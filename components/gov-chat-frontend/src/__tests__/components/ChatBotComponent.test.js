@@ -2308,6 +2308,39 @@ describe('ChatBotComponent', () => {
       expect(serviceTreeService.getAllCategories).toHaveBeenCalledTimes(1);
     });
 
+    it("a STALE tree response cannot install over a newer locale's tree", async () => {
+      const serviceTreeService = require('../../services/serviceTreeService');
+      let releaseFirst;
+      const heldFirst = new Promise((resolve) => {
+        releaseFirst = resolve;
+      });
+      mockLiveTree([{ catKey: '2', name: 'EN name', nameEN: 'Taxes', children: [] }]);
+      const wrapper = await createChatBotWrapperAsync([
+        { catKey: '2', name: 'EN name', nameEN: 'Taxes', children: [] }
+      ]);
+      const vm = wrapper.vm;
+
+      // Two locale switches in a row: the FIRST fetch is slow, the
+      // second fast. The slower OLD request landing last must not
+      // install its tree over the newer locale's.
+      serviceTreeService.getAllCategories.mockImplementationOnce(() => heldFirst);
+      wrapper.vm.$i18n.locale = 'fr';
+      await vm.$nextTick();
+      serviceTreeService.getAllCategories.mockImplementationOnce(() =>
+        Promise.resolve([{ catKey: '2', name: 'ES name', nameEN: 'Taxes', children: [] }])
+      );
+      wrapper.vm.$i18n.locale = 'es';
+      await vm.$nextTick();
+      await flushPromises();
+      expect(vm.serviceCategories[0].name).toBe('ES name');
+
+      releaseFirst([{ catKey: '2', name: 'FR name (stale)', nameEN: 'Taxes', children: [] }]);
+      await flushPromises();
+      await flushPromises();
+
+      expect(vm.serviceCategories[0].name).toBe('ES name');
+    });
+
     it('chips re-map AFTER the per-locale tree lands, not against the old one', async () => {
       const serviceTreeService = require('../../services/serviceTreeService');
       let releaseFetch;
@@ -2572,6 +2605,124 @@ describe('ChatBotComponent', () => {
       // points the operator at the wrong thing. (The wrapper's $t mock
       // returns the key; the KEY is what distinguishes the two copies.)
       expect(lastError).toBe('hierarchy.loading');
+    });
+
+    it('selecting a sidebar service REPLACES a live card chip (the mode switch is symmetric)', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const tree = [
+        { catKey: '1', name: 'Agriculture', nameEN: 'Agriculture', children: [] },
+        {
+          catKey: '2',
+          name: 'État civil',
+          nameEN: 'Civil Registry',
+          children: [{ name: 'Naissances', nameEN: 'Births' }]
+        }
+      ];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+
+      // A card chip is live; the user then picks a sidebar service. Both
+      // directions of the mode switch rule: the pick replaces the card,
+      // exactly as the card press replaces the pick.
+      vm.$store.commit('conversation/setContextItems', [
+        {
+          service: 'Crops card',
+          serviceKey: 'crops',
+          source: 'quickHelp',
+          id: 'crops',
+          serviceLabels: [],
+          category: '1',
+          selected: true
+        }
+      ]);
+      vm.currentCategoryId = '1';
+
+      vm.handleTreeNodeSelected({ service: 'Naissances', serviceKey: 'Births', category: '2', selected: true });
+
+      expect(vm.selectedContextItems).toHaveLength(1);
+      expect(vm.selectedContextItems[0].serviceKey).toBe('Births');
+      // The category moved to the pick's own.
+      expect(vm.currentCategoryId).toBe('2');
+    });
+
+    it('a composer entry with a hiddenPrompt sends it, not the typed text', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const tree = [{ catKey: '2', name: 'Cultivos', nameEN: 'Crops', children: [] }];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+      vm.quickHelpButtons = [
+        {
+          id: 'crops-entry',
+          service: 'Crops card',
+          serviceLabels: ['Crops'],
+          serviceKey: 'crops-entry',
+          category: '2',
+          placement: 'composer',
+          icon: 'x',
+          hiddenPrompt: 'You are a crops advisor. Answer in the declared scope.'
+        }
+      ];
+      vm.newMessage = '¿Qué hay?';
+
+      vm.handleWelcomeSend();
+
+      expect(mockSubmitQueryStream).toHaveBeenCalled();
+      const payload = mockSubmitQueryStream.mock.calls.at(-1)[0];
+      // The typed text is what the user SEES; the configured hidden
+      // prompt is what the LLM answers. The tile path always did this.
+      // (A scoped send carries the turn inside `messages`.)
+      expect(payload.messages.at(-1).content).toBe('You are a crops advisor. Answer in the declared scope.');
+      expect(payload.userQuestion).toBe('¿Qué hay?');
+      const userTurn = vm.openMessages.filter((m) => m.sender === 'user').at(-1);
+      expect(userTurn.content).toBe('¿Qué hay?');
+    });
+
+    it('a composer entry send is a MODE SWITCH too: the sidebar selection is replaced', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const tree = [
+        { catKey: '1', name: 'Agriculture', nameEN: 'Agriculture', children: [{ name: 'Cultivos', nameEN: 'Crops' }] },
+        {
+          catKey: '2',
+          name: 'État civil',
+          nameEN: 'Civil Registry',
+          children: [{ name: 'Naissances', nameEN: 'Births' }]
+        }
+      ];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+      vm.quickHelpButtons = [
+        {
+          id: 'crops-entry',
+          service: 'Crops card',
+          serviceLabels: [],
+          serviceKey: 'crops-entry',
+          category: '1',
+          placement: 'composer',
+          icon: 'x'
+        }
+      ];
+      // A sidebar service of ANOTHER category is selected first.
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'Naissances', serviceKey: 'Births', source: 'sidebar', category: '2', selected: true }
+      ]);
+      vm.newMessage = '¿Qué hay?';
+
+      vm.handleWelcomeSend();
+
+      const item = vm.selectedContextItems.find((i) => i.id === 'crops-entry');
+      expect(item).toBeDefined();
+      // The card REPLACED the sidebar selection: no union on the wire.
+      expect(vm.selectedContextItems).toHaveLength(1);
+      expect(mockSubmitQueryStream).toHaveBeenCalled();
+      const payload = mockSubmitQueryStream.mock.calls.at(-1)[0];
+      expect(payload.context.serviceLabels).toEqual([]);
+      expect(payload.context.categoryLabel).toBe('Agriculture');
     });
 
     it('a composer entry whose scope cannot be named yet is refused, not sent unfiltered', async () => {

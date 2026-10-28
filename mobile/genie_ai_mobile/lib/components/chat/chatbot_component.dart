@@ -365,6 +365,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           // against the tree that IS here now, not against the one that
           // failed to load.
           _treeUnavailable = false;
+          // A scope restored DURING the outage froze its own state as
+          // unavailable — without this, a successful retry left the
+          // conversation refused with an outage caption whose cause is
+          // gone. The active button's scope is re-checked against the
+          // tree that just landed (the web recomputes on every send).
+          if (_activeQuickHelpButtonId != null) {
+            final button = _quickHelpButtons.firstWhere(
+              (b) => b['id']?.toString() == _activeQuickHelpButtonId,
+              orElse: () => <String, dynamic>{},
+            );
+            if (button.isNotEmpty) {
+              _activeQuickHelpScope = _scopeResolver!.stateFor(button);
+            }
+          }
         });
         return;
       }
@@ -580,7 +594,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // The load AWAITS the hierarchy and the config before it commits
       // its scope: the user can navigate away inside that window, and a
       // setState after dispose is a FlutterError in debug and E2E runs.
-      if (mounted) {
+      // The SEQ gate keeps a superseded load's finally from killing the
+      // spinner of the NEWER load that replaced it.
+      if (mounted && seq == _loadSeq) {
         setState(() => _isLoading = false);
       }
     }

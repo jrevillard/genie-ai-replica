@@ -10,6 +10,16 @@
 // keys are walked a single time, then every button is checked against the
 // index — never against the tree itself.
 
+/// Whether [id] names a category scope at all. An EMPTY id declares
+/// nothing (it is how a selection is cleared), and 'general' is the
+/// placeholder a category-less selection is stored under: neither is a
+/// scope, in every rule that reads one. This predicate is the ONE copy —
+/// the subject of this whole branch is what happens when two copies of a
+/// scope rule drift apart.
+bool declaresCategoryScope(String? id) {
+  return id != null && id.isNotEmpty && id != 'general';
+}
+
 /// Checks Quick Help buttons against the live hierarchy.
 ///
 /// The hierarchy is what NAMES a scope: the config carries a category
@@ -19,6 +29,27 @@
 /// CALLER's fact — the widget marks it and passes each button through
 /// [unavailableScopeFor].
 class QuickHelpScopeResolver {
+  /// The ENGLISH spelling of [entry]: its `nameEN`, or its `name` when
+  /// the tree predates the dual-spelling response. The fallback is
+  /// exact ONLY because this resolver is built from the locale-'en'
+  /// fetch — there `name` IS the English translation (the dataprep
+  /// keeps the same fallback for the same deploy window). A LOCALIZED
+  /// tree must never reach these collectors: its `name` would put a
+  /// non-English label on the wire.
+  static String _enOf(Map entry) {
+    final en = entry['nameEN'];
+    if (en is String && en.isNotEmpty) return en;
+    // A PRESENT-but-empty nameEN is a real missing translation: the
+    // entity stays unnameable (the wire would carry a label no chunk
+    // has). An ABSENT key is a pre-dual-spelling response — the deploy
+    // window — and the fetch is locale 'en': `name` IS the English
+    // translation there.
+    if (!entry.containsKey('nameEN')) {
+      return entry['name']?.toString() ?? '';
+    }
+    return '';
+  }
+
   QuickHelpScopeResolver(List<dynamic> enTree)
     : _enLabels = _collectEnLabels(enTree),
       _categoryLabelsEn = _indexCategories(enTree),
@@ -47,9 +78,7 @@ class QuickHelpScopeResolver {
     // under: it names no category, and every rule treats it as NO scope —
     // this one included, or a category-less card would look healthy in
     // the grid and be refused at send time.
-    final declaresScope =
-        (category != null && category.isNotEmpty && category != 'general') ||
-        labels.isNotEmpty;
+    final declaresScope = declaresCategoryScope(category) || labels.isNotEmpty;
     return {
       'broken': declaresScope,
       'unavailable': declaresScope,
@@ -79,14 +108,14 @@ class QuickHelpScopeResolver {
     final labels = <String>{};
     for (final entry in enTree) {
       if (entry is! Map) continue;
-      final catEn = entry['nameEN'];
-      if (catEn is String && catEn.isNotEmpty) labels.add(catEn);
+      final catEn = _enOf(entry);
+      if (catEn.isNotEmpty) labels.add(catEn);
       final children = entry['children'];
       if (children is List) {
         for (final child in children) {
           if (child is! Map) continue;
-          final childEn = child['nameEN'];
-          if (childEn is String && childEn.isNotEmpty) labels.add(childEn);
+          final childEn = _enOf(child);
+          if (childEn.isNotEmpty) labels.add(childEn);
         }
       }
     }
@@ -100,8 +129,7 @@ class QuickHelpScopeResolver {
       final key = entry['catKey']?.toString();
       if (key == null || key.isEmpty) continue;
       if (byKey.containsKey(key)) continue;
-      final en = entry['nameEN'];
-      byKey[key] = (en is String && en.isNotEmpty) ? en : '';
+      byKey[key] = _enOf(entry);
     }
     return byKey;
   }
@@ -122,9 +150,7 @@ class QuickHelpScopeResolver {
     // not carry, and a category it carries without an EN translation,
     // are the same thing here — a scope that cannot be named.
     final categoryMissing =
-        category != null &&
-        category.isNotEmpty &&
-        category != 'general' &&
+        declaresCategoryScope(category) &&
         (_categoryLabelsEn[category] == null ||
             _categoryLabelsEn[category]!.isEmpty);
 
@@ -312,7 +338,7 @@ class ConversationScopeResolver {
       ),
     );
     final String? legacyCategoryId =
-        legacyCategory != null && legacyCategory.group(1) != 'general'
+        legacyCategory != null && declaresCategoryScope(legacyCategory.group(1))
         ? legacyCategory.group(1)
         : null;
     final sidebarTags = tagList
@@ -381,9 +407,7 @@ bool scopeCanGoOnTheWire({
   // the placeholder a category-less selection is stored under — it names
   // no category, on either platform.
   final hasScope =
-      (categoryId != null &&
-          categoryId.isNotEmpty &&
-          categoryId != 'general') ||
+      declaresCategoryScope(categoryId) ||
       labels.isNotEmpty ||
       sidebarServiceCount > 0;
   if (!hasScope) return true;

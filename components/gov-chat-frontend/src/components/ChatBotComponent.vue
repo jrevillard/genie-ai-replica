@@ -521,6 +521,16 @@ const QUICK_HELP_SOURCE = 'quickHelp';
 // One Quick Help selection, in the shape every context item uses — whether it
 // was picked from the overlay, restored from a saved conversation, or re-added
 // when the last selected item was removed.
+// Whether [id] names a category scope at all. An EMPTY id declares
+// nothing (it is how a selection is CLEARED), and 'general' is the
+// placeholder a category-less selection is stored under: neither is a
+// scope, in every rule that reads one. This predicate is the ONE copy —
+// the subject of this whole branch is what happens when two copies of a
+// scope rule drift apart.
+function declaresCategoryScope(id) {
+  return id != null && id !== '' && id !== 'general';
+}
+
 function quickHelpContextItem(button) {
   return {
     service: button.service,
@@ -673,6 +683,7 @@ export default {
       currentCategoryId: null,
       serviceCategories: [],
       serviceCategoriesLoadPromise: null, // The in-flight (or settled) hierarchy load
+      treeLoadSeq: 0, // Incremented per tree load; a stale response is dropped
       // The state of the hierarchy load: 'loading' until it settles, then
       // 'loaded' or 'failed'. The hierarchy is what NAMES a Quick Help
       // scope, so a button cannot say whether its scope is valid before it
@@ -1192,11 +1203,23 @@ export default {
 
     // *** UPDATED: Use serviceTreeService to load and transform categories ***
     async loadServiceCategories() {
+      // The mount's assurer and a locale switch's direct load can be in
+      // flight together: whichever response lands LAST wins the tree,
+      // and a slower OLD-locale response would install itself over the
+      // new locale's. The seq drops the stale one.
+      const seq = ++this.treeLoadSeq;
       try {
         // Use the service which handles transformation and localization
-        this.serviceCategories = await serviceTreeService.getAllCategories(this.currentLocale);
+        const tree = await serviceTreeService.getAllCategories(this.currentLocale);
+        if (seq !== this.treeLoadSeq) {
+          return;
+        }
+        this.serviceCategories = tree;
         this.serviceCategoriesStatus = 'loaded';
       } catch (error) {
+        if (seq !== this.treeLoadSeq) {
+          return;
+        }
         console.error('[ChatBotComponent] Failed to load service categories:', error);
         // The hierarchy is what names a scope: without it, no Quick Help
         // scope can be verified — and a scope that cannot be verified must
@@ -1265,9 +1288,7 @@ export default {
         // under: it names no category, and every rule treats it as NO
         // scope — this one included, or a category-less card would look
         // healthy in the grid and be refused at send time.
-        const declaresScope =
-          (button.category != null && button.category !== '' && button.category !== 'general') ||
-          (button.serviceLabels || []).length > 0;
+        const declaresScope = declaresCategoryScope(button.category) || (button.serviceLabels || []).length > 0;
         return {
           broken: declaresScope,
           unavailable: declaresScope,
@@ -1288,10 +1309,7 @@ export default {
       // not carry, and a category it carries without an EN translation,
       // are the same thing here — a scope that cannot be named.
       const categoryMissing =
-        button.category != null &&
-        button.category !== '' &&
-        button.category !== 'general' &&
-        this.getCategoryEnLabel(button.category) == null;
+        declaresCategoryScope(button.category) && this.getCategoryEnLabel(button.category) == null;
       return {
         broken: missingLabels.length > 0 || categoryMissing,
         unavailable: false,
@@ -1393,9 +1411,7 @@ export default {
         (item) =>
           item.source !== QUICK_HELP_SOURCE &&
           !item.categoryOnly &&
-          item.category != null &&
-          item.category !== '' &&
-          item.category !== 'general' &&
+          declaresCategoryScope(item.category) &&
           !item.serviceKey
       );
       if (unnamedSidebarItem) {
@@ -1790,7 +1806,22 @@ export default {
         // empty scope here sent its query unfiltered while the chip
         // showed the card. One builder for every Quick Help item.
         this.$store.commit('conversation/replaceQuickHelpItem', quickHelpContextItem(entry));
+        // The same MODE SWITCH the tile path rules: the card replaces the
+        // sidebar selection, or the wire would carry the union and the
+        // service-wins rule would drop the category the card promised.
+        this.$store.commit(
+          'conversation/setContextItems',
+          this.selectedContextItems.filter((item) => item.source === QUICK_HELP_SOURCE)
+        );
         this.currentCategoryId = entry.category;
+        // A composer entry can declare a hidden prompt like any tile: the
+        // typed question is what the user SEES, the configured prompt is
+        // what the LLM answers. The tile path armed these; the composer
+        // path silently sent the raw typed text.
+        if (entry.hiddenPrompt) {
+          this.hiddenPromptForNextMessage = entry.hiddenPrompt;
+          this.hiddenPromptForText = (this.newMessage || '').trim();
+        }
         this.sendMessage();
         return;
       } else {
@@ -1814,20 +1845,31 @@ export default {
           (existing) => existing.service === this.safeTranslate(item.service) && existing.category === item.category
         );
         if (!exists) {
-          this.$store.commit('conversation/addContextItem', {
-            service: this.safeTranslate(item.service),
-            // The tree panel hands over BOTH spellings: display (service) and
-            // the EN wire label (serviceKey). The filter carries the EN one —
-            // and an entity with no EN translation carries NONE: the
-            // localized name matches no chunk, so it must not stand in.
-            serviceKey: item.serviceKey || null,
-            category: item.category || 'general',
-            selected: true
-          });
+          // The mode switch is SYMMETRIC: a card press replaces the
+          // sidebar selection, and a sidebar pick replaces a live card
+          // chip — the two are alternative ways of scoping the same
+          // query, and the mixed pair is what the wire's service-wins
+          // rule silently narrows. Sidebar picks stay ADDITIVE among
+          // themselves.
+          this.$store.commit(
+            'conversation/setContextItems',
+            this.selectedContextItems
+              .filter((existing) => existing.source !== QUICK_HELP_SOURCE)
+              .concat({
+                service: this.safeTranslate(item.service),
+                // The tree panel hands over BOTH spellings: display (service)
+                // and the EN wire label (serviceKey). The filter carries the
+                // EN one — and an entity with no EN translation carries NONE:
+                // the localized name matches no chunk, so it must not stand in.
+                serviceKey: item.serviceKey || null,
+                category: item.category || 'general',
+                selected: true
+              })
+          );
           notificationService.info(this.translate('chatbot.contextAdded'), 1500);
-          if (!this.currentCategoryId) {
-            this.currentCategoryId = item.category || null;
-          }
+          // The pick owns the category now (a card's category must not
+          // outlive the chip the user replaced).
+          this.currentCategoryId = item.category || null;
         }
       } else {
         const index = this.selectedContextItems.findIndex(
@@ -2203,8 +2245,14 @@ export default {
         // one and not the other drops the scope of the other kind of tag
         // — and the category-only branch built its chip against a
         // possibly-empty tree: a null name, and a load race diagnosed as
-        // a configuration problem. BOTH branches wait.
-        await Promise.all([this.ensureQuickHelpLoaded(), this.ensureServiceCategoriesLoaded()]);
+        // a configuration problem. BOTH branches wait — but a scope-LESS
+        // conversation (no tags, no category edge) has nothing to
+        // resolve and skips the wait.
+        const carriesScope =
+          (Array.isArray(conversation.tags) && conversation.tags.length > 0) || this.currentCategoryId;
+        if (carriesScope) {
+          await Promise.all([this.ensureQuickHelpLoaded(), this.ensureServiceCategoriesLoaded()]);
+        }
         // The wait above is a REAL await (the config fetch, the
         // hierarchy fetch): a newer restore may have landed while it
         // was pending, and this one must not commit its scope over
@@ -2251,7 +2299,7 @@ export default {
             // contributes nothing.
             const legacyCategory = /^category\.(.+)$/.exec(tag);
             if (legacyCategory) {
-              if (legacyCategory[1] !== 'general') {
+              if (declaresCategoryScope(legacyCategory[1])) {
                 restoredContextItems.push({
                   service: this.getCategoryDisplayName(legacyCategory[1]) || tag,
                   serviceKey: null,

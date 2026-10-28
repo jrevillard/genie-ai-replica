@@ -259,6 +259,38 @@ void main() {
       expect(scope.sidebarLabelsEn, ['Births']);
     });
 
+    test(
+      'a PRE-nameEN tree (deploy window) still names scopes through name',
+      () {
+        // The mobile fetches the tree with locale 'en': there, `name` IS
+        // the English translation. A backend one version behind (no
+        // nameEN in the response) left every scoped card reading broken
+        // for the whole deploy window — the dataprep keeps exactly this
+        // fallback for the same window.
+        final preNameEnTree = <dynamic>[
+          {
+            'catKey': '2',
+            'name': 'Civil Registry',
+            'children': [
+              {'name': 'Births'},
+            ],
+          },
+        ];
+        final resolver = QuickHelpScopeResolver(preNameEnTree);
+
+        expect(resolver.knowsLabel('Births'), isTrue);
+        expect(resolver.categoryEnLabel('2'), 'Civil Registry');
+        expect(
+          resolver.stateFor({
+            'id': 'civil',
+            'category': '2',
+            'serviceLabels': const <dynamic>['Births'],
+          })['broken'],
+          isFalse,
+        );
+      },
+    );
+
     test('a LEGACY category.<id> tag restores the category, not a refusal', () {
       // Conversations saved before the redesign carry 'category.<id>' —
       // the old restore's spelling for a category-only scope. The web

@@ -42,9 +42,15 @@ function declaredSwaggerPaths(routesDir) {
   for (const file of fs.readdirSync(routesDir).filter((name) => name.endsWith('.js'))) {
     const source = fs.readFileSync(path.join(routesDir, file), 'utf8');
     for (const line of source.split('\n')) {
-      const match = line.match(/^\s*\*\s*["'](\/[^"']*)["']\s*:/);
+      // Both spellings a route file uses: quoted ("/api/x":) and bare
+      // (/api/x:). Requiring quotes alone left the bare-spelling files
+      // (analytics, auth) contributing NOTHING to this set — a YAML
+      // breakage there vanished from the spec while the guard stayed
+      // green.
+      const match =
+        line.match(/^\s*\*\s*["'](\/[^"']*)["']\s*:/) || line.match(/^\s*\*\s*(\/[A-Za-z0-9_\-/{}:]*)\s*:\s*$/);
       if (match) {
-        declared.add(match[1]);
+        declared.add(match[1].replace(/:$/, ''));
       }
     }
   }

@@ -69,6 +69,10 @@ rtk proxy helm template genieai charts/genieai-umbrella/ \
 #    merged — and never installed. The symptom is a reconcile that
 #    prints "applied revision 0.2.64" and leaves every object at its
 #    creationTimestamp. Bump per push, not per batch.
+#
+#    CI enforces it: scripts/chart-version-check.py (chart:lint job) fails
+#    the pipeline when the last two chart-touching commits changed the
+#    chart's content without moving the version.
 
 # 5. Commit chart + push genie-ai-deploy (overlay version bump). Order:
 #    a) push chart repo (chart publish first, otherwise overlay can pull

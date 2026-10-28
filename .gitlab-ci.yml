@@ -3191,7 +3191,13 @@ chart:lint:
       $(cat charts/ci/render-full-flags)
       --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
       > /tmp/rendered-full.yaml
-    # Production topology render. clusterProfile=prod is enum-legal and
+    # Production topology render. The GPU node host is the SAME in every
+    # CI render (https://gpu.ci-render.local:444 — see
+    # charts/ci/README.md): this job's prod render and chart:crd-validate's
+    # prod render must be the same surface, or a defect that only shows
+    # for one host shape (a DNS name with dots, a port, an IP literal) is
+    # covered in one job and missing from the other.
+    # clusterProfile=prod is enum-legal and
     # nothing else in CI ever selects it, so the whole prod surface was
     # unvalidated: it is the only configuration that emits a
     # PodDisruptionBudget, it multiplies the backend to 3 and the
@@ -3538,7 +3544,7 @@ chart:parity:
     - >
       helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
       --set opea.enabled=true
-      --set opea.gpu.nodeHost=https://gpu-node:444
+      --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
       > /tmp/rendered.yaml
     # --min-compared is the floor on variables actually compared (172 —
     # the number the gate compares TODAY; secretProvided, mayDiffer and
@@ -3659,7 +3665,7 @@ chart:crd-validate:
         --set clusterProfile=prod \
         --set ingress.tls.enabled=true \
         --set ingress.tls.issuerName=selfsigned \
-        --set opea.gpu.nodeHost=https://gpu-node:444 \
+        --set opea.gpu.nodeHost=https://gpu.ci-render.local:444 \
         > /tmp/crd-validate-prod.yaml
       ./scripts/validate-crds.sh /tmp/crd-validate.yaml /tmp/crd-validate-prod.yaml
   rules:

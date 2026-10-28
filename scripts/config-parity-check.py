@@ -543,8 +543,9 @@ def main(argv):
                 # names) and the gate reported green. The claim in the
                 # docstring — "the chart must set it" — is now
                 # asserted: the chart renders its own Kubernetes value,
-                # and it is not empty.
-                chart_value = rendered_rows.get(name, declared_rows.get(name))
+                # and it is not empty. chart_value is already bound by
+                # the lookup above — the mayDiffer branch is only
+                # reached with a value in hand.
                 if chart_value in (None, ""):
                     gaps.append(
                         f"{component}.{name}: filed mayDiffer — the chart must SET its "

@@ -86,23 +86,27 @@ spec:
           ports:
             - name: redis
               containerPort: {{ $redisPort }}
-          # With --appendonly yes, redis answers PING with -LOADING until
-          # the dataset is in memory; on a PVC-backed /data a grown AOF
-          # can outrun the liveness budget below and the pod would
-          # restart into the same load — a crash loop. The startup probe
-          # (30 x 10 s = 5 min) suspends readiness and liveness until the
-          # server answers, the same window clamav's startup probe gives
-          # the signature download.
+          # The probes ASSERT the reply (`test "$(… ping)" = PONG`),
+          # because redis-cli exits 0 on every server error reply
+          # (-LOADING, NOAUTH — verified on redis:7-alpine) and a bare
+          # `redis-cli ping` would succeed while the server cannot serve.
+          # With --appendonly yes redis replies -LOADING until the
+          # dataset is in memory; on a PVC-backed /data a grown AOF can
+          # outrun the liveness budget below and the pod would restart
+          # into the same load — a crash loop. The startup probe (30 x
+          # 10 s = 5 min) suspends readiness and liveness until the
+          # server actually answers PONG, the same window clamav's
+          # startup probe gives the signature download.
           startupProbe:
-            exec: { command: ["sh", "-c", "redis-cli -p {{ $redisPort }} ping"] }
+            exec: { command: ["sh", "-c", "test \"$(redis-cli -p {{ $redisPort }} ping)\" = PONG"] }
             failureThreshold: 30
             periodSeconds: 10
           readinessProbe:
-            exec: { command: ["sh", "-c", "redis-cli -p {{ $redisPort }} ping"] }
+            exec: { command: ["sh", "-c", "test \"$(redis-cli -p {{ $redisPort }} ping)\" = PONG"] }
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
-            exec: { command: ["sh", "-c", "redis-cli -p {{ $redisPort }} ping"] }
+            exec: { command: ["sh", "-c", "test \"$(redis-cli -p {{ $redisPort }} ping)\" = PONG"] }
             initialDelaySeconds: 30
             periodSeconds: 30
           volumeMounts:
@@ -170,7 +174,9 @@ spec:
   selector:
     {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "redis-cache") | nindent 4 }}
 ---
-# Ingress from backend ONLY (the sole consumer); egress DNS only.
+# Ingress: backend (the sole consumer), the helm-test peer, and the
+# vm-operator scrape peer when observability metrics are on.
+# Egress: DNS only.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -207,10 +213,9 @@ spec:
   # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
   # and no workload here exposes a Prometheus surface (they export over
   # OTLP). The peer exists so that enabling a real scrape surface later
-  # does not silently time out against the default-deny. For redis
-  # specifically, port 6379 speaks RESP, not HTTP — a real scrape needs
-  # a redis_exporter sidecar on its own port before any of this
-  # matters.
+  # does not silently time out against the default-deny. Redis speaks
+  # RESP on the listener port, not HTTP — a real scrape needs a
+  # redis_exporter sidecar on its own port before any of this matters.
     - from:
         - podSelector:
             matchLabels:

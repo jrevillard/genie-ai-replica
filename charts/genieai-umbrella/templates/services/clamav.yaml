@@ -202,8 +202,9 @@ spec:
   selector:
     {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "clamav") | nindent 4 }}
 ---
-# Ingress from document-repository ONLY (the sole consumer in this
-# tier). Egress limited to DNS and the CVD signature-update ports;
+# Ingress: document-repository (the sole consumer in this tier) and
+# the helm-test peer. Egress limited to DNS and the CVD
+# signature-update ports;
 # see egress note for the FQDN-allowlist gap.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

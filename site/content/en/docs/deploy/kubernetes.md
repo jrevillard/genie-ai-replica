@@ -87,10 +87,13 @@ helm install genieai charts/genieai-umbrella/ \
   -f my-values.yaml
 ```
 
-The chart renders NO Namespace object — the namespace is created by helm
-itself, so pass `--create-namespace` to have it propagated before the
+The chart renders NO Namespace object for the release namespace — helm
+creates it, so pass `--create-namespace` to have it propagated before the
 pre-install hooks run (without it the first hook Job never schedules:
-"namespaces \"genieai\" not found"). `my-values.yaml` must
+"namespaces \"genieai\" not found"). The chart does render one other
+Namespace, `<release-namespace>-obs`: the observability tier's file-log
+agent reads the node's `/var/log/pods` through hostPath volumes, which
+the release namespace's pod-security baseline forbids. `my-values.yaml` must
 carry the values the render requires — the public origin, the operator
 contact, a mail server and the client-secret placeholders (see
 [Configuration highlights](#configuration-highlights) and the chart
@@ -117,10 +120,17 @@ overlays/<cluster>/<env>/
     └── ...
 ```
 
-The `HelmRelease` references two values sources — a `ConfigMap` of
-operator-owned values, and a `Secret` of SOPS-decrypted values — and
-materializes them via `valuesFrom`. Inline `values:` carries only the
-per-pays overrides. The Application Secrets consumed by the chart (the
+The `HelmRelease` references the operator-owned values through
+`valuesFrom`: a `ConfigMap` in the Flux namespace carries them, and an
+overlay that also ships SOPS-encrypted values adds a `Secret` entry
+beside it. Inline `values:` carries the per-pays overrides. The chart's
+placeholder guard (`data.keycloak.failOnPlaceholderSecrets`) stays at
+its default — **on**: an overlay that feeds the realm's client secrets
+through the convergence Job's `envSecrets` rows declares non-placeholder
+values for `data.keycloak.clientSecrets.*`, and the render then fails if
+a realm placeholder has no row to resolve it from (kcc would otherwise
+fail at import time with an opaque parse error). The Application
+Secrets consumed by the chart (the
 table above) are materialized in the `genieai` namespace as regular
 Secrets by the SealedSecret controller (one `SealedSecret` per Secret,
 committed in the overlay's `secrets/` directory) and mounted by the
@@ -130,20 +140,21 @@ per-overlay deltas:
 
 ```yaml
 valuesFrom:
-  - name: genieai-public        # ConfigMap
+  - name: genieai-public        # ConfigMap, in the Flux namespace
     kind: ConfigMap
-  - name: genieai-secrets       # operator-override Secret (SOPS path;
-    kind: Secret                # encrypted-only until the Flux SOPS
-                                # decryption provider is installed)
-values:
-  data:
-    keycloak:
-      failOnPlaceholderSecrets: false
+  # - name: genieai-secrets     # operator-override Secret (SOPS path;
+  #   kind: Secret              # encrypted-only until the Flux SOPS
+  #                              # decryption provider is installed)
+# Inline `values:` — per-pays overrides only.
 ```
 
-Set `spec.install.timeout` and `spec.upgrade.timeout` to **900s** — the
-Keycloak convergence hook (kcc) and operator CRD reconciliation can each
-exceed the helm-controller 5-minute default on cold clusters.
+Set `spec.timeout` (the HelmRelease-wide bound) to **60m**, and
+`spec.install.timeout` to **2700s** — the install pulls every image
+(~20 GB on a cold cluster) before the pods can start, and the pull alone
+outran a 15-minute bound on the laptop cluster; two real installs hit the
+helm-controller's 5-minute default with "context deadline exceeded".
+`spec.upgrade.timeout` covers the Keycloak convergence hook (kcc) and the
+operator CRD reconciliation, and **900s** is enough for it.
 
 ## Required Secrets
 
@@ -157,11 +168,10 @@ the release completes.
 | `vllm-api-key` | `VLLM_API_KEY`, `HF_TOKEN` | Backend translation endpoint; OPEA tier (HF_TOKEN gates `google/gemma-3-4b-it` and other gated models) |
 | `keycloak-admin-credentials` | `username`, `password` | `Keycloak` CR `bootstrapAdmin.userSecret`; master realm convergence |
 | `keycloak-db-credentials` | `username`, `password` | CNPG cluster; Keycloak `spec.db` |
-| `keycloak-convergence-credentials` | `GENIE_ADMIN_PASSWORD`, `EMAIL_PASSWORD` | kcc convergence Job (`$(env:VAR)` placeholders in the realm body) |
+| `keycloak-convergence-credentials` | `GENIE_ADMIN_PASSWORD`, `EMAIL_PASSWORD` | kcc convergence Job (`$(env:VAR)` placeholders in the realm body) — `EMAIL_PASSWORD` is the realm's SMTP password: the `smtpServer` block always renders, so the Job resolves it on every install |
 | `keycloak-proxy-client-secret` | `KEYCLOAK_PROXY_CLIENT_SECRET` | Backend env (`genie-proxy-client` service account) |
 | `kc-dataprep-client-secret` | `KC_DATAPREP_CLIENT_SECRET` | Dataprep client-credentials grant |
 | `kc-grafana-client-secret` | `KC_GRAFANA_CLIENT_SECRET` | Grafana OIDC client |
-| `email-password` | `password` | SMTP password for the Keycloak realm — the realm's `smtpServer` block always renders, so this is the secret the convergence Job reads when `data.keycloak.smtp.auth=true` |
 | `translation-cache-password` | `password` | Backend translation cache |
 
 Additional Secrets used in the SealedSecret pattern: `keycloak-db-credentials`,

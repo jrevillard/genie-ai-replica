@@ -110,7 +110,21 @@ spec:
           {{- /* The tcpSocket probes dial the LISTENER port: an override
           of services.clamav.port must move them with it, or the pod is
           probed on a port it no longer listens on and never goes Ready.
-          Merge on the copy — the values are read-only render input. */ -}}
+          Set on the copy — the values are read-only render input.
+
+          The probe's port is DERIVED: it must be the listener's port,
+          because a probe on another port never goes Ready. The
+          derivation wins — the merge the template used before gave
+          precedence to the DESTINATION, so an operator's declared
+          probe port was discarded SILENTLY and the knob in
+          values.yaml was dead. The operator's own value is now
+          REJECTED by name when it contradicts the derivation, which is
+          the chart's rule for a value it cannot honour: a number here
+          that differs from the listener's port is a mistake worth
+          naming, not a knob to override. values.yaml declares an empty
+          tcpSocket for that reason — a declared number would always
+          win over the derivation (Helm merges the chart's values with
+          the overlay's, and the template cannot tell them apart). */ -}}
           {{- $clamavPort := $svc.port | default 3310 -}}
           {{- $probes := deepCopy ($svc.probes | default dict) -}}
           {{- /* Sub-blocks normalize too: a cleared probes block carries
@@ -119,9 +133,9 @@ spec:
           {{- $readiness := $probes.readiness | default dict -}}
           {{- $liveness := $probes.liveness | default dict -}}
           {{- $startup := $probes.startup | default dict -}}
-          {{- if $readiness.tcpSocket -}}{{- $_ := set $readiness "tcpSocket" (merge (dict "port" $clamavPort) $readiness.tcpSocket) -}}{{- end -}}
-          {{- if $liveness.tcpSocket -}}{{- $_ := set $liveness "tcpSocket" (merge (dict "port" $clamavPort) $liveness.tcpSocket) -}}{{- end -}}
-          {{- if $startup.tcpSocket -}}{{- $_ := set $startup "tcpSocket" (merge (dict "port" $clamavPort) $startup.tcpSocket) -}}{{- end -}}
+          {{- if hasKey $readiness "tcpSocket" -}}{{- if and (hasKey $readiness.tcpSocket "port") (ne (int $readiness.tcpSocket.port) (int $clamavPort)) -}}{{- fail (printf "services.clamav.probes.readiness.tcpSocket.port must equal services.clamav.port (%d): the probe dials the listener, and a probe on another port never goes Ready" (int $clamavPort)) -}}{{- end -}}{{- $_ := set $readiness.tcpSocket "port" $clamavPort -}}{{- end -}}
+          {{- if hasKey $liveness "tcpSocket" -}}{{- if and (hasKey $liveness.tcpSocket "port") (ne (int $liveness.tcpSocket.port) (int $clamavPort)) -}}{{- fail (printf "services.clamav.probes.liveness.tcpSocket.port must equal services.clamav.port (%d): the probe dials the listener, and a probe on another port never goes Ready" (int $clamavPort)) -}}{{- end -}}{{- $_ := set $liveness.tcpSocket "port" $clamavPort -}}{{- end -}}
+          {{- if hasKey $startup "tcpSocket" -}}{{- if and (hasKey $startup.tcpSocket "port") (ne (int $startup.tcpSocket.port) (int $clamavPort)) -}}{{- fail (printf "services.clamav.probes.startup.tcpSocket.port must equal services.clamav.port (%d): the probe dials the listener, and a probe on another port never goes Ready" (int $clamavPort)) -}}{{- end -}}{{- $_ := set $startup.tcpSocket "port" $clamavPort -}}{{- end -}}
           {{- with $readiness }}
           readinessProbe:
             {{- toYaml . | nindent 12 }}

@@ -428,7 +428,7 @@ def index_keycloak_clients(docs):
     issuer is not one of them — it dials the edge, and the edge's data
     plane is admitted by its own rule.
     """
-    clients: dict[str, int] = {}
+    clients: dict[str, set] = {}
     for component, workloads in workload_components(docs).items():
         for doc in workloads:
             for container in workload_containers(doc):
@@ -439,7 +439,13 @@ def index_keycloak_clients(docs):
                     match = KEYCLOAK_INTERNAL.search(url)
                     if not match:
                         continue
-                    clients[component] = int(match.group(1)) if match.group(1) else 80
+                    # Every port the component dials, not the last one:
+                    # a workload that reaches Keycloak on two ports is
+                    # membership-checked on both, or the policy could
+                    # admit the component on the wrong one and pass.
+                    clients.setdefault(component, set()).add(
+                        int(match.group(1)) if match.group(1) else 80
+                    )
     return clients
 
 
@@ -493,17 +499,20 @@ def keycloak_client_gaps(docs, policies):
         # An empty podSelector admits everything: the default-deny this
         # policy exists for is void, and port 8080 serves the Admin API.
         return [(("keycloak", "all-pods"), "the keycloak policy admits EVERY pod in the namespace")]
-    for component, port in sorted(clients.items()):
+    for component, ports in sorted(clients.items()):
         admitted = admissions.get(component)
-        if admitted is None:
-            gaps.append((component, f"the keycloak policy does not admit {component}"))
-        elif admitted != "any" and port not in admitted:
-            gaps.append(
-                (
-                    component,
-                    f"the keycloak policy admits {component} on {sorted(admitted)}, not {port}",
+        for port in sorted(ports):
+            if admitted is None:
+                gaps.append(
+                    (component, f"the keycloak policy does not admit {component}")
                 )
-            )
+            elif admitted != "any" and port not in admitted:
+                gaps.append(
+                    (
+                        component,
+                        f"the keycloak policy admits {component} on {sorted(admitted)}, not {port}",
+                    )
+                )
     return gaps
 
 

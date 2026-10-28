@@ -1888,6 +1888,45 @@ class TestFetchAllLabels:
         assert labels == ["Healthcare", "Clinics", "Hospitals"]
 
     @pytest.mark.asyncio
+    async def test_a_category_without_any_name_does_not_cost_the_whole_vocabulary(self):
+        """A category that carries neither spelling is malformed, not fatal.
+
+        It cannot be named, but the categories around it still are a
+        vocabulary — losing all of them would label every chunk with
+        nothing at all.
+        """
+        taxonomy = [
+            {"catKey": "1", "children": [{"name": "Births", "nameEN": "Births"}]},
+            {
+                "catKey": "2",
+                "name": "Crops",
+                "nameEN": "Crops",
+                "children": [{"name": "Tomato", "nameEN": "Tomato"}],
+            },
+        ]
+
+        labels = await _fetch_labels(taxonomy)
+
+        assert "Births" in labels
+        assert "Tomato" in labels
+
+    @pytest.mark.asyncio
+    async def test_a_nameless_category_does_not_borrow_the_previous_category_name(self):
+        """A category the payload does not name keeps its own (empty) group.
+
+        Its services are a group of their own — they are not filed under
+        the name of the category that happens to precede them.
+        """
+        taxonomy = [
+            {"catKey": "1", "name": "Crops", "nameEN": "Crops", "children": []},
+            {"catKey": "2", "children": [{"name": "Tomato", "nameEN": "Tomato"}]},
+        ]
+
+        labels = await _fetch_labels(taxonomy)
+
+        assert labels == ["Tomato", "Crops"]
+
+    @pytest.mark.asyncio
     async def test_returns_empty_on_error(self):
         dp = create_dataprep()
 

@@ -57,20 +57,56 @@ void main() {
       expect(resolver.stateFor(button)['broken'], isFalse);
     });
 
+    test('an empty hierarchy says every scoped category is missing', () {
+      // A hierarchy that LOADED and carries nothing is not a hierarchy
+      // that knows nothing: every category a button names is absent
+      // from it, and the button cannot keep the scope it promised.
+      final button = {
+        'id': 'civil',
+        'serviceLabels': ['Registration'],
+        'category': '404',
+      };
+
+      final empty = QuickHelpScopeResolver(<dynamic>[]);
+
+      expect(empty.stateFor(button)['broken'], isTrue);
+      expect(empty.stateFor(button)['categoryMissing'], isTrue);
+    });
+
     test(
-      'an empty tree validates nothing — it says nothing about any button',
+      'a category the hierarchy carries without an EN translation is missing',
       () {
-        final button = {
-          'id': 'civil',
-          'serviceLabels': ['Registration'],
-          'category': '404',
-        };
+        // The wire speaks EN: a category the hierarchy carries only in
+        // the localized spelling has no filterable label at all, so the
+        // scope it names cannot be put on the wire.
+        final tree = <dynamic>[
+          {'catKey': '2', 'name': 'X', 'nameEN': null, 'children': <dynamic>[]},
+        ];
+        final resolver = QuickHelpScopeResolver(tree);
 
-        final empty = QuickHelpScopeResolver(<dynamic>[]);
+        final state = resolver.stateFor({'id': 'civil', 'category': '2'});
 
-        expect(empty.stateFor(button)['broken'], isFalse);
+        expect(state['broken'], isTrue);
+        expect(state['categoryMissing'], isTrue);
       },
     );
+
+    test('a hierarchy that could not be loaded breaks every scope', () {
+      // The hierarchy is what NAMES a scope. Without it, no scope can be
+      // verified — and the button says so rather than looking healthy and
+      // swallowing the tap.
+      final resolver = QuickHelpScopeResolver.unavailable();
+
+      final state = resolver.stateFor({'id': 'civil', 'category': '2'});
+
+      expect(state['broken'], isTrue);
+      expect(state['unavailable'], isTrue);
+    });
+
+    test('a hierarchy that has not loaded says nothing about any button', () {
+      expect(QuickHelpScopeResolver.pending['broken'], isFalse);
+      expect(QuickHelpScopeResolver.pending['unavailable'], isFalse);
+    });
 
     test('the general placeholder names no category of the hierarchy', () {
       final button = {

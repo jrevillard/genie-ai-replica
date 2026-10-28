@@ -1404,6 +1404,8 @@ export default {
       'Problema de configuración: la etiqueta «{labels}» ya no existe en la jerarquía de conocimiento. Este botón no se puede usar hasta que su configuración se actualice.',
     quickHelpCategoryGone:
       'Problema de configuración: la categoría de este botón ya no existe en la jerarquía de conocimiento. Este botón no se puede usar hasta que su configuración se actualice.',
+    quickHelpScopeUnavailable:
+      'Problema de configuración: no se pudo cargar la jerarquía de conocimiento, por lo que no se puede verificar el alcance de este botón. Este botón no se puede usar hasta que la jerarquía esté disponible.',
     serviceLabelMismatch:
       'Servicio "{label}" utiliza una etiqueta de UI que puede no coincidir con la jerarquía de conocimiento',
     noFilterWarning: 'Sin filtro de contexto activo — la consulta no será filtrada.',

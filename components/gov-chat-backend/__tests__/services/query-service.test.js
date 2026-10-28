@@ -124,6 +124,8 @@ let mockDb;
 let mockQueriesCollection;
 let mockServiceCategoriesCollection;
 let mockServicesCollection;
+let mockServiceCategoryTranslationsCollection;
+let mockServiceTranslationsCollection;
 let mockQueryCategoriesCollection;
 let mockAnalyticsService;
 
@@ -133,6 +135,8 @@ beforeEach(() => {
   mockQueriesCollection = createMockCollection();
   mockServiceCategoriesCollection = createMockCollection();
   mockServicesCollection = createMockCollection();
+  mockServiceCategoryTranslationsCollection = createMockCollection();
+  mockServiceTranslationsCollection = createMockCollection();
   mockQueryCategoriesCollection = createMockCollection();
 
   mockDb = {
@@ -140,6 +144,8 @@ beforeEach(() => {
       if (name === 'queries') return mockQueriesCollection;
       if (name === 'serviceCategories') return mockServiceCategoriesCollection;
       if (name === 'services') return mockServicesCollection;
+      if (name === 'serviceCategoryTranslations') return mockServiceCategoryTranslationsCollection;
+      if (name === 'serviceTranslations') return mockServiceTranslationsCollection;
       if (name === 'queryCategories') return mockQueryCategoriesCollection;
       return createMockCollection();
     }),
@@ -170,8 +176,8 @@ describe('QueryService', () => {
   describe('init', () => {
     it('should initialize collections on first call', async () => {
       expect(mockDb.collection).toHaveBeenCalledWith('queries');
-      expect(mockDb.collection).toHaveBeenCalledWith('serviceCategories');
-      expect(mockDb.collection).toHaveBeenCalledWith('services');
+      expect(mockDb.collection).toHaveBeenCalledWith('serviceCategoryTranslations');
+      expect(mockDb.collection).toHaveBeenCalledWith('serviceTranslations');
       expect(queryService.initialized).toBe(true);
     });
 
@@ -751,6 +757,28 @@ describe('QueryService', () => {
         .mockResolvedValueOnce(createMockCursor(['svc-1']));
       const result = await queryService.initStreamQuery(data, {});
       expect(result.queryId).toBe('stream-1');
+    });
+
+    it('resolves the ids through the ENGLISH translation the wire carries', async () => {
+      // The wire carries the EN translation — the label the corpus's
+      // chunk_labels are minted from. The document's own `nameEN` is a
+      // cached copy: an entity edited there alone leaves the two apart,
+      // and a lookup against the copy would find nothing.
+      const data = createMockQueryData({ context: { categoryLabel: 'Crops', serviceLabels: ['Tomato'] } });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor(['cat-1']))
+        .mockResolvedValueOnce(createMockCursor(['svc-1']));
+
+      await queryService.initStreamQuery(data, {});
+
+      const categoryQuery = mockDb.query.mock.calls[0][0];
+      const serviceQuery = mockDb.query.mock.calls[1][0];
+      expect(categoryQuery.strings.join('?')).toContain('translation ==');
+      expect(categoryQuery.strings.join('?')).not.toContain('nameEN');
+      expect(categoryQuery.values[0]).toBe(mockServiceCategoryTranslationsCollection);
+      expect(serviceQuery.strings.join('?')).not.toContain('nameEN');
+      expect(serviceQuery.values[0]).toBe(mockServiceTranslationsCollection);
     });
 
     it('should preserve null categoryLabel (no "General" default) when categoryLabel is null', async () => {

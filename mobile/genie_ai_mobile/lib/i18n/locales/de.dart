@@ -1051,6 +1051,8 @@ const Map<String, dynamic> deLocale = {
         "Konfigurationsproblem: das Label „{labels}“ existiert nicht mehr in der Wissenshierarchie. Diese Schaltfläche kann nicht verwendet werden, bis ihre Konfiguration aktualisiert wurde.",
     "quickHelpCategoryGone":
         "Konfigurationsproblem: die Kategorie dieser Schaltfläche existiert nicht mehr in der Wissenshierarchie. Diese Schaltfläche kann nicht verwendet werden, bis ihre Konfiguration aktualisiert wurde.",
+    "quickHelpScopeUnavailable":
+        "Konfigurationsproblem: die Wissenshierarchie konnte nicht geladen werden, daher kann der Umfang dieser Schaltfläche nicht überprüft werden. Diese Schaltfläche kann nicht verwendet werden, bis die Hierarchie verfügbar ist.",
     "queryContext": "Abfragekontext",
     "contextAdded": "Kontext zu deiner Anfrage hinzugefügt",
     "contextRemoved": "Kontext von deiner Anfrage entfernt",

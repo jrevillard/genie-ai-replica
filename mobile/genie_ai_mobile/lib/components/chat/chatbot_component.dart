@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'quick_help_scope.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
 import 'package:genie_ai_mobile/components/chat/chat_response_feedback_dialog.dart';
@@ -27,6 +26,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:genie_ai_mobile/utils/config_resolver.dart';
+
+import 'quick_help_scope.dart';
 
 class ChatBotComponent extends ConsumerStatefulWidget {
   final String userId;
@@ -87,10 +88,22 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   String _selectedCategoryNameEn = "";
   List<String> _sidebarServiceLabelsEn = [];
   // The live hierarchy, indexed once: the EN label vocabulary (what the
-  // corpus filters on) and the category keys. Null until the tree loads (or
-  // if it fails) — then no button is judged broken, because an unloaded tree
+  // corpus filters on) and the category keys. Null until the tree loads —
+  // then no button is judged broken, because a tree that has not loaded
   // says nothing.
   QuickHelpScopeResolver? _scopeResolver;
+  // The hierarchy load has settled — it loaded, or it failed. The Quick
+  // Help grid waits for it: a button carries a scope, and the hierarchy
+  // is what names it, so a button rendered before the hierarchy is known
+  // cannot say whether its scope is valid — and a tap it cannot answer is
+  // a dead tap.
+  bool _treeSettled = false;
+  // The hierarchy could not be loaded: it names no scope at all, so every
+  // button says so instead of looking healthy and swallowing the tap.
+  bool _treeUnavailable = false;
+  // The in-flight hierarchy fetch. It runs ONCE: every button is checked
+  // against the resolver it builds, and a tap must not start a second one.
+  Future<void>? _enTreeFuture;
   // English KB labels for the retriever filter, sourced from a Quick Help button's
   // serviceLabels. Set in _quickHelpPressed, cleared after the stream completes.
   // Sidebar tree selections use _selectedCategoryId/_selectedCategoryName instead.
@@ -294,27 +307,47 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   }
 
   /// The live hierarchy at locale=en — the label vocabulary the corpus
-  /// filters on. Best effort: a failure leaves the resolver null, which
-  /// validates nothing rather than marking every button broken.
-  Future<void> _ensureEnTree() async {
+  /// filters on. The fetch runs once; every button is checked against the
+  /// resolver it builds.
+  Future<void> _ensureEnTree() {
+    return _enTreeFuture ??= _fetchEnTree();
+  }
+
+  Future<void> _fetchEnTree() async {
     try {
       final categoriesApi = ref.read(serviceCategoriesApiProvider);
       final response = await categoriesApi
           .apiServiceCategoriesCategoriesGetWithHttpInfo(locale: 'en');
-      if (response.statusCode == 200 && mounted) {
+      if (!mounted) return;
+      if (response.statusCode == 200) {
         final tree = jsonDecode(response.body) as List<dynamic>;
         setState(() {
           _scopeResolver = QuickHelpScopeResolver(tree);
+          _treeSettled = true;
         });
+        return;
       }
+      _markTreeUnavailable();
     } catch (e) {
-      debugPrint(
-        "[CHATBOT] EN tree fetch failed (scope validation disabled): $e",
-      );
+      debugPrint("[CHATBOT] EN tree fetch failed: $e");
+      _markTreeUnavailable();
     }
   }
 
+  /// The hierarchy could not be loaded: it names no scope, so every scope
+  /// is unverifiable — and every button says so.
+  void _markTreeUnavailable() {
+    if (!mounted) return;
+    setState(() {
+      _treeUnavailable = true;
+      _treeSettled = true;
+    });
+  }
+
   String _quickHelpErrorCaption(Map<String, dynamic> scope) {
+    if (scope['unavailable'] as bool? ?? false) {
+      return tr('chatbot.quickHelpScopeUnavailable');
+    }
     final missing = (scope['missingLabels'] as List).cast<String>();
     final parts = <String>[];
     if (missing.isNotEmpty) {
@@ -1702,7 +1735,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           ),
 
           // Quick Help Overlay
-          if (_showQuickHelpOverlay && _quickHelpButtons.isNotEmpty)
+          if (_showQuickHelpOverlay &&
+              _quickHelpButtons.isNotEmpty &&
+              _treeSettled)
             Container(
               color: tokens.bg,
               padding: const EdgeInsets.symmetric(
@@ -1751,13 +1786,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                             final String translatedTitle = tr(titleKey);
                             final String iconAsset =
                                 button['iconAsset']?.toString() ?? '';
-                            final scope =
-                                _scopeResolver?.stateFor(button) ??
-                                const {
-                                  'broken': false,
-                                  'missingLabels': <String>[],
-                                  'categoryMissing': false,
-                                };
+                            final scope = _treeUnavailable
+                                ? QuickHelpScopeResolver.unavailableScope
+                                : (_scopeResolver?.stateFor(button) ??
+                                      QuickHelpScopeResolver.pending);
                             final broken = scope['broken'] as bool;
 
                             return Material(

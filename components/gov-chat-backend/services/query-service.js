@@ -85,8 +85,8 @@ class QueryService {
     this.dbService = dbService; // Store the service reference instead of the promise
     this.db = null;
     this.queries = null;
-    this.serviceCategories = null;
-    this.services = null;
+    this.serviceCategoryTranslations = null;
+    this.serviceTranslations = null;
     this.analyticsService = null; // Will be set via dependency injection
     this.chatHistoryService = null; // Will be set via dependency injection
     this.initialized = false;
@@ -105,8 +105,8 @@ class QueryService {
     try {
       this.db = await this.dbService.getConnection('default');
       this.queries = this.db.collection('queries');
-      this.serviceCategories = this.db.collection('serviceCategories');
-      this.services = this.db.collection('services');
+      this.serviceCategoryTranslations = this.db.collection('serviceCategoryTranslations');
+      this.serviceTranslations = this.db.collection('serviceTranslations');
       this.initialized = true;
       logger.info('QueryService initialized successfully');
     } catch (error) {
@@ -413,11 +413,17 @@ class QueryService {
     let categoryId = queryData.categoryId || null;
     if (queryData.context?.categoryLabel && !categoryId) {
       try {
+        // The wire carries the ENGLISH TRANSLATION — the label the corpus's
+        // chunk_labels are minted from. The document's own `nameEN` is a
+        // cached copy: an entity edited there alone leaves the two apart,
+        // and a lookup against the copy finds nothing. The translation is
+        // the SSOT, so the translation is what the lookup reads.
         const categoryQuery = aql`
-            FOR cat IN ${this.serviceCategories}
-              FILTER cat.nameEN == ${queryData.context.categoryLabel}
+            FOR trans IN ${this.serviceCategoryTranslations}
+              FILTER LOWER(trans.languageCode) == 'en'
+              FILTER trans.translation == ${queryData.context.categoryLabel}
               LIMIT 1
-              RETURN cat._key
+              RETURN trans.serviceCategoryId
           `;
         const cursor = await this.db.query(categoryQuery);
         categoryId = await cursor.next();
@@ -430,10 +436,12 @@ class QueryService {
     let serviceIds = queryData.serviceId ? [queryData.serviceId] : [];
     if (queryData.context?.serviceLabels?.length > 0 && serviceIds.length === 0) {
       try {
+        // Same SSOT as the category: the ENGLISH translation.
         const servicesQuery = aql`
-            FOR svc IN ${this.services}
-              FILTER svc.nameEN IN ${queryData.context.serviceLabels}
-              RETURN svc._key
+            FOR trans IN ${this.serviceTranslations}
+              FILTER LOWER(trans.languageCode) == 'en'
+              FILTER trans.translation IN ${queryData.context.serviceLabels}
+              RETURN trans.serviceId
           `;
         const cursor = await this.db.query(servicesQuery);
         serviceIds = await cursor.all();
@@ -612,11 +620,16 @@ class QueryService {
       let categoryId = queryData.categoryId || null;
       if (queryData.context?.categoryLabel && !categoryId) {
         try {
+          // The wire carries the ENGLISH TRANSLATION — the label the corpus's
+          // chunk_labels are minted from. The document's own `nameEN` is a
+          // cached copy: an entity edited there alone leaves the two apart,
+          // and a lookup against the copy finds nothing.
           const categoryQuery = aql`
-              FOR cat IN ${this.serviceCategories}
-                FILTER cat.nameEN == ${queryData.context.categoryLabel}  // Changed to nameEN for schema match
+              FOR trans IN ${this.serviceCategoryTranslations}
+                FILTER LOWER(trans.languageCode) == 'en'
+                FILTER trans.translation == ${queryData.context.categoryLabel}
                 LIMIT 1
-                RETURN cat._key
+                RETURN trans.serviceCategoryId
             `;
           const cursor = await this.db.query(categoryQuery);
           categoryId = await cursor.next();
@@ -634,10 +647,13 @@ class QueryService {
       let serviceIds = queryData.serviceId ? [queryData.serviceId] : []; // Preserve if provided (as single or array)
       if (queryData.context?.serviceLabels?.length > 0 && serviceIds.length === 0) {
         try {
+          // Same SSOT as the category: the ENGLISH translation the wire
+          // carries, not the document's cached `nameEN` copy.
           const servicesQuery = aql`
-              FOR svc IN ${this.services}
-                FILTER svc.nameEN IN ${queryData.context.serviceLabels}  // Changed to nameEN for schema match
-                RETURN svc._key
+              FOR trans IN ${this.serviceTranslations}
+                FILTER LOWER(trans.languageCode) == 'en'
+                FILTER trans.translation IN ${queryData.context.serviceLabels}
+                RETURN trans.serviceId
             `;
           const cursor = await this.db.query(servicesQuery);
           serviceIds = await cursor.all();

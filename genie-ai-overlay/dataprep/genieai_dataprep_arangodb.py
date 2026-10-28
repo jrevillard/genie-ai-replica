@@ -1634,6 +1634,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             if not isinstance(category, dict):
                                 malformed += 1
                                 continue
+                            # A category the payload does not name keeps a
+                            # group of its own: its services are not filed
+                            # under the name of the category that precedes
+                            # them. The name is set below, when the payload
+                            # carries one.
+                            group_name = ""
                             # The EN translation is the vocabulary every
                             # chunk_label is minted from. The localized name
                             # only happens to BE English while the fetch

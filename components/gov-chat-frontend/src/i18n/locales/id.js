@@ -1391,6 +1391,8 @@ export default {
       'Masalah konfigurasi: label "{labels}" tidak lagi ada dalam hierarki pengetahuan. Tombol ini tidak dapat digunakan sampai konfigurasinya diperbarui.',
     quickHelpCategoryGone:
       'Masalah konfigurasi: kategori tombol ini tidak lagi ada dalam hierarki pengetahuan. Tombol ini tidak dapat digunakan sampai konfigurasinya diperbarui.',
+    quickHelpScopeUnavailable:
+      'Masalah konfigurasi: hierarki pengetahuan tidak dapat dimuat, sehingga cakupan tombol ini tidak dapat diverifikasi. Tombol ini tidak dapat digunakan sampai hierarki tersedia.',
     serviceLabelMismatch: 'Layanan "{label}" menggunakan label UI yang mungkin tidak cocok dengan hierarki pengetahuan',
     noFilterWarning: 'Tidak ada filter konteks aktif — kueri akan tidak difilter.',
     placeholder: 'Ketik pertanyaan Anda di sini...',

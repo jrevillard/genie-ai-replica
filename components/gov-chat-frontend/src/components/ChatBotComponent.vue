@@ -329,7 +329,11 @@
           </ChatComposer>
         </div>
 
-        <div class="quick-help-grid">
+        <!-- The grid waits for the hierarchy: a button carries a scope,
+             and the hierarchy is what names it. A button rendered before
+             the hierarchy is known cannot say whether its scope is valid
+             — and a click it cannot answer is a dead click. -->
+        <div v-if="quickHelpScopeSettled" class="quick-help-grid">
           <DsCard
             v-for="button in tileButtons"
             :key="button.id"
@@ -672,6 +676,12 @@ export default {
       currentCategoryId: null,
       serviceCategories: [],
       serviceCategoriesLoadPromise: null, // This will now hold the transformed tree data
+      // The state of the hierarchy load: 'loading' until it settles, then
+      // 'loaded' or 'failed'. The hierarchy is what NAMES a Quick Help
+      // scope, so a button cannot say whether its scope is valid before it
+      // has settled — and a button that cannot answer its click must not
+      // be offered.
+      serviceCategoriesStatus: 'loading',
       chatHistoryService: chatHistoryService,
       quickHelpButtons: [],
       // The in-flight load of the Quick Help configuration. A restore that
@@ -889,6 +899,12 @@ export default {
     // no schema change needed for that).
     tileButtons() {
       return this.quickHelpButtons.filter((b) => b && b.placement !== 'composer');
+    },
+    // The hierarchy has settled — it loaded, or it failed. Until then the
+    // Quick Help buttons cannot be checked against it, and a button that
+    // cannot be checked cannot be offered.
+    quickHelpScopeSettled() {
+      return this.serviceCategoriesStatus !== 'loading';
     }
   },
 
@@ -1163,8 +1179,13 @@ export default {
       try {
         // Use the service which handles transformation and localization
         this.serviceCategories = await serviceTreeService.getAllCategories(this.currentLocale);
+        this.serviceCategoriesStatus = 'loaded';
       } catch (error) {
         console.error('[ChatBotComponent] Failed to load service categories:', error);
+        // The hierarchy is what names a scope: without it, no Quick Help
+        // scope can be verified — and a scope that cannot be verified must
+        // not be sent (the corpus would answer outside it).
+        this.serviceCategoriesStatus = 'failed';
         notificationService.error('Could not load service categories.');
       }
     },
@@ -1208,16 +1229,32 @@ export default {
     // all. A broken button is a VISIBLE failure — error icon, caption, no
     // query — never a silently reduced one.
     quickHelpScopeState(button) {
-      if (!Array.isArray(this.serviceCategories) || this.serviceCategories.length === 0) {
-        // A tree that has not loaded (or failed to) says nothing about any
-        // button: report nothing rather than report every button broken.
-        return { broken: false, missingLabels: [], categoryMissing: false };
+      if (this.serviceCategoriesStatus === 'failed') {
+        // The hierarchy is what NAMES a scope. Without it, no scope can be
+        // verified — and the button says so rather than looking healthy
+        // and swallowing the click.
+        return { broken: true, unavailable: true, missingLabels: [], categoryMissing: false };
+      }
+      if (this.serviceCategoriesStatus === 'loading') {
+        // Nothing is known yet: report nothing rather than report every
+        // button broken. The grid waits for the hierarchy before it is
+        // rendered at all.
+        return { broken: false, unavailable: false, missingLabels: [], categoryMissing: false };
       }
       const enLabels = this.enLabelSet;
       const missingLabels = (button.serviceLabels || []).filter((label) => !enLabels.has(label));
+      // The category is usable only when the hierarchy names it in
+      // ENGLISH: that spelling is the wire. A category the hierarchy does
+      // not carry, and a category it carries without an EN translation,
+      // are the same thing here — a scope that cannot be named.
       const categoryMissing =
-        button.category != null && button.category !== 'general' && !this.categoryIndex.has(button.category.toString());
-      return { broken: missingLabels.length > 0 || categoryMissing, missingLabels, categoryMissing };
+        button.category != null && button.category !== 'general' && this.getCategoryEnLabel(button.category) == null;
+      return {
+        broken: missingLabels.length > 0 || categoryMissing,
+        unavailable: false,
+        missingLabels,
+        categoryMissing
+      };
     },
 
     // Whether a scope can be put on the wire. A button that declares a
@@ -1235,6 +1272,9 @@ export default {
       const state = this.quickHelpScopeState(button);
       if (!state.broken) {
         return '';
+      }
+      if (state.unavailable) {
+        return this.translate('chatbot.quickHelpScopeUnavailable', '');
       }
       const parts = [];
       if (state.missingLabels.length > 0) {
@@ -1278,6 +1318,32 @@ export default {
       if (hasSidebarItem && !hasServiceFilter && !context.categoryLabel && !isJustChat) {
         blocked = true;
         warnings.push(this.translate('chatbot.noFilterWarning', 'No context filter active.'));
+      }
+
+      // A Quick Help scope the hierarchy can no longer NAME leaves the
+      // query with no filter at all: the corpus would answer outside the
+      // scope the button declared. That is the silent reduction this
+      // branch forbids — the send is refused, and EVERY user is told why
+      // (the mismatch warnings above reach admins alone, which is not
+      // enough for the person whose question was refused).
+      const vanishedQuickHelpScope = this.selectedContextItems.some(
+        (item) =>
+          item.source === QUICK_HELP_SOURCE &&
+          item.id !== 'just-chat' &&
+          item.category != null &&
+          item.category !== 'general' &&
+          !this.quickHelpScopeIsNameable(item.category)
+      );
+      if (vanishedQuickHelpScope) {
+        blocked = true;
+        notificationService.error(
+          this.translate(
+            this.serviceCategoriesStatus === 'failed'
+              ? 'chatbot.quickHelpScopeUnavailable'
+              : 'chatbot.quickHelpCategoryGone',
+            ''
+          )
+        );
       }
 
       // Mismatch check: each service label must be a known KB label (in some item's

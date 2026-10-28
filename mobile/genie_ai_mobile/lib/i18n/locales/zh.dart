@@ -931,6 +931,8 @@ const Map<String, dynamic> zhLocale = {
     "whatCanIHelp": "今天我能为您提供什么帮助？",
     "quickHelpLabelGone": "配置问题：标签“{labels}”已不存在于知识层次结构中。在更新配置之前，此按钮无法使用。",
     "quickHelpCategoryGone": "配置问题：此按钮的类别已不存在于知识层次结构中。在更新配置之前，此按钮无法使用。",
+    "quickHelpScopeUnavailable":
+        "配置问题：知识层次结构无法加载，因此无法验证此按钮的范围。在层次结构可用之前，此按钮无法使用。",
     "queryContext": "查询上下文",
     "contextAdded": "上下文已添加到您的查询",
     "contextRemoved": "上下文已从您的查询中移除",

@@ -149,6 +149,7 @@ const swaggerOptions = {
         // label matches no chunk and scopes the query to nothing.
         QueryContext: {
           type: 'object',
+          description: 'Context labels (required for conversation mode)',
           properties: {
             categoryLabel: {
               type: 'string',
@@ -160,7 +161,7 @@ const swaggerOptions = {
               type: 'array',
               items: { type: 'string' }
             },
-            language: { type: 'string' }
+            language: { type: 'string', default: 'EN' }
           }
         },
         Session: {

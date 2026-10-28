@@ -12,17 +12,44 @@
 
 /// Checks Quick Help buttons against the live hierarchy.
 ///
-/// A tree that has not loaded (or failed to) says nothing about any button,
-/// so it validates nothing: [stateFor] reports every button as unbroken.
+/// The hierarchy is what NAMES a scope: the config carries a category
+/// KEY, the wire carries its ENGLISH label, and only the hierarchy can
+/// say what that label is. A hierarchy that has not loaded says nothing
+/// about any button ([pending]); a hierarchy that could not be loaded
+/// says that no scope can be verified at all ([unavailable]).
 class QuickHelpScopeResolver {
-  QuickHelpScopeResolver(List<dynamic> enTree)
+  QuickHelpScopeResolver(List<dynamic> enTree, {this.unavailable = false})
     : _enLabels = _collectEnLabels(enTree),
-      _categoryLabelsEn = _indexCategories(enTree),
-      _hasTree = enTree.isNotEmpty;
+      _categoryLabelsEn = _indexCategories(enTree);
+
+  /// A hierarchy that could not be loaded names no scope at all.
+  factory QuickHelpScopeResolver.unavailable() =>
+      QuickHelpScopeResolver(const [], unavailable: true);
+
+  /// The scope state of a button whose hierarchy has not loaded yet: it
+  /// says nothing about any button.
+  static const Map<String, dynamic> pending = {
+    'broken': false,
+    'unavailable': false,
+    'missingLabels': <String>[],
+    'categoryMissing': false,
+  };
+
+  /// The scope state of every button when the hierarchy could not be
+  /// loaded: no scope can be verified, and every button must say so.
+  static const Map<String, dynamic> unavailableScope = {
+    'broken': true,
+    'unavailable': true,
+    'missingLabels': <String>[],
+    'categoryMissing': false,
+  };
+
+  /// The hierarchy could not be loaded: no scope can be verified, and
+  /// every button must say so.
+  final bool unavailable;
 
   final Set<String> _enLabels;
   final Map<String, String> _categoryLabelsEn;
-  final bool _hasTree;
 
   static Set<String> _collectEnLabels(List<dynamic> enTree) {
     final labels = <String>{};
@@ -57,12 +84,8 @@ class QuickHelpScopeResolver {
 
   /// The scope state of [button] against the live tree.
   Map<String, dynamic> stateFor(Map<String, dynamic> button) {
-    if (!_hasTree) {
-      return {
-        'broken': false,
-        'missingLabels': const <String>[],
-        'categoryMissing': false,
-      };
+    if (unavailable) {
+      return unavailableScope;
     }
 
     final declared =
@@ -74,14 +97,20 @@ class QuickHelpScopeResolver {
         .toList();
 
     final category = button['category']?.toString();
+    // The category is usable only when the hierarchy names it in
+    // ENGLISH: that spelling is the wire. A category the hierarchy does
+    // not carry, and a category it carries without an EN translation,
+    // are the same thing here — a scope that cannot be named.
     final categoryMissing =
         category != null &&
         category.isNotEmpty &&
         category != 'general' &&
-        !_categoryLabelsEn.containsKey(category);
+        (_categoryLabelsEn[category] == null ||
+            _categoryLabelsEn[category]!.isEmpty);
 
     return {
       'broken': missingLabels.isNotEmpty || categoryMissing,
+      'unavailable': false,
       'missingLabels': missingLabels,
       'categoryMissing': categoryMissing,
     };

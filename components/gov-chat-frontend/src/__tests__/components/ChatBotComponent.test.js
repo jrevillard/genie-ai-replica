@@ -1711,6 +1711,7 @@ describe('ChatBotComponent', () => {
           children: [{ name: 'Naissances', nameEN: 'Births' }]
         }
       ];
+      vm.serviceCategoriesStatus = 'loaded';
 
       const state = vm.quickHelpScopeState(button);
       // 'Registration' was renamed ('Birth Registration' now) — the button can
@@ -1725,6 +1726,7 @@ describe('ChatBotComponent', () => {
 
       const button = { id: 'tax', service: 'Taxes', serviceLabels: ['Tax Filing'], category: '404', icon: 'x' };
       vm.serviceCategories = [{ catKey: '2', name: 'Crops', nameEN: 'Crops', children: [] }];
+      vm.serviceCategoriesStatus = 'loaded';
 
       const state = vm.quickHelpScopeState(button);
       expect(state.broken).toBe(true);
@@ -1753,8 +1755,10 @@ describe('ChatBotComponent', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
-      // An empty tree is a tree that has not loaded (or failed to): it says
-      // nothing about any button's scope, so it reports nothing.
+      // A tree that has not loaded yet says nothing about any button's
+      // scope, so it reports nothing. (A tree that FAILED to load is a
+      // different thing: every scope is unverifiable, and every button
+      // says so.)
       const button = {
         id: 'civil',
         service: 'État civil',
@@ -1784,6 +1788,7 @@ describe('ChatBotComponent', () => {
         visibleText: 'visible text'
       };
       vm.serviceCategories = [{ catKey: '2', name: 'État civil', nameEN: 'Civil Registry', children: [] }];
+      vm.serviceCategoriesStatus = 'loaded';
 
       await vm.selectQuickHelpOption(broken);
 
@@ -1815,6 +1820,106 @@ describe('ChatBotComponent', () => {
       expect(mockSubmitQueryStream).not.toHaveBeenCalled();
       expect(vm.selectedContextItems).toHaveLength(0);
       expect(vm.currentCategoryId).toBeNull();
+    });
+
+    it('a category the hierarchy carries without an EN translation breaks the scope', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // The wire speaks EN: a category the hierarchy carries only in the
+      // localized spelling has no filterable label at all. The button
+      // promises a scope it cannot keep — a broken button, not a healthy
+      // one that silently sends nothing.
+      const button = { id: 'civil', service: 'État civil', serviceLabels: [], category: '2', icon: 'x' };
+      vm.serviceCategories = [{ catKey: '2', name: 'État civil', nameEN: null, children: [] }];
+      vm.serviceCategoriesStatus = 'loaded';
+
+      const state = vm.quickHelpScopeState(button);
+      expect(state.broken).toBe(true);
+      expect(state.categoryMissing).toBe(true);
+    });
+
+    it('a scoped button whose category has no EN translation sends no query', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const tree = [{ catKey: '2', name: 'État civil', nameEN: null, children: [] }];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+
+      const button = {
+        id: 'civil',
+        service: 'État civil',
+        serviceLabels: [],
+        category: '2',
+        icon: 'x',
+        hiddenPrompt: 'hidden prompt',
+        visibleText: 'visible text'
+      };
+      await vm.selectQuickHelpOption(button);
+
+      expect(mockSubmitQueryStream).not.toHaveBeenCalled();
+      expect(vm.selectedContextItems).toHaveLength(0);
+    });
+
+    it('a hierarchy that could not be loaded breaks every scope, and says so', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      vm.serviceCategoriesStatus = 'failed';
+
+      // The hierarchy is what NAMES a scope. Without it, no scope can be
+      // verified — and the button must say that, not look healthy and
+      // swallow the click.
+      const button = { id: 'civil', service: 'État civil', serviceLabels: [], category: '2', icon: 'x' };
+      const state = vm.quickHelpScopeState(button);
+      expect(state.broken).toBe(true);
+      expect(state.unavailable).toBe(true);
+      expect(vm.quickHelpErrorCaption(button)).toBe('chatbot.quickHelpScopeUnavailable');
+    });
+
+    it('the Quick Help grid waits for the hierarchy before it offers a click', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // A button rendered before the hierarchy is known cannot say whether
+      // its scope is valid — and a click it cannot answer is a dead click.
+      vm.serviceCategoriesStatus = 'loading';
+      await vm.$nextTick();
+      expect(wrapper.find('.quick-help-grid').exists()).toBe(false);
+
+      vm.serviceCategoriesStatus = 'loaded';
+      await vm.$nextTick();
+      expect(wrapper.find('.quick-help-grid').exists()).toBe(true);
+    });
+
+    it('a restored scope the hierarchy can no longer name blocks the send', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const tree = [{ catKey: '2', name: 'Crops', nameEN: 'Crops', children: [] }];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+
+      // A conversation saved with a Quick Help scope whose category has
+      // left the hierarchy: the scope cannot be named any more, so the
+      // query would leave with NO filter — the corpus answering outside
+      // the scope the button declared. The send is refused, and the user
+      // is told why (the warning goes to admins alone — not enough).
+      vm.$store.commit('conversation/setContextItems', [
+        {
+          service: 'Taxes',
+          serviceKey: 'taxes',
+          serviceLabels: null,
+          source: 'quickHelp',
+          id: 'taxes',
+          category: '5',
+          selected: true
+        }
+      ]);
+      vm.currentCategoryId = '5';
+
+      expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] })).toBe(false);
+      expect(mockNotificationError).toHaveBeenCalledWith('chatbot.quickHelpCategoryGone');
     });
 
     it('restores the category scope of a saved conversation', async () => {

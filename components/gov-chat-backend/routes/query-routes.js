@@ -787,8 +787,6 @@ module.exports = (queryService) => {
    *                 description: Full conversation history (required for conversation mode)
    *               context:
    *                 $ref: '#/components/schemas/QueryContext'
-   *                     default: EN
-   *                 description: Context labels (required for conversation mode)
    *               contextOption:
    *                 type: string
    *                 enum: [single-message, conversation-with-context-labels]

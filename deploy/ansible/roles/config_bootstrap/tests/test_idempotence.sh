@@ -247,11 +247,19 @@ restore() {
     # that removed the host's config (a wrong branch, or a mirror whose source
     # path is wrong) must not leave the node without it while the script
     # reports a successful restore.
+    #
+    # The tree is synced into place, not extracted over a fresh extraction of
+    # $CONFIG_DIR: running containers hold bind mounts on these directories,
+    # so the directory inodes must survive the restore or every container
+    # would keep serving the deleted inode's content until restarted. rsync
+    # updates the tree inside the existing directories; a serving container
+    # never notices.
     if [ -n "$BACKUP_ARCHIVE" ] &&
         ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
             -a "test -f '$BACKUP_ARCHIVE'" >/dev/null 2>&1; then
+        RESTORE_SCRATCH="$CONFIG_PARENT/.config_bootstrap_restore_scratch"
         if ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
-            -a "rm -rf '$CONFIG_DIR' && tar -xpf '$BACKUP_ARCHIVE' -C '$CONFIG_PARENT'" >/dev/null 2>&1; then
+            -a "rm -rf '$RESTORE_SCRATCH' && mkdir -p '$RESTORE_SCRATCH' && tar -xpf '$BACKUP_ARCHIVE' -C '$RESTORE_SCRATCH' && rsync -a --delete '$RESTORE_SCRATCH/$(basename "$CONFIG_DIR")/' '$CONFIG_DIR/' && rm -rf '$RESTORE_SCRATCH'" >/dev/null 2>&1; then
             ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
                 -a "rm -f '$BACKUP_ARCHIVE'" >/dev/null 2>&1 || true
             printf '  [ok] %s restored from pre-test backup; backup removed.\n' "$CONFIG_DIR"
@@ -261,7 +269,8 @@ restore() {
     fi
     printf '  [FAIL] automatic restore did not complete.\n' >&2
     printf '         To restore %s by hand, run on the host:\n' "$CONFIG_DIR" >&2
-    printf '           tar -xpf %s -C %s\n' "$BACKUP_ARCHIVE" "$CONFIG_PARENT" >&2
+    printf '           mkdir -p /tmp/cb-restore && tar -xpf %s -C /tmp/cb-restore\n' "$BACKUP_ARCHIVE" >&2
+    printf '           rsync -a --delete /tmp/cb-restore/config/ %s/ && rm -rf /tmp/cb-restore\n' "$CONFIG_DIR" >&2
     # The restore failed and the host's config tree is gone (the rm -rf ran,
     # the extraction did not). That is the worst outcome this script can
     # produce, so it must not be reported as a pass: the CALLER decides the
@@ -291,11 +300,11 @@ CONFIG_DIR="$(resolve_config_dir)"
 # config_dir is "{{ deploy_dir }}/config" (group_vars/all.yml:22) - normalise so
 # the sub-path joins below are unambiguous whether or not it carries a slash.
 CONFIG_DIR="${CONFIG_DIR%/}"
-# The restore below removes the config tree and extracts the backup in its
-# place, so the path has to be the one the deployment uses: a mis-resolved
-# config_dir would otherwise be deleted wholesale. The playbook always derives
-# it as "{{ deploy_dir }}/config", so the basename is checked before anything
-# destructive can run.
+# The restore below rsyncs the backup into the config tree with --delete, so
+# the path has to be the one the deployment uses: a mis-resolved config_dir
+# would have the deployment's files deleted from it. The playbook always
+# derives it as "{{ deploy_dir }}/config", so the basename is checked before
+# anything destructive can run.
 [ "$(basename "$CONFIG_DIR")" = "config" ] || die \
     "refusing to operate on '$CONFIG_DIR': config_dir must be a directory named 'config'."
 CONFIG_PARENT="$(dirname "$CONFIG_DIR")"
@@ -360,7 +369,11 @@ step "Asserting the seeded Keycloak theme set"
 
 # genie-realm.yaml:14-17 points login, account, admin and email at the same
 # KEYCLOAK_THEME value, so all four subtrees must exist. A missing one is a
-# silent regression: Keycloak falls back to its built-in theme.
+# silent regression: Keycloak falls back to its built-in theme. This list is
+# the parent theme's own shape — keep it in step with the keycloak pair's
+# expect list in the role defaults: a deployment that retires one of the
+# parent's subtrees retires it there AND here, or this test reports the
+# converged role as broken.
 for sub in login account admin email; do
     remote_sh "test -f '$KEYCLOAK_THEME_DIR/genie/$sub/theme.properties'" ||
         fail "keycloak theme subtree incomplete: $sub/theme.properties missing under $KEYCLOAK_THEME_DIR/genie"

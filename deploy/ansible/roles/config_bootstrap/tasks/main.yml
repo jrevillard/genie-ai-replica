@@ -47,12 +47,15 @@
   block:
     # The pre-mirror role kept its scratch under a fixed path and removed it
     # only at the end of a successful play, so failed runs left the archives
-    # and the extraction tree on every node. This run's scratch is private;
-    # these two paths are what it replaced. Only what has been there for more
-    # than a week is removed, so a deployment of the pre-mirror role that is
-    # still running keeps its scratch. Retirable once every node has run this
-    # role at least once.
-    - name: Remove the legacy scratch tree and archives of the pre-mirror role
+    # and the extraction tree on every node. This run's scratch is private and
+    # removed in the always section — but a kill or a lost connection before
+    # the play reaches it skips that cleanup, so this janitor is what reaps
+    # those trees too: the single pattern covers the pre-mirror names and this
+    # role's own tempfile prefix. Only what has been there for more than a
+    # week is removed, so a deployment of the pre-mirror role that is still
+    # running keeps its scratch. Retirable once every node has run this role
+    # at least once.
+    - name: Remove the scratch trees older than a week
       become_user: root
       ansible.builtin.command:
         argv:
@@ -60,13 +63,8 @@
           - /tmp
           - -maxdepth
           - "1"
-          - (
           - -name
-          - genieai-config-extract
-          - -o
-          - -name
-          - genieai-config-extract-*.tar.gz
-          - )
+          - genieai-config-*
           - -mtime
           - "+7"
           - -print
@@ -192,9 +190,11 @@
     # defines one, so a host whose .env predates it silently checked the
     # default theme and the mirror then deleted the deployment's real theme.
     # The variable is what templates/env.j2 renders into KEYCLOAK_THEME and
-    # what docker-compose passes to the realm. It has a default in the role
-    # (defaults/main.yml), so every node checks the same theme unless the
-    # deployment overrides it — the theme is a property of the deployment,
+    # what docker-compose passes to the realm. Its deployment-wide default
+    # lives in group_vars/all.yml (not in the role: a role default would be
+    # invisible to the .env-rendering play), so every node checks the same
+    # theme unless the deployment overrides it — the theme is a property of
+    # the deployment,
     # not of a node.
     - name: Read the Keycloak theme this deployment is configured to use
       ansible.builtin.set_fact:
@@ -231,6 +231,20 @@
           have a dest_subdir under keycloak/). The theme guard has nothing to
           check, and the mirror would delete the deployment's theme.
         success_msg: "config_bootstrap: the Keycloak themes are seeded by a pair"
+
+    # An empty entrypoints list would run the stat loop over zero items and
+    # pass vacuously: the guard would check nothing while reporting success,
+    # and the mirror would delete the deployment's theme unchecked.
+    - name: Fail unless the theme guard has entrypoints to check
+      ansible.builtin.assert:
+        that:
+          - config_bootstrap_theme_entrypoints | length > 0
+        fail_msg: >-
+          config_bootstrap_theme_entrypoints is empty, so the theme guard
+          would check nothing and still pass. Name the theme subtrees the
+          realm points at (for the stock realm: login, account, admin, email)
+          or remove the override entirely.
+        success_msg: "config_bootstrap: the theme guard checks {{ config_bootstrap_theme_entrypoints | length }} entrypoints"
 
     # The theme's entrypoints, not its directory: a branch that ships the
     # directory without the subtrees the realm points at would pass a

@@ -320,8 +320,9 @@ spec:
         - protocol: TCP
           port: 9428
     {{- end }}
-    # document-repository (file references) — post-DNAT pod port 3001;
-    # the doc-repo ingress rule already permits backend as a peer.
+    # document-repository (file references) — post-DNAT pod port,
+    # services.documentRepository.port; the doc-repo ingress rule
+    # already permits backend as a peer.
     - to:
         - podSelector:
             matchLabels:

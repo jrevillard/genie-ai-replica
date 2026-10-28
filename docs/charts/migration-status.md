@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.109**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.110**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,16 +614,60 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 36 (0.2.110)** — 7 findings from the twelfth
+  `/code-review`. The theme: the fix that could not fix, and the
+  comments that outlived their numbers.
+  - *redis-cli exits 0 on every server error reply* — verified
+    empirically on the chart's image: during a real AOF load
+    (`loading:1`) and on NOAUTH, `redis-cli ping` prints the error and
+    exits 0. The run-11 crash-loop fix therefore never could fire: the
+    bare `redis-cli ping` probe SUCCEEDED while the server could not
+    serve (and would have passed on NOAUTH too). All three probes
+    assert the reply now — `test "$(redis-cli -p <port> ping)" = PONG`
+    — mutation-tested on the real image (error reply → exit 1, so the
+    startup probe's 5-minute window actually opens during a load).
+  - *The vm-operator peer comment still said 6379* — knob-following
+    number in the same file the pass-35 binding "de-hardcoded"; the
+    block only renders with observability metrics on, so neither the
+    default render nor the pass-35 mutation saw it. The number is gone
+    (the rules carry the port).
+  - *Three more knob-port comments survived run 11's sweep* —
+    documentRepository → backend "pod port (3000)", frontend → backend
+    "(3000)", backend → document-repository "pod port 3001". Same
+    contradiction under override as the chatqna/dataprep comments run
+    11 fixed; numbers replaced with the knob name, the phrasing
+    documentRepository.yaml already used elsewhere.
+  - *The chatqna header listed "translation 9031"* — the egress rule
+    beneath dials the POD port 8888 (the Service maps 9031 to it); a
+    reader grepping the rendered policy for 9031 found nothing. The
+    header says 8888 now.
+  - *"Ingress from backend ONLY" headers contradicted the peers
+    beneath* — both redis (helm-test + vm-operator peers) and clamav
+    (helm-test peer) shipped an ONLY that the rendered from-clauses
+    deny. The headers name the peers.
+  - *The pass-35 minikube story described a cluster state that exists
+    in no wired cluster* — the minikube cluster's GitRepository tracks
+    deploy-repo `main`, which carries a README only; only the laptop
+    cluster consumes `feat/deploy-repo`. The ledger entry is corrected
+    in place; the label fix stands as repo hygiene.
+  - *Declined (KISS): a shared `redisPort` helper* — the finding
+    proposed a `genieai-umbrella.redisPort` library helper for the
+    three remaining `$svc.port | default 6379` dialer reads
+    (backend.yaml ×2, the reachability test ×1). Three sites of a
+    stable default; the finding itself concedes no runtime risk. The
+    helper is machinery, not a defect — ledger item if a fourth site
+    appears.
 - **Review loop, pass 35 (0.2.109)** — 5 findings from the eleventh
   `/code-review`, one in the deploy repo. The theme: pass 34's own
   context, again.
   - *The deploy repo has TWO overlays, and only one got the label* —
     the 0.2.108 bump updated `jrevillard-laptop` but left
     `overlays/minikube/dev` at 0.2.107, while both track the branch
-    HEAD: the minikube cluster renders 0.2.108 content under a
-    HelmRelease claiming 0.2.107 — the label naming a chart that is not
-    the one in the cluster, the exact state the bump rule exists to
-    prevent. Both overlays move together from now on.
+    HEAD. (Correction, pass 36: the mismatch lives in the repo, not in
+    a cluster — the minikube cluster's GitRepository tracks deploy-repo
+    `main`, which carries no overlays yet; only the laptop cluster
+    consumes `feat/deploy-repo`. The fix is repo hygiene that matters
+    when the branch merges.) Both overlays move together from now on.
   - *Redis could be killed mid-load* — no startupProbe: with
     `--appendonly yes` redis answers PING with `-LOADING` until the
     dataset is in memory, and on a PVC-backed /data a grown AOF can
@@ -646,7 +690,10 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     containerPort, the Service, the NetworkPolicy and the probes, while
     clamav.yaml binds its port once. A single `$redisPort` binding now
     feeds every site — mutation-tested: changing the binding moves all
-    ten rendered occurrences and leaves zero stale 6379.
+    ten rendered occurrences and leaves zero stale 6379. (Correction,
+    pass 36: the claim covers the rendered occurrences of the
+    expression; a static comment in the metrics-only vm-operator peer
+    still said 6379.)
 - **Review loop, pass 34 (0.2.108)** — 4 findings from the tenth
   `/code-review`. The theme: pass 33's own leftovers.
   - *The redis probes still dialled 6379* — pass 33 moved the
@@ -1624,7 +1671,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.109** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.110** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

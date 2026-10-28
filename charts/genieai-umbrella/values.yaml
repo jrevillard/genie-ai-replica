@@ -502,6 +502,8 @@ dependencyGraph:
       - keycloak
       - retriever
       - reranker
+      - embedding                        # EMBEDDING_SERVER_HOST_IP=embedding:6000
+      - translation                      # TRANSLATION_SERVICE_HOST_IP=translation:9031
     dataprep:
       - documentRepository
       - backend

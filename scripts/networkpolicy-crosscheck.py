@@ -530,7 +530,15 @@ def namespace_wide_egress(docs):
         if not isinstance(doc, dict) or doc.get("kind") != "NetworkPolicy":
             continue
         spec = doc.get("spec") or {}
-        types = spec.get("policyTypes") or ["Ingress", "Egress"]
+        types = spec.get("policyTypes")
+        if types is None:
+            # Kubernetes infers the types from the rules when the field
+            # is absent: Ingress always, Egress only when the policy HAS
+            # an egress block. Defaulting to both made an ingress-only
+            # policy without the field read as egress-isolating, and the
+            # reachability check reported pairs that were in fact
+            # reachable.
+            types = ["Ingress"] + (["Egress"] if spec.get("egress") else [])
         if "Egress" not in types:
             continue
         selector = spec.get("podSelector") or {}

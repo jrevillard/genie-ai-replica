@@ -38,7 +38,8 @@
   (document-repository and backend expose port 80 → targetPort 3001/3000;
   keycloak-service:8080/auth). Container/listen port 8888; healthcheck
   hits `/health` on that port.
-*/}}{{- $opea := .Values.opea | default dict -}}
+*/}}
+{{- $opea := .Values.opea | default dict -}}
 {{- $opeaChatqna := $opea.chatqna | default dict -}}
 {{- $opeaModels := $opea.models | default dict -}}
 {{- $opeaModelsLlm := $opeaModels.llm | default dict -}}

@@ -5,7 +5,8 @@
   vm-operator + app.kubernetes.io/instance: <cr-name>, verified on a
   live cluster); the gateway collector by managed-by:
   opentelemetry-operator in the stack namespace.
-*/}}{{- $obs := .Values.observability | default dict -}}
+*/}}
+{{- $obs := .Values.observability | default dict -}}
 {{- $obsLogs := $obs.logs | default dict -}}
 {{- $obsMetrics := $obs.metrics | default dict -}}
 {{- $obsTraces := $obs.traces | default dict -}}

@@ -5,7 +5,8 @@
   .Values.opea.embedding.modelId so the orchestrators and the
   in-cluster model stay aligned without a second key. Skeleton via
   genieai-umbrella.modelDeployment.
-*/}}{{- $opea := .Values.opea | default dict -}}
+*/}}
+{{- $opea := .Values.opea | default dict -}}
 {{- $opeaGpu := $opea.gpu | default dict -}}
 {{- $opeaEmbedding := $opea.embedding | default dict -}}
 

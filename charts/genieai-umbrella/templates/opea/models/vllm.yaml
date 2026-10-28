@@ -5,7 +5,8 @@
   site mirrors it and rewrites the reference via insertAgent. Skeleton
   via genieai-umbrella.modelDeployment; this file carries only the
   model-specific args.
-*/}}{{- $opea := .Values.opea | default dict -}}
+*/}}
+{{- $opea := .Values.opea | default dict -}}
 {{- $opeaGpu := $opea.gpu | default dict -}}
 {{- $opeaModels := $opea.models | default dict -}}
 {{- $opeaModelsLlm := $opeaModels.llm | default dict -}}

@@ -476,6 +476,117 @@ def keycloak_client_gaps(docs, policies):
     return gaps
 
 
+def namespace_wide_egress(docs):
+    """The policies that isolate EVERY pod's egress in the namespace.
+
+    A policy whose podSelector matches every pod, with Egress in its
+    policyTypes (the default when the field is absent), isolates the
+    egress of every pod that has no policy of its own — the helm-test
+    probes among them, which the chart admits as ingress peers of the
+    backend and the doc-repo.
+    """
+    wide = []
+    for doc in docs:
+        if not isinstance(doc, dict) or doc.get("kind") != "NetworkPolicy":
+            continue
+        spec = doc.get("spec") or {}
+        types = spec.get("policyTypes") or ["Ingress", "Egress"]
+        if "Egress" not in types:
+            continue
+        selector = spec.get("podSelector") or {}
+        if not (selector.get("matchLabels") or {}) and not selector.get("matchExpressions"):
+            wide.append(doc)
+    return wide
+
+
+def rendered_components(docs):
+    """The components that have a workload in this render."""
+    components = set()
+    for doc in docs:
+        if not isinstance(doc, dict) or doc.get("kind") not in (
+            "Deployment",
+            "Job",
+            "StatefulSet",
+            "DaemonSet",
+            "Pod",
+        ):
+            continue
+        template = (doc.get("spec") or {}).get("template") or {}
+        # A Pod carries its labels in its own metadata; a Deployment (or
+        # Job) carries them in the pod template it renders.
+        labels = (template.get("metadata") or {}).get("labels") or (doc.get("metadata") or {}).get("labels") or {}
+        component = labels.get("genieai.io/component") or labels.get("app")
+        if component:
+            components.add(component)
+    return components
+
+
+def ingress_peers_without_policy(docs, policies):
+    """(peer, destination) for the ingress peers that carry no policy.
+
+    A flow declared only on the INGRESS side is not asserted (see
+    declared_flows: the in-cluster GPU tier was never run on a cluster,
+    so those findings would ship a red CI on a tier nobody has
+    exercised). This narrower pair IS decidable: a peer with no policy
+    of its own is unrestricted — unless a namespace-wide policy isolates
+    its egress.
+    """
+    pairs = set()
+    present = rendered_components(docs)
+    for doc in docs:
+        if not isinstance(doc, dict) or doc.get("kind") != "NetworkPolicy":
+            continue
+        spec = doc.get("spec") or {}
+        destination = component_of(spec.get("podSelector"))
+        if not destination:
+            continue
+        for rule in spec.get("ingress") or []:
+            for peer in rule.get("from") or []:
+                source = component_of(peer.get("podSelector"))
+                if (
+                    source
+                    and source != destination
+                    and source not in policies
+                    # A peer with no workload in this render is not a peer:
+                    # the OPEA tier is off in the base render, so the
+                    # policies that name chatqna name a pod that does not
+                    # exist here.
+                    and source in present
+                ):
+                    pairs.add((source, destination))
+    return sorted(pairs)
+
+
+def peer_reachability_gaps(docs, policies):
+    """The ingress peers a namespace-wide egress policy locks out.
+
+    The destination admits the peer on its port; the peer's own egress
+    decides whether the connection is ever made. A peer with no policy
+    is unrestricted — so the pair is fine — until a namespace-wide
+    policy isolates the egress, at which point the peer can only reach
+    what that policy admits.
+    """
+    wide = namespace_wide_egress(docs)
+    if not wide:
+        return []
+    gaps = []
+    for source, destination in ingress_peers_without_policy(docs, policies):
+        for policy in wide:
+            admitted = any(
+                peer_allows_any(rule, "to", destination)
+                for rule in (policy.get("spec") or {}).get("egress") or []
+            )
+            if not admitted:
+                gaps.append(
+                    (
+                        source,
+                        destination,
+                        policy.get("metadata", {}).get("name", "?"),
+                    )
+                )
+    return gaps
+
+
 def crosscheck(path):
     with open(path) as handle:
         docs = [d for d in yaml.safe_load_all(handle) if d]
@@ -489,6 +600,17 @@ def crosscheck(path):
     membership = []
     for component, reason in keycloak_client_gaps(docs, policies):
         membership.append((component, reason))
+    reachability = []
+    for source, destination, policy in peer_reachability_gaps(docs, policies):
+        reachability.append(
+            (
+                source,
+                destination,
+                policy,
+                f"the ingress peer has no policy of its own and the namespace-wide "
+                f"egress policy {policy} does not admit {destination}",
+            )
+        )
     for source, target, port in sorted(flows, key=lambda f: (f[0], f[1], str(f[2]))):
         missing = []
         allowed = True
@@ -516,6 +638,8 @@ def crosscheck(path):
         print(f"  SKIPPED {entry}: mixes a CIDR/namespace peer with a component peer — not asserted here")
     for component, reason in membership:
         print(f"  BLOCKED {component} -> keycloak :{KEYCLOAK_SERVICE_PORT} ({reason})")
+    for source, destination, policy, reason in reachability:
+        print(f"  BLOCKED {source} -> {destination} :any ({reason})")
     for source, target, port, missing in blocked:
         shown = port if port is not None else "any"
         print(
@@ -529,6 +653,8 @@ def crosscheck(path):
         )
     return policies, blocked + [
         (component, "keycloak", KEYCLOAK_SERVICE_PORT, reason) for component, reason in membership
+    ] + [
+        (source, destination, None, reason) for source, destination, _policy, reason in reachability
     ]
 
 

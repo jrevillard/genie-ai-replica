@@ -1669,9 +1669,15 @@ export default {
     // id), the same way applyQuickHelpButtons re-resolves the buttons. A
     // button the config no longer declares keeps its last title: the
     // chip's identity is the id, not the title.
+    //
+    // The lookup runs over the DEDUPED button list — the one the grid,
+    // the click, the restore and the send guard all read. The RAW
+    // config's first entry for an id can be a card the loader dropped
+    // (hidden, or a duplicate): re-resolving from it would put a hidden
+    // card's title on a chip whose scope is the surviving card's.
     quickHelpTitleFor(item, locale) {
-      const raw = (this.cachedConfig?.features?.chat?.quickHelp?.buttons || []).find((b) => b && b.id === item.id);
-      return (raw && resolveConfigText(raw.title, locale)) || item.service;
+      const button = this.quickHelpButtons.find((b) => b && b.id === item.id);
+      return (button && resolveConfigText(button.textKey, locale)) || item.service;
     },
 
     applyQuickHelpButtons() {

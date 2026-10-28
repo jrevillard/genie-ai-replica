@@ -3069,6 +3069,37 @@ describe('ChatBotComponent', () => {
       expect(vm.quickHelpButtons[0].serviceLabels).toEqual(['Births']);
     });
 
+    it('a hidden card sharing an id never lends its title to the surviving chip', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // The hidden filter runs BEFORE the dedup, so the surviving card is
+      // the first VISIBLE one. The raw config's first entry for the id is
+      // the HIDDEN card — and a locale switch re-resolving the chip's
+      // title from the raw list would put a hidden card's title on a chip
+      // whose scope is the visible card's. The title must come from the
+      // DEDUPED list, the one every other reader (grid, click, restore,
+      // send guard) already speaks.
+      vm.cachedConfig = {
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [
+                { id: 'civil', title: { en: 'Hidden first' }, hidden: true, category: '2' },
+                { id: 'civil', title: { en: 'Visible second', fr: 'Second visible' }, category: '2' }
+              ]
+            }
+          }
+        }
+      };
+      vm.applyQuickHelpButtons();
+      expect(vm.quickHelpButtons).toHaveLength(1);
+
+      // The title is re-resolved from the card that IS, not from the one
+      // the deployment hid.
+      expect(vm.quickHelpTitleFor({ id: 'civil', service: 'Visible second' }, 'fr')).toBe('Second visible');
+    });
+
     it('a category-only selection is not refused for lacking a service name', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;

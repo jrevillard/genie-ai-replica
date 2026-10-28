@@ -45,6 +45,26 @@ class QuickHelpScopeResolver {
     'categoryMissing': false,
   };
 
+  /// The scope state of [button] when the hierarchy could not be loaded.
+  ///
+  /// A card that declares NO scope promises nothing the hierarchy could
+  /// deny — it is the "just chat" entry, and the composer must stay
+  /// reachable when the hierarchy is down. Every card that DOES declare a
+  /// scope cannot be verified, so it says so.
+  static Map<String, dynamic> unavailableScopeFor(Map<String, dynamic> button) {
+    final category = button['category']?.toString();
+    final labels =
+        (button['serviceLabels'] as List<dynamic>?) ?? const <dynamic>[];
+    final declaresScope =
+        (category != null && category.isNotEmpty) || labels.isNotEmpty;
+    return {
+      'broken': declaresScope,
+      'unavailable': declaresScope,
+      'missingLabels': const <String>[],
+      'categoryMissing': false,
+    };
+  }
+
   /// The hierarchy could not be loaded: no scope can be verified, and
   /// every button must say so.
   final bool unavailable;
@@ -272,15 +292,20 @@ bool quickHelpScopeIsNameable(
 /// a scope with no English name would go out with NO filter at all — the
 /// corpus answering from outside the scope the selection declared.
 bool scopeCanGoOnTheWire({
-  required bool declaresScope,
+  String? categoryId,
   String? categoryNameEn,
   List<String> serviceLabels = const <String>[],
   List<String> sidebarServiceLabels = const <String>[],
 }) {
-  if (!declaresScope) return true;
   final labels = serviceLabels.isNotEmpty
       ? serviceLabels
       : sidebarServiceLabels;
+  // An EMPTY category id declares nothing: the context bar's X clears the
+  // selection with one, and an empty id is not a scope. Reading it as one
+  // would refuse every question the user asks afterwards.
+  final hasScope =
+      (categoryId != null && categoryId.isNotEmpty) || labels.isNotEmpty;
+  if (!hasScope) return true;
   return (categoryNameEn != null && categoryNameEn.isNotEmpty) ||
       labels.isNotEmpty;
 }

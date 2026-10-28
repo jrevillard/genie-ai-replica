@@ -1937,6 +1937,20 @@ describe('ChatBotComponent', () => {
       expect(vm.quickHelpScopeState(scoped).broken).toBe(true);
     });
 
+    it('an EMPTY category id declares no scope', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // A cleared selection is not a scope: the hierarchy cannot deny it,
+      // and the button must not be reported as broken because of it.
+      const button = { id: 'civil', service: 'État civil', serviceLabels: [], category: '', icon: 'x' };
+      vm.serviceCategories = [{ catKey: '2', name: 'État civil', nameEN: 'Civil Registry', children: [] }];
+      vm.serviceCategoriesStatus = 'loaded';
+
+      expect(vm.quickHelpScopeState(button).broken).toBe(false);
+      expect(vm.quickHelpScopeIsNameable('')).toBe(true);
+    });
+
     it('a hierarchy that could not be loaded breaks every scope, and says so', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;

@@ -266,29 +266,30 @@ void main() {
     test('a selection that declares NO scope asks an unscoped question', () {
       // The user's own choice: nothing was selected, so nothing is
       // declared and the query goes out as it is.
-      expect(scopeCanGoOnTheWire(declaresScope: false), isTrue);
+      expect(scopeCanGoOnTheWire(), isTrue);
+    });
+
+    test('an EMPTY category id declares no scope — the chat stays usable', () {
+      // The context bar's X clears the selection with an empty id, and the
+      // tree panel's empty selection carries one. Reading it as a scope
+      // would refuse EVERY question the user asks afterwards.
+      expect(scopeCanGoOnTheWire(categoryId: '', categoryNameEn: ''), isTrue);
     });
 
     test('a scope with an ENGLISH category label goes on the wire', () {
       expect(
-        scopeCanGoOnTheWire(
-          declaresScope: true,
-          categoryNameEn: 'Civil Registry',
-        ),
+        scopeCanGoOnTheWire(categoryId: '2', categoryNameEn: 'Civil Registry'),
         isTrue,
       );
     });
 
     test('a scope with ENGLISH service labels goes on the wire', () {
       expect(
-        scopeCanGoOnTheWire(declaresScope: true, serviceLabels: ['Births']),
+        scopeCanGoOnTheWire(categoryId: '2', serviceLabels: ['Births']),
         isTrue,
       );
       expect(
-        scopeCanGoOnTheWire(
-          declaresScope: true,
-          sidebarServiceLabels: ['Births'],
-        ),
+        scopeCanGoOnTheWire(categoryId: '2', sidebarServiceLabels: ['Births']),
         isTrue,
       );
     });
@@ -297,19 +298,48 @@ void main() {
       // The category has no EN translation: the wire would carry no
       // label, and the query would leave with NO filter — the corpus
       // answering from outside the scope the selection declared.
-      expect(
-        scopeCanGoOnTheWire(declaresScope: true, categoryNameEn: ''),
-        isFalse,
-      );
+      expect(scopeCanGoOnTheWire(categoryId: '2', categoryNameEn: ''), isFalse);
       expect(
         scopeCanGoOnTheWire(
-          declaresScope: true,
+          categoryId: '2',
           categoryNameEn: null,
           serviceLabels: const [],
           sidebarServiceLabels: const [],
         ),
         isFalse,
       );
+    });
+  });
+
+  group('QuickHelpScopeResolver.unavailableScopeFor', () {
+    test('a card that declares no scope stays usable', () {
+      // The "just chat" card promises nothing the hierarchy could deny,
+      // and the composer must stay reachable when the hierarchy is down.
+      final scope = QuickHelpScopeResolver.unavailableScopeFor({
+        'id': 'just-chat',
+        'category': null,
+        'serviceLabels': null,
+      });
+
+      expect(scope['broken'], isFalse);
+      expect(scope['unavailable'], isFalse);
+    });
+
+    test('a card that declares a scope cannot be verified', () {
+      final scoped = QuickHelpScopeResolver.unavailableScopeFor({
+        'id': 'tax',
+        'category': '5',
+        'serviceLabels': null,
+      });
+      final labelled = QuickHelpScopeResolver.unavailableScopeFor({
+        'id': 'civil',
+        'category': null,
+        'serviceLabels': ['Births'],
+      });
+
+      expect(scoped['broken'], isTrue);
+      expect(scoped['unavailable'], isTrue);
+      expect(labelled['broken'], isTrue);
     });
   });
 

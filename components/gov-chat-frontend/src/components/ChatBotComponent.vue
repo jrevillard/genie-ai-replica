@@ -1234,7 +1234,8 @@ export default {
         // verified — and the button says so rather than looking healthy
         // and swallowing the click. A card that declares NO scope promises
         // nothing the hierarchy could deny: it stays usable.
-        const declaresScope = button.category != null || (button.serviceLabels || []).length > 0;
+        const declaresScope =
+          (button.category != null && button.category !== '') || (button.serviceLabels || []).length > 0;
         return {
           broken: declaresScope,
           unavailable: declaresScope,
@@ -1255,7 +1256,10 @@ export default {
       // not carry, and a category it carries without an EN translation,
       // are the same thing here — a scope that cannot be named.
       const categoryMissing =
-        button.category != null && button.category !== 'general' && this.getCategoryEnLabel(button.category) == null;
+        button.category != null &&
+        button.category !== '' &&
+        button.category !== 'general' &&
+        this.getCategoryEnLabel(button.category) == null;
       return {
         broken: missingLabels.length > 0 || categoryMissing,
         unavailable: false,
@@ -1269,7 +1273,9 @@ export default {
     // the key, the wire needs the ENGLISH label. No label, no query: a query
     // without it would answer from the whole corpus.
     quickHelpScopeIsNameable(categoryId) {
-      if (categoryId == null || categoryId === 'general') {
+      // An EMPTY category id declares nothing: it is how a selection is
+      // CLEARED, not a scope the hierarchy could deny.
+      if (categoryId == null || categoryId === '' || categoryId === 'general') {
         return true;
       }
       return this.getCategoryEnLabel(categoryId) != null;

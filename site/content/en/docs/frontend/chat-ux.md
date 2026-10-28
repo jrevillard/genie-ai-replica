@@ -233,11 +233,13 @@ is never answered outside the scope the card promised.
 **The cards need the hierarchy to be checked.** They are rendered once the
 hierarchy load has settled: a card carries a scope, and the hierarchy is what
 names it, so a card rendered before the hierarchy is known cannot say whether
-its scope is valid. A hierarchy that **failed** to load breaks every card with
-a caption of its own — no scope can be verified, so no card can be used. A
-category the hierarchy carries **without an EN translation** is a broken scope
-too: the wire speaks ENGLISH, and a category with no English name has no
-filterable label at all.
+its scope is valid. A hierarchy that **failed** to load breaks every card that
+**declares a scope**, with a caption of its own — no scope can be verified, so
+no such card can be used. A card that declares **no** scope (the "just chat"
+entry) promises nothing the hierarchy could deny, and stays usable. A category
+the hierarchy carries **without an EN translation** is a broken scope too: the
+wire speaks ENGLISH, and a category with no English name has no filterable
+label at all.
 
 When the scope is intact but matches no document anyway (chunks ingested
 before a rename), the query abstains: chatqna's abstention instructions state

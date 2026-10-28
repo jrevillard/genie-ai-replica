@@ -534,12 +534,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // outside the scope the selection declared. The send is refused, and
     // the user is told why (the refusal happens BEFORE the turn is
     // committed, so the question stays in the composer).
-    final bool hasScope =
-        _selectedCategoryId != null ||
-        _activeServiceLabels.isNotEmpty ||
-        _sidebarServiceLabelsEn.isNotEmpty;
     if (!scopeCanGoOnTheWire(
-      declaresScope: hasScope,
+      categoryId: _selectedCategoryId,
       categoryNameEn: _selectedCategoryNameEn,
       serviceLabels: _activeServiceLabels,
       sidebarServiceLabels: _sidebarServiceLabelsEn,
@@ -1879,7 +1875,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                             final String iconAsset =
                                 button['iconAsset']?.toString() ?? '';
                             final scope = _treeUnavailable
-                                ? QuickHelpScopeResolver.unavailableScope
+                                ? QuickHelpScopeResolver.unavailableScopeFor(
+                                    button,
+                                  )
                                 : (_scopeResolver?.stateFor(button) ??
                                       QuickHelpScopeResolver.pending);
                             final broken = scope['broken'] as bool;

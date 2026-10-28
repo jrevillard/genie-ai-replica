@@ -8,7 +8,7 @@
 # The playbook never clones the repo onto the node, and the documented workflow
 # runs it from a local checkout that may sit on a different branch than the one
 # being deployed — seeding from the local checkout would write the wrong theme
-# assets, and --ignore-existing would then lock that mistake in.
+# assets, and the mirror below would then push that mistake to every host.
 
 - name: Ensure rsync is available on the target
   become_user: root
@@ -102,8 +102,18 @@
     - config_bootstrap_sync_enabled | bool
     - not ansible_check_mode | default(false) | bool
 
-# delete: false + --ignore-existing keeps manual operator edits intact between
-# deploys. Without --ignore-existing, every deploy would silently overwrite them.
+# The host copy is a MIRROR of the branch: rsync --archive --delete
+# overwrites the files the branch changed and removes the ones it no
+# longer ships. Preserving whatever sat on the host (--ignore-existing)
+# let the runtime config drift away from the branch it is validated
+# against: a stale genie-ai-config.json kept the schema it was written
+# with, while the frontend validates the served file against the schema
+# the branch ships — the app then refuses to mount, and the symptom is a
+# white page in production behind a deploy that reported success. The
+# branch is the single source of truth for the runtime config; anything
+# an operator wants changed belongs in the repository, in the flavour's
+# config file, not on the host.
+#
 # The trailing slash on src is load-bearing: without it rsync copies the source
 # directory *by name*, adding an extra level under dest.
 #
@@ -112,17 +122,38 @@
 # archives were downloaded and extracted on the target host. Plain rsync under
 # the play's become runs on the target, where the data actually is, and writes
 # into the root-owned config_dir without any --rsync-path sudo games.
-- name: Rsync branch defaults to host runtime config dir (preserve manual edits)
+- name: Rsync branch defaults to host runtime config dir (mirror the branch)
   ansible.builtin.command:
     argv:
       - rsync
       - --archive
-      - --ignore-existing
+      - --delete
       - --out-format=%i
       - "{{ config_bootstrap_tmp_root }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/"
       - "{{ config_dir }}/{{ item.dest_subdir }}/"
   register: config_bootstrap_rsync
   changed_when: config_bootstrap_rsync.stdout | trim | length > 0
+  loop: "{{ config_bootstrap_pairs }}"
+  loop_control:
+    label: "{{ item.dest_subdir }}"
+  when: config_bootstrap_sync_enabled | bool
+
+# The mirror is the claim; this is the proof. A host that still serves a
+# file the branch does not ship — or one whose content differs — is the
+# failure that cost a white page in production, and it must fail the
+# deploy here, not in the browser. diff -r compares content, so an
+# operator edit and a stale file are both caught.
+- name: Verify the host runtime config mirrors the branch copy
+  ansible.builtin.command:
+    argv:
+      - diff
+      - -r
+      - -q
+      - "{{ config_bootstrap_tmp_root }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/"
+      - "{{ config_dir }}/{{ item.dest_subdir }}/"
+  register: config_bootstrap_diff
+  changed_when: false
+  failed_when: config_bootstrap_diff.rc != 0
   loop: "{{ config_bootstrap_pairs }}"
   loop_control:
     label: "{{ item.dest_subdir }}"

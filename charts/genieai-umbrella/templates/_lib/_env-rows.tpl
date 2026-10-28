@@ -123,6 +123,45 @@ Usage: {{ include "genieai-umbrella.envRows" ($svc.env | default list) | fromJso
 {{- toJson $rows -}}
 {{- end -}}
 
+
+{{/*
+genieai-umbrella.convergenceEnvSecretRows — the operator-declared env
+rows of the Keycloak convergence Job, validated.
+
+Every row is OPERATOR-FACING: each overlay hand-writes five of them
+(data.keycloak.convergence.envSecrets), and a typo'd key — `envvar`
+instead of `envVar` — rendered `name: null` and reached the API server,
+which rejects the whole Job at apply time with "spec.template.spec.
+containers[0].env[N].name: Required value": a message naming neither
+the values key nor the row. The chart's own envRows helper rejects a
+row without a name; the same rule applies to the one operator-facing
+row list, and the placeholder-completeness guard does not cover it (it
+only catches a broken row whose variable the realm file references — an
+extra or misspelled row passes every other gate).
+
+Usage: {{ include "genieai-umbrella.convergenceEnvSecretRows" .Values.data.keycloak.convergence.envSecrets | nindent 12 }}
+*/}}
+{{- define "genieai-umbrella.convergenceEnvSecretRows" -}}
+{{- $rows := . | default list -}}
+{{- $out := list -}}
+{{- range $i, $row := $rows -}}
+{{- if not (kindIs "map" $row) -}}
+{{- fail (printf "data.keycloak.convergence.envSecrets[%d] must be a map {envVar, secretName, secretKey}, got %s" $i (kindOf $row)) -}}
+{{- end -}}
+{{- range $key := list "envVar" "secretName" "secretKey" -}}
+{{- if not (hasKey $row $key) -}}
+{{- fail (printf "data.keycloak.convergence.envSecrets[%d] has no %q — every row needs {envVar, secretName, secretKey}" $i $key) -}}
+{{- end -}}
+{{- $value := get $row $key -}}
+{{- if or (kindIs "invalid" $value) (eq (toString $value) "") -}}
+{{- fail (printf "data.keycloak.convergence.envSecrets[%d].%s is empty" $i $key) -}}
+{{- end -}}
+{{- end -}}
+{{- $out = append $out (printf "- name: %s\n  valueFrom:\n    secretKeyRef:\n      name: %s\n      key: %s" (get $row "envVar") (get $row "secretName" | quote) (get $row "secretKey" | quote)) -}}
+{{- end -}}
+{{- join "\n" $out -}}
+{{- end -}}
+
 {{- define "genieai-umbrella.boolEnvValue" -}}
 {{- $v := .value -}}
 {{- if kindIs "invalid" $v -}}{{- $v = .default -}}{{- end -}}

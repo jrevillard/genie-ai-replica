@@ -158,7 +158,35 @@ def check(docs, label):
 # YAML float).
 SAFE_VALUE = ("quote", "toString", "include", "printf", "boolEnvValue")
 ENV_NAME_LINE = re.compile(r"^\s*-\s*name:\s*[A-Za-z_][A-Za-z0-9_]*\s*$")
-ENV_VALUE_LINE = re.compile(r"^\s*value:\s*\{\{(.*)\}\}\s*$")
+ENV_VALUE_START = re.compile(r"^\s*value:\s*\{\{-?\s*")
+
+
+def _action_expression(lines, start):
+    """The expression of the `value: {{ ... }}` action starting at `start`.
+
+    The action may span several lines, and it may carry a trailing YAML
+    comment — a scanner that only matches a single line sees NEITHER, and
+    the row slips out of the gate's coverage exactly when it is at risk
+    (a comment after the action is how an author documents the knob, and
+    a wrapped expression is how a long one is written). The braces are
+    balanced so the capture ends at the action's own `}}`.
+    """
+    depth = 0
+    collected = []
+    for index in range(start, len(lines)):
+        line = lines[index]
+        # A YAML comment after the action is not part of it.
+        line = re.sub(r"(?<!#)#.*$", "", line) if "#" in line else line
+        collected.append(line)
+        depth += line.count("{{") - line.count("}}")
+        if depth <= 0 and "{{" in "".join(collected):
+            break
+    text = "\n".join(collected)
+    # GREEDY: an action may hold several sub-actions (`{{ if $smtp }}{{ ... }}{{ else }}...{{ end }}`),
+    # and the safety of the row depends on the WHOLE action, not on its first
+    # sub-expression.
+    match = re.search(r"\{\{-?\s*(.*)\s*-?\}\}", text, re.S)
+    return (match.group(1) if match else text), index
 
 
 def scan_hand_rendered_env_rows(chart_path):
@@ -186,10 +214,9 @@ def scan_hand_rendered_env_rows(chart_path):
                 value_index += 1
             if value_index >= len(lines):
                 continue
-            match = ENV_VALUE_LINE.match(lines[value_index])
-            if not match:
+            if not ENV_VALUE_START.match(lines[value_index]):
                 continue
-            expression = match.group(1)
+            expression, last = _action_expression(lines, value_index)
             if any(token in expression for token in SAFE_VALUE):
                 continue
             problems.append(

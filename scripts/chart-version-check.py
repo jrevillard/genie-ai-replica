@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
-"""The chart's version IS its artifact identity: Flux reconciles the version.
+"""The chart's version must move with the chart's content.
 
 Why this exists
 ---------------
-The deploy repo reconciles the chart from the BRANCH HEAD (the GitRepository
-source-ref carries no SHA pin), and the helm-controller compares the
-HelmRelease's `spec.chart.spec.version` with the running release. A push
-that changes the chart's CONTENT without moving that version therefore
-reconciles to "release in-sync with desired state" and installs nothing:
-the change is pushed, linted and merged, and the cluster keeps running the
-previous revision. `.claude/rules/K8s-WORKFLOW.md` states the rule — "Bump
-per push, not per batch" — and this gate makes it enforceable instead of a
-habit.
+The deploy repo's overlay names the chart it installs
+(`spec.chart.spec.version`), and that name is the deploy repo's LABEL of
+what the cluster runs: a reader of the overlay sees which chart release is
+deployed. A chart change that leaves the label behind names a release the
+cluster is not running.
+
+What the version is NOT, for this deployment: Flux does not reconcile on
+it. The HelmRelease CRD says the field is "ignored for charts from
+v1.GitRepository and v1beta2.Bucket sources" (helm-controller v1.1.0),
+and the install decision is the SOURCE's artifact digest — the chart's
+GitRepository tracks the branch tip, so a push reaches the cluster with
+or without a bump. The rule is a convention this gate makes enforceable,
+not a mechanism Flux enforces.
 
 140 of the branch's ~310 chart-touching commits changed the chart's
 content without moving the version before this gate existed (adjacent
@@ -134,8 +138,8 @@ def main():
             f"  {previous_label} -> {newest[:8]} changed:\n"
             + "".join(f"    {name}\n" for name in content)
             + f"  but the version is {new!r} on both sides.\n"
-            "  Flux reconciles the VERSION: without a bump the release reports "
-            "'in-sync with desired state' and installs nothing."
+            "  The deploy repo names the chart it installs: without a bump, "
+            "the overlay names a release the cluster is not running."
         )
         return 1
     print(f"the chart's version moved {old} -> {new} with its content")

@@ -681,16 +681,18 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     walk must know what the shipped RUNTIME reads, not what the source
     tree mentions (the frontend's `VUE_PROXY_HOST` is read by
     `server.js`, which the image never executes).
-  - *Open question: does the chart version still bind for a Git-path
-    source?* — the deploy repo's `GitRepository` carries no SHA pin and
-    the overlay's `spec.chart.spec.version` is what this branch's
-    measurement says Flux reconciles on; the reviewer's reading is that
-    a Git-path source ignores the version and the pin is inert. The
-    branch's measurement (a reconcile that printed "applied revision
-    0.2.64" and left every object at its creationTimestamp) is the
-    stronger evidence, but it was taken on a laptop cluster this
-    branch cannot reach today. Settle it with one live reconcile before
-    the MR leaves Draft.
+  - *The chart's version was NOT the artifact identity, and the repo
+    said it was* — the reviewer's reading was right and the branch's
+    own rule was wrong: the HelmRelease CRD says
+    `spec.chart.spec.version` is "ignored for charts from v1.GitRepository
+    and v1beta2.Bucket sources" (helm-controller v1.1.0), and the
+    controller's install decision is the SOURCE's artifact digest — the
+    chart's GitRepository tracks the branch tip, deliberately not a
+    commit pin ("the bump routinely got forgotten, and flux kept
+    rendering an old chart"). So a chart push reaches the cluster with
+    or without a version bump; the bump is the deploy repo's LABEL of
+    what is deployed, and the rule, the gate's docstring and the
+    workflow file now say so instead of teaching a false mechanism.
 - **Review loop, pass 31 (0.2.104)** — 10 findings from the seventh
   `/code-review`. The theme of the pass: the values a deployment reads
   through a path the chart does not own.
@@ -1001,13 +1003,14 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     requirement* — the chart renders no SealedSecret; the deploy
     repo's overlays carry them. The header now says whose
     requirement the operator is.
-  - *The chart's version IS its artifact identity, and nothing
-    enforced the bump* — Flux reconciles `spec.chart.spec.version`,
-    so a push that changes the chart without moving it installs
-    nothing (the release reports "in-sync with desired state"). 114
-    commits of this branch changed the chart without a bump.
+  - *The chart's version moved with the chart's content, and nothing
+    enforced it* — 114 commits of this branch changed the chart
+    without moving the version, and the deploy repo's overlay then
+    named a release the cluster was not running.
     `scripts/chart-version-check.py` fails the pipeline when the
-    content moves without the version.
+    content moves without the version. (The reason this pass gave —
+    "Flux reconciles `spec.chart.spec.version`" — was wrong: for a
+    Git-path source the field is ignored, and pass 32 corrected it.)
 - **Review loop, pass 24 (0.2.96)** — 7 findings from the `/code-review`
   skill, all verified true, all fixed. The review attacked the gates the
   previous passes had just rewritten, and it was right to.
@@ -1633,9 +1636,9 @@ and the rows below name each plan and its outcome.
      exposure-scenario section is in.
    - ✅ Root `CLAUDE.md` + `.claude/rules/K8s-WORKFLOW.md` — the
      port-forward, image count and validation-set bits are current, and
-     the chart-version rule explains that the version is the artifact
-     identity Flux reconciles on (a content change under an unchanged
-     version is reported "in-sync" and never installed).
+     the chart-version rule explains that the version is the deploy
+     repo's LABEL of the installed chart (for a Git-path source Flux
+     ignores the field; the install decision is the source's digest).
    - ✅ `charts/README.md` + `charts/genieai-umbrella/README.md` — refreshed
      against 0.2.66 (ingress/envoyGateway/theme values, namespace
      ownership, the four real CI gates, `ct lint`/`ct install` named as

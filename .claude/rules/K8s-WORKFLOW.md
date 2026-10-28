@@ -61,14 +61,20 @@ rtk proxy helm template genieai charts/genieai-umbrella/ \
 #    - genie-ai-deploy overlay: overlays/jrevillard-laptop/dev/helmrelease.yaml
 #      spec.chart.spec.version
 #
-#    The version is not bookkeeping — it is the artifact identity Flux
-#    reconciles on. The helm-controller compares the HelmRelease's
-#    `spec.chart.spec.version` with the running release and reports
-#    "release in-sync with desired state" when they match, so chart
-#    content that changed WITHOUT a version bump is pushed, linted,
-#    merged — and never installed. The symptom is a reconcile that
-#    prints "applied revision 0.2.64" and leaves every object at its
-#    creationTimestamp. Bump per push, not per batch.
+#    WHY, exactly: the version is the deploy repo's LABEL of the chart
+#    it installs — a reader of the overlay sees which chart release
+#    the cluster runs. It is NOT what Flux reconciles on for this
+#    source: the HelmRelease CRD says the field is "ignored for charts
+#    from v1.GitRepository and v1beta2.Bucket sources" (helm-controller
+#    v1.1.0), and the controller's install decision is the SOURCE's
+#    artifact digest — for the chart's GitRepository that is the branch
+#    tip (the overlays track `branch: feat/k8s-migration`, deliberately
+#    not a commit pin). So a chart push reaches the cluster with or
+#    without a version bump; what the bump buys is that the overlay and
+#    the chart agree on what is deployed.
+#
+#    Bump per push, not per batch, so the label never names a chart
+#    that is not the one in the cluster.
 #
 #    CI enforces it: scripts/chart-version-check.py (chart:lint job) fails
 #    the pipeline when the last two chart-touching commits changed the

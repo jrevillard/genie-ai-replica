@@ -193,15 +193,39 @@ def template_reads(templates_dir):
 
 
 def svc_reads(templates_dir):
-    """`$svc.a.b` chains — the per-service alias surface."""
+    """The per-service reads, through EVERY alias a template binds.
+
+    The factory's `$svc` is one alias; the templates bind the same
+    blocks to named variables too (`$svcBackend := $services.backend`,
+    `$servicesRedisCache := index $services "redisCache"`), and a read
+    through those (`$servicesRedisCache.port`) is a per-service read
+    exactly as much as a `$svc.` chain is. A candidate set that saw only
+    the literal `$svc.` prefix went blind the day a template read a
+    service block through its own binding — the typo-guard reported
+    "all per-service reads declared" over reads it had never collected.
+    """
     reads = {}
+    # alias -> the services.* key it names, per file scope.
     for path in sorted(templates_dir.rglob("*")):
         if path.suffix not in (".tpl", ".yaml", ".yml"):
             continue
         text = strip_go_comments(path.read_text(encoding="utf-8", errors="replace"))
+        aliases = {}
+        for m in re.finditer(
+            r"\$(\w+)\s*:=\s*(?:\$services\.(\w+)|index\s+\$services\s+\"(\w+)\")",
+            text,
+        ):
+            aliases[m.group(1)] = m.group(2) or m.group(3)
         for lineno, line in enumerate(text.splitlines(), 1):
-            for m in re.finditer(r"\$svc\.([a-zA-Z][a-zA-Z0-9_.]*)", line):
-                chain = m.group(1).rstrip(".")
+            chains = [
+                (m.group(1), m.group(2))
+                for m in re.finditer(r"\$(\w+)\.([a-zA-Z][a-zA-Z0-9_.]*)", line)
+            ]
+            for var, chain in chains:
+                service = aliases.get(var, "svc" if var == "svc" else None)
+                if not service:
+                    continue
+                chain = chain.rstrip(".")
                 if not chain:
                     continue
                 reads.setdefault(chain, []).append(f"{path.relative_to(CHART)}:{lineno}")

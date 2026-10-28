@@ -195,10 +195,13 @@ echo "-- Keycloak OIDC discovery (in-cluster — host cannot resolve .svc DNS) -
 # no label times out on an enforcing CNI — HTTP 000. The code is
 # ASSERTED, not printed: reachability alone would pass a 404 that a
 # drifted realm name or httpRelativePath answers.
-KC_CODE=$(kubectl run kc-probe --rm -i --restart=Never -n "$NS" \
+KC_RAW=$(kubectl run kc-probe --rm -i --restart=Never -n "$NS" \
   --labels="genieai.io/component=test" --image=curlimages/curl:8.10.1 --command -- \
   curl -sS -o /dev/null -w "%{http_code}" \
   "http://keycloak-service.${NS}.svc.cluster.local:8080/auth/realms/genie/.well-known/openid-configuration")
+# kubectl relays the pod's stdout AFTER its own creation line on some
+# versions ("pod/kc-probe created200") — the code is the trailing number.
+KC_CODE=$(printf '%s' "$KC_RAW" | grep -oE '[0-9]{3}[[:space:]]*$' | tr -d '[:space:]')
 case "$KC_CODE" in
   200|401) echo "  keycloak OIDC discovery: HTTP $KC_CODE (expected)";;
   *) echo "  FAIL: keycloak OIDC discovery answered HTTP ${KC_CODE:-none} (expect 200 or 401)"; exit 1;;

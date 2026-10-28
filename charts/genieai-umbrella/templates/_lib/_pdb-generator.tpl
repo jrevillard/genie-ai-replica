@@ -18,7 +18,8 @@ Usage:
 */}}
 {{- define "genieai-umbrella.pdbForService" -}}
 {{- $ctx := . -}}
-{{- $svc := index $ctx.Values.services $ctx.name -}}
+{{- $services := $ctx.Values.services | default dict -}}
+{{- $svc := index $services $ctx.name | default dict -}}
 {{- $replicas := include "genieai-umbrella.resolveReplicas" (dict "Values" $ctx.Values "service" $ctx.name) | int -}}
 {{- /* The minAvailable presence check is a nil check, NOT a truthiness
 check: `minAvailable: 0` is legal (permit every voluntary eviction, keep

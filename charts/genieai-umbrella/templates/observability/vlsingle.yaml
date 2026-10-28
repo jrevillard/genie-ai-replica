@@ -1,4 +1,6 @@
-{{- if .Values.observability.logs.enabled }}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsLogs := $obs.logs | default dict -}}
+{{- if $obsLogs.enabled }}
 {{- /*
   VLSingle CR — single-node VictoriaLogs.
   Reconciled by the vmoperator (cluster bootstrap prerequisite, NOT a
@@ -24,11 +26,11 @@ metadata:
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
 spec:
-  retentionPeriod: {{ .Values.observability.logs.retentionPeriod | quote }}
+  retentionPeriod: {{ $obsLogs.retentionPeriod | quote }}
   removePvcAfterDelete: false
   storage:
     resources:
       requests:
-        storage: {{ .Values.observability.logs.storageSize | quote }}
+        storage: {{ $obsLogs.storageSize | quote }}
   replicaCount: 1
 {{- end }}

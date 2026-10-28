@@ -9,11 +9,13 @@
   from under every other Gateway in the cluster. Opt-in via
   ingress.createGatewayClass (default false).
 */ -}}
-{{- if and .Values.ingress.enabled .Values.ingress.createGatewayClass .Values.envoyGateway.enabled -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- $envoyGateway := .Values.envoyGateway | default dict -}}
+{{- if and $ingress.enabled $ingress.createGatewayClass $envoyGateway.enabled -}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: GatewayClass
 metadata:
-  name: {{ .Values.ingress.className | default "envoy" }}
+  name: {{ $ingress.className | default "envoy" }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "ingress") | nindent 4 }}
 spec:

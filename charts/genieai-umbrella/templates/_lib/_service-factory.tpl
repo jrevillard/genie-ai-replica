@@ -16,10 +16,20 @@ top-level `.Values.component` (default: "umbrella") instead.
 {{- define "genieai-umbrella.serviceDeployment" -}}
 {{- $ctx := . -}}
 {{- $svcName := $ctx.name -}}
-{{- $svc := index $ctx.Values.services $svcName -}}
+{{- /* The service entry is copied before it is defaulted: the copy
+keeps the defaulting local to this render (no write-back into the
+chart's values), and the image block is materialized so a cleared
+`image` reads as an empty map — the guard below then reports it BY
+NAME instead of the template engine crashing on a nil parent. */ -}}
+{{- $services := $ctx.Values.services | default dict -}}
+{{- $svc := deepCopy (index $services $svcName | default dict) -}}
+{{- $_ := set $svc "image" ($svc.image | default dict) -}}
 {{- $replicas := include "genieai-umbrella.resolveReplicas" (dict "Values" $ctx.Values "service" $svcName) | int -}}
 {{- $component := $ctx.component | default $svcName -}}
 {{- $objectName := lower $svcName -}}
+{{- if not $svc.image.repository -}}
+{{- fail (printf "services.%s.image.repository is required — the chart carries no default image for this service; set services.%s.image.repository and services.%s.image.tag" $svcName $svcName $svcName) -}}
+{{- end -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

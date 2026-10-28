@@ -1,11 +1,15 @@
-{{- if .Values.data.arangodb.enabled -}}
+
+{{- $data := .Values.data | default dict -}}
+{{- $arangodb := $data.arangodb | default dict -}}
+{{- $pluggable := .Values.pluggable | default dict -}}
+{{- if $arangodb.enabled -}}
 {{- /* Honor .Values.data.arangodb.mode ONLY — no auto-promotion.
        Switching mode requires a fresh uninstall+install (kube-arangodb
        cannot mutate an ArangoDeployment's spec.mode in place; the prior
        ArangoDeployment becomes orphaned on a Helm upgrade because Helm
        only manages resources in the current render). See
        docs/charts/arangodb-mode-migration.md. */ -}}
-{{- $mode := .Values.data.arangodb.mode | default "single" -}}
+{{- $mode := $arangodb.mode | default "single" -}}
 {{- if eq $mode "single" -}}
 apiVersion: database.arangodb.com/v1
 kind: ArangoDeployment
@@ -45,14 +49,14 @@ spec:
         # Render storageClass ONLY when set: empty-string pins
         # storageClassName: "" = "no default SC" and strands the PVC
         # (same trap the CNPG template guards against).
-        {{- with .Values.pluggable.storageClassName }}
+        {{- with $pluggable.storageClassName }}
         storageClassName: {{ . }}
         {{- end }}
         accessModes:
           - ReadWriteOnce
         resources:
           requests:
-            storage: {{ .Values.data.arangodb.storageSize | default "50Gi" }}
+            storage: {{ $arangodb.storageSize | default "50Gi" }}
   auth:
     jwtSecretName: arango-jwt-secret
   # Plain HTTP on 8529. The operator enables TLS by default (per-deployment
@@ -96,7 +100,7 @@ spec:
     # reschedule loses the cluster configuration.
     volumeClaimTemplate:
       spec:
-        {{- with .Values.pluggable.storageClassName }}
+        {{- with $pluggable.storageClassName }}
         storageClassName: {{ . }}
         {{- end }}
         accessModes:
@@ -105,7 +109,7 @@ spec:
           requests:
             # Agency holds cluster-configuration state only (MBs), not
             # document data — sized independently of the dbservers volume.
-            storage: {{ .Values.data.arangodb.agentsStorageSize | default "2Gi" }}
+            storage: {{ $arangodb.agentsStorageSize | default "2Gi" }}
   dbservers:
     count: 3
     args:
@@ -114,14 +118,14 @@ spec:
       - --experimental-vector-index=true
     volumeClaimTemplate:
       spec:
-        {{- with .Values.pluggable.storageClassName }}
+        {{- with $pluggable.storageClassName }}
         storageClassName: {{ . }}
         {{- end }}
         accessModes:
           - ReadWriteOnce
         resources:
           requests:
-            storage: {{ .Values.data.arangodb.storageSize | default "50Gi" }}
+            storage: {{ $arangodb.storageSize | default "50Gi" }}
   coordinators:
     count: 2
     args:

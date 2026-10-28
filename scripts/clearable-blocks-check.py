@@ -1,85 +1,89 @@
 #!/usr/bin/env python3
-"""Clearing a CLEARABLE values block must never crash the render.
+"""Clearing a values block must never crash the render.
 
 Why this exists
 ---------------
-
 The chart's contract: a CLEARED block degrades to the derived behaviour
-(`services.backend.translation: null` is documented as the supported way
-to reset that block, and the per-service shape block documents its
-optional knobs as optional), and a block that is NOT clearable fails the
-render with a NAMED message — the guard that names the values key and
-the remedy.
+(a block whose switch lives inside it turns that tier off — the same
+meaning as `enabled: false`), and a block the chart cannot derive from
+fails in the template that needs it, BY NAME. Neither may crash the
+template engine.
 
-What it must never do is crash with "nil pointer evaluating interface
-{}.endpoint": that names a TEMPLATE (or worse, a helm test pod) instead
-of the values key the operator cleared, and with a hundred blocks in
-values.yaml the operator is left guessing which one they cleared was the
-guilty one. Three review passes found that class — in a helm test
-template reading `services.backend.translation` unguarded, in the two
-services reading their optional `pvc` block unguarded, and in the
-convergence templates reading their optional block unguarded.
+A crash is the worst of the three outcomes: "nil pointer evaluating
+interface {}.cache.enabled" names a TEMPLATE, never the values key the
+operator cleared, and a chart with a hundred blocks leaves the operator
+guessing which one they cleared was the guilty one. Six review passes
+found that class — in the helm test templates reading their optional
+blocks unguarded, in the services reading their optional `pvc` block, in
+the convergence templates reading their optional block, in the identity
+CR reading its optional sub-blocks, and in the edge tier reading its
+optional `tls`/`cors` blocks.
 
 What is checked
 ---------------
+EVERY dict-valued node in values.yaml, cleared one at a time, on BOTH
+render surfaces (the baseline and the full tier surface). The sweep is
+STRUCTURAL: the candidate list comes from the values tree itself, not
+from a hand-written list of block names — a list of names cannot see a
+block that was added later, and the blocks that crash are exactly the
+ones nobody remembered to add to the list.
 
-Every CLEARABLE block: the per-service optional knobs the shape block
-documents (for the services that declare them), plus the tier-level
-blocks the chart documents as clearable. Each one is nulled, the chart
-is rendered, and the render must not fail with the nil-pointer
-signature — the failure mode is greppable and exact, unlike a judgement
-about which message is acceptable.
+The assertion is about the FAILURE MODE, not the message: an error
+carrying the failing expression (`at <expr>`) is the template engine
+crashing and is a defect; an error that names a values key (helm's
+`fail`/`required`) is the contract being honoured.
 
-A block that is NOT clearable (a CR's structure, a required image
-reference) is out of scope: nulling it is not a configuration anyone
-writes, and the chart has no contract to keep there.
+A block the sweep cannot assert on is listed in EXEMPT, with the reason.
+The default is swept, so a NEW block is covered the day it is added.
 
 Usage: scripts/clearable-blocks-check.py [chart-path]
        CHART=charts/genieai-umbrella scripts/clearable-blocks-check.py
 """
 
 import os
+import re
 import subprocess
 import sys
 import time
 
 import yaml
 
-# The signature of an unguarded read: Go's template engine walking into
-# a nil interface. The message names the template, never the values key.
-NIL_POINTER = "nil pointer"
+# The signature of a template-engine crash: the engine reports the
+# expression it could not evaluate. A chart-authored guard (helm's
+# `fail`/`required`) reports the values key instead, and never carries
+# this shape.
+ENGINE_CRASH = "at <"
 
-# The per-service knobs the values.yaml "Per-service entry shape" block
-# documents as optional. Clearing one must degrade, not crash.
-OPTIONAL_SERVICE_KEYS = (
-    "replicas",
-    "resources",
-    "env",
-    "secrets",
-    "pvc",
-    "volumes",
-    "volumeMounts",
-    "probes",
-    "podDisruptionBudget",
-    "podAnnotations",
-    "workingDir",
-    "command",
-    "args",
-    "podSecurityContext",
-    "securityContext",
-)
+# Blocks whose clearing is NOT a configuration — the sweep cannot assert
+# on them, and the chart does not promise anything for them.
+#
+# `global` holds the chart's OWN defaults for every cluster-wide knob
+# (imageRegistry, imagePullPolicy, imagePullSecrets, toolingImageRegistry,
+# toolingArch, kubeletToolsMirror). Clearing it in an overlay DELETES those
+# defaults (Helm's `null` removes a key instead of merging it), which is a
+# destructive values edit rather than a setting: the chart's own default
+# for `toolingArch` disappears and the tools init container is handed an
+# empty architecture. The documented way to drop a global override is
+# `global: {}` — an empty map MERGES, and the chart's defaults survive.
+EXEMPT = {
+    "global": (
+        "the namespace root of the chart's cluster-wide defaults: clearing it "
+        "deletes those defaults (Helm's null removes a key), which is not a "
+        "configuration — `global: {}` is the documented way to drop an "
+        "override"
+    ),
+}
 
-# The tier-level blocks the chart documents as clearable.
-CLEARABLE_BLOCKS = (
-    "services.backend.translation",
-    "data.keycloak.convergence",
-)
+# The GPU node host is required by the external GPU mode and has no chart
+# default; the render must reach it or every orchestrator endpoint is
+# empty. The full surface needs it named.
+GPU_NODE_HOST = "https://gpu.ci-render.local:444"
 
 
-def base_flags(chart_path):
+def fixture_flags(chart_path, name):
     """The shared CI render fixture, resolved next to the chart."""
     ci_dir = os.path.join(os.path.dirname(os.path.abspath(chart_path)), "ci")
-    fixture = os.path.join(ci_dir, "render-base-flags")
+    fixture = os.path.join(ci_dir, name)
     if not os.path.isfile(fixture):
         sys.exit(f"missing render fixture: {fixture}")
     with open(fixture) as handle:
@@ -91,15 +95,28 @@ def base_flags(chart_path):
     return flags
 
 
-def candidate_blocks(values):
-    """The clearable blocks: the optional per-service knobs + the tier ones."""
-    blocks = list(CLEARABLE_BLOCKS)
-    for name, service in (values.get("services") or {}).items():
-        if not isinstance(service, dict):
-            continue
-        for key in OPTIONAL_SERVICE_KEYS:
-            if key in service:
-                blocks.append(f"services.{name}.{key}")
+def surfaces(chart_path):
+    """The render surfaces the sweep runs on: the baseline and the full tier."""
+    base = fixture_flags(chart_path, "render-base-flags")
+    full = base + fixture_flags(chart_path, "render-full-flags")
+    full.append(f"--set=opea.gpu.nodeHost={GPU_NODE_HOST}")
+    return [("baseline", base), ("full surface", full)]
+
+
+def dict_blocks(values):
+    """Every dict-valued node in the values tree, as dotted paths."""
+    blocks = []
+
+    def walk(node, prefix):
+        if not isinstance(node, dict):
+            return
+        for name, child in node.items():
+            path = f"{prefix}.{name}" if prefix else name
+            if isinstance(child, dict) and child:
+                blocks.append(path)
+            walk(child, path)
+
+    walk(values, "")
     return blocks
 
 
@@ -112,32 +129,55 @@ def main():
     values_path = os.path.join(chart_path, "values.yaml")
     with open(values_path) as handle:
         values = yaml.safe_load(handle)
-    blocks = candidate_blocks(values)
-    flags = base_flags(chart_path)
+
+    blocks = [b for b in dict_blocks(values) if b not in EXEMPT]
+    skipped = [b for b in dict_blocks(values) if b in EXEMPT]
 
     crashes = []
+    guards = 0
+    rendered = 0
     started = time.time()
-    for block in blocks:
-        proc = subprocess.run(
-            ["helm", "template", "test", chart_path, "-n", "genieai"]
-            + flags
-            + [f"--set={block}=null"],
-            capture_output=True,
-            text=True,
-        )
-        if proc.returncode == 0:
-            continue
-        if NIL_POINTER in proc.stderr:
-            first = proc.stderr.strip().split("\n")[0][:200]
-            crashes.append(f"  {block}: {first}")
-    elapsed = time.time() - started
+    for label, flags in surfaces(chart_path):
+        for block in blocks:
+            proc = subprocess.run(
+                ["helm", "template", "test", chart_path, "-n", "genieai"]
+                + flags
+                + [f"--set={block}=null"],
+                capture_output=True,
+                text=True,
+            )
+            if proc.returncode == 0:
+                rendered += 1
+                continue
+            stderr = proc.stderr
+            if ENGINE_CRASH in stderr:
+                expression = re.search(r"at <([^>]+)>", stderr)
+                template = re.search(r"templates/([A-Za-z0-9_./-]+):", stderr)
+                crashes.append(
+                    "  [%s] %s: %s — %s"
+                    % (
+                        label,
+                        block,
+                        template.group(1) if template else "?",
+                        expression.group(1) if expression else "?",
+                    )
+                )
+            else:
+                # A chart-authored guard: the render failed BY NAME.
+                guards += 1
 
+    elapsed = time.time() - started
+    total = len(blocks) * 2
     print(
-        f"{len(blocks)} clearable blocks cleared, {len(crashes)} crashed the render "
-        f"with a nil pointer ({elapsed:.0f}s)"
+        f"{len(blocks)} blocks swept on 2 surfaces ({total} renders): "
+        f"{rendered} degraded, {guards} failed by name, "
+        f"{len(crashes)} crashed the template engine ({elapsed:.0f}s)"
     )
+    if skipped:
+        for block in skipped:
+            print(f"  not swept: {block} — {EXEMPT[block]}")
     if crashes:
-        print("a cleared block must degrade or fail by NAME, never by nil pointer:")
+        print("a cleared block must degrade or fail by NAME, never by a crash:")
         for crash in crashes:
             print(crash)
         return 1

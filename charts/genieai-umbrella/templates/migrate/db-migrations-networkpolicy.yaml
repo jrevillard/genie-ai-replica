@@ -1,4 +1,6 @@
-{{- if .Values.services.backend.enabled }}
+{{- $services := .Values.services | default dict -}}
+{{- $servicesBackend := $services.backend | default dict -}}
+{{- if $servicesBackend.enabled }}
 {{- /*
   Egress for the post-install/post-upgrade migrations Job. It carries
   component "migrate-db" so it never joins the backend Service's

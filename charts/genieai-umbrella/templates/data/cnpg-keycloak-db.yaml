@@ -7,15 +7,20 @@
   Keycloak pods stay Pending on a connection error. Fail the render
   instead of shipping that combination.
 */ -}}
-{{- if and .Values.data.keycloak.enabled (not .Values.data.postgres.enabled) -}}
+{{- $data := .Values.data | default dict -}}
+{{- $kc := $data.keycloak | default dict -}}
+{{- $kcDb := $kc.db | default dict -}}
+{{- $postgres := $data.postgres | default dict -}}
+{{- $pluggable := .Values.pluggable | default dict -}}
+{{- if and $kc.enabled (not $postgres.enabled) -}}
 {{- fail "data.keycloak.enabled=true requires data.postgres.enabled=true — this chart renders exactly one CNPG Cluster (the Keycloak database, named data.keycloak.cnpgServiceName); without it the Keycloak CR has no database to connect to" -}}
 {{- end -}}
-{{- if .Values.data.postgres.enabled -}}
+{{- if $postgres.enabled -}}
 {{- $instances := include "genieai-umbrella.resolveInstances" (dict "Values" .Values "tier" "postgres") | int -}}
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
-  name: {{ .Values.data.keycloak.cnpgServiceName | default "keycloak-db" }}
+  name: {{ $kc.cnpgServiceName | default "keycloak-db" }}
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "data-postgres") | nindent 4 }}
@@ -39,11 +44,11 @@ spec:
   imageName: "ghcr.io/cloudnative-pg/postgresql:16"
   imagePullPolicy: IfNotPresent
   storage:
-    size: {{ .Values.data.postgres.storageSize | default "10Gi" }}
+    size: {{ $postgres.storageSize | default "10Gi" }}
     # Render storageClass ONLY when set: an empty-string value would pin
     # storageClassName: "" which means "NO default storage class" and
     # strands the PVC on most clusters.
-    {{- with .Values.pluggable.storageClassName }}
+    {{- with $pluggable.storageClassName }}
     storageClass: {{ . }}
     {{- end }}
     # Access modes live under pvcTemplate, NOT directly on storage:
@@ -71,7 +76,7 @@ spec:
       # cluster creates the bootstrap Secret/database and Keycloak consumes
       # them; two independent sources of truth here would let a
       # db.secretName override split that contract silently.
-      database: {{ .Values.data.keycloak.db.database | default "keycloak" }}
+      database: {{ $kcDb.database | default "keycloak" }}
       # The bootstrap role. CNPG derives it from the Secret's `username`
       # key, so `owner` and data.keycloak.db.secretName must agree: a
       # Secret carrying username: someone-else creates role
@@ -81,13 +86,13 @@ spec:
       # operator whose Secret carries a different username can say so:
       # set data.keycloak.db.username to the SAME value as the Secret's
       # `username` key.
-      owner: {{ .Values.data.keycloak.db.username | default "keycloak" }}
+      owner: {{ $kcDb.username | default "keycloak" }}
       # CNPG expects this Secret to carry BOTH `username` and `password`
       # keys (username-only fails validation). The Secret is
       # operator-provided via their secret backend; the chart does not
       # materialize it.
       secret:
-        name: {{ .Values.data.keycloak.db.secretName }}
+        name: {{ $kcDb.secretName | default "keycloak-db-credentials" }}
   serviceAccountTemplate:
     metadata:
       labels:

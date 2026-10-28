@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.111**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.112**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,30 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 38 (0.2.112)** — 3 findings from the fourteenth
+  `/code-review`, all in the comment-accuracy and coverage classes.
+  - *Three copies of the exact phrase pass 37 declared false survived* —
+    "the knob the Service follows" on the chatqna→backend rule and both
+    dataprep egress rules (backend, document-repository), one rule
+    below the instance pass 37 fixed in the same file. All three say
+    "publishes the factory's fixed 80, targets the pod by name" now.
+    Comments never render — no gate sees them; the sweep is manual and
+    a whole-file grep is the minimum, not spot fixes.
+  - *The rewritten required-secrets comment replaced one impossible
+    claim with another* — pass 37's version said the check is
+    "pre-install": the chart's actual pre-install hook validates only
+    the dependency graph, this Pod is `helm.sh/hook: test` (runs on
+    `helm test`; the Flux HelmRelease enables no tests), and
+    CreateContainerConfigError happens at container start, not
+    scheduling. The comment states the real mechanism (a `helm test`
+    failure naming the missing Secret vs a generic `--wait` timeout).
+  - *The translation-cache-password assertion was gated on the data
+    tiers* — the test Pod rendered only when a data tier was enabled,
+    so a stateless-only install (redisCache on, data off) asserted the
+    Secret nowhere. `$redisCache.enabled` joins the Pod's gate —
+    mutation-tested: with the gate reverted the stateless-only render
+    carries no test Pod; with it, the Pod renders and asserts the
+    Secret.
 - **Review loop, pass 37 (0.2.111)** — 6 findings from the thirteenth
   `/code-review`: five fixed here, one belongs to a compose-side MR.
   - *The comment sweep of runs 11–12 missed the chart's own values
@@ -635,9 +659,10 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     state* — it claimed a missing redis Secret breaks the cache
     silently while a TCP probe passes; with the NON-optional
     secretKeyRef the pod sits in CreateContainerConfigError and no
-    probe runs at all. The justification states the real mechanism
-    (the pre-install check surfaces a failure that scheduling would
-    otherwise report later).
+    probe runs at all. The justification states the real mechanism.
+    (Correction, pass 38: the check is `helm test`-scoped, not
+    pre-install, and it was gated on the data tiers — a stateless-only
+    install asserted nothing. Both fixed in pass 38.)
   - *The PONG command was copy-pasted into three probes* — bound once
     as `$redisProbe` next to `$redisPort`, the in-file idiom this file
     already established. The byte-compare against the 0.2.110 render
@@ -1708,7 +1733,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.111** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.112** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

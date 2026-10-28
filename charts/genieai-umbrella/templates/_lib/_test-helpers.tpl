@@ -19,12 +19,21 @@ indentation:
     {{- include "genieai-umbrella.testCheckHelper" . | nindent 10 }}
 */}}
 {{- define "genieai-umbrella.testCheckHelper" -}}
-# Each call: <host> <port> [path] <expected-status>
+# Each call: <host> <port> <path> <expected-status>, or the convenience
+# form <host> <port> <expected-status> (path defaults to /health). The
+# two forms were documented as one, but a 3-argument call bound the
+# status to the path and the expected value to nothing — a call the
+# helper's own documentation invited could never pass.
 check() {
   host=$1
   port=$2
-  path=${3:-/health}
-  expected=$4
+  if [ "$#" -ge 4 ]; then
+    path=$3
+    expected=$4
+  else
+    path=/health
+    expected=$3
+  fi
   code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "http://${host}:${port}${path}" 2>/dev/null || echo 000)
   if [ "$code" = "$expected" ]; then
     echo "PASS: ${host}:${port}${path} -> ${code}"

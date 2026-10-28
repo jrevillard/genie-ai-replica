@@ -11,7 +11,7 @@ Kubernetes-deployment Helm charts for GENIE.AI.
 
 ## Status
 
-`genieai-umbrella`: foundation, service tier, data layer, OPEA tier, observability, and the Gateway API edge (Envoy Gateway as an optional chart dependency, nginx removed from the data path) — all live-validated on a minikube laptop cluster via Flux. The chart version is the single source of truth in `genieai-umbrella/Chart.yaml` (Flux reconciles on it — a release that changes the chart without bumping the version is never installed). Keycloak custom theme ships at runtime (ConfigMap tarball + initContainer — `make keycloak-theme` to regenerate; CI guards drift).
+`genieai-umbrella`: foundation, service tier, data layer, OPEA tier, observability, and the Gateway API edge (Envoy Gateway as an optional chart dependency, nginx removed from the data path) — all live-validated on a minikube laptop cluster via Flux. The chart version lives in `genieai-umbrella/Chart.yaml` and moves with the chart's content — the deploy repo's overlay names it, so a release that changes the chart without bumping the version names a release the cluster is not running (Flux itself ignores the field for a Git-path source: the install decision is the source's artifact digest). Keycloak custom theme ships at runtime (ConfigMap tarball + initContainer — `make keycloak-theme` to regenerate; CI guards drift).
 
 The live map of what shipped, what was superseded and what remains is [`docs/charts/migration-status.md`](../docs/charts/migration-status.md); the design of record is [`docs/charts/helm-charts-design.md`](../docs/charts/helm-charts-design.md).
 

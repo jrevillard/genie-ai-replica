@@ -124,6 +124,22 @@ expect_fail "resetPasswordAllowed without smtp" \
   "data.keycloak.resetPasswordAllowed=true requires data.keycloak.smtp" \
   $(valid_flags_except "smtp.") --set data.keycloak.verifyEmail=false
 
+# 3b. A CLEARED knob is not an "off" knob. Helm deletes a key an
+#     overlay sets to null, so the template reads it as absent — and
+#     the fallback it applies must be the one values.yaml declares.
+#     Both knobs are declared `true`, so a nulled knob must still be
+#     true: with a `false` fallback the guard stopped firing AND the
+#     realm was imported with verification and password reset off,
+#     the opposite of the documented default, with no error anywhere.
+expect_fail "a cleared verifyEmail knob" \
+  "data.keycloak.verifyEmail=true requires data.keycloak.smtp" \
+  $(valid_flags_except "smtp.") --set data.keycloak.verifyEmail=null
+
+expect_fail "a cleared resetPasswordAllowed knob" \
+  "data.keycloak.resetPasswordAllowed=true requires data.keycloak.smtp" \
+  $(valid_flags_except "smtp.") --set data.keycloak.verifyEmail=false \
+  --set data.keycloak.resetPasswordAllowed=null
+
 # 4. The placeholder-secret guard (the chart default is true). The
 #    shared CI render fixture switches it OFF, so nothing else in the
 #    pipeline exercises it.
@@ -383,6 +399,14 @@ expect_fail "a dependency list that is not a list" \
 expect_fail "a dependency list with a non-string element" \
   "must be a list of strings, got an element of type" \
   $(valid_flags) --set-json 'dependencyGraph.services.backend=["keycloak",5]'
+
+# 31b. The clamav probe port is DERIVED from the listener's port: a
+#      probe on another port never goes Ready. The chart honours no
+#      number here, so a value that contradicts the derivation is
+#      rejected by name instead of being discarded in silence.
+expect_fail "a clamav probe port that is not the listener's" \
+  "services.clamav.probes.readiness.tcpSocket.port must equal services.clamav.port" \
+  $(valid_flags) --set services.clamav.probes.readiness.tcpSocket.port=9999
 
 # 32. The documented valid configuration must still render: a guard that
 #     rejects a good deployment is a defect too.

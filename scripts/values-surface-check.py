@@ -59,6 +59,14 @@ CHART = Path(__file__).resolve().parent.parent / "charts" / "genieai-umbrella"
 # and the protection would be lost. The block's shape is documented in the
 # comment above `smtp: null` (from, host, port, ssl, starttls, auth, user)
 # and the operator sets them in the overlay.
+#
+# The clamav probe ports are the first kind: the template reads them only
+# to REJECT a value that contradicts the derivation (the probe must dial
+# the listener, whose port is services.clamav.port). Declaring them in
+# values.yaml would make them always win over the derivation — Helm
+# merges the chart's values with the overlay's and the template cannot
+# tell them apart — so the values.yaml declares an EMPTY tcpSocket and
+# the port is derived.
 ALLOWLIST = {
     "services.backend.translation.backend",
     "data.keycloak.smtp.auth",
@@ -68,6 +76,9 @@ ALLOWLIST = {
     "data.keycloak.smtp.ssl",
     "data.keycloak.smtp.starttls",
     "data.keycloak.smtp.user",
+    "services.clamav.probes.readiness.tcpSocket.port",
+    "services.clamav.probes.liveness.tcpSocket.port",
+    "services.clamav.probes.startup.tcpSocket.port",
 }
 
 

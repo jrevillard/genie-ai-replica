@@ -1862,6 +1862,38 @@ describe('ChatBotComponent', () => {
       expect(vm.selectedContextItems).toHaveLength(0);
     });
 
+    it('the caption names the label that left the hierarchy', async () => {
+      const en = require('../../i18n/locales/en').default;
+      const wrapper = createChatBotWrapperWithI18n({ en });
+      const vm = wrapper.vm;
+      const tree = [
+        {
+          catKey: '2',
+          name: 'État civil',
+          nameEN: 'Civil Registry',
+          children: [{ name: 'Naissances', nameEN: 'Births' }]
+        }
+      ];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+
+      const button = {
+        id: 'civil',
+        service: 'État civil',
+        serviceLabels: ['Registration'],
+        category: '2',
+        icon: 'x'
+      };
+      const caption = vm.quickHelpErrorCaption(button);
+
+      // The caption NAMES the label that is gone. The i18n layer consumes
+      // the {labels} placeholder itself, so the value has to be passed to
+      // it as a parameter: a caption that replaces it by hand finds
+      // nothing left to replace, and says the label is "".
+      expect(caption).toContain('Registration');
+    });
+
     it('a hierarchy that could not be loaded breaks every scope, and says so', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
@@ -3535,19 +3567,21 @@ describe('ChatBotComponent', () => {
 
 const { createI18n } = require('vue-i18n');
 
-function createChatBotWrapperWithI18n() {
+function createChatBotWrapperWithI18n(
+  messages = {
+    en: {
+      chatbot: {
+        whatCanIHelp: 'How can {brandwordmark} help you today?'
+      }
+    }
+  }
+) {
   const store = createChatBotStore();
   const i18n = createI18n({
     legacy: true,
     locale: 'en',
     fallbackLocale: 'en',
-    messages: {
-      en: {
-        chatbot: {
-          whatCanIHelp: 'How can {brandwordmark} help you today?'
-        }
-      }
-    }
+    messages
   });
   return mount(ChatBotComponent, {
     global: {

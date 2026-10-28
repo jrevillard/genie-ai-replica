@@ -1279,7 +1279,9 @@ export default {
       const parts = [];
       if (state.missingLabels.length > 0) {
         parts.push(
-          this.translate('chatbot.quickHelpLabelGone', '').replace('{labels}', state.missingLabels.join(', '))
+          this.translateWithParams('chatbot.quickHelpLabelGone', {
+            labels: state.missingLabels.join(', ')
+          })
         );
       }
       if (state.categoryMissing) {
@@ -1305,7 +1307,7 @@ export default {
       let blocked = false;
       if (context.categoryLabel && /^Category \d+$/.test(context.categoryLabel)) {
         blocked = true;
-        warnings.push(this.translate('chatbot.categoryNotFound', '').replace('{label}', context.categoryLabel));
+        warnings.push(this.translateWithParams('chatbot.categoryNotFound', { label: context.categoryLabel }));
       }
       const hasServiceFilter = Array.isArray(context.serviceLabels) && context.serviceLabels.length > 0;
       const isJustChat = this.selectedContextItems.some((item) => item.id === 'just-chat');
@@ -1355,18 +1357,29 @@ export default {
             (item) => (item.serviceLabels || []).includes(label) || item.serviceKey === label
           );
           if (!matched) {
-            warnings.push(this.translate('chatbot.serviceLabelMismatch', '').replace('{label}', label));
+            warnings.push(this.translateWithParams('chatbot.serviceLabelMismatch', { label }));
           }
         }
       }
 
       if (warnings.length > 0 && isAdmin) {
         notificationService.warning(
-          this.translate('chatbot.configMismatchWarning', '').replace('{warnings}', warnings.join('; ')),
+          this.translateWithParams('chatbot.configMismatchWarning', { warnings: warnings.join('; ') }),
           8000
         );
       }
       return !blocked;
+    },
+
+    // Translate a key, with the placeholders filled by the i18n layer.
+    //
+    // The placeholders are passed AS PARAMETERS: vue-i18n consumes them
+    // itself, so a message that replaces them by hand afterwards finds
+    // nothing left to replace — and the caption ends up naming no label
+    // at all.
+    translateWithParams(key, params) {
+      const value = this.$t(key, params);
+      return value !== key ? value : key;
     },
 
     // Safely translate a key, with mapping for static strings

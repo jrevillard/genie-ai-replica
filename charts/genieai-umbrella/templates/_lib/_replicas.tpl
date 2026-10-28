@@ -56,18 +56,29 @@ Usage:
 {{- define "genieai-umbrella.resolveInstances" -}}
 {{- $tier := .tier -}}
 {{- $explicit := index .Values.data $tier "instances" -}}
-{{- $instances := 0 -}}
+{{- $instances := 1 -}}
+{{- /* An explicit 0 is rejected by the schema (minimum: 1): a data
+tier with no instance cannot serve, and "scale to zero" is not a thing
+a CNPG Cluster or a Keycloak CR can express. Coercing it to 1 here
+would turn the operator's mistake into a running database they did not
+ask for; failing names the value. Only an EXPLICIT 0 is an error — the
+"nothing declared" case falls through to the profile and then to 1. */ -}}
 {{- if not (kindIs "invalid" $explicit) -}}
 {{- $instances = int $explicit -}}
+{{- if eq $instances 0 -}}
+{{- fail (printf "the instance count of the %q data tier is 0: declare a count of at least 1" $tier) -}}
+{{- end -}}
 {{- else -}}
 {{- $profiles := default (dict) .Values.clusterProfileInstances -}}
 {{- if hasKey $profiles .Values.clusterProfile -}}
 {{- $perTier := index $profiles .Values.clusterProfile -}}
 {{- if hasKey $perTier $tier -}}
 {{- $instances = int (index $perTier $tier) -}}
+{{- if eq $instances 0 -}}
+{{- fail (printf "the instance count of the %q data tier is 0 in clusterProfileInstances.%s: declare a count of at least 1" $tier .Values.clusterProfile) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
-{{- if eq $instances 0 -}}{{- $instances = 1 -}}{{- end -}}
+{{- end -}}
 {{- $instances -}}
 {{- end -}}

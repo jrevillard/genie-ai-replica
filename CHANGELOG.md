@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Living Intelligence theme layer on the base theme.** A decorative layer — hero banner, dot mesh, bottom waves and corner network — is applied to the welcome screen and switched per deployment from the runtime config (`theme.visual`). The base theme ships it on; the derived flavours (`huduma`, `naat`, `original`) ship it off. Every artwork path is configurable, so an operator can swap an illustration on the host without rebuilding an image.
+- **Living Intelligence theme layer on the base theme.** A decorative layer — hero banner, dot mesh, bottom waves and corner network — is applied to the welcome screen and switched per deployment from the runtime config (`theme.visual`). The base theme ships it on; the derived flavours (`huduma`, `naat`, `original`) ship it off. Every artwork path is configurable, so an operator can swap an illustration without rebuilding an image — **the change goes in the repository, in the flavour's configuration file**: the deployment seeds the host's configuration directory as a mirror of the deployed branch (`rsync --archive --checksum --delete`), so a file changed on the host is reverted by the next deployment, and a file the branch no longer ships is removed. The deployment then verifies that the host matches the branch it just seeded, and refuses to sync a branch that does not ship the Keycloak theme the deployment is configured to use. A host that kept a stale configuration served a brand the branch no longer declared, and the app refused to start on it — a blank landing page behind a deploy that reported success.
 - **Per-category tints on the welcome-screen cards.** The nine quick-help cards now carry the background, hover and border colours that were already declared in each button's `styles` block and were never read by the frontend.
 - **`app.splash` in the runtime config.** The splash image is now a declared, per-deployment setting rather than an implicit fallback. The base theme ships the Living Intelligence globe splash; the derived flavours keep the bundled default.
 - **RAG pipeline tracing:** LLM spans now record the model, the sampling
@@ -55,20 +55,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Condense-question rewrite (multi-turn retrieval mode):** a new `MULTI_TURN_MODE=condense` handles follow-up questions — one short LLM call rewrites each follow-up into a standalone retrieval query, so corrections ("forget the beans, tell me about maize planting") and pronoun follow-ups ("what is its yield?") retrieve the right documents instead of carrying the rejected or implicit subject in the query embedding. Retrieval and reranking use the rewritten query; the answer prompt keeps the original question and history. Fail-closed: a failed rewrite fails the turn with HTTP 503 rather than answering on a wrong retrieval. Tunables: `MULTI_TURN_CONDENSE_HISTORY_TURNS` (default 8 segments = 4 exchanges), `MULTI_TURN_CONDENSE_MAX_TOKENS` (256), `MULTI_TURN_CONDENSE_TIMEOUT_SECONDS` (5.0), `MULTI_TURN_CONDENSE_SYSTEM_PROMPT` (override the rewrite prompt — a custom prompt must still demand JSON-only output). The default mode is unchanged (`blend`).
 
 ### Changed
-
-- **The host's runtime configuration now mirrors the deployed branch.**
-  The deployment seeds the host's config directory (the theme assets, the brand
-  configuration and the Keycloak themes the containers bind-mount) from the
-  branch being deployed, and the host copy is now a mirror: files the branch
-  changed are overwritten, and files the branch no longer ships are removed.
-  Previously the host kept whatever it already had, so a host could serve a
-  configuration that no longer matched the branch it was deployed from — the
-  symptom was a blank landing page behind a deploy that reported success.
-  **Operator changes to the runtime configuration must go in the repository**,
-  in the flavour's configuration file: a change made directly on the host is
-  reverted by the next deployment. The deployment also refuses to sync a branch
-  that does not ship the Keycloak theme the deployment is configured to use,
-  and fails when the host's copy does not match the branch it just seeded.
 
 - **The Keycloak theme now covers every surface, not only the login page.**
   The admin console, the account console and the Keycloak emails carry the

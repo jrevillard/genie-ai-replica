@@ -199,7 +199,6 @@ main {
 
 /* --- Cards and panels --- */
 .panel,
-.chat-message.bot .message-bubble,
 .analytics-section {
   background-color: var(--surface);
   color: var(--fg);
@@ -207,10 +206,15 @@ main {
   border-radius: var(--radius-md);
 }
 
-.chat-message.bot .message-bubble {
-  background-color: var(--bg);
-  border-bottom-left-radius: var(--radius-sm);
-}
+/* The bot bubble is not painted here: it lives inside the elevated
+   answer card, and the card is its surface. The component flattens
+   the bubble inside the card (transparent, no chrome of its own) so
+   the answer reads as one panel — painting the bubble here as well
+   stacked a second surface inside the card, and the inner one read as
+   a second colour in the middle of the answer. A global rule that
+   outranks the scoped one (a :root body prefix, for instance) brings
+   that stacking back, which is why the bubble is left to the
+   component here. */
 
 /* Analytics-section hover lift (UnifiedAnalytics.vue)
    :root body outranks scoped. Transition on base state for reverse

@@ -68,8 +68,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   carries a different brand than the host serves. A host that kept a stale
   configuration served a brand the branch no longer declared, and the app
   refused to start on it — a blank landing page behind a deploy that reported
-  success. A deployment that stops on one of those checks leaves the node
-  untouched and cleans up after itself; a failure during the mirror itself
+  success. A deployment that stops on one of those checks leaves the node's
+  runtime configuration untouched and cleans up after itself (the two things
+  it may still have done: install rsync, and reap week-old scratch trees
+  from /tmp); a failure during the mirror itself
   can leave the node half-converged, and re-running the deployment finishes
   it. `--check` does nothing for this role. Two variables relax the guards
   for the cases where they are wrong: `config_bootstrap_allow_rebrand` — a

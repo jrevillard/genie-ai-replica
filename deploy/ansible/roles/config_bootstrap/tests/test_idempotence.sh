@@ -208,10 +208,14 @@ BACKUP_ARCHIVE=""
 EXPECTED_PATH=""
 STRAY_PATH=""
 RESTORE_ARMED="false"
+RESTORE_RUNNING="false"
 
 # The restore stays armed until it SUCCEEDS, so a signal that lands while it
 # is running re-enters it: the tree is put back, the archive is removed, and
-# the run still ends on the signal's exit code. Disarming it up front left the
+# the run still ends on the signal's exit code. A signal landing mid-restore
+# finds the busy flag set and leaves the in-flight restore alone instead of
+# re-entering it — a second restore would delete the scratch tree the first
+# is still reading. Disarming it up front left the
 # archive on the host whenever a signal landed between the extraction and its
 # removal.
 # 0 = the host is back to its pre-test state (or there was nothing to
@@ -222,7 +226,14 @@ restore() {
     if [ -n "${BECOME_PW_FILE:-}" ] && [ -f "$BECOME_PW_FILE" ]; then
         rm -f "$BECOME_PW_FILE"
     fi
+    if [ "$RESTORE_RUNNING" = "true" ]; then
+        # A restore is already in flight (a second signal landed mid-restore).
+        # Let it finish alone: re-entering it would delete the scratch tree
+        # the first invocation is still reading.
+        return 0
+    fi
     [ "$RESTORE_ARMED" = "true" ] || return 0
+    RESTORE_RUNNING="true"
     if [ -n "$EXPECTED_PATH" ]; then
         ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
             -a "rm -f '$EXPECTED_PATH'" >/dev/null 2>&1 || true
@@ -264,6 +275,7 @@ restore() {
                 -a "rm -f '$BACKUP_ARCHIVE'" >/dev/null 2>&1 || true
             printf '  [ok] %s restored from pre-test backup; backup removed.\n' "$CONFIG_DIR"
             RESTORE_ARMED="false"
+            RESTORE_RUNNING="false"
             return 0
         fi
     fi
@@ -280,6 +292,7 @@ restore() {
     # needs when the tree was left unrestored. Disarm either way, so the EXIT
     # trap does not attempt the restore a second time and print it twice.
     RESTORE_ARMED="false"
+    RESTORE_RUNNING="false"
     return 1
 }
 # The EXIT trap keeps the code the run ended with and turns a FAILED restore
@@ -288,10 +301,12 @@ restore() {
 # continue on a tree the restore had just put back, and it would end by
 # reporting a pass — and a caller keys on 130/143 to recognise "interrupted",
 # so the signal's code is re-asserted even when the restore itself failed
-# (whose [FAIL] is printed).
+# (whose [FAIL] is printed). `restore || true` matters here: with errexit on,
+# a failing command inside the trap handler would end the handler on ITS code
+# and the signal's code would never be reached.
 trap 'rc=$?; if restore; then exit "$rc"; else exit 1; fi' EXIT
-trap 'restore; exit 130' INT
-trap 'restore; exit 143' TERM
+trap 'restore || true; exit 130' INT
+trap 'restore || true; exit 143' TERM
 
 # --- resolve paths ------------------------------------------------------------
 
@@ -488,13 +503,13 @@ step "Contract 3: the guards refuse a branch that does not belong to this deploy
 # On a deployment host (seeded from its flavour branch), deploying main is the
 # wrong-branch mistake the guards exist for: main carries the default brand,
 # and the role refuses to mirror it before anything is written. Which guard
-# fires depends on the branch's theme versus the group_vars theme — the
-# scenario suite pins each guard in isolation; here either refusal is proof.
+# fires depends on the branch's theme versus the group_vars theme — either
+# refusal is proof the deployment rejects a foreign branch before touching it.
 # Seeded from main there is no flavour to defend (every branch satisfies the
 # defaults), so the contract is skipped rather than made vacuous. An empty
 # REPO_BRANCH means deploy.yml's default, which is main.
 if [ -z "$REPO_BRANCH" ] || [ "$REPO_BRANCH" = "main" ]; then
-    pass "skipped: seeded from main, whose defaults every branch satisfies - the scenario suite owns the per-guard cases"
+    pass "skipped: seeded from main, whose defaults every branch satisfies - there is no foreign branch to refuse"
 else
     # The pre-test archive is still armed: if the guards fail to fire and the
     # mirror runs main's assets onto this host, the restore puts the
@@ -505,7 +520,7 @@ else
         rm -f "$CONTRACT3_LOG"
         fail "the role accepted branch main on a host this branch does not belong to - no guard fired"
     fi
-    if grep -qE "does not ship the Keycloak theme|ships the brand" "$CONTRACT3_LOG"; then
+    if grep -qE "does not ship the Keycloak theme|ships the brand|brand file that is not valid" "$CONTRACT3_LOG"; then
         pass "a guard refused branch main"
     else
         printf '  [FAIL] the deploy failed, but not through a config guard:\n' >&2

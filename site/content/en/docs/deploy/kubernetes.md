@@ -61,6 +61,12 @@ ships as a chart dependency (`envoyGateway.enabled`, default on); see
 kubectl label node <gpu-node> gpu=true
 ```
 
+The chart selects the GPU node with `opea.models.nodeSelector`, which
+defaults to `gpu: "true"`. A cluster that labels its GPU nodes
+differently (NVIDIA GPU Feature Discovery ships
+`nvidia.com/gpu.present=true`) sets the map in its overlay — it replaces
+the default outright, so the pods need only the labels you declare.
+
 **Air-gapped clusters.** Set `global.kubeletToolsMirror` to an internal URL;
 the chart's pre-install and helm-test Pods `curl`-download `kubectl` from
 a default public mirror otherwise.
@@ -170,7 +176,13 @@ the realm is never imported — useful for smoke installs.
 **`clusterProfile`** — drives replica counts and (where implemented) data-tier
 topology. Valid values: `dev`, `staging`, `prod`. `sovereign` is reserved
 until that profile lands. Per-service overrides go through
-`clusterProfileReplicas` in your overlay.
+`clusterProfileReplicas` in your overlay; the data tier's instance counts
+(Keycloak, Postgres) come from `clusterProfileInstances`. The two
+precedence rules differ on purpose: `clusterProfileReplicas` WINS over
+`services.<svc>.replicas` (that value is documented as a baseline), while
+an explicit `data.keycloak.instances` / `data.postgres.instances` WINS over
+`clusterProfileInstances` — it is the count you sized the database for.
+Leave the value unset to inherit the profile's count.
 
 **`ingress.host` and `ingress.scheme`** — public origin, **required** (no
 chart default: the render fails with a supply-it message when unset).

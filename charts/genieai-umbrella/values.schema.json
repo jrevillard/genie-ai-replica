@@ -19,6 +19,14 @@
           "properties": {
             "enabled": {
               "type": "boolean"
+            },
+            "instances": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "description": "Instance count for this data tier. null (the default) = the cluster profile's count (clusterProfileInstances); an explicit integer wins over the profile."
             }
           }
         },
@@ -86,6 +94,14 @@
             },
             "verifyEmail": {
               "type": "boolean"
+            },
+            "instances": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "description": "Instance count for this data tier. null (the default) = the cluster profile's count (clusterProfileInstances); an explicit integer wins over the profile."
             }
           }
         }
@@ -327,6 +343,17 @@
               "type": "boolean"
             }
           }
+        }
+      }
+    },
+    "clusterProfileInstances": {
+      "type": "object",
+      "description": "clusterProfile-driven instance counts for the data tier (Keycloak, Postgres). An explicit data.<tier>.instances wins over these.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "integer",
+          "minimum": 1
         }
       }
     }

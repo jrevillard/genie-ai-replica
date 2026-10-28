@@ -31,6 +31,13 @@ selects) and reports the ones the destination never allows back. Declaring a
 flow and admitting it are different decisions; the first is the intent, the
 second is what the datapath honours.
 
+A flow-based gate cannot see a flow whose only DECLARATION is the peer list
+that was itself dropped: deleting the backend from the keycloak policy's
+ingress list removes the declaration, and nothing contradicts it. The
+keycloak policy is therefore checked against an expectation derived from the
+RENDER — the workloads that carry a KEYCLOAK_URL pointing at the in-cluster
+keycloak Service must be admitted by that policy, on the port they dial.
+
 Ports on both sides are compared in POD space, i.e. after DNAT — the space
 the datapath actually evaluates. A policy may be written against either
 space, so every declared port is translated through the peer's own Service
@@ -41,14 +48,17 @@ port is required goes unnoticed.
 
 What it does NOT cover, by construction:
 
-  * Flows to operator-managed peers. The check needs a policy on BOTH
-    ends, and vm-operator / kube-arangodb / keycloak-operator pods have
+  * Flows to operator-managed peers the chart does not restrict. The
+    check needs a policy on BOTH ends, and the vm-operator pods have
     none — the chart only restricts the pods it owns. A peer labelled
-    `app.kubernetes.io/instance: vmetrics` or
-    `app.kubernetes.io/managed-by: keycloak-operator` is therefore out of
-    scope, and that is exactly where the collector's egress to
-    VictoriaMetrics (Service 8428, pod 8429) hid: correct-looking, wrong
-    post-DNAT, and silently dropping every remote-write batch.
+    `app.kubernetes.io/instance: vmetrics` is therefore out of scope,
+    and that is exactly where the collector's egress to VictoriaMetrics
+    (Service 8428, pod 8429) hid: correct-looking, wrong post-DNAT, and
+    silently dropping every remote-write batch.
+
+    The keycloak-operator pods ARE in scope: the chart renders the
+    policy that guards them, so the gate can check it — see the
+    membership check below.
   * A rule that mixes a CIDR or namespace peer with a component peer. The
     CIDR says nothing about which component is meant, so those rules are
     reported as SKIPPED rather than checked — visible, not silently green.
@@ -147,16 +157,34 @@ def admitted_ports(policies, component, direction, peer_component, services):
 def component_of(selector):
     """The component label a `podSelector` targets, if it names one.
 
-    Two label shapes name chart-owned components in this chart's renders:
-    `genieai.io/component` (services, orchestrators, hooks) and the bare
-    `app` (the four in-cluster model Deployments and their policies). The
-    operator-stamped peers (`app.kubernetes.io/instance: vmetrics`,
-    `app.kubernetes.io/managed-by: keycloak-operator`, the Envoy data
+    Three label shapes name chart-owned components in this chart's renders:
+    `genieai.io/component` (services, orchestrators, hooks), the bare
+    `app` (the four in-cluster model Deployments and their policies), and
+    the keycloak-operator's own stamp
+    (`app.kubernetes.io/instance: keycloak` +
+    `app.kubernetes.io/managed-by: keycloak-operator`) — the chart
+    renders a NetworkPolicy for those pods, so they have a component
+    identity like any other.
+
+    That last one used to be invisible: the keycloak policy's whole
+    ingress list (the backend's realm-token validation, the doc-repo's
+    JWKS fetch, chatqna, dataprep, the convergence Job) was outside
+    this gate, so a peer dropped from that list changed nothing the
+    script could see. The other operator-stamped peers
+    (`app.kubernetes.io/instance: vmetrics` and siblings, the Envoy data
     plane's `app.kubernetes.io/component: proxy`) match NEITHER key and
     stay out of scope — they have no policy on both ends by design.
     """
     labels = (selector or {}).get("matchLabels") or {}
-    return labels.get("genieai.io/component") or labels.get("app")
+    component = labels.get("genieai.io/component") or labels.get("app")
+    if component:
+        return component
+    if (
+        labels.get("app.kubernetes.io/instance") == "keycloak"
+        and labels.get("app.kubernetes.io/managed-by") == "keycloak-operator"
+    ):
+        return "keycloak"
+    return None
 
 
 def index_services(docs):
@@ -330,6 +358,113 @@ def declared_flows(policies, services):
     return flows
 
 
+# The keycloak pods are stamped by the operator, so their Service is not
+# in this render: the port a client dials (8080) and the port the policy
+# admits (8080) are the same number, and no Service-space translation
+# applies.
+KEYCLOAK_SERVICE_PORT = 8080
+
+
+def index_keycloak_clients(docs):
+    """{component: port} for the workloads that dial the in-cluster keycloak.
+
+    Derived from the RENDER, not from a hand-written list: every
+    workload carrying a KEYCLOAK_URL that points at the in-cluster
+    keycloak Service (the chart's own URL helper) needs that port
+    admitted by the keycloak policy. A workload whose KEYCLOAK_URL is
+    the PUBLIC issuer is not one of them — it dials the edge, and the
+    edge's data plane is admitted by its own rule.
+    """
+    clients: dict[str, int] = {}
+    for doc in docs:
+        if not isinstance(doc, dict) or doc.get("kind") not in (
+            "Deployment",
+            "Job",
+            "StatefulSet",
+            "DaemonSet",
+        ):
+            continue
+        pod = (doc.get("spec") or {}).get("template") or {}
+        labels = (pod.get("metadata") or {}).get("labels") or {}
+        component = labels.get("genieai.io/component") or labels.get("app")
+        if not component:
+            continue
+        for container in (pod.get("spec") or {}).get("containers") or []:
+            for entry in container.get("env") or []:
+                if entry.get("name") != "KEYCLOAK_URL":
+                    continue
+                url = entry.get("value") or ""
+                if ".svc.cluster.local" not in url:
+                    continue
+                match = re.search(r":(\d+)", url)
+                clients[component] = int(match.group(1)) if match else 80
+    return clients
+
+
+def keycloak_ingress_admissions(policies):
+    """{component: ports} the keycloak policy admits.
+
+    A rule with no `ports:` block admits every port — the value "any"
+    stands for it. An empty podSelector admits EVERY pod in the
+    namespace, which voids the default-deny the policy exists for: the
+    caller reports it rather than treating it as a pass.
+    """
+    admissions: dict[str, set | str] = {}
+    for policy in policies.get("keycloak", []):
+        for rule in (policy.get("spec") or {}).get("ingress") or []:
+            ports = rule_ports(rule)
+            for peer in rule.get("from") or []:
+                selector = peer.get("podSelector")
+                if selector is None:
+                    continue
+                if not (selector.get("matchLabels") or {}):
+                    return "all-pods"
+                component = component_of(selector)
+                if not component:
+                    continue
+                if ports is None:
+                    admissions[component] = "any"
+                    continue
+                current = admissions.get(component)
+                if current == "any":
+                    continue
+                admissions[component] = (current or set()) | set(ports)
+    return admissions
+
+
+def keycloak_client_gaps(docs, policies):
+    """The workloads that dial the in-cluster keycloak but are not admitted.
+
+    The keycloak policy's ingress list is a MEMBERSHIP list the chart
+    hand-writes, and a peer dropped from it changes nothing a
+    flow-based gate can see: the flow was declared BY that list. The
+    expectation is therefore derived from the render — the workloads
+    that dial the in-cluster keycloak — and the policy is checked
+    against it.
+    """
+    clients = index_keycloak_clients(docs)
+    if not clients:
+        return []
+    gaps = []
+    admissions = keycloak_ingress_admissions(policies)
+    if admissions == "all-pods":
+        # An empty podSelector admits everything: the default-deny this
+        # policy exists for is void, and port 8080 serves the Admin API.
+        return [(("keycloak", "all-pods"), "the keycloak policy admits EVERY pod in the namespace")]
+    for component, port in sorted(clients.items()):
+        admitted = admissions.get(component)
+        if admitted is None:
+            gaps.append((component, f"the keycloak policy does not admit {component}"))
+        elif admitted != "any" and port not in admitted:
+            gaps.append(
+                (
+                    component,
+                    f"the keycloak policy admits {component} on {sorted(admitted)}, not {port}",
+                )
+            )
+    return gaps
+
+
 def crosscheck(path):
     with open(path) as handle:
         docs = [d for d in yaml.safe_load_all(handle) if d]
@@ -340,6 +475,9 @@ def crosscheck(path):
     blocked = []
     advisory = []
     skipped: set[str] = set()
+    membership = []
+    for component, reason in keycloak_client_gaps(docs, policies):
+        membership.append((component, reason))
     for source, target, port in sorted(flows, key=lambda f: (f[0], f[1], str(f[2]))):
         missing = []
         allowed = True
@@ -365,6 +503,8 @@ def crosscheck(path):
     )
     for entry in sorted(skipped):
         print(f"  SKIPPED {entry}: mixes a CIDR/namespace peer with a component peer — not asserted here")
+    for component, reason in membership:
+        print(f"  BLOCKED {component} -> keycloak :{KEYCLOAK_SERVICE_PORT} ({reason})")
     for source, target, port, missing in blocked:
         shown = port if port is not None else "any"
         print(
@@ -376,7 +516,9 @@ def crosscheck(path):
             "the flow is declared port-less, so verify the dialed port is among them "
             "(an any-port flow cannot be fully asserted against a port-specific peer)."
         )
-    return policies, blocked
+    return policies, blocked + [
+        (component, "keycloak", KEYCLOAK_SERVICE_PORT, reason) for component, reason in membership
+    ]
 
 
 def main(argv):

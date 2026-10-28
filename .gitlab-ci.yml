@@ -3266,6 +3266,12 @@ chart:lint:
     # numeric and boolean knobs overridden to a number, which is the
     # configuration that used to render `value: 42`.
     - python3 scripts/env-types-check.py charts/genieai-umbrella
+    # The chart's version IS the artifact identity: Flux reconciles the
+    # version, so a push that changes the chart's content without moving
+    # it reconciles to "in-sync with desired state" and installs nothing.
+    # The rule is in .claude/rules/K8s-WORKFLOW.md ("Bump per push, not
+    # per batch"); this gate makes it enforceable.
+    - python3 scripts/chart-version-check.py charts/genieai-umbrella
     # Clearing a block must never crash the render. Helm's `null`
     # DELETES a key, so a cleared block turns the tier it controls OFF
     # (the same meaning as `enabled: false`) — and the chart degrades to

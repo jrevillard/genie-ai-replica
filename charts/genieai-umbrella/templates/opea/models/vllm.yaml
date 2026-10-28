@@ -12,8 +12,8 @@
 {{- $opeaModelsLlm := $opeaModels.llm | default dict -}}
 
 {{- if and $opea.enabled (eq $opeaGpu.mode "in-cluster") -}}
-{{- $modelId := $opeaModelsLlm.modelId -}}
-{{- $llm := $opeaModels.llm -}}
+{{- $modelId := $opeaModelsLlm.modelId | default "ibm-granite/granite-4.1-8b" | toString -}}
+{{- $llm := $opeaModelsLlm -}}
 {{- include "genieai-umbrella.modelDeployment" (dict
       "root" .
       "name" "vllm"
@@ -23,6 +23,6 @@
       "readinessDelay" 30
       "livenessDelay" 60
       "startup" (dict "failureThreshold" 30 "periodSeconds" 10)
-      "argsText" (printf "            - --model\n            - \"%s\"\n            - --gpu_memory_utilization\n            - \"%s\"\n            - --served-model-name\n            - \"%s\"\n            - --max_model_len\n            - \"%s\"\n            - --max_num_seqs\n            - \"%s\"\n            - --dtype=%s\n            - --enforce-eager\n            - --port\n            - \"8000\"" $modelId $llm.gpuUtilization $modelId $llm.maxModelLen $llm.maxNumSeqs $llm.dtype)
+      "argsText" (printf "            - --model\n            - \"%s\"\n            - --gpu_memory_utilization\n            - \"%s\"\n            - --served-model-name\n            - \"%s\"\n            - --max_model_len\n            - \"%s\"\n            - --max_num_seqs\n            - \"%s\"\n            - --dtype=%s\n            - --enforce-eager\n            - --port\n            - \"8000\"" $modelId ($llm.gpuUtilization | default "0.55" | toString) $modelId ($llm.maxModelLen | default "65536" | toString) ($llm.maxNumSeqs | default "64" | toString) ($llm.dtype | default "half" | toString))
     ) -}}
 {{- end -}}

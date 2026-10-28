@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-27)
 
-- **Chart `genieai-umbrella` at 0.2.87**, branch `feat/k8s-migration` rebased
+- **Chart `genieai-umbrella` at 0.2.88**, branch `feat/k8s-migration` rebased
   onto `main` at `179a8a8f1` (0 commits behind).
 - **No application code in the branch**: the diff touches `charts/`,
   `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
@@ -604,6 +604,33 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 16 (0.2.88)** — 6 findings, all verified true, all
+  fixed. The headline is **a regression of pass 15's own fix**, caught by
+  measurement rather than by reading:
+  - *The pass-15 reachability rewrite inverted the gate* — it counted a
+    connect TIMEOUT as FAIL, on the reasoning that a timeout is what a
+    NetworkPolicy drop looks like. Measured against a socket that
+    accepts and holds (what Redis does): `curl telnet://` exits **28**
+    on a perfectly healthy open port, because curl waits for data the
+    service never sends — the same code as a dropped SYN. The gate
+    would have failed `helm test` on every default install. The TCP
+    probes moved to the busybox/nc pod (`nc -z`: 0 on an open port even
+    a silent one, non-zero on a closed or dropped one — both measured),
+    the curl-based probe is gone, and the pod was renamed
+    `-test-tcp-reach` (it now probes clamav AND redis).
+    *The lesson is the metric one: the assertion was tightened without
+    measuring what a healthy peer returns.*
+  - *`partial_admission` was dead code* — a documented helper the
+    advisory path had inlined instead. Deleted.
+  - *Two texts still promised the jq download* — the site doc's
+    air-gapped paragraph and the tools-init docstring. Both corrected
+    (jq has no consumer anywhere).
+  - *The `check` helper's documented convenience form could never pass*
+    — `check <host> <port> <expected>` bound the status to the path and
+    the expected value to nothing. Both forms work now.
+  - *A YAML null in Compose dict-form environment became the literal
+    text "None"* — an unset variable is the empty string. Fixed (both
+    forms agree).
 - **Review round 9 closed (0.2.67)** — three parallel adversarial passes
   over the whole final diff (core/data/services, edge/observability/OPEA,
   CI/scripts), every finding verified against a render or a live cluster
@@ -687,7 +714,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.87** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.88** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.

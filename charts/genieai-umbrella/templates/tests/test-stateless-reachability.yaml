@@ -44,33 +44,13 @@ spec:
           set -eu
           failures=0
           {{- include "genieai-umbrella.testCheckHelper" . | nindent 10 }}
-          # TCP-open probe for binary-protocol services (clamav, redis-cache).
-          # The test image (curlimages/curl) ships no bash, so /dev/tcp is
-          # unavailable; probe with curl's telnet:// scheme instead:
-          # connection refused exits 7, DNS failure exits 6; a timeout
-          # (exit 28) or clean close means the TCP port answered.
-          check_tcp() {
-            host=$1
-            port=$2
-            curl_code=$(curl -s -o /dev/null --max-time 3 "telnet://${host}:${port}" </dev/null; echo $?)
-            case "$curl_code" in
-              0)
-                echo "PASS: ${host}:${port} tcp open"
-                ;;
-              28)
-                # A timeout is a SYN that never got an answer — which is
-                # exactly what a NetworkPolicy drop looks like. Counting
-                # it as PASS made this test structurally unable to fail
-                # on the defect class it exists to catch.
-                echo "FAIL: ${host}:${port} connect timed out (curl exit 28) — a NetworkPolicy drop looks exactly like this"
-                failures=$((failures+1))
-                ;;
-              *)
-                echo "FAIL: ${host}:${port} unreachable (curl exit $curl_code)"
-                failures=$((failures+1))
-                ;;
-            esac
-          }
+          # The TCP-open probes (clamav, redis-cache) live in the
+          # busybox/nc sibling pod below, NOT here: this image ships no
+          # nc, and curl's telnet:// exit code cannot tell a DROPPED SYN
+          # from an OPEN port that stays silent — both exit 28
+          # (measured against a listening socket that never answers), so
+          # a curl-based probe either passes a policy-dropped flow or
+          # fails a healthy one.
           {{- /* Checks hit the SERVICE ports (80; non-HTTP probes use their
                  configured port), NOT the container ports — Services are
                  the stable in-cluster contract. */ -}}
@@ -83,23 +63,21 @@ spec:
           {{- if .Values.services.documentRepository.enabled }}
           check document-repository 80 /health 200
           {{- end }}
-          # (clamav is probed by the dedicated busybox/nc sibling pod
-          # below — this curlimages/curl image carries no nc.)
-          {{- if .Values.services.redisCache.enabled }}
-          check_tcp redis-cache {{ .Values.services.redisCache.port | default 6379 }}
-          {{- end }}
           if [ "$failures" -gt 0 ]; then
             echo "FAIL: $failures service(s) unreachable"
             exit 1
           fi
           echo "PASS: all stateless-tier services reachable"
-{{- if .Values.services.clamav.enabled }}
+{{- if or .Values.services.clamav.enabled .Values.services.redisCache.enabled }}
 ---
-# clamav reachability from the only peer its NetworkPolicy admits.
+# TCP reachability for the binary-protocol services (clamav, redis-cache)
+# from the only peer their NetworkPolicies admit. nc -z completes the
+# handshake and exits 0 — an open port that never answers still passes,
+# and a dropped SYN (a NetworkPolicy hole) times out and fails.
 apiVersion: v1
 kind: Pod
 metadata:
-  name: {{ include "genieai-common.fullname" . }}-test-clamav-reach
+  name: {{ include "genieai-common.fullname" . }}-test-tcp-reach
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "test") | nindent 4 }}
@@ -121,7 +99,7 @@ spec:
     {{- toYaml . | nindent 8 }}
   {{- end }}
   containers:
-    - name: clamav-reach
+    - name: tcp-reach
       image: {{ .Values.global.toolingImageRegistry | default "docker.io" }}/busybox:1.36
       # Same container-level restricted-profile set as the sibling test
       # pods: the pod-level block carries runAsNonRoot only, and a
@@ -137,5 +115,31 @@ spec:
         capabilities:
           drop:
             - ALL
-      command: ["sh", "-c", "nc -z -w 5 clamav {{ .Values.services.clamav.port | default 3310 }} && echo 'PASS: clamav reachable' || (echo 'FAIL: clamav unreachable'; exit 1)"]
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          failures=0
+          {{- if .Values.services.clamav.enabled }}
+          if nc -z -w 5 clamav {{ .Values.services.clamav.port | default 3310 }}; then
+            echo "PASS: clamav reachable"
+          else
+            echo "FAIL: clamav unreachable"
+            failures=$((failures+1))
+          fi
+          {{- end }}
+          {{- if .Values.services.redisCache.enabled }}
+          if nc -z -w 5 redis-cache {{ .Values.services.redisCache.port | default 6379 }}; then
+            echo "PASS: redis-cache reachable"
+          else
+            echo "FAIL: redis-cache unreachable"
+            failures=$((failures+1))
+          fi
+          {{- end }}
+          if [ "$failures" -gt 0 ]; then
+            echo "FAIL: $failures TCP service(s) unreachable"
+            exit 1
+          fi
+          echo "PASS: all TCP-probed services reachable"
 {{- end }}

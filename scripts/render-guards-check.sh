@@ -23,6 +23,16 @@
 # wins, so a case that drops two values at once would only ever prove
 # the earlier guard.
 #
+# COVERAGE: every guard an OPERATOR can reach has a case here. The
+# guards left without one are unreachable from values by construction:
+#   - the dependency-graph type guard (a node whose value is a scalar) —
+#     Helm's coalesce always keeps the chart's table and warns about
+#     the scalar, so no operator value can produce it;
+#   - the envRows shape guards (a row that is not a map, a row without a
+#     name, a row with neither value nor valueFrom) — the templates
+#     build those rows, not the operator;
+#   - the instance-count guards — the schema rejects a 0 first.
+#
 # Usage: scripts/render-guards-check.sh [chart-path]
 #        CHART=charts/genieai-umbrella scripts/render-guards-check.sh
 set -uo pipefail
@@ -145,23 +155,70 @@ expect_fail "the environment is a map, not a list" \
 #    lenient: "443x" becomes 0, and the Gateway listener renders
 #    `port: 0` — the API server rejects the CR with "spec.listeners[1].
 #    port: Invalid value: 0", naming a CR field instead of the values
-#    key the operator typed.
-#    The TLS listener and the http→https redirect are what consume the
-#    port, and the shared fixture leaves TLS off — so the case enables
-#    it (the malformed port is the only invalid thing in it).
+#    key the operator typed. The guard lives in ingressHost, the parse
+#    site every consumer reaches (the issuer, the CORS origin, both
+#    CSP sets, the listeners), so it fires in the DEFAULT topology —
+#    the TLS-gated listeners alone would not have covered it.
 expect_fail "a non-numeric port in ingress.host" \
   "ingress.host carries an invalid port" \
-  $(valid_flags) --set 'ingress.host=genieai.local:443x' \
-  --set ingress.tls.enabled=true --set ingress.tls.issuerName=selfsigned
+  $(valid_flags) --set 'ingress.host=genieai.local:443x'
 
-# 9. An environment variable with no value is a typo, not an empty
-#    string: sprig's `toString nil` produces the four-character text
-#    "<nil>", which would reach the pod as a real value.
+# 9. A port outside the TCP range is not a port.
+expect_fail "an out-of-range port in ingress.host" \
+  "ingress.host carries an out-of-range port" \
+  $(valid_flags) --set 'ingress.host=genieai.local:99999'
+
+# 10. An environment variable with no value is a typo, not an empty
+#     string: sprig's `toString nil` produces the four-character text
+#     "<nil>", which would reach the pod as a real value.
 expect_fail "an environment variable with no value" \
   "has no value: declare an empty string" \
   $(valid_flags) --set 'services.frontend.env.FOO=null'
 
-# 10. The documented valid configuration must still render: a guard that
+# 11. The external GPU mode needs the GPU node it names. This is the
+#     FIRST error an operator following the OPEA quickstart hits, and
+#     every CI render that enables the tier passes a nodeHost — so a
+#     regression that inverted or deleted the condition shipped green.
+expect_fail "the external GPU mode without a node host" \
+  "opea.gpu.mode=external requires opea.gpu.nodeHost" \
+  $(valid_flags) --set opea.enabled=true
+
+# 12. The GPU mode is a two-value switch.
+expect_fail "an unknown opea.gpu.mode" \
+  "unknown opea.gpu.mode" \
+  $(valid_flags) --set opea.enabled=true --set opea.gpu.mode=weird
+
+# 13. An IPv6 literal cannot be expressed as an ipBlock, so the egress
+#     rule could never admit it.
+expect_fail "an IPv6-literal GPU node host" \
+  "an IPv6 literal" \
+  $(valid_flags) --set opea.enabled=true --set 'opea.gpu.nodeHost=[2001:db8::1]:444'
+
+# 14. The ArangoDB mode is a two-value switch (neither is schema-enum'd).
+expect_fail "an unknown data.arangodb.mode" \
+  'data.arangodb.mode must be "single" or "cluster"' \
+  $(valid_flags) --set data.arangodb.mode=weird
+
+# 15. The namespace is the release namespace. Every object the chart
+#     renders with an explicit namespace reads this value, so a
+#     mismatch splits the release across two namespaces.
+expect_fail "a namespace that is not the release namespace" \
+  "must equal the release namespace" \
+  $(valid_flags) --set namespace=other
+
+# 16. A service enabled without a dependency-graph entry is not
+#     validated by the pre-install dep-check hook — the hook IS the
+#     contract, so the chart refuses the combination.
+expect_fail "an enabled service with no dependency-graph entry" \
+  "dependencyGraph.services has no 'frontend' entry" \
+  $(valid_flags) --set dependencyGraph.services.frontend=null
+
+# 17. Same for a data tier.
+expect_fail "an enabled data tier with no dependency-graph entry" \
+  "dependencyGraph.data has no 'postgres' entry" \
+  $(valid_flags) --set dependencyGraph.data.postgres=null
+
+# 18. The documented valid configuration must still render: a guard that
 #     rejects a good deployment is a defect too.
 expect_ok "the documented values render" $(valid_flags)
 

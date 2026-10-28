@@ -93,7 +93,7 @@ both rows must be set explicitly. */ -}}
     (dict "name" "DATAPREP_HOST" "value" "http://dataprep")
     (dict "name" "DATAPREP_PORT" "value" "5000")
     (dict "name" "CLAMSCAN_HOST" "value" ($servicesDocumentRepository.clamavHost | default "clamav" | toString))
-    (dict "name" "CLAMSCAN_PORT" "value" ($servicesDocumentRepository.clamavPort | default ($servicesClamav.port | default 3310) | toString))
+    (dict "name" "CLAMSCAN_PORT" "value" ($servicesClamav.port | default 3310 | toString))
     (dict "name" "VIRUS_SCANNING" "value" ($virusScanning | toString))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
     (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
@@ -226,10 +226,9 @@ spec:
     # ClamAV scanner. Post-DNAT pod port; the Service port is identical,
     # but pod-to-pod peers must use the container port. The port comes
     # from services.clamav.port — the knob the clamav Deployment,
-    # Service, policies AND this side's dial port derive from
-    # (documentRepository.clamavPort is null by default and follows it);
-    # the doc-repo needs its own only when clamavHost points at an
-    # EXTERNAL scanner.
+    # Service, policies AND this side's dial port derive from. The chart
+    # carries no separate dial-port knob: a different number could only
+    # name a port nothing serves.
     - to:
         - podSelector:
             matchLabels:

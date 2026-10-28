@@ -123,7 +123,7 @@
         "DOCUMENT_REPOSITORY_URL": "in-cluster Service DNS instead of the Compose service name",
         "ENABLE_OBSERVABILITY": "the chart's observability tier is an operator-enabled install of its own; Compose gates the same services behind a profile",
         "GPU_NODE_HOST": "the chart names the GPU node it was configured with; Compose leaves it empty unless the remote-GPU topology is used",
-        "HUGGINGFACEHUB_API_TOKEN": "carried by the huggingface-hub-token Secret the operator provides",
+        "HUGGINGFACEHUB_API_TOKEN": "aliased to the `vllm-api-key` Secret's `VLLM_API_KEY` key (the OPEA name for the same credential; HF_TOKEN sits beside it on the same Secret)",
         "KC_DATAPREP_CLIENT_SECRET": "carried by the kc-dataprep-client-secret Secret the operator provides",
         "KEYCLOAK_URL": "the service authenticates in-cluster; Compose reaches Keycloak through the public origin",
         "OPEA_SSL_SKIP_VERIFY": "the GPU node serves a self-signed certificate in the external topology, so verification is skipped there",

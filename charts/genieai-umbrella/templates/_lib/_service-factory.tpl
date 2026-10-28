@@ -110,7 +110,15 @@ spec:
             - name: http
               containerPort: {{ $svc.port }}
           env:
-            {{- include "genieai-umbrella.envRows" ($svc.env | default list) | fromJsonArray | toYaml | nindent 12 }}
+            {{- /* The PROCESS must listen on the port the plumbing dials:
+            containerPort, Service targetPort, NetworkPolicy and probes
+            all move with `services.<svc>.port`, and an application that
+            reads `PORT` would otherwise stay on the image's own default
+            — the pod would never go Ready, with nothing in the render
+            to say why. Services whose image takes the port another way
+            (clamd reads clamd.conf, redis-server takes --port) simply
+            ignore this variable. */ -}}
+            {{- (list (dict "name" "PORT" "value" ($svc.port | toString))) | concat (include "genieai-umbrella.envRows" ($svc.env | default list) | fromJsonArray) | toYaml | nindent 12 }}
           {{- with $svc.secrets }}
           envFrom:
             {{- range . }}

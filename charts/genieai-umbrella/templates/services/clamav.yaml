@@ -126,6 +126,9 @@ spec:
           win over the derivation (Helm merges the chart's values with
           the overlay's, and the template cannot tell them apart). */ -}}
           {{- $clamavPort := $svc.port | default 3310 -}}
+          {{- if ne (int $clamavPort) 3310 -}}
+          {{- fail (printf "services.clamav.port must be 3310: the clamd daemon takes its port from clamd.conf, which the image fixes at 3310 (the image's entrypoint honours no port variable — /init reads only CLAMAV_NO_*), so a different number moves the Service, the NetworkPolicy and the probes to a port nothing listens on, and every scan times out") -}}
+          {{- end -}}
           {{- $probes := deepCopy ($svc.probes | default dict) -}}
           {{- /* Sub-blocks normalize too: a cleared probes block carries
           no readiness/liveness/startup maps, and a bare .tcpSocket read

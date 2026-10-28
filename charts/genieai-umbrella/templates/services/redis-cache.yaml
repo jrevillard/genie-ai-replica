@@ -49,6 +49,11 @@ spec:
           # (Kubernetes native expansion).
           args:
             - redis-server
+            - --port
+            # The port the plumbing uses (Service, NetworkPolicy,
+            # probes) — redis-server takes it as a flag, so an override
+            # of services.redisCache.port moves the LISTENER with it.
+            - "{{ $svc.port | default 6379 }}"
             - --appendonly
             - "yes"
             - --maxmemory-policy

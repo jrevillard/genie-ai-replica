@@ -40,19 +40,21 @@ applied to all four model pods, not a per-model knob (llm gets a full
 GPU, the TEI sidecars need far less; a uniform exclusive grant
 over-provisions three of the four). */ -}}
 {{- $res := $root.Values.opea.models.resources | default dict -}}
-{{- /* The GPU node label is an operator knob: the chart's default
-matches its documented single-GPU-node topology (a node labelled
-`gpu=true`), but a cluster that labels its GPU nodes differently —
-NVIDIA GPU Feature Discovery ships `nvidia.com/gpu.present=true` —
-would leave the four model pods Pending with "node(s) didn't match
-Pod's node affinity/selector", and no gate in this repository can see
-a scheduling decision.
+{{- /* The GPU node labels the four model pods are scheduled on.
+
+The knob: `opea.models.nodeSelector`. The chart's default is a node
+labelled `gpu=true` — its documented single-GPU-node topology. A cluster
+that labels its GPU nodes differently (NVIDIA GPU Feature Discovery
+ships `nvidia.com/gpu.present=true`) would leave the four model pods
+Pending with "node(s) didn't match Pod's node affinity/selector", and
+no gate in this repository can see a scheduling decision.
 
 The default lives HERE, not in values.yaml: a values map is MERGED by
 Helm, so a chart default of `{gpu: "true"}` would survive an overlay
 that declares `{nvidia.com/gpu.present: "true"}` — the pods would then
 need a node carrying BOTH labels, and stay Pending. values.yaml
-therefore declares the map EMPTY, which an overlay replaces outright. */ -}}
+therefore declares the map EMPTY (which means "the chart's default"),
+and an overlay replaces it outright. */ -}}
 {{- $nodeSelector := $root.Values.opea.models.nodeSelector | default dict -}}
 {{- if eq (len $nodeSelector) 0 -}}
 {{- $nodeSelector = dict "gpu" "true" -}}
@@ -77,13 +79,13 @@ spec:
       labels:
         app: {{ .name }}
     spec:
-      {{- /* The GPU node label is an operator knob: the chart's default
-      matches its documented single-GPU-node topology (`gpu=true`), but a
-      cluster that labels its GPU nodes differently — NVIDIA GPU Feature
-      Discovery ships `nvidia.com/gpu.present=true` — would leave the
-      four model pods Pending with "node(s) didn't match Pod's node
-      affinity/selector", and no gate in this repository can see a
-      scheduling decision. Empty = no node constraint. */}}
+      {{- /* The labels the model pods are scheduled on: the operator's
+      map, or the chart's `gpu=true` default when they declared none (see
+      where $nodeSelector is derived above). There is deliberately NO
+      "no constraint" configuration: the model pods need a GPU, and
+      unscheduled they would land on a GPU-less node and crash on the
+      model load — a louder failure than a Pending pod, but a slower
+      one. */}}
       {{- with $nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

@@ -50,6 +50,13 @@ rejects.
 {{- end -}}
 {{- $rows := list -}}
 {{- range $name, $value := . -}}
+{{- /* A nil value is an operator's typo, not an empty string: sprig's
+`toString nil` produces the four-character text "<nil>", which would
+reach the pod as a real value. The list path (envRows) rejects it for
+the same reason — an environment variable is either set or absent. */ -}}
+{{- if kindIs "invalid" $value -}}
+{{- fail (printf "the environment variable %q has no value: declare an empty string if you mean an empty value" $name) -}}
+{{- end -}}
 {{- $rows = append $rows (dict "name" $name "value" (toString $value)) -}}
 {{- end -}}
 {{- toJson $rows -}}

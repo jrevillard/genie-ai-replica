@@ -133,8 +133,36 @@ expect_fail "IPv6-literal ingress.host" \
   "IPv6 literal" \
   $(valid_flags_except "ingress.host") --set 'ingress.host=[2001:db8::1]:4443' --set ingress.enabled=true
 
-# 7. The documented valid configuration must still render: a guard that
-#    rejects a good deployment is a defect too.
+# 7. The operator's environment is a MAP. A list of {name, value} rows
+#    renders one variable named 0 whose value is the Go-map string, and
+#    every default the chart declares beside it disappears — so the
+#    chart refuses the shape instead of rendering it.
+expect_fail "the environment is a map, not a list" \
+  "the environment map must be a MAP" \
+  $(valid_flags) --set 'services.frontend.env[0].name=FOO' --set 'services.frontend.env[0].value=bar'
+
+# 8. The public port in ingress.host must be a port. Sprig's `int` is
+#    lenient: "443x" becomes 0, and the Gateway listener renders
+#    `port: 0` — the API server rejects the CR with "spec.listeners[1].
+#    port: Invalid value: 0", naming a CR field instead of the values
+#    key the operator typed.
+#    The TLS listener and the http→https redirect are what consume the
+#    port, and the shared fixture leaves TLS off — so the case enables
+#    it (the malformed port is the only invalid thing in it).
+expect_fail "a non-numeric port in ingress.host" \
+  "ingress.host carries an invalid port" \
+  $(valid_flags) --set 'ingress.host=genieai.local:443x' \
+  --set ingress.tls.enabled=true --set ingress.tls.issuerName=selfsigned
+
+# 9. An environment variable with no value is a typo, not an empty
+#    string: sprig's `toString nil` produces the four-character text
+#    "<nil>", which would reach the pod as a real value.
+expect_fail "an environment variable with no value" \
+  "has no value: declare an empty string" \
+  $(valid_flags) --set 'services.frontend.env.FOO=null'
+
+# 10. The documented valid configuration must still render: a guard that
+#     rejects a good deployment is a defect too.
 expect_ok "the documented values render" $(valid_flags)
 
 if [ "${fails}" -ne 0 ]; then

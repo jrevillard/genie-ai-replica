@@ -189,9 +189,15 @@ helm test "$RELEASE" -n "$NS" --logs
 echo
 echo "=== STEP 6: smoke URLs (if ingress enabled) ==="
 echo "-- Keycloak OIDC discovery (in-cluster — host cannot resolve .svc DNS) --"
-kubectl run kc-probe --rm -i --restart=Never --image=curlimages/curl:8.10.1 --command -- \
-  curl -s -o /dev/null -w "  HTTP %{http_code}  (expect 200 or 401, NOT 000/503)\n" \
-  "http://keycloak-service.${NS}.svc.cluster.local:8080/auth/realms/genie/.well-known/openid-configuration" || true
+# In the chart's namespace and carrying the test component label: the
+# keycloak NetworkPolicy admits only named same-namespace peers, so a
+# probe run in the caller's current namespace (kubectl's default) or with
+# no label times out on an enforcing CNI — HTTP 000 — and the smoke below
+# would assert nothing. The failure is fatal on purpose.
+kubectl run kc-probe --rm -i --restart=Never -n "$NS" \
+  --labels="genieai.io/component=test" --image=curlimages/curl:8.10.1 --command -- \
+  curl -sS -o /dev/null -w "  HTTP %{http_code}  (expect 200 or 401, NOT 000/503)\n" \
+  "http://keycloak-service.${NS}.svc.cluster.local:8080/auth/realms/genie/.well-known/openid-configuration"
 
 echo
 echo "=== DONE ==="

@@ -1,15 +1,23 @@
 {{/*
 Resolve the replica count of a service.
 
-Two things this helper exists for:
+Three things this helper exists for:
 
 1. `default` CANNOT express the fallback here. Sprig treats 0 as empty, so
    `replicas: 0` — the documented way to scale a tier off without deleting
    its values block — silently rendered 1 pod. Only an ABSENT key falls
-   back to 1, which needs a `kindIs "invalid"` test.
-2. The cluster-profile override lookup was duplicated in four templates.
-   It lives here so a profile entry can never be honoured by the
-   Deployment and ignored by the PodDisruptionBudget.
+   back, which needs a `kindIs "invalid"` test.
+2. The cluster-profile lookup was duplicated in four templates. It lives
+   here so a profile entry can never be honoured by the Deployment and
+   ignored by the PodDisruptionBudget.
+3. The order is the EXPLICIT value, then the profile, then 1 — the same
+   order the data tier's resolveInstances uses. The profile used to win,
+   which meant an operator on the prod profile who scaled a tier off
+   (`replicas: 0`) got the profile's count back plus a
+   PodDisruptionBudget for pods they had switched off, with every gate
+   green. `services.<svc>.replicas` is NULL by default, which is what
+   keeps "unset" (the profile applies) distinguishable from "the
+   operator pinned a count" (it wins).
 
 Usage:
   {{- $replicas := include "genieai-umbrella.resolveReplicas" (dict "Values" .Values "service" "backend") | int }}
@@ -20,12 +28,13 @@ Usage:
 {{- $replicas := 1 -}}
 {{- if not (kindIs "invalid" $svc.replicas) -}}
 {{- $replicas = int $svc.replicas -}}
-{{- end -}}
+{{- else -}}
 {{- $profiles := default (dict) .Values.clusterProfileReplicas -}}
 {{- if hasKey $profiles .Values.clusterProfile -}}
 {{- $perService := index $profiles .Values.clusterProfile -}}
 {{- if hasKey $perService .service -}}
 {{- $replicas = int (index $perService .service) -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 {{- $replicas -}}
@@ -36,8 +45,9 @@ Resolve the instance count of a DATA-TIER component (the Keycloak CR's
 `spec.instances`, the CNPG Cluster's `spec.instances`).
 
 The stateless tier's helper cannot be reused as-is: there the profile
-map WINS over the per-service value, because `services.<svc>.replicas`
-is documented as a baseline. For the data tier the operator's explicit
+map once won over the per-service value, which silently discarded an
+explicit `replicas: 0` on the prod profiles (see resolveReplicas — both
+tiers resolve the explicit value first now). For the data tier the operator's explicit
 count is the thing they sized the database for, so it wins: a template
 that overrode `data.keycloak.instances: 5` with a literal 2 on the prod
 profile discarded the operator's sizing with no warning and no error —

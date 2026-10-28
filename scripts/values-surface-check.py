@@ -247,21 +247,29 @@ def declared_keys(values_path):
 
 
 def per_service_surface(values):
-    """The accepted `$svc.<key>` surface: the union of the keys declared
-    under each services.* entry, plus the shape-comment contract."""
+    """The accepted `$svc.<key>` surface, and its dict-valued blocks.
+
+    Returns (surface, dict_blocks): every key path declared under each
+    services.* entry plus the shape-comment contract, and the subset of
+    those paths whose declared value is a dict — a dict block enumerates
+    its children in the surface, a NON-dict block (null, the optional
+    shape) carries none to enumerate.
+    """
     surface = set()
+    dict_blocks = set()
 
     def walk(node, prefix):
         for name, child in (node or {}).items():
             path = f"{prefix}.{name}" if prefix else name
             surface.add(path)
             if isinstance(child, dict):
+                dict_blocks.add(path)
                 walk(child, path)
 
     for svc in (values.get("services") or {}).values():
         walk(svc, "")
     surface |= shape_block_keys(values_path.read_text())
-    return surface
+    return surface, dict_blocks
 
 
 values_path = CHART / "values.yaml"
@@ -279,14 +287,22 @@ def main():
         print(f"UNDECLARED {key} — read at {missing[key][0]}"
               f"{' (+%d more)' % (len(missing[key]) - 1) if len(missing[key]) > 1 else ''}")
 
-    svc_surface = per_service_surface(yaml.safe_load(values_path.read_text()) or {})
+    svc_surface, svc_dict_blocks = per_service_surface(
+        yaml.safe_load(values_path.read_text()) or {}
+    )
     svc_read_map = svc_reads(CHART / "templates")
     svc_missing = {}
     for key, sites in svc_read_map.items():
         if key in svc_surface:
             continue
         parent = key.rsplit(".", 1)[0]
-        if parent in svc_surface:
+        # A parent declared as a NON-dict (null, the optional-block shape)
+        # makes any child read legal: the block declares no children of
+        # its own. A parent declared AS a dict has every child in the
+        # surface, so a sub-key read that is not among them is a
+        # fat-fingered knob, not a shape — forgiving it here made the
+        # gate green for any typo under any declared block.
+        if parent in svc_surface and parent not in svc_dict_blocks:
             continue
         svc_missing[key] = sites
     for key in sorted(svc_missing):

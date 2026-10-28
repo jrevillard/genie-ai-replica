@@ -3268,6 +3268,12 @@ chart:lint:
     # numeric and boolean knobs overridden to a number, which is the
     # configuration that used to render `value: 42`.
     - python3 scripts/env-types-check.py charts/genieai-umbrella
+    # The data tier's instance counts resolve the way the values say: the
+    # profile map supplies the count when the operator states none, and
+    # an explicit data.<tier>.instances WINS over the profile. The prod
+    # profile used to hardcode 2 and 3, so an operator's 5 and 7 were
+    # discarded with no warning and no error.
+    - python3 scripts/instance-count-check.py charts/genieai-umbrella
     - >-
       python3 /tmp/cluster-scope-check.py test genieai 1 envoy
       /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml
@@ -3389,6 +3395,49 @@ chart:contract:
       if wrong:
           sys.exit(f'OTEL_EXPORTER_OTLP_ENDPOINT drifted from the operator Service name: {wrong}')
       print('OTLP endpoint on every app Deployment:', ', '.join(sorted(found)))
+      PY
+    # The SPA's connect-src and the backend's CSP header answer the same
+    # question ("which origins may this client talk to?"), so they derive
+    # from ONE helper. They drifted once: the SPA's list carried only the
+    # public origin, so a browser on a non-default port (the laptop
+    # port-forward, https://genieai.local:4443) had its own same-origin
+    # /api calls blocked — the explicit origin does not match the page
+    # origin, and 'self' is the only source that does.
+    - |
+      python3 - <<'PY'
+      import sys, yaml
+
+      def env_of(doc, name):
+          for c in doc['spec']['template']['spec']['containers']:
+              for e in c.get('env', []):
+                  if e.get('name') == name:
+                      return e.get('value')
+          return None
+
+      deployments = {}
+      for doc in yaml.safe_load_all(open('/tmp/rendered.yaml')):
+          if not doc or doc.get('kind') != 'Deployment':
+              continue
+          slug = doc['metadata']['name'].rsplit('-', 1)[-1]
+          if slug in ('backend', 'frontend'):
+              deployments[slug] = doc
+
+      missing = [s for s in ('backend', 'frontend') if s not in deployments]
+      if missing:
+          sys.exit(f'no Deployment for {missing} in the render')
+
+      backend = env_of(deployments['backend'], 'CSP_CONNECT_SRC')
+      frontend = env_of(deployments['frontend'], 'VUE_APP_CSP_CONNECT_SRC')
+      if not backend or not frontend:
+          sys.exit(f'CSP rows missing: backend={backend!r} frontend={frontend!r}')
+      if "'self'" not in frontend:
+          sys.exit(f"the SPA's connect-src carries no 'self' source: {frontend!r} — a browser "
+                   'on a non-default port (the laptop port-forward) has its own same-origin '
+                   '/api calls blocked')
+      if not frontend.startswith(backend):
+          sys.exit(f"the SPA's connect-src does not start with the backend's derived set: "
+                   f'frontend={frontend!r} backend={backend!r}')
+      print('CSP: backend and SPA share the derived set —', backend)
       PY
     - PII_SMOKE_CONFIG=/tmp/contract-collector-config.yaml ./tests/otel-collector/run-pii-smoke.sh
   rules:

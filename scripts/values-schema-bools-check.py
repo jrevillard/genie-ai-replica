@@ -73,6 +73,22 @@ def schema_boolean_leaves(schema, prefix=""):
     return found
 
 
+def no_duplicate_keys(pairs):
+    """A JSON object with the same key twice.
+
+    `json.load` keeps the LAST occurrence and says nothing: a schema
+    that types a knob twice — once correctly, once wrongly — silently
+    loses the first constraint, and the render that was supposed to
+    fail with "at '/x/y': got number, want boolean" installs instead.
+    """
+    seen = set()
+    for key, value in pairs:
+        if key in seen:
+            raise ValueError(f"duplicate key {key!r} in the schema")
+        seen.add(key)
+    return dict(pairs)
+
+
 def main(argv):
     if len(argv) != 3:
         print(__doc__)
@@ -81,7 +97,11 @@ def main(argv):
     with open(values_path) as handle:
         values = yaml.safe_load(handle)
     with open(schema_path) as handle:
-        schema = json.load(handle)
+        try:
+            schema = json.load(handle, object_pairs_hook=no_duplicate_keys)
+        except ValueError as error:
+            print(f"values.schema.json: {error}")
+            return 1
 
     in_values = boolean_leaves(values)
     in_schema = schema_boolean_leaves(schema)

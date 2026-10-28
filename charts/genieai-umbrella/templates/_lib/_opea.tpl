@@ -76,7 +76,9 @@ fallback. */ -}}
 {{- if and (not $p) (not (has $key $optionalKeys)) -}}
 {{- fail (printf "opea.gpu.paths.%s is required in the external GPU mode — the endpoint is nodeHost + path, and a missing path renders an empty endpoint the pods dial; declare it (the chart's defaults are llm=/llm, embedding=/embed, reranker=/rerank, translation=/translation)" $key) -}}
 {{- end -}}
+{{- if $p -}}
 {{- trimSuffix "/" $host }}{{ $p }}
+{{- end -}}
   {{- end -}}
 
 {{- else -}}

@@ -7,7 +7,11 @@
 > role now MIRRORS the branch: `rsync --archive --checksum --delete`, plus a
 > check that the host matches the branch afterwards. The `--ignore-existing`
 > contract described below (and in the design specs) is gone. The shipped
-> `deploy/ansible/roles/config_bootstrap/` is authoritative.
+> `deploy/ansible/roles/config_bootstrap/` is authoritative — including over
+> every code block in this plan: the mirror and verification tasks quoted in
+> the 2026-10-28 revision below predate the shipped implementation (different
+> register names, no exit-code assert, no itemize-line filter). Do not copy
+> them; read the role.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

@@ -160,10 +160,12 @@ remote_sh() {
 }
 
 run_role() {
-    # Without an explicit branch, deploy.yml's repo_branch default (main) is
-    # what gets seeded. See the [repo_branch] argument note above.
+    # The optional first argument names the branch to deploy; the default is
+    # the branch the test was given, which deploy.yml would seed anyway. See
+    # the [repo_branch] argument note above.
+    local branch="${1:-$REPO_BRANCH}"
     local -a branch_args=()
-    [ -n "$REPO_BRANCH" ] && branch_args+=(-e "repo_branch=$REPO_BRANCH")
+    [ -n "$branch" ] && branch_args+=(-e "repo_branch=$branch")
     ansible_run -i "$INVENTORY" deploy.yml \
         --tags "$ROLE_TAG" \
         --limit "$HOST" \
@@ -465,6 +467,45 @@ if [ "$FILELIST_BEFORE" != "$FILELIST_AFTER_EDIT" ]; then
     fail "the role run added or removed files under $CONFIG_DIR"
 fi
 pass "no files were added or removed under $CONFIG_DIR"
+
+# --- contract 3: the guards refuse a foreign branch ---------------------------
+
+step "Contract 3: the guards refuse a branch that does not belong to this deployment"
+
+# On a deployment host (seeded from its flavour branch), deploying main is the
+# wrong-branch mistake the guards exist for: main carries the default brand,
+# and the role refuses to mirror it before anything is written. Which guard
+# fires depends on the branch's theme versus the group_vars theme — the
+# scenario suite pins each guard in isolation; here either refusal is proof.
+# Seeded from main there is no flavour to defend (every branch satisfies the
+# defaults), so the contract is skipped rather than made vacuous. An empty
+# REPO_BRANCH means deploy.yml's default, which is main.
+if [ -z "$REPO_BRANCH" ] || [ "$REPO_BRANCH" = "main" ]; then
+    pass "skipped: seeded from main, whose defaults every branch satisfies - the scenario suite owns the per-guard cases"
+else
+    # The pre-test archive is still armed: if the guards fail to fire and the
+    # mirror runs main's assets onto this host, the restore puts the
+    # deployment's config back.
+    MANIFEST_BEFORE_GUARD="$(manifest)"
+    CONTRACT3_LOG="/tmp/config_bootstrap_contract3_$$.log"
+    if run_role main > "$CONTRACT3_LOG" 2>&1; then
+        rm -f "$CONTRACT3_LOG"
+        fail "the role accepted branch main on a host this branch does not belong to - no guard fired"
+    fi
+    if grep -qE "does not ship the Keycloak theme|ships the brand" "$CONTRACT3_LOG"; then
+        pass "a guard refused branch main"
+    else
+        printf '  [FAIL] the deploy failed, but not through a config guard:\n' >&2
+        grep -E "fatal|ERROR" "$CONTRACT3_LOG" | head -3 >&2 || true
+        rm -f "$CONTRACT3_LOG"
+        fail "the refusal came from somewhere else"
+    fi
+    rm -f "$CONTRACT3_LOG"
+    if [ "$MANIFEST_BEFORE_GUARD" != "$(manifest)" ]; then
+        fail "the refused deployment changed the host - the guards must run before anything is mirrored"
+    fi
+    pass "the refused deployment left the host untouched"
+fi
 
 # --- cleanup (also runs via the EXIT trap) -----------------------------------
 

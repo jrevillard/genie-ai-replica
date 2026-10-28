@@ -75,7 +75,7 @@ The role syncs the host's configuration directory as a **mirror of the deployed 
   | Variable | What it relaxes | When to use it |
   |---|---|---|
   | `config_bootstrap_allow_rebrand` | The re-brand guard: the branch may carry a different `app.title` than the host serves | A deliberate rename in the repository — the guard compares the branch's title with the copy the host still serves, so a rename in the repository reads as a re-brand until every node has taken the new file |
-  | `config_bootstrap_theme_entrypoints` | The theme guard: which subtrees (`login`, `account`, `admin`, `email`) the deployment's theme must carry | A theme that serves only some of the realm's screens — the realm can point each screen at its own theme, and the list then names the subtrees that are actually used |
+  | `config_bootstrap_theme_entrypoints` | The theme guard: which subtrees (`login`, `account`, `admin`, `email`) the deployment's theme must carry | A theme that serves only some of the realm's screens — the realm can point each screen at its own theme, and the list then names the subtrees that are actually used. (The completeness of the theme the others INHERIT from — `genie`, the parent — is guarded separately, by the pair's `expect` list.) |
 
   Both live in `deploy/ansible/roles/config_bootstrap/defaults/main.yml`; set them in `group_vars/<environment>/vars.yml`.
 

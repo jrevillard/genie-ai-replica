@@ -15,25 +15,17 @@ config_bootstrap_sync_enabled: true
 # deploy.
 config_bootstrap_allow_rebrand: false
 
-# The Keycloak theme this deployment serves — the one the realms are pointed
-# at, and the one the mirror must not delete from a node that does not ship
-# it. The role refuses to sync a branch that does not ship it.
+# keycloak_theme — the theme this deployment serves, the one the mirror must
+# not delete from a node that does not ship it — is NOT declared here. It
+# lives in group_vars/all.yml, next to config_dir, for the same reason: role
+# defaults are scoped to the role's own plays, while the variable feeds
+# templates/env.j2 (a different play) and the guard in this one. One
+# declaration in all.yml feeds both; a role default would be invisible to the
+# .env-rendering play and the two consumers could disagree.
 #
-# It is a property of the DEPLOYMENT, not of a node: the role runs on the
-# nodes of the app stack (the inventory of deploy.yml — the GPU node has its
-# own playbook and a compose that mounts no runtime config, so it is never
-# seeded). Those nodes all belong to the deployment's environment group, so
-# they resolve the same value: a flavour sets it once, in
-# group_vars/<environment>/vars.yml (e.g. genie-el-salvador).
-#
-# The value must name a theme the deployed branch ships under
-# configs/keycloak/themes/. An empty value fails the deploy.
-#
-# The default here and docker-compose's KEYCLOAK_THEME default are two
-# declarations of the same thing and must move together: role defaults do not
-# reach the play that renders the .env, so when the variable is not overridden
-# the compose default (`KEYCLOAK_THEME=${KEYCLOAK_THEME:-genie}`,
-# docker-compose.yaml) is what the realm actually gets. Change both or neither.
+# A flavour overrides it in group_vars/<environment>/vars.yml (e.g.
+# genie-el-salvador). An undefined value fails the role loudly instead of
+# silently checking a default.
 #
 # What makes a theme usable: the realm (configs/keycloak/genie-realm.yaml)
 # points login, account, admin and email at the same KEYCLOAK_THEME, so a
@@ -51,8 +43,8 @@ config_bootstrap_theme_entrypoints:
 # is protected by the owning pair's `expect` list: put the paths that must
 # exist in the branch (e.g. genie/account/theme.properties) there, never in
 # config_bootstrap_theme_entrypoints, which names the configured theme's
-# own subtrees.
-keycloak_theme: genie
+# own subtrees. The expect list is also the knob when a deployment retires
+# one of the parent's subtrees.
 
 # List of (source, destination) pairs.
 #   src        - repo-relative directory. Used two ways: as the `?path=` argument

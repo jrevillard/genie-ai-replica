@@ -140,15 +140,19 @@
     - name: Fail unless every pair declares its expected assets as a list
       ansible.builtin.assert:
         that:
+          # `is defined` first: the conditions below resolve item.expect, and
+          # a pair that omits the key would raise a raw templating error
+          # instead of printing this message.
+          - item.expect is defined
           - item.expect is sequence
           - item.expect is not string
           - item.expect | length > 0
         fail_msg: >-
-          The config_bootstrap_pairs entry for {{ item.dest_subdir }} declares
-          its expected assets as a string, or an empty list. `expect` is a
-          non-empty list (one file per entry, repo-relative to the pair's
-          src): the guard it feeds is what stops a wrong branch from seeding a
-          config dir without the assets the containers fetch at boot.
+          The config_bootstrap_pairs entry for {{ item.dest_subdir }} does not
+          declare `expect` as a non-empty list (one file per entry,
+          repo-relative to the pair's src). The guard it feeds is what stops a
+          wrong branch from seeding a config dir without the assets the
+          containers fetch at boot.
         success_msg: "config_bootstrap: {{ item.dest_subdir }} expects a list of assets"
       loop: "{{ config_bootstrap_pairs }}"
 
@@ -539,6 +543,33 @@
       loop: "{{ config_bootstrap_mirror_specs }}"
       loop_control:
         label: "{{ item.label }}"
+
+    # The mirror restores the archive's directory modes onto the bind-mount
+    # sources. The containers read those sources as a non-root user, so each
+    # directory must grant others read and traverse (the low octal digit >= 5
+    # in an 0o775-mode world): a restrictive mode in the archive would shadow
+    # a readable config behind a deploy that reports success.
+    - name: Check the seeded directories are readable by the containers
+      ansible.builtin.stat:
+        path: "{{ item.dest }}"
+      register: config_bootstrap_dir_stat
+      loop: "{{ config_bootstrap_mirror_specs }}"
+      loop_control:
+        label: "{{ item.label }}"
+
+    - name: Fail when a seeded config directory is not readable
+      ansible.builtin.assert:
+        that:
+          - (item.stat.mode | int(base=8)) % 8 >= 5
+        fail_msg: >-
+          The config directory {{ item.item.dest }} carries mode
+          {{ item.stat.mode }} after the mirror: the containers read the mount
+          as a non-root user and would not be able to traverse it. Fix the
+          directory mode in the repository the branch is deployed from.
+        success_msg: "config_bootstrap: the seeded directories are readable"
+      loop: "{{ config_bootstrap_dir_stat.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.label | default('unknown') }}"
 
     - name: Fail when the host runtime config does not match the branch
       ansible.builtin.assert:

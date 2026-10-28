@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.95**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.96**, branch `feat/k8s-migration` based
   on `main` at `179a8a8f1` and **8 commits behind `origin/main`**
   (`5786919c1`). The gap touches the frontend, the OPEA overlay
   (retriever/dataprep), the site docs and the config-validator tests —
@@ -609,6 +609,46 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 24 (0.2.96)** — 7 findings from the `/code-review`
+  skill, all verified true, all fixed. The review attacked the gates the
+  previous passes had just rewritten, and it was right to.
+  - *The model Deployments rendered `%!s(<nil>)` into their container
+    arguments* — vllm, vllm-translation, tei and tei-reranker read the
+    model id and the tuning knobs of a clearable block without a
+    fallback, and Helm's `null` DELETES the chart's own defaults. A
+    cleared model block produced a green install whose pod crash-loops
+    on `--model "%!s(<nil>)"`, with the values key nowhere in the
+    output. Each read carries its chart default now, like the sibling
+    orchestrators already did.
+  - *The pass-23 guard broke the documented docling configuration* —
+    dataprep states the contract in the template: an empty docling
+    endpoint is the signal that it uses its in-process converter, so
+    `opea.gpu.paths.docling` MAY be cleared. The guard now exempts
+    that key; every other path still fails by name.
+  - *The cleared-block sweep never rendered the in-cluster GPU tier* —
+    the model Deployments exist ONLY in that mode, so the sweep
+    asserted nothing about the blocks they read, and the finding above
+    landed green in CI. The sweep now runs on THREE surfaces.
+  - *The "no silent empty" assertion was narrower than its promise* —
+    it inspected env rows and only emptiness, so the engine's debug
+    output (`%!s(<nil>)` in an argument, `<nil>` in an env value)
+    passed as a compliant degradation. The sweep now refuses a render
+    that carries either marker, wherever it appears.
+  - *Clearing `services.clamav` rendered `value: <nil>`* for
+    VIRUS_SCANNING — `and nil false` is nil, and `| toString` prints
+    the debug text. The switch is coerced to a bool, so a cleared
+    ClamAV tier renders `false` (what the application reads).
+  - *The env-types static half skipped the library helpers* — it
+    scanned `templates/**/*.yaml` and not the `.tpl` files, which is
+    where the shared env rows live. It scans both now.
+  - *The GPU helper's header advertised a docling entry the code does
+    not implement* — the chart renders no docling Deployment in any
+    mode, and the branch below the header returns an empty endpoint.
+    The header now says so.
+  - The render-guards script gained the case for the new path guard,
+    and its carve-out list names the two guards an operator cannot
+    reach (the schema types `streamingEnabled` before the chart can
+    reject it; the realm-file guard checks a file of the chart).
 - **Review loop, pass 23 (0.2.95)** — 5 findings, all verified true, all
   fixed. The pass attacked the gates pass 22 had just rewritten, and it
   was right to: the "degraded" bucket asserted only that the render did
@@ -1076,7 +1116,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.95** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.96** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.

@@ -28,9 +28,14 @@
 step with no scanner behind it fails every upload, so the ClamAV tier
 being off forces it off. `services.documentRepository.virusScanning`
 still turns it off on its own. */ -}}
-{{- $virusScanning := $svcClamav.enabled -}}
+{{- /* Coerced to a BOOL: a cleared clamav block leaves `enabled` nil, and
+`and nil false` is nil — which `| toString` renders as the debug text
+"<nil>" instead of the false the application reads
+(`process.env.VIRUS_SCANNING === "true"`). */ -}}
+{{- $clamavOn := and (kindIs "bool" $svcClamav.enabled) $svcClamav.enabled -}}
+{{- $virusScanning := $clamavOn -}}
 {{- if kindIs "bool" $servicesDocumentRepository.virusScanning -}}
-{{- $virusScanning = and $virusScanning $servicesDocumentRepository.virusScanning -}}
+{{- $virusScanning = and $clamavOn $servicesDocumentRepository.virusScanning -}}
 {{- end -}}
 {{- /* The chart owns `document-repository-uploads` only while
 `services.documentRepository.pvc.enabled` is true. With it off, a volume

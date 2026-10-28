@@ -10,7 +10,7 @@
 {{- $opeaModelsReranker := $opeaModels.reranker | default dict -}}
 
 {{- if and $opea.enabled (eq $opeaGpu.mode "in-cluster") -}}
-{{- $modelId := $opeaModelsReranker.modelId -}}
+{{- $modelId := $opeaModelsReranker.modelId | default "BAAI/bge-reranker-v2-m3" | toString -}}
 {{- include "genieai-umbrella.modelDeployment" (dict
       "root" .
       "name" "tei-reranker"

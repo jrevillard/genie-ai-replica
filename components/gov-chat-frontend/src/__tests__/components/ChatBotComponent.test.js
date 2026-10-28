@@ -2149,6 +2149,38 @@ describe('ChatBotComponent', () => {
       expect(vm.selectedContextItems[0].service).toBe('Declaración de impuestos');
     });
 
+    it('a locale switch re-resolves a QUICK HELP chip title, not just the buttons', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // The button's title is localized config text. The chip installed
+      // from it kept the OLD locale's title: applyQuickHelpButtons
+      // re-resolved the BUTTONS, but the store's chip items were never
+      // touched — a French UI kept showing the English title.
+      vm.cachedConfig = {
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [{ id: 'births', title: { en: 'Births', fr: 'Naissances' }, category: '2' }]
+            }
+          }
+        }
+      };
+      vm.applyQuickHelpButtons();
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'Births', serviceKey: 'births', source: 'quickHelp', id: 'births', category: '2', selected: true }
+      ]);
+
+      wrapper.vm.$i18n.locale = 'fr';
+      await vm.$nextTick();
+      await flushPromises();
+
+      expect(vm.selectedContextItems[0].service).toBe('Naissances');
+      // Identity and labels are untouched: only the display moved.
+      expect(vm.selectedContextItems[0].id).toBe('births');
+      expect(vm.selectedContextItems[0].serviceKey).toBe('births');
+    });
+
     it('a FAILED hierarchy load is retried, not cached for the session', async () => {
       const serviceTreeService = require('../../services/serviceTreeService');
       serviceTreeService.getAllCategories
@@ -2249,6 +2281,39 @@ describe('ChatBotComponent', () => {
       const payload = mockSubmitQueryStream.mock.calls.at(-1)[0];
       expect(payload.context.categoryLabel).toBe('Crops');
       expect(payload.context.serviceLabels).toEqual(['Crops']);
+    });
+
+    it('a composer entry whose scope cannot be named yet is refused, not sent unfiltered', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // The composer card renders BEFORE the hierarchy settles (the grid
+      // waits for it). Pressing it with the tree still loading installed
+      // the chip and sent the query — with no EN category label and no
+      // labels, the query left UNFILTERED while the chip showed the card.
+      vm.serviceCategories = [];
+      vm.serviceCategoriesStatus = 'loading';
+      vm.quickHelpButtons = [
+        {
+          id: 'crops-entry',
+          service: 'Crops card',
+          serviceLabels: [],
+          serviceKey: 'crops-entry',
+          category: '2',
+          placement: 'composer',
+          icon: 'x'
+        }
+      ];
+      vm.newMessage = '¿Qué hay?';
+
+      vm.handleWelcomeSend();
+
+      // Nothing installed, nothing sent — the refusal is visible.
+      expect(vm.selectedContextItems).toHaveLength(0);
+      expect(vm.currentCategoryId).toBeNull();
+      expect(mockSubmitQueryStream).not.toHaveBeenCalled();
+      const notificationService = require('../../services/notificationService');
+      expect(notificationService.error).toHaveBeenCalled();
     });
 
     it('a category-only selection is not refused for lacking a service name', async () => {
@@ -3827,6 +3892,105 @@ describe('ChatBotComponent', () => {
 
       expect(vm.selectedContextItems.length).toBe(0);
       expect(vm.currentCategoryId).toBeNull();
+    });
+
+    it('clearing the last chip of a category shared by SEVERAL buttons re-installs the CATEGORY, not a sibling', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const tree = [
+        {
+          catKey: '2',
+          name: 'État civil',
+          nameEN: 'Civil Registry',
+          children: [
+            { name: 'Naissances', nameEN: 'Births' },
+            { name: 'Mariages', nameEN: 'Marriages' }
+          ]
+        }
+      ];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+
+      // Two buttons, one category, DIFFERENT labels. No state remembers
+      // which one the user pressed: re-installing either would swap the
+      // scope's labels for ones nobody chose. The category itself is the
+      // only honest scope left.
+      vm.quickHelpButtons = [
+        {
+          id: 'births',
+          service: 'Births',
+          serviceLabels: ['Births'],
+          serviceKey: 'births',
+          category: '2',
+          icon: 'x'
+        },
+        {
+          id: 'marriages',
+          service: 'Marriages',
+          serviceLabels: ['Marriages'],
+          serviceKey: 'marriages',
+          category: '2',
+          icon: 'x'
+        }
+      ];
+      vm.currentCategoryId = '2';
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'Naissances', serviceKey: 'Births', source: 'sidebar', category: '2', selected: true }
+      ]);
+
+      vm.removeContextItem(0);
+
+      expect(vm.selectedContextItems).toHaveLength(1);
+      const reinstalled = vm.selectedContextItems[0];
+      // The category scope: no label on the wire, the category edge
+      // restores it — never a sibling's invented identity.
+      expect(reinstalled.categoryOnly).toBe(true);
+      expect(reinstalled.serviceKey).toBeNull();
+      expect(reinstalled.serviceLabels).toBeUndefined();
+      expect(reinstalled.id).toBeUndefined();
+      expect(reinstalled.category).toBe('2');
+      // The chip names the category, and the category stays active.
+      expect(reinstalled.service).toBe('État civil');
+      expect(vm.currentCategoryId).toBe('2');
+    });
+
+    it('clearing the last chip of a category with ONE button re-installs that button', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const tree = [
+        {
+          catKey: '2',
+          name: 'État civil',
+          nameEN: 'Civil Registry',
+          children: [{ name: 'Naissances', nameEN: 'Births' }]
+        }
+      ];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+
+      vm.quickHelpButtons = [
+        {
+          id: 'births',
+          service: 'Births',
+          serviceLabels: ['Births'],
+          serviceKey: 'births',
+          category: '2',
+          icon: 'x'
+        }
+      ];
+      vm.currentCategoryId = '2';
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'Naissances', serviceKey: 'Births', source: 'sidebar', category: '2', selected: true }
+      ]);
+
+      vm.removeContextItem(0);
+
+      expect(vm.selectedContextItems).toHaveLength(1);
+      expect(vm.selectedContextItems[0].id).toBe('births');
+      expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Births']);
+      expect(vm.selectedContextItems[0].categoryOnly).toBeUndefined();
     });
   });
 

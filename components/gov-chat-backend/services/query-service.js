@@ -104,7 +104,13 @@ class QueryService {
   normalizeQueryContext(context) {
     const normalized = { ...(context || {}) };
     if (!Array.isArray(normalized.serviceLabels)) {
-      normalized.serviceLabels = typeof normalized.serviceLabels === 'string' ? [normalized.serviceLabels] : [];
+      // A bare string is ONE label — but a bare EMPTY string is NOTHING:
+      // wrapping it into [''] would let the blank take the service branch
+      // and eclipse the declared category downstream.
+      normalized.serviceLabels =
+        typeof normalized.serviceLabels === 'string' && normalized.serviceLabels !== ''
+          ? [normalized.serviceLabels]
+          : [];
     }
     if (normalized.categoryLabel === undefined) {
       normalized.categoryLabel = null;
@@ -470,13 +476,20 @@ class QueryService {
     }
 
     // Resolve the wire's EN labels to the entities they name (the
-    // query record's links). The wire itself is untouched.
+    // query record's links). The wire itself is untouched. The two
+    // resolutions are INDEPENDENT: a request that carries its own
+    // categoryId still gets its service links (as the non-stream path
+    // does).
     let categoryId = queryData.categoryId || null;
     let serviceIds = queryData.serviceId ? [queryData.serviceId] : [];
-    if (!categoryId) {
+    if (!categoryId || serviceIds.length === 0) {
       const resolved = await this.resolveScopeIds(queryData.context);
-      categoryId = resolved.categoryId;
-      serviceIds = serviceIds.length > 0 ? serviceIds : resolved.serviceIds;
+      if (!categoryId) {
+        categoryId = resolved.categoryId;
+      }
+      if (serviceIds.length === 0) {
+        serviceIds = resolved.serviceIds;
+      }
     }
 
     const backendMode = process.env.CONTEXT_OPTION || 'conversation-with-context-labels';

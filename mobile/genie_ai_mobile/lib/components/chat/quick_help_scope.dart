@@ -256,17 +256,19 @@ class ConversationScopeResolver {
           (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
               .map((label) => label.toString())
               .toList();
-      final sidebarLabels = tagList
-          .where((other) => other != tag)
-          .where(_hierarchy.knowsLabel)
-          .toList();
+      final otherTags = tagList.where((other) => other != tag).toList();
+      final sidebarLabels = otherTags.where(_hierarchy.knowsLabel).toList();
       return ConversationScope(
         categoryId: category,
         categoryNameEn: _hierarchy.categoryEnLabel(category),
         categoryName: _hierarchy.categoryDisplayName(category),
         serviceLabelsEn: labels,
         sidebarLabelsEn: sidebarLabels,
-        sidebarTagCount: sidebarLabels.length,
+        // The count remembers the tags the conversation was SAVED with
+        // (not the ones that survived): a renamed-away sidebar label
+        // beside a Quick Help tag must refuse the follow-up, exactly as
+        // it does when there is no Quick Help tag.
+        sidebarTagCount: otherTags.length,
         quickHelpButtonId: tag,
       );
     }
@@ -323,9 +325,13 @@ bool scopeCanGoOnTheWire({
       : sidebarServiceLabels;
   // An EMPTY category id declares nothing: the context bar's X clears the
   // selection with one, and an empty id is not a scope. Reading it as one
-  // would refuse every question the user asks afterwards.
+  // would refuse every question the user asks afterwards. 'general' is
+  // the placeholder a category-less selection is stored under — it names
+  // no category, on either platform.
   final hasScope =
-      (categoryId != null && categoryId.isNotEmpty) ||
+      (categoryId != null &&
+          categoryId.isNotEmpty &&
+          categoryId != 'general') ||
       labels.isNotEmpty ||
       sidebarServiceCount > 0;
   if (!hasScope) return true;

@@ -220,10 +220,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   Future<void>? _quickHelpConfigFuture;
 
   Future<void> _ensureQuickHelpConfig() {
-    return _quickHelpConfigFuture ??= _loadQuickHelpConfig();
+    // A failed load is not cached: the next need for the buttons retries
+    // it (the tree's fetch does the same).
+    return _quickHelpConfigFuture ??= _loadQuickHelpConfig().whenComplete(() {
+      if (_quickHelpLoadFailed) _quickHelpConfigFuture = null;
+    });
   }
 
+  bool _quickHelpLoadFailed = false;
+
   Future<void> _loadQuickHelpConfig() async {
+    _quickHelpLoadFailed = false;
     try {
       final String configString = await rootBundle.loadString(
         'assets/config/genie-ai-config.json',
@@ -290,6 +297,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       });
     } catch (e) {
       debugPrint("[CHATBOT] Failed to load genie-ai-config.json: $e");
+      _quickHelpLoadFailed = true;
     }
   }
 
@@ -420,7 +428,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     }
   }
 
+  // The restore's staleness guard: a slower load must never commit over
+  // a newer one (the web's loadSeq, ported — the scope block added an
+  // await into the window).
+  int _loadSeq = 0;
+
   Future<void> _loadConversationDirect(String conversationId) async {
+    final seq = ++_loadSeq;
     setState(() => _isLoading = true);
     _resetChat(keepLoading: true);
 
@@ -473,7 +487,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // (a Quick Help tag is a button id). Waiting for the one and not
       // the other drops the scope of the other kind of tag.
       await Future.wait([_ensureEnTree(), _ensureQuickHelpConfig()]);
-      if (!mounted) return;
+      if (!mounted || seq != _loadSeq) return;
       final scope =
           ConversationScopeResolver(
             hierarchy: _scopeResolver ?? QuickHelpScopeResolver(const []),
@@ -485,7 +499,21 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       setState(() {
         _selectedCategoryId = scope.categoryId;
         _selectedCategoryNameEn = scope.categoryNameEn ?? '';
-        _selectedCategoryName = scope.categoryName ?? '';
+        // The resolver's tree is the ENGLISH one (the wire's
+        // vocabulary): its display name is English too. A Quick Help
+        // scope shows the button's own localized title — the same thing
+        // the press and the web show. (A sidebar scope still shows the
+        // EN name: the localized tree lives in the panel, not here.)
+        if (scope.quickHelpButtonId != null) {
+          final button = _quickHelpButtons.firstWhere(
+            (b) => b['id']?.toString() == scope.quickHelpButtonId,
+            orElse: () => <String, dynamic>{},
+          );
+          _selectedCategoryName =
+              button['resolvedTitle']?.toString() ?? scope.categoryName ?? '';
+        } else {
+          _selectedCategoryName = scope.categoryName ?? '';
+        }
         _activeQuickHelpButtonId = scope.quickHelpButtonId;
         // A Quick Help scope narrows the FIRST follow-up by its declared
         // labels (the mobile's one-turn scope); the sidebar labels that
@@ -546,6 +574,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _messages = [];
       _relatedDocuments = [];
       if (!keepLoading) _isLoading = false;
+      // A new chat inherits NOTHING from the previous one: a scope left
+      // standing would filter the new conversation's questions and be
+      // written into its tags at save time.
+      _selectedCategoryId = null;
+      _selectedCategoryName = '';
+      _selectedCategoryNameEn = '';
+      _sidebarServiceLabelsEn = [];
+      _sidebarServiceCount = 0;
+      _activeQuickHelpButtonId = null;
+      _activeServiceLabels = [];
     });
     widget.onRelatedDocumentsUpdate([]);
     _inputController.clear();
@@ -1006,6 +1044,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         _selectedCategoryName = '';
         _selectedCategoryNameEn = '';
         _sidebarServiceLabelsEn = [];
+        // A mode switch clears the WHOLE prior scope: a stale count would
+        // make the send guard refuse every subsequent send (no label can
+        // ever satisfy a count that remembers a selection that is gone),
+        // and a stale button id would tag the next conversation with a
+        // scope it never had.
+        _sidebarServiceCount = 0;
+        _activeQuickHelpButtonId = null;
       });
       _inputFocusNode.requestFocus();
       return;
@@ -1037,6 +1082,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // is a mode switch: it is cleared.
       _selectedCategoryId = button['category']?.toString();
       _selectedCategoryNameEn = _scopeResolver?.categoryLabelEn(button) ?? '';
+      // The Quick Help press REPLACES any sidebar selection: its count
+      // must go with it, or the send guard reads a count that remembers
+      // services that are no longer selected.
+      _sidebarServiceCount = 0;
+
       // The scope the query carries is VISIBLE. The resolver's tree is the
       // ENGLISH one (it is the wire's vocabulary), so its display name is
       // English too — the chip shows the button's own localized title

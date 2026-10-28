@@ -174,9 +174,14 @@ def build_filter_labels(context: dict) -> list[str]:
         return []
     labels: list[str] = []
     service_labels = context.get("serviceLabels")
-    if service_labels:
+    # A label that is NOTHING ('' — not a whitespace-only one, which is a
+    # KEPT label) is not a scope: a list of them must not take the service
+    # branch and eclipse the DECLARED category, or the query would run
+    # unfiltered outside the scope the request named.
+    service_list = [l for l in _as_label_list(service_labels) if l != ""]
+    if service_list:
         # The service is the narrower scope — the category must not widen it.
-        labels.extend(_as_label_list(service_labels))
+        labels.extend(service_list)
     else:
         labels.extend(_as_label_list(context.get("categoryLabel")))
         labels.extend(_as_label_list(context.get("categoryLabels")))

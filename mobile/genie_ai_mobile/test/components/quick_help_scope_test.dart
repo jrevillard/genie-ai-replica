@@ -256,6 +256,33 @@ void main() {
       expect(scope.serviceLabelsEn, ['Births']);
     });
 
+    test('a dropped tag beside a QUICK HELP tag refuses the send too', () {
+      // The conversation was saved with a Quick Help scope AND a sidebar
+      // label that was renamed away. The guard must refuse the follow-up
+      // in this branch too — not only when there is no Quick Help tag.
+      final convButtons2 = <Map<String, dynamic>>[
+        {'id': 'btn-x', 'category': '2', 'serviceLabels': const <dynamic>[]},
+      ];
+      final scope = ConversationScopeResolver(
+        hierarchy: QuickHelpScopeResolver(convTree),
+        quickHelpButtons: convButtons2,
+      ).resolve(tags: ['btn-x', 'Renamed Away']);
+
+      expect(scope.quickHelpButtonId, 'btn-x');
+      expect(scope.sidebarLabelsEn, isEmpty);
+      expect(scope.sidebarTagCount, 1);
+      expect(
+        scopeCanGoOnTheWire(
+          categoryId: scope.categoryId,
+          categoryNameEn: scope.categoryNameEn,
+          serviceLabels: scope.serviceLabelsEn,
+          sidebarServiceLabels: scope.sidebarLabelsEn,
+          sidebarServiceCount: scope.sidebarTagCount,
+        ),
+        isFalse,
+      );
+    });
+
     test('a DROPPED tag refuses the send, not vanishes from it', () {
       // The conversation was saved with two sidebar tags; one was renamed
       // away. The label list carries one, the count remembers two — the

@@ -688,6 +688,9 @@ export default {
       // runs while it is pending must wait for it, otherwise the tag of a
       // saved conversation is looked up in an empty button list.
       quickHelpLoadPromise: null,
+      // The Quick Help configuration load failed: the next need for the
+      // buttons retries it instead of awaiting the failed promise forever.
+      quickHelpLoadFailed: false,
       showNewChatConfirm: false,
       newChatDialog: {
         title: '',
@@ -1021,18 +1024,19 @@ export default {
         (newLocale) => {
           this.currentLocale = newLocale;
           // Update context labels when locale changes. A Quick Help item
-          // displays the title of its button (re-resolved by
-          // applyQuickHelpButtons). A SIDEBAR item's identity is its EN
-          // label: its display is the tree's localized name FOR that EN
-          // label — safeTranslate would return the EN string unchanged in
-          // a non-English UI.
+          // displays the title of its button, re-resolved from the config
+          // by the button id (applyQuickHelpButtons refreshes the buttons
+          // alone — the chips are separate store items). A SIDEBAR item's
+          // identity is its EN label: its display is the tree's localized
+          // name FOR that EN label — safeTranslate would return the EN
+          // string unchanged in a non-English UI.
           this.$store.commit(
             'conversation/setContextItems',
             this.selectedContextItems.map((item) => ({
               ...item,
               service:
                 item.source === QUICK_HELP_SOURCE
-                  ? item.service
+                  ? this.quickHelpTitleFor(item, newLocale)
                   : this.displayNameForEnLabel(item.serviceKey) || this.safeTranslate(item.service)
             }))
           );
@@ -1314,22 +1318,32 @@ export default {
     },
 
     quickHelpErrorCaption(button) {
-      const state = this.quickHelpScopeState(button);
-      if (!state.broken) {
+      return this.quickHelpStatesCaption([this.quickHelpScopeState(button)]);
+    },
+
+    // The caption for a set of BROKEN scope states — the ONE assembly both
+    // the grid's caption and the send-time refusal speak: an unavailable
+    // hierarchy names nothing, otherwise the gone labels (deduplicated
+    // across states) and the gone category, joined. A state that is not
+    // broken contributes nothing, so callers filter or pass as-is.
+    quickHelpStatesCaption(states) {
+      const broken = states.filter((state) => state && state.broken);
+      if (broken.length === 0) {
         return '';
       }
-      if (state.unavailable) {
+      if (broken.some((state) => state.unavailable)) {
         return this.translate('chatbot.quickHelpScopeUnavailable', '');
       }
       const parts = [];
-      if (state.missingLabels.length > 0) {
+      const missingLabels = [...new Set(broken.flatMap((state) => state.missingLabels || []))];
+      if (missingLabels.length > 0) {
         parts.push(
           this.translateWithParams('chatbot.quickHelpLabelGone', {
-            labels: state.missingLabels.join(', ')
+            labels: missingLabels.join(', ')
           })
         );
       }
-      if (state.categoryMissing) {
+      if (broken.some((state) => state.categoryMissing)) {
         parts.push(this.translate('chatbot.quickHelpCategoryGone', ''));
       }
       return parts.filter(Boolean).join(' ');
@@ -1408,22 +1422,9 @@ export default {
         .filter((state) => state.broken);
       if (brokenQuickHelpStates.length > 0) {
         blocked = true;
-        // The caption NAMES what is gone — the same thing the grid's
-        // caption names, through the same keys.
-        if (this.serviceCategoriesStatus === 'failed') {
-          notificationService.error(this.translate('chatbot.quickHelpScopeUnavailable', ''));
-        } else {
-          const missingLabels = [...new Set(brokenQuickHelpStates.flatMap((state) => state.missingLabels))];
-          const categoryGone = brokenQuickHelpStates.some((state) => state.categoryMissing);
-          const parts = [];
-          if (missingLabels.length > 0) {
-            parts.push(this.translateWithParams('chatbot.quickHelpLabelGone', { labels: missingLabels.join(', ') }));
-          }
-          if (categoryGone) {
-            parts.push(this.translate('chatbot.quickHelpCategoryGone', ''));
-          }
-          notificationService.error(parts.filter(Boolean).join(' '));
-        }
+        // The caption NAMES what is gone — the same assembly the grid's
+        // caption uses, through the same keys.
+        notificationService.error(this.quickHelpStatesCaption(brokenQuickHelpStates));
       }
 
       // Mismatch check: each service label must be a known KB label (in some item's
@@ -1506,15 +1507,6 @@ export default {
     },
 
     /**
-     * The Quick Help buttons, once the runtime configuration has been read.
-     *
-     * The buttons come from a configuration file that is fetched
-     * asynchronously, so they are not there when the component is created.
-     * A saved conversation restored before the fetch resolved would look its
-     * tag up in an empty list, fall back to the sidebar branch, and send the
-     * button id as a label — an id that names no entity in the hierarchy.
-     */
-    /**
      * The live hierarchy, once the initial load has settled. The restore path
      * resolves a saved scope against it; restoring before the load resolved
      * would look the tags up in an empty vocabulary and drop them.
@@ -1530,8 +1522,22 @@ export default {
       return this.serviceCategories;
     },
 
+    /**
+     * The Quick Help buttons, once the runtime configuration has been read.
+     *
+     * The buttons come from a configuration file that is fetched
+     * asynchronously, so they are not there when the component is created.
+     * A saved conversation restored before the fetch resolved would look its
+     * tag up in an empty list, fall back to the sidebar branch, and send the
+     * button id as a label — an id that names no entity in the hierarchy.
+     */
     async ensureQuickHelpLoaded() {
-      if (!this.quickHelpLoadPromise) {
+      // A FAILED load is not cached: the hierarchy retry (its sibling)
+      // must not be the only one — one transient config failure at mount
+      // would leave the grid empty and every restored Quick Help tag
+      // unresolved for the whole session.
+      if (!this.quickHelpLoadPromise || this.quickHelpLoadFailed) {
+        this.quickHelpLoadFailed = false;
         this.loadQuickHelpButtons();
       }
       await this.quickHelpLoadPromise;
@@ -1546,6 +1552,7 @@ export default {
       } catch (error) {
         console.error('[ChatBotComponent] Failed to load Quick Help config:', error);
         this.quickHelpButtons = [];
+        this.quickHelpLoadFailed = true;
       }
     },
 
@@ -1557,6 +1564,17 @@ export default {
      * of a button is locale-dependent. So a language switch re-resolves the
      * buttons already read instead of reading the configuration again.
      */
+    // A Quick Help chip's title is the BUTTON's title — localized config
+    // text. The chip is installed with the title resolved at press time;
+    // a locale switch must re-resolve it from the config (by the button
+    // id), the same way applyQuickHelpButtons re-resolves the buttons. A
+    // button the config no longer declares keeps its last title: the
+    // chip's identity is the id, not the title.
+    quickHelpTitleFor(item, locale) {
+      const raw = (this.cachedConfig?.features?.chat?.quickHelp?.buttons || []).find((b) => b && b.id === item.id);
+      return (raw && resolveConfigText(raw.title, locale)) || item.service;
+    },
+
     applyQuickHelpButtons() {
       const buttons = this.cachedConfig?.features?.chat?.quickHelp?.buttons || [];
       const locale = this.currentLocale;
@@ -1705,6 +1723,16 @@ export default {
       // Only a real knowledge-area entry becomes a context chip — the plain
       // just-chat surface is not a domain, and a chip would promise one.
       if (entry && entry.category) {
+        // The composer card renders BEFORE the hierarchy settles (the grid
+        // waits for it), so the same gate selectQuickHelpOption enforces
+        // has to run here too: a broken card, or a scope the tree cannot
+        // EN-name yet, installs nothing and sends nothing — the query
+        // would leave unfiltered while the chip promised the card's scope.
+        if (this.quickHelpScopeState(entry).broken || !this.quickHelpScopeIsNameable(entry.category)) {
+          const caption = this.quickHelpStatesCaption([this.quickHelpScopeState(entry)]);
+          notificationService.error(caption || this.translate('chatbot.quickHelpScopeUnavailable', ''));
+          return;
+        }
         this.$store.commit('conversation/replaceQuickHelpItem', {
           service: entry.service,
           // The entry's OWN declared labels and category ride along: the
@@ -1778,11 +1806,17 @@ export default {
         this.$store.commit('conversation/removeContextItem', index);
       }
       if (this.selectedContextItems.length === 0 && this.currentCategoryId) {
-        const quickHelpOption = this.quickHelpButtons.find((option) => option.category === this.currentCategoryId);
-        // A BROKEN button (a declared label or its category left the
-        // hierarchy) must not be re-installed: it would block every
-        // subsequent send, and removing the chip again would re-add the
-        // same broken button — the user could not recover from here.
+        const categoryButtons = this.quickHelpButtons.filter((option) => option.category === this.currentCategoryId);
+        const quickHelpOption = categoryButtons.length === 1 ? categoryButtons[0] : null;
+        // Several buttons share the category (the shipped configurations
+        // have up to seven in one): no state remembers WHICH one the user
+        // pressed, and re-installing an arbitrary sibling would swap the
+        // scope's labels for ones nobody chose. A single unambiguous
+        // button is re-installed; anything else re-installs the CATEGORY
+        // itself, which is the scope the chip actually showed. A BROKEN
+        // button is never re-installed: it would block every subsequent
+        // send, and removing the chip again would re-add the same broken
+        // button — the user could not recover from here.
         if (quickHelpOption && this.quickHelpScopeState(quickHelpOption).broken) {
           this.currentCategoryId = null;
         } else if (quickHelpOption) {
@@ -1793,6 +1827,21 @@ export default {
               serviceKey: quickHelpOption.serviceKey || quickHelpOption.id || quickHelpOption.service,
               source: 'quickHelp',
               id: quickHelpOption.id,
+              category: this.currentCategoryId,
+              selected: true
+            }
+          ]);
+        } else if (categoryButtons.length > 1) {
+          // The same shape the conversation-restore path builds for a
+          // category scope: no label on the wire, the category's own edge
+          // restores it. A category the hierarchy no longer carries is
+          // caught at send time (no categoryLabel, no labels — refused),
+          // not by this re-install.
+          this.$store.commit('conversation/setContextItems', [
+            {
+              service: this.getCategoryDisplayName(this.currentCategoryId),
+              serviceKey: null,
+              categoryOnly: true,
               category: this.currentCategoryId,
               selected: true
             }

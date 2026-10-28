@@ -22,7 +22,7 @@ from metrics import (
 )
 
 from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
-from core.label_contract import build_filter_labels
+from core.label_contract import build_filter_labels, encode_filter_labels
 from core.model_cache import get_max_model_len, get_model_id
 from core.model_http_policy import AIOHTTP_CONNECT_TIMEOUT_SECONDS, CONTROL_PLANE_TIMEOUT_SECONDS
 from core.span_attrs import ATTRIBUTE_NAMES, QUERY_ID_KEY, query_id_from_baggage
@@ -1882,8 +1882,6 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # lives in core.label_contract, shared with the retriever.
         _filter_labels = build_filter_labels(retrieval_context)
         if _filter_labels:
-            from core.label_contract import encode_filter_labels
-
             _base_mode = inputs.get("search_start", "chunk")
             inputs["search_start"] = encode_filter_labels(_base_mode, _filter_labels)
 

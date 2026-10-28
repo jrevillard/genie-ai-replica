@@ -34,6 +34,14 @@ class TestBuildFilterLabels:
         result = build({"serviceLabels": ["Tomato", "Onion"]})
         assert result == ["Tomato", "Onion"]
 
+    def test_a_blank_service_label_does_not_eclipse_the_declared_category(self):
+        # A label that is NOTHING (not a whitespace-only one, which is
+        # KEPT) is not a scope: taking the service branch for it would
+        # return no labels and the query would run unfiltered outside the
+        # scope the request declared.
+        assert build({"categoryLabel": "Healthcare", "serviceLabels": [""]}) == ["Healthcare"]
+        assert build({"categoryLabel": "Healthcare", "serviceLabels": ""}) == ["Healthcare"]
+
     def test_empty_context_no_filter(self):
         result = build({})
         assert result == []

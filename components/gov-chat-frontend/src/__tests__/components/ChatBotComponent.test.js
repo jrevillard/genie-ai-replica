@@ -251,6 +251,13 @@ function createChatBotWrapper(storeOverrides = {}, { rehydrate = false } = {}) {
 describe('ChatBotComponent', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // The hierarchy mock's IMPLEMENTATION survives clearAllMocks: a test
+    // that never installs a tree inherited the PREVIOUS test's hierarchy
+    // (an order-dependent suite). Every test starts from an empty
+    // hierarchy unless it installs its own.
+    const serviceTreeService = require('../../services/serviceTreeService');
+    serviceTreeService.getAllCategories.mockReset();
+    serviceTreeService.getAllCategories.mockResolvedValue([]);
     capturedCallbacks = {};
     capturedQueryData = null;
   });
@@ -3943,6 +3950,12 @@ describe('ChatBotComponent', () => {
   // -----------------------------------------------------------------------
   describe('Request context', () => {
     it('sends the welcome turn, failed exchanges and stub bot turns to no one', async () => {
+      // The hierarchy BEFORE the mount: the component reads it while
+      // mounting, and the chip's label must be one of its labels or the
+      // scope cannot be named. This test used to inherit a tree from a
+      // previous one — and passed vacuously, its first question being
+      // refused before it ever reached the model.
+      mockLiveTree(treeCarrying({ 1: ['Tomato'] }));
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
       // A context chip routes the send through the conversation branch,

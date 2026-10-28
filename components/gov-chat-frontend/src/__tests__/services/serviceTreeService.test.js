@@ -31,7 +31,13 @@ describe('serviceTreeService', () => {
 
       const result = await serviceTreeService.getAllCategories('en');
 
-      expect(mockGet).toHaveBeenCalledWith('services/categories', { params: { locale: 'en' } });
+      // The fetch is BOUNDED: a request that never answers left the
+      // hierarchy 'loading' forever (the grid hidden, the restore's await
+      // unresolved, the chat unusable).
+      expect(mockGet).toHaveBeenCalledWith('services/categories', {
+        params: { locale: 'en' },
+        timeout: 15000
+      });
       expect(result).toEqual([{ catKey: 'health', name: 'Health' }]);
     });
 
@@ -40,7 +46,10 @@ describe('serviceTreeService', () => {
 
       await serviceTreeService.getAllCategories();
 
-      expect(mockGet).toHaveBeenCalledWith('services/categories', { params: { locale: 'en' } });
+      expect(mockGet).toHaveBeenCalledWith('services/categories', {
+        params: { locale: 'en' },
+        timeout: 15000
+      });
     });
 
     it('rejects a body that is not a list of categories', async () => {

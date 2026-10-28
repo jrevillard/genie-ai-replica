@@ -1472,6 +1472,12 @@ class GenieaiArangoRetriever(OpeaComponent):
                         n=bm25_n,
                         labels_to_filter=labels_to_filter,
                         filter_strategy=filter_strategy,
+                        # The clause is CHUNK-scoped (it filters chunk
+                        # labels): the whole BM25 leg is chunk-gated
+                        # above, and the dense legs carry the same gate.
+                        # Widening one without the others would feed a
+                        # chunk-level clause to a view that has no
+                        # chunks — silently empty, not loudly wrong.
                         aql_filter_clause=aql_filter_clause,
                     )
                     if bm25_res:

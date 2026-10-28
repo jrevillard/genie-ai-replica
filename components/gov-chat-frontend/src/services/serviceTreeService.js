@@ -17,7 +17,13 @@ export default {
     try {
       // This points to the PUBLIC endpoint that returns simple data
       const response = await httpService.get('services/categories', {
-        params: { locale }
+        params: { locale },
+        // A BOUNDED fetch: a request that never answers left the
+        // hierarchy in 'loading' forever — the grid stayed hidden with
+        // no error, the restore's await never resolved, and the chat
+        // was unusable until the request finally failed. A timeout
+        // turns it into the visible FAILED state the captions describe.
+        timeout: 15000
       });
       // The hierarchy is a LIST of categories. A body that is not one is a
       // broken answer (a proxy error page, an object), and a client that

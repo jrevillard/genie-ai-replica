@@ -248,6 +248,21 @@ before a rename), the query abstains: chatqna's abstention instructions state
 that no documented information was found. The remedy is operational — update
 the configuration, re-ingest the corpus.
 
+## Deployment order: the backend speaks first
+
+The web client reads the hierarchy's ENGLISH spelling (`nameEN`) and has no
+fallback to the localized `name`: the fallback would put a localized label on
+the wire, which matches no chunk. Deploy the **backend first**, then the
+clients.
+
+A client released against a backend that does not yet publish `nameEN` sees
+every scoped card as broken (a visible caption, no query) — a loud, honest
+failure, not a silent mis-scope. The mobile app goes further: it fetches the
+hierarchy with `locale: 'en'`, where the response's `name` IS the English
+translation, so it tolerates a pre-`nameEN` backend (the fallback applies
+only when the `nameEN` key is ABSENT — an entity that carries an empty
+`nameEN` is a real missing translation and stays unnameable).
+
 ## Accessibility
 
 | Element | Treatment |

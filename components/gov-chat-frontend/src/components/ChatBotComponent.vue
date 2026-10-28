@@ -929,6 +929,10 @@ export default {
       const map = new Map();
       for (const button of this.quickHelpButtons) {
         if (!button || !button.id) continue;
+        // FIRST wins: the restore's lookup by id is first-wins too, and
+        // two cards sharing an id must not get different verdicts in the
+        // grid and in the restore.
+        if (map.has(button.id)) continue;
         map.set(button.id, this.computeQuickHelpScopeState(button));
       }
       return map;
@@ -1262,7 +1266,13 @@ export default {
         return null;
       }
       const category = this.categoryIndex.get(id.toString());
-      return category ? category.name || null : null;
+      if (!category) {
+        return null;
+      }
+      // A category with no translation in the UI locale has no localized
+      // name: the chip showed BLANK. The EN name (the wire's spelling) is
+      // a truthful display, and the id is the last resort.
+      return category.name || category.nameEN || id.toString();
     },
 
     // The localized name of the entity whose EN label is [en] — a saved
@@ -1982,10 +1992,21 @@ export default {
           if (this.selectedContextItems.length === 0) {
             this.currentCategoryId = null;
           } else {
-            this.currentCategoryId = this.selectedContextItems[0].category || null;
+            this.currentCategoryId = this.currentCategoryOfRemainingScope();
           }
         }
       }
+    },
+
+    // The category the REMAINING scope speaks for: the first surviving
+    // chip that HAS a category. A category-less chip first in the list
+    // must not null the id while a later chip carries a real category
+    // (the records and the saved edge would lose it).
+    currentCategoryOfRemainingScope() {
+      const withCategory = this.selectedContextItems.find(
+        (item) => item.category && item.category !== '' && item.category !== 'general'
+      );
+      return withCategory ? withCategory.category : null;
     },
 
     removeContextItem(index) {
@@ -1997,7 +2018,7 @@ export default {
       // category none of the remaining chips belongs to (the removed
       // item's own).
       if (this.selectedContextItems.length > 0) {
-        this.currentCategoryId = this.selectedContextItems[0].category || null;
+        this.currentCategoryId = this.currentCategoryOfRemainingScope();
       }
       if (this.selectedContextItems.length === 0 && this.currentCategoryId) {
         const categoryButtons = this.quickHelpButtons.filter((option) => option.category === this.currentCategoryId);

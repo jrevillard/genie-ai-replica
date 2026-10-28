@@ -443,8 +443,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   Future<void> _fetchEnTree() async {
     try {
       final categoriesApi = ref.read(serviceCategoriesApiProvider);
+      // A BOUNDED fetch: a request that never answers left the
+      // hierarchy 'loading' forever — _isLoading stayed true, the send
+      // returned early and the chat was unusable. The generated client
+      // carries no timeout of its own (it is generated code), so the
+      // bound is applied here: a timeout is the visible FAILED state
+      // the captions describe.
       final response = await categoriesApi
-          .apiServiceCategoriesCategoriesGetWithHttpInfo(locale: 'en');
+          .apiServiceCategoriesCategoriesGetWithHttpInfo(locale: 'en')
+          .timeout(const Duration(seconds: 15));
       if (!mounted) return;
       if (response.statusCode == 200) {
         final tree = jsonDecode(response.body) as List<dynamic>;

@@ -262,7 +262,14 @@ export default {
 
       const catKey = item.category;
       const children = this.nodes.find((n) => n.catKey === catKey)?.children || [];
-      const childIndex = children.findIndex((child) => child && child.name === item.service);
+      // The identity is the EN label (serviceKey) the chat side now
+      // keys on — matching the DISPLAY name alone desynced the highlight
+      // when two services shared one (the wrong row un-highlighted, the
+      // picked row left highlighted). A row with no EN label falls back
+      // to the display name.
+      const childIndex = children.findIndex(
+        (child) => child && (item.serviceKey ? child.nameEN === item.serviceKey : child.name === item.service)
+      );
 
       if (childIndex !== -1 && this.selectedNodes[catKey]) {
         // Filter out the removed index

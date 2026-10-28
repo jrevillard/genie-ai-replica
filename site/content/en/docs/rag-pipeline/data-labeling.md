@@ -128,7 +128,15 @@ displays is a translation.**
 The tree endpoints (`GET /api/service-categories/categories`,
 `GET /api/services/categories`) carry BOTH spellings of every entity: the
 localized `name` the UI displays, and `nameEN` — the English translation the
-retrieval corpus filters on. Clients put the ENGLISH value on the wire. A
+retrieval corpus filters on.
+
+> **Two different fields share the name `nameEN`.** The TREE publishes one
+> (the EN translation, the value clients put on the wire); the STORED ENTITY
+> carries another (the seed the write path copies into that translation — see
+> below). They coincide only in a hierarchy edited through the API. A client
+> filters on the tree's published translation, never on the seed.
+
+Clients put the ENGLISH value on the wire. A
 client that sent a localized display name would scope the query against
 labels no chunk carries — for every non-English deployment, that meant zero
 documents and an answer without context.

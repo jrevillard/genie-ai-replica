@@ -28,7 +28,7 @@
 | 12 | SealedSecret encryptedData carries `PLACEHOLDER_*_SEALED_KID` — underscores outside the base64 alphabet; controller fails to decrypt, never materialises the K8s Secret; helm test always fails on a fresh kind install | Plan 2 + Plan 5: placeholders replaced with `UExBQ0VIT0xERVIr` (base64 of "PLACEHOLDER+"); chart-side conftest (Plan 7) fails release branches that ship them. Re-seal with `kubeseal` before `helm install` |
 | 13 | ArangoDeployment PVC renders `storageClassName: {{ .Values.pluggable.storageClassName | default "" }}` — empty-string pin (same trap the CNPG template guards against) | Plan 2 Task 9: `{{- with .Values.pluggable.storageClassName }}` guard in both single + cluster modes |
 | 14 | Group-5 reachability test uses `/` for document-repository (returns 404) and HTTP against the binary clamd port (hangs); can never pass | Plan 3 Task 9: document-repository check uses `/health`; clamav check uses `bash -c "echo > /dev/tcp/clamav/3310"` (TCP probe) |
-| 15 | `email-password` SealedSecret is rendered but no service's envFrom ever references it — EMAIL_PASSWORD never reaches the backend | Plan 3 Task 1b Step 3: add `email-password` to backend's `secrets:` list |
+| 15 | `email-password` SealedSecret is rendered but no service's envFrom ever references it — EMAIL_PASSWORD never reaches the backend | ~~Plan 3 Task 1b Step 3: add `email-password` to backend's `secrets:` list~~ **SUPERSEDED — do not re-apply** (fe78a2c4a): the backend has no mail path, and envFrom mounts EVERY key of the Secret under its own name, so that Secret's `password` key landed in the backend process as an env var literally named `password`. EMAIL_PASSWORD belongs to the convergence Job through `data.keycloak.convergence.envSecrets` |
 
 ## Wave 9 — Plan 1 review rounds 1-2 (fixed on this branch)
 
@@ -163,7 +163,7 @@ Two findings in SHIPPED artifacts this round (both fixed + re-validated):
 | 5 | Spec §6.2 inverted — claimed externalSecrets shipped as the single backend, contradicting §6/§8/§16 | Corrected to sealedSecrets (v1's actual backend) |
 | 6 | Per-env kustomization `chart: ../../charts/...` resolves to deploy/charts (wrong depth); spec §19.2 same | `../../../charts/genieai-umbrella` both places |
 | 7 | Plan 2 Task 3 Step 4 verification used `--show-only` on a define-only underscore file — Helm errors (verified) | Verification via --execute include / consumer ConfigMap with explanation |
-| 8 | email-password absent from BOTH canonical backend-secrets blocks (Plan 3 Task 1, Plan 5 Task 6 rewrite) — SMTP silently broken (Wave-6 #15 reintroduced twice) | Added to both lists |
+| 8 | email-password absent from BOTH canonical backend-secrets blocks (Plan 3 Task 1, Plan 5 Task 6 rewrite) — SMTP silently broken (Wave-6 #15 reintroduced twice) | ~~Added to both lists~~ **SUPERSEDED — do not re-apply** (fe78a2c4a): see Wave-6 #15 — the backend has no mail path, and the Secret's `password` key materialised as an env var named `password` in the backend container |
 | 9 | pre-delete gate Job had no securityContext → rejected under enforce=restricted, annotated path unusable | Full pod+container securityContext added |
 | 10 | Plan 5 Task 6 Step 3 expected 10 SealedSecrets with ai.enabled=false; gating is secrets-only → 12 — executor would "fix" the gates and reintroduce the Day-0 crashloop | Expectation corrected to 12 with explicit do-not-touch-gates note |
 | 11 | Plan 6 Task 5 Step 5 expected 1 Job; helm template renders 3 (dep-check + drift + migrate hooks) | Expected 3 with missing-hook warning |

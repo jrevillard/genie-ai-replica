@@ -535,6 +535,23 @@ def main(argv):
                 # growing allowlist cannot quietly green the gate, and
                 # this category is exactly the comparison the floor is
                 # meant to notice losing.
+                #
+                # The category used to assert NOTHING: it skipped the
+                # comparison and moved on, so an entry filed "the
+                # addresses differ" could carry a behavioural switch
+                # (a chart that POINTS at a service Compose never
+                # names) and the gate reported green. The claim in the
+                # docstring — "the chart must set it" — is now
+                # asserted: the chart renders its own Kubernetes value,
+                # and it is not empty.
+                chart_value = rendered_rows.get(name, declared_rows.get(name))
+                if chart_value in (None, ""):
+                    gaps.append(
+                        f"{component}.{name}: filed mayDiffer — the chart must SET its "
+                        f"Kubernetes value, but it renders {chart_value!r} (a variable "
+                        "nobody sets is not a difference: file it under codeDefault, "
+                        "which asserts the chart leaves it unset)"
+                    )
                 continue
             checked += 1
             if required:

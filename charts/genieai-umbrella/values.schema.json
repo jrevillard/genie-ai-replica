@@ -206,6 +206,12 @@
               ],
               "minimum": 0,
               "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer — including 0, the scale-off — wins over the profile."
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "The port the container listens on and every piece of plumbing (Service targetPort, NetworkPolicy, probes) dials. The chart also sets the process's own port (PORT, or --port for redis), so an override moves the LISTENER too. ClamAV is the exception the render enforces: clamd takes its port from clamd.conf, so only 3310 is accepted."
             }
           }
         },
@@ -233,6 +239,12 @@
               ],
               "minimum": 0,
               "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer — including 0, the scale-off — wins over the profile."
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "The port the container listens on and every piece of plumbing (Service targetPort, NetworkPolicy, probes) dials. The chart also sets the process's own port (PORT, or --port for redis), so an override moves the LISTENER too. ClamAV is the exception the render enforces: clamd takes its port from clamd.conf, so only 3310 is accepted."
             }
           }
         },
@@ -271,6 +283,12 @@
               ],
               "minimum": 0,
               "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer — including 0, the scale-off — wins over the profile."
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "The port the container listens on and every piece of plumbing (Service targetPort, NetworkPolicy, probes) dials. The chart also sets the process's own port (PORT, or --port for redis), so an override moves the LISTENER too. ClamAV is the exception the render enforces: clamd takes its port from clamd.conf, so only 3310 is accepted."
             }
           }
         },
@@ -295,6 +313,12 @@
               ],
               "minimum": 0,
               "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer — including 0, the scale-off — wins over the profile."
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "The port the container listens on and every piece of plumbing (Service targetPort, NetworkPolicy, probes) dials. The chart also sets the process's own port (PORT, or --port for redis), so an override moves the LISTENER too. ClamAV is the exception the render enforces: clamd takes its port from clamd.conf, so only 3310 is accepted."
             }
           }
         },
@@ -319,6 +343,12 @@
               ],
               "minimum": 0,
               "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer — including 0, the scale-off — wins over the profile."
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "The port the container listens on and every piece of plumbing (Service targetPort, NetworkPolicy, probes) dials. The chart also sets the process's own port (PORT, or --port for redis), so an override moves the LISTENER too. ClamAV is the exception the render enforces: clamd takes its port from clamd.conf, so only 3310 is accepted."
             }
           }
         }
@@ -399,7 +429,7 @@
     },
     "clusterProfileReplicas": {
       "type": "object",
-      "description": "clusterProfile-driven replica overrides. The profile WINS over services.<svc>.replicas (that value is a baseline).",
+      "description": "clusterProfile-driven replica overrides. The order is the EXPLICIT value, then the profile, then 1: `services.<svc>.replicas` wins over this map when it is set (null by default = the profile applies).",
       "additionalProperties": {
         "type": "object",
         "additionalProperties": {

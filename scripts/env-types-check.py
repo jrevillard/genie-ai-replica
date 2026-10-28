@@ -64,7 +64,7 @@ TYPE_OVERRIDES = [
     "--set=opea.retriever.retrieverArangoScoreThreshold=0.75",
     "--set=opea.retriever.retrieverArangoTraversalEnabled=false",
     "--set=services.backend.port=8080",
-    "--set=services.documentRepository.clamavPort=3311",
+    "--set=services.documentRepository.port=3002",
     "--set=services.documentRepository.clamavHost=clamav",
 ]
 

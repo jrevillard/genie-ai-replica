@@ -789,11 +789,13 @@ services:
     # documentRepository pod can resolve (e.g. clamav.corp.example.com
     # or clamav.<other-namespace>.svc.cluster.local).
     clamavHost: clamav
-    # The port the scanner step dials. NULL by default = follow
-    # services.clamav.port — the one listener knob, so moving the
-    # scanner moves its clients. Set it only when clamavHost points at
-    # an EXTERNAL scanner on a different port.
-    clamavPort: null
+    # NOTE: there is no separate dial-port knob. CLAMSCAN_PORT follows
+    # services.clamav.port — the one port the chart carries — because a
+    # different number could only name a port nothing serves: the
+    # NetworkPolicy admits the clamav pod's port and clamd takes its
+    # port from clamd.conf. An external scanner therefore needs the same
+    # port AND an egress rule the chart does not render (an external
+    # clamavHost is unreachable under the default-deny egress).
     # Toggles the doc-repo virus-scan step (CLAMSCAN_* wiring above).
     virusScanning: true
     # Web-crawler egress (POST /api/files/crawl/schedule fetches
@@ -872,9 +874,11 @@ services:
     image: { repository: clamav/clamav, tag: "stable-debian", pullPolicy: "" }
     # Listener port. The template derives the Service port, the
     # NetworkPolicy rules, the tcpSocket probe ports, the helm-test
-    # probe AND the document-repository's dial port (its clamavPort is
-    # null by default and follows this one) from THIS knob. It is
-    # independent only when clamavHost points at an external scanner.
+    # probe AND the document-repository's dial port from THIS knob, and
+    # the render REJECTS a value other than 3310: the clamd daemon takes
+    # its port from clamd.conf, which the image fixes (its entrypoint
+    # honours no port variable), so another number moves the plumbing to
+    # a port nothing listens on.
     port: 3310
     # securityContext / volumes / volumeMounts / PVC are NOT values
     # here: templates/services/clamav.yaml is a hand-written Deployment

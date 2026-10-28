@@ -11,11 +11,11 @@ kubeconform and the CRD gate all stayed green, and an operator who
 sized the Keycloak database for prod load got 2 replicas and 3 database
 instances anyway.
 
-The counts now resolve through `clusterProfileInstances`, with the
-order INVERTED against the stateless tier: an explicit
-`data.<tier>.instances` WINS over the profile map, because it is the
-count the operator sized the database for. Only an ABSENT value falls
-back to the profile.
+The counts now resolve through `clusterProfileInstances`, in the same
+order every count in the chart resolves: the EXPLICIT value, then the
+profile, then 1 — an explicit `data.<tier>.instances` wins over the
+profile map, because it is the count the operator sized the database
+for. Only an ABSENT value falls back to the profile.
 
 This script renders the three configurations that must hold and checks
 the rendered instance counts:

@@ -390,15 +390,23 @@ expect_fail "a public host with a third colon segment" \
 #     pre-install hook's evaluator raises a TypeError on it — naming
 #     neither the values key nor the node. The render must name both.
 expect_fail "a dependency list that is not a list" \
-  "dependencyGraph.services.backend.deps must be a list of strings, got map" \
+  "dependencyGraph.services.backend must be a list of strings, got map" \
   $(valid_flags) --set-json 'dependencyGraph.services.backend.deps={"deps":null}'
 
 # 31. The list's ELEMENTS are names too: a list carrying a number
 #     reaches the hook's evaluator, which compares the element with a
 #     string and fails on the comparison rather than on the shape.
 expect_fail "a dependency list with a non-string element" \
-  "must be a list of strings, got an element of type" \
+  "dependencyGraph.services.backend must be a list of strings, got an element of type" \
   $(valid_flags) --set-json 'dependencyGraph.services.backend=["keycloak",5]'
+
+# 31c. The clamd LISTENER port is fixed by the image (clamd.conf, which
+#      the entrypoint honours no override for): a different number moves
+#      the Service, the NetworkPolicy and the probes to a port nothing
+#      listens on, and every scan times out. The render rejects it.
+expect_fail "a clamav listener port the image cannot serve" \
+  "services.clamav.port must be 3310" \
+  $(valid_flags) --set services.clamav.port=3311
 
 # 31b. The clamav probe port is DERIVED from the listener's port: a
 #      probe on another port never goes Ready. The chart honours no

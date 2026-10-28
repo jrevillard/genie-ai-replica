@@ -1407,6 +1407,8 @@ export default {
       'Konfigurationsproblem: die Kategorie dieser Schaltfläche existiert nicht mehr in der Wissenshierarchie. Diese Schaltfläche kann nicht verwendet werden, bis ihre Konfiguration aktualisiert wurde.',
     quickHelpScopeUnavailable:
       'Konfigurationsproblem: die Wissenshierarchie konnte nicht geladen werden, daher kann der Umfang dieser Schaltfläche nicht überprüft werden. Diese Schaltfläche kann nicht verwendet werden, bis die Hierarchie verfügbar ist.',
+    scopeNotNameable:
+      'Konfigurationsproblem: der ausgewählte Bereich trägt keinen englischen Namen in der Wissenshierarchie, daher kann der Umfang der Abfrage nicht bestimmt werden. Die Abfrage wurde nicht gesendet.',
     serviceLabelMismatch:
       'Dienst "{label}" verwendet ein UI-Label, das möglicherweise nicht zur Wissenshierarchie passt',
     noFilterWarning: 'Kein Kontextfilter aktiv — Abfrage wird ungefiltert sein.',

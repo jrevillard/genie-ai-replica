@@ -20,7 +20,8 @@
 class QuickHelpScopeResolver {
   QuickHelpScopeResolver(List<dynamic> enTree, {this.unavailable = false})
     : _enLabels = _collectEnLabels(enTree),
-      _categoryLabelsEn = _indexCategories(enTree);
+      _categoryLabelsEn = _indexCategories(enTree),
+      _categoryNames = _indexCategoryNames(enTree);
 
   /// A hierarchy that could not be loaded names no scope at all.
   factory QuickHelpScopeResolver.unavailable() =>
@@ -50,6 +51,20 @@ class QuickHelpScopeResolver {
 
   final Set<String> _enLabels;
   final Map<String, String> _categoryLabelsEn;
+  final Map<String, String> _categoryNames;
+
+  static Map<String, String> _indexCategoryNames(List<dynamic> enTree) {
+    final byKey = <String, String>{};
+    for (final entry in enTree) {
+      if (entry is! Map) continue;
+      final key = entry['catKey']?.toString();
+      if (key == null || key.isEmpty) continue;
+      if (byKey.containsKey(key)) continue;
+      final name = entry['name'];
+      byKey[key] = (name is String && name.isNotEmpty) ? name : '';
+    }
+    return byKey;
+  }
 
   static Set<String> _collectEnLabels(List<dynamic> enTree) {
     final labels = <String>{};
@@ -120,12 +135,117 @@ class QuickHelpScopeResolver {
   /// Null when the button declares no category, the hierarchy no longer
   /// carries it, or the entity has no EN translation (it cannot be filtered
   /// on at all).
-  String? categoryLabelEn(Map<String, dynamic> button) {
-    final category = button['category']?.toString();
-    if (category == null || category.isEmpty) return null;
-    final en = _categoryLabelsEn[category];
+  String? categoryLabelEn(Map<String, dynamic> button) =>
+      categoryEnLabel(button['category']?.toString());
+
+  /// The ENGLISH label of the category [catKey]. Null when the hierarchy
+  /// does not carry it, or carries it without an EN translation — a scope
+  /// that cannot be named, and so cannot be put on the wire.
+  String? categoryEnLabel(String? catKey) {
+    if (catKey == null || catKey.isEmpty) return null;
+    final en = _categoryLabelsEn[catKey];
     if (en == null || en.isEmpty) return null;
     return en;
+  }
+
+  /// The localized name of the category [catKey] — what the user reads.
+  /// Display only: it never filters.
+  String? categoryDisplayName(String? catKey) {
+    if (catKey == null || catKey.isEmpty) return null;
+    final name = _categoryNames[catKey];
+    if (name == null || name.isEmpty) return null;
+    return name;
+  }
+}
+
+/// The scope a saved conversation was asked in.
+class ConversationScope {
+  const ConversationScope({
+    this.categoryId,
+    this.categoryNameEn,
+    this.categoryName,
+    this.serviceLabelsEn = const <String>[],
+    this.quickHelpButtonId,
+  });
+
+  /// The category the conversation was scoped by (its storage key).
+  final String? categoryId;
+
+  /// The ENGLISH label of that category — the wire. Null when the
+  /// hierarchy can no longer name it.
+  final String? categoryNameEn;
+
+  /// The localized name of that category — display only.
+  final String? categoryName;
+
+  /// The ENGLISH labels the scope was narrowed by.
+  final List<String> serviceLabelsEn;
+
+  /// The id of the Quick Help button that produced the conversation, when
+  /// it was one.
+  final String? quickHelpButtonId;
+}
+
+/// Resolves the scope of a saved conversation against the live hierarchy
+/// and the Quick Help buttons.
+///
+/// A conversation carries the scope it was asked in: the Quick Help button
+/// that produced it — by its id, the button's identity — or the ENGLISH
+/// labels of the sidebar scope it was narrowed by. The scope is only
+/// usable when the live hierarchy can still NAME it: a scope that cannot
+/// be named leaves the query unscoped, and an unscoped query answers from
+/// the whole corpus.
+class ConversationScopeResolver {
+  ConversationScopeResolver({
+    required QuickHelpScopeResolver hierarchy,
+    required List<Map<String, dynamic>> quickHelpButtons,
+  }) : _hierarchy = hierarchy,
+       _buttons = {
+         for (final button in quickHelpButtons)
+           if (button['id'] != null) button['id'].toString(): button,
+       };
+
+  final QuickHelpScopeResolver _hierarchy;
+  final Map<String, Map<String, dynamic>> _buttons;
+
+  /// The scope of the conversation that carries [tags] and was asked in
+  /// [categoryKey].
+  ConversationScope resolve({List<dynamic>? tags, String? categoryKey}) {
+    final tagList = (tags ?? const <dynamic>[])
+        .map((tag) => tag.toString())
+        .toList();
+
+    // A Quick Help tag is the id of the button that produced the
+    // conversation: the button is looked up by that id, and its own scope
+    // is replayed. The lookup is on the id and never on a label — a
+    // sidebar selection and a Quick Help button can carry the same label,
+    // and restoring the wrong one would change the scope of the saved
+    // query.
+    for (final tag in tagList) {
+      final button = _buttons[tag];
+      if (button == null) continue;
+      final category = button['category']?.toString();
+      final labels =
+          (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
+              .map((label) => label.toString())
+              .toList();
+      return ConversationScope(
+        categoryId: category,
+        categoryNameEn: _hierarchy.categoryEnLabel(category),
+        categoryName: _hierarchy.categoryDisplayName(category),
+        serviceLabelsEn: labels,
+        quickHelpButtonId: tag,
+      );
+    }
+
+    // A sidebar scope: the tags are the ENGLISH labels it was narrowed
+    // by, and the category comes from the conversation's own edge.
+    return ConversationScope(
+      categoryId: categoryKey,
+      categoryNameEn: _hierarchy.categoryEnLabel(categoryKey),
+      categoryName: _hierarchy.categoryDisplayName(categoryKey),
+      serviceLabelsEn: tagList,
+    );
   }
 }
 
@@ -143,3 +263,33 @@ bool quickHelpScopeIsNameable(
   if (category.isEmpty || category == 'general') return true;
   return resolver?.categoryLabelEn(button) != null;
 }
+
+/// Whether the query can carry the selection's scope.
+///
+/// A selection that declares NO scope asks an unscoped question — the
+/// user's own choice, and it goes out as it is. A selection that DOES
+/// declare a scope must be able to NAME it: the wire speaks ENGLISH, and
+/// a scope with no English name would go out with NO filter at all — the
+/// corpus answering from outside the scope the selection declared.
+bool scopeCanGoOnTheWire({
+  required bool declaresScope,
+  String? categoryNameEn,
+  List<String> serviceLabels = const <String>[],
+  List<String> sidebarServiceLabels = const <String>[],
+}) {
+  if (!declaresScope) return true;
+  final labels = serviceLabels.isNotEmpty
+      ? serviceLabels
+      : sidebarServiceLabels;
+  return (categoryNameEn != null && categoryNameEn.isNotEmpty) ||
+      labels.isNotEmpty;
+}
+
+/// The tags a conversation carries: the Quick Help button's id — its
+/// identity — or the ENGLISH labels of a sidebar scope. A conversation
+/// that carries no scope carries no tags.
+List<String> conversationScopeTags({
+  String? quickHelpButtonId,
+  List<String> sidebarServiceLabels = const <String>[],
+}) =>
+    quickHelpButtonId != null ? [quickHelpButtonId] : [...sidebarServiceLabels];

@@ -183,4 +183,156 @@ void main() {
       );
     });
   });
+
+  // The scope of a saved conversation: what the conversation was asked in,
+  // resolved against the live hierarchy and the Quick Help buttons.
+  group('ConversationScopeResolver.resolve', () {
+    final convTree = <dynamic>[
+      {
+        'catKey': '2',
+        'name': 'Estado civil',
+        'nameEN': 'Civil Registry',
+        'children': [
+          {'name': 'Nacimientos', 'nameEN': 'Births'},
+        ],
+      },
+    ];
+    final convButtons = <Map<String, dynamic>>[
+      {
+        'id': 'civil',
+        'category': '2',
+        'serviceLabels': ['Births'],
+      },
+    ];
+
+    ConversationScopeResolver convResolver([
+      List<Map<String, dynamic>>? buttons,
+    ]) => ConversationScopeResolver(
+      hierarchy: QuickHelpScopeResolver(convTree),
+      quickHelpButtons: buttons ?? convButtons,
+    );
+
+    test('a Quick Help tag restores the scope of that button', () {
+      final scope = convResolver().resolve(tags: ['civil'], categoryKey: '2');
+
+      expect(scope.quickHelpButtonId, 'civil');
+      expect(scope.categoryId, '2');
+      expect(scope.categoryNameEn, 'Civil Registry');
+      expect(scope.categoryName, 'Estado civil');
+      expect(scope.serviceLabelsEn, ['Births']);
+    });
+
+    test('a sidebar tag restores the ENGLISH labels and the category', () {
+      final scope = convResolver().resolve(tags: ['Births'], categoryKey: '2');
+
+      expect(scope.quickHelpButtonId, isNull);
+      expect(scope.categoryId, '2');
+      expect(scope.categoryNameEn, 'Civil Registry');
+      expect(scope.serviceLabelsEn, ['Births']);
+    });
+
+    test('a scope the hierarchy can no longer name has no EN label', () {
+      // The category left the hierarchy: the conversation carries the key,
+      // but nothing can NAME it any more — the scope cannot go on the wire.
+      final scope = convResolver().resolve(
+        tags: ['Renamed'],
+        categoryKey: '404',
+      );
+
+      expect(scope.categoryNameEn, isNull);
+      expect(scope.categoryName, isNull);
+      expect(scope.serviceLabelsEn, ['Renamed']);
+    });
+
+    test('a tag that names no button stays a sidebar scope', () {
+      final scope = convResolver().resolve(tags: ['gone'], categoryKey: '2');
+
+      expect(scope.quickHelpButtonId, isNull);
+      expect(scope.categoryNameEn, 'Civil Registry');
+      expect(scope.serviceLabelsEn, ['gone']);
+    });
+
+    test('a conversation with no scope at all resolves to nothing', () {
+      final scope = convResolver().resolve();
+
+      expect(scope.categoryId, isNull);
+      expect(scope.categoryNameEn, isNull);
+      expect(scope.serviceLabelsEn, isEmpty);
+      expect(scope.quickHelpButtonId, isNull);
+    });
+  });
+
+  group('scopeCanGoOnTheWire', () {
+    test('a selection that declares NO scope asks an unscoped question', () {
+      // The user's own choice: nothing was selected, so nothing is
+      // declared and the query goes out as it is.
+      expect(scopeCanGoOnTheWire(declaresScope: false), isTrue);
+    });
+
+    test('a scope with an ENGLISH category label goes on the wire', () {
+      expect(
+        scopeCanGoOnTheWire(
+          declaresScope: true,
+          categoryNameEn: 'Civil Registry',
+        ),
+        isTrue,
+      );
+    });
+
+    test('a scope with ENGLISH service labels goes on the wire', () {
+      expect(
+        scopeCanGoOnTheWire(declaresScope: true, serviceLabels: ['Births']),
+        isTrue,
+      );
+      expect(
+        scopeCanGoOnTheWire(
+          declaresScope: true,
+          sidebarServiceLabels: ['Births'],
+        ),
+        isTrue,
+      );
+    });
+
+    test('a scope with no ENGLISH name at all does NOT go on the wire', () {
+      // The category has no EN translation: the wire would carry no
+      // label, and the query would leave with NO filter — the corpus
+      // answering from outside the scope the selection declared.
+      expect(
+        scopeCanGoOnTheWire(declaresScope: true, categoryNameEn: ''),
+        isFalse,
+      );
+      expect(
+        scopeCanGoOnTheWire(
+          declaresScope: true,
+          categoryNameEn: null,
+          serviceLabels: const [],
+          sidebarServiceLabels: const [],
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('conversationScopeTags', () {
+    test('a Quick Help scope travels as the button id', () {
+      expect(
+        conversationScopeTags(
+          quickHelpButtonId: 'civil',
+          sidebarServiceLabels: ['Births'],
+        ),
+        ['civil'],
+      );
+    });
+
+    test('a sidebar scope travels as its ENGLISH labels', () {
+      expect(
+        conversationScopeTags(sidebarServiceLabels: ['Births', 'Deaths']),
+        ['Births', 'Deaths'],
+      );
+    });
+
+    test('a conversation with no scope carries no tags', () {
+      expect(conversationScopeTags(), isEmpty);
+    });
+  });
 }

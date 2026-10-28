@@ -759,6 +759,18 @@ describe('QueryService', () => {
       expect(result.queryId).toBe('stream-1');
     });
 
+    it('reads a bare serviceLabels string as ONE label, never as an empty scope', async () => {
+      // A client that sends `serviceLabels: 'Tomato'` names a scope. Dropping
+      // it would send the query out with NO filter at all: the corpus would
+      // answer from outside the scope the client declared.
+      const data = createMockQueryData({ context: { categoryLabel: null, serviceLabels: 'Tomato' } });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+
+      const result = await queryService.initStreamQuery(data, {});
+
+      expect(result.opeaPayload.context.serviceLabels).toEqual(['Tomato']);
+    });
+
     it('resolves the ids through the ENGLISH translation the wire carries', async () => {
       // The wire carries the EN translation — the label the corpus's
       // chunk_labels are minted from. The document's own `nameEN` is a

@@ -32,10 +32,18 @@ retriever predating the escaping reads a label containing the ESCAPE
 CHARACTER (``%``) as its escaped form — ``50% Discount`` travels as
 ``50%25 Discount`` and matches no chunk — exactly like a space would have
 under percent-encoding. So the escaping is not free for labels that contain
-``%``: it is the price of making the comma reversible, and the price is paid
+``%``: it is the price of making the comma reversible, and that price is paid
 only during the window in which a new chatqna meets an old retriever. Update
-the retriever before the chatqna; the two escaped characters are the only
-labels exposed to that window.
+the retriever before the chatqna.
+
+A label that contains the COMMA is exposed in BOTH orders, and no
+deployment order keeps it working during the window: a new chatqna sends it
+escaped (``Births%2C Deaths``) and a retriever predating the escaping
+filters on that literal, while an old chatqna sends it raw and the new
+retriever splits it into two labels. Either way the filter matches no chunk
+and the query ABSTAINS — it never answers from outside the scope. The
+exposure lasts as long as the rolling upgrade does: once both ends run the
+escaping, the label round-trips and matches the corpus again.
 
 Usage:
     # chatqna (encode, in align_inputs for the RETRIEVER node):

@@ -386,7 +386,12 @@ class QueryService {
       queryData.context = { categoryLabel: null, serviceLabels: [] };
     } else {
       if (!Array.isArray(queryData.context.serviceLabels)) {
-        queryData.context.serviceLabels = [];
+        // A bare string is ONE label — never a sequence of characters, and
+        // never an EMPTY scope: dropping it would send the query out with
+        // no filter at all, and the corpus would answer from outside the
+        // scope the client declared. Absent stays absent.
+        queryData.context.serviceLabels =
+          typeof queryData.context.serviceLabels === 'string' ? [queryData.context.serviceLabels] : [];
       }
       // Preserve null/undefined categoryLabel — null means "no category filter"
       // (chatqna treats a missing categoryLabel as no category-level filter).
@@ -584,8 +589,19 @@ class QueryService {
 
         // Also validate the internals of the provided context
         if (!Array.isArray(queryData.context.serviceLabels)) {
-          logger.warn('[DEBUG] Validation WARNING: context.serviceLabels is not an array. Defaulting to empty array.');
-          queryData.context.serviceLabels = [];
+          if (typeof queryData.context.serviceLabels === 'string') {
+            // A bare string is ONE label — never a sequence of characters,
+            // and never an EMPTY scope: dropping it would send the query
+            // out with no filter at all, and the corpus would answer from
+            // outside the scope the client declared.
+            logger.warn('[DEBUG] Validation WARNING: context.serviceLabels is a bare string. Reading it as one label.');
+            queryData.context.serviceLabels = [queryData.context.serviceLabels];
+          } else {
+            logger.warn(
+              '[DEBUG] Validation WARNING: context.serviceLabels is not an array. Defaulting to empty array.'
+            );
+            queryData.context.serviceLabels = [];
+          }
         } else {
           logger.info(
             `[DEBUG] Validation PASSED: context.serviceLabels is present with labels: ${queryData.context.serviceLabels.join(', ')}.`

@@ -43,6 +43,16 @@ describe('serviceTreeService', () => {
       expect(mockGet).toHaveBeenCalledWith('services/categories', { params: { locale: 'en' } });
     });
 
+    it('rejects a body that is not a list of categories', async () => {
+      // A broken answer (a proxy error page, an object) is not a
+      // hierarchy: a client that walks it throws mid-render and the chat
+      // panel goes blank. The load must FAIL, so the caller can say the
+      // scope cannot be verified.
+      mockGet.mockResolvedValue({ data: { error: 'boom' } });
+
+      await expect(serviceTreeService.getAllCategories('en')).rejects.toThrow(/not a list/i);
+    });
+
     it('throws on API failure', async () => {
       mockGet.mockRejectedValue(new Error('Server error'));
 

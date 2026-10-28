@@ -1232,8 +1232,15 @@ export default {
       if (this.serviceCategoriesStatus === 'failed') {
         // The hierarchy is what NAMES a scope. Without it, no scope can be
         // verified — and the button says so rather than looking healthy
-        // and swallowing the click.
-        return { broken: true, unavailable: true, missingLabels: [], categoryMissing: false };
+        // and swallowing the click. A card that declares NO scope promises
+        // nothing the hierarchy could deny: it stays usable.
+        const declaresScope = button.category != null || (button.serviceLabels || []).length > 0;
+        return {
+          broken: declaresScope,
+          unavailable: declaresScope,
+          missingLabels: [],
+          categoryMissing: false
+        };
       }
       if (this.serviceCategoriesStatus === 'loading') {
         // Nothing is known yet: report nothing rather than report every
@@ -1320,6 +1327,11 @@ export default {
       if (hasSidebarItem && !hasServiceFilter && !context.categoryLabel && !isJustChat) {
         blocked = true;
         warnings.push(this.translate('chatbot.noFilterWarning', 'No context filter active.'));
+        // The mismatch warnings above reach admins alone. The person whose
+        // question was refused sees nothing at all — and the query that was
+        // refused is the one that would have answered from the WHOLE
+        // corpus, outside the scope the selection declared.
+        notificationService.error(this.translate('chatbot.scopeNotNameable', ''));
       }
 
       // A Quick Help scope the hierarchy can no longer NAME leaves the

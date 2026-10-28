@@ -1038,6 +1038,8 @@ const Map<String, dynamic> idLocale = {
         "Masalah konfigurasi: kategori tombol ini tidak lagi ada dalam hierarki pengetahuan. Tombol ini tidak dapat digunakan sampai konfigurasinya diperbarui.",
     "quickHelpScopeUnavailable":
         "Masalah konfigurasi: hierarki pengetahuan tidak dapat dimuat, sehingga cakupan tombol ini tidak dapat diverifikasi. Tombol ini tidak dapat digunakan sampai hierarki tersedia.",
+    "scopeNotNameable":
+        "Masalah konfigurasi: cakupan yang dipilih tidak memiliki nama Inggris dalam hierarki pengetahuan, sehingga cakupan kueri tidak dapat ditentukan. Kueri tidak dikirim.",
     "queryContext": "Konteks Kueri",
     "contextAdded": "Konteks ditambahkan ke kueri Anda",
     "contextRemoved": "Konteks dihapus dari kueri Anda",

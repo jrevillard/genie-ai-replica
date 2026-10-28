@@ -1347,6 +1347,8 @@ export default {
       "Configuration problem: this button's category no longer exists in the knowledge hierarchy. This button cannot be used until its configuration is updated.",
     quickHelpScopeUnavailable:
       "Configuration problem: the knowledge hierarchy could not be loaded, so this button's scope cannot be verified. This button cannot be used until the hierarchy is available.",
+    scopeNotNameable:
+      'Configuration problem: the selected scope has no English name in the knowledge hierarchy, so the query cannot be scoped. It was not sent.',
     serviceLabelMismatch: 'Service "{label}" uses a UI label that may not match the knowledge hierarchy',
     noFilterWarning: 'No context filter active — query will be unfiltered.',
     placeholder: 'I la ñiningo nyining jang...',

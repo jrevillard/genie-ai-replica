@@ -1045,6 +1045,8 @@ const Map<String, dynamic> swLocale = {
         "Tatizo la usanidi: kundi la kitufe hiki haipo tena katika mpangilio wa maarifa. Kitufe hiki hakiwezi kutumika hadi usanidi wake ukoreshwe.",
     "quickHelpScopeUnavailable":
         "Tatizo la usanidi: mpangilio wa maarifa haukuweza kupakiwa, hivyo kwa hiyo upeo wa kitufe hiki hauwezi kuthibitishwa. Kitufe hiki hakiwezi kutumika hadi mpangilio upo.",
+    "scopeNotNameable":
+        "Tatizo la usanidi: kipimo kilichochaguliwa hikija na jina la Kiingereza katika mpangilio wa maarifa, hivyo huwezi kufafanua upeo wa swali. Swali halikutumwa.",
     "queryContext": "Muktadha wa Swali",
     "contextAdded": "Muktadha umeongezwa kwenye swali lako",
     "contextRemoved": "Muktadha umeondolewa kwenye swali lako",

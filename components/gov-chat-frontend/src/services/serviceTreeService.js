@@ -19,7 +19,15 @@ export default {
       const response = await httpService.get('services/categories', {
         params: { locale }
       });
-      return response.data || [];
+      // The hierarchy is a LIST of categories. A body that is not one is a
+      // broken answer (a proxy error page, an object), and a client that
+      // walks it throws mid-render — the chat panel goes blank. It is a
+      // FAILED load, not a hierarchy: the mobile casts the body the same
+      // way and ends up in the same state.
+      if (!Array.isArray(response.data)) {
+        throw new Error('The knowledge hierarchy is not a list of categories');
+      }
+      return response.data;
     } catch (error) {
       console.error('Error fetching service categories:', error);
       throw error;

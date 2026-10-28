@@ -1894,6 +1894,49 @@ describe('ChatBotComponent', () => {
       expect(caption).toContain('Registration');
     });
 
+    it('a restored sidebar scope the hierarchy can no longer name refuses the send, and says so', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const tree = [{ catKey: '2', name: 'Crops', nameEN: 'Crops', children: [] }];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+
+      // A conversation saved with a sidebar scope whose EN label was
+      // renamed away: the tag is not in the hierarchy, so the scope
+      // cannot be named and the query would leave with NO filter. The
+      // refusal must be VISIBLE — the mismatch warnings reach admins
+      // alone, and the person whose question was refused sees nothing.
+      vm.$store.commit('conversation/setContextItems', [
+        {
+          service: 'Renamed Label',
+          serviceKey: null,
+          serviceLabels: [],
+          source: 'sidebar',
+          id: 'Renamed Label',
+          selected: true
+        }
+      ]);
+
+      expect(vm.checkContextConfig({ categoryLabel: null, serviceLabels: [] })).toBe(false);
+      expect(mockNotificationError).toHaveBeenCalledWith('chatbot.scopeNotNameable');
+    });
+
+    it('a card that declares no scope stays usable when the hierarchy failed', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      vm.serviceCategoriesStatus = 'failed';
+
+      // A card with no category and no label promises nothing the
+      // hierarchy could deny — it is the "just chat" entry, and the
+      // welcome composer stays reachable when the hierarchy is down.
+      const justChat = { id: 'just-chat', service: 'Just Chat', serviceLabels: null, category: null, icon: 'x' };
+      const scoped = { id: 'tax', service: 'Taxes', serviceLabels: null, category: '5', icon: 'x' };
+
+      expect(vm.quickHelpScopeState(justChat).broken).toBe(false);
+      expect(vm.quickHelpScopeState(scoped).broken).toBe(true);
+    });
+
     it('a hierarchy that could not be loaded breaks every scope, and says so', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;

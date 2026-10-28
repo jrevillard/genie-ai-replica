@@ -104,6 +104,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // The in-flight hierarchy fetch. It runs ONCE: every button is checked
   // against the resolver it builds, and a tap must not start a second one.
   Future<void>? _enTreeFuture;
+  // The id of the Quick Help button whose scope is active — the IDENTITY
+  // the conversation carries, so a reopened conversation can be re-scoped
+  // by the button (a Quick Help tag is the button id, never a label: a
+  // sidebar selection and a button can carry the same label).
+  String? _activeQuickHelpButtonId;
   // English KB labels for the retriever filter, sourced from a Quick Help button's
   // serviceLabels. Set in _quickHelpPressed, cleared after the stream completes.
   // Sidebar tree selections use _selectedCategoryId/_selectedCategoryName instead.
@@ -374,6 +379,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _selectedCategoryName = categoryName;
       _selectedCategoryNameEn = categoryNameEn;
       _sidebarServiceLabelsEn = serviceLabelsEn;
+      // A sidebar selection REPLACES the Quick Help scope: the two are
+      // alternative ways of scoping the same query.
+      _activeQuickHelpButtonId = null;
+      _activeServiceLabels = const [];
     });
   }
 
@@ -428,6 +437,36 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         _titleController.text = _conversationTitle;
         _messages = loadedMessages;
         _lastSavedMessageCount = loadedMessages.length;
+      });
+
+      // The scope the conversation was asked in: its category, and the
+      // labels it was narrowed by. The hierarchy NAMES the scope, so the
+      // tree is awaited first — a scope that cannot be named must not
+      // leave the follow-up unscoped, and an unscoped query answers from
+      // the whole corpus.
+      await _ensureEnTree();
+      final scope =
+          ConversationScopeResolver(
+            hierarchy: _scopeResolver ?? QuickHelpScopeResolver(const []),
+            quickHelpButtons: _quickHelpButtons,
+          ).resolve(
+            tags: conv['tags'] is List ? conv['tags'] as List<dynamic> : null,
+            categoryKey: _conversationCategoryKey(conv),
+          );
+      setState(() {
+        _selectedCategoryId = scope.categoryId;
+        _selectedCategoryNameEn = scope.categoryNameEn ?? '';
+        _selectedCategoryName = scope.categoryName ?? '';
+        _activeQuickHelpButtonId = scope.quickHelpButtonId;
+        // A Quick Help scope narrows the FIRST follow-up by its declared
+        // labels (the mobile's one-turn scope); a sidebar scope keeps its
+        // labels for the whole conversation.
+        _activeServiceLabels = scope.quickHelpButtonId == null
+            ? const []
+            : scope.serviceLabelsEn;
+        _sidebarServiceLabelsEn = scope.quickHelpButtonId == null
+            ? scope.serviceLabelsEn
+            : const [];
       });
 
       List<dynamic> accumulatedDocs = [];
@@ -487,6 +526,27 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
   void _sendMessage(String text, {String? hiddenPrompt}) async {
     if (text.trim().isEmpty || _isLoading || _isStreaming) return;
+
+    // The scope the user SEES is the scope the query must carry. A
+    // selection whose scope has no ENGLISH name — an entity without an EN
+    // translation, a label the hierarchy no longer carries — would leave
+    // the query with NO filter at all: the corpus would answer from
+    // outside the scope the selection declared. The send is refused, and
+    // the user is told why (the refusal happens BEFORE the turn is
+    // committed, so the question stays in the composer).
+    final bool hasScope =
+        _selectedCategoryId != null ||
+        _activeServiceLabels.isNotEmpty ||
+        _sidebarServiceLabelsEn.isNotEmpty;
+    if (!scopeCanGoOnTheWire(
+      declaresScope: hasScope,
+      categoryNameEn: _selectedCategoryNameEn,
+      serviceLabels: _activeServiceLabels,
+      sidebarServiceLabels: _sidebarServiceLabelsEn,
+    )) {
+      NotificationService.error(tr('chatbot.scopeNotNameable'));
+      return;
+    }
 
     final userMessage = {
       'role': 'user',
@@ -936,8 +996,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // is a mode switch: it is cleared.
       _selectedCategoryId = button['category']?.toString();
       _selectedCategoryNameEn = _scopeResolver?.categoryLabelEn(button) ?? '';
-      _selectedCategoryName = '';
+      // The scope the query carries is VISIBLE: the context bar names the
+      // category the answer is scoped by. A scope the user cannot see is a
+      // scope they cannot check.
+      _selectedCategoryName =
+          _scopeResolver?.categoryDisplayName(button['category']?.toString()) ??
+          '';
       _sidebarServiceLabelsEn = [];
+      _activeQuickHelpButtonId = button['id']?.toString();
     });
 
     // Send using the 2-prompt system
@@ -992,6 +1058,30 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // ===========================================================================
   // SAVING & EXPORT LOGIC
   // ===========================================================================
+  /// The scope of the conversation, as the web writes it.
+  List<String> _contextTags() => conversationScopeTags(
+    quickHelpButtonId: _activeQuickHelpButtonId,
+    sidebarServiceLabels: _sidebarServiceLabelsEn,
+  );
+
+  /// The category a saved conversation was asked in: its own field, or
+  /// the edge the backend created for it.
+  String? _conversationCategoryKey(Map<String, dynamic> conversation) {
+    final categoryId = conversation['categoryId'];
+    if (categoryId != null && categoryId.toString().isNotEmpty) {
+      return categoryId.toString();
+    }
+    final categories = conversation['categories'];
+    if (categories is List && categories.isNotEmpty) {
+      final first = categories.first;
+      if (first is Map) {
+        final key = first['_key'];
+        if (key != null && key.toString().isNotEmpty) return key.toString();
+      }
+    }
+    return null;
+  }
+
   Future<void> saveConversation({String? folderId}) async {
     if (_messages.isEmpty) {
       NotificationService.info("Nothing to save");
@@ -1012,6 +1102,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         final createRequest = ApiChatConversationsPostRequest(
           title: _conversationTitle,
           categoryId: _selectedCategoryId,
+          tags: _contextTags(),
         );
         final res = await chatHistoryApi.apiChatConversationsPostWithHttpInfo(
           createRequest,
@@ -1027,6 +1118,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         final updateRequest = ApiChatConversationsConversationIdPatchRequest(
           title: _conversationTitle,
           categoryId: _selectedCategoryId,
+          tags: _contextTags(),
         );
         final res = await chatHistoryApi
             .apiChatConversationsConversationIdPatchWithHttpInfo(

@@ -6,6 +6,7 @@
 */}}
 {{- if and .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster") -}}
 {{- $modelId := .Values.opea.translation.modelId -}}
+{{- $translation := .Values.opea.translation -}}
 {{- $initText := printf "      initContainers:\n        # Serializes the two HF model downloads: without it both vLLM\n        # pods pull concurrently on the single GPU node and can OOM.\n        - name: wait-for-vllm\n          image: %s/curlimages/curl:8.10.1\n          command:\n            - sh\n            - -c\n            - until curl -sf http://vllm.%s.svc.cluster.local:8000/health; do echo waiting for vllm; sleep 5; done" (.Values.global.toolingImageRegistry | default "docker.io") .Values.namespace -}}
 {{- include "genieai-umbrella.modelDeployment" (dict
       "root" .
@@ -17,6 +18,6 @@
       "livenessDelay" 120
       "startup" (dict "failureThreshold" 30 "periodSeconds" 10)
       "initText" $initText
-      "argsText" (printf "            - --model\n            - \"%s\"\n            - --gpu_memory_utilization\n            - \"0.3\"\n            - --served-model-name\n            - \"%s\"\n            - --max_model_len\n            - \"2048\"\n            - --dtype=auto\n            - --port\n            - \"9031\"\n            - --no-enable-chunked-prefill\n            - --max-num-seqs\n            - \"16\"\n            - --chat-template-content-format\n            - openai" $modelId $modelId)
+      "argsText" (printf "            - --model\n            - \"%s\"\n            - --gpu_memory_utilization\n            - \"%s\"\n            - --served-model-name\n            - \"%s\"\n            - --max_model_len\n            - \"%s\"\n            - --dtype=%s\n            - --port\n            - \"9031\"\n            - --no-enable-chunked-prefill\n            - --max-num-seqs\n            - \"%s\"\n            - --chat-template-content-format\n            - openai" $modelId $translation.gpuUtilization $modelId $translation.maxModelLen $translation.dtype $translation.maxNumSeqs)
     ) -}}
 {{- end -}}

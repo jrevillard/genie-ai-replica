@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.92**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.93**, branch `feat/k8s-migration` based
   on `main` at `179a8a8f1` and **8 commits behind `origin/main`**
   (`5786919c1`). The gap touches the frontend, the OPEA overlay
   (retriever/dataprep), the site docs and the config-validator tests —
@@ -609,6 +609,67 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 21 (0.2.93)** — 4 findings, all verified true, all
+  fixed, plus the gates the pass's own notes asked for.
+  - *A non-numeric replica count rendered `replicas: 0`* — the resolver
+    coerces with sprig `int`, so `--set services.backend.replicas=2O`
+    (letter O) scaled the service to ZERO with every gate green:
+    `replicas: 0` is the documented way to scale a tier off, so the
+    resolver cannot reject the zero itself — but the TYPE belongs to
+    the schema, which now types every `services.<svc>.replicas` and the
+    `clusterProfileReplicas` leaves as integers (`minimum: 0`, so the
+    documented scale-off still renders).
+  - *The pass-20 validation was bypassed by two earlier readers* — the
+    shape validation of the operator's convergence rows lived in the
+    EMITTER, so the placeholder-completeness guard and the helm test
+    read the rows raw first: a scalar row (the classic missing-dash
+    YAML mistake) crashed the render with a raw Go-template error in
+    whichever template read it first, naming neither the values key nor
+    the row. The validation is now ONE helper every consumer goes
+    through.
+  - *The envVar was emitted unquoted* — a numeric one passes a
+    non-empty check, renders as a YAML integer (or, as an int, as
+    `%!s(int64=123)` and a YAML parse error), and the API server
+    rejects the EnvVar name at apply time. It is quoted, and its shape
+    is checked (an environment variable NAME), with the row index in
+    the message.
+  - *The in-cluster vLLM tuning args were template literals* — Compose
+    exposes `VLLM_GPU_UTILIZATION`, `VLLM_MAX_MODEL_LEN`,
+    `VLLM_MAX_NUM_SEQS`, `VLLM_DTYPE` and their
+    `VLLM_TRANSLATION_*` siblings, and the `env.t4` / `env.rtx6000`
+    GPU profiles exist ONLY to set them (the T4 profile drops the
+    context length to 2048 because 65536 does not fit 16 GB). The
+    chart hardcoded 0.55 / 65536 / 64 / half and 0.3 / 2048 / 16 /
+    auto, so a 16 GB site in in-cluster mode could not bring the model
+    up at all, and the only recourse was editing the chart template.
+    Eight values knobs now carry the same defaults.
+- **Two gates added around the pass's own notes, and the fixes they
+  found**:
+  - `scripts/clearable-blocks-check.py` — the chart's contract is that
+    a CLEARED block degrades (the per-service shape block says its
+    knobs are optional; `services.backend.translation: null` is
+    documented), and a block that is not clearable fails the render in
+    the template that needs it. A nil-pointer crash names neither. The
+    sweep (42 clearable blocks, one render each) found three unguarded
+    reads the passes had missed: the optional `pvc` block of the
+    doc-repo and of redis, and the convergence block of the Job and of
+    the realm Secret. All four templates normalize now. Mutation
+    tested: re-unguarding the redis `pvc` turns the gate red with the
+    block named.
+  - The `values-surface` gate now RESOLVES a normalized variable back
+    to its values path (`$keycloak.enabled` is read as
+    `data.keycloak.enabled`): the normalizations this loop introduced
+    had made their leaves invisible to the scan, and the coverage the
+    gate claims would have shrunk with every one of them. The
+    extension immediately found two real gaps — `image.pullPolicy`
+    undeclared for clamav and redis, whose own templates read it — and
+    the seven `smtp` leaves, which CANNOT be declared (the block's
+    nullness IS the switch; declaring a leaf would make the render
+    believe a mail server exists) and are allowlisted with the reason.
+  - The env-types gate grew a STATIC half: every env row that bypasses
+    the service factory must quote or stringify its value, so a new
+    hand-rendered row is covered structurally and not only through the
+    knob list.
 - **Review loop, pass 20 (0.2.92)** — 2 findings, both verified true, both
   fixed. Both are the same shape: a place where the chart accepted an
   operator mistake without naming it.
@@ -920,7 +981,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.92** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.93** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.

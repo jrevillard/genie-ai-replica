@@ -1,5 +1,6 @@
-{{- if and .Values.services.documentRepository.enabled .Values.services.documentRepository.pvc.enabled -}}
-{{- $pvc := .Values.services.documentRepository.pvc -}}
+{{- /* The PVC block is OPTIONAL (the per-service shape block says so): a cleared block means "no chart-owned claim", not a nil-pointer crash. */ -}}
+{{- $pvc := .Values.services.documentRepository.pvc | default dict -}}
+{{- if and .Values.services.documentRepository.enabled $pvc.enabled -}}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

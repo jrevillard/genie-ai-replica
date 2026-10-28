@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.99**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.100**, branch `feat/k8s-migration` based
   on `main` at `179a8a8f1` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,45 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 28 (0.2.100)** — 7 findings from the fourth
+  `/code-review`, each verified against the render or the source before
+  the fix. One was a fleet-wide chart defect, one a graph gap, five
+  gate/correctness details.
+  - *The NetworkPolicies hardcoded the container ports of services
+    whose `port` is a documented knob* — frontend (8090), backend
+    (3000) and document-repository (3001) policies, plus the OPEA
+    policies' cross-references, admitted only the default port while
+    the Service and the probes followed the knob. Overriding the port
+    stranded the tier behind its own default-deny. The policies derive
+    the port from the knob now, like clamav and redis already did —
+    and the first sweep caught the new reads reading a NIL parent
+    (the pass-22 rule: bind the block, then read the leaf), which the
+    render-guards suite confirmed with two nameless failures before
+    the fix.
+  - *The data-deps test interpolated `data.keycloak.db.secretName`
+    raw* — a cleared block rendered `<no value>` into the required
+    Secret list while the CNPG Cluster and the Keycloak CR degraded to
+    the default name. The test carries the same default now.
+  - *The dependency graph omitted chatqna's edges to embedding and
+    translation* — both Services sit in its rendered env rows, so the
+    pre-install dep-check never validated them.
+  - *The reachability check defaulted a missing policyTypes to
+    Ingress+Egress* — Kubernetes infers the types from the rules, so
+    an ingress-only policy without the field read as egress-isolating
+    and the check reported reachable pairs as blocked.
+  - *The parity comparison stringified Python booleans* — a values-file
+    `true` compared as `True` against Compose's "true": two surfaces
+    that agree reported as a GAP.
+  - *The env-types capture stripped a `#` inside the action* — a URL
+    fragment or a quoted default corrupted the brace count and the
+    following lines were swallowed into one garbled expression. The
+    strip applies only when the braces still balance after it.
+  - *A scheme-less GPU node host rendered a broken endpoint and an
+    egress rule admitting the wrong port* — the port comes from the
+    URL's authority, which only a URL with a scheme carries. Both the
+    endpoint derivation and the egress rule now fail by name, and the
+    render-guards suite gained the case (the IPv6 case now carries the
+    scheme it needs to reach the check it tests).
 - **Review loop, pass 27 (0.2.99)** — 7 findings from the third
   `/code-review` of the branch, each verified by render or mutation
   before the fix. Two were chart behaviour, five were gate holes.
@@ -1258,7 +1297,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.99** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.100** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

@@ -2,6 +2,10 @@
 {{- $obs := .Values.observability | default dict -}}
 {{- $obsMetrics := $obs.metrics | default dict -}}
 {{- $svcFrontend := $services.frontend | default dict -}}
+{{- /* The backend's port: bound parent-first, like every values read —
+a cleared services.backend must degrade this egress rule to the default
+port, not crash the render on a nil parent. */ -}}
+{{- $servicesBackend := index $services "backend" | default dict -}}
 {{- $ingress := .Values.ingress | default dict -}}
 {{- if $svcFrontend.enabled -}}
 {{- $vals := deepCopy .Values -}}
@@ -81,7 +85,7 @@ spec:
         {{- include "genieai-umbrella.ingressDataPlanePeer" . | nindent 8 }}
       ports:
         - protocol: TCP
-          port: 8090
+          port: {{ $svcFrontend.port | default 8090 }}
     {{- end }}
     # helm-test reachability probe (component "test").
     - from:
@@ -90,7 +94,7 @@ spec:
               genieai.io/component: test
       ports:
         - protocol: TCP
-          port: 8090
+          port: {{ $svcFrontend.port | default 8090 }}
   {{- if $obsMetrics.enabled }}
   # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
   # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
@@ -105,7 +109,7 @@ spec:
               app.kubernetes.io/instance: vmetrics
       ports:
         - protocol: TCP
-          port: 8090
+          port: {{ $svcFrontend.port | default 8090 }}
   {{- end }}
   egress:
     # DNS resolution to kube-system.
@@ -125,7 +129,7 @@ spec:
               genieai.io/component: backend
       ports:
         - protocol: TCP
-          port: 3000
+          port: {{ $servicesBackend.port | default 3000 }}
     # OTLP exporter. Required for the observability pipeline; without
     # this port the default-deny policy drops frontend telemetry.
     - to:

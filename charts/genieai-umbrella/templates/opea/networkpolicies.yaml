@@ -35,7 +35,7 @@ override strands the orchestrator behind its own default-deny. */ -}}
 ---
 # chatqna (port 8888). Ingress: backend BFF. Egress: in-cluster
 # orchestrator peers (embedding 6000, retriever 7000, reranker 8000,
-# translation 9031), document-repository (3001), backend BFF (3000),
+# translation 9031), document-repository, backend BFF,
 # keycloak (8080), OTLP, external GPU node when in external mode.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -267,8 +267,8 @@ spec:
     {{- end }}
 ---
 # dataprep (port 5000). Ingress: documentRepository. Egress: ArangoDB
-# (8529), keycloak (8080), document-repository (3001), backend BFF
-# (3000), OTLP, external GPU node when in external mode.
+# (8529), keycloak (8080), document-repository, backend BFF,
+# OTLP, external GPU node when in external mode.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

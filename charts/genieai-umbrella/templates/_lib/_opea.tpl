@@ -53,6 +53,8 @@ an empty env var produces). */ -}}
   {{- $host := $gpu.nodeHost -}}
   {{- if not $host -}}
 {{- fail "opea.gpu.mode=external requires opea.gpu.nodeHost (e.g. https://gpu-node:444); without it every orchestrator would render an empty GPU endpoint" -}}
+  {{- else if not (regexMatch "^https?://" $host) -}}
+{{- fail (printf "opea.gpu.nodeHost %q carries no http:// or https:// scheme — the orchestrator endpoints are nodeHost + path, and a scheme-less endpoint is a URL no client can dial" $host) -}}
   {{- else -}}
 {{- /* An empty path renders an EMPTY endpoint, not the bare nodeHost:
 the empty endpoint is the documented "no such remote target" signal
@@ -146,6 +148,13 @@ have to be 0.0.0.0/0 the way it was when the chart ignored the URL:
 {{- $gpu := $opea.gpu | default dict -}}
 {{- if contains "[" $url -}}
 {{- fail (printf "an IPv6 literal (%s) is not supported as a named destination: the egress rule can only express an IPv4 CIDR, and an IPv6 connection matches no ipBlock — use a DNS name" $url) -}}
+{{- end -}}
+{{- /* The port is derived from the authority, which only a URL with a
+scheme carries. A scheme-less host (10.0.0.110:444) matched nothing and
+the rule silently admitted TCP 443 while the client dialed 444: every
+GPU call dropped under default-deny, with no error anywhere. */ -}}
+{{- if not (regexMatch "^https?://" $url) -}}
+{{- fail (printf "the destination URL %q carries no http:// or https:// scheme: the egress port is derived from the URL, and a scheme-less host renders an endpoint no client can dial" $url) -}}
 {{- end -}}
 {{- $host := regexReplaceAll "^([a-z]+://)?(\\[[^\\]]+\\]|[^:/]+).*" $url "$2" -}}
 {{- $isIPv4 := regexMatch "^[0-9]{1,3}(\\.[0-9]{1,3}){3}$" $host -}}

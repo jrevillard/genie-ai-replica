@@ -256,6 +256,28 @@ void main() {
       expect(scope.serviceLabelsEn, ['Births']);
     });
 
+    test('a DROPPED tag refuses the send, not vanishes from it', () {
+      // The conversation was saved with two sidebar tags; one was renamed
+      // away. The label list carries one, the count remembers two — the
+      // send guard then refuses instead of quietly narrowing the scope.
+      final scope = convResolver().resolve(
+        tags: ['Births', 'Renamed Away'],
+        categoryKey: '2',
+      );
+
+      expect(scope.serviceLabelsEn, ['Births']);
+      expect(scope.sidebarTagCount, 2);
+      expect(
+        scopeCanGoOnTheWire(
+          categoryId: scope.categoryId,
+          categoryNameEn: scope.categoryNameEn,
+          sidebarServiceLabels: scope.serviceLabelsEn,
+          sidebarServiceCount: scope.sidebarTagCount,
+        ),
+        isFalse,
+      );
+    });
+
     test('a tag the hierarchy does not carry is not a filter label', () {
       // An unknown button id (the web's runtime config has a button the
       // mobile's build-time config does not), or a label renamed away:
@@ -307,6 +329,44 @@ void main() {
       );
     });
 
+    test(
+      'a PICKED service with no ENGLISH name is refused — the category does not stand in',
+      () {
+        // The user picked the SERVICE; without its English name the wire
+        // would carry the CATEGORY alone — the query silently narrowing to
+        // the whole category while the chip still names the service.
+        expect(
+          scopeCanGoOnTheWire(
+            categoryId: '2',
+            categoryNameEn: 'Crops',
+            sidebarServiceLabels: const [],
+            sidebarServiceCount: 1,
+          ),
+          isFalse,
+        );
+        // No partial drop either: one unnamed pick among two refuses.
+        expect(
+          scopeCanGoOnTheWire(
+            categoryId: '2',
+            categoryNameEn: 'Crops',
+            sidebarServiceLabels: ['Births'],
+            sidebarServiceCount: 2,
+          ),
+          isFalse,
+        );
+        // A fully named selection goes through.
+        expect(
+          scopeCanGoOnTheWire(
+            categoryId: '2',
+            categoryNameEn: 'Crops',
+            sidebarServiceLabels: ['Births', 'Deaths'],
+            sidebarServiceCount: 2,
+          ),
+          isTrue,
+        );
+      },
+    );
+
     test('a scope with no ENGLISH name at all does NOT go on the wire', () {
       // The category has no EN translation: the wire would carry no
       // label, and the query would leave with NO filter — the corpus
@@ -357,13 +417,16 @@ void main() {
   });
 
   group('conversationScopeTags', () {
-    test('a Quick Help scope travels as the button id', () {
+    test('a Quick Help scope travels as the button id, beside the sidebar', () {
+      // Both scopes must survive the save: the web writes one tag per
+      // item, and dropping the sidebar labels here would lose them on the
+      // next restore.
       expect(
         conversationScopeTags(
           quickHelpButtonId: 'civil',
           sidebarServiceLabels: ['Births'],
         ),
-        ['civil'],
+        ['civil', 'Births'],
       );
     });
 

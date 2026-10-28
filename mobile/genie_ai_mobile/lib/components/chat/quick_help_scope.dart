@@ -171,6 +171,7 @@ class ConversationScope {
     this.categoryName,
     this.serviceLabelsEn = const <String>[],
     this.sidebarLabelsEn = const <String>[],
+    this.sidebarTagCount = 0,
     this.quickHelpButtonId,
   });
 
@@ -190,6 +191,12 @@ class ConversationScope {
   /// The ENGLISH sidebar labels selected BESIDE the Quick Help scope — a
   /// conversation can carry both, and the web restores both.
   final List<String> sidebarLabelsEn;
+
+  /// How many sidebar tags the conversation was SAVED with. A tag the
+  /// live hierarchy no longer carries is dropped from the labels — and a
+  /// dropped tag must refuse the send (the scope it named cannot be
+  /// carried), never quietly vanish from it.
+  final int sidebarTagCount;
 
   /// The id of the Quick Help button that produced the conversation, when
   /// it was one.
@@ -254,6 +261,7 @@ class ConversationScopeResolver {
         categoryName: _hierarchy.categoryDisplayName(category),
         serviceLabelsEn: labels,
         sidebarLabelsEn: sidebarLabels,
+        sidebarTagCount: sidebarLabels.length,
         quickHelpButtonId: tag,
       );
     }
@@ -271,6 +279,7 @@ class ConversationScopeResolver {
       categoryNameEn: _hierarchy.categoryEnLabel(categoryKey),
       categoryName: _hierarchy.categoryDisplayName(categoryKey),
       serviceLabelsEn: knownLabels,
+      sidebarTagCount: tagList.length,
     );
   }
 }
@@ -302,6 +311,7 @@ bool scopeCanGoOnTheWire({
   String? categoryNameEn,
   List<String> serviceLabels = const <String>[],
   List<String> sidebarServiceLabels = const <String>[],
+  int sidebarServiceCount = 0,
 }) {
   final labels = serviceLabels.isNotEmpty
       ? serviceLabels
@@ -310,17 +320,29 @@ bool scopeCanGoOnTheWire({
   // selection with one, and an empty id is not a scope. Reading it as one
   // would refuse every question the user asks afterwards.
   final hasScope =
-      (categoryId != null && categoryId.isNotEmpty) || labels.isNotEmpty;
+      (categoryId != null && categoryId.isNotEmpty) ||
+      labels.isNotEmpty ||
+      sidebarServiceCount > 0;
   if (!hasScope) return true;
+  // A PICKED service must carry its own ENGLISH name: the category does
+  // not stand in for it. A picked service with no EN translation
+  // contributes no label — sending anyway would narrow the query to the
+  // whole category while the chip still names the service. No partial
+  // drop either: one unnamed pick refuses the send.
+  if (sidebarServiceCount > sidebarServiceLabels.length) {
+    return false;
+  }
   return (categoryNameEn != null && categoryNameEn.isNotEmpty) ||
       labels.isNotEmpty;
 }
 
 /// The tags a conversation carries: the Quick Help button's id — its
-/// identity — or the ENGLISH labels of a sidebar scope. A conversation
-/// that carries no scope carries no tags.
+/// identity — and, BESIDE it, the ENGLISH labels of the sidebar scope
+/// that was selected with it. The web writes one tag per context item; a
+/// conversation carrying both scopes must carry both tags, or the sidebar
+/// one is lost on the next restore. A conversation that carries no scope
+/// carries no tags.
 List<String> conversationScopeTags({
   String? quickHelpButtonId,
   List<String> sidebarServiceLabels = const <String>[],
-}) =>
-    quickHelpButtonId != null ? [quickHelpButtonId] : [...sidebarServiceLabels];
+}) => [?quickHelpButtonId, ...sidebarServiceLabels];

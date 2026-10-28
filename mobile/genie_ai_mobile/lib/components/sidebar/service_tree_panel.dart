@@ -221,6 +221,7 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
         'category_id': '',
         'categoryNameEn': '',
         'serviceLabelsEn': const <String>[],
+        'serviceCount': 0,
       });
       return;
     }
@@ -248,6 +249,11 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
       'category_id': primaryCatId,
       'categoryNameEn': _orderedSelection.first['categoryNameEn'],
       'serviceLabelsEn': serviceLabelsEn,
+      // How many services were picked, beside the labels that survived:
+      // a picked service with no EN translation contributes no label, and
+      // the chat must refuse the send instead of quietly narrowing the
+      // query to the whole category.
+      'serviceCount': _orderedSelection.length,
     };
 
     debugPrint("[SERVICE_TREE] Emitting Multi-Selection: $payload");

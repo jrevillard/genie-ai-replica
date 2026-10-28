@@ -194,6 +194,16 @@ function createChatBotStore(stateOverrides = {}) {
 // Mount helper
 // ---------------------------------------------------------------------------
 
+// A wrapper whose mount-time tree load has SETTLED on [tree] — the
+// component's own promise then agrees with the assignment.
+async function createChatBotWrapperAsync(tree, storeOverrides = {}) {
+  const wrapper = createChatBotWrapper(storeOverrides);
+  await flushPromises();
+  wrapper.vm.serviceCategories = tree;
+  wrapper.vm.serviceCategoriesStatus = 'loaded';
+  return wrapper;
+}
+
 function createChatBotWrapper(storeOverrides = {}, { rehydrate = false } = {}) {
   const store = createChatBotStore(storeOverrides);
   if (rehydrate) rehydrateConversation(store.state.conversation);
@@ -2007,6 +2017,70 @@ describe('ChatBotComponent', () => {
       expect(mockNotificationError).toHaveBeenCalled();
       const message = mockNotificationError.mock.calls.at(-1)[0];
       expect(String(message)).toContain('Renamed Away');
+    });
+
+    it('a category-scoped conversation with NO tags restores its scope', async () => {
+      const tree = [{ catKey: '2', name: 'Cultivos', nameEN: 'Crops', children: [] }];
+      mockLiveTree(tree);
+      const wrapper = await createChatBotWrapperAsync(tree);
+      const vm = wrapper.vm;
+
+      // The backend ALWAYS returns tags: [] (an array), so the category
+      // branch behind `else if` never fired — the conversation reopened
+      // unscoped and its follow-up was answered from the whole corpus.
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        _key: 'c10',
+        title: 'Saved',
+        messages: [],
+        tags: [],
+        categories: [{ _key: '2', nameEN: 'Crops' }]
+      });
+
+      await vm.loadExistingConversation('c10');
+
+      expect(vm.currentCategoryId).toBe('2');
+      expect(vm.selectedContextItems).toHaveLength(1);
+      expect(vm.selectedContextItems[0].categoryOnly).toBe(true);
+      // A follow-up would carry the category's EN label.
+      expect(vm.getCategoryEnLabel(vm.currentCategoryId)).toBe('Crops');
+    });
+
+    it('a composer entry with a category keeps its scope on the wire', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // A deployment adds a card with placement 'composer' AND a
+      // category: the welcome composer's send used to drop the scope
+      // (hardcoded empty labels, nulled category) and the query left
+      // unfiltered while the chip showed the card.
+      const tree = [{ catKey: '2', name: 'Cultivos', nameEN: 'Crops', children: [] }];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+      vm.quickHelpButtons = [
+        {
+          id: 'crops-entry',
+          service: 'Crops card',
+          serviceLabels: ['Crops'],
+          serviceKey: 'crops-entry',
+          category: '2',
+          placement: 'composer',
+          icon: 'x'
+        }
+      ];
+      vm.newMessage = '¿Qué hay?';
+
+      vm.handleWelcomeSend();
+
+      expect(vm.currentCategoryId).toBe('2');
+      const item = vm.selectedContextItems.find((i) => i.id === 'crops-entry');
+      expect(item).toBeDefined();
+      expect(item.serviceLabels).toEqual(['Crops']);
+      expect(mockSubmitQueryStream).toHaveBeenCalled();
+      const payload = mockSubmitQueryStream.mock.calls.at(-1)[0];
+      expect(payload.context.categoryLabel).toBe('Crops');
+      expect(payload.context.serviceLabels).toEqual(['Crops']);
     });
 
     it('a category-only selection is not refused for lacking a service name', async () => {

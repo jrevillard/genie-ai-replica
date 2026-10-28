@@ -421,12 +421,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             .map((e) => e.toString())
             .where((e) => e.isNotEmpty)
             .toList();
+    // How many services were picked: a picked service with no EN
+    // translation contributes no label, and the chat must refuse the
+    // send instead of quietly narrowing the query to the category.
+    final int serviceCount =
+        (service['serviceCount'] as num?)?.toInt() ?? serviceLabelsEn.length;
     debugPrint("[MAIN] Service Selected: $name (ID: $id)");
     _chatBotKey.currentState?.setCategoryContext(
       id,
       name,
       categoryNameEn: categoryNameEn,
       serviceLabelsEn: serviceLabelsEn,
+      serviceCount: serviceCount,
     );
   }
 

@@ -1672,13 +1672,20 @@ export default {
       if (entry && entry.category) {
         this.$store.commit('conversation/replaceQuickHelpItem', {
           service: entry.service,
-          serviceLabels: [],
+          // The entry's OWN declared labels and category ride along: the
+          // entry is a Quick Help card like any tile, and hardcoding an
+          // empty scope here sent its query unfiltered while the chip
+          // showed the card.
+          serviceLabels: Array.isArray(entry.serviceLabels) ? entry.serviceLabels : [],
           serviceKey: entry.serviceKey || entry.id || entry.service,
           source: 'quickHelp',
           id: entry.id,
           category: entry.category,
           selected: true
         });
+        this.currentCategoryId = entry.category;
+        this.sendMessage();
+        return;
       } else {
         this.$store.commit(
           'conversation/setContextItems',
@@ -2054,7 +2061,11 @@ export default {
         this.$store.commit('conversation/setMessages', restoredMessages);
 
         let restoredContextItems = [];
-        if (conversation.tags && Array.isArray(conversation.tags)) {
+        // The backend ALWAYS returns an array (`tags: []` when none were
+        // saved), so the array test alone cannot route a category-scoped
+        // conversation to its branch — an EMPTY tag list with a category
+        // edge must fall through to it too.
+        if (Array.isArray(conversation.tags) && conversation.tags.length > 0) {
           // The tags of a saved conversation are the ids of the items it was
           // scoped by. A Quick Help tag is only recognised once the buttons
           // are known: looked up in an empty list, it would fall through to

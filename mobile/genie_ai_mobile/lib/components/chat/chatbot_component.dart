@@ -87,6 +87,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // The localized name (_selectedCategoryName) is display-only.
   String _selectedCategoryNameEn = "";
   List<String> _sidebarServiceLabelsEn = [];
+  // How many services the sidebar selection named (labels or not).
+  int _sidebarServiceCount = 0;
   // The live hierarchy, indexed once: the EN label vocabulary (what the
   // corpus filters on) and the category keys. Null until the tree loads —
   // then no button is judged broken, because a tree that has not loaded
@@ -332,6 +334,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         setState(() {
           _scopeResolver = QuickHelpScopeResolver(tree);
           _treeSettled = true;
+          // A retry that succeeded ends the outage: the cards are checked
+          // against the tree that IS here now, not against the one that
+          // failed to load.
+          _treeUnavailable = false;
         });
         return;
       }
@@ -376,12 +382,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     String categoryName, {
     String categoryNameEn = '',
     List<String> serviceLabelsEn = const [],
+    int serviceCount = 0,
   }) {
     setState(() {
       _selectedCategoryId = categoryId;
       _selectedCategoryName = categoryName;
       _selectedCategoryNameEn = categoryNameEn;
       _sidebarServiceLabelsEn = serviceLabelsEn;
+      // How many services the selection named, beside the labels that
+      // carry an EN translation. The send guard refuses when a picked
+      // one contributed no label (its scope cannot be named).
+      _sidebarServiceCount = serviceCount;
       // A sidebar selection REPLACES the Quick Help scope: the two are
       // alternative ways of scoping the same query.
       _activeQuickHelpButtonId = null;
@@ -473,6 +484,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             : (scope.quickHelpButtonId == null
                   ? scope.serviceLabelsEn
                   : const []);
+        // How many sidebar tags the conversation was saved with: a tag
+        // the hierarchy no longer carries is dropped from the labels, and
+        // the send guard refuses it instead of letting it vanish.
+        _sidebarServiceCount = scope.sidebarTagCount;
       });
 
       List<dynamic> accumulatedDocs = [];
@@ -545,6 +560,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       categoryNameEn: _selectedCategoryNameEn,
       serviceLabels: _activeServiceLabels,
       sidebarServiceLabels: _sidebarServiceLabelsEn,
+      sidebarServiceCount: _sidebarServiceCount,
     )) {
       // A hierarchy that could not be loaded is not a configuration
       // problem: naming it as one points the operator at the wrong thing.

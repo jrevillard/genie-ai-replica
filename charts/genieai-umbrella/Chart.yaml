@@ -5,12 +5,12 @@ description: |
   stack with one `helm install` — typically consumed via per-env Kustomize
   overlays at `overlays/<pays>/<env>/` in the genie-ai-deploy repo.
 type: application
-version: 0.2.101
+version: 0.2.102
 # `appVersion` mirrors the chart version deliberately: it tracks the chart
 # layout, not the GENIE.AI product release (the two version on independent
 # axes; deployed image tags are governed by values, not by appVersion).
 # Never "latest" — OCI registries reject it for immutable promotion.
-appVersion: 0.2.101
+appVersion: 0.2.102
 keywords:
   - genie-ai
   - umbrella

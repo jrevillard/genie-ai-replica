@@ -3298,8 +3298,12 @@ chart:lint:
     # profile used to hardcode 2 and 3, so an operator's 5 and 7 were
     # discarded with no warning and no error.
     - python3 scripts/instance-count-check.py charts/genieai-umbrella
+    # No allow-list entries: the GatewayClass the edge tier renders is
+    # exempt by KIND (the script's own singleton list) — a NAME entry
+    # here was dead weight that would have re-permitted any
+    # cluster-scoped object literally named `envoy` in every render.
     - >-
-      python3 /tmp/cluster-scope-check.py test genieai 1 envoy
+      python3 /tmp/cluster-scope-check.py test genieai 0
       /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml
   rules:
     # First-match semantics: a bare second merge_request_event rule would

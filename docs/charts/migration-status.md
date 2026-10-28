@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.101**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.102**, branch `feat/k8s-migration` based
   on `main` at `179a8a8f1` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,43 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 30 (0.2.102)** — 7 findings from the sixth
+  `/code-review`, three mutation-confirmed by the reviewer before the
+  fix. The theme of the pass: values that reach a browser or a hook.
+  - *`ingress.host` validated only the first colon segment* —
+    `genieai.local:4443:999` passed the guard and flowed verbatim into
+    the OIDC issuer, the CORS origin, both CSP connect-src sets and
+    `KC_PUBLIC_ORIGIN` (the reviewer rendered it). A third segment now
+    fails by name.
+  - *The theme-unpack init bypassed `global.toolingImageRegistry`* —
+    the chart's own `themeUnpackImage: busybox:1.36` made the `|
+    default` unreachable, so an air-gapped mirror routed every tooling
+    image except the one inside every Keycloak pod, which still pulled
+    docker.io and held the whole identity tier in ImagePullBackOff.
+    The knob is null by default and derives through the registry; an
+    explicit value wins verbatim.
+  - *The dependency-graph type guard accepted what it should have
+    rejected* — it named string and bool, so an int or the
+    `{deps: null}` shape a mistyped `--set` leaves behind rendered
+    into dependency-graph.json and crashed the pre-install hook with
+    a Python TypeError naming no values key. Only a slice of strings
+    is accepted now.
+  - *The keycloak smoke's no-code path died under pipefail* — grep
+    finding nothing killed the script silently instead of reaching
+    the named FAIL. The extraction tolerates it now.
+  - *The clamav startupProbe rendered the raw block while its
+    siblings rendered the bound copy* — correctness rested on two
+    names aliasing one map, and the natural dead-variable cleanup
+    would have stranded the probe on the old port. The bound binding
+    renders now.
+  - *The Grafana root_url read the ingress host as a raw chain* — the
+    one file that skipped the normalization convention, with an
+    else-branch no render could reach. It goes through the shared
+    helper now.
+  - *The cluster-scope check carried a dead allow-list entry* — `envoy`
+    was exempted by KIND upstream, so the NAME entry could only have
+    re-permitted a future cluster-scoped object literally named
+    `envoy`. Removed.
 - **Review loop, pass 29 (0.2.101)** — 7 findings from the fifth
   `/code-review`, three verified by render. Two were leftovers of the
   run-4 fix itself — the review passes now audit each other's patches,
@@ -1334,7 +1371,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.101** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.102** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

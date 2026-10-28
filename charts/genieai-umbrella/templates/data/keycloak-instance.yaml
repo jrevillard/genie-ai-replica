@@ -4,6 +4,10 @@ must degrade to the chart's documented default instead of crashing the
 template engine on a nil parent — the crash names a template, never the
 values key the operator cleared. */ -}}
 {{- $data := .Values.data | default dict -}}
+{{- /* The tooling registry the air-gapped contract routes every public
+image through — the theme-unpack init pulls busybox like every other
+hook and test pod. */ -}}
+{{- $global := .Values.global | default dict -}}
 {{- $kc := $data.keycloak | default dict -}}
 {{- $kcBootstrap := $kc.bootstrapAdmin | default dict -}}
 {{- $kcDb := $kc.db | default dict -}}
@@ -104,7 +108,11 @@ spec:
               sizeLimit: 8Mi
         initContainers:
           - name: unpack-keycloak-theme
-            image: {{ .Values.data.keycloak.themeUnpackImage | default "busybox:1.36" }}
+            # The registry prefix applies to the DEFAULT only: an
+            # explicit themeUnpackImage is a full image reference and
+            # wins verbatim, so a mirror operator can also pin a fully
+            # qualified unpack image.
+            image: {{ .Values.data.keycloak.themeUnpackImage | default (printf "%s/busybox:1.36" ($global.toolingImageRegistry | default "docker.io")) }}
             command:
               - sh
               - -c

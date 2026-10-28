@@ -26,9 +26,6 @@
 # COVERAGE: every guard an OPERATOR can reach has a case here (the
 # enumeration is the `fail` sites of charts/genieai-umbrella/templates).
 # The guards left without one are unreachable from values by construction:
-#   - the dependency-graph type guard (a node whose value is a scalar) —
-#     Helm's coalesce always keeps the chart's table and warns about
-#     the scalar, so no operator value can produce it;
 #   - the envRows shape guards (a row that is not a map, a row without a
 #     name, a row with neither value nor valueFrom) — the templates
 #     build those rows, not the operator;
@@ -363,7 +360,31 @@ expect_fail "a GPU path with no endpoint" \
   --set opea.gpu.nodeHost=https://gpu.ci-render.local:444 \
   --set opea.gpu.paths.llm=null
 
-# 29. The documented valid configuration must still render: a guard that
+# 29. The public host is `host` or `host:port` — nothing else. A third
+#     colon segment flowed verbatim into the OIDC issuer, the CORS
+#     origin and both CSP connect-src sets: a browser cannot dial it,
+#     and the failure lands at the token exchange, far from the values
+#     key the operator typed.
+expect_fail "a public host with a third colon segment" \
+  "carries more than one colon segment" \
+  $(valid_flags) --set ingress.host=guard.example.org:8443:extra
+
+# 30. The dependency graph's `deps` are a LIST of names. A mistyped
+#     `--set` leaves a map behind (`deps: {deps: null}`), and the
+#     pre-install hook's evaluator raises a TypeError on it — naming
+#     neither the values key nor the node. The render must name both.
+expect_fail "a dependency list that is not a list" \
+  "dependencyGraph.services.backend.deps must be a list of strings, got map" \
+  $(valid_flags) --set-json 'dependencyGraph.services.backend.deps={"deps":null}'
+
+# 31. The list's ELEMENTS are names too: a list carrying a number
+#     reaches the hook's evaluator, which compares the element with a
+#     string and fails on the comparison rather than on the shape.
+expect_fail "a dependency list with a non-string element" \
+  "must be a list of strings, got an element of type" \
+  $(valid_flags) --set-json 'dependencyGraph.services.backend=["keycloak",5]'
+
+# 32. The documented valid configuration must still render: a guard that
 #     rejects a good deployment is a defect too.
 expect_ok "the documented values render" $(valid_flags)
 

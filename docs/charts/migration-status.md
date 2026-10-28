@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.106**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.107**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,57 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 33 (0.2.107)** — 10 findings from the ninth
+  `/code-review`. The theme: a knob the chart moves but nothing honours.
+  - *The chart moved the port plumbing but never the LISTENER* —
+    `services.<svc>.port` moved the containerPort, the Service
+    targetPort, the NetworkPolicy and the probes, while the process
+    stayed on the image's own default (`process.env.PORT || 3000` for
+    the backend, 8090 for the frontend's nginx, 3001 for the
+    document-repository): an operator who moved a port rendered green
+    and got a pod that never went Ready. The factory now sets `PORT`
+    from the service's port (redis takes `--port`), so the knob moves
+    the listener too. The exception is enforced rather than silent:
+    clamd takes its port from clamd.conf, which the image fixes (its
+    entrypoint honours no port variable — /init reads only
+    `CLAMAV_NO_*`), so the render REJECTS a `services.clamav.port`
+    other than 3310 by name. The five ports are schema-typed integers
+    now — a string reached `containerPort` and the API server would
+    have rejected the Deployment.
+  - *The document-repository's `clamavPort` could only break the scan*
+    — it fed `CLAMSCAN_PORT` while the NetworkPolicy admitted the clamav
+    pod's port (derived from `services.clamav.port`) and clamd took its
+    port from clamd.conf: a different number dialled a port nothing
+    serves and the policy forbade the one that was served. The knob is
+    gone; `CLAMSCAN_PORT` follows `services.clamav.port`, the one port
+    the chart carries. (An external `clamavHost` remains a documented
+    gap: the default-deny egress admits no external scanner.)
+  - *The schema stated the replica precedence backwards* —
+    `clusterProfileReplicas` claimed the profile wins over
+    `services.<svc>.replicas`, the order the chart inverted two passes
+    ago. The description now states explicit → profile → 1, the same
+    order the per-service descriptions and values.yaml already state.
+  - *The dependency-graph guard named a values path that does not
+    exist* — "dependencyGraph.<tier>.<node>.deps must be a list", but
+    the node IS the list; an operator who followed the message set a
+    key under a list, Helm turned the node into a map, and the guard
+    fired again with the same message. The message names the node and
+    shows the working shape now.
+  - *Stale documentation that contradicted the chart* — the chart
+    README's Required-Secrets table still listed `huggingface-hub-token`
+    and `email-password` (both removed in pass 32) and omitted
+    `keycloak-convergence-credentials`, which the shipped overlay
+    creates; the parity allowlist excused the dataprep's
+    `HUGGINGFACEHUB_API_TOKEN` with a reason naming the dead Secret;
+    the instance-count checker's docstring still described the two
+    tiers' precedence as inverted (both are explicit-first); the
+    laptop overlay's `valuesFrom` comment promised an inline
+    `values:` block the same file says does not exist.
+  - *The project's own defect ledger mandated the change pass 32
+    reverted* — `plan-defects.md` rows Wave-6 #15 and Wave-9 #8 told
+    the next agent to re-add `email-password` to the backend's secrets
+    list, re-introducing the `password` env var the pass closed. Both
+    rows carry a SUPERSEDED banner now.
 - **Review loop, pass 32 (0.2.105)** — 12 findings from the eighth
   `/code-review`, four of them in the deploy repo. The theme: a value
   the chart (or the overlay) reads, but nobody honours.
@@ -1518,7 +1569,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.106** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.107** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

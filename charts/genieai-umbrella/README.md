@@ -205,8 +205,7 @@ Vault Agent, manual `kubectl apply`, etc.). A missing Secret produces
 | `keycloak-admin-credentials` | `username`, `password` | `Keycloak` CR `bootstrapAdmin.user.secret`; convergence Job `KEYCLOAK_USER` / `KEYCLOAK_PASSWORD` |
 | `keycloak-db-credentials` | `username`, `password` | CNPG `Cluster` + `Keycloak` CR `spec.db` |
 | `keycloak-proxy-client-secret` | `proxyClient` | convergence Job `KC_PROXY_CLIENT_SECRET` |
-| `huggingface-hub-token` | (single key, the HF token) | backend image pulls |
-| `email-password` | `password` | convergence Job `EMAIL_PASSWORD` |
+| `keycloak-convergence-credentials` | `GENIE_ADMIN_PASSWORD`, `EMAIL_PASSWORD` | convergence Job — the `EMAIL_PASSWORD` row is the realm's SMTP password (the `smtpServer` block always renders, so the Job resolves it on every install) |
 | `translation-cache-password` | (the cache password) | backend `TRANSLATION_CACHE_PASSWORD` |
 | `arango-root-secret` | `password` | backend `ARANGO_PASSWORD` (wired via explicit `secretKeyRef`, not `envFrom`) |
 | `vllm-api-key` | `VLLM_API_KEY`; `HF_TOKEN` | every GPU consumer (backend translation, OPEA orchestrators, in-cluster vLLM/TEI). Two-key contract: the Secret carries BOTH keys — `VLLM_API_KEY` (GPU-node bearer) and `HF_TOKEN` (Hugging Face pulls; gemma is gated). The `HUGGINGFACEHUB_API_TOKEN` env row is an alias that reads the `VLLM_API_KEY` key. |

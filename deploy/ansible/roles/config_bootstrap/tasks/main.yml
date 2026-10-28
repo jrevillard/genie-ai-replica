@@ -35,9 +35,9 @@
 
 # The whole seeding runs in a block with an `always` section: the scratch tree
 # holds the downloaded archives and the extracted branch copy (tens of MB per
-# pair), and the guard failures below are a designed path — a wrong branch, a
-# re-brand — not an accident. Without the always section every one of those
-# runs leaked its scratch tree into /tmp on every node of the fleet.
+# pair), the guard failures below are a designed path — a wrong branch, a
+# re-brand — and the scratch tree is removed on every path, not only on
+# success.
 #
 # The block is skipped in check mode, and it is skipped WHOLE: the directories
 # it creates are part of the seeding, so a check-mode plan that listed them
@@ -45,33 +45,6 @@
 - name: Seed the host runtime config from the branch
   when: config_bootstrap_run | bool
   block:
-    # Root is needed to create {{ config_dir }} itself on a host that does not
-    # have it yet (the play runs on `all`, including GPU nodes), mirroring the
-    # deploy play's "Ensure deploy directory exists" task for the same tree.
-    # The directories stay root-owned, consistent with the rest of the
-    # playbook: the rsync below runs under the play's become, so it writes
-    # into them as root.
-    #
-    # No mode is pinned: the mirror owns the directory's mode and restores it
-    # from the branch. A mode pinned here would be reverted by every mirror,
-    # and the itemize line that difference produces ("./" — the destination
-    # directory itself) is filtered out of the change detection below, so the
-    # flip would be invisible in the report.
-    #
-    # Creating them is part of the seeding: with config_bootstrap_sync_enabled
-    # false the role owns nothing on the host and leaves the operator's tree
-    # exactly as it is (docker-compose creates a missing bind-mount source as
-    # an empty root-owned directory anyway, so an operator who manages the tree
-    # by hand has to populate it themselves).
-    - name: Ensure runtime config directories exist
-      become_user: root
-      ansible.builtin.file:
-        path: "{{ config_dir }}/{{ item.dest_subdir }}"
-        state: directory
-      loop: "{{ config_bootstrap_pairs }}"
-      loop_control:
-        label: "{{ item.dest_subdir }}"
-
     # The pre-mirror role kept its scratch under a fixed path and removed it
     # only at the end of a successful play, so failed runs left the archives
     # and the extraction tree on every node. This run's scratch is private;
@@ -453,6 +426,38 @@
     # the SAME specs, computed once: the two paths are long expressions, and
     # writing them twice meant a future edit to one could silently leave the
     # verification comparing a tree the mirror never wrote.
+    # Root is needed to create {{ config_dir }} itself on a host that does not
+    # have it yet (the play runs on `all`, including GPU nodes), mirroring the
+    # deploy play's "Ensure deploy directory exists" task for the same tree.
+    # The directories stay root-owned, consistent with the rest of the
+    # playbook: the rsync below runs under the play's become, so it writes
+    # into them as root.
+    #
+    # The directories are created AFTER the guards: a deployment that stops on
+    # one of them leaves a fresh node without the config dirs — the guards run
+    # before anything on the host changes, not only before anything is
+    # mirrored.
+    #
+    # No mode is pinned: the mirror owns the directory's mode and restores it
+    # from the branch. A mode pinned here would be reverted by every mirror,
+    # and the itemize line that difference produces ("./" — the destination
+    # directory itself) is filtered out of the change detection below, so the
+    # flip would be invisible in the report.
+    #
+    # Creating them is part of the seeding: with config_bootstrap_sync_enabled
+    # false the role owns nothing on the host and leaves the operator's tree
+    # exactly as it is (docker-compose creates a missing bind-mount source as
+    # an empty root-owned directory anyway, so an operator who manages the tree
+    # by hand has to populate it themselves).
+    - name: Ensure runtime config directories exist
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ config_dir }}/{{ item.dest_subdir }}"
+        state: directory
+      loop: "{{ config_bootstrap_pairs }}"
+      loop_control:
+        label: "{{ item.dest_subdir }}"
+
     # The itemize-line filter is used by BOTH rsync checks (the mirror's
     # change detection and the verification's assert): one pattern, hoisted
     # here, so the two checks cannot start judging "change" by different

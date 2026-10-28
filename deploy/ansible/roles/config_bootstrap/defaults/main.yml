@@ -44,12 +44,13 @@ config_bootstrap_theme_entrypoints:
   - admin
   - email
 
-# The guard protects the CONFIGURED theme. A second theme it does not know
-# about — a parent theme a surviving child inherits from (a flavour theme
-# declares parent=genie), or anything an operator dropped in the themes
-# directory — is protected only by the pair's `expect` entries: keep the
-# parent theme's entrypoint in the list whenever the deployment's theme
-# inherits from it.
+# The guard protects the CONFIGURED theme only. A theme it does not know
+# about — the parent a flavour theme inherits from (a flavour declares
+# parent=genie), or anything an operator dropped in the themes directory —
+# is protected by the owning pair's `expect` list: put the paths that must
+# exist in the branch (e.g. genie/account/theme.properties) there, never in
+# config_bootstrap_theme_entrypoints, which names the configured theme's
+# own subtrees.
 keycloak_theme: genie
 
 # List of (source, destination) pairs.
@@ -87,5 +88,12 @@ config_bootstrap_pairs:
   # target in docker-compose.yaml is /opt/keycloak/themes (the root).
   - src: "configs/keycloak/themes"
     dest_subdir: "keycloak/themes"
+    # genie is the parent every flavour theme inherits from
+    # (parent=genie): dropping one of its subtrees while keeping the
+    # children would break them. Keep this list in step with the
+    # config_bootstrap_theme_entrypoints of the parent.
     expect:
       - "genie/login/theme.properties"
+      - "genie/account/theme.properties"
+      - "genie/admin/theme.properties"
+      - "genie/email/theme.properties"

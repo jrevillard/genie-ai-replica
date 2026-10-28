@@ -212,13 +212,15 @@ RESTORE_ARMED="false"
 # the run still ends on the signal's exit code. Disarming it up front left the
 # archive on the host whenever a signal landed between the extraction and its
 # removal.
+# 0 = the host is back to its pre-test state (or there was nothing to
+# restore); 1 = the restore failed. The exit CODE of the run is the caller's
+# business: the traps below keep the code the run ended with.
 restore() {
-    local exit_code="$?"
     # Runs on every exit (armed or not): scrub the become-password file first.
     if [ -n "${BECOME_PW_FILE:-}" ] && [ -f "$BECOME_PW_FILE" ]; then
         rm -f "$BECOME_PW_FILE"
     fi
-    [ "$RESTORE_ARMED" = "true" ] || return "$exit_code"
+    [ "$RESTORE_ARMED" = "true" ] || return 0
     if [ -n "$EXPECTED_PATH" ]; then
         ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
             -a "rm -f '$EXPECTED_PATH'" >/dev/null 2>&1 || true
@@ -252,7 +254,7 @@ restore() {
                 -a "rm -f '$BACKUP_ARCHIVE'" >/dev/null 2>&1 || true
             printf '  [ok] %s restored from pre-test backup; backup removed.\n' "$CONFIG_DIR"
             RESTORE_ARMED="false"
-            return "$exit_code"
+            return 0
         fi
     fi
     printf '  [FAIL] automatic restore did not complete.\n' >&2
@@ -269,13 +271,14 @@ restore() {
     RESTORE_ARMED="false"
     return 1
 }
-# The EXIT trap restores the host and turns a FAILED restore into a failed
-# run. The signal traps restore it and stop the script on the signal's code:
-# a signal that only restored the host would let the run continue on a tree
-# the restore had just put back, and it would end by reporting a pass — and a
-# caller keys on 130/143 to recognise "interrupted", so the signal's code is
-# re-asserted even when the restore itself failed (whose [FAIL] is printed).
-trap 'restore || exit 1' EXIT
+# The EXIT trap keeps the code the run ended with and turns a FAILED restore
+# into a failed run (1). The signal traps restore it and stop the script on
+# the signal's code: a signal that only restored the host would let the run
+# continue on a tree the restore had just put back, and it would end by
+# reporting a pass — and a caller keys on 130/143 to recognise "interrupted",
+# so the signal's code is re-asserted even when the restore itself failed
+# (whose [FAIL] is printed).
+trap 'rc=$?; if restore; then exit "$rc"; else exit 1; fi' EXIT
 trap 'restore; exit 130' INT
 trap 'restore; exit 143' TERM
 

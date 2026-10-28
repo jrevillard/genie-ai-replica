@@ -228,10 +228,10 @@ spec:
     # ClamAV scanner. Post-DNAT pod port; the Service port is identical,
     # but pod-to-pod peers must use the container port. The port comes
     # from services.clamav.port — the knob the clamav Deployment,
-    # Service and policies derive from — while the doc-repo DIALS
-    # services.documentRepository.clamavPort: the two are separate
-    # values, and the doc-repo only needs its own when clamavHost points
-    # at an EXTERNAL scanner. Keep them in sync for the in-cluster case.
+    # Service, policies AND this side's dial port derive from
+    # (documentRepository.clamavPort is null by default and follows it);
+    # the doc-repo needs its own only when clamavHost points at an
+    # EXTERNAL scanner.
     - to:
         - podSelector:
             matchLabels:

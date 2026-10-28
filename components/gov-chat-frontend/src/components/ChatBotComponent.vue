@@ -1645,7 +1645,12 @@ export default {
               ? this.quickHelpTitleFor(item, locale)
               : item.categoryOnly
                 ? this.getCategoryDisplayName(item.category)
-                : this.displayNameForEnLabel(item.serviceKey) || this.safeTranslate(item.service)
+                : this.displayNameForEnLabel(
+                    // The un-resolve above just moved the tag INTO
+                    // serviceKey — reading the stale spread copy would
+                    // fall back to the raw EN tag until the next remap.
+                    item.unresolved && this.enLabelSet.has(item.service) ? item.service : item.serviceKey
+                  ) || this.safeTranslate(item.service)
         }))
       );
     },
@@ -1686,7 +1691,15 @@ export default {
           const title = resolveConfigText(button.title, locale);
           const visibleText = resolveConfigText(button.action?.visibleText, locale);
           const hiddenPrompt = resolveConfigText(button.action?.hiddenPrompt, locale);
-          const explicitLabels = Array.isArray(button.serviceLabels) ? button.serviceLabels : null;
+          // A bare string where the array belongs is a config typo the
+          // wire rule already answers: ONE label, never an empty scope —
+          // mapping it to null made the card look healthy and sent the
+          // question unfiltered.
+          const explicitLabels = Array.isArray(button.serviceLabels)
+            ? button.serviceLabels
+            : typeof button.serviceLabels === 'string' && button.serviceLabels
+              ? [button.serviceLabels]
+              : null;
 
           return {
             service: title,
@@ -1846,7 +1859,7 @@ export default {
           notificationService.error(
             caption ||
               (this.serviceCategoriesStatus === 'loading'
-                ? this.safeTranslate('hierarchy.loading')
+                ? this.safeTranslate('admin.hierarchy.loading')
                 : this.translate('chatbot.quickHelpScopeUnavailable', ''))
           );
           return;

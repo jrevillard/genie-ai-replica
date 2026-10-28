@@ -2709,7 +2709,7 @@ describe('ChatBotComponent', () => {
       // The hierarchy is ON ITS WAY — naming a configuration problem
       // points the operator at the wrong thing. (The wrapper's $t mock
       // returns the key; the KEY is what distinguishes the two copies.)
-      expect(lastError).toBe('hierarchy.loading');
+      expect(lastError).toBe('admin.hierarchy.loading');
     });
 
     it('selecting a sidebar service REPLACES a live card chip (the mode switch is symmetric)', async () => {
@@ -2828,6 +2828,44 @@ describe('ChatBotComponent', () => {
       const payload = mockSubmitQueryStream.mock.calls.at(-1)[0];
       expect(payload.context.serviceLabels).toEqual([]);
       expect(payload.context.categoryLabel).toBe('Agriculture');
+    });
+
+    it('a BARE-STRING serviceLabels config typo is ONE label, not a scope-less card', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const tree = [
+        {
+          catKey: '2',
+          name: 'État civil',
+          nameEN: 'Civil Registry',
+          children: [{ name: 'Naissances', nameEN: 'Births' }]
+        }
+      ];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+
+      // The config declares a bare string where the array belongs. The
+      // backend wire rule reads a bare string as ONE label — never as an
+      // empty scope — and the card must agree: mapping the typo to null
+      // made the card look healthy and sent the question UNFILTERED.
+      vm.cachedConfig = {
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [{ id: 'typo', title: 'Typo card', category: '2', serviceLabels: 'Births' }]
+            }
+          }
+        }
+      };
+      vm.applyQuickHelpButtons();
+      vm.quickHelpButtons[0].placement = 'composer';
+      vm.newMessage = '¿Qué hay?';
+
+      vm.handleWelcomeSend();
+
+      const payload = mockSubmitQueryStream.mock.calls.at(-1)[0];
+      expect(payload.context.serviceLabels).toEqual(['Births']);
     });
 
     it('a composer entry with LABELS but no category keeps its scope on the wire', async () => {

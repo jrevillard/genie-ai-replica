@@ -175,9 +175,14 @@ describe('QueryService', () => {
 
   describe('init', () => {
     it('should initialize collections on first call', async () => {
+      // EVERY collection the service opens: these assertions were once
+      // edited down to the two translation collections — removing either
+      // original init left the test green.
       expect(mockDb.collection).toHaveBeenCalledWith('queries');
+      expect(mockDb.collection).toHaveBeenCalledWith('serviceCategories');
       expect(mockDb.collection).toHaveBeenCalledWith('serviceCategoryTranslations');
       expect(mockDb.collection).toHaveBeenCalledWith('serviceTranslations');
+      expect(mockDb.collection).toHaveBeenCalledWith('services');
       expect(queryService.initialized).toBe(true);
     });
 

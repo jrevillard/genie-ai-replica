@@ -303,6 +303,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
       setState(() {
         _quickHelpButtons = loadedButtons;
+        // The config just settled: a restore resolved while it was
+        // unavailable re-resolves now (button tags read as dead sidebar
+        // tags against an empty button list).
+        _maybeReResolveRestoredScope();
       });
     } catch (e) {
       debugPrint("[CHATBOT] Failed to load genie-ai-config.json: $e");
@@ -405,6 +409,24 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _sidebarServiceCount = scope.sidebarTagCount;
   }
 
+  /// Re-resolves the RESTORE's scope against whichever source just
+  /// settled (the tree, the Quick Help config): a restore resolved
+  /// during an outage of either froze its scope against empty data. Only
+  /// when the restore still OWNS the scope — a user action since (epoch
+  /// moved) means the saved scope no longer applies.
+  void _maybeReResolveRestoredScope() {
+    if (_restoredTags == null ||
+        _restoredScopeEpoch != _scopeEpoch ||
+        _scopeResolver == null) {
+      return;
+    }
+    final scope = ConversationScopeResolver(
+      hierarchy: _scopeResolver!,
+      quickHelpButtons: _quickHelpButtons,
+    ).resolve(tags: _restoredTags, categoryKey: _restoredCategoryKey);
+    _applyRestoredScope(scope);
+  }
+
   Future<void> _fetchEnTree() async {
     try {
       final categoriesApi = ref.read(serviceCategoriesApiProvider);
@@ -421,20 +443,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           // failed to load.
           _treeUnavailable = false;
           // A restore resolved during an outage froze its whole scope
-          // against an empty tree (labels dropped, count remembered,
-          // names empty) — a successful retry must RE-RESOLVE it, or the
-          // conversation stays refused on a cause that is gone. Only
-          // when the restore still OWNS the scope: a user action since
-          // (epoch moved) means the saved scope no longer applies.
-          if (_restoredTags != null &&
-              _restoredScopeEpoch == _scopeEpoch &&
-              _scopeResolver != null) {
-            final scope = ConversationScopeResolver(
-              hierarchy: _scopeResolver!,
-              quickHelpButtons: _quickHelpButtons,
-            ).resolve(tags: _restoredTags, categoryKey: _restoredCategoryKey);
-            _applyRestoredScope(scope);
-          }
+          // against an empty tree — a successful retry must RE-RESOLVE
+          // it. The config retry below runs the same recovery.
+          _maybeReResolveRestoredScope();
         });
         return;
       }
@@ -545,6 +556,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       }
 
       final Map<String, dynamic> conv = jsonDecode(res.body);
+      // The fetch resolved — a NEWER load may have landed while it was
+      // in flight. The transcript commit carries the SAME seq guard the
+      // scope commit below has: without it, a superseded-but-slower load
+      // overwrote the newer conversation's messages with its own while
+      // its scope commit was correctly thrown away.
+      if (!mounted || seq != _loadSeq) return;
 
       List<Map<String, dynamic>> loadedMessages = [];
       if (conv['messages'] != null && conv['messages'] is List) {
@@ -1123,9 +1140,39 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     final String visibleTextKey = action['visibleText']?.toString() ?? '';
     final String hiddenPromptKey = action['hiddenPrompt']?.toString() ?? '';
 
-    // If both are empty, just enter Chat Mode: close overlay, clear all
-    // label filters so the retriever sees all documents, focus input.
+    // If both are empty AND the card declares NO scope, just enter Chat
+    // Mode: close overlay, clear all label filters so the retriever sees
+    // all documents, focus input. A card that DECLARES a scope but has
+    // no prompts is still a scoped card — the web installs the same
+    // card's labels without asking for a prompt, and wiping the scope
+    // here sent the question over the whole corpus while the card
+    // promised its declared one.
+    final declaredLabels =
+        (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
+            .map((label) => label.toString())
+            .toList();
+    final declaresScope =
+        declaresCategoryScope(button['category']?.toString()) ||
+        declaredLabels.isNotEmpty;
     if (visibleTextKey.isEmpty && hiddenPromptKey.isEmpty) {
+      if (declaresScope) {
+        setState(() {
+          _showQuickHelpOverlay = false;
+          _selectedCategoryId = button['category']?.toString();
+          _selectedCategoryNameEn =
+              _scopeResolver?.categoryLabelEn(button) ?? '';
+          _selectedCategoryName = button['resolvedTitle']?.toString() ?? '';
+          _sidebarServiceLabelsEn = [];
+          _sidebarServiceCount = 0;
+          _scopeEpoch++;
+          _restoredTags = null;
+          _activeServiceLabels = declaredLabels;
+          _activeQuickHelpButtonId = button['id']?.toString();
+          _activeQuickHelpScope = _scopeResolver?.stateFor(button);
+        });
+        _inputFocusNode.requestFocus();
+        return;
+      }
       setState(() {
         _showQuickHelpOverlay = false;
         _activeServiceLabels = [];

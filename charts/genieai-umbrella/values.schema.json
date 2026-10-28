@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
-  "$comment": "Pins the values a wrong TYPE or a wrong ENUM would silently mis-render. Enums: a wrong clusterProfile renders the dev topology and the drift hook cannot catch it. Booleans: Helm's `not`/`and`/`or`/`ternary` are strict \u2014 a knob set to 0 or \"true\" aborts the render with 'wrong type for value; expected bool; got int64', so the type is checked up front instead. Everything else stays permissive (no additionalProperties:false anywhere) \u2014 Helm injects `global`, and future tiers add keys. Every boolean leaf of values.yaml is typed here; scripts/values-schema-bools-check.py fails the build when a new one is added without a matching constraint.",
+  "$comment": "Pins the values a wrong TYPE or a wrong ENUM would silently mis-render. Enums: a wrong clusterProfile renders the dev topology and the drift hook cannot catch it. Booleans: Helm's `not`/`and`/`or`/`ternary` are strict — a knob set to 0 or \"true\" aborts the render with 'wrong type for value; expected bool; got int64', so the type is checked up front instead. Everything else stays permissive (no additionalProperties:false anywhere) — Helm injects `global`, and future tiers add keys. Every boolean leaf of values.yaml is typed here; scripts/values-schema-bools-check.py fails the build when a new one is added without a matching constraint.",
   "type": "object",
   "properties": {
     "clusterProfile": {
@@ -200,9 +200,12 @@
               }
             },
             "replicas": {
-              "type": "integer",
+              "type": [
+                "integer",
+                "null"
+              ],
               "minimum": 0,
-              "description": "Pod count. 0 is the documented way to scale a tier off; a non-numeric value would be coerced by the template's int conversion into 0 \u2014 a silent scale-to-zero \u2014 so the type is pinned here."
+              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer — including 0, the scale-off — wins over the profile."
             }
           }
         },
@@ -224,9 +227,12 @@
               }
             },
             "replicas": {
-              "type": "integer",
+              "type": [
+                "integer",
+                "null"
+              ],
               "minimum": 0,
-              "description": "Pod count. 0 is the documented way to scale a tier off; a non-numeric value would be coerced by the template's int conversion into 0 \u2014 a silent scale-to-zero \u2014 so the type is pinned here."
+              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer — including 0, the scale-off — wins over the profile."
             }
           }
         },
@@ -259,9 +265,12 @@
               }
             },
             "replicas": {
-              "type": "integer",
+              "type": [
+                "integer",
+                "null"
+              ],
               "minimum": 0,
-              "description": "Pod count. 0 is the documented way to scale a tier off; a non-numeric value would be coerced by the template's int conversion into 0 \u2014 a silent scale-to-zero \u2014 so the type is pinned here."
+              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer — including 0, the scale-off — wins over the profile."
             }
           }
         },
@@ -280,9 +289,12 @@
               "type": "boolean"
             },
             "replicas": {
-              "type": "integer",
+              "type": [
+                "integer",
+                "null"
+              ],
               "minimum": 0,
-              "description": "Pod count. 0 is the documented way to scale a tier off; a non-numeric value would be coerced by the template's int conversion into 0 \u2014 a silent scale-to-zero \u2014 so the type is pinned here."
+              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer — including 0, the scale-off — wins over the profile."
             }
           }
         },
@@ -301,9 +313,12 @@
               }
             },
             "replicas": {
-              "type": "integer",
+              "type": [
+                "integer",
+                "null"
+              ],
               "minimum": 0,
-              "description": "Pod count. 0 is the documented way to scale a tier off; a non-numeric value would be coerced by the template's int conversion into 0 \u2014 a silent scale-to-zero \u2014 so the type is pinned here."
+              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer — including 0, the scale-off — wins over the profile."
             }
           }
         }

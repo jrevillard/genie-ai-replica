@@ -520,7 +520,9 @@ dependencyGraph:
 #
 # Per-service entry shape:
 #   enabled: master toggle for the rendered resource
-#   replicas: pod count baseline; prod/staging overrides in clusterProfileReplicas
+#   replicas: pod count. NULL by default: unset lets the cluster profile
+#     apply (prod/staging counts, 1 on dev); an EXPLICIT value — including
+#     0, the documented scale-off — always wins over the profile.
 #   image.repository / image.tag: container image pulled at deploy time
 #   port: the CONTAINER port. The Service always listens on 80 and
 #     forwards to it; the probes read it too.
@@ -544,7 +546,7 @@ dependencyGraph:
 services:
   backend:
     enabled: true
-    replicas: 1
+    replicas: null
     image: { repository: genie-ai-backend, tag: "main" }
     # One-shot migrations Job (post-install/post-upgrade hook) that
     # creates the ArangoDB collections; same registry/tag conventions
@@ -667,7 +669,7 @@ services:
 
   frontend:
     enabled: true
-    replicas: 1
+    replicas: null
     image: { repository: genie-ai-frontend, tag: "main" }
     port: 8090
     # Image USER is root (uid 0). The entrypoint writes
@@ -748,7 +750,7 @@ services:
 
   documentRepository:
     enabled: true
-    replicas: 1
+    replicas: null
     image: { repository: genie-ai-document-repository, tag: "main" }
     port: 3001
     # The image has no USER directive, so the default would be root.
@@ -845,7 +847,7 @@ services:
       enabled: true
       size: 2Gi
     enabled: true
-    replicas: 1
+    replicas: null
     # Tag: `stable-debian`. The chart
     # used `1.3` historically, but Docker Hub's clamav/clamav 1.x line
     # only ships `1.4+`; the operator logs `manifest unknown` and the
@@ -896,7 +898,7 @@ services:
 
   redisCache:
     enabled: true
-    replicas: 1
+    replicas: null
     # pullPolicy: read by this template directly (the service factory
     # reads it for the other services, where the per-service shape block
     # documents it). Empty = derived from the tag by the factory's

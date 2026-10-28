@@ -192,12 +192,17 @@ echo "-- Keycloak OIDC discovery (in-cluster — host cannot resolve .svc DNS) -
 # In the chart's namespace and carrying the test component label: the
 # keycloak NetworkPolicy admits only named same-namespace peers, so a
 # probe run in the caller's current namespace (kubectl's default) or with
-# no label times out on an enforcing CNI — HTTP 000 — and the smoke below
-# would assert nothing. The failure is fatal on purpose.
-kubectl run kc-probe --rm -i --restart=Never -n "$NS" \
+# no label times out on an enforcing CNI — HTTP 000. The code is
+# ASSERTED, not printed: reachability alone would pass a 404 that a
+# drifted realm name or httpRelativePath answers.
+KC_CODE=$(kubectl run kc-probe --rm -i --restart=Never -n "$NS" \
   --labels="genieai.io/component=test" --image=curlimages/curl:8.10.1 --command -- \
-  curl -sS -o /dev/null -w "  HTTP %{http_code}  (expect 200 or 401, NOT 000/503)\n" \
-  "http://keycloak-service.${NS}.svc.cluster.local:8080/auth/realms/genie/.well-known/openid-configuration"
+  curl -sS -o /dev/null -w "%{http_code}" \
+  "http://keycloak-service.${NS}.svc.cluster.local:8080/auth/realms/genie/.well-known/openid-configuration")
+case "$KC_CODE" in
+  200|401) echo "  keycloak OIDC discovery: HTTP $KC_CODE (expected)";;
+  *) echo "  FAIL: keycloak OIDC discovery answered HTTP ${KC_CODE:-none} (expect 200 or 401)"; exit 1;;
+esac
 
 echo
 echo "=== DONE ==="

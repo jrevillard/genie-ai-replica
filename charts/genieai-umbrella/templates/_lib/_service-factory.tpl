@@ -98,7 +98,7 @@ spec:
             - name: http
               containerPort: {{ $svc.port }}
           env:
-            {{- toYaml $svc.env | nindent 12 }}
+            {{- include "genieai-umbrella.envRows" ($svc.env | default list) | fromJsonArray | toYaml | nindent 12 }}
           {{- with $svc.secrets }}
           envFrom:
             {{- range . }}

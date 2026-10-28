@@ -21,17 +21,14 @@ template: template-umbrella
 # target is unusable without them — it once rendered nothing but the
 # error "ingress.host is required" while charts/README.md presented it
 # as THE render gate; the mail flags broke the same way later.
-# Same fixture CI's chart:* jobs expand (charts/ci/render-base-flags —
-# restated here because a make recipe cannot portably $(cat) it):
-# required deployment data, the placeholder guard off, an smtp that
-# answers nothing. Render-only values; nothing here reaches a cluster.
+# The SAME fixture CI's chart:* jobs expand — read from the file, not
+# restated: a restatement drifts (it already had dropped the
+# convergence envSecrets rows, the dummy client secrets and
+# ingress.enabled), and a local render that differs from CI's is a local
+# render that proves nothing about CI. The placeholder guard stays off
+# here: it is the one flag the fixture does not carry.
 RENDER_FLAGS = --set data.keycloak.failOnPlaceholderSecrets=false \
-	--set data.keycloak.adminEmail=ci-render@example.org \
-	--set data.keycloak.smtp.from=no-reply@ci.invalid \
-	--set data.keycloak.smtp.host=smtp.invalid \
-	--set data.keycloak.smtp.port=587 \
-	--set data.keycloak.smtp.starttls=true \
-	--set ingress.host=ci-render.local
+	$(shell cat ci/render-base-flags)
 
 template-umbrella: deps
 	helm template test genieai-umbrella -n genieai $(RENDER_FLAGS) > /tmp/genieai-rendered.yaml

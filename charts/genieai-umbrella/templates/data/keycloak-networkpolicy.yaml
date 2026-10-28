@@ -44,8 +44,11 @@ spec:
     # the admin console, not just the OIDC endpoints. The list is the
     # chart's own consumers: the backend (realm token validation), the
     # document-repository (JWKS fetch), chatqna and dataprep (their
-    # service-account token), and the post-install convergence Job
-    # (component "identity") that drives the Admin API.
+    # service-account token), the post-install convergence Job
+    # (component "identity") that drives the Admin API — and the helm-test
+    # probe (component "test"), the chart's only in-cluster L7 check of
+    # the OIDC discovery endpoint; without it the probe times out on an
+    # enforcing CNI and the smoke asserts nothing.
     - from:
         - podSelector:
             matchLabels:
@@ -62,6 +65,9 @@ spec:
         - podSelector:
             matchLabels:
               genieai.io/component: identity
+        - podSelector:
+            matchLabels:
+              genieai.io/component: test
       ports:
         - protocol: TCP
           port: 8080

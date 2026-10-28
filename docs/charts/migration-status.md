@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.97**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.98**, branch `feat/k8s-migration` based
   on `main` at `179a8a8f1` and **8 commits behind `origin/main`**
   (`5786919c1`). The gap touches the frontend, the OPEA overlay
   (retriever/dataprep), the site docs and the config-validator tests —
@@ -609,6 +609,53 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 26 (0.2.98)** — the `/code-review` of the whole
+  branch (7 findings), the `/simplify` sweep (reuse, simplification,
+  efficiency, altitude) and the `/test-audit` of the new gates. The
+  findings that mattered were the ones about the gates the pass-25 batch
+  had just written: a gate that asserts a contract it does not hold is
+  worse than no gate.
+  - *The vLLM policy locked out the translation model's own
+    initContainer* — `vllm-translation` waits for `vllm:8000/health`
+    before it starts, and the `vllm-model` policy admitted only
+    chatqna/retriever/dataprep. On an enforcing CNI the init was
+    blocked by the very policy that guards the model pods: an
+    `Init:0/1` loop with nothing in the vLLM logs, and no translation
+    model at all. The peer is admitted now.
+  - *The keycloak smoke probe asserted nothing* — `local-test.sh` ran
+    an unlabelled probe pod in the caller's namespace, which the
+    keycloak policy (named same-namespace peers) never admits; the
+    timeout produced HTTP 000 and `|| true` swallowed it. The probe
+    runs in the chart's namespace with the test label, the policy
+    admits the test component, and the failure is fatal.
+  - *The version gate's verdict depended on the checkout* — in an MR
+    pipeline the checkout is the merge result, whose history
+    interleaves the target branch's commits with this change's, so an
+    unrelated bump on the other side laundered an unbumped change
+    here. The comparison is now anchored on the diff base and on the
+    change's own side of the merge, and the library chart
+    (`charts/genieai-common`) is watched too: it renders INTO the
+    umbrella, but Flux reconciles the umbrella's version.
+  - *The "silent drop" assertion forgave too much* — one owned row
+    forgave every other row of the group, and a workload stripped of
+    ALL its rows was exempt (the check asked "does the workload still
+    have an env row", not "does the workload still exist"). Drops are
+    now judged per workload, and the workload's survival is read from
+    the rendered objects.
+  - *The env-types branch splitter mishandled the chart's own style* —
+    a dash-trimmed `{{- else -}}` was read as a value, and a
+    multi-line action was truncated at its first balanced line. The
+    splitter is three regexes now, and a Go template comment inside an
+    action is no longer a value.
+  - *The two CI "prod" renders were not the same surface* — one named
+    `gpu.ci-render.local:444`, the other `gpu-node:444`. One value
+    everywhere now, documented in `charts/ci/README.md`.
+  - *The local render was not CI's render* — `charts/Makefile` restated
+    CI's fixture and had dropped the convergence envSecrets rows, the
+  dummy client secrets and `ingress.enabled`. It reads the fixture now.
+  - *A duplicated derivation* — the redis-cache template derived the
+    optional-PVC block twice; the second copy could drift from the
+    first and mount a claim nobody creates.
 - **Review loop, pass 25 (0.2.97)** — 8 findings from the `/code-review`
   skill, all verified true, all fixed. The pass attacked the gates the
   previous passes had just rewritten, and it was right to: three of the
@@ -1165,7 +1212,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.97** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.98** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588) — the branch is 0 commits behind `main`.
@@ -1399,3 +1446,27 @@ the compose config, kept verbatim; backlog.
 - Dataprep vendored `llm_transformer` (sync langchain in `to_thread`) has no
   effective request timeout; long ingestions can pin threads on a stalled
   upstream (observed once against the shared GPU node; pod restart recovered).
+- **Five deeper fixes the review passes named and this branch did not take**
+  (each is a refactor, not a defect; each would remove a heuristic the gates
+  currently carry):
+  - *Route the hand-rendered env blocks through the factory's emitter*
+    (`genieai-umbrella.envRows`). About forty rows hand-render their value
+    today, each carrying its own `| quote`; the env-types gate then needs a
+    Python-side Go-template parser to police them, plus a hand-synced
+    `TYPE_OVERRIDES` list. Emitting them through the shared boundary makes
+    "every env value is a string" structural and deletes both.
+  - *Index the NetworkPolicies by the pods their selector matches* (the render
+    carries every workload's labels). The peer-reachability check then needs
+    no namespace-wide special case, and a policy selecting pods by a label
+    shape the component index does not know stops reading as "unrestricted".
+  - *Own the dropped-row ownership by component identity* (the values-key to
+    component map `config-parity-check.py` already carries) instead of by
+    substring matching a path segment against a workload name.
+  - *One table of GPU targets* (key, in-cluster service and port, default
+    external path, required?) from which the helper's branches, the values
+    defaults, the failure message and the parity entry all derive. The
+    docling exception is a fact about the deployment topology, and it is
+    currently written out in five places.
+  - *A shared `scripts/chartci.py`* for the gate scripts: the fixture reader,
+    the `helm template` wrapper, the workload-kind list and the YAML loader
+    are written four times over, with three different return shapes.

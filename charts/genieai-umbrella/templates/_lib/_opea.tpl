@@ -70,9 +70,8 @@ runtime connection failure with no error anywhere. */ -}}
 endpoint is nodeHost + path, and an empty path renders an empty URL
 the pod dials — a connection failure at runtime, with the values key
 the operator cleared nowhere in the message. The chart's own defaults
-(llm=/llm, embedding=/embed, reranker=/rerank, translation=/translation,
-docling=/docling) are deleted by a null, so they cannot be the
-fallback. */ -}}
+(llm=/llm, embedding=/embed, reranker=/rerank, translation=/translation)
+are deleted by a null, so they cannot be the fallback. */ -}}
 {{- if and (not $p) (not (has $key $optionalKeys)) -}}
 {{- fail (printf "opea.gpu.paths.%s is required in the external GPU mode — the endpoint is nodeHost + path, and a missing path renders an empty endpoint the pods dial; declare it (the chart's defaults are llm=/llm, embedding=/embed, reranker=/rerank, translation=/translation)" $key) -}}
 {{- end -}}

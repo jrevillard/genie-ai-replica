@@ -222,9 +222,13 @@ def owns_drop(block, group, vanished):
         switched off with its tier: the row carried its host, the port
         beside it carried nothing).
 
-    The rows that vanish together are judged as ONE group: a row that
-    carried no name of its own belongs to the same removal as the row
-    that did.
+    The rows one WORKLOAD loses are judged as ONE group, and one owned
+    row forgives that workload's group: a row that carries no name of
+    its own (a port, a model id) belongs to the same removal as the row
+    that does, and judging it alone would report a legitimate
+    degradation — the backend losing the chatqna PORT because the OPEA
+    tier went off. Two workloads are never forgiven together: the drop
+    a second workload suffers is judged on its own.
     """
     segments = [_normalized(part) for part in block.split(".")]
     for key, value in group:
@@ -276,8 +280,10 @@ def main():
                         % (label, block, text[max(0, garbage.start() - 40):garbage.start() + 20])
                     )
                 cleared_rows = env_rows(docs)
+                dropped = []
                 for key, value in base_rows.items():
                     if key not in cleared_rows:
+                        dropped.append((key, value))
                         continue
                     if value and not cleared_rows[key]:
                         emptied.append(
@@ -289,25 +295,31 @@ def main():
                 # a variable the operator never touched. It is legitimate
                 # only when the block that removed it is the one that
                 # configures it.
-                surviving = {key[0] for key in cleared_rows}
-                dropped = [
-                    (key, value)
-                    for key, value in base_rows.items()
-                    if key not in cleared_rows and key[0] in surviving
-                ]
-                if dropped and not owns_drop(block, dropped, base_names - object_names(docs)):
-                    orphans.append(
-                        "  [%s] %s: the block removed %d env row(s) from a workload "
-                        "it does not configure — %s"
-                        % (
-                            label,
-                            block,
-                            len(dropped),
-                            ", ".join(
-                                sorted("%s / %s" % (key[0], key[2]) for key, _ in dropped)
-                            ),
+                #
+                # The workload survived or not is read from the RENDERED
+                # OBJECTS, not from the rows that still carry a value: a
+                # workload stripped of every row is the worst case, not
+                # an exempt one.
+                vanished_names = base_names - object_names(docs)
+                surviving_workloads = {
+                    workload
+                    for workload in {key[0] for key, _ in dropped}
+                    if workload not in vanished_names
+                }
+                for workload in sorted(surviving_workloads):
+                    rows = [(key, value) for key, value in dropped if key[0] == workload]
+                    if not owns_drop(block, rows, vanished_names):
+                        orphans.append(
+                            "  [%s] %s: the block removed %d env row(s) from %s, "
+                            "a workload it does not configure — %s"
+                            % (
+                                label,
+                                block,
+                                len(rows),
+                                workload,
+                                ", ".join(sorted(key[2] for key, _ in rows)),
+                            )
                         )
-                    )
                 continue
             kind, detail = classify(stderr)
             if kind == "guard":

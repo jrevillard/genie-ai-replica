@@ -45,6 +45,10 @@ import yaml
 
 WORKLOAD_KINDS = ("Deployment", "Job", "DaemonSet", "StatefulSet", "ReplicaSet")
 
+# libyaml when it is there: this gate parses chart-sized renders and the
+# pure Python loader is ~18x slower on them.
+LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
 # The overrides that make a non-string reachable.
 #
 # `opea.translation.modelId` is the load-bearing entry: the translation
@@ -104,7 +108,7 @@ def render(chart_path, extra_flags, with_full_tier=False):
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         sys.exit("render failed:\n" + proc.stderr[:2000])
-    return list(yaml.safe_load_all(proc.stdout))
+    return list(yaml.load_all(proc.stdout, Loader=LOADER))
 
 
 def env_values(docs):
@@ -160,11 +164,14 @@ SAFE_VALUE = ("quote", "toString", "include", "printf", "boolEnvValue")
 ENV_NAME_LINE = re.compile(r"^\s*-\s*name:\s*[A-Za-z_][A-Za-z0-9_]*\s*$")
 ENV_VALUE_START = re.compile(r"^\s*value:\s*\{\{-?\s*")
 
-# The control markers of a template action. A marker opens, closes or
-# switches a BRANCH; anything else in an action position produces the
-# value.
-CONTROL_KEYWORDS = ("else if", "else", "if", "with", "range", "end", "define", "template", "block")
-BRANCH_MARKERS = ("if", "else if", "else", "with", "range")
+# A branch marker opens, closes or switches a branch of the action. It is
+# matched WHOLE, so the text between two markers is one branch body.
+BRANCH_MARKER = re.compile(r"\{\{-?\s*(?:else\s+if|else|if|with|range|end)\b[^{}]*?\}\}")
+# Any action, captured whole.
+ACTION = re.compile(r"\{\{-?\s*(.*?)\s*-?\}\}", re.S)
+# A Go template comment: it renders nothing, and it can sit inside an
+# action.
+TEMPLATE_COMMENT = re.compile(r"\{\{/\*.*?\*/\}\}", re.S)
 
 
 def _action_expression(lines, start):
@@ -195,71 +202,27 @@ def _action_expression(lines, start):
     return match.group(1) if match else text
 
 
-def _control_marker(piece):
-    """The control keyword of an action piece, or None when it is a value."""
-    text = piece.strip()
-    for keyword in CONTROL_KEYWORDS:
-        if text == keyword:
-            return keyword
-        if text.startswith(keyword + " ") or text.startswith(keyword + "("):
-            return keyword
-    return None
+def _branch_bodies(expression):
+    """The branch bodies of the action, as (value expressions, literal text).
 
-
-def _branches(expression):
-    """The action's branches: each is (value expressions, literal text).
-
-    The row's safety is the safety of EVERY branch: `{{ if $x }}{{ .a }}{{ else
-    }}{{ .b | quote }}{{ end }}` renders a string only when $x is false, and
-    the operator's knob decides which. A whole-action match ("does the
-    action mention quote anywhere?") hides that — it says yes while the
-    branch that actually renders is unprotected.
+    The action is split on its branch markers, so each body is what one
+    branch renders. A construct the split does not know (a nested marker,
+    a comment) lands in the body it belongs to, and the safety verdict
+    does not depend on the exact nesting: every value expression of
+    every body must be safe.
     """
-    parts = re.split(r"(\{\{|\}\})", "{{" + expression + "}}")
-    branches = []
-    leaves = []
-    literal = []
-    for index in range(0, len(parts), 2):
-        if index == 0:
-            continue
-        piece = parts[index]
-        if parts[index - 1] == "}}":
-            # Literal text between two actions.
-            literal.append(piece)
-            continue
-        marker = _control_marker(piece)
-        if marker is None:
-            leaves.append(piece.strip())
-        elif marker in BRANCH_MARKERS:
-            branches.append((leaves, "".join(literal)))
-            leaves, literal = [], []
-    branches.append((leaves, "".join(literal)))
-    return branches
-
-
-def _unsafe_branches(expression):
-    """The branches of the action that can render a non-string value."""
-    unsafe = []
-    for leaves, literal in _branches(expression):
-        for leaf in leaves:
-            if not any(token in leaf for token in SAFE_VALUE):
-                unsafe.append(leaf)
-                break
-        else:
-            # A branch with no value expression renders its literal text
-            # alone: `value: {{ if $x }}3.1{{ end }}` renders `value: 3.1`,
-            # a YAML float. A literal next to a value expression is part of
-            # a longer text and stays a string.
-            text = literal.strip()
-            if not leaves and text and not _is_yaml_string(text):
-                unsafe.append(text)
-    return unsafe
+    text = TEMPLATE_COMMENT.sub("", "{{" + expression + "}}")
+    bodies = []
+    for segment in BRANCH_MARKER.split(text):
+        leaves = [leaf.strip() for leaf in ACTION.findall(segment)]
+        bodies.append((leaves, ACTION.sub("", segment)))
+    return bodies
 
 
 def _is_yaml_string(text):
     """Whether the text parses as a YAML string.
 
-    The literal branch is only a problem when YAML reads it as something
+    A literal branch is only a problem when YAML reads it as something
     else — a number, a boolean (`yes`, `on`), a null. `localhost` and
     `no-reply@genieai.local` are strings and stay strings.
     """
@@ -269,6 +232,27 @@ def _is_yaml_string(text):
         # Not YAML at all: the manifest is broken for another reason, and
         # this gate is about types.
         return True
+
+
+def _unsafe_bodies(expression):
+    """The branch bodies that can render a non-string value."""
+    unsafe = []
+    for leaves, literal in _branch_bodies(expression):
+        unsafe_leaf = next(
+            (leaf for leaf in leaves if not any(token in leaf for token in SAFE_VALUE)),
+            None,
+        )
+        if unsafe_leaf:
+            unsafe.append(unsafe_leaf)
+            continue
+        # A body with no value expression renders its literal text
+        # alone: `value: {{ if $x }}3.1{{ end }}` renders `value: 3.1`, a
+        # YAML float. A literal next to a value expression is part of a
+        # longer text and stays a string.
+        text = literal.strip()
+        if not leaves and text and not _is_yaml_string(text):
+            unsafe.append(text)
+    return unsafe
 
 
 def scan_hand_rendered_env_rows(chart_path):
@@ -306,7 +290,7 @@ def scan_hand_rendered_env_rows(chart_path):
             if not ENV_VALUE_START.match(lines[value_index]):
                 continue
             expression = _action_expression(lines, value_index)
-            unsafe = _unsafe_branches(expression)
+            unsafe = _unsafe_bodies(expression)
             if not unsafe:
                 continue
             problems.append(

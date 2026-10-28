@@ -77,6 +77,10 @@ import sys
 
 import yaml
 
+# libyaml when it is there: this gate parses four chart-sized renders and
+# the pure Python loader is ~18x slower on them.
+LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
 # Ports are compared as ints where possible; named ports are left as strings
 # so they never accidentally match a numeric peer port.
 _PORT = re.compile(r"^\d+$")
@@ -376,6 +380,44 @@ KEYCLOAK_SERVICE_PORT = 8080
 KEYCLOAK_INTERNAL = re.compile(r"keycloak-service\.[^/\s\"]*\.svc\.cluster\.local(?::(\d+))?")
 
 
+def workload_components(docs):
+    """{component: [workloads]} for every workload in the render.
+
+    A Pod carries its labels in its own metadata; a Deployment (or a
+    Job) carries them in the pod template it renders.
+    """
+    components: dict[str, list] = {}
+    for doc in docs:
+        if not isinstance(doc, dict) or doc.get("kind") not in (
+            "Deployment",
+            "Job",
+            "StatefulSet",
+            "DaemonSet",
+            "Pod",
+        ):
+            continue
+        template = (doc.get("spec") or {}).get("template") or {}
+        labels = (template.get("metadata") or {}).get("labels") or (doc.get("metadata") or {}).get("labels") or {}
+        component = labels.get("genieai.io/component") or labels.get("app")
+        if component:
+            components.setdefault(component, []).append(doc)
+    return components
+
+
+def workload_containers(doc):
+    """The containers of a workload, initContainers included.
+
+    A Pod carries them in its own spec; a Deployment (or a Job) carries
+    them in the pod template it renders. The expectation this gate
+    derives must read BOTH, or a workload it lists as a component
+    contributes no evidence — the hole the docstring above says cannot
+    exist.
+    """
+    template = (doc.get("spec") or {}).get("template")
+    spec = (template or {}).get("spec") or doc.get("spec") or {}
+    return list(spec.get("containers") or []) + list(spec.get("initContainers") or [])
+
+
 def index_keycloak_clients(docs):
     """{component: port} for the workloads that dial the in-cluster keycloak.
 
@@ -387,28 +429,17 @@ def index_keycloak_clients(docs):
     plane is admitted by its own rule.
     """
     clients: dict[str, int] = {}
-    for doc in docs:
-        if not isinstance(doc, dict) or doc.get("kind") not in (
-            "Deployment",
-            "Job",
-            "StatefulSet",
-            "DaemonSet",
-        ):
-            continue
-        pod = (doc.get("spec") or {}).get("template") or {}
-        labels = (pod.get("metadata") or {}).get("labels") or {}
-        component = labels.get("genieai.io/component") or labels.get("app")
-        if not component:
-            continue
-        for container in (pod.get("spec") or {}).get("containers") or []:
-            for entry in container.get("env") or []:
-                url = entry.get("value")
-                if not isinstance(url, str):
-                    continue
-                match = KEYCLOAK_INTERNAL.search(url)
-                if not match:
-                    continue
-                clients[component] = int(match.group(1)) if match.group(1) else 80
+    for component, workloads in workload_components(docs).items():
+        for doc in workloads:
+            for container in workload_containers(doc):
+                for entry in container.get("env") or []:
+                    url = entry.get("value")
+                    if not isinstance(url, str):
+                        continue
+                    match = KEYCLOAK_INTERNAL.search(url)
+                    if not match:
+                        continue
+                    clients[component] = int(match.group(1)) if match.group(1) else 80
     return clients
 
 
@@ -499,28 +530,6 @@ def namespace_wide_egress(docs):
     return wide
 
 
-def rendered_components(docs):
-    """The components that have a workload in this render."""
-    components = set()
-    for doc in docs:
-        if not isinstance(doc, dict) or doc.get("kind") not in (
-            "Deployment",
-            "Job",
-            "StatefulSet",
-            "DaemonSet",
-            "Pod",
-        ):
-            continue
-        template = (doc.get("spec") or {}).get("template") or {}
-        # A Pod carries its labels in its own metadata; a Deployment (or
-        # Job) carries them in the pod template it renders.
-        labels = (template.get("metadata") or {}).get("labels") or (doc.get("metadata") or {}).get("labels") or {}
-        component = labels.get("genieai.io/component") or labels.get("app")
-        if component:
-            components.add(component)
-    return components
-
-
 def ingress_peers_without_policy(docs, policies):
     """(peer, destination) for the ingress peers that carry no policy.
 
@@ -532,7 +541,7 @@ def ingress_peers_without_policy(docs, policies):
     its egress.
     """
     pairs = set()
-    present = rendered_components(docs)
+    present = set(workload_components(docs))
     for doc in docs:
         if not isinstance(doc, dict) or doc.get("kind") != "NetworkPolicy":
             continue
@@ -581,7 +590,10 @@ def peer_reachability_gaps(docs, policies):
                     (
                         source,
                         destination,
-                        policy.get("metadata", {}).get("name", "?"),
+                        f"the ingress peer has no policy of its own and the "
+                        f"namespace-wide egress policy "
+                        f"{policy.get('metadata', {}).get('name', '?')} does not "
+                        f"admit {destination}",
                     )
                 )
     return gaps
@@ -589,7 +601,7 @@ def peer_reachability_gaps(docs, policies):
 
 def crosscheck(path):
     with open(path) as handle:
-        docs = [d for d in yaml.safe_load_all(handle) if d]
+        docs = [d for d in yaml.load_all(handle, Loader=LOADER) if d]
     policies = index_policies(docs)
     services = index_services(docs)
     flows = declared_flows(policies, services)
@@ -600,17 +612,7 @@ def crosscheck(path):
     membership = []
     for component, reason in keycloak_client_gaps(docs, policies):
         membership.append((component, reason))
-    reachability = []
-    for source, destination, policy in peer_reachability_gaps(docs, policies):
-        reachability.append(
-            (
-                source,
-                destination,
-                policy,
-                f"the ingress peer has no policy of its own and the namespace-wide "
-                f"egress policy {policy} does not admit {destination}",
-            )
-        )
+    reachability = peer_reachability_gaps(docs, policies)
     for source, target, port in sorted(flows, key=lambda f: (f[0], f[1], str(f[2]))):
         missing = []
         allowed = True
@@ -638,7 +640,7 @@ def crosscheck(path):
         print(f"  SKIPPED {entry}: mixes a CIDR/namespace peer with a component peer — not asserted here")
     for component, reason in membership:
         print(f"  BLOCKED {component} -> keycloak :{KEYCLOAK_SERVICE_PORT} ({reason})")
-    for source, destination, policy, reason in reachability:
+    for source, destination, reason in reachability:
         print(f"  BLOCKED {source} -> {destination} :any ({reason})")
     for source, target, port, missing in blocked:
         shown = port if port is not None else "any"
@@ -654,7 +656,7 @@ def crosscheck(path):
     return policies, blocked + [
         (component, "keycloak", KEYCLOAK_SERVICE_PORT, reason) for component, reason in membership
     ] + [
-        (source, destination, None, reason) for source, destination, _policy, reason in reachability
+        (source, destination, None, reason) for source, destination, reason in reachability
     ]
 
 

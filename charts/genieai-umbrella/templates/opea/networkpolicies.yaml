@@ -630,6 +630,14 @@ spec:
         - podSelector:
             matchLabels:
               genieai.io/component: dataprep
+        # The translation model's wait-for-vllm initContainer curls
+        # vllm:8000/health before starting: without this peer the init is
+        # blocked by the very policy that guards the vLLM pods, and the
+        # translation model never starts (an Init:0/1 loop with nothing
+        # in the vLLM logs to explain it).
+        - podSelector:
+            matchLabels:
+              app: vllm-translation
       ports:
         - protocol: TCP
           port: 8000

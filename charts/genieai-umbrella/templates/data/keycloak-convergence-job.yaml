@@ -1,4 +1,8 @@
-{{- if and .Values.data.keycloak.enabled .Values.data.keycloak.convergence.enabled -}}
+{{- /* The convergence block is CLEARABLE: a cleared block means "no
+convergence" (the same as enabled: false), not a nil-pointer crash. */ -}}
+{{- $keycloak := .Values.data.keycloak | default dict -}}
+{{- $convergence := $keycloak.convergence | default dict -}}
+{{- if and $keycloak.enabled $convergence.enabled -}}
 {{- /*
 keycloak-config-cli owns the realm. The operator's KeycloakRealmImport
 CR was removed: it is create-only (the operator hardcodes --override=false
@@ -67,7 +71,11 @@ being set would fail this assertion on every default render.
       "KEYCLOAK_LOCALE" "KEYCLOAK_SUPPORTED_LOCALES" "KEYCLOAK_ACCESS_TOKEN_LIFESPAN"
       "EMAIL_FROM" "EMAIL_HOST" "EMAIL_PORT"
       "EMAIL_SECURE" "EMAIL_SMTP_STARTTLS" "EMAIL_SMTP_AUTH" "EMAIL_USER" -}}
-{{- range $e := (.Values.data.keycloak.convergence.envSecrets | default list) -}}
+{{- /* The rows go through the VALIDATION helper, not straight from
+the values: a malformed row (a scalar, a typo'd key) would otherwise
+crash this template with a raw Go-template error before the guard
+below could name it. */ -}}
+{{- range $e := (include "genieai-umbrella.validatedConvergenceEnvSecrets" ($convergence.envSecrets | default list) | fromJsonArray) -}}
 {{- $known = append $known $e.envVar -}}
 {{- end -}}
 {{- /* backoffLimit is a NIL check, not `| default 2`: Sprig treats 0 as
@@ -76,8 +84,8 @@ realm) silently rendered 2 and the release failure arrived two retries
 later with three failed pods instead of one. The same falsy-zero trap
 resolveReplicas was written to avoid. */ -}}
 {{- $backoffLimit := 2 -}}
-{{- if not (kindIs "invalid" .Values.data.keycloak.convergence.backoffLimit) -}}
-{{- $backoffLimit = .Values.data.keycloak.convergence.backoffLimit -}}
+{{- if not (kindIs "invalid" $convergence.backoffLimit) -}}
+{{- $backoffLimit = $convergence.backoffLimit -}}
 {{- end -}}
 {{- $realmFile := .Files.Get "files/genie-realm.yaml" -}}
 {{- if .Values.data.keycloak.failOnPlaceholderSecrets -}}
@@ -282,7 +290,7 @@ spec:
             # entry. The rows are VALIDATED by the helper (a typo'd key
             # would render `name: null` and the API server would reject
             # the whole Job at apply time).
-            {{- include "genieai-umbrella.convergenceEnvSecretRows" (.Values.data.keycloak.convergence.envSecrets | default list) | nindent 12 }}
+            {{- include "genieai-umbrella.convergenceEnvSecretRows" ($convergence.envSecrets | default list) | nindent 12 }}
           volumeMounts:
             - name: realm
               mountPath: /config

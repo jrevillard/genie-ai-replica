@@ -835,7 +835,11 @@ services:
     # only ships `1.4+`; the operator logs `manifest unknown` and the
     # pod stays in ImagePullBackOff. `stable-debian` is a moving tag
     # — re-pin to a digest before any production rollout.
-    image: { repository: clamav/clamav, tag: "stable-debian" }
+    # pullPolicy: read by this template directly (the service factory
+    # reads it for the other services, where the per-service shape block
+    # documents it). Empty = derived from the tag by the factory's
+    # helper (a mutable tag pulls Always, a pinned one does not).
+    image: { repository: clamav/clamav, tag: "stable-debian", pullPolicy: "" }
     # Listener port. The template derives the Service port, the
     # NetworkPolicy rules, the tcpSocket probe ports and the helm-test
     # probe from THIS knob. The document-repository's own
@@ -877,7 +881,11 @@ services:
   redisCache:
     enabled: true
     replicas: 1
-    image: { repository: redis, tag: "7-alpine" }
+    # pullPolicy: read by this template directly (the service factory
+    # reads it for the other services, where the per-service shape block
+    # documents it). Empty = derived from the tag by the factory's
+    # helper (a mutable tag pulls Always, a pinned one does not).
+    image: { repository: redis, tag: "7-alpine", pullPolicy: "" }
     port: 6379
     resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 250m, memory: 512Mi } }
     pvc:
@@ -1101,10 +1109,30 @@ opea:
     env: {}
   translation:
     modelId: google/gemma-3-4b-it
+    # The vLLM tuning args of the in-cluster translation model. Compose
+    # exposes the same four knobs as VLLM_TRANSLATION_* (the env.t4 /
+    # env.rtx6000 GPU profiles exist to set them), and the chart's
+    # values were hardcoded in the template — a 16 GB T4 cannot hold
+    # the default context length and the operator's only recourse was
+    # editing the chart. Defaults are the Compose ones.
+    gpuUtilization: "0.3"
+    maxModelLen: "2048"
+    maxNumSeqs: "16"
+    dtype: "auto"
   models:
     # in-cluster mode only.
     llm:
       modelId: ibm-granite/granite-4.1-8b
+      # The vLLM tuning args of the in-cluster chat model. Compose
+      # exposes the same four knobs as VLLM_* (the GPU profiles
+      # env.t4 / env.rtx6000 exist to set them); the chart's values
+      # were hardcoded in the template, so a site whose GPU cannot hold
+      # the default context length had to edit the chart. Defaults are
+      # the Compose ones.
+      gpuUtilization: "0.55"
+      maxModelLen: "65536"
+      maxNumSeqs: "64"
+      dtype: "half"
     reranker:
       # TEI reranker model. The embedding model reads from
       # opea.embedding.modelId; the LLM from opea.models.llm.modelId;

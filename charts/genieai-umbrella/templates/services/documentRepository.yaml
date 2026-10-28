@@ -27,7 +27,9 @@ row still naming that claim leaves the pod in ContainerCreating forever
 dropped here. Operator-supplied volumes and mounts are left untouched:
 turning the PVC off means "ephemeral /app/uploads, or bring your own
 volume". */ -}}
-{{- if not .Values.services.documentRepository.pvc.enabled -}}
+{{- /* The PVC block is OPTIONAL (the per-service shape block says so): a cleared block means "no chart-owned claim", not a nil-pointer crash. */ -}}
+{{- $pvc := .Values.services.documentRepository.pvc | default dict -}}
+{{- if not $pvc.enabled -}}
 {{- $ownedClaim := "document-repository-uploads" -}}
 {{- $keptVolumes := list -}}
 {{- range $v := ($vals.services.documentRepository.volumes | default list) -}}

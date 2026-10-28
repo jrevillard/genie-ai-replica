@@ -529,8 +529,13 @@ dependencyGraph:
 #     apply (prod/staging counts, 1 on dev); an EXPLICIT value — including
 #     0, the documented scale-off — always wins over the profile.
 #   image.repository / image.tag: container image pulled at deploy time
-#   port: the CONTAINER port. The Service always listens on 80 and
-#     forwards to it; the probes read it too.
+#   port: the CONTAINER port. Factory-rendered services: the Service
+#     listens on 80 and forwards to the container's named `http` port
+#     (this value), and the httpGet probes use the same name — an
+#     override moves all of them together. Exceptions rendered by hand:
+#     redisCache and clamav expose their Service ON this port (redis's
+#     --port flag; clamd's fixed 3310, which the render rejects
+#     changing), so there the Service port follows the value.
 #   resources: k8s requests + limits (CPU + memory)
 #   env: raw env entries appended to the rendered Deployment
 #   secrets: K8s Secret refs consumed via envFrom (each entry: {name: <secret-name>};

@@ -190,6 +190,7 @@ class ConversationScope {
     this.categoryNameEn,
     this.categoryName,
     this.serviceLabelsEn = const <String>[],
+    this.sidebarLabelsEn = const <String>[],
     this.quickHelpButtonId,
   });
 
@@ -205,6 +206,10 @@ class ConversationScope {
 
   /// The ENGLISH labels the scope was narrowed by.
   final List<String> serviceLabelsEn;
+
+  /// The ENGLISH sidebar labels selected BESIDE the Quick Help scope — a
+  /// conversation can carry both, and the web restores both.
+  final List<String> sidebarLabelsEn;
 
   /// The id of the Quick Help button that produced the conversation, when
   /// it was one.
@@ -246,6 +251,11 @@ class ConversationScopeResolver {
     // sidebar selection and a Quick Help button can carry the same label,
     // and restoring the wrong one would change the scope of the saved
     // query.
+    // A conversation can carry a Quick Help scope AND a sidebar scope
+    // side by side (the web writes one tag per context item): the other
+    // tags are the sidebar labels, and both are replayed — restoring the
+    // button's scope alone would answer WIDER than the same conversation
+    // does on the web.
     for (final tag in tagList) {
       final button = _buttons[tag];
       if (button == null) continue;
@@ -254,11 +264,16 @@ class ConversationScopeResolver {
           (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
               .map((label) => label.toString())
               .toList();
+      final sidebarLabels = tagList
+          .where((other) => other != tag)
+          .where(_hierarchy.knowsLabel)
+          .toList();
       return ConversationScope(
         categoryId: category,
         categoryNameEn: _hierarchy.categoryEnLabel(category),
         categoryName: _hierarchy.categoryDisplayName(category),
         serviceLabelsEn: labels,
+        sidebarLabelsEn: sidebarLabels,
         quickHelpButtonId: tag,
       );
     }

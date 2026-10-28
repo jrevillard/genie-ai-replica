@@ -1967,6 +1967,48 @@ describe('ChatBotComponent', () => {
       expect(mockNotificationError).toHaveBeenCalledWith('chatbot.scopeNotNameable');
     });
 
+    it('a restored Quick Help scope with a gone LABEL refuses the send, and names it', async () => {
+      // The mocked $t returns the key unexpanded; the REAL locale is
+      // needed to prove the notification NAMES the gone label.
+      const en = require('../../i18n/locales/en').default;
+      const wrapper = createChatBotWrapperWithI18n({ en });
+      const vm = wrapper.vm;
+      const tree = [
+        {
+          catKey: '2',
+          name: 'État civil',
+          nameEN: 'Civil Registry',
+          children: [{ name: 'Naissances', nameEN: 'Births' }]
+        }
+      ];
+      mockLiveTree(tree);
+      vm.serviceCategories = tree;
+      vm.serviceCategoriesStatus = 'loaded';
+
+      // The grid refuses this button (a declared label left the
+      // hierarchy); the restored scope must refuse it the same way — the
+      // old guard checked the category only and sent the dead label.
+      vm.$store.commit('conversation/setContextItems', [
+        {
+          service: 'Civil registry',
+          serviceLabels: ['Births', 'Renamed Away'],
+          serviceKey: 'identity-civil',
+          source: 'quickHelp',
+          id: 'identity-civil',
+          category: '2',
+          selected: true
+        }
+      ]);
+      vm.currentCategoryId = '2';
+
+      expect(
+        vm.checkContextConfig({ categoryLabel: 'Civil Registry', serviceLabels: ['Births', 'Renamed Away'] })
+      ).toBe(false);
+      expect(mockNotificationError).toHaveBeenCalled();
+      const message = mockNotificationError.mock.calls.at(-1)[0];
+      expect(String(message)).toContain('Renamed Away');
+    });
+
     it('a category-only selection is not refused for lacking a service name', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;

@@ -312,10 +312,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   }
 
   /// The live hierarchy at locale=en — the label vocabulary the corpus
-  /// filters on. The fetch runs once; every button is checked against the
-  /// resolver it builds.
+  /// filters on. The fetch runs once per SUCCESS: a failed one is not
+  /// cached, so the next need for the hierarchy retries it — one
+  /// transient error must not disable every scope for the whole session.
   Future<void> _ensureEnTree() {
-    return _enTreeFuture ??= _fetchEnTree();
+    return _enTreeFuture ??= _fetchEnTree().whenComplete(() {
+      if (_treeUnavailable) _enTreeFuture = null;
+    });
   }
 
   Future<void> _fetchEnTree() async {
@@ -459,14 +462,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         _selectedCategoryName = scope.categoryName ?? '';
         _activeQuickHelpButtonId = scope.quickHelpButtonId;
         // A Quick Help scope narrows the FIRST follow-up by its declared
-        // labels (the mobile's one-turn scope); a sidebar scope keeps its
-        // labels for the whole conversation.
+        // labels (the mobile's one-turn scope); the sidebar labels that
+        // were selected BESIDE it keep narrowing the whole conversation —
+        // a conversation can carry both, and the web restores both.
         _activeServiceLabels = scope.quickHelpButtonId == null
             ? const []
             : scope.serviceLabelsEn;
-        _sidebarServiceLabelsEn = scope.quickHelpButtonId == null
-            ? scope.serviceLabelsEn
-            : const [];
+        _sidebarServiceLabelsEn = scope.sidebarLabelsEn.isNotEmpty
+            ? scope.sidebarLabelsEn
+            : (scope.quickHelpButtonId == null
+                  ? scope.serviceLabelsEn
+                  : const []);
       });
 
       List<dynamic> accumulatedDocs = [];
@@ -540,7 +546,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       serviceLabels: _activeServiceLabels,
       sidebarServiceLabels: _sidebarServiceLabelsEn,
     )) {
-      NotificationService.error(tr('chatbot.scopeNotNameable'));
+      // A hierarchy that could not be loaded is not a configuration
+      // problem: naming it as one points the operator at the wrong thing.
+      NotificationService.error(
+        _treeUnavailable
+            ? tr('chatbot.quickHelpScopeUnavailable')
+            : tr('chatbot.scopeNotNameable'),
+      );
       return;
     }
 
@@ -607,7 +619,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                 ? _selectedCategoryNameEn
                 : null,
             'serviceLabels': _activeServiceLabels.isNotEmpty
-                ? _activeServiceLabels
+                ? (_sidebarServiceLabelsEn.isNotEmpty
+                      ? [..._activeServiceLabels, ..._sidebarServiceLabelsEn]
+                      : _activeServiceLabels)
                 : _sidebarServiceLabelsEn,
             'language': I18nService().currentLocale.languageCode.toUpperCase(),
           },

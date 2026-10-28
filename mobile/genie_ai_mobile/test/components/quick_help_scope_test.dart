@@ -222,6 +222,18 @@ void main() {
       expect(scope.serviceLabelsEn, ['Births']);
     });
 
+    test('a conversation carrying BOTH scopes restores both', () {
+      // The web writes one tag per context item, and a sidebar selection
+      // survives beside a Quick Help one: the conversation carries the
+      // button id AND the sidebar's EN labels. Restoring the button's
+      // scope alone would answer wider than the web does.
+      final scope = convResolver().resolve(tags: ['civil', 'Births']);
+
+      expect(scope.quickHelpButtonId, 'civil');
+      expect(scope.serviceLabelsEn, ['Births']);
+      expect(scope.sidebarLabelsEn, ['Births']);
+    });
+
     test('a sidebar tag restores the ENGLISH labels and the category', () {
       final scope = convResolver().resolve(tags: ['Births'], categoryKey: '2');
 

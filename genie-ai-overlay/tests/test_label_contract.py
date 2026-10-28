@@ -23,12 +23,24 @@ class TestEncodeFilterLabels:
     def test_empty_labels_returns_base_unchanged(self):
         assert encode_filter_labels("chunk", []) == "chunk"
 
-    def test_none_or_whitespace_labels_filtered(self):
-        assert encode_filter_labels("chunk", ["", "  ", None]) == "chunk"  # type: ignore[list-item]
+    def test_none_and_empty_labels_filtered(self):
+        # Only a label that is NOTHING at all is dropped. A whitespace-only
+        # one is kept: dropping it would turn a scope into NO filter, and
+        # the whole corpus would answer where the corpus was asked to
+        # match nothing.
+        assert encode_filter_labels("chunk", ["", None]) == "chunk"  # type: ignore[list-item]
+        assert encode_filter_labels("chunk", ["  "]) == "chunk::labels:  "
 
-    def test_labels_stripped(self):
+    def test_labels_travel_verbatim(self):
+        # A padded hierarchy translation is the very string the corpus's
+        # chunk_labels carry; stripping it here would make it match no
+        # chunk ever.
         result = encode_filter_labels("chunk", ["  Onion  ", "Tomato"])
-        assert result == "chunk::labels:Onion,Tomato"
+        assert result == "chunk::labels:  Onion  ,Tomato"
+
+    def test_an_empty_string_label_is_not_a_label(self):
+        result = encode_filter_labels("chunk", ["", "Tomato"])
+        assert result == "chunk::labels:Tomato"
 
     def test_single_label(self):
         assert encode_filter_labels("chunk", ["Onion"]) == "chunk::labels:Onion"
@@ -55,9 +67,9 @@ class TestDecodeFilterLabels:
         assert mode == "node"
         assert labels == ["X"]
 
-    def test_strips_whitespace_in_labels(self):
+    def test_labels_decode_verbatim(self):
         mode, labels = decode_filter_labels("chunk::labels: Onion , Tomato ")
-        assert labels == ["Onion", "Tomato"]
+        assert labels == [" Onion ", " Tomato "]
 
     def test_empty_label_string_after_separator(self):
         mode, labels = decode_filter_labels("chunk::labels:")

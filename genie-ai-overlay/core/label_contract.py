@@ -96,7 +96,16 @@ def encode_filter_labels(base_mode: str, labels: list[str]) -> str:
     """
     if not labels:
         return base_mode
-    clean = [l.strip() for l in labels if l and l.strip()]
+    # The label travels VERBATIM: the hierarchy's translation — with
+    # whatever whitespace it carries — is the very string the dataprep
+    # minted the chunk_labels from. Stripping it here would make a padded
+    # translation (' Tomato ') match no chunk ever, an abstention the
+    # client's drift check cannot see (the tree DOES carry the label).
+    # Only a label that is nothing at all (None, '') is dropped — and a
+    # whitespace-only one is KEPT, so a scope that is not a label stays a
+    # filter (matching nothing) instead of quietly becoming no filter
+    # (the whole corpus answering).
+    clean = [l for l in labels if l]
     if not clean:
         return base_mode
     return f"{base_mode}{_LABEL_SEPARATOR}{','.join(_encode_label(label) for label in clean)}"
@@ -118,7 +127,9 @@ def decode_filter_labels(search_start: str) -> tuple[str, list[str]]:
     base_mode = parts[0]
     # A label that was never encoded decodes to itself, so a search_start
     # written before the encoding existed still decodes to the same label.
-    labels = [_decode_label(label.strip()) for label in parts[1].split(",") if label.strip()]
+    # No strip: the label is decoded exactly as it was encoded (see
+    # encode_filter_labels — the wire is verbatim).
+    labels = [_decode_label(label) for label in parts[1].split(",") if label]
     return base_mode, labels
 
 

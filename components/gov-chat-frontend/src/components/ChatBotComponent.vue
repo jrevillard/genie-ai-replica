@@ -1365,24 +1365,33 @@ export default {
       // branch forbids — the send is refused, and EVERY user is told why
       // (the mismatch warnings above reach admins alone, which is not
       // enough for the person whose question was refused).
-      const vanishedQuickHelpScope = this.selectedContextItems.some(
-        (item) =>
-          item.source === QUICK_HELP_SOURCE &&
-          item.id !== 'just-chat' &&
-          item.category != null &&
-          item.category !== 'general' &&
-          !this.quickHelpScopeIsNameable(item.category)
-      );
-      if (vanishedQuickHelpScope) {
+      // The grid and this guard are the SAME rule: a Quick Help button is
+      // broken when a declared label is gone OR its category is. The guard
+      // checked the category only, so a restored (or re-added) scope whose
+      // LABEL left the hierarchy went out carrying the dead label — an
+      // unexplained abstention, with no signal anywhere.
+      const brokenQuickHelpStates = this.selectedContextItems
+        .filter((item) => item.source === QUICK_HELP_SOURCE && item.id !== 'just-chat')
+        .map((item) => this.quickHelpScopeState(item))
+        .filter((state) => state.broken);
+      if (brokenQuickHelpStates.length > 0) {
         blocked = true;
-        notificationService.error(
-          this.translate(
-            this.serviceCategoriesStatus === 'failed'
-              ? 'chatbot.quickHelpScopeUnavailable'
-              : 'chatbot.quickHelpCategoryGone',
-            ''
-          )
-        );
+        // The caption NAMES what is gone — the same thing the grid's
+        // caption names, through the same keys.
+        if (this.serviceCategoriesStatus === 'failed') {
+          notificationService.error(this.translate('chatbot.quickHelpScopeUnavailable', ''));
+        } else {
+          const missingLabels = [...new Set(brokenQuickHelpStates.flatMap((state) => state.missingLabels))];
+          const categoryGone = brokenQuickHelpStates.some((state) => state.categoryMissing);
+          const parts = [];
+          if (missingLabels.length > 0) {
+            parts.push(this.translateWithParams('chatbot.quickHelpLabelGone', { labels: missingLabels.join(', ') }));
+          }
+          if (categoryGone) {
+            parts.push(this.translate('chatbot.quickHelpCategoryGone', ''));
+          }
+          notificationService.error(parts.filter(Boolean).join(' '));
+        }
       }
 
       // Mismatch check: each service label must be a known KB label (in some item's

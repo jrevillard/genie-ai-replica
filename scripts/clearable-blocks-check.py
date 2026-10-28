@@ -165,14 +165,20 @@ def render(chart_path, flags):
 
 
 def env_rows(docs):
-    """(workload, container, env name) -> value, for every rendered env row."""
+    """(workload, container, env name) -> value, for every rendered env row.
+
+    A Pod carries its containers in its own spec; a Deployment (or a Job)
+    carries them in the pod template it renders — a sweep that read only
+    the template shape would miss every bare Pod's rows while still
+    listing the Pod's blocks as swept.
+    """
     rows = {}
     for doc in docs:
         if not isinstance(doc, dict) or doc.get("kind") not in WORKLOAD_KINDS:
             continue
         workload = doc.get("metadata", {}).get("name", "<unnamed>")
-        spec = (doc.get("spec") or {}).get("template") or {}
-        pod = (spec.get("spec") or {})
+        template = (doc.get("spec") or {}).get("template")
+        pod = (template or {}).get("spec") or doc.get("spec") or {}
         containers = (pod.get("containers") or []) + (pod.get("initContainers") or [])
         for container in containers:
             for entry in container.get("env") or []:

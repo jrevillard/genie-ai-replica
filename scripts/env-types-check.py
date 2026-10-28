@@ -43,7 +43,7 @@ from pathlib import Path
 
 import yaml
 
-WORKLOAD_KINDS = ("Deployment", "Job", "DaemonSet", "StatefulSet", "ReplicaSet")
+WORKLOAD_KINDS = ("Deployment", "Job", "DaemonSet", "StatefulSet", "ReplicaSet", "Pod")
 
 # libyaml when it is there: this gate parses chart-sized renders and the
 # pure Python loader is ~18x slower on them.
@@ -112,14 +112,18 @@ def render(chart_path, extra_flags, with_full_tier=False):
 
 
 def env_values(docs):
-    """(workload, container, env name, value) for every rendered env row."""
+    """(workload, container, env name, value) for every rendered env row.
+
+    A Pod carries its containers in its own spec; a Deployment (or a Job)
+    carries them in the pod template it renders.
+    """
     rows = []
     for doc in docs:
         if not isinstance(doc, dict) or doc.get("kind") not in WORKLOAD_KINDS:
             continue
         workload = doc.get("metadata", {}).get("name", "<unnamed>")
-        spec = (doc.get("spec") or {}).get("template") or {}
-        pod = (spec.get("spec") or {})
+        template = (doc.get("spec") or {}).get("template")
+        pod = (template or {}).get("spec") or doc.get("spec") or {}
         containers = (pod.get("containers") or []) + (pod.get("initContainers") or [])
         for container in containers:
             for entry in container.get("env") or []:
@@ -170,8 +174,11 @@ BRANCH_MARKER = re.compile(r"\{\{-?\s*(?:else\s+if|else|if|with|range|end)\b[^{}
 # Any action, captured whole.
 ACTION = re.compile(r"\{\{-?\s*(.*?)\s*-?\}\}", re.S)
 # A Go template comment: it renders nothing, and it can sit inside an
-# action.
-TEMPLATE_COMMENT = re.compile(r"\{\{/\*.*?\*/\}\}", re.S)
+# action. The dashes are part of the comment's own markers, not of the
+# value: `{{- /* note */ -}}` is the chart's house style everywhere
+# else, and stripping only the undashed form made the comment read as a
+# value leaf.
+TEMPLATE_COMMENT = re.compile(r"\{\{-?\s*/\*.*?\*/\s*-?\}\}", re.S)
 
 
 def _action_expression(lines, start):

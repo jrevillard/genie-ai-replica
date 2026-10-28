@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.98**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.99**, branch `feat/k8s-migration` based
   on `main` at `179a8a8f1` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,47 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 27 (0.2.99)** — 7 findings from the third
+  `/code-review` of the branch, each verified by render or mutation
+  before the fix. Two were chart behaviour, five were gate holes.
+  - *The profile silently overrode an explicit `replicas`* —
+    `clusterProfile=prod` + `services.backend.replicas: 0` (the
+    documented scale-off) rendered **3 replicas and a
+    PodDisruptionBudget for them**. The helper's own docstring said 0
+    was the documented way to switch a tier off, and then the profile
+    lookup discarded it. The order is now the data tier's: the explicit
+    value, then the profile, then 1. `services.<svc>.replicas` is null
+    by default — that is what keeps "unset" (the profile applies)
+    distinguishable from "the operator pinned a count" (it wins).
+  - *The per-service surface check forgave any sub-key of a declared
+    block* — `$svc.podDisruptionBudget.typoKey` passed because the
+    parent dict was declared. A parent declared as a DICT enumerates
+    its children in the surface, so a sub-key read that is not among
+    them is now a finding; only a parent declared null (the optional
+    shape) forgives.
+  - *A dashed Go template comment inside an env value was read as a
+    value* — `{{- /* note */ -}}` is the chart's house style, and the
+    scanner stripped only the undashed form, flagging the comment as an
+    unquoted value. Both forms strip now.
+  - *The notApplicable category had a live claim the source
+    contradicts* — `frontend.VUE_PROXY_HOST` is read by `server.js`
+    (line 11). The claim holds for the shipped RUNTIME (the image's CMD
+    runs nginx, which proxies /api itself; server.js is the dev-only
+    proxy; src/ reads the proxyHost key nowhere) — the comment now
+    names that evidence, and the machine verifier is a deferred item.
+  - *The keycloak smoke asserted reachability but not correctness* —
+    the HTTP code was printed for a human and never parsed; a 404 from
+    a drifted realm name reached "proceed with merge". The code is
+    asserted (200 or 401) and the failure is fatal.
+  - *The env extractors read only the pod-template shape* — a bare Pod
+    carries its containers in its own spec, so the clearable sweep and
+    the env-types render half saw no rows for the chart's test pods.
+    Both read both shapes now, like the keycloak expectation already
+    did.
+  - *The keycloak expectation kept only the last port per component* —
+    a workload reaching Keycloak on two ports was membership-checked on
+    one; a policy admitting the wrong port passed. Every port is
+    collected and asserted now.
 - **Review loop, pass 26 (0.2.98)** — the `/code-review` of the whole
   branch (7 findings), the `/simplify` sweep (reuse, simplification,
   efficiency, altitude) and the `/test-audit` of the new gates. The
@@ -1217,7 +1258,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.98** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.99** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `179a8a8f1` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`
@@ -1476,3 +1517,10 @@ the compose config, kept verbatim; backlog.
   - *A shared `scripts/chartci.py`* for the gate scripts: the fixture reader,
     the `helm template` wrapper, the workload-kind list and the YAML loader
     are written four times over, with three different return shapes.
+  - *A verifier for the parity gate's `notApplicable` and `composeOnly`
+    categories.* `notRead` has one (it walks the shipped source); the other
+    two are reviewed by hand in the pass loop. A machine check needs the
+    notion of a variable the shipped RUNTIME reads, not one the source tree
+    mentions — the frontend's `VUE_PROXY_HOST` is read by `server.js`, which
+    the image never executes (the CMD runs nginx), so a naive source walk
+    both over- and under-reports.

@@ -1,8 +1,13 @@
-{{- if .Values.observability.grafana.enabled }}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsGrafana := $obs.grafana | default dict -}}
+{{- $obsLogs := $obs.logs | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- $obsTraces := $obs.traces | default dict -}}
+{{- if $obsGrafana.enabled }}
 {{- /* Grafana without a datasource is a blank canvas: every dashboard
 renders broken. Fail at render time when no storage component is
 enabled alongside it. */ -}}
-{{- if not (or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled) -}}
+{{- if not (or $obsLogs.enabled $obsMetrics.enabled $obsTraces.enabled) -}}
 {{- fail "observability.grafana.enabled=true requires at least one storage component (logs/metrics/traces enabled) — otherwise Grafana has no datasource" -}}
 {{- end }}
 {{- /*
@@ -75,7 +80,7 @@ spec:
           containers:
             - name: grafana
               resources:
-                {{- toYaml (.Values.observability.grafana.resources | default (dict "requests" (dict "cpu" "100m" "memory" "128Mi") "limits" (dict "cpu" "500m" "memory" "1Gi"))) | nindent 16 }}
+                {{- toYaml ($obsGrafana.resources | default (dict "requests" (dict "cpu" "100m" "memory" "128Mi") "limits" (dict "cpu" "500m" "memory" "1Gi"))) | nindent 16 }}
   # Service spec the operator MUST materialise for the edge route to
   # resolve. Two contracts live here:
   #   - the port: grafana-operator defaults the Service to Grafana's own
@@ -149,9 +154,9 @@ spec:
       # boolean (an operator writing `adminUser: true`) is rejected by
       # the API server and takes the whole Grafana CR — datasources,
       # folders, dashboards, alert rules — with it.
-      admin_user: {{ .Values.observability.grafana.adminUser | default "admin" | quote }}
+      admin_user: {{ $obsGrafana.adminUser | default "admin" | quote }}
 ---
-{{- if .Values.observability.logs.enabled }}
+{{- if $obsLogs.enabled }}
 ---
 # VictoriaLogs datasource — mirrors vm-datasource.yml's "VictoriaLogs"
 # entry (type victoriametrics-logs-datasource, uid
@@ -186,7 +191,7 @@ spec:
           name: SpanID
           url: "$${__value.raw}"
 {{- end }}
-{{- if .Values.observability.metrics.enabled }}
+{{- if $obsMetrics.enabled }}
 ---
 # VictoriaMetrics datasource — mirrors vm-datasource.yml's
 # "VictoriaMetrics" entry (type prometheus, uid victoriametrics,
@@ -215,7 +220,7 @@ spec:
       timeInterval: "15s"
       httpMethod: POST
 {{- end }}
-{{- if .Values.observability.traces.enabled }}
+{{- if $obsTraces.enabled }}
 ---
 # VictoriaTraces datasource — the datasource talks to the VTSingle
 # Service directly: VictoriaTraces serves the Jaeger HTTP API

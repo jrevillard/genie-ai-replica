@@ -85,9 +85,83 @@ def strip_go_comments(text):
 # back to the values path — `$keycloak.enabled` is read as
 # `data.keycloak.enabled` — so a typo in a normalized leaf is still an
 # UNDECLARED read.
-NORMALIZE = re.compile(
-    r"\$(\w+)\s*:=\s*(?:deepCopy\s+)?\.Values((?:\.[a-zA-Z][a-zA-Z0-9_]*)*)"
+#
+# The resolution is TRANSITIVE and ORDER-SENSITIVE. A second-order
+# binding (`{{- $convergence := $keycloak.convergence | default dict -}}`)
+# reads through another variable, and a chain of them (`$a := .Values.x`,
+# `$b := $a.y`, `$c := $b.z`) is what the chart actually uses: resolving
+# only the first hop leaves every leaf below it invisible, and the
+# coverage then shrinks with each normalization — the exact failure the
+# gate exists to prevent. A binding is resolved against the nearest
+# preceding binding of the same name (Go templates rebind; the last
+# binding before a read is the one in scope).
+NORMALIZE_DIRECT = re.compile(
+    r"\$(\w+)\s*:=\s*(?:deepCopy\s*\(?\s*)?\.Values((?:\.[a-zA-Z][a-zA-Z0-9_]*)*)"
 )
+NORMALIZE_CTX = re.compile(
+    r"\$(\w+)\s*:=\s*(?:deepCopy\s*\(?\s*)?\$(\w+)\.Values((?:\.[a-zA-Z][a-zA-Z0-9_]*)*)"
+)
+NORMALIZE_VAR = re.compile(
+    r"\$(\w+)\s*:=\s*(?:deepCopy\s*\(?\s*)?\$(\w+)((?:\.[a-zA-Z][a-zA-Z0-9_]*)*)"
+)
+
+
+def _bindings(text):
+    """Every values binding in a file: name -> [(position, kind, payload)].
+
+    kind "values" — bound to an absolute `.Values` chain;
+    kind "ctx"    — bound to a chain of a context-carried values tree;
+    kind "var"    — bound to a chain of another variable.
+    """
+    found = {}
+    ctx_spans = []
+    for m in NORMALIZE_CTX.finditer(text):
+        found.setdefault(m.group(1), []).append(
+            (m.start(), "ctx", m.group(3).lstrip("."))
+        )
+        ctx_spans.append(m.span())
+    for m in NORMALIZE_DIRECT.finditer(text):
+        found.setdefault(m.group(1), []).append(
+            (m.start(), "values", m.group(2).lstrip("."))
+        )
+    for m in NORMALIZE_VAR.finditer(text):
+        if any(start <= m.start() < end for start, end in ctx_spans):
+            continue
+        found.setdefault(m.group(1), []).append(
+            (m.start(), "var", (m.group(2), m.group(3).lstrip(".")))
+        )
+    for entries in found.values():
+        entries.sort()
+    return found
+
+
+def _path_of(name, before, bindings, memo):
+    """The values path a variable holds, from its nearest preceding binding."""
+    key = (name, before)
+    if key in memo:
+        return memo[key]
+    memo[key] = None  # cycle guard
+    entries = bindings.get(name)
+    if not entries:
+        return None
+    position, kind, payload = None, None, None
+    for entry in entries:
+        if entry[0] < before:
+            position, kind, payload = entry
+        else:
+            break
+    if position is None:
+        return None
+    if kind in ("values", "ctx"):
+        result = payload
+    else:
+        parent, chain = payload
+        base = _path_of(parent, position, bindings, memo)
+        if base is None:
+            return None
+        result = ".".join(part for part in (base, chain) if part)
+    memo[key] = result
+    return result
 
 
 def template_reads(templates_dir):
@@ -97,26 +171,24 @@ def template_reads(templates_dir):
         if path.suffix not in (".tpl", ".yaml", ".yml"):
             continue
         text = strip_go_comments(path.read_text(encoding="utf-8", errors="replace"))
-        # The normalized variables of THIS file: name -> values chain.
-        normalized = {}
-        for m in NORMALIZE.finditer(text):
-            normalized[m.group(1)] = m.group(2).lstrip(".")
-        for lineno, line in enumerate(text.splitlines(), 1):
+        bindings = _bindings(text)
+        memo = {}
+        offset = 0
+        for lineno, line in enumerate(text.splitlines(True), 1):
             for m in re.finditer(r"\.Values((?:\.[a-zA-Z][a-zA-Z0-9_]*)+)", line):
                 chain = m.group(1).lstrip(".")
                 if not chain:
                     continue
                 reads.setdefault(chain, []).append(f"{path.relative_to(CHART)}:{lineno}")
-            if not normalized:
-                continue
             for m in re.finditer(r"\$(\w+)((?:\.[a-zA-Z][a-zA-Z0-9_]*)+)", line):
-                base = normalized.get(m.group(1))
+                base = _path_of(m.group(1), offset + m.start(), bindings, memo)
                 if base is None:
                     continue
                 chain = ".".join(part for part in (base, m.group(2).lstrip(".")) if part)
                 if not chain:
                     continue
                 reads.setdefault(chain, []).append(f"{path.relative_to(CHART)}:{lineno}")
+            offset += len(line)
     return reads
 
 

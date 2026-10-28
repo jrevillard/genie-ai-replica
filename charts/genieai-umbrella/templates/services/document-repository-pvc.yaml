@@ -1,6 +1,10 @@
-{{- /* The PVC block is OPTIONAL (the per-service shape block says so): a cleared block means "no chart-owned claim", not a nil-pointer crash. */ -}}
-{{- $pvc := .Values.services.documentRepository.pvc | default dict -}}
-{{- if and .Values.services.documentRepository.enabled $pvc.enabled -}}
+{{- /* The PVC block is OPTIONAL (the per-service shape block says so): a cleared block means "no chart-owned claim", not a nil-pointer crash. */ -}}{{- $services := .Values.services | default dict -}}
+{{- $servicesDocumentRepository := $services.documentRepository | default dict -}}
+{{- $pluggable := .Values.pluggable | default dict -}}
+
+{{- $svcDocRepo := $services.documentRepository | default dict -}}
+{{- $pvc := $svcDocRepo.pvc | default dict -}}
+{{- if and $servicesDocumentRepository.enabled $pvc.enabled -}}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -9,7 +13,7 @@ metadata:
   namespace: {{ .Values.namespace }}
 spec:
   accessModes: ["ReadWriteOnce"]
-  {{- with .Values.pluggable.storageClassName }}
+  {{- with $pluggable.storageClassName }}
   storageClassName: {{ . }}
   {{- end }}
   resources:

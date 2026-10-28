@@ -1,4 +1,14 @@
-{{- if .Values.ingress.enabled -}}
+{{- $services := .Values.services | default dict -}}
+{{- $servicesDocumentRepository := $services.documentRepository | default dict -}}
+{{- $servicesBackend := $services.backend | default dict -}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsGrafana := $obs.grafana | default dict -}}
+{{- $servicesFrontend := $services.frontend | default dict -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- $ingressTls := $ingress.tls | default dict -}}
+{{- $data := .Values.data | default dict -}}
+{{- $dataKeycloak := $data.keycloak | default dict -}}
+{{- if $ingress.enabled -}}
 {{- /*
   Edge routing: the Gateway owns the hostname and TLS, this route owns
   the path matrix. Gateway API resolves rule matches by rule-list order
@@ -25,7 +35,7 @@ spec:
       # Bind to the https listener when TLS is on, http otherwise — the
       # Gateway renders the https listener conditionally, so sectionName
       # must name the listener that actually exists.
-      sectionName: {{ if .Values.ingress.tls.enabled }}https{{ else }}http{{ end }}
+      sectionName: {{ if $ingressTls.enabled }}https{{ else }}http{{ end }}
   hostnames:
     # Port-free hostname — a port on ingress.host is legal for the public
     # origin (issuer, redirects) but forbidden in HTTPRoute hostnames.
@@ -36,7 +46,7 @@ spec:
        backendRef to a Service that does not exist leaves the whole HTTPRoute
        with ResolvedRefs=False, and the edge answers 500 on every path it
        carries — including the ones that are fine. */}}
-    {{- if .Values.services.documentRepository.enabled }}
+    {{- if $servicesDocumentRepository.enabled }}
     - matches:
         - path:
             type: PathPrefix
@@ -55,7 +65,7 @@ spec:
            (CHATQNA_STREAM_TIMEOUT, default 3600s) and aborts on its own;
            the edge sits above it so the application timeout governs —
            1h10m = the backend default + margin. */}}
-    {{- if .Values.services.backend.enabled }}
+    {{- if $servicesBackend.enabled }}
     - matches:
         # PathPrefix "/api/" does not match the bare "/api" (the prefix
         # includes the slash) — real flows always carry subpaths, but the
@@ -92,7 +102,7 @@ spec:
            RequestHeaderModifier re-pins X-Forwarded-Host to the full
            public origin (ingress.host, port included) so every URL in
            the discovery document matches the issuer's origin. */}}
-    {{- if .Values.data.keycloak.enabled }}
+    {{- if $dataKeycloak.enabled }}
     - matches:
         # Both forms: like /api, PathPrefix "/auth/" misses the bare
         # "/auth" some OIDC clients request.
@@ -107,7 +117,7 @@ spec:
           requestHeaderModifier:
             set:
               - name: X-Forwarded-Host
-                value: {{ .Values.ingress.host | quote }}
+                value: {{ $ingress.host | quote }}
       backendRefs:
         - name: keycloak-service
           port: 8080
@@ -125,7 +135,7 @@ spec:
            unresolvable — Envoy then answers with a direct 500 and the
            Grafana logs never see a single request, which is exactly how
            this shipped unnoticed. */ -}}
-    {{- if .Values.observability.grafana.enabled }}
+    {{- if $obsGrafana.enabled }}
     - matches:
         - path:
             type: PathPrefix
@@ -135,7 +145,7 @@ spec:
           port: 80
     {{- end }}
     {{- /* Frontend SPA catch-all. */}}
-    {{- if .Values.services.frontend.enabled }}
+    {{- if $servicesFrontend.enabled }}
     - matches:
         - path:
             type: PathPrefix
@@ -154,7 +164,7 @@ on port 80). The rule carries no path match, so it redirects everything;
 cert-manager's per-Order solver route matches the challenge path EXACTLY,
 and Gateway API precedence (exact beats prefix) gives it the request
 before the redirect sees it. */ -}}
-{{- if and .Values.ingress.enabled .Values.ingress.tls.enabled }}
+{{- if and $ingress.enabled $ingressTls.enabled }}
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute

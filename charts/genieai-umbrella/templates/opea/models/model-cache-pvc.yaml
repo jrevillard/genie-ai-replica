@@ -6,7 +6,8 @@
   four model Deployments; the single-gpu=true node assumption makes
   RWO sufficient (all model pods co-schedule on that node). Multi-GPU
   clusters need a ReadWriteMany class or one claim per model.
-*/}}{{- $opea := .Values.opea | default dict -}}
+*/}}
+{{- $opea := .Values.opea | default dict -}}
 {{- $opeaGpu := $opea.gpu | default dict -}}
 {{- $opeaModels := $opea.models | default dict -}}
 {{- $opeaModelsCache := $opeaModels.cache | default dict -}}

@@ -1,5 +1,6 @@
 {{- /* The convergence block is CLEARABLE: a cleared block means "no
-convergence" (the same as enabled: false), not a nil-pointer crash. */ -}}
+convergence" (the same as enabled: false), not a nil-pointer crash. */ -}}{{- $global := .Values.global | default dict -}}
+
 {{- $data := .Values.data | default dict -}}
 {{- $keycloak := $data.keycloak | default dict -}}
 {{- $keycloakBootstrap := $keycloak.bootstrapAdmin | default dict -}}
@@ -33,8 +34,8 @@ chart's formal ticket that the deployment was configured for the realm
 at all: it must not be left at the chart default, and the overlay that
 sets it is the same overlay that names the Secrets.
 */ -}}
-{{- if .Values.data.keycloak.failOnPlaceholderSecrets -}}
-{{- $cs := .Values.data.keycloak.clientSecrets | default dict -}}
+{{- if $keycloak.failOnPlaceholderSecrets -}}
+{{- $cs := $keycloak.clientSecrets | default dict -}}
 {{- range $k := list "proxyClient" "dataprep" "grafana" -}}
 {{- $v := dig $k "" $cs -}}
 {{- if or (not $v) (eq $v "") (hasPrefix "change-me" $v) -}}
@@ -92,7 +93,7 @@ resolveReplicas was written to avoid. */ -}}
 {{- $backoffLimit = $convergence.backoffLimit -}}
 {{- end -}}
 {{- $realmFile := .Files.Get "files/genie-realm.yaml" -}}
-{{- if .Values.data.keycloak.failOnPlaceholderSecrets -}}
+{{- if $keycloak.failOnPlaceholderSecrets -}}
 {{- range $p := (regexFindAll "\\$\\(env:[A-Z_][A-Z0-9_]*\\)" $realmFile -1) -}}
 {{- $n := trimPrefix "$(env:" (trimSuffix ")" $p) -}}
 {{- if not (has $n $known) -}}
@@ -134,7 +135,7 @@ spec:
         seccompProfile:
           type: RuntimeDefault
         runAsUser: 65534
-      {{- with .Values.global.imagePullSecrets }}
+      {{- with $global.imagePullSecrets }}
       # PodSpec level (NOT inside the container entry — a container-level
       # imagePullSecrets is silently dropped under default field validation
       # and the pull fails with no error).
@@ -195,24 +196,24 @@ spec:
             # Non-secret realm parameters, resolved from the realm file's
             # $(env:VAR) placeholders. Values only — no Secret here.
             - name: KC_REALM
-              value: {{ .Values.data.keycloak.realm | quote }}
+              value: {{ $keycloak.realm | quote }}
             - name: KC_CLIENT_ID
-              value: {{ .Values.data.keycloak.webClientId | quote }}
+              value: {{ $keycloak.webClientId | quote }}
             - name: KC_PUBLIC_ORIGIN
               value: {{ printf "%s://%s" ($ingress.scheme | default "https") (include "genieai-umbrella.ingressHost" .) | quote }}
             - name: KC_MOBILE_CLIENT_ID
-              value: {{ .Values.data.keycloak.mobileClientId | default "genie-mobile" | quote }}
+              value: {{ $keycloak.mobileClientId | default "genie-mobile" | quote }}
             - name: KC_MOBILE_REDIRECT_SCHEME
-              value: {{ .Values.data.keycloak.mobileRedirectScheme | default "genieai" | quote }}
+              value: {{ $keycloak.mobileRedirectScheme | default "genieai" | quote }}
             - name: KC_GRAFANA_CLIENT_ID
-              value: {{ .Values.data.keycloak.grafanaClientId | quote }}
+              value: {{ $keycloak.grafanaClientId | quote }}
             - name: GENIE_ADMIN_USERNAME
-              value: {{ .Values.data.keycloak.adminUsername | quote }}
+              value: {{ $keycloak.adminUsername | quote }}
             - name: GENIE_ADMIN_EMAIL
               # Supplied per environment (operator contact) — no silent
               # placeholder fallback.
-              value: {{ .Values.data.keycloak.adminEmail | required "data.keycloak.adminEmail is required — supply the operator contact email in the environment overlay" | quote }}
-            {{- $smtp := .Values.data.keycloak.smtp | default dict }}
+              value: {{ $keycloak.adminEmail | required "data.keycloak.adminEmail is required — supply the operator contact email in the environment overlay" | quote }}
+            {{- $smtp := $keycloak.smtp | default dict }}
             # A flow that SENDS a mail needs a mail server. The realm's
             # smtpServer block is unconditional (kcc substitutes every
             # EMAIL_* placeholder), so without an smtp the realm would be
@@ -221,10 +222,10 @@ spec:
             # runtime with nothing in the operator's face: the user sees
             # "check your email" and no mail ever leaves. Failing the
             # render points at the knob instead.
-            {{- if and (.Values.data.keycloak.verifyEmail | default false) (not $smtp) -}}
+            {{- if and ($keycloak.verifyEmail | default false) (not $smtp) -}}
             {{- fail "data.keycloak.verifyEmail=true requires data.keycloak.smtp — without a mail server the verification mail never leaves" -}}
             {{- end -}}
-            {{- if and (.Values.data.keycloak.resetPasswordAllowed | default false) (not $smtp) -}}
+            {{- if and ($keycloak.resetPasswordAllowed | default false) (not $smtp) -}}
             {{- fail "data.keycloak.resetPasswordAllowed=true requires data.keycloak.smtp — without a mail server the reset mail never leaves" -}}
             {{- end -}}
             # The realm file's smtpServer block is unconditional, so the
@@ -253,43 +254,43 @@ spec:
             - name: EMAIL_USER
               value: {{ if and $smtp ($smtp.auth) }}{{ $smtp.user | required "data.keycloak.smtp.user is required when smtp.auth is true" | quote }}{{ else }}unused{{ end }}
             - name: KEYCLOAK_REGISTRATION_ENABLED
-              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" .Values.data.keycloak.registrationAllowed "default" false) | quote }}
+              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.registrationAllowed "default" false) | quote }}
             - name: KEYCLOAK_VERIFY_EMAIL
-              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" .Values.data.keycloak.verifyEmail "default" false) | quote }}
+              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.verifyEmail "default" false) | quote }}
             - name: KEYCLOAK_RESET_PASSWORD
-              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" .Values.data.keycloak.resetPasswordAllowed "default" false) | quote }}
+              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.resetPasswordAllowed "default" false) | quote }}
             - name: KEYCLOAK_LOGIN_WITH_EMAIL
-              value: {{ eq (include "genieai-umbrella.boolEnvValue" (dict "value" .Values.data.keycloak.loginWithEmailAllowed "default" true)) "true" | quote }}
+              value: {{ eq (include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.loginWithEmailAllowed "default" true)) "true" | quote }}
             - name: KEYCLOAK_DUPLICATE_EMAILS
-              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" .Values.data.keycloak.duplicateEmailsAllowed "default" false) | quote }}
+              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.duplicateEmailsAllowed "default" false) | quote }}
             - name: KEYCLOAK_BRUTE_FORCE
-              value: {{ eq (include "genieai-umbrella.boolEnvValue" (dict "value" .Values.data.keycloak.bruteForceProtected "default" true)) "true" | quote }}
+              value: {{ eq (include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.bruteForceProtected "default" true)) "true" | quote }}
             - name: KEYCLOAK_PASSWORD_POLICY
-              value: {{ .Values.data.keycloak.passwordPolicy | default "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)" | quote }}
+              value: {{ $keycloak.passwordPolicy | default "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)" | quote }}
             - name: KEYCLOAK_THEME
               # Same fallback as the Keycloak CR's theme mount path: the
               # tarball's only root is themes/genie, so "keycloak" (the
               # upstream default) resolves to a directory that exists
               # nowhere — an unthemed login page with no error anywhere.
-              value: {{ .Values.data.keycloak.theme | default "genie" | quote }}
+              value: {{ $keycloak.theme | default "genie" | quote }}
             - name: KEYCLOAK_I18N_ENABLED
-              value: {{ eq (include "genieai-umbrella.boolEnvValue" (dict "value" .Values.data.keycloak.internationalizationEnabled "default" true)) "true" | quote }}
+              value: {{ eq (include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.internationalizationEnabled "default" true)) "true" | quote }}
             # A default, not a bare read: an overlay that clears
             # defaultLocale would render value: "" — which Kubernetes
             # drops (omitempty), leaving $(env:KEYCLOAK_LOCALE)
             # unresolved and kcc failing the import. Same sentinel
             # logic as the EMAIL_* rows.
             - name: KEYCLOAK_LOCALE
-              value: {{ .Values.data.keycloak.defaultLocale | default "en" | quote }}
+              value: {{ $keycloak.defaultLocale | default "en" | quote }}
             # JSON array literal, not a comma-joined string: the realm
             # file's supportedLocales is a list field, and kcc's textual
             # substitution must inject a parseable JSON array. A CSV
             # here fails the import with
             # "Cannot construct instance of java.util.HashSet".
             - name: KEYCLOAK_SUPPORTED_LOCALES
-              value: {{ .Values.data.keycloak.supportedLocales | default (list "ar" "de" "en" "es" "fr" "pt" "ru" "th" "zh-Hans") | toJson | quote }}
+              value: {{ $keycloak.supportedLocales | default (list "ar" "de" "en" "es" "fr" "pt" "ru" "th" "zh-Hans") | toJson | quote }}
             - name: KEYCLOAK_ACCESS_TOKEN_LIFESPAN
-              value: {{ .Values.data.keycloak.accessTokenLifespan | default 300 | quote }}
+              value: {{ $keycloak.accessTokenLifespan | default 300 | quote }}
             # Secret-backed parameters, one row per operator-declared
             # entry. The rows are VALIDATED by the helper (a typo'd key
             # would render `name: null` and the API server would reject

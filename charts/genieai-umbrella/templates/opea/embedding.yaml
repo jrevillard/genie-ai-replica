@@ -5,7 +5,8 @@
   the explicit opea.gpu.skipTlsVerify knob (NOT inferred from the node
   URL scheme — see the opeaSslSkipVerify helper). Container/listen port
   6000; healthcheck hits /health on that port.
-*/}}{{- $opea := .Values.opea | default dict -}}
+*/}}
+{{- $opea := .Values.opea | default dict -}}
 {{- $opeaEmbedding := $opea.embedding | default dict -}}
 
 {{- if $opea.enabled -}}

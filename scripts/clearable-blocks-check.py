@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Clearing a values block must never crash the render.
+"""Clearing a values block must never break the render.
 
 Why this exists
 ---------------
@@ -7,34 +7,42 @@ The chart's contract: a CLEARED block degrades to the derived behaviour
 (a block whose switch lives inside it turns that tier off — the same
 meaning as `enabled: false`), and a block the chart cannot derive from
 fails in the template that needs it, BY NAME. Neither may crash the
-template engine.
+template engine, and neither may silently EMPTY a value the pods dial.
 
 A crash is the worst of the three outcomes: "nil pointer evaluating
 interface {}.cache.enabled" names a TEMPLATE, never the values key the
 operator cleared, and a chart with a hundred blocks leaves the operator
 guessing which one they cleared was the guilty one. Six review passes
-found that class — in the helm test templates reading their optional
-blocks unguarded, in the services reading their optional `pvc` block, in
-the convergence templates reading their optional block, in the identity
-CR reading its optional sub-blocks, and in the edge tier reading its
-optional `tls`/`cors` blocks.
+found that class — in the helm test templates, in the services' optional
+`pvc` blocks, in the convergence templates, in the identity CR's
+sub-blocks, in the edge tier's `tls`/`cors` blocks.
 
 What is checked
 ---------------
 EVERY dict-valued node in values.yaml, cleared one at a time, on BOTH
-render surfaces (the baseline and the full tier surface). The sweep is
-STRUCTURAL: the candidate list comes from the values tree itself, not
-from a hand-written list of block names — a list of names cannot see a
-block that was added later, and the blocks that crash are exactly the
-ones nobody remembered to add to the list.
+render surfaces (the baseline and the full tier surface, so the OPEA and
+observability templates are exercised). The sweep is STRUCTURAL: the
+candidate list comes from the values tree itself, not from a hand-written
+list of block names — a list of names cannot see a block that was added
+later, and the blocks that crash are exactly the ones nobody remembered
+to add to the list.
 
-The assertion is about the FAILURE MODE, not the message: an error
-carrying the failing expression (`at <expr>`) is the template engine
-crashing and is a defect; an error that names a values key (helm's
-`fail`/`required`) is the contract being honoured.
+Three assertions, one per failure mode:
 
-A block the sweep cannot assert on is listed in EXEMPT, with the reason.
-The default is swept, so a NEW block is covered the day it is added.
+1. NO CRASH. An error carrying the failing expression (`at <expr>`) is
+   the template engine crashing: a defect. A chart-authored guard
+   (`helm`'s `fail`/`required`) reports the VALUES KEY and never carries
+   that shape — it is the contract being honoured. Any other error (a
+   YAML parse error, a schema violation) is neither: it names neither
+   the values key nor the operator's mistake, so it is a defect too.
+2. NO SILENT EMPTY. A render that succeeds is not enough: a degraded
+   render that EMPTIES a value the pods dial (the GPU endpoint, the
+   collector address) is a broken release that installs cleanly. Every
+   environment row present in BOTH the baseline and the cleared render
+   must keep a non-empty value.
+3. NO LOST BLOCK. A block the sweep cannot assert on would be listed in
+   EXEMPT, with the reason. The default is swept, so a NEW block is
+   covered the day it is added.
 
 Usage: scripts/clearable-blocks-check.py [chart-path]
        CHART=charts/genieai-umbrella scripts/clearable-blocks-check.py
@@ -48,31 +56,33 @@ import time
 
 import yaml
 
+# libyaml when it is there: the sweep parses ~200 renders, and the pure
+# Python loader is 18x slower on a chart-sized manifest.
+LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
 # The signature of a template-engine crash: the engine reports the
 # expression it could not evaluate. A chart-authored guard (helm's
 # `fail`/`required`) reports the values key instead, and never carries
 # this shape.
 ENGINE_CRASH = "at <"
 
+# The signature of a chart-authored guard: helm reports the location and
+# the message the template wrote — and the message names the values key
+# the operator has to fix.
+CHART_GUARD = re.compile(r"execution error at \([^)]*\):")
+
+# The signature of a template-engine crash, for the report: the LAST
+# match is the INNERMOST template — the one that actually crashed, not
+# the include site that called it.
+CRASH_EXPRESSION = re.compile(r"at <([^>]+)>")
+CRASH_TEMPLATE = re.compile(r"templates/([A-Za-z0-9_./-]+):(\d+):(\d+)")
+
+WORKLOAD_KINDS = ("Deployment", "Job", "DaemonSet", "StatefulSet", "ReplicaSet", "Pod")
+
 # Blocks whose clearing is NOT a configuration — the sweep cannot assert
-# on them, and the chart does not promise anything for them.
-#
-# `global` holds the chart's OWN defaults for every cluster-wide knob
-# (imageRegistry, imagePullPolicy, imagePullSecrets, toolingImageRegistry,
-# toolingArch, kubeletToolsMirror). Clearing it in an overlay DELETES those
-# defaults (Helm's `null` removes a key instead of merging it), which is a
-# destructive values edit rather than a setting: the chart's own default
-# for `toolingArch` disappears and the tools init container is handed an
-# empty architecture. The documented way to drop a global override is
-# `global: {}` — an empty map MERGES, and the chart's defaults survive.
-EXEMPT = {
-    "global": (
-        "the namespace root of the chart's cluster-wide defaults: clearing it "
-        "deletes those defaults (Helm's null removes a key), which is not a "
-        "configuration — `global: {}` is the documented way to drop an "
-        "override"
-    ),
-}
+# on them, and the chart does not promise anything for them. EMPTY: every
+# block of the values tree is swept.
+EXEMPT = {}
 
 # The GPU node host is required by the external GPU mode and has no chart
 # default; the render must reach it or every orchestrator endpoint is
@@ -120,6 +130,50 @@ def dict_blocks(values):
     return blocks
 
 
+def render(chart_path, flags):
+    """(rc, stderr, documents) for one render."""
+    proc = subprocess.run(
+        ["helm", "template", "test", chart_path, "-n", "genieai"] + list(flags),
+        capture_output=True,
+        text=True,
+    )
+    docs = []
+    if proc.returncode == 0:
+        docs = [d for d in yaml.load_all(proc.stdout, Loader=LOADER) if d]
+    return proc.returncode, proc.stderr, docs
+
+
+def env_rows(docs):
+    """(workload, container, env name) -> value, for every rendered env row."""
+    rows = {}
+    for doc in docs:
+        if not isinstance(doc, dict) or doc.get("kind") not in WORKLOAD_KINDS:
+            continue
+        workload = doc.get("metadata", {}).get("name", "<unnamed>")
+        spec = (doc.get("spec") or {}).get("template") or {}
+        pod = (spec.get("spec") or {})
+        containers = (pod.get("containers") or []) + (pod.get("initContainers") or [])
+        for container in containers:
+            for entry in container.get("env") or []:
+                if "value" in entry:
+                    key = (workload, container.get("name", "<unnamed>"), entry.get("name"))
+                    rows[key] = entry["value"]
+    return rows
+
+
+def classify(stderr):
+    """(kind, detail) for one failed render."""
+    if ENGINE_CRASH in stderr:
+        expressions = CRASH_EXPRESSION.findall(stderr)
+        templates = CRASH_TEMPLATE.findall(stderr)
+        template = templates[-1] if templates else ("?", "?")
+        expression = expressions[-1] if expressions else "?"
+        return "crash", "%s:%s — %s" % (template[0], template[1], expression)
+    if CHART_GUARD.search(stderr):
+        return "guard", ""
+    return "nameless", stderr.strip().split("\n")[0][:160]
+
+
 def main():
     chart_path = (
         sys.argv[1]
@@ -130,48 +184,50 @@ def main():
     with open(values_path) as handle:
         values = yaml.safe_load(handle)
 
-    blocks = [b for b in dict_blocks(values) if b not in EXEMPT]
-    skipped = [b for b in dict_blocks(values) if b in EXEMPT]
+    every = dict_blocks(values)
+    blocks = [b for b in every if b not in EXEMPT]
+    skipped = [b for b in every if b in EXEMPT]
 
     crashes = []
+    nameless = []
+    emptied = []
     guards = 0
     rendered = 0
     started = time.time()
     for label, flags in surfaces(chart_path):
+        base_rc, base_err, base_docs = render(chart_path, flags)
+        if base_rc != 0:
+            print("FAIL: the baseline render of the %s failed:\n%s" % (label, base_err[:800]))
+            return 1
+        base_rows = env_rows(base_docs)
         for block in blocks:
-            proc = subprocess.run(
-                ["helm", "template", "test", chart_path, "-n", "genieai"]
-                + flags
-                + [f"--set={block}=null"],
-                capture_output=True,
-                text=True,
-            )
-            if proc.returncode == 0:
+            rc, stderr, docs = render(chart_path, flags + [f"--set={block}=null"])
+            if rc == 0:
                 rendered += 1
+                cleared_rows = env_rows(docs)
+                for key, value in base_rows.items():
+                    if key not in cleared_rows:
+                        continue
+                    if value and not cleared_rows[key]:
+                        emptied.append(
+                            "  [%s] %s: %s / %s / %s went from %r to an empty value"
+                            % (label, block, key[0], key[1], key[2], value)
+                        )
                 continue
-            stderr = proc.stderr
-            if ENGINE_CRASH in stderr:
-                expression = re.search(r"at <([^>]+)>", stderr)
-                template = re.search(r"templates/([A-Za-z0-9_./-]+):", stderr)
-                crashes.append(
-                    "  [%s] %s: %s — %s"
-                    % (
-                        label,
-                        block,
-                        template.group(1) if template else "?",
-                        expression.group(1) if expression else "?",
-                    )
-                )
-            else:
-                # A chart-authored guard: the render failed BY NAME.
+            kind, detail = classify(stderr)
+            if kind == "guard":
                 guards += 1
-
+            elif kind == "crash":
+                crashes.append("  [%s] %s: %s" % (label, block, detail))
+            else:
+                nameless.append("  [%s] %s: %s" % (label, block, detail))
     elapsed = time.time() - started
     total = len(blocks) * 2
     print(
         f"{len(blocks)} blocks swept on 2 surfaces ({total} renders): "
         f"{rendered} degraded, {guards} failed by name, "
-        f"{len(crashes)} crashed the template engine ({elapsed:.0f}s)"
+        f"{len(crashes)} crashed the template engine, "
+        f"{len(nameless)} failed without naming a values key ({elapsed:.0f}s)"
     )
     if skipped:
         for block in skipped:
@@ -180,6 +236,15 @@ def main():
         print("a cleared block must degrade or fail by NAME, never by a crash:")
         for crash in crashes:
             print(crash)
+    if nameless:
+        print("a cleared block must fail with a message naming the values key:")
+        for failure in nameless:
+            print(failure)
+    if emptied:
+        print("a cleared block must not EMPTY a value the pods read:")
+        for row in emptied:
+            print(row)
+    if crashes or nameless or emptied:
         return 1
     print("every cleared block degrades or fails with a named guard")
     return 0

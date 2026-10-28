@@ -1,3 +1,4 @@
+{{- $global := .Values.global | default dict -}}
 {{- $services := .Values.services | default dict -}}
 {{- $servicesBackend := $services.backend | default dict -}}
 {{- $data := .Values.data | default dict -}}
@@ -17,7 +18,7 @@ request without the collections, which is what this Job prevents.
 knob global.imageRegistry wins over the top-level imageRegistry — a
 divergence here would move every service image to an air-gapped mirror
 while this hook kept pulling from the default registry. */ -}}
-{{- $registry := .Values.global.imageRegistry | default .Values.imageRegistry -}}
+{{- $registry := $global.imageRegistry | default .Values.imageRegistry -}}
 {{- $img := $servicesBackend.migrationsImage | default dict -}}
 apiVersion: batch/v1
 kind: Job
@@ -48,7 +49,7 @@ spec:
       # GitLab registry) would leave THIS hook in ImagePullBackOff, and
       # the hook blocks the whole install — with a message naming a
       # component the operator is not looking at.
-      {{- with .Values.global.imagePullSecrets }}
+      {{- with $global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -69,7 +70,7 @@ spec:
       {{- if $dataArangodb.enabled }}
       initContainers:
         - name: wait-for-arango
-          image: "{{ .Values.global.toolingImageRegistry | default "docker.io" }}/curlimages/curl:8.10.1"
+          image: "{{ $global.toolingImageRegistry | default "docker.io" }}/curlimages/curl:8.10.1"
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -95,7 +96,7 @@ spec:
       containers:
         - name: db-migrations
           image: {{ if $registry }}{{ $registry }}/{{ end }}{{ $img.repository | default "genie-ai-db-migrations" }}:{{ $img.tag | default "main" }}
-          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" ($img.tag | default "main") "pullPolicy" .Values.global.imagePullPolicy) }}
+          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" ($img.tag | default "main") "pullPolicy" $global.imagePullPolicy) }}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

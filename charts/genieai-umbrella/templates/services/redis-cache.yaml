@@ -1,6 +1,7 @@
 {{- /* Copied and defaulted before it is read — see services/clamav.yaml
 for the rationale (a cleared image block must degrade to the chart's
-default, not crash the template engine). */ -}}{{- $services := .Values.services | default dict -}}
+default, not crash the template engine). */ -}}{{- $global := .Values.global | default dict -}}
+{{- $services := .Values.services | default dict -}}
 {{- $obs := .Values.observability | default dict -}}
 {{- $obsMetrics := $obs.metrics | default dict -}}
 
@@ -32,7 +33,7 @@ spec:
         fsGroup: 999                       # /data writable for AOF
         seccompProfile:
           type: RuntimeDefault
-      {{- with .Values.global.imagePullSecrets }}
+      {{- with $global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -43,7 +44,7 @@ spec:
           # a hand-written Deployment that drops the key silently
           # ignores it.
           image: "{{ $svc.image.repository | default "redis" }}:{{ $svc.image.tag | default "7-alpine" }}"
-          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" ($svc.image.tag | default "7-alpine") "pullPolicy" ($svc.image.pullPolicy | default .Values.global.imagePullPolicy)) }}
+          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" ($svc.image.tag | default "7-alpine") "pullPolicy" ($svc.image.pullPolicy | default $global.imagePullPolicy)) }}
           # $(VAR) in args expands against the container env below
           # (Kubernetes native expansion).
           args:

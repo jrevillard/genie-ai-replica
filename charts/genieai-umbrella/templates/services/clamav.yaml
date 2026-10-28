@@ -3,7 +3,8 @@ the defaulting local to this render, and the image block is materialized
 so a cleared `image` reads as an empty map — the chart's own default
 applies instead of the template engine crashing on a nil parent. A
 cleared service entry reads as an empty map: the service then does not
-render, which is the documented meaning of `enabled: false`. */ -}}
+render, which is the documented meaning of `enabled: false`. */ -}}{{- $global := .Values.global | default dict -}}
+
 {{- $services := .Values.services | default dict -}}
 {{- $servicesClamav := $services.clamav | default dict -}}
 {{- $servicesClamavCache := $servicesClamav.cache | default dict -}}
@@ -30,7 +31,7 @@ spec:
       labels:
         {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "clamav") | nindent 8 }}
     spec:
-      {{- with .Values.global.imagePullSecrets }}
+      {{- with $global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -53,7 +54,7 @@ spec:
       containers:
         - name: clamav
           image: "{{ $svc.image.repository | default "clamav/clamav" }}:{{ $svc.image.tag | default "stable-debian" }}"
-          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" $svc.image.tag "pullPolicy" ($svc.image.pullPolicy | default .Values.global.imagePullPolicy)) }}
+          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" $svc.image.tag "pullPolicy" ($svc.image.pullPolicy | default $global.imagePullPolicy)) }}
           # /init-unprivileged is the upstream-provided entrypoint for
           # running clamav 1.4+ as non-root. The default entrypoint
           # runs `install -o clamav /run/clamav` and `chown -R clamav

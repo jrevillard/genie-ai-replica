@@ -16,7 +16,8 @@
   scoped: an IPv4 literal in nodeHost becomes a /32, a DNS name takes
   opea.gpu.allowedCIDRs, and the port comes from the URL rather than
   being one of a hardcoded pair.
-*/}}{{- $opea := .Values.opea | default dict -}}
+*/}}
+{{- $opea := .Values.opea | default dict -}}
 {{- $obs := .Values.observability | default dict -}}
 {{- $obsMetrics := $obs.metrics | default dict -}}
 {{- $opeaGpu := $opea.gpu | default dict -}}

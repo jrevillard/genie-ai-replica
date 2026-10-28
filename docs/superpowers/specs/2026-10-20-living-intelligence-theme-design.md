@@ -399,8 +399,9 @@ enforcement and both halves is neither.
 
 Assets go under `public/config/`, **not** `public/`. `config_bootstrap` already
 rsyncs `components/gov-chat-frontend/public/config` → `{{ config_dir }}/frontend`
-as a mirror of the branch (`rsync --archive --checksum --delete`,
-`defaults/main.yml:27`, `tasks/main.yml:107`), so they are seeded automatically
+as a mirror of the branch (`rsync --archive --checksum --delete`; the
+`config_bootstrap_pairs` defaults and the task named "Rsync branch defaults to
+host runtime config dir" in `roles/config_bootstrap`), so they are seeded automatically
 and the host always serves the branch's copy. **Update 2026-10-28**: the mirror
 replaced `--ignore-existing`; an operator's replacement on the host does not
 survive the next deploy any more — the change belongs in the repository, in the

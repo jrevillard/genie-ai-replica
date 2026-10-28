@@ -20,11 +20,10 @@ config_bootstrap_allow_rebrand: false
 # it. The role refuses to sync a branch that does not ship it.
 #
 # It is a property of the DEPLOYMENT, not of a node: the role runs on every
-# node, and a fallback that differed per host group made a node outside the
-# environment's group check a theme the deployment does not use. The default
-# is the base theme every branch carries; a flavour overrides it in
-# group_vars/<environment>/vars.yml (e.g. genie-el-salvador) — and every group
-# of that deployment must carry the same value.
+# node, and a node whose groups do not override this variable checks the
+# default. A deployment that spans several inventory groups must therefore
+# carry the same value in each of them — a flavour sets it in every group its
+# hosts belong to (e.g. genie-el-salvador).
 #
 # The value must name a theme the deployed branch ships under
 # configs/keycloak/themes/. An empty value fails the deploy.
@@ -35,6 +34,16 @@ config_bootstrap_allow_rebrand: false
 # the compose default (`KEYCLOAK_THEME=${KEYCLOAK_THEME:-genie}`,
 # docker-compose.yaml) is what the realm actually gets. Change both or neither.
 #
+# What makes a theme usable: the realm (configs/keycloak/genie-realm.yaml)
+# points login, account, admin and email at the same KEYCLOAK_THEME, so a
+# theme is only complete when each subtree carries its theme.properties. The
+# role's theme guard checks all of them.
+config_bootstrap_theme_entrypoints:
+  - login
+  - account
+  - admin
+  - email
+
 # The guard protects the CONFIGURED theme. A second theme it does not know
 # about — a parent theme a surviving child inherits from (a flavour theme
 # declares parent=genie), or anything an operator dropped in the themes

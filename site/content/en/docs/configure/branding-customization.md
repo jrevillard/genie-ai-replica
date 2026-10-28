@@ -75,7 +75,7 @@ The role syncs the host's configuration directory as a **mirror of the deployed 
 
 A host that kept a stale configuration served a brand the branch no longer declared, and the application refused to start on it — a blank landing page behind a deploy that reported success. That is why the branch is the single source of truth.
 
-The re-seeded files are live immediately — the bind mount serves them from disk, so a browser reload is all it takes (no frontend restart).
+The re-seeded FRONTEND files are live immediately — the bind mount serves them from disk, so a browser reload is all it takes (no frontend restart). The Keycloak themes are not: Keycloak caches them in memory and in its gzip cache, so a theme change needs the restart and the cache clear that [Troubleshooting](#troubleshooting) describes.
 
 Nodes that you want to manage entirely by hand — an air-gapped deployment, for instance — can skip the sync with `config_bootstrap_sync_enabled: false`; the role then leaves the host's configuration directory untouched — it creates no directory, installs nothing and mirrors nothing. Populate the directory yourself.
 

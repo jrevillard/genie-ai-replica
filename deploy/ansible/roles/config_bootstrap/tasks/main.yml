@@ -52,13 +52,11 @@
     # playbook: the rsync below runs under the play's become, so it writes
     # into them as root.
     #
-    # No mode is pinned here. The mirror restores the directory's mode from
-    # the branch (the archive carries 0775), so pinning one made the role
-    # set it to 0755 and the mirror set it back on every single run — a
-    # change the role then reported as "not changed", because the itemize
-    # line for the destination directory itself was filtered out. The
-    # directory is created with the default mode and the mirror owns it from
-    # then on.
+    # No mode is pinned: the mirror owns the directory's mode and restores it
+    # from the branch. A mode pinned here would be reverted by every mirror,
+    # and the itemize line that difference produces ("./" — the destination
+    # directory itself) is filtered out of the change detection below, so the
+    # flip would be invisible in the report.
     #
     # Creating them is part of the seeding: with config_bootstrap_sync_enabled
     # false the role owns nothing on the host and leaves the operator's tree
@@ -74,11 +72,39 @@
       loop_control:
         label: "{{ item.dest_subdir }}"
 
-    # A private scratch directory per run. It used to be a fixed path under
-    # /tmp, which two problems came with: the path was predictable, so a local
-    # user could pre-create it and steer a root write, and two overlapping
-    # deploys on the same host purged each other's extraction tree mid-run —
-    # one of them then mirrored a half-extracted tree onto the host.
+    # The pre-mirror role kept its scratch under a fixed path and removed it
+    # only at the end of a successful play, so failed runs left the archives
+    # and the extraction tree on every node. This run's scratch is private;
+    # these two paths are what it replaced. Retirable once every node has run
+    # this role at least once.
+    - name: Remove the legacy scratch tree and archives of the pre-mirror role
+      become_user: root
+      ansible.builtin.command:
+        argv:
+          - find
+          - /tmp
+          - -maxdepth
+          - "1"
+          - (
+          - -name
+          - genieai-config-extract
+          - -o
+          - -name
+          - genieai-config-extract-*.tar.gz
+          - )
+          - -print
+          - -exec
+          - rm
+          - -rf
+          - '{}'
+          - +
+      register: config_bootstrap_legacy_cleanup
+      changed_when: >-
+        (config_bootstrap_legacy_cleanup.stdout | default('') | trim) | length > 0
+
+    # A private scratch directory per run: the path is unpredictable, so a
+    # local user cannot pre-create it and steer a root write, and overlapping
+    # deploys cannot purge each other's extraction tree mid-run.
     - name: Create a private scratch directory for this run
       ansible.builtin.tempfile:
         state: directory
@@ -131,21 +157,21 @@
     # source. Checking one well-known entrypoint asset per pair catches both an
     # empty extraction and a silently reshaped tree.
     #
-    # The expect check also validates the pairs' own shape first: `expect` is a
-    # list, and subelements fed the pre-mirror SCALAR form would iterate the
-    # string character by character — the deploy would fail on a wall of
-    # "does not contain .../config/t" messages that say nothing about the real
-    # problem (an override still using the old shape).
+    # The expect check validates the pairs' own shape first: the stat loop
+    # below walks `expect` with subelements, and a scalar would be walked per
+    # character — the assert turns that into one actionable message.
     - name: Fail unless every pair declares its expected assets as a list
       ansible.builtin.assert:
         that:
           - item.expect is sequence
           - item.expect is not string
+          - item.expect | length > 0
         fail_msg: >-
           The config_bootstrap_pairs entry for {{ item.dest_subdir }} declares
-          its expected assets as a string. `expect` is a list (one file per
-          entry, repo-relative to the pair's src); the string form belongs to
-          the pre-mirror role and no longer works.
+          its expected assets as a string, or an empty list. `expect` is a
+          non-empty list (one file per entry, repo-relative to the pair's
+          src): the guard it feeds is what stops a wrong branch from seeding a
+          config dir without the assets the containers fetch at boot.
         success_msg: "config_bootstrap: {{ item.dest_subdir }} expects a list of assets"
       loop: "{{ config_bootstrap_pairs }}"
 
@@ -225,18 +251,18 @@
           check, and the mirror would delete the deployment's theme.
         success_msg: "config_bootstrap: the Keycloak themes are seeded by a pair"
 
-    - name: Stat the deployment's Keycloak theme in the extracted branch
+    # The theme's entrypoints, not its directory: a branch that ships the
+    # directory without the subtrees the realm points at would pass a
+    # directory check and the mirror would replace a working host theme with
+    # a broken one — the exact regression this guard exists to stop.
+    - name: Stat the deployment theme's entrypoints in the extracted branch
       ansible.builtin.stat:
-        # The theme's entrypoint, not its directory: a branch that ships the
-        # directory without login/theme.properties would pass a directory
-        # check and the mirror would replace a working host theme with a
-        # broken one — the exact regression this guard exists to stop.
         path: >-
-          {{ config_bootstrap_tmp.path }}/{{ item.dest_subdir | replace('/', '-') }}/{{ item.src }}/{{ config_bootstrap_keycloak_theme }}/login/theme.properties
+          {{ config_bootstrap_tmp.path }}/{{ item.0.dest_subdir | replace('/', '-') }}/{{ item.0.src }}/{{ config_bootstrap_keycloak_theme }}/{{ item.1 }}/theme.properties
       register: config_bootstrap_theme_stat
-      loop: "{{ config_bootstrap_keycloak_pairs }}"
+      loop: "{{ lookup('ansible.builtin.cartesian', config_bootstrap_keycloak_pairs, config_bootstrap_theme_entrypoints) }}"
       loop_control:
-        label: "{{ item.dest_subdir }}"
+        label: "{{ item.0.dest_subdir }}/{{ item.1 }}"
 
     - name: Fail when the branch does not ship the deployment's Keycloak theme
       ansible.builtin.assert:
@@ -245,15 +271,17 @@
         fail_msg: >-
           The branch ({{ repo_branch }}) does not ship the Keycloak theme
           {{ config_bootstrap_keycloak_theme }} that this deployment is
-          configured to use. Syncing it would delete that theme from the host
-          and the realms would fall back to the built-in Keycloak theme. Check
+          configured to use complete:
+          {{ config_bootstrap_keycloak_theme }}/{{ item.item.1 }}/theme.properties
+          is missing. Syncing it would delete that theme from the host and the
+          realms would fall back to the built-in Keycloak theme. Check
           repo_branch against the branch this host is deployed from.
         success_msg: >-
           config_bootstrap: the branch ships the
           {{ config_bootstrap_keycloak_theme }} Keycloak theme
       loop: "{{ config_bootstrap_theme_stat.results | default([]) }}"
       loop_control:
-        label: "{{ item.item.dest_subdir | default('unknown') }}"
+        label: "{{ item.item.0.dest_subdir | default('unknown') }}/{{ item.item.1 | default('unknown') }}"
 
     # A wrong branch re-brands the deployment. The Keycloak theme catches the
     # half of the flavour that lives in the themes tree; the brand the web app
@@ -267,11 +295,19 @@
     # (brand_file), not hardcoded here: a pair whose src or dest_subdir
     # changes must not leave the check reading a path that no longer exists.
     #
-    # The files are parsed with python3 on the target rather than with Jinja's
-    # from_json: a malformed file made the templating itself fail — an opaque
-    # filter traceback that no escape hatch could bypass, on a role whose job
-    # is to survive a broken host configuration. A failed parse is a result
-    # the asserts below reason about, not a crash.
+    # Both files are parsed with the SAME script (kept once, below) so a fix
+    # to the parse cannot miss a side. python3 on the target rather than
+    # Jinja's from_json: a malformed file is a result the asserts below reason
+    # about (path, parse error, opt-out), not a templating crash.
+    - name: Keep the brand-file reader in one place
+      ansible.builtin.set_fact:
+        config_bootstrap_title_script: |
+          import json,sys
+          try:
+              print(json.load(open(sys.argv[1])).get("app", {}).get("title", ""))
+          except Exception as exc:
+              sys.stderr.write("%s\n" % exc)
+              sys.exit(3)
     - name: Find the pairs that declare a brand file
       ansible.builtin.set_fact:
         config_bootstrap_brand_pairs: "{{ config_bootstrap_pairs | selectattr('brand_file', 'defined') | list }}"
@@ -291,13 +327,7 @@
         argv:
           - python3
           - -c
-          - |
-            import json,sys
-            try:
-                print(json.load(open(sys.argv[1])).get("app", {}).get("title", ""))
-            except Exception as exc:
-                sys.stderr.write("%s\n" % exc)
-                sys.exit(3)
+          - "{{ config_bootstrap_title_script }}"
           - >-
             {{ config_bootstrap_tmp.path }}/{{ config_bootstrap_brand_pairs.0.dest_subdir | replace('/', '-') }}/{{ config_bootstrap_brand_pairs.0.src }}/{{ config_bootstrap_brand_pairs.0.brand_file }}
       register: config_bootstrap_branch_title_cmd
@@ -316,13 +346,7 @@
         argv:
           - python3
           - -c
-          - |
-            import json,sys
-            try:
-                print(json.load(open(sys.argv[1])).get("app", {}).get("title", ""))
-            except Exception as exc:
-                sys.stderr.write("%s\n" % exc)
-                sys.exit(3)
+          - "{{ config_bootstrap_title_script }}"
           - "{{ config_dir }}/{{ config_bootstrap_brand_pairs.0.dest_subdir }}/{{ config_bootstrap_brand_pairs.0.brand_file }}"
       register: config_bootstrap_host_title_cmd
       changed_when: false
@@ -396,12 +420,10 @@
 
     # The host copy is a MIRROR of the branch: rsync --archive --checksum --delete
     # overwrites the files the branch changed and removes the ones it no longer
-    # ships. Preserving whatever sat on the host (--ignore-existing) let the
-    # runtime config drift away from the branch it is validated against: a stale
-    # genie-ai-config.json kept the schema it was written with, while the
-    # frontend validates the served file against the schema the branch ships —
-    # the app then refuses to mount, and the symptom is a white page in
-    # production behind a deploy that reported success.
+    # ships. The branch is the single source of truth for the runtime config —
+    # it is the only copy validated against the schema the frontend enforces —
+    # and a host copy that keeps files the branch replaced serves a
+    # configuration nobody validated.
     #
     # --checksum: rsync's default quick check compares size and mtime, so a file
     # whose bytes changed but whose size and mtime did not would be skipped and
@@ -431,6 +453,15 @@
     # the SAME specs, computed once: the two paths are long expressions, and
     # writing them twice meant a future edit to one could silently leave the
     # verification comparing a tree the mirror never wrote.
+    # The itemize-line filter is used by BOTH rsync checks (the mirror's
+    # change detection and the verification's assert): one pattern, hoisted
+    # here, so the two checks cannot start judging "change" by different
+    # rules. It matches the destination-directory's own itemize line ("./"),
+    # which is not a difference in content.
+    - name: Keep the itemize filter in one place
+      ansible.builtin.set_fact:
+        config_bootstrap_dir_itemize_pattern: '{{ "\\s\\./$" }}'
+
     - name: Compute the mirror source and destination for each pair
       ansible.builtin.set_fact:
         config_bootstrap_mirror_specs: "{{ (config_bootstrap_mirror_specs | default([])) + [{'src': config_bootstrap_tmp.path ~ '/' ~ (item.dest_subdir | replace('/', '-')) ~ '/' ~ item.src ~ '/', 'dest': config_dir ~ '/' ~ item.dest_subdir ~ '/', 'label': item.dest_subdir}] }}"
@@ -456,7 +487,7 @@
       # moved, which is not a difference in content.
       changed_when: >-
         (config_bootstrap_rsync.stdout_lines | default([])
-         | reject('search', '\\s\\./$') | list | length) > 0
+         | reject('search', config_bootstrap_dir_itemize_pattern) | list | length) > 0
       loop: "{{ config_bootstrap_mirror_specs }}"
       loop_control:
         label: "{{ item.label }}"
@@ -508,7 +539,7 @@
           - item.rc == 0
           # The "./" line is the destination directory itself, not a file: a
           # directory whose own attributes moved is not a diverged file.
-          - (item.stdout_lines | default([]) | reject('search', '\\s\\./$') | list | length) == 0
+          - (item.stdout_lines | default([]) | reject('search', config_bootstrap_dir_itemize_pattern) | list | length) == 0
         fail_msg: >-
           The host runtime config does not match the branch ({{ repo_branch }}).
           The verification mirror exited with rc={{ item.rc }} and reported:

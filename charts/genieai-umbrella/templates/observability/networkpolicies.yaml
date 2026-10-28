@@ -5,8 +5,13 @@
   vm-operator + app.kubernetes.io/instance: <cr-name>, verified on a
   live cluster); the gateway collector by managed-by:
   opentelemetry-operator in the stack namespace.
-*/}}
-{{- if or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled }}
+*/}}{{- $obs := .Values.observability | default dict -}}
+{{- $obsLogs := $obs.logs | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- $obsTraces := $obs.traces | default dict -}}
+{{- $obsCollectorAgent := $obs.collectorAgent | default dict -}}
+
+{{- if or $obsLogs.enabled $obsMetrics.enabled $obsTraces.enabled }}
 ---
 # Collector gateway: receives OTLP from app SDKs and from the
 # filelog agent; ships to VLSingle / VMSingle / VTSingle.
@@ -68,7 +73,7 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    {{- if .Values.observability.logs.enabled }}
+    {{- if $obsLogs.enabled }}
     # VLSingle OTLP ingest (VL default OTLP port 9428).
     - to:
         - podSelector:
@@ -79,7 +84,7 @@ spec:
         - protocol: TCP
           port: 9428
     {{- end }}
-    {{- if .Values.observability.metrics.enabled }}
+    {{- if $obsMetrics.enabled }}
     # VMSingle Prometheus remote-write. The port is 8429, NOT the 8428
     # the collector's endpoint names: the vm-operator Service publishes
     # 8428 as an ALIAS that DNATs to the pod's 8429, and a
@@ -102,7 +107,7 @@ spec:
         - protocol: TCP
           port: 8429
     {{- end }}
-    {{- if .Values.observability.traces.enabled }}
+    {{- if $obsTraces.enabled }}
     # VTSingle is single-port (-httpListenAddr=:10428): the Jaeger query
     # API AND the OTLP ingest (/insert/opentelemetry) both live there —
     # the collector's exporter dials 10428 (see otel-collector.yaml).
@@ -116,7 +121,7 @@ spec:
           port: 10428
     {{- end }}
 {{- end }}
-{{- if .Values.observability.logs.enabled }}
+{{- if $obsLogs.enabled }}
 ---
 # Filelog agent (DaemonSet): tails containerd's pod-log path on each
 # node and forwards to the gateway over OTLP. Ingress is closed
@@ -174,7 +179,7 @@ spec:
     # every log line ships without its k8s.pod.* / service.name
     # enrichment — silently, with the agent still reporting healthy. Set
     # observability.collectorAgent.apiServerCIDRs on those CNIs.
-    {{- with .Values.observability.collectorAgent.apiServerCIDRs }}
+    {{- with $obsCollectorAgent.apiServerCIDRs }}
     - to:
         {{- range . }}
         - ipBlock:

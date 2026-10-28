@@ -13,7 +13,8 @@ ingress.dataplaneNamespace; when that namespace differs from the app
 namespace a namespaceSelector is added.
 */ -}}
 {{- define "genieai-umbrella.ingressDataPlanePeer" -}}
-{{- $dpNs := .Values.ingress.dataplaneNamespace | default .Values.namespace -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- $dpNs := $ingress.dataplaneNamespace | default .Values.namespace -}}
 {{- if ne $dpNs .Values.namespace -}}
 - namespaceSelector:
     matchLabels:

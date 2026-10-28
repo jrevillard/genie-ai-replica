@@ -1,5 +1,18 @@
-{{- if .Values.services.clamav.enabled -}}
-{{- $svc := .Values.services.clamav -}}
+{{- /* The service entry is COPIED before it is defaulted: the copy keeps
+the defaulting local to this render, and the image block is materialized
+so a cleared `image` reads as an empty map — the chart's own default
+applies instead of the template engine crashing on a nil parent. A
+cleared service entry reads as an empty map: the service then does not
+render, which is the documented meaning of `enabled: false`. */ -}}
+{{- $services := .Values.services | default dict -}}
+{{- $servicesClamav := $services.clamav | default dict -}}
+{{- $servicesClamavCache := $servicesClamav.cache | default dict -}}
+
+{{- $svc := deepCopy ($services.clamav | default dict) -}}
+{{- $_ := set $svc "image" ($svc.image | default dict) -}}
+{{- $cache := $svc.cache | default dict -}}
+{{- $pluggable := .Values.pluggable | default dict -}}
+{{- if $svc.enabled -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -128,7 +141,7 @@ spec:
             medium: Memory
         # clamd scans against the signature set in /var/lib/clamav; without
         # a writable mount freshclam cannot stage the .cvd files there.
-        {{- if .Values.services.clamav.cache.enabled }}
+        {{- if $cache.enabled }}
         # Signature database (~200 MB CVD set) on a persistent claim so a
         # pod restart does not re-download from the CVD mirror.
         - name: clamav-data
@@ -227,8 +240,8 @@ spec:
     # blocks, breaking freshclam. Branch explicitly on the empty case
     # so operators get the documented ANY-destination fallback when
     # they leave the list unset.
-    {{- if .Values.services.clamav.cvdAllowedCIDRs }}
-    {{- range $cidr := .Values.services.clamav.cvdAllowedCIDRs }}
+    {{- if $servicesClamav.cvdAllowedCIDRs }}
+    {{- range $cidr := $servicesClamav.cvdAllowedCIDRs }}
     - to:
         - ipBlock:
             cidr: {{ $cidr }}
@@ -254,7 +267,7 @@ spec:
     {{- end }}
 {{- end }}
 ---
-{{- if and .Values.services.clamav.enabled .Values.services.clamav.cache.enabled }}
+{{- if and $servicesClamav.enabled $servicesClamavCache.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -269,10 +282,10 @@ spec:
   # storageClassName means "NO default storage class" and strands the
   # PVC on most clusters. Same contract as the document-repository and
   # redis PVCs.
-  {{- with .Values.pluggable.storageClassName }}
+  {{- with $pluggable.storageClassName }}
   storageClassName: {{ . }}
   {{- end }}
   resources:
     requests:
-      storage: {{ .Values.services.clamav.cache.size | default "2Gi" }}
+      storage: {{ $servicesClamavCache.size | default "2Gi" }}
 {{- end }}

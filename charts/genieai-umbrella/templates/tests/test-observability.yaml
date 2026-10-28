@@ -10,8 +10,12 @@
   collector self-telemetry path is exercised by the live PII smoke
   on the deployed cluster; a TCP-probe in the test pod adds noise
   without catching what the live smoke doesn't already catch).
-*/}}
-{{- if or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled }}
+*/}}{{- $obs := .Values.observability | default dict -}}
+{{- $obsLogs := $obs.logs | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- $obsTraces := $obs.traces | default dict -}}
+
+{{- if or $obsLogs.enabled $obsMetrics.enabled $obsTraces.enabled }}
 apiVersion: v1
 kind: Pod
 metadata:
@@ -64,13 +68,13 @@ spec:
                  stable in-cluster contract. VL/VM/VT each expose
                  /health on their default port; the response is a
                  bare 200 OK on a healthy instance. */ -}}
-          {{- if .Values.observability.logs.enabled }}
+          {{- if $obsLogs.enabled }}
           check vlsingle-victorialogs 9428 /health 200
           {{- end }}
-          {{- if .Values.observability.metrics.enabled }}
+          {{- if $obsMetrics.enabled }}
           check vmsingle-vmetrics 8428 /health 200
           {{- end }}
-          {{- if .Values.observability.traces.enabled }}
+          {{- if $obsTraces.enabled }}
           check vtsingle-vtraces 10428 /health 200
           {{- end }}
           if [ "$failures" -gt 0 ]; then

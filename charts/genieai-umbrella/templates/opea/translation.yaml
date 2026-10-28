@@ -12,8 +12,10 @@
   port). The Service exposes 9031 -> 8888 because chatqna dials
   TRANSLATION_SERVICE_PORT 9031; the tcpSocket probe targets the real
   listener (8888).
-*/}}
-{{- if .Values.opea.enabled -}}
+*/}}{{- $opea := .Values.opea | default dict -}}
+{{- $opeaTranslation := $opea.translation | default dict -}}
+
+{{- if $opea.enabled -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -62,7 +64,7 @@ spec:
               # a YAML number ("3.1") would otherwise take the whole
               # Deployment down with "cannot unmarshal number into Go
               # struct field EnvVar.value of type string".
-              value: {{ .Values.opea.translation.modelId | default "google/gemma-3-4b-it" | toString | quote }}
+              value: {{ $opeaTranslation.modelId | default "google/gemma-3-4b-it" | toString | quote }}
             # Observability exporter — derived from the umbrella
             # observability flags (any signal on → SDK initialises)
             # rather than a per-service knob.

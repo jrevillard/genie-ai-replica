@@ -9,7 +9,9 @@
   issuerRef names whatever ClusterIssuer the operator created beforehand
   (the CI conftest gate fails any chart override that hardcodes one).
 */ -}}
-{{- if and .Values.ingress.enabled .Values.ingress.tls.enabled (not .Values.ingress.tls.secretName) -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- $ingressTls := $ingress.tls | default dict -}}
+{{- if and $ingress.enabled $ingressTls.enabled (not $ingressTls.secretName) -}}
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -19,8 +21,8 @@ metadata:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "ingress") | nindent 4 }}
 spec:
   issuerRef:
-    name: {{ .Values.ingress.tls.issuerName | required "ingress.tls.issuerName is required when ingress.tls.enabled=true and ingress.tls.secretName is empty" }}
-    kind: {{ .Values.ingress.tls.issuerKind | default "ClusterIssuer" }}
+    name: {{ $ingressTls.issuerName | required "ingress.tls.issuerName is required when ingress.tls.enabled=true and ingress.tls.secretName is empty" }}
+    kind: {{ $ingressTls.issuerKind | default "ClusterIssuer" }}
     group: cert-manager.io
   # Same helper the Gateway listener's certificateRefs uses — a divergence
   # leaves the listener NotReady (ResolvedRefs=False) while cert-manager

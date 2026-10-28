@@ -3,10 +3,13 @@
   (see vllm.yaml). Carries a wait-for-vllm initContainer that
   serializes the two HF model downloads on a single GPU node.
   Skeleton via genieai-umbrella.modelDeployment.
-*/}}
-{{- if and .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster") -}}
-{{- $modelId := .Values.opea.translation.modelId -}}
-{{- $translation := .Values.opea.translation -}}
+*/}}{{- $opea := .Values.opea | default dict -}}
+{{- $opeaGpu := $opea.gpu | default dict -}}
+{{- $opeaTranslation := $opea.translation | default dict -}}
+
+{{- if and $opea.enabled (eq $opeaGpu.mode "in-cluster") -}}
+{{- $modelId := $opeaTranslation.modelId -}}
+{{- $translation := $opea.translation -}}
 {{- $initText := printf "      initContainers:\n        # Serializes the two HF model downloads: without it both vLLM\n        # pods pull concurrently on the single GPU node and can OOM.\n        - name: wait-for-vllm\n          image: %s/curlimages/curl:8.10.1\n          command:\n            - sh\n            - -c\n            - until curl -sf http://vllm.%s.svc.cluster.local:8000/health; do echo waiting for vllm; sleep 5; done" (.Values.global.toolingImageRegistry | default "docker.io") .Values.namespace -}}
 {{- include "genieai-umbrella.modelDeployment" (dict
       "root" .

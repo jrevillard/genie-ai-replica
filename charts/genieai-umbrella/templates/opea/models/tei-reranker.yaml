@@ -3,9 +3,13 @@
   .Values.opea.models.reranker.modelId. Image from ghcr.io
   unconditionally (see tei.yaml). Skeleton via
   genieai-umbrella.modelDeployment.
-*/}}
-{{- if and .Values.opea.enabled (eq .Values.opea.gpu.mode "in-cluster") -}}
-{{- $modelId := .Values.opea.models.reranker.modelId -}}
+*/}}{{- $opea := .Values.opea | default dict -}}
+{{- $opeaGpu := $opea.gpu | default dict -}}
+{{- $opeaModels := $opea.models | default dict -}}
+{{- $opeaModelsReranker := $opeaModels.reranker | default dict -}}
+
+{{- if and $opea.enabled (eq $opeaGpu.mode "in-cluster") -}}
+{{- $modelId := $opeaModelsReranker.modelId -}}
 {{- include "genieai-umbrella.modelDeployment" (dict
       "root" .
       "name" "tei-reranker"

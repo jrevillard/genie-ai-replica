@@ -8,7 +8,8 @@
        The toRawJson|fromJson round-trip converts the chart-supplied
        common.Values to a plain map[string]interface{} that Sprig's
        `dig` can navigate (the dep-check enabled.json below does the
-       same for the same reason). */ -}}
+       same for the same reason). */ -}}{{- $global := .Values.global | default dict -}}
+
 {{- $vals := .Values | toRawJson | fromJson -}}
 {{- $svcGraph := dig "dependencyGraph" "services" dict $vals -}}
 {{- range $name, $cfg := dig "services" dict $vals }}
@@ -58,7 +59,7 @@ spec:
       # The evaluator reads only the two mounted JSON files; it makes no
       # Kubernetes API calls, so it never needs a service account token.
       automountServiceAccountToken: false
-      {{- with .Values.global.imagePullSecrets }}
+      {{- with $global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -71,7 +72,7 @@ spec:
         - name: dep-check
           # Minimal alpine + python base; the evaluator parses only the two
           # JSON mounts and needs no YAML library.
-          image: "{{ .Values.global.toolingImageRegistry | default "docker.io" }}/python:3.12-alpine"
+          image: "{{ $global.toolingImageRegistry | default "docker.io" }}/python:3.12-alpine"
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false

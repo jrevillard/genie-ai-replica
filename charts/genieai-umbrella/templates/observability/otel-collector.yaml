@@ -31,7 +31,7 @@
 apiVersion: opentelemetry.io/v1beta1
 kind: OpenTelemetryCollector
 metadata:
-  name: {{ $obs.collectorCRName }}
+  name: {{ $obs.collectorCRName | default "genieai-collector" }}
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
@@ -75,7 +75,7 @@ spec:
       otlp:
         protocols:
           http:
-            endpoint: 0.0.0.0:{{ $obs.collectorPort }}
+            endpoint: 0.0.0.0:{{ $obs.collectorPort | default 4318 }}
           grpc:
             endpoint: 0.0.0.0:4317
     processors:

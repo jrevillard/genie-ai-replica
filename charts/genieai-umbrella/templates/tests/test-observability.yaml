@@ -10,7 +10,9 @@
   collector self-telemetry path is exercised by the live PII smoke
   on the deployed cluster; a TCP-probe in the test pod adds noise
   without catching what the live smoke doesn't already catch).
-*/}}{{- $obs := .Values.observability | default dict -}}
+*/}}
+{{- $global := .Values.global | default dict -}}
+{{- $obs := .Values.observability | default dict -}}
 {{- $obsLogs := $obs.logs | default dict -}}
 {{- $obsMetrics := $obs.metrics | default dict -}}
 {{- $obsTraces := $obs.traces | default dict -}}
@@ -38,7 +40,7 @@ spec:
     runAsUser: 65534
     seccompProfile:
       type: RuntimeDefault
-  {{- with .Values.global.imagePullSecrets }}
+  {{- with $global.imagePullSecrets }}
   # Same credential as every sibling pod: a credentialed docker.io
   # mirror must not ImagePullBackOff the test pod while every workload
   # it probes pulls fine.
@@ -47,7 +49,7 @@ spec:
   {{- end }}
   containers:
     - name: t
-      image: "{{ .Values.global.toolingImageRegistry | default "docker.io" }}/curlimages/curl:8.10.1"
+      image: "{{ $global.toolingImageRegistry | default "docker.io" }}/curlimages/curl:8.10.1"
       imagePullPolicy: IfNotPresent
       securityContext:
         allowPrivilegeEscalation: false

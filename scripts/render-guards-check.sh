@@ -23,8 +23,9 @@
 # wins, so a case that drops two values at once would only ever prove
 # the earlier guard.
 #
-# COVERAGE: every guard an OPERATOR can reach has a case here. The
-# guards left without one are unreachable from values by construction:
+# COVERAGE: every guard an OPERATOR can reach has a case here (the
+# enumeration is the `fail` sites of charts/genieai-umbrella/templates).
+# The guards left without one are unreachable from values by construction:
 #   - the dependency-graph type guard (a node whose value is a scalar) —
 #     Helm's coalesce always keeps the chart's table and warns about
 #     the scalar, so no operator value can produce it;
@@ -264,7 +265,83 @@ expect_fail "a convergence envSecrets row with a numeric envVar" \
   --set 'data.keycloak.convergence.envSecrets[5].secretName=foo' \
   --set 'data.keycloak.convergence.envSecrets[5].secretKey=bar'
 
-# 22. The documented valid configuration must still render: a guard that
+# 22. The translation backend is DERIVED: an overlay that still sets it
+#     gets a render that rejects the value by name instead of a silent
+#     rewrite of what the operator asked for.
+expect_fail "a translation backend the chart derives" \
+  "services.backend.translation.backend is not a knob" \
+  $(valid_flags) --set services.backend.translation.backend=gpu
+
+# 23. The Keycloak CR needs a database: the chart renders exactly one
+#     CNPG Cluster (the identity tier's), so turning the postgres tier
+#     off while Keycloak is on deletes the only database the CR can
+#     reach — and nothing reports it, the Keycloak pods just stay
+#     Pending on a connection error.
+expect_fail "the identity tier without its database" \
+  "data.keycloak.enabled=true requires data.postgres.enabled=true" \
+  $(valid_flags) --set data.postgres.enabled=false
+
+# 24. The service images have no chart default (the registry builds
+#     them): a cleared image block renders an empty image reference, and
+#     the pod stays in ErrImagePull with the values key nowhere in the
+#     message.
+expect_fail "a service with no image repository" \
+  "services.backend.image.repository is required" \
+  $(valid_flags) --set services.backend.image.repository=null
+
+# 25. The OPEA tier needs its dependency-graph entry: the pre-install
+#     dep-check validates the orchestrators' requirements against it,
+#     and a missing entry silently disables that validation.
+expect_fail "the OPEA tier with no dependency-graph entry" \
+  "dependencyGraph.opea declares no node" \
+  $(valid_flags) --set opea.enabled=true \
+  --set opea.gpu.nodeHost=https://gpu.ci-render.local:444 \
+  --set dependencyGraph.opea=null
+
+# 26. Grafana without a datasource is a blank canvas: every dashboard
+#     renders broken. The guard fires at render time instead.
+expect_fail "Grafana with no storage component" \
+  "observability.grafana.enabled=true requires at least one storage component" \
+  $(valid_flags) --set observability.grafana.enabled=true \
+  --set observability.logs.enabled=false
+
+# 27. A convergence row with an EMPTY value: the row is the operator's
+#     own, and an empty envVar renders an env entry the API server
+#     rejects. The shared fixture's rows would override a values file
+#     (--set beats -f), so the case drops them and supplies the whole
+#     list through a file — which is how an overlay writes it anyway
+#     (Helm replaces a list wholesale).
+empty_row="$(mktemp)"
+trap 'rm -f "${scalar_rows}" "${empty_row}"' EXIT
+cat > "${empty_row}" <<'YAML'
+data:
+  keycloak:
+    convergence:
+      envSecrets:
+        - envVar: KC_PROXY_CLIENT_SECRET
+          secretName: keycloak-proxy-client-secret
+          secretKey: KEYCLOAK_PROXY_CLIENT_SECRET
+        - envVar: KC_DATAPREP_CLIENT_SECRET
+          secretName: kc-dataprep-client-secret
+          secretKey: KC_DATAPREP_CLIENT_SECRET
+        - envVar: KC_GRAFANA_CLIENT_SECRET
+          secretName: kc-grafana-client-secret
+          secretKey: KEYCLOAK_GRAFANA_CLIENT_SECRET
+        - envVar: GENIE_ADMIN_PASSWORD
+          secretName: keycloak-convergence-credentials
+          secretKey: GENIE_ADMIN_PASSWORD
+        - envVar: EMAIL_PASSWORD
+          secretName: keycloak-convergence-credentials
+          secretKey: EMAIL_PASSWORD
+        - envVar: ""
+          secretName: foo
+          secretKey: bar
+YAML
+expect_fail "a convergence envSecrets row with an empty value" \
+  "envSecrets[5].envVar is empty" \
+  $(valid_flags_except "convergence.envSecrets") -f "${empty_row}"
+
+# 28. The documented valid configuration must still render: a guard that
 #     rejects a good deployment is a defect too.
 expect_ok "the documented values render" $(valid_flags)
 

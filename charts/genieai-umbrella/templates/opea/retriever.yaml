@@ -10,7 +10,8 @@
   (`VLLM_ENDPOINT`, `TEI_EMBEDDING_ENDPOINT`) via the opea helpers;
   HF_TOKEN + VLLM_API_KEY from the vllm-api-key Secret. Container/listen
   port 7000; probes are tcpSocket dials on that port (an L4 accept, not an L7 /health).
-*/}}{{- $opea := .Values.opea | default dict -}}
+*/}}
+{{- $opea := .Values.opea | default dict -}}
 {{- $opeaRetriever := $opea.retriever | default dict -}}
 {{- $opeaModels := $opea.models | default dict -}}
 {{- $opeaModelsLlm := $opeaModels.llm | default dict -}}

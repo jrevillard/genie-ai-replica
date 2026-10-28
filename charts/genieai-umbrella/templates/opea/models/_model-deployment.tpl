@@ -24,8 +24,13 @@ Context keys (all from a dict built by the caller with "root" set):
                initialDelaySeconds for the shared /health probes
   startup      dict with failureThreshold + periodSeconds
 */}}
+
 {{- define "genieai-umbrella.modelDeployment" -}}
 {{- $root := .root -}}
+{{- $opea := $root.Values.opea | default dict -}}
+{{- $opeaModels := $opea.models | default dict -}}
+{{- $global := $root.Values.global | default dict -}}
+{{- $opeaModelsCache := $opeaModels.cache | default dict -}}
 {{- /* No GPU resource by default. `nvidia.com/gpu: 1` per pod is an
 EXCLUSIVE device grant: four model pods would need four GPUs, and the
 documented shape (one gpu=true node, vllm at 0.55 + vllm-translation at
@@ -39,7 +44,7 @@ scheduler-enforced exclusivity sets opea.models.resources — ONE dict
 applied to all four model pods, not a per-model knob (llm gets a full
 GPU, the TEI sidecars need far less; a uniform exclusive grant
 over-provisions three of the four). */ -}}
-{{- $res := $root.Values.opea.models.resources | default dict -}}
+{{- $res := $opeaModels.resources | default dict -}}
 {{- /* The GPU node labels the four model pods are scheduled on.
 
 The knob: `opea.models.nodeSelector`. The chart's default is a node
@@ -55,7 +60,7 @@ that declares `{nvidia.com/gpu.present: "true"}` — the pods would then
 need a node carrying BOTH labels, and stay Pending. values.yaml
 therefore declares the map EMPTY (which means "the chart's default"),
 and an overlay replaces it outright. */ -}}
-{{- $nodeSelector := $root.Values.opea.models.nodeSelector | default dict -}}
+{{- $nodeSelector := $opeaModels.nodeSelector | default dict -}}
 {{- if eq (len $nodeSelector) 0 -}}
 {{- $nodeSelector = dict "gpu" "true" -}}
 {{- end -}}
@@ -101,7 +106,7 @@ spec:
         # Pod Security `baseline`, not `restricted` — the same posture
         # the deploy repo's namespace label declares for the whole
         # application namespace.
-      {{- with $root.Values.global.imagePullSecrets }}
+      {{- with $global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -159,7 +164,7 @@ spec:
             failureThreshold: {{ .startup.failureThreshold }}
             periodSeconds: {{ .startup.periodSeconds }}
       volumes:
-        {{- if $root.Values.opea.models.cache.enabled }}
+        {{- if $opeaModelsCache.enabled }}
         # Shared model-weights cache (see templates/opea/models/model-cache-pvc.yaml).
         # ReadWriteOnce on the single gpu=true node; all four model pods
         # share the claim.

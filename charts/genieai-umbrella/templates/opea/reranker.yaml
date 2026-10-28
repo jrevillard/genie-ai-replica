@@ -5,7 +5,8 @@
   (NOVELTY_SIGMOID_*, CONTEXT_DECAY_FACTOR, MIN_VALUE_THRESHOLD) carry
   defaults overridable via .Values.opea.reranker.* (camelCase).
   Container/listen port 8000.
-*/}}{{- $opea := .Values.opea | default dict -}}
+*/}}
+{{- $opea := .Values.opea | default dict -}}
 {{- $opeaReranker := $opea.reranker | default dict -}}
 
 {{- if $opea.enabled -}}

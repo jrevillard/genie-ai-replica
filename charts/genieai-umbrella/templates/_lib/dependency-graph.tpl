@@ -15,7 +15,7 @@ same shape as the others and was missing only because it was written
 second. A dep name resolves against services, then opea, then data.
 */}}
 {{- define "genieai-umbrella.dependencyGraph.json" -}}
-{{- $graph := .Values.dependencyGraph -}}
+{{- $graph := .Values.dependencyGraph | default dict -}}
 {{- $tiers := list "services" "data" "opea" -}}
 {{- /* Type guard: a user override like `backend.deps: "keycloak,arangodb"`
        (a string) would otherwise emit `"deps": "keycloak,arangodb"` and

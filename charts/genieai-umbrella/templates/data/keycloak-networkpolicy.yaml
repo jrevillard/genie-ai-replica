@@ -1,4 +1,7 @@
-{{- if .Values.data.keycloak.enabled -}}
+{{- $data := .Values.data | default dict -}}
+{{- $kc := $data.keycloak | default dict -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- if $kc.enabled -}}
 {{- /*
   Keycloak ingress policy. Three peer families reach port 8080:
   - the Envoy Gateway data plane — edge routing of /auth/ (same-origin
@@ -28,7 +31,7 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-    {{- if .Values.ingress.enabled }}
+    {{- if $ingress.enabled }}
     - from:
         {{- include "genieai-umbrella.ingressDataPlanePeer" . | nindent 8 }}
       ports:

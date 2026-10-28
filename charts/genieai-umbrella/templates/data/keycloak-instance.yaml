@@ -1,7 +1,21 @@
-{{- if .Values.data.keycloak.enabled -}}
+{{- /* Every sub-block of the identity tier is bound BEFORE it is read:
+a cleared sub-block (db, http, hostname, proxy, update, bootstrapAdmin)
+must degrade to the chart's documented default instead of crashing the
+template engine on a nil parent — the crash names a template, never the
+values key the operator cleared. */ -}}
+{{- $data := .Values.data | default dict -}}
+{{- $kc := $data.keycloak | default dict -}}
+{{- $kcBootstrap := $kc.bootstrapAdmin | default dict -}}
+{{- $kcDb := $kc.db | default dict -}}
+{{- $kcHttp := $kc.http | default dict -}}
+{{- $kcHostname := $kc.hostname | default dict -}}
+{{- $kcProxy := $kc.proxy | default dict -}}
+{{- $kcUpdate := $kc.update | default dict -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- if $kc.enabled -}}
 {{- $instances := include "genieai-umbrella.resolveInstances" (dict "Values" .Values "tier" "keycloak") | int -}}
 {{- $ns := .Values.namespace -}}
-{{- $dbHost := printf "%s-rw.%s.svc.cluster.local" (.Values.data.keycloak.cnpgServiceName | default "keycloak-db") $ns -}}
+{{- $dbHost := printf "%s-rw.%s.svc.cluster.local" ($kc.cnpgServiceName | default "keycloak-db") $ns -}}
 apiVersion: k8s.keycloak.org/v2beta1
 kind: Keycloak
 metadata:
@@ -21,27 +35,27 @@ spec:
   # the Job's first authenticated call — not a clearer message.
   bootstrapAdmin:
     user:
-      secret: {{ .Values.data.keycloak.bootstrapAdmin.userSecret | default "keycloak-admin-credentials" }}
+      secret: {{ $kcBootstrap.userSecret | default "keycloak-admin-credentials" }}
   instances: {{ $instances }}
   # CNPG hosts the Postgres database; the secret holds both `username` and
   # `password` keys (CNPG bootstrap requirement). The chart does NOT
   # materialize the secret — operators wire it from their secret backend.
   db:
-    vendor: {{ .Values.data.keycloak.db.vendor | default "postgres" }}
+    vendor: {{ $kcDb.vendor | default "postgres" }}
     host: {{ $dbHost }}
-    port: {{ .Values.data.keycloak.db.port | default 5432 }}
-    database: {{ .Values.data.keycloak.db.database | default "keycloak" }}
+    port: {{ $kcDb.port | default 5432 }}
+    database: {{ $kcDb.database | default "keycloak" }}
     usernameSecret:
-      name: {{ .Values.data.keycloak.db.secretName }}
+      name: {{ $kcDb.secretName | default "keycloak-db-credentials" }}
       key: username
     passwordSecret:
-      name: {{ .Values.data.keycloak.db.secretName }}
+      name: {{ $kcDb.secretName | default "keycloak-db-credentials" }}
       key: password
   # TLS terminates at the edge (Envoy Gateway); the pod serves plain HTTP
   # internally. Letting the operator create an Ingress would shadow that.
   http:
     # kindIs guard: sprig `default true` would swallow an explicit `false`.
-    httpEnabled: {{ ternary .Values.data.keycloak.http.httpEnabled true (kindIs "bool" .Values.data.keycloak.http.httpEnabled) }}
+    httpEnabled: {{ ternary $kcHttp.httpEnabled true (kindIs "bool" $kcHttp.httpEnabled) }}
   hostname:
     # Fixed frontend URL (issuer base): tokens carry this issuer on every
     # request path, so the browser OIDC flow and the backend validation
@@ -50,8 +64,8 @@ spec:
     # falls back to strict:false and derives per-request — fine for
     # throwaway clusters, wrong whenever two clients reach Keycloak
     # through different hostnames.
-    strict: {{ .Values.data.keycloak.hostname.strict | default false }}
-    {{- if .Values.ingress.host }}
+    strict: {{ $kcHostname.strict | default false }}
+    {{- if $ingress.host }}
     # The issuer base, same string the backend's KEYCLOAK_EXPECTED_ISSUER
     # and the realm's redirect URLs use: scheme + host + the context path
     # (data.keycloak.httpRelativePath).
@@ -109,18 +123,18 @@ spec:
           - name: keycloak
             volumeMounts:
               - name: keycloak-theme
-                mountPath: {{ printf "/opt/keycloak/themes/%s" (.Values.data.keycloak.theme | default "genie") }}
+                mountPath: {{ printf "/opt/keycloak/themes/%s" ($kc.theme | default "genie") }}
                 readOnly: true
   # Trust X-Forwarded-* from Envoy. KC_PROXY=edge was removed in KC 24+;
   # spec.proxy.headers is the only path. Misconfiguration manifests as
   # `Invalid parameter: redirect_uri` loops on login.
   proxy:
-    headers: {{ .Values.data.keycloak.proxy.headers | default "xforwarded" }}
+    headers: {{ $kcProxy.headers | default "xforwarded" }}
   # KC 26 prod start mode (--optimized). The stock quay.io/keycloak image
   # has no pre-built server: `start --optimized` on first boot refuses
   # ("Please don't use this flag for the first startup or use kc.sh
   # build"). Default to false; custom pre-built images override to true.
-  startOptimized: {{ .Values.data.keycloak.startOptimized | default false }}
+  startOptimized: {{ $kc.startOptimized | default false }}
   # Image-bump = recreate, not roll: Keycloak needs exclusive access for
   # its schema migrations, so the operator deletes the pod and starts a
   # new one rather than overlapping two.
@@ -134,7 +148,7 @@ spec:
   # this chart performs; `update.strategy: RollingUpdate` is the
   # alternative if the site can tolerate overlapping migrations.
   update:
-    strategy: {{ .Values.data.keycloak.update.strategy | default "RecreateOnImageChange" }}
+    strategy: {{ $kcUpdate.strategy | default "RecreateOnImageChange" }}
   # KC 26 default probe timing is fine (10min startup grace). Memory request
   # is the real knob: lower it and the pod OOMs before becoming ready.
   resources:

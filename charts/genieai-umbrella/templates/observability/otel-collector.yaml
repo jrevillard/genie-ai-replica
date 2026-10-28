@@ -1,4 +1,8 @@
-{{- if or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled }}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsLogs := $obs.logs | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- $obsTraces := $obs.traces | default dict -}}
+{{- if or $obsLogs.enabled $obsMetrics.enabled $obsTraces.enabled }}
 {{- /*
   OTel Collector gateway — deployment mode. Receives OTLP from
   instrumented app services and from the filelog DaemonSet agent,
@@ -27,7 +31,7 @@
 apiVersion: opentelemetry.io/v1beta1
 kind: OpenTelemetryCollector
 metadata:
-  name: {{ .Values.observability.collectorCRName }}
+  name: {{ $obs.collectorCRName }}
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
@@ -46,8 +50,8 @@ spec:
          one that carries it. Only the GATEWAY gets this image: the
          filelog agent needs nothing but otlphttp and runs on every node,
          where the extra size is pure cost. */}}
-  {{- if .Values.observability.metrics.enabled }}
-  image: {{ .Values.observability.collectorImage | quote }}
+  {{- if $obsMetrics.enabled }}
+  image: {{ $obs.collectorImage | quote }}
   {{- end }}
   # The Service the operator creates must expose the ports the receiver
   # LISTENS on: without this the operator keeps its default (4318) while
@@ -58,9 +62,9 @@ spec:
   # the gateway's NetworkPolicy) has to be carried here too.
   ports:
     - name: otlp-http
-      port: {{ .Values.observability.collectorPort | default 4318 }}
+      port: {{ $obs.collectorPort | default 4318 }}
       protocol: TCP
-      targetPort: {{ .Values.observability.collectorPort | default 4318 }}
+      targetPort: {{ $obs.collectorPort | default 4318 }}
     - name: otlp-grpc
       port: 4317
       protocol: TCP
@@ -71,7 +75,7 @@ spec:
       otlp:
         protocols:
           http:
-            endpoint: 0.0.0.0:{{ .Values.observability.collectorPort }}
+            endpoint: 0.0.0.0:{{ $obs.collectorPort }}
           grpc:
             endpoint: 0.0.0.0:4317
     processors:
@@ -86,11 +90,11 @@ spec:
         check_interval: 1s
         limit_percentage: 75
         spike_limit_percentage: 15
-{{- if .Values.observability.logs.enabled }}
+{{- if $obsLogs.enabled }}
 {{- include "genieai-umbrella.otelLogTransformProcessors" . | nindent 6 }}
 {{- end }}
     exporters:
-{{- if .Values.observability.logs.enabled }}
+{{- if $obsLogs.enabled }}
       otlphttp/victorialogs:
         # Base URL only — the exporter appends /v1/logs. VictoriaLogs
         # serves OTLP ingestion under /insert/opentelemetry/v1/logs.
@@ -104,7 +108,7 @@ spec:
           initial_interval: 5s
           max_interval: 30s
 {{- end }}
-{{- if .Values.observability.metrics.enabled }}
+{{- if $obsMetrics.enabled }}
       prometheusremotewrite/victoriametrics:
         endpoint: http://vmsingle-vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428/api/v1/write
         tls:
@@ -126,7 +130,7 @@ spec:
       # observed on 0.2.41). nop accepts and discards.
       nop: {}
 {{- end }}
-{{- if .Values.observability.traces.enabled }}
+{{- if $obsTraces.enabled }}
       otlphttp/victoriatraces:
         # VictoriaTraces is single-port (-httpListenAddr=:10428) and its
         # ingest paths live under /insert like the rest of the Victoria
@@ -169,7 +173,7 @@ spec:
                     host: 0.0.0.0
                     port: 8888
       pipelines:
-{{- if .Values.observability.logs.enabled }}
+{{- if $obsLogs.enabled }}
         logs:
           receivers: [otlp]
           # Same transform set as the filelog agent — OTLP-sourced logs
@@ -178,7 +182,7 @@ spec:
           processors: [transform/pii_redact, transform/extract_envelope_trace_context, transform/stamp_log_metadata_from_msg, transform/normalize_log_body, transform/strip_python_log_prefix, memory_limiter, batch]
           exporters: [otlphttp/victorialogs]
 {{- end }}
-{{- if .Values.observability.metrics.enabled }}
+{{- if $obsMetrics.enabled }}
         metrics:
           receivers: [otlp]
           processors: [memory_limiter, batch]
@@ -189,7 +193,7 @@ spec:
           processors: [memory_limiter]
           exporters: [nop]
 {{- end }}
-{{- if .Values.observability.traces.enabled }}
+{{- if $obsTraces.enabled }}
         traces:
           receivers: [otlp]
           processors: [memory_limiter, batch]

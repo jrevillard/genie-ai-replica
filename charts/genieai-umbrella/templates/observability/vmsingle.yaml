@@ -1,4 +1,6 @@
-{{- if .Values.observability.metrics.enabled }}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- if $obsMetrics.enabled }}
 {{- /*
   VMSingle CR — single-node VictoriaMetrics.
   apiVersion: VMSingle stays on operator.victoriametrics.com/v1beta1
@@ -40,11 +42,11 @@ spec:
   # serviceScrapeSelector:
   #   matchLabels:
   #     app.kubernetes.io/instance: <release>
-  retentionPeriod: {{ .Values.observability.metrics.retentionPeriod | quote }}
+  retentionPeriod: {{ $obsMetrics.retentionPeriod | quote }}
   removePvcAfterDelete: false
   storage:
     resources:
       requests:
-        storage: {{ .Values.observability.metrics.storageSize | quote }}
+        storage: {{ $obsMetrics.storageSize | quote }}
   replicaCount: 1
 {{- end }}

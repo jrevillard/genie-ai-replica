@@ -38,16 +38,23 @@
   (document-repository and backend expose port 80 → targetPort 3001/3000;
   keycloak-service:8080/auth). Container/listen port 8888; healthcheck
   hits `/health` on that port.
-*/}}
-{{- if .Values.opea.enabled -}}
+*/}}{{- $opea := .Values.opea | default dict -}}
+{{- $opeaChatqna := $opea.chatqna | default dict -}}
+{{- $opeaModels := $opea.models | default dict -}}
+{{- $opeaModelsLlm := $opeaModels.llm | default dict -}}
+{{- $opeaTranslation := $opea.translation | default dict -}}
+{{- $data := .Values.data | default dict -}}
+{{- $dataKeycloak := $data.keycloak | default dict -}}
+
+{{- if $opea.enabled -}}
 {{- $vals  := deepCopy .Values -}}
 {{- $ns    := .Values.namespace -}}
 {{- $llmEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "llm") -}}
 {{- $translationEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "translation") -}}
 {{- $tuningEnv := list
-    (dict "name" "CHATQNA_TYPE" "value" (.Values.opea.chatqna.chatqnaType | default "ChatQnA" | toString))
+    (dict "name" "CHATQNA_TYPE" "value" ($opeaChatqna.chatqnaType | default "ChatQnA" | toString))
     (dict "name" "MEGA_SERVICE_HOST_IP" "value" "chatqna")
-    (dict "name" "LOG_LEVEL" "value" (.Values.opea.chatqna.logLevel | default "info" | toString))
+    (dict "name" "LOG_LEVEL" "value" ($opeaChatqna.logLevel | default "info" | toString))
     (dict "name" "EMBEDDING_SERVER_HOST_IP" "value" "embedding")
     (dict "name" "EMBEDDING_SERVER_PORT" "value" "6000")
     (dict "name" "RETRIEVER_SERVICE_HOST_IP" "value" "retriever")
@@ -58,36 +65,36 @@
     (dict "name" "TRANSLATION_SERVICE_PORT" "value" "9031")
     (dict "name" "VLLM_LLM_ENDPOINT" "value" $llmEndpoint)
     (dict "name" "VLLM_TRANSLATION_ENDPOINT" "value" $translationEndpoint)
-    (dict "name" "LLM_MODEL" "value" (.Values.opea.models.llm.modelId | default "ibm-granite/granite-4.1-8b" | toString))
-    (dict "name" "VLLM_TRANSLATION_MODEL_ID" "value" (.Values.opea.translation.modelId | default "google/gemma-3-4b-it" | toString))
-    (dict "name" "RERANKING_STRATEGY" "value" (.Values.opea.chatqna.rerankingStrategy | default "slice" | toString))
-    (dict "name" "RERANKING_THRESHOLD" "value" (.Values.opea.chatqna.rerankingThreshold | default "0.75" | toString))
-    (dict "name" "RERANKER_TOP_N" "value" (.Values.opea.chatqna.rerankerTopN | default "3" | toString))
-    (dict "name" "RETRIEVER_ARANGO_K" "value" (.Values.opea.chatqna.retrieverArangoK | default "20" | toString))
-    (dict "name" "RETRIEVER_ARANGO_FETCH_K" "value" (.Values.opea.chatqna.retrieverArangoFetchK | default "30" | toString))
-    (dict "name" "RETRIEVER_ARANGO_SCORE_THRESHOLD" "value" (.Values.opea.chatqna.retrieverArangoScoreThreshold | default "0.2" | toString))
-    (dict "name" "RETRIEVER_ARANGO_DISTANCE_THRESHOLD" "value" (.Values.opea.chatqna.retrieverArangoDistanceThreshold | default "1" | toString))
-    (dict "name" "RETRIEVER_ARANGO_LAMBDA_MULT" "value" (.Values.opea.chatqna.retrieverArangoLambdaMult | default "0.5" | toString))
-    (dict "name" "RETRIEVER_ARANGO_SEARCH_START" "value" (.Values.opea.chatqna.retrieverArangoSearchStart | default "chunk" | toString))
-    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_ENABLED" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" .Values.opea.chatqna.retrieverArangoTraversalEnabled "default" true)))
-    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH" "value" (.Values.opea.chatqna.retrieverArangoTraversalMaxDepth | default "2" | toString))
-    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED" "value" (.Values.opea.chatqna.retrieverArangoTraversalMaxReturned | default "5" | toString))
-    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD" "value" (.Values.opea.chatqna.retrieverArangoTraversalScoreThreshold | default "0.7" | toString))
-    (dict "name" "CONFIDENCE_RANK_DECAY" "value" (.Values.opea.chatqna.confidenceRankDecay | default "0.5" | toString))
-    (dict "name" "RERANKER_SCORE_CALIBRATION" "value" (.Values.opea.chatqna.rerankerScoreCalibration | default "none" | toString))
-    (dict "name" "RERANKER_SCORE_TEMPERATURE" "value" (.Values.opea.chatqna.rerankerScoreTemperature | default "1.0" | toString))
-    (dict "name" "LLM_SELF_CONFIDENCE_ENABLED" "value" (.Values.opea.chatqna.llmSelfConfidenceEnabled | default "0" | toString))
-    (dict "name" "MULTI_TURN_BLEND_ENABLED" "value" (.Values.opea.chatqna.multiTurnBlendEnabled | default "false" | toString))
-    (dict "name" "MULTI_TURN_BLEND_ALPHA" "value" (.Values.opea.chatqna.multiTurnBlendAlpha | default "0.7" | toString))
-    (dict "name" "MULTI_TURN_HISTORY_TURNS" "value" (.Values.opea.chatqna.multiTurnHistoryTurns | default "1" | toString))
+    (dict "name" "LLM_MODEL" "value" ($opeaModelsLlm.modelId | default "ibm-granite/granite-4.1-8b" | toString))
+    (dict "name" "VLLM_TRANSLATION_MODEL_ID" "value" ($opeaTranslation.modelId | default "google/gemma-3-4b-it" | toString))
+    (dict "name" "RERANKING_STRATEGY" "value" ($opeaChatqna.rerankingStrategy | default "slice" | toString))
+    (dict "name" "RERANKING_THRESHOLD" "value" ($opeaChatqna.rerankingThreshold | default "0.75" | toString))
+    (dict "name" "RERANKER_TOP_N" "value" ($opeaChatqna.rerankerTopN | default "3" | toString))
+    (dict "name" "RETRIEVER_ARANGO_K" "value" ($opeaChatqna.retrieverArangoK | default "20" | toString))
+    (dict "name" "RETRIEVER_ARANGO_FETCH_K" "value" ($opeaChatqna.retrieverArangoFetchK | default "30" | toString))
+    (dict "name" "RETRIEVER_ARANGO_SCORE_THRESHOLD" "value" ($opeaChatqna.retrieverArangoScoreThreshold | default "0.2" | toString))
+    (dict "name" "RETRIEVER_ARANGO_DISTANCE_THRESHOLD" "value" ($opeaChatqna.retrieverArangoDistanceThreshold | default "1" | toString))
+    (dict "name" "RETRIEVER_ARANGO_LAMBDA_MULT" "value" ($opeaChatqna.retrieverArangoLambdaMult | default "0.5" | toString))
+    (dict "name" "RETRIEVER_ARANGO_SEARCH_START" "value" ($opeaChatqna.retrieverArangoSearchStart | default "chunk" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_ENABLED" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" $opeaChatqna.retrieverArangoTraversalEnabled "default" true)))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH" "value" ($opeaChatqna.retrieverArangoTraversalMaxDepth | default "2" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED" "value" ($opeaChatqna.retrieverArangoTraversalMaxReturned | default "5" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD" "value" ($opeaChatqna.retrieverArangoTraversalScoreThreshold | default "0.7" | toString))
+    (dict "name" "CONFIDENCE_RANK_DECAY" "value" ($opeaChatqna.confidenceRankDecay | default "0.5" | toString))
+    (dict "name" "RERANKER_SCORE_CALIBRATION" "value" ($opeaChatqna.rerankerScoreCalibration | default "none" | toString))
+    (dict "name" "RERANKER_SCORE_TEMPERATURE" "value" ($opeaChatqna.rerankerScoreTemperature | default "1.0" | toString))
+    (dict "name" "LLM_SELF_CONFIDENCE_ENABLED" "value" ($opeaChatqna.llmSelfConfidenceEnabled | default "0" | toString))
+    (dict "name" "MULTI_TURN_BLEND_ENABLED" "value" ($opeaChatqna.multiTurnBlendEnabled | default "false" | toString))
+    (dict "name" "MULTI_TURN_BLEND_ALPHA" "value" ($opeaChatqna.multiTurnBlendAlpha | default "0.7" | toString))
+    (dict "name" "MULTI_TURN_HISTORY_TURNS" "value" ($opeaChatqna.multiTurnHistoryTurns | default "1" | toString))
     (dict "name" "DOC_REPO_URL" "value" (include "genieai-umbrella.serviceURL" (dict "root" . "name" "document-repository" "port" 80)))
     (dict "name" "BACKEND_SERVICE_URL" "value" (include "genieai-umbrella.serviceURL" (dict "root" . "name" "backend" "port" 80)))
     (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakPublicIssuer" .))
-    (dict "name" "KC_REALM" "value" (.Values.opea.chatqna.kcRealm | default (.Values.data.keycloak.realm | default "genie") | toString))
+    (dict "name" "KC_REALM" "value" ($opeaChatqna.kcRealm | default ($dataKeycloak.realm | default "genie") | toString))
     (dict "name" "KEYCLOAK_INTERNAL_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
     (dict "name" "GPU_NODE_HOST" "value" (include "genieai-umbrella.opeaGpuHostname" .))
-    (dict "name" "KC_CLIENT_ID" "value" (.Values.opea.chatqna.kcClientId | default "genie-app" | toString))
-    (dict "name" "CHATQNA_ENFORCE_ABSTENTION" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" .Values.opea.chatqna.chatqnaEnforceAbstention "default" true)))
+    (dict "name" "KC_CLIENT_ID" "value" ($opeaChatqna.kcClientId | default "genie-app" | toString))
+    (dict "name" "CHATQNA_ENFORCE_ABSTENTION" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" $opeaChatqna.chatqnaEnforceAbstention "default" true)))
     (dict "name" "GUARDRAIL_SERVICE_HOST_IP" "value" "guardrail")
     (dict "name" "GUARDRAIL_SERVICE_PORT" "value" "9090")
     (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
@@ -106,7 +113,7 @@ operator override as a bare value so the YAML emitter does not
 re-quote it (a YAML block scalar like `|` in the values file is honored
 end-to-end for multi-line prompts). */ -}}
 {{- $promptEnv := list -}}
-{{- $systemPrompt := .Values.opea.chatqna.systemPrompt | default "" -}}
+{{- $systemPrompt := $opeaChatqna.systemPrompt | default "" -}}
 {{- if $systemPrompt -}}
 {{- $promptEnv = append $promptEnv (dict "name" "CHATQNA_SYSTEM_PROMPT" "value" $systemPrompt) -}}
 {{- end -}}
@@ -116,7 +123,7 @@ Compose configures them (parity gate: scripts/config-parity-check.py).
 A MAP, so an overlay that sets one variable keeps the others. The rows
 come last: a container env list applies in order and the last row for a
 name wins. */ -}}
-{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" (.Values.opea.chatqna.env | default dict) | fromJsonArray -}}
+{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" ($opeaChatqna.env | default dict) | fromJsonArray -}}
 {{- /* workingDir: the image ENTRYPOINT runs `python genieai_chatqna.py`
 with a RELATIVE path; the script lives in /app/ChatQnA/. Without it the container starts in /app and
 exits immediately ("can't open file"). */ -}}
@@ -148,7 +155,12 @@ chart correct until that lands. */ -}}
       "startup"   (dict "httpGet" (dict "path" "/health" "port" "http") "failureThreshold" 30 "periodSeconds" 10)
     )
 -}}
-{{- $_ := set $vals.services "chatqna" $svcVals -}}
+{{- /* The service map is rebuilt rather than mutated in place: a
+cleared `services` map has nothing to mutate, and `set` on a nil map
+crashes the template engine. */ -}}
+{{- $valsServices := $vals.services | default dict -}}
+{{- $_ := set $valsServices "chatqna" $svcVals -}}
+{{- $_ := set $vals "services" $valsServices -}}
 {{- $ctx := dict "name" "chatqna" "component" "chatqna" "Values" $vals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}
 ---

@@ -5,14 +5,16 @@
   the explicit opea.gpu.skipTlsVerify knob (NOT inferred from the node
   URL scheme — see the opeaSslSkipVerify helper). Container/listen port
   6000; healthcheck hits /health on that port.
-*/}}
-{{- if .Values.opea.enabled -}}
+*/}}{{- $opea := .Values.opea | default dict -}}
+{{- $opeaEmbedding := $opea.embedding | default dict -}}
+
+{{- if $opea.enabled -}}
 {{- $vals := deepCopy .Values -}}
 {{- $embeddingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "embedding") -}}
 {{- $urls := list
     (dict "name" "EMBEDDING_MODEL_ENDPOINT" "value" $embeddingEndpoint)
     (dict "name" "TEI_EMBEDDING_ENDPOINT" "value" $embeddingEndpoint)
-    (dict "name" "EMBEDDING_MODEL_ID" "value" (.Values.opea.embedding.modelId | default "BAAI/bge-large-en-v1.5" | toString))
+    (dict "name" "EMBEDDING_MODEL_ID" "value" ($opeaEmbedding.modelId | default "BAAI/bge-large-en-v1.5" | toString))
     (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
     (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
@@ -23,7 +25,7 @@ orchestrators carry. Without it an overlay setting
 opea.embedding.env was silently dropped: the value merged into
 .Values, no template read it, and the rendered Deployment was
 byte-identical to one without it. */ -}}
-{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" (.Values.opea.embedding.env | default dict) | fromJsonArray -}}
+{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" ($opeaEmbedding.env | default dict) | fromJsonArray -}}
 {{- $svcVals := dict
     "image" (dict "repository" "genie-ai-embedding" "tag" "main")
     "port" 6000
@@ -35,7 +37,12 @@ byte-identical to one without it. */ -}}
       "startup"   (dict "httpGet" (dict "path" "/health" "port" 6000) "failureThreshold" 30 "periodSeconds" 10)
     )
 -}}
-{{- $_ := set $vals.services "embedding" $svcVals -}}
+{{- /* The service map is rebuilt rather than mutated in place: a
+cleared `services` map has nothing to mutate, and `set` on a nil map
+crashes the template engine. */ -}}
+{{- $valsServices := $vals.services | default dict -}}
+{{- $_ := set $valsServices "embedding" $svcVals -}}
+{{- $_ := set $vals "services" $valsServices -}}
 {{- $ctx := dict "name" "embedding" "component" "embedding" "Values" $vals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}
 ---

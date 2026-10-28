@@ -20,8 +20,9 @@
   the OTel SDK at export time.
 */}}
 {{- define "genieai-umbrella.otlpEndpoint" -}}
-{{- $cr := .Values.observability.collectorCRName | default "genieai-collector" -}}
-{{- $port := .Values.observability.collectorPort | default 4318 -}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $cr := $obs.collectorCRName | default "genieai-collector" -}}
+{{- $port := $obs.collectorPort | default 4318 -}}
 {{- printf "http://%s-collector.%s.svc.cluster.local:%d" $cr .Values.namespace (int $port) -}}
 {{- end -}}
 
@@ -137,7 +138,8 @@ telemetry reads the port from here, so a non-default collectorPort is
 one edit, not one per policy.
 */}}
 {{- define "genieai-umbrella.otlpPort" -}}
-{{- .Values.observability.collectorPort | default 4318 -}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obs.collectorPort | default 4318 -}}
 {{- end -}}
 
 {{/*
@@ -146,5 +148,16 @@ ENABLE_OBSERVABILITY env row: "1" when any signal tier is on. One
 definition for every service that carries the row.
 */}}
 {{- define "genieai-umbrella.observabilityEnabledFlag" -}}
-{{- ternary "1" "0" (or .Values.observability.logs.enabled .Values.observability.metrics.enabled .Values.observability.traces.enabled) -}}
+{{- /* Normalized before it is read: a cleared observability tier (or a
+cleared signal block) must degrade to "0" instead of crashing the
+template engine on a nil parent. */ -}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $logs := $obs.logs | default dict -}}
+{{- $metrics := $obs.metrics | default dict -}}
+{{- $traces := $obs.traces | default dict -}}
+{{- /* The switch is coerced to a BOOL: sprig's `ternary` refuses a
+non-bool argument ("invalid value; expected bool"), and a CLEARED
+signal block leaves `enabled` nil — the tier is off, not broken. */ -}}
+{{- $on := or (and (kindIs "bool" $logs.enabled) $logs.enabled) (and (kindIs "bool" $metrics.enabled) $metrics.enabled) (and (kindIs "bool" $traces.enabled) $traces.enabled) -}}
+{{- ternary "1" "0" $on -}}
 {{- end -}}

@@ -1,4 +1,6 @@
-{{- if .Values.data.keycloak.enabled -}}
+{{- $data := .Values.data | default dict -}}
+{{- $kc := $data.keycloak | default dict -}}
+{{- if $kc.enabled -}}
 {{- /* Theme tarball carrier. ConfigMap keys cannot contain "/", so the
        nested theme tree (themes/genie/login/resources/...) travels as a
        single gzip key; the Keycloak pod's initContainer unpacks it into

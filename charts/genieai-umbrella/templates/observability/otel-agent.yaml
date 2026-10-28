@@ -1,4 +1,6 @@
-{{- if .Values.observability.logs.enabled }}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsLogs := $obs.logs | default dict -}}
+{{- if $obsLogs.enabled }}
 {{- /*
   OTel Collector filelog agent — DaemonSet mode. One pod per node,
   tails kubelet's pod-log path under /var/log/pods (one symlinked log

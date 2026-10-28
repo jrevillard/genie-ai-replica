@@ -10,42 +10,48 @@
   (`VLLM_ENDPOINT`, `TEI_EMBEDDING_ENDPOINT`) via the opea helpers;
   HF_TOKEN + VLLM_API_KEY from the vllm-api-key Secret. Container/listen
   port 7000; probes are tcpSocket dials on that port (an L4 accept, not an L7 /health).
-*/}}
-{{- if .Values.opea.enabled -}}
+*/}}{{- $opea := .Values.opea | default dict -}}
+{{- $opeaRetriever := $opea.retriever | default dict -}}
+{{- $opeaModels := $opea.models | default dict -}}
+{{- $opeaModelsLlm := $opeaModels.llm | default dict -}}
+{{- $data := .Values.data | default dict -}}
+{{- $dataArangodb := $data.arangodb | default dict -}}
+
+{{- if $opea.enabled -}}
 {{- $vals  := deepCopy .Values -}}
 {{- $ns    := .Values.namespace -}}
 {{- $llmEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "llm") -}}
 {{- $embeddingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "embedding") -}}
 {{- $tuningEnv := list
-    (dict "name" "ARANGO_GRAPH_NAME" "value" (.Values.opea.retriever.arangoGraphName | default "GRAPH" | toString))
-    (dict "name" "RETRIEVER_COMPONENT_NAME" "value" (.Values.opea.retriever.retrieverComponentName | default "GENIE_RETRIEVER_ARANGODB" | toString))
-    (dict "name" "RETRIEVER_ARANGO_K" "value" (.Values.opea.retriever.retrieverArangoK | default "20" | toString))
-    (dict "name" "RETRIEVER_ARANGO_FETCH_K" "value" (.Values.opea.retriever.retrieverArangoFetchK | default "30" | toString))
-    (dict "name" "RETRIEVER_ARANGO_SCORE_THRESHOLD" "value" (.Values.opea.retriever.retrieverArangoScoreThreshold | default "0.2" | toString))
-    (dict "name" "RETRIEVER_ARANGO_DISTANCE_THRESHOLD" "value" (.Values.opea.retriever.retrieverArangoDistanceThreshold | default "1" | toString))
-    (dict "name" "RETRIEVER_ARANGO_LAMBDA_MULT" "value" (.Values.opea.retriever.retrieverArangoLambdaMult | default "0.5" | toString))
-    (dict "name" "RETRIEVER_ARANGO_SEARCH_START" "value" (.Values.opea.retriever.retrieverArangoSearchStart | default "chunk" | toString))
-    (dict "name" "RETRIEVER_ARANGO_SEARCH_MODE" "value" (.Values.opea.retriever.retrieverArangoSearchMode | default "vector" | toString))
-    (dict "name" "RETRIEVER_ARANGO_USE_APPROX_SEARCH" "value" (.Values.opea.retriever.retrieverArangoUseApproxSearch | default "false" | toString))
-    (dict "name" "RETRIEVER_ARANGO_DISTANCE_STRATEGY" "value" (.Values.opea.retriever.retrieverArangoDistanceStrategy | default "COSINE" | toString))
-    (dict "name" "RETRIEVER_ARANGO_NUM_CENTROIDS" "value" (.Values.opea.retriever.retrieverArangoNumCentroids | default "1" | toString))
-    (dict "name" "RETRIEVER_ARANGO_FILTER_STRATEGY" "value" (.Values.opea.retriever.retrieverArangoFilterStrategy | default "OR" | toString))
-    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_ENABLED" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" .Values.opea.retriever.retrieverArangoTraversalEnabled "default" true)))
-    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH" "value" (.Values.opea.retriever.retrieverArangoTraversalMaxDepth | default "2" | toString))
-    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED" "value" (.Values.opea.retriever.retrieverArangoTraversalMaxReturned | default "5" | toString))
-    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD" "value" (.Values.opea.retriever.retrieverArangoTraversalScoreThreshold | default "0.7" | toString))
-    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES" "value" (.Values.opea.retriever.retrieverArangoTraversalConcurrentBatches | default "10" | toString))
-    (dict "name" "RETRIEVER_HYBRID_RETRIEVAL_ENABLED" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" .Values.opea.retriever.retrieverHybridRetrievalEnabled "default" true)))
-    (dict "name" "RETRIEVER_HYBRID_RRF_K" "value" (.Values.opea.retriever.retrieverHybridRrfK | default "60" | toString))
-    (dict "name" "RETRIEVER_HYBRID_BM25_CANDIDATES" "value" (.Values.opea.retriever.retrieverHybridBm25Candidates | default "50" | toString))
-    (dict "name" "RETRIEVER_HYBRID_DENSE_WEIGHT" "value" (.Values.opea.retriever.retrieverHybridDenseWeight | default "1.0" | toString))
-    (dict "name" "RETRIEVER_HYBRID_LEXICAL_WEIGHT" "value" (.Values.opea.retriever.retrieverHybridLexicalWeight | default "1.0" | toString))
-    (dict "name" "RETRIEVER_HYBRID_BM25_ANALYZER" "value" (.Values.opea.retriever.retrieverHybridBm25Analyzer | default "text_en" | toString))
-    (dict "name" "RERANKING_STRATEGY" "value" (.Values.opea.retriever.rerankingStrategy | default "slice" | toString))
-    (dict "name" "RETRIEVER_SUMMARIZER_ENABLED" "value" (.Values.opea.retriever.retrieverSummarizerEnabled | default "false" | toString))
-    (dict "name" "LOG_LEVEL" "value" (.Values.opea.retriever.logLevel | default "info" | toString))
+    (dict "name" "ARANGO_GRAPH_NAME" "value" ($opeaRetriever.arangoGraphName | default "GRAPH" | toString))
+    (dict "name" "RETRIEVER_COMPONENT_NAME" "value" ($opeaRetriever.retrieverComponentName | default "GENIE_RETRIEVER_ARANGODB" | toString))
+    (dict "name" "RETRIEVER_ARANGO_K" "value" ($opeaRetriever.retrieverArangoK | default "20" | toString))
+    (dict "name" "RETRIEVER_ARANGO_FETCH_K" "value" ($opeaRetriever.retrieverArangoFetchK | default "30" | toString))
+    (dict "name" "RETRIEVER_ARANGO_SCORE_THRESHOLD" "value" ($opeaRetriever.retrieverArangoScoreThreshold | default "0.2" | toString))
+    (dict "name" "RETRIEVER_ARANGO_DISTANCE_THRESHOLD" "value" ($opeaRetriever.retrieverArangoDistanceThreshold | default "1" | toString))
+    (dict "name" "RETRIEVER_ARANGO_LAMBDA_MULT" "value" ($opeaRetriever.retrieverArangoLambdaMult | default "0.5" | toString))
+    (dict "name" "RETRIEVER_ARANGO_SEARCH_START" "value" ($opeaRetriever.retrieverArangoSearchStart | default "chunk" | toString))
+    (dict "name" "RETRIEVER_ARANGO_SEARCH_MODE" "value" ($opeaRetriever.retrieverArangoSearchMode | default "vector" | toString))
+    (dict "name" "RETRIEVER_ARANGO_USE_APPROX_SEARCH" "value" ($opeaRetriever.retrieverArangoUseApproxSearch | default "false" | toString))
+    (dict "name" "RETRIEVER_ARANGO_DISTANCE_STRATEGY" "value" ($opeaRetriever.retrieverArangoDistanceStrategy | default "COSINE" | toString))
+    (dict "name" "RETRIEVER_ARANGO_NUM_CENTROIDS" "value" ($opeaRetriever.retrieverArangoNumCentroids | default "1" | toString))
+    (dict "name" "RETRIEVER_ARANGO_FILTER_STRATEGY" "value" ($opeaRetriever.retrieverArangoFilterStrategy | default "OR" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_ENABLED" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" $opeaRetriever.retrieverArangoTraversalEnabled "default" true)))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH" "value" ($opeaRetriever.retrieverArangoTraversalMaxDepth | default "2" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED" "value" ($opeaRetriever.retrieverArangoTraversalMaxReturned | default "5" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD" "value" ($opeaRetriever.retrieverArangoTraversalScoreThreshold | default "0.7" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES" "value" ($opeaRetriever.retrieverArangoTraversalConcurrentBatches | default "10" | toString))
+    (dict "name" "RETRIEVER_HYBRID_RETRIEVAL_ENABLED" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" $opeaRetriever.retrieverHybridRetrievalEnabled "default" true)))
+    (dict "name" "RETRIEVER_HYBRID_RRF_K" "value" ($opeaRetriever.retrieverHybridRrfK | default "60" | toString))
+    (dict "name" "RETRIEVER_HYBRID_BM25_CANDIDATES" "value" ($opeaRetriever.retrieverHybridBm25Candidates | default "50" | toString))
+    (dict "name" "RETRIEVER_HYBRID_DENSE_WEIGHT" "value" ($opeaRetriever.retrieverHybridDenseWeight | default "1.0" | toString))
+    (dict "name" "RETRIEVER_HYBRID_LEXICAL_WEIGHT" "value" ($opeaRetriever.retrieverHybridLexicalWeight | default "1.0" | toString))
+    (dict "name" "RETRIEVER_HYBRID_BM25_ANALYZER" "value" ($opeaRetriever.retrieverHybridBm25Analyzer | default "text_en" | toString))
+    (dict "name" "RERANKING_STRATEGY" "value" ($opeaRetriever.rerankingStrategy | default "slice" | toString))
+    (dict "name" "RETRIEVER_SUMMARIZER_ENABLED" "value" ($opeaRetriever.retrieverSummarizerEnabled | default "false" | toString))
+    (dict "name" "LOG_LEVEL" "value" ($opeaRetriever.logLevel | default "info" | toString))
     (dict "name" "VLLM_ENDPOINT" "value" $llmEndpoint)
-    (dict "name" "VLLM_MODEL_ID" "value" (.Values.opea.models.llm.modelId | default "ibm-granite/granite-4.1-8b" | toString))
+    (dict "name" "VLLM_MODEL_ID" "value" ($opeaModelsLlm.modelId | default "ibm-granite/granite-4.1-8b" | toString))
     (dict "name" "GPU_NODE_HOST" "value" (include "genieai-umbrella.opeaGpuHostname" .))
     (dict "name" "TEI_EMBEDDING_ENDPOINT" "value" $embeddingEndpoint)
     (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
@@ -55,10 +61,10 @@
 {{- $arangoSecretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "ARANGO_PASSWORD" "secret" "arango-root-secret" "key" "password" "optional" true) | fromJson) -}}
 {{- $gpuSecretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "HF_TOKEN" "VLLM_API_KEY")) | fromJsonArray -}}
 {{- /* opea.retriever.env: see the parity gate. */ -}}
-{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" (.Values.opea.retriever.env | default dict) | fromJsonArray -}}
+{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" ($opeaRetriever.env | default dict) | fromJsonArray -}}
 {{- $arangoEnv := list
     (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
-    (dict "name" "ARANGO_DB" "value" (.Values.data.arangodb.database | default "_system" | toString))
+    (dict "name" "ARANGO_DB" "value" ($dataArangodb.database | default "_system" | toString))
     (dict "name" "ARANGO_USERNAME" "value" "root")
 -}}
 {{- $svcVals := dict
@@ -72,7 +78,12 @@
       "startup"   (dict "tcpSocket" (dict "port" 7000) "failureThreshold" 30 "periodSeconds" 10)
     )
 -}}
-{{- $_ := set $vals.services "retriever" $svcVals -}}
+{{- /* The service map is rebuilt rather than mutated in place: a
+cleared `services` map has nothing to mutate, and `set` on a nil map
+crashes the template engine. */ -}}
+{{- $valsServices := $vals.services | default dict -}}
+{{- $_ := set $valsServices "retriever" $svcVals -}}
+{{- $_ := set $vals "services" $valsServices -}}
 {{- $ctx := dict "name" "retriever" "component" "retriever" "Values" $vals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}
 ---

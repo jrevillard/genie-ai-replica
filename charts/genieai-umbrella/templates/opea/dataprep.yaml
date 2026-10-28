@@ -23,53 +23,60 @@
   The guardrail is not rendered by this chart; `GUARDRAIL_URL` carries
   the image default (`http://guardrail:9090/v1/guardrails`) and the
   service tolerates an unreachable guardrail.
-*/}}
-{{- if .Values.opea.enabled -}}
+*/}}{{- $opea := .Values.opea | default dict -}}
+{{- $opeaDataprep := $opea.dataprep | default dict -}}
+{{- $opeaModels := $opea.models | default dict -}}
+{{- $opeaModelsLlm := $opeaModels.llm | default dict -}}
+{{- $data := .Values.data | default dict -}}
+{{- $dataKeycloak := $data.keycloak | default dict -}}
+{{- $dataArangodb := $data.arangodb | default dict -}}
+
+{{- if $opea.enabled -}}
 {{- $vals  := deepCopy .Values -}}
 {{- $ns    := .Values.namespace -}}
 {{- $llmEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "llm") -}}
 {{- $embeddingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "embedding") -}}
 {{- $doclingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "docling") -}}
 {{- $tuningEnv := list
-    (dict "name" "DATAPREP_COMPONENT_NAME" "value" (.Values.opea.dataprep.dataprepComponentName | default "GENIE_DATAPREP_ARANGODB" | toString))
-    (dict "name" "ARANGO_GRAPH_NAME" "value" (.Values.opea.dataprep.arangoGraphName | default "GRAPH" | toString))
-    (dict "name" "DATAPREP_MAX_CONCURRENT_BATCHES" "value" (.Values.opea.dataprep.dataprepMaxConcurrentBatches | default "20" | toString))
-    (dict "name" "DATAPREP_LLM_LABEL_BATCH_SIZE" "value" (.Values.opea.dataprep.dataprepLlmLabelBatchSize | default "4" | toString))
-    (dict "name" "DATAPREP_CHUNK_SIZE_PDF" "value" (.Values.opea.dataprep.dataprepChunkSizePdf | default "500" | toString))
-    (dict "name" "DATAPREP_CHUNK_SIZE_DOCX" "value" (.Values.opea.dataprep.dataprepChunkSizeDocx | default "1000" | toString))
-    (dict "name" "DATAPREP_CHUNK_SIZE_XLSX" "value" (.Values.opea.dataprep.dataprepChunkSizeXlsx | default "1500" | toString))
-    (dict "name" "DATAPREP_CHUNK_SIZE_PPTX" "value" (.Values.opea.dataprep.dataprepChunkSizePptx | default "500" | toString))
-    (dict "name" "DATAPREP_CHUNK_SIZE_HTML" "value" (.Values.opea.dataprep.dataprepChunkSizeHtml | default "500" | toString))
-    (dict "name" "DATAPREP_CHUNK_SIZE_TXT" "value" (.Values.opea.dataprep.dataprepChunkSizeTxt | default "500" | toString))
-    (dict "name" "DATAPREP_CHUNK_SIZE_MD" "value" (.Values.opea.dataprep.dataprepChunkSizeMd | default "500" | toString))
-    (dict "name" "DATAPREP_CHUNK_OVERLAP" "value" (.Values.opea.dataprep.dataprepChunkOverlap | default "50" | toString))
-    (dict "name" "LABELING_STRATEGY" "value" (.Values.opea.dataprep.labelingStrategy | default "llm" | toString))
-    (dict "name" "EMBEDDING_LABEL_THRESHOLD" "value" (.Values.opea.dataprep.embeddingLabelThreshold | default "0.75" | toString))
-    (dict "name" "BM25_LABEL_THRESHOLD" "value" (.Values.opea.dataprep.bm25LabelThreshold | default "2.00" | toString))
-    (dict "name" "CONTENT_EXTRACTION_METHOD" "value" (.Values.opea.dataprep.contentExtractionMethod | default "docling" | toString))
-    (dict "name" "CONTEXTUAL_RETRIEVAL_ENABLED" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" .Values.opea.dataprep.contextualRetrievalEnabled "default" true)))
-    (dict "name" "DATAPREP_CONTEXTUAL_MODEL" "value" (.Values.opea.dataprep.dataprepContextualModel | default "" | toString))
-    (dict "name" "DATAPREP_CONTEXTUAL_DOC_BUDGET" "value" (.Values.opea.dataprep.dataprepContextualDocBudget | default "6000" | toString))
-    (dict "name" "DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL" "value" (.Values.opea.dataprep.dataprepContextualDocBudgetDocLevel | default "100000" | toString))
-    (dict "name" "DATAPREP_CONTEXTUAL_MAX_TOKENS" "value" (.Values.opea.dataprep.dataprepContextualMaxTokens | default "512" | toString))
-    (dict "name" "CONTEXTUAL_STRATEGY" "value" (.Values.opea.dataprep.contextualStrategy | default "per_chunk" | toString))
-    (dict "name" "CONTEXTUAL_LABEL_RAW" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" .Values.opea.dataprep.contextualLabelRaw "default" true)))
-    (dict "name" "VLLM_MODEL_ID" "value" (.Values.opea.models.llm.modelId | default "ibm-granite/granite-4.1-8b" | toString))
+    (dict "name" "DATAPREP_COMPONENT_NAME" "value" ($opeaDataprep.dataprepComponentName | default "GENIE_DATAPREP_ARANGODB" | toString))
+    (dict "name" "ARANGO_GRAPH_NAME" "value" ($opeaDataprep.arangoGraphName | default "GRAPH" | toString))
+    (dict "name" "DATAPREP_MAX_CONCURRENT_BATCHES" "value" ($opeaDataprep.dataprepMaxConcurrentBatches | default "20" | toString))
+    (dict "name" "DATAPREP_LLM_LABEL_BATCH_SIZE" "value" ($opeaDataprep.dataprepLlmLabelBatchSize | default "4" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_PDF" "value" ($opeaDataprep.dataprepChunkSizePdf | default "500" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_DOCX" "value" ($opeaDataprep.dataprepChunkSizeDocx | default "1000" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_XLSX" "value" ($opeaDataprep.dataprepChunkSizeXlsx | default "1500" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_PPTX" "value" ($opeaDataprep.dataprepChunkSizePptx | default "500" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_HTML" "value" ($opeaDataprep.dataprepChunkSizeHtml | default "500" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_TXT" "value" ($opeaDataprep.dataprepChunkSizeTxt | default "500" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_MD" "value" ($opeaDataprep.dataprepChunkSizeMd | default "500" | toString))
+    (dict "name" "DATAPREP_CHUNK_OVERLAP" "value" ($opeaDataprep.dataprepChunkOverlap | default "50" | toString))
+    (dict "name" "LABELING_STRATEGY" "value" ($opeaDataprep.labelingStrategy | default "llm" | toString))
+    (dict "name" "EMBEDDING_LABEL_THRESHOLD" "value" ($opeaDataprep.embeddingLabelThreshold | default "0.75" | toString))
+    (dict "name" "BM25_LABEL_THRESHOLD" "value" ($opeaDataprep.bm25LabelThreshold | default "2.00" | toString))
+    (dict "name" "CONTENT_EXTRACTION_METHOD" "value" ($opeaDataprep.contentExtractionMethod | default "docling" | toString))
+    (dict "name" "CONTEXTUAL_RETRIEVAL_ENABLED" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" $opeaDataprep.contextualRetrievalEnabled "default" true)))
+    (dict "name" "DATAPREP_CONTEXTUAL_MODEL" "value" ($opeaDataprep.dataprepContextualModel | default "" | toString))
+    (dict "name" "DATAPREP_CONTEXTUAL_DOC_BUDGET" "value" ($opeaDataprep.dataprepContextualDocBudget | default "6000" | toString))
+    (dict "name" "DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL" "value" ($opeaDataprep.dataprepContextualDocBudgetDocLevel | default "100000" | toString))
+    (dict "name" "DATAPREP_CONTEXTUAL_MAX_TOKENS" "value" ($opeaDataprep.dataprepContextualMaxTokens | default "512" | toString))
+    (dict "name" "CONTEXTUAL_STRATEGY" "value" ($opeaDataprep.contextualStrategy | default "per_chunk" | toString))
+    (dict "name" "CONTEXTUAL_LABEL_RAW" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" $opeaDataprep.contextualLabelRaw "default" true)))
+    (dict "name" "VLLM_MODEL_ID" "value" ($opeaModelsLlm.modelId | default "ibm-granite/granite-4.1-8b" | toString))
     (dict "name" "VLLM_ENDPOINT" "value" $llmEndpoint)
     (dict "name" "GPU_NODE_HOST" "value" (include "genieai-umbrella.opeaGpuHostname" .))
     (dict "name" "TEI_EMBEDDING_ENDPOINT" "value" $embeddingEndpoint)
-    (dict "name" "DOCLING_DEVICE" "value" (.Values.opea.dataprep.doclingDevice | default "cuda" | toString))
-    (dict "name" "GUARDRAIL_URL" "value" (.Values.opea.dataprep.guardrailUrl | default "http://guardrail:9090/v1/guardrails" | toString))
+    (dict "name" "DOCLING_DEVICE" "value" ($opeaDataprep.doclingDevice | default "cuda" | toString))
+    (dict "name" "GUARDRAIL_URL" "value" ($opeaDataprep.guardrailUrl | default "http://guardrail:9090/v1/guardrails" | toString))
     (dict "name" "DOCUMENT_REPOSITORY_URL" "value" (include "genieai-umbrella.serviceURL" (dict "root" . "name" "document-repository" "port" 80)))
     (dict "name" "BACKEND_SERVICE_URL" "value" (include "genieai-umbrella.serviceURL" (dict "root" . "name" "backend" "port" 80)))
     (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
-    (dict "name" "KC_REALM" "value" (.Values.opea.dataprep.kcRealm | default (.Values.data.keycloak.realm | default "genie") | toString))
-    (dict "name" "KC_DATAPREP_CLIENT_ID" "value" (.Values.opea.dataprep.kcDataprepClientId | default "dataprep-service-client" | toString))
+    (dict "name" "KC_REALM" "value" ($opeaDataprep.kcRealm | default ($dataKeycloak.realm | default "genie") | toString))
+    (dict "name" "KC_DATAPREP_CLIENT_ID" "value" ($opeaDataprep.kcDataprepClientId | default "dataprep-service-client" | toString))
     (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
-    (dict "name" "KEYCLOAK_SSL_SKIP_VERIFY" "value" (.Values.opea.dataprep.keycloakSslSkipVerify | default "0" | toString))
+    (dict "name" "KEYCLOAK_SSL_SKIP_VERIFY" "value" ($opeaDataprep.keycloakSslSkipVerify | default "0" | toString))
     (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
-    (dict "name" "LOG_LEVEL" "value" (.Values.opea.dataprep.logLevel | default "info" | toString))
+    (dict "name" "LOG_LEVEL" "value" ($opeaDataprep.logLevel | default "info" | toString))
 -}}
 {{- /* DOCLING_ENDPOINT follows the code's own GPU-vs-local logic: an
 empty endpoint = the in-process docling converter, a non-empty one = a
@@ -101,11 +108,11 @@ fallback wins), and renders the operator override as a bare value so
 the YAML emitter does not re-quote it (a YAML block scalar like `|`
 in the values file is honored end-to-end for multi-line prompts). */ -}}
 {{- $promptEnv := list -}}
-{{- $labelPrompt := .Values.opea.dataprep.labelSelectorSystemPrompt | default "" -}}
+{{- $labelPrompt := $opeaDataprep.labelSelectorSystemPrompt | default "" -}}
 {{- if $labelPrompt -}}
 {{- $promptEnv = append $promptEnv (dict "name" "LABEL_SELECTOR_SYSTEM_PROMPT" "value" $labelPrompt) -}}
 {{- end -}}
-{{- $ctxPrompt := .Values.opea.dataprep.contextualRetrievalPrompt | default "" -}}
+{{- $ctxPrompt := $opeaDataprep.contextualRetrievalPrompt | default "" -}}
 {{- if $ctxPrompt -}}
 {{- $promptEnv = append $promptEnv (dict "name" "CONTEXTUAL_RETRIEVAL_PROMPT" "value" $ctxPrompt) -}}
 {{- end -}}
@@ -116,10 +123,10 @@ in the values file is honored end-to-end for multi-line prompts). */ -}}
 {{- $gpuSecretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "HF_TOKEN" "VLLM_API_KEY" "HUGGINGFACEHUB_API_TOKEN")) | fromJsonArray -}}
 {{- /* opea.dataprep.env: see the parity gate. The rows come last so an
 operator's value wins over a derived row of the same name. */ -}}
-{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" (.Values.opea.dataprep.env | default dict) | fromJsonArray -}}
+{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" ($opeaDataprep.env | default dict) | fromJsonArray -}}
 {{- $arangoEnv := list
     (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
-    (dict "name" "ARANGO_DB" "value" (.Values.data.arangodb.database | default "_system" | toString))
+    (dict "name" "ARANGO_DB" "value" ($dataArangodb.database | default "_system" | toString))
     (dict "name" "ARANGO_USERNAME" "value" "root")
 -}}
 {{- $svcVals := dict
@@ -133,7 +140,12 @@ operator's value wins over a derived row of the same name. */ -}}
       "startup"   (dict "tcpSocket" (dict "port" 5000) "failureThreshold" 30 "periodSeconds" 10)
     )
 -}}
-{{- $_ := set $vals.services "dataprep" $svcVals -}}
+{{- /* The service map is rebuilt rather than mutated in place: a
+cleared `services` map has nothing to mutate, and `set` on a nil map
+crashes the template engine. */ -}}
+{{- $valsServices := $vals.services | default dict -}}
+{{- $_ := set $valsServices "dataprep" $svcVals -}}
+{{- $_ := set $vals "services" $valsServices -}}
 {{- $ctx := dict "name" "dataprep" "component" "dataprep" "Values" $vals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}
 ---

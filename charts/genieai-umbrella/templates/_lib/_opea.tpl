@@ -19,7 +19,12 @@ Unknown path key → fail. Unknown mode → fail.
 {{- define "genieai-umbrella.opeaGpuEndpoint" -}}
 {{- $root := .root -}}
 {{- $key  := .path -}}
-{{- $mode := $root.Values.opea.gpu.mode -}}
+{{- /* The GPU block is normalized parent-first: a cleared `opea` or
+`opea.gpu` must fail by NAME (the mode guard below) instead of
+crashing the template engine on a nil parent. */ -}}
+{{- $opea := $root.Values.opea | default dict -}}
+{{- $gpu := $opea.gpu | default dict -}}
+{{- $mode := $gpu.mode -}}
 
 {{- $validKeys := list "llm" "embedding" "reranker" "translation" "docling" -}}
 {{- if not (has $key $validKeys) -}}
@@ -43,7 +48,7 @@ an empty env var produces). */ -}}
   {{- end -}}
 
 {{- else if eq $mode "external" -}}
-  {{- $host := $root.Values.opea.gpu.nodeHost -}}
+  {{- $host := $gpu.nodeHost -}}
   {{- if not $host -}}
 {{- fail "opea.gpu.mode=external requires opea.gpu.nodeHost (e.g. https://gpu-node:444); without it every orchestrator would render an empty GPU endpoint" -}}
   {{- else -}}
@@ -51,7 +56,8 @@ an empty env var produces). */ -}}
 the empty endpoint is the documented "no such remote target" signal
 (dataprep's in-process docling fallback keys on it), and host + "" would
 hand the application a URL whose every request 404s. */ -}}
-{{- $p := index $root.Values.opea.gpu.paths $key -}}
+{{- $paths := $gpu.paths | default dict -}}
+{{- $p := index $paths $key -}}
 {{- if $p -}}
 {{- trimSuffix "/" $host }}{{ $p }}
 {{- end -}}
@@ -77,7 +83,9 @@ answers all cross it.
 Signature: {{ include "genieai-umbrella.opeaSslSkipVerify" . }}
 */}}
 {{- define "genieai-umbrella.opeaSslSkipVerify" -}}
-{{- if .Values.opea.gpu.skipTlsVerify -}}1{{- else -}}0{{- end -}}
+{{- $opea := .Values.opea | default dict -}}
+{{- $gpu := $opea.gpu | default dict -}}
+{{- if $gpu.skipTlsVerify -}}1{{- else -}}0{{- end -}}
 {{- end -}}
 
 {{/*
@@ -87,7 +95,9 @@ Feeds the GPU_NODE_HOST env the model-id auto-detection gates on.
 Empty nodeHost → empty string (auto-detection stays off).
 */}}
 {{- define "genieai-umbrella.opeaGpuHostname" -}}
-{{- regexReplaceAll "^([a-z]+://)?(\\[[^\\]]+\\]|[^:/]+).*" (.Values.opea.gpu.nodeHost | default "") "$2" -}}
+{{- $opea := .Values.opea | default dict -}}
+{{- $gpu := $opea.gpu | default dict -}}
+{{- regexReplaceAll "^([a-z]+://)?(\\[[^\\]]+\\]|[^:/]+).*" ($gpu.nodeHost | default "") "$2" -}}
 {{- end -}}
 
 {{/*
@@ -115,6 +125,8 @@ have to be 0.0.0.0/0 the way it was when the chart ignored the URL:
 {{- define "genieai-umbrella.opeaNetworkFromUrl" -}}
 {{- $root := .root -}}
 {{- $url := .url | default "" -}}
+{{- $opea := $root.Values.opea | default dict -}}
+{{- $gpu := $opea.gpu | default dict -}}
 {{- if contains "[" $url -}}
 {{- fail (printf "an IPv6 literal (%s) is not supported as a named destination: the egress rule can only express an IPv4 CIDR, and an IPv6 connection matches no ipBlock — use a DNS name" $url) -}}
 {{- end -}}
@@ -123,8 +135,8 @@ have to be 0.0.0.0/0 the way it was when the chart ignored the URL:
 {{- $cidrs := list -}}
 {{- if $isIPv4 -}}
 {{- $cidrs = append $cidrs (printf "%s/32" $host) -}}
-{{- else if $root.Values.opea.gpu.allowedCIDRs -}}
-{{- $cidrs = $root.Values.opea.gpu.allowedCIDRs -}}
+{{- else if $gpu.allowedCIDRs -}}
+{{- $cidrs = $gpu.allowedCIDRs -}}
 {{- else -}}
 {{- $cidrs = list "0.0.0.0/0" -}}
 {{- end -}}
@@ -152,7 +164,9 @@ they reach.
 Relative indentation: callers apply `| nindent 4`.
 */}}
 {{- define "genieai-umbrella.opeaGpuEgressRule" -}}
-{{- include "genieai-umbrella.opeaEgressRuleFromUrl" (dict "root" . "url" (.Values.opea.gpu.nodeHost | default "")) -}}
+{{- $opea := .Values.opea | default dict -}}
+{{- $gpu := $opea.gpu | default dict -}}
+{{- include "genieai-umbrella.opeaEgressRuleFromUrl" (dict "root" . "url" ($gpu.nodeHost | default "")) -}}
 {{- end -}}
 
 {{/*

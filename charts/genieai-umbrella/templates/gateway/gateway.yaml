@@ -12,7 +12,11 @@ derivation below would produce garbage (hostname "[2001", and
 An ingress fronting IPv6 still serves hosts by DNS name.
 */}}
 {{- define "genieai-umbrella.ingressHost" -}}
-{{- $host := .Values.ingress.host | required "ingress.host is required — supply the public hostname (may carry :port) in the environment overlay" -}}
+{{- /* Normalized before it is read: a CLEARED ingress block must fail
+with this helper's own message (naming the values key) instead of the
+template engine crashing on a nil parent. */ -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- $host := $ingress.host | required "ingress.host is required — supply the public hostname (may carry :port) in the environment overlay" -}}
 {{- if contains "[" $host -}}
 {{- fail (printf "ingress.host must be a DNS hostname optionally followed by :port — an IPv6 literal (%s) cannot be split; use a hostname" $host) -}}
 {{- end -}}
@@ -68,9 +72,13 @@ this helper — a second derivation site would let the two drift and leave
 the https listener waiting on a Secret nobody writes.
 */}}
 {{- define "genieai-umbrella.tlsSecretName" -}}
-{{- .Values.ingress.tls.secretName | default (printf "%s-tls" (include "genieai-umbrella.ingressHostname" .)) -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- $ingressTls := $ingress.tls | default dict -}}
+{{- $ingressTls.secretName | default (printf "%s-tls" (include "genieai-umbrella.ingressHostname" .)) -}}
 {{- end -}}
-{{- if .Values.ingress.enabled -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- $ingressTls := $ingress.tls | default dict -}}
+{{- if $ingress.enabled -}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
@@ -79,7 +87,7 @@ metadata:
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "ingress") | nindent 4 }}
 spec:
-  gatewayClassName: {{ .Values.ingress.className | default "envoy" | quote }}
+  gatewayClassName: {{ $ingress.className | default "envoy" | quote }}
   listeners:
     - name: http
       protocol: HTTP
@@ -95,7 +103,7 @@ spec:
       HTTP→HTTPS redirect, which the operator expresses as an HTTPRoute
       with a requestRedirect filter attached to the http listener.
     */ -}}
-    {{- if .Values.ingress.tls.enabled }}
+    {{- if $ingressTls.enabled }}
     - name: https
       protocol: HTTPS
       # The listener binds the PUBLIC port — the one ingress.host carries

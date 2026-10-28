@@ -99,7 +99,9 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: arango-operator-crd-access
-{{- if .Values.data.arangodb.enabled }}
+{{- $data := .Values.data | default dict -}}
+{{- $arangodb := $data.arangodb | default dict -}}
+{{- if $arangodb.enabled }}
 ---
 # Cluster-wide ClusterRole + ClusterRoleBinding for the bootstrap
 # kube-arangodb operator. The in-namespace Role+RoleBinding above

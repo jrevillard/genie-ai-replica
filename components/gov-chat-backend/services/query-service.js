@@ -186,7 +186,10 @@ class QueryService {
         logger.error(`Error resolving serviceIds: ${error.message}`);
       }
     }
-    return { categoryId, serviceIds };
+    // One service can answer through BOTH paths (its translation row
+    // for one label, its own nameEN for another): the record counts it
+    // once.
+    return { categoryId, serviceIds: [...new Set(serviceIds)] };
   }
 
   /**

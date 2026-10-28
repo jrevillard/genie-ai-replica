@@ -392,10 +392,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     final missing = (scope['missingLabels'] as List).cast<String>();
     final parts = <String>[];
     if (missing.isNotEmpty) {
+      // Through the i18n service's own substitution: the web half of
+      // this MR documented a hand-rolled replaceAll as exactly the bug
+      // a locale copy edit re-introduces.
       parts.add(
-        tr(
-          'chatbot.quickHelpLabelGone',
-        ).replaceAll('{labels}', missing.join(', ')),
+        tr('chatbot.quickHelpLabelGone', args: {'labels': missing.join(', ')}),
       );
     }
     if (scope['categoryMissing'] as bool) {
@@ -525,7 +526,22 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           _selectedCategoryName = scope.categoryName ?? '';
         }
         _activeQuickHelpButtonId = scope.quickHelpButtonId;
-        _activeQuickHelpScope = scope.quickHelpScopeState;
+        // During a hierarchy OUTAGE the resolver was built over an
+        // empty tree: every declared label reads as missing, and the
+        // refusal would name a configuration problem that may not exist.
+        // The outage is the CALLER's fact — the grid handles it through
+        // unavailableScopeFor, and the restore does the same.
+        if (_treeUnavailable && scope.quickHelpButtonId != null) {
+          final button = _quickHelpButtons.firstWhere(
+            (b) => b['id']?.toString() == scope.quickHelpButtonId,
+            orElse: () => <String, dynamic>{},
+          );
+          _activeQuickHelpScope = button.isNotEmpty
+              ? QuickHelpScopeResolver.unavailableScopeFor(button)
+              : scope.quickHelpScopeState;
+        } else {
+          _activeQuickHelpScope = scope.quickHelpScopeState;
+        }
         // A Quick Help scope narrows the FIRST follow-up by its declared
         // labels (the mobile's one-turn scope); the sidebar labels that
         // were selected BESIDE it keep narrowing the whole conversation —

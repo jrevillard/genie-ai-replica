@@ -256,6 +256,49 @@ void main() {
       expect(scope.serviceLabelsEn, ['Births']);
     });
 
+    test('a LEGACY category.<id> tag restores the category, not a refusal', () {
+      // Conversations saved before the redesign carry 'category.<id>' —
+      // the old restore's spelling for a category-only scope. The web
+      // restores it as the category; the mobile resolver counted it as
+      // an unknown sidebar tag (count 1, labels 0) and refused EVERY
+      // follow-up on a conversation the web answers.
+      final scope = convResolver().resolve(tags: ['category.2']);
+
+      expect(scope.categoryId, '2');
+      expect(scope.categoryNameEn, 'Civil Registry');
+      expect(scope.serviceLabelsEn, isEmpty);
+      // The legacy tag is not a sidebar tag: it names the CATEGORY, and
+      // the count must not read it as a dropped label.
+      expect(scope.sidebarTagCount, 0);
+      expect(
+        scopeCanGoOnTheWire(
+          categoryId: scope.categoryId,
+          categoryNameEn: scope.categoryNameEn,
+          serviceLabels: scope.serviceLabelsEn,
+          sidebarServiceLabels: scope.sidebarLabelsEn,
+          sidebarServiceCount: scope.sidebarTagCount,
+        ),
+        isTrue,
+      );
+    });
+
+    test('a LEGACY category.general tag names no scope', () {
+      final scope = convResolver().resolve(tags: ['category.general']);
+
+      expect(scope.categoryId, isNull);
+      expect(scope.sidebarTagCount, 0);
+      expect(
+        scopeCanGoOnTheWire(
+          categoryId: scope.categoryId,
+          categoryNameEn: scope.categoryNameEn,
+          serviceLabels: scope.serviceLabelsEn,
+          sidebarServiceLabels: scope.sidebarLabelsEn,
+          sidebarServiceCount: scope.sidebarTagCount,
+        ),
+        isTrue,
+      );
+    });
+
     test(
       'a restored QUICK HELP scope with a DEAD declared label refuses the send',
       () {

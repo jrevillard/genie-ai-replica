@@ -291,13 +291,38 @@ class ConversationScopeResolver {
     // on a label no chunk carries, and the follow-up would abstain. It is
     // dropped here — the send guard then refuses the scope if nothing
     // nameable is left, instead of sending an unfiltered query.
-    final knownLabels = tagList.where(_hierarchy.knowsLabel).toList();
+    // A LEGACY tag: conversations saved before the redesign carry
+    // 'category.<id>' — the old restore's spelling for a category-only
+    // scope. It names the CATEGORY, not a label: reading it as an
+    // unknown sidebar tag (count without a label) refused every
+    // follow-up on a conversation the web restores and answers.
+    // 'category.general' is the no-scope placeholder: it contributes
+    // nothing. The legacy tag wins over the conversation's own edge —
+    // it IS the scope the conversation was saved with.
+    final legacyCategory = RegExp(r'^category\.(.+)$').firstMatch(
+      tagList.firstWhere(
+        (tag) => tag.startsWith('category.'),
+        orElse: () => '',
+      ),
+    );
+    final String? legacyCategoryId =
+        legacyCategory != null && legacyCategory.group(1) != 'general'
+        ? legacyCategory.group(1)
+        : null;
+    final sidebarTags = tagList
+        .where((tag) => !tag.startsWith('category.'))
+        .toList();
+    final knownLabels = sidebarTags.where(_hierarchy.knowsLabel).toList();
     return ConversationScope(
-      categoryId: categoryKey,
-      categoryNameEn: _hierarchy.categoryEnLabel(categoryKey),
-      categoryName: _hierarchy.categoryDisplayName(categoryKey),
+      categoryId: legacyCategoryId ?? categoryKey,
+      categoryNameEn: _hierarchy.categoryEnLabel(
+        legacyCategoryId ?? categoryKey,
+      ),
+      categoryName: _hierarchy.categoryDisplayName(
+        legacyCategoryId ?? categoryKey,
+      ),
       serviceLabelsEn: knownLabels,
-      sidebarTagCount: tagList.length,
+      sidebarTagCount: sidebarTags.length,
     );
   }
 }

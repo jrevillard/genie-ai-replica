@@ -810,6 +810,24 @@ describe('QueryService', () => {
       expect(savedDoc.serviceId).toContain('svc-9');
     });
 
+    it('dedupes service ids across the translation and nameEN lookups', async () => {
+      // Two labels, one service: the first label resolves through the
+      // translation row, the second through the service's own nameEN —
+      // both land on svc-1. The query record counts the service once.
+      const data = createMockQueryData({
+        context: { categoryLabel: null, serviceLabels: ['Tomato', 'Tomato EN name'] }
+      });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([{ label: 'Tomato', serviceId: 'svc-1' }]))
+        .mockResolvedValueOnce(createMockCursor(['svc-1'])); // nameEN fallback: same service
+
+      await queryService.initStreamQuery(data, {});
+
+      const savedDoc = mockQueriesCollection.save.mock.calls[0][0];
+      expect(savedDoc.serviceId).toEqual(['svc-1']);
+    });
+
     it('does not re-resolve the category when the request carries its own categoryId', async () => {
       // The request names its category AND a service label: the id
       // resolution ran the full category lookup anyway and threw its

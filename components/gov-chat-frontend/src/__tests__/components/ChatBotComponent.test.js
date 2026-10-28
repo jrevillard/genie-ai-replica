@@ -1640,6 +1640,37 @@ describe('ChatBotComponent', () => {
       }
     });
 
+    it('a STALE hidden prompt never replaces an unrelated question', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // A button's send was refused (its scope could not be named): the
+      // hidden prompt stayed armed. The user then asks an unrelated
+      // question — the OLD prompt must not answer for it. The prompt is
+      // bound to the text it was armed with: same text retry keeps it,
+      // a different question gets exactly what the user typed.
+      vm.hiddenPromptForNextMessage = 'OLD BUTTON PROMPT';
+      vm.hiddenPromptForText = 'old button question';
+      vm.newMessage = 'a completely different question';
+      await vm.sendMessage();
+
+      const payload = mockSubmitQueryStream.mock.calls.at(-1)[0];
+      expect(payload.text).toBe('a completely different question');
+    });
+
+    it('a refused button send keeps its hidden prompt for the SAME text', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.hiddenPromptForNextMessage = 'OLD BUTTON PROMPT';
+      vm.hiddenPromptForText = 'old button question';
+      vm.newMessage = 'old button question';
+      await vm.sendMessage();
+
+      const payload = mockSubmitQueryStream.mock.calls.at(-1)[0];
+      expect(payload.text).toBe('OLD BUTTON PROMPT');
+    });
+
     it('sends no category key — the client contract carries labels only', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
@@ -2192,6 +2223,32 @@ describe('ChatBotComponent', () => {
       // Identity and labels are untouched: only the display moved.
       expect(vm.selectedContextItems[0].id).toBe('births');
       expect(vm.selectedContextItems[0].serviceKey).toBe('births');
+    });
+
+    it('a locale switch re-resolves a CATEGORY-ONLY chip, not the stale name', async () => {
+      const tree = [
+        { catKey: '2', name: 'Impuestos', nameEN: 'Taxes', children: [] },
+        { catKey: '2', name: 'Impuestos (fr)', nameEN: 'Taxes', children: [] }
+      ];
+      mockLiveTree(tree);
+      const wrapper = await createChatBotWrapperAsync(tree);
+      const vm = wrapper.vm;
+
+      // A categoryOnly chip has no serviceKey: the watcher's EN-label
+      // branch has nothing to resolve and fell back to the OLD locale's
+      // name. The category's display name is what the chip is.
+      vm.$store.commit('conversation/setContextItems', [
+        { service: 'Impuestos', serviceKey: null, categoryOnly: true, category: '2', selected: true }
+      ]);
+
+      vm.loadServiceCategories = jest.fn(); // the reload would overwrite the fr tree mock below
+      const frTree = [{ catKey: '2', name: 'Impuestos (fr)', nameEN: 'Taxes', children: [] }];
+      vm.serviceCategories = frTree;
+      wrapper.vm.$i18n.locale = 'fr';
+      await vm.$nextTick();
+      await flushPromises();
+
+      expect(vm.selectedContextItems[0].service).toBe('Impuestos (fr)');
     });
 
     it('a FAILED hierarchy load is retried, not cached for the session', async () => {

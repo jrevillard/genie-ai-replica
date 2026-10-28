@@ -521,17 +521,14 @@ const QUICK_HELP_SOURCE = 'quickHelp';
 // One Quick Help selection, in the shape every context item uses — whether it
 // was picked from the overlay, restored from a saved conversation, or re-added
 // when the last selected item was removed.
-function quickHelpContextItem(
-  button,
-  { serviceLabels = button.serviceLabels || null, category = button.category } = {}
-) {
+function quickHelpContextItem(button) {
   return {
     service: button.service,
-    serviceLabels,
+    serviceLabels: button.serviceLabels || null,
     serviceKey: button.serviceKey || button.id || button.service,
     source: QUICK_HELP_SOURCE,
     id: button.id,
-    category,
+    category: button.category,
     selected: true
   };
 }
@@ -711,7 +708,11 @@ export default {
       isSaving: false, // Loading state for save operation to prevent double-save
       lastSaveSucceeded: false, // The save's own verdict for the leave arms
       loadSeq: 0, // Incremented per conversation load; stale responses are dropped
-      hiddenPromptForNextMessage: null, // Stores hidden prompt for dual-prompt mechanism
+      hiddenPromptForNextMessage: null, // Stores hidden prompt for dual-prompt mechanism      // The text the hidden prompt was armed FOR: a refused send leaves
+      // the prompt armed (retrying the same question must keep it), and
+      // the binding is what stops an unrelated question from being
+      // answered by a prompt it never belonged to.
+      hiddenPromptForText: null,
       // Right sidebar width / collapsed state, both persisted in
       // localStorage and restored clamped against the current viewport.
       rightSidebarWidth: SIDEBAR_DEFAULTS.right,
@@ -1037,10 +1038,12 @@ export default {
               service:
                 item.source === QUICK_HELP_SOURCE
                   ? this.quickHelpTitleFor(item, newLocale)
-                  : this.displayNameForEnLabel(item.serviceKey) || this.safeTranslate(item.service)
+                  : item.categoryOnly
+                    ? this.getCategoryDisplayName(item.category)
+                    : this.displayNameForEnLabel(item.serviceKey) || this.safeTranslate(item.service)
             }))
           );
-          this.loadServiceCategories(); // Reload categories for the new locale
+          this.ensureServiceCategoriesLoaded(); // Reload categories for the new locale — and retry a failed load
         }
       );
     }
@@ -1048,7 +1051,10 @@ export default {
     eventBus.$on('treeNodeSelected', this.handleTreeNodeSelected);
     this.scrollToBottom();
     this.loadQuickHelpButtons();
-    this.serviceCategoriesLoadPromise = this.loadServiceCategories(); // Fetch categories on mount
+    // Through the assurer: a transient failure at mount is not cached
+    // for the session — the next need (a restore, a locale switch)
+    // retries instead of leaving every scoped card dead.
+    this.ensureServiceCategoriesLoaded();
 
     // Removed the statusUpdateInterval
     this.updateDialogTexts();
@@ -1711,6 +1717,7 @@ export default {
 
         // Store the hidden prompt to send to backend (what LLM sees)
         this.hiddenPromptForNextMessage = rawOption.hiddenPrompt || this.$t(rawOption.hiddenPromptKey);
+        this.hiddenPromptForText = visibleMessage;
         this.sendMessage();
       }
     },
@@ -1872,7 +1879,13 @@ export default {
       if (!content) return;
 
       // For dual-prompt mechanism: use hidden prompt for backend, visible text for display
-      const messageForBackend = this.hiddenPromptForNextMessage || content;
+      // The hidden prompt is bound to the text it was armed with: a
+      // refused send leaves it armed so the SAME question keeps it, and
+      // any other question sends exactly what the user typed.
+      const messageForBackend =
+        this.hiddenPromptForNextMessage && this.hiddenPromptForText === content
+          ? this.hiddenPromptForNextMessage
+          : content;
       const messageForDisplay = content;
 
       const useConversationContext = this.selectedContextItems.length > 0;
@@ -1925,6 +1938,7 @@ export default {
       this.isLoading = false;
       // Clear hidden prompt after use
       this.hiddenPromptForNextMessage = null;
+      this.hiddenPromptForText = null;
 
       // Placeholder bot message for streaming content; the outgoing query
       // text stays on the message so a failed turn can retry itself.

@@ -517,8 +517,19 @@ expect_fail "a Secret name that is not a Secret name (bootstrapAdmin.userSecret)
   $(valid_flags) --set 'data.keycloak.bootstrapAdmin.userSecret=bad name; kubectl'
 
 expect_fail "a convergence envSecrets row secretName that is not a Secret name" \
-  "is not a valid Secret name" \
+  "data.keycloak.convergence.envSecrets[0].secretName" \
   $(valid_flags) --set 'data.keycloak.convergence.envSecrets[0].secretName=bad name; kubectl'
+
+expect_fail "a Secret name past the 253-character DNS-subdomain bound" \
+  "is longer than the Kubernetes Secret-name bound" \
+  $(valid_flags) --set ingress.enabled=true --set ingress.tls.enabled=true --set "ingress.tls.secretName=$(printf 'a%.0s' $(seq 1 254))"
+
+expect_fail "a Secret name with a dot-label past the 63-character bound" \
+  "carries a dot-label longer than the Kubernetes bound" \
+  $(valid_flags) --set ingress.enabled=true --set ingress.tls.enabled=true --set "ingress.tls.secretName=a.$(printf 'b%.0s' $(seq 1 64)).c"
+
+expect_ok "a scheme-ful kubeletToolsMirror still renders" \
+  $(valid_flags) --set global.kubeletToolsMirror=https://mirror.internal:8443
 
 # 34b. The two global tooling keys are interpolated into the tools-init
 #      container's shell: the values schema constrains them to the URL /

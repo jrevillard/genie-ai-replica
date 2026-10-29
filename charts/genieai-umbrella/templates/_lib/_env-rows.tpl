@@ -169,9 +169,10 @@ Usage:
 {{- if not (regexMatch "^[A-Za-z_][A-Za-z0-9_]*$" (toString (get $row "envVar"))) -}}
 {{- fail (printf "data.keycloak.convergence.envSecrets[%d].envVar (%q) is not an environment variable name: it must start with a letter or an underscore and hold only letters, digits and underscores" $i (toString (get $row "envVar"))) -}}
 {{- end -}}
-{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" (toString (get $row "secretName"))) -}}
-{{- fail (printf "data.keycloak.convergence.envSecrets[%d].secretName (%q) is not a valid Secret name: lowercase alphanumerics, '.' and '-', bounded by alphanumerics" $i (toString (get $row "secretName"))) -}}
-{{- end -}}
+{{- /* The helper RETURNS the validated name; here it is called for its
+fail side-effect only, so the return value is captured and discarded —
+an uncaptured include would print the name into the rows' JSON. */ -}}
+{{- $validated := include "genieai-umbrella.validatedSecretName" (dict "name" (get $row "secretName") "key" (printf "data.keycloak.convergence.envSecrets[%d].secretName" $i)) -}}
 {{- end -}}
 {{- toJson $rows -}}
 {{- end -}}

@@ -643,6 +643,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                         timeout=http_timeout(SUMMARIZER_TIMEOUT_SECONDS),
                     )
                     self._llm_model_id = OPENAI_CHAT_MODEL
+                    self._llm_backend = "openai"
                 except openai.AuthenticationError:
                     logger.error("OpenAI API Key is invalid.")
                 except Exception as e:
@@ -650,6 +651,7 @@ class GenieaiArangoRetriever(OpeaComponent):
 
             elif VLLM_ENDPOINT:
                 self._llm_model_id = self._resolve_vllm_model_id()
+                self._llm_backend = "vllm"
                 self.llm = self._create_vllm_client(self._llm_model_id)
             else:
                 raise HTTPException(
@@ -691,7 +693,9 @@ class GenieaiArangoRetriever(OpeaComponent):
         model baked into the current client (e.g. the GPU node changed models), the
         ChatOpenAI client is recreated.
         """
-        if VLLM_ENDPOINT:
+        # Re-check only the vLLM-backed summarizer: an OpenAI-configured
+        # client must survive untouched (different endpoint, different id).
+        if VLLM_ENDPOINT and getattr(self, "_llm_backend", None) == "vllm":
             current_id = self._resolve_vllm_model_id()
             if current_id != getattr(self, "_llm_model_id", None):
                 logger.info(f"Summarizer model changed: {self._llm_model_id} -> {current_id}, recreating client")

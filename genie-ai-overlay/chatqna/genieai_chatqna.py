@@ -23,8 +23,14 @@ from metrics import (
 
 from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
 from core.label_contract import build_filter_labels, encode_filter_labels
-from core.model_cache import coerce_int, get_max_model_len, get_model_id, require_model_id
-from core.model_http_policy import AIOHTTP_CONNECT_TIMEOUT_SECONDS, CONTROL_PLANE_TIMEOUT_SECONDS, PROBE_TIMEOUT_SECONDS
+from core.model_cache import coerce_int, get_max_model_len, get_model_id, resolve_model_id
+from core.model_http_policy import (
+    AIOHTTP_CONNECT_TIMEOUT_SECONDS,
+    CONTROL_PLANE_TIMEOUT_SECONDS,
+    PROBE_TIMEOUT_SECONDS,
+    endpoint_auth_headers,
+    endpoint_verify,
+)
 from core.span_attrs import ATTRIBUTE_NAMES, QUERY_ID_KEY, query_id_from_baggage
 from tracing import (
     get_tracer,
@@ -512,12 +518,11 @@ def _get_llm_model() -> str:
     the deployment grants no hub egress, so the endpoint itself is the only
     trustworthy source for the name; and every payload sent to it
     (generation, condense, tokenize) must carry the discovered id because
-    vLLM validates the model name and 404s unknown ones. No env override
-    exists on purpose — deployers steer this path via the endpoint and the
-    served name (unlike retriever/dataprep, whose VLLM_MODEL_ID env is the
-    documented override resolve_model_id honors).
+    vLLM validates the model name and 404s unknown ones. The VLLM_MODEL_ID
+    env (core.model_cache.resolve_model_id) is the deployer's escape hatch
+    for endpoints whose /v1/models is unreachable while generation works.
     """
-    return require_model_id(_LLM_DISCOVERY_ENDPOINT)
+    return resolve_model_id(_LLM_DISCOVERY_ENDPOINT)
 
 
 def _get_translation_model_id() -> str | None:
@@ -1903,9 +1908,9 @@ def _count_tokens(text: str) -> int:
     image bakes no HuggingFace cache and the deployment grants no
     huggingface.co egress, so a local ``AutoTokenizer`` can only fail.
 
-    Same client shape as the model-id probe (core/model_cache.py): sync
-    httpx, PROBE timeout budget, ``OPEA_SSL_SKIP_VERIFY`` for the
-    self-signed GPU certs, ``Bearer VLLM_API_KEY``. The URL derives from
+    Same client shape as the model-id probe (core/model_http_policy.py:
+    shared ``Bearer VLLM_API_KEY`` headers and TLS-verify flag): sync httpx,
+    PROBE timeout budget. The URL derives from
     the same base the generation call and the probe use
     (``_LLM_DISCOVERY_ENDPOINT``), so external (``VLLM_LLM_ENDPOINT``,
     possibly a tunnel with a path prefix) and in-cluster
@@ -1918,11 +1923,8 @@ def _count_tokens(text: str) -> int:
     keeps the model-id probe from guessing.
     """
     url = f"{_LLM_DISCOVERY_ENDPOINT}/tokenize"
-    headers = {}
-    api_key = os.getenv("VLLM_API_KEY", "")
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    verify = os.getenv("OPEA_SSL_SKIP_VERIFY", "") != "1"
+    headers = endpoint_auth_headers()
+    verify = endpoint_verify()
     resp = httpx.post(
         url,
         headers=headers,
@@ -3742,21 +3744,26 @@ class ChatQnAService:
             f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions"
         )
         system_prompt = os.getenv("MULTI_TURN_CONDENSE_SYSTEM_PROMPT", "").strip() or _CONDENSE_SYSTEM_PROMPT
-        payload = {
-            "model": _get_llm_model(),
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": _build_condense_user_content(history_text, last_message)},
-            ],
-            "temperature": 0.0,
-            "max_tokens": _CONDENSE_MAX_TOKENS,
-            "response_format": {"type": "json_object"},
-            "stream": False,
-        }
         tracer = get_tracer("chatqna.query_condense")
         _start = time.monotonic()
         with tracer.start_as_current_span("chatqna.query_condense") as span:
             try:
+                # Inside the classified try: building the payload calls
+                # _get_llm_model(), which raises ModelDiscoveryError when the
+                # endpoint answers nothing — that must surface as the same
+                # fail-closed 503 as every other condense failure, not as an
+                # unclassified 500 that bypasses the caller's metrics.
+                payload = {
+                    "model": _get_llm_model(),
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": _build_condense_user_content(history_text, last_message)},
+                    ],
+                    "temperature": 0.0,
+                    "max_tokens": _CONDENSE_MAX_TOKENS,
+                    "response_format": {"type": "json_object"},
+                    "stream": False,
+                }
                 async with httpx.AsyncClient(timeout=_CONDENSE_TIMEOUT_SECONDS) as client:
                     response = await client.post(
                         url, json=payload, headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}

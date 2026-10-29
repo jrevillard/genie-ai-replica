@@ -32,7 +32,7 @@ import time
 
 import httpx
 
-from core.model_http_policy import PROBE_TIMEOUT_SECONDS
+from core.model_http_policy import PROBE_TIMEOUT_SECONDS, endpoint_auth_headers, endpoint_verify
 
 logger = logging.getLogger(__name__)
 
@@ -70,15 +70,10 @@ def _probe(endpoint_url: str) -> dict | None:
     The entry carries every field the endpoint exposes (``id``, and for vLLM
     servers ``max_model_len``) so a single HTTP call feeds all accessors.
     """
-    headers = {}
-    api_key = os.getenv("VLLM_API_KEY", "")
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    # Align with the project's OPEA_SSL_SKIP_VERIFY mechanism (self-signed GPU
-    # certs). The global genie_ssl_patch.py (installed via the zz_genie_startup.pth
-    # site-init hook) also handles this, but we set verify explicitly so the probe
-    # is correct regardless of patch state.
-    verify = os.getenv("OPEA_SSL_SKIP_VERIFY", "") != "1"
+    headers = endpoint_auth_headers()
+    # Explicit verify so the probe is correct regardless of the global
+    # genie_ssl_patch.py state (installed via the zz_genie_startup.pth hook).
+    verify = endpoint_verify()
     try:
         resp = httpx.get(
             f"{endpoint_url}/v1/models",
@@ -112,6 +107,9 @@ def coerce_int(value) -> int | None:
         return None
     if isinstance(value, int):
         return value
+    if isinstance(value, float):
+        # 12.0 is a serialization of 12; 12.5 is garbage.
+        return int(value) if math.isfinite(value) and int(value) == value else None
     if isinstance(value, str):
         try:
             return int(value.strip())
@@ -130,12 +128,6 @@ def _coerce_max_model_len(value) -> int | None:
     dropped so a bad payload never poisons the cache entry — an absurdly
     large window would silently disable the truncation guard.
     """
-    if isinstance(value, float):
-        if not math.isfinite(value):
-            return None
-        if int(value) != value:
-            return None
-        value = int(value)
     coerced = coerce_int(value)
     if coerced is not None and 0 < coerced <= MAX_SANE_MODEL_WINDOW_TOKENS:
         return coerced

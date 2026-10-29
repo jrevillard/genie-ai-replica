@@ -111,6 +111,20 @@ class TestCountTokens:
         ):
             assert m._count_tokens("x") == 12
 
+    def test_integral_float_count_is_coerced(self):
+        """A proxy serializing the count as JSON float 12.0 must count as 12 —
+        the same coercion stance as the window value in core/model_cache."""
+        import chatqna.genieai_chatqna as m
+
+        post = MagicMock(return_value=_resp({"count": 12.0}))
+        with (
+            patch.object(m, "_LLM_DISCOVERY_ENDPOINT", "http://vllm:8000"),
+            patch.object(m, "_get_llm_model", return_value="m"),
+            patch.dict("os.environ", {"VLLM_API_KEY": ""}, clear=False),
+            patch.object(m.httpx, "post", post),
+        ):
+            assert m._count_tokens("x") == 12
+
     def test_raises_without_http_when_model_undiscovered(self):
         """No discovered id → no request at all: a payload carrying a guessed
         name would get a 404 from vLLM's model-name validation."""

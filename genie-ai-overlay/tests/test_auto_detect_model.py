@@ -483,6 +483,16 @@ class TestChatqnaGetters:
             assert mod._get_llm_model() == "detected-llm"
         assert mock_get.call_args.args[0] == f"{mod._LLM_DISCOVERY_ENDPOINT}/v1/models"
 
+    def test_get_llm_model_prefers_explicit_env(self, monkeypatch):
+        """VLLM_MODEL_ID is the escape hatch for endpoints whose /v1/models is
+        unreachable while generation works (ACL'd proxies, tunnels)."""
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setenv("VLLM_MODEL_ID", "explicit/model")
+        with patch("httpx.get") as mock_get:
+            assert mod._get_llm_model() == "explicit/model"
+        mock_get.assert_not_called()
+
     def test_get_llm_model_raises_when_probe_has_no_answer(self):
         """Loud failure: without a discovered id no valid payload exists —
         a constant name would 404 at the endpoint."""
@@ -899,6 +909,41 @@ class TestRetrieverInitializeLlmAutoDetect:
         with patch("httpx.get", side_effect=httpx.ConnectError("down")), pytest.raises(ModelDiscoveryError):
             r._initialize_llm()
 
+    def test_get_llm_keeps_client_when_unchanged(self, monkeypatch):
+        """Same resolved id → the existing client is reused, not rebuilt."""
+        from retriever.genieai_retriever_arangodb import ChatOpenAI
+
+        monkeypatch.setenv("VLLM_MODEL_ID", "stable-model")
+        r = self._r()
+        ChatOpenAI.reset_mock()
+        client = MagicMock()
+        r._llm_model_id = "stable-model"
+        r.llm = client
+
+        r._get_llm()
+
+        assert r.llm is client
+        ChatOpenAI.assert_not_called()
+
+    def test_get_llm_keeps_openai_summarizer(self):
+        """OpenAI-backed summarizer + VLLM_ENDPOINT set: the model re-check
+        must not replace the OpenAI client with a vLLM one."""
+        from retriever.genieai_retriever_arangodb import ChatOpenAI
+
+        r = self._r()
+        ChatOpenAI.reset_mock()
+        r._llm_backend = "openai"
+        r._llm_model_id = "gpt-x"
+        client = MagicMock()
+        r.llm = client
+
+        with patch("httpx.get") as mock_get:
+            r._get_llm()
+
+        assert r.llm is client
+        ChatOpenAI.assert_not_called()
+        mock_get.assert_not_called()
+
     def test_get_llm_recreates_on_model_change(self):
         """The re-check runs without any GPU_NODE_HOST gate: a changed
         discovered id recreates the client."""
@@ -906,6 +951,7 @@ class TestRetrieverInitializeLlmAutoDetect:
 
         r = self._r()
         ChatOpenAI.reset_mock()
+        r._llm_backend = "vllm"
         r._llm_model_id = "old-model"
         old_client = MagicMock()
         r.llm = old_client

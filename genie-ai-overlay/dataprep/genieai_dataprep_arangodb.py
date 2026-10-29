@@ -1824,7 +1824,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             )
 
     def _initialize_llm(self, *args, **kwargs):
-        """Override parent to auto-detect model on remote GPU node.
+        """Override parent: explicit VLLM_MODEL_ID env wins, else discover.
 
         The parent reads VLLM_MODEL_ID from env/constant: the explicit env
         wins untouched; when it is unset, the id discovered at VLLM_ENDPOINT

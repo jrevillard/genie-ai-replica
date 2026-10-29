@@ -234,6 +234,30 @@ AUTH_TIMEOUT_SECONDS = positive_float_env("MODEL_AUTH_TIMEOUT_SECONDS", default=
 # raise this; it is left low so the common case cannot pay for it.
 PROBE_TIMEOUT_SECONDS = positive_float_env("MODEL_PROBE_TIMEOUT_SECONDS", default=10.0)
 
+
+def endpoint_auth_headers() -> dict:
+    """Bearer headers for model-server calls when VLLM_API_KEY is set.
+
+    The single home of that client shape: the /v1/models probe
+    (core/model_cache) and every other direct model-endpoint call (chatqna's
+    /tokenize counter) must authenticate identically — a contract applied to
+    one and missed by the other surfaces as a probe that succeeds while the
+    data calls 401.
+    """
+    headers = {}
+    api_key = os.getenv("VLLM_API_KEY", "")
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    return headers
+
+
+def endpoint_verify() -> bool:
+    """TLS verify flag honoring OPEA_SSL_SKIP_VERIFY (self-signed GPU certs).
+
+    Same single-home rationale as :func:`endpoint_auth_headers`."""
+    return os.getenv("OPEA_SSL_SKIP_VERIFY", "") != "1"
+
+
 # The retriever's document summarizer, a ChatOpenAI with no fallback: its
 # except clause degrades only vLLM input overflow and re-raises everything
 # else, so a timeout propagates out of retrieve() and the microservice maps it

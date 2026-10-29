@@ -584,7 +584,8 @@ services:
       # GPU translation endpoint is mandatory or one candidate among two. Without
       # it the backend cannot tell a remote GPU node from the in-cluster worker,
       # and would quietly fall back to CPU whenever a configured endpoint stops
-      # answering. chatqna, retriever and dataprep already receive it.
+      # answering. The backend is its only reader: the Python services discover
+      # their model id and endpoints at runtime.
       - GPU_NODE_HOST=${GPU_NODE_HOST:-}
       # Backend preference. `auto` (default) probes once and commits; `cpu` and
       # `gpu` skip the probe. Ignored when a GPU API is configured — see above.
@@ -1711,7 +1712,6 @@ services:
       # before this policy, and the right value for a phase with no degradation
       # path. Binding it differently needs a patch to the vendored source,
       # tracked in genie-ai-overlay/OVERRIDES.yaml, not a compose line.
-      GPU_NODE_HOST: ${GPU_NODE_HOST:-}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
       ARANGO_URL: http://arango-vector-db:8529
@@ -1936,7 +1936,6 @@ services:
       ENABLE_OBSERVABILITY: ${ENABLE_OBSERVABILITY:-0}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
 
-      GPU_NODE_HOST: ${GPU_NODE_HOST:-}
       # Shared model-endpoint HTTP budgets (core/model_http_policy.py).
       # Only the shared name is injected here. VLLM_TIMEOUT is the retriever's
       # historical alias for the same budget (config.py resolves one to the
@@ -2045,7 +2044,6 @@ services:
       LLM_SERVER_PORT: 8000
       VLLM_LLM_ENDPOINT: ${VLLM_ENDPOINT:-}
       VLLM_TRANSLATION_ENDPOINT: ${VLLM_TRANSLATION_ENDPOINT:-}
-      GPU_NODE_HOST: ${GPU_NODE_HOST:-}
       GUARDRAIL_SERVICE_HOST_IP: guardrail
       GUARDRAIL_SERVICE_PORT: 9090
       TRANSLATION_SERVICE_HOST_IP: vllm-translation-guardrail

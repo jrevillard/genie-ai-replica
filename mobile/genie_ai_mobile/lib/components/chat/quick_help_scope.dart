@@ -258,8 +258,12 @@ class QuickHelpScopeResolver {
   /// everywhere else — the conversation's edge (`serviceCategories/<key>`)
   /// among them. A reference the hierarchy cannot name keeps its own
   /// spelling: the scope is then broken, and a broken scope is a visible
-  /// error, never a silently unscoped query.
+  /// error, never a silently unscoped query. 'general' (and empty) declare
+  /// NO scope in every rule of this file: they are never looked up, or a
+  /// hierarchy category literally named "general" would hijack a
+  /// category-less selection into a real scope.
   String? categoryIdFor(String? reference) {
+    if (!declaresCategoryScope(reference)) return reference;
     return _categoryKeyFor(reference) ?? reference;
   }
 

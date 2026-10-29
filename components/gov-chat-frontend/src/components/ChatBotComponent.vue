@@ -1344,9 +1344,13 @@ export default {
     // own key for the category it names. The reference the hierarchy
     // cannot name keeps its own spelling — the scope is then broken, and
     // a broken scope is a visible error, never a silently unscoped query.
-    // The named twin of the mobile's categoryIdFor: the keep-on-miss rule
-    // lives here once, not as a repeated `??` at every call site.
+    // 'general' (and empty) declare NO scope in every rule of this file:
+    // they are never looked up, or a hierarchy category literally named
+    // "general" would hijack a category-less selection into a real scope.
+    // The named twin of the mobile's categoryIdFor: the rules live here
+    // once, not repeated at every call site.
     quickHelpCategoryIdFor(reference) {
+      if (!declaresCategoryScope(reference)) return reference;
       return this.quickHelpCategoryKey(reference) ?? reference;
     },
 
@@ -1362,10 +1366,10 @@ export default {
     // runs beside it.
     reResolveInstalledScopeAgainstHierarchy() {
       try {
-        // 'general' is the no-scope placeholder — it names no category in
-        // any spelling, and a hierarchy category literally named "general"
-        // must not hijack a category-less selection into a real scope.
-        if (declaresCategoryScope(this.currentCategoryId)) {
+        // quickHelpCategoryIdFor owns the no-scope-placeholder rule: a
+        // 'general' selection and 'general'-categoryed chips pass through
+        // untouched, whatever the hierarchy carries.
+        if (this.currentCategoryId) {
           this.currentCategoryId = this.quickHelpCategoryIdFor(this.currentCategoryId);
         }
         if (!this.selectedContextItems.some((item) => item.category)) {
@@ -1373,9 +1377,7 @@ export default {
         }
         const wasDirty = this.hasUnsavedChanges();
         const mapped = this.selectedContextItems.map((item) => {
-          // 'general' on a chip is the same placeholder the selection
-          // carries: it names no category in any spelling.
-          if (!declaresCategoryScope(item.category)) return item;
+          if (!item.category) return item;
           const category = this.quickHelpCategoryIdFor(item.category);
           const next = { ...item, category };
           // A category-only chip's display is the category's own name —

@@ -5370,6 +5370,38 @@ describe('Quick Help category reference', () => {
     expect(vm.selectedContextItems[0].category).toBe('general');
   });
 
+  it('a configuration card with the no-scope placeholder is never reinterpreted', async () => {
+    // 'general' declares NO scope in every rule of the file. A hierarchy
+    // category literally named "general" must not hijack such a card into
+    // a real scope at the configuration mapping.
+    const generalTree = [
+      { catKey: '2', name: 'Civil Registry', nameEN: 'Civil Registry', children: [] },
+      { catKey: '9', name: 'General', nameEN: 'general', children: [] }
+    ];
+    const configLoader = require('../../config-loader');
+    const previous = configLoader.default.getMockImplementation();
+    configLoader.default.mockResolvedValue({
+      features: {
+        chat: {
+          quickHelp: {
+            buttons: [{ id: 'open', title: { en: 'Open' }, category: 'general' }]
+          }
+        }
+      }
+    });
+    try {
+      mockLiveTree(generalTree);
+      const wrapper = createChatBotWrapper();
+      await flushPromises();
+
+      const button = wrapper.vm.quickHelpButtons.find((b) => b.id === 'open');
+      expect(button.category).toBe('general');
+      expect(wrapper.vm.quickHelpScopeState(button).broken).toBe(false);
+    } finally {
+      configLoader.default.mockImplementation(previous);
+    }
+  });
+
   it('the configuration reference is normalized to the hierarchy key', async () => {
     // The conversation's edge speaks the hierarchy's own key
     // (`serviceCategories/<key>`): the reference the configuration wrote

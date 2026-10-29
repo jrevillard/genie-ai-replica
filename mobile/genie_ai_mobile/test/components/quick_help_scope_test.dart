@@ -250,6 +250,31 @@ void main() {
       },
     );
 
+    test('the no-scope placeholder is never reinterpreted', () {
+      // 'general' declares NO scope in every rule of the file. A hierarchy
+      // category literally named "general" must not hijack a category-less
+      // selection into a real scope.
+      final tree = <dynamic>[
+        {
+          'catKey': '2',
+          'name': 'Civil Registry',
+          'nameEN': 'Civil Registry',
+          'children': <dynamic>[],
+        },
+        {
+          'catKey': '9',
+          'name': 'General',
+          'nameEN': 'general',
+          'children': <dynamic>[],
+        },
+      ];
+      final resolver = QuickHelpScopeResolver(tree);
+
+      expect(resolver.categoryIdFor('general'), 'general');
+      expect(resolver.categoryIdFor(''), '');
+      expect(resolver.categoryIdFor(null), isNull);
+    });
+
     test('a reference the hierarchy cannot name keeps its own spelling', () {
       // The scope is broken — a broken scope sends nothing — but what the
       // configuration wrote is still what the conversation carries.

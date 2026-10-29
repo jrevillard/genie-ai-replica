@@ -510,8 +510,14 @@ snapshot() {
 # with the same four subtrees: a run that loses the flavour's theme still has
 # genie present, and only this check sees the difference. A deployment that
 # does not name a theme in its environment serves genie, which the loop above
-# already covered.
-HOST_THEME="$(snapshot "grep -E '^KEYCLOAK_THEME=' '$CONFIG_PARENT/.env' | tail -n 1 | cut -d= -f2-" 2>/dev/null || true)"
+# already covered. A broken snapshot channel is not a skip: rc 2 means the
+# evidence could not be gathered, and the run stops rather than passing
+# without the check.
+SNAP_RC=0
+HOST_THEME="$(snapshot "grep -E '^KEYCLOAK_THEME=' '$CONFIG_PARENT/.env' | tail -n 1 | cut -d= -f2-" 2>/dev/null)" || SNAP_RC=$?
+if [ "$SNAP_RC" -eq 2 ]; then
+    die "could not read the rendered environment on the host (the configured-theme check has no evidence)"
+fi
 HOST_THEME="$(printf '%s' "$HOST_THEME" | tr -d '[:space:]')"
 if [ -n "$HOST_THEME" ] && [ "$HOST_THEME" != "genie" ]; then
     for sub in login account admin email; do
@@ -621,7 +627,7 @@ else
         rm -f "$CONTRACT3_LOG"
         fail "the role accepted branch main on a host this branch does not belong to - no guard fired"
     fi
-    if grep -qE "does not ship the Keycloak theme|ships the brand|brand file that is not valid" "$CONTRACT3_LOG"; then
+    if grep -qE "does not ship the Keycloak theme|ships the brand|brand file that could not be read" "$CONTRACT3_LOG"; then
         pass "a guard refused branch main"
     else
         printf '  [FAIL] the deploy failed, but not through a config guard:\n' >&2
@@ -642,7 +648,14 @@ fi
 
 # --- cleanup (also runs via the EXIT trap) -----------------------------------
 
-restore || exit 1
+if ! restore; then
+    # A signal that broke the restore ends the run on the signal's code, like
+    # any other interruption — not as an ordinary test failure.
+    if [ -n "$PENDING_SIGNAL" ]; then
+        exit "$PENDING_SIGNAL"
+    fi
+    exit 1
+fi
 trap - EXIT INT TERM
 
 # A signal that landed while the end-of-run restore was in flight let the

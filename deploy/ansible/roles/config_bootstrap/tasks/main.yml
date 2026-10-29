@@ -326,7 +326,11 @@
         config_bootstrap_title_script: |
           import json,sys
           try:
-              print(json.load(open(sys.argv[1])).get("app", {}).get("title", ""))
+              title = json.load(open(sys.argv[1])).get("app", {}).get("title", "")
+              # A non-string title (null, a number) is no title: the frontend
+              # would not render one, and printing Python's repr would make
+              # the guard compare strings the app never displays.
+              print(title if isinstance(title, str) else "")
           except Exception as exc:
               sys.stderr.write("%s\n" % exc)
               sys.exit(3)

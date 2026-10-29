@@ -602,13 +602,15 @@ PATH env.
 
 ### Air-gapped deployments
 
-The init containers download `kubectl` and `jq` from public release URLs
-by default. For air-gapped / sovereign clusters, set
-`global.kubeletToolsMirror` to an internal mirror URL (no scheme); the
-init containers prepend that mirror URL to the well-known release paths
-(`/release/v1.33.0/...`, `/jq/releases/download/jq-1.7.1/...`). The mirror
-must serve both paths from its base URL — the chart does not fall back to
-upstream when the mirror is unreachable.
+The init containers download `kubectl` from public release URLs by
+default. For air-gapped / sovereign clusters, set
+`global.kubeletToolsMirror` to an internal mirror —
+`[http[s]://]host[:port][/multi/segment/prefix]`; the scheme is optional
+(scheme-less makes curl use plain HTTP against the local proxy) and the
+init containers append the well-known release path
+(`/release/v1.33.0/bin/linux/<arch>/kubectl`). The mirror must serve
+that path from its base URL — the chart does not fall back to upstream
+when the mirror is unreachable.
 
 ## Secrets backend
 

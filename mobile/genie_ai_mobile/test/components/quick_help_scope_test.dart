@@ -1019,6 +1019,36 @@ void main() {
         isFalse,
       );
     });
+
+    test('an empty loaded locale (the last load FAILED) reloads', () {
+      // A failed load resolved no locale: the buttons would keep the
+      // old language for the rest of the session unless the next
+      // dependency change retries.
+      expect(
+        shouldReloadQuickHelpButtons(loadedLocale: '', currentLocale: 'fr'),
+        isTrue,
+      );
+    });
+  });
+
+  /// One rule for every path that shows a Quick Help title: an EMPTY
+  /// title is no title, so the context bar never blanks.
+  group('quickHelpTitleOf', () {
+    test('a card title is the title', () {
+      expect(
+        quickHelpTitleOf({'id': 'births', 'resolvedTitle': 'Naissances'}),
+        'Naissances',
+      );
+    });
+
+    test('an empty title is no title', () {
+      expect(quickHelpTitleOf({'id': 'births', 'resolvedTitle': ''}), isNull);
+    });
+
+    test('a card without a title has no title', () {
+      expect(quickHelpTitleOf({'id': 'births'}), isNull);
+      expect(quickHelpTitleOf(null), isNull);
+    });
   });
 
   /// The ONE button-identity lookup — the restore and the locale

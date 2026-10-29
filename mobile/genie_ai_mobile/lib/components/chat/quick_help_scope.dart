@@ -67,13 +67,26 @@ Map<String, dynamic>? quickHelpButtonById(
 /// the locale the LAST settled load resolved under. A null loadedLocale
 /// names the first, still-in-flight load — that load resolves under the
 /// locale live at its completion, so the mount's own dependency change
-/// must not start a second parse. A drift (a settled locale that is not
-/// the live one) re-resolves.
+/// must not start a second parse. An EMPTY loadedLocale names a FAILED
+/// load: no locale was resolved, and the next dependency change must
+/// retry. A drift (a settled locale that is not the live one)
+/// re-resolves.
 bool shouldReloadQuickHelpButtons({
   required String? loadedLocale,
   required String currentLocale,
 }) {
   return loadedLocale != null && loadedLocale != currentLocale;
+}
+
+/// The title [button] carries, or null when it carries no title.
+///
+/// An EMPTY title is no title: a config card with a blank title text
+/// must not blank the context bar — the caller keeps the name it has
+/// (the saved category name on a restore, the caller's fallback on a
+/// press). One rule for every path that shows a Quick Help title.
+String? quickHelpTitleOf(Map<String, dynamic>? button) {
+  final title = button?['resolvedTitle']?.toString() ?? '';
+  return title.isNotEmpty ? title : null;
 }
 
 /// The title of the ACTIVE Quick Help scope, re-resolved from the button
@@ -89,9 +102,9 @@ String? activeQuickHelpTitleFor(
   List<Map<String, dynamic>> buttons,
   String? activeQuickHelpButtonId,
 ) {
-  final button = quickHelpButtonById(buttons, activeQuickHelpButtonId);
-  final title = button?['resolvedTitle']?.toString() ?? '';
-  return title.isNotEmpty ? title : null;
+  return quickHelpTitleOf(
+    quickHelpButtonById(buttons, activeQuickHelpButtonId),
+  );
 }
 
 /// Checks Quick Help buttons against the live hierarchy.

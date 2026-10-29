@@ -152,10 +152,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // The locale the Quick Help buttons were last resolved under. A
   // didChangeDependencies locale drift against it re-resolves the
   // buttons (and the active scope's context-bar title) — the marker,
-  // not the welcome text, is what says the language changed. Null while
-  // the first load is in flight: that load resolves under the locale
-  // live at its completion and sets the marker itself, so the FIRST
-  // didChangeDependencies (which also fires on mount) must not reload.
+  // not the welcome text, is what says the language changed.
+  //
+  // Three states, and the difference between them is the whole point:
+  //   null — the FIRST load is in flight. That load resolves under the
+  //          locale live at its completion and sets the marker itself,
+  //          so the mount's own dependency change must not reload.
+  //   ''   — the last load FAILED: no locale was resolved, and the next
+  //          dependency change must retry. (Empty is no locale code, so
+  //          it drifts from every live locale.)
+  //   else — the locale the buttons speak.
   String? _quickHelpButtonsLocale;
 
   bool get _hasUnsavedChanges {
@@ -261,24 +267,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
   /// A FORCED reload (a locale drift). The single-flight wrapper caches a
   /// completed load, so a reload cannot go through it as-is: the cached
-  /// future is invalidated and the wrapper re-entered, which re-runs the
-  /// load under the wrapper's own failure policy — a restore arriving
-  /// mid-reload awaits THIS load instead of a duplicate parse.
+  /// future is invalidated and the wrapper re-entered, which re-resolves
+  /// the CACHED config parse under the wrapper's own failure policy — a
+  /// restore arriving mid-reload awaits THIS load, not a duplicate one.
   ///
-  /// One reload at a time: didChangeDependencies also fires for theme and
-  /// MediaQuery changes, and while the read is in flight the marker still
-  /// names the OLD locale, so a second change would start a duplicate
-  /// parse. The in-flight load resolves under the locale live at its
-  /// completion, so it already lands in the newest language.
-  bool _quickHelpReloadInFlight = false;
-
+  /// No I/O and no await: a drift can only be detected once a load has
+  /// settled, and a settled load has cached the config — so the reload
+  /// re-resolves what is already in memory and runs to completion inside
+  /// the dependency change that triggered it.
   void _startQuickHelpConfigReload() {
-    if (_quickHelpReloadInFlight) return;
-    _quickHelpReloadInFlight = true;
     _quickHelpConfigFuture = null;
-    _ensureQuickHelpConfig().whenComplete(() {
-      _quickHelpReloadInFlight = false;
-    });
+    _ensureQuickHelpConfig();
   }
 
   bool _quickHelpLoadFailed = false;
@@ -374,9 +373,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         // becomes a card — the same rule the web applies at its own load.
         _quickHelpButtons = dedupeQuickHelpButtons(loadedButtons);
         // The locale these titles were resolved under — the drift marker
-        // didChangeDependencies reloads on. A FAILED load leaves the old
-        // marker: the next dependency change retries, the same way a
-        // failed load is not cached.
+        // didChangeDependencies reloads on.
         _quickHelpButtonsLocale = _currentLocale;
         // The config just settled: a restore resolved while it was
         // unavailable re-resolves now (button tags read as dead sidebar
@@ -400,6 +397,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     } catch (e) {
       debugPrint("[CHATBOT] Failed to load genie-ai-config.json: $e");
       _quickHelpLoadFailed = true;
+      // No locale was resolved: the marker says so, and the next
+      // dependency change retries the load. A marker left at the old
+      // locale would hide the failure for the rest of the session — the
+      // buttons would never speak the new language.
+      _quickHelpButtonsLocale = '';
     }
   }
 
@@ -461,12 +463,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _quickHelpButtons,
       scope.quickHelpButtonId,
     );
-    if (button != null) {
-      _selectedCategoryName =
-          button['resolvedTitle']?.toString() ?? scope.categoryName ?? '';
-    } else {
-      _selectedCategoryName = scope.categoryName ?? '';
-    }
+    // An EMPTY title is no title (the same rule the locale re-title
+    // applies): the saved category name is the fallback, never a blank
+    // context bar.
+    _selectedCategoryName =
+        quickHelpTitleOf(button) ?? scope.categoryName ?? '';
     _activeQuickHelpButtonId = scope.quickHelpButtonId;
     // During a hierarchy OUTAGE the resolver was built over an
     // empty tree: every declared label reads as missing, and the
@@ -1229,7 +1230,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _showQuickHelpOverlay = false;
     _selectedCategoryId = button['category']?.toString();
     _selectedCategoryNameEn = _scopeResolver?.categoryLabelEn(button) ?? '';
-    _selectedCategoryName = button['resolvedTitle']?.toString() ?? nameFallback;
+    // An EMPTY title is no title (the same rule the locale re-title and
+    // the restore apply): the caller's fallback name shows, never a
+    // blank context bar.
+    _selectedCategoryName = quickHelpTitleOf(button) ?? nameFallback;
     _sidebarServiceLabelsEn = [];
     // A mode switch clears the sidebar count: the send guard would read a
     // count that remembers services that are no longer selected.

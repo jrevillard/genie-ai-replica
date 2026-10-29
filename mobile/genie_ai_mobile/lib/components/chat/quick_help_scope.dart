@@ -42,6 +42,23 @@ List<Map<String, dynamic>> dedupeQuickHelpButtons(
   return unique;
 }
 
+/// The button [id] names in [buttons], or null when no button declares
+/// it. The ONE copy of the button-identity lookup — the restore path and
+/// the locale re-title read the same rule, so a change to it (trimming
+/// ids, a new id shape) cannot drift between the two.
+Map<String, dynamic>? quickHelpButtonById(
+  List<Map<String, dynamic>> buttons,
+  String? id,
+) {
+  if (id == null || id.isEmpty) return null;
+  for (final button in buttons) {
+    if (button['id']?.toString() == id) {
+      return button;
+    }
+  }
+  return null;
+}
+
 /// The title of the ACTIVE Quick Help scope, re-resolved from the button
 /// list by its id — the mobile twin of the web's quickHelpTitleFor.
 ///
@@ -55,16 +72,9 @@ String? activeQuickHelpTitleFor(
   List<Map<String, dynamic>> buttons,
   String? activeQuickHelpButtonId,
 ) {
-  if (activeQuickHelpButtonId == null || activeQuickHelpButtonId.isEmpty) {
-    return null;
-  }
-  for (final button in buttons) {
-    if (button['id']?.toString() == activeQuickHelpButtonId) {
-      final title = button['resolvedTitle']?.toString() ?? '';
-      if (title.isNotEmpty) return title;
-    }
-  }
-  return null;
+  final button = quickHelpButtonById(buttons, activeQuickHelpButtonId);
+  final title = button?['resolvedTitle']?.toString() ?? '';
+  return title.isNotEmpty ? title : null;
 }
 
 /// Checks Quick Help buttons against the live hierarchy.

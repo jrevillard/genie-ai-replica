@@ -982,6 +982,34 @@ void main() {
 
       expect(activeQuickHelpTitleFor(buttons, 'births'), isNull);
     });
+  });
+
+  /// The ONE button-identity lookup — the restore and the locale
+  /// re-title must resolve the same entity for the same id.
+  group('quickHelpButtonById', () {
+    test('finds the button an id names', () {
+      final births = {'id': 'births', 'resolvedTitle': 'Births'};
+      final crops = {'id': 'crops', 'resolvedTitle': 'Crops'};
+
+      expect(quickHelpButtonById([births, crops], 'crops'), same(crops));
+    });
+
+    test('a null or empty id names no button', () {
+      final buttons = [
+        {'id': 'births', 'resolvedTitle': 'Births'},
+      ];
+
+      expect(quickHelpButtonById(buttons, null), isNull);
+      expect(quickHelpButtonById(buttons, ''), isNull);
+    });
+
+    test('an id no button declares names none', () {
+      final buttons = [
+        {'id': 'births', 'resolvedTitle': 'Births'},
+      ];
+
+      expect(quickHelpButtonById(buttons, 'crops'), isNull);
+    });
 
     test('a button the config no longer declares keeps its last title', () {
       // The scope's identity is the id: a gone button must not blank the

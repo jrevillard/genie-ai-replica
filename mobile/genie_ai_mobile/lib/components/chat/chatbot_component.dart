@@ -152,7 +152,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // The locale the Quick Help buttons were last resolved under. A
   // didChangeDependencies locale drift against it re-resolves the
   // buttons (and the active scope's context-bar title) — the marker,
-  // not the welcome text, is what says the language changed.
+  // not the welcome text, is what says the language changed. Null while
+  // the first load is in flight: that load resolves under the locale
+  // live at its completion and sets the marker itself, so the FIRST
+  // didChangeDependencies (which also fires on mount) must not reload.
   String? _quickHelpButtonsLocale;
 
   bool get _hasUnsavedChanges {
@@ -176,11 +179,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // started a SECOND full config parse — and this load's late failure
     // nulled the future of that in-flight second load (a third fetch).
     _ensureQuickHelpConfig();
-    // The buttons resolve under the locale live at resolution time;
-    // seeding the loaded-locale marker keeps the FIRST
-    // didChangeDependencies (which also fires on mount) from re-parsing
-    // the config a second time.
-    _quickHelpButtonsLocale = _currentLocale;
     _ensureEnTree();
     _titleController.text = _conversationTitle;
 
@@ -215,8 +213,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // message is not the trigger — a deployment whose welcome text is a
     // plain, locale-invariant string would otherwise pin the cards (and
     // the active scope's context-bar title) to one language.
-    if (_quickHelpButtonsLocale != _currentLocale) {
-      _loadQuickHelpConfig();
+    if (_quickHelpButtonsLocale != null &&
+        _quickHelpButtonsLocale != _currentLocale) {
+      _startQuickHelpConfigReload();
     }
 
     // Check for language changes and update welcome message
@@ -258,6 +257,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     });
   }
 
+  /// A FORCED reload (a locale drift). The single-flight wrapper caches a
+  /// completed load, so the drift trigger cannot go through it — but a
+  /// bare load would leave the tracked future stale: a restore that
+  /// arrives mid-reload would await the OLD future and start a duplicate
+  /// parse. The reload REPLACES the tracked future with its own load.
+  void _startQuickHelpConfigReload() {
+    _quickHelpConfigFuture = _loadQuickHelpConfig().whenComplete(() {
+      if (_quickHelpLoadFailed) _quickHelpConfigFuture = null;
+    });
+  }
+
   bool _quickHelpLoadFailed = false;
 
   Future<void> _loadQuickHelpConfig() async {
@@ -267,6 +277,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         'assets/config/genie-ai-config.json',
       );
       final Map<String, dynamic> config = jsonDecode(configString);
+      // A setState after dispose is a FlutterError in debug and E2E runs
+      // — the same guard the other async loaders carry. A locale switch
+      // can start this load and unmount the screen before it lands.
+      if (!mounted) return;
 
       // Cache the config for later use
       _cachedConfig = config;
@@ -422,17 +436,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // scope shows the button's own localized title — the same thing
     // the press and the web show. (A sidebar scope still shows the
     // EN name: the localized tree lives in the panel, not here.)
-    // The button the conversation's tag names — ONE lookup, both reads
-    // below (the title, the outage state) resolve the same entity.
-    final button = scope.quickHelpButtonId != null
-        ? _quickHelpButtons.firstWhere(
-            (b) => b['id']?.toString() == scope.quickHelpButtonId,
-            orElse: () => <String, dynamic>{},
-          )
-        : null;
-    if (scope.quickHelpButtonId != null) {
+    // The button the conversation's tag names — ONE lookup (the same
+    // shared one the locale re-title reads), and both reads below
+    // (the title, the outage state) resolve the same entity.
+    final button = quickHelpButtonById(
+      _quickHelpButtons,
+      scope.quickHelpButtonId,
+    );
+    if (button != null) {
       _selectedCategoryName =
-          button!['resolvedTitle']?.toString() ?? scope.categoryName ?? '';
+          button['resolvedTitle']?.toString() ?? scope.categoryName ?? '';
     } else {
       _selectedCategoryName = scope.categoryName ?? '';
     }
@@ -443,7 +456,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // The outage is the CALLER's fact — the grid handles it through
     // unavailableScopeFor, and the restore does the same.
     if (_treeUnavailable && scope.quickHelpButtonId != null) {
-      _activeQuickHelpScope = button!.isNotEmpty
+      _activeQuickHelpScope = button != null
           ? QuickHelpScopeResolver.unavailableScopeFor(button)
           : scope.quickHelpScopeState;
     } else {

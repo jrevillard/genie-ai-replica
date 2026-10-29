@@ -40,6 +40,7 @@ test = [
 packages = []
 
 [tool.ruff]
+extend-exclude = ["*.md"]
 target-version = "py311"
 line-length = 120
 

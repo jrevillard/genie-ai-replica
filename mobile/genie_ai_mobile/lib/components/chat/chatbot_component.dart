@@ -90,9 +90,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // How many services the sidebar selection named (labels or not).
   int _sidebarServiceCount = 0;
   // The live hierarchy, indexed once: the EN label vocabulary (what the
-  // corpus filters on) and the category keys. Null until the tree loads —
-  // then no button is judged broken, because a tree that has not loaded
-  // says nothing.
+  // corpus filters on) and the categories, by key and by English name. Null
+  // until the tree loads — then no button is judged broken, because a tree
+  // that has not loaded says nothing.
   QuickHelpScopeResolver? _scopeResolver;
 
   /// The hierarchy has settled — it loaded, or it failed. Derivable from
@@ -1276,8 +1276,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     if ((_scopeResolver?.stateFor(button)['broken'] as bool?) ?? false) {
       return;
     }
-    // The config carries the category KEY; the wire needs its ENGLISH label,
-    // and only the live tree can say it. A tree that did not load cannot name
+    // The config names the category; the wire needs its ENGLISH label, and
+    // only the live tree can say it. A tree that did not load cannot name
     // the scope — and a query without it would answer from the whole corpus.
     if (!quickHelpScopeIsNameable(button, _scopeResolver)) {
       return;

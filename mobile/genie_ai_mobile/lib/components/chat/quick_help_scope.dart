@@ -114,9 +114,10 @@ String? activeQuickHelpTitleFor(
 
 /// Checks Quick Help buttons against the live hierarchy.
 ///
-/// The hierarchy is what NAMES a scope: the config carries a category
-/// KEY, the wire carries its ENGLISH label, and only the hierarchy can
-/// say what that label is. A hierarchy that has not loaded says nothing
+/// The hierarchy is what NAMES a scope: the config carries the category's
+/// name (or its key, for a configuration written before that spelling), the
+/// wire carries its ENGLISH label, and only the hierarchy can say what that
+/// label is. A hierarchy that has not loaded says nothing
 /// about any button ([pending]); one that could not be loaded is the
 /// CALLER's fact — the widget marks it and passes each button through
 /// [unavailableScopeFor].
@@ -589,10 +590,10 @@ bool shouldReResolveRestoredScope({
 
 /// Whether the button's scope can be put on the wire.
 ///
-/// The config carries the category KEY; the wire needs its ENGLISH label,
-/// and only the live tree can say it. A tree that did not load cannot name
-/// the scope — and a query without it would answer from the whole corpus,
-/// from a button the user believes is scoped. No label, no query.
+/// The config names the category; the wire needs its ENGLISH label, and
+/// only the live tree can say it. A tree that did not load cannot name the
+/// scope — and a query without it would answer from the whole corpus, from
+/// a button the user believes is scoped. No label, no query.
 bool quickHelpScopeIsNameable(
   Map<String, dynamic> button,
   QuickHelpScopeResolver? resolver,

@@ -1389,8 +1389,9 @@ export default {
 
     // Whether a scope can be put on the wire. A button that declares a
     // category can only NAME it through the live tree — the config carries
-    // the key, the wire needs the ENGLISH label. No label, no query: a query
-    // without it would answer from the whole corpus.
+    // the category's name (or its key, for a configuration written before
+    // that spelling), the wire needs the ENGLISH label. No label, no query:
+    // a query without it would answer from the whole corpus.
     quickHelpScopeIsNameable(categoryId) {
       // An id that declares NO category scope (empty, or the 'general'
       // placeholder) is how a selection is CLEARED — the hierarchy has
@@ -1862,10 +1863,10 @@ export default {
         return;
       }
       const categoryId = rawOption.category || (rawOption.id !== 'just-chat' ? 'general' : null);
-      // The config carries the category KEY; the wire needs its ENGLISH
-      // label, and only the live tree can say it. A tree that did not load
-      // cannot name the scope — and a query without it would answer from the
-      // whole corpus, from a button the user believes is scoped.
+      // The config names the category; the wire needs its ENGLISH label,
+      // and only the live tree can say it. A tree that did not load cannot
+      // name the scope — and a query without it would answer from the whole
+      // corpus, from a button the user believes is scoped.
       if (!this.quickHelpScopeIsNameable(categoryId)) {
         return;
       }

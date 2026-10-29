@@ -93,6 +93,15 @@ describe('serviceTreeService', () => {
       );
       expect(result).toHaveLength(1);
     });
+
+    it('rejects a body that is not a list of categories', async () => {
+      // A broken answer (a proxy error page, an object) is not a
+      // hierarchy: a client that walks it throws mid-render. The load
+      // must FAIL so the panel shows the failed state.
+      mockGet.mockResolvedValue({ data: { error: 'boom' } });
+
+      await expect(serviceTreeService.getAdminCategories('en')).rejects.toThrow(/not a list/i);
+    });
   });
 
   // =========================================================================

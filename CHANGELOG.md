@@ -194,12 +194,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tree behind it returned only the localized name; the panel worked around
   that by fetching the tree in English and relabelling the result, so the
   English column showed the localized name, and it was empty for any entity
-  with no English translation. The tree now publishes `nameEN` beside the
-  localized name — the same shape as the public tree, with the English
-  translation as the source and the entity document's own `nameEN` as the
-  fallback for an entity seeded outside the write path — and the panel reads
-  that field. Its fetch is bounded too, so a request that never answers
-  shows the failed state instead of a spinner that turns forever. (#1123)
+  with no English translation. The admin tree
+  (`GET /api/service-categories/categories/detailed`) now publishes `nameEN`
+  beside the localized name — the shape the public tree already had, with
+  the English translation as the source and the entity document's own
+  `nameEN` as the fallback for an entity seeded outside the write path —
+  and the panel reads that field. Its fetch is bounded too, so a request
+  that never answers shows the failed state instead of a spinner that turns
+  forever. The public tree is unchanged by this fix: an entity with no
+  English translation row still publishes `nameEN: null` there. (#1123)
 - **The labelling prompt was different on every ingestion run.** The candidate
   labels sent to the labelling LLM were collected in a Python set, whose order
   follows the hash seed of the process that built it — so every container sent

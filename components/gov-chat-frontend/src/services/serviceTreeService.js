@@ -68,7 +68,14 @@ export default {
         { params: { locale } },
         { timeout: TREE_FETCH_TIMEOUT_MS }
       );
-      return response.data || [];
+      // The hierarchy is a LIST of categories — the same contract as the
+      // public sibling. A body that is not one is a broken answer (a proxy
+      // error page, an object), and a client that walks it throws
+      // mid-render: it is a FAILED load, not a hierarchy.
+      if (!Array.isArray(response.data)) {
+        throw new Error('The knowledge hierarchy is not a list of categories');
+      }
+      return response.data;
     } catch (error) {
       console.error('Error fetching admin service categories:', error);
       throw error;

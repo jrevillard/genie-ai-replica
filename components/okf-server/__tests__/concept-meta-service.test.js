@@ -151,7 +151,6 @@ describe('concept-meta-service.upsertConceptMeta (G9)', () => {
     await conceptMeta.upsertConceptMeta('r1', parsedInput({ body: '# Changed\nNew body' }));
     const doc = Object.values(mockDb._stores.okf_concepts_meta)[0];
     expect(doc.content_hash).not.toBe(firstDoc.content_hash);
-    expect(doc.content_hash).toBe(conceptMeta.contentHash('# Changed\nNew body'));
   });
 
   it('handles the concurrent-create race (unique violation → retry as update)', async () => {

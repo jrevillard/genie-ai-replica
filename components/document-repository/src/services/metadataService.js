@@ -42,9 +42,11 @@ async function extractMetadata(filePath, fileInfo = {}) {
     // forwarded to datapretreat at kick time → stamped onto every chunk doc.
     bundle_version: fileInfo.bundle_version != null ? fileInfo.bundle_version : null,
     chunk_count: 0,
-    // A caller MAY override the dataprep state (e.g. a bundle-zip file doc is
-    // stored at 'Ingested' — the bundle is the ingestion INPUT, its concepts are
-    // enqueued separately; it is never re-chunked). Default = 'Pending' (unchanged).
+    // A caller MAY override the dataprep state (a bundle-zip file doc is
+    // stored at 'Pending' like every file — the bundle is the ingestion INPUT,
+    // its concepts are enqueued separately; it is never re-chunked, and the
+    // okf-server drives the Ingesting → Ingested transition). Default =
+    // 'Pending' (unchanged).
     dataprep: fileInfo.dataprep || {
       status: 'Pending', // Changed to capitalized 'Pending' per spec
       ingest_date: '',

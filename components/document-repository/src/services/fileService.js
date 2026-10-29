@@ -1024,8 +1024,11 @@ class FileService {
     // Story 2.9.5-amend (2026-08-18): a ZIP bundle is ALSO stored as a file doc —
     // the bundle file is associated with the OKF repo (repo_id + graph_name +
     // labels) and is the ingestion INPUT (its concepts are enqueued separately,
-    // never re-chunked). Stored at dataprep.status='Ingested' + is_bundle=true so
-    // the 2.9.4 worker ignores it (it polls Pending only).
+    // never re-chunked). Stored with dataprep.status='Pending' (see the store
+    // below: it must NEVER be born 'Ingested' — nothing has been ingested at
+    // store time; the earlier comment here claimed 'Ingested' + is_bundle=true,
+    // contradicting the store it documents) so the 2.9.4 worker ignores it
+    // (it polls Pending only — the okf-server drives the transition).
     const isBundle = !!bundleInfo.is_bundle;
     const fileId = fileUtils.generateUniqueFileId();
     const fileName = isBundle ? `${fileId}.zip` : `${fileId}.md`;

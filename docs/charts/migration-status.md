@@ -614,6 +614,52 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 53 (0.2.125)** — 10 findings from the thirty-first
+  `/code-review`, all on the run-30 surfaces (the capture mode, this
+  ledger, .gitignore). No chart content changed (no version bump). All
+  ten verified true and fixed (grouped below where one fix closes
+  several) — the capture mode's fail-loudly contract had covered one of
+  its three artifacts:
+  - *A missing flux-git-auth or issuer WARN-skipped and exited 0* — the
+    PAT is unrecoverable once the cluster is deleted; a green exit over
+    its absence is the exact silent-path class the mode was built to
+    close, one artifact over. And the die on the key fired FIRST, so
+    the anomalous-key scenario also lost the PAT: the capture now
+    attempts ALL three artifacts even when one is missing, collects
+    the failures, and dies at the END naming them.
+  - *The die on a failed key query was unreachable* — under `set -e`,
+    `VAR=$(kubectl …)` exits inside the assignment, so the crafted
+    "is the controller running" message never printed for exactly the
+    scenarios it named (the run-30 commit's "verified live" claim
+    described the kubectl raw-error path). Queries moved into
+    `if VAR=$(…)` conditionals, where failure is catchable.
+  - *A failed capture left zero-byte files behind* — the shell
+    truncates the redirect target before kubectl runs, so the restore
+    path's `[ -f ]` guards passed and `apply_clean` died in
+    `json.loads('')` mid-bootstrap. Every artifact is written to a
+    temp name and moved into place only on success.
+  - *The active key was `.items[0]` with no count or content check* —
+    two labeled-active keys (the restore loop labels every
+    sealed-secrets-key* Secret active) made the capture an
+    alphabetically-first guess, and a labeled-but-hollow Secret
+    captured green and restored into the keyless catastrophe. The
+    capture now requires EXACTLY one key and verifies tls.key/tls.crt
+    are present.
+  - *The captured PRIVATE key and PAT were written world-readable* —
+    umask-default 0644 on the artifact whose whole point is being
+    secret. The capture dir is chmod 700 and the files are written
+    under umask 077.
+  - *.gitignore covered the key's filename but not the PAT's* —
+    `--capture .` left flux-git-auth.json untracked-and-unignored, one
+    `git add -A` from publishing the GitLab PAT. Covered now.
+  - *A bare `--capture` died with bash's `$2: unbound variable`* —
+    every value-taking flag now carries `${2:?…}` with a message
+    naming the flag and what it expects.
+  - *This ledger carried a truncated duplicate pass-51 heading* — an
+    inserted fragment ("… — 7 findings from the twenty-seventh",
+    never completed) split the pass-52 entry's bullet list in two,
+    leaving two consecutive pass-51 headings. Deleted; pass-52's
+    bullets read continuously again.
 - **Review loop, pass 52 (0.2.125)** — 13 findings across runs 28 and 29
   of the `/code-review`, across four surfaces: the bootstrap runbook,
   the bootstrap script, deploy/environments/README.md and this ledger.
@@ -641,7 +687,6 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried 7* (5 fixed + 1 deferred + 1 refuted) — the ledger's
     corrected count (7) is the true one; the pushed commit title
     undercounts and cannot be rewritten without a force-push.
-- **Review loop, pass 51 (0.2.125)** — 7 findings from the twenty-seventh
   - *The run-27 fix shipped uncommitted* — the `git add` named
     `migration-status.md` and missed the sibling file the same edit
     touched (`docs/charts/laptop-cluster-bootstrap.md`), so origin

@@ -44,10 +44,10 @@
 # drifted is drifted again afterwards - run the deploy, not this test, to
 # converge a node.
 #
-# A restore that fails fails the test. The restore removes the config tree
-# before extracting the archive back into it, so a failed restore leaves the
-# host with an empty config directory - which shadows the images and breaks
-# every container that reads it. That must never read as a pass.
+# A restore that fails fails the test. The restore syncs the archive back
+# into the existing tree (rsync --delete), so even a failed restore leaves
+# the host with whatever the archive still holds — the tree is never emptied
+# first.
 #
 # NOT run by CI. This needs a live Ansible target host.
 #
@@ -239,6 +239,13 @@ restore() {
     fi
     if [ "$RESTORE_ARMED" != "true" ]; then
         scrub_pw_file
+        # Nothing is armed: there is no recovery evidence in the test's work
+        # dir (an archive in it would have armed the restore), so the dir can
+        # go. A failed arm (the tar that never completed) leaves no residue.
+        if [ -n "${TEST_WORK_DIR:-}" ]; then
+            ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
+                -a "rm -rf '$TEST_WORK_DIR'" >/dev/null 2>&1 || true
+        fi
         return 0
     fi
     RESTORE_RUNNING="true"
@@ -253,6 +260,11 @@ restore() {
         ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
             -a "rm -f '$STRAY_PATH'" >/dev/null 2>&1 || true
         STRAY_PATH=""
+    fi
+    if [ -n "${THEME_BAK_PATH:-}" ]; then
+        ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
+            -a "rm -f '$THEME_BAK_PATH'" >/dev/null 2>&1 || true
+        THEME_BAK_PATH=""
     fi
     printf '\n=== Cleanup: restoring the config tree under %s ===\n' "$CONFIG_DIR"
     # The single-file copy is redundant next to the tree archive, and it must
@@ -514,7 +526,6 @@ snapshot() {
 # evidence could not be gathered, and the run stops rather than passing
 # without the check.
 SNAP_RC=0
-SNAP_RC=0
 HOST_THEME="$(snapshot "[ -f '$CONFIG_PARENT/.env' ] || exit 3; grep -E '^KEYCLOAK_THEME=' '$CONFIG_PARENT/.env' | tail -n 1 | cut -d= -f2-" 2>/dev/null)" || SNAP_RC=$?
 if [ "$SNAP_RC" -eq 2 ] || [ "$SNAP_RC" -eq 3 ]; then
     die "could not read the rendered environment on the host (the configured-theme check has no evidence)"
@@ -566,6 +577,19 @@ remote_sh "printf 'stray\\n' > '$STRAY_PATH'" ||
     fail "could not create the stray file $STRAY_PATH"
 pass "created stray file $STRAY_PATH"
 
+# The keycloak pair gets the same treatment: --delete carries the highest
+# stakes in the themes tree, where the deployment's own theme lives.
+THEME_BAK_PATH="$TEST_WORK_DIR/theme.properties.bak"
+THEME_TARGET="$KEYCLOAK_THEME_DIR/genie/login/theme.properties"
+remote_sh "cp -p '$THEME_TARGET' '$THEME_BAK_PATH'" ||
+    fail "could not back up $THEME_TARGET to $THEME_BAK_PATH"
+remote_sh "printf '%s\\n' '$MARKER' >> '$THEME_TARGET'" ||
+    fail "could not append the smoke-test marker to $THEME_TARGET"
+THEME_STRAY_PATH="$KEYCLOAK_THEME_DIR/config_bootstrap_smoke_stray_$$.txt"
+remote_sh "printf 'stray\\n' > '$THEME_STRAY_PATH'" ||
+    fail "could not create the stray file $THEME_STRAY_PATH"
+pass "the keycloak themes tree is prepared for the mirror check"
+
 step "Run 3: re-run the role after a manual edit"
 run_role
 
@@ -592,6 +616,27 @@ if remote_sh "test -e '$STRAY_PATH'"; then
     fail "the stray file $STRAY_PATH survived the role run - the mirror does not delete what the branch does not ship"
 fi
 pass "the stray file was removed by the role run"
+
+# ...and the keycloak pair must have converged the same way.
+if remote_sh "grep -Fq '$MARKER' '$THEME_TARGET'"; then
+    fail "the theme marker survived the role run - the keycloak pair does not mirror"
+fi
+pass "the theme marker was reverted by the role run"
+THEME_EXPECTED_PATH="$TEST_WORK_DIR/theme.properties.expected"
+ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
+    -a "cat '$THEME_BAK_PATH' > '$THEME_EXPECTED_PATH'" ||
+    fail "could not build the theme expected-content file on the host"
+if ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell -a "cmp -s '$THEME_EXPECTED_PATH' '$THEME_TARGET'"; then
+    pass "$THEME_TARGET is byte-identical to the pre-test content again"
+else
+    fail "$THEME_TARGET was not restored to the branch copy by the role run"
+fi
+ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell -a "rm -f '$THEME_EXPECTED_PATH'" || true
+if remote_sh "test -e '$THEME_STRAY_PATH'"; then
+    fail "the theme stray file $THEME_STRAY_PATH survived the role run"
+fi
+pass "the theme stray file was removed by the role run"
+remote_sh "rm -f '$THEME_BAK_PATH'" || true
 
 # A re-run must not have introduced or removed any other file either: the
 # whole file list must match the one captured before the test.

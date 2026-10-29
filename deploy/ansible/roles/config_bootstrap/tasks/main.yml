@@ -662,20 +662,38 @@
       register: config_bootstrap_dir_scan
       changed_when: false
 
+    # Files need the others-read bit too: the archive faithfully reproduces a
+    # 0640/0600 committed with a restrictive umask, and the containers would
+    # get EACCES on exactly the file they exist to read.
+    - name: Find config files the containers cannot read
+      become_user: root
+      ansible.builtin.command:
+        argv:
+          - find
+          - "{{ config_dir }}"
+          - -type
+          - f
+          - '!'
+          - -perm
+          - '-0004'
+      register: config_bootstrap_file_scan
+      changed_when: false
+
     - name: Fail when a config directory is not traversable by the containers
       ansible.builtin.assert:
         that:
           - config_bootstrap_dir_scan.stdout_lines | length == 0
+          - config_bootstrap_file_scan.stdout_lines | length == 0
         fail_msg: >-
-          Directories under {{ config_dir }} deny read or traverse to others
+          Paths under {{ config_dir }} deny read or traverse to others
           (this deployment reads the mount as a non-root user via the
           others bits — the compose files configure no group mapping, so a
-          0750-with-group setup is not supported here):
-          {{ config_bootstrap_dir_scan.stdout_lines | join(', ') }}. A path
+          0750-with-group setup is not supported here). Offending paths:
+          {{ (config_bootstrap_dir_scan.stdout_lines + config_bootstrap_file_scan.stdout_lines) | join(', ') }}. A path
           carried by the branch is fixed in the repository; a path changed on
           the host after a deploy is repaired by the next run — check what
           changed it.
-        success_msg: "config_bootstrap: the seeded directories are readable"
+        success_msg: "config_bootstrap: the seeded directories and files are readable"
 
     - name: Fail when the host runtime config does not match the branch
       ansible.builtin.assert:

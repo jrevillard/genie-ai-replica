@@ -52,7 +52,7 @@
 #
 # That is a simplification for the example, not the deployment model. The
 # real one is Flux v2 with a HelmRelease per target, in the genie-ai-deploy
-# repo under overlays/<pays>/<env>/, each with that target's values — see
+# repo under overlays/<cluster>/<env>/, each with that target's values — see
 # docs/charts/laptop-cluster-bootstrap.md and .claude/rules/K8s-WORKFLOW.md.
 # To drive ArgoCD with per-target values instead, point path at the
 # overlay and set valueFiles, and for el-salvador-style targets also change

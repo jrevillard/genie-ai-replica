@@ -2612,3 +2612,15 @@ the compose config, kept verbatim; backlog.
     gated on backend AND arangodb (no Arango = nothing to migrate; the
     backend fails its own named connection error). Baseline render
     byte-identical; gate green.
+
+  - *chatqna readiness starvation (0.2.130)*: after the authed probe let
+    the upgrade proceed, chatqna sat at 0/1 Ready — its startup does a
+    HEAD against huggingface.co for the baked-in granite config, a pod
+    with no internet egress answers Errno 101, and the blocking 5x8s
+    retry loop starved the uvicorn event loop: the 1 s readiness probe
+    timed out 267 times and the pod left the Service endpoints, which
+    surfaced downstream as `connect ETIMEDOUT` from the backend (the
+    French chat check). Fix: `HF_HUB_OFFLINE: "1"` in opea.chatqna.env —
+    the models are baked into the image, the check is pointless in an
+    air-gapped cluster. Compose variant deferred to its own MR (compose
+    is read-only for chart work).

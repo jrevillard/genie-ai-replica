@@ -545,14 +545,15 @@ expect_fail "a kubeletToolsMirror with a scheme-position colon" \
   "kubeletToolsMirror" \
   $(valid_flags) --set 'global.kubeletToolsMirror=https:mirror.internal:8443'
 
-# The delivery pins cover the documented shapes' cross product: the
-# default (no mirror), bare host, scheme-less with and without port,
-# scheme-ful with port, scheme-ful + multi-segment prefix (the
-# Nexus/Artifactory topology), and the uppercase-scheme form the regex
-# admits for RFC 3986's case-insensitive scheme names. The schema cases
-# above pin only the key name — helm's schema error embeds the whole
-# pattern, so a clause-specific needle would pin the pattern TEXT and
-# break on every refinement; the inputs are the discrimination.
+# The delivery pins cover the documented grammar's full cross product
+# (scheme? x port? x prefix?): the default (scheme, no port, no
+# prefix), bare host, scheme-less x port, scheme-less x prefix, scheme
+# x port, scheme x prefix (the Nexus/Artifactory topology), scheme x
+# port x prefix, and the uppercase-scheme form the regex admits for RFC
+# 3986's case-insensitive scheme names. The schema cases above pin only
+# the key name — helm's schema error embeds the whole pattern, so a
+# clause-specific needle would pin the pattern TEXT and break on every
+# refinement; the inputs are the discrimination.
 expect_render_contains \
   "a scheme-less host:port mirror reaches the init shell verbatim" \
   'BASE="mirror.internal:8443"' \
@@ -562,6 +563,16 @@ expect_render_contains \
   "a bare-host mirror reaches the init shell verbatim" \
   'BASE="mirror.internal"' \
   $(valid_flags) --set global.kubeletToolsMirror=mirror.internal
+
+expect_render_contains \
+  "a scheme-less port+prefix mirror reaches the init shell verbatim" \
+  'BASE="mirror.internal:8443/releases"' \
+  $(valid_flags) --set global.kubeletToolsMirror=mirror.internal:8443/releases
+
+expect_render_contains \
+  "a scheme+port+prefix mirror reaches the init shell verbatim" \
+  'BASE="https://mirror.internal:8443/releases"' \
+  $(valid_flags) --set global.kubeletToolsMirror=https://mirror.internal:8443/releases
 expect_render_contains \
   "the default mirror reaches the init shell" \
   'BASE="https://dl.k8s.io"' \

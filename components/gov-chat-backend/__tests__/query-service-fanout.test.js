@@ -8,6 +8,9 @@
 
 require('./setup-env');
 
+const fs = require('fs');
+const path = require('path');
+
 jest.mock('dotenv', () => ({ config: jest.fn() }));
 
 jest.mock(
@@ -228,28 +231,22 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
     expect(retrievalConfigClient.getAuthorizedGraphs).not.toHaveBeenCalled();
   });
 
-  it('RETRIEVER_FANOUT_ENABLED=false is opaque to the BFF: the payload is identical either way', async () => {
-    process.env.ARANGO_GRAPH_NAME = 'GRAPH';
-    // The BFF never reads the retriever's kill switch — the same hybrid
-    // carrier goes out with the flag OFF and ON (both runs asserted), and the
-    // retriever falls back to legacy itself. Previously this test never set
-    // the flag, so the opacity claim was an unrestated absence.
-    retrievalConfigClient.getRetrievalConfig.mockResolvedValue(
-      okfConfig({ config: { mode: 'hybrid' }, engaged: true, serving_graph_count: 1 })
-    );
-    retrievalConfigClient.getAuthorizedGraphs.mockResolvedValue({ graph_names: ['OKF_a_v1'] });
-
-    try {
-      process.env.RETRIEVER_FANOUT_ENABLED = 'false';
-      const { opeaPayload: disabled } = await queryService.initStreamQuery(makeQueryData(), BEARER);
-
-      process.env.RETRIEVER_FANOUT_ENABLED = 'true';
-      const { opeaPayload: enabled } = await queryService.initStreamQuery(makeQueryData(), BEARER);
-
-      expect(disabled.context).toEqual(enabled.context);
-      expect(enabled.context.authorized_graph_names).toEqual(['GRAPH', 'OKF_a_v1']);
-    } finally {
-      delete process.env.RETRIEVER_FANOUT_ENABLED;
+  it('SOURCE tripwire: no BFF code reads RETRIEVER_FANOUT_ENABLED (opacity is by absence)', () => {
+    // RETRIEVER_FANOUT_ENABLED is the retriever-side kill switch; the BFF must
+    // never consult it. This tripwire reads the BFF source at test time and
+    // fails the moment any service/route file starts reading the flag — the
+    // previous version toggled the env var around two identical invocations,
+    // which exercised the same deterministic code path either way and could
+    // not fail for the opacity reason it claimed (review test-audit). The
+    // fanout-carrier assertions in this suite remain the behavioural
+    // coverage; this one pins the structural fact the carrier tests assume.
+    const sources = [
+      path.join(__dirname, '..', 'services', 'query-service.js'),
+      path.join(__dirname, '..', 'routes', 'query-routes.js')
+    ];
+    for (const file of sources) {
+      const text = fs.readFileSync(file, 'utf8');
+      expect(text).not.toContain('RETRIEVER_FANOUT_ENABLED');
     }
   });
 

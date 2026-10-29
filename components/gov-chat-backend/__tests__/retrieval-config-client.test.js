@@ -360,4 +360,65 @@ describe('retrieval-config-client (Story 1.1)', () => {
       }
     });
   });
+
+  // invalid_env_int warn contract (review 2026-10-29): the warn fires ONLY
+  // when a PROVIDED, non-empty value misparses or sits below min. A provided
+  // value equal to its fallback is a VALID configuration (never warned) and
+  // an empty string is indistinguishable from unset (also silent). The parse
+  // runs at module load, so each case reloads the client under its env.
+  describe('envPositiveInt invalid_env_int warn contract', () => {
+    const VAR = 'OKF_RETRIEVAL_CONFIG_TIMEOUT_MS';
+
+    // The timeout constant derives from this variable at module load
+    // (fallback 3000, min 100) — reload per case and read both the resolved
+    // value and the freshly-bound mocked logger.
+    function loadWith(value) {
+      if (value === undefined) delete process.env[VAR];
+      else process.env[VAR] = value;
+      jest.resetModules();
+      const loaded = require('../services/retrieval-config-client');
+      const { logger: caseLogger } = require('../shared-lib');
+      return { loaded, caseLogger };
+    }
+
+    afterEach(() => {
+      delete process.env[VAR];
+    });
+
+    it('valid value equal to the fallback: NO warn (valid configuration, not a misconfiguration)', () => {
+      const { loaded, caseLogger } = loadWith('3000');
+
+      expect(loaded._internals.REQUEST_TIMEOUT_MS).toBe(3000);
+      expect(caseLogger.warn).not.toHaveBeenCalledWith('RetrievalConfigClient.invalid_env_int', expect.anything());
+    });
+
+    it('empty string: NO warn (indistinguishable from unset)', () => {
+      const { loaded, caseLogger } = loadWith('');
+
+      expect(loaded._internals.REQUEST_TIMEOUT_MS).toBe(3000);
+      expect(caseLogger.warn).not.toHaveBeenCalledWith('RetrievalConfigClient.invalid_env_int', expect.anything());
+    });
+
+    it('unparseable value: warn names the variable, the offending value and the applied fallback', () => {
+      const { loaded, caseLogger } = loadWith('abc');
+
+      expect(loaded._internals.REQUEST_TIMEOUT_MS).toBe(3000);
+      expect(caseLogger.warn).toHaveBeenCalledWith('RetrievalConfigClient.invalid_env_int', {
+        variable: VAR,
+        value: 'abc',
+        applied_fallback: 3000
+      });
+    });
+
+    it('value below min: warn (the applied fallback must stay visible to ops)', () => {
+      const { loaded, caseLogger } = loadWith('50');
+
+      expect(loaded._internals.REQUEST_TIMEOUT_MS).toBe(3000);
+      expect(caseLogger.warn).toHaveBeenCalledWith('RetrievalConfigClient.invalid_env_int', {
+        variable: VAR,
+        value: '50',
+        applied_fallback: 3000
+      });
+    });
+  });
 });

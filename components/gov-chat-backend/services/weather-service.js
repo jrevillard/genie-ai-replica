@@ -16,7 +16,6 @@ class WeatherService {
     this.dbService = dbService;
     this.db = null;
     this.weatherRequests = null;
-    this.analyticsService = null;
     this.initialized = false;
     // Offline reverse-geocoding index. Populated in init() from the
     // GeoNames cities500 dataset, downloaded by the Dockerfile at build
@@ -117,15 +116,6 @@ class WeatherService {
     this.cityIndex = index;
     this.cityMeta = meta;
     logger.info('WeatherService.city_index_loaded', { count: populatedCount });
-  }
-
-  /**
-   * Set the analytics service
-   * @param {Object} analyticsService - Analytics service instance
-   */
-  setAnalyticsService(analyticsService) {
-    this.analyticsService = analyticsService;
-    logger.info('WeatherService.analytics_service_set');
   }
 
   /**

@@ -42,6 +42,10 @@ const INDEXES = {
   okf_concepts_meta: [
     { type: 'persistent', fields: ['repo_id'] },
     { type: 'persistent', fields: ['repo_id', 'concept_id'], unique: true },
+    // Bare concept_id — backs getConceptMetaFromAnyRepo (the dataprep
+    // completion callback without a repo_id hint); without it that lookup
+    // full-scans the collection.
+    { type: 'persistent', fields: ['concept_id'] },
     // Fair-claim scans (spec #1020 §5.2): global FIFO head + per-repo
     // candidate/repo-selection passes; also speeds countByIndexStatus
     // (settle / refresh / callback paths).

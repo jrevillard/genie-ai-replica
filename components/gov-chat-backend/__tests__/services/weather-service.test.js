@@ -179,15 +179,6 @@ describe('WeatherService', () => {
     });
   });
 
-  describe('setAnalyticsService', () => {
-    it('should set analytics service', () => {
-      const { service } = setupService();
-      const analytics = { recordWeatherRequest: jest.fn() };
-      service.setAnalyticsService(analytics);
-      expect(service.analyticsService).toBe(analytics);
-    });
-  });
-
   describe('getCityName', () => {
     let service;
 
@@ -373,21 +364,16 @@ describe('WeatherService', () => {
       }
     });
 
-    it('does NOT call weather analytics — recordWeatherRequest has no shipped implementation', async () => {
+    it('carries no analytics plumbing — recordWeatherRequest has no shipped implementation', () => {
       // The old tests asserted a call into this.analyticsService
       // .recordWeatherRequest — a method that exists only in an unmerged
       // May-2026 side-branch; the shipped AnalyticsService never had it, so
       // the block threw per request (old guard) or was skipped silently
-      // (requestId guard). The dead call is removed (review 2026-10-29);
-      // this pins the removal so it cannot come back by accident.
-      const mockAnalytics = { recordWeatherRequest: jest.fn().mockResolvedValue({}) };
-      service.setAnalyticsService(mockAnalytics);
-      axios.get.mockResolvedValueOnce(openMeteoResponse);
-
-      const result = await service.getWeather({ latitude: 13.7942, longitude: -88.8965, userId: 'user-1' });
-
-      expect(result).toBeDefined();
-      expect(mockAnalytics.recordWeatherRequest).not.toHaveBeenCalled();
+      // (requestId guard). The write-only dead field and setter are removed
+      // (review 2026-10-29); this pins the removal so the plumbing cannot
+      // come back by accident.
+      expect(service.analyticsService).toBeUndefined();
+      expect(service.setAnalyticsService).toBeUndefined();
     });
 
     it('should throw a typed 503 CITY_NOT_FOUND when no city is within the lookup radius', async () => {
@@ -487,19 +473,6 @@ describe('WeatherService', () => {
       expect(result).toBeDefined();
       expect(result.current).toEqual(expect.objectContaining({ temperature: 22 }));
       expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('save_request_failed'), expect.any(Object));
-    });
-
-    // Bug fix: analytics must NOT be recorded when persistence failed
-    // (no requestId to log against).
-    it('should skip analytics recording when persistence fails', async () => {
-      const mockAnalytics = { recordWeatherRequest: jest.fn().mockResolvedValue({}) };
-      service.setAnalyticsService(mockAnalytics);
-      mockWeatherRequests.save.mockRejectedValueOnce(new Error('Arango unavailable'));
-      axios.get.mockResolvedValueOnce(openMeteoResponse);
-
-      await service.getWeather({ latitude: 46.2, longitude: 6.15, userId: 'user-1' });
-
-      expect(mockAnalytics.recordWeatherRequest).not.toHaveBeenCalled();
     });
   });
 });

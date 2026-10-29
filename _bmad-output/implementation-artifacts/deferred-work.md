@@ -2999,3 +2999,45 @@ location: components/okf-server/services/lifecycle-service.js (~:784-795 + :856-
 severity: low (maintenance; ~12 lines + one releaseLease() local with a single catch path)
 reason: Ship together with DW-444 on the next lifecycle touch — the reviewer's own framing is "cheap to fold into the next lifecycle touch"; recording both pairs here so the next diff carries them together.
 status: open
+
+### DW-446: backing-file-service carries five near-identical per-file HTTP arms (3x patch-status + 2x delete-with-NOT_FOUND-idempotency) — two file-local helpers (markDocRepoStatus/deleteDocRepoFile) collapse them with one idempotency/failure contract
+origin: !597 round-2 review (simplify, thread 30245850, 2026-10-29)
+location: components/okf-server/services/backing-file-service.js
+severity: low (maintenance; the retract arm of the five was already removed in wave 5 — 25ac484a2 deleted the dead markRetracted, re-pointed the wiring at retractBackingFiles and added the retract-split unit coverage; the remaining arms' collapse is this entry)
+reason: The helper extraction is a pure mechanical fold but touches every backing-file error path at once; folding it mid-review would make the wave-5 retract-resilience diff and the arm-collapse diff unauditable against each other. Ship on the next backing-file touch.
+status: open
+
+### DW-447: slugify exists TWICE with divergent identity semantics (tableConcepts.js:103: no diacritic folding, 60-char cap; crawl-conversion: NFKD folds, no cap) — both feed collision-sensitive concept path/key generation, so the same title yields different identities per ingestion path
+origin: !597 round-2 review (simplify, thread 97b7fe74, 2026-10-29)
+location: components/okf-server/services/converters/tableConcepts.js:103 vs components/okf-server/services/crawl-conversion-service.js
+severity: medium (identity drift on collision-sensitive paths — one export with an options arg for the cap, the diacritics-folding behaviour strictly better)
+reason: Unifying changes concept identities for table/csv-sourced content (the non-folding side converges onto the folding side) — a DATA-VISIBLE change in the same class as DW-443. Acceptance spec = the reviewer's divergence list; ship with its own reviewed change and an identity note for existing table-derived concepts.
+status: open
+
+### DW-448: OTel ops-counter boilerplate (createCounter('okf_X_operations_total') + identical recordOp try/catch wrapper) copy-pasted in 7 services + 1 variant — one makeOpCounter(name, description) factory in shared-lib/metrics.js returning the recordOp closure
+origin: !597 round-2 review (simplify, thread 71bf45eb, 2026-10-29)
+location: components/okf-server/services/{pii-service:27, ingest-service:59, repository-service:88, concept-meta-service:41, conformance-service:37, parser-service:25, edge-service:48 (variant), ragas-suite-service}
+severity: low (maintenance; 8 one-line call-site swaps; a meter-API change or name typo becomes a one-place fix)
+reason: Pure mechanical sweep across 8 files — same mid-review auditability argument as DW-444/446; batch it with the next metrics touch so the diff reads as one intent.
+status: open
+
+### DW-449: audit wrapper (actor.sub||'system' fallback + actor_name unpack + catch-and-warn) duplicated verbatim in graph-lifecycle-service.js:127 and hand-rolled at ~20 direct writeAudit call sites across 9 files — move into services/audit-service.js as writeActorAudit
+origin: !597 round-2 review (simplify, thread b7523105, 2026-10-29)
+location: components/okf-server/services/audit-service.js (new export) + graph-lifecycle-service.js:127 + the second duplicating site
+severity: low (maintenance; the 'system' fallback semantics live in 2 copies while ~20 sites don't apply it at all; the bare sites adopt opportunistically)
+reason: The two duplicating sites swap in the same commit as the export; the ~20 bare sites are an opportunistic sweep, not a blocking change. Fold with the next audit-payload touch.
+status: open
+
+### DW-450: writeRepoConceptEdges fetches the repo's WHOLE concept-id set and builds a fresh Set on EVERY concept terminal callback — an N-concept drain pays N x N row reads (~1M rows at 1000 concepts) when the G22 cross-repo check only needs 'does this target exist'
+origin: !597 round-2 review (efficiency, thread af0c7728, 2026-10-29)
+location: components/okf-server/services/edge-service.js (~:111)
+severity: medium (drain-path efficiency; smallest fix = per-target FILTER m.concept_id == @t LIMIT 1 probe on the existing (repo_id, concept_id) unique index, evaluated for the concept's actual links, typically <20)
+reason: Changes the function's data flow (whole-set prefetch to per-target probes) on the drain path that DW-427/Dr sizing work also exercises — defer to the next edge-service touch so its diff stays single-purpose; the unique index makes the probe O(1) per link, no new cache introduced.
+status: open
+
+### DW-451: chatqna's D1 grounding gate discriminates OKF-vs-legacy by string-parsing graph_name.startswith('OKF_') — a naming convention owned by dataprep/okf-server, re-parsed two service hops away as a grounding-policy input
+origin: !597 round-2 review (altitude, thread f36c4886, 2026-10-29)
+location: genie-ai-overlay/chatqna/genieai_chatqna.py (~:3058) vs genie-ai-overlay/retriever/genieai_retriever_arangodb.py _attach_provenance (~:2117)
+severity: low-medium (fragile edge: a legacy graph RENAMED into the OKF_ namespace — or ARANGO_GRAPH_NAME itself OKF_-prefixed — silently flips D1 from refuse-to-fabricate to fabricate-okf-source)
+reason: The fix is a cross-service contract addition (retriever stamps prov['graph_kind'] = 'okf'|'legacy' in _attach_provenance — the one neutral place that knows which graph produced the hit; chatqna's gate reads the field). Contract changes ship outside a review cycle: the wire shape is shared with the OPEA orchestrator envelope (DW-5 documents how dynamic input types drop custom fields — the field must ride an existing passthrough), so it needs its own probed change, not a review-wave patch. DW-442's repoId identity channel (landed, wave 6) already retired the routing half of the prefix-parse; this entry tracks the residual grounding-policy half.
+status: open

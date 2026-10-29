@@ -135,10 +135,11 @@ function isUnauthorized(err) {
 // point makes the arbitrary-url case unreachable while keeping the wrapper
 // generic for its 7 services.
 function assertAllowedUrl(url) {
-  // Same env the okf-server config module reads (config.documentRepository.url)
-  // — read lazily here so this module keeps its no-imports, lazy-env shape
-  // (the header documents why: test-friendly env sequencing).
-  const base = process.env.DOCUMENT_REPOSITORY_URL || 'http://document-repository:3001';
+  // Same env the okf-server config module reads — the fallback comes FROM
+  // config.documentRepository.url (call-time require, lazy shape preserved)
+  // so the allowlist can never drift from the base the callers actually use
+  // (a stale literal here would fail-close every authedAxios call).
+  const base = process.env.DOCUMENT_REPOSITORY_URL || require('../config').documentRepository.url;
   let origin;
   try {
     origin = new URL(url).origin;

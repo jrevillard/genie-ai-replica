@@ -1891,10 +1891,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # Request-local context WINS when bound: falling back to the shared
         # mutable attribute from a bound context let a concurrent OKF ingest's
         # repo_id leak into a legacy ingest's completion routing
-        # (DATAPREP_INGEST_CONCURRENCY > 1 — review 2026-10-29).
+        # (DATAPREP_INGEST_CONCURRENCY > 1 — review 2026-10-29). The ctx now
+        # carries okf_graph_hint alongside repo_id (bound at ingest start, the
+        # same single per-request source) so an OKF_-graph ingest WITHOUT a
+        # repo_id still routes to the OKF control plane instead of being
+        # hardcoded to the legacy route (review round 2, thread e0e879eb).
         if ctx is not None:
             current_repo = ctx.get("repo_id")
-            okf_graph_hint = False
+            okf_graph_hint = bool(ctx.get("okf_graph_hint", False))
         elif okf_graph_hint is not None:
             # Caller-supplied routing (retract path, review 2026-10-29 round
             # 3): route by the request's own OKF_ graph marker. The singleton
@@ -3868,10 +3872,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # PARALLEL-INGEST: bind the request-local context (task-scoped) so
         # concurrent ingests never share bundle-log caches or callback
         # repo_id. The self-stash above remains for legacy readers.
+        # okf_graph_hint rides in the SAME ctx (already derived above, before
+        # this set) so the completion callback routes off ONE per-request
+        # source for both values — a bound ctx that hardcoded the hint to
+        # False misrouted an OKF_-graph ingest that carries no repo_id
+        # (review 2026-10-29 round 2, thread e0e879eb).
         _INGEST_CTX.set(
             {
                 "input": input,
                 "repo_id": self._current_repo_id,
+                "okf_graph_hint": self._current_okf_graph_hint,
                 "bundle_cache": {},
                 "name_cache": {},
             }

@@ -75,6 +75,13 @@ variables:
   # - **/scripts/**: dev/migration scripts NOT shipped in container. We list specific
   #   sub-patterns (rather than the broad **/scripts/) so the production entrypoint
   #   `components/document-repository/scripts/clamav-node.sh` stays scanned.
+  # - scripts/okf-testing-lab/**: RAGAS testing-lab CLI helpers, run by hand —
+  #   NOT shipped in a container. CAVEAT (review 2026-10-29): two of these
+  #   modules are REQUIRED by CI-run okf-server Jest suites since commit
+  #   c40e9ea03 (ragas-compare-runs.js, ragas-regenerate-entry.js), so their
+  #   SAST findings are invisible by construction — and any future lab helper
+  #   a test needs lands in the same blind spot. Moving the shared helpers to
+  #   a scanned location belongs to the post-train slimming pass.
   # - **/seed-*.js: synthetic data generators, never executed at runtime
   # - **/__tests__/, **/__mocks__/, **/tests/, **/coverage/: test code + generated reports
   # - .claude/**: Claude Code agent skills, hooks, BMAD orchestration YAML. Not

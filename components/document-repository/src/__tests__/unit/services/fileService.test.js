@@ -531,6 +531,21 @@ describe('fileService', () => {
       await expect(fileService._waitCrawlStopped('k1')).resolves.toBe(true);
     });
 
+    it('_waitCrawlStopped: an arangojs driver error shaped {code: 404} (no statusCode) counts as absence', async () => {
+      // arangojs exposes the HTTP status as .code on DRIVER errors (shared-lib's
+      // own measurement) — the statusCode-only arm classified that shape as a
+      // real fault and rethrew a routine "job already gone" as a
+      // delete-blocking error (review 2026-10-29).
+      const mockDb = {
+        collection: jest.fn().mockReturnValue({
+          document: jest.fn().mockRejectedValue(Object.assign(new Error('document not found'), { code: 404 }))
+        })
+      };
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await expect(fileService._waitCrawlStopped('k1')).resolves.toBe(true);
+    });
+
     it('_waitCrawlStopped: a missing collection (1203) is a real fault — rethrown, NOT absence', async () => {
       // The old loose /not found/i message test classified this as "job gone"
       // and let the delete proceed over a broken database. Canonical

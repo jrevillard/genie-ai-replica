@@ -35,16 +35,20 @@ const { logger, parsePositiveInt } = require('../shared-lib');
 
 /**
  * Local positive-int env parse (self-contained — no shared-lib symbol touched
- * at module load). A PRESENT-but-invalid or below-min value logs a WARN naming
- * the variable, the offending value and the applied fallback — an operator
- * typo must be visible, never silently swallowed. An UNSET variable falls back
- * silently (the default is the normal configuration, not a misconfiguration).
+ * at module load). Warn contract: the WARN fires ONLY when a PROVIDED,
+ * non-empty value fails to parse or sits below `min` — that is an operator
+ * typo and must be visible, never silently swallowed. Two shapes stay silent:
+ * a provided value equal to the fallback (a VALID configuration — matching
+ * the default is not a misconfiguration) and an empty string (indistinguishable
+ * from unset, which is also silent).
  */
 function envPositiveInt(varName, rawValue, fallback, min) {
   // Wraps shared-lib's parsePositiveInt (one env-int policy in the repo —
   // review 2026-10-29); the warn-on-misconfiguration behaviour stays local.
   const n = parsePositiveInt(rawValue, fallback, { min });
-  if (n === fallback && rawValue !== undefined && rawValue !== null && rawValue !== '') {
+  const provided = rawValue !== undefined && rawValue !== null && rawValue !== '';
+  const parsed = Number.parseInt(rawValue, 10);
+  if (provided && (Number.isNaN(parsed) || parsed < min)) {
     logger.warn('RetrievalConfigClient.invalid_env_int', {
       variable: varName,
       value: String(rawValue),

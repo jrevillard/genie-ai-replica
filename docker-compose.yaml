@@ -550,9 +550,13 @@ services:
       # not the internal Docker URL, so the issuer matches the JWT's iss claim.
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       # Split-URL OIDC: KEYCLOAK_PUBLIC_URL aliases the browser-facing issuer to
-      # the same JWKS when discovery is fetched via a different (internal) URL.
-      # No-op when unset (cloud) — mirrors the okf-server block.
+      # the same JWKS when discovery is fetched via a different (internal) URL;
+      # KEYCLOAK_JWKS_URL pins the JWKS fetch host; KEYCLOAK_BROWSER_ISSUER adds
+      # a second accepted issuer alongside it. No-op when unset (cloud) —
+      # mirrors the okf-server block.
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
+      - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
+      - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
       - KEYCLOAK_REALM=${KEYCLOAK_REALM:-genie}
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       # Additional Keycloak realms for multi-realm token validation (JSON map: {"realm":"client-id"})
@@ -696,9 +700,13 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       - SERVICE_NAME=genie-okf-server
       - NODE_ENV=production
-      # Split-URL OIDC: KEYCLOAK_PUBLIC_URL aliases the browser-facing issuer to the same JWKS.
-      # No-op in cloud (equals KEYCLOAK_URL); active where internal/public issuers differ (local build).
+      # Split-URL OIDC: KEYCLOAK_PUBLIC_URL aliases the browser-facing issuer to the same JWKS;
+      # KEYCLOAK_JWKS_URL pins the JWKS fetch host; KEYCLOAK_BROWSER_ISSUER adds a second accepted
+      # issuer alongside it. No-op in cloud (equals KEYCLOAK_URL); active where internal/public
+      # issuers differ (local build).
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
+      - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
+      - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
       # Service-account mints (okf-server → doc-repo/dataprep) are server-to-server:
       # prefer the container-reachable INTERNAL Keycloak; the browser-facing public
       # alias stays only a late fallback. Mirrors the dataprep block.
@@ -1117,8 +1125,12 @@ services:
       - ARANGO_URL=http://arango-vector-db:8529
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       # Split-URL OIDC: KEYCLOAK_PUBLIC_URL overrides the expected issuer when
-      # JWKS is fetched via a different (internal) URL. No-op when unset (cloud).
+      # JWKS is fetched via a different (internal) URL; KEYCLOAK_JWKS_URL pins
+      # the JWKS fetch host; KEYCLOAK_BROWSER_ISSUER adds another accepted
+      # issuer alongside it. No-op when unset (cloud).
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
+      - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
+      - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
       - KC_REALM=${KEYCLOAK_REALM:-genie}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - LOG_LEVEL=${LOG_LEVEL:-info}

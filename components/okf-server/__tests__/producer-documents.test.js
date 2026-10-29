@@ -625,3 +625,25 @@ describe('lifecycle sourcesBusyBlocker (Story 7.7 gate)', () => {
     expect(await lifecycle.sourcesBusyBlocker(repo([{ kind: 'document', file_id: 'bundle-1' }]))).toBeNull();
   });
 });
+
+describe('producer-service — docRepoFileOf (shared doc-repo envelope unwrap)', () => {
+  // The unwrap is shared by lifecycle-service and crawl-conversion-service —
+  // a diverging copy that handled only {file} | {data} silently degraded the
+  // {data: {file}} shape to id-only stamping (review 2026-10-29). Pin all
+  // three shipped shapes through the SINGLE helper.
+  const file = { file_id: 'f-1', file_name: 'a.pdf', dataprep: { status: 'Ingested' } };
+
+  test.each([
+    ['{file}', { data: { file } }],
+    ['{data: {file}}', { data: { data: { file } } }],
+    ['{data}', { data: { data: file } }]
+  ])('unwraps the %s envelope to the file doc', (_shape, res) => {
+    expect(producer.docRepoFileOf(res)).toBe(file);
+  });
+
+  test('degrades to {} on absent/empty responses (never throws)', () => {
+    expect(producer.docRepoFileOf(null)).toEqual({});
+    expect(producer.docRepoFileOf(undefined)).toEqual({});
+    expect(producer.docRepoFileOf({})).toEqual({});
+  });
+});

@@ -123,6 +123,16 @@ async function init(idpUrl) {
     throw new Error('KEYCLOAK_URL environment variable is required for OIDC discovery');
   }
   const baseUrl = idpUrl || `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}`;
+  // The realm ACTUALLY being initialized, derived from the idpUrl's
+  // /realms/<name> suffix; falls back to the module-level KEYCLOAK_REALM when
+  // idpUrl is absent (the primary init call is init() with no args).
+  // initAllRealms() re-invokes init() per additional realm, so keying the
+  // per-realm issuer aliases below on KEYCLOAK_REALM instead let the PARTNER
+  // realm's init overwrite the PRIMARY realm's public-issuer alias with the
+  // partner JWKS — every primary-realm browser token carrying the public
+  // issuer then verified against the wrong realm's keys (review 2026-10-29).
+  const realmMatch = /\/realms\/([^/?#]+)/.exec(baseUrl);
+  const realm = realmMatch ? realmMatch[1] : KEYCLOAK_REALM;
   const discoveryUrl = `${baseUrl}/.well-known/openid-configuration`;
 
   logger.info(`[KeycloakAuth] Fetching OIDC discovery from ${discoveryUrl}`);
@@ -169,7 +179,10 @@ async function init(idpUrl) {
     //   - KEYCLOAK_BROWSER_ISSUER: explicit browser-facing issuer (e.g. https://localhost/auth)
     const publicUrlOverride = process.env.KEYCLOAK_PUBLIC_URL;
     if (publicUrlOverride) {
-      const publicIssuerOverride = `${publicUrlOverride.replace(/\/$/, '')}/realms/${KEYCLOAK_REALM}`;
+      // Keyed by the realm ACTUALLY being initialized (see the derivation
+      // above): a partner realm's override alias carries the partner realm's
+      // name, never the primary's.
+      const publicIssuerOverride = `${publicUrlOverride.replace(/\/$/, '')}/realms/${realm}`;
       issuerMap.set(publicIssuerOverride, overrideJwks);
     }
     if (process.env.KEYCLOAK_BROWSER_ISSUER) {
@@ -186,8 +199,13 @@ async function init(idpUrl) {
   // build behind Docker Desktop): the browser token iss (https://localhost) can
   // differ from the discovery issuer fetched internally (http://kong:8000). Map
   // the public issuer to the same JWKS so token lookup succeeds. No-op if unset.
+  // Registered ONLY when the realm being initialized IS the primary (realm ===
+  // KEYCLOAK_REALM): the alias is by definition the PRIMARY realm's public
+  // issuer, and registering it from an additional realm's init would clobber
+  // the primary alias with that realm's JWKS (the multi-realm bug this file's
+  // realm derivation prevents).
   const publicUrl = process.env.KEYCLOAK_PUBLIC_URL;
-  if (publicUrl) {
+  if (publicUrl && realm === KEYCLOAK_REALM) {
     const publicIssuer = `${publicUrl.replace(/\/$/, '')}/realms/${KEYCLOAK_REALM}`;
     if (publicIssuer !== doc.issuer) {
       issuerMap.set(publicIssuer, jwks);

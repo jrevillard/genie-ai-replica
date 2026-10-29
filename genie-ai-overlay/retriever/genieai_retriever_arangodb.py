@@ -1459,23 +1459,35 @@ class GenieaiArangoRetriever(OpeaComponent):
             # Retrieve Embedding Dimension #
             ################################
 
-            random_doc = collection.random()
-            random_doc_id = random_doc["_id"]
-            sample_embedding = random_doc.get(ARANGO_EMBEDDING_FIELD)
+            if isinstance(embedding, (list, tuple)) and len(embedding) > 0:
+                # The query embedding is already in scope — derive the dimension
+                # from it and skip the collection.random() probe entirely (the
+                # probe reads an arbitrary document on every request otherwise).
+                dimension = len(embedding)
+                logger.debug(
+                    f"Embedding dimension derived from the query embedding — dimension={dimension}, "
+                    f"collection={collection_name}"
+                )
+            else:
+                # Legacy no-embedding path: probe a stored document to learn the
+                # collection's embedding dimension.
+                random_doc = collection.random()
+                random_doc_id = random_doc["_id"]
+                sample_embedding = random_doc.get(ARANGO_EMBEDDING_FIELD)
 
-            if not sample_embedding:
-                logger.error(f"Document '{random_doc_id}' is missing field '{ARANGO_EMBEDDING_FIELD}'.")
-                return []
+                if not sample_embedding:
+                    logger.error(f"Document '{random_doc_id}' is missing field '{ARANGO_EMBEDDING_FIELD}'.")
+                    return []
 
-            if not isinstance(sample_embedding, list):
-                logger.error(f"Document '{random_doc_id}' has a non-list embedding field, found {type(embedding)}.")
-                return []
+                if not isinstance(sample_embedding, list):
+                    logger.error(f"Document '{random_doc_id}' has a non-list embedding field, found {type(embedding)}.")
+                    return []
 
-            dimension = len(sample_embedding)
+                dimension = len(sample_embedding)
 
-            if dimension == 0:
-                logger.error(f"Document '{random_doc_id}' has an empty embedding field.")
-                return []
+                if dimension == 0:
+                    logger.error(f"Document '{random_doc_id}' has an empty embedding field.")
+                    return []
 
             if OPENAI_API_KEY and OPENAI_EMBED_MODEL and OPENAI_EMBED_ENABLED:
                 # OpenAI embeddings are not contrastive / instruction-tuned —
@@ -2298,15 +2310,20 @@ async def _route_graphs(self, encoded_graph_names, query_embedding):
                 self.db.aql.execute(
                     "FOR r IN okf_repositories FILTER r.deleted_at == null "
                     "FILTER r.ingested_graph_name != null FILTER r.head != null "
+                    "FILTER r.ingested_graph_name IN @okf_graphs "
                     "RETURN {g: r.ingested_graph_name, v: r.head.vector, "
                     "fv: (r.head.per_field || {}).forbidden || null, "
                     "fvs: (r.head.per_field || {}).forbidden_vectors || [], "
-                    "dim: r.head.dim, model: r.head.model}"
+                    "dim: r.head.dim, model: r.head.model}",
+                    bind_vars={"okf_graphs": sorted(okf_graphs)},
                 )
             )
             qdim = len(query_embedding)
             for row in head_rows:
                 g, v = row.get("g"), row.get("v")
+                # The IN @okf_graphs bind above is the transfer-volume fix
+                # (the server only ships authorized repos' heads); this
+                # Python-side check stays as belt-and-braces defence in depth.
                 if g not in okf_graphs or not isinstance(v, (list, tuple)) or len(v) != qdim:
                     continue
                 hmodel = row.get("model") or ""
@@ -2480,7 +2497,10 @@ async def _route_graphs(self, encoded_graph_names, query_embedding):
 async def invoke_fanout(self, input, input_dict, encoded_graph_names):
     """Additive multi-graph fan-out orchestrator (Story 1.1/1.4/1.5).
 
-    Called when `_encoded_graph_names` carries ≥2 graphs. Runs the legacy
+    Called when `_encoded_graph_names` carries ≥1 graph (the engagement
+    predicate, `_fanout_should_engage` — only the EMPTY carrier takes the
+    legacy single-graph path; a single-graph OKF carrier deliberately runs
+    through here too). Runs the legacy
     extraction ONCE per authorized graph (Decision B: full extraction —
     vector + BM25 hybrid + traversal + response, per leg) and fuses via
     2-level cross-graph RRF (Level-2 only; Level-1 is per-leg). Per-leg

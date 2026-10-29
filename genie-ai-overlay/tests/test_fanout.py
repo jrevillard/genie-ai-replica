@@ -13,7 +13,9 @@ The decision matrix is in `_bmad-output/implementation-artifacts/1-0-retriever-p
 (Decisions A–F); these tests pin the contract the orchestrator commits to.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from retriever.genieai_retriever_arangodb import (
     _attach_provenance,
@@ -437,11 +439,12 @@ class _StubRoutingDb:
     def __init__(self, results, heads=None):
         self._results = results
         self._heads = heads
-        self.calls = []
+        self.calls = []  # (query, bind_vars) per execute — the query rides
+        # alongside the bind vars so tests can pin AQL shape, not just inputs.
         self.aql = self
 
     def execute(self, aql, bind_vars=None):
-        self.calls.append(bind_vars)
+        self.calls.append((aql, bind_vars))
         if "okf_repositories" in aql:
             if self._heads == "fail":
                 raise RuntimeError("head fetch failed")
@@ -680,6 +683,42 @@ class TestRouteGraphs:
         )
         assert degraded is False
         assert routed == ["GRAPH", "OKF_alphabet_v1"]
+
+    async def test_head_fetch_filters_to_authorized_graphs_server_side(self):
+        # Transfer-volume fix (review 2026-10-29): the okf_repositories AQL
+        # must carry the authorized graph set as a bind var so the SERVER
+        # ships only authorized repos' heads — a deployment with many live
+        # repos no longer transfers every head vector just to discard most
+        # of them in Python. The legacy GRAPH entry never rides in the bind.
+        results = {
+            "OKF_alphabet_v1_SOURCE": [0.95, 0.94, 0.93, 0.92, 0.91],
+            "OKF_ncd_v1_SOURCE": [0.83, 0.82],
+        }
+        stub = _routing_stub(results, heads=self._head_rows())
+        routed, degraded = await self._route(stub, ["GRAPH", "OKF_alphabet_v1", "OKF_ncd_v1"])
+        assert degraded is False
+        assert routed == ["OKF_ncd_v1"]
+
+        head_calls = [(query, bind_vars) for query, bind_vars in stub.db.calls if "okf_repositories" in query]
+        assert head_calls, "the head fetch never ran"
+        for query, bind_vars in head_calls:
+            assert "FILTER r.ingested_graph_name IN @okf_graphs" in query, (
+                "server-side filter missing from the head AQL"
+            )
+            assert bind_vars["okf_graphs"] == ["OKF_alphabet_v1", "OKF_ncd_v1"], (
+                f"bind var must carry exactly the authorized OKF set, got {bind_vars.get('okf_graphs')}"
+            )
+
+    async def test_python_side_still_discards_unauthorized_heads(self):
+        # Belt-and-braces (defence in depth alongside the server-side
+        # filter): a head row the server should never have sent (stale bind,
+        # replication race) is still discarded by the in-process check —
+        # its graph must not route, the authorized claim must.
+        heads = self._head_rows(g="OKF_unauthorized_v1") + self._head_rows()
+        stub = _routing_stub({}, heads=heads)
+        routed, degraded = await self._route(stub, ["GRAPH", "OKF_ncd_v1"])
+        assert degraded is False
+        assert routed == ["OKF_ncd_v1"]
 
     # ─── Story 1-8b: the forbidden/noise gate (FLOOR + per-tag VETO) ────────
     # David, 2026-10-09: "forbidden is forbidden — a hard contract, it should
@@ -1296,3 +1335,104 @@ class TestFanoutBoundAndFallback:
                 "OKF_g_v1_SOURCE",
             )
             assert "LIMIT 500" in q
+
+
+class TestExtractDimensionProbe:
+    """The embedding-dimension probe at the head of `_extract_for_graph`.
+
+    Review 2026-10-29: `collection.random()` ran on EVERY request just to
+    read one arbitrary document's embedding length. When the query embedding
+    is already in scope the dimension derives from it and the probe is
+    skipped entirely; the legacy no-embedding path keeps the probe unchanged.
+    """
+
+    @staticmethod
+    async def _run_extract(embedding):
+        """Drive `_extract_for_graph` once against a happy-path db mock.
+
+        Returns (collection mock, ArangoVector mock) so a test can pin both
+        whether the random() probe ran and which dimension the vector store
+        was constructed with. Same patch set as test_retriever.invoke_env
+        (local-fallback embeddings branch, hybrid off).
+        """
+        from retriever.genieai_retriever_arangodb import GenieaiArangoRetriever
+
+        input_dict = {
+            "search_start": "node",
+            "search_mode": "vector",
+            "enable_traversal": False,
+            "enable_summarizer": False,
+            "distance_strategy": "COSINE",
+            "use_approx_search": False,
+            "num_centroids": 1,
+            "traversal_max_depth": 1,
+            "traversal_max_returned": 3,
+            "traversal_score_threshold": 0.5,
+            "traversal_query": None,
+            "context": {},
+            "filter_strategy": "OR",
+        }
+        input = MagicMock()
+        input.embedding = embedding  # a list is "already in scope"; None is not
+        input.search_type = "similarity"
+        input.k = 4
+        input.fetch_k = 20
+        input.lambda_mult = 0.5
+        input.score_threshold = 0.5
+
+        db = MagicMock()
+        db.has_graph.return_value = True
+        db.graph.return_value.has_vertex_collection.return_value = True
+        db.graph.return_value.has_edge_collection.return_value = False
+        db.graph.return_value.edge_definitions.return_value = []
+        collection = MagicMock()
+        collection.count.return_value = 5
+        collection.random.return_value = {"_id": "GRAPH_ENTITY/doc1", "embedding": [0.1] * 768}
+        db.collection.return_value = collection
+
+        mock_doc = MagicMock()
+        mock_doc.id = "doc1"
+        mock_doc.page_content = "relevant text"
+        mock_doc.metadata = {}
+        mock_vdb = MagicMock()
+        mock_vdb.asimilarity_search_with_relevance_scores = AsyncMock(return_value=[(mock_doc, 0.9)])
+
+        retriever = GenieaiArangoRetriever.__new__(GenieaiArangoRetriever)
+        retriever.db = db
+
+        with (
+            patch("retriever.genieai_retriever_arangodb.HuggingFaceBgeEmbeddings", MagicMock()),
+            patch("retriever.genieai_retriever_arangodb.ArangoVector", return_value=mock_vdb) as mock_vector,
+            patch("retriever.genieai_retriever_arangodb.OPENAI_API_KEY", None),
+            patch("retriever.genieai_retriever_arangodb.TEI_EMBEDDING_ENDPOINT", ""),
+            patch("retriever.genieai_retriever_arangodb.HF_TOKEN", ""),
+            patch("retriever.genieai_retriever_arangodb.HYBRID_RETRIEVAL_ENABLED", False),
+        ):
+            result = await GenieaiArangoRetriever._extract_for_graph(
+                retriever,
+                graph_name="GRAPH",
+                input_dict=input_dict,
+                input=input,
+                query="test query",
+                start_time=0.0,
+                span=MagicMock(),
+            )
+
+        assert result, "the happy-path extraction returned no results"
+        return collection, mock_vector
+
+    @pytest.mark.asyncio
+    async def test_embedding_in_scope_skips_the_random_probe(self):
+        # The query embedding is in scope → dimension = len(embedding) and
+        # collection.random() NEVER runs (the per-request probe cost).
+        collection, mock_vector = await self._run_extract([0.2] * 768)
+        collection.random.assert_not_called()
+        assert mock_vector.call_args.kwargs["embedding_dimension"] == 768
+
+    @pytest.mark.asyncio
+    async def test_no_embedding_keeps_the_random_probe(self):
+        # Legacy no-embedding path unchanged: the probe runs and the stored
+        # sample's length feeds the vector store's dimension.
+        collection, mock_vector = await self._run_extract(None)
+        collection.random.assert_called_once()
+        assert mock_vector.call_args.kwargs["embedding_dimension"] == 768

@@ -76,8 +76,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   console.log(`probing ${samples.length} row(s) with ${METRIC}\n`);
 
   // The judges to compare: the run's own (MiniMax-M3.1-Flash) and the env
-  // judge the sidecar uses by default.
-  const cfg = (await col.database) ? null : await db.collection('okf_model_configs').document('mc1792423414860-1bbfd8');
+  // judge the sidecar uses by default. Read the saved MiniMax model config
+  // (null when the doc is absent — those judge entries then degrade to the
+  // env judge below). NOTE: a Database handle awaited directly is always
+  // truthy, so the old `(await col.database) ? null : ...` guard NEVER read
+  // the config (review 2026-10-29).
+  const cfg = await db
+    .collection('okf_model_configs')
+    .document('mc1792423414860-1bbfd8')
+    .catch(() => null);
   const judges = [
     {
       name: 'Minimax-M3.1-Flash (the run judge)',

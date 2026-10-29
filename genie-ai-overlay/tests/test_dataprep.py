@@ -1627,6 +1627,63 @@ class TestUpdateDocStatusRouting:
             dp_module._INGEST_CTX.reset(token)
 
     @pytest.mark.asyncio
+    async def test_ctx_bound_okf_graph_hint_routes_without_repo_id(self):
+        """An OKF_-graph ingest carries NO repo_id (a graph name is a name,
+        not an identity field) — the ctx-bound okf_graph_hint must make
+        is_okf_job true on its own, so the completion routes to the OKF
+        control plane instead of the hardcoded-False legacy route (review
+        round 2, thread e0e879eb). The payload claims no repo (there is
+        none to claim)."""
+        dp = create_dataprep()
+        dp._current_repo_id = None
+        token = dp_module._INGEST_CTX.set({"repo_id": None, "okf_graph_hint": True})
+        try:
+            with (
+                patch.object(
+                    dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}
+                ),
+                patch.object(dp_module, "OKF_SERVER_URL", "http://okf-test:3002"),
+                patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
+                patch.object(dp_module.propagate, "inject"),
+            ):
+                session = self._mock_session()
+                await dp._update_doc_status("guidance-doc-import-smoke-1789404732138-sec5", "Ingested", chunk_count=3)
+
+            called_url = session.patch.call_args[0][0]
+            assert "/api/okf/internal/concepts/" in called_url
+            assert "/api/files/" not in called_url
+            payload = session.patch.call_args[1]["json"]
+            assert "repo_id" not in payload  # nothing to claim — no repo_id in ctx
+        finally:
+            dp_module._INGEST_CTX.reset(token)
+
+    @pytest.mark.asyncio
+    async def test_ctx_bound_false_hint_routes_to_doc_repo(self):
+        """A legacy-graph ingest binds okf_graph_hint=False in the ctx — the
+        ctx-bound branch reads the hint (no longer hardcodes it) and still
+        routes to doc-repo."""
+        dp = create_dataprep()
+        dp._current_repo_id = None
+        token = dp_module._INGEST_CTX.set({"repo_id": None, "okf_graph_hint": False})
+        try:
+            with (
+                patch.object(
+                    dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}
+                ),
+                patch.object(dp_module, "OKF_SERVER_URL", "http://okf-test:3002"),
+                patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
+                patch.object(dp_module.propagate, "inject"),
+            ):
+                session = self._mock_session()
+                await dp._update_doc_status("1791566703011_a807dad8", "Ingested", chunk_count=12)
+
+            called_url = session.patch.call_args[0][0]
+            assert "/api/files/1791566703011_a807dad8/status" in called_url
+            assert "/api/okf/" not in called_url
+        finally:
+            dp_module._INGEST_CTX.reset(token)
+
+    @pytest.mark.asyncio
     async def test_legacy_job_without_okf_context_routes_to_doc_repo(self):
         """No concept_id and no OKF context = a legacy single-file ingest —
         the doc-repo status PATCH is preserved unchanged."""
@@ -1863,6 +1920,89 @@ class TestIngestFileWithGuardrail:
         status_calls = [c.args[1] for c in mock_status.call_args_list]
         assert "Ingesting" in status_calls
         assert "Ingested" in status_calls
+
+    @staticmethod
+    def _ctx_capture_patches(dp, inp):
+        """Happy-path patch set for ingest_file_with_guardrail, with the
+        first _update_doc_status call capturing the request ctx that the
+        ingest start bound (the ctx is set BEFORE 'Ingesting', so the
+        side_effect reads the production-shape dict)."""
+        captured = {}
+
+        async def _capture_ctx(file_id, status, **kwargs):
+            captured.setdefault("ctx", dp_module._INGEST_CTX.get())
+
+        patches = [
+            patch.object(dp, "_update_doc_status", new_callable=AsyncMock, side_effect=_capture_ctx),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["Healthcare"]),
+            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["chunk1", "chunk2"]),
+            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            patch.object(
+                dp,
+                "_apply_contextualization",
+                new_callable=AsyncMock,
+                side_effect=lambda chunks, inp, fid: (list(chunks), []),
+            ),
+            patch.object(
+                dp,
+                "_apply_labels",
+                new_callable=AsyncMock,
+                return_value=(
+                    [
+                        {"text": "chunk1", "labels": ["A"]},
+                        {"text": "chunk2", "labels": ["B"]},
+                    ],
+                    [],
+                ),
+            ),
+            patch.object(dp, "_process_batch", new_callable=AsyncMock),
+            patch.object(dp_module, "ArangoGraph"),
+        ]
+        return patches, captured
+
+    @pytest.mark.asyncio
+    async def test_okf_graph_ingest_binds_the_hint_into_the_request_ctx(self):
+        """OKF_-graph ingest WITHOUT a repo_id: the ingest-start ctx binds
+        okf_graph_hint=True NEXT TO repo_id=None — one per-request source
+        carries both routing values, so a bound context no longer means the
+        hint is hardcoded False (review round 2, thread e0e879eb)."""
+        dp = create_dataprep()
+        inp = create_mock_ingest_input(file_id="ctx-hint-okf", graph_name="OKF_ncd_v1", repo_id=None)
+        patches, captured = self._ctx_capture_patches(dp, inp)
+
+        try:
+            with contextlib.ExitStack() as stack:
+                for p in patches:
+                    stack.enter_context(p)
+                result = await dp.ingest_file_with_guardrail(inp, lock_file=None)
+        finally:
+            dp_module._INGEST_CTX.set(None)
+
+        assert result["status"] == 200
+        assert captured["ctx"] is not None
+        assert captured["ctx"]["repo_id"] is None
+        assert captured["ctx"]["okf_graph_hint"] is True
+
+    @pytest.mark.asyncio
+    async def test_legacy_graph_ingest_binds_hint_false_in_the_request_ctx(self):
+        """A legacy-graph (non-OKF_) ingest without repo_id binds the hint
+        False — the ctx-bound completion still routes to doc-repo."""
+        dp = create_dataprep()
+        inp = create_mock_ingest_input(file_id="ctx-hint-legacy", graph_name="GRAPH", repo_id=None)
+        patches, captured = self._ctx_capture_patches(dp, inp)
+
+        try:
+            with contextlib.ExitStack() as stack:
+                for p in patches:
+                    stack.enter_context(p)
+                result = await dp.ingest_file_with_guardrail(inp, lock_file=None)
+        finally:
+            dp_module._INGEST_CTX.set(None)
+
+        assert result["status"] == 200
+        assert captured["ctx"] is not None
+        assert captured["ctx"]["okf_graph_hint"] is False
 
     @pytest.mark.asyncio
     async def test_zero_batch_ingest_completes_as_honest_empty_success(self):

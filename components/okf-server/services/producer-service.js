@@ -868,6 +868,8 @@ module.exports = {
   startDocumentsConversion,
   isTerminal,
   live,
+  // shared doc-repo envelope unwrap (lifecycle-service + crawl-conversion-service)
+  docRepoFileOf,
   // exported for unit tests (pure functions)
   segmentMarkdown,
   draftWholeMarkdown,

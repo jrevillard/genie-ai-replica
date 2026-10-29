@@ -858,9 +858,6 @@ userProfileService.setSessionService(sessionService);
 // Auth Service Dependencies
 authService.setSessionService(sessionService);
 
-// Chat History Service Dependencies
-chatHistoryService.setAnalyticsService(analyticsService);
-
 // Translation Service Dependencies (optional)
 translationService.setServiceCategoryService(serviceCategoryService);
 ```
@@ -1179,7 +1176,6 @@ async function initializeServices() {
   userProfileService.setSessionService(sessionService);
   queryService.setAnalyticsService(analyticsService);
   queryService.setChatHistoryService(chatHistoryService);
-  chatHistoryService.setAnalyticsService(analyticsService);
   analyticsService.setServiceCategoryService(serviceCategoryService);
 }
 ```

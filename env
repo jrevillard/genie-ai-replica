@@ -783,9 +783,19 @@ KEYCLOAK_URL=https://localhost/auth
 #   KEYCLOAK_INTERNAL_URL — internal Keycloak base (http://keycloak:8080) used by
 #                           chatqna (JWKS fetch) and dataprep (service-account token
 #                           mint). Unset = disabled (services use KEYCLOAK_URL).
-# Cloud/Swarm deployments where the public URL resolves internally: leave both unset.
+#   KEYCLOAK_JWKS_URL     — pins the host the JWKS is fetched from.
+#                           Default: unset. Used by: okf-server (shared verifier)
+#                           + document-repository middleware. Compose: yes.
+#                           Ansible: yes.
+#   KEYCLOAK_BROWSER_ISSUER — a second accepted issuer alongside the pinned one.
+#                           Default: unset. Used by: document-repository middleware
+#                           + okf-server (shared verifier). Compose: yes.
+#                           Ansible: yes.
+# Cloud/Swarm deployments where the public URL resolves internally: leave all unset.
 # KEYCLOAK_PUBLIC_URL=https://localhost/auth
 # KEYCLOAK_INTERNAL_URL=http://keycloak:8080
+# KEYCLOAK_JWKS_URL=http://keycloak:8080
+# KEYCLOAK_BROWSER_ISSUER=https://localhost/auth
 
 # OKF audience binding (Story 6.1, RFC 8707 — optional): set to okf-server to make
 # the okf-server reject tokens whose aud does not include it (requires the realm
@@ -1794,12 +1804,9 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # OKF_RAGAS_MAX_ENTRIES=200
 #   Default: 200. Hard cap per suite (generation + import).
 # OKF_RAGAS_RUN_CONCURRENCY=2
+#   Default: 2. Per-run query concurrency — bounds LLM load on the shared
+#   GPU so benchmarking does not starve chat answering.
 # OKF_RAGAS_RERANK_CONCURRENCY=3
-# OKF_RAGAS_SERVE_URL=http://chatqna-xeon-backend-server:8888/v1/chatqna
-#   Default: the compose chatqna service. SERVE mode (the benchmark default)
-#   posts each question to this URL - the same pipeline a citizen question
-#   takes - and measures the served answer and served contexts. Only a
-#   'whatif' run (knob experiments) ignores it.
 #   Default: 3. How many benchmark rerank batch calls (32 texts each) may be
 #   in flight at once. Batch calls are independent and scores are identical
 #   at any concurrency — this is transport, not computation. 1 = the old
@@ -1807,6 +1814,11 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   waves, ~3x faster retrieval leg. Global in-flight ceiling is
 #   OKF_RAGAS_RUN_CONCURRENCY x this value — raise on an idle GPU, lower to
 #   1 when the benchmark shares the GPU with live chat traffic.
+# OKF_RAGAS_SERVE_URL=http://chatqna-xeon-backend-server:8888/v1/chatqna
+#   Default: the compose chatqna service. SERVE mode (the benchmark default)
+#   posts each question to this URL - the same pipeline a citizen question
+#   takes - and measures the served answer and served contexts. Only a
+#   'whatif' run (knob experiments) ignores it.
 # OKF_RAGAS_ANSWER_MAX_TOKENS=5000
 #   Default: 5000. The answer leg's INITIAL token budget. It was hardcoded
 #   to 800, and a reasoning-capable model burns 400-700 tokens BEFORE
@@ -1816,8 +1828,6 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   rate fell from 10 questions/min to 2 as the harder questions arrived).
 #   max_tokens is a CAP, not a reservation -- a model that needs less never
 #   pays for it, and the ladder still climbs for the ones that do.
-#   Default: 2. Per-run query concurrency — bounds LLM load on the shared
-#   GPU so benchmarking does not starve chat answering.
 # OKF_RAGAS_LONG_TIMEOUT_MS=3600000
 #   Default: 3600000 (1h). LIVENESS HORIZON, not a job deadline: a
 #   reachable, running job is NEVER timed out — the horizon bounds only how

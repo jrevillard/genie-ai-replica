@@ -961,6 +961,28 @@ void main() {
       expect(activeQuickHelpTitleFor(buttons, null), isNull);
     });
 
+    test('an EMPTY active id declares nothing, like the scope rule', () {
+      // declaresCategoryScope treats '' as no identity; the re-title
+      // must agree, or a config card with "id": "" would adopt the
+      // FIRST such card's title on the next locale switch.
+      final buttons = [
+        {'id': '', 'resolvedTitle': 'Card A'},
+        {'id': '', 'resolvedTitle': 'Card B'},
+      ];
+
+      expect(activeQuickHelpTitleFor(buttons, ''), isNull);
+    });
+
+    test('an empty resolved title is absent, not a title', () {
+      // A config card with no title text must not BLANK the context
+      // bar: null lets the caller keep the title it already shows.
+      final buttons = [
+        {'id': 'births', 'resolvedTitle': ''},
+      ];
+
+      expect(activeQuickHelpTitleFor(buttons, 'births'), isNull);
+    });
+
     test('a button the config no longer declares keeps its last title', () {
       // The scope's identity is the id: a gone button must not blank the
       // context bar — null lets the caller keep the title it has.

@@ -149,6 +149,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   Map<String, dynamic>? _cachedConfig;
   String _currentLocale = 'en';
 
+  // The locale the Quick Help buttons were last resolved under. A
+  // didChangeDependencies locale drift against it re-resolves the
+  // buttons (and the active scope's context-bar title) — the marker,
+  // not the welcome text, is what says the language changed.
+  String? _quickHelpButtonsLocale;
+
   bool get _hasUnsavedChanges {
     if (_currentConversationId == null) {
       return _messages.length > 1;
@@ -170,6 +176,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // started a SECOND full config parse — and this load's late failure
     // nulled the future of that in-flight second load (a third fetch).
     _ensureQuickHelpConfig();
+    // The buttons resolve under the locale live at resolution time;
+    // seeding the loaded-locale marker keeps the FIRST
+    // didChangeDependencies (which also fires on mount) from re-parsing
+    // the config a second time.
+    _quickHelpButtonsLocale = _currentLocale;
     _ensureEnTree();
     _titleController.text = _conversationTitle;
 
@@ -199,6 +210,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // Track current locale
     _currentLocale = Localizations.localeOf(context).languageCode;
 
+    // The Quick Help buttons are per-locale text: a switch re-resolves
+    // them by the LOCALE they were last resolved under. The welcome
+    // message is not the trigger — a deployment whose welcome text is a
+    // plain, locale-invariant string would otherwise pin the cards (and
+    // the active scope's context-bar title) to one language.
+    if (_quickHelpButtonsLocale != _currentLocale) {
+      _loadQuickHelpConfig();
+    }
+
     // Check for language changes and update welcome message
     final String newWelcomeMessage = _getConfigWelcomeMessage();
 
@@ -211,8 +231,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           _messages.first['content'] = newWelcomeMessage;
         });
       }
-      // Reload quick help buttons with new locale
-      _loadQuickHelpConfig();
       _welcomeMessage = newWelcomeMessage;
     }
   }
@@ -323,6 +341,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         // configuration error: the FIRST wins and the duplicate never
         // becomes a card — the same rule the web applies at its own load.
         _quickHelpButtons = dedupeQuickHelpButtons(loadedButtons);
+        // The locale these titles were resolved under — the drift marker
+        // didChangeDependencies reloads on. A FAILED load leaves the old
+        // marker: the next dependency change retries, the same way a
+        // failed load is not cached.
+        _quickHelpButtonsLocale = _currentLocale;
         // The config just settled: a restore resolved while it was
         // unavailable re-resolves now (button tags read as dead sidebar
         // tags against an empty button list).

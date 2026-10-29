@@ -48,13 +48,16 @@ List<Map<String, dynamic>> dedupeQuickHelpButtons(
 /// A locale switch re-resolves the buttons (a load in the new locale) and
 /// the context bar's title must follow: the scope's identity is the button
 /// id, not the title it was pressed under. A button the config no longer
-/// declares, or a null id (a sidebar scope, or none), resolves to null so
-/// the caller keeps the title it already has.
+/// declares, or a null or EMPTY id (empty declares nothing — the file's
+/// own scope rule — and a sidebar scope has no id at all), resolves to
+/// null so the caller keeps the title it already has.
 String? activeQuickHelpTitleFor(
   List<Map<String, dynamic>> buttons,
   String? activeQuickHelpButtonId,
 ) {
-  if (activeQuickHelpButtonId == null) return null;
+  if (activeQuickHelpButtonId == null || activeQuickHelpButtonId.isEmpty) {
+    return null;
+  }
   for (final button in buttons) {
     if (button['id']?.toString() == activeQuickHelpButtonId) {
       final title = button['resolvedTitle']?.toString() ?? '';

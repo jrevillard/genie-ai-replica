@@ -578,7 +578,7 @@ class ServiceCategoryService {
               // by this display name (the file's labels ARE locale
               // names), so an English fallback here would let two entities
               // share one key and file a label under the wrong entity.
-              LET categoryName = LENGTH(TRIM(categoryTranslation)) > 0 ? categoryTranslation : null
+              LET categoryName = categoryTranslation
               LET services = (
                   FOR edge IN categoryServices
                       FILTER edge._from == category._id
@@ -604,7 +604,7 @@ class ServiceCategoryService {
                           // The display name stays the locale's translation —
                           // the admin panel keys its label map by it (see
                           // the category level above).
-                          LET serviceName = LENGTH(TRIM(serviceTranslation)) > 0 ? serviceTranslation : null
+                          LET serviceName = serviceTranslation
                           SORT edge.order ASC
                           RETURN {
                               _key: service._key,

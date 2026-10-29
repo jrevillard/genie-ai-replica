@@ -175,16 +175,21 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     // on: a DISPLAY name is not unique — the tree falls back to the
     // English name for an entity the locale has no translation for, so
     // two entities in one category can read the same — and the English
-    // label is what the wire speaks. An entity with no English label at
-    // all carries none (it will refuse at send, visibly), so the display
-    // name stands in for it.
+    // label is what the wire speaks.
+    //
+    // The tapped row picks the key, and the stored row must answer in
+    // the SAME key space (the web's one-predicate rule): an entity with
+    // no English label at all carries none (it will refuse at send,
+    // visibly), so the display name stands in for it — and a stored row
+    // that HAS an English label is never matched on its display name.
     final existingIndex = _orderedSelection.indexWhere(
       (item) =>
           (item['id'] == serviceId && serviceId.isNotEmpty) ||
           (serviceEn.isNotEmpty
               ? item['nameEn'] == serviceEn && item['category_id'] == categoryId
               : item['name'] == serviceName &&
-                    item['category_id'] == categoryId),
+                    item['category_id'] == categoryId &&
+                    (item['nameEn'] as String? ?? '').isEmpty),
     );
 
     setState(() {

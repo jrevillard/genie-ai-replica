@@ -32,9 +32,10 @@ void main() {
     'two same-named services in DIFFERENT categories are two scopes',
     (tester) async {
       // The children carry no id/key — their identity is the (category,
-      // name) pair. Matching on the name alone crossed the categories:
-      // tapping B's 'Registro' found A's entry, DESELECTED A's scope while
-      // A's highlight stayed, and B's own tap never selected B.
+      // ENGLISH label) pair, the spelling the wire speaks. Matching on the
+      // DISPLAY name alone crossed the categories: tapping B's 'Registro'
+      // found A's entry, DESELECTED A's scope while A's highlight stayed,
+      // and B's own tap never selected B.
       final dupTree = [
         {
           'catKey': '2',
@@ -182,6 +183,56 @@ void main() {
     // off, because their identities are their English labels.
     expect(emitted!['serviceLabelsEn'], ['Passport', 'Travel']);
     expect(emitted!['serviceCount'], 2);
+  });
+
+  testWidgets('a service with an English label is not toggled by one without', (
+    tester,
+  ) async {
+    // Two rows that READ the same, one carrying an English label and
+    // one carrying none (no EN translation row and no nameEN of its
+    // own). The tapped row picks the key space, and the stored row
+    // must answer in the SAME one: the second tap must not toggle the
+    // first one off.
+    final mixedLabels = [
+      {
+        'catKey': '2',
+        'name': 'Estado civil',
+        'nameEN': 'Civil Registry',
+        'children': [
+          {'name': 'Taxes', 'nameEN': 'Taxes'},
+          {'name': 'Taxes', 'nameEN': null},
+        ],
+      },
+    ];
+    Map<String, dynamic>? emitted;
+    resetThemeManager();
+    final api = ServiceCategoriesApi(
+      ApiClient()..client = _MockClient(jsonEncode(mixedLabels)),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [serviceCategoriesApiProvider.overrideWithValue(api)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: ServiceTreePanel(onSelectionChange: (s) => emitted = s),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Estado civil'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Taxes').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Taxes').last);
+    await tester.pumpAndSettle();
+
+    // BOTH are picked: the second tap did not toggle the first one off.
+    // Only the first carries an English label, so only it speaks.
+    expect(emitted!['serviceCount'], 2);
+    expect(emitted!['serviceLabelsEn'], ['Taxes']);
   });
 }
 

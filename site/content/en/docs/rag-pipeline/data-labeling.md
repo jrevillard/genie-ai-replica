@@ -194,15 +194,18 @@ labelling LLM, and what the retriever matches afterwards.
 The `nameEN` field of an entity is the *seed* of that translation: the write
 path copies it into the `EN` translation when the entity is created or
 updated through the API. The two therefore coincide in a hierarchy that was
-only ever edited through the API — but the translation is what is matched, so:
+only ever edited through the API. Where they do not:
 
 - An entity edited in `nameEN` alone (without a translation update) keeps
-  filtering on its previous English translation.
-- An entity with **no** `EN` translation has no filterable label at all,
-  whatever its `nameEN` says. Filtering on its `nameEN` would match no chunk
-  and empty the corpus.
+  filtering on its previous English translation — the tree publishes the
+  translation row.
+- An entity with **no** `EN` translation row — one seeded outside the write
+  path — is published with the document's own `nameEN` as its English name.
+  The corpus carries that label only once it has been re-ingested; until
+  then a scope on that entity matches nothing and the query abstains.
 
-Match a label on the `EN` translation, never on `nameEN`.
+Match a label on the **tree's** `nameEN` — the value the wire speaks — never
+on the display name.
 
 ### When the filter matches nothing anyway
 

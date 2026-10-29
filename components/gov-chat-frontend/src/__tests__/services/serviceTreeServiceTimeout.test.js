@@ -81,4 +81,16 @@ describe('the hierarchy fetch is bounded at the HTTP client', () => {
     expect(config.timeout).toBe(15000);
     expect(config.params).toEqual({ locale: 'en' });
   });
+
+  it('hands axios a timeout for the admin hierarchy fetch too', async () => {
+    await serviceTreeService.getAdminCategories('fr');
+
+    expect(axios.get).toHaveBeenCalledTimes(1);
+    const [url, config] = axios.get.mock.calls[0];
+    expect(url).toContain('service-categories/categories/detailed');
+    // The admin panel's hierarchy spinner is the same trap: without the
+    // bound a stalled request turns forever and no error ever shows.
+    expect(config.timeout).toBe(15000);
+    expect(config.params).toEqual({ locale: 'fr' });
+  });
 });

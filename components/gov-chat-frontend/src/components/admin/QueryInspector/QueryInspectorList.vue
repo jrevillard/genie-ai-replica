@@ -60,7 +60,7 @@
             <span v-else class="qi-list__muted">—</span>
           </td>
           <td class="qi-list__cell--center">
-            <DsPill v-if="query.metadata?.abstained === true" variant="warning" data-testid="qi-abstention-marker">
+            <DsPill v-if="isAbstained(query)" variant="warning" data-testid="qi-abstention-marker">
               {{ translate('admin.queryInspector.abstained', 'Abstained') }}
             </DsPill>
             <span v-else class="qi-list__muted">—</span>
@@ -131,7 +131,7 @@ import DsInput from '../../ds/Input.vue';
 import DsFormGroup from '../../ds/FormGroup.vue';
 import DsPill from '../../ds/Pill.vue';
 import DsStateDisplay from '../../ds/StateDisplay.vue';
-import { scopeLabels as storedScopeLabels } from './query-scope';
+import { isAbstained as queryIsAbstained, scopeDisplayText } from './query-scope';
 
 export default {
   name: 'QueryInspectorList',
@@ -158,15 +158,14 @@ export default {
   methods: {
     /**
      * The stored scope as one string — or null when the record does not say
-     * (rendered as the dash). The three-state rule lives in query-scope.js,
-     * shared with the detail view.
+     * (rendered as the dash). The three-state rule and its rendering live in
+     * query-scope.js, shared with the detail view.
      */
     scopeText(query) {
-      const labels = storedScopeLabels(query);
-      if (labels === null) {
-        return null;
-      }
-      return labels.join(', ') || this.translate('admin.queryInspector.unfiltered', 'Unfiltered');
+      return scopeDisplayText(query, this.translate('admin.queryInspector.unfiltered', 'Unfiltered'));
+    },
+    isAbstained(query) {
+      return queryIsAbstained(query);
     },
     translate(key, fallback) {
       return this.$parent?.translate?.(key, fallback) ?? fallback;

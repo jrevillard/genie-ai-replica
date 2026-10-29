@@ -205,7 +205,7 @@ import DsButton from '../../ds/Button.vue';
 import DsCard from '../../ds/Card.vue';
 import DsPill from '../../ds/Pill.vue';
 import DsStateDisplay from '../../ds/StateDisplay.vue';
-import { scopeLabels as storedScopeLabels } from './query-scope';
+import { isAbstained as queryIsAbstained, scopeDisplayText } from './query-scope';
 
 export default {
   name: 'QueryInspectorDetail',
@@ -221,7 +221,7 @@ export default {
      * true flag marks an abstention.
      */
     isAbstained() {
-      return this.query.metadata?.abstained === true;
+      return queryIsAbstained(this.query);
     },
     /**
      * The cause of the abstention, in the operator's words. The machine
@@ -264,15 +264,11 @@ export default {
      * claiming the query was unfiltered.
      */
     scopeText() {
-      const labels = storedScopeLabels(this.query);
-      if (labels === null) {
-        // Absent, null, or malformed: the pipeline never reported a scope
-        // for this query.
-        return this.translate('admin.queryInspector.scopeNotRecorded', 'Not recorded');
-      }
-      // Same wording as the list: one state, one name, so a cell and its
-      // detail cannot read as two different states.
-      return labels.join(', ') || this.translate('admin.queryInspector.unfiltered', 'Unfiltered');
+      // Absent, null, or malformed — the record does not say — reads as the
+      // dedicated label; the rest comes from the shared rendering, so the
+      // list and this panel cannot disagree.
+      const text = scopeDisplayText(this.query, this.translate('admin.queryInspector.unfiltered', 'Unfiltered'));
+      return text === null ? this.translate('admin.queryInspector.scopeNotRecorded', 'Not recorded') : text;
     },
     translate(key, fallback) {
       return this.$parent?.translate?.(key, fallback) ?? fallback;

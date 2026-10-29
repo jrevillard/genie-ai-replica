@@ -1364,6 +1364,19 @@ _SELF_CONF_SENTINEL_PREFIX = "[[CONF:"
 _SELF_CONF_PARTIAL_RE = re.compile(r"\s*\[\[CONF:[^\[]*$")
 
 
+def _find_node_key(result_dict: dict, prefix: str) -> str | None:
+    """The first key in ``result_dict`` starting with ``prefix``, or None.
+
+    The one locator for orchestrator node outputs; the service method of the
+    same name delegates here so callers inside and outside the class share
+    the same first-match rule.
+    """
+    for key in result_dict or {}:
+        if key.startswith(prefix):
+            return key
+    return None
+
+
 def _node_docs(result_dict: dict, prefix: str) -> list | None:
     """The ``retrieved_docs`` of the first node whose key starts with
     ``prefix``, or None when that node's output does not carry the key.
@@ -1374,12 +1387,13 @@ def _node_docs(result_dict: dict, prefix: str) -> list | None:
     say" — a malformed or error-shaped result, which is a fault, not a
     selection that kept nothing.
     """
-    for key, val in (result_dict or {}).items():
-        if key.startswith(prefix):
-            if isinstance(val, dict):
-                return val.get("retrieved_docs")
-            return getattr(val, "retrieved_docs", None)
-    return None
+    key = _find_node_key(result_dict, prefix)
+    if key is None:
+        return None
+    val = (result_dict or {})[key]
+    if isinstance(val, dict):
+        return val.get("retrieved_docs")
+    return getattr(val, "retrieved_docs", None)
 
 
 def _abstention_outcome(result_dict: dict) -> tuple[bool, str | None]:
@@ -2629,10 +2643,7 @@ class ChatQnAService:
 
     def _find_node_key(self, service_name: str, result_dict: dict) -> str | None:
         """Helper to find the full key for a service in the result_dict."""
-        for key in result_dict:
-            if key.startswith(service_name):
-                return key
-        return None
+        return _find_node_key(result_dict, service_name)
 
     async def fetch_file_metadata(self, file_id: str, token: str) -> dict:
         """

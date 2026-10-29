@@ -236,6 +236,12 @@ export default {
           'No document was retrieved for this query. The answer has no document backing.'
         );
       }
+      if (reason === 'reranker_selected_nothing') {
+        return this.translate(
+          'admin.queryInspector.abstentionRerankerSelectedNothing',
+          'The retrieval matched documents, but the reranker kept none of them. The scope was fine — the answer has no document backing.'
+        );
+      }
       if (reason === 'reranker_input_too_long') {
         return this.translate(
           'admin.queryInspector.abstentionRerankerInput',

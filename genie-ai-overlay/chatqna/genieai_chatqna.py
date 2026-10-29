@@ -1359,29 +1359,15 @@ _SELF_CONF_SENTINEL_PREFIX = "[[CONF:"
 _SELF_CONF_PARTIAL_RE = re.compile(r"\s*\[\[CONF:[^\[]*$")
 
 
-def _retriever_docs(result_dict: dict) -> list | None:
-    """The documents the RETRIEVER returned, or None when the node cannot say.
-
-    One accessor for the retriever node, so the grounding decision and the
-    abstention flag cannot read different nodes. None means "the node output
-    does not carry the key" — a malformed or error-shaped result, which is a
-    fault, not a retrieval that matched nothing.
-    """
-    for key, val in (result_dict or {}).items():
-        if key.startswith("retriever"):
-            if isinstance(val, dict):
-                return val.get("retrieved_docs")
-            return getattr(val, "retrieved_docs", None)
-    return None
-
-
 def _node_docs(result_dict: dict, prefix: str) -> list | None:
     """The ``retrieved_docs`` of the first node whose key starts with
     ``prefix``, or None when that node's output does not carry the key.
 
-    Node outputs are dicts shaped like ``{"retrieved_docs": [...]}``; None
-    means "the node cannot say" — a malformed or error-shaped result, which
-    is a fault, not a selection that kept nothing.
+    One accessor per node kind, so the grounding decision and the abstention
+    flag cannot read the same node by different rules. Node outputs are dicts
+    shaped like ``{"retrieved_docs": [...]}``; None means "the node cannot
+    say" — a malformed or error-shaped result, which is a fault, not a
+    selection that kept nothing.
     """
     for key, val in (result_dict or {}).items():
         if key.startswith(prefix):
@@ -2823,7 +2809,7 @@ class ChatQnAService:
         file_id_pairs = retriever_node_output.get("file_id_pairs", {})
         # Retriever docs carry the orchestrator id + text + similarity score (metadata.score).
         # Same accessor as the abstention flag: one node, one meaning.
-        retrieved_docs = _retriever_docs(result_dict) or []
+        retrieved_docs = _node_docs(result_dict, "retriever") or []
 
         # The reranker's verdict. NOTE: align_outputs (RERANK branch) stores the reranked
         # docs under the "retrieved_docs" key — with id + reranker score already

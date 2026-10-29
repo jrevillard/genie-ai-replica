@@ -474,8 +474,11 @@ class QueryService {
             // The labels the retrieval filtered on (chatqna computes them with
             // the pipeline's own rule). The Query Inspector names the scope
             // behind an abstention from them; dropping them here would leave
-            // every streamed query without a scope.
-            filter_labels: Array.isArray(obj.filter_labels) ? obj.filter_labels : [],
+            // every streamed query without a scope. Absent means the pipeline
+            // never reported a scope — null, so the Inspector's dash says "not
+            // recorded", not "Unfiltered" (an empty list is a reported empty
+            // scope and means exactly that).
+            filter_labels: Array.isArray(obj.filter_labels) ? obj.filter_labels : null,
             is_grounded: obj.is_grounded ?? false
           };
           // self_confidence is keyed by PRESENCE, not by value. chatqna emits

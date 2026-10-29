@@ -567,7 +567,7 @@ describe('QueryService', () => {
       expect(result.filter_labels).toEqual(['Tax Payment', 'Taxes']);
     });
 
-    it('should default filter labels to an empty list when chatqna omits them', () => {
+    it('should store null filter labels when chatqna omits them', () => {
       const meta = {
         type: 'metadata',
         source_documents: [],
@@ -576,9 +576,11 @@ describe('QueryService', () => {
         is_grounded: false
       };
       const result = queryService.parseChatQnASSELine(JSON.stringify(meta));
-      // Absent means "unfiltered query", not "unknown scope": the key has to
-      // exist so a persisted query never carries undefined.
-      expect(result.filter_labels).toEqual([]);
+      // Absent means the pipeline never reported a scope (a chatqna too old
+      // to carry the field) — NOT "unfiltered": an empty list is reserved for
+      // a metadata event that reported an empty scope, so the Inspector can
+      // tell the dash (not recorded) from Unfiltered.
+      expect(result.filter_labels).toBeNull();
     });
 
     it('should preserve explicit null self_confidence (sentinel missing)', () => {

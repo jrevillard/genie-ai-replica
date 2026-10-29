@@ -172,7 +172,7 @@ forwarded to VictoriaMetrics:
 
 | Metric | Type | Attributes |
 |---|---|---|
-| `genie_ai_chat_request_total` (`chat_requests_total`) | Counter | `response_type` (`streaming`/`sync`), `abstained` (`true`/`false` — `true` when the retrieval returned no document or the reranker refused the input; with the default abstention enforcement such a turn abstains), `error` (`true`/`false`), `retrieval_source` (`chunk`/`chunk_label_filter`/`hybrid`; the condense-rewrite failure path records the request's `search_type` verbatim, e.g. `similarity_score_threshold`). |
+| `genie_ai_chat_request_total` (`chat_requests_total`) | Counter | `response_type` (`streaming`/`sync`), `abstained` (`true`/`false` — `true` when the retrieval returned no document, the reranker kept none of the matched documents, or the reranker refused the input; with the default abstention enforcement such a turn abstains), `error` (`true`/`false`), `retrieval_source` (`chunk`/`chunk_label_filter`/`hybrid`; the condense-rewrite failure path records the request's `search_type` verbatim, e.g. `similarity_score_threshold`). |
 | `genie_ai_chat_rag_latency_seconds` (`chat_rag_duration_seconds`) | Histogram | `response_type`, `abstained`, `error`, `retrieval_source`. |
 
 A PromQL probe to graph RAG latency over the last 5 minutes:

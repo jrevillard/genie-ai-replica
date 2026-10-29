@@ -524,6 +524,25 @@ describe('QueryInspectorDetail', () => {
     expect(reason.text()).toContain('No document');
   });
 
+  it("should name the reranker-kept-nothing cause in the operator's words", () => {
+    // The retrieval matched, the reranker kept none: the scope was fine, and
+    // the prose must say so — a cause split that renders as the generic
+    // fallback plus machine tokens defeats its own purpose.
+    const query = {
+      ...fullQuery,
+      metadata: {
+        confidence_score: 0,
+        source_documents: [],
+        abstained: true,
+        abstention_reason: 'reranker_selected_nothing'
+      }
+    };
+    const wrapper = mountDetail({ query });
+    const reason = wrapper.find('[data-testid="qi-abstention-reason"]');
+    expect(reason.text()).toContain('reranker kept none');
+    expect(reason.text()).not.toContain('(');
+  });
+
   it('should name the scope that filtered, next to the labels that were requested', () => {
     // The list and the detail must not disagree about what filtered. The
     // pipeline reports the applied filter labels; the request is shown

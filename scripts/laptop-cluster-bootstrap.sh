@@ -173,12 +173,16 @@ if [ -n "$CAPTURE_DIR" ]; then
     KEY_COUNT=$(set -- $KEY_NAMES; echo $#)
     if [ "$KEY_COUNT" -eq 1 ]; then
       TMP="$CAPTURE_DIR/.sealed-secrets-key.tmp"
-      if kubectl -n sealed-secrets get secret "$KEY_NAMES" -o json > "$TMP" \
-         && python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d.get("data",{}).get("tls.key") and d.get("data",{}).get("tls.crt") else 1)' "$TMP"; then
-        mv "$TMP" "$CAPTURE_DIR/sealed-secrets-key-active.json"
+      if kubectl -n sealed-secrets get secret "$KEY_NAMES" -o json > "$TMP"; then
+        if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d.get("data",{}).get("tls.key") and d.get("data",{}).get("tls.crt") else 1)' "$TMP"; then
+          mv "$TMP" "$CAPTURE_DIR/sealed-secrets-key-active.json"
+        else
+          rm -f "$TMP"
+          failures+="sealed-secrets key '$KEY_NAMES' is labeled active but carries no tls.key/tls.crt data; "
+        fi
       else
         rm -f "$TMP"
-        failures+="sealed-secrets key '$KEY_NAMES' is labeled active but carries no tls.key/tls.crt data; "
+        failures+="failed to fetch sealed-secrets key '$KEY_NAMES'; "
       fi
     elif [ "$KEY_COUNT" -eq 0 ]; then
       failures+="no sealed-secrets key carries the active label (is the controller running and the kubecontext the right one?); "

@@ -9,6 +9,12 @@
 // The resolver indexes the tree ONCE: the label vocabulary and the category
 // keys are walked a single time, then every button is checked against the
 // index — never against the tree itself.
+//
+// The CONFIG-side rules of a Quick Help button live here too: its identity
+// (its id), the title it displays, and when the loaded buttons must
+// re-resolve for a new locale. They are the same kind of rule — one copy,
+// read by every path — and they belong to the button, not to the widget
+// that shows it.
 
 /// Whether [id] names a category scope at all. An EMPTY id declares
 /// nothing (it is how a selection is cleared), and 'general' is the
@@ -64,13 +70,12 @@ Map<String, dynamic>? quickHelpButtonById(
 /// Whether the Quick Help buttons must re-resolve for [currentLocale].
 ///
 /// The buttons are per-locale text resolved by a load; [loadedLocale] is
-/// the locale the LAST settled load resolved under. A null loadedLocale
-/// names the first, still-in-flight load — that load resolves under the
-/// locale live at its completion, so the mount's own dependency change
-/// must not start a second parse. An EMPTY loadedLocale names a FAILED
-/// load: no locale was resolved, and the next dependency change must
-/// retry. A drift (a settled locale that is not the live one)
-/// re-resolves.
+/// the locale the last load ran under — whether it succeeded or failed, a
+/// failure marks the locale it failed under, so the retry is scoped to a
+/// locale change. A null loadedLocale names the first, still-in-flight
+/// load — that load resolves under the locale live at its completion, so
+/// the mount's own dependency change must not start a second parse. A
+/// drift (a load under another locale) re-resolves.
 bool shouldReloadQuickHelpButtons({
   required String? loadedLocale,
   required String currentLocale,

@@ -154,14 +154,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // buttons (and the active scope's context-bar title) — the marker,
   // not the welcome text, is what says the language changed.
   //
-  // Three states, and the difference between them is the whole point:
+  // Two states:
   //   null — the FIRST load is in flight. That load resolves under the
   //          locale live at its completion and sets the marker itself,
   //          so the mount's own dependency change must not reload.
-  //   ''   — the last load FAILED: no locale was resolved, and the next
-  //          dependency change must retry. (Empty is no locale code, so
-  //          it drifts from every live locale.)
-  //   else — the locale the buttons speak.
+  //   else — the locale of the last load, WHETHER IT SUCCEEDED OR
+  //          FAILED. A failed attempt marks the locale it ran under:
+  //          the retry is then scoped to a LOCALE change (the trigger
+  //          the pre-fix code used), not to every dependency change —
+  //          a keyboard opening must not re-read the asset.
   String? _quickHelpButtonsLocale;
 
   bool get _hasUnsavedChanges {
@@ -268,16 +269,24 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   /// A FORCED reload (a locale drift). The single-flight wrapper caches a
   /// completed load, so a reload cannot go through it as-is: the cached
   /// future is invalidated and the wrapper re-entered, which re-resolves
-  /// the CACHED config parse under the wrapper's own failure policy — a
-  /// restore arriving mid-reload awaits THIS load, not a duplicate one.
+  /// the config under the wrapper's own failure policy — a restore
+  /// arriving mid-reload awaits THIS load, not a duplicate one.
   ///
-  /// No I/O and no await: a drift can only be detected once a load has
-  /// settled, and a settled load has cached the config — so the reload
-  /// re-resolves what is already in memory and runs to completion inside
-  /// the dependency change that triggered it.
+  /// One reload at a time. A reload over a CACHED config resolves in
+  /// memory and finishes inside the dependency change that triggered it;
+  /// a reload after a FAILED load has nothing cached and reads the asset
+  /// asynchronously — and a second dependency change arriving then would
+  /// start a concurrent load, whose late failure would null the tracked
+  /// future of the load still in flight.
+  bool _quickHelpReloadInFlight = false;
+
   void _startQuickHelpConfigReload() {
+    if (_quickHelpReloadInFlight) return;
+    _quickHelpReloadInFlight = true;
     _quickHelpConfigFuture = null;
-    _ensureQuickHelpConfig();
+    _ensureQuickHelpConfig().whenComplete(() {
+      _quickHelpReloadInFlight = false;
+    });
   }
 
   bool _quickHelpLoadFailed = false;
@@ -397,11 +406,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     } catch (e) {
       debugPrint("[CHATBOT] Failed to load genie-ai-config.json: $e");
       _quickHelpLoadFailed = true;
-      // No locale was resolved: the marker says so, and the next
-      // dependency change retries the load. A marker left at the old
-      // locale would hide the failure for the rest of the session — the
-      // buttons would never speak the new language.
-      _quickHelpButtonsLocale = '';
+      // The attempt ran under this locale, whether it succeeded or not:
+      // a marker left at the OLD locale would hide the failure for the
+      // rest of the session (the buttons would never speak the new
+      // language), and a marker of "nothing resolved" would re-read the
+      // asset on every dependency change.
+      _quickHelpButtonsLocale = _currentLocale;
     }
   }
 

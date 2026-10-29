@@ -1020,12 +1020,16 @@ void main() {
       );
     });
 
-    test('an empty loaded locale (the last load FAILED) reloads', () {
-      // A failed load resolved no locale: the buttons would keep the
-      // old language for the rest of the session unless the next
-      // dependency change retries.
+    test('a failed load marks the locale it failed under', () {
+      // The retry is scoped to a LOCALE change — the trigger the pre-fix
+      // code used. A keyboard opening (a dependency change under the
+      // same locale) must not re-read the asset.
       expect(
-        shouldReloadQuickHelpButtons(loadedLocale: '', currentLocale: 'fr'),
+        shouldReloadQuickHelpButtons(loadedLocale: 'en', currentLocale: 'en'),
+        isFalse,
+      );
+      expect(
+        shouldReloadQuickHelpButtons(loadedLocale: 'en', currentLocale: 'fr'),
         isTrue,
       );
     });

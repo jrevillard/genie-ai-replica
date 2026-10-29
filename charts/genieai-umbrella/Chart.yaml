@@ -2,16 +2,16 @@ apiVersion: v2
 name: genieai-umbrella
 description: |
   Single-install umbrella chart for GENIE.AI. Renders the entire 28-service
-  stack with one `helm install` — consumed via Flux from the per-cluster
-  Kustomize overlays (overlays/<cluster>/<env>/) in the genie-ai-deploy
-  repo.
+  stack with one `helm install` — typically consumed via Flux from the
+  per-cluster Kustomize overlays (overlays/<cluster>/<env>/) in the
+  genie-ai-deploy repo.
 type: application
-version: 0.2.124
+version: 0.2.125
 # `appVersion` mirrors the chart version deliberately: it tracks the chart
 # layout, not the GENIE.AI product release (the two versions on independent
 # axes; deployed image tags are governed by values, not by appVersion).
 # Never "latest" — OCI registries reject it for immutable promotion.
-appVersion: 0.2.124
+appVersion: 0.2.125
 keywords:
   - genie-ai
   - umbrella

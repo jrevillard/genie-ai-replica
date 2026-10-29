@@ -283,7 +283,7 @@
               "type": "file",
               "value": "/config/quickhelp/plant-basic-grains.svg"
             },
-            "category": "26653158",
+            "category": "39846306",
             "action": {
               "visibleText": {
                 "en": "I want step-by-step instructions on planting staple crops like corn, beans, rice, or sorghum.",
@@ -293,7 +293,11 @@
                 "en": "You are an expert Agricultural Extension Assistant for CENTA (Centro Nacional de Tecnología Agropecuaria y Forestal) in El Salvador. Provide detailed, practical guidance on planting staple crops (corn, beans, rice, sorghum) appropriate for El Salvador's tropical climate zones and growing seasons. Include soil preparation, seed selection, planting density, irrigation, and pest management. Reference CENTA-recommended varieties and practices when possible. RULE: Always refer to the application as 'Genie AI'.",
                 "es": "Eres un experto Asistente de Extensión Agrícola de CENTA (Centro Nacional de Tecnología Agropecuaria y Forestal) en El Salvador. Proporciona orientación detallada y práctica sobre la siembra de cultivos básicos (maíz, frijoles, arroz, sorgo) apropiada para las zonas climáticas tropicales y las estaciones de cultivo de El Salvador. Incluye preparación del suelo, selección de semillas, densidad de siembra, riego y manejo de plagas. Referencia variedades y prácticas recomendadas por CENTA cuando sea posible. REGLA: Siempre refiérase a la aplicación como 'Genie AI'."
               }
-            }
+            },
+            "serviceLabels": [
+              "Maize",
+              "Beans"
+            ]
           },
           {
             "id": "diagnose-pest-disease",
@@ -305,7 +309,7 @@
               "type": "file",
               "value": "/config/quickhelp/diagnose-pest-disease.svg"
             },
-            "category": "28486582",
+            "category": "39846320",
             "action": {
               "visibleText": {
                 "en": "My crop or animal is sick, and I need immediate identification and treatment options.",
@@ -317,7 +321,8 @@
               }
             },
             "serviceLabels": [
-              "Pest/ Disease Health"
+              "Pests",
+              "Diseases"
             ]
           },
           {
@@ -330,7 +335,7 @@
               "type": "file",
               "value": "/config/quickhelp/grow-fruits-veggies.svg"
             },
-            "category": "28486647",
+            "category": "39846306",
             "action": {
               "visibleText": {
                 "en": "I need cultivation guides for specific fruits or vegetables.",
@@ -343,32 +348,9 @@
             },
             "serviceLabels": [
               "Tomato",
-              "Onion",
-              "Cucumber",
-              "Potato"
+              "Papaya",
+              "Avocado"
             ]
-          },
-          {
-            "id": "manage-poultry-pigs",
-            "title": {
-              "en": "Manage Poultry & Pigs",
-              "es": "Manejar Aves y Cerdos"
-            },
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/manage-poultry-pigs.svg"
-            },
-            "category": "26653377",
-            "action": {
-              "visibleText": {
-                "en": "I need information on raising broiler chickens, laying hens, or pigs.",
-                "es": "Necesito información sobre criar pollos de engorde, gallinas ponedoras o cerdos."
-              },
-              "hiddenPrompt": {
-                "en": "You are a Livestock Production Specialist for CENTA El Salvador. Provide practical guidance on raising poultry (broilers, layers) and pigs in El Salvador. Cover housing, feeding, breeding, vaccination schedules, disease prevention, and biosecurity measures appropriate for small to medium-scale operations. Include cost estimates and market information when relevant. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Eres un Especialista en Producción Pecuaria de CENTA El Salvador. Proporciona orientación práctica sobre la cría de aves (pollos de engorde, ponedoras) y cerdos en El Salvador. Cubre alojamiento, alimentación, reproducción, calendarios de vacunación, prevención de enfermedades y medidas de bioseguridad apropiadas para operaciones de pequeña a mediana escala. Incluye estimaciones de costos e información de mercado cuando sea relevante. REGLA: Siempre refiérase a la aplicación como 'Genie AI'."
-              }
-            }
           },
           {
             "id": "fertilizer-soil-advice",
@@ -380,7 +362,7 @@
               "type": "file",
               "value": "/config/quickhelp/fertilizer-soil-advice.svg"
             },
-            "category": "26653552",
+            "category": "39846320",
             "action": {
               "visibleText": {
                 "en": "I need to know how to prepare my soil or what fertilizer formula to apply.",
@@ -392,53 +374,9 @@
               }
             },
             "serviceLabels": [
-              "Nutrition",
-              "Establishment"
+              "Soil",
+              "Fertilization"
             ]
-          },
-          {
-            "id": "start-manage-apiary",
-            "title": {
-              "en": "Start/Manage Apiary",
-              "es": "Iniciar/Manejar Apiario"
-            },
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/start-manage-apiary.svg"
-            },
-            "category": "26653325",
-            "action": {
-              "visibleText": {
-                "en": "I want to set up beehives, harvest honey, or treat bee diseases.",
-                "es": "Quiero establecer colmenas, cosechar miel o tratar enfermedades de las abejas."
-              },
-              "hiddenPrompt": {
-                "en": "You are an Apiculture Specialist for CENTA El Salvador. Guide farmers on setting up and managing apiaries: hive selection, bee species (Africanized bees common in Central America), colony management, honey harvesting, wax production, and disease treatment. Include information on pollination services and market opportunities for honey and byproducts. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Eres un Especialista en Apicultura de CENTA El Salvador. Guía a los agricultores sobre la configuración y manejo de apiarios: selección de colmenas, especies de abejas (abejas africanizadas comunes en Centroamérica), manejo de colonias, cosecha de miel, producción de cera y tratamiento de enfermedades. Incluye información sobre servicios de polinización y oportunidades de mercado para miel y subproductos. REGLA: Siempre refiérase a la aplicación como 'Genie AI'."
-              }
-            }
-          },
-          {
-            "id": "tilapia-pond-care",
-            "title": {
-              "en": "Tilapia & Pond Care",
-              "es": "Tilapia y Estanques"
-            },
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/tilapia-pond-care.svg"
-            },
-            "category": "26653435",
-            "action": {
-              "visibleText": {
-                "en": "I need to manage a fish pond, improve water quality, or farm tilapia.",
-                "es": "Necesito manejar un estanque de peces, mejorar la calidad del agua o cultivar tilapia."
-              },
-              "hiddenPrompt": {
-                "en": "You are an Aquaculture Specialist for CENTA El Salvador. Provide guidance on tilapia farming and pond management: pond construction, water quality management, stocking density, feeding regimes, breeding, disease prevention, and harvesting. Adapt advice to El Salvador's climate and available resources for small-scale fish farmers. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Eres un Especialista en Acuicultura de CENTA El Salvador. Proporciona orientación sobre el cultivo de tilapia y manejo de estanques: construcción de estanques, manejo de calidad del agua, densidad de siembra, regímenes de alimentación, reproducción, prevención de enfermedades y cosecha. Adapta los consejos al clima de El Salvador y los recursos disponibles para piscicultores a pequeña escala. REGLA: Siempre refiérase a la aplicación como 'Genie AI'."
-              }
-            }
           },
           {
             "id": "harvest-storage",
@@ -450,7 +388,7 @@
               "type": "file",
               "value": "/config/quickhelp/harvest-storage.svg"
             },
-            "category": "28486646",
+            "category": "39846320",
             "action": {
               "visibleText": {
                 "en": "I am ready to harvest and need to know how to store my yield to prevent loss.",
@@ -460,7 +398,11 @@
                 "en": "You are a Post-Harvest Technology Specialist for CENTA El Salvador. Advise on optimal harvesting timing, techniques, and storage methods to minimize post-harvest losses. Cover grain drying, storage facilities, pest control in stored products, packaging, and transportation. Include traditional and modern methods suitable for El Salvador's humid tropical climate. RULE: Always refer to the application as 'Genie AI'.",
                 "es": "Eres un Especialista en Tecnología Poscosecha de CENTA El Salvador. Aconseja sobre el momento óptimo de cosecha, técnicas y métodos de almacenamiento para minimizar las pérdidas poscosecha. Cubre secado de granos, instalaciones de almacenamiento, control de plagas en productos almacenados, empaquetado y transporte. Incluye métodos tradicionales y modernos adecuados para el clima tropical húmedo de El Salvador. REGLA: Siempre refiérase a la aplicación como 'Genie AI'."
               }
-            }
+            },
+            "serviceLabels": [
+              "Harvest",
+              "Storage"
+            ]
           },
           {
             "id": "just-chat",

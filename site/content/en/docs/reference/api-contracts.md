@@ -1,7 +1,7 @@
 ---
-title: "Backend HTTP API"
+title: 'Backend HTTP API'
 weight: 2
-description: "Every public endpoint with request/response shape, auth requirement, and error semantics."
+description: 'Every public endpoint with request/response shape, auth requirement, and error semantics.'
 mode: reference
 persona: developer
 owner: docs-stewards
@@ -127,29 +127,29 @@ a new one from Keycloak instead.
 
 ## Conventions
 
-| Element | Convention |
-|---|---|
-| Base URL | `${VUE_APP_API_URL}` = `/api` (proxied by Kong / Nginx) |
-| Auth | Keycloak JWT in `Authorization: Bearer <token>` unless `Allow public` |
-| Content-Type | `application/json` for request and response bodies |
-| Errors | `{ "message": "<msg>" }` for typed errors; `{ "error": "<CODE>", "message": "<msg>" }` for explicit route-level errors (no `details` field today) |
-| ID format | UUID v4 for new entities, MongoDB ObjectId-compatible string otherwise |
-| Timestamps | ISO-8601 in UTC |
+| Element      | Convention                                                                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Base URL     | `${VUE_APP_API_URL}` = `/api` (proxied by Kong / Nginx)                                                                                           |
+| Auth         | Keycloak JWT in `Authorization: Bearer <token>` unless `Allow public`                                                                             |
+| Content-Type | `application/json` for request and response bodies                                                                                                |
+| Errors       | `{ "message": "<msg>" }` for typed errors; `{ "error": "<CODE>", "message": "<msg>" }` for explicit route-level errors (no `details` field today) |
+| ID format    | UUID v4 for new entities, MongoDB ObjectId-compatible string otherwise                                                                            |
+| Timestamps   | ISO-8601 in UTC                                                                                                                                   |
 
 ## Allowlist — public paths (no auth required)
 
-| Path | Purpose |
-|---|---|
-| `GET /api/health` | Liveness probe |
-| `GET /robots.txt` | Web crawler policy |
-| `GET /` | Service banner (lists available endpoints) |
-| `GET /sitemap.xml` | Empty sitemap (SPA renders client-side) |
-| `GET /api-docs` | Swagger UI |
-| `GET /api-docs.json` | OpenAPI JSON |
-| `GET /api-docs/` | Swagger UI (trailing-slash form) |
-| `GET /api/auth/callback` | OIDC Authorization-Code callback target |
-| `GET /api/auth/logout/callback` | OIDC post-logout redirect target |
-| `GET /Uploads/*` | Legacy static serving (Kong-enforced auth) |
+| Path                            | Purpose                                    |
+| ------------------------------- | ------------------------------------------ |
+| `GET /api/health`               | Liveness probe                             |
+| `GET /robots.txt`               | Web crawler policy                         |
+| `GET /`                         | Service banner (lists available endpoints) |
+| `GET /sitemap.xml`              | Empty sitemap (SPA renders client-side)    |
+| `GET /api-docs`                 | Swagger UI                                 |
+| `GET /api-docs.json`            | OpenAPI JSON                               |
+| `GET /api-docs/`                | Swagger UI (trailing-slash form)           |
+| `GET /api/auth/callback`        | OIDC Authorization-Code callback target    |
+| `GET /api/auth/logout/callback` | OIDC post-logout redirect target           |
+| `GET /Uploads/*`                | Legacy static serving (Kong-enforced auth) |
 
 The Keycloak auth middleware explicitly bypasses JWT verification for these
 paths (`keycloak-auth-middleware.js:10-18`). Probes, documentation, and the
@@ -170,37 +170,37 @@ Everything else requires a valid Keycloak JWT.
 
 ## Error codes
 
-| Code | HTTP | Meaning |
-|---|---|---|
-| `UNAUTHENTICATED` | 401 | Missing or invalid token |
-| `FORBIDDEN` | 403 | Authenticated but missing required realm role |
-| `NOT_FOUND` | 404 | Resource does not exist |
-| `VALIDATION_FAILED` | 422 | **Not emitted.** Backend uses `ValidationError` (HTTP 400) — no dedicated envelope code is sent; either implement 422 or drop the row |
-| `RATE_LIMITED` | 429 | Emitted by Kong, **not** the backend (Kong enforces 1000/min per consumer on express-api and returns plain text `API rate limit exceeded`, not the standard JSON envelope) |
-| `CHATQNA_STREAM_ERROR` | 502 | Upstream ChatQnA streaming error (ArangoDB / ChatQnA / Keycloak upstream errors propagate through this code) |
-| `INTERNAL` | 500 | Unhandled exception |
-| `TOKEN_INVALID` | 401 | `keycloak-auth-middleware.js:79,157` |
-| `TOKEN_EXPIRED` | 401 | `keycloak-auth-middleware.js:150` |
-| `PROVISIONING_FAILED` | 500 | `keycloak-auth-middleware.js:106` |
-| `INTERNAL_ERROR` | 500 | `keycloak-auth-middleware.js:165` |
-| `STREAMING_DISABLED` | 501 | `query-routes.js:146` |
-| `STREAM_ERROR` | varies | `query-routes.js:389` (generic upstream stream failure) |
-| `CITY_NOT_FOUND` | 503 | `services/weather-service.js:199` (no city within lookup radius) |
-| `CHATQNA_UNAVAILABLE` | 504 | `query-routes.js:384` (ChatQnA timeout / aborted) |
-| `Not Found` | 404 | Sensitive-path blocker (`index.js:566`), 404 fallback (`index.js:822`) |
+| Code                   | HTTP   | Meaning                                                                                                                                                                    |
+| ---------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `UNAUTHENTICATED`      | 401    | Missing or invalid token                                                                                                                                                   |
+| `FORBIDDEN`            | 403    | Authenticated but missing required realm role                                                                                                                              |
+| `NOT_FOUND`            | 404    | Resource does not exist                                                                                                                                                    |
+| `VALIDATION_FAILED`    | 422    | **Not emitted.** Backend uses `ValidationError` (HTTP 400) — no dedicated envelope code is sent; either implement 422 or drop the row                                      |
+| `RATE_LIMITED`         | 429    | Emitted by Kong, **not** the backend (Kong enforces 1000/min per consumer on express-api and returns plain text `API rate limit exceeded`, not the standard JSON envelope) |
+| `CHATQNA_STREAM_ERROR` | 502    | Upstream ChatQnA streaming error (ArangoDB / ChatQnA / Keycloak upstream errors propagate through this code)                                                               |
+| `INTERNAL`             | 500    | Unhandled exception                                                                                                                                                        |
+| `TOKEN_INVALID`        | 401    | `keycloak-auth-middleware.js:79,157`                                                                                                                                       |
+| `TOKEN_EXPIRED`        | 401    | `keycloak-auth-middleware.js:150`                                                                                                                                          |
+| `PROVISIONING_FAILED`  | 500    | `keycloak-auth-middleware.js:106`                                                                                                                                          |
+| `INTERNAL_ERROR`       | 500    | `keycloak-auth-middleware.js:165`                                                                                                                                          |
+| `STREAMING_DISABLED`   | 501    | `query-routes.js:146`                                                                                                                                                      |
+| `STREAM_ERROR`         | varies | `query-routes.js:389` (generic upstream stream failure)                                                                                                                    |
+| `CITY_NOT_FOUND`       | 503    | `services/weather-service.js:199` (no city within lookup radius)                                                                                                           |
+| `CHATQNA_UNAVAILABLE`  | 504    | `query-routes.js:384` (ChatQnA timeout / aborted)                                                                                                                          |
+| `Not Found`            | 404    | Sensitive-path blocker (`index.js:566`), 404 fallback (`index.js:822`)                                                                                                     |
 
 > **Note:** the legacy `UNAUTHORIZED` code is **not** emitted. Clients
 > matching on it will silently break — match `UNAUTHENTICATED`.
 
 ## Defense in depth
 
-| Layer | What it blocks |
-|---|---|
-| **Nginx** | Dotfiles (`.X` except `.well-known`) and VCS dirs (`.git`, `.svn`, `.hg`, `CVS`, `BitKeeper`) |
-| **Kong** | Adds headers (`X-Forwarded-For`, etc.); rate limit on express-api service |
-| **Helmet (backend)** | CSP, HSTS, frame-options, X-Content-Type-Options |
-| **CORS** | Allowlist via `CORS_ALLOWED_ORIGINS` |
-| **Rate limit** | Kong rate-limit 1000 / minute per consumer on the express-api service |
+| Layer                | What it blocks                                                                                |
+| -------------------- | --------------------------------------------------------------------------------------------- |
+| **Nginx**            | Dotfiles (`.X` except `.well-known`) and VCS dirs (`.git`, `.svn`, `.hg`, `CVS`, `BitKeeper`) |
+| **Kong**             | Adds headers (`X-Forwarded-For`, etc.); rate limit on express-api service                     |
+| **Helmet (backend)** | CSP, HSTS, frame-options, X-Content-Type-Options                                              |
+| **CORS**             | Allowlist via `CORS_ALLOWED_ORIGINS`                                                          |
+| **Rate limit**       | Kong rate-limit 1000 / minute per consumer on the express-api service                         |
 
 ### Defense in depth (sensitive-path blocker)
 
@@ -230,9 +230,9 @@ bypass this check.
 flow directly to Keycloak (`keycloak-route` in `kong_config.json`). The BFF
 only exposes the application-level logout.
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/logout` | Yes | Logout — invalidate ArangoDB session, emit audit log, leave OIDC revocation to Keycloak |
+| Method | Path      | Auth | Description                                                                             |
+| ------ | --------- | ---- | --------------------------------------------------------------------------------------- |
+| POST   | `/logout` | Yes  | Logout — invalidate ArangoDB session, emit audit log, leave OIDC revocation to Keycloak |
 
 **Logout behaviour** (verified in `auth-routes.js` +
 `authController.logout`):
@@ -252,13 +252,13 @@ only exposes the application-level logout.
 **Route file**: `routes/user-routes.js` **Mount**: `/api/me` (Kong
 `user-route`) **Auth required**: **Yes** on every endpoint.
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/` | Yes | Get current user profile (singleton) |
-| GET | `/context` | Yes | Get sanitized AI-enrichment context |
-| POST | `/reset-data` | Yes | Reset profile data (clears profile fields, keeps credentials) |
-| POST | `/delete` | Yes | GDPR right-to-erasure (soft-delete with PII nullification) |
-| PUT | `/` | Yes | Update profile + optional avatar upload |
+| Method | Path          | Auth | Description                                                   |
+| ------ | ------------- | ---- | ------------------------------------------------------------- |
+| GET    | `/`           | Yes  | Get current user profile (singleton)                          |
+| GET    | `/context`    | Yes  | Get sanitized AI-enrichment context                           |
+| POST   | `/reset-data` | Yes  | Reset profile data (clears profile fields, keeps credentials) |
+| POST   | `/delete`     | Yes  | GDPR right-to-erasure (soft-delete with PII nullification)    |
+| PUT    | `/`           | Yes  | Update profile + optional avatar upload                       |
 
 **`GET /api/me`** — returns the full user document from ArangoDB,
 populated from the JWT on first hit (JIT provisioning). Subsequent reads
@@ -309,18 +309,18 @@ code change.
 router; clients should use `/api/queries`. **Auth required**: **Yes** on
 every endpoint.
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/stream` | Yes | Stream RAG response over SSE — see [SSE Streaming Protocol](#sse-streaming-protocol) |
-| POST | `/` | Yes | Create new query (single-message mode) |
-| GET | `/` | Yes | List queries (paginated, current user only) |
-| GET | `/:queryId` | Yes | Get a single query (current user or admin) |
-| PATCH | `/:queryId/responsetime` | Yes | Update response-time metric — called by SSE consumer |
-| POST | `/:queryId/feedback` | Yes | Submit user feedback (1–5 rating, optional comment) |
-| PATCH | `/:queryId/answered` | Yes | Mark query as seen by user (stamps `responseTime`) |
-| GET | `/:queryId/conversations` | Yes | List conversations linked to this query |
-| POST | `/:queryId/conversation` | Yes | Promote a query to a new conversation |
-| POST | `/:queryId/link/:messageId` | Yes | Re-link a query to a chat message (after a failed link) |
+| Method | Path                        | Auth | Description                                                                          |
+| ------ | --------------------------- | ---- | ------------------------------------------------------------------------------------ |
+| POST   | `/stream`                   | Yes  | Stream RAG response over SSE — see [SSE Streaming Protocol](#sse-streaming-protocol) |
+| POST   | `/`                         | Yes  | Create new query (single-message mode)                                               |
+| GET    | `/`                         | Yes  | List queries (paginated, current user only)                                          |
+| GET    | `/:queryId`                 | Yes  | Get a single query (current user or admin)                                           |
+| PATCH  | `/:queryId/responsetime`    | Yes  | Update response-time metric — called by SSE consumer                                 |
+| POST   | `/:queryId/feedback`        | Yes  | Submit user feedback (1–5 rating, optional comment)                                  |
+| PATCH  | `/:queryId/answered`        | Yes  | Mark query as seen by user (stamps `responseTime`)                                   |
+| GET    | `/:queryId/conversations`   | Yes  | List conversations linked to this query                                              |
+| POST   | `/:queryId/conversation`    | Yes  | Promote a query to a new conversation                                                |
+| POST   | `/:queryId/link/:messageId` | Yes  | Re-link a query to a chat message (after a failed link)                              |
 
 **`POST /api/queries`** has two semantic modes selected by request body
 shape:
@@ -328,7 +328,7 @@ shape:
 - **Single-message** (`{ question, context }`) — one user turn, no
   conversation linkage, no link to a chat message.
 - **Conversation-with-context-labels** (`{ question, conversationId,
-  messageId, context }`) — appends to an existing conversation, records
+messageId, context }`) — appends to an existing conversation, records
   context labels for retrieval blending (issue #833 multi-turn
   vector-space blending).
 
@@ -385,16 +385,16 @@ answer from a translated one — the status is that signal.
 
 **`GET /api/queries`** is paginated, scoped to the JWT user. Query params:
 
-| Param | Type | Default | Notes |
-|-------|------|---------|-------|
-| `sessionId` | string | — | Filter by chat session |
-| `text` | string | — | Full-text search across `question`/`response` |
-| `categoryId` | string | — | Filter by category |
-| `serviceId` | string | — | Filter by service |
-| `isAnswered` | boolean | — | `true`/`false` |
-| `startDate` / `endDate` | ISO date | — | Date range on `createdAt` |
-| `limit` | int | 20 | Max 100, min 1 |
-| `offset` | int | 0 | Min 0 |
+| Param                   | Type     | Default | Notes                                         |
+| ----------------------- | -------- | ------- | --------------------------------------------- |
+| `sessionId`             | string   | —       | Filter by chat session                        |
+| `text`                  | string   | —       | Full-text search across `question`/`response` |
+| `categoryId`            | string   | —       | Filter by category                            |
+| `serviceId`             | string   | —       | Filter by service                             |
+| `isAnswered`            | boolean  | —       | `true`/`false`                                |
+| `startDate` / `endDate` | ISO date | —       | Date range on `createdAt`                     |
+| `limit`                 | int      | 20      | Max 100, min 1                                |
+| `offset`                | int      | 0       | Min 0                                         |
 
 **`POST /api/queries/:queryId/feedback`** body:
 
@@ -445,34 +445,34 @@ The optional body may carry `responseType` and `confidenceScore` overrides.
 (`kong_config.json:376`). `/api/chat-history` is reachable only via the
 catch-all `/api` route. **Auth required**: **Yes** on every endpoint.
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/conversations` | Yes | List user conversations (paginated) |
-| GET | `/conversations/:conversationId` | Yes | Conversation + messages |
-| POST | `/conversations` | Yes | Create conversation |
-| PATCH | `/conversations/:conversationId` | Yes | Update title/metadata |
-| DELETE | `/conversations/:conversationId` | Yes | Soft-delete conversation |
-| GET | `/conversations/:conversationId/messages` | Yes | Messages, paginated |
-| POST | `/conversations/:conversationId/messages` | Yes | Append message |
-| POST | `/conversations/:conversationId/messages/read` | Yes | Mark messages as read |
-| GET | `/query/:queryId/messages` | Yes | Reverse lookup — messages for a query |
-| GET | `/messages/:messageId/query` | Yes | Reverse lookup — query for a message |
-| POST | `/query/:queryId/conversation` | Yes | Promote query to conversation (alias of `/api/queries/:queryId/conversation`) |
-| GET | `/search` | Yes | Full-text search across conversations |
-| GET | `/recent` | Yes | Last-N conversations (sidebar) |
-| GET | `/stats` | Yes | Per-user conversation statistics |
-| GET | `/folders` | Yes | List folders |
-| POST | `/folders` | Yes | Create folder |
-| GET | `/folders/:folderId` | Yes | Folder details |
-| PATCH | `/folders/:folderId` | Yes | Rename / update folder |
-| DELETE | `/folders/:folderId` | Yes | Soft-delete folder, cascade conversations |
-| GET | `/folders/search` | Yes | Search folders |
-| POST | `/folders/reorder` | Yes | Custom sort order |
-| GET | `/folders/:folderId/path` | Yes | Breadcrumb path |
-| POST | `/folders/:folderId/conversations/:conversationId` | Yes | Add conversation to folder |
-| DELETE | `/folders/:folderId/conversations/:conversationId` | Yes | Remove conversation from folder |
-| GET | `/conversations/:conversationId/folder` | Yes | Get folder for conversation |
-| POST | `/conversations/:conversationId/move` | Yes | Move conversation to another folder |
+| Method | Path                                               | Auth | Description                                                                   |
+| ------ | -------------------------------------------------- | ---- | ----------------------------------------------------------------------------- |
+| GET    | `/conversations`                                   | Yes  | List user conversations (paginated)                                           |
+| GET    | `/conversations/:conversationId`                   | Yes  | Conversation + messages                                                       |
+| POST   | `/conversations`                                   | Yes  | Create conversation                                                           |
+| PATCH  | `/conversations/:conversationId`                   | Yes  | Update title/metadata                                                         |
+| DELETE | `/conversations/:conversationId`                   | Yes  | Soft-delete conversation                                                      |
+| GET    | `/conversations/:conversationId/messages`          | Yes  | Messages, paginated                                                           |
+| POST   | `/conversations/:conversationId/messages`          | Yes  | Append message                                                                |
+| POST   | `/conversations/:conversationId/messages/read`     | Yes  | Mark messages as read                                                         |
+| GET    | `/query/:queryId/messages`                         | Yes  | Reverse lookup — messages for a query                                         |
+| GET    | `/messages/:messageId/query`                       | Yes  | Reverse lookup — query for a message                                          |
+| POST   | `/query/:queryId/conversation`                     | Yes  | Promote query to conversation (alias of `/api/queries/:queryId/conversation`) |
+| GET    | `/search`                                          | Yes  | Full-text search across conversations                                         |
+| GET    | `/recent`                                          | Yes  | Last-N conversations (sidebar)                                                |
+| GET    | `/stats`                                           | Yes  | Per-user conversation statistics                                              |
+| GET    | `/folders`                                         | Yes  | List folders                                                                  |
+| POST   | `/folders`                                         | Yes  | Create folder                                                                 |
+| GET    | `/folders/:folderId`                               | Yes  | Folder details                                                                |
+| PATCH  | `/folders/:folderId`                               | Yes  | Rename / update folder                                                        |
+| DELETE | `/folders/:folderId`                               | Yes  | Soft-delete folder, cascade conversations                                     |
+| GET    | `/folders/search`                                  | Yes  | Search folders                                                                |
+| POST   | `/folders/reorder`                                 | Yes  | Custom sort order                                                             |
+| GET    | `/folders/:folderId/path`                          | Yes  | Breadcrumb path                                                               |
+| POST   | `/folders/:folderId/conversations/:conversationId` | Yes  | Add conversation to folder                                                    |
+| DELETE | `/folders/:folderId/conversations/:conversationId` | Yes  | Remove conversation from folder                                               |
+| GET    | `/conversations/:conversationId/folder`            | Yes  | Get folder for conversation                                                   |
+| POST   | `/conversations/:conversationId/move`              | Yes  | Move conversation to another folder                                           |
 
 **`POST /folders/reorder`** body:
 
@@ -513,16 +513,16 @@ survive a folder-recreate). See [Deletion semantics](#deletion-semantics).
 **Route file**: `routes/analytics-routes.js` **Mount**: `/api/analytics`
 (Kong `analytics-route`) **Auth required**: **Yes** on every endpoint.
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/dashboard` | Yes | Aggregate dashboard metrics |
-| GET | `/metric/:metric` | Yes | Single metric (generic) |
-| GET | `/timeseries/:metricType` | Yes | Time-bucketed series |
-| POST | `/events` | Yes | Record a custom analytics event |
-| GET | `/records` | Yes | Raw event records |
-| GET | `/events` | Yes | Filtered event list |
-| GET | `/satisfaction/gauge` | Yes | Satisfaction gauge (1–5) |
-| GET | `/satisfaction/heatmap` | Yes | Satisfaction by category |
+| Method | Path                      | Auth | Description                     |
+| ------ | ------------------------- | ---- | ------------------------------- |
+| GET    | `/dashboard`              | Yes  | Aggregate dashboard metrics     |
+| GET    | `/metric/:metric`         | Yes  | Single metric (generic)         |
+| GET    | `/timeseries/:metricType` | Yes  | Time-bucketed series            |
+| POST   | `/events`                 | Yes  | Record a custom analytics event |
+| GET    | `/records`                | Yes  | Raw event records               |
+| GET    | `/events`                 | Yes  | Filtered event list             |
+| GET    | `/satisfaction/gauge`     | Yes  | Satisfaction gauge (1–5)        |
+| GET    | `/satisfaction/heatmap`   | Yes  | Satisfaction by category        |
 
 **`GET /events`** supports the same `startDate`/`endDate`/`limit`/`offset`
 pagination as `/api/queries` (default `limit=20`, max 100).
@@ -543,25 +543,25 @@ pagination as `/api/queries` (default `limit=20`, max 100).
 (lowercase). The router-level `requireAdmin` is applied at
 `admin-routes.js:44-45`.
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/system-health` | Admin | Deep system health probe (DB, OPEA, Redis, etc.) |
-| GET | `/database/stats` | Admin | ArangoDB collection statistics |
-| GET | `/logs` | Admin | Application log retrieval |
-| POST | `/logs/rollover` | Admin | Trigger log rollover (legacy — see note below) |
-| GET | `/user-stats` | Admin | User statistics |
-| GET | `/security-metrics` | Admin | Security event metrics |
-| POST | `/security-scan` | Admin | Trigger security scan |
-| GET | `/security/last-scan` | Admin | Last scan result |
-| POST | `/diagnostics` | Admin | Run a diagnostics bundle |
-| GET | `/logs/summary` | Admin | Aggregated log stats |
-| GET | `/logs/search` | Admin | Log search |
-| GET | `/logs/debug-yesterday` | Admin | Yesterday's debug logs |
-| POST | `/database-operations/backup` | Admin | Trigger backup — also reachable at `/api/database/backup` |
-| POST | `/database-operations/optimize` | Admin | Optimize DB — also reachable at `/api/database/optimize` |
-| GET | `/users/search` | Admin | Search users |
-| GET | `/queries/inspect` | Admin | List all queries (admin view, cross-user) |
-| GET | `/queries/inspect/:queryId` | Admin | Inspect a query |
+| Method | Path                            | Auth  | Description                                               |
+| ------ | ------------------------------- | ----- | --------------------------------------------------------- |
+| GET    | `/system-health`                | Admin | Deep system health probe (DB, OPEA, Redis, etc.)          |
+| GET    | `/database/stats`               | Admin | ArangoDB collection statistics                            |
+| GET    | `/logs`                         | Admin | Application log retrieval                                 |
+| POST   | `/logs/rollover`                | Admin | Trigger log rollover (legacy — see note below)            |
+| GET    | `/user-stats`                   | Admin | User statistics                                           |
+| GET    | `/security-metrics`             | Admin | Security event metrics                                    |
+| POST   | `/security-scan`                | Admin | Trigger security scan                                     |
+| GET    | `/security/last-scan`           | Admin | Last scan result                                          |
+| POST   | `/diagnostics`                  | Admin | Run a diagnostics bundle                                  |
+| GET    | `/logs/summary`                 | Admin | Aggregated log stats                                      |
+| GET    | `/logs/search`                  | Admin | Log search                                                |
+| GET    | `/logs/debug-yesterday`         | Admin | Yesterday's debug logs                                    |
+| POST   | `/database-operations/backup`   | Admin | Trigger backup — also reachable at `/api/database/backup` |
+| POST   | `/database-operations/optimize` | Admin | Optimize DB — also reachable at `/api/database/optimize`  |
+| GET    | `/users/search`                 | Admin | Search users                                              |
+| GET    | `/queries/inspect`              | Admin | List all queries (admin view, cross-user)                 |
+| GET    | `/queries/inspect/:queryId`     | Admin | Inspect a query                                           |
 
 **Two separate implementations** share these names — they are NOT
 aliases. `/api/admin/database-operations/backup` and
@@ -589,20 +589,20 @@ backward-compat with older scripts.
 `/api/service-categories` (Kong `service-category-route`) **Auth
 required**: **Yes** on every endpoint.
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/categories` | Yes | List service categories (hierarchical) |
-| GET | `/categories/detailed` | Yes | Categories with translations + services |
-| GET | `/categories/:categoryId` | Yes | Single category |
-| GET | `/:categoryId/translations` | Yes | Translations for one category |
-| GET | `/services/:serviceId/translations` | Yes | Translations for one service |
-| GET | `/search` | Yes | Full-text search |
-| POST | `/` | Yes | Create category |
-| DELETE | `/:categoryId` | Yes | Soft-delete category |
-| DELETE | `/services/:serviceId` | Yes | Soft-delete service |
-| POST | `/:categoryId/services` | Yes | Add service to category |
-| PUT | `/:categoryId` | Yes | Update category metadata |
-| PUT | `/services/:serviceId` | Yes | Update service metadata |
+| Method | Path                                | Auth | Description                             |
+| ------ | ----------------------------------- | ---- | --------------------------------------- |
+| GET    | `/categories`                       | Yes  | List service categories (hierarchical)  |
+| GET    | `/categories/detailed`              | Yes  | Categories with translations + services |
+| GET    | `/categories/:categoryId`           | Yes  | Single category                         |
+| GET    | `/:categoryId/translations`         | Yes  | Translations for one category           |
+| GET    | `/services/:serviceId/translations` | Yes  | Translations for one service            |
+| GET    | `/search`                           | Yes  | Full-text search                        |
+| POST   | `/`                                 | Yes  | Create category                         |
+| DELETE | `/:categoryId`                      | Yes  | Soft-delete category                    |
+| DELETE | `/services/:serviceId`              | Yes  | Soft-delete service                     |
+| POST   | `/:categoryId/services`             | Yes  | Add service to category                 |
+| PUT    | `/:categoryId`                      | Yes  | Update category metadata                |
+| PUT    | `/services/:serviceId`              | Yes  | Update service metadata                 |
 
 **Translation routes** (`GET /:categoryId/translations`,
 `GET /services/:serviceId/translations`) return translation records
@@ -615,11 +615,11 @@ and in [ArangoDB collections](/docs/reference/arangodb-collections/).
 **Route file**: `routes/service-routes.js` **Mount**: `/api/services`
 (Kong `service-route`) **Auth required**: **Yes**.
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/categories` | Yes | Flat list of all services |
-| GET | `/categories/:categoryId` | Yes | Services under one category |
-| GET | `/search` | Yes | Full-text search across services |
+| Method | Path                      | Auth | Description                      |
+| ------ | ------------------------- | ---- | -------------------------------- |
+| GET    | `/categories`             | Yes  | Flat list of all services        |
+| GET    | `/categories/:categoryId` | Yes  | Services under one category      |
+| GET    | `/search`                 | Yes  | Full-text search across services |
 
 ### 9. Translation routes (`/api/translate`)
 
@@ -627,10 +627,10 @@ and in [ArangoDB collections](/docs/reference/arangodb-collections/).
 (catch-all `/api` route only — no dedicated Kong route). **Auth
 required**: **Yes**.
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/` | Yes | Translate an array of text strings |
-| POST | `/markdown` | Yes | Translate markdown, preserve structure |
+| Method | Path        | Auth | Description                            |
+| ------ | ----------- | ---- | -------------------------------------- |
+| POST   | `/`         | Yes  | Translate an array of text strings     |
+| POST   | `/markdown` | Yes  | Translate markdown, preserve structure |
 
 **`POST /api/translate`** body:
 
@@ -676,7 +676,7 @@ to the model, and never guessed.
 `"Unsupported source language"` when the source is the one refused. The
 message names the refused side only: the caller's value is never echoed
 back into the response or into the logs. The `code` tells the client the
-request was *refused* — not that it failed — without it having to read
+request was _refused_ — not that it failed — without it having to read
 the message.
 
 **Streaming translation** is a separate, optional path: set
@@ -688,9 +688,9 @@ arrive (issue #829). See [SSE Streaming Protocol](#sse-streaming-protocol).
 **Route file**: `routes/weather-routes.js` **Mount**: `/api/weather`
 (catch-all `/api` route). **Auth required**: **Yes**.
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/` | Yes | Fetch weather data |
+| Method | Path | Auth | Description        |
+| ------ | ---- | ---- | ------------------ |
+| POST   | `/`  | Yes  | Fetch weather data |
 
 Body: `{ "latitude": <number>, "longitude": <number> }`
 Response: `{"location": "<City, Country>", "current": {"temperature": ...,
@@ -713,10 +713,10 @@ city within the lookup radius.
 `requireAdmin`). In practice these endpoints are still mostly invoked by
 admins, but a non-admin caller with a valid token will reach the handler.
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/backup` | Yes (any user) | Trigger database backup |
-| POST | `/optimize` | Yes (any user) | Optimize database |
+| Method | Path        | Auth           | Description             |
+| ------ | ----------- | -------------- | ----------------------- |
+| POST   | `/backup`   | Yes (any user) | Trigger database backup |
+| POST   | `/optimize` | Yes (any user) | Optimize database       |
 
 These are **not aliases** of the `/api/admin/database-operations/*` paths
 — they call a different service implementation. See Section 6 for the
@@ -735,31 +735,31 @@ authenticates with its own middleware (`authorizeRole` rather than
 
 Quick reference:
 
-| Path | Mount | Roles | Notes |
-|------|-------|-------|-------|
-| `POST /api/files/upload` | Admin | Admin | Single file |
-| `POST /api/files/uploads` | Admin | Admin | Multiple files |
-| `POST /api/files/upload-link` | Admin | Admin | URL-based upload |
-| `POST /api/files/crawl/schedule` | Admin | Admin | Web crawl |
-| `GET /api/files`, `/search`, `/search/files`, `/:fileId` | Any user | — | List/search |
-| `GET /api/files/:fileId/crawl-*`, `POST .../kill-crawl`, `POST .../kill-ingest` | Admin | Admin | Crawl ops |
-| `GET /api/files/:fileId/view`, `/viewbrowser`, `/download`, `POST /api/files/downloads` | Any user | — | Read |
-| `DELETE /api/files/:fileId`, `DELETE /api/files/` | Admin | Admin | Delete |
-| `PATCH /api/files/:fileId` | Admin | Admin | Update metadata |
-| `POST /api/files/:fileId/ingest`, `/retract`, `POST /api/files/ingest`, `/retract` | Admin | Admin | RAG ingest/retract |
-| `POST /api/files/:fileId/ingestion-log` | Admin, dataprep-service | Admin | Log ingestion event |
-| `GET /api/files/:fileId/ingestion-log` | Admin, dataprep-service | Admin | Get logs |
-| `PATCH /api/files/:fileId/status` | Admin, dataprep-service | Admin | Update status |
-| `/api/labels/*` | Admin | Admin | Label CRUD |
+| Path                                                                                    | Mount                   | Roles | Notes               |
+| --------------------------------------------------------------------------------------- | ----------------------- | ----- | ------------------- |
+| `POST /api/files/upload`                                                                | Admin                   | Admin | Single file         |
+| `POST /api/files/uploads`                                                               | Admin                   | Admin | Multiple files      |
+| `POST /api/files/upload-link`                                                           | Admin                   | Admin | URL-based upload    |
+| `POST /api/files/crawl/schedule`                                                        | Admin                   | Admin | Web crawl           |
+| `GET /api/files`, `/search`, `/search/files`, `/:fileId`                                | Any user                | —     | List/search         |
+| `GET /api/files/:fileId/crawl-*`, `POST .../kill-crawl`, `POST .../kill-ingest`         | Admin                   | Admin | Crawl ops           |
+| `GET /api/files/:fileId/view`, `/viewbrowser`, `/download`, `POST /api/files/downloads` | Any user                | —     | Read                |
+| `DELETE /api/files/:fileId`, `DELETE /api/files/`                                       | Admin                   | Admin | Delete              |
+| `PATCH /api/files/:fileId`                                                              | Admin                   | Admin | Update metadata     |
+| `POST /api/files/:fileId/ingest`, `/retract`, `POST /api/files/ingest`, `/retract`      | Admin                   | Admin | RAG ingest/retract  |
+| `POST /api/files/:fileId/ingestion-log`                                                 | Admin, dataprep-service | Admin | Log ingestion event |
+| `GET /api/files/:fileId/ingestion-log`                                                  | Admin, dataprep-service | Admin | Get logs            |
+| `PATCH /api/files/:fileId/status`                                                       | Admin, dataprep-service | Admin | Update status       |
+| `/api/labels/*`                                                                         | Admin                   | Admin | Label CRUD          |
 
 **File upload limits** (set in
 `components/document-repository/src/config/appConfig.js`):
 
-| Env var | Default | Notes |
-|---------|---------|-------|
-| `MAX_FILE_SIZE` | `52428800` (50 MB) | Per-file cap |
-| `MAX_FILES_UPLOAD` | `10` | Per-request cap |
-| `UPLOAD_DIR` | `./uploads` | Storage dir |
+| Env var            | Default            | Notes           |
+| ------------------ | ------------------ | --------------- |
+| `MAX_FILE_SIZE`    | `52428800` (50 MB) | Per-file cap    |
+| `MAX_FILES_UPLOAD` | `10`               | Per-request cap |
+| `UPLOAD_DIR`       | `./uploads`        | Storage dir     |
 
 **Allowed types**: `application/pdf`, `application/msword`,
 `application/vnd.openxmlformats-officedocument.wordprocessingml.document`,
@@ -816,14 +816,14 @@ X-Accel-Buffering: no
 The stream emits one or more of the following event types. Field types are
 stable; renaming a field is a breaking change.
 
-| Type | Fields | Notes |
-|------|--------|-------|
-| `chunk` | `content: string` | One streaming chunk (an English text unit by default) |
-| `metadata` | `queryId: string`, `responseTime: number`, `source_documents?: array`, `confidence_score?: number`, `is_grounded?: boolean`, `retrieval_confidence_score?: number \| null`, `self_confidence?: number \| null`, `abstained?: boolean`, `abstention_reason?: string \| null` | Captured from chatqna's in-stream metadata, forwarded to client (no separate backend retrieval) |
-| `translation` | `content: string` | Emitted by `/api/queries/stream` on the post-stream translation path (`STREAMING_TRANSLATION_ENABLED=0`, the English-then-flip path). The standalone `/api/translate` endpoints answer with JSON, not with stream events |
-| `chunk` | `content: string` (translated) | Emitted by streaming-translation path — see below |
-| `error` | `message: string`, `code: string` | Closes the stream after emission |
-| `done` | `queryId: string`, `translationFailed: boolean` | Always last; closes the stream. `translationFailed` is `true` when a translation was attempted and failed, and the client is showing the English original. A language the translation models do not cover is refused before the stream opens, so it never reaches this frame |
+| Type          | Fields                                                                                                                                                                                                                                                                                                          | Notes                                                                                                                                                                                                                                                                        |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chunk`       | `content: string`                                                                                                                                                                                                                                                                                               | One streaming chunk (an English text unit by default)                                                                                                                                                                                                                        |
+| `metadata`    | `queryId: string`, `responseTime: number`, `source_documents?: array`, `confidence_score?: number`, `is_grounded?: boolean`, `retrieval_confidence_score?: number \| null`, `self_confidence?: number \| null`, `abstained?: boolean`, `abstention_reason?: string \| null`, `filter_labels?: string[] \| null` | Captured from chatqna's in-stream metadata, forwarded to client (no separate backend retrieval)                                                                                                                                                                              |
+| `translation` | `content: string`                                                                                                                                                                                                                                                                                               | Emitted by `/api/queries/stream` on the post-stream translation path (`STREAMING_TRANSLATION_ENABLED=0`, the English-then-flip path). The standalone `/api/translate` endpoints answer with JSON, not with stream events                                                     |
+| `chunk`       | `content: string` (translated)                                                                                                                                                                                                                                                                                  | Emitted by streaming-translation path — see below                                                                                                                                                                                                                            |
+| `error`       | `message: string`, `code: string`                                                                                                                                                                                                                                                                               | Closes the stream after emission                                                                                                                                                                                                                                             |
+| `done`        | `queryId: string`, `translationFailed: boolean`                                                                                                                                                                                                                                                                 | Always last; closes the stream. `translationFailed` is `true` when a translation was attempted and failed, and the client is showing the English original. A language the translation models do not cover is refused before the stream opens, so it never reaches this frame |
 
 Example stream (English-then-flip path):
 
@@ -849,12 +849,13 @@ intermediate proxies do not time out the connection.
 remaining fields are diagnostics for the admin Query Inspector and post-hoc
 evaluation — a chat client should render `confidence_score` only.
 
-| Field | Meaning |
-|-------|---------|
-| `retrieval_confidence_score` | Raw rank-weighted retrieval confidence, always present. `null` when chatqna omits it. |
-| `self_confidence` | LLM self-grade. **Keyed by presence**: absent when `LLM_SELF_CONFIDENCE_ENABLED=0`, `null` when the feature is on but the `[[CONF:…]]` sentinel was missing or malformed. Consumers must test the key, not the value, to tell "disabled" from "no sentinel". |
-| `abstained` | `true` when chatqna withheld a real answer. Defaults to `false`. |
-| `abstention_reason` | Machine-readable cause. On this event, `reranker_input_too_long` — the reranker refused an oversized input. (`translation_input_too_long` is a different transport: it surfaces as an HTTP 422, not as a metadata event.) Defaults to `null`. |
+| Field                        | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `retrieval_confidence_score` | Raw rank-weighted retrieval confidence, always present. `null` when chatqna omits it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `self_confidence`            | LLM self-grade. **Keyed by presence**: absent when `LLM_SELF_CONFIDENCE_ENABLED=0`, `null` when the feature is on but the `[[CONF:…]]` sentinel was missing or malformed. Consumers must test the key, not the value, to tell "disabled" from "no sentinel".                                                                                                                                                                                                                                                                                                                                      |
+| `abstained`                  | `true` when the turn abstained: the retrieval returned no document (`no_documents_retrieved`), the reranker kept none of the documents the retrieval matched (`reranker_selected_nothing`), or the reranker refused the input (`reranker_input_too_long`). The first two are reported only while the abstention instructions are enforced (`CHATQNA_ENFORCE_ABSTENTION`, the default): a deployment that turned the guardrail off answers instead of abstaining, and the flag stays unset — see [Generation → Abstention](/docs/rag-pipeline/generation/#abstention). Defaults to `false`.        |
+| `filter_labels`              | The labels the retrieval filtered on, by the pipeline's own rule (`core/label_contract.build_filter_labels`): the service labels when the query named one — the service is the narrower scope, the category must not widen it into the whole category — otherwise the category. Empty list when the query was unfiltered. On the LIVE SSE event: always present, `null` when the producing chatqna predates the field. On the STORED record: absent on queries saved before this field existed, `null` when the metadata event arrived without it. Consumers must accept `null` and absent alike. |
+| `abstention_reason`          | Machine-readable cause. `no_documents_retrieved` — the retrieval returned no document for the query (a scoped query whose label filter matched nothing); `reranker_selected_nothing` — the retrieval matched documents but the reranker kept none of them (the scope was fine; do not blame the label); `reranker_input_too_long` — the reranker refused an oversized input. (`translation_input_too_long` is a different transport: it surfaces as an HTTP 422, not as a metadata event.) Defaults to `null`.                                                                                    |
 
 ### Streaming translation (issue #829)
 
@@ -898,16 +899,16 @@ The 501 response body:
 
 ### Failure modes (SSE)
 
-| Symptom | Likely cause |
-|---------|--------------|
-| HTTP 501 `STREAMING_DISABLED` | `OPEA_STREAMING=false` |
-| HTTP 401 `UNAUTHENTICATED` | Bearer token missing or invalid |
-| HTTP 400 `UNSUPPORTED_LANGUAGE` | The requested language is not one the deployment can serve. Refused before the stream opens — nothing was generated |
-| Stream starts then stops with `CHATQNA_STREAM_ERROR` | Upstream OPEA ChatQnA failure (timeouts, refused) |
-| Stream starts then stops with `STREAM_ERROR` | Generic upstream stream error |
-| Answer arrives in English, `done` carries `translationFailed: true` | The translation backend did not answer. Not a stream failure — the answer is complete, only its language is not |
+| Symptom                                                              | Likely cause                                                                                                         |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| HTTP 501 `STREAMING_DISABLED`                                        | `OPEA_STREAMING=false`                                                                                               |
+| HTTP 401 `UNAUTHENTICATED`                                           | Bearer token missing or invalid                                                                                      |
+| HTTP 400 `UNSUPPORTED_LANGUAGE`                                      | The requested language is not one the deployment can serve. Refused before the stream opens — nothing was generated  |
+| Stream starts then stops with `CHATQNA_STREAM_ERROR`                 | Upstream OPEA ChatQnA failure (timeouts, refused)                                                                    |
+| Stream starts then stops with `STREAM_ERROR`                         | Generic upstream stream error                                                                                        |
+| Answer arrives in English, `done` carries `translationFailed: true`  | The translation backend did not answer. Not a stream failure — the answer is complete, only its language is not      |
 | Answer arrives in English, `done` carries `translationFailed: false` | No translation was asked for: the request named English, named `"auto"`, or named no language at all. Nothing failed |
-| Stream silently hangs and times out | Upstream ChatQnA unresponsive; check `CHATQNA_STREAM_TIMEOUT` (default 3600000 ms = 60 min) |
+| Stream silently hangs and times out                                  | Upstream ChatQnA unresponsive; check `CHATQNA_STREAM_TIMEOUT` (default 3600000 ms = 60 min)                          |
 
 ## Static & operational endpoints
 
@@ -932,10 +933,18 @@ for the runtime contract.
   "message": "Welcome to the Government Services API",
   "apiDocumentation": "/api-docs",
   "availableEndpoints": [
-    "/api/me", "/api/queries", "/api/services",
-    "/api/service-categories", "/api/chat-history", "/api/chat",
-    "/api/analytics", "/api/auth",
-    "/api/database", "/api/admin", "/api/weather", "/api/translate"
+    "/api/me",
+    "/api/queries",
+    "/api/services",
+    "/api/service-categories",
+    "/api/chat-history",
+    "/api/chat",
+    "/api/analytics",
+    "/api/auth",
+    "/api/database",
+    "/api/admin",
+    "/api/weather",
+    "/api/translate"
   ]
 }
 ```
@@ -985,13 +994,13 @@ service-category, translation, and weather routes; per-route for the
 
 **Failure modes**:
 
-| Status | Code | Cause |
-|--------|------|-------|
-| 401 | `TOKEN_INVALID` | Header missing or malformed |
-| 401 | `TOKEN_EXPIRED` | Token past expiry (also marks user deleted in ArangoDB if Keycloak reports disabled) |
-| 500 | `PROVISIONING_FAILED` | JIT provisioning failed |
-| 500 | `INTERNAL_ERROR` | Unexpected middleware error |
-| 403 | `FORBIDDEN` | Soft-deleted user (`req.user.deleted === true`) |
+| Status | Code                  | Cause                                                                                |
+| ------ | --------------------- | ------------------------------------------------------------------------------------ |
+| 401    | `TOKEN_INVALID`       | Header missing or malformed                                                          |
+| 401    | `TOKEN_EXPIRED`       | Token past expiry (also marks user deleted in ArangoDB if Keycloak reports disabled) |
+| 500    | `PROVISIONING_FAILED` | JIT provisioning failed                                                              |
+| 500    | `INTERNAL_ERROR`      | Unexpected middleware error                                                          |
+| 403    | `FORBIDDEN`           | Soft-deleted user (`req.user.deleted === true`)                                      |
 
 ### `keycloakAuthMiddleware.requireAdmin`
 
@@ -1025,13 +1034,13 @@ List endpoints (`/api/queries`, `/api/chat/conversations`,
 `/api/chat/messages`, `/api/analytics/events`,
 `/api/admin/users/search`) share a common pagination contract:
 
-| Query param | Type | Default | Notes |
-|-------------|------|---------|-------|
-| `limit` | int | `20` | Page size, min 1, max 100 |
-| `offset` | int | `0` | Min 0 |
-| `startDate` / `endDate` | ISO date | — | Inclusive range on `createdAt` |
-| `sort` | string | `createdAt DESC` | Field + space + direction |
-| Free filter fields | per endpoint | — | See endpoint table |
+| Query param             | Type         | Default          | Notes                          |
+| ----------------------- | ------------ | ---------------- | ------------------------------ |
+| `limit`                 | int          | `20`             | Page size, min 1, max 100      |
+| `offset`                | int          | `0`              | Min 0                          |
+| `startDate` / `endDate` | ISO date     | —                | Inclusive range on `createdAt` |
+| `sort`                  | string       | `createdAt DESC` | Field + space + direction      |
+| Free filter fields      | per endpoint | —                | See endpoint table             |
 
 There is **no `cursor` parameter** — pagination is offset-based. For very
 large result sets, narrow the `startDate`/`endDate` window rather than
@@ -1042,15 +1051,15 @@ paging deep.
 The BFF uses soft-delete throughout. There are three flavours; check the
 table when in doubt.
 
-| Endpoint | Behavior |
-|----------|-----------|
-| `POST /api/me/delete` | **Soft-delete with PII nullification** — Keycloak user is deleted, ArangoDB user is marked `deleted=true` and every PII field is overwritten with `null`. Irreversible. Subsequent requests with cached tokens return `FORBIDDEN`. |
-| `POST /api/me/reset-data` | **Reset profile data** — clears custom profile fields but preserves `email`, `createdAt`, and Keycloak credentials so JIT re-bootstraps on next login. Reversible (re-login recreates). |
-| `DELETE /api/chat/conversations/:id` | **Soft-delete conversation** — sets `deleted=true` on the conversation; messages remain in ArangoDB but are filtered out by reads. |
-| `DELETE /api/chat/folders/:folderId` | **Cascade soft-delete** — sets `deleted=true` on the folder AND every conversation in it. Conversations are not hard-deleted; restoring the folder restores membership. |
-| `DELETE /api/files/:fileId` | **Soft-delete file** — sets `deleted=true` on the file document; the underlying upload stays on disk until the periodic GC sweep. |
-| `DELETE /api/service-categories/:categoryId` and `/services/:serviceId` | **Soft-delete** — service-category tree keeps the node but reads filter it out. |
-| `DELETE /api/labels/:labelId` | **Soft-delete** — the label and any descendants are marked deleted; `/api/labels/:labelId/with-children` cascades the soft-delete explicitly. |
+| Endpoint                                                                | Behavior                                                                                                                                                                                                                           |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/me/delete`                                                   | **Soft-delete with PII nullification** — Keycloak user is deleted, ArangoDB user is marked `deleted=true` and every PII field is overwritten with `null`. Irreversible. Subsequent requests with cached tokens return `FORBIDDEN`. |
+| `POST /api/me/reset-data`                                               | **Reset profile data** — clears custom profile fields but preserves `email`, `createdAt`, and Keycloak credentials so JIT re-bootstraps on next login. Reversible (re-login recreates).                                            |
+| `DELETE /api/chat/conversations/:id`                                    | **Soft-delete conversation** — sets `deleted=true` on the conversation; messages remain in ArangoDB but are filtered out by reads.                                                                                                 |
+| `DELETE /api/chat/folders/:folderId`                                    | **Cascade soft-delete** — sets `deleted=true` on the folder AND every conversation in it. Conversations are not hard-deleted; restoring the folder restores membership.                                                            |
+| `DELETE /api/files/:fileId`                                             | **Soft-delete file** — sets `deleted=true` on the file document; the underlying upload stays on disk until the periodic GC sweep.                                                                                                  |
+| `DELETE /api/service-categories/:categoryId` and `/services/:serviceId` | **Soft-delete** — service-category tree keeps the node but reads filter it out.                                                                                                                                                    |
+| `DELETE /api/labels/:labelId`                                           | **Soft-delete** — the label and any descendants are marked deleted; `/api/labels/:labelId/with-children` cascades the soft-delete explicitly.                                                                                      |
 
 There is **no hard-delete endpoint** on the BFF or document-repository.
 GDPR right-to-erasure is satisfied by `POST /api/me/delete`.
@@ -1087,10 +1096,10 @@ rate-limiting applies to it.
 
 **Default policy** (identical on both plugins):
 
-| Window | Limit | Policy | Scope |
-|--------|-------|--------|-------|
-| per minute | 1000 | `local` | per Kong **consumer** (not per IP) |
-| per hour | 10000 | `local` | per Kong **consumer** |
+| Window     | Limit | Policy  | Scope                              |
+| ---------- | ----- | ------- | ---------------------------------- |
+| per minute | 1000  | `local` | per Kong **consumer** (not per IP) |
+| per hour   | 10000 | `local` | per Kong **consumer**              |
 
 **Scope is per-consumer, not per-user, per-role, or per-IP.** There is
 no tiered "admin bypass" — every Kong-authenticated consumer hits the
@@ -1115,12 +1124,12 @@ block before assuming the global limits apply.
 
 Interactive API documentation is served by the BFF itself (not by Kong):
 
-| URL | Purpose |
-|-----|---------|
-| `http://localhost:3000/api-docs` | Local dev Swagger UI |
-| `https://<domain>/api-docs` | Production Swagger UI (Keycloak OAuth2 + PKCE baked in via `swagger-ui` config) |
-| `http://localhost:3000/api-docs.json` | Local OpenAPI 3.0 JSON |
-| `https://<domain>/api-docs.json` | Production OpenAPI JSON |
+| URL                                   | Purpose                                                                         |
+| ------------------------------------- | ------------------------------------------------------------------------------- |
+| `http://localhost:3000/api-docs`      | Local dev Swagger UI                                                            |
+| `https://<domain>/api-docs`           | Production Swagger UI (Keycloak OAuth2 + PKCE baked in via `swagger-ui` config) |
+| `http://localhost:3000/api-docs.json` | Local OpenAPI 3.0 JSON                                                          |
+| `https://<domain>/api-docs.json`      | Production OpenAPI JSON                                                         |
 
 Swagger definitions are inline in route files using JSDoc comments
 (`@swagger`, `@summary`, `@tags`, etc.) — `swagger-jsdoc` reads
@@ -1135,13 +1144,13 @@ CORS is configured in the **backend**
 `cors` plugin entries (`kong_config.json:394, 779`) are both
 `enabled: false`.
 
-| Setting | Value |
-|---------|-------|
-| Allowed origins | `CORS_ALLOWED_ORIGINS` (comma-separated; each entry is matched exactly, or as a `/pattern/` regex if wrapped in slashes) |
-| Allowed methods | `GET, POST, PUT, PATCH, DELETE, OPTIONS` |
-| Allowed headers | `Content-Type, Authorization, X-Requested-With` |
-| Credentials | `true` |
-| `OPTIONS` success status | `204` |
+| Setting                  | Value                                                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Allowed origins          | `CORS_ALLOWED_ORIGINS` (comma-separated; each entry is matched exactly, or as a `/pattern/` regex if wrapped in slashes) |
+| Allowed methods          | `GET, POST, PUT, PATCH, DELETE, OPTIONS`                                                                                 |
+| Allowed headers          | `Content-Type, Authorization, X-Requested-With`                                                                          |
+| Credentials              | `true`                                                                                                                   |
+| `OPTIONS` success status | `204`                                                                                                                    |
 
 > **Missing origin** is allowed (e.g. server-to-server calls with no
 > `Origin` header). Set `CORS_ALLOWED_ORIGINS` to the production frontend
@@ -1154,10 +1163,10 @@ The BFF applies a per-request metrics middleware that records HTTP
 counters and a duration histogram. It can be turned off for benchmarking
 or ultra-lean stacks:
 
-| Env var | Default | Effect |
-|---------|---------|--------|
-| `ENABLE_METRICS` | `true` | When `false`, the metrics middleware is a no-op (`metrics-middleware.js:26`) |
-| `ENABLE_OBSERVABILITY` | `false` (compose default) | Enables the broader OTel Collector / Victoria* stack |
+| Env var                | Default                   | Effect                                                                       |
+| ---------------------- | ------------------------- | ---------------------------------------------------------------------------- |
+| `ENABLE_METRICS`       | `true`                    | When `false`, the metrics middleware is a no-op (`metrics-middleware.js:26`) |
+| `ENABLE_OBSERVABILITY` | `false` (compose default) | Enables the broader OTel Collector / Victoria* stack                         |
 
 `ENABLE_METRICS=false` is the right knob for a load test where every µs
 counts; the broader stack still works through
@@ -1186,6 +1195,6 @@ contract.
   realm setup, client credentials, admin user creation, ROPC
   enable/revert.
 - [Troubleshooting](/docs/operate/troubleshooting/) — `docker service
-  logs`, security-blocker diagnostics.
+logs`, security-blocker diagnostics.
 - [Operations → Admin Logs](/docs/operate/admin-logs/) — the Logs tab endpoints,
   including `debug-yesterday` and the LogSQL query endpoint.

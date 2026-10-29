@@ -1375,23 +1375,50 @@ def _retriever_docs(result_dict: dict) -> list | None:
     return None
 
 
-def _retriever_matched_no_document(result_dict: dict) -> bool:
-    """Whether the retrieval produced no document at all for this query.
+def _node_docs(result_dict: dict, prefix: str) -> list | None:
+    """The ``retrieved_docs`` of the first node whose key starts with
+    ``prefix``, or None when that node's output does not carry the key.
 
-    A label-filtered retrieval returns an empty list when the requested scope
-    matches zero documents — the query then abstains instead of answering
-    outside the scope. The reranker's verdict is a different question: it may
-    reject documents the retriever DID match, and that is not a scope that
-    matched nothing. This reads the retriever node, so the two cases cannot
-    be confused.
+    Node outputs are dicts shaped like ``{"retrieved_docs": [...]}``; None
+    means "the node cannot say" — a malformed or error-shaped result, which
+    is a fault, not a selection that kept nothing.
     """
-    docs = _retriever_docs(result_dict)
+    for key, val in (result_dict or {}).items():
+        if key.startswith(prefix):
+            if isinstance(val, dict):
+                return val.get("retrieved_docs")
+            return getattr(val, "retrieved_docs", None)
+    return None
+
+
+def _abstention_outcome(result_dict: dict) -> tuple[bool, str | None]:
+    """Whether the turn had no document backing, and its machine-readable cause.
+
+    Two distinct no-document paths hand the LLM the abstention instructions
+    (align_outputs adds them whenever its document list is empty): the
+    retriever matched nothing inside the requested scope, or the reranker
+    rejected every document the retriever DID match. Both are abstentions;
+    the reason keeps the causes apart so an operator can tell a scope that
+    retrieved nothing from a reranker that kept nothing.
+
+    A node output without the expected key is a malformed or error-shaped
+    result, not a selection that kept nothing: claim no abstention about it
+    (the grounding decision makes the same conservative call).
+    """
+    if not _abstention_enforced():
+        # The abstention instructions never reached the prompt, so the turn
+        # was never set up to abstain: the flag keeps its established meaning
+        # ("the turn abstained") rather than reporting intent.
+        return False, None
+    docs = _node_docs(result_dict, "retriever")
     if docs is None:
-        # A retriever output without the key is a malformed or error-shaped
-        # node result, not a scope that matched nothing: claim no abstention
-        # about it (the grounding decision makes the same conservative call).
-        return False
-    return not docs
+        return False, None
+    if not docs:
+        return True, "no_documents_retrieved"
+    reranked = _node_docs(result_dict, "rerank")
+    if reranked is not None and not reranked:
+        return True, "reranker_selected_nothing"
+    return False, None
 
 
 def _mark_abstention(metadata: dict, reason: str) -> None:
@@ -3023,9 +3050,10 @@ class ChatQnAService:
             f"self={self_confidence} self_conf_enabled={LLM_SELF_CONFIDENCE_ENABLED} "
             f"-> confidence_score={_cs}"
         )
-        # The retrieval produced no document and the turn was instructed to
-        # abstain: the answer is an abstention, not an answer.
-        abstained = _retriever_matched_no_document(result_dict) and _abstention_enforced()
+        # The retrieval produced no document, or the reranker kept none, and
+        # the turn was instructed to abstain: the answer is an abstention, not
+        # an answer. The reason names which.
+        abstained, abstention_reason = _abstention_outcome(result_dict)
         # Every input of the answer-level outcome is known here, so this is the
         # first point at which the span can be recorded. `sentinel_present`
         # reports whether a self-grade was actually parsed, so an operator can
@@ -3059,7 +3087,7 @@ class ChatQnAService:
             "is_grounded": is_grounded,
         }
         if abstained:
-            _mark_abstention(metadata, "no_documents_retrieved")
+            _mark_abstention(metadata, abstention_reason)
         if LLM_SELF_CONFIDENCE_ENABLED:
             # Raw LLM self-assessed groundedness; None when the sentinel was
             # omitted/malformed. Never hard-fails the chat.
@@ -4206,9 +4234,9 @@ class ChatQnAService:
                 span.set_attribute("rag.chunk_count", _count_final_chunks(result_dict))
 
                 # Record custom application metrics. The `abstained` attribute
-                # follows the same signal as the metadata event: the retrieval
-                # produced no document.
-                _abstained = _retriever_matched_no_document(result_dict) and _abstention_enforced()
+                # follows the same signal as the metadata event: the turn had
+                # no document backing.
+                _abstained, _abstention_reason = _abstention_outcome(result_dict)
                 _metric_attrs = _chat_attrs("true" if _abstained else "false", "false")
                 chat_requests_total.add(1, _metric_attrs)
                 chat_rag_duration_seconds.record(_rag_duration, _metric_attrs)
@@ -4252,6 +4280,9 @@ class ChatQnAService:
                 )
                 metadata = {
                     "source_documents": [],
+                    # Bound before schedule() raised, so the scope the reranker
+                    # was fed is still known on this path.
+                    "filter_labels": list(filter_labels),
                     "retrieval_confidence_score": 0.0,
                     "confidence_score": 0.0,
                     "is_grounded": False,
@@ -4445,7 +4476,7 @@ class ChatQnAService:
         # the metric), so the metric and this metadata cannot come from
         # different runs.
         if _abstained:
-            _mark_abstention(metadata, "no_documents_retrieved")
+            _mark_abstention(metadata, _abstention_reason)
         if LLM_SELF_CONFIDENCE_ENABLED:
             # Raw LLM self-assessed groundedness; None when the sentinel was omitted
             # or malformed.

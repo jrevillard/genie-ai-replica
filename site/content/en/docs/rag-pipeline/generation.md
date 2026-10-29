@@ -77,8 +77,7 @@ that information."
 > **Verifying abstention fired.** When abstention fires, the streamed
 > answer ends with the configured refusal phrase, and the SSE metadata
 > event carries `is_grounded: false`. When the retrieval returned no
-> document at all — the label filter matched nothing, or nothing in scope
-> was relevant enough to clear the similarity threshold — the metadata
+> document at all — the label filter matched nothing — the metadata
 > event also carries `abstained: true` with
 > `abstention_reason: no_documents_retrieved`, the `chatqna.stream_outcome`
 > span records `answer.abstained` on a streamed turn, and
@@ -86,7 +85,11 @@ that information."
 > all derived from the same retrieval signal. The flag is reported while
 > the abstention instructions are enforced (`CHATQNA_ENFORCE_ABSTENTION`,
 > the default); a deployment that turned the guardrail off answers instead
-> of abstaining, and the flag stays unset. The metadata event also carries
+> of abstaining, and the flag stays unset. When the retrieval DID match
+> documents but the reranker kept none, the turn is also an abstention —
+> with `abstention_reason: reranker_selected_nothing`, so a healthy scope
+> is not mistaken for a stale label.
+> The metadata event also carries
 > `filter_labels` — the labels the retrieval filtered on, by the pipeline's
 > own rule — so the admin Query Inspector names the scope without
 > re-deriving it (see [Admin Dashboard](/docs/frontend/admin-dashboard/)).

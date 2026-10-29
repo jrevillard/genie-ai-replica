@@ -54,7 +54,7 @@
           <td class="qi-list__cell--time">{{ formatTime(query.timestamp) }}</td>
           <td class="qi-list__cell--question">{{ truncate(query.text, 80) }}</td>
           <td class="qi-list__cell--scope" :data-testid="`qi-scope-${query._key}`">
-            <span v-if="scopeLabels(query)" class="qi-list__scope-labels">{{ scopeLabels(query) }}</span>
+            <span v-if="scopeText(query)" class="qi-list__scope-labels">{{ scopeText(query) }}</span>
             <span v-else class="qi-list__muted">—</span>
           </td>
           <td class="qi-list__cell--center">
@@ -154,13 +154,20 @@ export default {
   },
   methods: {
     /**
-     * The labels the retrieval filtered on, as one string. The pipeline
-     * decides them (chatqna sends the applied filter labels in its metadata
+     * The labels the retrieval filtered on, as one string — or null when the
+     * record does not say (a query saved before the field existed, or
+     * streamed by a chatqna too old to report it). The pipeline decides the
+     * labels (chatqna sends the applied filter labels in its metadata
      * event), so the Inspector shows what actually filtered instead of
-     * re-deriving the rule here.
+     * re-deriving the rule here. An empty list is a fact, not an absence:
+     * the retrieval ran unfiltered.
      */
-    scopeLabels(query) {
-      return (query.metadata?.filter_labels || []).join(', ');
+    scopeText(query) {
+      const labels = query.metadata?.filter_labels;
+      if (labels == null) {
+        return null;
+      }
+      return labels.join(', ') || this.translate('admin.queryInspector.unfiltered', 'Unfiltered');
     },
     translate(key, fallback) {
       return this.$parent?.translate?.(key, fallback) ?? fallback;
@@ -267,10 +274,6 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.qi-list__cell--scope {
-  max-width: 260px;
 }
 
 /* The cap lives on the span: a max-width on a table cell is not a cap in an

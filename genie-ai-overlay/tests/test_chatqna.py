@@ -2688,10 +2688,11 @@ class TestStreamWithMetadata:
         assert '"filter_labels": ["Tax Payment"]' in joined
 
     @pytest.mark.asyncio
-    async def test_reranker_that_dropped_every_document_is_not_reported_as_an_empty_scope(self):
+    async def test_reranker_that_dropped_every_document_reports_its_own_cause(self):
         """The retriever DID match documents; the reranker rejected them all.
-        The scope was fine — reporting this as "the scope matched nothing"
-        would send the operator after a stale label that is not stale."""
+        The turn still abstained (the model was told to abstain with no
+        documents), but the scope was fine — the reason must say so, or the
+        operator is sent after a stale label that is not stale."""
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
         body = self._make_body(["data: b'I cannot answer that'\n\n", "data: [DONE]\n\n"])
@@ -2701,7 +2702,8 @@ class TestStreamWithMetadata:
         }
         out = await self._drain(svc._stream_with_metadata(body, result_dict, token="t"))
         joined = "".join(out)
-        assert '"abstained": true' not in joined
+        assert '"abstained": true' in joined
+        assert '"abstention_reason": "reranker_selected_nothing"' in joined
 
     @pytest.mark.asyncio
     async def test_a_malformed_retriever_output_is_not_reported_as_an_empty_scope(self):
@@ -3826,28 +3828,30 @@ async def test_non_streaming_answer_reports_that_it_was_translated():
 
 
 @pytest.mark.parametrize(
-    "nodes,expect_abstained",
+    "nodes,expect_reason",
     [
         # The label filter matched zero documents: the answer is an abstention.
         (
             {"retriever": {"retrieved_docs": [], "file_id_pairs": {}}, "rerank": {"retrieved_docs": []}},
-            True,
+            "no_documents_retrieved",
         ),
         # The retriever DID match documents and the reranker rejected them all:
-        # the scope was fine, and reporting it as "matched nothing" would send
-        # the operator after a label that is not stale.
+        # also an abstention (align_outputs instructs the model to abstain when
+        # its document list is empty), but with its own cause — reporting it as
+        # "matched nothing" would send the operator after a label that is not
+        # stale.
         (
             {
                 "retriever": {"retrieved_docs": [{"id": "d1", "text": "doc"}], "file_id_pairs": {}},
                 "rerank": {"retrieved_docs": []},
             },
-            False,
+            "reranker_selected_nothing",
         ),
     ],
     ids=["scope_matched_nothing", "reranker_dropped_every_document"],
 )
 @pytest.mark.asyncio
-async def test_non_streaming_abstention_follows_the_retrieval(nodes, expect_abstained):
+async def test_non_streaming_abstention_follows_the_retrieval(nodes, expect_reason):
     """The non-streaming metadata must say whether the turn abstained: the
     operator cannot tell an abstention from an ordinary answer by reading the
     response, and the flag is only truthful if it follows the retrieval."""
@@ -3873,11 +3877,8 @@ async def test_non_streaming_abstention_follows_the_retrieval(nodes, expect_abst
     ):
         payload = await svc.handle_request(req)
 
-    if expect_abstained:
-        assert payload["metadata"]["abstained"] is True
-        assert payload["metadata"]["abstention_reason"] == "no_documents_retrieved"
-    else:
-        assert payload["metadata"].get("abstained") is not True
+    assert payload["metadata"]["abstained"] is True
+    assert payload["metadata"]["abstention_reason"] == expect_reason
 
 
 @pytest.mark.asyncio

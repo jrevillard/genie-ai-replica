@@ -303,16 +303,31 @@ describe('QueryInspectorList', () => {
     expect(wrapper.find('[data-testid="qi-scope-q1"]').text()).toBe('Taxes & Revenue');
   });
 
-  it('should show no scope when the retrieval ran unfiltered', () => {
+  it('should say the query was unfiltered when the filter list is empty', () => {
     // An unfiltered query (the single-message backend mode sends no context
-    // at all) carries an empty filter-label list, and the column says so.
+    // at all) carries an empty filter-label list. That is a different fact
+    // from "the record predates the field": the dash is reserved for the
+    // latter, the column says Unfiltered for the former.
     const query = { ...answeredQuery, metadata: { ...answeredQuery.metadata, filter_labels: [] } };
     const wrapper = mountList({
       queries: [query],
       pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 }
     });
 
+    expect(wrapper.find('[data-testid="qi-scope-q1"]').text()).toContain('Unfiltered');
+  });
+
+  it('should show a dash when the scope was never recorded', () => {
+    // A query saved before the field existed (or streamed by a chatqna too
+    // old to report it): the honest answer is a dash, not "Unfiltered".
+    const query = { ...answeredQuery, metadata: {} };
+    const wrapper = mountList({
+      queries: [query],
+      pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 }
+    });
+
     expect(wrapper.find('[data-testid="qi-scope-q1"]').text()).toContain('—');
+    expect(wrapper.find('[data-testid="qi-scope-q1"]').text()).not.toContain('Unfiltered');
   });
 
   it('should not mark a query that answered', () => {
@@ -533,6 +548,14 @@ describe('QueryInspectorDetail', () => {
 
   it('should say the scope was not recorded for a query saved before the field existed', () => {
     const wrapper = mountDetail({ query: fullQuery });
+    expect(wrapper.find('[data-testid="qi-detail-scope"]').text()).toContain('Not recorded');
+  });
+
+  it('should say the scope was not recorded when the stored value is null', () => {
+    // An explicit null in the stored metadata means the same as an absent
+    // field — the pipeline never reported the scope for this query.
+    const query = { ...fullQuery, metadata: { ...fullQuery.metadata, filter_labels: null } };
+    const wrapper = mountDetail({ query });
     expect(wrapper.find('[data-testid="qi-detail-scope"]').text()).toContain('Not recorded');
   });
 

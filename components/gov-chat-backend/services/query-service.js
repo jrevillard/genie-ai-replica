@@ -471,6 +471,11 @@ class QueryService {
             // abstention from an ordinary low-confidence one.
             abstained: obj.abstained ?? false,
             abstention_reason: obj.abstention_reason ?? null,
+            // The labels the retrieval filtered on (chatqna computes them with
+            // the pipeline's own rule). The Query Inspector names the scope
+            // behind an abstention from them; dropping them here would leave
+            // every streamed query without a scope.
+            filter_labels: Array.isArray(obj.filter_labels) ? obj.filter_labels : [],
             is_grounded: obj.is_grounded ?? false
           };
           // self_confidence is keyed by PRESENCE, not by value. chatqna emits

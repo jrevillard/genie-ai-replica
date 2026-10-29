@@ -192,10 +192,13 @@ The list shows the scope that filtered each query — the labels the
 pipeline applied, reported by the retrieval itself (the service when the
 query named one: the service is the narrower scope, the category must not
 widen it into the whole category; otherwise the category). A query that
-abstained — the retrieval returned no document — carries an **Abstained**
+abstained — no document backed the answer — carries an **Abstained**
 marker, so the scopes that recently retrieved nothing are visible without
 reading every answer. The detail view names the cause of the abstention
-and shows the labels that were requested next to the scope that filtered.
+(`no_documents_retrieved` — the scope matched nothing;
+`reranker_selected_nothing` — the scope matched, the reranker kept none;
+`reranker_input_too_long` — an ingestion-side input overflow) and shows
+the labels that were requested next to the scope that filtered.
 
 Click a row in the list to load detail. Filters: user, date range, confidence range, label, query substring. See [Debugging with Tracing & Logs](/docs/operate/tracing-howto/) for the related backend trace view.
 

@@ -154,7 +154,10 @@ const emptyStreamMetadata = () => ({
   is_grounded: false,
   retrieval_confidence_score: null,
   abstained: null,
-  abstention_reason: null
+  abstention_reason: null,
+  // No metadata event means no filter labels either — the turn never
+  // reported what it filtered on.
+  filter_labels: []
 });
 
 module.exports = (queryService) => {

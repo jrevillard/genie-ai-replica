@@ -258,7 +258,8 @@ export default {
      */
     scopeText() {
       const labels = this.query.metadata?.filter_labels;
-      if (labels === undefined) {
+      if (labels == null) {
+        // Absent or null: the pipeline never reported a scope for this query.
         return this.translate('admin.queryInspector.scopeNotRecorded', 'Not recorded');
       }
       return labels.join(', ') || this.translate('admin.queryInspector.scopeNone', 'None (unfiltered query)');

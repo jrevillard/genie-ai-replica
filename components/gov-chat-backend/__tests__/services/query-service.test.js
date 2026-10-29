@@ -548,6 +548,39 @@ describe('QueryService', () => {
       expect(result.abstention_reason).toBe('reranker_input_too_long');
     });
 
+    it('should pass through the filter labels the retrieval filtered on', () => {
+      const meta = {
+        type: 'metadata',
+        source_documents: [],
+        confidence_score: 0,
+        retrieval_confidence_score: 0,
+        is_grounded: false,
+        abstained: true,
+        abstention_reason: 'no_documents_retrieved',
+        filter_labels: ['Tax Payment', 'Taxes']
+      };
+      const result = queryService.parseChatQnASSELine(JSON.stringify(meta));
+      // The Query Inspector names the scope behind an abstention from these
+      // labels. The parser rebuilds the event from a whitelist, so a field
+      // missing from it is dropped here and the scope is empty for every
+      // streamed query.
+      expect(result.filter_labels).toEqual(['Tax Payment', 'Taxes']);
+    });
+
+    it('should default filter labels to an empty list when chatqna omits them', () => {
+      const meta = {
+        type: 'metadata',
+        source_documents: [],
+        confidence_score: 0.5,
+        retrieval_confidence_score: 0.5,
+        is_grounded: false
+      };
+      const result = queryService.parseChatQnASSELine(JSON.stringify(meta));
+      // Absent means "unfiltered query", not "unknown scope": the key has to
+      // exist so a persisted query never carries undefined.
+      expect(result.filter_labels).toEqual([]);
+    });
+
     it('should preserve explicit null self_confidence (sentinel missing)', () => {
       const meta = {
         type: 'metadata',

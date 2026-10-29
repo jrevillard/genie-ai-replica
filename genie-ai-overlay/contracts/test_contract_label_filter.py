@@ -149,11 +149,13 @@ def test_retriever_forwards_filter_clause_to_vector_search(comps):
     }
     retriever.db = mock_db
 
-    # Capture the filter_clause kwarg passed to the vector search method.
-    captured: dict = {}
+    # Capture the filter_clause kwarg of EVERY vector search call. The list
+    # matters: the retriever may search more than once (see the rescue below),
+    # and each call carries its own clause.
+    captured: list[dict] = []
 
     async def _capture_search(*args, **kwargs):
-        captured.update(kwargs)
+        captured.append(dict(kwargs))
         return []
 
     # Patch ArangoVector and the embedding class so invoke() reaches the
@@ -177,14 +179,25 @@ def test_retriever_forwards_filter_clause_to_vector_search(comps):
 
         asyncio.run(retriever.invoke(input_doc))
 
-    # Assert the filter_clause was forwarded to the vector search.
-    assert "filter_clause" in captured, (
+    # The FIRST vector search is the filtered one: the label clause must reach
+    # the database layer, not just the code.
+    assert captured, "no vector search call reached the database layer"
+    assert "filter_clause" in captured[0], (
         "filter_clause kwarg missing from the vector search call — the category filter is silently dropped"
     )
-    clause = captured["filter_clause"]
+    clause = captured[0]["filter_clause"]
     assert "FILTER" in clause, "FILTER keyword missing from the forwarded clause"
     for label in labels:
         assert f'"{label}"' in clause, f"label {label!r} missing from FILTER clause"
+
+    # The scope is absolute: the filtered search is the ONLY search. An empty
+    # result must stay empty — chatqna's abstention instructions answer it. A
+    # second, unfiltered search would answer a question nobody asked, from a
+    # corpus the request never scoped.
+    assert len(captured) == 1, (
+        f"expected exactly ONE vector search, got {len(captured)} — "
+        "an unfiltered retry answers outside the requested scope"
+    )
 
 
 def test_installed_arangovector_exposes_filter_clause_named_param(comps):

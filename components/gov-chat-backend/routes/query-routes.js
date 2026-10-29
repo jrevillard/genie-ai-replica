@@ -268,16 +268,7 @@ module.exports = (queryService) => {
    *                     content:
    *                       type: string
    *               context:
-   *                 type: object
-   *                 properties:
-   *                   categoryLabel:
-   *                     type: string
-   *                   serviceLabels:
-   *                     type: array
-   *                     items:
-   *                       type: string
-   *                   language:
-   *                     type: string
+   *                 $ref: '#/components/schemas/QueryContext'
    *     responses:
    *       200:
    *         description: SSE stream of response chunks
@@ -795,18 +786,7 @@ module.exports = (queryService) => {
    *                       type: string
    *                 description: Full conversation history (required for conversation mode)
    *               context:
-   *                 type: object
-   *                 properties:
-   *                   categoryLabel:
-   *                     type: string
-   *                   serviceLabels:
-   *                     type: array
-   *                     items:
-   *                       type: string
-   *                   language:
-   *                     type: string
-   *                     default: EN
-   *                 description: Context labels (required for conversation mode)
+   *                 $ref: '#/components/schemas/QueryContext'
    *               contextOption:
    *                 type: string
    *                 enum: [single-message, conversation-with-context-labels]

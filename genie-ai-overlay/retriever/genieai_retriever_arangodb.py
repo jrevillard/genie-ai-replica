@@ -21,6 +21,7 @@ from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
+from core.label_contract import build_filter_labels, decode_filter_labels
 from core.model_cache import get_model_id
 from core.model_http_policy import LLM_MAX_RETRIES, SUMMARIZER_TIMEOUT_SECONDS, http_timeout
 from core.span_attrs import ATTRIBUTE_NAMES as A
@@ -237,6 +238,22 @@ def _chunk_passes_label_filter(chunk_labels, labels_to_filter, filter_strategy):
     return any(label in chunk_labels for label in labels_to_filter)
 
 
+def _escape_aql_string(value) -> str:
+    """Escape a value for interpolation into an AQL string literal.
+
+    A label is DATA, but it is interpolated into AQL TEXT: a double quote in a
+    label would close the string literal and the rest of the label would be
+    read as AQL. The backslash is escaped FIRST because it is AQL's own escape
+    character — doubling it before the quote keeps the two escapes
+    independent.
+    """
+    escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
+    # A raw newline, CR or tab breaks the AQL string literal the same way
+    # a quote does: the query errors, the except swallows it, and every
+    # query scoped by the label abstains looking like an empty corpus.
+    return escaped.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+
+
 def _build_aql_filter_clause(labels_to_filter, filter_strategy):
     """Build the AQL ``FILTER`` clause for the given labels + strategy.
 
@@ -248,7 +265,7 @@ def _build_aql_filter_clause(labels_to_filter, filter_strategy):
     """
     if not labels_to_filter:
         return ""
-    labels_array = "[" + ", ".join(f'"{label}"' for label in labels_to_filter) + "]"
+    labels_array = "[" + ", ".join(f'"{_escape_aql_string(label)}"' for label in labels_to_filter) + "]"
     if filter_strategy == "AND":
         return f"FILTER (doc.chunk_labels != null) AND ({labels_array} ALL IN doc.chunk_labels)"
     if filter_strategy == "OR":
@@ -1115,8 +1132,6 @@ class GenieaiArangoRetriever(OpeaComponent):
             # search_start reads. chatqna encodes labels in search_start because
             # the OPEA framework drops custom fields between mega-service nodes.
             # See core/label_contract.py for the format + full documentation.
-            from core.label_contract import decode_filter_labels
-
             _base_mode, _encoded_labels = decode_filter_labels(str(input_dict.get("search_start", "chunk")))
             input_dict["search_start"] = _base_mode  # restore base mode
             if _encoded_labels:
@@ -1158,17 +1173,19 @@ class GenieaiArangoRetriever(OpeaComponent):
             # the same spellings.
             filter_strategy = input_dict.get("filter_strategy", ARANGO_FILTER_STRATEGY).strip().upper()
 
-            # Consolidate all labels into a single list
-            labels_to_filter = []
-            if filter_data.get("categoryLabels"):
-                labels_to_filter.extend(filter_data["categoryLabels"])
-            if filter_data.get("serviceLabels"):
-                labels_to_filter.extend(filter_data["serviceLabels"])
-
-            # Add labels encoded in search_start (parsed at the top of invoke,
-            # stored in input_dict["_encoded_filter_labels"]). See the DATA
-            # CONTRACT comment near model_dump() above.
-            labels_to_filter.extend(input_dict.pop("_encoded_filter_labels", []))
+            # The scope of the request. The labels encoded in search_start
+            # (parsed at the top of invoke, stored in
+            # input_dict["_encoded_filter_labels"]) are the scope the chatqna
+            # resolved against the live hierarchy — see the DATA CONTRACT
+            # comment near model_dump() above. When they are present they ARE
+            # the request's scope; the context is the fallback for a caller
+            # that encodes nothing.
+            _encoded_labels = input_dict.pop("_encoded_filter_labels", [])
+            # Built by the SAME rule the chatqna applies: the service labels are
+            # the filter when they exist, the category filters on its own. A
+            # union of both would widen the service scope to the whole
+            # category.
+            labels_to_filter = list(_encoded_labels) if _encoded_labels else build_filter_labels(filter_data)
 
             # CONSTRUCT THE AQL FILTER CLAUSE
             aql_filter_clause = _build_aql_filter_clause(labels_to_filter, filter_strategy)
@@ -1455,7 +1472,13 @@ class GenieaiArangoRetriever(OpeaComponent):
                         n=bm25_n,
                         labels_to_filter=labels_to_filter,
                         filter_strategy=filter_strategy,
-                        aql_filter_clause=aql_filter_clause if search_start == "chunk" else "",
+                        # The clause is CHUNK-scoped (it filters chunk
+                        # labels): the whole BM25 leg is chunk-gated
+                        # above, and the dense legs carry the same gate.
+                        # Widening one without the others would feed a
+                        # chunk-level clause to a view that has no
+                        # chunks — silently empty, not loudly wrong.
+                        aql_filter_clause=aql_filter_clause,
                     )
                     if bm25_res:
                         _fused_all = rrf_fuse(search_res, bm25_res)

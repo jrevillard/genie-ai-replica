@@ -51,16 +51,26 @@ const DEFAULT_SETTLE_MS = 3000;
  *   locale    applied through the app's own boot path
  *             (localStorage.userLocale, read by main.js before mount)
  *   settle    ms to wait after the reload; defaults to DEFAULT_SETTLE_MS
+ *   setupPage an async hook run on the page BEFORE the login — the
+ *             place for route stubs: the first chat mount already
+ *             sees them, instead of a stub installed after the app
+ *             has already fetched the real thing
+ *   reload    false skips the splash-clearing reload and its settle
+ *             pause — for a spec that HOLDS a network answer, a
+ *             `waitUntil: 'networkidle'` reload would never settle
  *
  * Returns { ctx, page } — the caller closes ctx when it is done.
  */
-async function openWelcomeScreen(browser, { viewport, theme, locale, settle } = {}) {
+async function openWelcomeScreen(browser, { viewport, theme, locale, settle, setupPage, reload = true } = {}) {
   const ctx = await browser.newContext({
     viewport: viewport || DEFAULT_VIEWPORT,
     colorScheme: theme || 'light',
     ignoreHTTPSErrors: true
   });
   const page = await ctx.newPage();
+  if (setupPage) {
+    await setupPage(page);
+  }
   await loginViaUI(page);
   if (locale) {
     await page.evaluate((l) => localStorage.setItem('userLocale', l), locale);
@@ -73,9 +83,13 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, settle } = 
   // image instead of the scrim. A reload skips it (the session flag is
   // set) and leaves the page ready to sample.
   await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
-  await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
-  await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
-  await page.waitForTimeout(settle === undefined ? DEFAULT_SETTLE_MS : settle);
+  if (reload) {
+    await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
+    await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
+    await page.waitForTimeout(settle === undefined ? DEFAULT_SETTLE_MS : settle);
+  } else if (settle !== undefined) {
+    await page.waitForTimeout(settle);
+  }
   return { ctx, page };
 }
 

@@ -124,6 +124,8 @@ let mockDb;
 let mockQueriesCollection;
 let mockServiceCategoriesCollection;
 let mockServicesCollection;
+let mockServiceCategoryTranslationsCollection;
+let mockServiceTranslationsCollection;
 let mockQueryCategoriesCollection;
 let mockAnalyticsService;
 
@@ -133,6 +135,8 @@ beforeEach(() => {
   mockQueriesCollection = createMockCollection();
   mockServiceCategoriesCollection = createMockCollection();
   mockServicesCollection = createMockCollection();
+  mockServiceCategoryTranslationsCollection = createMockCollection();
+  mockServiceTranslationsCollection = createMockCollection();
   mockQueryCategoriesCollection = createMockCollection();
 
   mockDb = {
@@ -140,6 +144,8 @@ beforeEach(() => {
       if (name === 'queries') return mockQueriesCollection;
       if (name === 'serviceCategories') return mockServiceCategoriesCollection;
       if (name === 'services') return mockServicesCollection;
+      if (name === 'serviceCategoryTranslations') return mockServiceCategoryTranslationsCollection;
+      if (name === 'serviceTranslations') return mockServiceTranslationsCollection;
       if (name === 'queryCategories') return mockQueryCategoriesCollection;
       return createMockCollection();
     }),
@@ -169,8 +175,13 @@ describe('QueryService', () => {
 
   describe('init', () => {
     it('should initialize collections on first call', async () => {
+      // EVERY collection the service opens: these assertions were once
+      // edited down to the two translation collections — removing either
+      // original init left the test green.
       expect(mockDb.collection).toHaveBeenCalledWith('queries');
       expect(mockDb.collection).toHaveBeenCalledWith('serviceCategories');
+      expect(mockDb.collection).toHaveBeenCalledWith('serviceCategoryTranslations');
+      expect(mockDb.collection).toHaveBeenCalledWith('serviceTranslations');
       expect(mockDb.collection).toHaveBeenCalledWith('services');
       expect(queryService.initialized).toBe(true);
     });
@@ -631,16 +642,19 @@ describe('QueryService', () => {
       delete process.env.CONTEXT_OPTION;
     });
 
-    it('should default context to General when missing', async () => {
+    it('should keep a missing category label as null — no phantom filter', async () => {
       process.env.CONTEXT_OPTION = 'test-mode';
       const data = createMockQueryData();
       delete data.context;
       mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'q1' });
       mockQueriesCollection.update.mockResolvedValueOnce({ new: { _key: 'q1', isAnswered: true } });
       await queryService.createQuery(data);
+      // 'General' names no entity of any hierarchy: injecting it would scope
+      // the query to a label no chunk carries. A request with no category
+      // declares no scope, and the corpus is its scope.
       expect(mockQueriesCollection.save).toHaveBeenCalledWith(
         expect.objectContaining({
-          context: { categoryLabel: 'General', serviceLabels: [] }
+          context: { categoryLabel: null, serviceLabels: [] }
         })
       );
       delete process.env.CONTEXT_OPTION;
@@ -745,9 +759,164 @@ describe('QueryService', () => {
       mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
       mockDb.query
         .mockResolvedValueOnce(createMockCursor(['cat-1']))
-        .mockResolvedValueOnce(createMockCursor(['svc-1']));
+        .mockResolvedValueOnce(createMockCursor([{ label: 'Tomato', serviceId: 'svc-1' }]));
       const result = await queryService.initStreamQuery(data, {});
       expect(result.queryId).toBe('stream-1');
+    });
+
+    it('reads a bare serviceLabels string as ONE label, never as an empty scope', async () => {
+      // A client that sends `serviceLabels: 'Tomato'` names a scope. Dropping
+      // it would send the query out with NO filter at all: the corpus would
+      // answer from outside the scope the client declared.
+      const data = createMockQueryData({ context: { categoryLabel: null, serviceLabels: 'Tomato' } });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+
+      const result = await queryService.initStreamQuery(data, {});
+
+      expect(result.opeaPayload.context.serviceLabels).toEqual(['Tomato']);
+    });
+
+    it('forwards the legacy plural categoryLabels instead of dropping the scope', async () => {
+      // The upstream OPEA field is the PLURAL list. A caller using that
+      // spelling declared a category scope: keeping it only in the query
+      // record while the wire carries categoryLabel: null answers from the
+      // whole corpus while the caller believes it asked a scoped question.
+      const data = createMockQueryData({
+        context: { categoryLabel: null, categoryLabels: ['Taxes & Revenue'], serviceLabels: [] }
+      });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+
+      const result = await queryService.initStreamQuery(data, {});
+
+      expect(result.opeaPayload.context.categoryLabel).toBeNull();
+      expect(result.opeaPayload.context.categoryLabels).toEqual(['Taxes & Revenue']);
+    });
+
+    it('reads a bare plural categoryLabels string as ONE label', async () => {
+      // The same rule the singular spellings follow: a bare string is ONE
+      // label, never a sequence of characters and never an empty scope.
+      const data = createMockQueryData({
+        context: { categoryLabel: null, categoryLabels: 'Taxes & Revenue', serviceLabels: [] }
+      });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+
+      const result = await queryService.initStreamQuery(data, {});
+
+      expect(result.opeaPayload.context.categoryLabels).toEqual(['Taxes & Revenue']);
+    });
+
+    it('sends no categoryLabels key when the caller used the singular', async () => {
+      // The singular is this API's contract; the plural rides along only
+      // when the caller sent it. An always-present empty key would make
+      // the wire claim a plural spelling nobody used.
+      const data = createMockQueryData({
+        context: { categoryLabel: 'Crops', serviceLabels: [] }
+      });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+
+      const result = await queryService.initStreamQuery(data, {});
+
+      expect(result.opeaPayload.context.categoryLabels).toBeUndefined();
+    });
+
+    it('falls back to the document nameEN when no EN translation row exists', async () => {
+      // An entity imported outside the write path carries nameEN with no
+      // translation document: its queries still get their category link
+      // (the analytics), while the wire is untouched.
+      const data = createMockQueryData({ context: { categoryLabel: 'Crops', serviceLabels: [] } });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // the translation lookup: nothing
+        .mockResolvedValueOnce(createMockCursor(['cat-2'])) // the nameEN fallback: found
+        .mockResolvedValueOnce(createMockCursor([])); // the services lookup: nothing
+
+      const result = await queryService.initStreamQuery(data, {});
+
+      // The query document keeps its category link...
+      const savedDoc = mockQueriesCollection.save.mock.calls[0][0];
+      expect(savedDoc.categoryId).toBe('cat-2');
+      // ...and the wire still carries exactly what the client sent.
+      expect(result.opeaPayload.context.categoryLabel).toBe('Crops');
+    });
+
+    it('falls back to the service nameEN for the LINK when no EN translation row exists', async () => {
+      // The same asymmetry the category fallback fixed: an entity
+      // imported outside the write path carries nameEN with no
+      // translation document. Its queries lost their service link while
+      // identical categories kept theirs. The fallback feeds the query
+      // RECORD only — the wire still carries exactly what the client
+      // sent.
+      const data = createMockQueryData({ context: { categoryLabel: null, serviceLabels: ['Tomato'] } });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // the translation lookup: nothing
+        .mockResolvedValueOnce(createMockCursor(['svc-9'])); // the nameEN fallback: found
+
+      await queryService.initStreamQuery(data, {});
+
+      const savedDoc = mockQueriesCollection.save.mock.calls[0][0];
+      expect(savedDoc.serviceId).toContain('svc-9');
+    });
+
+    it('dedupes service ids across the translation and nameEN lookups', async () => {
+      // Two labels, one service: the first label resolves through the
+      // translation row, the second through the service's own nameEN —
+      // both land on svc-1. The query record counts the service once.
+      const data = createMockQueryData({
+        context: { categoryLabel: null, serviceLabels: ['Tomato', 'Tomato EN name'] }
+      });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([{ label: 'Tomato', serviceId: 'svc-1' }]))
+        .mockResolvedValueOnce(createMockCursor(['svc-1'])); // nameEN fallback: same service
+
+      await queryService.initStreamQuery(data, {});
+
+      const savedDoc = mockQueriesCollection.save.mock.calls[0][0];
+      expect(savedDoc.serviceId).toEqual(['svc-1']);
+    });
+
+    it('does not re-resolve the category when the request carries its own categoryId', async () => {
+      // The request names its category AND a service label: the id
+      // resolution ran the full category lookup anyway and threw its
+      // result away — one query per send for nothing.
+      const data = createMockQueryData({
+        categoryId: 'cat-own',
+        context: { categoryLabel: 'Crops', serviceLabels: ['Tomato'] }
+      });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      mockDb.query.mockResolvedValueOnce(createMockCursor([{ label: 'Tomato', serviceId: 'svc-1' }])); // services lookup only
+
+      await queryService.initStreamQuery(data, {});
+
+      // Exactly ONE resolution query ran — the services one.
+      expect(mockDb.query).toHaveBeenCalledTimes(1);
+      expect(mockDb.query.mock.calls[0][0].values[0]).toBe(mockServiceTranslationsCollection);
+      const savedDoc = mockQueriesCollection.save.mock.calls[0][0];
+      expect(savedDoc.categoryId).toBe('cat-own');
+      expect(savedDoc.serviceId).toEqual(['svc-1']);
+    });
+
+    it('resolves the ids through the ENGLISH translation the wire carries', async () => {
+      // The wire carries the EN translation — the label the corpus's
+      // chunk_labels are minted from. The document's own `nameEN` is a
+      // cached copy: an entity edited there alone leaves the two apart,
+      // and a lookup against the copy would find nothing.
+      const data = createMockQueryData({ context: { categoryLabel: 'Crops', serviceLabels: ['Tomato'] } });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor(['cat-1']))
+        .mockResolvedValueOnce(createMockCursor([{ label: 'Tomato', serviceId: 'svc-1' }]));
+
+      await queryService.initStreamQuery(data, {});
+
+      const categoryQuery = mockDb.query.mock.calls[0][0];
+      const serviceQuery = mockDb.query.mock.calls[1][0];
+      expect(categoryQuery.strings.join('?')).toContain('translation ==');
+      expect(categoryQuery.strings.join('?')).not.toContain('nameEN');
+      expect(categoryQuery.values[0]).toBe(mockServiceCategoryTranslationsCollection);
+      expect(serviceQuery.strings.join('?')).not.toContain('nameEN');
+      expect(serviceQuery.values[0]).toBe(mockServiceTranslationsCollection);
     });
 
     it('should preserve null categoryLabel (no "General" default) when categoryLabel is null', async () => {

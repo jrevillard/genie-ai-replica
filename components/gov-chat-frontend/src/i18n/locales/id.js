@@ -1387,6 +1387,14 @@ export default {
     configMismatchWarning:
       'Ketidakcocokan konfigurasi: {warnings}. Silakan periksa konfigurasi Bantuan Cepat dan hierarki pengetahuan.',
     categoryNotFound: 'Kategori "{label}" tidak ditemukan dalam hierarki pengetahuan',
+    quickHelpLabelGone:
+      'Masalah konfigurasi: label "{labels}" tidak lagi ada dalam hierarki pengetahuan. Tombol ini tidak dapat digunakan sampai konfigurasinya diperbarui.',
+    quickHelpCategoryGone:
+      'Masalah konfigurasi: kategori tombol ini tidak lagi ada dalam hierarki pengetahuan. Tombol ini tidak dapat digunakan sampai konfigurasinya diperbarui.',
+    quickHelpScopeUnavailable:
+      'Masalah konfigurasi: hierarki pengetahuan tidak dapat dimuat, sehingga cakupan tombol ini tidak dapat diverifikasi. Tombol ini tidak dapat digunakan sampai hierarki tersedia.',
+    scopeNotNameable:
+      'Masalah konfigurasi: cakupan yang dipilih tidak memiliki nama Inggris dalam hierarki pengetahuan, sehingga cakupan kueri tidak dapat ditentukan. Kueri tidak dikirim.',
     serviceLabelMismatch: 'Layanan "{label}" menggunakan label UI yang mungkin tidak cocok dengan hierarki pengetahuan',
     noFilterWarning: 'Tidak ada filter konteks aktif — kueri akan tidak difilter.',
     placeholder: 'Ketik pertanyaan Anda di sini...',

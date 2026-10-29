@@ -108,7 +108,7 @@ document — it goes into the `analytics` collection (see
 | `_key` | string | UUID |
 | `catCode` | string | optional slug, e.g. `cat1` |
 | `order` | int | display order |
-| `nameEN` | string | **Source of truth** — what the RAG pipeline reads |
+| `nameEN` | string | Required English field. The write path seeds the `EN` translation from it, and the RAG pipeline filters on that translation. |
 
 Description text is **not** stored on the category doc; it lives in the
 `serviceCategoryTranslations` collection (one row per language).
@@ -118,7 +118,7 @@ Description text is **not** stored on the category doc; it lives in the
 | Field | Type | Notes |
 |---|---|---|
 | `_key` | string | UUID |
-| `nameEN` | string | Source of truth |
+| `nameEN` | string | Required English field; seeds the `EN` translation the RAG pipeline filters on |
 | `categoryId` | string | FK → serviceCategories (snapshot at creation; ordering lives on the edge) |
 
 Ordering of services **within** a category lives on the

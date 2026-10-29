@@ -259,12 +259,52 @@ describe('ServiceCategoryService', () => {
   describe('getAllCategoriesWithServices', () => {
     it('should return categories with services', async () => {
       mockDb.query.mockResolvedValue(
-        createMockCursor([{ catKey: 'cat-1', catCode: 'taxes', name: 'Taxes', children: ['Tax Filing'] }])
+        createMockCursor([
+          {
+            catKey: 'cat-1',
+            catCode: 'taxes',
+            name: 'Impuestos',
+            nameEN: 'Taxes',
+            children: [{ name: 'Declaración de impuestos', nameEN: 'Tax Filing' }]
+          }
+        ])
       );
 
       const result = await service.getAllCategoriesWithServices('en');
       expect(result).toHaveLength(1);
-      expect(result[0].children).toEqual(['Tax Filing']);
+      // Both spellings survive the round trip: the localized name the UI
+      // displays, and the ENGLISH one the query wire speaks. They are
+      // different strings on purpose — a projection that carried one for
+      // the other would look right with equal names.
+      expect(result[0].name).toBe('Impuestos');
+      expect(result[0].nameEN).toBe('Taxes');
+      expect(result[0].children).toEqual([{ name: 'Declaración de impuestos', nameEN: 'Tax Filing' }]);
+    });
+
+    it('publishes both spellings — the EN translation beside the localized name', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('done'));
+      await service.getAllCategoriesWithServices('fr').catch(() => {});
+
+      const queryArg = mockDb.query.mock.calls[0][0];
+      // arangojs 8 builds a LAZY aql object ({_aql, strings, values}) — the
+      // query string only exists when a driver serializes it. The static
+      // template parts carry everything structural this test asserts on.
+      const text = queryArg.strings.join('|');
+      // The EN translation is selected for the category AND for every
+      // service: the corpus's chunk_labels carry the EN translation, so the
+      // tree must publish it — that is the value the query wire speaks.
+      const enSelections = (text.match(/'en'/g) || []).length;
+      expect(enSelections).toBeGreaterThanOrEqual(2);
+      // Both levels project the pair: `name` (display) and `nameEN` (wire).
+      const dualSpellings = (text.match(/RETURN\s*\{[^}]*name:\s*\w+[^}]*nameEN/g) || []).length;
+      expect(dualSpellings).toBeGreaterThanOrEqual(2);
+      // The projection names the EN TRANSLATION on both sides — the
+      // variable that carries it, not a literal and not the localized
+      // one. `nameEN: null` and `nameEN: serviceTranslation` both leave
+      // the corpus vocabulary empty while every pattern above still
+      // matches, so the shape alone does not prove the value.
+      expect(text).toMatch(/name:\s*categoryTranslation,\s*nameEN:\s*categoryTranslationEN/);
+      expect(text).toMatch(/name:\s*serviceTranslation,\s*nameEN:\s*serviceTranslationEN/);
     });
 
     it('should throw on database error', async () => {

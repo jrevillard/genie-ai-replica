@@ -110,6 +110,13 @@ overrides:
     justification: Top-n filtering (reranker) — upstream lacks this field. Reranker returns top-n results after scoring.
     added_in: v1.3
     last_validated: v1.5
+  - override: core.genieai_api_protocol.RequestContext.categoryLabel
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Upstream RequestContext declares categoryLabels only; Pydantic's extra='ignore' default drops the singular categoryLabel the backend sends and chatqna reads, so category-level filtering never reached the retriever.
+    added_in: v1.5
+    last_validated: v1.5
+    test: tests/test_request_context.py
   - override: build-patches.docarray_alias_shim
     disposition: re-graft-to-new-API
     owner: genie-ai

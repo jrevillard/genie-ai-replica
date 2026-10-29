@@ -1852,6 +1852,81 @@ class TestFetchAllLabels:
         assert "Schools" in labels
 
     @pytest.mark.asyncio
+    async def test_the_labels_are_the_english_spelling_not_the_localized_name(self):
+        """The taxonomy is the vocabulary every chunk_label is minted from.
+
+        It must read the EN translation the tree publishes beside the
+        localized name — not the localized name, which only happens to be
+        English while the fetch carries no locale parameter.
+        """
+        taxonomy = [
+            {
+                "catKey": "2",
+                "name": "Cultivos",
+                "nameEN": "Crops",
+                "children": [{"name": "Tomate", "nameEN": "Tomato"}],
+            }
+        ]
+
+        labels = await _fetch_labels(taxonomy)
+
+        assert labels == ["Crops", "Tomato"]
+
+    @pytest.mark.asyncio
+    async def test_a_legacy_payload_without_the_english_field_falls_back_to_the_name(self):
+        """A backend older than the both-spellings tree publishes no nameEN.
+
+        Its `name` at the default locale IS the English translation, so the
+        fallback is the same vocabulary.
+        """
+        taxonomy = [
+            {"name": "Healthcare", "children": ["Hospitals", {"name": "Clinics"}]},
+        ]
+
+        labels = await _fetch_labels(taxonomy)
+
+        assert labels == ["Healthcare", "Clinics", "Hospitals"]
+
+    @pytest.mark.asyncio
+    async def test_a_category_without_any_name_does_not_cost_the_whole_vocabulary(self):
+        """A category that carries neither spelling is malformed, not fatal.
+
+        It cannot be named, but the categories around it still are a
+        vocabulary — losing all of them would label every chunk with
+        nothing at all.
+        """
+        taxonomy = [
+            {"catKey": "1", "children": [{"name": "Births", "nameEN": "Births"}]},
+            {
+                "catKey": "2",
+                "name": "Crops",
+                "nameEN": "Crops",
+                "children": [{"name": "Tomato", "nameEN": "Tomato"}],
+            },
+        ]
+
+        labels = await _fetch_labels(taxonomy)
+
+        assert "Births" in labels
+        assert "Tomato" in labels
+
+    @pytest.mark.asyncio
+    async def test_a_nameless_category_does_not_borrow_the_previous_category_name(self):
+        """A category the payload does not name keeps its own (empty) group.
+
+        Its services are a group of their own — they are not filed under
+        the name of the category that happens to precede them.
+        """
+        taxonomy = [
+            {"catKey": "1", "name": "Crops", "nameEN": "Crops", "children": []},
+            {"catKey": "2", "children": [{"name": "Tomato", "nameEN": "Tomato"}]},
+        ]
+
+        labels = await _fetch_labels(taxonomy)
+
+        assert labels == ["Tomato", "Crops"]
+
+    @pytest.mark.asyncio
     async def test_returns_empty_on_error(self):
         dp = create_dataprep()
 

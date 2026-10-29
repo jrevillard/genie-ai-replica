@@ -115,6 +115,139 @@ class TestInvokeLegSpan:
         assert captured["graph_name"] == "OKF_x_v1"
 
 
+class TestPerGraphCandidateCap:
+    """Story 1.5 tiered option-(d) caps (review 2026-10-29 round 3): the
+    per-graph cap must pre-truncate each leg's candidate list BEFORE cross-
+    graph fusion (Level-2) — without that tier one large graph floods fusion
+    up to the global cap and crowds every other graph out. The global cap
+    (target_k in invoke_fanout) still applies on top."""
+
+    @staticmethod
+    def _per_graph_counts(fused):
+        counts = {}
+        for item in fused:
+            graph = item["doc"].id.rsplit("-", 1)[0]
+            counts[graph] = counts.get(graph, 0) + 1
+        return counts
+
+    async def _fanout(self, per_graph_cap, global_cap, leg_sizes, k=10):
+        """invoke_fanout through the REAL _invoke_leg (stubbed extraction,
+        routing skipped — no embedding), with both cap knobs patched."""
+        import retriever.genieai_retriever_arangodb as mod
+
+        async def fake_extract(self, **kwargs):
+            n = leg_sizes[kwargs["graph_name"]]
+            return [{"doc": _StubDoc(f"{kwargs['graph_name']}-{i}", {}), "score": 0.0} for i in range(n)]
+
+        stub = type("StubRetriever", (), {"_extract_for_graph": fake_extract})()
+        input = MagicMock()
+        input.embedding = None  # routing skipped → full carrier
+        input.k = k
+        with (
+            patch("tracing.get_tracer") as mock_tracer,
+            patch.object(mod, "FANOUT_CANDIDATE_CAP_PER_GRAPH", per_graph_cap),
+            patch.object(mod, "FANOUT_CANDIDATE_CAP_GLOBAL", global_cap),
+        ):
+            mock_tracer.return_value.start_span.return_value = MagicMock()
+            fused = await mod.invoke_fanout(stub, input, {"text": "q"}, ["GRAPH", "OKF_a_v1", "OKF_b_v1"])
+        return fused
+
+    async def test_leg_hits_precapped_per_graph_before_fusion(self):
+        # per-graph 2 binds (global 200 does not): each leg may contribute at
+        # most 2 candidates → fused 6, not the uncapped 13.
+        fused = await self._fanout(2, 200, {"GRAPH": 5, "OKF_a_v1": 4, "OKF_b_v1": 4})
+        assert len(fused) == 6
+        counts = self._per_graph_counts(fused)
+        assert all(n <= 2 for n in counts.values()), counts
+
+    async def test_global_cap_still_applies_above_per_graph_cap(self):
+        # per-graph 50 is generous (nothing truncated), global 3 binds:
+        # target_k = min(k=10, 3) → fused 3.
+        fused = await self._fanout(50, 3, {"GRAPH": 5, "OKF_a_v1": 5})
+        assert len(fused) == 3
+
+    async def test_invoke_leg_returns_precapped_list(self):
+        """Direct pin on the per-graph boundary: `_invoke_leg` returns the
+        top-ranked per-graph slice, and returns shorter lists untouched."""
+        import retriever.genieai_retriever_arangodb as mod
+        from retriever.genieai_retriever_arangodb import _invoke_leg
+
+        async def fake_extract(self, **kwargs):
+            n = kwargs["input_dict"].get("n", 5)
+            return [{"doc": _StubDoc(f"c{i}", {}), "score": 0.0} for i in range(n)]
+
+        stub = type("StubRetriever", (), {"_extract_for_graph": fake_extract})()
+        with (
+            patch.object(mod, "FANOUT_CANDIDATE_CAP_PER_GRAPH", 2),
+            patch("tracing.get_tracer") as mock_get_tracer,
+        ):
+            mock_get_tracer.return_value.start_span.return_value = MagicMock()
+            result = await _invoke_leg(stub, graph_name="OKF_x_v1", input_dict={"input": "q"}, input=None, query="q")
+        assert [item["doc"].id for item in result] == ["c0", "c1"]  # top-ranked kept
+
+        with (
+            patch.object(mod, "FANOUT_CANDIDATE_CAP_PER_GRAPH", 2),
+            patch("tracing.get_tracer") as mock_get_tracer,
+        ):
+            mock_get_tracer.return_value.start_span.return_value = MagicMock()
+            result_under = await _invoke_leg(
+                stub, graph_name="OKF_x_v1", input_dict={"input": "q", "n": 1}, input=None, query="q"
+            )
+        assert [item["doc"].id for item in result_under] == ["c0"]  # below cap → untouched
+
+
+class TestDedicatedExtractionPool:
+    """DW-424 (review 2026-10-29 round 3): a timed-out leg is ABANDONED and
+    its thread keeps running — that slot must come out of the dedicated
+    bounded pool (okf-extract), never the shared default executor that every
+    other to_thread user in the process depends on. The leg runner and the
+    routing probes both route there."""
+
+    async def test_invoke_leg_runs_on_the_dedicated_pool(self):
+        import threading
+
+        from retriever.genieai_retriever_arangodb import _invoke_leg
+
+        seen = {}
+
+        async def fake_extract(self, **kwargs):
+            seen["thread"] = threading.current_thread().name
+            return [{"doc": "hit"}]
+
+        stub = type("StubRetriever", (), {"_extract_for_graph": fake_extract})()
+        with patch("tracing.get_tracer") as mock_get_tracer:
+            mock_get_tracer.return_value.start_span.return_value = MagicMock()
+            result = await _invoke_leg(stub, graph_name="OKF_x_v1", input_dict={"input": "q"}, input=None, query="q")
+        assert result == [{"doc": "hit"}]
+        assert seen["thread"].startswith("okf-extract"), seen["thread"]
+
+    async def test_route_probes_run_on_the_dedicated_pool(self):
+        import threading
+
+        from retriever.genieai_retriever_arangodb import _route_graphs
+
+        seen = []
+
+        class ProbeThreadDb:
+            def __init__(self):
+                self.aql = self
+
+            def execute(self, aql, bind_vars=None):
+                kind = "heads" if "okf_repositories" in aql else "probe"
+                seen.append((kind, threading.current_thread().name))
+                if kind == "heads":
+                    return iter([])  # the head fetch runs inline on the loop
+                return iter([0.9, 0.9, 0.9])
+
+        stub = type("StubRetriever", (), {"db": ProbeThreadDb()})()
+        with patch("tracing.get_tracer") as mock_tracer:
+            mock_tracer.return_value.start_span.return_value = MagicMock()
+            routed, degraded = await _route_graphs(stub, ["GRAPH", "OKF_alphabet_v1", "OKF_kenya_v1"], [0.1] * 8)
+        assert degraded is False
+        probe_threads = [name for kind, name in seen if kind == "probe"]
+        assert probe_threads and all(name.startswith("okf-extract") for name in probe_threads)
+
+
 class TestLegacyFallbackRefusal:
     """The no-carrier tail of invoke() (`_legacy_single_graph_or_refuse`):
     run the legacy extraction against ARANGO_GRAPH_NAME — or refuse it when

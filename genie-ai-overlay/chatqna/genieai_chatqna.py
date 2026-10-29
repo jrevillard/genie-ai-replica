@@ -1213,7 +1213,16 @@ def _is_usage_only_frame(content: str) -> bool:
     # PRESENT, choices merely falsy) swallowed legitimate answers — a model
     # asked for JSON can return {"usage": "5 kWh", ...}: a usage STRING with
     # no choices key at all (review 2026-10-29).
-    return isinstance(obj, dict) and isinstance(obj.get("usage"), dict) and obj.get("choices") == []
+    # That tightening stays — the usage STRING case is still answer content —
+    # but some vLLM builds end the stream with a keyless frame: a usage OBJECT
+    # and NO ``choices`` key at all. That shape is transport metadata too
+    # (review 2026-10-29 round 3), so it is recognized alongside the
+    # choices==[] frame; any PRESENT choices key must still be exactly [].
+    return (
+        isinstance(obj, dict)
+        and isinstance(obj.get("usage"), dict)
+        and (obj.get("choices") == [] or "choices" not in obj)
+    )
 
 
 def _stream_answer_text(json_data: object) -> str | None:
@@ -1999,7 +2008,10 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
 
             _base_mode = inputs.get("search_start", "chunk")
             inputs["search_start"] = encode_filter_labels(_base_mode, _filter_labels)
-        elif _filter_labels or _graph_names or _exclude_legacy:
+        # DW-430 (review 2026-10-29 round 3): a sticky-only carrier (sticky
+        # set, labels/graphs/no_legacy all falsy) must still encode — the
+        # sticky⊆authorized invariant alone does not put the set on the wire.
+        elif _filter_labels or _graph_names or _exclude_legacy or _sticky_graph_names:
             from core.label_contract import encode
 
             _base_mode = inputs.get("search_start", "chunk")
@@ -2978,8 +2990,13 @@ class ChatQnAService:
                     dup_text = text_by_doc.get(doc_id_by_orchestrator)
                     if dup_text:
                         for existing in source_documents_formatted:
-                            if existing.get("document_id") == file_id and "text" in existing:
-                                existing["text"] = f"{existing['text']}\n{dup_text}"
+                            if existing.get("document_id") == file_id:
+                                # Merge into the surviving doc's context; when the
+                                # surviving doc has no text yet (its own chunk
+                                # carried none in the verdict), the duplicate's
+                                # text must still land — not be dropped (review
+                                # 2026-10-29 round 3).
+                                existing["text"] = f"{existing['text']}\n{dup_text}" if "text" in existing else dup_text
                                 break
                 continue
 

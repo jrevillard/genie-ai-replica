@@ -21,10 +21,14 @@ const appConfig = require('../config/appConfig');
 const CRAWL_KILL_WAIT_MS = appConfig.crawler?.killWaitMs || 30000;
 const CRAWL_KILL_POLL_MS = 500;
 
-// Definitive arangojs not-found (ArangoError 404 / 1202 "document not found").
-// Distinct from transient connection errors, which must not be mistaken for it.
-const isDocumentNotFound = (e) =>
-  !!e && (e.statusCode === 404 || e.errorNum === 1202 || /not found/i.test(e.message || ''));
+// Definitive document absence, by the CANONICAL classifier (shared/lib's
+// _isExpectedAbsence: ArangoError 1202/1204, or the exact cursor 'no match'
+// message) plus the arangojs HTTP 404 shape (err.statusCode). The old loose
+// /not found/i message test ALSO matched a MISSING COLLECTION (errorNum 1203,
+// "collection or view not found") and gateway route-not-found — infrastructure
+// faults that must be rethrown, not treated as "job gone" (review 2026-10-29
+// round 3; mirrors crawlWorker.js).
+const isDocumentNotFound = (e) => !!e && (dbService._isExpectedAbsence(e) || e.statusCode === 404);
 
 class FileService {
   constructor() {

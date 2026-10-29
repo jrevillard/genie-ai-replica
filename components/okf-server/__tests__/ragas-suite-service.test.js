@@ -256,6 +256,15 @@ beforeEach(() => {
 });
 
 describe('beginSuiteGeneration / getSuite', () => {
+  // Egress guard (review 2026-10-29 wave 2): `sidecar()` takes a fixed-base
+  // relative path at every call site — an absolute URL (the canonical SSRF
+  // target: the link-local metadata address) must be rejected before any
+  // fetch leaves the process.
+  it('sidecar() rejects a non-relative path before any fetch', async () => {
+    await expect(svc.sidecar('http://169.254.169.254/latest/meta-data')).rejects.toThrow(/rejected non-relative path/);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('generates via the sidecar and persists a ragas_suite with new-N entries', async () => {
     const begun = await svc.beginSuiteGeneration(
       'me',

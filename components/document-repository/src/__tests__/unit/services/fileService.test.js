@@ -6,7 +6,23 @@ jest.mock(
   '../../../../shared-lib',
   () => ({
     logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
-    dbService: { getConnection: jest.fn() }
+    // Canonical absence classifier (review 2026-10-29 round 3): fileService's
+    // isDocumentNotFound delegates to dbService._isExpectedAbsence, so the
+    // mock carries the real semantics — a bare jest.fn() would return
+    // undefined and silently shift the not-found boundary.
+    dbService: {
+      getConnection: jest.fn(),
+      _isExpectedAbsence: (error) => {
+        if (!error) return false;
+        if (error.errorNum === 1202 || error.errorNum === 1204) return true;
+        if (error.errorNum != null) return false;
+        return (
+          String(error.message || '')
+            .trim()
+            .toLowerCase() === 'no match'
+        );
+      }
+    }
   }),
   { virtual: true }
 );
@@ -513,6 +529,37 @@ describe('fileService', () => {
       fileService.getDb = jest.fn().mockResolvedValue(mockDb);
 
       await expect(fileService._waitCrawlStopped('k1')).resolves.toBe(true);
+    });
+
+    it('_waitCrawlStopped: a missing collection (1203) is a real fault — rethrown, NOT absence', async () => {
+      // The old loose /not found/i message test classified this as "job gone"
+      // and let the delete proceed over a broken database. Canonical
+      // _isExpectedAbsence treats any errorNum other than 1202/1204 as a
+      // real fault (review 2026-10-29 round 3; mirrors crawlWorker.js).
+      const mockDb = {
+        collection: jest.fn().mockReturnValue({
+          document: jest
+            .fn()
+            .mockRejectedValue(Object.assign(new Error('collection or view not found'), { errorNum: 1203 }))
+        })
+      };
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await expect(fileService._waitCrawlStopped('k1')).rejects.toThrow('collection or view not found');
+    });
+
+    it('_waitCrawlStopped: a loose "route not found" message is NOT absence — rethrown', async () => {
+      // No errorNum, no statusCode: the exact-message rule ('no match' only)
+      // keeps gateway route-not-found out of the absence classifier (review
+      // 2026-10-29 round 3).
+      const mockDb = {
+        collection: jest.fn().mockReturnValue({
+          document: jest.fn().mockRejectedValue(new Error('gateway returned not found'))
+        })
+      };
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await expect(fileService._waitCrawlStopped('k1')).rejects.toThrow('gateway returned not found');
     });
   });
 

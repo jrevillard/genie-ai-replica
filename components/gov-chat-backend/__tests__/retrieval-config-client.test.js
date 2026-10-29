@@ -297,6 +297,45 @@ describe('retrieval-config-client (Story 1.1)', () => {
     expect(first.engaged).toBe(true);
   });
 
+  // DW-428 (review 2026-10-29 round 3): the okf-server parser folds realm
+  // ROLE NAMES that ARE scopes into the scope set (Story 6-1c group grants —
+  // a user whose only path to the role is group membership carries it in
+  // realm_access.roles). The BFF copy must see the same set, or a
+  // role-granted caller keys the shared authz cache as `@no-scopes`,
+  // colliding with every scope-less caller.
+  it('parseOkfScopes: a scope-shaped realm role lands in the parsed set', () => {
+    expect(
+      client._internals.parseOkfScopes({
+        okf_scopes: [],
+        realm_access: { roles: ['default-roles-genie', 'offline_access', 'okf:t:c:read'] }
+      })
+    ).toEqual(['okf:t:c:read']);
+  });
+
+  it('role-granted scopes share the claim-scoped cache entry and never the @no-scopes one', async () => {
+    axios.get.mockReturnValue(okfGetResponse(HYBRID_CONFIG));
+
+    const byClaim = makeBearer(['okf:t:a:read'], []);
+    const byRole = makeBearer([], ['okf:t:a:read']);
+    const noScopes = makeBearer([], []);
+
+    await client.getRetrievalConfig(byClaim);
+    await client.getRetrievalConfig(byRole); // same effective scopes → cache hit
+    await client.getRetrievalConfig(noScopes); // distinct key — no cross-user bleed
+
+    expect(axios.get).toHaveBeenCalledTimes(2);
+  });
+
+  // Egress guard (review 2026-10-29 wave 2): fetchUpstream takes a fixed-base
+  // relative path — an absolute URL (the canonical SSRF target: the
+  // link-local metadata address) must be rejected before any HTTP attempt.
+  it('fetchUpstream rejects a non-relative path before any HTTP attempt', async () => {
+    await expect(
+      client._internals.fetchUpstream('http://169.254.169.254/latest/meta-data', 'Bearer x')
+    ).rejects.toThrow(/rejected non-relative path/);
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
   // OKF feature flag (2026-10-21, merge prep): OKF_ENABLED=0 parks the OKF
   // stack — the client resolves the legacy default DIRECTLY, no connection
   // attempt, no warn noise. With the okf-server parked every caller would

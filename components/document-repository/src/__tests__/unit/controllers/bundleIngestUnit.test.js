@@ -37,6 +37,7 @@ describe('_ingestFileById graph_name threading (Story 2.5 AC5)', () => {
     labels: ['t:tenant1'],
     storage_path: '/uploads/file-1.md',
     graph_name: 'OKF_a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    repo_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     dataprep: { status: 'Pending', retract_date: null }
   };
 
@@ -50,13 +51,16 @@ describe('_ingestFileById graph_name threading (Story 2.5 AC5)', () => {
     expect(axios.post).toHaveBeenCalledTimes(1);
     const payload = axios.post.mock.calls[0][1];
     expect(payload.graphName).toBe('OKF_a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+    // DW-442 (review 2026-10-29 round 3): the repo id rides the payload so
+    // dataprep's OKF completion routing does not have to guess it
+    expect(payload.repoId).toBe('a1b2c3d4-e5f6-7890-abcd-ef1234567890');
     expect(payload.fileId).toBe('file-1');
     expect(payload.fileName).toBe('bundle.md');
     expect(payload.fileBase64).toBe('YjY0');
   });
 
   it('sends graphName null for legacy free-form files (backward compat — existing routes unaffected)', async () => {
-    const legacyFile = { ...okfFile, graph_name: null, labels: ['Healthcare'] };
+    const legacyFile = { ...okfFile, graph_name: null, repo_id: null, labels: ['Healthcare'] };
     fileController._getFileBase64 = jest.fn().mockResolvedValue({ file: legacyFile, base64String: 'YjY0' });
     axios.post.mockResolvedValue({ data: { success: true } });
 
@@ -64,6 +68,7 @@ describe('_ingestFileById graph_name threading (Story 2.5 AC5)', () => {
 
     const payload = axios.post.mock.calls[0][1];
     expect(payload.graphName).toBeNull();
+    expect(payload.repoId).toBeNull();
   });
 
   it('does not re-ingest an already-ingested file', async () => {

@@ -1924,18 +1924,18 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   Default: 3000. Used by: backend. Compose: yes.
 
 # --- dataprep OKF labeling (client_credentials service account) ---
-# OKF_LLM_RETRY_ATTEMPTS=3
-#   Default: 3. Used by: dataprep-arango-service. Compose: yes.
-# OKF_LLM_RETRY_BASE_MS=500
-#   Default: 500. Used by: dataprep-arango-service. Compose: yes.
-# OKF_LLM_RETRY_MAX_MS=8000
-#   Default: 8000. Used by: dataprep-arango-service. Compose: yes.
-# OKF_LLM_STORM_COOLDOWN_S=2
-#   Default: 2. Used by: dataprep-arango-service. Compose: yes.
-# OKF_LLM_STORM_COOLDOWN_MAX_S=30
-#   Default: 30. Used by: dataprep-arango-service. Compose: yes.
-# OKF_LLM_ROUND2_DELAY_S=10
-#   Default: 10. Used by: dataprep-arango-service. Compose: yes.
-# EMBEDDING_LABEL_THRESHOLD=0.35
-#   Default: 0.35 (cosine floor for chunk-label acceptance). Used by:
+# OKF_LLM_RETRY_ATTEMPTS=5
+#   Default: 5. Used by: dataprep-arango-service. Compose: yes.
+# OKF_LLM_RETRY_BASE_MS=2000
+#   Default: 2000. Used by: dataprep-arango-service. Compose: yes.
+# OKF_LLM_RETRY_MAX_MS=90000
+#   Default: 90000. Used by: dataprep-arango-service. Compose: yes.
+# OKF_LLM_STORM_COOLDOWN_S=20
+#   Default: 20. Used by: dataprep-arango-service. Compose: yes.
+# OKF_LLM_STORM_COOLDOWN_MAX_S=120
+#   Default: 120. Used by: dataprep-arango-service. Compose: yes.
+# OKF_LLM_ROUND2_DELAY_S=45
+#   Default: 45. Used by: dataprep-arango-service. Compose: yes.
+# EMBEDDING_LABEL_THRESHOLD=0.75
+#   Default: 0.75 (cosine floor for chunk-label acceptance). Used by:
 #   dataprep-arango-service. Compose: yes.

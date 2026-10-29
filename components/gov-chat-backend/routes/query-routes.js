@@ -902,6 +902,14 @@ module.exports = (queryService) => {
       res.status(201).json(query);
     } catch (error) {
       logger.error(`Error creating query: ${error.message}`, { stack: error.stack });
+      // Review 2026-10-29 round 3: a bearer failure caught while resolving the
+      // OKF fan-out posture (OkfAuthzUnauthorizedError, statusCode 401)
+      // propagates — the same error already maps to 401 on the streaming path;
+      // wrapping it in a 500 here mislabelled an invalid request as a server
+      // fault.
+      if (error.statusCode === 401) {
+        return res.status(401).json({ error: 'UNAUTHENTICATED', message: error.message });
+      }
       res.status(500).json({ message: error.message });
     }
   });

@@ -1751,14 +1751,23 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 logger.warning(f"Bundle-log URL resolve failed for concept {file_id}: {e}")
             return None  # transient — NOT cached (P1a)
 
+    # Invariant: a value is a doc-repo file_id only when it matches the
+    # TIMESTAMP SHAPE of doc-repo ids — ``${Date.now()}_${uuidv4().split('-')[0]}``
+    # (components/document-repository/src/utils/fileUtils.js), e.g.
+    # '1774623200119_e9887fa8'. The old first-char-digit check misclassified
+    # concept ids that BEGIN with a digit ('3d_printing_guide') as file_ids,
+    # silently skipping their bundle-log mirror (review 2026-10-29 round 3).
+    _FILE_ID_SHAPE_RE = re.compile(r"^\d+_[0-9a-f]{8,}$")
+
     def _is_concept_id(self, value: str) -> bool:
-        """Heuristic: an OKF concept id is a non-UUID bare id (e.g.
-        'ecitizen_digital_payments', 'index'); a doc-repo file_id is a long
-        numeric timestamp. Anything matching the timestamp shape is treated as
-        a file_id (no mirror); bare ids are concept ids (mirror)."""
+        """Heuristic: an OKF concept id is a bare id (e.g.
+        'ecitizen_digital_payments', 'index', '3d_printing_guide'); a doc-repo
+        file_id matches the timestamped shape above. Anything matching that
+        shape is treated as a file_id (no mirror); every other value —
+        including digit-leading bare ids — is a concept id (mirror)."""
         if not value:
             return False
-        return not value[0].isdigit()
+        return not self._FILE_ID_SHAPE_RE.match(value)
 
     def _initialize_client(self):
         """Override the OPEA parent's DB selection with the GENIE convention.
@@ -1854,7 +1863,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             return None
 
     async def _update_doc_status(
-        self, file_id: str, status: str, chunk_count: int = None, concept_id: str = None, error: str = None
+        self,
+        file_id: str,
+        status: str,
+        chunk_count: int = None,
+        concept_id: str = None,
+        error: str = None,
+        okf_graph_hint: bool | None = None,
     ):
         """Updates file status. For an OKF CONCEPT (concept_id set — content-only
         chunking, no doc-repo files doc), the completion callback routes to the OKF
@@ -1862,7 +1877,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         ingest), it routes to the Document Repository as before (Spec 4.1/6.1).
         ``error``: the failure reason, carried on 'Ingestion Error' callbacks so the
         row's last_error names the CAUSE (failure-clarity, David 2026-09-09 — a
-        generic wrapper left the user blind to what went wrong)."""
+        generic wrapper left the user blind to what went wrong).
+        ``okf_graph_hint``: caller-supplied routing for calls outside any ingest
+        context (the retract path) — True/False routes by the request's own OKF_
+        graph marker; left as None the legacy singleton fallback applies."""
         headers = await self._service_headers()
         if not headers:
             if logflag:
@@ -1877,6 +1895,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         if ctx is not None:
             current_repo = ctx.get("repo_id")
             okf_graph_hint = False
+        elif okf_graph_hint is not None:
+            # Caller-supplied routing (retract path, review 2026-10-29 round
+            # 3): route by the request's own OKF_ graph marker. The singleton
+            # fallback below may hold a CONCURRENT ingest's repo under
+            # DATAPREP_INGEST_CONCURRENCY > 1, and a retract carries no
+            # repo_id of its own (a graph name is a name, not an identity
+            # field), so none is claimed.
+            current_repo = None
         else:
             current_repo = getattr(self, "_current_repo_id", None)
             okf_graph_hint = getattr(self, "_current_okf_graph_hint", False)
@@ -1932,13 +1958,23 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     ) as session,
                     session.patch(url, json=payload, headers=headers) as response,
                 ):
-                    if response.status != 200:
-                        logger.error(f"Failed to update status {status} for {file_id}: {await response.text()}")
-                    return
+                    if response.status == 200:
+                        return
+                    # Invariant: only the documented success status ends the
+                    # loop. A non-200 (5xx/429 hiccup) used to `return` here —
+                    # only connection errors ever retried — so one transient
+                    # gateway failure discarded the whole ~30-min ingest: the
+                    # row never reached 'indexed' and the worker re-billed it
+                    # in full (review 2026-10-29 round 3). Fall through and
+                    # retry like any other failure.
+                    logger.error(
+                        f"Failed to update status {status} for {file_id} "
+                        f"(attempt {attempt}/3): HTTP {response.status}: {await response.text()}"
+                    )
             except Exception as e:
                 logger.error(f"Error calling status API (attempt {attempt}/3) for {file_id}: {e}")
-                if attempt < 3:
-                    await asyncio.sleep(min(2 ** (attempt - 1), 8))
+            if attempt < 3:
+                await asyncio.sleep(min(2 ** (attempt - 1), 8))
 
     async def _write_ingestion_log(self, file_id: str, level: str, stage: str, message: str):
         """Writes human-readable logs to the Document Repository (Spec 5.2/6.2).
@@ -3472,17 +3508,21 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             dropped = [l for l in labels_list if l not in scope]
             labels_list = [l for l in labels_list if l in scope]
 
-        # Preserve ACL labels (t:<tenant>, r:<repo_id>, d:<domain>) carried in
-        # file_labels. These are access-control tokens, NOT taxonomy entries:
-        # never taxonomy-resolved or scoped — propagated verbatim so the
-        # retriever can enforce per-tenant/repo/domain isolation (OKF gap G4,
-        # Story 2.6a). Unioned AFTER the scope filter (ACL labels are
-        # authoritative, not subject to taxonomy scoping) and de-duplicated.
+        # Preserve ACL labels (t:<tenant>, r:<repo_id>, d:<domain>) AND the
+        # minted version tags (okf:v{N}) carried in file_labels. These are
+        # access-control/version tokens, NOT taxonomy entries: never
+        # taxonomy-resolved or scoped — propagated verbatim so the retriever
+        # can enforce per-tenant/repo/domain isolation (OKF gap G4, Story
+        # 2.6a) and version pinning (review P7). Unioned AFTER the scope
+        # filter (authoritative, not subject to taxonomy scoping) and
+        # de-duplicated. The DEFAULT (LLM) path previously preserved only the
+        # ACL tokens and dropped the version tag — the exact P7 defect the
+        # embedding/bm25 paths had already fixed (round-3 review 2026-10-29).
         _acl_preserved: list[str] = []
         if file_labels:
             _existing = set(labels_list)
             for _l in file_labels:
-                if _is_acl_label(_l) and _l not in _existing:
+                if (_is_acl_label(_l) or (isinstance(_l, str) and re.match(r"^okf:v\d+$", _l))) and _l not in _existing:
                     labels_list.append(_l)
                     _existing.add(_l)
                     _acl_preserved.append(_l)
@@ -4011,6 +4051,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # line injects it (see OVERRIDES.yaml). The ArangoDB writes
                     # go through langchain-arangodb / py-arango, which carry
                     # their own socket timeouts and take no HTTP budget.
+                    # Zero-batch ingest (documents_to_process == []): no batch
+                    # tasks are scheduled, so `results` must be bound anyway —
+                    # left unbound, the totals below raised UnboundLocalError
+                    # and the generic handler falsely marked the file
+                    # 'Ingestion Error' and auto-retracted an honest empty run
+                    # (review 2026-10-29 round 3).
+                    results = []
                     if tasks:
                         results = await _await_with_heartbeat(
                             tasks,
@@ -4243,6 +4290,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         col_has_source = f"{graph_name}_HAS_SOURCE"
         col_links_to = f"{graph_name}_LINKS_TO"
 
+        # Routing identity from THIS request (review 2026-10-29 round 3): the
+        # OKF_ prefix is the same routing marker the ingest path uses — the
+        # completion callback belongs to the OKF control plane. Deriving it
+        # here (instead of letting _update_doc_status fall back to the
+        # singleton attrs) keeps a concurrent ingest from routing this
+        # retract's 'Retracted' callbacks at the wrong repo
+        # (DATAPREP_INGEST_CONCURRENCY > 1).
+        okf_graph_hint = graph_name.startswith("OKF_")
+
         try:
             # ----------------------------------------------------------
             # STEP 1: Identify CHUNKS (Sources)
@@ -4286,7 +4342,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 )
                 logger.info(log_msg)
                 await self._write_ingestion_log(file_id, "INFO", "Retract", log_msg)
-                await self._update_doc_status(file_id, "Retracted")
+                await self._update_doc_status(file_id, "Retracted", okf_graph_hint=okf_graph_hint)
                 return {"status": 200, "message": "No chunks found.", "details": {"deleted_chunks": 0}}
 
             # There IS something to retract — now, and only now, announce the
@@ -4438,7 +4494,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # ----------------------------------------------------------
             # FINAL REPORT
             # ----------------------------------------------------------
-            await self._update_doc_status(file_id, "Retracted")
+            await self._update_doc_status(file_id, "Retracted", okf_graph_hint=okf_graph_hint)
 
             final_msg = (
                 f"Retraction Complete. Deleted: {len(chunk_keys_list)} Chunks, "

@@ -15,6 +15,21 @@ const edgeService = require('../services/edge-service');
 const { authedAxios } = require('../services/service-token');
 const { getBundleFileId } = require('../workers/ingestWorker');
 const config = require('../config');
+const { timingSafeEqual } = require('node:crypto');
+
+/**
+ * Timing-safe shared-secret compare (review 2026-10-29 round 3): a plain
+ * `!==` on the internal secret leaks its bytes one guess at a time via the
+ * string-compare early exit. Length mismatch returns false WITHOUT throwing
+ * (timingSafeEqual rejects unequal lengths).
+ */
+function secretMatches(provided, expected) {
+  if (!expected || typeof provided !== 'string') return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
 
 /**
  * Bundle zip state machine (David's directive: a bundle is NEVER 'Ingested'
@@ -139,8 +154,9 @@ async function settleBundleIfComplete(repoId) {
 async function conceptStatus(req, res) {
   try {
     logger.info('INTERNAL conceptStatus hit', { concept_id: req.params.concept_id, method: req.method });
-    // Fail-closed internal auth: the shared secret must be configured AND match.
-    if (!config.internal.secret || req.get('x-okf-internal-secret') !== config.internal.secret) {
+    // Fail-closed internal auth: the shared secret must be configured AND match
+    // (timing-safe — see secretMatches above).
+    if (!secretMatches(req.get('x-okf-internal-secret') || '', config.internal.secret)) {
       return res.status(401).json({ error: 'INTERNAL_UNAUTHORIZED' });
     }
     const { concept_id } = req.params;

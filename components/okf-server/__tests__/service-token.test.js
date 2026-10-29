@@ -162,4 +162,15 @@ describe('service-token (client_credentials, cached, single-flight)', () => {
     // exactly one mint + one attempt
     expect(axios.post).toHaveBeenCalledTimes(2);
   });
+
+  test('egress guard: a non-docrepo URL is rejected BEFORE any request or mint (review 2026-10-29 wave 2)', async () => {
+    // Link-local metadata address — the canonical SSRF target. The allowlist
+    // must refuse it at the choke point, with no HTTP attempt and no
+    // service-account mint fired for a call that can never be made.
+    await expect(authedAxios.get('http://169.254.169.254/latest/meta-data')).rejects.toThrow(
+      /not the configured document repository/
+    );
+    expect(axios.get).not.toHaveBeenCalled();
+    expect(axios.post).not.toHaveBeenCalled();
+  });
 });

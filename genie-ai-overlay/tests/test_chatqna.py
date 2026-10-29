@@ -945,6 +945,35 @@ class TestAlignInputsBundledDict:
             )
         mock_contract.encode.assert_called_once_with("chunk", labels=[], graphs=["GRAPH", "OKF_a_v1"])
 
+    def test_retriever_carrier_sticky_only_encodes(self):
+        """DW-430 (review 2026-10-29 round 3): a sticky-only carrier — sticky
+        set, labels/graphs/no_legacy all empty — must reach encode with the
+        ::sticky: segment. The dispatch previously matched NEITHER branch, so
+        the continuity set was silently dropped from search_start (only the
+        retriever-side sticky⊆authorized invariant saved it from fanning
+        out)."""
+        self_mock = MagicMock()
+        self_mock.services = {"retriever_node": create_mock_service_node(FakeServiceType.RETRIEVER)}
+        llm_params = {}
+        inputs = {"text": "query", "search_start": "chunk"}
+        with (
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+            patch.dict("sys.modules", {"core.label_contract": MagicMock()}),
+        ):
+            import sys
+
+            mock_contract = sys.modules["core.label_contract"]
+            mock_contract.encode.return_value = "chunk::sticky:OKF_a_v1"
+            align_inputs(
+                self_mock,
+                inputs,
+                "retriever_node",
+                MagicMock(),
+                llm_params,
+                genie_params={"retrieval_context": {"sticky_graph_names": ["OKF_a_v1"]}},
+            )
+        mock_contract.encode.assert_called_once_with("chunk", labels=[], graphs=[], sticky=["OKF_a_v1"])
+
     def test_rerank_extracts_reranker_parameters_from_dict(self):
         """RERANK branch reads reranker_parameters from genie_params dict."""
         self_mock = MagicMock()
@@ -2702,6 +2731,49 @@ class TestAssembleSourceDocuments:
         assert grounded is True
 
     @pytest.mark.asyncio
+    async def test_duplicate_chunk_text_merges_into_benchmark_context(self):
+        """Benchmark opt-in (include_contexts): a duplicate chunk's text must
+        land on the surviving doc's context — appended to it — instead of
+        being dropped with the duplicate row, or the evaluator scores
+        context_recall against fewer contexts than the model actually saw
+        (review 2026-10-29 round 3)."""
+        svc = create_chatqna_service()
+        svc.fetch_file_metadata = AsyncMock(return_value={"labels": ["X"], "file_name": "a.pdf"})
+        result_dict = self._result_dict(
+            rerank_verdict=[
+                {"id": "d1", "text": "hives", "score": 0.95},
+                {"id": "d2", "text": "honey", "score": 0.90},  # same file f1
+            ],
+            retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
+            file_id_pairs={"d1": "f1", "d2": "f1"},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t", include_contexts=True)
+        assert [d["document_id"] for d in docs] == ["f1"]
+        assert docs[0]["text"] == "hives\nhoney"
+        assert grounded is True
+
+    @pytest.mark.asyncio
+    async def test_duplicate_chunk_text_survives_when_surviving_doc_has_no_text(self):
+        """The residual drop (review 2026-10-29 round 3): when the FIRST
+        chunk's text is absent from the verdict (text_by_doc has no entry for
+        it), the surviving doc surfaces without a text key — the duplicate's
+        text must still be attached, not silently discarded."""
+        svc = create_chatqna_service()
+        svc.fetch_file_metadata = AsyncMock(return_value={"labels": ["X"], "file_name": "a.pdf"})
+        result_dict = self._result_dict(
+            rerank_verdict=[
+                {"id": "d1", "score": 0.95},  # first chunk: no text in the verdict
+                {"id": "d2", "text": "honey", "score": 0.90},  # same file f1
+            ],
+            retrieved_docs=[{"id": "d1"}, {"id": "d2", "text": "honey"}],
+            file_id_pairs={"d1": "f1", "d2": "f1"},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t", include_contexts=True)
+        assert [d["document_id"] for d in docs] == ["f1"]
+        assert docs[0]["text"] == "honey"
+        assert grounded is True
+
+    @pytest.mark.asyncio
     async def test_not_grounded_when_reranker_rejects_all(self):
         svc = create_chatqna_service()
         svc.fetch_file_metadata = AsyncMock(return_value={"labels": ["Fruit"], "file_name": "fruit.pdf"})
@@ -2810,10 +2882,14 @@ class TestStreamWithMetadata:
             '{"id":"chatcmpl-x","object":"chat.completion.chunk","created":1,'
             '"model":"m","choices":[],"usage":{"prompt_tokens":1,"total_tokens":2}}'
         )
+        # The keyless twin (review 2026-10-29 round 3): usage OBJECT, no
+        # choices key at all — must drop the same way.
+        keyless_usage_frame = '{"id":"chatcmpl-x","usage":{"prompt_tokens":1,"total_tokens":2}}'
         body = self._make_body(
             [
                 "data: b'Real answer text.'\n\n",
                 f"data: b'{usage_frame}'\n\n",
+                f"data: b'{keyless_usage_frame}'\n\n",
                 "data: [DONE]\n\n",
             ]
         )
@@ -2833,6 +2909,13 @@ class TestStreamWithMetadata:
         assert _is_usage_only_frame("plain answer text") is False
         assert _is_usage_only_frame("{broken json") is False
         assert _is_usage_only_frame("") is False
+        # Keyless terminal frame (review 2026-10-29 round 3): some vLLM builds
+        # end with a usage OBJECT and NO choices key at all — usage-only too,
+        # or the raw JSON leaks into the answer text.
+        assert _is_usage_only_frame('{"id":"x","usage":{"total_tokens":2}}') is True
+        # The tightening holds: a usage STRING with no choices key is answer
+        # content (a model asked for JSON can return {"usage": "5 kWh"}).
+        assert _is_usage_only_frame('{"usage":"5 kWh"}') is False
 
     @pytest.mark.asyncio
     async def test_appends_done_if_missing(self):

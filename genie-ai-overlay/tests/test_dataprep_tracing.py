@@ -322,6 +322,14 @@ class TestDataprepComponentSpan:
         mock_self._log_semaphore.__aexit__ = AsyncMock(return_value=None)
 
         mock_response = AsyncMock()
+        # `async with session.patch(...) as response` yields the response's
+        # __aenter__ result, not the response itself — bind it to itself so
+        # the 200 fast path (single inject call) is what actually runs. The
+        # pre-retry code returned after ANY response, so the unbound shape
+        # never mattered; the retry-on-non-200 contract (review 2026-10-29
+        # round 3) made it visible as a 3x retry on a non-200 status mock.
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
         mock_response.status = 200
         mock_response.text = AsyncMock(return_value="OK")
 

@@ -3,6 +3,8 @@
 
 import asyncio
 import contextlib
+import contextvars
+import functools
 import inspect
 import json
 import math
@@ -57,6 +59,7 @@ from .config import (
     ARANGO_USERNAME,
     EMBEDDING_TIMEOUT,
     FANOUT_CANDIDATE_CAP_GLOBAL,
+    FANOUT_CANDIDATE_CAP_PER_GRAPH,
     FANOUT_ENABLED,
     FANOUT_MAX_GRAPHS,
     FANOUT_PER_GRAPH_TIMEOUT_MS,
@@ -103,6 +106,27 @@ from .config import (
 # bounded traversal — an overrun there must never consume the whole leg
 # timeout, which used to discard the leg's already-fused vector documents).
 TRAVERSAL_BUDGET_RESERVE_S = 0.75
+
+# DW-424 (review 2026-10-29 round 3): a timed-out fan-out leg is ABANDONED
+# (Decision E) — the awaiting task returns [] but its worker thread keeps
+# running up to ~90s. On the shared default executor (max_workers =
+# min(32, cpu+4)) a timeout storm starved every other to_thread user in the
+# process. Retrieval-leg work (the leg runner + the routing probes) therefore
+# runs on this dedicated bounded pool: abandonment costs retrieval capacity
+# only, never the process-wide default pool.
+_EXTRACTION_POOL = ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 4), thread_name_prefix="okf-extract")
+
+
+async def _to_thread_on_pool(func, /, *args, **kwargs):
+    """`asyncio.to_thread` routed to `_EXTRACTION_POOL` (DW-424).
+
+    asyncio.to_thread takes no executor argument (through py3.12), so this
+    replicates its exact semantics — contextvars copied, kwargs forwarded —
+    over ``loop.run_in_executor(_EXTRACTION_POOL, ...)``.
+    """
+    loop = asyncio.get_running_loop()
+    ctx = contextvars.copy_context()
+    return await loop.run_in_executor(_EXTRACTION_POOL, functools.partial(ctx.run, func, *args, **kwargs))
 
 
 # Defining a custom data subclass
@@ -1187,6 +1211,11 @@ class GenieaiArangoRetriever(OpeaComponent):
 
             _search_start_raw = str(input_dict.get("search_start", "chunk"))
             _base_mode, _encoded_labels, _encoded_graphs = decode(_search_start_raw)
+            # Raw carrier stashed BEFORE the restore: invoke_fanout decodes the
+            # ::sticky: segment from THIS key — reading search_start after the
+            # restore below would always see the bare mode and drop the
+            # conversation's continuity set (review 2026-10-29, round 3).
+            input_dict["_search_start_raw"] = _search_start_raw
             input_dict["search_start"] = _base_mode  # restore base mode
             if _encoded_labels:
                 input_dict["_encoded_filter_labels"] = _encoded_labels
@@ -1759,6 +1788,12 @@ class GenieaiArangoRetriever(OpeaComponent):
                     )
                 else:
                     try:
+                        # DW-424: deliberately NOT _EXTRACTION_POOL. This runs
+                        # on the running loop's default executor — a per-leg
+                        # loop here (the legacy path's main loop runs it to
+                        # completion, no abandonment) — and nesting it on the
+                        # bounded pool would let concurrent leg threads crowd
+                        # traversals out (enrichment lost to the budget).
                         neighborhoods = await asyncio.wait_for(
                             asyncio.to_thread(
                                 self.fetch_neighborhoods,
@@ -2177,7 +2212,9 @@ async def _invoke_leg(self, graph_name, input_dict, input, query):
     # under a 2000ms timeout). Run the coroutine on its OWN thread/loop so the
     # main loop stays responsive; on timeout the awaiting task returns at the
     # deadline and the worker thread is abandoned in the background (its result
-    # is discarded — the leg counts as zero-hit per Decision E).
+    # is discarded — the leg counts as zero-hit per Decision E). DW-424: the
+    # abandoned thread occupies the dedicated extraction pool, NOT the shared
+    # default executor it starved under a timeout storm.
     coro = self._extract_for_graph(
         graph_name=graph_name,
         input_dict=input_dict,
@@ -2186,7 +2223,7 @@ async def _invoke_leg(self, graph_name, input_dict, input, query):
         start_time=time.time(),
         span=span,
     )
-    leg_task = asyncio.create_task(asyncio.to_thread(asyncio.run, coro))
+    leg_task = asyncio.create_task(_to_thread_on_pool(asyncio.run, coro))
     done, pending = await asyncio.wait({leg_task}, timeout=FANOUT_PER_GRAPH_TIMEOUT_MS / 1000.0)
     if pending:
         logger.info(
@@ -2200,6 +2237,18 @@ async def _invoke_leg(self, graph_name, input_dict, input, query):
         f"Fan-out leg done — graph_name={graph_name}, "
         f"hits={len(result or [])}, elapsed={time.time() - leg_started:.2f}s"
     )
+    # Story 1.5 (ADR-039 D4): tiered option-(d) caps — pre-cap this leg's
+    # candidate list per graph BEFORE cross-graph fusion (Level-2). Without
+    # the per-graph tier one large graph floods fusion up to the global cap
+    # and crowds every other graph out (the config knob existed but was wired
+    # nowhere — review 2026-10-29 round 3). The global cap still applies
+    # afterwards, in invoke_fanout's target_k.
+    if result and len(result) > FANOUT_CANDIDATE_CAP_PER_GRAPH:
+        logger.info(
+            f"Fan-out leg candidates pre-capped per graph — graph_name={graph_name}, "
+            f"{len(result)} -> {FANOUT_CANDIDATE_CAP_PER_GRAPH}"
+        )
+        result = result[:FANOUT_CANDIDATE_CAP_PER_GRAPH]
     return result
 
 
@@ -2348,7 +2397,9 @@ async def _route_graphs(self, encoded_graph_names, query_embedding):
         # let asyncio.wait's timeout fire only BETWEEN probes, never during
         # one (the exact defect _invoke_leg documents fixing for the legs).
         # The query runs on a worker thread so the probes genuinely race.
-        rows = await asyncio.to_thread(self.db.aql.execute, aql, bind_vars={"emb": query_embedding, "k": ROUTE_TOP_K})
+        # DW-424: on the dedicated extraction pool, not the shared default
+        # executor (the same pool abandoned legs occupy).
+        rows = await _to_thread_on_pool(self.db.aql.execute, aql, bind_vars={"emb": query_embedding, "k": ROUTE_TOP_K})
         return graph_name, list(rows)
 
     async def _probe_batch(graphs):
@@ -2460,7 +2511,10 @@ async def invoke_fanout(self, input, input_dict, encoded_graph_names):
 
     search_set = list(encoded_graph_names)
     query_embedding = input.embedding if isinstance(input.embedding, list) and input.embedding else None
-    _sticky = decode_sticky(str(input_dict.get("search_start") or ""))
+    # The sticky segment lives on the RAW carrier — invoke() stashes it as
+    # _search_start_raw before restoring search_start to the base mode; direct
+    # callers (tests, the framework path) may still carry it on search_start.
+    _sticky = decode_sticky(str(input_dict.get("_search_start_raw") or input_dict.get("search_start") or ""))
     span.set_attribute("rag.route.sticky", ",".join(_sticky))
     if not ROUTE_ENABLED:
         logger.info("Graph routing disabled (RETRIEVER_ROUTE_ENABLED=false) — full carrier fan-out")

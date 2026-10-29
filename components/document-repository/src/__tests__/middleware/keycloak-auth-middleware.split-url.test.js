@@ -52,7 +52,8 @@ describe('keycloak-auth-middleware — KEYCLOAK_PUBLIC_URL issuer alias', () => 
     expect(outcome).toBe('next');
     expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     const options = mockJwtVerify.mock.calls[0][2];
-    expect(options.issuer).toBe('https://localhost/auth/realms/genie');
+    // DW-431: acceptable issuers are a LIST — base + public alias.
+    expect(options.issuer).toEqual(['http://kong:8000/auth/realms/genie', 'https://localhost/auth/realms/genie']);
 
     // JWKS is still constructed from the internal KEYCLOAK_URL.
     const jose = require('jose');
@@ -67,7 +68,33 @@ describe('keycloak-auth-middleware — KEYCLOAK_PUBLIC_URL issuer alias', () => 
 
     expect(outcome).toBe('next');
     const options = mockJwtVerify.mock.calls[0][2];
-    expect(options.issuer).toBe('http://kong:8000/auth/realms/genie');
+    // Single-issuer deployments: array of one == the old string behavior.
+    expect(options.issuer).toEqual(['http://kong:8000/auth/realms/genie']);
+  });
+
+  // DW-431 regression: KEYCLOAK_PUBLIC_URL and KEYCLOAK_BROWSER_ISSUER used to
+  // overwrite one `expectedIssuer` string in sequence — with both set, only
+  // the browser issuer validated and public-issuer tokens were rejected.
+  test('public AND browser issuers are accepted TOGETHER (no sequential overwrite)', async () => {
+    process.env.KEYCLOAK_URL = 'http://kong:8000/auth';
+    process.env.KC_REALM = 'genie';
+    process.env.KEYCLOAK_PUBLIC_URL = 'https://localhost/auth';
+    process.env.KEYCLOAK_BROWSER_ISSUER = 'https://localhost/auth/realms/genie';
+    mockJwtVerify.mockReset();
+    mockJwtVerify.mockResolvedValue({
+      payload: { sub: 'user-1', iss: 'irrelevant-to-unit-test', realm_access: { roles: ['User'] } }
+    });
+    try {
+      jest.resetModules();
+      const mw = require('../../middlewares/keycloak-auth-middleware');
+      const outcome = await runAuth(mw);
+      expect(outcome).toBe('next');
+      const options = mockJwtVerify.mock.calls[0][2];
+      expect(options.issuer).toEqual(['http://kong:8000/auth/realms/genie', 'https://localhost/auth/realms/genie']);
+    } finally {
+      delete process.env.KEYCLOAK_PUBLIC_URL;
+      delete process.env.KEYCLOAK_BROWSER_ISSUER;
+    }
   });
 
   test('attaches req.user from the verified payload', async () => {

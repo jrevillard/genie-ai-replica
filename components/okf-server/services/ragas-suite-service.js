@@ -5050,5 +5050,8 @@ module.exports = {
   // Exported so the summary's population rule (in-scope rows only) and its
   // four buckets can be pinned by a test: the panel used to derive them
   // itself, across two populations, and misreported which rows failed.
-  summarizeRun
+  summarizeRun,
+  // Exported so the sidecar()'s egress guard (review 2026-10-29 wave 2) can
+  // be pinned by a test — a malicious path must be rejected before any fetch.
+  sidecar
 };

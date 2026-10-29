@@ -1257,6 +1257,22 @@ describe('POST /', () => {
     expect(response.status).toBe(500);
     expect(response.body.message).toBe('Create failed');
   });
+
+  // Review 2026-10-29 round 3: a bearer failure caught during OKF fan-out
+  // resolution (OkfAuthzUnauthorizedError) carries statusCode 401 and must
+  // propagate — the same error maps to 401 on the streaming path; wrapping it
+  // in a 500 mislabelled an invalid request as a server fault.
+  it('should propagate a 401 from fan-out resolution instead of wrapping it in 500', async () => {
+    const err = new Error('token expired');
+    err.statusCode = 401;
+    queryService.createQuery.mockRejectedValue(err);
+
+    const response = await authPost('/api/queries', { sessionId: 's1' });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe('UNAUTHENTICATED');
+    expect(response.body.message).toBe('token expired');
+  });
 });
 
 // ============================================================

@@ -12,7 +12,15 @@ const { logger } = require('../../shared-lib');
 const PUBLIC_PATHS = ['/health', '/api-docs', '/api', '/api-docs.json'];
 
 let jwks = null;
-let expectedIssuer = null;
+// DW-431 (review 2026-10-29 round 3): the acceptable issuers are a LIST, not
+// one string. The old single `expectedIssuer` was overwritten in sequence —
+// KEYCLOAK_PUBLIC_URL first, then KEYCLOAK_BROWSER_ISSUER — so a deployment
+// with both set validated ONLY the browser issuer and rejected public-issuer
+// tokens, despite this block's "alongside" comment. Base + each distinct
+// alias now accumulate; jwtVerify accepts an issuer array. Single-alias
+// deployments keep the old behavior (a one-element array validates exactly
+// the one issuer the old string did).
+let expectedIssuers = [];
 
 /**
  * Get or create the JWKS key set (lazy initialization with caching)
@@ -39,34 +47,35 @@ async function getJWKS() {
     // explicit pin becomes the base value and the aliases layer on top only
     // when it is unset — a pin is never silently overridden by an alias.
     const pinnedIssuer = appConfig.security.keycloakExpectedIssuer;
-    expectedIssuer = pinnedIssuer || `${keycloakUrl}/realms/${realm}`;
+    expectedIssuers = [pinnedIssuer || `${keycloakUrl}/realms/${realm}`];
     // Split internal/public OIDC URLs (same pattern as shared/lib
     // keycloak-auth-service): JWKS is fetched via the internal KEYCLOAK_URL
     // (reachable on the container network) while tokens minted through the
-    // public endpoint carry the public issuer. KEYCLOAK_PUBLIC_URL overrides
-    // the expected issuer only — no-op when unset (single-URL deployments).
+    // public endpoint carry the public issuer. KEYCLOAK_PUBLIC_URL ADDS an
+    // accepted issuer — no-op when unset (single-URL deployments).
     const publicUrl = pinnedIssuer ? null : process.env.KEYCLOAK_PUBLIC_URL;
     if (publicUrl) {
       const publicIssuer = `${publicUrl.replace(/\/$/, '')}/realms/${realm}`;
-      if (publicIssuer !== expectedIssuer) {
-        logger.info(`[KEYCLOAK-AUTH] Issuer alias: validating ${publicIssuer} (JWKS via internal ${keycloakUrl})`);
-        expectedIssuer = publicIssuer;
+      if (!expectedIssuers.includes(publicIssuer)) {
+        logger.info(`[KEYCLOAK-AUTH] Issuer alias: also validating ${publicIssuer} (JWKS via internal ${keycloakUrl})`);
+        expectedIssuers.push(publicIssuer);
       }
     }
     // DAVID 2026-09-15: browser tokens minted via the nginx /auth path carry
     // the issuer `https://localhost/auth/realms/genie` — a path-prefix alias
     // (/auth/realms/<realm>) that neither the internal nor the public URL
-    // produces. jwtVerify checks issuer as a literal string match, so a
-    // mismatched path drops the token with JWTClaimValidationFailed. Honor
-    // KEYCLOAK_BROWSER_ISSUER as a third expected issuer alongside the
-    // already-aliased ones — no-op when unset (single-URL deployments).
+    // produces. jwtVerify checks issuer as a literal match, so a mismatched
+    // path drops the token with JWTClaimValidationFailed. Honor
+    // KEYCLOAK_BROWSER_ISSUER as another accepted issuer ALONGSIDE the
+    // already-aliased ones (it used to overwrite them — DW-431) — no-op when
+    // unset (single-URL deployments).
     const browserIssuer = pinnedIssuer ? null : process.env.KEYCLOAK_BROWSER_ISSUER;
-    if (browserIssuer && browserIssuer !== expectedIssuer) {
-      logger.info(`[KEYCLOAK-AUTH] Browser issuer alias: validating ${browserIssuer}`);
-      expectedIssuer = browserIssuer;
+    if (browserIssuer && !expectedIssuers.includes(browserIssuer)) {
+      logger.info(`[KEYCLOAK-AUTH] Browser issuer alias: also validating ${browserIssuer}`);
+      expectedIssuers.push(browserIssuer);
     }
     logger.info(`[KEYCLOAK-AUTH] Initializing JWKS from ${jwksUri}`);
-    logger.info(`[KEYCLOAK-AUTH] Will validate tokens with issuer=${expectedIssuer}`);
+    logger.info(`[KEYCLOAK-AUTH] Will validate tokens with issuers=${expectedIssuers.join(', ')}`);
     jwks = jose.createRemoteJWKSet(new URL(jwksUri));
   }
   return jwks;
@@ -162,9 +171,10 @@ const authenticateToken = async (req, res, next) => {
 
     let decoded;
     try {
-      // jwtVerify validates: signature, issuer, expiration, and not-before
+      // jwtVerify validates: signature, issuer (any of the acceptable
+      // issuers — jose accepts an array), expiration, and not-before
       const { payload } = await jose.jwtVerify(token, keySet, {
-        issuer: expectedIssuer,
+        issuer: expectedIssuers,
         requiredClaims: ['iss', 'exp']
       });
       decoded = payload;
@@ -184,7 +194,7 @@ const authenticateToken = async (req, res, next) => {
         err_name: err && err.name,
         err_code: err && err.code,
         err_message: err && err.message,
-        expected_issuer: expectedIssuer,
+        expected_issuers: expectedIssuers,
         token_issuer: (diagClaims && diagClaims.iss) || 'unparseable',
         token_exp: (diagClaims && diagClaims.exp) || 0
       });

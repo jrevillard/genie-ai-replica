@@ -995,6 +995,34 @@ describe('File Routes Integration', () => {
       expect(res.body.error).toBe('NO_ACTIVE_INGEST');
       expect(res.body.message).toContain('No active ingestion task');
     });
+
+    // Review 2026-10-29 round 3: the upstream body's status must NOT be
+    // echoed verbatim. A 200 body carrying {success:false, status:200} used
+    // to answer 200 with an error body (false success toast); a garbage
+    // string used to be echoed as an invalid HTTP status. Only the documented
+    // 404 maps through — everything else is 502.
+    it('maps an upstream status:200 echo to 502, never a false 200 success', async () => {
+      axios.post.mockResolvedValue({
+        data: { success: false, status: 200, message: 'no task' }
+      });
+
+      const res = await request(app).post('/api/files/file-abc123/kill-ingest');
+
+      expect(res.status).toBe(502);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBe('NO_ACTIVE_INGEST');
+    });
+
+    it('maps a garbage upstream status string to 502 (never echoed as a status)', async () => {
+      axios.post.mockResolvedValue({
+        data: { success: false, status: 'garbage-not-a-number', message: 'no task' }
+      });
+
+      const res = await request(app).post('/api/files/file-abc123/kill-ingest');
+
+      expect(res.status).toBe(502);
+      expect(res.body.success).toBe(false);
+    });
   });
 
   // --- 404 ---

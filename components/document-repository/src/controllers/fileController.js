@@ -4,7 +4,7 @@ const config = require('../config/appConfig');
 const Joi = require('joi');
 const path = require('path');
 const fs = require('fs').promises;
-const { logger } = require('../../shared-lib');
+const { logger, dbService } = require('../../shared-lib');
 const archiver = require('archiver');
 const axios = require('axios');
 
@@ -93,19 +93,21 @@ const isOkfServiceCaller = (req) => {
   return callerRoles.some((r) => String(r).toLowerCase() === 'okf-service');
 };
 
+// DW-426 (review 2026-10-29 round 3): ONE IN-list AQL replaces the per-file
+// getMetadataById loop (~N round-trips → 1).
 const bundleProtectedIds = async (fileIds) => {
-  const protectedIds = [];
-  for (const fileId of fileIds) {
-    let meta = null;
-    try {
-      meta = await metadataService.getMetadataById(fileId);
-    } catch {
-      // metadata fetch failed — fall through (the delete path itself
-      // surfaces any actual error from the deletion)
-    }
-    if (meta && meta.is_bundle === true) protectedIds.push(fileId);
+  try {
+    const db = await dbService.getConnection('files');
+    const cursor = await db.query('FOR f IN files FILTER f.file_id IN @ids AND f.is_bundle == true RETURN f.file_id', {
+      ids: fileIds
+    });
+    return await cursor.all();
+  } catch {
+    // metadata lookup failed — degrade to "no protected ids" exactly as the
+    // per-file loop did (the delete path itself surfaces any actual error
+    // from the deletion)
+    return [];
   }
-  return protectedIds;
 };
 
 // Schema for file upload validation
@@ -757,7 +759,7 @@ class FileController {
 
       // WS2 (David, 2026-09-25): bundle zips are OKF per-version ingestion
       // artifacts (see bundleProtectedIds). Only the okf-service account may
-      // delete them; Admin / steward roles get an explicit 403 with
+      // delete them; every other caller gets an explicit 403 with
       // code=BUNDLE_PROTECTED so the UI can hide the action entirely.
       if (!isOkfServiceCaller(req)) {
         const [protectedId] = await bundleProtectedIds([fileId]);
@@ -1189,6 +1191,10 @@ class FileController {
         storagePath: file.storage_path,
         fileBase64: base64String,
         graphName: file.graph_name || null,
+        // DW-442 (review 2026-10-29 round 3): name the repo explicitly —
+        // dataprep's OKF completion routing accepts and prefers an explicit
+        // repo id over guessing it from the graph name.
+        repoId: file.repo_id || null,
         // Story 2.9.7: chunk-doc version stamping (null = unminted legacy).
         bundleVersion: file.bundle_version != null ? file.bundle_version : null,
         // Optional per-request override; dataprep falls back to env DATAPREP_CHUNK_OVERLAP when omitted.
@@ -1285,7 +1291,12 @@ class FileController {
         graph_name: Joi.string()
           .pattern(/^OKF_[a-z0-9-]+(_v[0-9]+)?$/)
           .required(),
-        repo_id: Joi.string().uuid().required(),
+        // Relaxed to the same shape GET /api/files validates (getFilesSchema
+        // above): repository ids are not guaranteed UUID-shaped — the smoke
+        // uses short test IDs and some integration paths pass prefixed IDs.
+        // The route is authenticated + role-gated, so the shape carries no
+        // security weight (review 2026-10-29 round 3; was .uuid()).
+        repo_id: Joi.string().min(1).max(256).required(),
         originalFileName: Joi.string().allow('').optional(),
         // Selected knowledge-hierarchy labels ride on the files doc (same as
         // the single-upload path) and flow to dataprep as file_labels, where
@@ -1639,7 +1650,15 @@ class FileController {
       // never dispatched). Live 2026-09-15: the Bali kill toasted success on a
       // completed file while the repo-wide drain kept running.
       if (response.data && response.data.success === false) {
-        return res.status(response.data.status || 502).json({
+        // Whitelist the forwarded status: dataprep's documented "no active
+        // task" body is {success:false, status:404}, and that one maps
+        // through; every OTHER status value in a 200 body — a 200 echo, a
+        // garbage string — maps to 502, so the client can neither read the
+        // failure as a success nor receive an invalid echoed HTTP status
+        // (review 2026-10-29 round 3; same false-success class as the
+        // 2026-09-15 fix below).
+        const upstream = Number(response.data.status);
+        return res.status(upstream === 404 ? 404 : 502).json({
           success: false,
           error: 'NO_ACTIVE_INGEST',
           message: response.data.message || 'No active ingestion task found for this file.'

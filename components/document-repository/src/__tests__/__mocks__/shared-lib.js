@@ -33,7 +33,22 @@ module.exports = {
     error: jest.fn()
   },
   dbService: {
-    getConnection: jest.fn()
+    getConnection: jest.fn(),
+    // Canonical absence classifier (review 2026-10-29 round 3): fileService's
+    // isDocumentNotFound now delegates here, so the mock must behave like the
+    // real shared/lib function — a bare jest.fn() would return undefined and
+    // silently change which errors count as "document gone" (1203 / loose
+    // "not found" messages would fall through to the statusCode check only).
+    _isExpectedAbsence: (error) => {
+      if (!error) return false;
+      if (error.errorNum === 1202 || error.errorNum === 1204) return true;
+      if (error.errorNum != null) return false; // 1203 and friends are real faults
+      return (
+        String(error.message || '')
+          .trim()
+          .toLowerCase() === 'no match'
+      );
+    }
   },
   setScopeName: jest.fn(),
   // Each of these INVOKES its callback rather than returning undefined. A bare

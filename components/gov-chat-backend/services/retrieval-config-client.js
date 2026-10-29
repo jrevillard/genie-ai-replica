@@ -134,7 +134,8 @@ function decodeJwtPayload(bearerHeader) {
 /**
  * Parse `okf:{tenant}:{repo}:{read|admin}` scopes from a JWT payload — the
  * SAME semantics as components/okf-server middleware/auth.js parseOkfScopes
- * (okf_scopes claim, array or space-joined, then the standard scope claim;
+ * (okf_scopes claim, array or space-joined, then the standard scope claim,
+ * then realm ROLE NAMES that ARE scope strings — Story 6-1c group grants;
  * okf:-prefixed entries only; duplicates removed).
  */
 function parseOkfScopes(payload) {
@@ -157,6 +158,15 @@ function parseOkfScopes(payload) {
   }
   if (typeof p.scope === 'string') {
     p.scope.split(/\s+/).forEach(push);
+  }
+  // Source 3 (Story 6-1c, DW-428, review 2026-10-29 round 3): realm ROLE
+  // NAMES that ARE scope strings. The okf-server copy folds
+  // `realm_access.roles` in — a user granted a scope-shaped role directly or
+  // through a GROUP carries it there — so this copy must see the same set.
+  // Missing it keyed a role-granted caller as `@no-scopes`, colliding with
+  // every scope-less caller on the shared authz cache entry.
+  if (p.realm_access && Array.isArray(p.realm_access.roles)) {
+    p.realm_access.roles.forEach(push);
   }
   return out;
 }
@@ -379,6 +389,7 @@ module.exports = {
     parseOkfScopes,
     decodeJwtPayload,
     currentWindow,
+    fetchUpstream, // exposed so the egress guard (wave 2) can be pinned by a test
     OKF_SERVER_URL,
     RETRIEVAL_CONFIG_TTL_MS,
     REQUEST_TIMEOUT_MS

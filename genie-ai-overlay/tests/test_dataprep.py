@@ -1529,6 +1529,47 @@ class TestLabelWithBm25:
 
 
 # ---------------------------------------------------------------------------
+# TestIsConceptId (review 2026-10-29 round 3: the old first-char-digit
+# heuristic misclassified digit-leading concept ids like '3d_printing_guide'
+# as doc-repo file_ids, silently skipping their bundle-log mirror)
+# ---------------------------------------------------------------------------
+
+
+class TestIsConceptId:
+    """Tests for _is_concept_id() — the bundle-mirror eligibility predicate.
+
+    Invariant: a value is a doc-repo file_id ONLY when it matches the
+    timestamped shape `<millis>_<hex8+>` (fileUtils.generateUniqueFileId);
+    every other value is a concept id whose ingestion log must mirror into
+    the bundle.
+    """
+
+    def test_digit_leading_concept_id_is_a_concept(self):
+        """'3d_printing_guide' begins with a digit but is a bare concept id —
+        it must mirror (the old value[0].isdigit() check excluded it)."""
+        dp = create_dataprep()
+        assert dp._is_concept_id("3d_printing_guide") is True
+
+    def test_timestamped_doc_repo_file_id_is_not_a_concept(self):
+        """The real doc-repo shape (`${Date.now()}_${uuidv4()[:8]}`) is a
+        file_id — no bundle mirror."""
+        dp = create_dataprep()
+        assert dp._is_concept_id("1774623200119_e9887fa8") is False
+
+    def test_bare_word_concept_ids_are_concepts(self):
+        dp = create_dataprep()
+        assert dp._is_concept_id("ecitizen_digital_payments") is True
+        assert dp._is_concept_id("index") is True
+
+    def test_empty_and_none_are_safely_not_concepts(self):
+        """Empty/None are not concept ids — callers treat False as 'do not
+        mirror' without raising."""
+        dp = create_dataprep()
+        assert dp._is_concept_id("") is False
+        assert dp._is_concept_id(None) is False
+
+
+# ---------------------------------------------------------------------------
 # TestUpdateDocStatusRouting (2026-10-10 live: 6× ERROR "Metadata not found"
 # during the Slaugherhouse ingest — a call site that lost concept_id still
 # carried a CONCEPT id as file_id and the fallthrough PATCHed doc-repo,
@@ -1612,6 +1653,163 @@ class TestUpdateDocStatusRouting:
         finally:
             dp_module._INGEST_CTX.reset(token)
 
+    # -----------------------------------------------------------------
+    # Retry contract (review 2026-10-29 round 3): this PATCH is the ONLY
+    # channel that flips a meta row to 'indexed'. The loop used to return on
+    # ANY response — a single transient 5xx discarded the whole ~30-min
+    # ingest, the row never reached 'indexed', and the worker re-billed it
+    # in full. Only the documented success status (200) may end the loop.
+    # -----------------------------------------------------------------
+
+    @staticmethod
+    def _mock_session_with_statuses(statuses):
+        """A session whose successive PATCH calls return the given statuses."""
+        import aiohttp as aiohttp_mod
+
+        mock_session = MagicMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        responses = []
+        for status in statuses:
+            resp = MagicMock()
+            resp.status = status
+            resp.text = AsyncMock(return_value=f"body-{status}")
+            resp.__aenter__ = AsyncMock(return_value=resp)
+            resp.__aexit__ = AsyncMock(return_value=False)
+            responses.append(resp)
+        mock_session.patch = MagicMock(side_effect=responses)
+        aiohttp_mod.ClientSession.return_value = mock_session
+        aiohttp_mod.ClientTimeout.return_value = MagicMock()
+        return mock_session
+
+    @pytest.mark.asyncio
+    async def test_non_200_response_is_retried_until_success(self):
+        """503 then 200: the non-200 attempt must be retried, not swallowed."""
+        dp = create_dataprep()
+        dp._current_repo_id = None
+        token = dp_module._INGEST_CTX.set({})
+        try:
+            with (
+                patch.object(
+                    dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}
+                ),
+                patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
+                patch.object(dp_module.propagate, "inject"),
+                patch("dataprep.genieai_dataprep_arangodb.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            ):
+                session = self._mock_session_with_statuses([503, 200])
+                await dp._update_doc_status("1791566703011_a807dad8", "Ingested", chunk_count=12)
+
+            assert session.patch.call_count == 2, "the 503 attempt must be retried"
+            mock_sleep.assert_awaited_once()  # backoff between attempt 1 and 2
+        finally:
+            dp_module._INGEST_CTX.reset(token)
+
+    @pytest.mark.asyncio
+    async def test_persistent_non_200_exhausts_three_attempts_without_raising(self):
+        """All 500s: 3 attempts with backoff, then give up best-effort — the
+        callback must never raise into the ingest's error path."""
+        dp = create_dataprep()
+        dp._current_repo_id = None
+        token = dp_module._INGEST_CTX.set({})
+        try:
+            with (
+                patch.object(
+                    dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}
+                ),
+                patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
+                patch.object(dp_module.propagate, "inject"),
+                patch("dataprep.genieai_dataprep_arangodb.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            ):
+                session = self._mock_session_with_statuses([500, 500, 500, 500])
+                await dp._update_doc_status("1791566703011_a807dad8", "Ingested")
+
+            assert session.patch.call_count == 3
+            assert mock_sleep.await_count == 2  # between 1->2 and 2->3 only
+        finally:
+            dp_module._INGEST_CTX.reset(token)
+
+    @pytest.mark.asyncio
+    async def test_first_attempt_200_returns_immediately(self):
+        """A genuine 200 on the first attempt returns at once — no retry, no
+        backoff (the old fast path, unchanged)."""
+        dp = create_dataprep()
+        dp._current_repo_id = None
+        token = dp_module._INGEST_CTX.set({})
+        try:
+            with (
+                patch.object(
+                    dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}
+                ),
+                patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
+                patch.object(dp_module.propagate, "inject"),
+            ):
+                session = self._mock_session_with_statuses([200])
+                await dp._update_doc_status("1791566703011_a807dad8", "Ingested", chunk_count=12)
+
+            assert session.patch.call_count == 1
+        finally:
+            dp_module._INGEST_CTX.reset(token)
+
+    # -----------------------------------------------------------------
+    # Standalone-retract routing (review 2026-10-29 round 3): retract_file
+    # runs OUTSIDE any ingest context, so _update_doc_status's legacy
+    # fallback read the singleton attrs — whatever repo a CONCURRENT ingest
+    # last stashed on self. Routing must come from the retract request's own
+    # OKF_ graph marker instead.
+    # -----------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_standalone_okf_retract_routes_by_own_graph_name(self):
+        """An OKF retract (graph OKF_...) routes its 'Retracted' callback to
+        the OKF control plane even with another ingest's repo on the
+        singleton — and claims no repo identity the request never carried."""
+        dp = create_dataprep()
+        dp._current_repo_id = "repo-from-concurrent-ingest"
+        dp.db.aql.execute = MagicMock(return_value=TestRetractFile._empty_chunk_cursor())
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}),
+            patch.object(dp_module, "OKF_SERVER_URL", "http://okf-test:3002"),
+            patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
+            patch.object(dp_module.propagate, "inject"),
+        ):
+            session = self._mock_session()
+            await dp.retract_file("concept-3d-printing", "OKF_repo_1")
+
+        called_url = session.patch.call_args[0][0]
+        assert "/api/okf/internal/concepts/" in called_url
+        assert "/api/files/" not in called_url
+        payload = session.patch.call_args[1]["json"]
+        assert payload["status"] == "Retracted"
+        # No repo identity is claimed on the retract's behalf: the request
+        # carries none, and the singleton value belongs to another ingest.
+        assert "repo_id" not in payload
+
+    @pytest.mark.asyncio
+    async def test_standalone_legacy_retract_ignores_stale_okf_singleton(self):
+        """A legacy-graph retract must PATCH doc-repo even when a concurrent
+        OKF ingest left its repo_id on the singleton — the stale value must
+        not misroute the callback (the regression this pins)."""
+        dp = create_dataprep()
+        dp._current_repo_id = "repo-from-concurrent-okf-ingest"
+        dp.db.aql.execute = MagicMock(return_value=TestRetractFile._empty_chunk_cursor())
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}),
+            patch.object(dp_module, "OKF_SERVER_URL", "http://okf-test:3002"),
+            patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
+            patch.object(dp_module.propagate, "inject"),
+        ):
+            session = self._mock_session()
+            await dp.retract_file("1791566703011_a807dad8", "GRAPH")
+
+        called_url = session.patch.call_args[0][0]
+        assert "/api/files/1791566703011_a807dad8/status" in called_url
+        assert "/api/okf/" not in called_url
+        payload = session.patch.call_args[1]["json"]
+        assert payload["dataprep"]["status"] == "Retracted"
+
 
 # ---------------------------------------------------------------------------
 # TestIngestFileWithGuardrail
@@ -1665,6 +1863,53 @@ class TestIngestFileWithGuardrail:
         status_calls = [c.args[1] for c in mock_status.call_args_list]
         assert "Ingesting" in status_calls
         assert "Ingested" in status_calls
+
+    @pytest.mark.asyncio
+    async def test_zero_batch_ingest_completes_as_honest_empty_success(self):
+        """A zero-batch ingest (no graph tasks scheduled) must complete as an
+        honest empty success, not crash.
+
+        Regression (review 2026-10-29 round 3): `results` was only assigned
+        under `if tasks:`, so a zero-batch run hit the totals with the name
+        unbound — UnboundLocalError — and the generic handler falsely marked
+        the file 'Ingestion Error' and auto-retracted a valid (if empty) run.
+        """
+        dp = create_dataprep()
+        inp = create_mock_ingest_input()
+
+        with (
+            patch.object(dp, "_update_doc_status", new_callable=AsyncMock) as mock_status,
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["Healthcare"]),
+            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["chunk1"]),
+            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            patch.object(
+                dp,
+                "_apply_contextualization",
+                new_callable=AsyncMock,
+                side_effect=lambda chunks, inp, fid: (list(chunks), []),
+            ),
+            # The labeling stage yields NO documents -> zero graph batches.
+            patch.object(
+                dp,
+                "_apply_labels",
+                new_callable=AsyncMock,
+                return_value=([], []),
+            ),
+            patch.object(dp, "_process_batch", new_callable=AsyncMock) as mock_process_batch,
+            patch.object(dp_module, "ArangoGraph"),
+        ):
+            result = await dp.ingest_file_with_guardrail(inp, lock_file=None)
+
+        # Zero batches scheduled: no batch work ran, and the run still
+        # completes 'Ingested' — never the UnboundLocalError -> 'Ingestion
+        # Error' path.
+        mock_process_batch.assert_not_awaited()
+        assert result["status"] == 200
+        status_calls = [c.args[1] for c in mock_status.call_args_list]
+        assert "Ingesting" in status_calls
+        assert "Ingested" in status_calls
+        assert "Ingestion Error" not in status_calls
 
     @pytest.mark.asyncio
     async def test_no_content_raises_and_retracts(self):

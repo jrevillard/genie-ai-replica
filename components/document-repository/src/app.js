@@ -94,8 +94,14 @@ app.use(compression());
 // per request built a fresh middleware object on every non-bundle call
 // (review 2026-10-29).
 const standardJsonParser = express.json({ limit: '10mb' });
+const BUNDLE_INGEST_PATH = '/api/files/ingest-bundle';
 app.use((req, res, next) => {
-  if (req.method === 'POST' && req.path === '/api/files/ingest-bundle') return next();
+  // Express non-strict routing serves the trailing-slash spelling
+  // (`/api/files/ingest-bundle/`) through the SAME route, but the exact
+  // comparison below missed it — a ~42 MB bundle POSTed with a trailing
+  // slash fell to the 10mb global parser and died with 413 (review
+  // 2026-10-29 round 3). Normalize trailing slashes before comparing.
+  if (req.method === 'POST' && req.path.replace(/\/+$/, '') === BUNDLE_INGEST_PATH) return next();
   return standardJsonParser(req, res, next);
 });
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

@@ -94,12 +94,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // then no button is judged broken, because a tree that has not loaded
   // says nothing.
   QuickHelpScopeResolver? _scopeResolver;
+
+  /// The hierarchy has settled — it loaded, or it failed. Derivable from
+  /// the two outcomes' own marks (a resolver exists, or the outage flag
+  /// is up): a third field would only have to be kept in phase with them.
+  bool get _treeSettled => _scopeResolver != null || _treeUnavailable;
   // The hierarchy load has settled — it loaded, or it failed. The Quick
   // Help grid waits for it: a button carries a scope, and the hierarchy
   // is what names it, so a button rendered before the hierarchy is known
   // cannot say whether its scope is valid — and a tap it cannot answer is
   // a dead tap.
-  bool _treeSettled = false;
   // The hierarchy could not be loaded: it names no scope at all, so every
   // button says so instead of looking healthy and swallowing the tap.
   bool _treeUnavailable = false;
@@ -381,13 +385,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // scope shows the button's own localized title — the same thing
     // the press and the web show. (A sidebar scope still shows the
     // EN name: the localized tree lives in the panel, not here.)
+    // The button the conversation's tag names — ONE lookup, both reads
+    // below (the title, the outage state) resolve the same entity.
+    final button = scope.quickHelpButtonId != null
+        ? _quickHelpButtons.firstWhere(
+            (b) => b['id']?.toString() == scope.quickHelpButtonId,
+            orElse: () => <String, dynamic>{},
+          )
+        : null;
     if (scope.quickHelpButtonId != null) {
-      final button = _quickHelpButtons.firstWhere(
-        (b) => b['id']?.toString() == scope.quickHelpButtonId,
-        orElse: () => <String, dynamic>{},
-      );
       _selectedCategoryName =
-          button['resolvedTitle']?.toString() ?? scope.categoryName ?? '';
+          button!['resolvedTitle']?.toString() ?? scope.categoryName ?? '';
     } else {
       _selectedCategoryName = scope.categoryName ?? '';
     }
@@ -398,11 +406,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // The outage is the CALLER's fact — the grid handles it through
     // unavailableScopeFor, and the restore does the same.
     if (_treeUnavailable && scope.quickHelpButtonId != null) {
-      final button = _quickHelpButtons.firstWhere(
-        (b) => b['id']?.toString() == scope.quickHelpButtonId,
-        orElse: () => <String, dynamic>{},
-      );
-      _activeQuickHelpScope = button.isNotEmpty
+      _activeQuickHelpScope = button!.isNotEmpty
           ? QuickHelpScopeResolver.unavailableScopeFor(button)
           : scope.quickHelpScopeState;
     } else {
@@ -466,7 +470,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         final tree = jsonDecode(response.body) as List<dynamic>;
         setState(() {
           _scopeResolver = QuickHelpScopeResolver(tree);
-          _treeSettled = true;
           // A retry that succeeded ends the outage: the cards are checked
           // against the tree that IS here now, not against the one that
           // failed to load.
@@ -491,7 +494,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     if (!mounted) return;
     setState(() {
       _treeUnavailable = true;
-      _treeSettled = true;
     });
   }
 
@@ -533,11 +535,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _sidebarServiceCount = serviceCount;
       // A sidebar selection REPLACES the Quick Help scope: the two are
       // alternative ways of scoping the same query.
-      _scopeEpoch++;
-      _restoredTags = null;
-      _activeQuickHelpButtonId = null;
-      _activeQuickHelpScope = null;
-      _activeServiceLabels = const [];
+      _clearQuickHelpScopeFields();
     });
   }
 
@@ -705,11 +703,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _selectedCategoryNameEn = '';
       _sidebarServiceLabelsEn = [];
       _sidebarServiceCount = 0;
-      _scopeEpoch++;
-      _restoredTags = null;
-      _activeQuickHelpButtonId = null;
-      _activeQuickHelpScope = null;
-      _activeServiceLabels = [];
+      _clearQuickHelpScopeFields();
     });
     widget.onRelatedDocumentsUpdate([]);
     _inputController.clear();
@@ -822,11 +816,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             'categoryLabel': _selectedCategoryNameEn.isNotEmpty
                 ? _selectedCategoryNameEn
                 : null,
-            'serviceLabels': _activeServiceLabels.isNotEmpty
-                ? (_sidebarServiceLabelsEn.isNotEmpty
-                      ? [..._activeServiceLabels, ..._sidebarServiceLabelsEn]
-                      : _activeServiceLabels)
-                : _sidebarServiceLabelsEn,
+            'serviceLabels': mergeServiceLabels(
+              _activeServiceLabels,
+              _sidebarServiceLabelsEn,
+            ),
             'language': I18nService().currentLocale.languageCode.toUpperCase(),
           },
           'contextOption': 'conversation-with-context-labels',
@@ -1153,6 +1146,44 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     return merged;
   }
 
+  // Installs a pressed Quick Help card as THE scope. ONE copy of the
+  // field list for the press paths (the scoped no-prompt card and the
+  // dual-prompt card differ only in the display-name fallback); the
+  // caller owns its own setState.
+  void _installQuickHelpScopeFields(
+    Map<String, dynamic> button, {
+    required String nameFallback,
+  }) {
+    final declaredLabels =
+        (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
+            .map((label) => label.toString())
+            .toList();
+    _showQuickHelpOverlay = false;
+    _selectedCategoryId = button['category']?.toString();
+    _selectedCategoryNameEn = _scopeResolver?.categoryLabelEn(button) ?? '';
+    _selectedCategoryName = button['resolvedTitle']?.toString() ?? nameFallback;
+    _sidebarServiceLabelsEn = [];
+    // A mode switch clears the sidebar count: the send guard would read a
+    // count that remembers services that are no longer selected.
+    _sidebarServiceCount = 0;
+    _scopeEpoch++;
+    _restoredTags = null;
+    _activeServiceLabels = declaredLabels;
+    _activeQuickHelpButtonId = button['id']?.toString();
+    _activeQuickHelpScope = _scopeResolver?.stateFor(button);
+  }
+
+  // Clears the Quick Help half of the scope. ONE field list for the three
+  // clears (a new chat, a sidebar pick, a scope-less card press): an
+  // eleventh scope field must be remembered here once, not three times.
+  void _clearQuickHelpScopeFields() {
+    _scopeEpoch++;
+    _restoredTags = null;
+    _activeQuickHelpButtonId = null;
+    _activeQuickHelpScope = null;
+    _activeServiceLabels = const [];
+  }
+
   void _quickHelpPressed(Map<String, dynamic> button) {
     // A broken scope is a VISIBLE failure: the overlay caption names the
     // configuration problem. Never a query with a silently reduced scope.
@@ -1186,39 +1217,24 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     if (visibleTextKey.isEmpty && hiddenPromptKey.isEmpty) {
       if (declaresScope) {
         setState(() {
-          _showQuickHelpOverlay = false;
-          _selectedCategoryId = button['category']?.toString();
-          _selectedCategoryNameEn =
-              _scopeResolver?.categoryLabelEn(button) ?? '';
-          _selectedCategoryName = button['resolvedTitle']?.toString() ?? '';
-          _sidebarServiceLabelsEn = [];
-          _sidebarServiceCount = 0;
-          _scopeEpoch++;
-          _restoredTags = null;
-          _activeServiceLabels = declaredLabels;
-          _activeQuickHelpButtonId = button['id']?.toString();
-          _activeQuickHelpScope = _scopeResolver?.stateFor(button);
+          _installQuickHelpScopeFields(button, nameFallback: '');
         });
         _inputFocusNode.requestFocus();
         return;
       }
       setState(() {
-        _showQuickHelpOverlay = false;
-        _activeServiceLabels = [];
-        _selectedCategoryId = null;
-        _selectedCategoryName = '';
-        _selectedCategoryNameEn = '';
-        _sidebarServiceLabelsEn = [];
         // A mode switch clears the WHOLE prior scope: a stale count would
         // make the send guard refuse every subsequent send (no label can
         // ever satisfy a count that remembers a selection that is gone),
         // and a stale button id would tag the next conversation with a
         // scope it never had.
+        _showQuickHelpOverlay = false;
+        _selectedCategoryId = null;
+        _selectedCategoryName = '';
+        _selectedCategoryNameEn = '';
+        _sidebarServiceLabelsEn = [];
         _sidebarServiceCount = 0;
-        _scopeEpoch++;
-        _restoredTags = null;
-        _activeQuickHelpButtonId = null;
-        _activeQuickHelpScope = null;
+        _clearQuickHelpScopeFields();
       });
       _inputFocusNode.requestFocus();
       return;
@@ -1233,43 +1249,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         button['resolvedHiddenPrompt'] ??
         (hiddenPromptKey.isNotEmpty ? tr(hiddenPromptKey) : visibleText);
 
-    // Set the retriever filter labels from the button config (English KB labels).
-    // Consumed by _sendStreaming when building the request context.
-    final List<String> labels =
-        (button['serviceLabels'] as List<dynamic>?)
-            ?.map((e) => e.toString())
-            .toList() ??
-        const [];
-
+    // The card's declared English KB labels become the retriever filter —
+    // the helper installs them; _sendStreaming reads them off the scope.
     setState(() {
-      _showQuickHelpOverlay = false;
-      _activeServiceLabels = labels;
-      // The button's declared category rides along in its EN spelling — the
-      // wire's SSOT — resolved against the live hierarchy (it used to be
-      // dropped here, silently unscoping the query). The sidebar selection
-      // is a mode switch: it is cleared.
-      _selectedCategoryId = button['category']?.toString();
-      _selectedCategoryNameEn = _scopeResolver?.categoryLabelEn(button) ?? '';
-      // The Quick Help press REPLACES any sidebar selection: its count
-      // must go with it, or the send guard reads a count that remembers
-      // services that are no longer selected.
-      _sidebarServiceCount = 0;
-
-      // The scope the query carries is VISIBLE. The resolver's tree is the
-      // ENGLISH one (it is the wire's vocabulary), so its display name is
-      // English too — the chip shows the button's own localized title
-      // instead, the same thing the web's chip shows for the same
-      // selection.
-      _selectedCategoryName =
-          button['resolvedTitle']?.toString() ?? visibleText;
-      _sidebarServiceLabelsEn = [];
-      _scopeEpoch++;
-      _restoredTags = null;
-      _activeQuickHelpButtonId = button['id']?.toString();
-      // Not broken here — the press path refuses a broken button before
-      // it reaches this line. Carried so the send guard and the restore
-      // read ONE field for the same fact.
-      _activeQuickHelpScope = _scopeResolver?.stateFor(button);
+      _installQuickHelpScopeFields(button, nameFallback: visibleText);
     });
 
     // Send using the 2-prompt system

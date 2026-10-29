@@ -74,8 +74,11 @@ class QuickHelpScopeResolver {
 
   QuickHelpScopeResolver(List<dynamic> enTree)
     : _enLabels = _collectEnLabels(enTree),
-      _categoryLabelsEn = _indexCategories(enTree),
-      _categoryNames = _indexCategoryNames(enTree);
+      _categoryLabelsEn = _indexByCatKey(enTree, _enOf),
+      _categoryNames = _indexByCatKey(enTree, (entry) {
+        final name = entry['name'];
+        return (name is String && name.isNotEmpty) ? name : '';
+      });
 
   /// The scope state of a button whose hierarchy has not loaded yet: it
   /// says nothing about any button.
@@ -113,15 +116,20 @@ class QuickHelpScopeResolver {
   final Map<String, String> _categoryLabelsEn;
   final Map<String, String> _categoryNames;
 
-  static Map<String, String> _indexCategoryNames(List<dynamic> enTree) {
+  /// Categories by key, FIRST-wins, each mapped by [valueOf]. The one
+  /// walk behind both indexes (the EN-label index and the display-name
+  /// index) — a skip rule added to one belongs to both.
+  static Map<String, String> _indexByCatKey(
+    List<dynamic> enTree,
+    String Function(Map entry) valueOf,
+  ) {
     final byKey = <String, String>{};
     for (final entry in enTree) {
       if (entry is! Map) continue;
       final key = entry['catKey']?.toString();
       if (key == null || key.isEmpty) continue;
       if (byKey.containsKey(key)) continue;
-      final name = entry['name'];
-      byKey[key] = (name is String && name.isNotEmpty) ? name : '';
+      byKey[key] = valueOf(entry);
     }
     return byKey;
   }
@@ -144,18 +152,6 @@ class QuickHelpScopeResolver {
     return labels;
   }
 
-  static Map<String, String> _indexCategories(List<dynamic> enTree) {
-    final byKey = <String, String>{};
-    for (final entry in enTree) {
-      if (entry is! Map) continue;
-      final key = entry['catKey']?.toString();
-      if (key == null || key.isEmpty) continue;
-      if (byKey.containsKey(key)) continue;
-      byKey[key] = _enOf(entry);
-    }
-    return byKey;
-  }
-
   /// The scope state of [button] against the live tree.
   Map<String, dynamic> stateFor(Map<String, dynamic> button) {
     final declared =
@@ -171,10 +167,9 @@ class QuickHelpScopeResolver {
     // ENGLISH: that spelling is the wire. A category the hierarchy does
     // not carry, and a category it carries without an EN translation,
     // are the same thing here — a scope that cannot be named.
+    // categoryEnLabel is the ONE predicate for that rule.
     final categoryMissing =
-        declaresCategoryScope(category) &&
-        (_categoryLabelsEn[category] == null ||
-            _categoryLabelsEn[category]!.isEmpty);
+        declaresCategoryScope(category) && categoryEnLabel(category) == null;
 
     return {
       'broken': missingLabels.isNotEmpty || categoryMissing,
@@ -511,9 +506,7 @@ bool scopeCanGoOnTheWire({
   // refuses the tap: replaying the dead labels would filter on labels no
   // chunk carries — a silent abstention instead of a named failure.
   if (quickHelpScopeBroken) return false;
-  final labels = serviceLabels.isNotEmpty
-      ? serviceLabels
-      : sidebarServiceLabels;
+  final labels = mergeServiceLabels(serviceLabels, sidebarServiceLabels);
   // An EMPTY category id declares nothing: the context bar's X clears the
   // selection with one, and an empty id is not a scope. Reading it as one
   // would refuse every question the user asks afterwards. 'general' is
@@ -535,6 +528,16 @@ bool scopeCanGoOnTheWire({
   return (categoryNameEn != null && categoryNameEn.isNotEmpty) ||
       labels.isNotEmpty;
 }
+
+/// The labels a request carries: the Quick Help card's declared labels
+/// BESIDE the sidebar's — one merge rule, read by the send path (the
+/// payload) and the wire guard (the emptiness check) alike. A pick
+/// between the two would have to be re-derived everywhere the payload is
+/// built; the concat is the payload, and emptiness is the same under it.
+List<String> mergeServiceLabels(List<String> active, List<String> sidebar) => [
+  ...active,
+  ...sidebar,
+];
 
 /// The tags a conversation carries: the Quick Help button's id — its
 /// identity — and, BESIDE it, the ENGLISH labels of the sidebar scope

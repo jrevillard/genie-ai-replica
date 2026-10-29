@@ -137,70 +137,114 @@ class QueryService {
    * is untouched: the retriever filters on what the client sent.
    */
   async resolveScopeIds(context, { resolveCategory = true } = {}) {
-    let categoryId = null;
-    if (resolveCategory && context?.categoryLabel) {
-      try {
-        const categoryQuery = aql`
-            FOR trans IN ${this.serviceCategoryTranslations}
-              FILTER LOWER(trans.languageCode) == 'en'
-              FILTER trans.translation == ${context.categoryLabel}
-              LIMIT 1
-              RETURN trans.serviceCategoryId
-          `;
-        let cursor = await this.db.query(categoryQuery);
-        categoryId = await cursor.next();
-        if (!categoryId) {
-          const fallbackQuery = aql`
-              FOR cat IN ${this.serviceCategories}
-                FILTER cat.nameEN == ${context.categoryLabel}
+    // The category and the service resolutions are INDEPENDENT — the one
+    // never feeds the other — so they run in PARALLEL instead of paying
+    // both Arango round-trip latencies back to back.
+    const resolveCategoryId = async () => {
+      let categoryId = null;
+      if (resolveCategory && context?.categoryLabel) {
+        try {
+          const categoryQuery = aql`
+              FOR trans IN ${this.serviceCategoryTranslations}
+                FILTER LOWER(trans.languageCode) == 'en'
+                FILTER trans.translation == ${context.categoryLabel}
                 LIMIT 1
-                RETURN cat._key
+                RETURN trans.serviceCategoryId
             `;
-          cursor = await this.db.query(fallbackQuery);
+          let cursor = await this.db.query(categoryQuery);
           categoryId = await cursor.next();
+          if (!categoryId) {
+            const fallbackQuery = aql`
+                FOR cat IN ${this.serviceCategories}
+                  FILTER cat.nameEN == ${context.categoryLabel}
+                  LIMIT 1
+                  RETURN cat._key
+              `;
+            cursor = await this.db.query(fallbackQuery);
+            categoryId = await cursor.next();
+          }
+        } catch (error) {
+          logger.error(`Error resolving categoryId: ${error.message}`);
         }
-      } catch (error) {
-        logger.error(`Error resolving categoryId: ${error.message}`);
       }
-    }
-    let serviceIds = [];
-    if (context?.serviceLabels?.length > 0) {
-      try {
-        // The pairs come back, not the bare ids: a label the translation
-        // lookup did not answer for is the input of the fallback below.
-        const servicesQuery = aql`
-            FOR trans IN ${this.serviceTranslations}
-              FILTER LOWER(trans.languageCode) == 'en'
-              FILTER trans.translation IN ${context.serviceLabels}
-              RETURN DISTINCT { label: trans.translation, serviceId: trans.serviceId }
-          `;
-        const cursor = await this.db.query(servicesQuery);
-        const matched = await cursor.all();
-        serviceIds = matched.map((pair) => pair.serviceId);
-        // The same fallback the category resolution has: an entity
-        // imported outside the write path carries nameEN with no
-        // translation document. The fallback feeds the query RECORD's
-        // link only — the wire still carries exactly what the client
-        // sent.
-        const matchedLabels = new Set(matched.map((pair) => pair.label));
-        const unmatched = context.serviceLabels.filter((label) => !matchedLabels.has(label));
-        if (unmatched.length > 0) {
-          const fallbackQuery = aql`
-              FOR svc IN ${this.services}
-                FILTER svc.nameEN IN ${unmatched}
-                RETURN svc._key
+      return categoryId;
+    };
+    const resolveServiceIds = async () => {
+      let serviceIds = [];
+      if (context?.serviceLabels?.length > 0) {
+        try {
+          // The pairs come back, not the bare ids: a label the translation
+          // lookup did not answer for is the input of the fallback below.
+          const servicesQuery = aql`
+              FOR trans IN ${this.serviceTranslations}
+                FILTER LOWER(trans.languageCode) == 'en'
+                FILTER trans.translation IN ${context.serviceLabels}
+                RETURN DISTINCT { label: trans.translation, serviceId: trans.serviceId }
             `;
-          const fallbackCursor = await this.db.query(fallbackQuery);
-          serviceIds.push(...(await fallbackCursor.all()));
+          const cursor = await this.db.query(servicesQuery);
+          const matched = await cursor.all();
+          serviceIds = matched.map((pair) => pair.serviceId);
+          // The same fallback the category resolution has: an entity
+          // imported outside the write path carries nameEN with no
+          // translation document. The fallback feeds the query RECORD's
+          // link only — the wire still carries exactly what the client
+          // sent.
+          const matchedLabels = new Set(matched.map((pair) => pair.label));
+          const unmatched = context.serviceLabels.filter((label) => !matchedLabels.has(label));
+          if (unmatched.length > 0) {
+            const fallbackQuery = aql`
+                FOR svc IN ${this.services}
+                  FILTER svc.nameEN IN ${unmatched}
+                  RETURN svc._key
+              `;
+            const fallbackCursor = await this.db.query(fallbackQuery);
+            serviceIds.push(...(await fallbackCursor.all()));
+          }
+        } catch (error) {
+          logger.error(`Error resolving serviceIds: ${error.message}`);
         }
-      } catch (error) {
-        logger.error(`Error resolving serviceIds: ${error.message}`);
       }
-    }
+      return serviceIds;
+    };
+    const [categoryId, serviceIds] = await Promise.all([resolveCategoryId(), resolveServiceIds()]);
     // One service can answer through BOTH paths (its translation row
     // for one label, its own nameEN for another): the record counts it
     // once.
     return { categoryId, serviceIds: [...new Set(serviceIds)] };
+  }
+
+  /**
+   * The shared scope policy of both send paths: resolve ONLY what the
+   * request does not already carry — a lookup whose result would be
+   * thrown away is Arango queries per send for nothing — and take both
+   * ids out of ONE resolveScopeIds call (two calls meant up to four
+   * queries per send).
+   */
+  async resolveMissingScopeIds(queryData) {
+    let categoryId = queryData.categoryId || null;
+    let serviceIds = queryData.serviceId ? [queryData.serviceId] : [];
+    const needCategory = !categoryId && Boolean(queryData.context?.categoryLabel);
+    const needServices = queryData.context?.serviceLabels?.length > 0 && serviceIds.length === 0;
+    if (needCategory || needServices) {
+      const resolved = await this.resolveScopeIds(queryData.context, { resolveCategory: needCategory });
+      if (needCategory) {
+        categoryId = resolved.categoryId;
+        if (!categoryId) {
+          logger.warn(`Category not found for label: ${queryData.context.categoryLabel}`);
+        } else {
+          logger.info(`Resolved categoryLabel "${queryData.context.categoryLabel}" to categoryId: ${categoryId}`);
+        }
+      }
+      if (needServices) {
+        serviceIds = resolved.serviceIds;
+        if (serviceIds.length === 0) {
+          logger.warn(`No services found for labels: ${queryData.context.serviceLabels.join(', ')}`);
+        } else {
+          logger.info(`Resolved serviceLabels to serviceIds: ${serviceIds.join(', ')}`);
+        }
+      }
+    }
+    return { categoryId, serviceIds };
   }
 
   /**
@@ -510,26 +554,11 @@ class QueryService {
     }
 
     // Resolve the wire's EN labels to the entities they name (the
-    // query record's links). The wire itself is untouched. The two
-    // resolutions are INDEPENDENT: a request that carries its own
-    // categoryId still gets its service links (as the non-stream path
-    // does).
-    let categoryId = queryData.categoryId || null;
-    let serviceIds = queryData.serviceId ? [queryData.serviceId] : [];
-    // BOTH branches are skipped when the request already carries the id
-    // they would resolve: their lookup results would be thrown away —
-    // queries per send for nothing.
-    const needCategory = !categoryId && Boolean(queryData.context?.categoryLabel);
-    const needServices = queryData.context?.serviceLabels?.length > 0 && serviceIds.length === 0;
-    if (needCategory || needServices) {
-      const resolved = await this.resolveScopeIds(queryData.context, { resolveCategory: needCategory });
-      if (needCategory && !categoryId) {
-        categoryId = resolved.categoryId;
-      }
-      if (needServices && serviceIds.length === 0) {
-        serviceIds = resolved.serviceIds;
-      }
-    }
+    // query record's links). The wire itself is untouched. The shared
+    // policy of both send paths lives in resolveMissingScopeIds: only
+    // what the request does not already carry is looked up — a request
+    // that carries its own categoryId still gets its service links.
+    const { categoryId, serviceIds } = await this.resolveMissingScopeIds(queryData);
 
     const backendMode = process.env.CONTEXT_OPTION || 'conversation-with-context-labels';
 
@@ -677,31 +706,10 @@ class QueryService {
       }
 
       // Resolve the wire's EN labels to the entities they name — the
-      // SAME single resolution the stream path applies: both ids out of
-      // ONE call (two calls meant up to four Arango queries per send).
-      let categoryId = queryData.categoryId || null;
-      let serviceIds = queryData.serviceId ? [queryData.serviceId] : []; // Preserve if provided (as single or array)
-      const needCategory = !categoryId && Boolean(queryData.context?.categoryLabel);
-      const needServices = queryData.context?.serviceLabels?.length > 0 && serviceIds.length === 0;
-      if (needCategory || needServices) {
-        const resolved = await this.resolveScopeIds(queryData.context, { resolveCategory: needCategory });
-        if (needCategory) {
-          categoryId = resolved.categoryId;
-          if (!categoryId) {
-            logger.warn(`Category not found for label: ${queryData.context.categoryLabel}`);
-          } else {
-            logger.info(`Resolved categoryLabel "${queryData.context.categoryLabel}" to categoryId: ${categoryId}`);
-          }
-        }
-        if (needServices) {
-          serviceIds = resolved.serviceIds;
-          if (serviceIds.length === 0) {
-            logger.warn(`No services found for labels: ${queryData.context.serviceLabels.join(', ')}`);
-          } else {
-            logger.info(`Resolved serviceLabels to serviceIds: ${serviceIds.join(', ')}`);
-          }
-        }
-      }
+      // shared policy of both send paths (see resolveMissingScopeIds):
+      // only what the request does not already carry, both ids out of
+      // ONE call.
+      const { categoryId, serviceIds } = await this.resolveMissingScopeIds(queryData);
 
       const basicQueryDoc = {
         userId: queryData.userId,

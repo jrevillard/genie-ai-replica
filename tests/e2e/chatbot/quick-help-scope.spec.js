@@ -49,7 +49,7 @@
 // caption's wording, a count of user turns) — a screenshot alone would prove
 // nothing.
 const { test, expect } = require('@playwright/test');
-const { loginViaUI } = require('../helpers/chatbot');
+const { openWelcomeScreen } = require('../helpers/welcome');
 
 // The live hierarchy this spec serves. Category '2' exists and names itself in
 // ENGLISH; category '404' does not exist at all.
@@ -174,37 +174,33 @@ async function stubHierarchy(page, gate = null) {
 }
 
 async function openWelcome(browser, { holdHierarchy = false } = {}) {
-  const ctx = await browser.newContext({
-    viewport: { width: 1440, height: 900 },
-    ignoreHTTPSErrors: true
-  });
-  const page = await ctx.newPage();
-
   // Both stubs are installed BEFORE the login, so the first chat mount
-  // already sees them.
-  await stubConfiguration(page);
+  // already sees them. The gate is created here and released by the
+  // caller, which is what makes the "hierarchy still on its way" window
+  // real instead of a race against a fast stub.
   let release = null;
-  const gate = holdHierarchy
-    ? new Promise((resolve) => {
-        release = resolve;
-      })
-    : null;
-  await stubHierarchy(page, gate);
+  const setupPage = async (page) => {
+    await stubConfiguration(page);
+    const gate = holdHierarchy
+      ? new Promise((resolve) => {
+          release = resolve;
+        })
+      : null;
+    await stubHierarchy(page, gate);
+  };
 
-  await loginViaUI(page);
-  await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
-  if (!holdHierarchy) {
-    // The reload clears the splash (it shows once per authenticated
-    // session) — the same recipe the other welcome-screen specs use.
-    await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('.quick-help-banner', { timeout: 15000 });
-  }
+  // A held hierarchy must not be reloaded for: the reload waits for
+  // networkidle, and the held answer never settles it. A held run also
+  // gets no settle pause — the spec's own wait is the gate.
+  const { ctx, page } = await openWelcomeScreen(browser, {
+    setupPage,
+    reload: !holdHierarchy,
+    ...(holdHierarchy ? {} : { settle: 1500 })
+  });
+
   // The composer appears only once the configuration's buttons are known:
   // it is the signal that the config has been read and applied.
   await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
-  if (!holdHierarchy) {
-    await page.waitForTimeout(1500);
-  }
   return { ctx, page, release };
 }
 

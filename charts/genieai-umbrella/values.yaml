@@ -1035,6 +1035,13 @@ opea:
     env:
       # Path the embedding endpoint is called on.
       EMBEDDING_SERVER_ENDPOINT: /v1/embeddings
+      # The models are baked into the image; the startup HF Hub HEAD
+      # check is unreachable from a pod with no internet egress, and its
+      # blocking retry loop (5 x 8 s) starves the uvicorn event loop —
+      # the 1 s readiness probe then fails and the pod leaves the
+      # Service endpoints. Offline mode skips the check and loads the
+      # local copy directly.
+      HF_HUB_OFFLINE: "1"
       # Model-endpoint HTTP budgets, resolved by the shared policy module
       # (genie-ai-overlay/core/model_http_policy.py).
       MODEL_CONNECT_TIMEOUT_SECONDS: "30"

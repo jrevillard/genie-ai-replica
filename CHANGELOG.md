@@ -193,13 +193,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the flag off and are unaffected. Structured guards pin the scoping on
   both platforms.
 
+### Removed
+
+- **Breaking:** **`POST /api/service-categories/init` removed.** The route
+  answered 500 on every call: it seeded a default taxonomy through
+  `initializeDefaultCategoriesAndServices()`, a service method that no longer
+  exists (removed during the migration of the service-category service to the
+  translation collections), so the request failed with
+  `TypeError: ...initializeDefaultCategoriesAndServices is not a function`.
+  The endpoint is removed rather than restored — it had no caller (the web
+  frontend, the mobile app and the deployment scripts never called it) and the
+  taxonomy it seeded was a hard-coded English default list that matches no real
+  deployment. Seed the taxonomy from the **Knowledge Hierarchy** tab of the
+  Admin Dashboard, or with
+  `components/gov-chat-backend/scripts/new-schema-scripts/create-knowledge-hierarchy.js`
+  (turn the ArangoDB schema validation off for `serviceCategories`, `services`
+  and `categoryServices` before running the script, and back on afterwards).
+- **Breaking:** **`GET /api/analytics` removed.** Same defect as the endpoint
+  above: the route called `analyticsService.getAnalytics()`, a method removed
+  during the 2025 singleton refactor of the backend services, so it answered
+  500 on every call — a malformed `filters` parameter was the one exception, it
+  was rejected with 400 before the service was reached. No first-party client
+  calls it: the web app reads `/api/analytics/dashboard` and the `/metric`,
+  `/timeseries` and `/satisfaction` endpoints, and the mobile app never called
+  it. It is removed rather than restored — read
+  `GET /api/analytics/dashboard` for the overview.
+- **The npm wrappers that created the database and seeded the taxonomy are
+  gone.** `npm run setup-db`, `npm run init-categories` and `npm run setup-all`
+  ran `node setup-db.js`, `node init-service-categories.js` and
+  `node setup-all.js` from the package root, where those files have never
+  existed — they were kept elsewhere in the repository and are now gone
+  entirely — so every command failed with `MODULE_NOT_FOUND`, while the
+  documentation presented them as the way to create the collections and seed
+  the taxonomy. No action is needed on a deployed stack: the one-shot
+  `db-migrations` job already creates every collection and index at deploy
+  time. For a database managed outside Compose, run
+  `node arango-schema-creator.js ./arango-schema.json` (after
+  `source set-env.sh`) from
+  `components/gov-chat-backend/scripts/new-schema-scripts`, and
+  `node create-knowledge-hierarchy.js` to seed the taxonomy (which needs the
+  ArangoDB schema validation turned off first — see the scripts' README).
+
 ### Fixed
 
+- **The labelling prompt was different on every ingestion run.** The candidate
+  labels sent to the labelling LLM were collected in a Python set, whose order
+  follows the hash seed of the process that built it — so every container sent
+  the same taxonomy in a different order, and the LLM could pick a different
+  label set for the same chunk. The list now keeps the shape the backend
+  returns — each category followed by the services under it — with a canonical
+  order inside each category (case-folded name, exact name as the tie-break),
+  independently of the order the taxonomy arrives in; the labels a chunk
+  stores are in that same order. Two ingestion runs now send the same prompt,
+  so an A/B comparison between labelling runs measures the change under test
+  instead of the prompt ordering. A label whose translation is missing no
+  longer reaches the prompt as the text "None": the per-fetch log line states
+  how many entries carried no usable label and how many the payload held that
+  the parser did not recognise. (#1109, !612)
 - **The welcome screen's title is wrapped in a local scrim instead of a full-width band.** The scrim used to span the whole artwork, washing the icon tiles along with the text; it now hugs the heading and its subtitle and fades on every side, as the designer's mockup does.
 - **The welcome screen's input bar was the wrong size.** It took 96 % of the card row's width and stood 90 px tall — a two-line field. It now takes 81 % of the row (805 px of 989 in the mockup) and rests at 50 px, one line, growing with what is typed into it.
 - **The welcome screen's subtitle was unreadable in the dark theme.** Its grey sat at 3.05:1 against the artwork behind it, below the 4.5:1 floor WCAG AA sets for 16 px text. It is now a brand tint — 9.95:1 in the light theme, 8.91:1 in the dark one — and stays a visible step below the heading.
 - **The welcome screen broke in the narrow-panel window.** With both sidebars open the panel is at its narrowest just above 1400 px: the title wrapped to two lines in the longer locales, and the wave band stopped short of the panel's edges. The title now holds one line in all 14 locales, and the wave band spans the panel's full width.
 - **The welcome screen's input placeholder wrapped to two lines.** "Ask a question, explore knowledge, or start a task…" overflowed the field in 10 of the 14 locales, including the English one. The third clause is gone in every locale, and the placeholder is measured against the field in the regression test, so it cannot come back.
+<<<<<<< HEAD
 
 - **RAGAS benchmarks scored a different answerer than the chat (8-6):** the run's answer leg used a condensed system prompt plus a bare-JSON "answer the question" instruction, producing terse extractive answers ("101,746") where the deployed chat answers in full grounded sentences. RAGAS `answer_relevancy` reverse-generates questions *from the answer text*, so a bare number — factually perfect, faithfulness/context metrics at 1.0 — measured ~0.42 and was marked failing while the real chat answered the same question well (live-measured on the same question, contexts and judge: terse 0.415 vs chat-shaped 1.00). The answer leg now serves with the **verbatim chatqna contract** (or the deployment's pinned `CHATQNA_SYSTEM_PROMPT`, which docker-compose now forwards to okf-server so a pin shapes the chat and the benchmark identically), and the user message mirrors how chatqna presents relevant content. Existing run results were scored by the old answerer — re-run suites to get chat-representative scores.
 - **RAGAS generation orphaned from the UI on refresh (8-6):** an in-flight suite generation has no document in the database until it completes, so after a page refresh the suite list could not contain it — the panel reloaded the previous suite, showed no progress, and a second Generate attempt dead-ended on "a benchmark-suite generation is already running" while the first generation kept executing server-side. The suite listing now surfaces the live generation as a synthetic newest row carrying its live phase and counts, the panel re-attaches on refresh/reopen, and a Generate attempt that lands on the in-flight rejection attaches to the running generation (progress bar + Cancel) instead of erroring.
@@ -208,6 +264,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The benchmark panel named a judge the run was not using (8-6/8-7).** A generation carried an explicit judge pick while the panel displayed "Deployment default" — a label that resolves to the deployment's *active* configuration, which was a different model entirely (the run was silently scored against a personal low-tier key while the UI implied the production one). The server now resolves the effective judge **before** dispatch and publishes it in the live progress envelope ("Judging with <configuration> (<model>)"); "Deployment default" names the active configuration and its model rather than hiding behind a generic word; and a pick the selector cannot display is dropped rather than sent silently. The panel's judge labels were also reading the wrong i18n namespace (`okf.ragas.judge.*` instead of the locales' `okf.ragas.generate.*`), so they had been falling back to English in **all 14 locales** — fixed and translated.
 - **One dropped connection destroyed 74 minutes of benchmark work (8-6).** The knowledge-graph build died on a single `Server disconnected without sending a response` and took the whole run with it, even though 2,057 judge answers were already cached and reusable. Transport-family failures (connection/timeout/protocol errors) are now retried on the same jittered backoff as a rate limit, and the knowledge-graph phase degrades a dead node to an empty result and **reports it** in the run's `kg_failures` rather than aborting the run. Only a malformed request (HTTP 400) surfaces immediately.
 - **A progress count of zero is "not counted yet", not "nothing happened" (8-6).** During the knowledge-graph build the panel reported "Building the knowledge graph 0/1075" for over 20 minutes while the work was demonstrably running — the count increments per *finished* transform, and a judge-backed transform's nodes finish minutes apart, so a long phase looks permanently stalled. A zero count is no longer printed, the bar animates as indeterminate while it is zero, the sidecar reports a counter of judge calls **as issued** (so a line always advances), and the elapsed clock is recomputed on every poll rather than only when a phase reports something. A number that never moves is worse than no number.
+=======
+- **The label-filter strategy could not be changed in a deployment.** The
+  retriever read the strategy from an environment variable that no deployment
+  sets, so a deployment asking for `AND` (every label of the filter must be
+  present on a chunk) filtered with `OR` (one matching label is enough). The
+  retriever now reads the variable the deployment sets,
+  `RETRIEVER_ARANGO_FILTER_STRATEGY`, and refuses to start when the value is
+  neither `AND` nor `OR`. A deployment that set the old variable name must
+  rename it. A check in the configuration validator now fails the build when
+  one of the retriever's variables is read under another name, when the
+  deployment configures a variable that a service reads but no container
+  receives, or when a service reads a variable that no deployment file sets.
+  (#614)
+>>>>>>> origin/main
 
 - **More links in the documentation site pointed at a page that did not answer
   the question.** The "Developer" card on the home page promised a local dev

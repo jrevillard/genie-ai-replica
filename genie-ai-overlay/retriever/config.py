@@ -220,7 +220,15 @@ ARANGO_TRAVERSAL_MAX_RETURNED = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_MAX_RE
 ARANGO_TRAVERSAL_SCORE_THRESHOLD = float(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD", 0.5))
 ARANGO_TRAVERSAL_QUERY = os.getenv("ARANGO_TRAVERSAL_QUERY")
 ARANGO_TRAVERSAL_CONCURRENT_BATCHES = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES", 1))
-ARANGO_FILTER_STRATEGY = os.getenv("ARANGO_FILTER_STRATEGY", "OR")  # for label filtering
+# The label-filter strategies the retriever supports: AND = every filter
+# label must be on a chunk, OR = one of them is enough.
+FILTER_STRATEGIES = ("AND", "OR")
+ARANGO_FILTER_STRATEGY = os.getenv("RETRIEVER_ARANGO_FILTER_STRATEGY", "OR").strip().upper()  # for label filtering
+if ARANGO_FILTER_STRATEGY not in FILTER_STRATEGIES:
+    raise ValueError(
+        f"RETRIEVER_ARANGO_FILTER_STRATEGY must be one of {', '.join(FILTER_STRATEGIES)},"
+        f" got {ARANGO_FILTER_STRATEGY!r}"
+    )
 
 # 1-8g-l (2026-10-11, live incident: Indonesia History — 144k chunks, 633k
 # entities, 1,046,217 LINKS_TO edges — starved EVERY chat answer 9/9: the

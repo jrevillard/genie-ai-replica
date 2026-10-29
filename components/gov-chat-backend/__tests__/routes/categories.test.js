@@ -25,26 +25,12 @@ jest.mock('../../services/session-service', () => ({
   createSession: jest.fn()
 }));
 
-// Mock service-category-service with ALL required methods (route constructor validates getAllCategoriesWithServices)
-jest.mock('../../services/service-category-service', () => ({
-  getAllCategoriesWithServices: jest.fn(),
-  getAdminAllCategoriesWithServices: jest.fn(),
-  getCategoryWithServices: jest.fn(),
-  getCategoryTranslations: jest.fn(),
-  getServiceTranslations: jest.fn(),
-  searchCategoriesAndServices: jest.fn(),
-  createCategory: jest.fn(),
-  createServiceWithTranslations: jest.fn(),
-  updateCategoryWithTranslations: jest.fn(),
-  updateServiceWithTranslations: jest.fn(),
-  deleteCategory: jest.fn(),
-  deleteService: jest.fn(),
-  categoryExists: jest.fn(),
-  initializeDefaultCategoriesAndServices: jest.fn(),
-  upsertCategories: jest.fn(),
-  upsertServices: jest.fn(),
-  init: jest.fn()
-}));
+// Automock the real service: the mock can only expose what the service
+// implements, so a route calling a method the service lacks cannot pass its
+// own test.
+jest.mock('../../services/service-category-service', () =>
+  jest.createMockFromModule('../../services/service-category-service')
+);
 
 // Mock swagger dependencies
 jest.mock(
@@ -412,17 +398,15 @@ describe('POST /api/service-categories/:categoryId/services (AC21)', () => {
 });
 
 // ============================================================
-// AC22: POST /api/service-categories/init
+// POST /api/service-categories/init — removed
 // ============================================================
-describe('POST /api/service-categories/init (AC22)', () => {
-  it('should return 200 with initialization result', async () => {
-    const initResult = { message: 'Default categories initialized', categoriesCreated: 5 };
-    serviceCategoryService.initializeDefaultCategoriesAndServices.mockResolvedValue(initResult);
-
+// Pinned as absent, so it cannot come back wired to a service method that does
+// not exist. Seeding a taxonomy goes through the Knowledge Hierarchy tab of the
+// Admin Dashboard or the create-knowledge-hierarchy.js script.
+describe('POST /api/service-categories/init', () => {
+  it('should return 404 — the endpoint no longer exists', async () => {
     const response = await authPost('/api/service-categories/init', {});
 
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual(initResult);
-    expect(serviceCategoryService.initializeDefaultCategoriesAndServices).toHaveBeenCalled();
+    expect(response.status).toBe(404);
   });
 });

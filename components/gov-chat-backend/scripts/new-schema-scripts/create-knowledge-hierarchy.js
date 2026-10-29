@@ -42,8 +42,8 @@
  *
  * Environment Variables (in .env file):
  * - ARANGO_URL: ArangoDB URL (default: http://localhost:8529)
- * - ARANGO_DATABASE: Database name (default: genie)
- * - ARANGO_USERNAME: ArangoDB username (default: root)
+ * - ARANGO_DATABASE: Database name (default: test-temp)
+ * - ARANGO_USER: ArangoDB username (default: root)
  * - ARANGO_PASSWORD: ArangoDB password (default: test)
  *
  * Prerequisites:

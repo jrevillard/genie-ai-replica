@@ -1835,7 +1835,9 @@ services:
       # these (k, fetch_k, score_threshold, lambda_mult, search_start, traversal_*)
       # in the HTTP request body, so this env block is only reached on direct
       # retriever API calls that bypass chatqna (debugging/probes). Keep defaults
-      # identical to the chatqna block to avoid silent drift.
+      # identical to the chatqna block to avoid silent drift. The label-filter
+      # strategy is not one of them: no request field carries it, so the retriever
+      # reads it from this block.
       RETRIEVER_ARANGO_K: ${RETRIEVER_ARANGO_K:-20}
       RETRIEVER_ARANGO_FETCH_K: ${RETRIEVER_ARANGO_FETCH_K:-30}
       RETRIEVER_ARANGO_SCORE_THRESHOLD: ${RETRIEVER_ARANGO_SCORE_THRESHOLD:-0.2}
@@ -1978,10 +1980,13 @@ services:
       RERANKER_TOP_N: ${RERANKER_TOP_N:-3}
       # Retriever query params (forwarded to retriever via the HTTP request body).
       # chatqna is the AUTHORITATIVE source — in production it always sends these,
-      # so the retriever service's own RETRIEVER_ARANGO_* env vars are inert
-      # (OPEA-vendored fallback, only reached on direct retriever API calls that
-      # bypass chatqna). Defaults are intentionally kept identical in both blocks
-      # to avoid silent drift; tune here and the retriever block tracks it.
+      # so the retriever service's own RETRIEVER_ARANGO_* env vars are inert for
+      # them (OPEA-vendored fallback, only reached on direct retriever API calls
+      # that bypass chatqna). The label-filter strategy is the exception: chatqna
+      # sends no strategy, so the retriever reads it from its own environment,
+      # and it exists in the retriever block only. Defaults of the forwarded
+      # params are intentionally kept identical in both blocks to avoid silent
+      # drift; tune here and the retriever block tracks them.
       RETRIEVER_ARANGO_K: ${RETRIEVER_ARANGO_K:-20}
       RETRIEVER_ARANGO_FETCH_K: ${RETRIEVER_ARANGO_FETCH_K:-30}
       RETRIEVER_ARANGO_SCORE_THRESHOLD: ${RETRIEVER_ARANGO_SCORE_THRESHOLD:-0.2}

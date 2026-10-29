@@ -26,9 +26,23 @@ import './styles/genie-visual-effects.css';
 import './charts-apex-overrides.css';
 
 import loadConfig, { config } from './config-loader';
+import { renderConfigError } from './config-error-screen';
 
-// Initialize configuration before app creation to ensure it's available globally
-await loadConfig();
+// Initialize configuration before app creation to ensure it's available globally.
+//
+// A configuration failure is an operator error, not a transient one: the
+// served file does not satisfy the schema it declares, and the app must not
+// mount with a config it just refused. It must not leave a blank page
+// either — the error screen names the file and the failing paths, so the
+// cause is visible in the interface and not only in the browser console.
+let configError = null;
+try {
+  await loadConfig();
+} catch (error) {
+  configError = error;
+  console.error('Configuration error:', error);
+  renderConfigError(error);
+}
 
 // Determine the initial locale - prioritize:
 // 1. Previously saved user preference
@@ -122,8 +136,12 @@ app.config.globalProperties.$setLocale = function (locale) {
   document.documentElement.setAttribute('lang', locale);
 };
 
-// Mount the app
-app.mount('#app');
+// Mount the app — unless the runtime configuration was rejected, in which
+// case the error screen is the whole interface and the app must not paint
+// over it.
+if (!configError) {
+  app.mount('#app');
+}
 
 // Function to set the actual viewport height as a CSS variable
 function setViewportHeight() {

@@ -483,46 +483,6 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * "/api/service-categories/init":
-   *   post:
-   *     summary: Initialize default categories
-   *     description: Initializes the system with default categories and services
-   *     tags: [Service Categories]
-   *     security:
-   *       - KeycloakOAuth2: ['openid']
-   *     responses:
-   *       '200':
-   *         description: Default categories initialized successfully
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: object
-   *               properties:
-   *                 message:
-   *                   type: string
-   *                 categoriesCreated:
-   *                   type: integer
-   *       '500':
-   *         description: Server error
-   */
-  router.post('/init', async (req, res) => {
-    const start = Date.now();
-    try {
-      logger.info('Initializing default categories and services');
-      const result = await serviceCategoryService.initializeDefaultCategoriesAndServices();
-      logger.info(`Default categories initialized successfully in ${Date.now() - start}ms`);
-      res.json(result);
-    } catch (error) {
-      logger.error(`Error initializing default categories: ${error.message}`, {
-        stack: error.stack,
-        durationMs: Date.now() - start
-      });
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  /**
-   * @swagger
    * "/api/service-categories/{categoryId}/services":
    *   post:
    *     summary: Create a new service for a category

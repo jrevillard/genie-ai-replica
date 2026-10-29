@@ -13,6 +13,7 @@ const {
   parseComposeServiceContracts
 } = require('../validators/parse-compose');
 const { parseEnvTemplateImageVars } = require('../validators/parse-env-template');
+const { validateRetrieverEnvCoverage } = require('../validators/validate-retriever-env');
 const { validateFeatureFlags, OPEA_VAR_NAMES } = require('../validators/validate-features');
 const {
   validateHardwareProfile,
@@ -2062,6 +2063,135 @@ describe('Configuration Validation Suite', () => {
         expect(issues.filter((issue) => issue.kind === 'stylesCommon')).toEqual([
           { theme: 'demo', type: 'login', kind: 'stylesCommon', reference: 'css/common.css' }
         ]);
+      });
+    });
+  });
+
+  describe('AC7: Retriever env var names agree with the code that reads them', () => {
+    let retrieverEnv;
+
+    beforeAll(() => {
+      retrieverEnv = validateRetrieverEnvCoverage({
+        composeFile: COMPOSE_FILE,
+        ansibleEnvFile: ENV_TEMPLATE_FILE,
+        envTemplateFile: ENV_FILE,
+        overlayDir: path.join(ROOT, 'genie-ai-overlay')
+      });
+    });
+
+    test('every knob of the retrieval path is delivered and read', () => {
+      expect(retrieverEnv.errors).toEqual([]);
+    });
+
+    test('the label filter strategy knob is delivered to the retriever and read by the overlay', () => {
+      expect(retrieverEnv.deliveredToRetriever.has('RETRIEVER_ARANGO_FILTER_STRATEGY')).toBe(true);
+      expect(retrieverEnv.codeNames.has('RETRIEVER_ARANGO_FILTER_STRATEGY')).toBe(true);
+    });
+
+    // --- the check on a fixture -------------------------------------------
+    // The check has to fail when the two sides drift apart, otherwise it
+    // passes on every repository state. Each case builds the same small
+    // deployment with one difference and states what the check must report.
+    describe('the check on a fixture', () => {
+      let root;
+
+      const COMPOSE = [
+        'services:',
+        '  retriever-arango-service:',
+        '    environment:',
+        '      RETRIEVER_ARANGO_K: ${RETRIEVER_ARANGO_K:-4}',
+        ''
+      ].join('\n');
+      const WITH_FILTER_STRATEGY =
+        COMPOSE + '      RETRIEVER_ARANGO_FILTER_STRATEGY: ${RETRIEVER_ARANGO_FILTER_STRATEGY:-OR}\n';
+      const READ_K = 'K = os.getenv("RETRIEVER_ARANGO_K", "4")\n';
+      const READ_FILTER_STRATEGY = 'STRATEGY = os.getenv("RETRIEVER_ARANGO_FILTER_STRATEGY", "OR")\n';
+
+      const CASES = [
+        {
+          name: 'a knob the retriever receives and the code reads is not reported',
+          files: { 'docker-compose.yaml': COMPOSE, 'overlay/retriever/config.py': READ_K },
+          reported: []
+        },
+        {
+          name: 'a knob the retriever receives and no service reads is reported',
+          files: {
+            'docker-compose.yaml': WITH_FILTER_STRATEGY,
+            'overlay/retriever/config.py': READ_K
+          },
+          reported: ['RETRIEVER_ARANGO_FILTER_STRATEGY']
+        },
+        {
+          name: 'a knob the deployment configures and the retriever does not receive is reported',
+          files: {
+            'docker-compose.yaml': COMPOSE,
+            'env.j2': 'RETRIEVER_ARANGO_FILTER_STRATEGY={{ retriever_arango_filter_strategy }}\n',
+            'overlay/retriever/config.py': READ_K + READ_FILTER_STRATEGY
+          },
+          reported: ['RETRIEVER_ARANGO_FILTER_STRATEGY']
+        },
+        {
+          name: 'a knob the code reads and no deployment file sets is reported',
+          files: {
+            'docker-compose.yaml': COMPOSE,
+            'overlay/retriever/config.py': READ_K + 'GHOST = os.getenv("RETRIEVER_ARANGO_GHOST", "OR")\n'
+          },
+          reported: ['RETRIEVER_ARANGO_GHOST']
+        },
+        {
+          name: 'a commented-out read does not count as a read',
+          files: {
+            'docker-compose.yaml': WITH_FILTER_STRATEGY,
+            'overlay/retriever/config.py': READ_K + '# ' + READ_FILTER_STRATEGY
+          },
+          reported: ['RETRIEVER_ARANGO_FILTER_STRATEGY']
+        },
+        {
+          name: 'a read by a service outside the retrieval path does not count as a read',
+          files: {
+            'docker-compose.yaml': WITH_FILTER_STRATEGY,
+            'overlay/retriever/config.py': READ_K,
+            'overlay/dataprep/genieai_dataprep_arangodb.py': READ_FILTER_STRATEGY
+          },
+          reported: ['RETRIEVER_ARANGO_FILTER_STRATEGY']
+        }
+      ];
+
+      beforeEach(() => {
+        root = fs.mkdtempSync(path.join(os.tmpdir(), 'retriever-env-'));
+      });
+
+      afterEach(() => {
+        fs.rmSync(root, { recursive: true, force: true });
+      });
+
+      function writeFixture(relativePath, content) {
+        const target = path.join(root, relativePath);
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, content);
+        return target;
+      }
+
+      function checkFixture() {
+        return validateRetrieverEnvCoverage({
+          composeFile: path.join(root, 'docker-compose.yaml'),
+          ansibleEnvFile: path.join(root, 'env.j2'),
+          envTemplateFile: path.join(root, 'env'),
+          overlayDir: path.join(root, 'overlay')
+        });
+      }
+
+      test.each(CASES)('$name', ({ files, reported }) => {
+        writeFixture('env.j2', '');
+        writeFixture('env', '');
+        for (const [relativePath, content] of Object.entries(files)) {
+          writeFixture(relativePath, content);
+        }
+        const errors = checkFixture().errors;
+        expect(errors).toHaveLength(reported.length);
+        for (const name of reported) {
+          expect(errors.join('\n')).toContain(name);
+        }
       });
     });
   });

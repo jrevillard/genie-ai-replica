@@ -60,6 +60,7 @@ from .config import (
     FANOUT_ENABLED,
     FANOUT_MAX_GRAPHS,
     FANOUT_PER_GRAPH_TIMEOUT_MS,
+    FILTER_STRATEGIES,
     HF_TOKEN,
     HYBRID_BM25_ANALYZER,
     HYBRID_BM25_CANDIDATES,
@@ -277,7 +278,10 @@ def _build_aql_filter_clause(labels_to_filter, filter_strategy):
         return f"FILTER (doc.chunk_labels != null) AND ({labels_array} ALL IN doc.chunk_labels)"
     if filter_strategy == "OR":
         return f"FILTER (doc.chunk_labels != null) AND ({labels_array} ANY IN doc.chunk_labels)"
-    raise HTTPException(status_code=400, detail=f"Invalid filter_strategy: {filter_strategy}. Expected 'AND' or 'OR'.")
+    raise HTTPException(
+        status_code=400,
+        detail=f"Invalid filter_strategy: {filter_strategy}. Expected one of {', '.join(FILTER_STRATEGIES)}.",
+    )
 
 
 def _normalize_chunk_id(doc) -> str | None:
@@ -1333,7 +1337,9 @@ class GenieaiArangoRetriever(OpeaComponent):
             traversal_query = input_dict.get("traversal_query", ARANGO_TRAVERSAL_QUERY)
 
             filter_data = input_dict.get("context", {})
-            filter_strategy = input_dict.get("filter_strategy", ARANGO_FILTER_STRATEGY).upper()
+            # Same normalization as the deployment value, so both paths accept
+            # the same spellings.
+            filter_strategy = input_dict.get("filter_strategy", ARANGO_FILTER_STRATEGY).strip().upper()
 
             # Consolidate all labels into a single list
             labels_to_filter = []

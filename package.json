@@ -10,8 +10,8 @@
     "format:check": "npm run format:check --prefix components/gov-chat-frontend && npm run format:check --prefix components/gov-chat-backend && npm run format:check --prefix components/document-repository && npm run format:check --prefix components/shared/lib",
     "lint:py": "ruff check genie-ai-overlay/",
     "lint:py:fix": "ruff check --fix genie-ai-overlay/",
-    "format:py": "ruff format genie-ai-overlay/",
-    "format:py:check": "ruff format --check genie-ai-overlay/",
+    "format:py": "ruff format genie-ai-overlay/ --extend-exclude '*.md'",
+    "format:py:check": "ruff format --check genie-ai-overlay/ --extend-exclude '*.md'",
     "lint:dart": "cd mobile/genie_ai_mobile && flutter analyze",
     "format:dart": "cd mobile/genie_ai_mobile && dart format .",
     "format:dart:check": "cd mobile/genie_ai_mobile && dart format --set-exit-if-changed ."

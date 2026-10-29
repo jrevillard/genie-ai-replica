@@ -138,7 +138,7 @@ The application uses a dynamic configuration system that loads from `/config/gen
     "type": "file|inline",
     "value": "/path/to/icon.svg"
   },
-  "category": "service-category-id",
+  "category": "Healthcare & Social Services",
   "prompt": "i18n.promptKey", 
   "styles": {
     "backgroundColor": "#color",
@@ -147,6 +147,12 @@ The application uses a dynamic configuration system that loads from `/config/gen
   }
 }
 ```
+
+`category` is the knowledge area's **English name** in the live hierarchy —
+the label `GET /api/service-categories/categories` publishes as `nameEN`
+(e.g. `Taxes & Revenue`), not a database key. The hierarchy's own key is
+still accepted, for configurations written before that spelling. A category
+the hierarchy does not carry renders as an error card and sends nothing.
 
 #### Domain-Specific Examples
 
@@ -175,7 +181,7 @@ The application uses a dynamic configuration system that loads from `/config/gen
           {
             "id": "find-products",
             "title": "quickhelp.findProducts",
-            "category": "search",
+            "category": "Business & Trade",
             "prompt": "quickhelp.findProductsPrompt"
           }
         ]
@@ -210,7 +216,7 @@ The application uses a dynamic configuration system that loads from `/config/gen
           {
             "id": "book-appointment",
             "title": "quickhelp.bookAppointment",
-            "category": "appointments",
+            "category": "Healthcare & Social Services",
             "prompt": "quickhelp.bookAppointmentPrompt"
           }
         ]

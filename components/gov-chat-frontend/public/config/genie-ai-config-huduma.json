@@ -243,7 +243,7 @@
                           "string",
                           "null"
                         ],
-                        "description": "Category ID for the button (null for general)"
+                        "description": "ENGLISH name of the category the button scopes to, as the live hierarchy publishes it (e.g. \"Taxes & Revenue\"); null for general. The hierarchy's database key is accepted too, for configurations written before this spelling."
                       },
                       "styles": {
                         "type": "object",
@@ -385,7 +385,7 @@
               "type": "file",
               "value": "/config/quickhelp/identity-civil.svg"
             },
-            "category": "1",
+            "category": "Identity & Civil Registration",
             "styles": {
               "backgroundColor": "#f5f9ff",
               "hoverColor": "#e6f0ff",
@@ -403,7 +403,7 @@
               "type": "file",
               "value": "/config/quickhelp/taxes-revenue.svg"
             },
-            "category": "5",
+            "category": "Taxes & Revenue",
             "styles": {
               "backgroundColor": "#fff7ed",
               "hoverColor": "#ffedd5",
@@ -421,7 +421,7 @@
               "type": "file",
               "value": "/config/quickhelp/business-trade.svg"
             },
-            "category": "8",
+            "category": "Business & Trade",
             "styles": {
               "backgroundColor": "#f5f3ff",
               "hoverColor": "#ede9fe",
@@ -439,7 +439,7 @@
               "type": "file",
               "value": "/config/quickhelp/healthcare-social.svg"
             },
-            "category": "2",
+            "category": "Healthcare & Social Services",
             "styles": {
               "backgroundColor": "#fef2f2",
               "hoverColor": "#fee2e2",
@@ -457,7 +457,7 @@
               "type": "file",
               "value": "/config/quickhelp/education-learning.svg"
             },
-            "category": "3",
+            "category": "Education & Learning",
             "styles": {
               "backgroundColor": "#eff6ff",
               "hoverColor": "#dbeafe",
@@ -475,7 +475,7 @@
               "type": "file",
               "value": "/config/quickhelp/transportation-mobility.svg"
             },
-            "category": "7",
+            "category": "Transportation & Mobility",
             "styles": {
               "backgroundColor": "#f5f3ff",
               "hoverColor": "#ede9fe",
@@ -493,7 +493,7 @@
               "type": "file",
               "value": "/config/quickhelp/housing-urban.svg"
             },
-            "category": "9",
+            "category": "Housing & Urban Development",
             "styles": {
               "backgroundColor": "#ecfeff",
               "hoverColor": "#cffafe",
@@ -511,7 +511,7 @@
               "type": "file",
               "value": "/config/quickhelp/employment-labor.svg"
             },
-            "category": "4",
+            "category": "Employment & Labor Services",
             "styles": {
               "backgroundColor": "#fdf2f8",
               "hoverColor": "#fce7f3",

@@ -5121,3 +5121,352 @@ describe('ChatBotComponent welcome heading', () => {
     expect(heading.text()).not.toMatch(/[<>]/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The category a Quick Help CONFIGURATION names
+//
+// The configuration writes the category's ENGLISH NAME — the label the
+// hierarchy publishes and the corpus filters on. The database key stays
+// accepted: a configuration written before the change still names a
+// category, and a deployment's configuration is edited on its own.
+// ---------------------------------------------------------------------------
+describe('Quick Help category reference', () => {
+  const TREE = [{ catKey: '2', name: 'Civil Registry', nameEN: 'Civil Registry', children: [] }];
+
+  const configLoader = require('../../config-loader');
+  let originalConfig;
+
+  beforeEach(() => {
+    originalConfig = configLoader.default.getMockImplementation();
+    configLoader.default.mockResolvedValue({
+      features: {
+        chat: {
+          quickHelp: {
+            buttons: [{ id: 'civil', title: { en: 'Civil' }, category: 'Civil Registry' }]
+          }
+        }
+      }
+    });
+    // This block sits OUTSIDE the main ChatBotComponent describe, so the
+    // file-level hooks do not run here: the mocks are reset by hand, or a
+    // test inherits the implementation an earlier block left behind (a
+    // conversation whose tags name buttons this config does not carry).
+    jest.clearAllMocks();
+    const serviceTreeService = require('../../services/serviceTreeService');
+    serviceTreeService.getAllCategories.mockReset();
+    serviceTreeService.getAllCategories.mockResolvedValue([]);
+    const chatHistoryService = require('../../services/chatHistoryService');
+    chatHistoryService.getConversation.mockReset();
+    chatHistoryService.getConversation.mockResolvedValue({ messages: [] });
+  });
+
+  afterEach(() => {
+    configLoader.default.mockImplementation(originalConfig);
+    // The block restored mocks its beforeEach mutated — the file-level
+    // hooks do not run here, so a later block would inherit the empty
+    // hierarchy and the empty conversation this block installed.
+    const serviceTreeService = require('../../services/serviceTreeService');
+    serviceTreeService.getAllCategories.mockReset();
+    serviceTreeService.getAllCategories.mockResolvedValue([]);
+    const chatHistoryService = require('../../services/chatHistoryService');
+    chatHistoryService.getConversation.mockReset();
+    chatHistoryService.getConversation.mockResolvedValue({ messages: [] });
+  });
+
+  it('resolves a category named by its ENGLISH name', async () => {
+    mockLiveTree(TREE);
+    const wrapper = await createChatBotWrapperAsync(TREE);
+
+    expect(wrapper.vm.getCategoryEnLabel('Civil Registry')).toBe('Civil Registry');
+    expect(wrapper.vm.getCategoryDisplayName('Civil Registry')).toBe('Civil Registry');
+  });
+
+  it('still resolves a category named by its database key', async () => {
+    mockLiveTree(TREE);
+    const wrapper = await createChatBotWrapperAsync(TREE);
+
+    expect(wrapper.vm.getCategoryEnLabel('2')).toBe('Civil Registry');
+  });
+
+  it('a name the hierarchy does not carry names no category', async () => {
+    mockLiveTree(TREE);
+    const wrapper = await createChatBotWrapperAsync(TREE);
+
+    expect(wrapper.vm.getCategoryEnLabel('Taxes')).toBeNull();
+  });
+
+  it('a button whose category is named by its ENGLISH name is not broken', async () => {
+    mockLiveTree(TREE);
+    const wrapper = await createChatBotWrapperAsync(TREE);
+
+    const state = wrapper.vm.quickHelpScopeState({
+      id: 'civil',
+      category: 'Civil Registry',
+      serviceLabels: []
+    });
+
+    expect(state.broken).toBe(false);
+  });
+
+  it('an entry the hierarchy cannot address by key cannot be addressed by name', async () => {
+    // Resolving one would hand the conversation's edge a name where the
+    // backend writes `serviceCategories/<key>`: the card would look
+    // healthy and the conversation would silently lose its category.
+    const wrapper = await createChatBotWrapperAsync([{ name: 'Orphan', nameEN: 'Orphan', children: [] }]);
+
+    expect(wrapper.vm.getCategoryEnLabel('Orphan')).toBeNull();
+    expect(wrapper.vm.quickHelpCategoryKey('Orphan')).toBeNull();
+  });
+
+  it('a hierarchy key that equals another category NAME resolves the keyed category', async () => {
+    // A re-created hierarchy can mint a key ("2024") that equals another
+    // category's name. Every key-typed consumer — the saved conversation's
+    // edge, the legacy tags — must keep resolving to the KEYED category:
+    // the name interpretation would restore the wrong scope.
+    const wrapper = await createChatBotWrapperAsync([
+      { catKey: '2024', name: 'The Year Area', nameEN: 'The Year Area', children: [] },
+      { catKey: '7', name: '2024', nameEN: '2024', children: [] }
+    ]);
+
+    expect(wrapper.vm.getCategoryDisplayName('2024')).toBe('The Year Area');
+    expect(wrapper.vm.getCategoryEnLabel('2024')).toBe('The Year Area');
+  });
+
+  it('a scope restored while the hierarchy was down carries the key once it lands', async () => {
+    // The tree was not there at restore: the chips and the selected
+    // category keep the configuration's own spelling. The next save would
+    // write that spelling as the conversation's edge
+    // (`serviceCategories/<categoryId>`) — a document that does not
+    // exist. When the hierarchy lands, the installed scope is
+    // re-resolved, like the mobile twin re-resolves its restore.
+    const serviceTreeService = require('../../services/serviceTreeService');
+    let resolveTree;
+    const pendingTree = new Promise((resolve) => {
+      resolveTree = resolve;
+    });
+    // The hierarchy is down at the mount, down again at the restore's
+    // bounded retry (each failure SETTLES — the load reports a failure,
+    // it does not hang), and only the third attempt is held until the
+    // test recovers it.
+    serviceTreeService.getAllCategories
+      .mockRejectedValueOnce(new Error('hierarchy down'))
+      .mockRejectedValueOnce(new Error('hierarchy down'))
+      .mockImplementation(() => pendingTree);
+
+    const wrapper = createChatBotWrapper();
+    const vm = wrapper.vm;
+    await flushPromises();
+
+    const chatHistoryService = require('../../services/chatHistoryService');
+    chatHistoryService.getConversation.mockResolvedValueOnce({
+      _key: 'c1',
+      title: 'Saved chat',
+      messages: [],
+      tags: ['civil']
+    });
+
+    await vm.loadExistingConversation('c1');
+    // The tree was down: the scope carries the configuration's spelling.
+    expect(vm.currentCategoryId).toBe('Civil Registry');
+
+    resolveTree(TREE);
+    await vm.ensureServiceCategoriesLoaded();
+    await flushPromises();
+
+    expect(vm.currentCategoryId).toBe('2');
+    const chip = vm.selectedContextItems.find((item) => item.source === 'quickHelp');
+    expect(chip.category).toBe('2');
+    // The recovery moved fields the user cannot edit: a conversation that
+    // was clean before the tree landed stays clean.
+    expect(vm.hasUnsavedChanges()).toBe(false);
+  });
+
+  it('a category-only scope restored while the hierarchy was down is repaired', async () => {
+    // A conversation saved with a category edge and no tags restores a
+    // category-only chip. While the tree is down its display is blank and
+    // its category keeps the configuration's spelling; the recovery
+    // resolves both — the chip's display IS the category's own name.
+    const serviceTreeService = require('../../services/serviceTreeService');
+    let resolveTree;
+    const pendingTree = new Promise((resolve) => {
+      resolveTree = resolve;
+    });
+    serviceTreeService.getAllCategories
+      .mockRejectedValueOnce(new Error('hierarchy down'))
+      .mockRejectedValueOnce(new Error('hierarchy down'))
+      .mockImplementation(() => pendingTree);
+
+    const wrapper = createChatBotWrapper();
+    const vm = wrapper.vm;
+    await flushPromises();
+
+    const chatHistoryService = require('../../services/chatHistoryService');
+    chatHistoryService.getConversation.mockResolvedValueOnce({
+      _key: 'c2',
+      title: 'Category-only chat',
+      messages: [],
+      categoryId: 'Civil Registry'
+    });
+
+    await vm.loadExistingConversation('c2');
+    expect(vm.currentCategoryId).toBe('Civil Registry');
+
+    resolveTree(TREE);
+    await vm.ensureServiceCategoriesLoaded();
+    await flushPromises();
+
+    expect(vm.currentCategoryId).toBe('2');
+    const chip = vm.selectedContextItems[0];
+    expect(chip.categoryOnly).toBe(true);
+    expect(chip.category).toBe('2');
+    expect(chip.service).toBe('Civil Registry');
+  });
+
+  it('an empty key is no key: a reference resolved to it keeps the card broken', async () => {
+    // declaresCategoryScope reads an empty id as NO scope: a reference
+    // resolved to one would render the card healthy and send the query
+    // unfiltered while the card promised a scope.
+    const wrapper = await createChatBotWrapperAsync([{ catKey: '', name: 'Ghost', nameEN: 'Ghost', children: [] }]);
+
+    expect(wrapper.vm.getCategoryEnLabel('Ghost')).toBeNull();
+    expect(wrapper.vm.quickHelpCategoryKey('Ghost')).toBeNull();
+
+    const button = wrapper.vm.quickHelpButtons.find((b) => b.id === 'civil');
+    expect(button.category).toBe('Civil Registry');
+
+    const state = wrapper.vm.quickHelpScopeState({
+      id: 'civil',
+      category: 'Civil Registry',
+      serviceLabels: []
+    });
+    expect(state.broken).toBe(true);
+  });
+
+  it('the no-scope placeholder is never reinterpreted by the recovery', async () => {
+    // 'general' names no category in any spelling. A hierarchy category
+    // literally named "general" must not hijack a category-less selection
+    // into a real scope when the tree lands.
+    const generalTree = [
+      { catKey: '2', name: 'Civil Registry', nameEN: 'Civil Registry', children: [] },
+      { catKey: '9', name: 'General', nameEN: 'general', children: [] }
+    ];
+    mockLiveTree(generalTree);
+    const wrapper = createChatBotWrapper();
+    await flushPromises();
+
+    const vm = wrapper.vm;
+    vm.currentCategoryId = 'general';
+    vm.selectedContextItems.push({
+      service: 'Just Chat',
+      serviceKey: 'just-chat',
+      source: 'quickHelp',
+      id: 'just-chat',
+      category: 'general',
+      selected: true
+    });
+    vm.reResolveInstalledScopeAgainstHierarchy();
+
+    expect(vm.currentCategoryId).toBe('general');
+    expect(vm.selectedContextItems[0].category).toBe('general');
+  });
+
+  it('a configuration card with the no-scope placeholder is never reinterpreted', async () => {
+    // 'general' declares NO scope in every rule of the file. A hierarchy
+    // category literally named "general" must not hijack such a card into
+    // a real scope at the configuration mapping.
+    const generalTree = [
+      { catKey: '2', name: 'Civil Registry', nameEN: 'Civil Registry', children: [] },
+      { catKey: '9', name: 'General', nameEN: 'general', children: [] }
+    ];
+    const configLoader = require('../../config-loader');
+    const previous = configLoader.default.getMockImplementation();
+    configLoader.default.mockResolvedValue({
+      features: {
+        chat: {
+          quickHelp: {
+            buttons: [{ id: 'open', title: { en: 'Open' }, category: 'general' }]
+          }
+        }
+      }
+    });
+    try {
+      mockLiveTree(generalTree);
+      const wrapper = createChatBotWrapper();
+      await flushPromises();
+
+      const button = wrapper.vm.quickHelpButtons.find((b) => b.id === 'open');
+      expect(button.category).toBe('general');
+      expect(wrapper.vm.quickHelpScopeState(button).broken).toBe(false);
+    } finally {
+      configLoader.default.mockImplementation(previous);
+    }
+  });
+
+  it('the configuration reference is normalized to the hierarchy key', async () => {
+    // The conversation's edge speaks the hierarchy's own key
+    // (`serviceCategories/<key>`): the reference the configuration wrote
+    // is resolved into it.
+    mockLiveTree(TREE);
+    const wrapper = createChatBotWrapper();
+    await flushPromises();
+
+    const button = wrapper.vm.quickHelpButtons.find((b) => b.id === 'civil');
+    expect(button.category).toBe('2');
+  });
+
+  it('a restored scope carries the hierarchy key, not the name', async () => {
+    // The conversation's category edge is written by the backend as
+    // `serviceCategories/<key>`: the scope the restore installs must
+    // speak the hierarchy's key, even when the hierarchy landed after
+    // the configuration did.
+    const serviceTreeService = require('../../services/serviceTreeService');
+    let resolveTree;
+    serviceTreeService.getAllCategories.mockReturnValue(
+      new Promise((resolve) => {
+        resolveTree = resolve;
+      })
+    );
+
+    const wrapper = createChatBotWrapper();
+    const vm = wrapper.vm;
+    await flushPromises();
+
+    resolveTree(TREE);
+    await flushPromises();
+
+    const chatHistoryService = require('../../services/chatHistoryService');
+    chatHistoryService.getConversation.mockResolvedValueOnce({
+      _key: 'c1',
+      title: 'Saved chat',
+      messages: [],
+      tags: ['civil']
+    });
+
+    await vm.loadExistingConversation('c1');
+
+    expect(vm.currentCategoryId).toBe('2');
+    expect(vm.selectedContextItems[0].category).toBe('2');
+  });
+
+  it('resolves the reference when the hierarchy lands after the configuration', async () => {
+    // The two loads are independent: the configuration may be read
+    // before the hierarchy is there. The buttons are resolved again when
+    // the hierarchy lands.
+    const serviceTreeService = require('../../services/serviceTreeService');
+    let resolveTree;
+    serviceTreeService.getAllCategories.mockReturnValue(
+      new Promise((resolve) => {
+        resolveTree = resolve;
+      })
+    );
+
+    const wrapper = createChatBotWrapper();
+    await flushPromises();
+
+    resolveTree(TREE);
+    await flushPromises();
+
+    const button = wrapper.vm.quickHelpButtons.find((b) => b.id === 'civil');
+    expect(button.category).toBe('2');
+  });
+});

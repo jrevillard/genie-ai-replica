@@ -51,8 +51,13 @@
 const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen } = require('../helpers/welcome');
 
-// The live hierarchy this spec serves. Category '2' exists and names itself in
-// ENGLISH; category '404' does not exist at all.
+// The live hierarchy this spec serves. The category 'Civil Registry' exists and
+// names itself in ENGLISH; 'Taxes & Revenue' does not exist at all.
+//
+// The cards name their category the way a CONFIGURATION does: by the
+// hierarchy's ENGLISH name — the spelling a deployment can write down. The
+// hierarchy's own key ('2') stays accepted, for configurations written
+// before that spelling was adopted.
 const HIERARCHY = [
   {
     catKey: '2',
@@ -80,7 +85,10 @@ const STUB_BUTTONS = [
   },
   {
     // A card whose CATEGORY names fine but whose LABEL is gone: the
-    // broken-guard is the only thing that refuses it.
+    // broken-guard is the only thing that refuses it. Its category is the
+    // hierarchy's own KEY — the legacy spelling — so the rendered layer
+    // also proves the key resolves (its caption must not blame the
+    // category; the healthy card beside it proves the NAME does).
     id: 'e2e-label-gone',
     title: { en: 'Label gone' },
     icon: { type: 'file', value: '/config/quickhelp/identity-civil.svg' },
@@ -101,7 +109,7 @@ const STUB_BUTTONS = [
     id: 'e2e-category-gone',
     title: { en: 'Category gone' },
     icon: { type: 'file', value: '/config/quickhelp/taxes-revenue.svg' },
-    category: '404',
+    category: 'Taxes & Revenue',
     action: {
       visibleText: { en: 'Tell me about the vanished category' },
       hiddenPrompt: { en: 'Tell me about the vanished category' }
@@ -113,13 +121,18 @@ const STUB_BUTTONS = [
     // CONTROL — without it, a spec that stubs everything to "broken" would
     // pass even if the app rendered every card as an error.
     //
+    // Its category is the ENGLISH NAME — the spelling every shipped
+    // configuration now writes, and the one the rendered layer must prove
+    // reaches the query path. The legacy key is exercised by the label-gone
+    // card beside it.
+    //
     // The dual-prompt action is what makes the click SEND: a card without a
     // hidden prompt installs its chip and stops there, so a control card
     // without one would prove nothing about the query path.
     id: 'e2e-healthy',
     title: { en: 'Healthy card' },
     icon: { type: 'file', value: '/config/quickhelp/healthcare-social.svg' },
-    category: '2',
+    category: 'Civil Registry',
     serviceLabels: ['Births'],
     action: {
       visibleText: { en: 'Tell me about births' },
@@ -300,6 +313,10 @@ test.describe('Quick Help scope states', () => {
     // The gone LABEL is quoted by name — that is the whole point of the
     // caption: the operator sees WHICH label to fix.
     expect(labelText, 'the caption quotes the label that is gone').toContain('No Such Service');
+    expect(
+      labelText.toLowerCase(),
+      'the caption does not blame the category — its legacy KEY resolved'
+    ).not.toContain('category');
 
     await ctx.close();
   });

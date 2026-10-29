@@ -177,7 +177,7 @@
                           "string",
                           "null"
                         ],
-                        "description": "Category ID for the button (null for general)"
+                        "description": "ENGLISH name of the category the button scopes to, as the live hierarchy publishes it (e.g. \"Taxes & Revenue\"); null for general. The hierarchy's database key is accepted too, for configurations written before this spelling."
                       },
                       "action": {
                         "type": "object",
@@ -327,7 +327,7 @@
               "type": "file",
               "value": "/config/quickhelp/identity-civil.svg"
             },
-            "category": "1",
+            "category": "Identity & Civil Registration",
             "action": {
               "visibleText": {
                 "ar": "أحتاج إلى معلومات حول كيفية تقديم طلب للحصول على بطاقة الهوية الوطنية",
@@ -385,7 +385,7 @@
               "type": "file",
               "value": "/config/quickhelp/taxes-revenue.svg"
             },
-            "category": "5",
+            "category": "Taxes & Revenue",
             "action": {
               "visibleText": {
                 "ar": "ما هو العملية لدفع الضرائب عبر الإنترنت؟",
@@ -443,7 +443,7 @@
               "type": "file",
               "value": "/config/quickhelp/business-trade.svg"
             },
-            "category": "8",
+            "category": "Business & Trade",
             "action": {
               "visibleText": {
                 "ar": "دلني على الخطوات لتسجيل عمل جديد",
@@ -501,7 +501,7 @@
               "type": "file",
               "value": "/config/quickhelp/healthcare-social.svg"
             },
-            "category": "2",
+            "category": "Healthcare & Social Services",
             "action": {
               "visibleText": {
                 "ar": "أين يمكنني العثور على معلومات حول خدمات الرعاية الصحية العامة؟",
@@ -559,7 +559,7 @@
               "type": "file",
               "value": "/config/quickhelp/education-learning.svg"
             },
-            "category": "3",
+            "category": "Education & Learning",
             "action": {
               "visibleText": {
                 "ar": "ما هي خدمات التعليم المتاحة لأطفالي؟",
@@ -617,7 +617,7 @@
               "type": "file",
               "value": "/config/quickhelp/transportation-mobility.svg"
             },
-            "category": "7",
+            "category": "Transportation & Mobility",
             "action": {
               "visibleText": {
                 "ar": "كيف أجدد رخصة القيادة الخاصة بي؟",
@@ -675,7 +675,7 @@
               "type": "file",
               "value": "/config/quickhelp/housing-urban.svg"
             },
-            "category": "9",
+            "category": "Housing & Urban Development",
             "action": {
               "visibleText": {
                 "ar": "أخبرني عن برامج الإسكان الميسورة التكلفة في كينيا",
@@ -733,7 +733,7 @@
               "type": "file",
               "value": "/config/quickhelp/employment-labor.svg"
             },
-            "category": "4",
+            "category": "Employment & Labor Services",
             "action": {
               "visibleText": {
                 "ar": "ما هي فرص العمل الحكومية المتاحة حاليًا؟",

@@ -104,6 +104,8 @@ The Quick Help overlay loads on first launch and after a fresh conversation. It 
 
 A button may also carry an `action` object with `visibleText` and `hiddenPrompt` keys (each a locale-keyed map of strings). When `action` is present, `chatbot_component.dart:739-740` (inside `_quickHelpPressed`, starting at line 737) reads `button['action']['visibleText']` to prefill the chat input and `button['action']['hiddenPrompt']` to seed the LLM's hidden prompt — these fields are optional and only present when the button's prompt needs to differ from its visible label.
 
+A `category` names the category the button scopes to: the category's **English name** (`nameEN`, as `GET /api/service-categories/categories` publishes it) — the same spelling the retriever filters on, and the one a deployment can write down without reading the database. The hierarchy's own `catKey` is still accepted, for configurations written before that spelling was adopted. A category the live hierarchy does not carry renders as an error card and sends nothing.
+
 User flow:
 
 1. Overlay appears above the chat input.

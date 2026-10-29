@@ -40,8 +40,7 @@ spec:
       # `registry.k8s.io/kubectl` is distroless (no /bin/sh), so this Pod
       # ships kubectl via an init container that downloads the static
       # binary into the shared `tools` emptyDir. The main container is
-      # alpine (sh is built in); kubectl is made discoverable via the
-      # PATH env,
+      # alpine (sh is built in); kubectl is made discoverable via the PATH env,
       # which prepends /tools/bin.
       volumes:
         - name: tools
@@ -55,7 +54,7 @@ spec:
           env:
             - name: PATH
               # Prepend /tools/bin so kubectl (downloaded by the
-              # `tools` init container) are discoverable by the script.
+              # `tools` init container) is discoverable by the script.
               value: /tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             - name: RENDERED_PROFILE
               value: {{ .Values.clusterProfile | default "dev" | quote }}

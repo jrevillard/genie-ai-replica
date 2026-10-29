@@ -546,11 +546,12 @@ expect_fail "a kubeletToolsMirror with a scheme-position colon" \
   $(valid_flags) --set 'global.kubeletToolsMirror=https:mirror.internal:8443'
 
 # The delivery pins cover the documented grammar's full cross product
-# (scheme? x port? x prefix?): the default (scheme, no port, no
-# prefix), bare host, scheme-less x port, scheme-less x prefix, scheme
-# x port, scheme x prefix (the Nexus/Artifactory topology), scheme x
-# port x prefix, and the uppercase-scheme form the regex admits for RFC
-# 3986's case-insensitive scheme names. The schema cases above pin only
+# (scheme? x port? x prefix?) — bare host; scheme-less with port,
+# prefix, or both; scheme-ful without port or prefix (the default);
+# scheme-ful with port; scheme-ful with prefix; and scheme-ful with
+# both (the Nexus/Artifactory topology) — plus the uppercase-scheme
+# variant the regex admits for RFC 3986's case-insensitive scheme
+# names. The schema cases above pin only
 # the key name — helm's schema error embeds the whole pattern, so a
 # clause-specific needle would pin the pattern TEXT and break on every
 # refinement; the inputs are the discrimination.
@@ -573,6 +574,7 @@ expect_render_contains \
   "a scheme+port+prefix mirror reaches the init shell verbatim" \
   'BASE="https://mirror.internal:8443/releases"' \
   $(valid_flags) --set global.kubeletToolsMirror=https://mirror.internal:8443/releases
+
 expect_render_contains \
   "the default mirror reaches the init shell" \
   'BASE="https://dl.k8s.io"' \

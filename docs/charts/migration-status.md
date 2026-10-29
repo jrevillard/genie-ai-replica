@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-29)
 
-- **Chart `genieai-umbrella` at 0.2.123**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.124**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,29 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 50 (0.2.124)** — 6 findings from the twenty-sixth
+  `/code-review`, all comment/enum residue (the reviewer's own verdict:
+  the run-25 fix itself verified true).
+  - *The subject-verb fix was applied to the wrong comment* — the
+    already-grammatical top-of-spec comment was reworded while the
+    actual "are discoverable" slip survived one paragraph below. The
+    slip is fixed at line 58, the widow line beside it rewrapped.
+  - *The pin-inventory enumeration omitted scheme-less port+prefix and
+    padded the count with the uppercase-scheme variant* — a case
+    variant of one cell, not a cross-product cell. The enumeration
+    names all eight cells now.
+  - *Chart.yaml's own comment read "the two version on independent
+    axes"* — plural fixed; and its description carried the French
+    placeholder `overlays/<pays>/<env>/` (a Language-Policy violation
+    describing a layout that does not exist) — rewritten in English
+    with the real `overlays/<cluster>/<env>/` shape. The same French
+    placeholder survived in examples/argocd-application.yaml — found by
+    grepping the class, not by the review.
+  - *The site doc's grammar shorthand lagged on the prefix shape* —
+    `[/prefix]` against the other three surfaces'
+    `[/multi/segment/prefix]`. Aligned.
+  - *A missing blank line between two pin blocks* — the file's uniform
+    separation restored.
 - **Review loop, pass 49 (0.2.123)** — 6 findings from the twenty-fifth
   `/code-review`: five fixed, one declined as machinery (tripwire
   recorded).
@@ -2048,7 +2071,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.123** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.124** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

@@ -418,10 +418,11 @@ describe('ServiceCategoryService', () => {
       // panel keys its label map by this display name — the file's labels
       // ARE locale names — so an English fallback here would let two
       // entities share one key and file a label under the wrong entity.
-      // The projection carries the raw translation — the fallback the
-      // public tree applies is not there.
-      expect(text).toMatch(/name:\s*categoryTranslation,\s*nameEN:\s*categoryNameEN/);
-      expect(text).toMatch(/name:\s*serviceTranslation,\s*nameEN:\s*serviceNameEN/);
+      // The sibling shape test above already pins what the RETURN does
+      // carry; this one fails the moment the public tree's display-name
+      // fallback is copy-pasted in.
+      expect(text).not.toMatch(/LET categoryName =/);
+      expect(text).not.toMatch(/LET serviceName =/);
     });
 
     it('falls back to the entity document nameEN when no EN translation row exists', async () => {

@@ -137,10 +137,6 @@ reads is the label that scopes the query. An entity with no name in any
 language is published unnamed, and the clients do not offer it: it cannot be
 scoped on.
 
-The labels are minted when a document is ingested, so a corpus that never
-carried the label of an entity seeded outside the write path needs a
-re-ingest before that entity's scope matches documents.
-
 > **Two different fields share the name `nameEN`.** The TREE publishes one
 > (the EN translation — or the entity document's own `nameEN` for an entity
 > with no EN translation row — the value clients put on the wire); the STORED

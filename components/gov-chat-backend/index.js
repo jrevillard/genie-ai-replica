@@ -117,8 +117,8 @@ const swaggerOptions = {
         // definition: the wire contract must not be written twice. The two
         // trees differ in ONE field: the public tree falls back to the
         // ENGLISH name for its display name, the admin tree does not (the
-        // admin panel keys its label map by the display name). Every
-        // description below says which tree it applies to.
+        // admin panel keys its label map by the display name) — the
+        // descriptions of `name` say which tree they describe.
         CategoryTree: {
           type: 'object',
           properties: {
@@ -145,7 +145,7 @@ const swaggerOptions = {
                   _key: {
                     type: 'string',
                     description:
-                      "The service entity's key. A client identifies a service by it, never by a name — neither spelling is unique inside a category."
+                      "The service entity's stable key. Neither spelling of the name is unique inside a category, so identity that survives renames and locale switches keys on this."
                   },
                   name: {
                     type: 'string',

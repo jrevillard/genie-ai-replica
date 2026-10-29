@@ -156,11 +156,9 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     if (serviceItem is Map) {
       // The tree's children publish their entity _key: it is the
       // identity — neither spelling of the name is unique inside a
-      // category. The older spellings stand in for a tree that predates
-      // the field.
-      serviceId =
-          (serviceItem['_key'] ?? serviceItem['id'] ?? serviceItem['key'] ?? "")
-              .toString();
+      // category. An empty id (a tree that predates the field) falls
+      // through to the label rules below.
+      serviceId = (serviceItem['_key'] ?? "").toString();
       serviceName = serviceItem['label'] ?? serviceItem['name'] ?? "Unknown";
       final en = serviceItem['nameEN'];
       serviceEn = (en is String) ? en : "";
@@ -181,22 +179,21 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     //
     // A row without a key (a tree that predates the field) falls back to
     // the ENGLISH label — the spelling the wire speaks, and the one the
-    // web keys on. The tapped row picks the key space, and the stored row
-    // must answer in the SAME one (the web's one-predicate rule): a
-    // stored row that carries a key, or an English label, is never
-    // matched on its display name.
+    // web keys on — and the display name stands in only for a row that
+    // carries no English label at all.
     final existingIndex = _orderedSelection.indexWhere((item) {
       final String itemId = (item['id'] as String? ?? '');
-      if (serviceId.isNotEmpty && itemId.isNotEmpty) {
-        return itemId == serviceId;
+      // A keyed stored row answers only in the key space.
+      if (itemId.isNotEmpty) {
+        return serviceId.isNotEmpty && itemId == serviceId;
       }
+      // Both rows are keyless: the ENGLISH label is the identity, the
+      // spelling the wire speaks — the display name stands in only for a
+      // row that carries no English label at all.
       if (serviceEn.isNotEmpty) {
-        return itemId.isEmpty &&
-            item['nameEn'] == serviceEn &&
-            item['category_id'] == categoryId;
+        return item['nameEn'] == serviceEn && item['category_id'] == categoryId;
       }
-      return itemId.isEmpty &&
-          (item['nameEn'] as String? ?? '').isEmpty &&
+      return (item['nameEn'] as String? ?? '').isEmpty &&
           item['name'] == serviceName &&
           item['category_id'] == categoryId;
     });

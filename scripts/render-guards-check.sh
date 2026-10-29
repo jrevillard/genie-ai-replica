@@ -522,14 +522,28 @@ expect_fail "a convergence envSecrets row secretName that is not a Secret name" 
 
 expect_fail "a Secret name past the 253-character DNS-subdomain bound" \
   "is longer than the Kubernetes Secret-name bound" \
-  $(valid_flags) --set ingress.enabled=true --set ingress.tls.enabled=true --set "ingress.tls.secretName=$(printf 'a%.0s' $(seq 1 254))"
+  $(valid_flags) --set ingress.enabled=true --set ingress.tls.enabled=true --set "ingress.tls.secretName=$(printf 'a%.0s' $(seq 1 63)).$(printf 'b%.0s' $(seq 1 63)).$(printf 'c%.0s' $(seq 1 63)).$(printf 'd%.0s' $(seq 1 63))"
 
 expect_fail "a Secret name with a dot-label past the 63-character bound" \
   "carries a dot-label longer than the Kubernetes bound" \
   $(valid_flags) --set ingress.enabled=true --set ingress.tls.enabled=true --set "ingress.tls.secretName=a.$(printf 'b%.0s' $(seq 1 64)).c"
 
-expect_ok "a scheme-ful kubeletToolsMirror still renders" \
+# The scheme-ful mirror must reach the init container's shell VERBATIM:
+# expect_ok alone would pass a template that mangles the value in
+# transit (a re-prefixed BASE, dropped quoting) — the needle pins the
+# path (rendered 3x, one per tools-init consumer).
+expect_render_contains \
+  "a scheme-ful kubeletToolsMirror reaches the init shell verbatim" \
+  'BASE="https://mirror.internal:8443"' \
   $(valid_flags) --set global.kubeletToolsMirror=https://mirror.internal:8443
+
+expect_fail "a kubeletToolsMirror with a non-http scheme" \
+  "kubeletToolsMirror" \
+  $(valid_flags) --set 'global.kubeletToolsMirror=file://mirror.internal'
+
+expect_fail "a kubeletToolsMirror with a colon-host (no numeric port)" \
+  "kubeletToolsMirror" \
+  $(valid_flags) --set 'global.kubeletToolsMirror=https:mirror.internal:8443'
 
 # 34b. The two global tooling keys are interpolated into the tools-init
 #      container's shell: the values schema constrains them to the URL /

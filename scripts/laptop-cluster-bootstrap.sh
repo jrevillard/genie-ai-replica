@@ -41,6 +41,10 @@
 #   --deploy-repo <path>    genie-ai-deploy checkout (default: ../genie-ai-deploy)
 #   --overlay <name>        overlay / cluster-dir name in the deploy repo
 #                           (default: jrevillard-laptop)
+#   --capture <dir>         capture the cluster-only state (active
+#                           sealed-secrets key, flux-git-auth, issuer)
+#                           into <dir> and exit — the producer of the
+#                           files the restore path consumes
 #   --kubernetes-version    default v1.32.0
 #   --skip-start            do NOT touch the cluster (prereqs + secret restore only)
 #
@@ -106,6 +110,8 @@ PYEOF
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
+CAPTURE_DIR=""
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --cluster) CLUSTER="$2"; shift 2 ;;
@@ -115,6 +121,7 @@ while [ $# -gt 0 ]; do
     --sealed-secrets-key) SEALED_KEYS_FILE="$2"; shift 2 ;;
     --flux-git-auth) FLUX_GIT_AUTH_FILE="$2"; shift 2 ;;
     --issuer) ISSUER_FILE="$2"; shift 2 ;;
+    --capture) CAPTURE_DIR="$2"; shift 2 ;;
     --skip-start) SKIP_START=1; shift ;;
     # The header ends where the code starts (`set -euo pipefail`), so
     # the window derives from that marker: a hardcoded line number
@@ -128,6 +135,36 @@ done
 for tool in kubectl helm flux minikube; do
   command -v "$tool" >/dev/null 2>&1 || die "$tool not found in PATH"
 done
+
+# ── 0. The capture mode ─────────────────────────────────────────────────
+# `--capture <dir>` writes exactly the files the restore path below
+# consumes — the ACTIVE sealed-secrets key as a SINGLE-Secret document
+# (the shape apply_clean cleans; a label-selector `get -o json` would
+# emit a SecretList whose items keep their resourceVersion and be
+# rejected on the apply-create), the flux-git-auth Secret and the
+# selfsigned issuer. It fails LOUDLY when the active key is missing: an
+# empty capture is the silent path to a keyless cluster. This block is
+# the producer; the runbook's step 1 is just this invocation, so the
+# filename and file-shape contract has one owner.
+if [ -n "$CAPTURE_DIR" ]; then
+  mkdir -p "$CAPTURE_DIR"
+  log "capturing the cluster-only state into $CAPTURE_DIR"
+  ACTIVE_KEY=$(kubectl -n sealed-secrets get secret \
+    -l sealedsecrets.bitnami.com/sealed-secrets-key=active \
+    -o jsonpath='{.items[0].metadata.name}')
+  [ -n "$ACTIVE_KEY" ] || die "no active sealed-secrets key in namespace sealed-secrets — is the controller running and the kubecontext the right one?"
+  kubectl -n sealed-secrets get secret "$ACTIVE_KEY" -o json \
+    > "$CAPTURE_DIR/sealed-secrets-key-active.json"
+  kubectl -n flux-system get secret flux-git-auth -o json \
+    > "$CAPTURE_DIR/flux-git-auth.json" 2>/dev/null \
+    || log "WARN: flux-git-auth not found in flux-system (skipped)"
+  kubectl get clusterissuer selfsigned -o yaml \
+    > "$CAPTURE_DIR/selfsigned-issuer.yaml" 2>/dev/null \
+    || log "WARN: selfsigned ClusterIssuer not found (skipped)"
+  log "captured: sealed-secrets-key-active.json, flux-git-auth.json, selfsigned-issuer.yaml"
+  log "rotation caveat: SealedSecrets sealed with a rotated-out key must be re-sealed (kubeseal --re-encrypt) BEFORE this cluster is deleted — the restore cannot revive a rotated-out key"
+  exit 0
+fi
 
 # ── 1. The cluster itself ────────────────────────────────────────────────
 if [ -z "$SKIP_START" ]; then

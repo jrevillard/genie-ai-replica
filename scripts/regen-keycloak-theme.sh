@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Regenerate charts/genieai-umbrella/files/keycloak-themes.tgz from
+# Regenerate charts/genieai-assets/files/keycloak-themes.tgz from
 # configs/keycloak/themes (the single theme source, shared with the
 # compose/Ansible path since #998).
 #
@@ -17,7 +17,7 @@ set -euo pipefail
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 src="${repo_root}/configs/keycloak"
-out="${1:-${repo_root}/charts/genieai-umbrella/files/keycloak-themes.tgz}"
+out="${1:-${repo_root}/charts/genieai-assets/files/keycloak-themes.tgz}"
 
 [ -d "${src}/themes/genie" ] || {
   echo "missing ${src}/themes/genie — run from a full checkout" >&2

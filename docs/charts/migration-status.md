@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-29)
 
-- **Chart `genieai-umbrella` at 0.2.124**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.125**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,13 +614,48 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 51 (0.2.125)** — 7 findings from the twenty-seventh
+  `/code-review`: six fixed, one refuted, one deferred to the operator.
+  - *The `<pays>` grep was run over charts/genieai-umbrella/ only* —
+    six live sites survived it: charts/README.md, the site doc's
+    "per-pays overrides" (twice), the bootstrap doc's "pays that use
+    SOPS"/"a future pays", and the bootstrap script's `--pays` flag /
+    `$PAYS` variable. All aligned on the cluster vocabulary now. The
+    script rename is the one functional change: `--pays` → `--overlay`,
+    `$PAYS` → `$OVERLAY` — named for what the value selects (the deploy
+    repo's overlay directory), NOT `--cluster`, which the script
+    already takes for the minikube profile (the first rename attempt
+    created a second `CLUSTER=` assignment that clobbered the profile —
+    caught before any push by re-reading the parser).
+  - *The deploy repo carries its own `<pays>` vocabulary* (~34 matches
+    in 8 files, including the sops scripts' CLI) — deferred: renaming
+    it is the operator's naming decision ("pays" was the historical
+    term for the country deployments the repo grew around), not a
+    mechanical fix this branch makes unilaterally.
+  - *The Nexus parenthetical moved to the wrong cell in the pass-50
+    enumeration* — it annotated scheme+port+prefix; the actual Nexus
+    pin is scheme+prefix without port. Back on its cell.
+  - *Chart.yaml's description dropped the load-bearing "typically"* —
+    "consumed via Flux" asserted the sole delivery path while the repo
+    ships an ArgoCD example and documents direct installs. Restored.
+  - *The site doc's grammar shorthand lagged on the prefix shape* —
+    `[/prefix]` against the other surfaces' multi-segment form.
+    Aligned.
+  - *Two cosmetic residues* — the site doc's own rewrap widow ("the")
+    and the pass-50 ledger entry citing a line number that drifted the
+    moment it was written (the citation is dropped; the prose locates
+    the fix).
+  - *Refuted: the "pass-50 parenthetical contradicts the commit
+    message" finding* — the quoted phrase ("the run-25 fix itself
+    verified true") is the reviewer's own verification note, not
+    ledger text; the ledger carries no such sentence.
 - **Review loop, pass 50 (0.2.124)** — 6 findings from the twenty-sixth
   `/code-review`, all comment/enum residue (the reviewer's own verdict:
   the run-25 fix itself verified true).
   - *The subject-verb fix was applied to the wrong comment* — the
     already-grammatical top-of-spec comment was reworded while the
     actual "are discoverable" slip survived one paragraph below. The
-    slip is fixed at line 58, the widow line beside it rewrapped.
+    slip is fixed, and the widow line beside it rewrapped.
   - *The pin-inventory enumeration omitted scheme-less port+prefix and
     padded the count with the uppercase-scheme variant* — a case
     variant of one cell, not a cross-product cell. The enumeration
@@ -631,7 +666,13 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     describing a layout that does not exist) — rewritten in English
     with the real `overlays/<cluster>/<env>/` shape. The same French
     placeholder survived in examples/argocd-application.yaml — found by
-    grepping the class, not by the review.
+    grepping the class, not by the review. (Correction, pass 51: the
+    grep was run over charts/genieai-umbrella/ only; six live sites in
+    charts/README.md, the site doc, the bootstrap doc and the bootstrap
+    script survived it, and the deploy repo carries its own
+    `<pays>` vocabulary — a naming decision deferred to the operator,
+    since "pays" was the historical term for the country deployments
+    the repo grew around.)
   - *The site doc's grammar shorthand lagged on the prefix shape* —
     `[/prefix]` against the other three surfaces'
     `[/multi/segment/prefix]`. Aligned.
@@ -2071,7 +2112,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.124** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.125** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

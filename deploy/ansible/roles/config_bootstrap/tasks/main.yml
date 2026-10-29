@@ -133,6 +133,21 @@
     # source. Checking one well-known entrypoint asset per pair catches both an
     # empty extraction and a silently reshaped tree.
     #
+    # The guards below loop over the pairs; an empty list would run every one
+    # of them over zero items and pass while the role seeds an empty config
+    # directory that shadows the image-baked config in the bind mount. The
+    # role refuses it with the same message the other vacuous guards use.
+    - name: Fail unless there are pairs to seed
+      ansible.builtin.assert:
+        that:
+          - config_bootstrap_pairs | length > 0
+        fail_msg: >-
+          config_bootstrap_pairs is empty (or renamed to something the role
+          does not read), so nothing would be seeded and every guard below
+          would pass over zero items. Restore the pairs list — the role
+          default seeds the frontend config and the Keycloak themes.
+        success_msg: "config_bootstrap: {{ config_bootstrap_pairs | length }} pairs to seed"
+
     # The expect check validates the pairs' own shape first: the stat loop
     # below walks `expect` with subelements, and a scalar would be walked per
     # character — the assert turns that into one actionable message.
@@ -378,12 +393,15 @@
 
     - name: Compute the brand each side carries
       ansible.builtin.set_fact:
+        # Only the trailing newline is stripped, not all whitespace: a title
+        # that differs from the host's by a space is a different title, and
+        # the mirror really would change the brand the app displays.
         config_bootstrap_branch_title: >-
-          {{ (config_bootstrap_branch_title_cmd.stdout | default('') | trim)
+          {{ ((config_bootstrap_branch_title_cmd.stdout | default('')) | regex_replace('\n$', ''))
              if (config_bootstrap_branch_title_cmd.rc | default(1)) == 0 else '' }}
         config_bootstrap_branch_file_valid: "{{ (config_bootstrap_branch_title_cmd.rc | default(1)) == 0 }}"
         config_bootstrap_host_title: >-
-          {{ (config_bootstrap_host_title_cmd.stdout | default('') | trim)
+          {{ ((config_bootstrap_host_title_cmd.stdout | default('')) | regex_replace('\n$', ''))
              if (config_bootstrap_host_title_cmd.rc | default(1)) == 0 else '' }}
         config_bootstrap_host_file_valid: >-
           {{ (not config_bootstrap_host_brand_stat.stat.exists)

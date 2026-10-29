@@ -388,7 +388,7 @@ Per-chunk LLM document-context prefix → embedding (+ optionally labeling) so c
 | `kc_dataprep_client_id` | `genie-dataprep` | no | Keycloak client ID for dataprep service account |
 | `keycloak_ssl_skip_verify` | `""` | no | Skip SSL verification for Keycloak API calls (set `"true"` for self-signed certs) |
 | `keycloak_password_policy` | — | no | Password policy string (e.g. `length(8) and notUsername`) |
-| `keycloak_theme` | `genie` | no | Login theme for Keycloak — must name a theme the deployed branch ships under `configs/keycloak/themes/`. A deployment spanning several inventory groups must set the same value in each of them |
+| `keycloak_theme` | `genie` | no | Keycloak theme for every surface the realm serves (login, account, admin, email) — must name a theme the deployed branch ships under `configs/keycloak/themes/`. A deployment spanning several inventory groups must set the same value in each of them |
 | `config_bootstrap_allow_rebrand` | `false` | no | Allow a branch whose `app.title` differs from the one the host serves. The guard compares the branch with the copy the host still serves — the copy the mirror is about to replace — so a rename committed in the repository blocks the deploy until the flag is set: set it to `true`, deploy (every node takes the new title), then set it back to `false`. Leaving it on disables the re-brand guard for later branches too |
 | `config_bootstrap_theme_entrypoints` | `[login, account, admin, email]` | no | The theme subtrees the deployment's theme must carry. Narrow it for a theme that serves only some of the realm's screens |
 | `keycloak_access_token_lifespan` | — | no | Access token lifespan (e.g. `300` seconds, `5m`) |

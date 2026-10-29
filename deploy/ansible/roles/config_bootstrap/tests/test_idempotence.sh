@@ -281,6 +281,10 @@ restore() {
             -a "rm -rf '$RESTORE_SCRATCH'; mkdir -p '$RESTORE_SCRATCH' && tar -xpf '$BACKUP_ARCHIVE' -C '$RESTORE_SCRATCH' && rsync -a --delete '$RESTORE_SCRATCH/$(basename "$CONFIG_DIR")/' '$CONFIG_DIR/'; st=\$?; rm -rf '$RESTORE_SCRATCH'; exit \$st" >/dev/null 2>&1; then
             ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
                 -a "rm -f '$BACKUP_ARCHIVE'" >/dev/null 2>&1 || true
+            # rmdir only removes an empty directory: anything left in the
+            # work dir stays, for the operator to look at.
+            ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
+                -a "rmdir '$TEST_WORK_DIR'" >/dev/null 2>&1 || true
             printf '  [ok] %s restored from pre-test backup; backup removed.\n' "$CONFIG_DIR"
             RESTORE_ARMED="false"
             RESTORE_RUNNING="false"
@@ -337,7 +341,17 @@ sigtrap() {
     restore || true
     exit "$1"
 }
-trap 'rc=$?; if restore; then exit "$rc"; else exit 1; fi' EXIT
+exit_trap() {
+    local rc=$?
+    if restore; then :; else rc=1; fi
+    # A signal that landed while a restore was in flight set this: the run
+    # ends on the signal's code, not on the code the interrupted step left.
+    if [ -n "$PENDING_SIGNAL" ]; then
+        exit "$PENDING_SIGNAL"
+    fi
+    exit "$rc"
+}
+trap exit_trap EXIT
 trap 'sigtrap 130' INT
 trap 'sigtrap 143' TERM
 
@@ -376,7 +390,16 @@ remote_sh "test -d '$KEYCLOAK_THEME_DIR'" >/dev/null ||
 # empty mount that shadows the images. The whole tree is archived, not just the
 # file this test edits: the mirror can remove any file the branch does not
 # ship.
-BACKUP_ARCHIVE="/tmp/config_bootstrap_smoke_backup_$$.tar"
+#
+# The test's scratch files (the tree archive, the single-file backups) live in
+# a directory under CONFIG_PARENT, not in predictable /tmp paths: this test
+# writes them with elevated rights, and on a multi-user host a local user who
+# guesses the path could pre-create it and steer the write. A directory created
+# here and kept root-owned does not let them.
+TEST_WORK_DIR="$CONFIG_PARENT/.config_bootstrap_test"
+remote_sh "mkdir -p '$TEST_WORK_DIR' && chmod 700 '$TEST_WORK_DIR'" ||
+    die "could not create the test scratch directory $TEST_WORK_DIR on the host"
+BACKUP_ARCHIVE="$TEST_WORK_DIR/backup.tar"
 remote_sh "tar -cpf '$BACKUP_ARCHIVE' -C '$CONFIG_PARENT' '$(basename "$CONFIG_DIR")'" ||
     fail "could not archive the config tree under $CONFIG_DIR to $BACKUP_ARCHIVE"
 RESTORE_ARMED="true"
@@ -434,8 +457,12 @@ step "Contract 1: a second role run must be a no-op"
 
 # Both snapshots must SUCCEED: a run that could not read the tree has no
 # evidence, and comparing nothing to nothing would pass every contract below.
+# The find runs first and its exit status is carried to the end (the remote
+# shell has no pipefail — piped into sort, a partially failed scan would
+# report sort's 0); the temp file lives outside the config tree so it never
+# enters the snapshots themselves.
 manifest() {
-    snapshot "find . -type f -exec md5sum {} + | sort -k2" ||
+    snapshot "find . -type f -exec md5sum {} + > '$CONFIG_PARENT/.config_bootstrap_md5.tmp'; __f=\$?; sort -k2 '$CONFIG_PARENT/.config_bootstrap_md5.tmp'; rm -f '$CONFIG_PARENT/.config_bootstrap_md5.tmp'; test \$__f -eq 0" ||
         die "could not list the config tree on the host (the manifest comparison has no evidence)"
 }
 
@@ -443,7 +470,7 @@ manifest() {
 # used separately so a run that adds or removes files is distinguishable from
 # one that rewrites file contents.
 filelist() {
-    snapshot "find . -type f | sort" ||
+    snapshot "find . -type f > '$CONFIG_PARENT/.config_bootstrap_files.tmp'; __f=\$?; sort '$CONFIG_PARENT/.config_bootstrap_files.tmp'; rm -f '$CONFIG_PARENT/.config_bootstrap_files.tmp'; test \$__f -eq 0" ||
         die "could not list the config tree on the host (the file comparison has no evidence)"
 }
 
@@ -513,7 +540,7 @@ step "Contract 2: the host copy must mirror the branch"
 
 remote_sh "test -f '$THEME_CSS'" || fail "cannot test the mirror contract: $THEME_CSS is missing"
 
-BACKUP_PATH="/tmp/config_bootstrap_smoke_backup_$$.css"
+BACKUP_PATH="$TEST_WORK_DIR/theme-variables.css.bak"
 remote_sh "cp -p '$THEME_CSS' '$BACKUP_PATH'" ||
     fail "could not back up $THEME_CSS to $BACKUP_PATH"
 pass "backed up $THEME_CSS to $BACKUP_PATH"
@@ -542,7 +569,7 @@ fi
 pass "the manual edit was reverted by the role run"
 
 # ...and the file must equal the pre-test content again, byte for byte.
-EXPECTED_PATH="/tmp/config_bootstrap_smoke_expected_$$.css"
+EXPECTED_PATH="$TEST_WORK_DIR/theme-variables.css.expected"
 ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
     -a "cat '$BACKUP_PATH' > '$EXPECTED_PATH'" ||
     fail "could not build the expected-content file on the host"

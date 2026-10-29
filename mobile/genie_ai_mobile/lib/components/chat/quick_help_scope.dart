@@ -117,10 +117,9 @@ String? activeQuickHelpTitleFor(
 /// The hierarchy is what NAMES a scope: the config carries the category's
 /// name (or its key, for a configuration written before that spelling), the
 /// wire carries its ENGLISH label, and only the hierarchy can say what that
-/// label is. A hierarchy that has not loaded says nothing
-/// about any button ([pending]); one that could not be loaded is the
-/// CALLER's fact — the widget marks it and passes each button through
-/// [unavailableScopeFor].
+/// label is. A hierarchy that has not loaded says nothing about any button
+/// ([pending]); one that could not be loaded is the CALLER's fact — the
+/// widget marks it and passes each button through [unavailableScopeFor].
 class QuickHelpScopeResolver {
   /// The ENGLISH spelling of [entry]: its `nameEN`, or its `name` when
   /// the tree predates the dual-spelling response. The fallback is

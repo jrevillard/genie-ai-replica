@@ -615,9 +615,33 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
 - **Review loop, pass 52 (0.2.125)** — 13 findings across runs 28 and 29
-  of the `/code-review`, all in the bootstrap runbook and the ledger the
-  previous passes had just edited. No chart content changed (no version
-  bump).
+  of the `/code-review`, across four surfaces: the bootstrap runbook,
+  the bootstrap script, deploy/environments/README.md and this ledger.
+  No chart content changed (no version bump).
+  - *The deepest one is functional, and it was mine*: run 29's
+    capture-by-label emitted a SecretList the restore's `apply_clean`
+    cannot clean per item — the kept `resourceVersion` is rejected on
+    the apply-create, AFTER the script has deleted the generated keys:
+    the keyless-cluster catastrophe, one pass after claiming to have
+    closed it. The whole capture/restore contract now lives in ONE
+    place: the script grew a `--capture <dir>` mode that writes exactly
+    the files the restore consumes (ACTIVE key as a single-Secret
+    document — the shape apply_clean cleans), fails loudly when the
+    active key is missing, and the runbook's step 1 is its invocation.
+    The capture writes to ~/.genieai-sealed-secrets (the cluster's
+    PRIVATE key was previously redirected into whatever directory the
+    operator sat in — one git add -A from being published; .gitignore
+    now also covers the filename).
+  - *The rotation caveat moved BEFORE the delete* — "must be re-sealed"
+    is impossible after `minikube delete` (kubeseal --re-encrypt needs
+    a controller holding both keys); the runbook now commands the
+    re-seal at step 1, and the self-contradicting sealed-with sentences
+    are gone.
+  - *The run-27 commit title said "the 6 findings" while its report
+    carried 7* (5 fixed + 1 deferred + 1 refuted) — the ledger's
+    corrected count (7) is the true one; the pushed commit title
+    undercounts and cannot be rewritten without a force-push.
+- **Review loop, pass 51 (0.2.125)** — 7 findings from the twenty-seventh
   - *The run-27 fix shipped uncommitted* — the `git add` named
     `migration-status.md` and missed the sibling file the same edit
     touched (`docs/charts/laptop-cluster-bootstrap.md`), so origin
@@ -655,12 +679,12 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     true") said the opposite of its own first bullet. All three fixed,
     and this entry records what run 28 actually fixed.
 - **Review loop, pass 51 (0.2.125)** — 7 findings from the twenty-seventh
-  `/code-review`: six fixed and one refuted. (Correction, pass 52: the
+  `/code-review`: five fixed, one deferred to the operator (the deploy
+  repo's `<pays>` vocabulary — recorded in the pass-50 entry's
+  correction below), and one refuted. (Correction, pass 52: the
   original entry said "six fixed, one refuted, one deferred" — eight
   dispositions for seven findings — and carried a phantom site-grammar
-  bullet for a fix that landed in pass 50; both dropped here. The
-  deploy-repo deferral is recorded in the pass-50 entry's correction
-  below.)
+  bullet for a fix that landed in pass 50; both dropped here.)
   - *The `<pays>` grep was run over charts/genieai-umbrella/ only* —
     six live sites survived it: charts/README.md, the site doc's
     "per-pays overrides" (twice), the bootstrap doc's "pays that use

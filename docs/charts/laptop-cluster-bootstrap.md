@@ -124,28 +124,33 @@ convergence Job) run inside it.
 ## Running it
 
 ```bash
-# 1. capture the cluster-only state BEFORE deleting the cluster.
-#    The sealed-secrets key is captured BY LABEL — the ACTIVE key is
-#    the one the committed SealedSecrets were sealed with, and the
-#    label selector is also what avoids the positional-name trap (`get
-#    secret sealed-secrets-key*` is an exact-name selector in kubectl,
-#    not a glob; it silently matches nothing).
-kubectl -n sealed-secrets get secret \
-  -l sealedsecrets.bitnami.com/sealed-secrets-key=active \
-  -o json > sealed-secrets-key-active.json
-kubectl -n flux-system get secret flux-git-auth -o json > flux-git-auth.json
-kubectl get clusterissuer selfsigned -o yaml > issuer.yaml
-# If the controller ever rotated (multiple sealed-secrets-key* secrets),
-# the non-active ones are archive-only: the committed SealedSecrets are
-# sealed with the active key. SealedSecrets still sealed with a rotated-
-# out key must be re-sealed — the restore cannot revive it.
+# 1. capture the cluster-only state BEFORE deleting the cluster — into
+#    ~/.genieai-sealed-secrets, NOT the repo (the capture includes the
+#    cluster's sealed-secrets PRIVATE key). The --capture mode is the
+#    producer of exactly the files step 2 consumes — filename and file
+#    shape are owned by the script, so they cannot diverge — and it
+#    fails loudly when the active key is missing (an empty capture is
+#    the silent path to a keyless cluster). NOT
+#    `get secret sealed-secrets-key*`: a positional argument is an
+#    exact-name selector in kubectl, not a glob; it silently matches
+#    nothing.
+mkdir -p ~/.genieai-sealed-secrets
+./scripts/laptop-cluster-bootstrap.sh --capture ~/.genieai-sealed-secrets
+
+# Rotation caveat — BEFORE the delete: if the controller ever rotated,
+# SealedSecrets sealed with a rotated-out key must be re-sealed NOW
+# (`kubeseal --re-encrypt` needs a controller holding both keys); the
+# restore cannot revive a rotated-out key, and after the delete the old
+# private key is gone for good. The --capture file is the ACTIVE key —
+# the one the committed SealedSecrets are sealed with unless a rotation
+# happened and was not re-sealed.
 
 # 2. rebuild
 minikube delete
 ./scripts/laptop-cluster-bootstrap.sh \
-  --sealed-secrets-key sealed-secrets-key-active.json \
-  --flux-git-auth flux-git-auth.json \
-  --issuer issuer.yaml
+  --sealed-secrets-key ~/.genieai-sealed-secrets/sealed-secrets-key-active.json \
+  --flux-git-auth ~/.genieai-sealed-secrets/flux-git-auth.json \
+  --issuer ~/.genieai-sealed-secrets/selfsigned-issuer.yaml
 
 # 3. the script never deletes a cluster — that stays a deliberate act
 ```

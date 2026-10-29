@@ -2670,54 +2670,28 @@ class TestStreamWithMetadata:
         assert '"source_documents": []' in joined
 
     @pytest.mark.asyncio
-    async def test_retrieval_that_matched_no_document_is_flagged_as_abstained(self):
-        """The retriever returned nothing for this query — the label filter
-        matched zero documents. The answer is an abstention, and the metadata
-        event must say so: on the operator side an abstention is otherwise
-        indistinguishable from an ordinary answer."""
-        svc = create_chatqna_service()
-        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
-        body = self._make_body(["data: b'I cannot answer that'\n\n", "data: [DONE]\n\n"])
-        result_dict = {"retriever": {"retrieved_docs": [], "file_id_pairs": {}}}
-        out = await self._drain(svc._stream_with_metadata(body, result_dict, token="t", filter_labels=["Tax Payment"]))
-        joined = "".join(out)
-        assert '"abstained": true' in joined
-        assert '"abstention_reason": "no_documents_retrieved"' in joined
-        # The labels the retrieval filtered on ride along: the Inspector
-        # names the scope from them.
-        assert '"filter_labels": ["Tax Payment"]' in joined
-
-    @pytest.mark.asyncio
-    async def test_reranker_that_dropped_every_document_reports_its_own_cause(self):
-        """The retriever DID match documents; the reranker rejected them all.
-        The turn still abstained (the model was told to abstain with no
-        documents), but the scope was fine — the reason must say so, or the
-        operator is sent after a stale label that is not stale."""
-        svc = create_chatqna_service()
-        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
-        body = self._make_body(["data: b'I cannot answer that'\n\n", "data: [DONE]\n\n"])
-        result_dict = {
-            "retriever": {"retrieved_docs": [{"id": "d1", "text": "doc"}], "file_id_pairs": {}},
-            "rerank": {"retrieved_docs": []},
-        }
-        out = await self._drain(svc._stream_with_metadata(body, result_dict, token="t"))
-        joined = "".join(out)
-        assert '"abstained": true' in joined
-        assert '"abstention_reason": "reranker_selected_nothing"' in joined
-
-    @pytest.mark.asyncio
-    async def test_a_malformed_retriever_output_is_not_reported_as_an_empty_scope(self):
-        """A retriever node result without retrieved_docs is a fault, not a
-        scope that matched nothing: claiming an abstention about it would send
-        the operator after the taxonomy while the real problem is the
-        pipeline shape."""
+    async def test_the_derived_outcome_reaches_the_metadata_event(self):
+        """The outcome handle_request derived (for the metric) must land in
+        the metadata event verbatim — flag AND reason. Derivation itself is
+        owned by the handle_request tests; this owns the pass-through wiring.
+        The reranker-kept-nothing reason doubles as the check that a second
+        cause flows through the same channel."""
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
         body = self._make_body(["data: b'I cannot answer that'\n\n", "data: [DONE]\n\n"])
         result_dict = {"retriever": {"error": "shape changed"}}
-        out = await self._drain(svc._stream_with_metadata(body, result_dict, token="t"))
+        out = await self._drain(
+            svc._stream_with_metadata(
+                body,
+                result_dict,
+                token="t",
+                abstained=True,
+                abstention_reason="reranker_selected_nothing",
+            )
+        )
         joined = "".join(out)
-        assert '"abstained": true' not in joined
+        assert '"abstained": true' in joined
+        assert '"abstention_reason": "reranker_selected_nothing"' in joined
 
     @pytest.mark.asyncio
     async def test_appends_done_if_missing(self):
@@ -3882,6 +3856,37 @@ async def test_non_streaming_abstention_follows_the_retrieval(nodes, expect_reas
 
 
 @pytest.mark.asyncio
+async def test_a_malformed_retriever_output_is_not_reported_as_an_abstention():
+    """A retriever node result without retrieved_docs is a fault, not a scope
+    that matched nothing: claiming an abstention about it would send the
+    operator after the taxonomy while the real problem is the pipeline shape.
+    The same conservative call the grounding decision makes."""
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    async def fake_schedule(**_kwargs):
+        return ({"retriever": {"error": "shape changed"}, "llm": {"text": "an answer"}}, None)
+
+    svc.megaservice.schedule = fake_schedule
+    svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        _patched_chat_request(stream=False),
+    ):
+        payload = await svc.handle_request(req)
+
+    assert payload["metadata"].get("abstained") is not True
+
+
+@pytest.mark.asyncio
 async def test_the_metadata_carries_the_labels_the_retrieval_filtered_on():
     """The Inspector reads the scope from the metadata, so the metadata has
     to carry the labels the pipeline filtered on — by the pipeline's own rule
@@ -4113,6 +4118,55 @@ async def test_reranker_input_too_long_stream_returns_sse():
     assert metadata_events[0]["abstained"] is True
     assert metadata_events[0]["abstention_reason"] == "reranker_input_too_long"
     assert events[-1].strip() == "data: [DONE]"
+
+
+@pytest.mark.asyncio
+async def test_a_streamed_turn_reports_the_abstention_the_metric_counts():
+    """The streamed metadata event and the counter must come from ONE
+    computation of the abstention outcome: handle_request derives it once for
+    the metric and passes it into the stream wrapper, so
+    genie_ai_chat_request_total{abstained="true"} and the Inspector flag
+    cannot disagree for the same turn."""
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    from fastapi.responses import StreamingResponse
+
+    async def _token_stream():
+        yield b"data: b'I cannot answer that'\n\n"
+
+    async def fake_schedule(**_kwargs):
+        return (
+            {
+                "retriever": {"retrieved_docs": [], "file_id_pairs": {}},
+                "rerank": {"retrieved_docs": []},
+                "llm": StreamingResponse(_token_stream(), media_type="text/event-stream"),
+            },
+            None,
+        )
+
+    svc.megaservice.schedule = fake_schedule
+    svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        _patched_chat_request(stream=True),
+    ):
+        resp = await svc.handle_request(req)
+
+    assert isinstance(resp, StreamingResponse)
+    events = [chunk.decode("utf-8") if isinstance(chunk, bytes) else str(chunk) async for chunk in resp.body_iterator]
+    metadata_events = [json.loads(e[len("data: ") :]) for e in events if e.startswith("data: {")]
+    assert metadata_events[0]["abstained"] is True
+    assert metadata_events[0]["abstention_reason"] == "no_documents_retrieved"
 
 
 def _fake_parms(**_kwargs):

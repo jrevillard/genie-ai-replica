@@ -205,6 +205,7 @@ import DsButton from '../../ds/Button.vue';
 import DsCard from '../../ds/Card.vue';
 import DsPill from '../../ds/Pill.vue';
 import DsStateDisplay from '../../ds/StateDisplay.vue';
+import { scopeLabels as storedScopeLabels } from './query-scope';
 
 export default {
   name: 'QueryInspectorDetail',
@@ -263,9 +264,10 @@ export default {
      * claiming the query was unfiltered.
      */
     scopeText() {
-      const labels = this.query.metadata?.filter_labels;
-      if (labels == null) {
-        // Absent or null: the pipeline never reported a scope for this query.
+      const labels = storedScopeLabels(this.query);
+      if (labels === null) {
+        // Absent, null, or malformed: the pipeline never reported a scope
+        // for this query.
         return this.translate('admin.queryInspector.scopeNotRecorded', 'Not recorded');
       }
       return labels.join(', ') || this.translate('admin.queryInspector.scopeNone', 'None (unfiltered query)');

@@ -578,6 +578,15 @@ describe('QueryInspectorDetail', () => {
     expect(wrapper.find('[data-testid="qi-detail-scope"]').text()).toContain('Not recorded');
   });
 
+  it('should treat a malformed stored scope as not recorded, not crash', () => {
+    // A non-array in the stored metadata (a bad migration, a hand-edited
+    // record) is not joinable: it degrades to the dash instead of throwing
+    // out of the render.
+    const query = { ...fullQuery, metadata: { ...fullQuery.metadata, filter_labels: 'Tax Payment' } };
+    const wrapper = mountDetail({ query });
+    expect(wrapper.find('[data-testid="qi-detail-scope"]').text()).toContain('Not recorded');
+  });
+
   it('should not show an abstention block for an ordinary answer', () => {
     const wrapper = mountDetail({ query: fullQuery });
     expect(wrapper.find('[data-testid="qi-abstention-marker"]').exists()).toBe(false);

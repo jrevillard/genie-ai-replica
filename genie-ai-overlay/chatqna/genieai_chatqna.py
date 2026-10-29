@@ -2815,8 +2815,7 @@ class ChatQnAService:
         # docs under the "retrieved_docs" key — with id + reranker score already
         # reconstructed — NOT under "reranked_docs" (that key is empty in the orchestrator
         # output). Each verdict doc is {id, text, score} where score is the reranker score.
-        reranker_node_output = result_dict.get(rerank_key, {}) if rerank_key else {}
-        rerank_verdict = reranker_node_output.get("retrieved_docs", []) if rerank_key else []
+        rerank_verdict = _node_docs(result_dict, "rerank") or []
 
         # Normalize the documents to display into (id, score) tuples.
         if rerank_key:
@@ -2933,9 +2932,20 @@ class ChatQnAService:
         return source_documents_formatted, retrieval_confidence_score, is_grounded
 
     async def _stream_with_metadata(
-        self, body_iterator, result_dict, token: str, parent_context=None, filter_labels=None
+        self,
+        body_iterator,
+        result_dict,
+        token: str,
+        parent_context=None,
+        filter_labels=None,
+        abstained=False,
+        abstention_reason=None,
     ):
         """Forward the LLM token stream, then append a `metadata` SSE event.
+
+        ``abstained`` / ``abstention_reason`` carry the outcome handle_request
+        already derived for the request metric, so the counter and this
+        metadata event cannot disagree about the same turn.
 
         The metadata event carries the reranker-grounded source documents, confidence,
         and ``is_grounded`` flag, emitted as plain JSON **before** the terminal ``[DONE]``
@@ -3036,10 +3046,8 @@ class ChatQnAService:
             f"self={self_confidence} self_conf_enabled={LLM_SELF_CONFIDENCE_ENABLED} "
             f"-> confidence_score={_cs}"
         )
-        # The retrieval produced no document, or the reranker kept none, and
-        # the turn was instructed to abstain: the answer is an abstention, not
-        # an answer. The reason names which.
-        abstained, abstention_reason = _abstention_outcome(result_dict)
+        # The abstention outcome was derived once in handle_request (it also
+        # drove the metric), so this event and the counter cannot disagree.
         # Every input of the answer-level outcome is known here, so this is the
         # first point at which the span can be recorded. `sentinel_present`
         # reports whether a self-grade was actually parsed, so an operator can
@@ -4377,6 +4385,8 @@ class ChatQnAService:
                         token=token_str,
                         parent_context=_orchestrate_context,
                         filter_labels=filter_labels,
+                        abstained=_abstained,
+                        abstention_reason=_abstention_reason,
                     ),
                     media_type="text/event-stream",
                 )

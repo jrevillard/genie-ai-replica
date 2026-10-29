@@ -129,6 +129,7 @@ import DsInput from '../../ds/Input.vue';
 import DsFormGroup from '../../ds/FormGroup.vue';
 import DsPill from '../../ds/Pill.vue';
 import DsStateDisplay from '../../ds/StateDisplay.vue';
+import { scopeLabels as storedScopeLabels } from './query-scope';
 
 export default {
   name: 'QueryInspectorList',
@@ -154,17 +155,13 @@ export default {
   },
   methods: {
     /**
-     * The labels the retrieval filtered on, as one string — or null when the
-     * record does not say (a query saved before the field existed, or
-     * streamed by a chatqna too old to report it). The pipeline decides the
-     * labels (chatqna sends the applied filter labels in its metadata
-     * event), so the Inspector shows what actually filtered instead of
-     * re-deriving the rule here. An empty list is a fact, not an absence:
-     * the retrieval ran unfiltered.
+     * The stored scope as one string — or null when the record does not say
+     * (rendered as the dash). The three-state rule lives in query-scope.js,
+     * shared with the detail view.
      */
     scopeText(query) {
-      const labels = query.metadata?.filter_labels;
-      if (labels == null) {
+      const labels = storedScopeLabels(query);
+      if (labels === null) {
         return null;
       }
       return labels.join(', ') || this.translate('admin.queryInspector.unfiltered', 'Unfiltered');

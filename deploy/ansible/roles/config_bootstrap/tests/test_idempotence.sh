@@ -514,8 +514,9 @@ snapshot() {
 # evidence could not be gathered, and the run stops rather than passing
 # without the check.
 SNAP_RC=0
-HOST_THEME="$(snapshot "grep -E '^KEYCLOAK_THEME=' '$CONFIG_PARENT/.env' | tail -n 1 | cut -d= -f2-" 2>/dev/null)" || SNAP_RC=$?
-if [ "$SNAP_RC" -eq 2 ]; then
+SNAP_RC=0
+HOST_THEME="$(snapshot "[ -f '$CONFIG_PARENT/.env' ] || exit 3; grep -E '^KEYCLOAK_THEME=' '$CONFIG_PARENT/.env' | tail -n 1 | cut -d= -f2-" 2>/dev/null)" || SNAP_RC=$?
+if [ "$SNAP_RC" -eq 2 ] || [ "$SNAP_RC" -eq 3 ]; then
     die "could not read the rendered environment on the host (the configured-theme check has no evidence)"
 fi
 HOST_THEME="$(printf '%s' "$HOST_THEME" | tr -d '[:space:]')"
@@ -602,6 +603,25 @@ if [ "$FILELIST_BEFORE" != "$FILELIST_AFTER_EDIT" ]; then
 fi
 pass "no files were added or removed under $CONFIG_DIR"
 
+# --- contract 2b: --check and a disabled sync touch nothing -------------------
+
+# The CHANGELOG and the README promise both: a --check run plans nothing the
+# run would not do (for this role: nothing at all), and
+# config_bootstrap_sync_enabled=false leaves the operator's tree exactly as
+# it is. Both are cheap to regress — a moved task, a lost when — and only
+# this test runs them on the real tree.
+step "Contract 2b: --check and a disabled sync must not touch the tree"
+MANIFEST_PRE_NOOP="$(manifest)"
+ansible_run -i "$INVENTORY" deploy.yml --tags "$ROLE_TAG" --limit "$HOST" --become --check ||
+    fail "--check could not complete the plan"
+ansible_run -i "$INVENTORY" deploy.yml --tags "$ROLE_TAG" --limit "$HOST" --become \
+    -e config_bootstrap_sync_enabled=false ||
+    fail "the sync-disabled run failed"
+if [ "$MANIFEST_PRE_NOOP" != "$(manifest)" ]; then
+    fail "--check or a sync-disabled run changed the config tree - both must leave it untouched"
+fi
+pass "--check and the sync-disabled run left the tree byte-identical"
+
 # --- contract 3: the guards refuse a foreign branch ---------------------------
 
 step "Contract 3: the guards refuse a branch that does not belong to this deployment"
@@ -613,9 +633,20 @@ step "Contract 3: the guards refuse a branch that does not belong to this deploy
 # refusal is proof the deployment rejects a foreign branch before touching it.
 # The contract refuses branch main by name, so it needs a host whose own
 # branch is not main; seeded from main the test does not know which branch
-# would be foreign here, and skips. An empty REPO_BRANCH means deploy.yml's
-# default, which is main.
-if [ -z "$REPO_BRANCH" ] || [ "$REPO_BRANCH" = "main" ]; then
+# would be foreign here, and skips.
+#
+# The branch the deployment seeds is not the argument the test was given:
+# group_vars can override repo_branch (a flavour pins its own branch), so the
+# effective branch is resolved from the same variable scope the role reads —
+# the test argument, when given, wins the way an extra-var would.
+if [ -n "$REPO_BRANCH" ]; then
+    RESOLVED_BRANCH="$REPO_BRANCH"
+else
+    RESOLVED_BRANCH="$(ansible_run raw -i "$INVENTORY" "$HOST" -m debug \
+        -a 'msg={{ repo_branch }}' 2>/dev/null |
+        sed -n 's/.*"msg": "\(.*\)".*/\1/p')"
+fi
+if [ "$RESOLVED_BRANCH" = "main" ]; then
     pass "skipped: seeded from main - this test does not know which branch this deployment would have to refuse; run it on the deployment host, where contract 3 exercises the refusal against the branch that host actually runs"
 else
     # The pre-test archive is still armed: if the guards fail to fire and the

@@ -87,6 +87,50 @@
         prefix: genieai-config-
       register: config_bootstrap_tmp
 
+    # The guards below loop over the pairs; a list that is empty or renamed to
+    # something the role does not read would run every one of them over zero
+    # items and pass while the role seeds an empty config directory that
+    # shadows the image-baked config in the bind mount. The role refuses it
+    # with the same message the other vacuous guards use.
+    - name: Fail unless there are pairs to seed
+      ansible.builtin.assert:
+        that:
+          - config_bootstrap_pairs is defined
+          - config_bootstrap_pairs | length > 0
+        fail_msg: >-
+          config_bootstrap_pairs is empty (or renamed to something the role
+          does not read), so nothing would be seeded and every guard below
+          would pass over zero items. Restore the pairs list — the role
+          default seeds the frontend config and the Keycloak themes.
+        success_msg: "config_bootstrap: {{ config_bootstrap_pairs | length }} pairs to seed"
+
+    # The expect check validates the pairs' own shape first: the loops below
+    # resolve item.dest_subdir and walk item.expect with subelements, and a
+    # missing key or a scalar expect would raise raw templating errors or be
+    # walked per character — the assert turns both into one actionable
+    # message.
+    - name: Fail unless every pair declares its destination and expected assets
+      ansible.builtin.assert:
+        that:
+          # `is defined` first: the conditions below resolve the keys, and a
+          # pair that omits one would raise a raw templating error instead of
+          # printing this message.
+          - item.dest_subdir is defined
+          - item.dest_subdir is string
+          - item.expect is defined
+          - item.expect is sequence
+          - item.expect is not string
+          - item.expect | length > 0
+        fail_msg: >-
+          A config_bootstrap_pairs entry does not declare dest_subdir (the
+          directory under config_dir it seeds) or does not declare `expect`
+          as a non-empty list of files (repo-relative to the pair's src). The
+          guards these two keys feed are what stop a wrong branch from
+          seeding a config dir without the assets the containers fetch at
+          boot.
+        success_msg: "config_bootstrap: every pair declares its destination and expected assets"
+      loop: "{{ config_bootstrap_pairs }}"
+
     # Same endpoint shape the Grafana provisioning download uses in deploy.yml:
     # a whole-directory archive at the pinned branch, with --strip-components=1
     # to drop the archive's top-level <branch>-<sha>-<short>/ prefix. The
@@ -132,44 +176,6 @@
     # must fail the deploy here, before anything is synced into the mount
     # source. Checking one well-known entrypoint asset per pair catches both an
     # empty extraction and a silently reshaped tree.
-    #
-    # The guards below loop over the pairs; an empty list would run every one
-    # of them over zero items and pass while the role seeds an empty config
-    # directory that shadows the image-baked config in the bind mount. The
-    # role refuses it with the same message the other vacuous guards use.
-    - name: Fail unless there are pairs to seed
-      ansible.builtin.assert:
-        that:
-          - config_bootstrap_pairs | length > 0
-        fail_msg: >-
-          config_bootstrap_pairs is empty (or renamed to something the role
-          does not read), so nothing would be seeded and every guard below
-          would pass over zero items. Restore the pairs list — the role
-          default seeds the frontend config and the Keycloak themes.
-        success_msg: "config_bootstrap: {{ config_bootstrap_pairs | length }} pairs to seed"
-
-    # The expect check validates the pairs' own shape first: the stat loop
-    # below walks `expect` with subelements, and a scalar would be walked per
-    # character — the assert turns that into one actionable message.
-    - name: Fail unless every pair declares its expected assets as a list
-      ansible.builtin.assert:
-        that:
-          # `is defined` first: the conditions below resolve item.expect, and
-          # a pair that omits the key would raise a raw templating error
-          # instead of printing this message.
-          - item.expect is defined
-          - item.expect is sequence
-          - item.expect is not string
-          - item.expect | length > 0
-        fail_msg: >-
-          The config_bootstrap_pairs entry for {{ item.dest_subdir }} does not
-          declare `expect` as a non-empty list (one file per entry,
-          repo-relative to the pair's src). The guard it feeds is what stops a
-          wrong branch from seeding a config dir without the assets the
-          containers fetch at boot.
-        success_msg: "config_bootstrap: {{ item.dest_subdir }} expects a list of assets"
-      loop: "{{ config_bootstrap_pairs }}"
-
     - name: Stat the expected assets in each extracted archive
       ansible.builtin.stat:
         path: "{{ config_bootstrap_tmp.path }}/{{ item.0.dest_subdir | replace('/', '-') }}/{{ item.0.src }}/{{ item.1 }}"

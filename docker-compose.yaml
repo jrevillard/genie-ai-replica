@@ -2044,6 +2044,10 @@ services:
       LLM_SERVER_PORT: 8000
       VLLM_LLM_ENDPOINT: ${VLLM_ENDPOINT:-}
       VLLM_TRANSLATION_ENDPOINT: ${VLLM_TRANSLATION_ENDPOINT:-}
+      # Escape hatch for endpoints whose /v1/models is unreachable while
+      # generation works (ACL'd proxies): empty by default, so discovery
+      # stays the source of truth; a pinned name bypasses the probe.
+      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-}
       GUARDRAIL_SERVICE_HOST_IP: guardrail
       GUARDRAIL_SERVICE_PORT: 9090
       TRANSLATION_SERVICE_HOST_IP: vllm-translation-guardrail

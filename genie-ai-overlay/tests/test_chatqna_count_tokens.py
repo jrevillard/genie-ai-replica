@@ -95,6 +95,22 @@ class TestCountTokens:
         ):
             assert m._count_tokens("x") == 12
 
+    def test_count_tokens_emits_a_span(self, captured_spans):
+        """Each count is visible in traces — the eventual offload/batching
+        work needs the per-call cost on the waterfall."""
+        import chatqna.genieai_chatqna as m
+
+        post = MagicMock(return_value=_resp({"count": 7}))
+        with (
+            patch.object(m, "_LLM_DISCOVERY_ENDPOINT", "http://vllm:8000"),
+            patch.object(m, "_get_llm_model", return_value="m"),
+            patch.dict("os.environ", {"VLLM_API_KEY": ""}, clear=False),
+            patch.object(m.httpx, "post", post),
+        ):
+            m._count_tokens("x")
+
+        assert captured_spans("chatqna.count_tokens")
+
     def test_integral_float_count_is_coerced(self):
         """A proxy serializing the count as JSON float 12.0 must count as 12 —
         the same coercion stance as the window value in core/model_cache."""

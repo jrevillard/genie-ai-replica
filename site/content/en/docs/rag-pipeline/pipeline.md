@@ -105,9 +105,10 @@ sent to the LLM. The default model is **`meta-llama/Meta-Llama-3.1-8B-Instruct`*
 (the docker-compose default, set by `VLLM_LLM_MODEL_ID`).
 **`ibm-granite/granite-4.1-8b`** is the **recommended and validated** model
 (must support OpenAI-compatible guided JSON for the dataprep labelling call).
-The in-code fallback for chatqna is `ibm-granite/granite-3.3-2b-instruct`
-(`genieai_chatqna.py:148`), reached only when neither `VLLM_LLM_MODEL_ID` nor
-`LLM_MODEL` env vars are set. See [Choosing models]({{< relref "choosing-models" >}}).
+Chatqna has no in-code fallback model name: it discovers whatever the LLM
+endpoint serves (`/v1/models`) and fails loudly when nothing answers; the
+legacy `LLM_MODEL` env var is no longer read (`VLLM_MODEL_ID` pins a name).
+See [Choosing models]({{< relref "choosing-models" >}}).
 
 The built-in system prompt (paraphrased; the canonical default lives in
 `genieai_chatqna.py:490-502`) instructs the model to:

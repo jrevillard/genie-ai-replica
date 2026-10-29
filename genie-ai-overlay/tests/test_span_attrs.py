@@ -41,6 +41,7 @@ VOCABULARY = sorted(ATTRIBUTE_NAMES.values())
 OWNED_SPAN_NAMES = {
     "llm.invoke",
     "chatqna.orchestrate",
+    "chatqna.count_tokens",
     "chatqna.query_condense",
     "chatqna.reranker_selection",
     "chatqna.stream_outcome",
@@ -169,8 +170,9 @@ class TestVocabularyShape:
         # branch writes (caught by this sweep at the 2026-10-21 merge);
         # 108 -> 109 for answer.abstention_reason (main, Query Inspector
         # !1121 - the boolean alone cannot split a spike into stale scopes vs
-        # an over-rejecting reranker).
-        assert len(ATTRIBUTE_NAMES) == 109
+        # an over-rejecting reranker); 109 -> 111 for llm.endpoint +
+        # token.count on the /tokenize counting span.
+        assert len(ATTRIBUTE_NAMES) == 111
 
 
 class TestLegacyAttributeNames:
@@ -265,8 +267,9 @@ class TestLegacyAttributeNames:
     def test_registering_the_backlog_did_not_inflate_the_vocabulary(self):
         # See test_vocabulary_entry_count_is_pinned - 83 (bounded-LLM wave)
         # + 10 okf.fanout.* + 15 rag.route.* routing attributes from the okf
-        # line; 108 -> 109 with answer.abstention_reason (main, !1121).
-        assert len(ATTRIBUTE_NAMES) == 109
+        # line; 108 -> 109 with answer.abstention_reason (main, !1121);
+        # 109 -> 111 with the counting-span keys (llm.endpoint, token.count).
+        assert len(ATTRIBUTE_NAMES) == 111
         assert len(LEGACY_ATTRIBUTE_NAMES) == 21
 
 

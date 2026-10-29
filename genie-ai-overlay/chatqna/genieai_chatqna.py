@@ -44,6 +44,7 @@ from tracing import (
     setup_json_logging,
     setup_trace_logging,
     setup_tracing,
+    with_span,
 )
 
 setup_tracing("genieai-chatqna")
@@ -1931,31 +1932,35 @@ def _count_tokens(text: str) -> int:
     url = f"{_LLM_DISCOVERY_ENDPOINT}/tokenize"
     headers = endpoint_auth_headers()
     verify = endpoint_verify()
-    resp = httpx.post(
-        url,
-        headers=headers,
-        json={"model": _get_llm_model(), "prompt": text},
-        timeout=PROBE_TIMEOUT_SECONDS,
-        verify=verify,
-    )
-    resp.raise_for_status()
-    payload = resp.json()
-    # vLLM returns both the token list and a precomputed "count"; prefer
-    # the scalar, fall back to the list length for servers that omit it.
-    if not isinstance(payload, dict):
-        raise ValueError(f"/tokenize returned a non-object payload: {payload!r}")
-    count = payload.get("count")
-    if count is None:
-        tokens = payload.get("tokens")
-        if not isinstance(tokens, list):
-            raise ValueError(f"/tokenize payload has neither a count nor a token list: {payload!r}")
-        return len(tokens)
-    # A proxy may serialize count as a digit string (same coercion stance as
-    # the window value in core/model_cache); anything else is malformed.
-    coerced = coerce_int(count)
-    if coerced is None:
-        raise ValueError(f"/tokenize count is not an integer: {payload!r}")
-    return coerced
+    with with_span("chatqna.count_tokens", attributes={"llm.endpoint": url}) as span:
+        resp = httpx.post(
+            url,
+            headers=headers,
+            json={"model": _get_llm_model(), "prompt": text},
+            timeout=PROBE_TIMEOUT_SECONDS,
+            verify=verify,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        # vLLM returns both the token list and a precomputed "count"; prefer
+        # the scalar, fall back to the list length for servers that omit it.
+        if not isinstance(payload, dict):
+            raise ValueError(f"/tokenize returned a non-object payload: {payload!r}")
+        count = payload.get("count")
+        if count is None:
+            tokens = payload.get("tokens")
+            if not isinstance(tokens, list):
+                raise ValueError(f"/tokenize payload has neither a count nor a token list: {payload!r}")
+            tokens_len = len(tokens)
+            span.set_attribute("token.count", tokens_len)
+            return tokens_len
+        # A proxy may serialize count as a digit string (same coercion stance as
+        # the window value in core/model_cache); anything else is malformed.
+        coerced = coerce_int(count)
+        if coerced is None:
+            raise ValueError(f"/tokenize count is not an integer: {payload!r}")
+        span.set_attribute("token.count", coerced)
+        return coerced
 
 
 ##################################################################################################################################
@@ -4435,7 +4440,10 @@ class ChatQnAService:
             # Telemetry only — the loud model-id gate lives in the payload
             # sites (generation, condense, tokenize); the attribute records
             # what discovery knows, never aborts the request.
-            span.set_attribute("rag.model_id", get_model_id(_LLM_DISCOVERY_ENDPOINT) or "undiscovered")
+            span.set_attribute(
+                "rag.model_id",
+                os.getenv("VLLM_MODEL_ID", "") or get_model_id(_LLM_DISCOVERY_ENDPOINT) or "undiscovered",
+            )
             # What this request actually blended, and the answer reserve it is
             # budgeted against. The token estimate and the history counts are
             # written by align_inputs, which is the only site that measures
@@ -4658,6 +4666,19 @@ class ChatQnAService:
 
                 return {"response": final_text, "metadata": metadata}
 
+            except ModelDiscoveryError as e:
+                # Same fail-closed contract as the condense path: a request
+                # that cannot even name its LLM is "LLM unavailable" (503),
+                # not a bug (500) — whatever the multi-turn mode.
+                from opentelemetry.trace import StatusCode
+
+                _err_duration = time.time() - _rag_start
+                _err_attrs = _chat_attrs("false", "true")
+                chat_requests_total.add(1, _err_attrs)
+                chat_rag_duration_seconds.record(_err_duration, _err_attrs)
+                span.set_status(StatusCode.ERROR)
+                span.record_exception(e)
+                raise HTTPException(status_code=503, detail="llm_unavailable") from e
             except Exception as e:
                 from opentelemetry.trace import StatusCode
 

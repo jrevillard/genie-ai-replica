@@ -3147,15 +3147,15 @@ chart:lint:
     # convergence Job, configs/keycloak/genie-realm.yaml is COPYed into
     # the compose image. They must stay byte-identical or the two
     # delivery paths deploy different realms.
-    - cmp -s charts/genieai-umbrella/files/genie-realm.yaml configs/keycloak/genie-realm.yaml || { echo "realm file drift between the chart copy and the compose copy - update both"; exit 1; }
+    - cmp -s charts/genieai-assets/files/genie-realm.yaml configs/keycloak/genie-realm.yaml || { echo "realm file drift between the chart copy and the compose copy - update both"; exit 1; }
     # Same contract for the Keycloak theme tarball, content-compared:
     # regenerate to a temp file and hash the member listing + the
     # concatenated member contents. Byte-comparing the .tgz itself would
     # be flaky — gzip output differs a few bytes across gzip versions.
     - ./scripts/regen-keycloak-theme.sh /tmp/themes-check.tgz >/dev/null
     - |
-      [ "$(tar -tzf /tmp/themes-check.tgz | sha256sum)" = "$(tar -tzf charts/genieai-umbrella/files/keycloak-themes.tgz | sha256sum)" ] \
-      && [ "$(tar -xzOf /tmp/themes-check.tgz | sha256sum)" = "$(tar -xzOf charts/genieai-umbrella/files/keycloak-themes.tgz | sha256sum)" ] \
+      [ "$(tar -tzf /tmp/themes-check.tgz | sha256sum)" = "$(tar -tzf charts/genieai-assets/files/keycloak-themes.tgz | sha256sum)" ] \
+      && [ "$(tar -xzOf /tmp/themes-check.tgz | sha256sum)" = "$(tar -xzOf charts/genieai-assets/files/keycloak-themes.tgz | sha256sum)" ] \
       || { echo "keycloak theme tarball content drift - run 'make keycloak-theme' and commit the result"; exit 1; }
     # Same contract for the Grafana dashboards and the alert rules: the
     # chart inlines them into GrafanaDashboard / GrafanaAlertRule CRs, so

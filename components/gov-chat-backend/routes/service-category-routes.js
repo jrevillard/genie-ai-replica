@@ -75,7 +75,16 @@ module.exports = (serviceCategoryService) => {
    *         description: Language locale for category and service names
    *     responses:
    *       '200':
-   *         description: List of categories with detailed service objects
+   *         description: List of categories with detailed service objects —
+   *           the CategoryTree shape (both spellings), where each service
+   *           additionally carries its entity `_key` (the hierarchy editor
+   *           acts on entities).
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: array
+   *               items:
+   *                 $ref: '#/components/schemas/CategoryTree'
    *       '500':
    *         description: Server error
    */

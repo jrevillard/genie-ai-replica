@@ -81,8 +81,26 @@ describe('serviceTreeService', () => {
 
       const result = await serviceTreeService.getAdminCategories('fr');
 
-      expect(mockGet).toHaveBeenCalledWith('service-categories/categories/detailed', { params: { locale: 'fr' } });
+      // The fetch is BOUNDED, like its public sibling: a request that
+      // never answers left the admin panel's hierarchy spinner turning
+      // forever, with no error to show. The bound lives in the THIRD
+      // argument — the second one is the query, and a timeout placed
+      // there is dropped on the floor.
+      expect(mockGet).toHaveBeenCalledWith(
+        'service-categories/categories/detailed',
+        { params: { locale: 'fr' } },
+        { timeout: 15000 }
+      );
       expect(result).toHaveLength(1);
+    });
+
+    it('rejects a body that is not a list of categories', async () => {
+      // A broken answer (a proxy error page, an object) is not a
+      // hierarchy: a client that walks it throws mid-render. The load
+      // must FAIL so the panel shows the failed state.
+      mockGet.mockResolvedValue({ data: { error: 'boom' } });
+
+      await expect(serviceTreeService.getAdminCategories('en')).rejects.toThrow(/not a list/i);
     });
   });
 

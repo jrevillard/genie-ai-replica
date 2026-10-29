@@ -571,6 +571,62 @@ describe('AdminDashboard', () => {
   });
 
   // -----------------------------------------------------------------------
+  // The hierarchy panel reads the wire spelling (nameEN) the admin tree
+  // publishes, not the localized name.
+  // -----------------------------------------------------------------------
+  describe('loadKnowledgeHierarchy — nameEN mapping', () => {
+    it('maps the payload nameEN onto the editor rows at both levels', async () => {
+      const treeMock = require('../../services/serviceTreeService').getAdminCategories;
+      treeMock.mockClear();
+      treeMock.mockResolvedValueOnce([
+        {
+          catKey: 'cat-1',
+          catCode: 'taxes',
+          name: 'Impuestos',
+          nameEN: 'Taxes',
+          children: [{ _key: 'svc-1', name: 'Declaración de impuestos', nameEN: 'Tax Filing' }]
+        }
+      ]);
+
+      const wrapper = createAdminDashboardWrapper();
+      await wrapper.vm.loadKnowledgeHierarchy();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.knowledgeHierarchy).toHaveLength(1);
+      // Localized and EN values differ on purpose: the rows must carry the
+      // EN spelling the filter wire speaks, and a mapping that picked the
+      // localized name would read 'Impuestos' here.
+      expect(wrapper.vm.knowledgeHierarchy[0]).toMatchObject({ _key: 'cat-1', nameEN: 'Taxes' });
+      expect(wrapper.vm.knowledgeHierarchy[0].services).toHaveLength(1);
+      expect(wrapper.vm.knowledgeHierarchy[0].services[0]).toMatchObject({ _key: 'svc-1', nameEN: 'Tax Filing' });
+    });
+
+    it('falls back to the payload name when the tree predates the nameEN field', async () => {
+      const treeMock = require('../../services/serviceTreeService').getAdminCategories;
+      treeMock.mockClear();
+      treeMock.mockResolvedValueOnce([
+        {
+          catKey: 'cat-1',
+          catCode: 'taxes',
+          name: 'Taxes',
+          children: [{ _key: 'svc-1', name: 'Tax Filing' }]
+        }
+      ]);
+
+      const wrapper = createAdminDashboardWrapper();
+      await wrapper.vm.loadKnowledgeHierarchy();
+      await wrapper.vm.$nextTick();
+
+      // A tree without the field is a response from a backend older than
+      // it: the panel is fetched in English, so the payload's `name` IS
+      // the English translation there. Same fallback the mobile collector
+      // makes for the same deploy window.
+      expect(wrapper.vm.knowledgeHierarchy[0]).toMatchObject({ _key: 'cat-1', nameEN: 'Taxes' });
+      expect(wrapper.vm.knowledgeHierarchy[0].services[0]).toMatchObject({ _key: 'svc-1', nameEN: 'Tax Filing' });
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // Task 1b: Dirty state protection — isFormDirty computed
   // -----------------------------------------------------------------------
   describe('isFormDirty computed', () => {

@@ -496,7 +496,9 @@ class ServiceCategoryService {
   /**
    * Get all categories with DETAILED services for the admin panel
    * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
-   * @returns {Promise<Array>} Categories with detailed service objects
+   * @returns {Promise<Array>} Categories with detailed service objects,
+   *   each carrying the localized display name and the ENGLISH translation
+   *   (`nameEN`) the filter wire speaks
    */
   async getAdminAllCategoriesWithServices(locale = 'en') {
     await this.init();
@@ -506,39 +508,70 @@ class ServiceCategoryService {
 
       // The admin variant of getAllCategoriesWithServices: the category
       // level is the same, but the services subquery returns the entity KEY
-      // (the hierarchy editor acts on entities) instead of the wire
-      // spellings the public tree publishes.
+      // (the hierarchy editor acts on entities) beside the wire spellings.
+      // Both spellings come out of ONE translation pass per entity, the
+      // same shape as the public tree: the hierarchy editor renames the
+      // EN name, so the tree must publish it.
+      const localeCode = upperLocale.toLowerCase();
       const query = aql`
           FOR category IN serviceCategories
               SORT category.order ASC
-              LET categoryTranslation = FIRST(
+              LET categoryTranslations = (
                   FOR trans IN serviceCategoryTranslations
                       FILTER trans.serviceCategoryId == category._key
-                      FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
-                      RETURN trans.translation
+                      FILTER LOWER(trans.languageCode) IN [ ${localeCode}, 'en' ]
+                      RETURN { code: LOWER(trans.languageCode), translation: trans.translation }
               )
+              LET categoryTranslation = FIRST(
+                  FOR t IN categoryTranslations
+                      FILTER t.code == ${localeCode}
+                      RETURN t.translation
+              )
+              LET categoryTranslationEN = FIRST(
+                  FOR t IN categoryTranslations
+                      FILTER t.code == 'en'
+                      RETURN t.translation
+              )
+              // The EN translation row is the SSOT; the document's cached
+              // nameEN is the FALLBACK for an entity seeded outside the
+              // write path (the taxonomy seed script writes the document
+              // field and no translation row at all) — the same
+              // resolution the corpus's own EN lookup applies.
+              LET categoryNameEN = categoryTranslationEN != null ? categoryTranslationEN : category.nameEN
               LET services = (
                   FOR edge IN categoryServices
                       FILTER edge._from == category._id
                       FOR service IN services
                           FILTER service._id == edge._to
-                          LET serviceTranslation = FIRST(
+                          LET serviceTranslations = (
                               FOR trans IN serviceTranslations
                                   FILTER trans.serviceId == service._key
-                                  FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
-                                  RETURN trans.translation
+                                  FILTER LOWER(trans.languageCode) IN [ ${localeCode}, 'en' ]
+                                  RETURN { code: LOWER(trans.languageCode), translation: trans.translation }
                           )
+                          LET serviceTranslation = FIRST(
+                              FOR t IN serviceTranslations
+                                  FILTER t.code == ${localeCode}
+                                  RETURN t.translation
+                          )
+                          LET serviceTranslationEN = FIRST(
+                              FOR t IN serviceTranslations
+                                  FILTER t.code == 'en'
+                                  RETURN t.translation
+                          )
+                          LET serviceNameEN = serviceTranslationEN != null ? serviceTranslationEN : service.nameEN
                           SORT edge.order ASC
-                          // This is the key change: return an object with the key and name
                           RETURN {
                               _key: service._key,
-                              name: serviceTranslation
+                              name: serviceTranslation,
+                              nameEN: serviceNameEN
                           }
               )
               RETURN {
                   catKey: category._key,
                   catCode: category.catCode,
                   name: categoryTranslation,
+                  nameEN: categoryNameEN,
                   children: services
               }
       `;

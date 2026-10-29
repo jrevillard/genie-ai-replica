@@ -49,16 +49,31 @@ export default {
 
   /**
    * For the ADMIN dashboard ONLY.
-   * Fetches all categories with a detailed array of service objects ({_key, name}).
+   * Fetches all categories with a detailed array of service objects
+   * ({_key, name, nameEN}).
+   *
+   * Every category and every child service carries BOTH spellings: `name`
+   * (the localized display name) and `nameEN` (the English translation —
+   * the SSOT the filter wire speaks; the localized name never filters).
+   *
    * @param {String} locale - Locale code (e.g., 'en')
    * @returns {Promise} Categories with detailed service objects.
    */
   async getAdminCategories(locale = 'en') {
     try {
       // This points to the ADMIN endpoint that returns detailed data
-      const response = await httpService.get('service-categories/categories/detailed', {
-        params: { locale }
-      });
+      const response = await httpService.get(
+        'service-categories/categories/detailed',
+        { params: { locale } },
+        // A BOUNDED fetch, like the public sibling: a request that never
+        // answers left the admin panel's hierarchy spinner turning
+        // forever, with no error to show. The timeout goes in the THIRD
+        // argument — httpService.get's axios options. Its second argument
+        // is the query: it reads `params` from it and sends the rest as
+        // query parameters, so a timeout placed there is dropped on the
+        // floor and axios waits forever.
+        { timeout: 15000 }
+      );
       return response.data || [];
     } catch (error) {
       console.error('Error fetching admin service categories:', error);

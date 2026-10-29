@@ -81,7 +81,16 @@ describe('serviceTreeService', () => {
 
       const result = await serviceTreeService.getAdminCategories('fr');
 
-      expect(mockGet).toHaveBeenCalledWith('service-categories/categories/detailed', { params: { locale: 'fr' } });
+      // The fetch is BOUNDED, like its public sibling: a request that
+      // never answers left the admin panel's hierarchy spinner turning
+      // forever, with no error to show. The bound lives in the THIRD
+      // argument — the second one is the query, and a timeout placed
+      // there is dropped on the floor.
+      expect(mockGet).toHaveBeenCalledWith(
+        'service-categories/categories/detailed',
+        { params: { locale: 'fr' } },
+        { timeout: 15000 }
+      );
       expect(result).toHaveLength(1);
     });
   });

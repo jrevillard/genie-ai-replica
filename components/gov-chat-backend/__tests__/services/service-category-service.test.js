@@ -321,14 +321,69 @@ describe('ServiceCategoryService', () => {
           {
             catKey: 'cat-1',
             catCode: 'taxes',
-            name: 'Taxes',
-            children: [{ _key: 'svc-1', name: 'Tax Filing' }]
+            name: 'Impuestos',
+            nameEN: 'Taxes',
+            children: [{ _key: 'svc-1', name: 'Declaración de impuestos', nameEN: 'Tax Filing' }]
           }
         ])
       );
 
       const result = await service.getAdminAllCategoriesWithServices('en');
-      expect(result[0].children[0]).toEqual({ _key: 'svc-1', name: 'Tax Filing' });
+      // The admin tree carries the same spellings the public tree publishes:
+      // the hierarchy editor renames entities, and nameEN is the one the
+      // corpus filters on — the one that must not drift. Localized and EN
+      // values differ on purpose; a projection that carried one for the
+      // other would look right with equal names.
+      expect(result[0].name).toBe('Impuestos');
+      expect(result[0].nameEN).toBe('Taxes');
+      expect(result[0].children[0]).toEqual({
+        _key: 'svc-1',
+        name: 'Declaración de impuestos',
+        nameEN: 'Tax Filing'
+      });
+    });
+
+    it('publishes both spellings — the EN translation beside the localized name', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('done'));
+      await service.getAdminAllCategoriesWithServices('fr').catch(() => {});
+
+      const queryArg = mockDb.query.mock.calls[0][0];
+      // arangojs 8 builds a LAZY aql object ({_aql, strings, values}) — see
+      // the note in the getAllCategoriesWithServices shape test above.
+      const text = queryArg.strings.join('|');
+      // The EN translation is selected for the category AND for every
+      // service, through the same single-translation-pass shape as the
+      // public tree.
+      const enSelections = (text.match(/'en'/g) || []).length;
+      expect(enSelections).toBeGreaterThanOrEqual(2);
+      // Both levels project the pair — `name` (display) and `nameEN` (wire)
+      // — beside the entity KEY the hierarchy editor acts on. Asserting the
+      // variable that carries the EN TRANSLATION (not a literal, not the
+      // localized one) is what makes this fail on `nameEN: serviceTranslation`.
+      expect(text).toMatch(/name:\s*categoryTranslation,\s*nameEN:\s*categoryNameEN/);
+      expect(text).toMatch(/_key:\s*service\._key,\s*name:\s*serviceTranslation,\s*nameEN:\s*serviceNameEN/);
+    });
+
+    it('falls back to the entity document nameEN when no EN translation row exists', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('done'));
+      await service.getAdminAllCategoriesWithServices('en').catch(() => {});
+
+      const queryArg = mockDb.query.mock.calls[0][0];
+      const text = queryArg.strings.join('|');
+      // The EN translation row is the SSOT, but an entity seeded outside
+      // the write path (the taxonomy seed script writes the document
+      // field and no translation row at all) would publish an EMPTY
+      // English name — the very symptom the admin panel must not show.
+      // The document's cached nameEN is the fallback the corpus's own EN
+      // resolution uses, so the tree must use it too.
+      expect(text).toMatch(/categoryTranslationEN\s*!=\s*null\s*\?\s*categoryTranslationEN\s*:\s*category\.nameEN/);
+      expect(text).toMatch(/serviceTranslationEN\s*!=\s*null\s*\?\s*serviceTranslationEN\s*:\s*service\.nameEN/);
+    });
+
+    it('should throw on database error', async () => {
+      mockDb.query.mockRejectedValue(new Error('Query failed'));
+
+      await expect(service.getAdminAllCategoriesWithServices('en')).rejects.toThrow('Query failed');
     });
   });
 

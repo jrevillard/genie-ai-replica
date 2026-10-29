@@ -33,6 +33,39 @@
     state: present
   when: config_bootstrap_run | bool
 
+# The pre-mirror role kept its scratch under a fixed path and removed it only
+# at the end of a successful play, so failed runs left the archives and the
+# extraction tree on every node. This run's scratch is private and removed in
+# the always section of the seeding block — but a kill or a lost connection
+# before the play reaches it skips that cleanup, so this janitor is what reaps
+# those trees too: the single pattern covers the pre-mirror names and this
+# role's own tempfile prefix. It runs whether or not this play seeds anything
+# (an operator who turned the sync off after leaked runs still gets the trees
+# reaped). Only what has been there for more than a week is removed, so a
+# deployment of the pre-mirror role that is still running keeps its scratch.
+# Retirable once every node has run this role at least once.
+- name: Remove the scratch trees older than a week
+  become_user: root
+  ansible.builtin.command:
+    argv:
+      - find
+      - /tmp
+      - -maxdepth
+      - "1"
+      - -name
+      - genieai-config-*
+      - -mtime
+      - "+7"
+      - -print
+      - -exec
+      - rm
+      - -rf
+      - '{}'
+      - +
+  register: config_bootstrap_legacy_cleanup
+  changed_when: >-
+    (config_bootstrap_legacy_cleanup.stdout | default('') | trim) | length > 0
+
 # The whole seeding runs in a block with an `always` section: the scratch tree
 # holds the downloaded archives and the extracted branch copy (tens of MB per
 # pair), the guard failures below are a designed path — a wrong branch, a
@@ -45,38 +78,6 @@
 - name: Seed the host runtime config from the branch
   when: config_bootstrap_run | bool
   block:
-    # The pre-mirror role kept its scratch under a fixed path and removed it
-    # only at the end of a successful play, so failed runs left the archives
-    # and the extraction tree on every node. This run's scratch is private and
-    # removed in the always section — but a kill or a lost connection before
-    # the play reaches it skips that cleanup, so this janitor is what reaps
-    # those trees too: the single pattern covers the pre-mirror names and this
-    # role's own tempfile prefix. Only what has been there for more than a
-    # week is removed, so a deployment of the pre-mirror role that is still
-    # running keeps its scratch. Retirable once every node has run this role
-    # at least once.
-    - name: Remove the scratch trees older than a week
-      become_user: root
-      ansible.builtin.command:
-        argv:
-          - find
-          - /tmp
-          - -maxdepth
-          - "1"
-          - -name
-          - genieai-config-*
-          - -mtime
-          - "+7"
-          - -print
-          - -exec
-          - rm
-          - -rf
-          - '{}'
-          - +
-      register: config_bootstrap_legacy_cleanup
-      changed_when: >-
-        (config_bootstrap_legacy_cleanup.stdout | default('') | trim) | length > 0
-
     # A private scratch directory per run: the path is unpredictable, so a
     # local user cannot pre-create it and steer a root write, and overlapping
     # deploys cannot purge each other's extraction tree mid-run.
@@ -293,8 +294,9 @@
     # shows lives in the runtime configuration, and the branch ships that file
     # too. So the branch's title is compared with the one the host serves, and
     # a difference fails the deploy: re-branding is a decision (change the
-    # repository), not a side effect of deploying another branch. Set
-    # config_bootstrap_allow_rebrand to true to make it a warning.
+    # repository), not a side effect of deploying another branch. Setting
+    # config_bootstrap_allow_rebrand to true lets the mirror proceed without
+    # a warning: the flag is for the deploy where the re-brand is the point.
     #
     # The file that carries the brand is declared by the pair that owns it
     # (brand_file), not hardcoded here: a pair whose src or dest_subdir
@@ -606,9 +608,10 @@
         fail_msg: >-
           The config directory {{ item.item.dest }} carries mode
           {{ item.stat.mode }} after the mirror: the containers read the mount
-          as a non-root user and would not be able to traverse it. The role
-          creates these directories mode 0775 — a mode that still fails this
-          check was changed on the host after the deploy.
+          as a non-root user and would not be able to traverse it. Either the
+          branch's tree carries the restrictive mode (fix it in the
+          repository) or the mode was changed on the host after a previous
+          deploy (the next run repairs it; check what changed it).
         success_msg: "config_bootstrap: the seeded directories are readable"
       loop: "{{ config_bootstrap_dir_stat.results | default([]) }}"
       loop_control:

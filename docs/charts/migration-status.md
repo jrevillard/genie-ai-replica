@@ -615,7 +615,11 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
 - **Review loop, pass 51 (0.2.125)** — 7 findings from the twenty-seventh
-  `/code-review`: six fixed, one refuted, one deferred to the operator.
+  `/code-review`: six fixed and one refuted. (Correction, pass 52: the
+  original entry said "six fixed, one refuted, one deferred" — eight
+  dispositions for seven findings — and carried a phantom site-grammar
+  bullet for a fix that landed in pass 50; both dropped here. The
+  deploy-repo deferral is a pass-52 finding.)
   - *The `<pays>` grep was run over charts/genieai-umbrella/ only* —
     six live sites survived it: charts/README.md, the site doc's
     "per-pays overrides" (twice), the bootstrap doc's "pays that use
@@ -627,31 +631,27 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     already takes for the minikube profile (the first rename attempt
     created a second `CLUSTER=` assignment that clobbered the profile —
     caught before any push by re-reading the parser).
-  - *The deploy repo carries its own `<pays>` vocabulary* (~34 matches
-    in 8 files, including the sops scripts' CLI) — deferred: renaming
-    it is the operator's naming decision ("pays" was the historical
-    term for the country deployments the repo grew around), not a
-    mechanical fix this branch makes unilaterally.
   - *The Nexus parenthetical moved to the wrong cell in the pass-50
     enumeration* — it annotated scheme+port+prefix; the actual Nexus
     pin is scheme+prefix without port. Back on its cell.
   - *Chart.yaml's description dropped the load-bearing "typically"* —
     "consumed via Flux" asserted the sole delivery path while the repo
     ships an ArgoCD example and documents direct installs. Restored.
-  - *The site doc's grammar shorthand lagged on the prefix shape* —
-    `[/prefix]` against the other surfaces' multi-segment form.
-    Aligned.
   - *Two cosmetic residues* — the site doc's own rewrap widow ("the")
     and the pass-50 ledger entry citing a line number that drifted the
     moment it was written (the citation is dropped; the prose locates
     the fix).
-  - *Refuted: the "pass-50 parenthetical contradicts the commit
-    message" finding* — the quoted phrase ("the run-25 fix itself
-    verified true") is the reviewer's own verification note, not
-    ledger text; the ledger carries no such sentence.
+  - *Refutation withdrawn (pass 52): the quoted sentence IS ledger
+    text* — "the run-25 fix itself verified true" sat in the pass-50
+    entry's own intro (it summarized the run-26 reviewer's verdict on
+    the 0.2.124 delta, not on run 25's fix, which is exactly what the
+    entry's first bullet records as misapplied). The intro is reworded;
+    the refutation's "the ledger carries no such sentence" was checked
+    against the wrong string.
 - **Review loop, pass 50 (0.2.124)** — 6 findings from the twenty-sixth
-  `/code-review`, all comment/enum residue (the reviewer's own verdict:
-  the run-25 fix itself verified true).
+  `/code-review`, all comment/enum residue (the reviewer's own verdict
+  covered the whole 0.2.124 delta; run 25's subject-verb fix itself had
+  landed on the wrong comment, as this entry's first bullet records).
   - *The subject-verb fix was applied to the wrong comment* — the
     already-grammatical top-of-spec comment was reworded while the
     actual "are discoverable" slip survived one paragraph below. The

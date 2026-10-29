@@ -41,7 +41,6 @@
 #   --deploy-repo <path>    genie-ai-deploy checkout (default: ../genie-ai-deploy)
 #   --overlay <name>        overlay / cluster-dir name in the deploy repo
 #                           (default: jrevillard-laptop)
-#   --env <name>            overlay env (default: dev)
 #   --kubernetes-version    default v1.32.0
 #   --skip-start            do NOT touch the cluster (prereqs + secret restore only)
 #
@@ -62,7 +61,6 @@ CLUSTER="minikube"
 # failed only at the last step — after the destructive ones.
 DEPLOY_REPO="${DEPLOY_REPO:-${REPO_ROOT}/../genie-ai-deploy}"
 OVERLAY="jrevillard-laptop"
-ENV="dev"
 K8S_VERSION="v1.32.0"
 CPUS=4
 # The node's REAL memory. The kubelet inside minikube reports the HOST's
@@ -113,7 +111,6 @@ while [ $# -gt 0 ]; do
     --cluster) CLUSTER="$2"; shift 2 ;;
     --deploy-repo) DEPLOY_REPO="$2"; shift 2 ;;
     --overlay) OVERLAY="$2"; shift 2 ;;
-    --env) ENV="$2"; shift 2 ;;
     --kubernetes-version) K8S_VERSION="$2"; shift 2 ;;
     --sealed-secrets-key) SEALED_KEYS_FILE="$2"; shift 2 ;;
     --flux-git-auth) FLUX_GIT_AUTH_FILE="$2"; shift 2 ;;

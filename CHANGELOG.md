@@ -209,6 +209,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scope in the old language; it now re-resolves the title by the button id,
   mirroring the web app's Quick Help chip re-title on a locale switch. A
   button the configuration no longer declares keeps its last title.
+  (#1115, !629)
 - **The labelling prompt was different on every ingestion run.** The candidate
   labels sent to the labelling LLM were collected in a Python set, whose order
   follows the hash seed of the process that built it — so every container sent

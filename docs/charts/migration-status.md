@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-29)
 
-- **Chart `genieai-umbrella` at 0.2.119**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.120**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,29 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 46 (0.2.120)** — 4 findings from the twenty-second
+  `/code-review`, the mirror contract's documentary and coverage tail.
+  - *The delivery pin covered one of the two motivating shapes* — the
+    scheme-ful Nexus topology (`https://nexus.internal/repository/k8s-
+    releases`) that motivated pass 45's multi-segment fix had no
+    contains-case; the scheme-less one was pinned. Both are now, and
+    the "covers every documented shape" comment enumerates what is
+    pinned instead of claiming an exhaustiveness it did not have.
+  - *The fifth documentary surface still said "kubectl and jq"* —
+    charts/README.md (the pass-45 fix caught the umbrella README and
+    values.yaml, not this sibling). It says kubectl only now.
+  - *values.yaml's own comment lagged two revisions behind* — still
+    `[/prefix]` (single-segment reading) and a hardcoded
+    `/linux/amd64/` path (the real path is `<arch>`, detected at
+    runtime or forced by `global.toolingArch` — the arm64 minikube
+    this chart explicitly supports would 404 against the documented
+    mirror). Both aligned.
+  - *The pattern's trailing `/?` admitted the double-slash trap* — a
+    trailing slash in the mirror renders into
+    `.../k8s-releases//release/...`, which Nexus/Artifactory and strict
+    routers 404 after three retries and an aborted helm upgrade. The
+    trailing slash is rejected at render now; a guard case fires on
+    it (mutation-tested: restoring the `/?` turns the case red).
 - **Review loop, pass 45 (0.2.119)** — 7 findings from the twenty-first
   `/code-review`: six fixed, one declined (generic Helm surface).
   - *The mirror pattern admitted at most ONE path segment* — the
@@ -1957,7 +1980,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.119** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.120** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

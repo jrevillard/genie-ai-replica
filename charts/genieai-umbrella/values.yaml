@@ -51,9 +51,11 @@ global:
   toolingImageRegistry: ""
   # Hook + test-pod init containers curl-download kubectl from the
   # public releases. In air-gapped environments set this to an internal
-  # mirror — [http[s]://]host[:port][/prefix]; the scheme is optional
-  # (scheme-less makes curl use plain HTTP against the local proxy), and
-  # the path /release/v1.33.0/bin/linux/amd64/kubectl is appended
+  # mirror — [http[s]://]host[:port][/multi/segment/prefix]; the scheme
+  # is optional (scheme-less makes curl use plain HTTP against the
+  # local proxy), no trailing slash, and the path
+  # /release/v1.33.0/bin/linux/<arch>/kubectl (<arch> detected at
+  # runtime unless global.toolingArch forces one) is appended
   # automatically. The render rejects any other shape: the value is
   # interpolated into the init container's shell. Default = empty (use
   # the public URLs).

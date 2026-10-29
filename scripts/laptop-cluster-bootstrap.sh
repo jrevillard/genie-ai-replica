@@ -39,7 +39,8 @@
 # Flags:
 #   --cluster <name>        minikube profile (default: minikube)
 #   --deploy-repo <path>    genie-ai-deploy checkout (default: ../genie-ai-deploy)
-#   --pays <name>           overlay / pays name (default: jrevillard-laptop)
+#   --overlay <name>        overlay / cluster-dir name in the deploy repo
+#                           (default: jrevillard-laptop)
 #   --env <name>            overlay env (default: dev)
 #   --kubernetes-version    default v1.32.0
 #   --skip-start            do NOT touch the cluster (prereqs + secret restore only)
@@ -60,7 +61,7 @@ CLUSTER="minikube"
 # path, so a relative default resolved against the wrong directory
 # failed only at the last step — after the destructive ones.
 DEPLOY_REPO="${DEPLOY_REPO:-${REPO_ROOT}/../genie-ai-deploy}"
-PAYS="jrevillard-laptop"
+OVERLAY="jrevillard-laptop"
 ENV="dev"
 K8S_VERSION="v1.32.0"
 CPUS=4
@@ -111,7 +112,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --cluster) CLUSTER="$2"; shift 2 ;;
     --deploy-repo) DEPLOY_REPO="$2"; shift 2 ;;
-    --pays) PAYS="$2"; shift 2 ;;
+    --overlay) OVERLAY="$2"; shift 2 ;;
     --env) ENV="$2"; shift 2 ;;
     --kubernetes-version) K8S_VERSION="$2"; shift 2 ;;
     --sealed-secrets-key) SEALED_KEYS_FILE="$2"; shift 2 ;;
@@ -221,16 +222,16 @@ fi
 
 log "applying the Flux sources and Kustomizations"
 # Two Kustomizations, both declared in the repo:
-#   clusters/<pays>/flux-kustomization.yaml  -> drives ./clusters/<pays>
-#   clusters/<pays>/flux-system/flux-kustomization.yaml -> drives ./overlays/<pays>/<env>
+#   clusters/<overlay>/flux-kustomization.yaml  -> drives ./clusters/<overlay>
+#   clusters/<overlay>/flux-system/flux-kustomization.yaml -> drives ./overlays/<overlay>/<env>
 # The first one carries the GitRepository that points at the deploy repo
 # itself; the second one carries the chart source, the HelmRelease and
 # the SealedSecrets.
-kubectl apply -f "$DEPLOY_REPO/clusters/$PAYS/flux-kustomization.yaml"
+kubectl apply -f "$DEPLOY_REPO/clusters/$OVERLAY/flux-kustomization.yaml"
 # `-k` (kustomize build), not `-f`: the directory carries a
 # kustomization.yaml, and `kubectl apply -f` would try to apply that
 # file as a resource (no CRD for kustomize.config.k8s.io).
-kubectl apply -k "$DEPLOY_REPO/clusters/$PAYS/flux-system/"
+kubectl apply -k "$DEPLOY_REPO/clusters/$OVERLAY/flux-system/"
 
 log "waiting for the Flux sources"
 # Not advisory: a source that never went Ready means the PAT is wrong or

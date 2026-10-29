@@ -2978,3 +2978,24 @@ location: components/document-repository/src/controllers/fileController.js:1177 
 severity: medium (after c43b7921d the dataprep side routes OKF completions by the OKF graph HINT without claiming an identity, so files no longer stick Ingesting; the explicit repoId removes the ambiguity entirely and lets the hint fallback retire)
 reason: Protocol rule: identity must never be parsed out of the graph name (genieai_api_protocol.py). doc-repo must send repo_id explicitly; then the dataprep graph-hint becomes a pure belt-and-braces path.
 status: open
+
+### DW-443: The crawl .md split exists TWICE with material drift (crawl-conversion author side vs ingest-service re-split side) — one shared split module so re-splitting yields the same concept identities as the original conversion
+origin: !597 round-2 review (simplify, thread 5b1489e9, 2026-10-29)
+location: components/okf-server/services/crawl-conversion-service.js (conceptPathForUrl/cleanTitle/deriveTitleFromUrl/deriveTitleFromBody, the author side) vs components/okf-server/services/ingest-service.js:1214-1262 (splitBySourceMarkers/urlToConceptPath/deriveTitleFromBody, the reader side)
+severity: medium (functional drift: re-splitting the same crawl file yields DIFFERENT concept identities than the original conversion — dedup misses, duplicate concepts; path fallbacks crawl-page-N vs crawl-<fileId>-N, titles link-unwrapped+unslugified vs raw heading/URL)
+reason: The unification is a DATA-VISIBLE behaviour change on the legacy dataprep re-ingest path (identities and titles change for content re-split through it, converging with the author side — the RAGAS corpus exercises mode B). Acceptance spec = the reviewer's drift list; ship with a before/after identity note for existing re-ingested content and its own reviewed MR. The modern crawl-to-OKF import path never re-splits (it imports concepts directly), which bounds the blast radius.
+status: open
+
+### DW-444: promoteGraph / demoteGraph / renameForRepoNameChange are the same ~40-line skeleton three times — one private transitionGraph(repo, toGraph, {candidates, allowDropTarget, action, description}) with the three exports as thin wrappers
+origin: !597 round-2 review (simplify, thread 928b8c13, 2026-10-29)
+location: components/okf-server/services/lifecycle-service.js (~:430-530)
+severity: low (maintenance; ~105 lines to ~50; the next span-attr/audit-detail change lands once instead of three times)
+reason: The fold touches the publish/retract/rename paths' span attributes, audit payloads and log lines in one sweep — that ordering is load-bearing for the Studio history view and the audit trail, and folding it mid-review would make wave-to-wave diffs unauditable against the version under review. Ship on the next lifecycle touch (with DW-445, same file).
+status: open
+
+### DW-445: Two copy-paste pairs in the lifecycle publish branch — identical buildVectorizedHead try/catch arms (hoistable below the if/else) and a double settle_claimed_at lease release (promoteGraph's catch releases-then-rethrows into the outer catch's release)
+origin: !597 round-2 review (simplify, thread 7679f56f, 2026-10-29)
+location: components/okf-server/services/lifecycle-service.js (~:784-795 + :856-867; ~:306-310 + :339-343)
+severity: low (maintenance; ~12 lines + one releaseLease() local with a single catch path)
+reason: Ship together with DW-444 on the next lifecycle touch — the reviewer's own framing is "cheap to fold into the next lifecycle touch"; recording both pairs here so the next diff carries them together.
+status: open

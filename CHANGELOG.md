@@ -208,8 +208,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the label the corpus filters on remain the same string. The admin tree keeps
   its localized display name: the admin panel keys its label map by that name,
   so an English fallback there would let two entities share one key and file a
-  label under the wrong entity. An entity with no name in any language is
-  published unnamed and the clients do not offer it: it cannot be scoped on. A
+  label under the wrong entity. On the mobile app, the tree panel now
+  identifies a selected service by its English label, so two services that
+  read the same in the interface language are two scopes. An entity with no
+  name in any language is published unnamed and the clients do not offer it:
+  it cannot be scoped on. A
   corpus that never carried the label of an entity seeded outside the write
   path needs a re-ingest before that entity's scope matches documents — the
   labels are minted when a document is ingested. (#1117, !632)

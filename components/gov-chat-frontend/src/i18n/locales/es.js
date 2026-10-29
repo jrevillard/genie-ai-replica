@@ -3559,7 +3559,9 @@ export default {
         colResizeTip: 'Arrastre el tirador para redimensionar — doble clic en el encabezado para restablecer',
         trendTitle: 'Tendencia de métricas por ejecución',
         trendNote:
-          'Cada línea es la media de una métrica RAGAS por ejecución, de la más antigua a la más reciente — el ␘ de cada medidor explica la métrica. Las respuestas juzgadas se cachean; repeticiones idénticas solo difieren donde cambió la respuesta o la recuperación.',
+          'Cada línea es la media de una métrica RAGAS por ejecución, de la más antigua a la más reciente, y nunca cruza un límite de juez — cada etiqueta del eje X nombra al juez que puntuó la ejecución. Las respuestas juzgadas se cachean; repeticiones idénticas solo difieren donde cambió la respuesta o la recuperación.',
+        trendMixedJudges:
+          'Los jueces difieren entre estas ejecuciones — compare dentro de un segmento del mismo juez, no entre segmentos',
         statusTitle: 'Resultados por pregunta',
         statusNote:
           'Cada pregunta dentro del alcance de esta ejecución, apilada por resultado: respondida, reprobada (alguna métrica elegida por debajo de su umbral), abstención (quien responde se abstuvo) o error de pipeline (la cadena falló en esa fila). Los controles fuera de alcance no se cuentan — son un control, no un resultado.',

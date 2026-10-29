@@ -2189,7 +2189,8 @@ export default {
         colResizeTip: 'Drag the grip to resize — double-click the header to reset',
         trendTitle: 'Metric trend across runs',
         trendNote:
-          'Each line is one RAGAS metric’s suite mean per run, oldest to newest — hover any gauge’s ␘ for what that metric measures. Judged answers are cached, so equal re-runs differ only where answers or retrieval changed.',
+          'Each line is one RAGAS metric’s suite mean per run, oldest to newest, and never crosses a judge boundary — each x-label names the judge that scored the run. Judged answers are cached, so equal re-runs differ only where answers or retrieval changed.',
+        trendMixedJudges: 'Judges differ across these runs — compare within a judge segment, not across',
         statusTitle: 'Per-question outcomes',
         statusNote:
           'Every in-scope question in this run, stacked by outcome: answered, failing (any selected metric below its threshold), abstained (the answerer declined), or errored (the pipeline failed that row). Out-of-scope controls are not counted — they are a control, not a result.',

@@ -3890,6 +3890,38 @@ function buildEnvAdvice({ attributions, runFacts, mode, candidateK }) {
         { env: 'RERANKING_THRESHOLD', direction: 'raise', note: 'drop chunks scoring below it' }
       ]
     };
+    // Which knobs the run's DECLARED strategy actually reads
+    // (genieai_tei_reranker.py:453-559): slice obeys TOP_N; threshold and
+    // slice_threshold obey THRESHOLD; adaptive and knee_threshold turn their
+    // own gates and read NEITHER — a knob turn under them is dead (David,
+    // live 2026-10-27: the advisor prescribed TOP_N/threshold on an adaptive
+    // deployment and the operator burned a benchmark cycle discovering it).
+    const STRATEGY_KNOBS = {
+      slice: ['RERANKER_TOP_N'],
+      threshold: ['RERANKING_THRESHOLD'],
+      slice_threshold: ['RERANKER_TOP_N', 'RERANKING_THRESHOLD'],
+      adaptive: [],
+      knee_threshold: []
+    };
+    const declaredStrategy = (facts.declared_posture && facts.declared_posture.strategy) || null;
+    const liveKnobs = declaredStrategy ? STRATEGY_KNOBS[declaredStrategy] || null : null;
+    let changes = POSTURE[dir];
+    if (liveKnobs && liveKnobs.length === 0) {
+      // The active strategy reads NEITHER knob — the honest prescription is
+      // the strategy switch itself, never a knob turn that cannot land.
+      changes = [
+        {
+          env: 'RERANKING_STRATEGY',
+          direction: 'switch',
+          to: 'slice or slice_threshold',
+          note:
+            `${declaredStrategy} reads neither RERANKER_TOP_N nor RERANKING_THRESHOLD — switching ` +
+            'the strategy is the lever; a knob turn under it is dead'
+        }
+      ];
+    } else if (liveKnobs) {
+      changes = changes.filter((c) => liveKnobs.includes(c.env));
+    }
     const WHY = {
       both: () =>
         `This run fails BOTH ways: ${loosenRows.length} row(s) had the expected passage CUT by the gate ` +
@@ -3911,10 +3943,18 @@ function buildEnvAdvice({ attributions, runFacts, mode, candidateK }) {
     out.push({
       id: 'reranker-posture',
       component: 'chatqna (rerank stage) + reranker service',
-      changes: POSTURE[dir],
+      changes,
       rows: [...new Set([...tightenRows, ...loosenRows].map((r) => r.id))],
       targets: TARGETS[dir],
-      why: WHY[dir](),
+      why:
+        (declaredStrategy
+          ? `This run declared RERANKING_STRATEGY=${declaredStrategy} — under it ` +
+            (liveKnobs && liveKnobs.length
+              ? `${liveKnobs.join(' and ')} is the knob that actually bites` +
+                (liveKnobs.length === 1 ? '; the other knob below is inert and is not prescribed' : '')
+              : 'NEITHER RERANKER_TOP_N nor RERANKING_THRESHOLD bites, so the prescription below is the strategy switch, not a knob turn') +
+            '. '
+          : '') + WHY[dir](),
       trade_off:
         'THE central completeness-vs-noise trade-off of RAG configuration. Loosening (raise TOP_N / lower ' +
         'threshold) recovers gate-cut passages — context_recall and the facts they carried — but admits ' +
@@ -3929,11 +3969,16 @@ function buildEnvAdvice({ attributions, runFacts, mode, candidateK }) {
       // code cannot read chatqna's env, so it states the read-first rule
       // instead of one deployment's live values, which would be a false
       // claim everywhere else and would rot even where it was true.
-      apply:
-        'Read RERANKING_STRATEGY, RERANKER_TOP_N and RERANKING_THRESHOLD off the chatqna container FIRST ' +
-        '(which knob bites depends on the strategy: slice obeys TOP_N literally, threshold/adaptive obey ' +
-        'the threshold), turn it in the chosen direction, recreate chatqna, and note the old value so the ' +
-        're-run can be compared against a known starting point.',
+      apply: declaredStrategy
+        ? `This run declared RERANKING_STRATEGY=${declaredStrategy} — ${
+            liveKnobs && liveKnobs.length
+              ? `turn ${liveKnobs.join(' / ')} in the chosen direction`
+              : 'switch RERANKING_STRATEGY to slice or slice_threshold first (under the current strategy no knob turn lands)'
+          }, recreate chatqna, and note the old value so the re-run can be compared against a known starting point.`
+        : 'Read RERANKING_STRATEGY, RERANKER_TOP_N and RERANKING_THRESHOLD off the chatqna container FIRST ' +
+          '(which knob bites depends on the strategy: slice obeys TOP_N literally, threshold/adaptive obey ' +
+          'the threshold), turn it in the chosen direction, recreate chatqna, and note the old value so the ' +
+          're-run can be compared against a known starting point.',
       verify:
         'Re-run the suite. The turned direction should show fewer of the rows it serves (gate-cut or ' +
         'noise); the OPPOSITE metric group is the price — if it rises more than the first fell, revert: ' +

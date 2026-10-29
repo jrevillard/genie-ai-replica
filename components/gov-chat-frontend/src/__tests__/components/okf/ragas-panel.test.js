@@ -1566,6 +1566,76 @@ describe('RagasPanel', () => {
       expect(w.vm.explainFactsLabel).toBe('');
     });
   });
+
+  describe('the trend never crosses a judge boundary (2026-10-29)', () => {
+    // history arrives newest-first from the runs endpoint; the trend
+    // reverses to oldest-first before segmenting.
+    const run = (key, created, judgeModel, faith) => ({
+      _key: key,
+      created_at: created,
+      judge_model: judgeModel,
+      judge_source: 'picked',
+      summary: { n: 50, metrics: { faithfulness: faith } }
+    });
+
+    it('keeps one continuous series while the judge is unchanged', () => {
+      const w = mountPanel();
+      w.vm.runHistory = [
+        run('rr2', '2026-10-27T01:22:00Z', 'glm-5.3', 0.62),
+        run('rr1', '2026-10-26T13:56:00Z', 'glm-5.3', 0.58)
+      ];
+      const s = w.vm.trendSeries;
+      expect(s).toHaveLength(1);
+      expect(s[0].name).toBe('faithfulness · glm-5.3');
+      expect(s[0].data).toEqual([0.58, 0.62]); // oldest first, both points drawn
+    });
+
+    it('splits the line at a judge change — each segment its own series', () => {
+      const w = mountPanel();
+      w.vm.runHistory = [
+        run('rr3', '2026-10-27T01:22:00Z', 'glm-5.3', 0.62),
+        run('rr2', '2026-10-26T16:35:00Z', 'MiniMax-M3', 0.71),
+        run('rr1', '2026-10-26T13:56:00Z', 'ibm-granite/granite-4.1-8b', 0.83)
+      ];
+      const s = w.vm.trendSeries;
+      // Three judges -> three single-point segments for the same metric,
+      // emitted oldest-segment first.
+      expect(s).toHaveLength(3);
+      // Every series covers exactly its own judge's slot (null elsewhere).
+      const nonNull = s.map((x) => x.data.map((v, i) => (v !== null ? i : -1)).filter((i) => i >= 0));
+      expect(nonNull).toEqual([[0], [1], [2]]);
+      // And each series names its judge so a hover never guesses.
+      expect(s.map((x) => x.name).sort()).toEqual([
+        'faithfulness · MiniMax-M3',
+        'faithfulness · glm-5.3',
+        'faithfulness · granite-4.1-8b'
+      ]);
+    });
+
+    it('labels every x category with the judge that scored that run', () => {
+      const w = mountPanel();
+      w.vm.runHistory = [
+        run('rr2', '2026-10-27T01:22:00Z', 'glm-5.3', 0.62),
+        run('rr1', '2026-10-26T13:56:00Z', 'ibm-granite/granite-4.1-8b', 0.83)
+      ];
+      const cats = w.vm.trendOptions.xaxis.categories;
+      expect(cats[0]).toContain('10-26T13:56');
+      expect(cats[0]).toContain('granite-4.1-8b'); // vendor prefix stripped
+      expect(cats[1]).toContain('10-27T01:22');
+      expect(cats[1]).toContain('glm-5.3');
+    });
+
+    it('warns when the trended span mixes judges — and only then', () => {
+      const w = mountPanel();
+      w.vm.runHistory = [
+        run('rr2', '2026-10-27T01:22:00Z', 'glm-5.3', 0.62),
+        run('rr1', '2026-10-26T13:56:00Z', 'ibm-granite/granite-4.1-8b', 0.83)
+      ];
+      expect(w.vm.trendMixedJudges).toBe(true);
+      w.vm.runHistory = [run('rr2', '2026-10-27T01:22:00Z', 'glm-5.3', 0.62)];
+      expect(w.vm.trendMixedJudges).toBe(false);
+    });
+  });
 });
 
 // 2026-10-28 live: all 10 metrics ticked, a background loadSuite re-seeded

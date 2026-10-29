@@ -3539,7 +3539,9 @@ export default {
         colResizeTip: 'Seret pegangan untuk mengubah ukuran — klik ganda header untuk mengatur ulang',
         trendTitle: 'Tren metrik per run',
         trendNote:
-          'Setiap garis adalah rata-rata satu metrik RAGAS per run, dari terlama — ␘ pada tiap meteran menjelaskan metriknya. Jawaban yang dinilai di-cache; run ulang identik hanya berbeda bila jawaban atau pengambilan berubah.',
+          'Setiap garis adalah rata-rata satu metrik RAGAS per run, dari terlama ke terbaru, dan tidak pernah melewati batas judge — setiap label sumbu x menyebutkan judge yang menilai run tersebut. Jawaban yang dinilai di-cache; run ulang identik hanya berbeda bila jawaban atau pengambilan berubah.',
+        trendMixedJudges:
+          'Judge berbeda antar run ini — bandingkan dalam satu segmen judge yang sama, bukan antar segmen',
         statusTitle: 'Hasil per pertanyaan',
         statusNote:
           'Setiap pertanyaan suite pada run ini yang berada dalam cakupan, ditumpuk per hasil: terjawab, gagal (metrik terpilih di bawah ambangnya), menahan diri (penjawab menolak), atau error pipeline. Pembanding di luar cakupan tidak dihitung — ia adalah pembanding, bukan hasil.',

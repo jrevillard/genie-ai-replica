@@ -3561,7 +3561,9 @@ export default {
         colResizeTip: 'Faites glisser la poignée pour redimensionner — double-cliquez sur l’en-tête pour réinitialiser',
         trendTitle: 'Tendance des métriques par exécution',
         trendNote:
-          'Chaque ligne est la moyenne d’une métrique RAGAS par exécution, de la plus ancienne à la plus récente — le ␘ de chaque jauge explique la métrique. Les réponses jugées sont en cache ; des re-exécutions identiques ne diffèrent que si réponses ou récupération changent.',
+          'Chaque ligne est la moyenne d’une métrique RAGAS par exécution, de la plus ancienne à la plus récente, et ne franchit jamais une frontière de juge — chaque libellé de l’axe X nomme le juge qui a noté l’exécution. Les réponses jugées sont en cache ; des re-exécutions identiques ne diffèrent que si réponses ou récupération changent.',
+        trendMixedJudges:
+          'Les juges diffèrent entre ces exécutions — comparez au sein d’un segment de juge, pas entre segments',
         statusTitle: 'Résultats par question',
         statusNote:
           'Chaque question dans le périmètre de cette exécution, empilée par issue : répondue, échouée (une métrique choisie sous son seuil), abstention (celui qui a répondu s’est abstenu) ou erreur de pipeline (la chaîne a échoué sur cette ligne). Les témoins hors périmètre ne sont pas comptés — ce sont des témoins, pas des résultats.',

@@ -3603,6 +3603,56 @@ describe('buildEnvAdvice — the configuration adjustment cycle (2026-10-27)', (
     expect(rerank.targets).toContain('context_recall');
   });
 
+  it('prescribes the STRATEGY SWITCH, not a dead knob turn, under adaptive (David 2026-10-27)', () => {
+    // Live: the advisor prescribed RERANKER_TOP_N/RERANKING_THRESHOLD on an
+    // adaptive deployment — under adaptive NEITHER knob is read, and the
+    // operator burned a benchmark cycle discovering the turn was dead.
+    const adaptive = {
+      ...FACTS,
+      declared_posture: { k: 20, fetch_k: 30, strategy: 'adaptive', top_n: 3, threshold: 0.75 }
+    };
+    const attributions = [
+      row('new-7', 'reranker', ['context_recall'], {
+        ladder_applied: true,
+        candidate_rank: null,
+        ladder_stage: 'reranker'
+      })
+    ];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: adaptive, mode: 'serve' });
+    const rerank = out.find((e) => e.id === 'reranker-posture');
+    expect(rerank).toBeDefined();
+    // The only change offered is the strategy itself.
+    expect(rerank.changes).toHaveLength(1);
+    expect(rerank.changes[0].env).toBe('RERANKING_STRATEGY');
+    expect(rerank.changes[0].direction).toBe('switch');
+    expect(rerank.changes.map((c) => c.env)).not.toContain('RERANKER_TOP_N');
+    expect(rerank.changes.map((c) => c.env)).not.toContain('RERANKING_THRESHOLD');
+    // The why names the declared strategy and says the knobs are dead.
+    expect(rerank.why).toMatch(/RERANKING_STRATEGY=adaptive/);
+    expect(rerank.why).toMatch(/NEITHER RERANKER_TOP_N nor RERANKING_THRESHOLD/);
+    expect(rerank.apply).toMatch(/switch RERANKING_STRATEGY/i);
+  });
+
+  it('keeps only the knob the declared strategy reads (slice obeys TOP_N, not THRESHOLD)', () => {
+    const slice = { ...FACTS, declared_posture: { k: 20, fetch_k: 30, strategy: 'slice', top_n: 3, threshold: 0.75 } };
+    const attributions = [
+      row('new-7', 'reranker', ['context_recall'], {
+        ladder_applied: true,
+        candidate_rank: null,
+        ladder_stage: 'reranker'
+      })
+    ];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: slice, mode: 'serve' });
+    const rerank = out.find((e) => e.id === 'reranker-posture');
+    expect(rerank).toBeDefined();
+    expect(rerank.changes.map((c) => c.env)).toEqual(['RERANKER_TOP_N']);
+    expect(rerank.why).toMatch(/RERANKING_STRATEGY=slice/);
+    expect(rerank.why).toMatch(/RERANKER_TOP_N is the knob that actually bites/);
+    // The inert knob is named as inert, not silently dropped.
+    expect(rerank.why).toMatch(/inert/);
+    expect(rerank.apply).toMatch(/turn RERANKER_TOP_N/i);
+  });
+
   it('does NOT prescribe a direction for the NOISE-path reranker rows (stage reranker, ladder silent)', () => {
     // Repeat review #1: attributeFailures stages a noise-ranked-above-signal
     // row 'reranker' too (context_utilization failed, recall passed — the

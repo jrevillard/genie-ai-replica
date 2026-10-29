@@ -3564,7 +3564,9 @@ export default {
         colResizeTip: 'Ziehen Sie den Griff zum Skalieren — Doppelklick auf die Kopfzeile setzt zurück',
         trendTitle: 'Metrik-Trend über Läufe',
         trendNote:
-          'Jede Linie ist der Suite-Mittelwert einer RAGAS-Metrik pro Lauf, ältester zuerst — das ␘ an jedem Tacho erklärt die Metrik. Bewertete Antworten werden gecacht; gleiche Wiederholungen unterscheiden sich nur, wo Antworten oder Abruf sich änderten.',
+          'Jede Linie ist der Suite-Mittelwert einer RAGAS-Metrik pro Lauf, ältester zuerst, und überschreitet nie eine Richter-Grenze — jede X-Achsen-Beschriftung nennt den Richter, der den Lauf bewertet hat. Bewertete Antworten werden gecacht; gleiche Wiederholungen unterscheiden sich nur, wo Antworten oder Abruf sich änderten.',
+        trendMixedJudges:
+          'Die Richter unterscheiden sich zwischen diesen Läufen — vergleichen Sie innerhalb eines Richter-Abschnitts, nicht über Abschnitte hinweg',
         statusTitle: 'Ergebnisse pro Frage',
         statusNote:
           'Jede Frage im Geltungsbereich dieses Laufs, gestapelt nach Ausgang: beantwortet, durchgefallen (eine gewählte Metrik unter ihrer Schwelle), enthalten (der Antwortende hat verweigert) oder Fehler (die Pipeline ist an dieser Zeile gescheitert). Kontrollen außerhalb des Geltungsbereichs werden nicht gezählt — sie sind eine Kontrolle, kein Ergebnis.',

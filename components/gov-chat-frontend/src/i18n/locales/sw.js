@@ -3532,7 +3532,9 @@ export default {
         colResizeTip: 'Buruta handlesi kubadilisha ukubwa — bonyeza mara mbili kichwa kuanza upya',
         trendTitle: 'Mwelekeo wa vipimo kati ya uendeshaji',
         trendNote:
-          'Kila mstari ni wastani wa kipimo kimoja cha RAGAS kwa kila uendeshaji, kutoka ya zamani — ⓘ ya kila kipimo inaelezea kipimo hicho. Majibu yaliyohakikiwa yanahifadhiwa; marudio sawa yanatofautiana tu ambapo jibu au upatikanaji ulibadilika.',
+          'Kila mstari ni wastani wa kipimo kimoja cha RAGAS kwa kila uendeshaji, kutoka ya zamani kwenda mpya, na huvuka mipaka ya jaji — kila lebo ya mhimili wa x inaita jaji aliyekadiria uendeshaji. Majibu yaliyohakikiwa yanahifadhiwa; marudio sawa yanatofautiana tu ambapo jibu au upatikanaji ulibadilika.',
+        trendMixedJudges:
+          'Majaji hutofautiana kati ya uendeshaji huu — linganisha ndani ya kipande cha jaji mmoja, si kati ya vipande',
         statusTitle: 'Matokeo kwa kila swali',
         statusNote:
           'Kila swali la suite katika uendeshaji huu lililo ndani ya wigo, kwa matokeo: limejibiwa, kushindwa (kipimo kuchaguliwa chini ya kikomo chake), imejitoa (mwijibu alikataa), au hitilafu ya mnyororo. Vitu vya kulinganisha nje ya wigo havihesabiwi — ni kitu kimoja cha kulinganisha, si matokeo.',

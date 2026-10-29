@@ -701,6 +701,13 @@ class GenieaiArangoRetriever(OpeaComponent):
                 logger.info(f"Summarizer model changed: {self._llm_model_id} -> {current_id}, recreating client")
                 self._llm_model_id = current_id
                 self.llm = self._create_vllm_client(current_id)
+        elif self.llm is None and VLLM_ENDPOINT:
+            # OpenAI init failed at boot (transient key/probe error leaves llm
+            # unset): degrade to the vLLM summarizer instead of returning None
+            # and AttributeError-ing on every retrieve.
+            self._llm_model_id = self._resolve_vllm_model_id()
+            self._llm_backend = "vllm"
+            self.llm = self._create_vllm_client(self._llm_model_id)
         return self.llm
 
     def _initialize_client(self):

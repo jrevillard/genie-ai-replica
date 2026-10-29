@@ -270,12 +270,20 @@ def resolve_model_id(endpoint_url: str) -> str:
     """Model id for ``endpoint_url``: the explicit ``VLLM_MODEL_ID`` env wins
     as the deployer override; otherwise the discovered id, loud on no answer.
 
-    The single home of that precedence: payload-building consumers (retriever
-    summarizer, dataprep labelling and graph clients) call this instead of
-    hand-rolling the env check. Chatqna's generation path has no env knob by
-    design — deployers steer it via the endpoint and the served name.
+    The single home of that precedence: payload-building consumers call this
+    instead of hand-rolling the env check — chatqna's generation/condense/
+    tokenize payloads, the retriever summarizer, and dataprep's labelling
+    and graph clients all honor the same escape hatch.
     """
-    return os.getenv("VLLM_MODEL_ID", "") or require_model_id(endpoint_url)
+    env_model = os.getenv("VLLM_MODEL_ID", "")
+    if env_model:
+        return env_model
+    if not endpoint_url:
+        raise ModelDiscoveryError(
+            "no vLLM endpoint configured and VLLM_MODEL_ID is unset — "
+            "set VLLM_ENDPOINT (or VLLM_LLM_ENDPOINT) or VLLM_MODEL_ID"
+        )
+    return require_model_id(endpoint_url)
 
 
 def clear_cache() -> None:

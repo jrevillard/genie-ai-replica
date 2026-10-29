@@ -444,8 +444,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (previously gated on `GPU_NODE_HOST`, silently falling back to a name that
   could diverge from the deployed model); the compose retriever service now
   receives `VLLM_MODEL_ID` like dataprep, so its explicit env wins without a
-  boot-time probe race. Counting failures abort the request loudly rather than
-  silently feeding a zero into the truncation budget. (#631)
+  boot-time probe race. **Config note:** chatqna no longer reads `LLM_MODEL`;
+  `VLLM_MODEL_ID` is the override every Python service honors (set it only to
+  pin a name — without it the served model is discovered automatically).
+  Counting failures abort the request loudly rather than silently feeding a
+  zero into the truncation budget. (#631)
 - **The labelling prompt was different on every ingestion run.** The candidate
   labels sent to the labelling LLM were collected in a Python set, whose order
   follows the hash seed of the process that built it — so every container sent

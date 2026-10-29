@@ -23,7 +23,13 @@ from metrics import (
 
 from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
 from core.label_contract import build_filter_labels, encode_filter_labels
-from core.model_cache import coerce_int, get_max_model_len, get_model_id, resolve_model_id
+from core.model_cache import (
+    ModelDiscoveryError,
+    coerce_int,
+    get_max_model_len,
+    get_model_id,
+    resolve_model_id,
+)
 from core.model_http_policy import (
     AIOHTTP_CONNECT_TIMEOUT_SECONDS,
     CONTROL_PLANE_TIMEOUT_SECONDS,
@@ -3793,11 +3799,15 @@ class ChatQnAService:
                 span.set_attribute("genie.condense.completion_tokens", usage.get("completion_tokens", 0))
                 logger.debug(f"Condense rewrite ok: {standalone_query}")
                 return standalone_query
-            except (CondenseError, httpx.TimeoutException, httpx.HTTPError) as e:
+            except (CondenseError, ModelDiscoveryError, httpx.TimeoutException, httpx.HTTPError) as e:
                 reason = (
                     e.reason
                     if isinstance(e, CondenseError)
-                    else ("timeout" if isinstance(e, httpx.TimeoutException) else "http_error")
+                    else (
+                        "model_discovery"
+                        if isinstance(e, ModelDiscoveryError)
+                        else ("timeout" if isinstance(e, httpx.TimeoutException) else "http_error")
+                    )
                 )
                 _condense_span_attrs(span, "failed", round((time.monotonic() - _start) * 1000))
                 logger.warning(f"Condense rewrite failed ({reason}): {type(e).__name__}: {e}")
@@ -3921,7 +3931,10 @@ class ChatQnAService:
             target_lang: The language name the map gives for that code.
             source_lang_code: Source ISO language code (e.g. "en"). Defaults to "en".
         """
-        if _is_translategemma():
+        # One derivation per call: the parse below must branch on the SAME
+        # decision that shaped the payload, not on a second (re-probed) read.
+        translategemma = _is_translategemma()
+        if translategemma:
             target_lang_code = canonical_code
             prompt = self._build_translategemma_prompt(
                 text=text,
@@ -3964,7 +3977,7 @@ class ChatQnAService:
                 )
                 response.raise_for_status()
                 response_data = response.json()
-                if _is_translategemma():
+                if translategemma:
                     translated = response_data["choices"][0]["text"].strip()
                 else:
                     translated = response_data["choices"][0]["message"]["content"].strip()

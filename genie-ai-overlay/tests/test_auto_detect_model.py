@@ -456,6 +456,17 @@ class TestResolveModelId:
         with patch("httpx.get", return_value=mock_resp):
             assert model_cache.resolve_model_id("https://gpu-host/llm") == "served/model"
 
+    def test_raises_actionable_error_when_no_endpoint_and_no_env(self, monkeypatch):
+        """Neither knob configured: the error must name the two env vars to
+        set, not point at a '/v1/models' URL with an empty base."""
+        monkeypatch.delenv("VLLM_MODEL_ID", raising=False)
+
+        with pytest.raises(model_cache.ModelDiscoveryError) as exc_info:
+            model_cache.resolve_model_id("")
+
+        assert "VLLM_MODEL_ID" in str(exc_info.value)
+        assert "VLLM_ENDPOINT" in str(exc_info.value)
+
 
 # ---------------------------------------------------------------------------
 # chatqna getters — _get_llm_model / _get_translation_model_id
@@ -733,19 +744,23 @@ class TestDataprepAutoDetect:
         src = Path(__file__).resolve().parents[1] / "dataprep" / "genieai_dataprep_arangodb.py"
         return src.read_text()
 
-    def test_uses_vllm_api_key_for_auth(self, source):
-        idx = source.find("def _build_vllm_client")
-        chunk = source[idx : idx + 2000]
+    def test_client_auth_wiring(self, monkeypatch):
+        """The AsyncOpenAI client authenticates with VLLM_API_KEY against the
+        configured endpoint — behavioral pin of the constructor wiring (no
+        custom default_headers, no OPEA_API_KEY)."""
+        import dataprep.genieai_dataprep_arangodb as dp
 
-        assert "VLLM_API_KEY" in chunk
-        assert "OPEA_API_KEY" not in chunk
+        monkeypatch.setenv("VLLM_ENDPOINT", "https://10.0.0.110/vllm")
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_MODEL_ID", "m")
 
-    def test_no_custom_default_headers(self, source):
-        idx = source.find("def _build_vllm_client")
-        chunk = source[idx : idx + 2000]
+        with patch.object(dp, "AsyncOpenAI") as mock_client:
+            dp._build_vllm_client()
 
-        assert "default_headers" not in chunk
-        assert "X-API-Key" not in chunk
+        kwargs = mock_client.call_args.kwargs
+        assert kwargs["api_key"] == "test-key"
+        assert kwargs["base_url"] == "https://10.0.0.110/vllm/v1"
+        assert "default_headers" not in kwargs
 
     def test_env_wins_without_probe(self, monkeypatch):
         """The explicit VLLM_MODEL_ID env is the deployer override: no probe."""
@@ -916,8 +931,9 @@ class TestRetrieverInitializeLlmAutoDetect:
         monkeypatch.setenv("VLLM_MODEL_ID", "stable-model")
         r = self._r()
         ChatOpenAI.reset_mock()
-        client = MagicMock()
+        r._llm_backend = "vllm"
         r._llm_model_id = "stable-model"
+        client = MagicMock()
         r.llm = client
 
         r._get_llm()
@@ -943,6 +959,27 @@ class TestRetrieverInitializeLlmAutoDetect:
         assert r.llm is client
         ChatOpenAI.assert_not_called()
         mock_get.assert_not_called()
+
+    def test_get_llm_recovers_to_vllm_when_openai_init_failed(self):
+        """Transient OpenAI-key failure at boot leaves llm unset; the first
+        _get_llm call degrades to the vLLM summarizer instead of handing
+        back None (an AttributeError on every retrieve)."""
+        from retriever.genieai_retriever_arangodb import ChatOpenAI
+
+        r = self._r()
+        ChatOpenAI.reset_mock()
+        r.llm = None
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "fallback-model"}]}
+        mock_resp.raise_for_status = MagicMock()
+
+        with patch("httpx.get", return_value=mock_resp):
+            llm = r._get_llm()
+
+        assert llm is not None
+        assert r._llm_backend == "vllm"
+        assert ChatOpenAI.call_args.kwargs["model"] == "fallback-model"
 
     def test_get_llm_recreates_on_model_change(self):
         """The re-check runs without any GPU_NODE_HOST gate: a changed

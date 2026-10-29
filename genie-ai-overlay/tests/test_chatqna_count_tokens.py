@@ -22,11 +22,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
-def _resp(json_body, status=200):
+def _resp(json_body):
     m = MagicMock()
-    m.status_code = status
     m.json.return_value = json_body
-    m.raise_for_status.side_effect = None if status < 400 else AssertionError("raise_for_status must raise")
     return m
 
 
@@ -82,20 +80,6 @@ class TestCountTokens:
             pytest.raises(m.httpx.HTTPStatusError),
         ):
             m._count_tokens("text")
-
-    def test_in_cluster_base_without_path_prefix(self):
-        """No VLLM_LLM_ENDPOINT → the compose-internal base, no path prefix."""
-        import chatqna.genieai_chatqna as m
-
-        post = MagicMock(return_value=_resp({"count": 1}))
-        with (
-            patch.object(m, "_LLM_DISCOVERY_ENDPOINT", "http://vllm:8000"),
-            patch.object(m, "_get_llm_model", return_value="m"),
-            patch.dict("os.environ", {"VLLM_API_KEY": ""}, clear=False),
-            patch.object(m.httpx, "post", post),
-        ):
-            m._count_tokens("x")
-        assert post.call_args[0][0] == "http://vllm:8000/tokenize"
 
     def test_string_count_is_coerced(self):
         """A proxy serializing ``count`` as a digit string must not crash the

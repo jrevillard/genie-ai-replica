@@ -71,7 +71,7 @@ job.
   create it first (`-n <ns> --create-namespace`).
 - Vendored dep tarballs are generated, not tracked — run `make -C charts deps` after cloning or dep changes. `Chart.lock` IS tracked.
 - Hook Jobs live in `templates/hooks/*.yaml` with explicit `helm.sh/hook` annotations (phase + weight). The subdirectory is organizational; Helm scans `templates/` recursively.
-- Hook + test-pod init containers download `kubectl` from public release URLs (nothing else — no jq). Set `global.kubeletToolsMirror` for air-gapped clusters.
+- The pre-upgrade cluster-profile hook and the test-pod init containers download `kubectl` from public release URLs (nothing else — no jq; the pre-install Job downloads nothing). Set `global.kubeletToolsMirror` for air-gapped clusters.
 - NetworkPolicy: every rendered service gets a default-deny + explicit allowlist policy. The OPEA model Deployments get ingress-only policies; orchestrators see per-peer egress rules scoped to the call graph.
 - PodDisruptionBudget: only emitted when `replicas >= 2`.
 

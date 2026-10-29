@@ -592,20 +592,21 @@ helm test genieai -n genieai
 ```
 
 The two helm-test pods (`<release>-genieai-umbrella-test-namespace`,
-`<release>-genieai-umbrella-test-data-deps`) and the cluster-profile
-detection hook Job all need `kubectl`. The chart no longer pins an image
-that ships those binaries preinstalled (`registry.k8s.io/kubectl` is
-distroless, the `bitnami/kubectl` version tags were purged); each Pod
-runs an init container that downloads the static binaries into a shared
-`tools` emptyDir and the main container (alpine) picks them up via the
-PATH env.
+`<release>-genieai-umbrella-test-data-deps`) and the pre-upgrade
+cluster-profile detection hook Job all need `kubectl`. The chart no
+longer pins an image that ships that binary preinstalled
+(`registry.k8s.io/kubectl` is distroless, the `bitnami/kubectl` version
+tags were purged); each Pod runs an init container that downloads the
+static kubectl binary into a shared `tools` emptyDir and the main
+container (alpine) picks it up via the PATH env.
 
 ### Air-gapped deployments
 
 The init container downloads the static `kubectl` binary from public
 release URLs by default. For air-gapped / sovereign clusters, set
 `global.kubeletToolsMirror` to an internal mirror —
-`[http[s]://]host[:port][/multi/segment/prefix]`, no trailing slash; the
+`[http[s]://]host[:port 1-65535][/multi/segment/prefix]`, no trailing
+slash; the
 scheme is optional (scheme-less makes curl use plain HTTP against the
 local proxy) and the init container appends the well-known release path
 (`/release/v1.33.0/bin/linux/<arch>/kubectl`). The mirror must serve

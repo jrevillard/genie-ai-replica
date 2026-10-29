@@ -67,8 +67,9 @@ differently (NVIDIA GPU Feature Discovery ships
 `nvidia.com/gpu.present=true`) sets the map in its overlay — it replaces
 the default outright, so the pods need only the labels you declare.
 
-**Air-gapped clusters.** Set `global.kubeletToolsMirror` to an internal URL;
-the chart's pre-upgrade cluster-profile hook and its helm-test Pods
+**Air-gapped clusters.** Set `global.kubeletToolsMirror` to an internal
+URL (`[http[s]://]host[:port 1-65535][/prefix]`, no trailing slash); the
+chart's pre-upgrade cluster-profile hook and its helm-test Pods
 `curl`-download `kubectl` from a default public mirror otherwise.
 
 ## Install paths

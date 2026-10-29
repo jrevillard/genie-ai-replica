@@ -260,25 +260,24 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   }
 
   /// A FORCED reload (a locale drift). The single-flight wrapper caches a
-  /// completed load, so the drift trigger cannot go through it — but a
-  /// bare load would leave the tracked future stale: a restore that
-  /// arrives mid-reload would await the OLD future and start a duplicate
-  /// parse. The reload REPLACES the tracked future with its own load.
+  /// completed load, so a reload cannot go through it as-is: the cached
+  /// future is invalidated and the wrapper re-entered, which re-runs the
+  /// load under the wrapper's own failure policy — a restore arriving
+  /// mid-reload awaits THIS load instead of a duplicate parse.
   ///
   /// One reload at a time: didChangeDependencies also fires for theme and
   /// MediaQuery changes, and while the read is in flight the marker still
   /// names the OLD locale, so a second change would start a duplicate
   /// parse. The in-flight load resolves under the locale live at its
   /// completion, so it already lands in the newest language.
-  Future<void>? _quickHelpReloadInFlight;
+  bool _quickHelpReloadInFlight = false;
 
   void _startQuickHelpConfigReload() {
-    if (_quickHelpReloadInFlight != null) return;
-    final reload = _loadQuickHelpConfig();
-    _quickHelpReloadInFlight = reload;
-    _quickHelpConfigFuture = reload.whenComplete(() {
-      _quickHelpReloadInFlight = null;
-      if (_quickHelpLoadFailed) _quickHelpConfigFuture = null;
+    if (_quickHelpReloadInFlight) return;
+    _quickHelpReloadInFlight = true;
+    _quickHelpConfigFuture = null;
+    _ensureQuickHelpConfig().whenComplete(() {
+      _quickHelpReloadInFlight = false;
     });
   }
 

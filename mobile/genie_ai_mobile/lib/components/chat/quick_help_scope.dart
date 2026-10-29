@@ -43,9 +43,11 @@ List<Map<String, dynamic>> dedupeQuickHelpButtons(
 }
 
 /// The button [id] names in [buttons], or null when no button declares
-/// it. The ONE copy of the button-identity lookup — the restore path and
-/// the locale re-title read the same rule, so a change to it (trimming
-/// ids, a new id shape) cannot drift between the two.
+/// it. The chatbot's two reads of a button by id — the restore path and
+/// the locale re-title — share this one lookup, so a change to the
+/// matching rule (trimming ids, a new id shape) cannot drift between
+/// them. (ConversationScopeResolver keeps its OWN first-wins index in
+/// _indexButtons — a different rule over a different structure.)
 Map<String, dynamic>? quickHelpButtonById(
   List<Map<String, dynamic>> buttons,
   String? id,

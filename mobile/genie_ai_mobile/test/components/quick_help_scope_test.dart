@@ -982,6 +982,16 @@ void main() {
 
       expect(activeQuickHelpTitleFor(buttons, 'births'), isNull);
     });
+
+    test('a button the config no longer declares keeps its last title', () {
+      // The scope's identity is the id: a gone button must not blank the
+      // context bar — null lets the caller keep the title it has.
+      final buttons = [
+        {'id': 'crops', 'resolvedTitle': 'Cultures'},
+      ];
+
+      expect(activeQuickHelpTitleFor(buttons, 'births'), isNull);
+    });
   });
 
   /// A locale drift re-resolves the buttons; the mount's own dependency
@@ -1036,16 +1046,6 @@ void main() {
       ];
 
       expect(quickHelpButtonById(buttons, 'crops'), isNull);
-    });
-
-    test('a button the config no longer declares keeps its last title', () {
-      // The scope's identity is the id: a gone button must not blank the
-      // context bar — null lets the caller keep the title it has.
-      final buttons = [
-        {'id': 'crops', 'resolvedTitle': 'Cultures'},
-      ];
-
-      expect(activeQuickHelpTitleFor(buttons, 'births'), isNull);
     });
   });
 }

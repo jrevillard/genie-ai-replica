@@ -161,28 +161,46 @@ minikube delete
 The script is idempotent: re-running it re-applies the operators and
 the secret restores without touching the deployment.
 
-## The laptop node is memory-tight
+## The dev node's memory is the real constraint
 
-The chart gives the backend a 12 Gi memory limit, and it needs that
-much: when the GPU translation endpoint is unreachable, the backend
-falls back to an in-process CPU translation model
+The chart gives the backend a 12 Gi memory limit because, on a
+deployment with no translation endpoint named, the backend loads an
+in-process CPU translation model
 (`Xenova/nllb-200-distilled-600M`, 4 threads, 5 batches) whose ONNX
-load peaks **above 8 Gi**.
+load peaks **above 8 Gi**. That fallback cannot happen on the laptop
+overlay: it names a translation endpoint, and a named GPU API is
+**mandatory** — the backend refuses to start rather than translate
+with a model the deployment did not ask for
+(`components/gov-chat-backend/services/translation-service.js`,
+`selectBackend`). The 12 Gi limit is headroom for other deployments,
+not a prediction about this node.
 
-The laptop node has 8 Gi in total. A GPU that blips — and the shared
-GPU node does — therefore makes the backend load a model that cannot
-fit: the container is OOMKilled (exit 137), and on a node that close to
-its limit the OOM reaches the node too (the control plane dies with
-it, and the cluster comes back with an empty etcd).
+What did kill the node was its own memory budget. At 8 GiB of
+container memory, the sum of the chart's requests (~7.7 Gi) plus the
+control plane (~1.5 Gi) had no headroom: a rolling upgrade (old and
+new ReplicaSet resident at once) plus a parallel image build pushed
+the container into the **docker** OOM killer — the apiserver died
+mid-deploy, and recreating the container (which minikube does on a
+memory resize) lost `/etc/kubernetes` — it lives in the container
+layer, not the docker volume, so etcd and the certs under
+`/var/lib/minikube` survive but the static pod manifests do not. The
+bootstrap script sets `MEMORY=12288` for exactly this headroom.
 
-Two things follow for the laptop:
+Three things follow for the dev node:
 
-- keep the GPU translation endpoint reachable — the fallback is not
-  survivable on an 8 Gi node;
-- the node's own memory is the real constraint, not the pod's limit.
-
-On a real cluster the 12 Gi limit is what keeps a GPU blip a degraded
-translation instead of a backend outage.
+- keep `MEMORY=12288` (the bootstrap script's constant) — restarting
+  an existing container ignores new `--memory` flags; the profile
+  records it, so `minikube start` alone keeps it;
+- keep the GPU translation endpoint reachable — not because of a
+  fallback (there is none), but because the backend gates startup on
+  it: a GPU outage is a backend outage;
+- before a `minikube delete`, run the bootstrap script's
+  `--capture` mode — it is the only copy of the sealed-secrets key,
+  the Flux PAT and the selfsigned issuer. If capture was skipped,
+  everything still recoverable lives in etcd as protobuf and can be
+  pulled with `etcdctl` from a scratch `etcd` process pointed at the
+  surviving `/var/lib/minikube/etcd` — but that is an emergency
+  procedure, not a plan.
 
 ## Validating the result
 

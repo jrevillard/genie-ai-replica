@@ -163,7 +163,9 @@ class TestVocabularyShape:
         # key that distinguishes "hit the budget" from "still running", and a
         # shared phase ceiling needs one that says which phase ran out. Bump
         # this with the addition it accounts for.
-        assert len(ATTRIBUTE_NAMES) == 83
+        # 84: answer.abstention_reason — the boolean alone cannot split a
+        # spike into stale scopes vs an over-rejecting reranker.
+        assert len(ATTRIBUTE_NAMES) == 84
 
 
 class TestLegacyAttributeNames:
@@ -257,8 +259,9 @@ class TestLegacyAttributeNames:
 
     def test_registering_the_backlog_did_not_inflate_the_vocabulary(self):
         # See test_vocabulary_entry_count_is_pinned — raised 80 → 83 alongside the
-        # three bounded-LLM attributes, not by the legacy sweep.
-        assert len(ATTRIBUTE_NAMES) == 83
+        # three bounded-LLM attributes, 83 → 84 with answer.abstention_reason,
+        # not by the legacy sweep.
+        assert len(ATTRIBUTE_NAMES) == 84
         assert len(LEGACY_ATTRIBUTE_NAMES) == 21
 
 

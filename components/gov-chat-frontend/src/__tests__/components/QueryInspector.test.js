@@ -206,6 +206,16 @@ describe('QueryInspector', () => {
 // QueryInspectorList — renders directly (no v-else wrapper issues)
 // ===========================================================================
 describe('QueryInspectorList', () => {
+  // A query that answered: grounded, one source document, no abstention.
+  const answeredQuery = {
+    _key: 'q1',
+    timestamp: '2025-05-28T10:00:00Z',
+    text: 'What is the tax rate?',
+    metadata: { confidence_score: 0.9, source_documents: [{}] },
+    context: { categoryLabel: 'Taxes & Revenue', serviceLabels: [] },
+    responseTime: 500
+  };
+
   let QueryInspectorList;
 
   beforeEach(() => {
@@ -252,6 +262,96 @@ describe('QueryInspectorList', () => {
       pagination: { total: 0, limit: 25, offset: 0, pages: 0, currentPage: 1 }
     });
     expect(wrapper.find('.ds-state').exists() || wrapper.text()).toBeTruthy();
+  });
+
+  it('should mark an abstained query and show the scope that filtered', () => {
+    // The operator's question is "which scopes matched nothing?". The marker
+    // alone does not answer it — the scope has to sit next to it. The scope
+    // is the filter labels the PIPELINE applied (chatqna reports them), not
+    // the raw request: for this query only the service filtered.
+    const queries = [
+      {
+        _key: 'q1',
+        timestamp: '2025-05-28T10:00:00Z',
+        text: 'What is the tax rate?',
+        metadata: {
+          confidence_score: 0,
+          source_documents: [],
+          abstained: true,
+          abstention_reason: 'no_documents_retrieved',
+          filter_labels: ['Tax Payment']
+        },
+        context: { categoryLabel: 'Taxes & Revenue', serviceLabels: ['Tax Payment'] },
+        responseTime: 500
+      }
+    ];
+    const wrapper = mountList({ queries, pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 } });
+
+    // The marker is row-addressable: a page can carry several abstained
+    // rows, and a finder that cannot name its row validates the wrong one.
+    expect(wrapper.find('[data-testid="qi-abstention-q1"]').exists()).toBe(true);
+    const scope = wrapper.find('[data-testid="qi-scope-q1"]');
+    expect(scope.exists()).toBe(true);
+    expect(scope.text()).toBe('Tax Payment');
+  });
+
+  it('should keep the abstention marker row-unique', () => {
+    const queries = [
+      { _key: 'q1', text: 'a', metadata: { abstained: true }, responseTime: 1 },
+      { _key: 'q2', text: 'b', metadata: { abstained: true }, responseTime: 1 },
+      { _key: 'q3', text: 'c', metadata: {}, responseTime: 1 }
+    ];
+    const wrapper = mountList({ queries, pagination: { total: 3, limit: 25, offset: 0, pages: 1, currentPage: 1 } });
+    expect(wrapper.find('[data-testid="qi-abstention-q1"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="qi-abstention-q2"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="qi-abstention-q3"]').exists()).toBe(false);
+    expect(wrapper.findAll('[data-testid="qi-abstention-q1"]')).toHaveLength(1);
+  });
+
+  it('should show the category as the scope when no service was named', () => {
+    const query = { ...answeredQuery, metadata: { ...answeredQuery.metadata, filter_labels: ['Taxes & Revenue'] } };
+    const wrapper = mountList({
+      queries: [query],
+      pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 }
+    });
+
+    expect(wrapper.find('[data-testid="qi-scope-q1"]').text()).toBe('Taxes & Revenue');
+  });
+
+  it('should say the query was unfiltered when the filter list is empty', () => {
+    // An unfiltered query (the single-message backend mode sends no context
+    // at all) carries an empty filter-label list. That is a different fact
+    // from "the record predates the field": the dash is reserved for the
+    // latter, the column says Unfiltered for the former.
+    const query = { ...answeredQuery, metadata: { ...answeredQuery.metadata, filter_labels: [] } };
+    const wrapper = mountList({
+      queries: [query],
+      pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 }
+    });
+
+    expect(wrapper.find('[data-testid="qi-scope-q1"]').text()).toContain('Unfiltered');
+  });
+
+  it('should show a dash when the scope was never recorded', () => {
+    // A query saved before the field existed (or streamed by a chatqna too
+    // old to report it): the honest answer is a dash, not "Unfiltered".
+    const query = { ...answeredQuery, metadata: {} };
+    const wrapper = mountList({
+      queries: [query],
+      pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 }
+    });
+
+    expect(wrapper.find('[data-testid="qi-scope-q1"]').text()).toContain('—');
+    expect(wrapper.find('[data-testid="qi-scope-q1"]').text()).not.toContain('Unfiltered');
+  });
+
+  it('should not mark a query that answered', () => {
+    const wrapper = mountList({
+      queries: [answeredQuery],
+      pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 }
+    });
+
+    expect(wrapper.find('[data-testid="qi-abstention-marker"]').exists()).toBe(false);
   });
 
   it('should show pagination when multiple pages', () => {
@@ -419,5 +519,93 @@ describe('QueryInspectorDetail', () => {
     const wrapper = mountDetail({ query });
     const link = wrapper.find('a');
     expect(link.exists()).toBe(false);
+  });
+
+  it('should show the abstention and its cause', () => {
+    const query = {
+      ...fullQuery,
+      metadata: {
+        confidence_score: 0,
+        source_documents: [],
+        abstained: true,
+        abstention_reason: 'no_documents_retrieved'
+      }
+    };
+    const wrapper = mountDetail({ query });
+
+    expect(wrapper.find('[data-testid="qi-abstention-marker"]').exists()).toBe(true);
+    const reason = wrapper.find('[data-testid="qi-abstention-reason"]');
+    expect(reason.exists()).toBe(true);
+    expect(reason.text()).toContain('No document');
+  });
+
+  it("should name the reranker-kept-nothing cause in the operator's words", () => {
+    // The retrieval matched, the reranker kept none: the scope was fine, and
+    // the prose must say so — a cause split that renders as the generic
+    // fallback plus machine tokens defeats its own purpose.
+    const query = {
+      ...fullQuery,
+      metadata: {
+        confidence_score: 0,
+        source_documents: [],
+        abstained: true,
+        abstention_reason: 'reranker_selected_nothing'
+      }
+    };
+    const wrapper = mountDetail({ query });
+    const reason = wrapper.find('[data-testid="qi-abstention-reason"]');
+    expect(reason.text()).toContain('reranker kept none');
+    expect(reason.text()).not.toContain('(');
+  });
+
+  it('should name the scope that filtered, next to the labels that were requested', () => {
+    // The list and the detail must not disagree about what filtered. The
+    // pipeline reports the applied filter labels; the request is shown
+    // beside them so a stale label the service scope shadowed stays visible.
+    const query = {
+      ...fullQuery,
+      metadata: { ...fullQuery.metadata, filter_labels: ['Tax Payment'] }
+    };
+    const wrapper = mountDetail({ query });
+    const scope = wrapper.find('[data-testid="qi-detail-scope"]');
+    expect(scope.exists()).toBe(true);
+    expect(scope.text()).toContain('Tax Payment');
+    // The requested category stays visible next to the scope that filtered.
+    expect(wrapper.text()).toContain('Taxes & Revenue');
+  });
+
+  it('should say the query was unfiltered when the filter list is empty', () => {
+    // Same wording as the list cell: the shared scope rule keeps the views
+    // from disagreeing, and so does the shared name for the state.
+    const query = { ...fullQuery, metadata: { ...fullQuery.metadata, filter_labels: [] } };
+    const wrapper = mountDetail({ query });
+    expect(wrapper.find('[data-testid="qi-detail-scope"]').text()).toContain('Unfiltered');
+  });
+
+  it('should say the scope was not recorded for a query saved before the field existed', () => {
+    const wrapper = mountDetail({ query: fullQuery });
+    expect(wrapper.find('[data-testid="qi-detail-scope"]').text()).toContain('Not recorded');
+  });
+
+  it('should say the scope was not recorded when the stored value is null', () => {
+    // An explicit null in the stored metadata means the same as an absent
+    // field — the pipeline never reported the scope for this query.
+    const query = { ...fullQuery, metadata: { ...fullQuery.metadata, filter_labels: null } };
+    const wrapper = mountDetail({ query });
+    expect(wrapper.find('[data-testid="qi-detail-scope"]').text()).toContain('Not recorded');
+  });
+
+  it('should treat a malformed stored scope as not recorded, not crash', () => {
+    // A non-array in the stored metadata (a bad migration, a hand-edited
+    // record) is not joinable: it degrades to the dash instead of throwing
+    // out of the render.
+    const query = { ...fullQuery, metadata: { ...fullQuery.metadata, filter_labels: 'Tax Payment' } };
+    const wrapper = mountDetail({ query });
+    expect(wrapper.find('[data-testid="qi-detail-scope"]').text()).toContain('Not recorded');
+  });
+
+  it('should not show an abstention block for an ordinary answer', () => {
+    const wrapper = mountDetail({ query: fullQuery });
+    expect(wrapper.find('[data-testid="qi-abstention-marker"]').exists()).toBe(false);
   });
 });

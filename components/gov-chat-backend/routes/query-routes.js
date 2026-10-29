@@ -154,7 +154,11 @@ const emptyStreamMetadata = () => ({
   is_grounded: false,
   retrieval_confidence_score: null,
   abstained: null,
-  abstention_reason: null
+  abstention_reason: null,
+  // No metadata event means the turn never reported a scope — null (the
+  // Inspector's "not recorded" dash), not an empty list, which would claim
+  // the query ran unfiltered.
+  filter_labels: null
 });
 
 module.exports = (queryService) => {

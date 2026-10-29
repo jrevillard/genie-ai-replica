@@ -340,6 +340,7 @@ def _emit_stream_outcome_span(
     is_grounded: bool,
     sentinel_present: bool,
     abstained: bool,
+    abstention_reason: str | None = None,
 ) -> None:
     """Record the answer-level outcome of a streamed turn.
 
@@ -373,6 +374,10 @@ def _emit_stream_outcome_span(
             span.set_attribute(ATTRIBUTE_NAMES["answer_is_grounded"], bool(is_grounded))
             span.set_attribute(ATTRIBUTE_NAMES["answer_sentinel_present"], bool(sentinel_present))
             span.set_attribute(ATTRIBUTE_NAMES["answer_abstained"], bool(abstained))
+            # Empty when the turn did not abstain: a stable four-value
+            # vocabulary (the three machine codes + "") keeps the metric and
+            # the span attributable without per-call attr-shape changes.
+            span.set_attribute(ATTRIBUTE_NAMES["answer_abstention_reason"], abstention_reason or "")
     finally:
         span.end()
 
@@ -1359,6 +1364,74 @@ _SELF_CONF_SENTINEL_PREFIX = "[[CONF:"
 _SELF_CONF_PARTIAL_RE = re.compile(r"\s*\[\[CONF:[^\[]*$")
 
 
+def _find_node_key(result_dict: dict, prefix: str) -> str | None:
+    """The first key in ``result_dict`` starting with ``prefix``, or None.
+
+    The one locator for orchestrator node outputs; the service method of the
+    same name delegates here so callers inside and outside the class share
+    the same first-match rule.
+    """
+    for key in result_dict or {}:
+        if key.startswith(prefix):
+            return key
+    return None
+
+
+def _node_docs(result_dict: dict, prefix: str) -> list | None:
+    """The ``retrieved_docs`` of the first node whose key starts with
+    ``prefix``, or None when that node's output does not carry the key.
+
+    One accessor per node kind, so the grounding decision and the abstention
+    flag cannot read the same node by different rules. Node outputs are dicts
+    shaped like ``{"retrieved_docs": [...]}``; None means "the node cannot
+    say" — a malformed or error-shaped result, which is a fault, not a
+    selection that kept nothing.
+    """
+    key = _find_node_key(result_dict, prefix)
+    if key is None:
+        return None
+    val = (result_dict or {})[key]
+    if isinstance(val, dict):
+        return val.get("retrieved_docs")
+    return getattr(val, "retrieved_docs", None)
+
+
+def _abstention_outcome(result_dict: dict) -> tuple[bool, str | None]:
+    """Whether the turn had no document backing, and its machine-readable cause.
+
+    Two distinct no-document paths hand the LLM the abstention instructions
+    (align_outputs adds them whenever its document list is empty): the
+    retriever matched nothing inside the requested scope, or the reranker
+    rejected every document the retriever DID match. Both are abstentions;
+    the reason keeps the causes apart so an operator can tell a scope that
+    retrieved nothing from a reranker that kept nothing.
+
+    A node output without the expected key is a malformed or error-shaped
+    result, not a selection that kept nothing: claim no abstention about it
+    (the grounding decision makes the same conservative call).
+    """
+    if not _abstention_enforced():
+        # The abstention instructions never reached the prompt, so the turn
+        # was never set up to abstain: the flag keeps its established meaning
+        # ("the turn abstained") rather than reporting intent.
+        return False, None
+    docs = _node_docs(result_dict, "retriever")
+    if docs is None:
+        return False, None
+    if not docs:
+        return True, "no_documents_retrieved"
+    reranked = _node_docs(result_dict, "rerank")
+    if reranked is not None and not reranked:
+        return True, "reranker_selected_nothing"
+    return False, None
+
+
+def _mark_abstention(metadata: dict, reason: str) -> None:
+    """Mark a metadata payload as abstained, with its machine-readable cause."""
+    metadata["abstained"] = True
+    metadata["abstention_reason"] = reason
+
+
 def _count_final_chunks(result_dict: dict) -> int:
     """Count the chunks actually fed to the LLM from the orchestrator result.
 
@@ -1432,6 +1505,19 @@ CHATQNA_SYSTEM_PROMPT = _CHATQNA_SYSTEM_PROMPT_BASE + (
     _CHATQNA_SELF_CONF_INSTRUCTION if LLM_SELF_CONFIDENCE_ENABLED else ""
 )
 CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "") or "true"
+
+
+def _abstention_enforced() -> bool:
+    """Whether a turn with no context is instructed to abstain.
+
+    The same predicate decides whether the abstention instructions reach the
+    prompt, so the flag that reports an abstention follows the same switch:
+    a deployment that turned the guardrail off answers instead of abstaining,
+    and the flag stays unset.
+    """
+    return str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true"
+
+
 CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", "").strip() or None
 # Default fallback when CHATQNA_ABSTENTION_INSTRUCTIONS is unset: instruct
 # the LLM to still surface partial KB content while disclosing the
@@ -2251,7 +2337,7 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             # rerank input only — it must never enter the answer-LLM prompt.
             received_prompt = _condense_raw_or(kwargs, received_prompt)
 
-            if str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true":
+            if _abstention_enforced():
                 abstention_instructions = (
                     CHATQNA_ABSTENTION_INSTRUCTIONS
                     if CHATQNA_ABSTENTION_INSTRUCTIONS is not None
@@ -2372,7 +2458,7 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         # else:
         #     prompt = ChatTemplate.generate_rag_prompt(initial_query, docs)
 
-        if not docs and str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true":
+        if not docs and _abstention_enforced():
             abstention_instructions = (
                 CHATQNA_ABSTENTION_INSTRUCTIONS
                 if CHATQNA_ABSTENTION_INSTRUCTIONS is not None
@@ -2557,10 +2643,7 @@ class ChatQnAService:
 
     def _find_node_key(self, service_name: str, result_dict: dict) -> str | None:
         """Helper to find the full key for a service in the result_dict."""
-        for key in result_dict:
-            if key.startswith(service_name):
-                return key
-        return None
+        return _find_node_key(result_dict, service_name)
 
     async def fetch_file_metadata(self, file_id: str, token: str) -> dict:
         """
@@ -2739,16 +2822,20 @@ class ChatQnAService:
         retriever_key = self._find_node_key("retriever", result_dict)
 
         retriever_node_output = result_dict.get(retriever_key, {})
-        file_id_pairs = retriever_node_output.get("file_id_pairs", {})
+        # Same tolerance as _node_docs: a non-dict node output is a malformed
+        # result, not a crash — the grounding decision degrades instead.
+        file_id_pairs = (
+            retriever_node_output.get("file_id_pairs", {}) if isinstance(retriever_node_output, dict) else {}
+        )
         # Retriever docs carry the orchestrator id + text + similarity score (metadata.score).
-        retrieved_docs = retriever_node_output.get("retrieved_docs", [])
+        # Same accessor as the abstention flag: one node, one meaning.
+        retrieved_docs = _node_docs(result_dict, "retriever") or []
 
         # The reranker's verdict. NOTE: align_outputs (RERANK branch) stores the reranked
         # docs under the "retrieved_docs" key — with id + reranker score already
         # reconstructed — NOT under "reranked_docs" (that key is empty in the orchestrator
         # output). Each verdict doc is {id, text, score} where score is the reranker score.
-        reranker_node_output = result_dict.get(rerank_key, {}) if rerank_key else {}
-        rerank_verdict = reranker_node_output.get("retrieved_docs", []) if rerank_key else []
+        rerank_verdict = _node_docs(result_dict, "rerank") or []
 
         # Normalize the documents to display into (id, score) tuples.
         if rerank_key:
@@ -2864,8 +2951,21 @@ class ChatQnAService:
 
         return source_documents_formatted, retrieval_confidence_score, is_grounded
 
-    async def _stream_with_metadata(self, body_iterator, result_dict, token: str, parent_context=None):
+    async def _stream_with_metadata(
+        self,
+        body_iterator,
+        result_dict,
+        token: str,
+        parent_context=None,
+        filter_labels=None,
+        abstained=False,
+        abstention_reason=None,
+    ):
         """Forward the LLM token stream, then append a `metadata` SSE event.
+
+        ``abstained`` / ``abstention_reason`` carry the outcome handle_request
+        already derived for the request metric, so the counter and this
+        metadata event cannot disagree about the same turn.
 
         The metadata event carries the reranker-grounded source documents, confidence,
         and ``is_grounded`` flag, emitted as plain JSON **before** the terminal ``[DONE]``
@@ -2966,6 +3066,8 @@ class ChatQnAService:
             f"self={self_confidence} self_conf_enabled={LLM_SELF_CONFIDENCE_ENABLED} "
             f"-> confidence_score={_cs}"
         )
+        # The abstention outcome was derived once in handle_request (it also
+        # drove the metric), so this event and the counter cannot disagree.
         # Every input of the answer-level outcome is known here, so this is the
         # first point at which the span can be recorded. `sentinel_present`
         # reports whether a self-grade was actually parsed, so an operator can
@@ -2976,25 +3078,26 @@ class ChatQnAService:
             self_confidence=self_confidence,
             is_grounded=is_grounded,
             sentinel_present=self_confidence is not None,
-            abstained=False,
+            abstained=abstained,
+            abstention_reason=abstention_reason,
         )
         metadata = {
             "type": "metadata",
             "source_documents": source_documents,
+            # The labels the retrieval filtered on (empty when the query was
+            # unfiltered), so an operator sees the scope behind an abstention.
+            "filter_labels": list(filter_labels or []),
             # Raw retrieval confidence (rank-weighted) — always present for admin/eval.
             "retrieval_confidence_score": round(retrieval_confidence, 2),
             # Citizen-facing: the LLM self-grade when the feature is on (fallback to
             # retrieval so the badge never disappears), else the retrieval confidence.
-            # Clients render this field unchanged — surfacing the self-grade needs no
-            # client change beyond enabling LLM_SELF_CONFIDENCE_ENABLED.
-            "confidence_score": round(
-                _display_confidence(retrieval_confidence, self_confidence)
-                if LLM_SELF_CONFIDENCE_ENABLED
-                else retrieval_confidence,
-                2,
-            ),
+            # Same _cs the debug log above reports, so the log cannot claim a
+            # different value than what clients received.
+            "confidence_score": _cs,
             "is_grounded": is_grounded,
         }
+        if abstained:
+            _mark_abstention(metadata, abstention_reason)
         if LLM_SELF_CONFIDENCE_ENABLED:
             # Raw LLM self-assessed groundedness; None when the sentinel was
             # omitted/malformed. Never hard-fails the chat.
@@ -3920,9 +4023,9 @@ class ChatQnAService:
                 # as the other error paths — the condense raise happens
                 # before the orchestrate-span metrics block, so the failure
                 # would otherwise be invisible to dashboards. Mirror the
-                # _chat_attrs contract (response_type / abstained / error /
-                # retrieval_source) with a local fallback for
-                # retrieval_source since retriever_parameters is not built
+                # _chat_attrs contract (response_type / abstained /
+                # abstention_reason / error / retrieval_source) with a local
+                # fallback for retrieval_source since retriever_parameters is not built
                 # yet at this point in the request.
                 _condense_start = time.time()
                 try:
@@ -3936,6 +4039,7 @@ class ChatQnAService:
                         {
                             "response_type": "streaming" if chat_request.stream else "sync",
                             "abstained": "false",
+                            "abstention_reason": "",
                             "error": "true",
                             "retrieval_source": getattr(chat_request, "search_type", None)
                             or "similarity_score_threshold",
@@ -4076,14 +4180,21 @@ class ChatQnAService:
 
             _rag_start = time.time()
 
-            def _chat_attrs(abstained: str, error: str) -> dict:
-                """Metric attribute set shared by the success / abstention / error paths."""
+            def _chat_attrs(abstained: str, error: str, abstention_reason: str = "") -> dict:
+                """Metric attribute set shared by the success / abstention / error paths.
+
+                ``abstention_reason`` is the machine code when the turn
+                abstained, "" otherwise — a bounded vocabulary, so the counter
+                can split a spike into stale scopes vs an over-rejecting
+                reranker.
+                """
                 return sanitize_attributes(
                     {
                         "response_type": "streaming" if chat_request.stream else "sync",
                         "abstained": abstained,
                         "error": error,
                         "retrieval_source": getattr(retriever_parameters, "search_type", "hybrid"),
+                        "abstention_reason": abstention_reason,
                     }
                 )
 
@@ -4095,6 +4206,11 @@ class ChatQnAService:
                     genie_params["retriever_parameters"] = retriever_parameters
                     genie_params["reranker_parameters"] = reranker_parameters
                     genie_params["retrieval_context"] = retrieval_context
+                    # The labels the retrieval filtered on, by the pipeline's
+                    # own rule (core.label_contract): the admin Inspector reads
+                    # them from the metadata instead of re-deriving the rule
+                    # in JavaScript.
+                    filter_labels = build_filter_labels(retrieval_context)
                     result_dict, runtime_graph = await self.megaservice.schedule(
                         initial_inputs={
                             "text": retrieval_query,
@@ -4135,8 +4251,11 @@ class ChatQnAService:
                 # which is always False — docs are a key, not an attribute.)
                 span.set_attribute("rag.chunk_count", _count_final_chunks(result_dict))
 
-                # Record custom application metrics
-                _metric_attrs = _chat_attrs("false", "false")
+                # Record custom application metrics. The `abstained` attribute
+                # follows the same signal as the metadata event: the turn had
+                # no document backing.
+                _abstained, _abstention_reason = _abstention_outcome(result_dict)
+                _metric_attrs = _chat_attrs("true" if _abstained else "false", "false", _abstention_reason or "")
                 chat_requests_total.add(1, _metric_attrs)
                 chat_rag_duration_seconds.record(_rag_duration, _metric_attrs)
 
@@ -4157,7 +4276,7 @@ class ChatQnAService:
                 span.set_attribute("abstained.reason", "reranker_input_too_long")
                 logger.warning(f"Abstaining: reranker input too long. {e}")
 
-                chat_requests_total.add(1, _chat_attrs("true", "false"))
+                chat_requests_total.add(1, _chat_attrs("true", "false", "reranker_input_too_long"))
 
                 # The reranker never returned a selection (schedule raised
                 # before result_dict was bound), so emit an empty selection
@@ -4179,12 +4298,14 @@ class ChatQnAService:
                 )
                 metadata = {
                     "source_documents": [],
+                    # Bound before schedule() raised, so the scope the reranker
+                    # was fed is still known on this path.
+                    "filter_labels": list(filter_labels),
                     "retrieval_confidence_score": 0.0,
                     "confidence_score": 0.0,
                     "is_grounded": False,
-                    "abstained": True,
-                    "abstention_reason": "reranker_input_too_long",
                 }
+                _mark_abstention(metadata, "reranker_input_too_long")
                 if chat_request.stream:
                     # The backend translates the stream. The English text goes
                     # out as it is, and the backend reports its own translation
@@ -4249,6 +4370,7 @@ class ChatQnAService:
                         is_grounded=metadata["is_grounded"],
                         sentinel_present=False,
                         abstained=metadata["abstained"],
+                        abstention_reason=metadata["abstention_reason"],
                     )
 
                     return StreamingResponse(_abstention_stream(), media_type="text/event-stream")
@@ -4282,7 +4404,13 @@ class ChatQnAService:
                 # backend would re-run retrieval without the category filter / reranker.
                 return StreamingResponse(
                     self._stream_with_metadata(
-                        response.body_iterator, result_dict, token=token_str, parent_context=_orchestrate_context
+                        response.body_iterator,
+                        result_dict,
+                        token=token_str,
+                        parent_context=_orchestrate_context,
+                        filter_labels=filter_labels,
+                        abstained=_abstained,
+                        abstention_reason=_abstention_reason,
                     ),
                     media_type="text/event-stream",
                 )
@@ -4344,6 +4472,9 @@ class ChatQnAService:
         # Construct the final JSON payload
         metadata = {
             "source_documents": source_documents_formatted,
+            # The labels the retrieval filtered on (empty when the query was
+            # unfiltered), so an operator sees the scope behind an abstention.
+            "filter_labels": list(filter_labels),
             # Raw retrieval confidence (rank-weighted) — always present for admin/eval.
             "retrieval_confidence_score": round(retrieval_confidence, 2),
             # Citizen-facing: the LLM self-grade when the feature is on (fallback to
@@ -4361,6 +4492,11 @@ class ChatQnAService:
             # this to flag responses that have no document basis.
             "is_grounded": is_grounded,
         }
+        # `_abstained` was computed in the schedule block above (it also drove
+        # the metric), so the metric and this metadata cannot come from
+        # different runs.
+        if _abstained:
+            _mark_abstention(metadata, _abstention_reason)
         if LLM_SELF_CONFIDENCE_ENABLED:
             # Raw LLM self-assessed groundedness; None when the sentinel was omitted
             # or malformed.

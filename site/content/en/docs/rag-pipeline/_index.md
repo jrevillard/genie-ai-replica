@@ -90,5 +90,5 @@ through query and back to the user.
 - **Observable.** Each stage is an instrumented span (`chatqna.orchestrate`
   root, with chatqna-side children such as `chatqna.reranker_selection` emitted
   during reranker alignment) plus per-request metrics
-  (`chat_requests_total`, `chat_rag_duration_seconds`), making latency and
+  (`genie_ai_chat_request_total`, `genie_ai_chat_rag_latency_seconds`), making latency and
   retrieval-quality regressions visible in VictoriaMetrics.

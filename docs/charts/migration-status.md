@@ -614,12 +614,53 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 52 (0.2.125)** — 13 findings across runs 28 and 29
+  of the `/code-review`, all in the bootstrap runbook and the ledger the
+  previous passes had just edited. No chart content changed (no version
+  bump).
+  - *The run-27 fix shipped uncommitted* — the `git add` named
+    `migration-status.md` and missed the sibling file the same edit
+    touched (`docs/charts/laptop-cluster-bootstrap.md`), so origin
+    carried a ledger asserting work its tree did not contain.
+    Committed.
+  - *The runbook's capture command used the positional
+    `sealed-secrets-key*` selector the script's own comment documents
+    as never matching* — following the doc produced an empty key file
+    and ended in the keyless-cluster catastrophe the doc exists to
+    prevent. It captures by the ACTIVE label now.
+  - *The capture loop numbered files the restore step never named* —
+    step 1 wrote `sealed-secrets-key-N.json`, step 2 still passed
+    `key.json`; and counter-naming destroyed the mapping to the actual
+    secret identities. Both steps now share one name,
+    `sealed-secrets-key-active.json` (the script's help example
+    aligned), and the doc states the archive-only status of non-active
+    keys (the restore cannot revive a rotated-out key; such
+    SealedSecrets need re-sealing).
+  - *The SOPS row referenced the recovery script without its repo
+    prefix* — `scripts/sops-install-cluster-secret.sh` exists only in
+    genie-ai-deploy. Prefixed like its sibling cell.
+  - *Three `<pays>` sites survived pass 51's sweep in
+    deploy/environments/README.md* — the file the aligned
+    charts/README.md bullet points at; the third consecutive
+    stopped-short event (grep scope, one directory, the referenced
+    file). Aligned.
+  - *The bootstrap script's `--env` flag was parsed and never read* —
+    the deployed overlay env is decided by the deploy repo's
+    clusters/<overlay>/flux-system kustomization, so `--env prod`
+    silently bootstrapped dev. The dead flag is removed.
+  - *Ledger hygiene* — pass 51's dispositions summed to 8 for 7
+    findings and carried a phantom site-grammar bullet; its
+    deploy-repo-deferral correction promised a pass-52 finding no entry
+    carried; its run-25 verdict phrase ("the run-25 fix itself verified
+    true") said the opposite of its own first bullet. All three fixed,
+    and this entry records what run 28 actually fixed.
 - **Review loop, pass 51 (0.2.125)** — 7 findings from the twenty-seventh
   `/code-review`: six fixed and one refuted. (Correction, pass 52: the
   original entry said "six fixed, one refuted, one deferred" — eight
   dispositions for seven findings — and carried a phantom site-grammar
   bullet for a fix that landed in pass 50; both dropped here. The
-  deploy-repo deferral is a pass-52 finding.)
+  deploy-repo deferral is recorded in the pass-50 entry's correction
+  below.)
   - *The `<pays>` grep was run over charts/genieai-umbrella/ only* —
     six live sites survived it: charts/README.md, the site doc's
     "per-pays overrides" (twice), the bootstrap doc's "pays that use
@@ -630,7 +671,9 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     repo's overlay directory), NOT `--cluster`, which the script
     already takes for the minikube profile (the first rename attempt
     created a second `CLUSTER=` assignment that clobbered the profile —
-    caught before any push by re-reading the parser).
+    caught before any push by re-reading the parser). (A seventh site —
+    deploy/environments/README.md, the file the aligned charts/README.md
+    bullet points at — survived even this sweep; pass 52.)
   - *The Nexus parenthetical moved to the wrong cell in the pass-50
     enumeration* — it annotated scheme+port+prefix; the actual Nexus
     pin is scheme+prefix without port. Back on its cell.

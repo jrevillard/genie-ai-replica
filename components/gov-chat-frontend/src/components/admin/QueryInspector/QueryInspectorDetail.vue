@@ -42,16 +42,20 @@
       <DsCard variant="outline">
         <template #header>
           <span class="qi-detail__section-title">
-            {{ translate('admin.queryInspector.sectionContext', 'Context (Labels sent to RAG)') }}
+            {{ translate('admin.queryInspector.sectionContext', 'Context') }}
           </span>
         </template>
         <div class="qi-detail__box qi-detail__box--context">
+          <p data-testid="qi-scope">
+            <strong>{{ translate('admin.queryInspector.scopeFiltered', 'Scope that filtered') }}:</strong>
+            {{ effectiveScope(query) || translate('admin.queryInspector.scopeNone', 'None (unfiltered query)') }}
+          </p>
           <p>
-            <strong>{{ translate('admin.queryInspector.category', 'Category') }}:</strong>
+            <strong>{{ translate('admin.queryInspector.category', 'Requested Category') }}:</strong>
             {{ query.context?.categoryLabel || 'None' }}
           </p>
           <p>
-            <strong>{{ translate('admin.queryInspector.serviceLabels', 'Service Labels') }}:</strong>
+            <strong>{{ translate('admin.queryInspector.serviceLabels', 'Requested Service Labels') }}:</strong>
             <span v-if="query.context?.serviceLabels?.length">{{ query.context.serviceLabels.join(', ') }}</span>
             <span v-else class="qi-detail__muted">None</span>
           </p>
@@ -201,6 +205,7 @@ import DsButton from '../../ds/Button.vue';
 import DsCard from '../../ds/Card.vue';
 import DsPill from '../../ds/Pill.vue';
 import DsStateDisplay from '../../ds/StateDisplay.vue';
+import { effectiveScope } from '../../../utils/effectiveScope';
 
 export default {
   name: 'QueryInspectorDetail',
@@ -246,6 +251,7 @@ export default {
     }
   },
   methods: {
+    effectiveScope,
     translate(key, fallback) {
       return this.$parent?.translate?.(key, fallback) ?? fallback;
     },

@@ -1359,6 +1359,22 @@ _SELF_CONF_SENTINEL_PREFIX = "[[CONF:"
 _SELF_CONF_PARTIAL_RE = re.compile(r"\s*\[\[CONF:[^\[]*$")
 
 
+def _retriever_docs(result_dict: dict) -> list | None:
+    """The documents the RETRIEVER returned, or None when the node cannot say.
+
+    One accessor for the retriever node, so the grounding decision and the
+    abstention flag cannot read different nodes. None means "the node output
+    does not carry the key" — a malformed or error-shaped result, which is a
+    fault, not a retrieval that matched nothing.
+    """
+    for key, val in (result_dict or {}).items():
+        if key.startswith("retriever"):
+            if isinstance(val, dict):
+                return val.get("retrieved_docs")
+            return getattr(val, "retrieved_docs", None)
+    return None
+
+
 def _retriever_matched_no_document(result_dict: dict) -> bool:
     """Whether the retrieval produced no document at all for this query.
 
@@ -1369,17 +1385,13 @@ def _retriever_matched_no_document(result_dict: dict) -> bool:
     matched nothing. This reads the retriever node, so the two cases cannot
     be confused.
     """
-    for key, val in (result_dict or {}).items():
-        if key.startswith("retriever"):
-            docs = val.get("retrieved_docs") if isinstance(val, dict) else getattr(val, "retrieved_docs", None)
-            if docs is None:
-                # A retriever output without the key is a malformed or
-                # error-shaped node result, not a scope that matched nothing:
-                # claim no abstention about it (the grounding decision makes
-                # the same conservative call).
-                return False
-            return not docs
-    return False
+    docs = _retriever_docs(result_dict)
+    if docs is None:
+        # A retriever output without the key is a malformed or error-shaped
+        # node result, not a scope that matched nothing: claim no abstention
+        # about it (the grounding decision makes the same conservative call).
+        return False
+    return not docs
 
 
 def _mark_abstention(metadata: dict, reason: str) -> None:
@@ -2770,7 +2782,8 @@ class ChatQnAService:
         retriever_node_output = result_dict.get(retriever_key, {})
         file_id_pairs = retriever_node_output.get("file_id_pairs", {})
         # Retriever docs carry the orchestrator id + text + similarity score (metadata.score).
-        retrieved_docs = retriever_node_output.get("retrieved_docs", [])
+        # Same accessor as the abstention flag: one node, one meaning.
+        retrieved_docs = _retriever_docs(result_dict) or []
 
         # The reranker's verdict. NOTE: align_outputs (RERANK branch) stores the reranked
         # docs under the "retrieved_docs" key — with id + reranker score already

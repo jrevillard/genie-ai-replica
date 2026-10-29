@@ -517,6 +517,26 @@ describe('QueryInspectorDetail', () => {
     expect(reason.text()).toContain('No document');
   });
 
+  it('should name the scope that filtered, next to the labels that were requested', () => {
+    // The list and the detail must not disagree about what filtered: the
+    // pipeline filters on the service when one was named (the category must
+    // not widen it into the whole category).
+    const query = { ...fullQuery, contextOption: 'conversation-with-context-labels' };
+    const wrapper = mountDetail({ query });
+    const scope = wrapper.find('[data-testid="qi-scope"]');
+    expect(scope.exists()).toBe(true);
+    expect(scope.text()).toContain('Tax Payment');
+    expect(scope.text()).not.toContain('Taxes & Revenue');
+  });
+
+  it('should name no scope when the backend sent no context to the RAG', () => {
+    // The single-message mode drops the context: the labels stored on the
+    // query are not a filter, and saying otherwise would send the operator
+    // after a label that never filtered.
+    const wrapper = mountDetail({ query: { ...fullQuery, contextOption: 'single-message' } });
+    expect(wrapper.find('[data-testid="qi-scope"]').text()).toContain('None');
+  });
+
   it('should not show an abstention block for an ordinary answer', () => {
     const wrapper = mountDetail({ query: fullQuery });
     expect(wrapper.find('[data-testid="qi-abstention-marker"]').exists()).toBe(false);

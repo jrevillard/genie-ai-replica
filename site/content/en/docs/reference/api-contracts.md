@@ -853,7 +853,7 @@ evaluation — a chat client should render `confidence_score` only.
 |-------|---------|
 | `retrieval_confidence_score` | Raw rank-weighted retrieval confidence, always present. `null` when chatqna omits it. |
 | `self_confidence` | LLM self-grade. **Keyed by presence**: absent when `LLM_SELF_CONFIDENCE_ENABLED=0`, `null` when the feature is on but the `[[CONF:…]]` sentinel was missing or malformed. Consumers must test the key, not the value, to tell "disabled" from "no sentinel". |
-| `abstained` | `true` when the turn abstained instead of answering: the retrieval returned no document, or the reranker refused the input. With `CHATQNA_ENFORCE_ABSTENTION=false` (not the default) a retrieval that returns nothing may still be answered without document backing — see [Generation → Abstention](/docs/rag-pipeline/generation/#abstention). Defaults to `false`. |
+| `abstained` | `true` when the turn had no document-backed answer: the retrieval returned no document (`no_documents_retrieved`) or the reranker refused the input (`reranker_input_too_long`). With the default abstention enforcement the user reads an abstention; a deployment that sets `CHATQNA_ENFORCE_ABSTENTION=false` may read an answer without document backing — see [Generation → Abstention](/docs/rag-pipeline/generation/#abstention). Defaults to `false`. |
 | `abstention_reason` | Machine-readable cause. `no_documents_retrieved` — the retrieval returned no document for the query (a scoped query whose label filter matched nothing); `reranker_input_too_long` — the reranker refused an oversized input. (`translation_input_too_long` is a different transport: it surfaces as an HTTP 422, not as a metadata event.) Defaults to `null`. |
 
 ### Streaming translation (issue #829)

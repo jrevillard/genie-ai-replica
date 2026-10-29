@@ -54,7 +54,7 @@
           <td class="qi-list__cell--time">{{ formatTime(query.timestamp) }}</td>
           <td class="qi-list__cell--question">{{ truncate(query.text, 80) }}</td>
           <td class="qi-list__cell--scope" data-testid="qi-scope">
-            <span v-if="scopeText(query)">{{ scopeText(query) }}</span>
+            <span v-if="effectiveScope(query)">{{ effectiveScope(query) }}</span>
             <span v-else class="qi-list__muted">—</span>
           </td>
           <td class="qi-list__cell--center">
@@ -129,6 +129,7 @@ import DsInput from '../../ds/Input.vue';
 import DsFormGroup from '../../ds/FormGroup.vue';
 import DsPill from '../../ds/Pill.vue';
 import DsStateDisplay from '../../ds/StateDisplay.vue';
+import { effectiveScope } from '../../../utils/effectiveScope';
 
 export default {
   name: 'QueryInspectorList',
@@ -153,6 +154,7 @@ export default {
     };
   },
   methods: {
+    effectiveScope,
     translate(key, fallback) {
       return this.$parent?.translate?.(key, fallback) ?? fallback;
     },
@@ -179,21 +181,6 @@ export default {
      * This is what makes an abstention actionable: "Tax Payment matched
      * nothing" is a fact an operator can act on.
      */
-    scopeText(query) {
-      const context = query.context || {};
-      // Nothing is not a label: the pipeline drops empty and null entries
-      // before filtering, and showing one here would name a scope that never
-      // filtered. The pipeline dedupes too.
-      const isLabel = (label) => label !== '' && label != null;
-      const services = Array.isArray(context.serviceLabels) ? context.serviceLabels.filter(isLabel) : [];
-      if (services.length) {
-        return [...new Set(services)].join(', ');
-      }
-      const labels = [];
-      if (isLabel(context.categoryLabel)) labels.push(context.categoryLabel);
-      if (Array.isArray(context.categoryLabels)) labels.push(...context.categoryLabels.filter(isLabel));
-      return [...new Set(labels)].join(', ');
-    },
     confidenceVariant(score) {
       if (score >= 0.8) return 'success';
       if (score >= 0.5) return 'warning';

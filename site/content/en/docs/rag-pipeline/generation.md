@@ -80,7 +80,8 @@ that information."
 > document at all — a scoped query whose label filter matched nothing —
 > the metadata event also carries `abstained: true` with
 > `abstention_reason: no_documents_retrieved`, the `chatqna.stream_outcome`
-> span records `answer.abstained`, and `chat_requests_total` counts the
+> span records `answer.abstained` on a streamed turn, and
+> `genie_ai_chat_request_total` counts the
 > turn under `abstained="true"` — all derived from the same retrieval
 > signal. The flag reports that the retrieval produced no document; with
 > the default enforcement the answer is then an abstention, while a

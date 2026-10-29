@@ -155,8 +155,8 @@ Additional attributes emitted from the reranker microservice span:
 The `is_grounded`, `confidence_score`, and `self_confidence` values are
 **not** exposed as chatqna span attributes — they are surfaced via the
 SSE metadata event (see the metadata envelope above). The `abstained`
-value is exposed both as a metric attribute on `chat_requests_total` in
-VictoriaMetrics and as the `answer.abstained` attribute on the
+value is exposed both as a metric attribute on `genie_ai_chat_request_total`
+in VictoriaMetrics and as the `answer.abstained` attribute on the
 `chatqna.stream_outcome` span, derived from the same retrieval signal.
 
 Look for these on VictoriaTraces to debug why a particular answer was
@@ -172,13 +172,13 @@ forwarded to VictoriaMetrics:
 
 | Metric | Type | Attributes |
 |---|---|---|
-| `chat_requests_total` | Counter | `response_type` (`streaming`/`sync`), `abstained` (`true`/`false` — `true` when the retrieval returned no document or the reranker refused the input; with the default abstention enforcement such a turn abstains), `error` (`true`/`false`), `retrieval_source` (`chunk`/`chunk_label_filter`/`hybrid`; the condense-rewrite failure path records the request's `search_type` verbatim, e.g. `similarity_score_threshold`). |
-| `chat_rag_duration_seconds` | Histogram | `response_type`, `abstained`, `error`, `retrieval_source`. |
+| `genie_ai_chat_request_total` (`chat_requests_total`) | Counter | `response_type` (`streaming`/`sync`), `abstained` (`true`/`false` — `true` when the retrieval returned no document or the reranker refused the input; with the default abstention enforcement such a turn abstains), `error` (`true`/`false`), `retrieval_source` (`chunk`/`chunk_label_filter`/`hybrid`; the condense-rewrite failure path records the request's `search_type` verbatim, e.g. `similarity_score_threshold`). |
+| `genie_ai_chat_rag_latency_seconds` (`chat_rag_duration_seconds`) | Histogram | `response_type`, `abstained`, `error`, `retrieval_source`. |
 
 A PromQL probe to graph RAG latency over the last 5 minutes:
 
 ```promql
-histogram_quantile(0.95, sum(rate(chat_rag_duration_seconds_bucket[5m])) by (le))
+histogram_quantile(0.95, sum(rate(genie_ai_chat_rag_latency_seconds_bucket[5m])) by (le))
 ```
 
 ## Curl probe

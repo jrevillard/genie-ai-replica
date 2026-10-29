@@ -288,6 +288,12 @@ function ragasSecret() {
  * RAGAS_UNAVAILABLE (503) — the panel says so honestly; nothing hangs.
  */
 async function sidecar(path, { method = 'POST', json, body, contentType, timeoutMs } = {}) {
+  // Egress guard (review 2026-10-29): `path` is a hard-coded constant at
+  // every call site — reject anything that could turn the fixed-base
+  // concatenation into an arbitrary URL, so a future caller cannot.
+  if (typeof path !== 'string' || path.includes('://')) {
+    throw new Error(`ragas sidecar: rejected non-relative path: ${String(path).slice(0, 80)}`);
+  }
   const headers = { 'X-RAGAS-Secret': ragasSecret() };
   let payload;
   if (json !== undefined) {

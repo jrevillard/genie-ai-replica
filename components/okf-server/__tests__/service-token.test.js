@@ -21,6 +21,9 @@ describe('service-token (client_credentials, cached, single-flight)', () => {
     require('../services/service-token')._resetForTesting();
     process.env.KC_OKF_SERVER_CLIENT_ID = 'okf-server';
     process.env.KC_OKF_SERVER_CLIENT_SECRET = 'test-secret';
+    // The authedAxios egress allowlist validates origins against the SAME
+    // env the config module reads — the tests' http://docrepo URLs need it.
+    process.env.DOCUMENT_REPOSITORY_URL = 'http://docrepo';
     delete process.env.KEYCLOAK_INTERNAL_URL;
     delete process.env.KEYCLOAK_PUBLIC_URL;
     delete process.env.KEYCLOAK_URL;

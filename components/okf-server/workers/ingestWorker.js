@@ -20,6 +20,7 @@
 
 const { aql } = require('arangojs');
 const matter = require('gray-matter');
+const { parsePositiveInt } = require('../shared-lib/validation-utils');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
@@ -179,14 +180,14 @@ function reapGraceMs() {
 
 /** NaN-safe env int (the 2.9.1 maxConceptsFromEnv lesson). For the GRACE
  * variable 0 is a legitimate value (sweep immediately / test) — use
- * safeIntOrZero for it (review fix P10: a 0 was silently replaced by 1h). */
+ * safeIntOrZero for it (review fix P10: a 0 was silently replaced by 1h).
+ * Both wrap shared-lib's parsePositiveInt — one env-int policy in the repo,
+ * not a fourth (review 2026-10-29). */
 function safeInt(name, fallback) {
-  const parsed = parseInt(process.env[name] || '', 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  return parsePositiveInt(process.env[name], fallback, { min: 1 });
 }
 function safeIntOrZero(name, fallback) {
-  const parsed = parseInt(process.env[name] || '', 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+  return parsePositiveInt(process.env[name], fallback, { min: 0 });
 }
 
 async function getDb() {

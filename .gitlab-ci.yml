@@ -102,6 +102,7 @@ variables:
     **/seed-*.js,
     **/scripts/seed-*.js,
     **/scripts/migrations/**,
+    scripts/okf-testing-lab/**,
     **/scripts/new-schema-scripts/**,
     **/__tests__/**,
     **/__mocks__/**,

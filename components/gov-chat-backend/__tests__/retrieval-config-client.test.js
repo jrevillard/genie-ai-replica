@@ -12,6 +12,9 @@ jest.mock('dotenv', () => ({ config: jest.fn() }));
 jest.mock(
   '../shared-lib',
   () => ({
+    // The client destructures parsePositiveInt from the barrel — the mock
+    // carries the real (pure) function like the shared mock file does.
+    ...require('./mocks/shared-lib'),
     logger: {
       info: jest.fn(),
       error: jest.fn(),
@@ -80,6 +83,10 @@ beforeEach(() => {
   jest.resetModules();
   nowMs = 1_000_000;
   jest.spyOn(Date, 'now').mockImplementation(() => nowMs);
+  // Dark-launch polarity (review 2026-10-29): unset now means PARKED. These
+  // suites exercise the ENABLED paths, so state the precondition — the flag
+  // is read once at module load, before the require below.
+  process.env.OKF_ENABLED = '1';
   // Required AFTER resetModules so the test's axios binding is the same
   // instance the freshly-loaded client module captured.
   client = require('../services/retrieval-config-client');

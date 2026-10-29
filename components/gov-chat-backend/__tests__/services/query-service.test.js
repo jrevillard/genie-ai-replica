@@ -7,6 +7,10 @@ jest.mock('dotenv', () => ({ config: jest.fn() }));
 jest.mock(
   '../../shared-lib',
   () => ({
+    // The retrieval-config-client destructures parsePositiveInt from the
+    // barrel — the mock must carry the real (pure) function like the shared
+    // mock file does, or every client-requiring test dies on TypeError.
+    ...require('../mocks/shared-lib'),
     logger: {
       info: jest.fn(),
       error: jest.fn(),

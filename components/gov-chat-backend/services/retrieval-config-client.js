@@ -31,7 +31,7 @@
 
 const axios = require('axios');
 const nodeCrypto = require('crypto');
-const { logger } = require('../shared-lib');
+const { logger, parsePositiveInt } = require('../shared-lib');
 
 /**
  * Local positive-int env parse (self-contained — no shared-lib symbol touched
@@ -41,16 +41,15 @@ const { logger } = require('../shared-lib');
  * silently (the default is the normal configuration, not a misconfiguration).
  */
 function envPositiveInt(varName, rawValue, fallback, min) {
-  const n = Number.parseInt(rawValue, 10);
-  if (Number.isNaN(n) || n < min) {
-    if (rawValue !== undefined && rawValue !== null) {
-      logger.warn('RetrievalConfigClient.invalid_env_int', {
-        variable: varName,
-        value: String(rawValue),
-        applied_fallback: fallback
-      });
-    }
-    return fallback;
+  // Wraps shared-lib's parsePositiveInt (one env-int policy in the repo —
+  // review 2026-10-29); the warn-on-misconfiguration behaviour stays local.
+  const n = parsePositiveInt(rawValue, fallback, { min });
+  if (n === fallback && rawValue !== undefined && rawValue !== null && rawValue !== '') {
+    logger.warn('RetrievalConfigClient.invalid_env_int', {
+      variable: varName,
+      value: String(rawValue),
+      applied_fallback: fallback
+    });
   }
   return n;
 }
@@ -80,7 +79,13 @@ const REQUEST_TIMEOUT_MS = envPositiveInt(
  * legacy answer with no attempt and no noise. Read once at module load,
  * like the other constants.
  */
-const OKF_ENABLED = (process.env.OKF_ENABLED ?? '1').trim() === '1';
+// Dark-launch polarity (review 2026-10-29): DISABLED when unset. The
+// dark-launch guarantee previously lived only in docker-compose's
+// `${OKF_ENABLED:-0}` — any non-compose run (local `npm start`, a container
+// whose env entry was dropped) silently flipped to enabled and burned a 3s
+// connection attempt per TTL window against a parked okf-server. The flag is
+// now stated once in compose and defaults to parked everywhere.
+const OKF_ENABLED = (process.env.OKF_ENABLED ?? '0').trim() === '1';
 
 /** The fail-closed default: legacy mode, fan-out never engaged. */
 function legacyDefaultConfig() {
@@ -201,6 +206,12 @@ function pruneCache(window) {
 }
 
 async function fetchUpstream(path, bearerHeader, correlationId) {
+  // Egress guard (review 2026-10-29): `path` is a hard-coded constant at
+  // every call site today — reject anything that could turn the fixed-base
+  // concatenation into an arbitrary URL, so a future caller cannot.
+  if (typeof path !== 'string' || path.includes('://')) {
+    throw new Error(`retrieval-config-client: rejected non-relative path: ${String(path).slice(0, 80)}`);
+  }
   const started = Date.now();
   const res = await axios.get(`${OKF_SERVER_URL}${path}`, {
     headers: { Authorization: bearerHeader },

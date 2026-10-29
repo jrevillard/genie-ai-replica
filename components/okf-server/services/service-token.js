@@ -129,8 +129,37 @@ function withAuth(token, opts) {
 function isUnauthorized(err) {
   return Boolean(err && err.response && err.response.status === 401);
 }
+// Egress allowlist (review 2026-10-29): every authedAxios call must target
+// the configured documentRepository origin. The wrapper attracts SAST SSRF
+// findings because it accepts an arbitrary url — this one check at the choke
+// point makes the arbitrary-url case unreachable while keeping the wrapper
+// generic for its 7 services.
+function assertAllowedUrl(url) {
+  // Same env the okf-server config module reads (config.documentRepository.url)
+  // — read lazily here so this module keeps its no-imports, lazy-env shape
+  // (the header documents why: test-friendly env sequencing).
+  const base = process.env.DOCUMENT_REPOSITORY_URL || 'http://document-repository:3001';
+  let origin;
+  try {
+    origin = new URL(url).origin;
+  } catch {
+    throw new Error(`service-token: rejected malformed url: ${String(url).slice(0, 80)}`);
+  }
+  const allowed = new URL(base).origin;
+  if (origin !== allowed) {
+    throw new Error(`service-token: egress to ${origin} is not the configured document repository (${allowed})`);
+  }
+}
+
+// Every verb routes through the allowlist first.
+function _guard(url) {
+  assertAllowedUrl(url);
+  return url;
+}
+
 const authedAxios = {
   async get(url, opts = {}) {
+    _guard(url);
     const token = await getServiceToken();
     try {
       return await axios.get(url, withAuth(token, opts));
@@ -141,6 +170,7 @@ const authedAxios = {
     }
   },
   async post(url, body, opts = {}) {
+    _guard(url);
     const token = await getServiceToken();
     try {
       return await axios.post(url, body, withAuth(token, opts));
@@ -151,6 +181,7 @@ const authedAxios = {
     }
   },
   async patch(url, body, opts = {}) {
+    _guard(url);
     // Story 4.8-amend (bundle state machine): the internal controller PATCHes
     // the bundle zip's doc-repo status (Pending → Ingesting → Ingested|Error).
     // Same 401-retry shape as get/post.
@@ -164,6 +195,7 @@ const authedAxios = {
     }
   },
   async delete(url, opts = {}) {
+    _guard(url);
     // Story #978 lifecycle: publish SUPERSEDES the previous bundle zip — the
     // stale artifact is deleted from doc-repo (one live bundle per repo).
     // Same 401-retry shape as get/post.

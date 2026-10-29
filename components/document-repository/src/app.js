@@ -90,10 +90,13 @@ app.use(compression());
 // global JSON parser — it carries base64-encoded OKF repository bundles far
 // above the normal cap (a 1000-concept repo ships ~42 MB of JSON), and it
 // mounts its own, config-driven limit in routes/fileRoutes.js. Every other
-// JSON route stays at the 10mb default.
+// JSON route stays at the 10mb default. The parser is HOISTED: instantiating
+// per request built a fresh middleware object on every non-bundle call
+// (review 2026-10-29).
+const standardJsonParser = express.json({ limit: '10mb' });
 app.use((req, res, next) => {
   if (req.method === 'POST' && req.path === '/api/files/ingest-bundle') return next();
-  return express.json({ limit: '10mb' })(req, res, next);
+  return standardJsonParser(req, res, next);
 });
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 

@@ -599,6 +599,35 @@ expect_fail "a mirror with a trailing slash (it would double the appended path's
   "kubeletToolsMirror" \
   $(valid_flags) --set 'global.kubeletToolsMirror=mirror.internal/releases/'
 
+# The global block is CLOSED (additionalProperties: false) and fully
+# typed: a typo'd key is rejected NAMING the key (the pre-closure
+# behavior was nil-accept — `imagePullSecret` for `imagePullSecrets`,
+# read from 13 sites, silently dropped every pull credential and every
+# pod ImagePullBackOff'd in the cluster with no schema error), a
+# mistyped row shape is rejected naming the path, and every legitimate
+# key renders.
+expect_fail "a typo'd global key is rejected, naming the key" \
+  "additional properties 'imagePullSecret' not allowed" \
+  $(valid_flags) '--set=global.imagePullSecret=[{"name":"x"}]'
+
+expect_fail "a scalar imagePullSecrets row is rejected, naming the path" \
+  "got string, want object" \
+  $(valid_flags) '--set=global.imagePullSecrets[0]=mysecret'
+
+expect_fail "an out-of-enum global.imagePullPolicy is rejected" \
+  "imagePullPolicy" \
+  $(valid_flags) --set global.imagePullPolicy=Whenever
+
+expect_render_contains "all six global keys render together" \
+  "name: my-pull-secret" \
+  $(valid_flags) \
+  --set global.imageRegistry=reg.example.com \
+  --set global.imagePullSecrets[0].name=my-pull-secret \
+  --set global.toolingArch=arm64 \
+  --set global.toolingImageRegistry=toolreg.example.com \
+  --set global.kubeletToolsMirror=mirror.example.com:8443/nexus \
+  --set global.imagePullPolicy=Always
+
 expect_fail "a mirror with an out-of-range port (a one-digit typo must fail the render, not the init container)" \
   "kubeletToolsMirror" \
   $(valid_flags) --set 'global.kubeletToolsMirror=https://mirror.internal:84430'

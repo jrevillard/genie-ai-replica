@@ -614,6 +614,48 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Deferred items resolved on the operator's ruling (0.2.126)** — the
+  review loop closed at run 33 (0 findings); the user ruled on each
+  deferred item afterwards:
+  - *The deploy repo's `<pays>` vocabulary is gone* — 72 sites across
+    14 files (README, .sops.yaml, CI comments, sops script help, both
+    overlays, the flux-system kustomizations), every one a comment, a
+    README line, or a documented-recipe placeholder; zero functional
+    code carried the word (verified per file before renaming). Zero
+    residual; all touched YAML re-parsed; all touched shell re-checked
+    with `bash -n`. MR !2 (genie-ai-deploy), merged after its pipeline
+    went green.
+  - *The compose redis healthcheck asserts PONG now* (MR !624, target
+    main) — the same bare `redis-cli ping` the chart fixed in pass 15,
+    same defect class: with `--appendonly yes` a restart answers
+    "-LOADING ..." while the AOF loads and redis-cli exits 0 — docker
+    declares the cache healthy while it rejects every GET.
+    Mutation-tested against a live redis: the bare probe on a
+    requirepass server prints "NOAUTH ..." and exits 0 (healthy — the
+    bug); the reply assert exits 1; the authed green path exits 0 on
+    PONG.
+  - *The chart's `global` values block is CLOSED and fully typed*
+    (0.2.126): the four untyped keys (imageRegistry, imagePullSecrets,
+    toolingImageRegistry, imagePullPolicy) joined the schema and
+    `additionalProperties: false` rejects unknown keys NAMING them —
+    the pre-closure behavior accepted a typo'd key as nil, and a
+    typo'd `imagePullSecret` (13 read sites) silently dropped every
+    pull credential for a fleet-wide ImagePullBackOff discovered in
+    the cluster, not at render. gateway-helm (the one subchart the
+    block coalesces into) ships no schema and reads no global.* key —
+    verified in the vendored tgz before closing. Four new render
+    guards (typo rejected naming the key, scalar row rejected naming
+    the path, out-of-enum policy rejected, all six keys rendering
+    together); the closure itself mutation-proven — schema reopened,
+    the typo renders (rc=0); restored, rejected naming the key.
+  - *The two declined tripwires stay declined, now against the
+    operator's simplicity bar*: the securityContext helper (4 blocks
+    share ~3 lines and differ everywhere else — a parameter list as
+    long as the YAML it replaces) and a requiredSecrets list (a
+    render-time check cannot know which Secrets exist — SealedSecrets
+    materialize post-install — and the missing-Secret failure already
+    names the Secret exactly at pod start). The doc-linter tripwire:
+    declined by the operator.
 - **Review loop, pass 55 (0.2.125)** — the thirty-third `/code-review`
   found 0 findings on the run-32 delta (the split guard verified by
   branch matrix: each get×python3 outcome produces its own message,

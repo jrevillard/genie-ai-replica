@@ -416,6 +416,83 @@ expect_fail "a clamav probe port that is not the listener's" \
   "services.clamav.probes.readiness.tcpSocket.port must equal services.clamav.port" \
   $(valid_flags) --set services.clamav.probes.readiness.tcpSocket.port=9999
 
+# expect_render_contains <label> <needle> <flags...>
+#   The render must SUCCEED and its output must carry <needle> — the
+#   positive half the expect_fail/expect_ok pair cannot express: a gate
+#   or assertion whose branch stops rendering leaves every negative
+#   guard green.
+expect_render_contains() {
+  local label="$1" needle="$2"
+  shift 2
+  local output rc matches
+  output="$(helm template "${RELEASE}" "${CHART}" -n "${NS}" "$@" 2>&1)"
+  rc=$?
+  if [ "${rc}" -ne 0 ]; then
+    echo "FAIL: ${label} — the render FAILED:"
+    printf '%s\n' "${output}" | head -6
+    fails=$((fails + 1))
+    return
+  fi
+  # grep -c, never -q: under pipefail, -q's early exit on the first
+  # match SIGPIPEs the 700 KB render's writer and the pipeline reports
+  # 141 — a match counted as a miss. -c reads the whole input.
+  matches="$(printf '%s' "${output}" | grep -cF -- "${needle}")" || true
+  if [ "${matches}" -eq 0 ]; then
+    echo "FAIL: ${label} — the render succeeded but does not contain: ${needle}"
+    fails=$((fails + 1))
+    return
+  fi
+  echo "PASS: ${label} — rendered output carries the assertion"
+}
+
+# expect_render_lacks <label> <needle> <flags...>
+expect_render_lacks() {
+  local label="$1" needle="$2"
+  shift 2
+  local output rc matches
+  output="$(helm template "${RELEASE}" "${CHART}" -n "${NS}" "$@" 2>&1)"
+  rc=$?
+  if [ "${rc}" -ne 0 ]; then
+    echo "FAIL: ${label} — the render FAILED:"
+    printf '%s\n' "${output}" | head -6
+    fails=$((fails + 1))
+    return
+  fi
+  matches="$(printf '%s' "${output}" | grep -cF -- "${needle}")" || true
+  if [ "${matches}" -ne 0 ]; then
+    echo "FAIL: ${label} — the render still contains: ${needle}"
+    fails=$((fails + 1))
+    return
+  fi
+  echo "PASS: ${label} — rendered output does not carry the assertion"
+}
+
+# 33. The data-deps gate covers every assertion's condition (runs
+#     14-16 each found a shape the gate skipped): the assertions must
+#     render — and be absent — in the shapes they name, or a future
+#     re-narrowing lands green because no CI render exercises it.
+expect_render_contains \
+  "the admin Secret is asserted with convergence disabled" \
+  'required_secrets="$required_secrets keycloak-admin-credentials"' \
+  $(valid_flags) --set data.keycloak.convergence.enabled=false
+
+expect_render_contains \
+  "the pre-baked Gateway TLS Secret is asserted" \
+  'required_secrets="$required_secrets edge-tls-guard-check"' \
+  $(valid_flags) --set ingress.enabled=true --set ingress.tls.enabled=true --set ingress.tls.secretName=edge-tls-guard-check
+
+expect_render_lacks \
+  "no vllm assertion without a consumer (backend off)" \
+  "vllm-api-key" \
+  $(valid_flags) --set services.backend.enabled=false --set services.backend.translation.endpoint=https://gpu.guard.example.org:444/v1
+
+# 34. An operator-supplied Secret name reaches the test pods' shell:
+#     a value that is not a Kubernetes Secret name fails the RENDER
+#     naming the values key, never the shell inside the pod.
+expect_fail "a Secret name that is not a Secret name" \
+  "is not a valid Secret name" \
+  $(valid_flags) --set ingress.enabled=true --set ingress.tls.enabled=true --set 'ingress.tls.secretName=not a name; kubectl'
+
 # 32. The documented valid configuration must still render: a guard that
 #     rejects a good deployment is a defect too.
 expect_ok "the documented values render" $(valid_flags)

@@ -984,6 +984,33 @@ void main() {
     });
   });
 
+  /// A locale drift re-resolves the buttons; the mount's own dependency
+  /// change (the first load still in flight) must not.
+  group('shouldReloadQuickHelpButtons', () {
+    test('a settled locale that is not the live one reloads', () {
+      expect(
+        shouldReloadQuickHelpButtons(loadedLocale: 'en', currentLocale: 'fr'),
+        isTrue,
+      );
+    });
+
+    test('the locale the buttons already speak does not', () {
+      expect(
+        shouldReloadQuickHelpButtons(loadedLocale: 'fr', currentLocale: 'fr'),
+        isFalse,
+      );
+    });
+
+    test('a null loaded locale (first load in flight) does not', () {
+      // The first load resolves under the locale live at its completion
+      // — reloading beside it would be a duplicate parse on every mount.
+      expect(
+        shouldReloadQuickHelpButtons(loadedLocale: null, currentLocale: 'fr'),
+        isFalse,
+      );
+    });
+  });
+
   /// The ONE button-identity lookup — the restore and the locale
   /// re-title must resolve the same entity for the same id.
   group('quickHelpButtonById', () {

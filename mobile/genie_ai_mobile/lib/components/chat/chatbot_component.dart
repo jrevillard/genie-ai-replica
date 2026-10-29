@@ -213,8 +213,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // message is not the trigger — a deployment whose welcome text is a
     // plain, locale-invariant string would otherwise pin the cards (and
     // the active scope's context-bar title) to one language.
-    if (_quickHelpButtonsLocale != null &&
-        _quickHelpButtonsLocale != _currentLocale) {
+    if (shouldReloadQuickHelpButtons(
+      loadedLocale: _quickHelpButtonsLocale,
+      currentLocale: _currentLocale,
+    )) {
       _startQuickHelpConfigReload();
     }
 
@@ -262,8 +264,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   /// bare load would leave the tracked future stale: a restore that
   /// arrives mid-reload would await the OLD future and start a duplicate
   /// parse. The reload REPLACES the tracked future with its own load.
+  ///
+  /// One reload at a time: didChangeDependencies also fires for theme and
+  /// MediaQuery changes, and while the read is in flight the marker still
+  /// names the OLD locale, so a second change would start a duplicate
+  /// parse. The in-flight load resolves under the locale live at its
+  /// completion, so it already lands in the newest language.
+  Future<void>? _quickHelpReloadInFlight;
+
   void _startQuickHelpConfigReload() {
-    _quickHelpConfigFuture = _loadQuickHelpConfig().whenComplete(() {
+    if (_quickHelpReloadInFlight != null) return;
+    final reload = _loadQuickHelpConfig();
+    _quickHelpReloadInFlight = reload;
+    _quickHelpConfigFuture = reload.whenComplete(() {
+      _quickHelpReloadInFlight = null;
       if (_quickHelpLoadFailed) _quickHelpConfigFuture = null;
     });
   }
@@ -273,10 +287,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   Future<void> _loadQuickHelpConfig() async {
     _quickHelpLoadFailed = false;
     try {
-      final String configString = await rootBundle.loadString(
-        'assets/config/genie-ai-config.json',
-      );
-      final Map<String, dynamic> config = jsonDecode(configString);
+      // The bundled config is immutable per build: a reload (a locale
+      // drift) re-resolves the CACHED parse instead of re-reading the
+      // asset — the same rule the web states for its own re-resolve.
+      // A failed first load caches nothing, so its retry re-reads.
+      final Map<String, dynamic> config =
+          _cachedConfig ??
+          jsonDecode(
+            await rootBundle.loadString('assets/config/genie-ai-config.json'),
+          );
       // A setState after dispose is a FlutterError in debug and E2E runs
       // — the same guard the other async loaders carry. A locale switch
       // can start this load and unmount the screen before it lands.

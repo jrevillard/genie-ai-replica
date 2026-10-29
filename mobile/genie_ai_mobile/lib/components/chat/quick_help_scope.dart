@@ -59,6 +59,21 @@ Map<String, dynamic>? quickHelpButtonById(
   return null;
 }
 
+/// Whether the Quick Help buttons must re-resolve for [currentLocale].
+///
+/// The buttons are per-locale text resolved by a load; [loadedLocale] is
+/// the locale the LAST settled load resolved under. A null loadedLocale
+/// names the first, still-in-flight load — that load resolves under the
+/// locale live at its completion, so the mount's own dependency change
+/// must not start a second parse. A drift (a settled locale that is not
+/// the live one) re-resolves.
+bool shouldReloadQuickHelpButtons({
+  required String? loadedLocale,
+  required String currentLocale,
+}) {
+  return loadedLocale != null && loadedLocale != currentLocale;
+}
+
 /// The title of the ACTIVE Quick Help scope, re-resolved from the button
 /// list by its id — the mobile twin of the web's quickHelpTitleFor.
 ///

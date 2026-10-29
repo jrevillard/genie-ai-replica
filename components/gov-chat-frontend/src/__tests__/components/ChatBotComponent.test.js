@@ -5200,6 +5200,40 @@ describe('Quick Help category reference', () => {
     expect(button.category).toBe('2');
   });
 
+  it('a restored scope carries the hierarchy key, not the name', async () => {
+    // The conversation's category edge is written by the backend as
+    // `serviceCategories/<key>`: the scope the restore installs must
+    // speak the hierarchy's key, even when the hierarchy landed after
+    // the configuration did.
+    const serviceTreeService = require('../../services/serviceTreeService');
+    let resolveTree;
+    serviceTreeService.getAllCategories.mockReturnValue(
+      new Promise((resolve) => {
+        resolveTree = resolve;
+      })
+    );
+
+    const wrapper = createChatBotWrapper();
+    const vm = wrapper.vm;
+    await flushPromises();
+
+    resolveTree(TREE);
+    await flushPromises();
+
+    const chatHistoryService = require('../../services/chatHistoryService');
+    chatHistoryService.getConversation.mockResolvedValueOnce({
+      _key: 'c1',
+      title: 'Saved chat',
+      messages: [],
+      tags: ['civil']
+    });
+
+    await vm.loadExistingConversation('c1');
+
+    expect(vm.currentCategoryId).toBe('2');
+    expect(vm.selectedContextItems[0].category).toBe('2');
+  });
+
   it('resolves the reference when the hierarchy lands after the configuration', async () => {
     // The two loads are independent: the configuration may be read
     // before the hierarchy is there. The buttons are resolved again when

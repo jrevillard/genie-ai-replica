@@ -978,15 +978,6 @@ export default {
     currentLocale: function () {
       this.updateDialogTexts();
     },
-    serviceCategories: function () {
-      // The Quick Help buttons name their category in the configuration's
-      // own spelling; the HIERARCHY is what turns that spelling into the
-      // category's key. The two loads are independent, so a hierarchy
-      // that lands after the configuration resolves the buttons again.
-      if (this.quickHelpButtons.length) {
-        this.applyQuickHelpButtons();
-      }
-    },
     '$i18n.locale'(newLocale) {
       this.currentLocale = newLocale;
       // The runtime configuration does not change with the locale: only the
@@ -1259,6 +1250,14 @@ export default {
         }
         this.serviceCategories = tree;
         this.serviceCategoriesStatus = 'loaded';
+        // The Quick Help buttons name their category in the configuration's
+        // own spelling; the HIERARCHY is what turns that spelling into the
+        // category's key. The two loads are independent, so a hierarchy
+        // that lands after the configuration resolves the buttons again —
+        // synchronously here, before any consumer of this load resumes.
+        if (this.quickHelpButtons.length) {
+          this.applyQuickHelpButtons();
+        }
       } catch (error) {
         if (seq !== this.treeLoadSeq) {
           return;

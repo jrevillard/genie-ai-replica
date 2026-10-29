@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
-  "$comment": "Pins the values a wrong TYPE or a wrong ENUM would silently mis-render. Enums: a wrong clusterProfile renders the dev topology and the drift hook cannot catch it. Booleans: Helm's `not`/`and`/`or`/`ternary` are strict \u2014 a knob set to 0 or \"true\" aborts the render with 'wrong type for value; expected bool; got int64', so the type is checked up front instead. Everything else stays permissive (no additionalProperties:false anywhere) \u2014 Helm injects `global`, and future tiers add keys. Every boolean leaf of values.yaml is typed here; scripts/values-schema-bools-check.py fails the build when a new one is added without a matching constraint.",
+  "$comment": "Pins the values a wrong TYPE or a wrong ENUM would silently mis-render. Enums: a wrong clusterProfile renders the dev topology and the drift hook cannot catch it. Booleans: Helm's `not`/`and`/`or`/`ternary` are strict — a knob set to 0 or \"true\" aborts the render with 'wrong type for value; expected bool; got int64', so the type is checked up front instead. Everything else stays permissive (no additionalProperties:false anywhere) — Helm injects `global`, and future tiers add keys. Every boolean leaf of values.yaml is typed here; scripts/values-schema-bools-check.py fails the build when a new one is added without a matching constraint.",
   "type": "object",
   "properties": {
     "clusterProfile": {
@@ -205,7 +205,7 @@
                 "null"
               ],
               "minimum": 0,
-              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer \u2014 including 0, the scale-off \u2014 wins over the profile."
+              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer — including 0, the scale-off — wins over the profile."
             },
             "port": {
               "type": "integer",
@@ -238,7 +238,7 @@
                 "null"
               ],
               "minimum": 0,
-              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer \u2014 including 0, the scale-off \u2014 wins over the profile."
+              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer — including 0, the scale-off — wins over the profile."
             },
             "port": {
               "type": "integer",
@@ -282,7 +282,7 @@
                 "null"
               ],
               "minimum": 0,
-              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer \u2014 including 0, the scale-off \u2014 wins over the profile."
+              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer — including 0, the scale-off — wins over the profile."
             },
             "port": {
               "type": "integer",
@@ -312,7 +312,7 @@
                 "null"
               ],
               "minimum": 0,
-              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer \u2014 including 0, the scale-off \u2014 wins over the profile."
+              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer — including 0, the scale-off — wins over the profile."
             },
             "port": {
               "type": "integer",
@@ -342,7 +342,7 @@
                 "null"
               ],
               "minimum": 0,
-              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer \u2014 including 0, the scale-off \u2014 wins over the profile."
+              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer — including 0, the scale-off — wins over the profile."
             },
             "port": {
               "type": "integer",
@@ -440,8 +440,30 @@
     },
     "global": {
       "type": "object",
-      "$comment": "Only the keys the chart interpolates into a shell are typed here \u2014 a shape the render would otherwise accept and the pod would execute. toolingArch lands in the kubectl URL path; kubeletToolsMirror is interpolated into the tools-init container's shell inside double quotes.",
+      "$comment": "Closed block: every key the templates read through the captured $global is typed, and unknown keys are REJECTED at render (Helm would otherwise accept a typo'd key as nil — e.g. `imagePullSecret` for `imagePullSecrets`, read from 13 sites — and every pod would ImagePullBackOff in the cluster with no schema error naming the key). toolingArch and kubeletToolsMirror additionally constrain shapes the render interpolates into a shell. The block coalesces wholesale into subcharts (gateway-helm): verified it ships no schema and reads no global.* key, so closing here cannot reject a key it consumes.",
       "properties": {
+        "imageRegistry": {
+          "type": "string",
+          "description": "Optional registry prefix that WINS over the top-level imageRegistry when set (the factory and the migrations Job read it first); empty = the top-level imageRegistry applies. Exists for operators following the Helm global.* convention — the chart's own overlays set the top-level key."
+        },
+        "imagePullSecrets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false,
+            "description": "A pull-credential Secret reference ({name: <Secret>}) wired into every service pod's spec.imagePullSecrets."
+          },
+          "description": "Pull credentials for a registry that requires authentication — only about the PULL CREDENTIALS; the registry images are pulled FROM is the top-level imageRegistry."
+        },
         "toolingArch": {
           "type": "string",
           "enum": [
@@ -451,14 +473,29 @@
             "arm",
             "386"
           ],
-          "description": "Forces the kubectl binary architecture the tools-init container downloads; empty = detect from uname -m. Constrained to the values the download URL accepts \u2014 the value is interpolated into the init container's shell, so anything outside the enum is rejected at render, not executed."
+          "description": "Forces the kubectl binary architecture the tools-init container downloads; empty = detect from uname -m. Constrained to the values the download URL accepts — the value is interpolated into the init container's shell, so anything outside the enum is rejected at render, not executed."
+        },
+        "toolingImageRegistry": {
+          "type": "string",
+          "description": "Registry for Helm hook Jobs and test pods that pull public Docker Hub images (alpine, python, curlimages/curl); empty = docker.io. Separate from the top-level imageRegistry, which scopes service images to the GitLab Container Registry."
         },
         "kubeletToolsMirror": {
           "type": "string",
           "pattern": "^(|(([Hh][Tt][Tt][Pp][Ss]?://)?[A-Za-z0-9][A-Za-z0-9.-]*(:([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]))?(/[A-Za-z0-9._~%-]+)*))$",
-          "description": "Internal mirror for the kubectl download: [http[s]://]host[:port 1-65535][/multi/segment/prefix] \u2014 the scheme is optional and case-insensitive (scheme-less makes curl use plain HTTP), /release/... is appended, and the prefix may carry multiple path segments (the Nexus/Artifactory repository topology). No trailing slash (it would double the appended path's leading slash on strict routers). The host admits a colon only before a numeric port in the 1-65535 range, and the scheme only http(s): the value is interpolated into the tools-init container's shell inside double quotes, and any other shape (file://, https:mirror, :99999, shell metacharacters) is rejected at render."
+          "description": "Internal mirror for the kubectl download: [http[s]://]host[:port 1-65535][/multi/segment/prefix] — the scheme is optional and case-insensitive (scheme-less makes curl use plain HTTP), /release/... is appended, and the prefix may carry multiple path segments (the Nexus/Artifactory repository topology). No trailing slash (it would double the appended path's leading slash on strict routers). The host admits a colon only before a numeric port in the 1-65535 range, and the scheme only http(s): the value is interpolated into the tools-init container's shell inside double quotes, and any other shape (file://, https:mirror, :99999, shell metacharacters) is rejected at render."
+        },
+        "imagePullPolicy": {
+          "type": "string",
+          "enum": [
+            "",
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ],
+          "description": "Global pull-policy override for the service images; empty = follows the tag (mutable tags pull Always, pinned tags IfNotPresent), and a per-service services.<svc>.image.pullPolicy beats both."
         }
-      }
+      },
+      "additionalProperties": false
     }
   }
 }

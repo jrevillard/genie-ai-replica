@@ -1,6 +1,18 @@
 // src/services/serviceTreeService.js - Connect ServiceTreePanelComponent to backend
 import httpService from './httpService';
 
+// Both hierarchy fetches are BOUNDED: a request that never answers left the
+// hierarchy 'loading' forever — the grid hidden, the spinner turning, the
+// await unresolved, no error anywhere. A timeout turns it into the visible
+// FAILED state the callers describe.
+//
+// The timeout goes in the THIRD argument of httpService.get — its axios
+// options. The second argument is the query: it reads `params` from it and
+// sends the rest as query parameters, so a timeout placed there is dropped
+// on the floor and axios waits forever. The bound only exists if axios
+// actually receives it.
+const TREE_FETCH_TIMEOUT_MS = 15000;
+
 export default {
   /**
    * For the MAIN application sidebar.
@@ -19,18 +31,7 @@ export default {
       const response = await httpService.get(
         'services/categories',
         { params: { locale } },
-        // A BOUNDED fetch: a request that never answers left the
-        // hierarchy in 'loading' forever — the grid stayed hidden with
-        // no error, the restore's await never resolved, and the chat
-        // was unusable until the request finally failed. A timeout
-        // turns it into the visible FAILED state the captions describe.
-        //
-        // The timeout goes in the THIRD argument — httpService.get's
-        // axios options. Its second argument is the query: it reads
-        // `params` from it and sends the rest as query parameters, so a
-        // timeout placed there is dropped on the floor and axios waits
-        // forever. The bound only exists if axios actually receives it.
-        { timeout: 15000 }
+        { timeout: TREE_FETCH_TIMEOUT_MS }
       );
       // The hierarchy is a LIST of categories. A body that is not one is a
       // broken answer (a proxy error page, an object), and a client that
@@ -65,14 +66,7 @@ export default {
       const response = await httpService.get(
         'service-categories/categories/detailed',
         { params: { locale } },
-        // A BOUNDED fetch, like the public sibling: a request that never
-        // answers left the admin panel's hierarchy spinner turning
-        // forever, with no error to show. The timeout goes in the THIRD
-        // argument — httpService.get's axios options. Its second argument
-        // is the query: it reads `params` from it and sends the rest as
-        // query parameters, so a timeout placed there is dropped on the
-        // floor and axios waits forever.
-        { timeout: 15000 }
+        { timeout: TREE_FETCH_TIMEOUT_MS }
       );
       return response.data || [];
     } catch (error) {

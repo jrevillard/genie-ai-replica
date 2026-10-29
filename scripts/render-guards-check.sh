@@ -605,13 +605,18 @@ expect_fail "a mirror with a trailing slash (it would double the appended path's
 # read from 13 sites, silently dropped every pull credential and every
 # pod ImagePullBackOff'd in the cluster with no schema error), a
 # mistyped row shape is rejected naming the path, and every legitimate
-# key renders.
+# key renders. The needles pin the KEY NAME only, like the mirror
+# cases above: helm's schema-error WORDING is version-specific (local
+# helm renders "additional properties 'X' not allowed", CI's
+# helm-kubectl:3.16.0 "Additional property X is not allowed" — caught
+# by chart:lint after passing locally), so a phrasing needle pins a
+# helm version instead of the contract.
 expect_fail "a typo'd global key is rejected, naming the key" \
-  "additional properties 'imagePullSecret' not allowed" \
+  "imagePullSecret" \
   $(valid_flags) '--set=global.imagePullSecret=[{"name":"x"}]'
 
 expect_fail "a scalar imagePullSecrets row is rejected, naming the path" \
-  "got string, want object" \
+  "imagePullSecrets" \
   $(valid_flags) '--set=global.imagePullSecrets[0]=mysecret'
 
 expect_fail "an out-of-enum global.imagePullPolicy is rejected" \

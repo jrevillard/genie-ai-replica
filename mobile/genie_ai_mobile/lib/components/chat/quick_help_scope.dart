@@ -247,6 +247,18 @@ class QuickHelpScopeResolver {
     return _categoryLabelsEn.containsKey(reference) ? reference : null;
   }
 
+  /// The category id a configuration reference speaks: the hierarchy's own
+  /// key for the category it names.
+  ///
+  /// The configuration names its category; the key is what the app speaks
+  /// everywhere else — the conversation's edge (`serviceCategories/<key>`)
+  /// among them. A reference the hierarchy cannot name keeps its own
+  /// spelling: the scope is then broken, and a broken scope is a visible
+  /// error, never a silently unscoped query.
+  String? categoryIdFor(String? reference) {
+    return categoryKeyFor(reference) ?? reference;
+  }
+
   static Set<String> _collectEnLabels(List<dynamic> enTree) {
     final labels = <String>{};
     for (final entry in enTree) {
@@ -494,7 +506,7 @@ class ConversationScopeResolver {
       // what the conversation's edge speaks.
       final effectiveCategory = category == null
           ? categoryKey
-          : (_hierarchy.categoryKeyFor(category) ?? category);
+          : _hierarchy.categoryIdFor(category);
       return ConversationScope(
         categoryId: effectiveCategory,
         categoryNameEn: _hierarchy.categoryEnLabel(effectiveCategory),

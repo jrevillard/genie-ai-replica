@@ -210,6 +210,17 @@ void main() {
     test('the localized name of a category named by its ENGLISH name', () {
       expect(resolver.categoryDisplayName('Civil Registry'), 'État civil');
     });
+
+    test('the category id a reference speaks is the hierarchy key', () {
+      expect(resolver.categoryIdFor('Civil Registry'), '2');
+      expect(resolver.categoryIdFor('2'), '2');
+    });
+
+    test('a reference the hierarchy cannot name keeps its own spelling', () {
+      // The scope is broken — a broken scope sends nothing — but what the
+      // configuration wrote is still what the conversation carries.
+      expect(resolver.categoryIdFor('Taxes'), 'Taxes');
+    });
   });
 
   // The scope of a saved conversation: what the conversation was asked in,

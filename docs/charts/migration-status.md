@@ -8,6 +8,31 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-29)
 
+- **All six live checks green at 0.2.130 on the rebuilt node (2026-10-29,
+  16:20)** — health through the Envoy edge, genie theme + register link,
+  French chat stream with streaming translation through the SSH-tunnel
+  GPU endpoint (`192.168.49.1:9443`), `.md` upload → ClamAV → Ingested
+  (1 chunk), and a grounded RAG answer citing the ingested file at
+  score 0.99. First full pass since 0.2.32.
+- **MAIN-SIDE DEFECT (not fixable on this branch): the chatqna image
+  cannot load its LLM tokenizer offline.** `align_inputs` calls
+  `AutoTokenizer.from_pretrained(LLM_MODEL)` at request time; the
+  `genie-ai-chatqna-arango` image bakes no HF cache (Dockerfile has no
+  download step, pod `~/.cache/huggingface` is empty), and the chatqna
+  NetworkPolicy allows only DNS + in-cluster peers — no
+  huggingface.co egress. A fresh pod therefore answers every chat with
+  `stream_setup_error` 500 (`OSError: We couldn't connect to
+  'https://huggingface.co'`). The 0.2.130 pass ran with the tokenizer
+  files injected by hand into the live pod (`kubectl cp` of a
+  `snapshot_download` result + `refs/main`); a pod restart loses them.
+  How the 0.2.32 pass (2026-10-18) served chat at all is unexplained by
+  the surviving evidence — the NP shape and the Dockerfile were the
+  same there; the ledger records the mystery rather than a cause.
+  Proper fix: MR off `main` baking the granite tokenizer into the
+  chatqna image (`huggingface_hub` snapshot at build time), keeping
+  `HF_HUB_OFFLINE=1` — offline + cache is the deterministic
+  air-gap-friendly contract; opening HF egress in the NP would trade a
+  broken chat for a slow, outage-dependent one.
 - **Chart `genieai-umbrella` at 0.2.130**, branch `feat/k8s-migration`
   **rebased onto `origin/main` (2026-10-29, 511 commits replayed clean,
   the vendored `charts/*.tgz` regenerated away before the replay)**. CI

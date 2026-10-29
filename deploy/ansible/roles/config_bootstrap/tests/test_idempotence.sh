@@ -208,6 +208,7 @@ EXPECTED_PATH=""
 STRAY_PATH=""
 RESTORE_ARMED="false"
 RESTORE_RUNNING="false"
+PENDING_SIGNAL=""
 
 # The restore stays armed until it SUCCEEDS, so a signal that lands mid-run
 # still finds the host's config recoverable: the archive is only removed once
@@ -288,9 +289,15 @@ restore() {
         fi
     fi
     printf '  [FAIL] automatic restore did not complete.\n' >&2
-    printf '         To restore %s by hand, run on the host:\n' "$CONFIG_DIR" >&2
-    printf '           mkdir -p /tmp/cb-restore && tar -xpf %s -C /tmp/cb-restore\n' "$BACKUP_ARCHIVE" >&2
-    printf '           rsync -a --delete /tmp/cb-restore/config/ %s/ && rm -rf /tmp/cb-restore\n' "$CONFIG_DIR" >&2
+    if [ -n "$BACKUP_ARCHIVE" ] && ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
+        -a "test -f '$BACKUP_ARCHIVE'" >/dev/null 2>&1; then
+        printf '         To restore %s by hand, run on the host:\n' "$CONFIG_DIR" >&2
+        printf '           mkdir -p /tmp/cb-restore && tar -xpf %s -C /tmp/cb-restore\n' "$BACKUP_ARCHIVE" >&2
+        printf '           rsync -a --delete /tmp/cb-restore/config/ %s/ && rm -rf /tmp/cb-restore\n' "$CONFIG_DIR" >&2
+    else
+        printf '         The pre-test archive is gone: this script cannot put %s back.\n' "$CONFIG_DIR" >&2
+        printf '         Inspect the tree on the host before trusting it.\n' >&2
+    fi
     # The restore failed and the host's config tree is gone (the rm -rf ran,
     # the extraction did not). That is the worst outcome this script can
     # produce, so it must not be reported as a pass: the CALLER decides the
@@ -321,6 +328,10 @@ restore() {
 sigtrap() {
     if [ "$RESTORE_RUNNING" = "true" ]; then
         printf '  [..] signal received while the restore is running; it finishes before the shell goes away.\n' >&2
+        # The run still ends on the signal's code: PENDING_SIGNAL is checked
+        # after the last step, so finishing the restore never reads as a
+        # green pass to a caller that interrupted the run.
+        PENDING_SIGNAL="$1"
         return 0
     fi
     restore || true
@@ -421,15 +432,19 @@ done
 
 step "Contract 1: a second role run must be a no-op"
 
+# Both snapshots must SUCCEED: a run that could not read the tree has no
+# evidence, and comparing nothing to nothing would pass every contract below.
 manifest() {
-    snapshot "find . -type f -exec md5sum {} + | sort -k2"
+    snapshot "find . -type f -exec md5sum {} + | sort -k2" ||
+        die "could not list the config tree on the host (the manifest comparison has no evidence)"
 }
 
 # Sorted list of every regular file under config_dir. A subset of manifest(),
 # used separately so a run that adds or removes files is distinguishable from
 # one that rewrites file contents.
 filelist() {
-    snapshot "find . -type f | sort"
+    snapshot "find . -type f | sort" ||
+        die "could not list the config tree on the host (the file comparison has no evidence)"
 }
 
 # `ansible`'s display of a successful task's stdout changed across versions
@@ -437,18 +452,30 @@ filelist() {
 # travels through the display: the command writes it to a file on the host,
 # fetch brings it to the controller, and the caller reads the file. The
 # fetched copy is what the caller sees, byte for byte.
+# Prints the command's output and returns the command's exit status. The
+# payload travels host -> controller through fetch, so the display cannot
+# swallow it — and a run that failed mid-way is not allowed to look like an
+# empty tree: the exit status rides in the file as a __RC__ line, and a
+# snapshot without one means the channel itself broke.
 snapshot() {
     local snapshot_remote="$CONFIG_PARENT/.config_bootstrap_snapshot.txt"
-    local snapshot_local
+    local snapshot_local snapshot_rc
     snapshot_local="$(mktemp "${TMPDIR:-/tmp}/config_bootstrap_snapshot.XXXXXX")"
     ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
-        -a "cd '$CONFIG_DIR' && { $1 ; } > '$snapshot_remote'" >/dev/null 2>&1 || true
+        -a "cd '$CONFIG_DIR' && { $1 ; echo __RC__:\$? ; } > '$snapshot_remote'" >/dev/null 2>&1 || true
     ansible_run raw -i "$INVENTORY" "$HOST" -m fetch \
         -a "src='$snapshot_remote' dest='$snapshot_local' flat=yes" >/dev/null 2>&1 || true
-    cat "$snapshot_local" 2>/dev/null
+    if ! grep -q '^__RC__:' "$snapshot_local" 2>/dev/null; then
+        rm -f "$snapshot_local"
+        printf 'snapshot: could not read the tree state on the host\n' >&2
+        return 2
+    fi
+    snapshot_rc="$(sed -n 's/^__RC__://p' "$snapshot_local" | tail -n 1)"
+    sed '/^__RC__:/d' "$snapshot_local"
     rm -f "$snapshot_local"
     ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
         -a "rm -f '$snapshot_remote'" >/dev/null 2>&1 || true
+    return "$snapshot_rc"
 }
 
 # The deployment's CONFIGURED theme (the one keycloak_theme names, rendered
@@ -586,6 +613,13 @@ fi
 
 restore || exit 1
 trap - EXIT INT TERM
+
+# A signal that landed while the end-of-run restore was in flight let the
+# restore finish; the run still reports itself as interrupted, not passed.
+if [ -n "$PENDING_SIGNAL" ]; then
+    printf '\n=== interrupted by signal; the restore completed first ===\n' >&2
+    exit "$PENDING_SIGNAL"
+fi
 
 printf '\n=== ALL SMOKE TESTS PASSED ===\n'
 printf 'Host:          %s\n' "$HOST"

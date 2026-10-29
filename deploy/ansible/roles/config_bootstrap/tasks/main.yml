@@ -329,6 +329,22 @@
           {{ config_bootstrap_brand_pairs | length }} entries declare one.
         success_msg: "config_bootstrap: the brand file is declared by one pair"
 
+    # The brand check reads its file from the extracted branch; a pair that
+    # declares brand_file without also listing it in expect lets a branch that
+    # stopped shipping the file surface as a JSON parse failure (file not
+    # found) instead of the missing-asset message the expect guard names.
+    - name: Fail unless the brand file is also in its pair's expect list
+      ansible.builtin.assert:
+        that:
+          - config_bootstrap_brand_pairs[0].brand_file in config_bootstrap_brand_pairs[0].expect
+        fail_msg: >-
+          The pair {{ config_bootstrap_brand_pairs[0].dest_subdir }} declares
+          brand_file {{ config_bootstrap_brand_pairs[0].brand_file }} but does
+          not list it in its expect: a branch that stops shipping the file
+          would then fail the brand check with a parse error instead of the
+          missing-asset message. Add the file to the pair's expect list.
+        success_msg: "config_bootstrap: the brand file is also expected by its pair"
+
     - name: Read the title the branch's brand file carries
       ansible.builtin.command:
         argv:
@@ -429,8 +445,10 @@
     # stay stale on the host. Comparing content is the only check that matches
     # the claim this task makes.
     #
-    # The out-format names the paths: with --delete, the task now removes host
-    # state, and an operator has to see what it removed.
+    # The out-format names the paths: with --delete, the task removes host
+    # state, and the itemize lines record exactly what moved — they land in
+    # the registered result (visible under -v) and the verification below
+    # prints them when it flags a divergence.
     #
     # The trailing slash on src is load-bearing: it makes the source's CONTENTS
     # land directly in dest, and it is what scopes --delete to dest as a whole.
@@ -477,15 +495,21 @@
     # by hand has to populate it themselves).
     # The config_dir parent is not part of any pair, so the mirror never
     # touches it — and a mode drifted on it (a 0700 between deploys) would
-    # shadow a readable subtree behind a green deploy. Creating it with an
-    # explicit mode both seeds it correctly and repairs a drifted one on
-    # every run; the readability guard below stays as the backstop.
-    - name: Ensure the config directory itself is present and traversable
+    # shadow a readable subtree behind a green deploy. Creating them with an
+    # explicit mode both seeds them correctly and repairs a drifted one on
+    # every run; the readability guard below stays as the backstop. The
+    # parents of the pair roots are in the list because the mirror's rsync
+    # destinations sit below them (config_dir/keycloak/themes under
+    # config_dir/keycloak) and the mirror never touches those intermediates
+    # itself. The mode is 0775: the same mode the mirror restores on the pair
+    # directories (the archive carries it), so the tree stays uniform.
+    - name: Ensure the config directory and the pair parents are present and traversable
       become_user: root
       ansible.builtin.file:
-        path: "{{ config_dir }}"
+        path: "{{ item }}"
         state: directory
         mode: "0775"
+      loop: "{{ ([config_dir] + (config_bootstrap_pairs | map(attribute='dest_subdir') | map('ansible.builtin.dirname') | reject('equalto', '') | unique | map('regex_replace', '^(.+)$', config_dir ~ '/\\1') | list)) | unique }}"
 
     - name: Ensure runtime config directories exist
       become_user: root

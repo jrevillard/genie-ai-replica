@@ -178,6 +178,10 @@ void main() {
   // hierarchy publishes and the corpus filters on. The database key stays
   // accepted: a configuration written before the change still names a
   // category, and a deployment's configuration is edited on its own.
+  // The resolution is asserted at the boundaries that consume it — the
+  // grid's verdict (stateFor), the names the user reads, and the id the
+  // conversation's edge speaks (categoryIdFor) — never at the internal
+  // accessor those boundaries share.
   group('QuickHelpScopeResolver.categoryReference', () {
     test('a category named by its ENGLISH name resolves', () {
       final button = {
@@ -190,21 +194,23 @@ void main() {
       expect(resolver.categoryLabelEn(button), 'Civil Registry');
     });
 
-    test('the hierarchy key of a category named by its ENGLISH name', () {
-      expect(resolver.categoryKeyFor('Civil Registry'), '2');
-    });
-
     test('a category named by its database key still resolves', () {
-      expect(resolver.categoryKeyFor('2'), '2');
+      final button = {
+        'id': 'civil',
+        'serviceLabels': ['Births'],
+        'category': '2',
+      };
+
+      expect(resolver.stateFor(button)['broken'], isFalse);
+      expect(resolver.categoryLabelEn(button), 'Civil Registry');
     });
 
     test('a name the hierarchy does not carry names no category', () {
-      expect(resolver.categoryKeyFor('Taxes'), isNull);
-
       final state = resolver.stateFor({'id': 'civil', 'category': 'Taxes'});
 
       expect(state['broken'], isTrue);
       expect(state['categoryMissing'], isTrue);
+      expect(resolver.categoryLabelEn({'category': 'Taxes'}), isNull);
     });
 
     test('the localized name of a category named by its ENGLISH name', () {

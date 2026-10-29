@@ -236,7 +236,7 @@ class QuickHelpScopeResolver {
   /// database key stays accepted: a configuration written before that
   /// spelling was adopted still names a category, and a deployment's
   /// configuration is edited on its own.
-  String? categoryKeyFor(String? reference) {
+  String? _categoryKeyFor(String? reference) {
     if (reference == null || reference.isEmpty) return null;
     final byName = _categoryKeysByName[reference];
     if (byName != null) return byName;
@@ -253,7 +253,7 @@ class QuickHelpScopeResolver {
   /// spelling: the scope is then broken, and a broken scope is a visible
   /// error, never a silently unscoped query.
   String? categoryIdFor(String? reference) {
-    return categoryKeyFor(reference) ?? reference;
+    return _categoryKeyFor(reference) ?? reference;
   }
 
   static Set<String> _collectEnLabels(List<dynamic> enTree) {
@@ -313,7 +313,7 @@ class QuickHelpScopeResolver {
   /// translation — a scope that cannot be named, and so cannot be put on
   /// the wire.
   String? categoryEnLabel(String? reference) {
-    final key = categoryKeyFor(reference);
+    final key = _categoryKeyFor(reference);
     if (key == null) return null;
     final en = _categoryLabelsEn[key];
     if (en == null || en.isEmpty) return null;
@@ -323,7 +323,7 @@ class QuickHelpScopeResolver {
   /// The localized name of the category the [reference] names — what the
   /// user reads. Display only: it never filters.
   String? categoryDisplayName(String? reference) {
-    final key = categoryKeyFor(reference);
+    final key = _categoryKeyFor(reference);
     if (key == null) return null;
     final name = _categoryNames[key];
     if (name == null || name.isEmpty) return null;

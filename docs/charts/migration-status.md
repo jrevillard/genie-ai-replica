@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-29)
 
-- **Chart `genieai-umbrella` at 0.2.122**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.123**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,29 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 49 (0.2.123)** — 6 findings from the twenty-fifth
+  `/code-review`: five fixed, one declined as machinery (tripwire
+  recorded).
+  - *The cross-product pin claim was 2 shapes short* — scheme-less
+    port+prefix and scheme+port+prefix (the realistic
+    Nexus-with-port topology) had no pin while the comment claimed the
+    full cross product. Both pinned verbatim; the comment now
+    enumerates all eight combinations and the claim is true.
+  - *The site doc still over-stated the download set* — "its helm-test
+    Pods" named all five; only test-namespace and test-data-deps
+    download. It names the two now.
+  - *The schema description's grammar shorthand lacked the port bound*
+    — the fourth grammar mention the run-24 sweep missed (drift beside
+    the prose that states it). Aligned.
+  - *A subject-verb slip one paragraph below the freshly corrected
+    comment* — "kubectl … are discoverable" → singular.
+  - *A one-word widow line in the rewritten values comment* — rewrapped.
+  - *Declined: a doc-lint deriving the four grammar mentions from the
+    schema* — the class (four prose surfaces hand-synced with the
+    regex) is real and has cost two runs, but a prose-derivation linter
+    is machinery the branch's KISS rule keeps as a ledger item; the
+    tripwire is the next grammar refinement costing more than one
+    pass.
 - **Review loop, pass 48 (0.2.122)** — 4 findings from the
   twenty-fourth `/code-review`, all residue of the classes this ledger
   already tracks.
@@ -2025,7 +2048,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.122** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.123** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

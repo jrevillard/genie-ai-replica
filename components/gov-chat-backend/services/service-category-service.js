@@ -409,8 +409,9 @@ class ServiceCategoryService {
    * Get all categories with their services (for public-facing components)
    * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
    * @returns {Promise<Array>} Categories with their services, each carrying
-   *   the localized display name and the ENGLISH translation (`nameEN`) the
-   *   filter wire speaks.
+   *   the display name (`name` — the localized translation, or the ENGLISH
+   *   one when the locale has no translation) and the ENGLISH translation
+   *   (`nameEN`) the filter wire speaks.
    */
   async getAllCategoriesWithServices(locale = 'en') {
     await this.init();
@@ -418,15 +419,23 @@ class ServiceCategoryService {
       const upperLocale = locale.toUpperCase();
       logger.info(`Fetching all categories with services for locale ${upperLocale}`);
 
-      // The tree carries BOTH spellings of every entity: the localized name
-      // the UI displays, and the ENGLISH translation the retrieval corpus
-      // filters on. English is the SSOT of the filter wire — a client that
-      // sent a localized name would scope against labels no chunk carries.
+      // The tree carries BOTH spellings of every entity: the name the UI
+      // displays, and the ENGLISH translation the retrieval corpus filters
+      // on. English is the SSOT of the filter wire — a client that sent a
+      // localized name would scope against labels no chunk carries.
       // Both spellings of an entity come out of ONE translation pass:
       // the sub-iterators below run over the (at most two) documents the
       // single index seek returned. Two FIRST() subqueries per entity —
       // the shape this replaces — did the seek twice, and the dataprep
       // walks this tree once per ingest.
+      //
+      // The DISPLAY name is the locale's translation when there is one and
+      // the ENGLISH one otherwise: an entity nobody translated in the
+      // active locale used to publish a NULL name, and the clients then
+      // hid it — a blank category row, and services dropped from the tree
+      // altogether. The tree showed less than exists. The English name is
+      // the same name the corpus filters on, so the label the user reads
+      // is the label that scopes the query.
       const localeCode = upperLocale.toLowerCase();
       const query = aql`
       FOR category IN serviceCategories
@@ -447,6 +456,10 @@ class ServiceCategoryService {
             FILTER t.code == 'en'
             RETURN t.translation
         )
+        // The locale's translation wins; the ENGLISH one is the fallback.
+        // An entity with neither keeps a null name — it has nothing to
+        // show and nothing to scope on.
+        LET categoryName = categoryTranslation != null ? categoryTranslation : categoryTranslationEN
         LET services = (
           FOR edge IN categoryServices
             FILTER edge._from == category._id
@@ -468,13 +481,17 @@ class ServiceCategoryService {
                   FILTER t.code == 'en'
                   RETURN t.translation
               )
+              // The same fallback the category gets: a service nobody
+              // translated in the active locale used to publish a null
+              // name, and the clients dropped it from the tree.
+              LET serviceName = serviceTranslation != null ? serviceTranslation : serviceTranslationEN
               SORT edge.order ASC
-              RETURN { name: serviceTranslation, nameEN: serviceTranslationEN }
+              RETURN { name: serviceName, nameEN: serviceTranslationEN }
         )
         RETURN {
           catKey: category._key,
           catCode: category.catCode,
-          name: categoryTranslation,
+          name: categoryName,
           nameEN: categoryTranslationEN,
           children: services
         }
@@ -497,8 +514,9 @@ class ServiceCategoryService {
    * Get all categories with DETAILED services for the admin panel
    * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
    * @returns {Promise<Array>} Categories with detailed service objects,
-   *   each carrying the localized display name and the ENGLISH translation
-   *   (`nameEN`) the filter wire speaks
+   *   each carrying the display name (`name` — the localized translation, or
+   *   the ENGLISH one when the locale has no translation) and the ENGLISH
+   *   translation (`nameEN`) the filter wire speaks
    */
   async getAdminAllCategoriesWithServices(locale = 'en') {
     await this.init();
@@ -538,6 +556,11 @@ class ServiceCategoryService {
               // field and no translation row at all) — the same
               // resolution the corpus's own EN lookup applies.
               LET categoryNameEN = categoryTranslationEN != null ? categoryTranslationEN : category.nameEN
+              // The DISPLAY name, resolved like the public tree's: the
+              // locale's translation when there is one, the ENGLISH one
+              // otherwise. One schema describes both trees, so both must
+              // mean the same thing by their name field.
+              LET categoryName = categoryTranslation != null ? categoryTranslation : categoryNameEN
               LET services = (
                   FOR edge IN categoryServices
                       FILTER edge._from == category._id
@@ -560,17 +583,18 @@ class ServiceCategoryService {
                                   RETURN t.translation
                           )
                           LET serviceNameEN = serviceTranslationEN != null ? serviceTranslationEN : service.nameEN
+                          LET serviceName = serviceTranslation != null ? serviceTranslation : serviceNameEN
                           SORT edge.order ASC
                           RETURN {
                               _key: service._key,
-                              name: serviceTranslation,
+                              name: serviceName,
                               nameEN: serviceNameEN
                           }
               )
               RETURN {
                   catKey: category._key,
                   catCode: category.catCode,
-                  name: categoryTranslation,
+                  name: categoryName,
                   nameEN: categoryNameEN,
                   children: services
               }

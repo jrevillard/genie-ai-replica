@@ -303,8 +303,27 @@ describe('ServiceCategoryService', () => {
       // one. `nameEN: null` and `nameEN: serviceTranslation` both leave
       // the corpus vocabulary empty while every pattern above still
       // matches, so the shape alone does not prove the value.
-      expect(text).toMatch(/name:\s*categoryTranslation,\s*nameEN:\s*categoryTranslationEN/);
-      expect(text).toMatch(/name:\s*serviceTranslation,\s*nameEN:\s*serviceTranslationEN/);
+      expect(text).toMatch(/name:\s*categoryName,\s*nameEN:\s*categoryTranslationEN/);
+      expect(text).toMatch(/name:\s*serviceName,\s*nameEN:\s*serviceTranslationEN/);
+    });
+
+    it('falls back to the EN translation for the display name when the locale has none', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('done'));
+      await service.getAllCategoriesWithServices('fr').catch(() => {});
+
+      const queryArg = mockDb.query.mock.calls[0][0];
+      const text = queryArg.strings.join('|');
+      // An entity nobody translated in the active locale used to publish
+      // a NULL name, and the clients hid it: a blank category row, and
+      // services dropped from the tree altogether — the tree showed less
+      // than exists. The DISPLAY name falls back to the ENGLISH one, the
+      // name the corpus filters on, so the label the user reads is the
+      // label that scopes the query. The locale's own translation still
+      // wins wherever there is one.
+      expect(text).toMatch(
+        /LET categoryName = categoryTranslation != null \? categoryTranslation : categoryTranslationEN/
+      );
+      expect(text).toMatch(/LET serviceName = serviceTranslation != null \? serviceTranslation : serviceTranslationEN/);
     });
 
     it('should throw on database error', async () => {
@@ -360,8 +379,23 @@ describe('ServiceCategoryService', () => {
       // — beside the entity KEY the hierarchy editor acts on. Asserting the
       // variable that carries the EN TRANSLATION (not a literal, not the
       // localized one) is what makes this fail on `nameEN: serviceTranslation`.
-      expect(text).toMatch(/name:\s*categoryTranslation,\s*nameEN:\s*categoryNameEN/);
-      expect(text).toMatch(/_key:\s*service\._key,\s*name:\s*serviceTranslation,\s*nameEN:\s*serviceNameEN/);
+      expect(text).toMatch(/name:\s*categoryName,\s*nameEN:\s*categoryNameEN/);
+      expect(text).toMatch(/_key:\s*service\._key,\s*name:\s*serviceName,\s*nameEN:\s*serviceNameEN/);
+    });
+
+    it('falls back to the EN name for the display name when the locale has none', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('done'));
+      await service.getAdminAllCategoriesWithServices('fr').catch(() => {});
+
+      const queryArg = mockDb.query.mock.calls[0][0];
+      const text = queryArg.strings.join('|');
+      // The same rule the public tree applies, so one schema describes
+      // both: the DISPLAY name is the locale's translation when there is
+      // one, the ENGLISH one otherwise. Here the English name is the one
+      // the admin projection already resolves — the translation row, or
+      // the document's cached nameEN when no row exists.
+      expect(text).toMatch(/LET categoryName = categoryTranslation != null \? categoryTranslation : categoryNameEN/);
+      expect(text).toMatch(/LET serviceName = serviceTranslation != null \? serviceTranslation : serviceNameEN/);
     });
 
     it('falls back to the entity document nameEN when no EN translation row exists', async () => {

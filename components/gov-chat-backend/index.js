@@ -123,7 +123,8 @@ const swaggerOptions = {
             name: {
               type: 'string',
               nullable: true,
-              description: 'The localized name the UI displays.'
+              description:
+                'The name the UI displays: the localized translation, or the ENGLISH one when the active locale has no translation.'
             },
             nameEN: {
               type: 'string',
@@ -137,7 +138,12 @@ const swaggerOptions = {
               items: {
                 type: 'object',
                 properties: {
-                  name: { type: 'string', nullable: true, description: 'Localized, display-only.' },
+                  name: {
+                    type: 'string',
+                    nullable: true,
+                    description:
+                      'Display name: the localized translation, or the ENGLISH one when the active locale has no translation.'
+                  },
                   nameEN: { type: 'string', nullable: true, description: 'English, the filter wire (SSOT).' }
                 }
               }

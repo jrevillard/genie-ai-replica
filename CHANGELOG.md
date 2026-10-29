@@ -191,6 +191,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A category or a service with no translation in the active language
+  disappeared from the knowledge tree.** The public tree published the
+  localized name and nothing else, so an entity nobody had translated in the
+  language of the interface arrived with a null name: the sidebar showed a
+  blank row, and the services under it were dropped from the tree altogether —
+  the tree showed less than exists. The tree now publishes a display name for
+  every entity: the translation in the active language when there is one, and
+  the English translation — the same name the corpus filters on — when there
+  is none. The English spelling the query wire speaks (`nameEN`) is
+  unchanged, and an entity with no name in any language is still not offered:
+  it cannot be scoped on. The admin tree resolves its display name the same
+  way. (#1117)
 - **The admin hierarchy panel could show an empty English name.** The detailed
   tree behind it returned only the localized name; the panel worked around
   that by fetching the tree in English and relabelling the result, so the

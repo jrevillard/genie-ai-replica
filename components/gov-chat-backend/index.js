@@ -114,7 +114,11 @@ const swaggerOptions = {
           }
         },
         // The hierarchy tree, as both public endpoints serve it. ONE
-        // definition: the wire contract must not be written twice.
+        // definition: the wire contract must not be written twice. The two
+        // trees differ in ONE field: the public tree falls back to the
+        // ENGLISH name for its display name, the admin tree does not (the
+        // admin panel keys its label map by the display name). Every
+        // description below says which tree it applies to.
         CategoryTree: {
           type: 'object',
           properties: {
@@ -124,13 +128,13 @@ const swaggerOptions = {
               type: 'string',
               nullable: true,
               description:
-                'The name the UI displays: the localized translation, or the ENGLISH one when the active locale has no translation.'
+                'The name the UI displays: the localized translation, or — on the PUBLIC tree — the ENGLISH one when the active locale has no translation.'
             },
             nameEN: {
               type: 'string',
               nullable: true,
               description:
-                "The ENGLISH translation — the SSOT every filter label is spoken in. Clients put THIS value on the query wire; the localized `name` is display-only. Falls back to the entity document's own `nameEN` for an entity with no English translation row."
+                "The ENGLISH name — the SSOT every filter label is spoken in. Clients put THIS value on the query wire; the localized `name` is display-only. It is the English translation row, or the entity document's own `nameEN` for an entity with no English translation row."
             },
             children: {
               type: 'array',
@@ -142,9 +146,14 @@ const swaggerOptions = {
                     type: 'string',
                     nullable: true,
                     description:
-                      'Display name: the localized translation, or the ENGLISH one when the active locale has no translation.'
+                      'Display name: the localized translation, or — on the PUBLIC tree — the ENGLISH one when the active locale has no translation.'
                   },
-                  nameEN: { type: 'string', nullable: true, description: 'English, the filter wire (SSOT).' }
+                  nameEN: {
+                    type: 'string',
+                    nullable: true,
+                    description:
+                      "The ENGLISH name, the filter wire (SSOT): the English translation row, or the entity document's own `nameEN` for an entity with no English translation row."
+                  }
                 }
               }
             }

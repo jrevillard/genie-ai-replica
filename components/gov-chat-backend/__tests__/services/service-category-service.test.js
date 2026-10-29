@@ -320,8 +320,12 @@ describe('ServiceCategoryService', () => {
       // name the corpus filters on, so the label the user reads is the
       // label that scopes the query. The locale's own translation still
       // wins wherever there is one.
-      expect(text).toMatch(/LET categoryName = categoryTranslation != null \? categoryTranslation : categoryNameEN/);
-      expect(text).toMatch(/LET serviceName = serviceTranslation != null \? serviceTranslation : serviceNameEN/);
+      expect(text).toMatch(
+        /LET categoryName = LENGTH\(TRIM\(categoryTranslation\)\) > 0 \? categoryTranslation : categoryNameEN/
+      );
+      expect(text).toMatch(
+        /LET serviceName = LENGTH\(TRIM\(serviceTranslation\)\) > 0 \? serviceTranslation : serviceNameEN/
+      );
     });
 
     it('falls back to the entity document nameEN when no EN translation row exists', async () => {
@@ -338,8 +342,8 @@ describe('ServiceCategoryService', () => {
       // applies, so the tree must use it too. The write path keeps the
       // document and the row in sync, so this can only fill a missing row
       // with the text the row would have carried.
-      expect(text).toMatch(/categoryTranslationEN\s*!=\s*null\s*\?\s*categoryTranslationEN\s*:\s*category\.nameEN/);
-      expect(text).toMatch(/serviceTranslationEN\s*!=\s*null\s*\?\s*serviceTranslationEN\s*:\s*service\.nameEN/);
+      expect(text).toMatch(/categoryTranslationEN\)\)\s*>\s*0\s*\?\s*categoryTranslationEN\s*:\s*category\.nameEN/);
+      expect(text).toMatch(/serviceTranslationEN\)\)\s*>\s*0\s*\?\s*serviceTranslationEN\s*:\s*service\.nameEN/);
     });
 
     it('should throw on database error', async () => {
@@ -399,19 +403,21 @@ describe('ServiceCategoryService', () => {
       expect(text).toMatch(/_key:\s*service\._key,\s*name:\s*serviceName,\s*nameEN:\s*serviceNameEN/);
     });
 
-    it('falls back to the EN name for the display name when the locale has none', async () => {
+    it('keeps the LOCALIZED name as its display name — no English fallback', async () => {
       mockDb.query.mockRejectedValueOnce(new Error('done'));
       await service.getAdminAllCategoriesWithServices('fr').catch(() => {});
 
       const queryArg = mockDb.query.mock.calls[0][0];
       const text = queryArg.strings.join('|');
-      // The same rule the public tree applies, so one schema describes
-      // both: the DISPLAY name is the locale's translation when there is
-      // one, the ENGLISH one otherwise. Here the English name is the one
-      // the admin projection already resolves — the translation row, or
-      // the document's cached nameEN when no row exists.
-      expect(text).toMatch(/LET categoryName = categoryTranslation != null \? categoryTranslation : categoryNameEN/);
-      expect(text).toMatch(/LET serviceName = serviceTranslation != null \? serviceTranslation : serviceNameEN/);
+      // The public tree falls back to the English name for an entity the
+      // locale has no translation for; the admin tree does NOT. The admin
+      // panel keys its label map by this display name — the file's labels
+      // ARE locale names — so an English fallback here would let two
+      // entities share one key and file a label under the wrong entity.
+      expect(text).toMatch(
+        /LET categoryName = LENGTH\(TRIM\(categoryTranslation\)\) > 0 \? categoryTranslation : null/
+      );
+      expect(text).toMatch(/LET serviceName = LENGTH\(TRIM\(serviceTranslation\)\) > 0 \? serviceTranslation : null/);
     });
 
     it('falls back to the entity document nameEN when no EN translation row exists', async () => {
@@ -426,8 +432,8 @@ describe('ServiceCategoryService', () => {
       // English name — the very symptom the admin panel must not show.
       // The document's cached nameEN is the fallback the corpus's own EN
       // resolution uses, so the tree must use it too.
-      expect(text).toMatch(/categoryTranslationEN\s*!=\s*null\s*\?\s*categoryTranslationEN\s*:\s*category\.nameEN/);
-      expect(text).toMatch(/serviceTranslationEN\s*!=\s*null\s*\?\s*serviceTranslationEN\s*:\s*service\.nameEN/);
+      expect(text).toMatch(/categoryTranslationEN\)\)\s*>\s*0\s*\?\s*categoryTranslationEN\s*:\s*category\.nameEN/);
+      expect(text).toMatch(/serviceTranslationEN\)\)\s*>\s*0\s*\?\s*serviceTranslationEN\s*:\s*service\.nameEN/);
     });
 
     it('should throw on database error', async () => {

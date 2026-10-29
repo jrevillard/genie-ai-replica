@@ -410,8 +410,9 @@ class ServiceCategoryService {
    * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
    * @returns {Promise<Array>} Categories with their services, each carrying
    *   the display name (`name` — the localized translation, or the ENGLISH
-   *   one when the locale has no translation) and the ENGLISH translation
-   *   (`nameEN`) the filter wire speaks.
+   *   one when the locale has no translation) and the ENGLISH name
+   *   (`nameEN` — the English translation row, or the entity document's own
+   *   `nameEN` when there is no row) the filter wire speaks.
    */
   async getAllCategoriesWithServices(locale = 'en') {
     await this.init();
@@ -462,12 +463,14 @@ class ServiceCategoryService {
         // row at all) — the same resolution the admin tree applies, and the
         // one the corpus's own EN lookup applies. The write path keeps the
         // two in sync, so the fallback can only fill a missing row with
-        // the very text the row would have carried.
-        LET categoryNameEN = categoryTranslationEN != null ? categoryTranslationEN : category.nameEN
+        // the very text the row would have carried. A BLANK row counts as
+        // no row: a blank name is the very symptom this tree must not
+        // publish.
+        LET categoryNameEN = LENGTH(TRIM(categoryTranslationEN)) > 0 ? categoryTranslationEN : category.nameEN
         // The DISPLAY name: the locale's translation when there is one, the
         // ENGLISH one otherwise. An entity with neither keeps a null name —
         // it has nothing to show and nothing to scope on.
-        LET categoryName = categoryTranslation != null ? categoryTranslation : categoryNameEN
+        LET categoryName = LENGTH(TRIM(categoryTranslation)) > 0 ? categoryTranslation : categoryNameEN
         LET services = (
           FOR edge IN categoryServices
             FILTER edge._from == category._id
@@ -490,12 +493,12 @@ class ServiceCategoryService {
                   RETURN t.translation
               )
               // The same EN resolution the category gets.
-              LET serviceNameEN = serviceTranslationEN != null ? serviceTranslationEN : service.nameEN
+              LET serviceNameEN = LENGTH(TRIM(serviceTranslationEN)) > 0 ? serviceTranslationEN : service.nameEN
               // And the same DISPLAY name: the locale's translation when
               // there is one, the ENGLISH one otherwise. A service nobody
               // translated in the active locale used to publish a null
               // name, and the clients dropped it from the tree.
-              LET serviceName = serviceTranslation != null ? serviceTranslation : serviceNameEN
+              LET serviceName = LENGTH(TRIM(serviceTranslation)) > 0 ? serviceTranslation : serviceNameEN
               SORT edge.order ASC
               RETURN { name: serviceName, nameEN: serviceNameEN }
         )
@@ -525,9 +528,10 @@ class ServiceCategoryService {
    * Get all categories with DETAILED services for the admin panel
    * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
    * @returns {Promise<Array>} Categories with detailed service objects,
-   *   each carrying the display name (`name` — the localized translation, or
-   *   the ENGLISH one when the locale has no translation) and the ENGLISH
-   *   translation (`nameEN`) the filter wire speaks
+   *   each carrying the localized display name (`name` — the admin panel
+   *   keys its label map by it) and the ENGLISH name (`nameEN` — the
+   *   English translation row, or the entity document's own `nameEN` when
+   *   there is no row) the filter wire speaks
    */
   async getAdminAllCategoriesWithServices(locale = 'en') {
     await this.init();
@@ -565,13 +569,16 @@ class ServiceCategoryService {
               // nameEN is the FALLBACK for an entity seeded outside the
               // write path (the taxonomy seed script writes the document
               // field and no translation row at all) — the same
-              // resolution the corpus's own EN lookup applies.
-              LET categoryNameEN = categoryTranslationEN != null ? categoryTranslationEN : category.nameEN
-              // The DISPLAY name, resolved like the public tree's: the
-              // locale's translation when there is one, the ENGLISH one
-              // otherwise. One schema describes both trees, so both must
-              // mean the same thing by their name field.
-              LET categoryName = categoryTranslation != null ? categoryTranslation : categoryNameEN
+              // resolution the corpus's own EN lookup applies. A BLANK
+              // row counts as no row.
+              LET categoryNameEN = LENGTH(TRIM(categoryTranslationEN)) > 0 ? categoryTranslationEN : category.nameEN
+              // The DISPLAY name is the locale's translation, and NOTHING
+              // else — the public tree falls back to the ENGLISH name, the
+              // admin tree does not. The admin panel keys its label map
+              // by this display name (the file's labels ARE locale
+              // names), so an English fallback here would let two entities
+              // share one key and file a label under the wrong entity.
+              LET categoryName = LENGTH(TRIM(categoryTranslation)) > 0 ? categoryTranslation : null
               LET services = (
                   FOR edge IN categoryServices
                       FILTER edge._from == category._id
@@ -593,8 +600,11 @@ class ServiceCategoryService {
                                   FILTER t.code == 'en'
                                   RETURN t.translation
                           )
-                          LET serviceNameEN = serviceTranslationEN != null ? serviceTranslationEN : service.nameEN
-                          LET serviceName = serviceTranslation != null ? serviceTranslation : serviceNameEN
+                          LET serviceNameEN = LENGTH(TRIM(serviceTranslationEN)) > 0 ? serviceTranslationEN : service.nameEN
+                          // The display name stays the locale's translation —
+                          // the admin panel keys its label map by it (see
+                          // the category level above).
+                          LET serviceName = LENGTH(TRIM(serviceTranslation)) > 0 ? serviceTranslation : null
                           SORT edge.order ASC
                           RETURN {
                               _key: service._key,

@@ -44,7 +44,8 @@
 #   --capture <dir>         capture the cluster-only state (active
 #                           sealed-secrets key, flux-git-auth, issuer)
 #                           into <dir> and exit — the producer of the
-#                           files the restore path consumes
+#                           files the restore path consumes; exits
+#                           non-zero naming anything it could not capture
 #   --kubernetes-version    default v1.32.0
 #   --skip-start            do NOT touch the cluster (prereqs + secret restore only)
 #
@@ -114,14 +115,14 @@ CAPTURE_DIR=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --cluster) CLUSTER="$2"; shift 2 ;;
-    --deploy-repo) DEPLOY_REPO="$2"; shift 2 ;;
-    --overlay) OVERLAY="$2"; shift 2 ;;
-    --kubernetes-version) K8S_VERSION="$2"; shift 2 ;;
-    --sealed-secrets-key) SEALED_KEYS_FILE="$2"; shift 2 ;;
-    --flux-git-auth) FLUX_GIT_AUTH_FILE="$2"; shift 2 ;;
-    --issuer) ISSUER_FILE="$2"; shift 2 ;;
-    --capture) CAPTURE_DIR="$2"; shift 2 ;;
+    --cluster) CLUSTER="${2:?--cluster requires a minikube profile name}"; shift 2 ;;
+    --deploy-repo) DEPLOY_REPO="${2:?--deploy-repo requires a path}"; shift 2 ;;
+    --overlay) OVERLAY="${2:?--overlay requires an overlay name}"; shift 2 ;;
+    --kubernetes-version) K8S_VERSION="${2:?--kubernetes-version requires a version}"; shift 2 ;;
+    --sealed-secrets-key) SEALED_KEYS_FILE="${2:?--sealed-secrets-key requires a file path}"; shift 2 ;;
+    --flux-git-auth) FLUX_GIT_AUTH_FILE="${2:?--flux-git-auth requires a file path}"; shift 2 ;;
+    --issuer) ISSUER_FILE="${2:?--issuer requires a file path}"; shift 2 ;;
+    --capture) CAPTURE_DIR="${2:?--capture requires a directory}"; shift 2 ;;
     --skip-start) SKIP_START=1; shift ;;
     # The header ends where the code starts (`set -euo pipefail`), so
     # the window derives from that marker: a hardcoded line number
@@ -142,25 +143,73 @@ done
 # (the shape apply_clean cleans; a label-selector `get -o json` would
 # emit a SecretList whose items keep their resourceVersion and be
 # rejected on the apply-create), the flux-git-auth Secret and the
-# selfsigned issuer. It fails LOUDLY when the active key is missing: an
-# empty capture is the silent path to a keyless cluster. This block is
-# the producer; the runbook's step 1 is just this invocation, so the
-# filename and file-shape contract has one owner.
+# selfsigned issuer. This block is the producer; the runbook's step 1
+# is just this invocation, so the filename and file-shape contract has
+# one owner.
+#
+# It fails LOUDLY, at the END, naming anything it could not capture:
+# dying on the first miss would abort before the artifacts it could
+# still save, and an exit 0 over a miss is the silent path to
+# `minikube delete` destroying an unrecoverable PAT. Each file is
+# written to a temp name and moved into place only on success, so a
+# failed capture leaves no zero-byte file for the restore path's
+# `[ -f ]` checks to accept. The active key must be EXACTLY one and
+# must carry its material: a green capture of the wrong key or of a
+# hollow one is the keyless catastrophe by another road.
 if [ -n "$CAPTURE_DIR" ]; then
   mkdir -p "$CAPTURE_DIR"
+  # Everything captured here is cluster-private (the sealed-secrets
+  # PRIVATE key, the Flux GitLab PAT): owner-only, regardless of the
+  # caller's umask.
+  chmod 700 "$CAPTURE_DIR"
+  umask 077
   log "capturing the cluster-only state into $CAPTURE_DIR"
-  ACTIVE_KEY=$(kubectl -n sealed-secrets get secret \
-    -l sealedsecrets.bitnami.com/sealed-secrets-key=active \
-    -o jsonpath='{.items[0].metadata.name}')
-  [ -n "$ACTIVE_KEY" ] || die "no active sealed-secrets key in namespace sealed-secrets — is the controller running and the kubecontext the right one?"
-  kubectl -n sealed-secrets get secret "$ACTIVE_KEY" -o json \
-    > "$CAPTURE_DIR/sealed-secrets-key-active.json"
-  kubectl -n flux-system get secret flux-git-auth -o json \
-    > "$CAPTURE_DIR/flux-git-auth.json" 2>/dev/null \
-    || log "WARN: flux-git-auth not found in flux-system (skipped)"
-  kubectl get clusterissuer selfsigned -o yaml \
-    > "$CAPTURE_DIR/selfsigned-issuer.yaml" 2>/dev/null \
-    || log "WARN: selfsigned ClusterIssuer not found (skipped)"
+  failures=""
+
+  # 1. the active sealed-secrets key
+  if KEY_NAMES=$(kubectl -n sealed-secrets get secret \
+      -l sealedsecrets.bitnami.com/sealed-secrets-key=active \
+      -o jsonpath='{.items[*].metadata.name}'); then
+    KEY_COUNT=$(set -- $KEY_NAMES; echo $#)
+    if [ "$KEY_COUNT" -eq 1 ]; then
+      TMP="$CAPTURE_DIR/.sealed-secrets-key.tmp"
+      if kubectl -n sealed-secrets get secret "$KEY_NAMES" -o json > "$TMP" \
+         && python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d.get("data",{}).get("tls.key") and d.get("data",{}).get("tls.crt") else 1)' "$TMP"; then
+        mv "$TMP" "$CAPTURE_DIR/sealed-secrets-key-active.json"
+      else
+        rm -f "$TMP"
+        failures+="sealed-secrets key '$KEY_NAMES' is labeled active but carries no tls.key/tls.crt data; "
+      fi
+    elif [ "$KEY_COUNT" -eq 0 ]; then
+      failures+="no sealed-secrets key carries the active label (is the controller running and the kubecontext the right one?); "
+    else
+      failures+="$KEY_COUNT secrets carry the active label ($KEY_NAMES) — the capture cannot tell which one the committed SealedSecrets are sealed with; "
+    fi
+  else
+    failures+="the sealed-secrets key query failed (is the controller running and the kubecontext the right one?); "
+  fi
+
+  # 2. the Flux GitLab PAT — unrecoverable once the cluster is gone
+  TMP="$CAPTURE_DIR/.flux-git-auth.tmp"
+  if kubectl -n flux-system get secret flux-git-auth -o json > "$TMP"; then
+    mv "$TMP" "$CAPTURE_DIR/flux-git-auth.json"
+  else
+    rm -f "$TMP"
+    failures+="flux-git-auth not found in flux-system (the GitLab PAT is unrecoverable once the cluster is deleted); "
+  fi
+
+  # 3. the selfsigned ClusterIssuer
+  TMP="$CAPTURE_DIR/.selfsigned-issuer.tmp"
+  if kubectl get clusterissuer selfsigned -o yaml > "$TMP"; then
+    mv "$TMP" "$CAPTURE_DIR/selfsigned-issuer.yaml"
+  else
+    rm -f "$TMP"
+    failures+="selfsigned ClusterIssuer not found; "
+  fi
+
+  if [ -n "$failures" ]; then
+    die "capture incomplete — do NOT delete the cluster until this is resolved: ${failures%; }"
+  fi
   log "captured: sealed-secrets-key-active.json, flux-git-auth.json, selfsigned-issuer.yaml"
   log "rotation caveat: SealedSecrets sealed with a rotated-out key must be re-sealed (kubeseal --re-encrypt) BEFORE this cluster is deleted — the restore cannot revive a rotated-out key"
   exit 0

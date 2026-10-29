@@ -331,7 +331,7 @@ describe('connection test (before enabling)', () => {
       api_key: 'kt',
       model: 'gpt-x'
     });
-    expect(r).toMatchObject({ ok: true, endpoint_ok: true, model_listed: null, generation_ok: true, models_n: null });
+    expect(r).toMatchObject({ ok: true, endpoint_ok: true, generation_ok: true });
     expect(typeof r.latency_ms).toBe('number');
     expect(global.fetch).not.toHaveBeenCalled();
     expect(axios.post).toHaveBeenCalledTimes(1);

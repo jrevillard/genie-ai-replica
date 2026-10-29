@@ -30,10 +30,6 @@ jest.mock('../services/audit-service', () => ({
 // relative order, which two separate spies cannot express.
 const order = [];
 jest.mock('../services/backing-file-service', () => ({
-  markRetracted: jest.fn(async (repo_id) => {
-    order.push('markRetracted');
-    return { repo_id, marked: [], failed: [], total: 0 };
-  }),
   // Retract's split rule (David, 2026-10-12): bundles hard-deleted, sources
   // only marked Retracted. See backing-file-service.test.js for the per-kind
   // behaviour — this suite only asserts the hook is wired.
@@ -138,7 +134,7 @@ describe('delete cascade wires backingFileService.hardDelete', () => {
       ingested_at: new Date().toISOString(),
       ingested_version: 3
     });
-    backingFileService.markRetracted.mockRejectedValueOnce(new Error('doc-repo unreachable'));
+    backingFileService.retractBackingFiles.mockRejectedValueOnce(new Error('doc-repo unreachable'));
     const res = await lifecycleService.transition(REPO, 'retract', ACTOR);
     expect(res.ok).toBe(true);
     expect(res.lifecycle_state).toBe('retracted');

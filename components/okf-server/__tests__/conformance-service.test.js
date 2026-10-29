@@ -146,25 +146,11 @@ describe('conformance-service — persistConformanceIssues (DB)', () => {
 describe('conformance-service — getRepoMetrics (DB)', () => {
   beforeEach(() => db._reset());
 
-  test('returns metrics from AQL query result', async () => {
-    db.query.mockResolvedValue({
-      all: async () => [
-        {
-          concept_count: 5,
-          conformance_issue_count: 3,
-          stale_concept_count: 1,
-          has_reserved_index: true,
-          pii_hit_count: 2
-        }
-      ]
-    });
-    const metrics = await getRepoMetrics('r1');
-    expect(metrics.concept_count).toBe(5);
-    expect(metrics.conformance_issue_count).toBe(3);
-    expect(metrics.stale_concept_count).toBe(1);
-    expect(metrics.has_reserved_index).toBe(true);
-    expect(metrics.pii_hit_count).toBe(2);
-  });
+  // NOTE: there is deliberately NO mock-echo test here — a fixture supplying
+  // the five metric values with assertions reading them back proves only
+  // rows[0] passthrough and cannot detect a wrong query, discriminator, or a
+  // hardcoded metric. The AQL-text specs below own the real contract (the
+  // identical echo was also removed from concept-meta-service.test.js).
 
   // The mock above supplies the answer, so it CANNOT catch a hardcoded metric —
   // which is exactly how pii_hit_count stayed literally 0 while Bali reported

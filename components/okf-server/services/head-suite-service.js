@@ -50,6 +50,7 @@
 'use strict';
 
 const { logger } = require('../shared-lib/logger');
+const { isArangoNotFound } = require('./arango-errors');
 const { withSpan } = require('../shared-lib/tracing');
 const { createHash } = require('node:crypto');
 const dbService = require('../shared-lib/db-connection-service');
@@ -444,7 +445,7 @@ function loadSuiteDoc(db, repoId, suiteKey) {
     .collection(HEAD_TEST_RUNS_COLLECTION)
     .document(suiteKey)
     .catch((e) => {
-      if (e && (e.code === 404 || e.statusCode === 404 || /not found/i.test(e.message || ''))) {
+      if (isArangoNotFound(e)) {
         const err = new Error(`suite ${suiteKey} not found for repo ${repoId}`);
         err.code = 'SUITE_NOT_FOUND';
         err.status = 404;

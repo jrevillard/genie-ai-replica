@@ -892,8 +892,7 @@ async function patchConceptMeta(repo_id, concept_id, parsed) {
   try {
     repoDoc = await db.collection('okf_repositories').document(repo_id);
   } catch (err) {
-    const nf = err && (err.code === 404 || err.errorNum === 1204 || err.statusCode === 404);
-    if (!nf) throw err;
+    if (!isArangoNotFound(err)) throw err;
   }
   if (repoDoc) {
     const { composeIngestLabels } = require('./ingest-service');

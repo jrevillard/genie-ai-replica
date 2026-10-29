@@ -47,6 +47,7 @@
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
+const { isArangoNotFound } = require('./arango-errors');
 const { DateTime } = require('luxon');
 const auditService = require('./audit-service');
 const versionService = require('./version-service');
@@ -220,7 +221,7 @@ async function loadRepo(db, repoId) {
   try {
     repo = await db.collection(REPOS).document(repoId);
   } catch (err) {
-    if (!(err && (err.code === 404 || err.errorNum === 1204 || err.statusCode === 404))) throw err;
+    if (!isArangoNotFound(err)) throw err;
   }
   if (!repo || repo.deleted_at) {
     throw new LifecycleError('REPO_NOT_FOUND', `Repository ${repoId} not found`, 404);

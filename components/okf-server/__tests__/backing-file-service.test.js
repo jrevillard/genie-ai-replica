@@ -102,10 +102,8 @@ beforeEach(() => {
   programQueries();
 });
 
-describe('backing-file-service.markRetracted — defect A (retract marked ONE bundle)', () => {
-  test('marks ALL bundles Retracted, not just items[0] of a limit=1 fetch', async () => {
-    // Four published versions -> four bundles (WS3: they live forever). This is
-    // the exact Bali shape: v17..v20, only the first ever marked Retracted.
+describe('backing-file-service.retractBackingFiles — the retract split (defect A)', () => {
+  test('deletes ALL regenerable bundles (the Bali shape: v17..v20, not just items[0])', async () => {
     for (const v of [17, 18, 19, 20]) {
       seedFile({
         file_id: `bali-v${v}`,
@@ -113,55 +111,53 @@ describe('backing-file-service.markRetracted — defect A (retract marked ONE bu
         repo_id: REPO,
         is_bundle: true,
         bundle_version: v,
-        dataprep: { status: v === 17 ? 'Retracted' : 'Ingested' }
+        dataprep: { status: 'Ingested' }
       });
     }
-    const result = await service.markRetracted(REPO, { reason: 'repository retracted' });
-    // v17 was already Retracted -> skipped, preserving its original retract_date.
+    const result = await service.retractBackingFiles(REPO, { reason: 'repository retracted' });
     expect(result.total).toBe(4);
-    expect(result.marked.sort()).toEqual(['bali-v18', 'bali-v19', 'bali-v20']);
-    const patched = authedAxios.patch.mock.calls.map((c) => c[0]);
-    expect(patched).toHaveLength(3);
-    expect(patched.some((u) => u.includes('bali-v18'))).toBe(true);
-    expect(patched.some((u) => u.includes('bali-v20'))).toBe(true);
+    expect(result.deleted_bundles.sort()).toEqual(['bali-v17', 'bali-v18', 'bali-v19', 'bali-v20']);
+    expect(result.marked_sources).toEqual([]);
+    const deleted = authedAxios.delete.mock.calls.map((c) => c[0]);
+    expect(deleted).toHaveLength(4);
+    expect(deleted.every((u) => u.includes('/api/files/'))).toBe(true);
   });
 
-  test('every patch asserts the Retracted status + a retract_date (the badge must stop lying)', async () => {
+  test('marks SOURCE documents Retracted with a retract_date — never deleted (the steward uploads survive the edit state)', async () => {
+    seedFile({ file_id: 's1', file_name: 'doc.md', okf_repo_id: REPO, dataprep: { status: 'Ingested' } });
     seedFile({ file_id: 'b1', file_name: 'b.zip', repo_id: REPO, is_bundle: true, dataprep: { status: 'Ingested' } });
-    await service.markRetracted(REPO);
-    const body = authedAxios.patch.mock.calls[0][1];
-    expect(body.dataprep.status).toBe('Retracted');
-    expect(typeof body.dataprep.retract_date).toBe('string');
-    expect(body.dataprep.retract_date).toBeTruthy();
+    const result = await service.retractBackingFiles(REPO);
+    expect(result.marked_sources).toEqual(['s1']);
+    expect(result.deleted_bundles).toEqual(['b1']);
+    const patchBody = authedAxios.patch.mock.calls[0][1];
+    expect(patchBody.dataprep.status).toBe('Retracted');
+    expect(typeof patchBody.dataprep.retract_date).toBe('string');
+    expect(authedAxios.delete.mock.calls.some((c) => c[0].includes('s1'))).toBe(false);
   });
 
-  test('does NOT re-stamp an already-Retracted file (its retract_date is the audit trail)', async () => {
-    seedFile({ file_id: 'b1', file_name: 'b.zip', repo_id: REPO, is_bundle: true, dataprep: { status: 'Retracted' } });
-    const result = await service.markRetracted(REPO);
-    expect(result.marked).toEqual([]);
+  test('does NOT re-stamp an already-Retracted source (its retract_date is the audit trail)', async () => {
+    seedFile({ file_id: 's1', file_name: 'doc.md', okf_repo_id: REPO, dataprep: { status: 'Retracted' } });
+    const result = await service.retractBackingFiles(REPO);
+    expect(result.marked_sources).toEqual([]);
     expect(authedAxios.patch).not.toHaveBeenCalled();
   });
 
-  test('marks SOURCE documents too (they are badged Ingested just the same)', async () => {
-    seedFile({ file_id: 's1', file_name: 'doc.md', okf_repo_id: REPO, dataprep: { status: 'Ingested' } });
-    seedFile({ file_id: 'b1', file_name: 'b.zip', repo_id: REPO, is_bundle: true, dataprep: { status: 'Ingested' } });
-    const result = await service.markRetracted(REPO);
-    expect(result.marked.sort()).toEqual(['b1', 's1']);
-  });
-
   test('a doc-repo failure on one file never aborts the rest (best-effort, non-fatal)', async () => {
+    seedFile({ file_id: 's1', file_name: 'doc.md', okf_repo_id: REPO, dataprep: { status: 'Ingested' } });
     seedFile({ file_id: 'b1', file_name: 'b.zip', repo_id: REPO, is_bundle: true, dataprep: { status: 'Ingested' } });
     seedFile({ file_id: 'b2', file_name: 'b.zip', repo_id: REPO, is_bundle: true, dataprep: { status: 'Ingested' } });
     authedAxios.patch.mockRejectedValueOnce(new Error('doc-repo 503'));
-    const result = await service.markRetracted(REPO);
-    expect(result.marked).toEqual(['b2']);
-    expect(result.failed).toEqual([expect.objectContaining({ file_id: 'b1' })]);
-  });
-
-  test('retract NEVER hard-deletes — a retracted repo is the edit state and can come back', async () => {
-    seedFile({ file_id: 's1', file_name: 'doc.md', okf_repo_id: REPO, dataprep: { status: 'Ingested' } });
-    await service.markRetracted(REPO);
-    expect(authedAxios.delete).not.toHaveBeenCalled();
+    authedAxios.delete.mockRejectedValueOnce(new Error('doc-repo 503'));
+    const result = await service.retractBackingFiles(REPO);
+    expect(result.marked_sources).toEqual([]); // s1's patch failed
+    expect(result.deleted_bundles).toEqual(['b2']); // the rest still ran
+    expect(result.failed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ file_id: 's1', kind: 'source' }),
+        expect.objectContaining({ file_id: 'b1', kind: 'bundle' })
+      ])
+    );
+    expect(result.failed).toHaveLength(2);
   });
 });
 

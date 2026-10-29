@@ -1001,6 +1001,10 @@ services:
     # OKF feature flag: parked with the okf-server (see okf-server block).
     profiles: ["okf"]
     logging: *fluent-logging
+    # Harden: no privilege escalation from the container — the file's
+    # convention (kics Security Opt Not Set).
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
     environment:
       # Shared secret with okf-server (fail-closed when unset). Defaults to

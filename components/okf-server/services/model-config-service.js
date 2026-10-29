@@ -20,6 +20,7 @@
 
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
+const { isArangoNotFound } = require('./arango-errors');
 const { withSpan } = require('../shared-lib/tracing');
 const auditService = require('./audit-service');
 
@@ -217,7 +218,7 @@ async function loadDoc(db, key) {
     .collection(COLLECTION)
     .document(key)
     .catch((e) => {
-      if (e && (e.code === 404 || e.statusCode === 404 || /not found/i.test(e.message || ''))) return null;
+      if (isArangoNotFound(e)) return null;
       throw e;
     });
   if (!doc) throw httpErr('MODEL_CONFIG_NOT_FOUND', 404, `model configuration ${key} not found`);
@@ -553,9 +554,7 @@ async function testConnection(payload = {}) {
       return {
         ok: false,
         endpoint_ok: null,
-        models_n: null,
         model: null,
-        model_listed: null,
         generation_ok: null,
         latency_ms: 0,
         error: 'no model to test — type or pick a model first'
@@ -568,9 +567,7 @@ async function testConnection(payload = {}) {
       // A real HTTP answer (even 401/404) proves the endpoint was REACHED —
       // only transport failures mean "could not reach".
       endpoint_ok: ping.ok || !/could not reach/.test(ping.error || ''),
-      models_n: null,
       model,
-      model_listed: null,
       generation_ok: ping.ok,
       latency_ms: Date.now() - t0
     };

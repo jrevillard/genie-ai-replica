@@ -38,6 +38,7 @@
 'use strict';
 
 const { logger } = require('../shared-lib/logger');
+const { isArangoNotFound } = require('./arango-errors');
 const { withSpan } = require('../shared-lib/tracing');
 const { createHash } = require('node:crypto');
 const dbService = require('../shared-lib/db-connection-service');
@@ -1039,7 +1040,7 @@ function loadDoc(db, key, code, what) {
     .collection(COLLECTION)
     .document(key)
     .catch((e) => {
-      if (e && (e.code === 404 || e.statusCode === 404 || /not found/i.test(e.message || ''))) {
+      if (isArangoNotFound(e)) {
         // `what` already names the key (every call site passes it), so the
         // key is NOT appended again — the old message read "run rrX for suite
         // rsY rrX not found" (David saw it in the console, 2026-10-25).

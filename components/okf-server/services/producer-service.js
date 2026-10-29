@@ -23,6 +23,7 @@ const config = require('../config');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const { authedAxios } = require('./service-token');
+const { isArangoNotFound } = require('./arango-errors');
 const { ingestRepoConcepts } = require('./ingest-service');
 const { withSpan } = require('../shared-lib/tracing');
 const crawlConversion = require('./crawl-conversion-service');
@@ -456,7 +457,7 @@ async function runDocumentsConversion(job) {
     try {
       repo = await db.collection(COLLECTION).document(repo_id);
     } catch (err) {
-      if (!(err && (err.code === 404 || err.errorNum === 1204 || err.statusCode === 404))) throw err;
+      if (!isArangoNotFound(err)) throw err;
     }
     if (!repo || repo.deleted_at) {
       const e = new Error('repository ' + repo_id + ' was deleted mid-conversion — terminating the import');

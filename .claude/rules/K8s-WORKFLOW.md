@@ -288,14 +288,17 @@ Special case — `vllm-api-key` carries **two** keys:
 ## Live validation set
 
 The end-to-end test that proves the stack works. Per cycle, run all six
-(last full pass: 0.2.32, 2026-10-18):
+(last full pass: **0.2.130, 2026-10-29**, on the rebuilt 12 GiB node —
+all six green; previous full pass was 0.2.32, 2026-10-18):
 
 1. `/api/health` returns 200 through the edge: `kubectl -n genieai
-   port-forward svc/envoy-genieai-genieai-<hash> 4443:443` →
+   port-forward svc/envoy-genieai-genieai-<hash> 4443:4443` (the Service
+   port is 4443, not 443) →
    `curl -sk -H "Host: genieai.local" https://localhost:4443/api/health`.
 2. Login page carries the genie theme — fetch the realm login form (PKCE
    challenge needed) and grep for `login/genie/css/genie.css`; theme
    delivery = ConfigMap tgz + initContainer (regen: `make keycloak-theme`).
+   Keycloak 26.x serves the form with HTTP 200 at the auth URL itself.
 3. Register link present on the login page (realm `registrationAllowed`).
 4. Chat stream in French — send a question with UI lang `fr`, confirm the
    streamed response arrives in French in real time (validates streaming
@@ -303,9 +306,30 @@ The end-to-end test that proves the stack works. Per cycle, run all six
 5. Document upload → ClamAV scan → dataprep ingestion — upload via
    `POST /api/files/upload` (EN-only content) then trigger
    `POST /api/files/<id>/ingest`; watch dataprep status go `Ingested`.
+   **The file must be `.md`/`.pdf`/`.docx`** — docling rejects `.txt`
+   with `File format not allowed` and the ingest fails at chunking.
+   Upload requires the `Admin` role (use `genie-admin`).
 6. RAG answer with citations — ask a question whose answer is in the
    just-ingested file; confirm the answer is correct AND `source_documents`
    cites the file.
+
+Known caveats from the 0.2.130 pass:
+
+- **The chatqna tokenizer is NOT available offline** (main-side defect):
+  `align_inputs` calls `AutoTokenizer.from_pretrained(LLM_MODEL)` at
+  request time, the image bakes no HF cache, and the chatqna
+  NetworkPolicy has no egress to huggingface.co — so a fresh pod
+  cannot serve ANY chat. The 0.2.130 pass worked because the tokenizer
+  files were injected by hand into the running pod
+  (`~/.cache/huggingface/hub/models--ibm-granite--granite-4.1-8b/`,
+  snapshot + `refs/main`); a pod restart loses them. The proper fix is
+  a main-side MR baking the tokenizer into the chatqna image
+  (HF_HUB_OFFLINE=1 + cache = deterministic, no egress needed).
+- **First-boot ordering**: on a cold cluster the dataprep (and any OPEA
+  service) crashes once with a collector `ConnectionError` when its OTLP
+  exporter fires before the collector pod pulled its image. The
+  kubelet restart absorbs it — no action needed, but expect one Error
+  pod in the first minutes.
 
 ## Local image iteration (laptop-build, primary use case)
 

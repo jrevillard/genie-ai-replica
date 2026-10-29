@@ -1,3 +1,4 @@
+{{- $assets := index .Subcharts "genieai-assets" -}}
 {{- $data := .Values.data | default dict -}}
 {{- $kc := $data.keycloak | default dict -}}
 {{- if $kc.enabled -}}
@@ -19,5 +20,5 @@ metadata:
 binaryData:
   # `required` turns a missing tarball into a render-time failure instead
   # of an empty ConfigMap and a theme-less Keycloak.
-  keycloak-themes.tgz: {{ .Files.Get $tgz | b64enc | required (printf "missing %s in the chart — run `make keycloak-theme` and commit the tarball" $tgz) }}
+  keycloak-themes.tgz: {{ $assets.Files.Get $tgz | b64enc | required (printf "missing %s in the chart — run `make keycloak-theme` and commit the tarball" $tgz) }}
 {{- end -}}

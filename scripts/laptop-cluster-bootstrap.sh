@@ -32,7 +32,7 @@
 # Usage
 # -----
 #   ./scripts/laptop-cluster-bootstrap.sh \
-#     --sealed-secrets-key ~/.genieai-sealed-secrets/sealed-secrets-key.json \
+#     --sealed-secrets-key ~/.genieai-sealed-secrets/sealed-secrets-key-active.json \
 #     --flux-git-auth   ~/.genieai-sealed-secrets/flux-git-auth.json \
 #     --issuer          ~/.genieai-sealed-secrets/selfsigned-issuer.yaml
 #

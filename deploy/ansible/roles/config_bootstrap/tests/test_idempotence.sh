@@ -630,7 +630,11 @@ else
         fail "the refusal came from somewhere else"
     fi
     rm -f "$CONTRACT3_LOG"
-    if [ "$MANIFEST_BEFORE_GUARD" != "$(manifest)" ]; then
+    # Outside the if: a snapshot that cannot be read must fail loudly as a
+    # broken channel, not turn into an empty string that compares unequal and
+    # blames the guards.
+    MANIFEST_AFTER_GUARD="$(manifest)"
+    if [ "$MANIFEST_BEFORE_GUARD" != "$MANIFEST_AFTER_GUARD" ]; then
         fail "the refused deployment changed the host - the guards must run before anything is mirrored"
     fi
     pass "the refused deployment left the host untouched"

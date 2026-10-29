@@ -415,11 +415,14 @@
         that:
           - config_bootstrap_branch_file_valid | bool
         fail_msg: >-
-          The branch ({{ repo_branch }}) ships a brand file that is not valid
-          JSON ({{ config_bootstrap_brand_pairs.0.brand_file }}). The parse
-          error is: {{ config_bootstrap_branch_title_cmd.stderr | default('') | trim }}.
-          The frontend refuses to start on a file it cannot parse, so the
-          deploy stops here.
+          The branch ({{ repo_branch }}) ships a brand file that could not be
+          read ({{ config_bootstrap_brand_pairs.0.brand_file }}): exit code
+          {{ config_bootstrap_branch_title_cmd.rc | default('?') }}{% if config_bootstrap_branch_title_cmd.stderr | default('') | trim %},
+          error: {{ config_bootstrap_branch_title_cmd.stderr | trim }}{% endif %}{% if config_bootstrap_branch_title_cmd.msg is defined and config_bootstrap_branch_title_cmd.msg %},
+          module message: {{ config_bootstrap_branch_title_cmd.msg }}{% endif %}.
+          Usually the file is not valid JSON and the frontend would refuse to
+          start on it; an empty error with a nonzero exit names the reader
+          itself, not the file.
         success_msg: "config_bootstrap: the branch's brand file parses"
 
     # The HOST's brand file is the copy the mirror is about to replace: a
@@ -655,7 +658,9 @@
           - config_bootstrap_dir_scan.stdout_lines | length == 0
         fail_msg: >-
           Directories under {{ config_dir }} deny read or traverse to others
-          (the containers read the mount as a non-root user):
+          (this deployment reads the mount as a non-root user via the
+          others bits — the compose files configure no group mapping, so a
+          0750-with-group setup is not supported here):
           {{ config_bootstrap_dir_scan.stdout_lines | join(', ') }}. A path
           carried by the branch is fixed in the repository; a path changed on
           the host after a deploy is repaired by the next run — check what

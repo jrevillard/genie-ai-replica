@@ -153,50 +153,16 @@ _bmad/render/
 _bmad-output/implementation-artifacts/orchestrate-runs/
 _bmad-output/implementation-artifacts/bmad-build-auto-result-*.md
 
-# CI-mirrored openapi-generator install (config:api-client before_script)
-.openapi-tools/
-
 # Legacy file-mode log artefacts (T8 deleted the code path)
 components/gov-chat-backend/logs/
 
 # Core dumps from test runs (pytest, bench, etc.)
 core.*
 
-# Local Python virtualenvs (genie-ai-overlay dev)
-genie-ai-overlay/.venv/
-genie-ai-overlay/.venv-linux/
+# Captured sealed-secrets PRIVATE keys (laptop-cluster-bootstrap runbook)
+sealed-secrets-key*.json
 
-# BMAD per-story worktrees (local checkouts)
-_bmad-worktrees/
-
-# Claude session temp state
-.claude/tmp/
-
-# Bash crash dumps
-bash.exe.stackdump
-
-# OKF smoke tokens (host-side mint output — never commit)
-okf-smoke-tokens.json
-
-# Story 8-6 smoke exports (host-side xlsx output — never commit)
-smoke-*.xlsx
-
-# Agent scratch space (never commit)
-# Throwaway diagnostic scripts, AQL probes, and GitLab draft bodies written
-# while investigating. Regenerable — nothing here is a source of truth.
-.scratch-pii/
-/.claude/dora.json
-/_count_suites.cjs
-/_probe_*.py
-/_q_*.json
-/_suite_backup_*.json
-/_msg-*.txt
-
-# Deployment-local ops scripts (David): cloud deploy/ssh/log helpers live on
-# each operator's machine — never commit them. Untracked per David, 2026-11-02.
-/check-logs.sh
-/deploy-cloud.sh
-/deploy-cloud-frontend.sh
-/redeploy-cloud-full.sh
-/redeploy-stack.sh
-/ssh-cloud.sh
+# Captured sealed-secrets PRIVATE keys (laptop-cluster-bootstrap runbook)
+sealed-secrets-key*.json
+# Captured Flux GitLab PAT — same --capture mode, same one-git-add-A hazard
+flux-git-auth.json

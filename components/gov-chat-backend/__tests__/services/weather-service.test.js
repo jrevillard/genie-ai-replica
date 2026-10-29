@@ -373,27 +373,21 @@ describe('WeatherService', () => {
       }
     });
 
-    it('should record analytics when analyticsService is set', async () => {
+    it('does NOT call weather analytics — recordWeatherRequest has no shipped implementation', async () => {
+      // The old tests asserted a call into this.analyticsService
+      // .recordWeatherRequest — a method that exists only in an unmerged
+      // May-2026 side-branch; the shipped AnalyticsService never had it, so
+      // the block threw per request (old guard) or was skipped silently
+      // (requestId guard). The dead call is removed (review 2026-10-29);
+      // this pins the removal so it cannot come back by accident.
       const mockAnalytics = { recordWeatherRequest: jest.fn().mockResolvedValue({}) };
       service.setAnalyticsService(mockAnalytics);
       axios.get.mockResolvedValueOnce(openMeteoResponse);
 
-      await service.getWeather({ latitude: 13.7942, longitude: -88.8965, userId: 'user-1' });
-
-      expect(mockAnalytics.recordWeatherRequest).toHaveBeenCalledWith(
-        expect.objectContaining({ _key: 'wr-1', userId: 'user-1', city: 'San Salvador, SV' })
-      );
-    });
-
-    it('should handle analytics recording failure gracefully', async () => {
-      const mockAnalytics = { recordWeatherRequest: jest.fn().mockRejectedValue(new Error('Analytics down')) };
-      service.setAnalyticsService(mockAnalytics);
-      axios.get.mockResolvedValueOnce(openMeteoResponse);
-
-      const result = await service.getWeather({ latitude: 13.7942, longitude: -88.8965 });
+      const result = await service.getWeather({ latitude: 13.7942, longitude: -88.8965, userId: 'user-1' });
 
       expect(result).toBeDefined();
-      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('record_analytics_failed'), expect.any(Object));
+      expect(mockAnalytics.recordWeatherRequest).not.toHaveBeenCalled();
     });
 
     it('should throw a typed 503 CITY_NOT_FOUND when no city is within the lookup radius', async () => {

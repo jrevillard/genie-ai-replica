@@ -1870,14 +1870,24 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             return
 
         ctx = _INGEST_CTX.get()
-        current_repo = (ctx or {}).get("repo_id") or getattr(self, "_current_repo_id", None)
+        # Request-local context WINS when bound: falling back to the shared
+        # mutable attribute from a bound context let a concurrent OKF ingest's
+        # repo_id leak into a legacy ingest's completion routing
+        # (DATAPREP_INGEST_CONCURRENCY > 1 — review 2026-10-29).
+        if ctx is not None:
+            current_repo = ctx.get("repo_id")
+            okf_graph_hint = False
+        else:
+            current_repo = getattr(self, "_current_repo_id", None)
+            okf_graph_hint = getattr(self, "_current_okf_graph_hint", False)
         # 2026-10-10 (live, 6× ERROR during the Slaugherhouse ingest): a call
         # site that lost concept_id still carried a CONCEPT id as file_id —
         # the fallthrough PATCHed doc-repo, which rightly has no metadata for
         # concept ids ("Metadata not found"), poisoning every log sweep. An
-        # OKF ingest (ctx has repo_id) routes to the OKF control plane EVEN
-        # when concept_id is missing — the endpoint resolves by file_id.
-        is_okf_job = bool(concept_id or current_repo)
+        # OKF ingest (ctx has repo_id, or the input carried an OKF_ graph)
+        # routes to the OKF control plane EVEN when concept_id is missing —
+        # the endpoint resolves by file_id.
+        is_okf_job = bool(concept_id or current_repo or okf_graph_hint)
         if is_okf_job:
             # Story 4.8-amend: OKF concept completion → okf-server concept-status
             # endpoint (the control plane that owns index_status + edges).
@@ -3779,17 +3789,21 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         self._current_input = input
         # The caller's EXPLICIT repo_id is the identity channel (David,
         # 2026-08-31): born-right graph names encode repo NAME+VERSION, not the
-        # repo_id — a graph name is a name, not an identity field. The old
-        # graph-name parse survives ONLY as the fallback for legacy in-flight
-        # jobs sent before the explicit field existed.
+        # repo_id — a graph name is a name, not an identity field. A graph
+        # whose name carries the OKF_ prefix is a ROUTING MARKER only (the
+        # completion callback belongs to the OKF control plane); it must never
+        # be mistaken for a repo id — the old graph-name-suffix parse produced
+        # `kenya-gov_v3`-shaped repo ids that misrouted completion callbacks
+        # and left files stuck Ingesting (review 2026-10-29, JR dataprep
+        # fallback finding).
         self._current_repo_id = getattr(input, "repo_id", None)
+        self._current_okf_graph_hint = False
         if not self._current_repo_id:
             try:
                 graph_name = input.graph_name or ""
             except AttributeError:
                 graph_name = ""
-            if graph_name.startswith("OKF_") and len(graph_name) > 4:
-                self._current_repo_id = graph_name[4:]
+            self._current_okf_graph_hint = graph_name.startswith("OKF_")
         # The bundle-id cache is keyed by concept_id, but concept ids RECUR
         # across runs/repos ('index', 'service_directory', ...). A cache hit
         # from a previous ingest would mirror this run's logs into the
@@ -3797,6 +3811,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # the lookup is one cheap GET per concept (live-caught 2026-08-21:
         # a whole run's 25 stage logs landed on the prior run's bundle id).
         self._bundle_file_id_cache = {}
+        # Same recurrence reasoning, same per-ingest invalidation: concept
+        # ids recur across runs, so a name cached for concept 'index' in a
+        # previous ingest would surface the PREVIOUS repo's filename here.
+        # The request-local _INGEST_CTX['name_cache'] covers the production
+        # path; this singleton-wide map is a legacy fallback and must not
+        # grow one permanent entry per concept ever ingested.
+        self._concept_file_name_cache = {}
         # Cache the concept's filename eagerly so the per-stage log prefix
         # is populated without an extra lookup.
         concept_id = getattr(input, "concept_id", None)

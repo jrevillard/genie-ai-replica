@@ -107,6 +107,15 @@ function mapRole(roles) {
   if (roles.includes('okf-service')) {
     return 'okf-service';
   }
+  // tools-admin super-role (fileRoutes authorizeRole lists it): same verbatim
+  // mapping rule — a tools-admin USER token's realm roles are typically
+  // ['default-roles-genie', 'offline_access', 'uma_authorization',
+  // 'tools-admin'], so without this the scalar falls through to
+  // 'Default-roles-genie' and every tools-admin grant is dead for most tokens
+  // (review 2026-10-29).
+  if (roles.includes('tools-admin')) {
+    return 'tools-admin';
+  }
   return roles[0].charAt(0).toUpperCase() + roles[0].slice(1);
 }
 

@@ -1309,6 +1309,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         query: str,
         start_time: float,
         span,
+        legacy_unbounded: bool = False,
     ) -> list:
         """Run the full extraction body (vector search → BM25 hybrid →
         traversal → final response assembly) against a SPECIFIC graph.
@@ -1735,12 +1736,22 @@ class GenieaiArangoRetriever(OpeaComponent):
                 #       overrun CONTINUES without enrichment instead of
                 #       poisoning the leg.
                 keys = [r["doc"].id for r in search_res]
-                elapsed_s = time.time() - start_time
-                budget_s = FANOUT_PER_GRAPH_TIMEOUT_MS / 1000.0 - elapsed_s - TRAVERSAL_BUDGET_RESERVE_S
+                if legacy_unbounded:
+                    # D8 byte-identical tail: the LEGACY single-graph path
+                    # predates the fan-out bounds and must not inherit them —
+                    # a dark-mode citizen query against a large legacy corpus
+                    # would silently lose graph enrichment to a per-leg budget
+                    # that was never its contract (review 2026-10-29). The
+                    # size gate + sub-budget are a fan-out PER-LEG contract.
+                    skip_reason = None
+                    budget_s = None
+                else:
+                    elapsed_s = time.time() - start_time
+                    budget_s = FANOUT_PER_GRAPH_TIMEOUT_MS / 1000.0 - elapsed_s - TRAVERSAL_BUDGET_RESERVE_S
+                    skip_reason = self._traversal_skip_reason(
+                        graph_name=graph_name, vector_db=vector_db, elapsed_s=elapsed_s, budget_s=budget_s
+                    )
                 neighborhoods = None
-                skip_reason = self._traversal_skip_reason(
-                    graph_name=graph_name, vector_db=vector_db, elapsed_s=elapsed_s, budget_s=budget_s
-                )
                 if skip_reason:
                     logger.info(
                         f"Fan-out traversal skipped — graph={graph_name}: {skip_reason}; "
@@ -2030,6 +2041,7 @@ async def _legacy_single_graph_or_refuse(self, *, input_dict, input, query, star
         query=query,
         start_time=start_time,
         span=span,
+        legacy_unbounded=True,  # D8: the legacy tail keeps its pre-fan-out behavior
     )
     # Story 1.0 provenance contract — "EVERY retrieval hit must carry
     # graph_name, repo_id, concept_id". The fan-out path attaches at fusion;
@@ -2331,7 +2343,12 @@ async def _route_graphs(self, encoded_graph_names, query_embedding):
             f"LET s = APPROX_NEAR_COSINE(doc.{ARANGO_EMBEDDING_FIELD}, @emb) "
             "SORT s DESC LIMIT @k RETURN s"
         )
-        rows = self.db.aql.execute(aql, bind_vars={"emb": query_embedding, "k": ROUTE_TOP_K})
+        # The AQL client is SYNCHRONOUS — awaiting it inline in an async def
+        # would serialize the whole _probe_batch fan-out on the event loop and
+        # let asyncio.wait's timeout fire only BETWEEN probes, never during
+        # one (the exact defect _invoke_leg documents fixing for the legs).
+        # The query runs on a worker thread so the probes genuinely race.
+        rows = await asyncio.to_thread(self.db.aql.execute, aql, bind_vars={"emb": query_embedding, "k": ROUTE_TOP_K})
         return graph_name, list(rows)
 
     async def _probe_batch(graphs):

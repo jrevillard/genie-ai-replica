@@ -298,21 +298,16 @@ class WeatherService {
         }
       }
 
-      // Record in analytics
-      if (requestId && this.analyticsService) {
-        try {
-          logger.debug('WeatherService.recording_analytics', { requestId });
-          await this.analyticsService.recordWeatherRequest({
-            _key: requestId,
-            userId: userId || null,
-            city,
-            timestamp: requestDoc.timestamp
-          });
-          logger.info('WeatherService.analytics_recorded', { requestId });
-        } catch (error) {
-          logger.error('WeatherService.record_analytics_failed', { requestId, error: error.message });
-        }
-      }
+      // Weather analytics: intentionally NOT recorded here. This block used
+      // to call this.analyticsService.recordWeatherRequest(...) — a method
+      // that exists only in an unmerged May-2026 side-branch: the shipped
+      // AnalyticsService has no such method (no consumer anywhere either —
+      // no route, dashboard or frontend reads weather analytics), so the
+      // pre-train guard threw per request and the train's requestId guard
+      // silently skipped it (review 2026-10-29 flagged the under-count; the
+      // deeper finding is that there was never anything to count). Restore
+      // alongside a real recordWeatherRequest implementation when weather
+      // analytics becomes a product requirement.
 
       logger.info('WeatherService.weather_fetched', {
         requestId,

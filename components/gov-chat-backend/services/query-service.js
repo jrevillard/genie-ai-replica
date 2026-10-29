@@ -550,6 +550,20 @@ class QueryService {
 
       // Per-call authz — only when the server engaged the fan-out (the carrier
       // is empty regardless when engaged is false).
+      // Story 1.3 — the sticky lookup (below) needs only engaged+sessionId and
+      // is INDEPENDENT of the authz call, so both start together: one fewer
+      // sequential ArangoDB round-trip per engaged chat query (review
+      // 2026-10-29).
+      let stickyGraphs = [];
+      const stickyPromise =
+        engaged && sessionId
+          ? this._loadStickyGraphs(sessionId, queryId).catch((stickyErr) => {
+              // Sticky is an optimization — a lookup problem must never break the query.
+              logger.warn('QueryService.sticky_load_failed', { queryId, correlationId, error: stickyErr?.message });
+              return [];
+            })
+          : null;
+
       let authorizedGraphs = [];
       if (engaged) {
         const authz = await retrievalConfigClient.getAuthorizedGraphs(bearer, { correlationId, queryId });
@@ -566,15 +580,8 @@ class QueryService {
       // set is intersected with the carrier's authorized graphs and the legacy
       // graph is never sticky (the legacy leg is outside routing entirely).
       const legacyGraph = process.env.ARANGO_GRAPH_NAME || 'GRAPH';
-      let stickyGraphs = [];
-      if (engaged && sessionId) {
-        try {
-          stickyGraphs = await this._loadStickyGraphs(sessionId, queryId);
-        } catch (stickyErr) {
-          // Sticky is an optimization — a lookup problem must never break the query.
-          logger.warn('QueryService.sticky_load_failed', { queryId, correlationId, error: stickyErr?.message });
-          stickyGraphs = [];
-        }
+      if (stickyPromise) {
+        stickyGraphs = await stickyPromise;
       }
 
       if (mode === 'hybrid') {
@@ -638,9 +645,15 @@ class QueryService {
    * @returns {Promise<string[]>} Sticky graph names (possibly empty)
    */
   async _loadStickyGraphs(sessionId, queryId) {
+    // The most recent query that has PERSISTED a routed set — an EMPTY set
+    // counts. Sticky sets must reset when routing moves on: loading "most
+    // recent NON-empty" glued a session to a graph that had stopped serving
+    // for the rest of the conversation (the authorized-intersection protects
+    // against revocation, not against a graph that stopped SERVING while
+    // still authorized — review 2026-10-29).
     const cursor = await this.db.query(
       `FOR q IN queries
-         FILTER q.sessionId == @sessionId AND LENGTH(q.okfRoutedGraphs) > 0
+         FILTER q.sessionId == @sessionId AND q.okfRoutedGraphs != null
          SORT q.timestamp DESC
          LIMIT 1
          RETURN q.okfRoutedGraphs`,
@@ -667,6 +680,21 @@ class QueryService {
   }
 
   /**
+   * Story 1.3 — persist the routed-graph set on a finalized query (ONE
+   * helper for all three finalize paths). An EMPTY set is persisted too:
+   * that is what lets _loadStickyGraphs reset a session's stickiness when
+   * routing moves on (see the load-side note).
+   * @param {Object} updateData - The update payload being assembled
+   * @param {Object} metadata - Finalized metadata (source_documents)
+   * @param {string} queryId - Correlation for logs
+   */
+  _persistRoutedGraphs(updateData, metadata, queryId) {
+    const routedGraphs = this._deriveRoutedGraphs(metadata);
+    updateData.okfRoutedGraphs = routedGraphs;
+    logger.info('QueryService.sticky_routed_graphs_persisted', { queryId, routedGraphs });
+  }
+
+  /**
    * Finalize a streaming query — update DB with response and metadata.
    * @param {string} queryId - The query ID
    * @param {string} responseText - The full accumulated response text
@@ -682,13 +710,8 @@ class QueryService {
       isAnswered: true,
       metadata
     };
-    // Story 1.3 — persist the routed graphs so the NEXT query in this session
-    // can stick to the conversation's subject (see _loadStickyGraphs).
-    const routedGraphs = this._deriveRoutedGraphs(metadata);
-    if (routedGraphs.length) {
-      updateData.okfRoutedGraphs = routedGraphs;
-      logger.info('QueryService.sticky_routed_graphs_persisted', { queryId, routedGraphs });
-    }
+    // Story 1.3 — persist the routed set (empty persists too: it RESETS stickiness).
+    this._persistRoutedGraphs(updateData, metadata, queryId);
     await this.queries.update(queryId, updateData);
 
     // Record analytics
@@ -878,13 +901,8 @@ class QueryService {
           isAnswered: true,
           metadata: opeaMetadata
         };
-        // Story 1.3 — sticky persistence (mock + OPEA branches, same rule as
-        // the stream finalize).
-        const routedGraphs = this._deriveRoutedGraphs(opeaMetadata);
-        if (routedGraphs.length) {
-          updateData.okfRoutedGraphs = routedGraphs;
-          logger.info('QueryService.sticky_routed_graphs_persisted', { queryId, routedGraphs });
-        }
+        // Story 1.3 — sticky persistence (empty persists too: RESETS stickiness).
+        this._persistRoutedGraphs(updateData, opeaMetadata, queryId);
         await this.queries.update(queryId, updateData);
       } else {
         // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
@@ -951,12 +969,8 @@ class QueryService {
           isAnswered: true,
           metadata: opeaMetadata
         };
-        // Story 1.3 — sticky persistence (OPEA branch).
-        const routedGraphs = this._deriveRoutedGraphs(opeaMetadata);
-        if (routedGraphs.length) {
-          updateData.okfRoutedGraphs = routedGraphs;
-          logger.info('QueryService.sticky_routed_graphs_persisted', { queryId, routedGraphs });
-        }
+        // Story 1.3 — sticky persistence (empty persists too: RESETS stickiness).
+        this._persistRoutedGraphs(updateData, opeaMetadata, queryId);
         await this.queries.update(queryId, updateData);
       }
 

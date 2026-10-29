@@ -1208,7 +1208,12 @@ def _is_usage_only_frame(content: str) -> bool:
         obj = json.loads(stripped)
     except (ValueError, TypeError):
         return False
-    return isinstance(obj, dict) and "usage" in obj and not obj.get("choices")
+    # The REAL terminal frame is exact: `"choices": []` present-and-empty, and
+    # `usage` an OBJECT of token counts. The old shape check ("usage" merely
+    # PRESENT, choices merely falsy) swallowed legitimate answers — a model
+    # asked for JSON can return {"usage": "5 kWh", ...}: a usage STRING with
+    # no choices key at all (review 2026-10-29).
+    return isinstance(obj, dict) and isinstance(obj.get("usage"), dict) and obj.get("choices") == []
 
 
 def _stream_answer_text(json_data: object) -> str | None:
@@ -3022,7 +3027,24 @@ class ChatQnAService:
                     # instead — no okf-server call (chatqna stays a service
                     # consumer; the BFF is the trusted side). Doc-repo files
                     # keep the enriched path above verbatim.
+                    #
+                    # The fallback is gated on the hit actually being
+                    # OKF-sourced (provenance graph_name carries the OKF_
+                    # prefix — the legacy tail attaches the legacy graph name,
+                    # and a failed doc-repo fetch on a LEGACY hit is a
+                    # transient outage or a deleted file, exactly what the D1
+                    # rule refuses to fabricate a source for). Without the
+                    # gate, one doc-repo 500 on a pure-legacy path invented an
+                    # "okf-concept" source from nothing (review 2026-10-29).
                     prov = provenance_by_doc.get(doc_id_by_orchestrator, {})
+                    prov_graph = str(prov.get("graph_name") or "")
+                    if not prov_graph.startswith("OKF_"):
+                        logger.info(
+                            f"doc-repo metadata absent for file ID {file_id} — provenance "
+                            f"graph is not an OKF graph ({prov_graph or 'none'}); the D1 rule "
+                            f"applies: no source surfaced, no confidence poison"
+                        )
+                        continue
                     logger.info(
                         f"doc-repo metadata absent for file ID {file_id} — surfacing "
                         f"as OKF concept source (graph_name={prov.get('graph_name', 'n/a')}, "

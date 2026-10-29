@@ -213,9 +213,12 @@ describe('QueryService — Inspector methods', () => {
 
       await queryService.getQueriesForInspector();
 
+      // The field names, not the alias: renaming the loop variable is a
+      // source reorganization, dropping a projected field is a contract
+      // change, and only the second may fail here.
       const projection = mockDb.query.mock.calls[0][0].strings.join('');
-      expect(projection).toContain('metadata: q.metadata');
-      expect(projection).toContain('context: q.context');
+      expect(projection).toMatch(/metadata:\s*\w+\.metadata/);
+      expect(projection).toMatch(/context:\s*\w+\.context/);
     });
 
     it('should handle null count from DB', async () => {

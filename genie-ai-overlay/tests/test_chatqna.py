@@ -3822,63 +3822,38 @@ async def test_non_streaming_answer_reports_that_it_was_translated():
     assert payload["response"] == "[ES]English answer"
 
 
-@pytest.mark.asyncio
-async def test_non_streaming_retrieval_that_matched_no_document_is_flagged_as_abstained():
-    """The retriever returned nothing for this query — the label filter
-    matched zero documents. The non-streaming answer is an abstention, and
-    the metadata must say so: the operator cannot tell an abstention from an
-    ordinary answer by reading the response."""
-    svc = create_chatqna_service()
-    svc.user_profile_client = MagicMock()
-    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
-
-    async def fake_schedule(**_kwargs):
-        return (
-            {
-                "retriever": {"retrieved_docs": [], "file_id_pairs": {}},
-                "rerank": {"retrieved_docs": []},
-                "llm": {"text": "I cannot answer that"},
-            },
-            None,
-        )
-
-    svc.megaservice.schedule = fake_schedule
-    svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
-
-    req = create_mock_request(
-        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
-        headers={"Authorization": "Bearer dummy.jwt.token"},
-    )
-    with (
-        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
-        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
-        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
-        _patched_chat_request(stream=False),
-    ):
-        payload = await svc.handle_request(req)
-
-    assert payload["metadata"]["abstained"] is True
-    assert payload["metadata"]["abstention_reason"] == "no_documents_retrieved"
-
-
-@pytest.mark.asyncio
-async def test_non_streaming_reranker_that_dropped_every_document_is_not_reported_as_an_empty_scope():
-    """The retriever DID match documents; the reranker rejected them all.
-    The scope was fine — reporting this as "the scope matched nothing" would
-    send the operator after a stale label that is not stale."""
-    svc = create_chatqna_service()
-    svc.user_profile_client = MagicMock()
-    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
-
-    async def fake_schedule(**_kwargs):
-        return (
+@pytest.mark.parametrize(
+    "nodes,expect_abstained",
+    [
+        # The label filter matched zero documents: the answer is an abstention.
+        (
+            {"retriever": {"retrieved_docs": [], "file_id_pairs": {}}, "rerank": {"retrieved_docs": []}},
+            True,
+        ),
+        # The retriever DID match documents and the reranker rejected them all:
+        # the scope was fine, and reporting it as "matched nothing" would send
+        # the operator after a label that is not stale.
+        (
             {
                 "retriever": {"retrieved_docs": [{"id": "d1", "text": "doc"}], "file_id_pairs": {}},
                 "rerank": {"retrieved_docs": []},
-                "llm": {"text": "I cannot answer that"},
             },
-            None,
-        )
+            False,
+        ),
+    ],
+    ids=["scope_matched_nothing", "reranker_dropped_every_document"],
+)
+@pytest.mark.asyncio
+async def test_non_streaming_abstention_follows_the_retrieval(nodes, expect_abstained):
+    """The non-streaming metadata must say whether the turn abstained: the
+    operator cannot tell an abstention from an ordinary answer by reading the
+    response, and the flag is only truthful if it follows the retrieval."""
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    async def fake_schedule(**_kwargs):
+        return ({**nodes, "llm": {"text": "I cannot answer that"}}, None)
 
     svc.megaservice.schedule = fake_schedule
     svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
@@ -3895,7 +3870,11 @@ async def test_non_streaming_reranker_that_dropped_every_document_is_not_reporte
     ):
         payload = await svc.handle_request(req)
 
-    assert payload["metadata"].get("abstained") is not True
+    if expect_abstained:
+        assert payload["metadata"]["abstained"] is True
+        assert payload["metadata"]["abstention_reason"] == "no_documents_retrieved"
+    else:
+        assert payload["metadata"].get("abstained") is not True
 
 
 @pytest.mark.asyncio

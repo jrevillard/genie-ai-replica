@@ -6,9 +6,9 @@ the design of record ([`helm-charts-design.md`](helm-charts-design.md)).
 Plan checkboxes are not a status source — evidence is the chart, the deploy
 repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
-## Current state (2026-10-28)
+## Current state (2026-10-29)
 
-- **Chart `genieai-umbrella` at 0.2.114**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.115**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,53 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 41 (0.2.115)** — 7 findings from the seventeenth
+  `/code-review`: six fixed, one declined as machinery (tripwire
+  recorded).
+  - *The new assertion branches were exercised by no CI render shape* —
+    every CI render had keycloak+convergence on and no ingress.tls or
+    translation endpoint, so a regression re-narrowing the admin
+    assertion or dropping the TLS operand landed green. Three new
+    render guards (and a positive-output pair of helpers,
+    `expect_render_contains` / `expect_render_lacks` — the existing
+    guards could only assert failure): convergence-off still asserts
+    the admin Secret; the TLS Secret is asserted when set; no vllm
+    assertion without a consumer. Two self-found defects shaped them:
+    the helpers' first version grepped with `-q`, and under the
+    script's own pipefail the early exit SIGPIPEs the 700 KB render's
+    writer — the pipeline reports 141 and a MATCH is counted as a miss
+    (`grep -c` reads the whole input); and the first needle
+    (`keycloak-admin-credentials`) matched the Keycloak CR's own
+    manifest line, so re-narrowing the assertion left the guard green —
+    the needle must be the assertion ROW. Both cases mutation-tested
+    (re-narrowing the admin assertion fails the guard; dropping
+    `backend.enabled` from the vllm branch fails the lacks guard).
+  - *Operator-supplied Secret names reached the test pods' shell raw* —
+    three interpolations bypassed the validation the convergence rows
+    go through. New `genieai-umbrella.validatedSecretName` (the
+    Kubernetes Secret-name shape; a violation fails the render naming
+    the values key), applied to all three; a guard asserts it fires.
+  - *The _tests.tpl header stated a false reason for living in _lib* —
+    helm lint renders first and parses the OUTPUT; a `define` in a
+    .yaml template is legal. The observed breakage was the trimming
+    dash on the include (the pass-40 entry records it), not the
+    location. The comment states the real mechanism (convention +
+    whitespace interactions).
+  - *The prose `<no value>` was silently stripped at render* — helm
+    post-processes that literal out of rendered output, so the
+    deployed pod's comment read `not a literal ""`. Reworded without
+    the sequence.
+  - *Dead `$global` binding in test-namespace.yaml* — both its readers
+    moved into the scaffolding helper's own `$g` in pass 40. Deleted.
+  - *The ledger's Current state heading claimed 2026-10-28* while the
+    state it heads was committed on the 29th. Updated.
+  - *Declined (KISS): a shared container-securityContext helper for
+    the four test pods* — the scaffolding helper covers the two
+    kubectl pods; the curl/busybox pods in test-observability and
+    test-stateless-reachability re-declare the restricted profile.
+    Real duplication, but a second helper layer for a posture that has
+    not changed in the branch's life is machinery; if a posture change
+    or a fifth test pod appears, the helper item activates.
 - **Review loop, pass 40 (0.2.114)** — 4 findings from the sixteenth
   `/code-review`, all in the required-Secrets contract's assertion half.
   - *keycloak-admin-credentials was asserted narrower than its
@@ -637,13 +684,15 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     both require `backend.enabled` now.
   - *The two test pods re-declared ~40 lines of scaffolding* — bound
     once as `genieai-umbrella.testPodScaffolding` in
-    `templates/_lib/_tests.tpl` (a .tpl file, because helm lint parses
-    .yaml templates as YAML and a `define` body is not YAML). The
+    `templates/_lib/_tests.tpl`. The
     byte-compare against the 0.2.113 render shows the only spec change
     is the data-deps container's name (`t` → `test`); the first
-    attempt, defined inside the .yaml file and included with a
-    whitespace-trimming dash, broke the YAML parse — both caught by
-    lint before any push.
+    attempt, included with a whitespace-trimming dash, glued the
+    preceding line to `spec:` and broke the YAML parse — caught by
+    lint before any push. (Correction, pass 41: the file lives in
+    _lib by convention — lint renders first and parses the OUTPUT, so
+    a `define` inside a .yaml template is legal; the dash was the
+    whole defect.)
 - **Review loop, pass 39 (0.2.113)** — 4 findings from the fifteenth
   `/code-review`: three fixed, one declined as machinery (with a
   mitigation).
@@ -1791,7 +1840,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.114** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.115** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

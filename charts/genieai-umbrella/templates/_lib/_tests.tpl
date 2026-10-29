@@ -5,24 +5,27 @@ subtly wrong — the first version of the scaffolding include glued the
 preceding line to `spec:` with a trimming dash and lint caught the
 broken YAML). */}}
 
-{{- /* One operator-supplied Secret NAME interpolated into the test
-pods' shell script. The name reaches `sh` inside a pod carrying the
-dep-check SA, so the FULL Kubernetes Secret-name shape is enforced —
-the charset regex AND the DNS-subdomain bounds (253 chars total, 63
-per dot-label): a violation fails the RENDER naming the values key,
-never the shell. Takes {name, key}: `name` is the value, `key` the
-values path for the failure message. */ -}}
+{{- /* One operator-supplied Secret NAME interpolated into a pod's
+shell (the test pods' required_secrets rows, the convergence envSecrets
+rows). The name reaches `sh` inside a pod carrying the dep-check SA,
+so the FULL Kubernetes Secret-name shape is enforced — the charset
+regex AND the DNS-subdomain bounds (253 chars total, 63 per
+dot-label): a violation fails the RENDER naming the values key, never
+the shell. This is the ONE place that shape lives; every consumer
+includes it. Takes {name, key}: `name` is the value, `key` the values
+path for the failure message. */ -}}
 {{- define "genieai-umbrella.validatedSecretName" -}}
 {{- $name := toString .name -}}
+{{- $key := toString .key -}}
 {{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" $name) -}}
-{{- fail (printf "%s (%q) is not a valid Secret name: lowercase alphanumerics, '.' and '-', bounded by alphanumerics" (.key | toString) $name) -}}
+{{- fail (printf "%s (%q) is not a valid Secret name: lowercase alphanumerics, '.' and '-', bounded by alphanumerics" $key $name) -}}
 {{- end -}}
 {{- if gt (len $name) 253 -}}
-{{- fail (printf "%s (%q) is longer than the Kubernetes Secret-name bound (253 characters)" (.key | toString) $name) -}}
+{{- fail (printf "%s (%q) is longer than the Kubernetes Secret-name bound (253 characters)" $key $name) -}}
 {{- end -}}
 {{- range $label := splitList "." $name -}}
 {{- if gt (len $label) 63 -}}
-{{- fail (printf "%s (%q) carries a dot-label longer than the Kubernetes bound (63 characters)" (.key | toString) $label) -}}
+{{- fail (printf "%s (%q) carries a dot-label longer than the Kubernetes bound (63 characters)" $key $label) -}}
 {{- end -}}
 {{- end -}}
 {{- $name -}}

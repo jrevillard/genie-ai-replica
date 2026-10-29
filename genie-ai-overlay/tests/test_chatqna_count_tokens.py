@@ -11,6 +11,8 @@ pin the contract that matters at the deployment boundary:
   possibly with a path prefix) and in-cluster resolve identically;
 - the request carries the deployed model id and the Bearer key;
 - the server's ``count`` scalar wins, the token list is the fallback;
+- without a discovered model id no request leaves at all, and a malformed
+  count payload raises — a silent 0 would skip the overflow guard;
 - a server without the route fails LOUDLY (the budget math runs on these
   counts — an approximation would silently corrupt history truncation).
 """
@@ -108,3 +110,34 @@ class TestCountTokens:
             patch.object(m.httpx, "post", post),
         ):
             assert m._count_tokens("x") == 12
+
+    def test_raises_without_http_when_model_undiscovered(self):
+        """No discovered id → no request at all: a payload carrying a guessed
+        name would get a 404 from vLLM's model-name validation."""
+        import chatqna.genieai_chatqna as m
+        from core.model_cache import ModelDiscoveryError
+
+        post = MagicMock()
+        with (
+            patch.object(m, "_get_llm_model", side_effect=ModelDiscoveryError("no id")),
+            patch.object(m.httpx, "post", post),
+            pytest.raises(ModelDiscoveryError),
+        ):
+            m._count_tokens("text")
+        post.assert_not_called()
+
+    @pytest.mark.parametrize("payload", [{}, {"count": None, "tokens": None}, "not-a-dict", 42, {"count": "abc"}])
+    def test_malformed_payload_fails_loudly(self, payload):
+        """A malformed count payload must RAISE — a silent 0 would skip the
+        overflow guard and ship an oversized prompt to a confusing 400."""
+        import chatqna.genieai_chatqna as m
+
+        post = MagicMock(return_value=_resp(payload))
+        with (
+            patch.object(m, "_LLM_DISCOVERY_ENDPOINT", "http://vllm:8000"),
+            patch.object(m, "_get_llm_model", return_value="m"),
+            patch.dict("os.environ", {"VLLM_API_KEY": ""}, clear=False),
+            patch.object(m.httpx, "post", post),
+            pytest.raises(ValueError),
+        ):
+            m._count_tokens("text")

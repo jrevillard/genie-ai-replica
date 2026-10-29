@@ -367,6 +367,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+
 - **A category or a service with no translation in the active language
   disappeared from the knowledge tree.** The public tree published the
   localized name and nothing else, so an entity nobody had translated in the
@@ -429,6 +430,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mirroring the web app's Quick Help chip re-title on a locale switch. A
   button the configuration no longer declares keeps its last title.
   (#1115, !629)
+- **Chat requests no longer die on token counting.** The history-truncation
+  budget needs exact token counts, and chatqna used to load a local
+  HuggingFace tokenizer for them — the image bakes no HF cache and deployments
+  grant no huggingface.co egress, so on isolated deployments every chat died on
+  its first request (`OSError: We couldn't connect to 'https://huggingface.co'`).
+  Token counting now calls the LLM server's `/tokenize` endpoint, so the counts
+  always come from the tokenizer of whatever model is actually deployed. The
+  model name sent to the LLM server is discovered from the server itself
+  (`/v1/models`) instead of falling back to a compiled-in name — vLLM validates
+  the name and rejects unknown ones. Counting failures abort the request loudly
+  rather than silently feeding a zero into the truncation budget. (#631)
 - **The labelling prompt was different on every ingestion run.** The candidate
   labels sent to the labelling LLM were collected in a Python set, whose order
   follows the hash seed of the process that built it — so every container sent

@@ -18,10 +18,11 @@ can fall back to their configured window.
 
 Usage::
 
-    from core.model_cache import get_max_model_len, get_model_id
+    from core.model_cache import get_max_model_len, get_model_id, require_model_id
 
     model = get_model_id("https://gpu.example.com/llm")
     window = get_max_model_len("https://gpu.example.com/llm")
+    model = require_model_id("https://gpu.example.com/llm")  # raises if undiscovered
 """
 
 import logging
@@ -98,6 +99,27 @@ def _probe(endpoint_url: str) -> dict | None:
     return None
 
 
+def coerce_int(value) -> int | None:
+    """Coerce a JSON scalar to ``int``: bools rejected, digit strings accepted.
+
+    Shared stance for every numeric field read out of a model-server payload
+    (context windows, tokenize counts): proxies serialize numbers as digit
+    strings, and a boolean is never a count. Returns None for anything else —
+    callers decide whether None means fallback (window getters) or a loud
+    error (payload-building sites).
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
 def _coerce_max_model_len(value) -> int | None:
     """Coerce a probed ``max_model_len`` to a usable int, or None.
 
@@ -108,22 +130,13 @@ def _coerce_max_model_len(value) -> int | None:
     dropped so a bad payload never poisons the cache entry — an absurdly
     large window would silently disable the truncation guard.
     """
-    coerced = None
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        coerced = value
-    elif isinstance(value, float):
+    if isinstance(value, float):
         if not math.isfinite(value):
             return None
-        coerced = int(value)
-        if coerced != value:
+        if int(value) != value:
             return None
-    elif isinstance(value, str):
-        try:
-            coerced = int(value.strip())
-        except ValueError:
-            return None
+        value = int(value)
+    coerced = coerce_int(value)
     if coerced is not None and 0 < coerced <= MAX_SANE_MODEL_WINDOW_TOKENS:
         return coerced
     return None
@@ -231,6 +244,34 @@ def get_max_model_len(endpoint_url: str, ttl_seconds: int | None = None) -> int 
         the field or was never successfully probed.
     """
     return _cached_field(endpoint_url, ttl_seconds, "max_model_len")
+
+
+class ModelDiscoveryError(RuntimeError):
+    """No model id could be discovered for an endpoint.
+
+    Raised by :func:`require_model_id` for callers whose requests must
+    carry the name the endpoint actually serves.
+    """
+
+
+def require_model_id(endpoint_url: str) -> str:
+    """Return the model ID served at ``endpoint_url`` or raise ModelDiscoveryError.
+
+    The loud twin of :func:`get_model_id`: vLLM validates the model name on
+    ``/tokenize`` and the OpenAI endpoints and answers 404 for unknown names,
+    so a payload that must identify the served model (tokenize, direct
+    chat/completions) has no usable fallback — a hardcoded name is correct
+    only by coincidence with whatever the deployment serves. A stale cached
+    id from a previous successful probe still counts as an answer.
+    """
+    detected = get_model_id(endpoint_url)
+    if not detected:
+        raise ModelDiscoveryError(
+            f"no model id discovered at {endpoint_url}/v1/models — the endpoint "
+            "must answer the model-id probe before requests carrying a model "
+            "name can be built"
+        )
+    return detected
 
 
 def clear_cache() -> None:

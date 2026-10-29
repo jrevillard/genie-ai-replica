@@ -3,10 +3,10 @@
 # Tests for vLLM model auto-detection (TTL-cached) across OPEA services.
 #
 # Probe logic lives in core/model_cache.py. Each service (chatqna, retriever,
-# dataprep) calls get_model_id() to resolve the model served by a remote vLLM
-# node, gated on GPU_NODE_HOST; chatqna additionally discovers the served
-# context window (get_max_model_len) with probing always on — remote endpoint
-# when configured, compose-internal vLLM otherwise.
+# dataprep) calls get_model_id() to resolve the model served by a vLLM node —
+# remote GPU endpoint when configured, compose-internal vLLM otherwise, always
+# on. chatqna additionally discovers the served context window
+# (get_max_model_len) the same way.
 
 import logging
 import os
@@ -416,51 +416,91 @@ class TestModelCacheMaxModelLen:
 
 
 # ---------------------------------------------------------------------------
+# require_model_id — the loud twin of get_model_id
+# ---------------------------------------------------------------------------
+class TestRequireModelId:
+    """Payloads that must carry the name the endpoint actually serves
+    (tokenize, direct chat/completions) raise instead of guessing a name
+    vLLM would reject with a 404."""
+
+    def test_returns_discovered_id(self):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "served/model"}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert model_cache.require_model_id("https://gpu-host/llm") == "served/model"
+
+    def test_raises_when_probe_has_no_answer(self):
+        with (
+            patch("httpx.get", side_effect=httpx.ConnectError("down")),
+            pytest.raises(model_cache.ModelDiscoveryError),
+        ):
+            model_cache.require_model_id("https://gpu-host/llm")
+
+
+# ---------------------------------------------------------------------------
 # chatqna getters — _get_llm_model / _get_translation_model_id
 # ---------------------------------------------------------------------------
 class TestChatqnaGetters:
-    """Tests for chatqna model getter functions."""
+    """chatqna model-id getters: discovery is ALWAYS ON.
 
-    def test_get_llm_model_returns_detected_when_gpu_host_set(self, monkeypatch):
+    Both getters probe the same endpoint their callers' requests target
+    (_LLM_DISCOVERY_ENDPOINT / _TRANSLATION_DISCOVERY_ENDPOINT — remote GPU
+    node when configured, compose-internal vLLM otherwise), sharing the
+    core.model_cache TTL cache with the context-window getters. A payload
+    sent to a vLLM endpoint must carry the name that endpoint actually
+    serves: vLLM validates the model name and 404s unknown ones, so a
+    hardcoded fallback name kills every request that carries it.
+    """
+
+    def test_get_llm_model_returns_probed_id_without_gate(self):
+        """Plain compose (no GPU_NODE_HOST): the internal vLLM is probed anyway."""
         import chatqna.genieai_chatqna as mod
-
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "10.0.0.110")
-        monkeypatch.setattr(mod, "_VLLM_LLM_ENDPOINT", "https://10.0.0.110/llm")
 
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": [{"id": "detected-llm"}]}
 
-        with patch("httpx.get", return_value=mock_resp):
+        with patch("httpx.get", return_value=mock_resp) as mock_get:
             assert mod._get_llm_model() == "detected-llm"
+        assert mock_get.call_args.args[0] == f"{mod._LLM_DISCOVERY_ENDPOINT}/v1/models"
 
-    def test_get_llm_model_returns_default_when_no_gpu_host(self, monkeypatch):
+    def test_get_llm_model_raises_when_probe_has_no_answer(self):
+        """Loud failure: without a discovered id no valid payload exists —
+        a constant name would 404 at the endpoint."""
+        import chatqna.genieai_chatqna as mod
+        from core.model_cache import ModelDiscoveryError
+
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")), pytest.raises(ModelDiscoveryError):
+            mod._get_llm_model()
+
+    def test_get_translation_model_id_discovers_when_env_empty(self, monkeypatch):
         import chatqna.genieai_chatqna as mod
 
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "")
-
-        with patch("httpx.get") as mock_get:
-            result = mod._get_llm_model()
-
-        mock_get.assert_not_called()
-        assert result == mod.LLM_MODEL
-
-    def test_get_translation_model_id_returns_detected(self, monkeypatch):
-        import chatqna.genieai_chatqna as mod
-
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "10.0.0.110")
-        monkeypatch.setattr(mod, "_VLLM_TRANSLATION_ENDPOINT", "https://10.0.0.110/translation")
+        monkeypatch.setattr(mod, "TRANSLATION_MODEL_ID", "")
 
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": [{"id": "google/translategemma-3-7b"}]}
 
-        with patch("httpx.get", return_value=mock_resp):
+        with patch("httpx.get", return_value=mock_resp) as mock_get:
             assert mod._get_translation_model_id() == "google/translategemma-3-7b"
+        assert mock_get.call_args.args[0] == f"{mod._TRANSLATION_DISCOVERY_ENDPOINT}/v1/models"
+
+    def test_get_translation_model_id_prefers_explicit_env(self, monkeypatch):
+        """The documented VLLM_TRANSLATION_MODEL_ID stays the deployer override:
+        when it is set, no probe runs."""
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "TRANSLATION_MODEL_ID", "explicit/model")
+        monkeypatch.setattr(mod, "_VLLM_TRANSLATION_ENDPOINT", "https://10.0.0.110/translation")
+
+        with patch("httpx.get") as mock_get:
+            assert mod._get_translation_model_id() == "explicit/model"
+        mock_get.assert_not_called()
 
     def test_is_translategemma_true_for_translategemma(self, monkeypatch):
         import chatqna.genieai_chatqna as mod
 
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "10.0.0.110")
-        monkeypatch.setattr(mod, "_VLLM_TRANSLATION_ENDPOINT", "https://10.0.0.110/translation")
+        monkeypatch.setattr(mod, "TRANSLATION_MODEL_ID", "")
 
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": [{"id": "google/translategemma-3-7b"}]}
@@ -468,10 +508,19 @@ class TestChatqnaGetters:
         with patch("httpx.get", return_value=mock_resp):
             assert mod._is_translategemma() is True
 
+    def test_is_translategemma_false_when_undiscovered(self, monkeypatch):
+        """Undiscovered translation model → the generic chat-completions path
+        (which sends no model name), never a crash."""
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "TRANSLATION_MODEL_ID", "")
+
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")):
+            assert mod._is_translategemma() is False
+
     def test_is_translategemma_false_for_generic_model(self, monkeypatch):
         import chatqna.genieai_chatqna as mod
 
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "")
         monkeypatch.setattr(mod, "TRANSLATION_MODEL_ID", "gemma-3-4b-it")
 
         assert mod._is_translategemma() is False
@@ -535,7 +584,6 @@ class TestChatqnaContextWindowGetters:
         discovers the real window without any GPU_NODE_HOST configured."""
         import chatqna.genieai_chatqna as mod
 
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "")
         monkeypatch.setattr(mod, "_LLM_DISCOVERY_ENDPOINT", "http://vllm:8000")
 
         mock_resp = MagicMock()
@@ -548,7 +596,6 @@ class TestChatqnaContextWindowGetters:
     def test_get_max_translation_chars_probes_without_gpu_node_host(self, monkeypatch):
         import chatqna.genieai_chatqna as mod
 
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "")
         monkeypatch.setattr(mod, "_TRANSLATION_DISCOVERY_ENDPOINT", "http://vllm-translation-guardrail:9031")
 
         mock_resp = MagicMock()
@@ -569,7 +616,6 @@ class TestChatqnaContextWindowGetters:
     def test_get_max_model_len_probe_failure_falls_back_to_configured(self, monkeypatch):
         import chatqna.genieai_chatqna as mod
 
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "10.0.0.110")
         monkeypatch.setattr(mod, "_VLLM_LLM_ENDPOINT", "https://10.0.0.110/llm")
         monkeypatch.setattr(mod, "MAX_MODEL_LEN_TEXTGEN", 4096)
 
@@ -622,7 +668,6 @@ class TestChatqnaContextWindowGetters:
     def test_get_max_translation_chars_probe_failure_falls_back(self, monkeypatch):
         import chatqna.genieai_chatqna as mod
 
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "10.0.0.110")
         monkeypatch.setattr(mod, "_VLLM_TRANSLATION_ENDPOINT", "https://10.0.0.110/translation")
         monkeypatch.setattr(mod, "MAX_TRANSLATION_CHARS", 2000)
 
@@ -855,3 +900,10 @@ class TestRetrieverInitializeLlmAutoDetect:
             result = r._get_llm()
 
         assert result is existing_llm  # same client object returned
+
+
+@pytest.fixture(autouse=True)
+def discovered_llm_model():
+    """Override the conftest stand-in: this file exercises the REAL probe
+    path end-to-end (transport mocks, cache semantics, loud failure)."""
+    yield

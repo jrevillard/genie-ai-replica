@@ -23,7 +23,7 @@ from metrics import (
 
 from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
 from core.label_contract import build_filter_labels, encode_filter_labels
-from core.model_cache import get_max_model_len, get_model_id
+from core.model_cache import coerce_int, get_max_model_len, get_model_id, require_model_id
 from core.model_http_policy import AIOHTTP_CONNECT_TIMEOUT_SECONDS, CONTROL_PLANE_TIMEOUT_SECONDS, PROBE_TIMEOUT_SECONDS
 from core.span_attrs import ATTRIBUTE_NAMES, QUERY_ID_KEY, query_id_from_baggage
 from tracing import (
@@ -496,44 +496,36 @@ if _VLLM_LLM_ENDPOINT:
     LLM_SERVER_ENDPOINT_PREFIX = _parsed.path.rstrip("/") or ""
 else:
     LLM_SERVER_ENDPOINT_PREFIX = ""
-LLM_MODEL = os.getenv("LLM_MODEL", "ibm-granite/granite-3.3-2b-instruct")
 
-# Endpoint the context-window discovery probes: the remote GPU node when
-# configured, otherwise the compose-internal vLLM (LLM_SERVER_HOST_IP:PORT —
-# chatqna already talks to it for generation). Probing is always on; when the
-# endpoint is unreachable the getters fall back to the configured constants.
+# Endpoint the model-id and context-window discovery probes: the remote GPU
+# node when configured, otherwise the compose-internal vLLM
+# (LLM_SERVER_HOST_IP:PORT — chatqna already talks to it for generation).
+# Probing is always on; the model-id getter fails loudly when nothing
+# answers, the window getters fall back to the configured constants.
 _LLM_DISCOVERY_ENDPOINT = _VLLM_LLM_ENDPOINT or f"http://{LLM_SERVER_HOST_IP}:{LLM_SERVER_PORT}"
-
-# Auto-detect remote vLLM models with TTL caching (see core/model_cache.py).
-# GPU_NODE_HOST gates this: local GPU deployments keep their explicit config
-# (VLLM_ENDPOINT has a compose default http://vllm:8000). See issue #758.
-_GPU_NODE_HOST = os.getenv("GPU_NODE_HOST", "")
 
 
 def _get_llm_model() -> str:
-    """Return the LLM model ID.
+    """Return the model ID served at ``_LLM_DISCOVERY_ENDPOINT``.
 
-    Auto-detects from remote vLLM (with TTL cache) when GPU_NODE_HOST is set;
-    otherwise returns the LLM_MODEL env/config default.
+    Standing invariants: the chatqna image bakes no HuggingFace cache and
+    the deployment grants no hub egress, so the endpoint itself is the only
+    trustworthy source for the name; and every payload sent to it
+    (generation, condense, tokenize) must carry the discovered id because
+    vLLM validates the model name and 404s unknown ones.
     """
-    if _GPU_NODE_HOST and _VLLM_LLM_ENDPOINT:
-        detected = get_model_id(_VLLM_LLM_ENDPOINT)
-        if detected:
-            return detected
-    return LLM_MODEL
+    return require_model_id(_LLM_DISCOVERY_ENDPOINT)
 
 
-def _get_translation_model_id() -> str:
-    """Return the translation model ID.
+def _get_translation_model_id() -> str | None:
+    """Return the translation model ID: the explicit VLLM_TRANSLATION_MODEL_ID
+    env when the deployer set it, otherwise the id discovered at
+    ``_TRANSLATION_DISCOVERY_ENDPOINT`` — None when neither answers.
 
-    Auto-detects from remote vLLM (with TTL cache) when GPU_NODE_HOST is set;
-    otherwise returns the TRANSLATION_MODEL_ID env/config default.
+    None is a valid state: the generic translation path sends no model name;
+    only the TranslateGemma completions payloads need one.
     """
-    if _GPU_NODE_HOST and _VLLM_TRANSLATION_ENDPOINT:
-        detected = get_model_id(_VLLM_TRANSLATION_ENDPOINT)
-        if detected:
-            return detected
-    return TRANSLATION_MODEL_ID
+    return TRANSLATION_MODEL_ID or get_model_id(_TRANSLATION_DISCOVERY_ENDPOINT)
 
 
 def _is_translategemma() -> bool:
@@ -542,7 +534,8 @@ def _is_translategemma() -> bool:
     TranslateGemma uses the completions API with a pre-formatted prompt;
     other models use the chat completions API.
     """
-    return "translategemma" in _get_translation_model_id().lower()
+    translation_model_id = _get_translation_model_id()
+    return bool(translation_model_id) and "translategemma" in translation_model_id.lower()
 
 
 # Window discovery shares the model-id cache entry, so the MODEL_DETECT_TTL
@@ -1903,13 +1896,9 @@ def _count_tokens(text: str) -> int:
 
     The server that serves generation tokenizes with the deployed model's
     REAL tokenizer — the counts the context-window budget needs, for
-    whatever model is deployed, with no local tokenizer download. It
-    replaces a local ``AutoTokenizer.from_pretrained`` here, which could
-    only ever fail: the chatqna image bakes no HuggingFace cache and the
-    deployment grants no huggingface.co egress, so every chat died on
-    the first request with ``OSError: We couldn't connect to
-    'https://huggingface.co'`` (found live on the k8s deployment,
-    2026-10-29).
+    whatever model is deployed, with no local tokenizer download: the
+    image bakes no HuggingFace cache and the deployment grants no
+    huggingface.co egress, so a local ``AutoTokenizer`` can only fail.
 
     Same client shape as the model-id probe (core/model_cache.py): sync
     httpx, PROBE timeout budget, ``OPEA_SSL_SKIP_VERIFY`` for the
@@ -1919,10 +1908,11 @@ def _count_tokens(text: str) -> int:
     possibly a tunnel with a path prefix) and in-cluster
     (``http://vllm:8000``) resolve identically.
 
-    A server without ``/tokenize`` (vLLM < 0.4.2) fails LOUDLY and on
-    purpose: the budget math below runs on these counts, and an
-    approximation would silently corrupt the history truncation — the
-    same reasoning that keeps the model-id probe from guessing.
+    Failures are loud and on purpose: the budget math below runs on these
+    counts, so an unknown model name (vLLM validates it), an unreachable
+    endpoint, or a malformed count payload must abort the request rather
+    than silently corrupt the history truncation — the same reasoning that
+    keeps the model-id probe from guessing.
     """
     url = f"{_LLM_DISCOVERY_ENDPOINT}/tokenize"
     headers = {}
@@ -1941,10 +1931,20 @@ def _count_tokens(text: str) -> int:
     payload = resp.json()
     # vLLM returns both the token list and a precomputed "count"; prefer
     # the scalar, fall back to the list length for servers that omit it.
+    if not isinstance(payload, dict):
+        raise ValueError(f"/tokenize returned a non-object payload: {payload!r}")
     count = payload.get("count")
     if count is None:
-        return len(payload.get("tokens", []))
-    return int(count)
+        tokens = payload.get("tokens")
+        if not isinstance(tokens, list):
+            raise ValueError(f"/tokenize payload has neither a count nor a token list: {payload!r}")
+        return len(tokens)
+    # A proxy may serialize count as a digit string (same coercion stance as
+    # the window value in core/model_cache); anything else is malformed.
+    coerced = coerce_int(count)
+    if coerced is None:
+        raise ValueError(f"/tokenize count is not an integer: {payload!r}")
+    return coerced
 
 
 ##################################################################################################################################
@@ -4409,7 +4409,10 @@ class ChatQnAService:
             if _query_id:
                 span.set_attribute(QUERY_ID_KEY, _query_id)
             span.set_attribute("rag.query_length", len(last_translated_message_content))
-            span.set_attribute("rag.model_id", _get_llm_model())
+            # Telemetry only — the loud model-id gate lives in the payload
+            # sites (generation, condense, tokenize); the attribute records
+            # what discovery knows, never aborts the request.
+            span.set_attribute("rag.model_id", get_model_id(_LLM_DISCOVERY_ENDPOINT) or "undiscovered")
             # What this request actually blended, and the answer reserve it is
             # budgeted against. The token estimate and the history counts are
             # written by align_inputs, which is the only site that measures

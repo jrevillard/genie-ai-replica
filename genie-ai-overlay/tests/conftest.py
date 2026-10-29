@@ -5,7 +5,7 @@ import sys
 
 os.makedirs("reports", exist_ok=True)
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -208,6 +208,19 @@ def set_env_vars(monkeypatch):
     monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
     monkeypatch.setenv("LOCAL_EMBEDDING_MODEL", "BAAI/bge-large-en-v1.5")
     monkeypatch.setenv("RETRIEVER_MODEL_ID", "BAAI/bge-large-en-v1.5")
+
+
+@pytest.fixture
+def count_patch():
+    """Factory: point ``_count_tokens`` at a mock tokenizer's ``.encode``."""
+
+    def _patch(tokenizer):
+        return patch(
+            "chatqna.genieai_chatqna._count_tokens",
+            side_effect=lambda text: len(tokenizer.encode(text)),
+        )
+
+    return _patch
 
 
 # --- Tracing test support -----------------------------------------------------
@@ -459,3 +472,18 @@ def captured_spans():
         return spans
 
     return _get
+
+
+@pytest.fixture(autouse=True)
+def discovered_llm_model():
+    """CI stands in for the vLLM model-id probe: both chatqna seams answer
+    with a stable synthetic id — the loud ``require_model_id`` (payload
+    sites) and the soft ``get_model_id`` (telemetry) — mirroring a reachable
+    vLLM in production (probe failure there fails the request loudly at the
+    payload sites — covered at the core and transport level in
+    test_auto_detect_model.py, which overrides this fixture)."""
+    with (
+        patch("chatqna.genieai_chatqna.require_model_id", return_value="ci-discovered/model"),
+        patch("core.model_cache.get_model_id", return_value="ci-discovered/model"),
+    ):
+        yield

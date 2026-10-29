@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-29)
 
-- **Chart `genieai-umbrella` at 0.2.120**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.121**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,30 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 47 (0.2.121)** — 4 findings from the twenty-third
+  `/code-review`, all documentary or validation-boundary tail (no
+  functional defects — the reviewer's own verdict).
+  - *The mirror's port clause admitted out-of-range ports* —
+    `:99999` and leading-zero `:08443` passed the render and failed at
+    pod runtime, inverting the chart's guard philosophy for its own
+    key. The clause bounds to 1-65535 (the classic regex decomposition,
+    leading zeros rejected); a guard fires on a transposed-digit
+    `:84430` (mutation-tested: reverting to unbounded digits turns it
+    red).
+  - *The published docs named the wrong pods* —
+    site/.../kubernetes.md said the "pre-install and helm-test Pods"
+    curl-download kubectl; the pre-install Job runs python with no init
+    container. It names the real consumers now (the pre-upgrade
+    cluster-profile hook and the two helm-test pods) — the sixth
+    documentary surface of the mirror contract.
+  - *The umbrella README's air-gapped section missed the
+    no-trailing-slash rejection 0.2.120 introduced* and still said
+    "binaries" plural (jq is long gone). Both fixed — an operator
+    upgrading with a pre-existing trailing-slash mirror now has a
+    published statement of the constraint.
+  - *The delivery-pins comment enumerated 4 of the 5 pinned shapes* —
+    the scheme-ful host:port case was missing, the same incompleteness
+    class the enumeration was written to remove. All five named.
 - **Review loop, pass 46 (0.2.120)** — 4 findings from the twenty-second
   `/code-review`, the mirror contract's documentary and coverage tail.
   - *The delivery pin covered one of the two motivating shapes* — the
@@ -1980,7 +2004,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.120** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.121** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

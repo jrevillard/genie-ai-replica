@@ -4,6 +4,7 @@
   datasource is absent is permanently blank and its panels read
   "Datasource not found" — silently, with the pipeline green.
 */}}
+{{- $assets := index .Subcharts "genieai-assets" -}}
 {{- $obs := .Values.observability | default dict -}}
 {{- $obsGrafana := $obs.grafana | default dict -}}
 {{- $obsMetrics := $obs.metrics | default dict -}}
@@ -64,11 +65,13 @@
   dashboards.
 
   Dashboards: configs/grafana/provisioning/dashboards/*.json +
-  dashboards/observability/*.json. JSON content is inlined via
-  `.Files.Get` (the largest is ~263 KiB, well under the 1 MiB
-  ConfigMap threshold where the spec.url+ConfigMap fallback would be
-  safer). Helm's `toString` keeps the raw JSON intact in a block
-  scalar.
+  dashboards/observability/*.json — carried by the genieai-assets cargo
+  dependency and inlined via `$assets.Files.Get` (the
+  largest is ~263 KiB, well under the 1 MiB ConfigMap threshold where
+  the spec.url+ConfigMap fallback would be safer; carrying the bytes in
+  a dependency also keeps them out of the helm release snapshot — see
+  that chart's description). Helm's `toString` keeps the raw JSON
+  intact in a block scalar.
 
   Alert rules: configs/grafana/provisioning/alerting/alert-rules.yml
   is the only file with `groups:` (contact-points and
@@ -160,7 +163,7 @@ spec:
   resyncPeriod: 30s
 {{- include "genieai-umbrella.dashboardDatasources" (dict "root" $ "entry" . "tier" $tierOn) }}
   json: |-
-{{ $.Files.Get (printf "files/observability/dashboards/%s" .file) | indent 4 }}
+{{ $assets.Files.Get (printf "files/observability/dashboards/%s" .file) | indent 4 }}
 {{- end }}
 {{- end }}
 {{- range $dashboardsObservability }}
@@ -185,10 +188,10 @@ spec:
   resyncPeriod: 30s
 {{- include "genieai-umbrella.dashboardDatasources" (dict "root" $ "entry" . "tier" $tierOn) }}
   json: |-
-{{ $.Files.Get (printf "files/observability/dashboards/observability/%s" .file) | indent 4 }}
+{{ $assets.Files.Get (printf "files/observability/dashboards/observability/%s" .file) | indent 4 }}
 {{- end }}
 {{- end }}
-{{- $alertFile := $.Files.Get "files/observability/alerting/alert-rules.yml" }}
+{{- $alertFile := $assets.Files.Get "files/observability/alerting/alert-rules.yml" }}
 {{- /* Per-group tier gating: a rule group whose datasource is absent
        never evaluates, so its alert can never fire while the pipeline
        stays green. Named per group rather than looked up in a map —

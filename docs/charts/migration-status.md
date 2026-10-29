@@ -614,6 +614,43 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **The 1 MiB wall and the genieai-assets cargo chart (0.2.127)** — the
+  first live-validation attempt on minikube (restarted for the operator's
+  sequence) failed the upgrade with `Secret "sh.helm.release.v1.genieai.v12"
+  is invalid: data: Too long: may not be more than 1048576 bytes`, and the
+  investigation that followed rewrote three wrong models before landing:
+  - *Wrong model 1 — "the release Secret stores the chart archive"*: the
+    real v11 payload (read from the cluster) stores NO chart archive and
+    NO dependencies at all — helm-controller persists the PARENT chart's
+    files + templates, the rendered manifest, and the hooks. The gateway-
+    helm vendored CRDs, first blamed, never ride.
+  - *Wrong model 2 — "the dashboards grew"*: their stored bytes are
+    identical between v11 and HEAD. Nothing moved but two things.
+  - *The actual delta*: the theme tarball (stale 122 KB copy in v11,
+    re-synced to 384 KB by 0.2.71) now rides TWICE — once as `chart.files`
+    and once as the rendered ConfigMap — ~700 K chars, ~+525 KB stored;
+    everything else in the manifest grew by 4 K chars. The re-sync that
+    fixed the stale-copy defect is what breached the wall: fixing one
+    defect surfaced the next.
+  - *The fix the operator approved*: `charts/genieai-assets`, a cargo
+    dependency (files only, zero templates, zero values) holding the
+    theme tarball, the realm, the dashboards and the alerting. The
+    umbrella reads them through `.Subcharts.genieai-assets.Files` (via
+    `index` — hyphenated names cannot be field-accessed). Dependency
+    content is not persisted, so the assets ride ONCE (the render) while
+    their source bytes sit outside the snapshot. The render is
+    byte-identical to 0.2.126 (verified by `cmp`); the predicted snapshot
+    is 837 KB against the 1 MiB cap (v11 was 820 KB). The drift guards
+    and sync targets (sync-chart-dashboards.sh, regen-keycloak-theme.sh,
+    the CI realm/theme checks, the K8s-WORKFLOW copies table) now point
+    at the assets chart, with an explicit do-not-move-back warning.
+  - *Not done, deliberately*: moving Envoy Gateway to the bootstrap (the
+    first fix proposed, withdrawn — the vendored CRDs never ride the
+    snapshot; its cost there is ~40 KB of rendered objects), splitting
+    the umbrella into per-tier charts (real architecture evolution,
+    recorded with tripwires: independent release cadence, separate team
+    ownership, or the wall returning), and slimming the brand images
+    (both logo formats are needed).
 - **Deferred items resolved on the operator's ruling (0.2.126)** — the
   review loop closed at run 33 (0 findings); the user ruled on each
   deferred item afterwards:

@@ -1,5 +1,6 @@
 {{- /* The convergence block is CLEARABLE: a cleared block means "no
 convergence" (the same as enabled: false), not a nil-pointer crash. */ -}}{{- $global := .Values.global | default dict -}}
+{{- $assets := index .Subcharts "genieai-assets" -}}
 
 {{- $data := .Values.data | default dict -}}
 {{- $keycloak := $data.keycloak | default dict -}}
@@ -92,7 +93,7 @@ resolveReplicas was written to avoid. */ -}}
 {{- if not (kindIs "invalid" $convergence.backoffLimit) -}}
 {{- $backoffLimit = $convergence.backoffLimit -}}
 {{- end -}}
-{{- $realmFile := .Files.Get "files/genie-realm.yaml" -}}
+{{- $realmFile := $assets.Files.Get "files/genie-realm.yaml" -}}
 {{- if $keycloak.failOnPlaceholderSecrets -}}
 {{- range $p := (regexFindAll "\\$\\(env:[A-Z_][A-Z0-9_]*\\)" $realmFile -1) -}}
 {{- $n := trimPrefix "$(env:" (trimSuffix ")" $p) -}}

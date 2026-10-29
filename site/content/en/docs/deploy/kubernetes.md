@@ -69,10 +69,9 @@ the default outright, so the pods need only the labels you declare.
 
 **Air-gapped clusters.** Set `global.kubeletToolsMirror` to an internal
 URL (`[http[s]://]host[:port 1-65535][/multi/segment/prefix]`, no
-trailing slash); the
-chart's pre-upgrade cluster-profile hook and its two kubectl-carrying
-helm-test Pods (`test-namespace`, `test-data-deps`) `curl`-download
-`kubectl` from a default public mirror otherwise.
+trailing slash); the chart's pre-upgrade cluster-profile hook and its
+two kubectl-carrying helm-test Pods (`test-namespace`, `test-data-deps`)
+`curl`-download `kubectl` from a default public mirror otherwise.
 
 ## Install paths
 
@@ -126,7 +125,7 @@ overlays/<cluster>/<env>/
 The `HelmRelease` references the operator-owned values through
 `valuesFrom`: a `ConfigMap` in the Flux namespace carries them, and an
 overlay that also ships SOPS-encrypted values adds a `Secret` entry
-beside it. Inline `values:` carries the per-pays overrides. The chart's
+beside it. Inline `values:` carries the per-cluster overrides. The chart's
 placeholder guard (`data.keycloak.failOnPlaceholderSecrets`) stays at
 its default — **on**: an overlay that feeds the realm's client secrets
 through the convergence Job's `envSecrets` rows declares non-placeholder
@@ -148,7 +147,7 @@ valuesFrom:
   # - name: genieai-secrets     # operator-override Secret (SOPS path;
   #   kind: Secret              # encrypted-only until the Flux SOPS
   #                              # decryption provider is installed)
-# Inline `values:` — per-pays overrides only.
+# Inline `values:` — per-cluster overrides only.
 ```
 
 Set `spec.timeout` (the HelmRelease-wide bound) to **60m**, and

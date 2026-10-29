@@ -187,8 +187,10 @@ every chunk of the parent category and leak the service scope into it.
 ### Which spelling the retriever matches
 
 A chunk label is the **English translation** of the taxonomy entity
-(`serviceCategoryTranslations` / `serviceTranslations`, locale `EN`). That
-translation is what the dataprep reads to build the taxonomy it offers to the
+(`serviceCategoryTranslations` / `serviceTranslations`, locale `EN`) — or,
+for an entity with no `EN` translation row, the entity document's own
+`nameEN`, which the tree publishes as its English name (see below). That
+resolution is what the dataprep reads to build the taxonomy it offers to the
 labelling LLM, and what the retriever matches afterwards.
 
 The `nameEN` field of an entity is the *seed* of that translation: the write

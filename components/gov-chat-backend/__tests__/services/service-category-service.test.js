@@ -399,8 +399,8 @@ describe('ServiceCategoryService', () => {
       // — beside the entity KEY the hierarchy editor acts on. Asserting the
       // variable that carries the EN TRANSLATION (not a literal, not the
       // localized one) is what makes this fail on `nameEN: serviceTranslation`.
-      expect(text).toMatch(/name:\s*categoryName,\s*nameEN:\s*categoryNameEN/);
-      expect(text).toMatch(/_key:\s*service\._key,\s*name:\s*serviceName,\s*nameEN:\s*serviceNameEN/);
+      expect(text).toMatch(/name:\s*categoryTranslation,\s*nameEN:\s*categoryNameEN/);
+      expect(text).toMatch(/_key:\s*service\._key,\s*name:\s*serviceTranslation,\s*nameEN:\s*serviceNameEN/);
     });
 
     it('keeps the LOCALIZED name as its display name — no English fallback', async () => {
@@ -416,8 +416,8 @@ describe('ServiceCategoryService', () => {
       // entities share one key and file a label under the wrong entity.
       // The projection carries the raw translation — the fallback the
       // public tree applies is not there.
-      expect(text).toMatch(/LET categoryName = categoryTranslation\s*\n/);
-      expect(text).toMatch(/LET serviceName = serviceTranslation\s*\n/);
+      expect(text).toMatch(/name:\s*categoryTranslation,\s*nameEN:\s*categoryNameEN/);
+      expect(text).toMatch(/name:\s*serviceTranslation,\s*nameEN:\s*serviceNameEN/);
     });
 
     it('falls back to the entity document nameEN when no EN translation row exists', async () => {

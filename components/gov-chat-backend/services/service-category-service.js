@@ -500,7 +500,10 @@ class ServiceCategoryService {
               // name, and the clients dropped it from the tree.
               LET serviceName = LENGTH(TRIM(serviceTranslation)) > 0 ? serviceTranslation : serviceNameEN
               SORT edge.order ASC
-              RETURN { name: serviceName, nameEN: serviceNameEN }
+              // The KEY travels with the spellings: a client identifies a
+              // service by it, never by a name — neither spelling is
+              // unique inside a category.
+              RETURN { _key: service._key, name: serviceName, nameEN: serviceNameEN }
         )
         RETURN {
           catKey: category._key,
@@ -572,13 +575,13 @@ class ServiceCategoryService {
               // resolution the corpus's own EN lookup applies. A BLANK
               // row counts as no row.
               LET categoryNameEN = LENGTH(TRIM(categoryTranslationEN)) > 0 ? categoryTranslationEN : category.nameEN
-              // The DISPLAY name is the locale's translation, and NOTHING
-              // else — the public tree falls back to the ENGLISH name, the
-              // admin tree does not. The admin panel keys its label map
-              // by this display name (the file's labels ARE locale
-              // names), so an English fallback here would let two entities
-              // share one key and file a label under the wrong entity.
-              LET categoryName = categoryTranslation
+              // The DISPLAY name (name below) is the locale's translation,
+              // and NOTHING else — the public tree falls back to the
+              // ENGLISH name, the admin tree does not. The admin panel
+              // keys its label map by this display name (the file's labels
+              // ARE locale names), so an English fallback here would let
+              // two entities share one key and file a label under the
+              // wrong entity.
               LET services = (
                   FOR edge IN categoryServices
                       FILTER edge._from == category._id
@@ -604,18 +607,17 @@ class ServiceCategoryService {
                           // The display name stays the locale's translation —
                           // the admin panel keys its label map by it (see
                           // the category level above).
-                          LET serviceName = serviceTranslation
                           SORT edge.order ASC
                           RETURN {
                               _key: service._key,
-                              name: serviceName,
+                              name: serviceTranslation,
                               nameEN: serviceNameEN
                           }
               )
               RETURN {
                   catKey: category._key,
                   catCode: category.catCode,
-                  name: categoryName,
+                  name: categoryTranslation,
                   nameEN: categoryNameEN,
                   children: services
               }

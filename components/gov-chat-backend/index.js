@@ -142,6 +142,11 @@ const swaggerOptions = {
               items: {
                 type: 'object',
                 properties: {
+                  _key: {
+                    type: 'string',
+                    description:
+                      "The service entity's key. A client identifies a service by it, never by a name — neither spelling is unique inside a category."
+                  },
                   name: {
                     type: 'string',
                     nullable: true,

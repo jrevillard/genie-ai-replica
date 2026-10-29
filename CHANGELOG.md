@@ -209,13 +209,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its localized display name: the admin panel keys its label map by that name,
   so an English fallback there would let two entities share one key and file a
   label under the wrong entity. On the mobile app, the tree panel now
-  identifies a selected service by its English label, so two services that
-  read the same in the interface language are two scopes. An entity with no
-  name in any language is published unnamed and the clients do not offer it:
-  it cannot be scoped on. A
-  corpus that never carried the label of an entity seeded outside the write
-  path needs a re-ingest before that entity's scope matches documents — the
-  labels are minted when a document is ingested. (#1117, !632)
+  identifies a selected service by its entity key: the public tree's services
+  now carry their `_key`, and neither spelling of the name is unique inside a
+  category — two services that read the same are two scopes. An entity with
+  no name in any language is published unnamed and the clients do not offer
+  it: it cannot be scoped on.
+
+  **Upgrading a deployment whose taxonomy was seeded by the scripts**
+  (`create-knowledge-hierarchy.js`) requires a **re-ingest of the corpus**
+  after deploying this change: those entities' labels are minted when a
+  document is ingested, and until the re-ingest every scope on them finds no
+  documents — the query abstains ("no documented information was found").
+  (#1117, !632)
 - **The admin hierarchy panel could show an empty English name.** The detailed
   tree behind it returned only the localized name; the panel worked around
   that by fetching the tree in English and relabelling the result, so the

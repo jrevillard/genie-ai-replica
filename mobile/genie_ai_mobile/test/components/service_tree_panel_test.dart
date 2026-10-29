@@ -234,6 +234,60 @@ void main() {
     expect(emitted!['serviceCount'], 2);
     expect(emitted!['serviceLabelsEn'], ['Taxes']);
   });
+
+  testWidgets(
+    'two services sharing every name are two scopes once the tree carries keys',
+    (tester) async {
+      // The tree publishes each child's entity _key, and NEITHER spelling
+      // of the name is unique inside a category: here both children read
+      // 'Taxes' on the wire. The key is the identity — picking one must
+      // never toggle the other.
+      final keyedTree = [
+        {
+          'catKey': '2',
+          'name': 'Estado civil',
+          'nameEN': 'Civil Registry',
+          'children': [
+            {'_key': 'svc-a', 'name': 'Impuestos', 'nameEN': 'Taxes'},
+            {'_key': 'svc-b', 'name': 'Taxes', 'nameEN': 'Taxes'},
+          ],
+        },
+      ];
+      Map<String, dynamic>? emitted;
+      resetThemeManager();
+      final api = ServiceCategoriesApi(
+        ApiClient()..client = _MockClient(jsonEncode(keyedTree)),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [serviceCategoriesApiProvider.overrideWithValue(api)],
+          child: MaterialApp(
+            home: Scaffold(
+              body: ServiceTreePanel(onSelectionChange: (s) => emitted = s),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Estado civil'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Impuestos'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Taxes'));
+      await tester.pumpAndSettle();
+
+      // BOTH are selected — the second tap did not toggle the first off.
+      expect(emitted!['serviceCount'], 2);
+
+      // Deselecting the keyed twin removes ONLY that one.
+      await tester.tap(find.text('Taxes'));
+      await tester.pumpAndSettle();
+      expect(emitted!['serviceCount'], 1);
+      expect(emitted!['serviceLabelsEn'], ['Taxes']);
+    },
+  );
 }
 
 class _MockClient extends http.BaseClient {

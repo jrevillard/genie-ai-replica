@@ -154,7 +154,13 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     String serviceEn = "";
 
     if (serviceItem is Map) {
-      serviceId = (serviceItem['id'] ?? serviceItem['key'] ?? "").toString();
+      // The tree's children publish their entity _key: it is the
+      // identity — neither spelling of the name is unique inside a
+      // category. The older spellings stand in for a tree that predates
+      // the field.
+      serviceId =
+          (serviceItem['_key'] ?? serviceItem['id'] ?? serviceItem['key'] ?? "")
+              .toString();
       serviceName = serviceItem['label'] ?? serviceItem['name'] ?? "Unknown";
       final en = serviceItem['nameEN'];
       serviceEn = (en is String) ? en : "";
@@ -171,26 +177,33 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     // named alike in different categories toggled each other's scope,
     // and the highlight desynced from what the chat received.
     //
-    // The ENGLISH label is the identity, the same spelling the web keys
-    // on: a DISPLAY name is not unique — the tree falls back to the
-    // English name for an entity the locale has no translation for, so
-    // two entities in one category can read the same — and the English
-    // label is what the wire speaks.
+    // The identity is the entity KEY when both rows carry one — the tree
+    // publishes it, and neither spelling of the name is unique inside a
+    // category. Neither label is an identity while the key exists: two
+    // services can share either spelling, and tapping the second one
+    // would toggle the first one off.
     //
-    // The tapped row picks the key, and the stored row must answer in
-    // the SAME key space (the web's one-predicate rule): an entity with
-    // no English label at all carries none (it will refuse at send,
-    // visibly), so the display name stands in for it — and a stored row
-    // that HAS an English label is never matched on its display name.
-    final existingIndex = _orderedSelection.indexWhere(
-      (item) =>
-          (item['id'] == serviceId && serviceId.isNotEmpty) ||
-          (serviceEn.isNotEmpty
-              ? item['nameEn'] == serviceEn && item['category_id'] == categoryId
-              : item['name'] == serviceName &&
-                    item['category_id'] == categoryId &&
-                    (item['nameEn'] as String? ?? '').isEmpty),
-    );
+    // A row without a key (a tree that predates the field) falls back to
+    // the ENGLISH label — the spelling the wire speaks, and the one the
+    // web keys on. The tapped row picks the key space, and the stored row
+    // must answer in the SAME one (the web's one-predicate rule): a
+    // stored row that carries a key, or an English label, is never
+    // matched on its display name.
+    final existingIndex = _orderedSelection.indexWhere((item) {
+      final String itemId = (item['id'] as String? ?? '');
+      if (serviceId.isNotEmpty && itemId.isNotEmpty) {
+        return itemId == serviceId;
+      }
+      if (serviceEn.isNotEmpty) {
+        return itemId.isEmpty &&
+            item['nameEn'] == serviceEn &&
+            item['category_id'] == categoryId;
+      }
+      return itemId.isEmpty &&
+          (item['nameEn'] as String? ?? '').isEmpty &&
+          item['name'] == serviceName &&
+          item['category_id'] == categoryId;
+    });
 
     setState(() {
       if (existingIndex >= 0) {

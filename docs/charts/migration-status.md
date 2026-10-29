@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-29)
 
-- **Chart `genieai-umbrella` at 0.2.118**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.119**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,41 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 45 (0.2.119)** — 7 findings from the twenty-first
+  `/code-review`: six fixed, one declined (generic Helm surface).
+  - *The mirror pattern admitted at most ONE path segment* — the
+    canonical Nexus/Artifactory air-gapped topology
+    (`https://nexus.internal/repository/k8s-releases`) failed the
+    render with no workaround, while values.yaml advertised
+    `[/prefix]` unqualified. The prefix is multi-segment now, and a
+    delivery case pins it verbatim in the init shell
+    (mutation-tested: reverting to the single-segment pattern fails
+    the case).
+  - *The chart README's air-gapped section was two properties stale* —
+    it still told operators the mirror takes "no scheme" and to serve
+    a `/jq/...` path nothing downloads (jq left the tools-init
+    container several passes ago). It names the shipped shape now —
+    the fourth documentary surface the pass-20 alignment missed.
+  - *The delivery pin covered one shape only* — the default
+    (`https://dl.k8s.io`) and the scheme-less air-gapped form had no
+    contains-case, so a regression making the scheme group required or
+    dropping the default would land green. Both pinned verbatim, plus
+    an uppercase-scheme case (the regex admits it for RFC 3986's
+    case-insensitive scheme names, which the pattern now spells out —
+    a plain `https?` rejected `HTTPS://` outright).
+  - *The two negative mirror cases pinned only the key name* — the
+    schema error embeds the whole pattern, so a clause-specific needle
+    would pin the pattern TEXT and break on every refinement; the
+    comment at the cases states that trade-off and the distinct inputs
+    are the discrimination. The scheme-position case's label no longer
+    mis-describes its input (`https:mirror` carries the offending
+    colon in scheme position, not the port).
+  - *Declined: closing the schema's global block with
+    additionalProperties* — the typo'd-mirror-key class is real, but
+    the block deliberately leaves `imageRegistry`/`toolingImageRegistry`
+    and the pull-secret keys untyped; closing it means typing the
+    whole `global` surface, a chart-wide contract this branch's KISS
+    rule keeps as a ledger item.
 - **Review loop, pass 44 (0.2.118)** — 4 findings from the twentieth
   `/code-review`, all sharpening the pass-42/43 mirror contract.
   - *The mirror pattern still admitted two shapes outside its own
@@ -1922,7 +1957,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.118** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.119** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

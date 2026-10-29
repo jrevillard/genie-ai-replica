@@ -73,8 +73,11 @@ CPUS=4
 # over-commits and the DOCKER oom killer (not the kubernetes one) fires.
 # The sum of the chart's memory REQUESTS (~7.7 Gi) plus the control
 # plane (~1.5 Gi) has to fit in here, or a pod that balloons takes the
-# node — and the control plane — down with it.
-MEMORY=10240
+# node — and the control plane — down with it. 10240 was measured too
+# tight in practice: a rolling upgrade (old + new ReplicaSet resident
+# at once) plus a parallel image build pushed the container into hard
+# OOM and the apiserver died mid-deploy. 12288 leaves that headroom.
+MEMORY=12288
 DISK=20000
 SEALED_KEYS_FILE=""
 FLUX_GIT_AUTH_FILE=""

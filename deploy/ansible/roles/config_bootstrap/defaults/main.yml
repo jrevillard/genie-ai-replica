@@ -8,9 +8,45 @@
 # false to skip when they want to manage the host directory entirely by hand.
 config_bootstrap_sync_enabled: true
 
-# Scratch directory for the branch-pinned archive downloads and their extraction.
-# Cleaned up at the end of the play.
-config_bootstrap_tmp_root: /tmp/genieai-config-extract
+# Whether a branch that carries a different app.title than the host serves may
+# be mirrored onto it. The default is false: re-branding a deployment is a
+# decision to make in the repository, not a side effect of deploying another
+# branch by mistake. Set it to true when the re-brand is the point of the
+# deploy.
+config_bootstrap_allow_rebrand: false
+
+# keycloak_theme — the theme this deployment serves, the one the mirror must
+# not delete from a node that does not ship it — is NOT declared here. It
+# lives in group_vars/all.yml, next to config_dir, for the same reason: role
+# defaults are scoped to the role's own plays, while the variable feeds
+# templates/env.j2 (a different play) and the guard in this one. One
+# declaration in all.yml feeds both; a role default would be invisible to the
+# .env-rendering play and the two consumers could disagree.
+#
+# A flavour overrides it in group_vars/<environment>/vars.yml (e.g.
+# genie-el-salvador). An undefined value fails the role loudly instead of
+# silently checking a default.
+#
+# What makes a theme usable: the realm (configs/keycloak/genie-realm.yaml)
+# points login, account, admin and email at the same KEYCLOAK_THEME, so a
+# theme is only complete when each subtree carries its theme.properties. The
+# role's theme guard checks all of them.
+config_bootstrap_theme_entrypoints:
+  - login
+  - account
+  - admin
+  - email
+
+# The guard protects the CONFIGURED theme only. The owning pair's `expect`
+# list keeps the rest of the branch's themes tree intact: the paths it names
+# (the parent a flavour theme inherits from, e.g.
+# genie/account/theme.properties) must exist in the branch, so a branch that
+# ships them re-seeds them and the mirror never deletes them. What the branch
+# does NOT ship, the mirror removes — a theme that exists only on the host
+# does not survive a deploy (the branding guide says the same): keep it in
+# the repository, then name it in config_bootstrap_theme_entrypoints if a
+# realm points at it. The expect list is also the knob when a deployment
+# retires one of the parent's subtrees.
 
 # List of (source, destination) pairs.
 #   src        - repo-relative directory. Used two ways: as the `?path=` argument
@@ -20,17 +56,39 @@ config_bootstrap_tmp_root: /tmp/genieai-config-extract
 #                unpacks to after --strip-components=1.
 #   dest_subdir - subdirectory of config_dir to seed, matching the host paths
 #                rendered as CONFIG_DIR_FRONTEND / CONFIG_DIR_KEYCLOAK.
-#   expect      - a file that MUST exist in the extracted archive. Checked before
+#   expect      - files that MUST exist in the extracted archive. Checked before
 #                anything is synced, so a wrong branch or a failed extraction
 #                fails the deploy instead of silently seeding a broken mount.
+#                The runtime config JSON is in the list because it is the file
+#                the frontend fetches and validates at boot: a branch whose
+#                config directory does not carry it would mirror that absence
+#                onto the host, and the mount would serve a 404 for it.
+#   brand_file  - the file inside the pair that carries the deployment's brand
+#                (its app.title). Exactly one pair must declare it: the role
+#                compares the branch's copy with the host's copy and refuses to
+#                mirror a branch that would re-brand the deployment. Declared
+#                here rather than hardcoded in the role so that changing a
+#                pair's src or dest_subdir cannot leave the check reading a
+#                path that no longer exists.
 config_bootstrap_pairs:
   - src: "components/gov-chat-frontend/public/config"
     dest_subdir: "frontend"
-    expect: "theme-variables.css"
+    expect:
+      - "theme-variables.css"
+      - "genie-ai-config.json"
+    brand_file: "genie-ai-config.json"
   # Seed the whole themes tree, not one theme: additional themes (e.g.
   # genie-el-salvador with parent=genie) must sit next to genie under the
   # mounted directory, or their parent reference cannot resolve. The mount
   # target in docker-compose.yaml is /opt/keycloak/themes (the root).
   - src: "configs/keycloak/themes"
     dest_subdir: "keycloak/themes"
-    expect: "genie/login/theme.properties"
+    # genie is the parent every flavour theme inherits from
+    # (parent=genie): dropping one of its subtrees while keeping the
+    # children would break them. Keep this list in step with the
+    # config_bootstrap_theme_entrypoints of the parent.
+    expect:
+      - "genie/login/theme.properties"
+      - "genie/account/theme.properties"
+      - "genie/admin/theme.properties"
+      - "genie/email/theme.properties"

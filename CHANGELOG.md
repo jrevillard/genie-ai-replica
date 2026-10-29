@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Living Intelligence theme layer on the base theme.** A decorative layer — hero banner, dot mesh, bottom waves and corner network — is applied to the welcome screen and switched per deployment from the runtime config (`theme.visual`). The base theme ships it on; the derived flavours (`huduma`, `naat`, `original`) ship it off. Every artwork path is configurable, so an operator can swap an illustration on the host without rebuilding an image.
+- **Living Intelligence theme layer on the base theme.** A decorative layer — hero banner, dot mesh, bottom waves and corner network — is applied to the welcome screen and switched per deployment from the runtime config (`theme.visual`). The base theme ships it on; the derived flavours (`huduma`, `naat`, `original`) ship it off. Every artwork path is configurable, so an operator can swap an illustration without rebuilding an image — the change goes in the repository, in the flavour's configuration file, and the next deployment seeds it onto the nodes (see the breaking change under **Changed**).
 - **Per-category tints on the welcome-screen cards.** The nine quick-help cards now carry the background, hover and border colours that were already declared in each button's `styles` block and were never read by the frontend.
 - **`app.splash` in the runtime config.** The splash image is now a declared, per-deployment setting rather than an implicit fallback. The base theme ships the Living Intelligence globe splash; the derived flavours keep the bundled default.
 - **RAG pipeline tracing:** LLM spans now record the model, the sampling
@@ -56,6 +56,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** the deployment now seeds the host's configuration directory
+  as a **mirror of the deployed branch** (`rsync --archive --checksum
+  --delete`): a file changed on the host is reverted by the next deployment,
+  and a file the branch no longer ships is removed. **The change belongs in
+  the repository, in the flavour's configuration file** — the node's copy is
+  seeded from the branch and is no longer preserved. The deployment then
+  verifies that the host matches the branch it just seeded, and refuses to
+  sync a branch that does not ship the Keycloak theme the deployment is
+  configured to use — the one it renders into `KEYCLOAK_THEME` — or that
+  carries a different brand than the host serves. A host that kept a stale
+  configuration served a brand the branch no longer declared, and the app
+  refused to start on it — a blank landing page behind a deploy that reported
+  success. A deployment that stops on one of those checks leaves the node's
+  runtime configuration untouched and cleans up after itself (the two things
+  it may still have done: install rsync, and reap week-old scratch trees
+  from /tmp); a failure during the mirror itself
+  can leave the node half-converged, and re-running the deployment finishes
+  it. `--check` does nothing for this role. Two variables relax the guards
+  for the cases where they are wrong: `config_bootstrap_allow_rebrand` — a
+  deliberate rename in the repository reads as a re-brand until the nodes
+  have taken the new title, so set it for the deployment that applies the
+  rename and set it back afterwards — and `config_bootstrap_theme_entrypoints`
+  (a theme that serves only some of the realm's screens). Both are documented
+  in the deployment guide. **A deployment that failed mid-mirror is resumed
+  by re-running it**: the mirror is content-compared, so the re-run only
+  writes what is not already correct (resuming with `--start-at-task` is not
+  supported — the mirror tasks read variables set earlier in the play).
 - **The Keycloak theme now covers every surface, not only the login page.**
   The admin console, the account console and the Keycloak emails carry the
   Living Intelligence look: the masthead is a pale wash of the brand instead of

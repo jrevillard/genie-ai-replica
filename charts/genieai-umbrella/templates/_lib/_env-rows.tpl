@@ -169,6 +169,9 @@ Usage:
 {{- if not (regexMatch "^[A-Za-z_][A-Za-z0-9_]*$" (toString (get $row "envVar"))) -}}
 {{- fail (printf "data.keycloak.convergence.envSecrets[%d].envVar (%q) is not an environment variable name: it must start with a letter or an underscore and hold only letters, digits and underscores" $i (toString (get $row "envVar"))) -}}
 {{- end -}}
+{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" (toString (get $row "secretName"))) -}}
+{{- fail (printf "data.keycloak.convergence.envSecrets[%d].secretName (%q) is not a valid Secret name: lowercase alphanumerics, '.' and '-', bounded by alphanumerics" $i (toString (get $row "secretName"))) -}}
+{{- end -}}
 {{- end -}}
 {{- toJson $rows -}}
 {{- end -}}

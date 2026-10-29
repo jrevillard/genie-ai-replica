@@ -41,6 +41,7 @@
           <th>{{ translate('admin.queryInspector.colTime', 'Time') }}</th>
           <th>{{ translate('admin.queryInspector.colQuestion', 'User Question') }}</th>
           <th>{{ translate('admin.queryInspector.colScope', 'Scope') }}</th>
+          <th>{{ translate('admin.queryInspector.colAbstention', 'Abstention') }}</th>
           <th>{{ translate('admin.queryInspector.colConfidence', 'Confidence') }}</th>
           <th>{{ translate('admin.queryInspector.colResponseTime', 'Response Time') }}</th>
           <th>{{ translate('admin.queryInspector.colSources', 'Sources') }}</th>
@@ -55,9 +56,12 @@
           <td class="qi-list__cell--scope" data-testid="qi-scope">
             <span v-if="scopeText(query)" class="qi-list__scope-labels">{{ scopeText(query) }}</span>
             <span v-else class="qi-list__muted">—</span>
-            <DsPill v-if="query.metadata?.abstained" variant="warning" data-testid="qi-abstention-marker">
+          </td>
+          <td class="qi-list__cell--center">
+            <DsPill v-if="query.metadata?.abstained === true" variant="warning" data-testid="qi-abstention-marker">
               {{ translate('admin.queryInspector.abstained', 'Abstained') }}
             </DsPill>
+            <span v-else class="qi-list__muted">—</span>
           </td>
           <td class="qi-list__cell--center">
             <DsPill
@@ -166,15 +170,26 @@ export default {
       return text?.length > max ? text.substring(0, max) + '...' : text || '';
     },
     /**
-     * The labels the query asked for, as one string. The scope is what makes
-     * an abstention actionable: "Taxes & Revenue matched nothing" is a fact
-     * an operator can act on, an abstention without a scope is not.
+     * The label filter the retrieval actually applied, as one string — the
+     * same rule the pipeline uses (core/label_contract.build_filter_labels):
+     * the service labels are the filter whenever they exist (the service is
+     * the narrower scope — the category must not widen it into the whole
+     * category), otherwise the category filters on its own. Both spellings
+     * of the category count (categoryLabel singular, categoryLabels legacy).
+     * This is what makes an abstention actionable: "Tax Payment matched
+     * nothing" is a fact an operator can act on.
      */
     scopeText(query) {
       const context = query.context || {};
+      const services = Array.isArray(context.serviceLabels)
+        ? context.serviceLabels.filter((label) => label !== '' && label != null)
+        : [];
+      if (services.length) {
+        return services.join(', ');
+      }
       const labels = [];
       if (context.categoryLabel) labels.push(context.categoryLabel);
-      if (Array.isArray(context.serviceLabels)) labels.push(...context.serviceLabels);
+      if (Array.isArray(context.categoryLabels)) labels.push(...context.categoryLabels);
       return labels.join(', ');
     },
     confidenceVariant(score) {
@@ -270,12 +285,6 @@ export default {
 
 .qi-list__cell--scope {
   max-width: 260px;
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.qi-list__scope-labels {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

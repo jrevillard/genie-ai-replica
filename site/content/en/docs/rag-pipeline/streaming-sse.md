@@ -155,8 +155,9 @@ Additional attributes emitted from the reranker microservice span:
 The `is_grounded`, `confidence_score`, and `self_confidence` values are
 **not** exposed as chatqna span attributes — they are surfaced via the
 SSE metadata event (see the metadata envelope above). The `abstained`
-value is exposed as a metric attribute on `chat_requests_total` in
-VictoriaMetrics.
+value is exposed both as a metric attribute on `chat_requests_total` in
+VictoriaMetrics and as the `answer.abstained` attribute on the
+`chatqna.stream_outcome` span, derived from the same retrieval signal.
 
 Look for these on VictoriaTraces to debug why a particular answer was
 generated. Per-stage child spans are OPEA megaservice HTTP client spans

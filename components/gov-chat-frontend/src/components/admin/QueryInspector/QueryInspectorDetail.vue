@@ -220,7 +220,9 @@ export default {
     },
     /**
      * The cause of the abstention, in the operator's words. The machine
-     * reason stays the source of truth; this only says what it means.
+     * reason stays the source of truth; this only says what it means. An
+     * unknown code keeps the generic sentence and names the code, so a new
+     * producer never renders as bare machine tokens.
      */
     abstentionReasonText() {
       const reason = this.query.metadata?.abstention_reason;
@@ -236,10 +238,11 @@ export default {
           'The reranker refused an oversized input (an ingestion-side issue). The answer has no document backing.'
         );
       }
-      return (
-        reason ||
-        this.translate('admin.queryInspector.abstentionUnspecified', 'The answer is an abstention, not an answer.')
+      const generic = this.translate(
+        'admin.queryInspector.abstentionUnspecified',
+        'The answer has no document backing.'
       );
+      return reason ? `${generic} (${reason})` : generic;
     }
   },
   methods: {

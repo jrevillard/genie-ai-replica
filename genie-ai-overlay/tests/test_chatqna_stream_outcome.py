@@ -419,22 +419,37 @@ class TestEmissionSiteArguments:
         assert rendered["self_confidence"] == "self_confidence"
         assert rendered["is_grounded"] == "is_grounded"
         # `abstained` was the constant False for as long as nothing measured
-        # it. The retrieval decides it now, so the span carries the measurement
-        # like the three values above.
-        assert rendered["abstained"] == "abstained"
+        # it. The retrieval decides it now — any expression but a constant is
+        # acceptable, so a rename or a hoist never trips this guard while a
+        # revert to a constant always does. The retrieval-derived semantics
+        # are pinned by the runtime tests in test_chatqna.py.
+        span_arg = next(kw.value for kw in call.keywords if kw.arg == "abstained")
+        assert not isinstance(span_arg, ast.Constant), (
+            "the outcome span's abstained must be measured, not a constant — a "
+            "scope that matched nothing has to show up in the trace"
+        )
 
-    def test_the_abstention_is_measured_from_the_retrieval(self):
-        """The flag the span receives must come from the retrieval, not from a
-        constant: a scope that matched nothing has to show up in the trace."""
-        fn = _function_node("_stream_with_metadata")
-        assignments = [
+    def test_the_metric_abstention_attribute_is_measured_not_constant(self):
+        """`chat_requests_total`'s abstained attribute is user-visible and has
+        no behaviour test (the metric objects are inert under the comps mock).
+        Reverting the success path's attribute to a constant — or swapping the
+        two _chat_attrs arguments, which moves the abstention onto the `error`
+        label — must fail here: every behaviour suite would stay green while
+        the metric reported abstained=false forever."""
+        fn = _function_node("handle_request")
+        attrs_calls = [
             node
             for node in ast.walk(fn)
-            if isinstance(node, ast.Assign)
-            and any(isinstance(target, ast.Name) and target.id == "abstained" for target in node.targets)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_chat_attrs"
         ]
-        assert len(assignments) == 1, "the abstention flag must be computed once per stream"
-        assert ast.unparse(assignments[0].value) == "_retriever_matched_no_document(result_dict)"
+        # The reranker-input-too-long path deliberately passes the constant
+        # "true" (that abstention is by construction); the success path must
+        # derive its value.
+        measured = [c for c in attrs_calls if not isinstance(c.args[0], ast.Constant)]
+        assert measured, (
+            "the success path's _chat_attrs call must derive its abstained "
+            "attribute from the retrieval, not pass a constant"
+        )
 
     def test_handle_request_captures_the_orchestrate_context_inside_the_with_block(self):
         """Captured after the block closes it would hold a stale/None handle."""

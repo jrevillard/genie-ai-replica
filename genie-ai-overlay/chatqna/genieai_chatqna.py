@@ -4396,8 +4396,10 @@ class ChatQnAService:
         }
         # The retrieval produced no document: the turn has no document backing.
         # The metadata has to say so — an operator cannot tell an abstention
-        # from an ordinary answer by reading the response.
-        if _retriever_matched_no_document(result_dict):
+        # from an ordinary answer by reading the response. `_abstained` was
+        # computed in the schedule block above (it also drove the metric), so
+        # the metric and this metadata cannot be computed from different runs.
+        if _abstained:
             metadata["abstained"] = True
             metadata["abstention_reason"] = "no_documents_retrieved"
         if LLM_SELF_CONFIDENCE_ENABLED:

@@ -78,6 +78,6 @@ job.
 ## Other directories
 
 - `deploy/environments/` — empty; per-environment overlays live in the
-  `genie-ai-deploy` repo under `overlays/<pays>/<env>/` and are applied by
+  `genie-ai-deploy` repo under `overlays/<cluster>/<env>/` and are applied by
   Flux, not from this tree (see `deploy/environments/README.md`).
 - `docs/charts/` — dev-internal reference docs (operator selection, migration playbooks).

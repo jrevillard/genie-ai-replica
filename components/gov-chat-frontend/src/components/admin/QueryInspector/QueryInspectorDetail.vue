@@ -61,6 +61,21 @@
         </div>
       </DsCard>
 
+      <!-- Abstention -->
+      <DsCard v-if="isAbstained" variant="outline">
+        <template #header>
+          <span class="qi-detail__section-title">
+            {{ translate('admin.queryInspector.sectionAbstention', 'Abstention') }}
+          </span>
+        </template>
+        <div class="qi-detail__abstention">
+          <DsPill variant="warning" data-testid="qi-abstention-marker">
+            {{ translate('admin.queryInspector.abstained', 'Abstained') }}
+          </DsPill>
+          <span data-testid="qi-abstention-reason">{{ abstentionReasonText }}</span>
+        </div>
+      </DsCard>
+
       <!-- Messages -->
       <DsCard v-if="query.messages?.length" variant="outline">
         <template #header>
@@ -194,6 +209,39 @@ export default {
     query: { type: Object, required: true }
   },
   emits: ['back'],
+  computed: {
+    /**
+     * Whether this query abstained. `abstained` is null when the turn never
+     * produced an answer to classify, and false when it answered — only a
+     * true flag marks an abstention.
+     */
+    isAbstained() {
+      return this.query.metadata?.abstained === true;
+    },
+    /**
+     * The cause of the abstention, in the operator's words. The machine
+     * reason stays the source of truth; this only says what it means.
+     */
+    abstentionReasonText() {
+      const reason = this.query.metadata?.abstention_reason;
+      if (reason === 'no_documents_retrieved') {
+        return this.translate(
+          'admin.queryInspector.abstentionNoDocuments',
+          'No document was retrieved for this query. The answer has no document backing.'
+        );
+      }
+      if (reason === 'reranker_input_too_long') {
+        return this.translate(
+          'admin.queryInspector.abstentionRerankerInput',
+          'The reranker refused an oversized input (an ingestion-side issue). The answer has no document backing.'
+        );
+      }
+      return (
+        reason ||
+        this.translate('admin.queryInspector.abstentionUnspecified', 'The answer is an abstention, not an answer.')
+      );
+    }
+  },
   methods: {
     translate(key, fallback) {
       return this.$parent?.translate?.(key, fallback) ?? fallback;
@@ -280,6 +328,14 @@ export default {
 
 .qi-detail__box--feedback {
   border-left: 3px solid var(--success);
+}
+
+.qi-detail__abstention {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--text-sm);
+  line-height: 1.6;
 }
 
 .qi-detail__muted {

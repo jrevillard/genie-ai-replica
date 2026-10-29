@@ -203,6 +203,21 @@ describe('QueryService — Inspector methods', () => {
       expect(result.data.pagination.pages).toBe(0);
     });
 
+    it('should project the metadata and the requested scope', async () => {
+      // The Inspector tells an abstention from an ordinary answer with the
+      // metadata (the abstention flag) and names the scope it asked for with
+      // the context. The mock cursor returns canned documents whatever the
+      // query asks for, so the projection itself is what has to be checked:
+      // drop a field here and the Inspector loses it silently.
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([0]));
+
+      await queryService.getQueriesForInspector();
+
+      const projection = mockDb.query.mock.calls[0][0].strings.join('');
+      expect(projection).toContain('metadata: q.metadata');
+      expect(projection).toContain('context: q.context');
+    });
+
     it('should handle null count from DB', async () => {
       mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([null]));
 

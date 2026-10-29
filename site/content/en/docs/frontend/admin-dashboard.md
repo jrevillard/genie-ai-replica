@@ -181,10 +181,17 @@ Browse and inspect individual queries that ran through the RAG pipeline. Three c
 │ - timestamp                │ - request               │
 │ - user                     │ - retrieved chunks      │
 │ - query text               │ - response              │
-│ - response time            │ - metadata              │
-│ - confidence               │ - confidence            │
+│ - scope                    │ - metadata              │
+│ - response time            │ - confidence            │
+│ - confidence               │ - abstention            │
 └────────────────────────────┴─────────────────────────┘
 ```
+
+The list shows the scope each query asked for (the category and service
+labels sent to the RAG). A query that abstained — the retrieval matched no
+document — carries an **Abstained** marker next to its scope, so the
+scopes that recently matched nothing are visible without reading every
+answer. The detail view names the cause of the abstention.
 
 Click a row in the list to load detail. Filters: user, date range, confidence range, label, query substring. See [Debugging with Tracing & Logs](/docs/operate/tracing-howto/) for the related backend trace view.
 

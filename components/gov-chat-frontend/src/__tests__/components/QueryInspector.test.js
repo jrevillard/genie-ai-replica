@@ -254,6 +254,49 @@ describe('QueryInspectorList', () => {
     expect(wrapper.find('.ds-state').exists() || wrapper.text()).toBeTruthy();
   });
 
+  it('should mark an abstained query and show the scope it asked for', () => {
+    // The operator's question is "which scopes matched nothing?". The marker
+    // alone does not answer it — the scope has to sit next to it.
+    const queries = [
+      {
+        _key: 'q1',
+        timestamp: '2025-05-28T10:00:00Z',
+        text: 'What is the tax rate?',
+        metadata: {
+          confidence_score: 0,
+          source_documents: [],
+          abstained: true,
+          abstention_reason: 'no_documents_retrieved'
+        },
+        context: { categoryLabel: 'Taxes & Revenue', serviceLabels: ['Tax Payment'] },
+        responseTime: 500
+      }
+    ];
+    const wrapper = mountList({ queries, pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 } });
+
+    expect(wrapper.find('[data-testid="qi-abstention-marker"]').exists()).toBe(true);
+    const scope = wrapper.find('[data-testid="qi-scope"]');
+    expect(scope.exists()).toBe(true);
+    expect(scope.text()).toContain('Taxes & Revenue');
+    expect(scope.text()).toContain('Tax Payment');
+  });
+
+  it('should not mark a query that answered', () => {
+    const queries = [
+      {
+        _key: 'q1',
+        timestamp: '2025-05-28T10:00:00Z',
+        text: 'What is the tax rate?',
+        metadata: { confidence_score: 0.9, source_documents: [{}] },
+        context: { categoryLabel: 'Taxes & Revenue', serviceLabels: [] },
+        responseTime: 500
+      }
+    ];
+    const wrapper = mountList({ queries, pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 } });
+
+    expect(wrapper.find('[data-testid="qi-abstention-marker"]').exists()).toBe(false);
+  });
+
   it('should show pagination when multiple pages', () => {
     const queries = [{ _key: 'q1', text: 'test', metadata: {}, responseTime: 100 }];
     const wrapper = mountList({ queries, pagination: { total: 50, limit: 25, offset: 0, pages: 2, currentPage: 1 } });
@@ -419,5 +462,28 @@ describe('QueryInspectorDetail', () => {
     const wrapper = mountDetail({ query });
     const link = wrapper.find('a');
     expect(link.exists()).toBe(false);
+  });
+
+  it('should show the abstention and its cause', () => {
+    const query = {
+      ...fullQuery,
+      metadata: {
+        confidence_score: 0,
+        source_documents: [],
+        abstained: true,
+        abstention_reason: 'no_documents_retrieved'
+      }
+    };
+    const wrapper = mountDetail({ query });
+
+    expect(wrapper.find('[data-testid="qi-abstention-marker"]').exists()).toBe(true);
+    const reason = wrapper.find('[data-testid="qi-abstention-reason"]');
+    expect(reason.exists()).toBe(true);
+    expect(reason.text()).toContain('No document');
+  });
+
+  it('should not show an abstention block for an ordinary answer', () => {
+    const wrapper = mountDetail({ query: fullQuery });
+    expect(wrapper.find('[data-testid="qi-abstention-marker"]').exists()).toBe(false);
   });
 });

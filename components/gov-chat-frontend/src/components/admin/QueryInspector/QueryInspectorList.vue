@@ -40,6 +40,7 @@
         <tr>
           <th>{{ translate('admin.queryInspector.colTime', 'Time') }}</th>
           <th>{{ translate('admin.queryInspector.colQuestion', 'User Question') }}</th>
+          <th>{{ translate('admin.queryInspector.colScope', 'Scope') }}</th>
           <th>{{ translate('admin.queryInspector.colConfidence', 'Confidence') }}</th>
           <th>{{ translate('admin.queryInspector.colResponseTime', 'Response Time') }}</th>
           <th>{{ translate('admin.queryInspector.colSources', 'Sources') }}</th>
@@ -51,6 +52,13 @@
         <tr v-for="query in queries" :key="query._key" class="qi-list__row" @click="$emit('inspect', query._key)">
           <td class="qi-list__cell--time">{{ formatTime(query.timestamp) }}</td>
           <td class="qi-list__cell--question">{{ truncate(query.text, 80) }}</td>
+          <td class="qi-list__cell--scope" data-testid="qi-scope">
+            <span v-if="scopeText(query)" class="qi-list__scope-labels">{{ scopeText(query) }}</span>
+            <span v-else class="qi-list__muted">—</span>
+            <DsPill v-if="query.metadata?.abstained" variant="warning" data-testid="qi-abstention-marker">
+              {{ translate('admin.queryInspector.abstained', 'Abstained') }}
+            </DsPill>
+          </td>
           <td class="qi-list__cell--center">
             <DsPill
               v-if="query.metadata?.confidence_score != null"
@@ -157,6 +165,18 @@ export default {
     truncate(text, max) {
       return text?.length > max ? text.substring(0, max) + '...' : text || '';
     },
+    /**
+     * The labels the query asked for, as one string. The scope is what makes
+     * an abstention actionable: "Taxes & Revenue matched nothing" is a fact
+     * an operator can act on, an abstention without a scope is not.
+     */
+    scopeText(query) {
+      const context = query.context || {};
+      const labels = [];
+      if (context.categoryLabel) labels.push(context.categoryLabel);
+      if (Array.isArray(context.serviceLabels)) labels.push(...context.serviceLabels);
+      return labels.join(', ');
+    },
     confidenceVariant(score) {
       if (score >= 0.8) return 'success';
       if (score >= 0.5) return 'warning';
@@ -243,6 +263,19 @@ export default {
 
 .qi-list__cell--question {
   max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qi-list__cell--scope {
+  max-width: 260px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.qi-list__scope-labels {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

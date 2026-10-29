@@ -76,10 +76,20 @@ that information."
 
 > **Verifying abstention fired.** When abstention fires, the streamed
 > answer ends with the configured refusal phrase, and the SSE metadata
-> event carries `is_grounded: false`. The `abstained` value is exposed as
-> a metric attribute on `chat_requests_total` in VictoriaMetrics (not as
-> a chatqna span attribute); the `chatqna.orchestrate` root span in
-> VictoriaTraces reflects the same request for trace-level correlation.
+> event carries `is_grounded: false`. When the retrieval returned no
+> document at all — a scoped query whose label filter matched nothing —
+> the metadata event also carries `abstained: true` with
+> `abstention_reason: no_documents_retrieved`, and the answer-level span
+> records the same value. The flag reports that the retrieval produced no
+> document; with the default enforcement the answer is then an abstention,
+> while a deployment that sets `CHATQNA_ENFORCE_ABSTENTION=false` may
+> answer without document backing instead. The `abstained` value is
+> exposed as a metric attribute on `chat_requests_total` in VictoriaMetrics
+> (not as a chatqna span attribute); the `chatqna.orchestrate` root span in
+> VictoriaTraces reflects the same request for trace-level correlation. The
+> admin Query Inspector shows the marker and the scope the query asked
+> for, so an operator can find the scopes that matched nothing without
+> reading every answer.
 
 ## Self-confidence {#self-confidence}
 

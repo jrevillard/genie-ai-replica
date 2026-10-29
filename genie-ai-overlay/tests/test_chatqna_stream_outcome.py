@@ -418,7 +418,23 @@ class TestEmissionSiteArguments:
         assert rendered["retrieval_confidence"] == "retrieval_confidence"
         assert rendered["self_confidence"] == "self_confidence"
         assert rendered["is_grounded"] == "is_grounded"
-        assert rendered["abstained"] == "False"
+        # `abstained` was the constant False for as long as nothing measured
+        # it. The retrieval decides it now, so the span carries the measurement
+        # like the three values above.
+        assert rendered["abstained"] == "abstained"
+
+    def test_the_abstention_is_measured_from_the_retrieval(self):
+        """The flag the span receives must come from the retrieval, not from a
+        constant: a scope that matched nothing has to show up in the trace."""
+        fn = _function_node("_stream_with_metadata")
+        assignments = [
+            node
+            for node in ast.walk(fn)
+            if isinstance(node, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id == "abstained" for target in node.targets)
+        ]
+        assert len(assignments) == 1, "the abstention flag must be computed once per stream"
+        assert ast.unparse(assignments[0].value) == "_retriever_matched_no_document(result_dict)"
 
     def test_handle_request_captures_the_orchestrate_context_inside_the_with_block(self):
         """Captured after the block closes it would hold a stale/None handle."""

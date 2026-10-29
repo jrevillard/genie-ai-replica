@@ -2670,6 +2670,37 @@ class TestStreamWithMetadata:
         assert '"source_documents": []' in joined
 
     @pytest.mark.asyncio
+    async def test_retrieval_that_matched_no_document_is_flagged_as_abstained(self):
+        """The retriever returned nothing for this query — the label filter
+        matched zero documents. The answer is an abstention, and the metadata
+        event must say so: on the operator side an abstention is otherwise
+        indistinguishable from an ordinary answer."""
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body(["data: b'I cannot answer that'\n\n", "data: [DONE]\n\n"])
+        result_dict = {"retriever": {"retrieved_docs": [], "file_id_pairs": {}}}
+        out = await self._drain(svc._stream_with_metadata(body, result_dict, token="t"))
+        joined = "".join(out)
+        assert '"abstained": true' in joined
+        assert '"abstention_reason": "no_documents_retrieved"' in joined
+
+    @pytest.mark.asyncio
+    async def test_reranker_that_dropped_every_document_is_not_reported_as_an_empty_scope(self):
+        """The retriever DID match documents; the reranker rejected them all.
+        The scope was fine — reporting this as "the scope matched nothing"
+        would send the operator after a stale label that is not stale."""
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body(["data: b'I cannot answer that'\n\n", "data: [DONE]\n\n"])
+        result_dict = {
+            "retriever": {"retrieved_docs": [{"id": "d1", "text": "doc"}], "file_id_pairs": {}},
+            "rerank": {"retrieved_docs": []},
+        }
+        out = await self._drain(svc._stream_with_metadata(body, result_dict, token="t"))
+        joined = "".join(out)
+        assert '"abstained": true' not in joined
+
+    @pytest.mark.asyncio
     async def test_appends_done_if_missing(self):
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
@@ -3775,6 +3806,82 @@ async def test_non_streaming_answer_reports_that_it_was_translated():
 
     assert payload["metadata"]["translation_status"] == "ok"
     assert payload["response"] == "[ES]English answer"
+
+
+@pytest.mark.asyncio
+async def test_non_streaming_retrieval_that_matched_no_document_is_flagged_as_abstained():
+    """The retriever returned nothing for this query — the label filter
+    matched zero documents. The non-streaming answer is an abstention, and
+    the metadata must say so: the operator cannot tell an abstention from an
+    ordinary answer by reading the response."""
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    async def fake_schedule(**_kwargs):
+        return (
+            {
+                "retriever": {"retrieved_docs": [], "file_id_pairs": {}},
+                "rerank": {"retrieved_docs": []},
+                "llm": {"text": "I cannot answer that"},
+            },
+            None,
+        )
+
+    svc.megaservice.schedule = fake_schedule
+    svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        _patched_chat_request(stream=False),
+    ):
+        payload = await svc.handle_request(req)
+
+    assert payload["metadata"]["abstained"] is True
+    assert payload["metadata"]["abstention_reason"] == "no_documents_retrieved"
+
+
+@pytest.mark.asyncio
+async def test_non_streaming_reranker_that_dropped_every_document_is_not_reported_as_an_empty_scope():
+    """The retriever DID match documents; the reranker rejected them all.
+    The scope was fine — reporting this as "the scope matched nothing" would
+    send the operator after a stale label that is not stale."""
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    async def fake_schedule(**_kwargs):
+        return (
+            {
+                "retriever": {"retrieved_docs": [{"id": "d1", "text": "doc"}], "file_id_pairs": {}},
+                "rerank": {"retrieved_docs": []},
+                "llm": {"text": "I cannot answer that"},
+            },
+            None,
+        )
+
+    svc.megaservice.schedule = fake_schedule
+    svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        _patched_chat_request(stream=False),
+    ):
+        payload = await svc.handle_request(req)
+
+    assert payload["metadata"].get("abstained") is not True
 
 
 @pytest.mark.asyncio

@@ -1359,6 +1359,29 @@ _SELF_CONF_SENTINEL_PREFIX = "[[CONF:"
 _SELF_CONF_PARTIAL_RE = re.compile(r"\s*\[\[CONF:[^\[]*$")
 
 
+def _retriever_matched_no_document(result_dict: dict) -> bool:
+    """Whether the retrieval produced no document at all for this query.
+
+    A label-filtered retrieval returns an empty list when the requested scope
+    matches zero documents — the query then abstains instead of answering
+    outside the scope. The reranker's verdict is a different question: it may
+    reject documents the retriever DID match, and that is not a scope that
+    matched nothing. This reads the retriever node, so the two cases cannot
+    be confused.
+
+    Args:
+        result_dict: The megaservice orchestrator output keyed by node name.
+
+    Returns:
+        True when the retrieval produced no document.
+    """
+    for key, val in (result_dict or {}).items():
+        if key.startswith("retriever"):
+            docs = val.get("retrieved_docs") if isinstance(val, dict) else getattr(val, "retrieved_docs", None)
+            return not docs
+    return False
+
+
 def _count_final_chunks(result_dict: dict) -> int:
     """Count the chunks actually fed to the LLM from the orchestrator result.
 
@@ -2966,6 +2989,10 @@ class ChatQnAService:
             f"self={self_confidence} self_conf_enabled={LLM_SELF_CONFIDENCE_ENABLED} "
             f"-> confidence_score={_cs}"
         )
+        # The retrieval produced no document: the turn has no document backing.
+        # The metadata event has to say so — an operator cannot tell an
+        # abstention from an ordinary answer by reading the response.
+        abstained = _retriever_matched_no_document(result_dict)
         # Every input of the answer-level outcome is known here, so this is the
         # first point at which the span can be recorded. `sentinel_present`
         # reports whether a self-grade was actually parsed, so an operator can
@@ -2976,7 +3003,7 @@ class ChatQnAService:
             self_confidence=self_confidence,
             is_grounded=is_grounded,
             sentinel_present=self_confidence is not None,
-            abstained=False,
+            abstained=abstained,
         )
         metadata = {
             "type": "metadata",
@@ -2995,6 +3022,9 @@ class ChatQnAService:
             ),
             "is_grounded": is_grounded,
         }
+        if abstained:
+            metadata["abstained"] = True
+            metadata["abstention_reason"] = "no_documents_retrieved"
         if LLM_SELF_CONFIDENCE_ENABLED:
             # Raw LLM self-assessed groundedness; None when the sentinel was
             # omitted/malformed. Never hard-fails the chat.
@@ -4135,8 +4165,11 @@ class ChatQnAService:
                 # which is always False — docs are a key, not an attribute.)
                 span.set_attribute("rag.chunk_count", _count_final_chunks(result_dict))
 
-                # Record custom application metrics
-                _metric_attrs = _chat_attrs("false", "false")
+                # Record custom application metrics. The `abstained` attribute
+                # follows the same signal as the metadata event: the retrieval
+                # produced no document.
+                _abstained = _retriever_matched_no_document(result_dict)
+                _metric_attrs = _chat_attrs("true" if _abstained else "false", "false")
                 chat_requests_total.add(1, _metric_attrs)
                 chat_rag_duration_seconds.record(_rag_duration, _metric_attrs)
 
@@ -4361,6 +4394,12 @@ class ChatQnAService:
             # this to flag responses that have no document basis.
             "is_grounded": is_grounded,
         }
+        # The retrieval produced no document: the turn has no document backing.
+        # The metadata has to say so — an operator cannot tell an abstention
+        # from an ordinary answer by reading the response.
+        if _retriever_matched_no_document(result_dict):
+            metadata["abstained"] = True
+            metadata["abstention_reason"] = "no_documents_retrieved"
         if LLM_SELF_CONFIDENCE_ENABLED:
             # Raw LLM self-assessed groundedness; None when the sentinel was omitted
             # or malformed.

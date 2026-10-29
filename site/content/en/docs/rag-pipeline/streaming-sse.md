@@ -171,7 +171,7 @@ forwarded to VictoriaMetrics:
 
 | Metric | Type | Attributes |
 |---|---|---|
-| `chat_requests_total` | Counter | `response_type` (`streaming`/`sync`), `abstained` (`true`/`false` — currently hardcoded to `false`; see note below), `error` (`true`/`false`), `retrieval_source` (`chunk`/`chunk_label_filter`/`hybrid`). |
+| `chat_requests_total` | Counter | `response_type` (`streaming`/`sync`), `abstained` (`true`/`false` — `true` when the turn abstained: the retrieval returned no document, or the reranker refused the input), `error` (`true`/`false`), `retrieval_source` (`chunk`/`chunk_label_filter`/`hybrid`). |
 | `chat_rag_duration_seconds` | Histogram | `response_type`, `abstained`, `error`, `retrieval_source`. |
 
 A PromQL probe to graph RAG latency over the last 5 minutes:

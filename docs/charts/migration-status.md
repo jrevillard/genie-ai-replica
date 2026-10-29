@@ -614,6 +614,13 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 54 (0.2.125)** — 1 finding from the thirty-second
+  `/code-review` (which verified all ten run-31 fixes closed): the
+  compound `kubectl get && python3` guard collapsed a transient GET
+  failure and a hollow key into one message asserting the specific
+  cause "carries no tls.key/tls.crt data" — a cause the branch never
+  established. Split into sequential guards, each naming its actual
+  failure. No chart content changed (no version bump).
 - **Review loop, pass 53 (0.2.125)** — 10 findings from the thirty-first
   `/code-review`, all on the run-30 surfaces (the capture mode, this
   ledger, .gitignore). No chart content changed (no version bump). All

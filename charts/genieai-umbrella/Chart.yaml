@@ -6,12 +6,12 @@ description: |
   per-cluster Kustomize overlays (overlays/<cluster>/<env>/) in the
   genie-ai-deploy repo.
 type: application
-version: 0.2.126
+version: 0.2.127
 # `appVersion` mirrors the chart version deliberately: it tracks the chart
 # layout, not the GENIE.AI product release (the two versions on independent
 # axes; deployed image tags are governed by values, not by appVersion).
 # Never "latest" — OCI registries reject it for immutable promotion.
-appVersion: 0.2.126
+appVersion: 0.2.127
 keywords:
   - genie-ai
   - umbrella
@@ -32,6 +32,13 @@ dependencies:
   - name: genieai-common
     version: "0.1.0"
     repository: "file://../genieai-common"
+  # Runtime assets (theme tarball, realm, dashboards, alerting) as a CARGO
+  # dependency: its files/ ride outside the release snapshot (helm-controller
+  # persists no dependency content — see that chart's description), while this
+  # chart's templates read them through .Subcharts.genieai-assets.Files.
+  - name: genieai-assets
+    version: "0.1.0"
+    repository: "file://../genieai-assets"
   # Envoy Gateway — the edge tier this chart's Gateway/HTTPRoute CRs bind
   # to. Unlike the data-layer operators below, the edge controller couples
   # 1:1 with the ingress resources the chart renders (GatewayClass, data

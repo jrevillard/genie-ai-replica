@@ -22,9 +22,12 @@ set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 src="${repo_root}/configs/grafana/provisioning"
-chart="${repo_root}/charts/genieai-umbrella"
+# The files live in the genieai-assets cargo chart (outside the release
+# snapshot — see that chart's Chart.yaml); the dashboard LIST that must
+# match them lives in the umbrella's grafana-dashboards template.
+chart="${repo_root}/charts/genieai-assets"
 out="${chart}/files/observability"
-tmpl="${chart}/templates/observability/grafana-dashboards.yaml"
+tmpl="${repo_root}/charts/genieai-umbrella/templates/observability/grafana-dashboards.yaml"
 
 mode=write
 [ "${1:-}" = "--check" ] && mode=check

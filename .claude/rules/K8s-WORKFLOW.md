@@ -98,9 +98,21 @@ and CI fails the pipeline when the copy drifts from the source:
 
 | Copy | Source | Re-sync |
 |---|---|---|
-| `charts/genieai-umbrella/files/genie-realm.yaml` | `configs/keycloak/genie-realm.yaml` | copy it over |
-| `charts/genieai-umbrella/files/observability/dashboards/**` + `alerting/alert-rules.yml` | `configs/grafana/provisioning/` | `make chart-dashboards` |
-| `charts/genieai-umbrella/files/keycloak-themes.tgz` | `configs/keycloak/themes` | `make keycloak-theme` |
+| `charts/genieai-assets/files/genie-realm.yaml` | `configs/keycloak/genie-realm.yaml` | copy it over |
+| `charts/genieai-assets/files/observability/dashboards/**` + `alerting/alert-rules.yml` | `configs/grafana/provisioning/` | `make chart-dashboards` |
+| `charts/genieai-assets/files/keycloak-themes.tgz` | `configs/keycloak/themes` | `make keycloak-theme` |
+
+The assets live in the `genieai-assets` cargo chart, not in the
+umbrella: helm-controller persists a release snapshot (the parent
+chart's files + templates + the rendered manifest) into one Secret
+capped at 1 MiB by the API server, and the theme tarball riding twice
+(source in `files/` + rendered ConfigMap) breached that cap at
+0.2.126. Dependency content is NOT persisted (proven on release v11),
+so carrying the bytes in a dependency keeps them out of the snapshot
+while the umbrella renders them through
+`.Subcharts.genieai-assets.Files`. Do not move these files back into
+`charts/genieai-umbrella/files/` — the next upgrade would fail with
+`sh.helm.release.v1.*: data: Too long`.
 
 A copy without a guard drifts silently: the compose deployment serves the
 source and the Kubernetes deployment serves the copy, and the two answer

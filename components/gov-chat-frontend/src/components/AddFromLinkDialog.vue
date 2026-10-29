@@ -42,12 +42,28 @@
           />
           <p v-if="crawlMode === 'single_page'" class="form-hint">
             {{ translate('link.hint', 'The content of the webpage will be crawled and saved as an HTML file.') }}
+            <DsInfoTip
+              :text="
+                translate(
+                  'link.ragTip',
+                  'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
+                )
+              "
+            />
           </p>
           <p v-else class="form-hint">
             {{
               translate(
                 'link.hintAsync',
                 'The full site will be crawled in the background and saved as a Markdown file.'
+              )
+            }}
+          </p>
+          <p class="form-hint">
+            {{
+              translate(
+                'okf.crawl.postCrawlHint',
+                "After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab."
               )
             }}
           </p>
@@ -175,6 +191,7 @@ import documentFileService from '../services/documentFileService.js';
 import { eventBus } from '../eventBus.js';
 import DsButton from './ds/Button.vue';
 import DsInput from './ds/Input.vue';
+import DsInfoTip from './ds/InfoTip.vue';
 
 // --- TOP 20 SITE PRESETS ---
 const SITE_PRESETS = {
@@ -311,7 +328,8 @@ export default {
   name: 'AddFromLinkDialog',
   components: {
     DsButton,
-    DsInput
+    DsInput,
+    DsInfoTip
   },
   emits: ['close', 'link-submitted'],
   data() {
@@ -457,6 +475,41 @@ export default {
               ).replace('{fileName}', fileName);
 
         this.showNotification(successMsg, 'success');
+        // UX simplification (David, 2026-09-01): the crawl dialog no longer
+        // offers an OKF target or split mode — EVERY crawl is saved as the
+        // same combined markdown, and the conversion happens on the file's
+        // Dashboard tab ("Create OKF repository from this crawl"), where all
+        // split options live in one place, after the file exists. The legacy
+        // seed event is kept only for the async path so an already-open
+        // Studio wizard can pre-fill (harmless no-op otherwise).
+        // Audit A6 + verifier B1 (2026-09-29): seed the crawl stub's REAL
+        // file_id WITH its origin stamp — StudioTab builds draft.input
+        // .document_ids AND document_names from these rows, and Produce
+        // routes each conversion leg by the row's source. A URL string here
+        // once reached convertFromCrawlInto as a bogus file_id; a bare id
+        // without a row once routed the whole crawl through the documents
+        // batch (losing per-URL slug identity). No file_id → seed nothing:
+        // an async site crawl cannot be converted from a URL string anyway.
+        if (this.crawlMode !== 'single_page') {
+          const fileId = response.data && response.data.file_id;
+          if (fileId) {
+            await this.$store.dispatch('okf/setSelection', {
+              crawlSeeds: [
+                { file_id: fileId, file_name: (response.data && response.data.file_name) || fileId, source: 'crawl' }
+              ]
+            });
+            window.dispatchEvent(
+              new CustomEvent('okf:create-from-crawl', {
+                detail: {
+                  file_id: fileId,
+                  url: this.url.trim(),
+                  crawlMode: this.crawlMode,
+                  crawlDepth: this.crawlDepth
+                }
+              })
+            );
+          }
+        }
         this.$emit('link-submitted', response.data);
         this.$emit('close');
       } catch (error) {

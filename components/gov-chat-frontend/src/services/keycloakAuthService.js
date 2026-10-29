@@ -14,6 +14,8 @@ let currentUser = null;
 const accessTokenCallbacks = new Set();
 let unsubscribeUserLoaded = null;
 let unsubscribeSilentRenewError = null;
+/** The ONE in-flight silent renew, shared by every caller (see signinSilent). */
+let renewInFlight = null;
 
 /**
  * Initialize the OIDC service — creates UserManager, checks for existing session,
@@ -29,7 +31,22 @@ async function initialize() {
     accessTokenCallbacks.forEach((cb) => cb(user));
   });
 
-  unsubscribeSilentRenewError = userManager.events.addSilentRenewError(() => {
+  // A FAILED RENEW IS NOT A DEAD SESSION (David's 2026-10-11 logout). This used
+  // to call login() unconditionally, so ONE rejected refresh in a burst threw
+  // the user to the login page and discarded a perfectly good session — which
+  // is exactly what happened mid-import while two tabs were racing. Retry once
+  // through the shared renew; only a second failure justifies a redirect.
+  unsubscribeSilentRenewError = userManager.events.addSilentRenewError(async () => {
+    try {
+      const user = await signinSilent();
+      if (user && !user.expired) return; // recovered — nothing to tell the user
+    } catch (retryError) {
+      console.warn('[KeycloakAuth] Silent renew retry failed:', retryError?.message);
+    }
+    // Still failing: check whether the session is actually unusable before
+    // discarding it. A live, unexpired user is not a reason to log out.
+    const user = await getUser();
+    if (user && !user.expired) return;
     login();
   });
 
@@ -150,17 +167,29 @@ function isAuthenticated() {
  * @returns {Promise<Object|null>} Refreshed user or null if refresh failed
  */
 async function signinSilent() {
-  const manager = getUserManager();
-  try {
-    const user = await manager.signinSilent();
-    if (user) {
-      currentUser = user;
+  // SERIALISED (David's 2026-10-11 logout, root-caused from the Keycloak log):
+  // two browser tabs each renew on their own timer, and the realm runs
+  // refresh_token_max_reuse=0 + revoke_refresh_token=false — so every silent
+  // renew ROTATES the refresh token and a rotated/reused one is rejected. Two
+  // concurrent renews therefore race and kill the session they share. Measured
+  // live: 280 token POSTs in 59 seconds from two tabs, 5 rejected with
+  // "Session not active", then a forced logout. One shared in-flight promise
+  // means concurrent callers wait for ONE refresh instead of racing.
+  if (renewInFlight) return renewInFlight;
+  renewInFlight = (async () => {
+    const manager = getUserManager();
+    try {
+      const user = await manager.signinSilent();
+      if (user) currentUser = user;
+      return user;
+    } catch (error) {
+      console.error('[KeycloakAuth] Error during silent renew:', error.message);
+      throw error;
+    } finally {
+      renewInFlight = null;
     }
-    return user;
-  } catch (error) {
-    console.error('[KeycloakAuth] Error during silent renew:', error.message);
-    throw error;
-  }
+  })();
+  return renewInFlight;
 }
 
 /**

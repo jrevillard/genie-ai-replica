@@ -1,0 +1,1351 @@
+<!--
+  OkfRepoEditor.vue — Story #978 Studio editor (Editor sub-tab content).
+
+  Three-pane layout:
+    left   — OkfConceptList (concepts, filter, re-split entry)
+    center — OkfConceptEditor (Source | Rendered, debounced save)
+    right  — metadata panel: type / title / label (single-select from the
+             Knowledge Hierarchy services level), status + trust display.
+             Writes are immediate via conceptService.update (server-side
+             frontmatter splice) so they never clobber unsaved center-pane
+             edits.
+  Hosts the Resplit + Autocorrect modals.
+-->
+<template>
+  <div class="okf-re" role="region" :aria-label="translate('okf.editor.label', 'Repository editor')" :style="gridStyle">
+    <div class="okf-re__left">
+      <OkfConceptList
+        class="okf-re__rail"
+        :concepts="concepts"
+        :selected-id="selectedId"
+        :loading="loading"
+        :load-progress="loadProgress"
+        :label-options="labelOptions"
+        :read-only="readOnly"
+        :show-add-source="!readOnly"
+        @select="onSelect"
+        @add="addOpen = true"
+        @add-source="sourceOpen = true"
+        @resplit="resplitOpen = true"
+        @delete="onDeleteAsk"
+        @label="onTreeLabel"
+        @pii-bulk="onPiiBulkAsk"
+        @reingest="onReingestConcept"
+      />
+      <!-- Story 6-1c (2026-10-17, David): the Access Control panel lives in
+           the LEFT rail, directly under the Concepts panel — the right rail
+           got too crowded (frontmatter chips + head badge + access). Bounded
+           height so it never eats the concept list. -->
+      <div v-if="repoId" class="okf-re__access">
+        <OkfAccessPanel :repo-id="repoId" @changed="onAccessChanged" />
+      </div>
+    </div>
+    <!-- FLEXIBLE COLUMNS (David, 2026-09-09): drag either splitter to resize;
+         double-click resets that pane; arrow keys nudge (a11y). Track order
+         MUST match DOM order: rail | split | center | split | meta. -->
+    <div
+      class="okf-re__split"
+      role="separator"
+      aria-orientation="vertical"
+      tabindex="0"
+      :aria-label="translate('okf.editor.resizeRail', 'Drag to resize the file list')"
+      :title="translate('okf.editor.resizeTip', 'Drag to resize — double-click to reset')"
+      @pointerdown="onSplitDown($event, 'rail')"
+      @dblclick="resetPane('rail')"
+      @keydown="onSplitKey($event, 'rail')"
+    ></div>
+
+    <div class="okf-re__center">
+      <div class="okf-re__view-toggle" role="tablist" :aria-label="translate('okf.editor.paneLabel', 'View pane')">
+        <DsButton :variant="centerView === 'files' ? 'primary' : 'secondary'" small @click="centerView = 'files'">
+          {{ translate('okf.editor.pane.files', 'Files') }}
+        </DsButton>
+        <DsButton :variant="centerView === 'graph' ? 'primary' : 'secondary'" small @click="centerView = 'graph'">
+          {{ translate('okf.editor.pane.graph', 'Graph') }}
+        </DsButton>
+        <!-- R1 (David, 2026-09-29): the center must be able to EXPAND ACROSS
+             the metadata pane — collapse it to give the editor the full
+             remaining width; restore with the same control. -->
+        <DsButton variant="ghost" small class="okf-re__meta-toggle" @click="toggleMetaPane">
+          {{
+            metaCollapsed
+              ? translate('okf.editor.meta.show', 'Show metadata')
+              : translate('okf.editor.meta.hide', 'Hide metadata')
+          }}
+        </DsButton>
+      </div>
+      <!-- LONG-ACTION STRIP (David, 2026-09-12): any editor action that can
+           outlive a browser/gateway timeout renders here as a NON-BLOCKING
+           indeterminate bar with live elapsed seconds — the panes stay
+           interactive instead of the page freezing on a wait dialog. -->
+      <div v-if="longAction" class="okf-re__long" role="status">
+        <DsProgress indeterminate :value="1" size="xs" class="okf-re__long-bar" />
+        <span class="okf-re__long-label">{{ longAction.label }} · {{ longElapsed }}</span>
+      </div>
+      <template v-if="centerView === 'files'">
+        <!-- CROSS-REPO STALE-STATE GUARD (David, 2026-09-06): render the
+             editor ONLY for a concept that exists in THIS repo's list — a
+             selection left over from another repo can never reach the
+             fetch, so one repo's id can never pair with another repo's
+             concept (the child mounts and fetches BEFORE the parent's
+            openEditor reset runs). -->
+        <template v-if="selectedRow">
+          <OkfConceptEditor
+            ref="conceptEditor"
+            :key="selectedRow.concept_id + ':' + conceptReloadKey"
+            :repo-id="repoId"
+            :concept-id="selectedRow.concept_id"
+            :read-only="readOnly"
+            :label-options="labelOptions"
+            :repo-tag-summary="repoTagSummary"
+            @saved="onConceptSaved"
+          />
+        </template>
+        <p v-else class="okf-re__placeholder">
+          {{ translate('okf.editor.pickConcept', 'Select a concept from the list to start editing.') }}
+        </p>
+      </template>
+      <OkfRepoGraphView
+        v-show="centerView === 'graph'"
+        :active="centerView === 'graph'"
+        :repo-id="repoId"
+        :concepts="graphConcepts"
+        :selected-id="selectedId"
+        @select="onGraphNodeSelect"
+      />
+    </div>
+
+    <!-- R1: the metadata splitter + pane collapse away entirely — the center
+         then spans across them. -->
+    <div
+      v-if="!metaCollapsed"
+      class="okf-re__split"
+      role="separator"
+      aria-orientation="vertical"
+      tabindex="0"
+      :aria-label="translate('okf.editor.resizeMeta', 'Drag to resize the metadata pane')"
+      :title="translate('okf.editor.resizeTip', 'Drag to resize — double-click to reset')"
+      @pointerdown="onSplitDown($event, 'meta')"
+      @dblclick="resetPane('meta')"
+      @keydown="onSplitKey($event, 'meta')"
+    ></div>
+
+    <aside
+      v-if="!metaCollapsed"
+      class="okf-re__meta"
+      :aria-label="translate('okf.editor.meta.label', 'Concept metadata')"
+    >
+      <!-- Story 1.7 (2026-10-08): the per-repo frontmatter (the
+           tag-set that builds the OKF bundle's vectorized head)
+           lives in the index.md YAML. The chip UI is ALWAYS visible
+           in the editor's right rail (per David 2026-10-08: the
+           editor must be able to perform ALL operations the wizard
+           can — including Refresh suggestions). On a non-index
+           concept the per-concept metadata form appears below the
+           chip panel. -->
+      <!-- 1-8g-q (David: "a maintenance operation, similar to indexing a
+           database"): the head tag-set stays EDITABLE on a serving repo —
+           the whole point of the Testing Lab loop. readOnly is false
+           unconditionally; content (concepts) below keeps the lock. -->
+      <FrontmatterPanel
+        v-if="repoId"
+        :repo-id="repoId"
+        :read-only="false"
+        :show-title="true"
+        :compact="true"
+        @saved="onFrontmatterPanelSaved"
+        @flush-before-save="flushConceptEditorSave"
+      />
+      <!-- Story 1-8 (2026-10-08): compact head status under the tag panel —
+           the vectorized head is what the tags become at publish; the CTA
+           opens the Testing Lab to test it against competing repositories. -->
+      <div v-if="repoId" class="okf-re__head-badge">
+        <button type="button" class="okf-re__head-badge-btn" @click="headTestOpen = true">
+          <span :class="['okf-re__head-dot', 'okf-re__head-dot--' + headStatus]" />
+          {{ headBadgeText }}
+          <span class="okf-re__head-cta">{{ translate('okf.testingLab.cta', 'Testing Lab') }} →</span>
+        </button>
+      </div>
+      <OkfTestingLabDialog
+        :visible="headTestOpen"
+        :repo="headTestRepo"
+        :initial-tab="'test'"
+        @close="headTestOpen = false"
+        @changed="onHeadTestChanged"
+      />
+      <!-- REPO-WIDE PII RE-SCAN, IN THE EDITOR (2026-10-13). The re-scan used
+           to live on the Validate step only, so a curator with a concept
+           stuck on a scan ERROR — the one pii_state that blocks the hand-off
+           and that no per-occurrence action can clear — had to leave the
+           editor to fix it. Same store actions as the Validate step; no new
+           endpoint. Sits under the concept list's PII affordances so it
+           reads as part of that surface, and is always mounted (not gated on
+           the selected concept) because the RUN is repository-scoped. -->
+      <div v-if="repoId" class="okf-re__pii-rescan">
+        <span class="okf-re__pii-rescan-label">{{ translate('okf.editor.piiRescan.label', 'Personal data') }}</span>
+        <OkfPiiRepoRescan
+          :repo-id="repoId"
+          :concept-id="selectedId || ''"
+          :read-only="readOnly"
+          @rescanned="onRepoPiiRescanned"
+        />
+      </div>
+      <template v-if="selectedRow">
+        <h4 class="okf-re__meta-title">{{ translate('okf.editor.meta.label', 'Concept metadata') }}</h4>
+
+        <DsFormGroup input-id="okf-meta-type">
+          <template #label>
+            {{ translate('okf.editor.meta.type', 'Type') }}
+            <DsInfoTip
+              :text="
+                translate(
+                  'okf.glossary.type',
+                  'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.'
+                )
+              "
+            />
+          </template>
+          <DsSelect
+            id="okf-meta-type"
+            v-model="metaType"
+            :placeholder="translate('okf.editor.meta.typePlaceholder', 'Select type…')"
+            size="sm"
+            :disabled="readOnly"
+            @update:model-value="onMetaChange"
+          >
+            <option v-for="opt in typeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+          </DsSelect>
+        </DsFormGroup>
+
+        <DsFormGroup input-id="okf-meta-title">
+          <template #label>
+            {{ translate('okf.editor.meta.title', 'Title') }}
+            <DsInfoTip
+              :text="
+                translate(
+                  'okf.glossary.title',
+                  'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.'
+                )
+              "
+            />
+          </template>
+          <DsInput
+            id="okf-meta-title"
+            v-model="metaTitle"
+            size="sm"
+            :disabled="readOnly"
+            @update:model-value="onMetaChange"
+          />
+        </DsFormGroup>
+
+        <DsFormGroup input-id="okf-meta-label">
+          <template #label>
+            {{ translate('okf.editor.meta.labelLabel', 'Label (Knowledge Hierarchy)') }}
+            <DsInfoTip
+              :text="
+                translate(
+                  'okf.glossary.label',
+                  'A category from the Knowledge Hierarchy that tells the assistant what kind of thing this concept is. Labels are how answers find the right content.'
+                )
+              "
+            />
+          </template>
+          <!-- Options via slot (DsSelect has no options prop); a selectable
+               empty first option lets the steward UNassign a label. -->
+          <DsSelect
+            id="okf-meta-label"
+            v-model="metaLabel"
+            size="sm"
+            :disabled="readOnly"
+            @update:model-value="onMetaChange"
+          >
+            <option value="">{{ translate('okf.editor.meta.noLabel', 'No label') }}</option>
+            <option v-for="opt in labelOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+          </DsSelect>
+          <p v-if="!labelBounded" class="okf-re__meta-unbounded">
+            {{
+              translate(
+                'okf.glossary.subjectAreaMissing',
+                "This repository's Subject Area is not in the Knowledge Hierarchy — showing every label."
+              )
+            }}
+          </p>
+        </DsFormGroup>
+
+        <dl class="okf-re__meta-facts">
+          <dt>
+            {{ translate('okf.editor.meta.status', 'Index status') }}
+            <DsInfoTip
+              :text="
+                translate(
+                  'okf.glossary.indexStatus',
+                  'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.'
+                )
+              "
+            />
+          </dt>
+          <dd>{{ selectedRow.index_status || '—' }}</dd>
+          <dt>
+            {{ translate('okf.editor.meta.trust', 'Trust tier') }}
+            <DsInfoTip
+              :text="
+                translate(
+                  'okf.glossary.trustTier',
+                  'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.'
+                )
+              "
+            />
+          </dt>
+          <dd>{{ selectedRow.trust_tier || '—' }}</dd>
+        </dl>
+
+        <p v-if="metaError" class="okf-re__meta-error">{{ metaError }}</p>
+        <p v-if="metaSaved" class="okf-re__meta-saved">{{ translate('okf.editor.meta.saved', 'Metadata saved') }}</p>
+      </template>
+      <p v-else class="okf-re__meta-empty">{{ translate('okf.editor.meta.none', 'No concept selected') }}</p>
+
+      <footer class="okf-re__actions">
+        <DsButton variant="secondary" small :disabled="readOnly" @click="autocorrectOpen = true">
+          {{ translate('okf.editor.autocorrect.button', 'Autocorrect') }}
+        </DsButton>
+      </footer>
+    </aside>
+
+    <OkfAddConceptModal
+      :visible="addOpen"
+      :repo-id="repoId"
+      :has-index="hasIndex"
+      @close="addOpen = false"
+      @created="onConceptCreated"
+    />
+
+    <!-- 3.10 T-editor (D6 editor parity): add MORE sources (tagged crawls,
+         uploads — any format) into THIS repo at any time. Conversions run
+         under the long-action strip; the tree refreshes on completion. -->
+    <OkfSourceDialog
+      :visible="sourceOpen"
+      :allow-upload="true"
+      :selected="[]"
+      @close="sourceOpen = false"
+      @confirm="onAddSources"
+    />
+    <p v-if="sourceNote" class="okf-re__source-note" role="status">{{ sourceNote }}</p>
+
+    <DsDialog
+      :visible="deleteAsk !== null"
+      :title="translate('okf.editor.delete.title', 'Delete file')"
+      size="sm"
+      :actions="deleteActions"
+      @close="deleteAsk = null"
+      @action="onDeleteAction"
+    >
+      <p>
+        {{
+          translate(
+            'okf.editor.delete.body',
+            'This permanently removes the file, its indexed chunks and its graph links.'
+          )
+        }}
+        <strong>{{ deleteAsk && (deleteAsk.title || deleteAsk.concept_id) }}</strong>
+      </p>
+    </DsDialog>
+
+    <!-- REPO BULK PII (David, 2026-09-12): confirmation for the header-bar
+         Redact-all / Remove-all / Accept-all decision. -->
+    <DsDialog
+      :visible="piiBulkAsk !== null"
+      :title="piiBulkTitle"
+      size="sm"
+      :actions="piiBulkActions"
+      @close="piiBulkAsk = null"
+      @action="onPiiBulkAction"
+    >
+      <p>{{ piiBulkBody }}</p>
+    </DsDialog>
+
+    <OkfResplitModal
+      :visible="resplitOpen"
+      :repo-id="repoId"
+      :file-id="sourceFileId"
+      @close="resplitOpen = false"
+      @done="onResplitDone"
+    />
+    <OkfAutocorrectPanel
+      :visible="autocorrectOpen"
+      :repo-id="repoId"
+      @close="autocorrectOpen = false"
+      @applied="onAutocorrectApplied"
+    />
+  </div>
+</template>
+
+<script>
+import { mapGetters } from 'vuex';
+import translateMixin from '../../../mixins/translateMixin';
+import serviceTreeService from '../../../services/serviceTreeService';
+import conceptService from '../../../services/conceptService';
+import repoOkfService from '../../../services/repoOkfService';
+import DsButton from '../../ds/Button.vue';
+import DsFormGroup from '../../ds/FormGroup.vue';
+import DsInput from '../../ds/Input.vue';
+import DsProgress from '../../ds/Progress.vue';
+import DsSelect from '../../ds/Select.vue';
+import DsInfoTip from '../../ds/InfoTip.vue';
+import OkfConceptList from './ConceptList.vue';
+import OkfConceptEditor from './ConceptEditor.vue';
+import OkfResplitModal from './ResplitModal.vue';
+import OkfAddConceptModal from './AddConceptModal.vue';
+import OkfSourceDialog from '../wizard/OkfSourceDialog.vue';
+import OkfRepoGraphView from './RepoGraphView.vue';
+import FrontmatterPanel from '../FrontmatterPanel.vue';
+import DsDialog from '../../ds/Dialog.vue';
+import okfRepoOps from '../../../services/okfRepoOps';
+import OkfAutocorrectPanel from './AutocorrectPanel.vue';
+import OkfTestingLabDialog from './TestingLabDialog.vue';
+import OkfAccessPanel from './AccessPanel.vue';
+import OkfPiiRepoRescan from './PiiRepoRescan.vue';
+
+const TYPE_OPTIONS = ['topic', 'entity', 'process', 'event', 'source'].map((t) => ({ value: t, label: t }));
+
+export default {
+  name: 'OkfRepoEditor',
+  components: {
+    DsButton,
+    DsDialog,
+    DsFormGroup,
+    DsInfoTip,
+    DsInput,
+    DsProgress,
+    DsSelect,
+    OkfConceptList,
+    OkfConceptEditor,
+    OkfResplitModal,
+    OkfAddConceptModal,
+    OkfSourceDialog,
+    OkfRepoGraphView,
+    FrontmatterPanel,
+    OkfAutocorrectPanel,
+    OkfTestingLabDialog,
+    OkfAccessPanel,
+    OkfPiiRepoRescan
+  },
+  mixins: [translateMixin],
+  props: {
+    repoId: { type: String, required: true },
+    // The doc-repo file linked at create time — re-split needs it until the
+    // server can resolve the link itself (files.okf_repo_id).
+    sourceFileId: { type: String, default: null },
+    // READ ONLY (serving repo): concept + metadata mutations are disabled.
+    readOnly: { type: Boolean, default: false },
+    // COMPACT (Step 9 Review embed, 2026-10-08): the editor mounted
+    // inside the wizard's narrow center column collapses the metadata
+    // rail by default + uses a wider file list, so the file names
+    // don't truncate and the PII panel has room. The curator can
+    // still toggle the metadata rail open if they want to inspect a
+    // concept's labels.
+    compact: { type: Boolean, default: false }
+  },
+  emits: ['resplit-done'],
+  data() {
+    return {
+      // 3.10 T-editor (D6): add-sources picker + post-conversion note
+      sourceOpen: false,
+      sourceNote: '',
+      // Frontmatter chip-panel saves rewrite the index.md YAML under the
+      // open concept; bump to remount the ConceptEditor so the center pane
+      // re-reads the freshly-saved YAML (same pattern as Curate.vue's
+      // editorReloadKey — without it the pane showed STALE frontmatter
+      // until the editor was closed and reopened, David 2026-10-09).
+      conceptReloadKey: 0,
+      // Story 1-8: the right-rail head badge opens the Testing Lab here.
+      headTestOpen: false,
+      typeOptions: TYPE_OPTIONS,
+      labelOptions: [],
+      // False when the repo's Subject Area has no KH match — the picker then
+      // shows the full tree plus the unbounded hint (legacy repos only).
+      labelBounded: true,
+      centerView: 'files',
+      resplitOpen: false,
+      addOpen: false,
+      deleteAsk: null,
+      // REPO BULK PII (David, 2026-09-12): 'redact'|'remove'|'accept' while
+      // the confirm dialog is open; null when closed.
+      piiBulkAsk: null,
+      piiBulkBusy: false,
+      reingestBusyId: null, // concept_id currently retrying (David, 2026-10-14)
+      deleting: false,
+      autocorrectOpen: false,
+      // LONG-ACTION STRIP (David, 2026-09-12): { label, startedAt } while a
+      // potentially-slow editor action runs; the strip is non-blocking and
+      // shows live elapsed seconds (longTick drives the re-render).
+      longAction: null,
+      longElapsed: '0s',
+      // Right-rail bindings — synced from the selected row, written immediately.
+      metaType: '',
+      metaTitle: '',
+      metaLabel: '',
+      metaError: '',
+      metaSaved: false,
+      metaSyncing: false,
+      // FLEXIBLE COLUMNS (David, 2026-09-09): draggable pane widths (px),
+      // persisted per browser. The center pane always flexes.
+      // R1 (David, 2026-09-29): defaults give the CENTER the wide layout —
+      // concepts and metadata start narrow (his screenshot-3 default), and
+      // the metadata pane can collapse entirely so the editor expands
+      // across it.
+      railWidth: 260,
+      metaWidth: 250,
+      // Compact mode (Step 9 Review embed): metadata rail starts collapsed
+      // so the file list + center pane have room. The curator can toggle
+      // it open if they need to inspect labels.
+      metaCollapsed: false
+    };
+  },
+  computed: {
+    ...mapGetters('okf', ['conceptsByRepo', 'selectedConceptId', 'editorLoading', 'editorLoadProgress', 'repoById']),
+    gridStyle() {
+      // R1: the metadata tracks vanish when the pane is collapsed — the
+      // center column then stretches across the full remaining width.
+      return this.metaCollapsed
+        ? { gridTemplateColumns: `${this.railWidth}px 6px minmax(0, 1fr)` }
+        : { gridTemplateColumns: `${this.railWidth}px 6px minmax(0, 1fr) 6px ${this.metaWidth}px` };
+    },
+    concepts() {
+      return this.conceptsByRepo(this.repoId);
+    },
+    // NON-BLOCKING LOAD: this repo's chunked-fetch progress, else null.
+    loadProgress() {
+      const p = this.editorLoadProgress;
+      return p && p.repoId === this.repoId ? p : null;
+    },
+    // The graph waits for the WHOLE list: one cytoscape layout over the final
+    // array instead of a heavy re-layout per streamed page.
+    graphConcepts() {
+      return this.loading || this.loadProgress ? [] : this.concepts;
+    },
+    selectedId() {
+      return this.selectedConceptId;
+    },
+    loading() {
+      return this.editorLoading;
+    },
+    repo() {
+      return this.repoById(this.repoId) || {};
+    },
+    /** Story 1-8: the rail badge state — present / stale / missing. */
+    headStatus() {
+      if (!this.repo.head || !this.repo.head.vector) return 'missing';
+      const fm = this.repo.frontmatter;
+      if (fm && fm.updated_at && this.repo.head.computed_at && fm.updated_at > this.repo.head.computed_at)
+        return 'stale';
+      return 'present';
+    },
+    headBadgeText() {
+      if (this.headStatus === 'present') return this.translate('okf.testingLab.badge.present', 'head ready');
+      if (this.headStatus === 'stale') return this.translate('okf.testingLab.badge.stale', 'head stale');
+      return this.translate('okf.testingLab.badge.missing', 'no head');
+    },
+    headTestRepo() {
+      return this.repo && this.repo.repo_id ? this.repo : null;
+    },
+    /** 2026-10-10: one-line summary of the REPO-level tags for the concept
+     * editor's frontmatter bar — the per-concept form shows only the
+     * concept's own YAML, so without this the repo tags are invisible THERE
+     * and an empty form reads as lost data (live report on Slaugherhouse). */
+    repoTagSummary() {
+      const fm = this.repo && this.repo.frontmatter;
+      if (!fm) return '';
+      const parts = [];
+      for (const [field, label] of [
+        ['topic', 'topic'],
+        ['forbidden', 'forbidden'],
+        ['entity', 'entity'],
+        ['keyword', 'keyword']
+      ]) {
+        const n = Array.isArray(fm[field]) ? fm[field].length : 0;
+        if (n) parts.push(`${n} ${label}`);
+      }
+      return parts.join(' · ');
+    },
+    hasIndex() {
+      return this.concepts.some((c) => c.is_index);
+    },
+    deleteActions() {
+      return [
+        {
+          key: 'cancel',
+          label: this.translate('common.cancel', 'Cancel'),
+          variant: 'secondary',
+          disabled: this.deleting
+        },
+        {
+          key: 'confirm',
+          label: this.translate('okf.editor.delete.confirm', 'Delete'),
+          variant: 'danger',
+          disabled: this.deleting
+        }
+      ];
+    },
+    piiFlaggedCount() {
+      return this.concepts.filter((c) => c && c.pii_state === 'hit').length;
+    },
+    piiBulkTitle() {
+      const action = this.piiBulkAsk || 'accept';
+      const key = 'okf.editor.piiBulk.title.' + action;
+      const fallback = {
+        redact: 'Redact all flagged content',
+        remove: 'Remove all flagged content',
+        accept: 'Accept all flagged entities'
+      }[action];
+      return this.translate(key, fallback);
+    },
+    piiBulkBody() {
+      const action = this.piiBulkAsk || 'accept';
+      const key = 'okf.editor.piiBulk.body.' + action;
+      const fallback = {
+        redact: 'The body of every flagged concept is replaced with the redaction notice. This cannot be undone.',
+        remove: 'The body of every flagged concept is emptied. This cannot be undone.',
+        accept: 'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
+      }[action];
+      return (
+        this.translate(key, fallback) +
+        ' ' +
+        this.translate('okf.editor.piiBulk.scope', 'Concepts affected: {n}.').replace(
+          '{n}',
+          String(this.piiFlaggedCount)
+        )
+      );
+    },
+    piiBulkActions() {
+      return [
+        {
+          key: 'cancel',
+          label: this.translate('common.cancel', 'Cancel'),
+          variant: 'secondary',
+          disabled: this.piiBulkBusy
+        },
+        {
+          key: 'confirm',
+          label: this.translate('okf.editor.piiBulk.confirm', 'Apply'),
+          variant: this.piiBulkAsk === 'accept' ? 'primary' : 'danger',
+          disabled: this.piiBulkBusy
+        }
+      ];
+    },
+    selectedRow() {
+      return this.concepts.find((c) => c.concept_id === this.selectedId) || null;
+    }
+    // Story 1.7 (2026-10-08, simplified): the per-repo frontmatter
+    // chip UI is ALWAYS visible in the right rail (per David
+    // 2026-10-08: the editor must be able to perform ALL operations
+    // the wizard can — including Refresh suggestions). The
+    // per-concept metadata form (Type / Title / Label / Description)
+    // appears below the chip panel for whichever concept is selected.
+  },
+  watch: {
+    /** Auto-open the index file (else the first) once the list arrives —
+     *  mounted() is too early on a fresh repo, where fetchConcepts resolves
+     *  AFTER mount. */
+    concepts: {
+      immediate: true,
+      handler(rows) {
+        if (!this.selectedId && rows.length > 0) {
+          const indexRow = rows.find((c) => c.is_index);
+          this.onSelect((indexRow || rows[0]).concept_id);
+        }
+      }
+    },
+    selectedRow: {
+      immediate: true,
+      handler(row) {
+        this.syncMetaFields(row);
+      }
+    }
+  },
+  async mounted() {
+    this.restorePaneWidths();
+    // Compact mode (Step 9 Review embed): collapse the metadata rail so
+    // the file list + center pane have room in the wizard's narrow
+    // center column.
+    if (this.compact) this.metaCollapsed = true;
+    await this.$store.dispatch('okf/openEditor', { repoId: this.repoId });
+    this.loadLabelOptions();
+  },
+  beforeUnmount() {
+    // Verifier A8-minor: a kick/poll tail still in flight must never arm a
+    // timer on the dead instance — the flag gates startConversionWatch and
+    // waitForConversionTerminal, and every timer dies here.
+    this._torndown = true;
+    this.endLongAction();
+    this.stopConversionWatch();
+    clearTimeout(this._sourceNoteTimer);
+    if (this._metaTimer) clearTimeout(this._metaTimer);
+  },
+  methods: {
+    // Story 1.7: forward the chip panel's `flush-before-save` event to
+    // the embedded ConceptEditor. The ConceptEditor has a 1.5s debounced
+    // autosave; without this drain, the panel's two-write save would race
+    // the autosave (the autosave would fire with stale uncommitted draft
+    // text, overwriting the panel's just-saved YAML).
+    flushConceptEditorSave() {
+      const ed = this.$refs.conceptEditor;
+      if (ed && typeof ed.flushPendingSave === 'function') ed.flushPendingSave();
+    },
+    // Story 1.7: when the chip panel saves, the index.md YAML has
+    // changed; refetch the concept list so the right-rail's per-concept
+    // metadata reflects the new state, and the parent's gate (Curate
+    // step in the wizard) re-evaluates on the next render.
+    onFrontmatterPanelSaved() {
+      this.$store.dispatch('okf/fetchConcepts', this.repoId);
+      // The save also rewrote okf_repositories.frontmatter (and possibly the
+      // index.md YAML under the open concept): refresh the cached repo doc
+      // (badges / gates) AND remount the ConceptEditor so the center pane
+      // re-reads the freshly-saved YAML instead of its stale draft.
+      this.$store.dispatch('okf/fetchRepos');
+      this.conceptReloadKey += 1;
+    },
+    // Story 6-1c: a restriction toggle changes who can query this repo —
+    // refresh the cached repo doc so badges/gates re-evaluate.
+    onAccessChanged() {
+      this.$store.dispatch('okf/fetchRepos');
+    },
+    // Story 1-8: a head rebuild inside the Testing Lab rewrites the repo
+    // doc — refresh the cached repo so the badge + gates re-evaluate.
+    onHeadTestChanged() {
+      this.$store.dispatch('okf/fetchRepos');
+    },
+    // A repo-wide PII re-scan finished server-side. The concept rows now
+    // carry fresh verdicts (the control already re-read the list), and the
+    // repository's own scan marker / acknowledgement may have moved with
+    // them — refresh both so the rail and the publish banner stop showing
+    // the pre-scan truth.
+    onRepoPiiRescanned() {
+      this.$store.dispatch('okf/fetchRepos');
+    },
+    // Public entry point for the wizard's Curate step. The wizard
+    // embeds the editor inside its step; the chip panel on the
+    // wizard's surface emits `flush-before-save`, which the wizard
+    // forwards to this method. (The wizard also keeps a direct
+    // ref to its own $refs.repoEditor; this method is the
+    // fallback if the wizard ever switches to a non-embedded
+    // mount.)
+    flushPendingSave() {
+      this.flushConceptEditorSave();
+    },
+    // ── LONG-ACTION STRIP (David, 2026-09-12) ─────────────────────────────
+    // Wrap any editor action that can outlive a browser/gateway response
+    // window. Non-blocking: the strip animates and the elapsed counter ticks
+    // while the panes stay interactive.
+    beginLongAction(label) {
+      this.endLongAction();
+      this.longAction = { label, startedAt: Date.now() };
+      this.longElapsed = '0s';
+      this._longTimer = setInterval(() => {
+        if (!this.longAction) return;
+        this.longElapsed = Math.round((Date.now() - this.longAction.startedAt) / 1000) + 's';
+      }, 1000);
+    },
+    endLongAction() {
+      if (this._longTimer) {
+        clearInterval(this._longTimer);
+        this._longTimer = null;
+      }
+      this.longAction = null;
+    },
+    // ── ADD FROM DOCUMENTS (3.10 T-editor, D6 editor parity) ──────────────
+    // The editor accepts MORE sources at any time: tagged crawl files
+    // convert one-by-one (per-file repo-scoped job, split_mode B), other
+    // documents convert as one batch — the same services the wizard's
+    // Produce step drives. Kicks ride the long-action strip; the tree
+    // refreshes when the chain lands.
+    async onAddSources(payload) {
+      const rows = (payload && payload.rows) || [];
+      const ids = (payload && payload.ids) || rows.map((r) => r.file_id);
+      this.sourceOpen = false;
+      if (!this.repoId || ids.length === 0) return;
+      const crawls = rows.filter((r) => r && r.source === 'crawl').map((r) => r.file_id);
+      const docs = ids.filter((id) => !crawls.includes(id));
+      const classification = 'heuristics';
+      this.beginLongAction(this.translate('okf.editor.addSources.working', 'Converting sources…'));
+      this.sourceNote = '';
+      try {
+        // Verifier B7 (2026-09-29): the server runs ONE conversion per repo —
+        // kicking leg N+1 while leg N still runs 409s after ~12s of retries
+        // (conversions take MINUTES). The chain is therefore truly
+        // sequential: kick one leg, WAIT for its terminal status, then kick
+        // the next. Upsert idempotency keeps a re-run safe.
+        for (const fileId of crawls) {
+          await this.kickCrawlWithRetry(fileId, classification);
+          await this.waitForConversionTerminal();
+        }
+        if (docs.length > 0) {
+          await this.kickDocumentsWithRetry({
+            file_ids: docs,
+            repo_id: this.repoId,
+            classification
+          });
+          await this.waitForConversionTerminal();
+        }
+        await this.$store.dispatch('okf/fetchConcepts', this.repoId);
+        const total = this.concepts.length;
+        this.sourceNote = this.translate(
+          'okf.editor.addSources.done',
+          '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).'
+        )
+          .replace('{n}', String(ids.length))
+          .replace('{t}', String(total));
+        // A8 (audit): safety net — refresh the tree when any residual
+        // background work lands (normally already terminal here).
+        this.startConversionWatch();
+      } catch (err) {
+        this.sourceNote =
+          this.translate(
+            'okf.editor.addSources.failed',
+            'A conversion failed — check the logs; the rest may still have queued.'
+          ) + (err && err.message ? ` (${err.message})` : '');
+      } finally {
+        this.endLongAction();
+        clearTimeout(this._sourceNoteTimer);
+        this._sourceNoteTimer = setTimeout(() => {
+          this.sourceNote = '';
+        }, 8000);
+      }
+    },
+    // Verifier B7: poll the repo's conversion to a terminal state (or give
+    // up after an hour — a stalled conversion must not pin the strip
+    // forever). Returns the terminal status; null/undefined handled by the
+    // caller as "nothing running".
+    async waitForConversionTerminal() {
+      const deadline = Date.now() + 3600000;
+      for (;;) {
+        if (this._torndown) return null;
+        const repo = await repoOkfService.get(this.repoId).catch(() => null);
+        const st = repo && repo.conversion ? repo.conversion.status : null;
+        if (st === 'done' || st === 'failed' || st == null) return st;
+        if (Date.now() > deadline) return 'timeout';
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+    },
+    // Sequential-kick race (same class as wizard audit A3): the live-registry
+    // delete lags the "done" poll, so a kick fired right at the terminal
+    // boundary can read CONVERSION_IN_FLIGHT against the just-finished leg.
+    // Retry briefly (2s/4s/6s) before surfacing failure.
+    async kickWithRetry(kickFn) {
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          await kickFn();
+          return;
+        } catch (err) {
+          const code = (err && (err.code || (err.data && err.data.error))) || '';
+          const msg = (err && (err.message || (err.data && err.data.message))) || '';
+          const inFlight = code === 'CONVERSION_IN_FLIGHT' || /in flight/i.test(msg);
+          if (!inFlight || attempt >= 3) throw err;
+          await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+        }
+      }
+    },
+    async kickCrawlWithRetry(fileId, classification) {
+      await this.kickWithRetry(() =>
+        repoOkfService.convertFromCrawlInto({
+          repo_id: this.repoId,
+          file_id: fileId,
+          classification,
+          split_mode: 'B'
+        })
+      );
+    },
+    async kickDocumentsWithRetry(payload) {
+      await this.kickWithRetry(() => repoOkfService.importDocuments(payload));
+    },
+    startConversionWatch() {
+      if (this._torndown) return; // verifier A8-minor: never arm past unmount
+      this.stopConversionWatch();
+      this._convWatch = setInterval(async () => {
+        try {
+          const repo = await repoOkfService.get(this.repoId);
+          const st = repo && repo.conversion ? repo.conversion.status : null;
+          if (st === 'done' || st === 'failed' || st == null) {
+            this.stopConversionWatch();
+            await this.$store.dispatch('okf/fetchConcepts', this.repoId);
+            if (st === 'done') {
+              const total = this.concepts.length;
+              this.sourceNote = this.translate(
+                'okf.editor.addSources.landed',
+                'Conversions complete — {t} topics now in the tree.'
+              ).replace('{t}', String(total));
+              clearTimeout(this._sourceNoteTimer);
+              this._sourceNoteTimer = setTimeout(() => {
+                this.sourceNote = '';
+              }, 8000);
+            }
+          }
+        } catch {
+          /* transient fetch error — keep watching */
+        }
+      }, 5000);
+    },
+    stopConversionWatch() {
+      if (this._convWatch) {
+        clearInterval(this._convWatch);
+        this._convWatch = null;
+      }
+    },
+    // ── FLEXIBLE COLUMNS (David, 2026-09-09) ──────────────────────────────
+    // Pointer-drag on either splitter (drag anywhere — listeners sit on the
+    // window for the drag's lifetime), double-click resets, arrow keys nudge.
+    onSplitDown(evt, which) {
+      evt.preventDefault();
+      const startX = evt.clientX;
+      const startW = which === 'rail' ? this.railWidth : this.metaWidth;
+      // The rail grows with the mouse; the meta pane's handle sits at
+      // (container − metaWidth), so dragging it RIGHT must SHRINK the pane —
+      // the delta sign flips or the handle runs opposite to the mouse.
+      const dir = which === 'rail' ? 1 : -1;
+      const move = (e) => this.setPaneWidth(which, startW + dir * (e.clientX - startX));
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        this.savePaneWidths();
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    },
+    onSplitKey(evt, which) {
+      const step = evt.shiftKey ? 48 : 16;
+      if (evt.key !== 'ArrowLeft' && evt.key !== 'ArrowRight') return;
+      evt.preventDefault();
+      const cur = which === 'rail' ? this.railWidth : this.metaWidth;
+      this.setPaneWidth(which, cur + (evt.key === 'ArrowLeft' ? -step : step));
+      this.savePaneWidths();
+    },
+    resetPane(which) {
+      if (which === 'rail') this.setPaneWidth('rail', 230);
+      else {
+        this.metaCollapsed = false;
+        this.setPaneWidth('meta', 250);
+      }
+      this.savePaneWidths();
+    },
+    setPaneWidth(which, px) {
+      const clamped = Math.max(170, Math.min(560, Math.round(px)));
+      if (which === 'rail') this.railWidth = clamped;
+      else this.metaWidth = clamped;
+    },
+    toggleMetaPane() {
+      this.metaCollapsed = !this.metaCollapsed;
+      this.savePaneWidths();
+    },
+    savePaneWidths() {
+      try {
+        localStorage.setItem(
+          'okf.editor.panes',
+          JSON.stringify({ rail: this.railWidth, meta: this.metaWidth, metaCollapsed: this.metaCollapsed })
+        );
+      } catch {
+        /* storage unavailable — widths stay session-local */
+      }
+    },
+    restorePaneWidths() {
+      try {
+        const raw = localStorage.getItem('okf.editor.panes');
+        if (!raw) return;
+        const p = JSON.parse(raw);
+        this.setPaneWidth('rail', Number(p && p.rail) || 230);
+        this.setPaneWidth('meta', Number(p && p.meta) || 250);
+        this.metaCollapsed = !!(p && p.metaCollapsed);
+      } catch {
+        /* ignore malformed storage */
+      }
+    },
+    onSelect(conceptId) {
+      this.metaSaved = false;
+      this.metaError = '';
+      this.$store.commit('okf/setSelectedConcept', conceptId);
+    },
+    syncMetaFields(row) {
+      this.metaSyncing = true;
+      // row is NULL while the concept list is loading (fresh repo) — clear
+      // the fields instead of dereferencing.
+      if (!row) {
+        this.metaType = '';
+        this.metaTitle = '';
+        this.metaLabel = '';
+        this.$nextTick(() => {
+          this.metaSyncing = false;
+        });
+        return;
+      }
+      const fm = row.frontmatter || {};
+      this.metaType = fm.type || row.type || '';
+      this.metaTitle = row.title || fm.title || '';
+      this.metaLabel = (fm.labels && fm.labels[0]) || (row.labels && row.labels[0]) || '';
+      this.$nextTick(() => {
+        this.metaSyncing = false;
+      });
+    },
+    async loadLabelOptions() {
+      // Labels MUST come from the Knowledge Hierarchy services level (the
+      // same tree the admin dashboard curates) — never free text — and are
+      // BOUNDED TO THE SUBJECT AREA (David, 2026-09-05): only the services
+      // under this repo's domain category. A legacy domain with no KH match
+      // falls back to the full tree (bounded: false → hint shows) so
+      // curation is never blocked.
+      try {
+        const categories = await serviceTreeService.getAdminCategories('en');
+        const repo = this.$store.getters['okf/repoById'](this.repoId) || {};
+        const { options, bounded } = okfRepoOps.labelOptionsForDomain(categories, repo.domain || '');
+        this.labelOptions = options;
+        this.labelBounded = bounded;
+      } catch {
+        this.labelOptions = []; // hierarchy unavailable — picker stays empty
+        this.labelBounded = true;
+      }
+    },
+    onMetaChange() {
+      // Right-rail writes are immediate per the UX design ("selecting a label
+      // writes immediately") — debounce only to coalesce title keystrokes.
+      if (this.metaSyncing) return;
+      if (this._metaTimer) clearTimeout(this._metaTimer);
+      this._metaTimer = setTimeout(() => {
+        this._metaTimer = null;
+        this.onMetaFieldChange();
+      }, 400);
+    },
+    async onMetaFieldChange() {
+      if (this.metaSyncing || !this.selectedId) return;
+      this.metaError = '';
+      this.metaSaved = false;
+      const patch = {};
+      if (this.metaType) patch.type = this.metaType;
+      if (this.metaTitle) patch.title = this.metaTitle;
+      patch.labels = this.metaLabel ? [this.metaLabel] : [];
+      try {
+        await conceptService.update(this.repoId, this.selectedId, patch);
+        this.metaSaved = true;
+        // Refresh the row so title/labels render in the left rail too.
+        await this.$store.dispatch('okf/fetchConcepts', this.repoId);
+      } catch (err) {
+        // REPO_READ_ONLY must surface "retract to edit" — actionable, never raw.
+        const code = (err && (err.code || (err.data && err.data.error))) || '';
+        this.metaError = okfRepoOps.friendlyLifecycleError(
+          code,
+          err && err.message,
+          this.translate('okf.editor.meta.saveFailed', 'Metadata save failed')
+        );
+      }
+    },
+    async onTreeLabel({ conceptId, label }) {
+      // Quick label write straight from the tree (Knowledge Hierarchy).
+      try {
+        await okfRepoOps.applyLabel(this.repoId, conceptId, label ? [label] : []);
+        await this.$store.dispatch('okf/fetchConcepts', this.repoId);
+      } catch (err) {
+        const code = (err && (err.code || (err.data && err.data.error))) || '';
+        this.metaError = okfRepoOps.friendlyLifecycleError(
+          code,
+          err && err.message,
+          this.translate('okf.editor.meta.saveFailed', 'Metadata save failed')
+        );
+      }
+    },
+    onGraphNodeSelect(conceptId) {
+      // Graph node click selects the concept (David, 2026-09-12) but does NOT
+      // flip the pane — the user stays in Graph mode and flips to Files
+      // manually via the toggle. The Files pane reads selectedRow from the
+      // store, so on the manual flip it already shows the clicked node's file.
+      this.onSelect(conceptId);
+    },
+    onConceptCreated(conceptId) {
+      this.onSelect(conceptId);
+    },
+    onDeleteAsk(node) {
+      this.deleteAsk = node;
+    },
+    onPiiBulkAsk(action) {
+      this.piiBulkAsk = action;
+    },
+    // ── Per-concept re-ingest (David, 2026-10-14) ──
+    // No confirm dialog: ONE concept, and the operation is content-preserving —
+    // it requeues that row and re-arms the drain. A modal for a single retry
+    // would be noise. The error surfaces in metaError, which the metadata rail
+    // already renders.
+    async onReingestConcept(row) {
+      const conceptId = row && (row.concept_id || row.id);
+      if (!this.repoId || !conceptId || this.reingestBusyId === conceptId) return;
+      this.reingestBusyId = conceptId;
+      this.metaError = '';
+      try {
+        const res = await this.$store.dispatch('okf/reingestFailed', {
+          repoId: this.repoId,
+          conceptId
+        });
+        if (!res.ok) {
+          this.metaError =
+            res.code === 'DRAIN_IN_PROGRESS'
+              ? this.translate(
+                  'okf.editor.concepts.reingestBusy',
+                  'A RAG ingest is already running for this repository — wait for it to finish, then retry.'
+                )
+              : res.message || this.translate('okf.editor.concepts.reingestFailed', 'Re-ingest failed — try again.');
+        }
+      } finally {
+        this.reingestBusyId = null;
+      }
+    },
+    async onPiiBulkAction(key) {
+      if (key === 'cancel') {
+        this.piiBulkAsk = null;
+        return;
+      }
+      if (key !== 'confirm' || !this.piiBulkAsk || this.piiBulkBusy) return;
+      this.piiBulkBusy = true;
+      this.beginLongAction(this.translate('okf.editor.actions.bulkPii', 'Applying the bulk PII action'));
+      try {
+        const result = await repoOkfService.bulkPiiAction(this.repoId, this.piiBulkAsk);
+        if (!result || !result.ok) {
+          this.metaError = this.translate('okf.editor.piiBulk.failed', 'The bulk PII action failed — try again.');
+          return;
+        }
+        // The flagged pills clear as the refreshed rows come back clean. The
+        // resolutions persist: suppressed items stay un-flagged across the
+        // save-triggered rescans until an explicit re-scan.
+        await this.$store.dispatch('okf/fetchConcepts', this.repoId);
+      } finally {
+        this.piiBulkBusy = false;
+        this.piiBulkAsk = null;
+        this.endLongAction();
+      }
+    },
+    async onDeleteAction(key) {
+      if (key === 'cancel') {
+        this.deleteAsk = null;
+        return;
+      }
+      if (key !== 'confirm' || !this.deleteAsk || this.deleting) return;
+      this.deleting = true;
+      this.beginLongAction(
+        this.translate('okf.editor.actions.deleting', 'Deleting') +
+          ' ' +
+          (this.deleteAsk.title || this.deleteAsk.concept_id)
+      );
+      try {
+        const result = await this.$store.dispatch('okf/deleteConcept', {
+          repoId: this.repoId,
+          conceptId: this.deleteAsk.concept_id
+        });
+        if (!result.ok) this.metaError = result.message;
+      } finally {
+        this.deleting = false;
+        this.deleteAsk = null;
+        this.endLongAction();
+      }
+    },
+    onConceptSaved() {
+      // Body changed — index_status/content_hash were patched into the row by
+      // the store action. Nothing else to do here.
+    },
+    onResplitDone() {
+      this.$emit('resplit-done');
+      this.onSelect(null);
+      this.$store.commit('okf/setSelectedConcept', null);
+    },
+    onAutocorrectApplied() {
+      // The store action already refetched the rows.
+      this.metaSaved = false;
+    }
+  }
+};
+</script>
+
+<style scoped>
+.okf-re {
+  display: grid;
+  gap: 0;
+  min-height: 560px;
+}
+/* FLEXIBLE COLUMNS (David, 2026-09-09): the vertical drag handle between the
+   file rail and the editor, and between the editor and the metadata rail. */
+.okf-re__split {
+  width: 6px;
+  margin: 0 var(--space-xs);
+  border-radius: var(--radius-sm);
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s ease;
+  touch-action: none;
+}
+.okf-re__split:hover,
+.okf-re__split:focus-visible,
+.okf-re__split:active {
+  background: var(--accent-muted);
+}
+.okf-re__left {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.okf-re__rail {
+  max-height: 640px;
+}
+.okf-re__access {
+  margin-top: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+.okf-re__view-toggle {
+  display: inline-flex;
+  gap: var(--space-xs);
+  align-self: flex-start;
+}
+.okf-re__center {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+/* LONG-ACTION STRIP: slim non-blocking indicator with live elapsed seconds. */
+.okf-re__long {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) 0;
+}
+.okf-re__long-bar {
+  flex: 1 1 auto;
+}
+.okf-re__long-label {
+  flex: 0 0 auto;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.okf-re__source-note {
+  margin: 0;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--info-bg);
+  border: 1px solid var(--info);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font-size: var(--text-xs);
+}
+.okf-re__placeholder {
+  color: var(--muted);
+  text-align: center;
+  padding: var(--space-xl) 0;
+}
+.okf-re__meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+.okf-re__meta-title {
+  margin: 0;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+/* Story 1-8: compact head status badge under the tag panel. */
+.okf-re__head-badge {
+  margin-bottom: var(--space-sm);
+}
+.okf-re__head-badge-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 100%;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  cursor: pointer;
+}
+.okf-re__head-badge-btn:hover {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+/* Repo-wide PII re-scan (2026-10-13): a repository-scoped control in the
+   right rail, so it reads as a property of the repo rather than of whichever
+   concept happens to be open. */
+.okf-re__pii-rescan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px dashed var(--border);
+  width: 100%;
+}
+.okf-re__pii-rescan-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.okf-re__head-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.okf-re__head-dot--present {
+  background: var(--success);
+}
+.okf-re__head-dot--stale {
+  background: var(--warning);
+}
+.okf-re__head-dot--missing {
+  background: var(--danger);
+}
+.okf-re__head-cta {
+  margin-left: auto;
+  color: var(--accent);
+  font-weight: 600;
+}
+.okf-re__meta-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-xs) var(--space-sm);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+.okf-re__meta-facts dt {
+  color: var(--muted);
+}
+.okf-re__meta-facts dd {
+  margin: 0;
+}
+.okf-re__meta-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+.okf-re__meta-saved {
+  margin: 0;
+  color: var(--success);
+  font-size: var(--text-sm);
+}
+.okf-re__meta-unbounded {
+  margin: var(--space-xs) 0 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.okf-re__meta-empty {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.okf-re__actions {
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-sm);
+}
+</style>

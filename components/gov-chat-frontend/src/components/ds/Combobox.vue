@@ -81,13 +81,21 @@ export default {
       type: Boolean,
       default: false
     },
+    /** REMOTE mode (6-1c groups, 2026-10-17): the parent owns filtering —
+     * each keystroke emits `search` with the term and the options list is
+     * rendered verbatim (no client-side filter). Off = the original local
+     * filter behavior, byte-identical for existing consumers. */
+    remote: {
+      type: Boolean,
+      default: false
+    },
     size: {
       type: String,
       default: 'md',
       validator: (v) => ['sm', 'md', 'lg'].includes(v)
     }
   },
-  emits: ['update:modelValue', 'focus', 'blur'],
+  emits: ['update:modelValue', 'focus', 'blur', 'search'],
   data() {
     return {
       isOpen: false,
@@ -97,6 +105,7 @@ export default {
   },
   computed: {
     filtered() {
+      if (this.remote) return this.options;
       if (!this.searchTerm) return this.options;
       const term = this.searchTerm.toLowerCase();
       return this.options.filter((o) => this.getLabel(o).toLowerCase().includes(term));
@@ -129,6 +138,7 @@ export default {
     },
     filter() {
       this.activeIndex = -1;
+      if (this.remote) this.$emit('search', this.searchTerm);
     },
     navigate(dir) {
       if (this.filtered.length === 0) return;

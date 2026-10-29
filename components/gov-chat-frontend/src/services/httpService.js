@@ -145,6 +145,27 @@ class HttpService {
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // [DIAG 2026-09-15] Publish/lifecycle 502 — David: trace EVERY outgoing
+    // /api/okf request so we can see whether the request left the browser
+    // (CORS pre-flight, baseUrl, URL string, method, payload shape) and what
+    // headers/method actually went on the wire. Side-effect on globalThis so
+    // it CANNOT be tree-shaken away and a global probe stays available.
+    try {
+      if (config && config.url && String(config.url).indexOf('/api/okf') !== -1) {
+        const m = config.method ? config.method.toUpperCase() : 'GET';
+        const u = String(config.url);
+        const auth =
+          config.headers && config.headers.Authorization ? String(config.headers.Authorization).slice(0, 30) : '(none)';
+        const t0 = Date.now();
+        config.__okfT0 = t0;
+        console.warn('[OKF-OUT]', m, u, 'baseURL=' + this.baseUrl, 'auth=' + auth, 't0=' + t0);
+        if (typeof window !== 'undefined') {
+          window.__okfLog = (window.__okfLog || []).concat(['OUT ' + m + ' ' + u + ' t0=' + t0]);
+        }
+      }
+    } catch {
+      /* never throw from a logger */
+    }
     return config;
   }
 
@@ -164,6 +185,29 @@ class HttpService {
    * @returns {Object} Response object
    */
   handleResponse(response) {
+    // [DIAG 2026-09-15] Companion to the request-side log — captures the FULL
+    // response (status, headers, body) for any /api/okf call. globalThis side
+    // effect so the log survives minification + we can recover it later.
+    try {
+      if (
+        response &&
+        response.config &&
+        response.config.url &&
+        String(response.config.url).indexOf('/api/okf') !== -1
+      ) {
+        console.warn(
+          '[OKF-IN]',
+          response.status,
+          response.config.url,
+          'ct=' + (response.headers && response.headers['content-type'])
+        );
+        if (typeof window !== 'undefined') {
+          window.__okfLog = (window.__okfLog || []).concat(['IN ' + response.status + ' ' + response.config.url]);
+        }
+      }
+    } catch {
+      /* never throw from a logger */
+    }
     return response;
   }
 
@@ -182,20 +226,39 @@ class HttpService {
       if (status === 401 && !originalRequest._retryCount) {
         originalRequest._retryCount = 1;
 
+        // A SERVER-SIDE failure on the retry (502/504/timeout/network) is NOT a
+        // dead session (David's 2026-10-11 logout: one transient failure threw
+        // the user to the login page and discarded a good session). Only a 401
+        // on the retried request may escalate to a redirect — and even then the
+        // stored user is checked first, so a live session is never discarded.
         try {
           const refreshedUser = await keycloakAuthService.signinSilent();
 
           if (refreshedUser?.access_token) {
             originalRequest.headers.Authorization = `Bearer ${refreshedUser.access_token}`;
-            return this.axios(originalRequest);
+            try {
+              return await this.axios(originalRequest);
+            } catch (retryError) {
+              const retryStatus = retryError.response ? retryError.response.status : null;
+              if (retryStatus !== 401) {
+                // Server-side problem: surface it verbatim. Redirecting here is
+                // how a gateway blip used to look like an expired session.
+                return Promise.reject(retryError);
+              }
+            }
           }
         } catch (refreshError) {
           console.error('[HttpService] Token refresh failed:', refreshError.message);
         }
 
-        // Refresh failed or no token — redirect to Keycloak login
-        if (typeof window !== 'undefined') {
-          await keycloakAuthService.login();
+        // The refresh yielded no usable token, or the retry came back 401 —
+        // the only two cases where the session may genuinely be gone. Check the
+        // STORED user before discarding it.
+        const user = await keycloakAuthService.getUser();
+        if (!user || user.expired) {
+          if (typeof window !== 'undefined') {
+            await keycloakAuthService.login();
+          }
         }
 
         return Promise.reject({
@@ -213,6 +276,60 @@ class HttpService {
         data: error.response.data,
         message: error.response.data?.message || 'An error occurred'
       };
+      // [DIAG 2026-09-15] Full error trace — print the exact upstream response
+      // so we can see whether 502 came from nginx/Kong/upstream and what body
+      // came back. Never throw from a logger. globalThis side effect so we can
+      // inspect from the browser DevTools even if console is muted.
+      try {
+        if (
+          originalRequest &&
+          originalRequest.url &&
+          String(originalRequest.url).indexOf('/api/okf') !== -1 &&
+          // silent callers (probe-style lookups, the deferred 10.5 drafts
+          // endpoint) already handle their own errors — a console.error per
+          // expected 404 is noise, not diagnostics (field report 2026-09-29).
+          !originalRequest.silent
+        ) {
+          const headers = error.response && error.response.headers;
+          const data = error.response && error.response.data;
+          const t0 = originalRequest.__okfT0;
+          const dt = t0 ? Date.now() - t0 : -1;
+          console.error(
+            '[OKF-ERR]',
+            status,
+            originalRequest.method && originalRequest.method.toUpperCase(),
+            originalRequest.url,
+            {
+              statusText,
+              responseHeaders: headers,
+              responseData: data,
+              message: error.message,
+              code: error.code,
+              durationMs: dt,
+              aborted: !error.response
+            }
+          );
+          if (typeof window !== 'undefined') {
+            window.__okfLog = (window.__okfLog || []).concat([
+              'ERR ' +
+                status +
+                ' ' +
+                originalRequest.url +
+                ' dt=' +
+                dt +
+                'ms' +
+                ' aborted=' +
+                !error.response +
+                ' msg=' +
+                (error.message || 'n/a') +
+                ' code=' +
+                (error.code || 'n/a')
+            ]);
+          }
+        }
+      } catch {
+        /* never throw from a logger */
+      }
 
       // Parse error for structured handling
       const parsedError = parseAuthError(error.response.data);
@@ -220,17 +337,19 @@ class HttpService {
       // Emit user-facing error notification for all non-401 errors
       // (401 errors redirect to Keycloak login — the redirect IS the user feedback).
       // Callers may opt out with { silent: true } for probe-style lookups where a
-      // non-success response is an expected, handled outcome (e.g. crawl-job 404).
+      // non-success response is an expected, handled outcome (e.g. crawl-job 404,
+      // the OKF bundle manifest before the worker has settled it). Silent skips
+      // BOTH the toast and the console.error — the caller owns the outcome.
       if (!error.config?.silent) {
         notificationService.error(parsedError.message);
-      }
 
-      // Log only safe information (status, statusText, message) — NOT raw data or details
-      console.error('API response error:', {
-        status,
-        statusText,
-        message: parsedError.message
-      });
+        // Log only safe information (status, statusText, message) — NOT raw data or details
+        console.error('API response error:', {
+          status,
+          statusText,
+          message: parsedError.message
+        });
+      }
 
       return Promise.reject(errorData);
     } else if (error.request) {

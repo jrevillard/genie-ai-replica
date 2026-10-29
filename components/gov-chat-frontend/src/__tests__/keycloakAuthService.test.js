@@ -368,13 +368,47 @@ describe('keycloakAuthService', () => {
       expect(keycloakAuthService.getAccessToken()).toBe('refreshed-token-789');
     });
 
-    it('should redirect to login when addSilentRenewError fires', async () => {
+    // A FAILED SILENT RENEW IS NOT A DEAD SESSION (David's 2026-10-11 logout).
+    // The old contract redirected unconditionally, so one rejected refresh in a
+    // burst of 280 threw the user to the login page mid-import. These pin the
+    // new contract: retry once, and redirect ONLY when the stored session is
+    // genuinely gone.
+    it('does NOT redirect when the retry recovers the session', async () => {
       mockGetUser.mockResolvedValue(createMockUser());
+      mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'renewed-token' }));
       await keycloakAuthService.initialize();
       mockSigninRedirect.mockResolvedValue(undefined);
 
-      const addSilentRenewErrorCb = mockAddSilentRenewError.mock.calls[0][0];
-      addSilentRenewErrorCb(new Error('Refresh token expired'));
+      const cb = mockAddSilentRenewError.mock.calls[0][0];
+      await cb(new Error('Session not active'));
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(mockSigninSilent).toHaveBeenCalled();
+      expect(mockSigninRedirect).not.toHaveBeenCalled();
+    });
+
+    it('does NOT redirect when the retry fails but the stored user is still live', async () => {
+      mockGetUser.mockResolvedValue(createMockUser()); // live, unexpired
+      mockSigninSilent.mockRejectedValue(new Error('Session not active'));
+      await keycloakAuthService.initialize();
+      mockSigninRedirect.mockResolvedValue(undefined);
+
+      const cb = mockAddSilentRenewError.mock.calls[0][0];
+      await cb(new Error('Session not active'));
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(mockSigninRedirect).not.toHaveBeenCalled();
+    });
+
+    it('redirects only when the session really is gone', async () => {
+      mockGetUser.mockResolvedValue(createMockUser({ expired: true }));
+      mockSigninSilent.mockRejectedValue(new Error('Session not active'));
+      await keycloakAuthService.initialize();
+      mockSigninRedirect.mockResolvedValue(undefined);
+
+      const cb = mockAddSilentRenewError.mock.calls[0][0];
+      await cb(new Error('Session not active'));
+      await new Promise((r) => setTimeout(r, 0));
 
       expect(mockSigninRedirect).toHaveBeenCalledWith({ state: undefined });
     });

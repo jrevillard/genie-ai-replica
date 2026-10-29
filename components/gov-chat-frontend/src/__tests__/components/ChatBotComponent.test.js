@@ -5276,6 +5276,98 @@ describe('Quick Help category reference', () => {
     expect(vm.currentCategoryId).toBe('2');
     const chip = vm.selectedContextItems.find((item) => item.source === 'quickHelp');
     expect(chip.category).toBe('2');
+    // The recovery moved fields the user cannot edit: a conversation that
+    // was clean before the tree landed stays clean.
+    expect(vm.hasUnsavedChanges()).toBe(false);
+  });
+
+  it('a category-only scope restored while the hierarchy was down is repaired', async () => {
+    // A conversation saved with a category edge and no tags restores a
+    // category-only chip. While the tree is down its display is blank and
+    // its category keeps the configuration's spelling; the recovery
+    // resolves both — the chip's display IS the category's own name.
+    const serviceTreeService = require('../../services/serviceTreeService');
+    let resolveTree;
+    const pendingTree = new Promise((resolve) => {
+      resolveTree = resolve;
+    });
+    serviceTreeService.getAllCategories
+      .mockRejectedValueOnce(new Error('hierarchy down'))
+      .mockRejectedValueOnce(new Error('hierarchy down'))
+      .mockImplementation(() => pendingTree);
+
+    const wrapper = createChatBotWrapper();
+    const vm = wrapper.vm;
+    await flushPromises();
+
+    const chatHistoryService = require('../../services/chatHistoryService');
+    chatHistoryService.getConversation.mockResolvedValueOnce({
+      _key: 'c2',
+      title: 'Category-only chat',
+      messages: [],
+      categoryId: 'Civil Registry'
+    });
+
+    await vm.loadExistingConversation('c2');
+    expect(vm.currentCategoryId).toBe('Civil Registry');
+
+    resolveTree(TREE);
+    await vm.ensureServiceCategoriesLoaded();
+    await flushPromises();
+
+    expect(vm.currentCategoryId).toBe('2');
+    const chip = vm.selectedContextItems[0];
+    expect(chip.categoryOnly).toBe(true);
+    expect(chip.category).toBe('2');
+    expect(chip.service).toBe('Civil Registry');
+  });
+
+  it('an empty key is no key: a reference resolved to it keeps the card broken', async () => {
+    // declaresCategoryScope reads an empty id as NO scope: a reference
+    // resolved to one would render the card healthy and send the query
+    // unfiltered while the card promised a scope.
+    const wrapper = await createChatBotWrapperAsync([{ catKey: '', name: 'Ghost', nameEN: 'Ghost', children: [] }]);
+
+    expect(wrapper.vm.getCategoryEnLabel('Ghost')).toBeNull();
+    expect(wrapper.vm.quickHelpCategoryKey('Ghost')).toBeNull();
+
+    const button = wrapper.vm.quickHelpButtons.find((b) => b.id === 'civil');
+    expect(button.category).toBe('Civil Registry');
+
+    const state = wrapper.vm.quickHelpScopeState({
+      id: 'civil',
+      category: 'Civil Registry',
+      serviceLabels: []
+    });
+    expect(state.broken).toBe(true);
+  });
+
+  it('the no-scope placeholder is never reinterpreted by the recovery', async () => {
+    // 'general' names no category in any spelling. A hierarchy category
+    // literally named "general" must not hijack a category-less selection
+    // into a real scope when the tree lands.
+    const generalTree = [
+      { catKey: '2', name: 'Civil Registry', nameEN: 'Civil Registry', children: [] },
+      { catKey: '9', name: 'General', nameEN: 'general', children: [] }
+    ];
+    mockLiveTree(generalTree);
+    const wrapper = createChatBotWrapper();
+    await flushPromises();
+
+    const vm = wrapper.vm;
+    vm.currentCategoryId = 'general';
+    vm.selectedContextItems.push({
+      service: 'Just Chat',
+      serviceKey: 'just-chat',
+      source: 'quickHelp',
+      id: 'just-chat',
+      category: 'general',
+      selected: true
+    });
+    vm.reResolveInstalledScopeAgainstHierarchy();
+
+    expect(vm.currentCategoryId).toBe('general');
+    expect(vm.selectedContextItems[0].category).toBe('general');
   });
 
   it('the configuration reference is normalized to the hierarchy key', async () => {

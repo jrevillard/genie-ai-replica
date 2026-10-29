@@ -849,7 +849,11 @@ export default {
       const byKey = new Map();
       const byNameEn = new Map();
       for (const cat of this.serviceCategories || []) {
-        if (cat.catKey === null || cat.catKey === undefined) continue;
+        // An EMPTY key is no key: `declaresCategoryScope` reads it as no
+        // scope, so a reference resolved to it would render the card
+        // healthy and send the query unfiltered — the mobile twin's index
+        // drops the entry for the same reason.
+        if (cat.catKey === null || cat.catKey === undefined || cat.catKey === '') continue;
         const key = cat.catKey.toString();
         if (!byKey.has(key)) byKey.set(key, cat);
         if (cat.nameEN && !byNameEn.has(cat.nameEN)) byNameEn.set(cat.nameEN, cat);
@@ -1253,29 +1257,11 @@ export default {
         // Its OWN guard: a failure while re-mapping the buttons is a
         // configuration problem, not a hierarchy one — swallowing it into
         // this catch would mark the loaded tree failed and toast the
-        // wrong cause.
+        // wrong cause. The installed scope's re-resolution carries its
+        // own guard too, so neither recovery cancels the other.
         try {
           if (this.quickHelpButtons.length) {
             this.applyQuickHelpButtons();
-          }
-          // A scope restored while the hierarchy was down carries the
-          // configuration's own spelling — the tree was not there to turn
-          // it into the key. Left alone, the next save would write that
-          // spelling as the conversation's category edge
-          // (`serviceCategories/<categoryId>`): a document that does not
-          // exist. The mobile twin re-resolves its restored scope when the
-          // tree settles; this is the web's equivalent.
-          if (this.currentCategoryId) {
-            this.currentCategoryId = this.quickHelpCategoryKey(this.currentCategoryId) ?? this.currentCategoryId;
-          }
-          const scopedChips = this.selectedContextItems.filter((item) => item.category);
-          if (scopedChips.length) {
-            this.$store.commit(
-              'conversation/setContextItems',
-              this.selectedContextItems.map((item) =>
-                item.category ? { ...item, category: this.quickHelpCategoryKey(item.category) ?? item.category } : item
-              )
-            );
           }
         } catch (mappingError) {
           console.error(
@@ -1283,6 +1269,7 @@ export default {
             mappingError
           );
         }
+        this.reResolveInstalledScopeAgainstHierarchy();
       } catch (error) {
         if (seq !== this.treeLoadSeq) {
           return;
@@ -1351,6 +1338,74 @@ export default {
     quickHelpCategoryKey(reference) {
       const category = this.resolveCategoryReference(reference);
       return category ? category.catKey.toString() : null;
+    },
+
+    // The category id a configuration reference speaks: the hierarchy's
+    // own key for the category it names. The reference the hierarchy
+    // cannot name keeps its own spelling — the scope is then broken, and
+    // a broken scope is a visible error, never a silently unscoped query.
+    // The named twin of the mobile's categoryIdFor: the keep-on-miss rule
+    // lives here once, not as a repeated `??` at every call site.
+    quickHelpCategoryIdFor(reference) {
+      return this.quickHelpCategoryKey(reference) ?? reference;
+    },
+
+    // A scope the chat already carries, re-resolved against the tree that
+    // just landed. A scope restored while the hierarchy was down keeps the
+    // configuration's own spelling — the tree was not there to turn it
+    // into the key — and left alone, the next save would write that
+    // spelling as the conversation's category edge
+    // (`serviceCategories/<categoryId>`): a document that does not exist.
+    // The mobile twin re-resolves its restored scope when the tree
+    // settles; this is the web's equivalent. Own guard: this recovery
+    // must not be cancelled by (nor cancel) the button re-mapping that
+    // runs beside it.
+    reResolveInstalledScopeAgainstHierarchy() {
+      try {
+        // 'general' is the no-scope placeholder — it names no category in
+        // any spelling, and a hierarchy category literally named "general"
+        // must not hijack a category-less selection into a real scope.
+        if (declaresCategoryScope(this.currentCategoryId)) {
+          this.currentCategoryId = this.quickHelpCategoryIdFor(this.currentCategoryId);
+        }
+        if (!this.selectedContextItems.some((item) => item.category)) {
+          return;
+        }
+        const wasDirty = this.hasUnsavedChanges();
+        const mapped = this.selectedContextItems.map((item) => {
+          // 'general' on a chip is the same placeholder the selection
+          // carries: it names no category in any spelling.
+          if (!declaresCategoryScope(item.category)) return item;
+          const category = this.quickHelpCategoryIdFor(item.category);
+          const next = { ...item, category };
+          // A category-only chip's display is the category's own name —
+          // blank or raw while the tree was down, nameable now. A Quick
+          // Help chip's display is its BUTTON's title; it never re-resolves
+          // through the category.
+          if (item.categoryOnly) {
+            next.service = this.getCategoryDisplayName(category) || item.service;
+          }
+          return next;
+        });
+        const changed = mapped.some(
+          (item, index) =>
+            item.category !== this.selectedContextItems[index].category ||
+            item.service !== this.selectedContextItems[index].service
+        );
+        if (!changed) {
+          return;
+        }
+        this.$store.commit('conversation/setContextItems', mapped);
+        // The mapping moved fields the user cannot edit: a conversation
+        // that was clean before the tree landed must not read as unsaved
+        // because of it. A conversation the user HAD edited keeps its
+        // dirty state.
+        if (!wasDirty) {
+          this.$store.commit('conversation/setSavedState');
+        }
+      } catch (scopeError) {
+        console.error('[ChatBotComponent] Failed to re-resolve the installed scope against the hierarchy:', scopeError);
+      }
     },
 
     // The localized name of the entity whose EN label is [en] — a saved
@@ -1823,11 +1878,8 @@ export default {
             icon: button.icon?.value,
             // The configuration names its category; the hierarchy's own key
             // is what the rest of the app speaks — the conversation's edge
-            // (`serviceCategories/<key>`) among them. A reference the
-            // hierarchy cannot name keeps its spelling: the scope is then
-            // broken, and a broken scope is a visible error, never a
-            // silently unscoped query.
-            category: this.quickHelpCategoryKey(button.category) ?? button.category,
+            // (`serviceCategories/<key>`) among them.
+            category: this.quickHelpCategoryIdFor(button.category),
             styles: button.styles,
             // Pass the placement field through so the tile / composer
             // routing in the welcome panel can read it directly.

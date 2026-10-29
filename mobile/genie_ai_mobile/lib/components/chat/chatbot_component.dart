@@ -1238,7 +1238,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             .map((label) => label.toString())
             .toList();
     _showQuickHelpOverlay = false;
-    _selectedCategoryId = button['category']?.toString();
+    // The configuration names its category; the hierarchy's own key is
+    // what the conversation's edge speaks.
+    final categoryRef = button['category']?.toString();
+    _selectedCategoryId =
+        _scopeResolver?.categoryKeyFor(categoryRef) ?? categoryRef;
     _selectedCategoryNameEn = _scopeResolver?.categoryLabelEn(button) ?? '';
     // An EMPTY title is no title (the same rule the locale re-title and
     // the restore apply): the caller's fallback name shows, never a

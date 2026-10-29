@@ -5121,3 +5121,104 @@ describe('ChatBotComponent welcome heading', () => {
     expect(heading.text()).not.toMatch(/[<>]/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The category a Quick Help CONFIGURATION names
+//
+// The configuration writes the category's ENGLISH NAME — the label the
+// hierarchy publishes and the corpus filters on. The database key stays
+// accepted: a configuration written before the change still names a
+// category, and a deployment's configuration is edited on its own.
+// ---------------------------------------------------------------------------
+describe('Quick Help category reference', () => {
+  const TREE = [{ catKey: '2', name: 'Civil Registry', nameEN: 'Civil Registry', children: [] }];
+
+  const configLoader = require('../../config-loader');
+  let originalConfig;
+
+  beforeEach(() => {
+    originalConfig = configLoader.default.getMockImplementation();
+    configLoader.default.mockResolvedValue({
+      features: {
+        chat: {
+          quickHelp: {
+            buttons: [{ id: 'civil', title: { en: 'Civil' }, category: 'Civil Registry' }]
+          }
+        }
+      }
+    });
+  });
+
+  afterEach(() => {
+    configLoader.default.mockImplementation(originalConfig);
+  });
+
+  it('resolves a category named by its ENGLISH name', async () => {
+    mockLiveTree(TREE);
+    const wrapper = await createChatBotWrapperAsync(TREE);
+
+    expect(wrapper.vm.getCategoryEnLabel('Civil Registry')).toBe('Civil Registry');
+    expect(wrapper.vm.getCategoryDisplayName('Civil Registry')).toBe('Civil Registry');
+  });
+
+  it('still resolves a category named by its database key', async () => {
+    mockLiveTree(TREE);
+    const wrapper = await createChatBotWrapperAsync(TREE);
+
+    expect(wrapper.vm.getCategoryEnLabel('2')).toBe('Civil Registry');
+  });
+
+  it('a name the hierarchy does not carry names no category', async () => {
+    mockLiveTree(TREE);
+    const wrapper = await createChatBotWrapperAsync(TREE);
+
+    expect(wrapper.vm.getCategoryEnLabel('Taxes')).toBeNull();
+  });
+
+  it('a button whose category is named by its ENGLISH name is not broken', async () => {
+    mockLiveTree(TREE);
+    const wrapper = await createChatBotWrapperAsync(TREE);
+
+    const state = wrapper.vm.quickHelpScopeState({
+      id: 'civil',
+      category: 'Civil Registry',
+      serviceLabels: []
+    });
+
+    expect(state.broken).toBe(false);
+  });
+
+  it('the configuration reference is normalized to the hierarchy key', async () => {
+    // The conversation's edge speaks the hierarchy's own key
+    // (`serviceCategories/<key>`): the reference the configuration wrote
+    // is resolved into it.
+    mockLiveTree(TREE);
+    const wrapper = createChatBotWrapper();
+    await flushPromises();
+
+    const button = wrapper.vm.quickHelpButtons.find((b) => b.id === 'civil');
+    expect(button.category).toBe('2');
+  });
+
+  it('resolves the reference when the hierarchy lands after the configuration', async () => {
+    // The two loads are independent: the configuration may be read
+    // before the hierarchy is there. The buttons are resolved again when
+    // the hierarchy lands.
+    const serviceTreeService = require('../../services/serviceTreeService');
+    let resolveTree;
+    serviceTreeService.getAllCategories.mockReturnValue(
+      new Promise((resolve) => {
+        resolveTree = resolve;
+      })
+    );
+
+    const wrapper = createChatBotWrapper();
+    await flushPromises();
+
+    resolveTree(TREE);
+    await flushPromises();
+
+    const button = wrapper.vm.quickHelpButtons.find((b) => b.id === 'civil');
+    expect(button.category).toBe('2');
+  });
+});

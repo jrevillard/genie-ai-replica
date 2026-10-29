@@ -148,7 +148,8 @@ class QuickHelpScopeResolver {
       _categoryNames = _indexByCatKey(enTree, (entry) {
         final name = entry['name'];
         return (name is String && name.isNotEmpty) ? name : '';
-      });
+      }),
+      _categoryKeysByName = _indexByNameEn(enTree);
 
   /// The scope state of a button whose hierarchy has not loaded yet: it
   /// says nothing about any button.
@@ -186,9 +187,16 @@ class QuickHelpScopeResolver {
   final Map<String, String> _categoryLabelsEn;
   final Map<String, String> _categoryNames;
 
+  /// The category keys by their ENGLISH name — the identifier a
+  /// CONFIGURATION names a category by. The same tree and the same rules
+  /// as the key indexes: an entry the hierarchy cannot address by key
+  /// cannot be addressed by name either, and the first of two categories
+  /// sharing a name wins.
+  final Map<String, String> _categoryKeysByName;
+
   /// Categories by key, FIRST-wins, each mapped by [valueOf]. The one
-  /// walk behind both indexes (the EN-label index and the display-name
-  /// index) — a skip rule added to one belongs to both.
+  /// walk behind the two key indexes (the EN-label index and the
+  /// display-name index) — a skip rule added to one belongs to both.
   static Map<String, String> _indexByCatKey(
     List<dynamic> enTree,
     String Function(Map entry) valueOf,
@@ -202,6 +210,40 @@ class QuickHelpScopeResolver {
       byKey[key] = valueOf(entry);
     }
     return byKey;
+  }
+
+  /// The category keys by their ENGLISH name, FIRST-wins. The name is
+  /// the identifier a configuration writes down; the key it resolves to
+  /// is what the rest of the app speaks.
+  static Map<String, String> _indexByNameEn(List<dynamic> enTree) {
+    final byName = <String, String>{};
+    for (final entry in enTree) {
+      if (entry is! Map) continue;
+      final key = entry['catKey']?.toString();
+      if (key == null || key.isEmpty) continue;
+      final name = _enOf(entry);
+      if (name.isEmpty) continue;
+      if (byName.containsKey(name)) continue;
+      byName[name] = key;
+    }
+    return byName;
+  }
+
+  /// The hierarchy's own key for the category the [reference] names, or
+  /// null when the hierarchy carries no such category.
+  ///
+  /// The configuration names a category by its ENGLISH NAME — the label
+  /// the hierarchy publishes and the corpus filters on, and the one a
+  /// deployment can write down without reading the database. The
+  /// database key stays accepted: a configuration written before that
+  /// spelling was adopted still names a category, and a deployment's
+  /// configuration is edited on its own.
+  String? categoryKeyFor(String? reference) {
+    if (reference == null || reference.isEmpty) return null;
+    final byName = _categoryKeysByName[reference];
+    if (byName != null) return byName;
+    // The legacy spelling: the key the hierarchy itself minted.
+    return _categoryLabelsEn.containsKey(reference) ? reference : null;
   }
 
   static Set<String> _collectEnLabels(List<dynamic> enTree) {
@@ -256,21 +298,24 @@ class QuickHelpScopeResolver {
   String? categoryLabelEn(Map<String, dynamic> button) =>
       categoryEnLabel(button['category']?.toString());
 
-  /// The ENGLISH label of the category [catKey]. Null when the hierarchy
-  /// does not carry it, or carries it without an EN translation — a scope
-  /// that cannot be named, and so cannot be put on the wire.
-  String? categoryEnLabel(String? catKey) {
-    if (catKey == null || catKey.isEmpty) return null;
-    final en = _categoryLabelsEn[catKey];
+  /// The ENGLISH label of the category the [reference] names. Null when
+  /// the hierarchy does not carry it, or carries it without an EN
+  /// translation — a scope that cannot be named, and so cannot be put on
+  /// the wire.
+  String? categoryEnLabel(String? reference) {
+    final key = categoryKeyFor(reference);
+    if (key == null) return null;
+    final en = _categoryLabelsEn[key];
     if (en == null || en.isEmpty) return null;
     return en;
   }
 
-  /// The localized name of the category [catKey] — what the user reads.
-  /// Display only: it never filters.
-  String? categoryDisplayName(String? catKey) {
-    if (catKey == null || catKey.isEmpty) return null;
-    final name = _categoryNames[catKey];
+  /// The localized name of the category the [reference] names — what the
+  /// user reads. Display only: it never filters.
+  String? categoryDisplayName(String? reference) {
+    final key = categoryKeyFor(reference);
+    if (key == null) return null;
+    final name = _categoryNames[key];
     if (name == null || name.isEmpty) return null;
     return name;
   }
@@ -444,7 +489,11 @@ class ConversationScopeResolver {
       // The button's own category WINS; a button that declares NONE keeps
       // the conversation's own edge — dropping it sent the follow-up
       // unscoped (a silent widening) while the web kept the edge.
-      final effectiveCategory = category ?? categoryKey;
+      // The configuration names its category; the hierarchy's own key is
+      // what the conversation's edge speaks.
+      final effectiveCategory = category == null
+          ? categoryKey
+          : (_hierarchy.categoryKeyFor(category) ?? category);
       return ConversationScope(
         categoryId: effectiveCategory,
         categoryNameEn: _hierarchy.categoryEnLabel(effectiveCategory),

@@ -848,6 +848,20 @@ export default {
       return index;
     },
 
+    // The live hierarchy indexed by category EN name — the identifier a
+    // CONFIGURATION names a category by. The database key is the
+    // hierarchy's own identity (the sidebar speaks it); the EN name is
+    // the spelling a deployment can write down without reading the
+    // database, and the one the corpus filters on.
+    categoryIndexByNameEn() {
+      const index = new Map();
+      for (const cat of this.serviceCategories || []) {
+        if (!cat.nameEN) continue;
+        if (!index.has(cat.nameEN)) index.set(cat.nameEN, cat);
+      }
+      return index;
+    },
+
     // The localized name of the entity whose EN label is a given one. The
     // EN label is the identity (a saved conversation carries it); the name
     // is what the user reads. The map's KEY SET is also the vocabulary the
@@ -963,6 +977,15 @@ export default {
     },
     currentLocale: function () {
       this.updateDialogTexts();
+    },
+    serviceCategories: function () {
+      // The Quick Help buttons name their category in the configuration's
+      // own spelling; the HIERARCHY is what turns that spelling into the
+      // category's key. The two loads are independent, so a hierarchy
+      // that lands after the configuration resolves the buttons again.
+      if (this.quickHelpButtons.length) {
+        this.applyQuickHelpButtons();
+      }
     },
     '$i18n.locale'(newLocale) {
       this.currentLocale = newLocale;
@@ -1249,26 +1272,19 @@ export default {
       }
     },
 
-    // *** UPDATED: Find category label by its key in the transformed tree data ***
     // The category the query is scoped by, in the SSOT language. English is
     // what the corpus filters on — chunk_labels carry the EN translation —
     // so the wire speaks EN and the localized name stays display-only. Null
-    // when the id names no category of the live tree: a broken scope.
+    // when the reference names no category of the live tree: a broken scope.
     getCategoryEnLabel(id) {
-      if (id === null || id === undefined) {
-        return null;
-      }
-      const category = this.categoryIndex.get(id.toString());
+      const category = this.resolveCategoryReference(id);
       return category ? category.nameEN || null : null;
     },
 
     // The category name the user reads — the localized spelling of the
     // same entity. Display only: it never filters.
     getCategoryDisplayName(id) {
-      if (id === null || id === undefined) {
-        return null;
-      }
-      const category = this.categoryIndex.get(id.toString());
+      const category = this.resolveCategoryReference(id);
       if (!category) {
         return null;
       }
@@ -1276,6 +1292,34 @@ export default {
       // name: the chip showed BLANK. The EN name (the wire's spelling) is
       // a truthful display, and the id is the last resort.
       return category.name || category.nameEN || id.toString();
+    },
+
+    // The live category a reference names.
+    //
+    // A reference is what a CONFIGURATION writes: the category's ENGLISH
+    // NAME — the label the hierarchy publishes and the corpus filters on,
+    // the one a deployment can write down without reading the database.
+    // The database key stays accepted: a configuration written before
+    // that spelling was adopted still names a category, and a
+    // deployment's configuration is edited on its own. The name is tried
+    // first; the key is the fallback.
+    resolveCategoryReference(reference) {
+      if (reference === null || reference === undefined || reference === '') {
+        return null;
+      }
+      const id = reference.toString();
+      return this.categoryIndexByNameEn.get(id) || this.categoryIndex.get(id) || null;
+    },
+
+    // The hierarchy's own key for the category a reference names — what
+    // the conversation's edge speaks (`serviceCategories/<key>`). Null
+    // when the hierarchy carries no such category.
+    quickHelpCategoryKey(reference) {
+      const category = this.resolveCategoryReference(reference);
+      if (!category || category.catKey === null || category.catKey === undefined) {
+        return null;
+      }
+      return category.catKey.toString();
     },
 
     // The localized name of the entity whose EN label is [en] — a saved
@@ -1745,7 +1789,13 @@ export default {
             visibleText: visibleText,
             hiddenPrompt: hiddenPrompt,
             icon: button.icon?.value,
-            category: button.category,
+            // The configuration names its category; the hierarchy's own key
+            // is what the rest of the app speaks — the conversation's edge
+            // (`serviceCategories/<key>`) among them. A reference the
+            // hierarchy cannot name keeps its spelling: the scope is then
+            // broken, and a broken scope is a visible error, never a
+            // silently unscoped query.
+            category: this.quickHelpCategoryKey(button.category) ?? button.category,
             styles: button.styles,
             // Pass the placement field through so the tile / composer
             // routing in the welcome panel can read it directly.

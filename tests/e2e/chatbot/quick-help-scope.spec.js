@@ -51,8 +51,13 @@
 const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen } = require('../helpers/welcome');
 
-// The live hierarchy this spec serves. Category '2' exists and names itself in
-// ENGLISH; category '404' does not exist at all.
+// The live hierarchy this spec serves. The category 'Civil Registry' exists and
+// names itself in ENGLISH; 'Taxes & Revenue' does not exist at all.
+//
+// The cards name their category the way a CONFIGURATION does: by the
+// hierarchy's ENGLISH name — the spelling a deployment can write down. The
+// hierarchy's own key ('2') stays accepted, for configurations written
+// before that spelling was adopted.
 const HIERARCHY = [
   {
     catKey: '2',
@@ -84,7 +89,7 @@ const STUB_BUTTONS = [
     id: 'e2e-label-gone',
     title: { en: 'Label gone' },
     icon: { type: 'file', value: '/config/quickhelp/identity-civil.svg' },
-    category: '2',
+    category: 'Civil Registry',
     serviceLabels: ['No Such Service'],
     // The dual-prompt action is what makes the click REACH the query path
     // when the guard is gone: without a hidden prompt the click would stop
@@ -101,7 +106,7 @@ const STUB_BUTTONS = [
     id: 'e2e-category-gone',
     title: { en: 'Category gone' },
     icon: { type: 'file', value: '/config/quickhelp/taxes-revenue.svg' },
-    category: '404',
+    category: 'Taxes & Revenue',
     action: {
       visibleText: { en: 'Tell me about the vanished category' },
       hiddenPrompt: { en: 'Tell me about the vanished category' }
@@ -119,7 +124,7 @@ const STUB_BUTTONS = [
     id: 'e2e-healthy',
     title: { en: 'Healthy card' },
     icon: { type: 'file', value: '/config/quickhelp/healthcare-social.svg' },
-    category: '2',
+    category: 'Civil Registry',
     serviceLabels: ['Births'],
     action: {
       visibleText: { en: 'Tell me about births' },

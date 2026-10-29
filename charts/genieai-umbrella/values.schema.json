@@ -455,8 +455,8 @@
         },
         "kubeletToolsMirror": {
           "type": "string",
-          "pattern": "^(|([A-Za-z][A-Za-z0-9+.-]*://)?[A-Za-z0-9][A-Za-z0-9.:-]*(/[A-Za-z0-9._~%-]*)?)$",
-          "description": "Internal mirror for the kubectl download: [scheme://]host[:port][/prefix] \u2014 the scheme is optional (a scheme-less mirror makes curl use plain HTTP), /release/... is appended. The pattern admits no shell metacharacters: the value is interpolated into the tools-init container's shell inside double quotes."
+          "pattern": "^(|((https?)://)?[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]+)?(/[A-Za-z0-9._~%-]*)?)$",
+          "description": "Internal mirror for the kubectl download: [http[s]://]host[:port][/prefix] \u2014 the scheme is optional (a scheme-less mirror makes curl use plain HTTP), /release/... is appended. The host admits a colon only before a numeric port and the scheme only http(s): the value is interpolated into the tools-init container's shell inside double quotes, and any other shape (file://, https:mirror, shell metacharacters) is rejected at render."
         }
       }
     }

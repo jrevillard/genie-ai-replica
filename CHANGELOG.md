@@ -223,6 +223,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   document is ingested, and until the re-ingest every scope on them finds no
   documents — the query abstains ("no documented information was found").
   (#1117, !632)
+- **The shipped Quick Help configurations named their categories by a database
+  key.** Every flavour configuration wrote each quick-help card's category as
+  the raw ArangoDB key (`"category": "1"`) — a value a deployer could not
+  learn from the configuration alone, and one a re-created hierarchy
+  invalidated. The configuration now writes the category's **English name**
+  (`"category": "Taxes & Revenue"`), the label the knowledge hierarchy
+  publishes and the one the retrieval filter speaks; the database key is
+  still accepted, so a configuration written before this change keeps
+  working. The web app and the mobile app both resolve the name against the
+  live hierarchy. (#1116, !633)
 - **The admin hierarchy panel could show an empty English name.** The detailed
   tree behind it returned only the localized name; the panel worked around
   that by fetching the tree in English and relabelling the result, so the

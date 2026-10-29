@@ -1,4 +1,4 @@
-{{- /* Component label context, same pattern as templates/namespace.yaml. */ -}}{{- $global := .Values.global | default dict -}}
+{{- /* Component label context, same pattern as templates/namespace.yaml. */ -}}
 {{- $opea := .Values.opea | default dict -}}
 
 {{- $componentValues := dict "Chart" .Chart "Release" .Release "Values" .Values "component" "test" -}}
@@ -97,9 +97,10 @@ metadata:
           # bootstrap and the Keycloak CR read, and with the same
           # default they apply: a cleared block degrades to
           # keycloak-db-credentials, and the test must assert the
-          # Secret the deployment actually consumes, not a literal
-          # "<no value>".
-          required_secrets="$required_secrets {{ $kcDb.secretName | default "keycloak-db-credentials" }}"
+          # Secret the deployment actually consumes, not an empty
+          # interpolation. The name goes through the validating helper
+          # because it reaches `sh` inside the pod (see _lib/_tests.tpl).
+          required_secrets="$required_secrets {{ include "genieai-umbrella.validatedSecretName" (dict "name" ($kcDb.secretName | default "keycloak-db-credentials") "key" "data.keycloak.db.secretName") }}"
           {{- end }}
           {{- if $redisCache.enabled }}
           # redis runs with --requirepass from a NON-optional secretKeyRef:
@@ -119,7 +120,7 @@ metadata:
           # assertion matches the CONSUMER's condition
           # (keycloak.enabled), not the convergence Job's: a
           # convergence-disabled install still consumes this Secret.
-          required_secrets="$required_secrets {{ $bootstrapAdmin.userSecret | default "keycloak-admin-credentials" }}"
+          required_secrets="$required_secrets {{ include "genieai-umbrella.validatedSecretName" (dict "name" ($bootstrapAdmin.userSecret | default "keycloak-admin-credentials") "key" "data.keycloak.bootstrapAdmin.userSecret") }}"
           {{- end }}
           {{- if and $keycloak.enabled $kcConvergence.enabled }}
           # The convergence Job mounts every envSecrets row through
@@ -143,7 +144,7 @@ metadata:
           # set, no cert-manager Certificate renders and nothing else
           # materializes the Secret — the edge cannot terminate TLS
           # without it.
-          required_secrets="$required_secrets {{ $ingressTls.secretName }}"
+          required_secrets="$required_secrets {{ include "genieai-umbrella.validatedSecretName" (dict "name" $ingressTls.secretName "key" "ingress.tls.secretName") }}"
           {{- end }}
           {{- if $opea.enabled }}
           # The OPEA tier mounts both through NON-optional secretKeyRefs

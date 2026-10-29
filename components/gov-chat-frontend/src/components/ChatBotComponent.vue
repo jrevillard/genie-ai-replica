@@ -1267,7 +1267,10 @@ export default {
             this.applyQuickHelpButtons();
           }
         } catch (mappingError) {
-          console.error('[ChatBotComponent] Failed to re-resolve Quick Help buttons against the hierarchy:', mappingError);
+          console.error(
+            '[ChatBotComponent] Failed to re-resolve Quick Help buttons against the hierarchy:',
+            mappingError
+          );
         }
       } catch (error) {
         if (seq !== this.treeLoadSeq) {

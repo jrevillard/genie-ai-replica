@@ -5203,9 +5203,7 @@ describe('Quick Help category reference', () => {
     // Resolving one would hand the conversation's edge a name where the
     // backend writes `serviceCategories/<key>`: the card would look
     // healthy and the conversation would silently lose its category.
-    const wrapper = await createChatBotWrapperAsync([
-      { name: 'Orphan', nameEN: 'Orphan', children: [] }
-    ]);
+    const wrapper = await createChatBotWrapperAsync([{ name: 'Orphan', nameEN: 'Orphan', children: [] }]);
 
     expect(wrapper.vm.getCategoryEnLabel('Orphan')).toBeNull();
     expect(wrapper.vm.quickHelpCategoryKey('Orphan')).toBeNull();

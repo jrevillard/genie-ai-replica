@@ -40,6 +40,8 @@ test = [
 packages = []
 
 [tool.ruff]
+# ruff >=0.17 formats python blocks inside Markdown; the READMEs are hand-maintained, keep ruff off *.md
+extend-exclude = ["*.md"]
 target-version = "py311"
 line-length = 120
 

@@ -137,10 +137,12 @@ reads is the label that scopes the query. An entity with no name in any
 language is not offered at all: it cannot be scoped on.
 
 > **Two different fields share the name `nameEN`.** The TREE publishes one
-> (the EN translation, the value clients put on the wire); the STORED ENTITY
-> carries another (the seed the write path copies into that translation — see
-> below). They coincide only in a hierarchy edited through the API. A client
-> filters on the tree's published translation, never on the seed.
+> (the EN translation — or the entity document's own `nameEN` for an entity
+> with no EN translation row — the value clients put on the wire); the STORED
+> ENTITY carries another (the seed the write path copies into that
+> translation — see below). The write path keeps the two in sync, so they
+> carry the same text; a client filters on the tree's published value,
+> whichever of the two the tree resolved to.
 
 Clients put the ENGLISH value on the wire. A
 client that sent a localized display name would scope the query against

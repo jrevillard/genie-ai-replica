@@ -456,10 +456,18 @@ class ServiceCategoryService {
             FILTER t.code == 'en'
             RETURN t.translation
         )
-        // The locale's translation wins; the ENGLISH one is the fallback.
-        // An entity with neither keeps a null name — it has nothing to
-        // show and nothing to scope on.
-        LET categoryName = categoryTranslation != null ? categoryTranslation : categoryTranslationEN
+        // The EN translation row is the SSOT; the document's cached nameEN
+        // is the FALLBACK for an entity seeded outside the write path (the
+        // taxonomy seed script writes the document field and no translation
+        // row at all) — the same resolution the admin tree applies, and the
+        // one the corpus's own EN lookup applies. The write path keeps the
+        // two in sync, so the fallback can only fill a missing row with
+        // the very text the row would have carried.
+        LET categoryNameEN = categoryTranslationEN != null ? categoryTranslationEN : category.nameEN
+        // The DISPLAY name: the locale's translation when there is one, the
+        // ENGLISH one otherwise. An entity with neither keeps a null name —
+        // it has nothing to show and nothing to scope on.
+        LET categoryName = categoryTranslation != null ? categoryTranslation : categoryNameEN
         LET services = (
           FOR edge IN categoryServices
             FILTER edge._from == category._id
@@ -481,18 +489,21 @@ class ServiceCategoryService {
                   FILTER t.code == 'en'
                   RETURN t.translation
               )
-              // The same fallback the category gets: a service nobody
+              // The same EN resolution the category gets.
+              LET serviceNameEN = serviceTranslationEN != null ? serviceTranslationEN : service.nameEN
+              // And the same DISPLAY name: the locale's translation when
+              // there is one, the ENGLISH one otherwise. A service nobody
               // translated in the active locale used to publish a null
               // name, and the clients dropped it from the tree.
-              LET serviceName = serviceTranslation != null ? serviceTranslation : serviceTranslationEN
+              LET serviceName = serviceTranslation != null ? serviceTranslation : serviceNameEN
               SORT edge.order ASC
-              RETURN { name: serviceName, nameEN: serviceTranslationEN }
+              RETURN { name: serviceName, nameEN: serviceNameEN }
         )
         RETURN {
           catKey: category._key,
           catCode: category.catCode,
           name: categoryName,
-          nameEN: categoryTranslationEN,
+          nameEN: categoryNameEN,
           children: services
         }
     `;

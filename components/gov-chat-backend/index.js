@@ -130,7 +130,7 @@ const swaggerOptions = {
               type: 'string',
               nullable: true,
               description:
-                'The ENGLISH translation — the SSOT every filter label is spoken in. Clients put THIS value on the query wire; the localized `name` is display-only.'
+                "The ENGLISH translation — the SSOT every filter label is spoken in. Clients put THIS value on the query wire; the localized `name` is display-only. Falls back to the entity document's own `nameEN` for an entity with no English translation row."
             },
             children: {
               type: 'array',

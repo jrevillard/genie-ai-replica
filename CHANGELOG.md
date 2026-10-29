@@ -196,13 +196,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   localized name and nothing else, so an entity nobody had translated in the
   language of the interface arrived with a null name: the sidebar showed a
   blank row, and the services under it were dropped from the tree altogether —
-  the tree showed less than exists. The tree now publishes a display name for
+  the tree showed less than exists. Both trees now publish a display name for
   every entity: the translation in the active language when there is one, and
   the English translation — the same name the corpus filters on — when there
-  is none. The English spelling the query wire speaks (`nameEN`) is
-  unchanged, and an entity with no name in any language is still not offered:
-  it cannot be scoped on. The admin tree resolves its display name the same
-  way. (#1117, !632)
+  is none. The public tree resolves its English name the way the admin tree
+  already did: the English translation row, or the entity document's own
+  `nameEN` for an entity seeded outside the write path (the taxonomy seed
+  scripts write the document field and no translation row). The write path
+  keeps the two in sync, so the fallback only fills a missing row with the
+  text the row would have carried — the label a client puts on the wire and
+  the label the corpus filters on remain the same string. An entity with no
+  name in any language is still not offered: it cannot be scoped on.
+  (#1117, !632)
 - **The admin hierarchy panel could show an empty English name.** The detailed
   tree behind it returned only the localized name; the panel worked around
   that by fetching the tree in English and relabelling the result, so the
@@ -214,8 +219,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `nameEN` as the fallback for an entity seeded outside the write path —
   and the panel reads that field. Its fetch is bounded too, so a request
   that never answers shows the failed state instead of a spinner that turns
-  forever. The public tree is unchanged by this fix: an entity with no
-  English translation row still publishes `nameEN: null` there. (#1123)
+  forever. The public tree publishes `nameEN` the same way since the
+  display-name fix above. (#1123)
 - **A selected Quick Help scope kept the title of the language it was selected
   in.** On the mobile app, switching the interface language re-resolved the
   Quick Help cards but left the context bar's title of the active Quick Help

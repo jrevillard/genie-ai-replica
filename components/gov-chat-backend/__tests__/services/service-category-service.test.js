@@ -303,8 +303,8 @@ describe('ServiceCategoryService', () => {
       // one. `nameEN: null` and `nameEN: serviceTranslation` both leave
       // the corpus vocabulary empty while every pattern above still
       // matches, so the shape alone does not prove the value.
-      expect(text).toMatch(/name:\s*categoryName,\s*nameEN:\s*categoryTranslationEN/);
-      expect(text).toMatch(/name:\s*serviceName,\s*nameEN:\s*serviceTranslationEN/);
+      expect(text).toMatch(/name:\s*categoryName,\s*nameEN:\s*categoryNameEN/);
+      expect(text).toMatch(/name:\s*serviceName,\s*nameEN:\s*serviceNameEN/);
     });
 
     it('falls back to the EN translation for the display name when the locale has none', async () => {
@@ -320,10 +320,26 @@ describe('ServiceCategoryService', () => {
       // name the corpus filters on, so the label the user reads is the
       // label that scopes the query. The locale's own translation still
       // wins wherever there is one.
-      expect(text).toMatch(
-        /LET categoryName = categoryTranslation != null \? categoryTranslation : categoryTranslationEN/
-      );
-      expect(text).toMatch(/LET serviceName = serviceTranslation != null \? serviceTranslation : serviceTranslationEN/);
+      expect(text).toMatch(/LET categoryName = categoryTranslation != null \? categoryTranslation : categoryNameEN/);
+      expect(text).toMatch(/LET serviceName = serviceTranslation != null \? serviceTranslation : serviceNameEN/);
+    });
+
+    it('falls back to the entity document nameEN when no EN translation row exists', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('done'));
+      await service.getAllCategoriesWithServices('en').catch(() => {});
+
+      const queryArg = mockDb.query.mock.calls[0][0];
+      const text = queryArg.strings.join('|');
+      // An entity seeded outside the write path (the taxonomy seed script
+      // writes the document field and no translation row at all) would
+      // publish an EMPTY English name — the very symptom the tree must not
+      // show: a blank row, and services the clients drop. The document's
+      // cached nameEN is the fallback the corpus's own EN resolution
+      // applies, so the tree must use it too. The write path keeps the
+      // document and the row in sync, so this can only fill a missing row
+      // with the text the row would have carried.
+      expect(text).toMatch(/categoryTranslationEN\s*!=\s*null\s*\?\s*categoryTranslationEN\s*:\s*category\.nameEN/);
+      expect(text).toMatch(/serviceTranslationEN\s*!=\s*null\s*\?\s*serviceTranslationEN\s*:\s*service\.nameEN/);
     });
 
     it('should throw on database error', async () => {

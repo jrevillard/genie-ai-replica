@@ -131,6 +131,58 @@ void main() {
     expect(emitted!['categoryNameEn'], 'Civil Registry');
     expect(emitted!['serviceLabelsEn'], ['Births']);
   });
+
+  testWidgets('two services that READ the same in this locale are two scopes', (
+    tester,
+  ) async {
+    // The tree falls back to the English name for an entity the locale
+    // has no translation for, so two entities in one category can carry
+    // the same display name. The identity is the ENGLISH label — the
+    // spelling the wire speaks — so picking one must not pick the other.
+    final sameNames = [
+      {
+        'catKey': '2',
+        'name': 'Estado civil',
+        'nameEN': 'Civil Registry',
+        'children': [
+          // Untranslated in this locale: the tree publishes its English
+          // name as the display name.
+          {'name': 'Passport', 'nameEN': 'Passport'},
+          // A service whose localized name reads the same.
+          {'name': 'Passport', 'nameEN': 'Travel'},
+        ],
+      },
+    ];
+    Map<String, dynamic>? emitted;
+    resetThemeManager();
+    final api = ServiceCategoriesApi(
+      ApiClient()..client = _MockClient(jsonEncode(sameNames)),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [serviceCategoriesApiProvider.overrideWithValue(api)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: ServiceTreePanel(onSelectionChange: (s) => emitted = s),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Estado civil'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Passport').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Passport').last);
+    await tester.pumpAndSettle();
+
+    // BOTH are selected: the second tap did not toggle the first one
+    // off, because their identities are their English labels.
+    expect(emitted!['serviceLabelsEn'], ['Passport', 'Travel']);
+    expect(emitted!['serviceCount'], 2);
+  });
 }
 
 class _MockClient extends http.BaseClient {

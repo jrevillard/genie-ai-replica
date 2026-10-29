@@ -166,14 +166,25 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
 
     // 3. Update Selection State
     // Check if this specific item is already selected. The children
-    // carry no id/key, so their identity is the (category, name) pair:
+    // carry no id/key, so their identity is the (category, label) pair:
     // matching on the name alone crossed the categories — two services
     // named alike in different categories toggled each other's scope,
     // and the highlight desynced from what the chat received.
+    //
+    // The ENGLISH label is the identity, the same spelling the web keys
+    // on: a DISPLAY name is not unique — the tree falls back to the
+    // English name for an entity the locale has no translation for, so
+    // two entities in one category can read the same — and the English
+    // label is what the wire speaks. An entity with no English label at
+    // all carries none (it will refuse at send, visibly), so the display
+    // name stands in for it.
     final existingIndex = _orderedSelection.indexWhere(
       (item) =>
           (item['id'] == serviceId && serviceId.isNotEmpty) ||
-          (item['name'] == serviceName && item['category_id'] == categoryId),
+          (serviceEn.isNotEmpty
+              ? item['nameEn'] == serviceEn && item['category_id'] == categoryId
+              : item['name'] == serviceName &&
+                    item['category_id'] == categoryId),
     );
 
     setState(() {

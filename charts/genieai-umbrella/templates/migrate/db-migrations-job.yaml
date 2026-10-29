@@ -76,6 +76,18 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+          env:
+            # The probe below must present the same credentials the migration
+            # run itself uses: an auth-enabled ArangoDB (the default here)
+            # answers 401 to an anonymous /_api/version, and a `curl -sf`
+            # probe can then never see the 200 it waits for.
+            - name: ARANGO_USER
+              value: "root"
+            - name: ARANGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: arango-root-secret
+                  key: password
           command:
             - sh
             - -c
@@ -83,7 +95,7 @@ spec:
               url="{{ include "genieai-umbrella.arangoURL" . }}/_api/version"
               i=0
               while [ "$i" -lt 100 ]; do
-                if curl -sf "$url" >/dev/null 2>&1; then
+                if curl -sf -u "$ARANGO_USER:$ARANGO_PASSWORD" "$url" >/dev/null 2>&1; then
                   echo "arangodb is up: $url"
                   exit 0
                 fi

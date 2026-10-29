@@ -5147,11 +5147,17 @@ describe('Quick Help category reference', () => {
         }
       }
     });
-    // The hierarchy mock's IMPLEMENTATION survives clearAllMocks: every
-    // test starts from an empty hierarchy unless it installs its own.
+    // This block sits OUTSIDE the main ChatBotComponent describe, so the
+    // file-level hooks do not run here: the mocks are reset by hand, or a
+    // test inherits the implementation an earlier block left behind (a
+    // conversation whose tags name buttons this config does not carry).
+    jest.clearAllMocks();
     const serviceTreeService = require('../../services/serviceTreeService');
     serviceTreeService.getAllCategories.mockReset();
     serviceTreeService.getAllCategories.mockResolvedValue([]);
+    const chatHistoryService = require('../../services/chatHistoryService');
+    chatHistoryService.getConversation.mockReset();
+    chatHistoryService.getConversation.mockResolvedValue({ messages: [] });
   });
 
   afterEach(() => {
@@ -5191,6 +5197,18 @@ describe('Quick Help category reference', () => {
     });
 
     expect(state.broken).toBe(false);
+  });
+
+  it('an entry the hierarchy cannot address by key cannot be addressed by name', async () => {
+    // Resolving one would hand the conversation's edge a name where the
+    // backend writes `serviceCategories/<key>`: the card would look
+    // healthy and the conversation would silently lose its category.
+    const wrapper = await createChatBotWrapperAsync([
+      { name: 'Orphan', nameEN: 'Orphan', children: [] }
+    ]);
+
+    expect(wrapper.vm.getCategoryEnLabel('Orphan')).toBeNull();
+    expect(wrapper.vm.quickHelpCategoryKey('Orphan')).toBeNull();
   });
 
   it('the configuration reference is normalized to the hierarchy key', async () => {

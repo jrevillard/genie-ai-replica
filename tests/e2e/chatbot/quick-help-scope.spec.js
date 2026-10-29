@@ -118,13 +118,17 @@ const STUB_BUTTONS = [
     // CONTROL — without it, a spec that stubs everything to "broken" would
     // pass even if the app rendered every card as an error.
     //
+    // Its category is the hierarchy's own KEY, not the name: the legacy
+    // spelling stays accepted, and the rendered layer is what proves the
+    // fallback (the Jest suite pins the name-first rule itself).
+    //
     // The dual-prompt action is what makes the click SEND: a card without a
     // hidden prompt installs its chip and stops there, so a control card
     // without one would prove nothing about the query path.
     id: 'e2e-healthy',
     title: { en: 'Healthy card' },
     icon: { type: 'file', value: '/config/quickhelp/healthcare-social.svg' },
-    category: 'Civil Registry',
+    category: '2',
     serviceLabels: ['Births'],
     action: {
       visibleText: { en: 'Tell me about births' },

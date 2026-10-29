@@ -852,11 +852,14 @@ export default {
     // CONFIGURATION names a category by. The database key is the
     // hierarchy's own identity (the sidebar speaks it); the EN name is
     // the spelling a deployment can write down without reading the
-    // database, and the one the corpus filters on.
+    // database, and the one the corpus filters on. An entry the
+    // hierarchy cannot address by key cannot be addressed by name
+    // either: resolving one would hand the conversation's edge a name
+    // where the backend writes `serviceCategories/<key>`.
     categoryIndexByNameEn() {
       const index = new Map();
       for (const cat of this.serviceCategories || []) {
-        if (!cat.nameEN) continue;
+        if (!cat.nameEN || cat.catKey === null || cat.catKey === undefined) continue;
         if (!index.has(cat.nameEN)) index.set(cat.nameEN, cat);
       }
       return index;
@@ -1255,8 +1258,16 @@ export default {
         // category's key. The two loads are independent, so a hierarchy
         // that lands after the configuration resolves the buttons again —
         // synchronously here, before any consumer of this load resumes.
-        if (this.quickHelpButtons.length) {
-          this.applyQuickHelpButtons();
+        // Its OWN guard: a failure while re-mapping the buttons is a
+        // configuration problem, not a hierarchy one — swallowing it into
+        // this catch would mark the loaded tree failed and toast the
+        // wrong cause.
+        try {
+          if (this.quickHelpButtons.length) {
+            this.applyQuickHelpButtons();
+          }
+        } catch (mappingError) {
+          console.error('[ChatBotComponent] Failed to re-resolve Quick Help buttons against the hierarchy:', mappingError);
         }
       } catch (error) {
         if (seq !== this.treeLoadSeq) {

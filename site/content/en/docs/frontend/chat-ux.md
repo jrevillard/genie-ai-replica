@@ -187,7 +187,7 @@ Card config (each entry in config.features.chat.quickHelp.buttons):
   },
   "service": "Agriculture",
   "serviceLabels": ["Farming subsidies"],
-  "category": "Agriculture & Rural Development",
+  "category": "Utilities & Environment",
   "icon": "agriculture.svg"
 }
 ```

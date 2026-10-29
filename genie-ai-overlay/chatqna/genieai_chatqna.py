@@ -12,6 +12,7 @@ import os
 import re
 import time
 from datetime import date, datetime
+from functools import lru_cache
 from urllib.parse import urlparse
 
 from metrics import (
@@ -26,6 +27,7 @@ from core.label_contract import build_filter_labels, encode_filter_labels
 from core.model_cache import (
     MAX_SANE_MODEL_WINDOW_TOKENS,
     ModelDiscoveryError,
+    TokenCountError,
     coerce_int,
     discover_model_id,
     get_max_model_len,
@@ -545,16 +547,14 @@ def _get_translation_model_id() -> str | None:
     return TRANSLATION_MODEL_ID or get_model_id(_TRANSLATION_DISCOVERY_ENDPOINT)
 
 
-def _is_translategemma(translation_model_id: str | None = None) -> bool:
+def _is_translategemma(translation_model_id: str | None) -> bool:
     """True when the active translation model is TranslateGemma.
 
     TranslateGemma uses the completions API with a pre-formatted prompt;
-    other models use the chat completions API. Callers that already resolved
-    the id pass it in, so one read decides the payload AND the response
+    other models use the chat completions API. Callers pass the id they
+    already resolved, so one read decides the payload AND the response
     parse (a second read would re-probe and could disagree).
     """
-    if translation_model_id is None:
-        translation_model_id = _get_translation_model_id()
     return bool(translation_model_id) and "translategemma" in translation_model_id.lower()
 
 
@@ -1911,6 +1911,14 @@ class UserContextBuilder:
 ##################################################################################################################################
 
 
+@lru_cache(maxsize=4)
+def _count_static_tokens(text: str) -> int:
+    """Memoized ``_count_tokens`` for request-invariant text (the system
+    prompt takes at most two values per process). A cache hit skips the HTTP
+    round-trip entirely; the bounded size keeps it from growing."""
+    return _count_tokens(text)
+
+
 def _count_tokens(text: str) -> int:
     """Count tokens with the LLM server's ``/tokenize`` endpoint.
 
@@ -1937,7 +1945,10 @@ def _count_tokens(text: str) -> int:
     url = f"{_LLM_DISCOVERY_ENDPOINT}/tokenize"
     headers = endpoint_auth_headers()
     verify = endpoint_verify()
-    with with_span("chatqna.count_tokens", attributes={"llm.endpoint": url}) as span:
+    with with_span(
+        "chatqna.count_tokens",
+        attributes={ATTRIBUTE_NAMES["llm_endpoint"]: url},
+    ) as span:
         resp = httpx.post(
             url,
             headers=headers,
@@ -1950,30 +1961,29 @@ def _count_tokens(text: str) -> int:
         # vLLM returns both the token list and a precomputed "count"; prefer
         # the scalar, fall back to the list length for servers that omit it.
         if not isinstance(payload, dict):
-            raise ValueError(f"/tokenize returned a non-object payload: {payload!r}")
+            raise TokenCountError(f"/tokenize returned a non-object payload: {payload!r}")
         count = payload.get("count")
         if count is None:
             tokens = payload.get("tokens")
             if not isinstance(tokens, list):
-                raise ValueError(f"/tokenize payload has neither a count nor a token list: {payload!r}")
-            tokens_len = len(tokens)
-            span.set_attribute("token.count", tokens_len)
-            return tokens_len
-        # A proxy may serialize count as a digit string (same coercion stance as
-        # the window value in core/model_cache); anything else is malformed.
-        coerced = coerce_int(count)
-        if coerced is None:
-            raise ValueError(f"/tokenize count is not an integer: {payload!r}")
-        if coerced < 0:
-            # 0 is an honest count for an empty piece; a negative count is a
-            # lie that would silently defeat the overflow guard.
-            raise ValueError(f"/tokenize count is negative: {payload!r}")
-        if coerced > MAX_SANE_MODEL_WINDOW_TOKENS:
-            # Same sanity bound as the window value: a number this large is a
-            # broken proxy, and it would wipe the history budget outright.
-            raise ValueError(f"/tokenize count is absurdly large: {payload!r}")
-        span.set_attribute("token.count", coerced)
-        return coerced
+                raise TokenCountError(f"/tokenize payload has neither a count nor a token list: {payload!r}")
+            count = len(tokens)
+        else:
+            # A proxy may serialize count as a digit string (same coercion
+            # stance as the window value); anything non-integral is malformed.
+            count = coerce_int(count)
+            if count is None:
+                raise TokenCountError(f"/tokenize count is not an integer: {payload!r}")
+            if count < 0:
+                # 0 is an honest count for an empty piece; a negative count is
+                # a lie that would silently defeat the overflow guard.
+                raise TokenCountError(f"/tokenize count is negative: {payload!r}")
+            if count > MAX_SANE_MODEL_WINDOW_TOKENS:
+                # Same sanity bound as the window value: a number this large is
+                # a broken proxy, and it would wipe the history budget outright.
+                raise TokenCountError(f"/tokenize count is absurdly large: {payload!r}")
+        span.set_attribute(ATTRIBUTE_NAMES["token_count"], count)
+        return count
 
 
 ##################################################################################################################################
@@ -2205,7 +2215,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # so counting them separately costs nothing extra on overflow requests.
         # The 200-token buffer absorbs the ±1 boundary tokens a combined count
         # would merge.
-        system_tokens = _count_tokens(system_instructions)
+        system_tokens = _count_static_tokens(system_instructions)
         user_content_tokens = _count_tokens(user_content)
         full_prompt_tokens = system_tokens + user_content_tokens
         _active_span = otel_trace.get_current_span()
@@ -3822,15 +3832,14 @@ class ChatQnAService:
                 logger.debug(f"Condense rewrite ok: {standalone_query}")
                 return standalone_query
             except (CondenseError, ModelDiscoveryError, httpx.TimeoutException, httpx.HTTPError) as e:
-                reason = (
-                    e.reason
-                    if isinstance(e, CondenseError)
-                    else (
-                        "model_discovery"
-                        if isinstance(e, ModelDiscoveryError)
-                        else ("timeout" if isinstance(e, httpx.TimeoutException) else "http_error")
-                    )
-                )
+                if isinstance(e, CondenseError):
+                    reason = e.reason
+                elif isinstance(e, ModelDiscoveryError):
+                    reason = "model_discovery"
+                elif isinstance(e, httpx.TimeoutException):
+                    reason = "timeout"
+                else:
+                    reason = "http_error"
                 _condense_span_attrs(span, "failed", round((time.monotonic() - _start) * 1000))
                 logger.warning(f"Condense rewrite failed ({reason}): {type(e).__name__}: {e}")
                 _raise_condense_503(reason, e)
@@ -4681,30 +4690,21 @@ class ChatQnAService:
 
                 return {"response": final_text, "metadata": metadata}
 
-            except (ModelDiscoveryError, httpx.HTTPError) as e:
-                # Same fail-closed contract as the condense path: a request
-                # that cannot reach or name its LLM is "LLM unavailable"
-                # (503), not a bug (500) — whatever the multi-turn mode.
-                from opentelemetry.trace import StatusCode
-
-                _err_duration = time.time() - _rag_start
-                _err_attrs = _chat_attrs("false", "true")
-                chat_requests_total.add(1, _err_attrs)
-                chat_rag_duration_seconds.record(_err_duration, _err_attrs)
-                span.set_status(StatusCode.ERROR)
-                span.record_exception(e)
-                raise HTTPException(status_code=503, detail="llm_unavailable") from e
             except Exception as e:
                 from opentelemetry.trace import StatusCode
 
-                # Record error metric
+                # Record error metric (shared by every failure family)
                 _err_duration = time.time() - _rag_start
                 _err_attrs = _chat_attrs("false", "true")
                 chat_requests_total.add(1, _err_attrs)
                 chat_rag_duration_seconds.record(_err_duration, _err_attrs)
-
                 span.set_status(StatusCode.ERROR)
                 span.record_exception(e)
+                # Same fail-closed contract as the condense path: a request
+                # that cannot reach, name or count against its LLM is
+                # "LLM unavailable" (503), not a bug (500).
+                if isinstance(e, (ModelDiscoveryError, TokenCountError, httpx.HTTPError)):
+                    raise HTTPException(status_code=503, detail="llm_unavailable") from e
                 raise
 
         if logflag:

@@ -10,7 +10,6 @@
 
 import logging
 import os
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -560,7 +559,7 @@ class TestChatqnaGetters:
         mock_resp.json.return_value = {"data": [{"id": "google/translategemma-3-7b"}]}
 
         with patch("httpx.get", return_value=mock_resp):
-            assert mod._is_translategemma() is True
+            assert mod._is_translategemma(mod._get_translation_model_id()) is True
 
     def test_is_translategemma_false_when_undiscovered(self, monkeypatch):
         """Undiscovered translation model → the generic chat-completions path
@@ -570,14 +569,14 @@ class TestChatqnaGetters:
         monkeypatch.setattr(mod, "TRANSLATION_MODEL_ID", "")
 
         with patch("httpx.get", side_effect=httpx.ConnectError("down")):
-            assert mod._is_translategemma() is False
+            assert mod._is_translategemma(mod._get_translation_model_id()) is False
 
     def test_is_translategemma_false_for_generic_model(self, monkeypatch):
         import chatqna.genieai_chatqna as mod
 
         monkeypatch.setattr(mod, "TRANSLATION_MODEL_ID", "gemma-3-4b-it")
 
-        assert mod._is_translategemma() is False
+        assert mod._is_translategemma(mod._get_translation_model_id()) is False
 
 
 # ---------------------------------------------------------------------------
@@ -751,12 +750,6 @@ class TestChatqnaContextWindowGetters:
 class TestDataprepAutoDetect:
     """dataprep._build_vllm_client: explicit VLLM_MODEL_ID env wins; otherwise
     the id discovered at VLLM_ENDPOINT — loud when nothing answers."""
-
-    @pytest.fixture()
-    def source(self):
-        """Read the actual source file for assertions."""
-        src = Path(__file__).resolve().parents[1] / "dataprep" / "genieai_dataprep_arangodb.py"
-        return src.read_text()
 
     def test_client_auth_wiring(self, monkeypatch):
         """The AsyncOpenAI client authenticates with VLLM_API_KEY against the

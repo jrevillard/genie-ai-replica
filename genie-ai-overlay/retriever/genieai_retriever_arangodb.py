@@ -650,9 +650,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                     logger.error(f"An error occurred while verifying the API Key: {e}")
 
             elif VLLM_ENDPOINT:
-                self._llm_model_id = self._resolve_vllm_model_id()
-                self._llm_backend = "vllm"
-                self.llm = self._create_vllm_client(self._llm_model_id)
+                self._init_vllm_summarizer(self._resolve_vllm_model_id())
             else:
                 raise HTTPException(
                     status_code=400, detail="No LLM environment variables are set, cannot generate graphs."
@@ -693,28 +691,35 @@ class GenieaiArangoRetriever(OpeaComponent):
         model baked into the current client (e.g. the GPU node changed models), the
         ChatOpenAI client is recreated.
         """
-        # Re-check only the vLLM-backed summarizer: an OpenAI-configured
-        # client must survive untouched (different endpoint, different id).
-        # A failed probe DEGRADES the auxiliary summarizer (None → the caller
-        # skips summarization); retrieval itself must never fail for it.
-        if VLLM_ENDPOINT and getattr(self, "_llm_backend", None) == "vllm":
-            try:
-                current_id = self._resolve_vllm_model_id()
-            except ModelDiscoveryError:
-                logger.warning("Summarizer model id undiscovered — skipping summarization this call")
-                return None
-            if current_id != getattr(self, "_llm_model_id", None):
-                logger.info(f"Summarizer model changed: {self._llm_model_id} -> {current_id}, recreating client")
-                self._llm_model_id = current_id
-                self.llm = self._create_vllm_client(current_id)
-        elif getattr(self, "llm", None) is None and VLLM_ENDPOINT:
+        # One resolution, one degradation policy: a failed probe DEGRADES the
+        # auxiliary summarizer (None → the caller skips summarization);
+        # retrieval itself must never fail for it. The OpenAI-configured
+        # client (different endpoint, different id) survives untouched.
+        if not VLLM_ENDPOINT:
+            return getattr(self, "llm", None)
+        if getattr(self, "_llm_backend", None) != "vllm" and getattr(self, "llm", None) is not None:
+            # OpenAI-configured client: different endpoint, different id —
+            # untouched, and never probed.
+            return self.llm
+        try:
+            current_id = self._resolve_vllm_model_id()
+        except ModelDiscoveryError:
+            logger.warning("Summarizer model id undiscovered — skipping summarization this call")
+            return None
+        if getattr(self, "_llm_backend", None) == "vllm" and current_id != getattr(self, "_llm_model_id", None):
+            logger.info(f"Summarizer model changed: {self._llm_model_id} -> {current_id}, recreating client")
+            self._init_vllm_summarizer(current_id)
+        elif getattr(self, "llm", None) is None:
             # OpenAI init failed at boot (transient key/probe error leaves llm
-            # unset): degrade to the vLLM summarizer instead of returning None
-            # and AttributeError-ing on every retrieve.
-            self._llm_model_id = self._resolve_vllm_model_id()
-            self._llm_backend = "vllm"
-            self.llm = self._create_vllm_client(self._llm_model_id)
-        return self.llm
+            # unset): degrade to the vLLM summarizer instead of AttributeError-
+            # ing on every retrieve.
+            self._init_vllm_summarizer(current_id)
+        return getattr(self, "llm", None)
+
+    def _init_vllm_summarizer(self, model_id: str) -> None:
+        self._llm_model_id = model_id
+        self._llm_backend = "vllm"
+        self.llm = self._create_vllm_client(model_id)
 
     def _initialize_client(self):
         """Initialize the ArangoDB connection."""

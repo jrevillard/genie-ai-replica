@@ -1834,13 +1834,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         """
         _vllm_endpoint = os.getenv("VLLM_ENDPOINT", "")
 
-        if not os.getenv("VLLM_MODEL_ID"):
-            detected = resolve_model_id(_vllm_endpoint)
-            os.environ["VLLM_MODEL_ID"] = detected
-            # Patch the parent module constant (captured at parent import
-            # time — os.environ alone does not update it). The parent reads
+        detected = resolve_model_id(_vllm_endpoint)
+        if detected != os.getenv("VLLM_MODEL_ID"):
+            # Discovered (the env did not answer): mirror it into os.environ
+            # AND the parent module constant (captured at parent import time —
+            # os.environ alone does not update it). The parent reads
             # VLLM_MODEL_ID as a module constant, so this reassignment is
             # the runtime mechanism for model discovery.
+            os.environ["VLLM_MODEL_ID"] = detected
             _parent_mod.VLLM_MODEL_ID = detected
             logger.info(f"Auto-discovered vLLM model for graph extraction: {detected}")
 

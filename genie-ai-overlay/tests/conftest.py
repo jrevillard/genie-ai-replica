@@ -215,6 +215,9 @@ def count_patch():
     """Factory: point ``_count_tokens`` at a mock tokenizer's ``.encode``."""
 
     def _patch(tokenizer):
+        import chatqna.genieai_chatqna as _chatqna_module
+
+        _chatqna_module._count_static_tokens.cache_clear()
         return patch(
             "chatqna.genieai_chatqna._count_tokens",
             side_effect=lambda text: len(tokenizer.encode(text)),

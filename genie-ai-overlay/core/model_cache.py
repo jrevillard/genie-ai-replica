@@ -238,6 +238,13 @@ def get_max_model_len(endpoint_url: str, ttl_seconds: int | None = None) -> int 
     return _cached_field(endpoint_url, ttl_seconds, "max_model_len")
 
 
+class TokenCountError(ValueError):
+    """A /tokenize response violated the counting contract (malformed shape,
+    non-integer, negative or absurd count). Subclasses ValueError so callers
+    of the counting helper keep a single failure family; the chat request
+    path maps it to the same fail-closed 503 as transport failures."""
+
+
 class ModelDiscoveryError(RuntimeError):
     """No model id could be discovered for an endpoint.
 

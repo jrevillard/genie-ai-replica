@@ -178,6 +178,7 @@ ATTRIBUTE_NAMES = {
     "answer_is_grounded": "answer.is_grounded",
     "answer_sentinel_present": "answer.sentinel_present",
     "answer_abstained": "answer.abstained",
+    "answer_abstention_reason": "answer.abstention_reason",
     # Reranker adaptive
     "rag_adaptive_chunk_keys": "rag.adaptive_chunk_keys",
     # chatqna.orchestrate — written at genieai_chatqna.py:2807-2808. The

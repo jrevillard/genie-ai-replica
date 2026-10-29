@@ -340,6 +340,7 @@ def _emit_stream_outcome_span(
     is_grounded: bool,
     sentinel_present: bool,
     abstained: bool,
+    abstention_reason: str | None = None,
 ) -> None:
     """Record the answer-level outcome of a streamed turn.
 
@@ -373,6 +374,10 @@ def _emit_stream_outcome_span(
             span.set_attribute(ATTRIBUTE_NAMES["answer_is_grounded"], bool(is_grounded))
             span.set_attribute(ATTRIBUTE_NAMES["answer_sentinel_present"], bool(sentinel_present))
             span.set_attribute(ATTRIBUTE_NAMES["answer_abstained"], bool(abstained))
+            # Empty when the turn did not abstain: a stable four-value
+            # vocabulary (the three machine codes + "") keeps the metric and
+            # the span attributable without per-call attr-shape changes.
+            span.set_attribute(ATTRIBUTE_NAMES["answer_abstention_reason"], abstention_reason or "")
     finally:
         span.end()
 
@@ -3059,6 +3064,7 @@ class ChatQnAService:
             is_grounded=is_grounded,
             sentinel_present=self_confidence is not None,
             abstained=abstained,
+            abstention_reason=abstention_reason,
         )
         metadata = {
             "type": "metadata",
@@ -3070,14 +3076,9 @@ class ChatQnAService:
             "retrieval_confidence_score": round(retrieval_confidence, 2),
             # Citizen-facing: the LLM self-grade when the feature is on (fallback to
             # retrieval so the badge never disappears), else the retrieval confidence.
-            # Clients render this field unchanged — surfacing the self-grade needs no
-            # client change beyond enabling LLM_SELF_CONFIDENCE_ENABLED.
-            "confidence_score": round(
-                _display_confidence(retrieval_confidence, self_confidence)
-                if LLM_SELF_CONFIDENCE_ENABLED
-                else retrieval_confidence,
-                2,
-            ),
+            # Same _cs the debug log above reports, so the log cannot claim a
+            # different value than what clients received.
+            "confidence_score": _cs,
             "is_grounded": is_grounded,
         }
         if abstained:
@@ -4163,14 +4164,21 @@ class ChatQnAService:
 
             _rag_start = time.time()
 
-            def _chat_attrs(abstained: str, error: str) -> dict:
-                """Metric attribute set shared by the success / abstention / error paths."""
+            def _chat_attrs(abstained: str, error: str, abstention_reason: str = "") -> dict:
+                """Metric attribute set shared by the success / abstention / error paths.
+
+                ``abstention_reason`` is the machine code when the turn
+                abstained, "" otherwise — a bounded vocabulary, so the counter
+                can split a spike into stale scopes vs an over-rejecting
+                reranker.
+                """
                 return sanitize_attributes(
                     {
                         "response_type": "streaming" if chat_request.stream else "sync",
                         "abstained": abstained,
                         "error": error,
                         "retrieval_source": getattr(retriever_parameters, "search_type", "hybrid"),
+                        "abstention_reason": abstention_reason,
                     }
                 )
 
@@ -4231,7 +4239,7 @@ class ChatQnAService:
                 # follows the same signal as the metadata event: the turn had
                 # no document backing.
                 _abstained, _abstention_reason = _abstention_outcome(result_dict)
-                _metric_attrs = _chat_attrs("true" if _abstained else "false", "false")
+                _metric_attrs = _chat_attrs("true" if _abstained else "false", "false", _abstention_reason or "")
                 chat_requests_total.add(1, _metric_attrs)
                 chat_rag_duration_seconds.record(_rag_duration, _metric_attrs)
 
@@ -4252,7 +4260,7 @@ class ChatQnAService:
                 span.set_attribute("abstained.reason", "reranker_input_too_long")
                 logger.warning(f"Abstaining: reranker input too long. {e}")
 
-                chat_requests_total.add(1, _chat_attrs("true", "false"))
+                chat_requests_total.add(1, _chat_attrs("true", "false", "reranker_input_too_long"))
 
                 # The reranker never returned a selection (schedule raised
                 # before result_dict was bound), so emit an empty selection
@@ -4347,6 +4355,7 @@ class ChatQnAService:
                         is_grounded=metadata["is_grounded"],
                         sentinel_present=False,
                         abstained=metadata["abstained"],
+                        abstention_reason=metadata["abstention_reason"],
                     )
 
                     return StreamingResponse(_abstention_stream(), media_type="text/event-stream")

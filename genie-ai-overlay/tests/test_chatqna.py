@@ -3989,18 +3989,20 @@ async def test_the_abstention_flag_follows_the_abstention_enforcement(monkeypatc
 
 
 @pytest.mark.parametrize(
-    "retriever_docs,expected",
+    "retriever_docs,expected,expected_reason",
     [
-        ([], "true"),
-        ([{"id": "d1", "text": "doc"}], "false"),
+        ([], "true", "no_documents_retrieved"),
+        ([{"id": "d1", "text": "doc"}], "false", ""),
     ],
     ids=["scope_matched_nothing", "scope_matched_something"],
 )
 @pytest.mark.asyncio
-async def test_the_metric_counts_the_abstentions_it_reports(monkeypatch, retriever_docs, expected):
+async def test_the_metric_counts_the_abstentions_it_reports(monkeypatch, retriever_docs, expected, expected_reason):
     """The counter and the payload must agree: an operator reading
     genie_ai_chat_request_total{abstained="true"} must be counting the same
-    turns the Inspector marks."""
+    turns the Inspector marks — and the cause rides on the same attribute
+    set, so a spike can be split into stale scopes vs an over-rejecting
+    reranker without querying the collection."""
     recorded = []
 
     class _Counter:
@@ -4038,6 +4040,7 @@ async def test_the_metric_counts_the_abstentions_it_reports(monkeypatch, retriev
         await svc.handle_request(req)
 
     assert recorded[-1]["abstained"] == expected
+    assert recorded[-1]["abstention_reason"] == expected_reason
 
 
 @pytest.mark.asyncio

@@ -53,8 +53,10 @@
         <tr v-for="query in queries" :key="query._key" class="qi-list__row" @click="$emit('inspect', query._key)">
           <td class="qi-list__cell--time">{{ formatTime(query.timestamp) }}</td>
           <td class="qi-list__cell--question">{{ truncate(query.text, 80) }}</td>
-          <td class="qi-list__cell--scope" :data-testid="`qi-scope-${query._key}`">
-            <span v-if="scopeText(query)" class="qi-list__scope-labels">{{ scopeText(query) }}</span>
+          <td :data-testid="`qi-scope-${query._key}`">
+            <span v-if="scopeText(query)" class="qi-list__scope-labels" :title="scopeText(query)">{{
+              scopeText(query)
+            }}</span>
             <span v-else class="qi-list__muted">—</span>
           </td>
           <td class="qi-list__cell--center">

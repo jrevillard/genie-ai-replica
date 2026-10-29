@@ -270,7 +270,9 @@ export default {
         // for this query.
         return this.translate('admin.queryInspector.scopeNotRecorded', 'Not recorded');
       }
-      return labels.join(', ') || this.translate('admin.queryInspector.scopeNone', 'None (unfiltered query)');
+      // Same wording as the list: one state, one name, so a cell and its
+      // detail cannot read as two different states.
+      return labels.join(', ') || this.translate('admin.queryInspector.unfiltered', 'Unfiltered');
     },
     translate(key, fallback) {
       return this.$parent?.translate?.(key, fallback) ?? fallback;

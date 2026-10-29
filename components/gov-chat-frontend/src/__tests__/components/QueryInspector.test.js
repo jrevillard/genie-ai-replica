@@ -560,9 +560,11 @@ describe('QueryInspectorDetail', () => {
   });
 
   it('should say the query was unfiltered when the filter list is empty', () => {
+    // Same wording as the list cell: the shared scope rule keeps the views
+    // from disagreeing, and so does the shared name for the state.
     const query = { ...fullQuery, metadata: { ...fullQuery.metadata, filter_labels: [] } };
     const wrapper = mountDetail({ query });
-    expect(wrapper.find('[data-testid="qi-detail-scope"]').text()).toContain('None');
+    expect(wrapper.find('[data-testid="qi-detail-scope"]').text()).toContain('Unfiltered');
   });
 
   it('should say the scope was not recorded for a query saved before the field existed', () => {

@@ -80,7 +80,8 @@ that information."
 > document at all — the label filter matched nothing — the metadata
 > event also carries `abstained: true` with
 > `abstention_reason: no_documents_retrieved`, the `chatqna.stream_outcome`
-> span records `answer.abstained` on a streamed turn, and
+> span records `answer.abstained` and its cause (`answer.abstention_reason`)
+> on a streamed turn, and
 > `genie_ai_chat_request_total` counts the turn under `abstained="true"` —
 > all derived from the same retrieval signal. The flag is reported while
 > the abstention instructions are enforced (`CHATQNA_ENFORCE_ABSTENTION`,

@@ -100,8 +100,13 @@ class TestStreamOutcomeSpan:
             is_grounded=False,
             sentinel_present=False,
             abstained=True,
+            abstention_reason="no_documents_retrieved",
         )
-        assert captured_spans(STREAM_OUTCOME)[0].attributes[A["answer_abstained"]] is True
+        span = captured_spans(STREAM_OUTCOME)[0]
+        assert span.attributes[A["answer_abstained"]] is True
+        # The boolean alone cannot answer "stale scope or over-rejecting
+        # reranker" — the cause rides beside it.
+        assert span.attributes[A["answer_abstention_reason"]] == "no_documents_retrieved"
 
     def test_joins_the_rag_trace_rather_than_starting_a_new_one(self, captured_spans):
         """The whole point: the outcome must land in the RAG trace."""

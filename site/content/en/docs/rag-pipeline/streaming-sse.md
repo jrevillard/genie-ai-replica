@@ -6,7 +6,7 @@ aliases:
   - /docs/rag/streaming-sse/
 mode: reference
 persona: developer
-owner: "docs-stewards"
+owner: 'docs-stewards'
 last_reviewed: 2026-09-18
 ---
 
@@ -71,7 +71,7 @@ The last data event before `[DONE]` is the **metadata envelope**:
 
 ```json
 {
-  "ops": [{"value": ""}],
+  "ops": [{ "value": "" }],
   "source_documents": [
     {
       "text": "...first chunk text...",
@@ -90,13 +90,13 @@ The last data event before `[DONE]` is the **metadata envelope**:
 }
 ```
 
-| Field | Type | When present | Meaning |
-|---|---|---|---|
-| `source_documents` | array | Always | The kept chunks used for the answer (after reranking). Each entry has `text` and `metadata`. |
-| `retrieval_confidence_score` | float 0–1 | Always | Rank-weighted aggregate of the calibrated reranker scores — see [Reranking → The displayed confidence score]({{< relref "reranking" >}}). |
-| `confidence_score` | float 0–1 | Always | The user-facing score. Equals `self_confidence` if available, otherwise `retrieval_confidence_score`. |
-| `is_grounded` | bool | Always | `true` iff ≥1 chunk passed the reranker. When `false` and `CHATQNA_ENFORCE_ABSTENTION=true`, the answer ends with the configured refusal phrase. |
-| `self_confidence` | int 0–100 | Only when `LLM_SELF_CONFIDENCE_ENABLED=1` | The LLM's own certainty, from the `[[CONF:n]]` token. |
+| Field                        | Type      | When present                              | Meaning                                                                                                                                          |
+| ---------------------------- | --------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `source_documents`           | array     | Always                                    | The kept chunks used for the answer (after reranking). Each entry has `text` and `metadata`.                                                     |
+| `retrieval_confidence_score` | float 0–1 | Always                                    | Rank-weighted aggregate of the calibrated reranker scores — see [Reranking → The displayed confidence score]({{< relref "reranking" >}}).        |
+| `confidence_score`           | float 0–1 | Always                                    | The user-facing score. Equals `self_confidence` if available, otherwise `retrieval_confidence_score`.                                            |
+| `is_grounded`                | bool      | Always                                    | `true` iff ≥1 chunk passed the reranker. When `false` and `CHATQNA_ENFORCE_ABSTENTION=true`, the answer ends with the configured refusal phrase. |
+| `self_confidence`            | int 0–100 | Only when `LLM_SELF_CONFIDENCE_ENABLED=1` | The LLM's own certainty, from the `[[CONF:n]]` token.                                                                                            |
 
 The metadata event is emitted **once per request**, on the same SSE
 stream as the content events. Backend parsers should buffer until the
@@ -137,20 +137,20 @@ the `chatqna.orchestrate` root span (and per-stage child spans from the
 OPEA megaservice HTTP client instrumentation). The actual span attributes
 on `chatqna.orchestrate` are:
 
-| Span attribute | Source |
-|---|---|
-| `rag.query_length` | Length of the query fed into the megaservice. |
-| `rag.model_id` | The chat LLM model (resolved from `VLLM_LLM_MODEL_ID` or the live vLLM endpoint via `core/model_cache.py`). |
-| `rag.chunk_count` | Number of chunks that reached the LLM after reranking. |
+| Span attribute     | Source                                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `rag.query_length` | Length of the query fed into the megaservice.                                                               |
+| `rag.model_id`     | The chat LLM model (resolved from `VLLM_LLM_MODEL_ID` or the live vLLM endpoint via `core/model_cache.py`). |
+| `rag.chunk_count`  | Number of chunks that reached the LLM after reranking.                                                      |
 
 Additional attributes emitted from the reranker microservice span:
 
-| Span attribute | Source |
-|---|---|
-| `reranker.strategy` | The strategy used for this request (`slice`, `adaptive`, etc.). |
-| `reranker.input_doc_count` / `reranker.output_doc_count` | Candidate and kept chunk counts. |
-| `reranker.score_threshold` | The `RERANKING_THRESHOLD` value applied. Emitted only when the strategy is `threshold` or `slice_threshold` — the only two that consult it. Absent on a `slice` / `knee_threshold` / `adaptive` span. |
-| `rag.adaptive_context_decay_factor` / `rag.adaptive_min_value_threshold` / `rag.adaptive_breakdown` | Emitted on the reranker microservice span when `adaptive` was used. |
+| Span attribute                                                                                      | Source                                                                                                                                                                                                |
+| --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reranker.strategy`                                                                                 | The strategy used for this request (`slice`, `adaptive`, etc.).                                                                                                                                       |
+| `reranker.input_doc_count` / `reranker.output_doc_count`                                            | Candidate and kept chunk counts.                                                                                                                                                                      |
+| `reranker.score_threshold`                                                                          | The `RERANKING_THRESHOLD` value applied. Emitted only when the strategy is `threshold` or `slice_threshold` — the only two that consult it. Absent on a `slice` / `knee_threshold` / `adaptive` span. |
+| `rag.adaptive_context_decay_factor` / `rag.adaptive_min_value_threshold` / `rag.adaptive_breakdown` | Emitted on the reranker microservice span when `adaptive` was used.                                                                                                                                   |
 
 The `is_grounded`, `confidence_score`, and `self_confidence` values are
 **not** exposed as chatqna span attributes — they are surfaced via the
@@ -170,10 +170,10 @@ e.g. `POST /v1/embeddings`, `POST /v1/retrieval`, plus the chatqna-side
 ChatQnA emits two per-request metrics, scraped by the OTel Collector and
 forwarded to VictoriaMetrics:
 
-| Metric | Type | Attributes |
-|---|---|---|
-| `genie_ai_chat_request_total` (`chat_requests_total`) | Counter | `response_type` (`streaming`/`sync`), `abstained` (`true`/`false` — `true` when the reranker refused the input, or — while the abstention instructions are enforced, `CHATQNA_ENFORCE_ABSTENTION` on by default — when the retrieval returned no document or the reranker kept none of the matched documents; a deployment with the guardrail off counts those turns as `false`), `error` (`true`/`false`), `retrieval_source` (`chunk`/`chunk_label_filter`/`hybrid`; the condense-rewrite failure path records the request's `search_type` verbatim, e.g. `similarity_score_threshold`). |
-| `genie_ai_chat_rag_latency_seconds` (`chat_rag_duration_seconds`) | Histogram | `response_type`, `abstained`, `error`, `retrieval_source`. |
+| Metric                                                            | Type      | Attributes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `genie_ai_chat_request_total` (`chat_requests_total`)             | Counter   | `response_type` (`streaming`/`sync`), `abstained` (`true`/`false` — `true` when the reranker refused the input, or — while the abstention instructions are enforced, `CHATQNA_ENFORCE_ABSTENTION` on by default — when the retrieval returned no document or the reranker kept none of the matched documents; a deployment with the guardrail off counts those turns as `false`), `abstention_reason` (the machine code — `no_documents_retrieved`, `reranker_selected_nothing`, `reranker_input_too_long` — or empty when the turn did not abstain; splits a spike into stale scopes vs an over-rejecting reranker), `error` (`true`/`false`), `retrieval_source` (`chunk`/`chunk_label_filter`/`hybrid`; the condense-rewrite failure path records the request's `search_type` verbatim, e.g. `similarity_score_threshold`). |
+| `genie_ai_chat_rag_latency_seconds` (`chat_rag_duration_seconds`) | Histogram | `response_type`, `abstained`, `error`, `retrieval_source`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 A PromQL probe to graph RAG latency over the last 5 minutes:
 

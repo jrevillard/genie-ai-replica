@@ -9,6 +9,12 @@
 // The resolver indexes the tree ONCE: the label vocabulary and the category
 // keys are walked a single time, then every button is checked against the
 // index — never against the tree itself.
+//
+// The CONFIG-side rules of a Quick Help button live here too: its identity
+// (its id), the title it displays, and when the loaded buttons must
+// re-resolve for a new locale. They are the same kind of rule — one copy,
+// read by every path — and they belong to the button, not to the widget
+// that shows it.
 
 /// Whether [id] names a category scope at all. An EMPTY id declares
 /// nothing (it is how a selection is cleared), and 'general' is the
@@ -40,6 +46,70 @@ List<Map<String, dynamic>> dedupeQuickHelpButtons(
     }
   }
   return unique;
+}
+
+/// The button [id] names in [buttons], or null when no button declares
+/// it. The chatbot's two reads of a button by id — the restore path and
+/// the locale re-title — share this one lookup, so a change to the
+/// matching rule (trimming ids, a new id shape) cannot drift between
+/// them. (ConversationScopeResolver keeps its OWN first-wins index in
+/// _indexButtons — a different rule over a different structure.)
+Map<String, dynamic>? quickHelpButtonById(
+  List<Map<String, dynamic>> buttons,
+  String? id,
+) {
+  if (id == null || id.isEmpty) return null;
+  for (final button in buttons) {
+    if (button['id']?.toString() == id) {
+      return button;
+    }
+  }
+  return null;
+}
+
+/// Whether the Quick Help buttons must re-resolve for [currentLocale].
+///
+/// The buttons are per-locale text resolved by a load; [loadedLocale] is
+/// the locale the last load ran under — whether it succeeded or failed, a
+/// failure marks the locale it failed under, so the retry is scoped to a
+/// locale change. A null loadedLocale names the first, still-in-flight
+/// load — that load resolves under the locale live at its completion, so
+/// the mount's own dependency change must not start a second parse. A
+/// drift (a load under another locale) re-resolves.
+bool shouldReloadQuickHelpButtons({
+  required String? loadedLocale,
+  required String currentLocale,
+}) {
+  return loadedLocale != null && loadedLocale != currentLocale;
+}
+
+/// The title [button] carries, or null when it carries no title.
+///
+/// An EMPTY title is no title: a config card with a blank title text
+/// must not blank the context bar — the caller keeps the name it has
+/// (the saved category name on a restore, the caller's fallback on a
+/// press). One rule for every path that shows a Quick Help title.
+String? quickHelpTitleOf(Map<String, dynamic>? button) {
+  final title = button?['resolvedTitle']?.toString() ?? '';
+  return title.isNotEmpty ? title : null;
+}
+
+/// The title of the ACTIVE Quick Help scope, re-resolved from the button
+/// list by its id — the mobile twin of the web's quickHelpTitleFor.
+///
+/// A locale switch re-resolves the buttons (a load in the new locale) and
+/// the context bar's title must follow: the scope's identity is the button
+/// id, not the title it was pressed under. A button the config no longer
+/// declares, or a null or EMPTY id (empty declares nothing — the file's
+/// own scope rule — and a sidebar scope has no id at all), resolves to
+/// null so the caller keeps the title it already has.
+String? activeQuickHelpTitleFor(
+  List<Map<String, dynamic>> buttons,
+  String? activeQuickHelpButtonId,
+) {
+  return quickHelpTitleOf(
+    quickHelpButtonById(buttons, activeQuickHelpButtonId),
+  );
 }
 
 /// Checks Quick Help buttons against the live hierarchy.

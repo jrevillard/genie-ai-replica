@@ -934,4 +934,152 @@ void main() {
       expect(dedupeQuickHelpButtons([a, b]), [a, b]);
     });
   });
+
+  /// A locale switch reloads the buttons with the new locale's titles: the
+  /// context bar's title of an ACTIVE Quick Help scope must follow, and it
+  /// follows by IDENTITY (the button id), never by the pressed title.
+  group('activeQuickHelpTitleFor', () {
+    test('returns the reloaded button title for the active id', () {
+      // The button was pressed under 'en' ('Births'); the reload carried
+      // the 'fr' title. The active scope reads the FRENCH one.
+      final buttons = [
+        {'id': 'births', 'resolvedTitle': 'Naissances'},
+        {'id': 'crops', 'resolvedTitle': 'Cultures'},
+      ];
+
+      expect(activeQuickHelpTitleFor(buttons, 'births'), 'Naissances');
+    });
+
+    test('a null active id (sidebar scope or none) resolves nothing', () {
+      final buttons = [
+        {'id': 'births', 'resolvedTitle': 'Naissances'},
+        // A card with no id of its own must not adopt a scope-less
+        // selection: the null guard is what keeps it from matching.
+        {'resolvedTitle': 'Just chat'},
+      ];
+
+      expect(activeQuickHelpTitleFor(buttons, null), isNull);
+    });
+
+    test('an EMPTY active id declares nothing, like the scope rule', () {
+      // declaresCategoryScope treats '' as no identity; the re-title
+      // must agree, or a config card with "id": "" would adopt the
+      // FIRST such card's title on the next locale switch.
+      final buttons = [
+        {'id': '', 'resolvedTitle': 'Card A'},
+        {'id': '', 'resolvedTitle': 'Card B'},
+      ];
+
+      expect(activeQuickHelpTitleFor(buttons, ''), isNull);
+    });
+
+    test('an empty resolved title is absent, not a title', () {
+      // A config card with no title text must not BLANK the context
+      // bar: null lets the caller keep the title it already shows.
+      final buttons = [
+        {'id': 'births', 'resolvedTitle': ''},
+      ];
+
+      expect(activeQuickHelpTitleFor(buttons, 'births'), isNull);
+    });
+
+    test('a button the config no longer declares keeps its last title', () {
+      // The scope's identity is the id: a gone button must not blank the
+      // context bar — null lets the caller keep the title it has.
+      final buttons = [
+        {'id': 'crops', 'resolvedTitle': 'Cultures'},
+      ];
+
+      expect(activeQuickHelpTitleFor(buttons, 'births'), isNull);
+    });
+  });
+
+  /// A locale drift re-resolves the buttons; the mount's own dependency
+  /// change (the first load still in flight) must not.
+  group('shouldReloadQuickHelpButtons', () {
+    test('a settled locale that is not the live one reloads', () {
+      expect(
+        shouldReloadQuickHelpButtons(loadedLocale: 'en', currentLocale: 'fr'),
+        isTrue,
+      );
+    });
+
+    test('the locale the buttons already speak does not', () {
+      expect(
+        shouldReloadQuickHelpButtons(loadedLocale: 'fr', currentLocale: 'fr'),
+        isFalse,
+      );
+    });
+
+    test('a null loaded locale (first load in flight) does not', () {
+      // The first load resolves under the locale live at its completion
+      // — reloading beside it would be a duplicate parse on every mount.
+      expect(
+        shouldReloadQuickHelpButtons(loadedLocale: null, currentLocale: 'fr'),
+        isFalse,
+      );
+    });
+
+    test('a failed load marks the locale it failed under', () {
+      // The retry is scoped to a LOCALE change — the trigger the pre-fix
+      // code used. A keyboard opening (a dependency change under the
+      // same locale) must not re-read the asset.
+      expect(
+        shouldReloadQuickHelpButtons(loadedLocale: 'en', currentLocale: 'en'),
+        isFalse,
+      );
+      expect(
+        shouldReloadQuickHelpButtons(loadedLocale: 'en', currentLocale: 'fr'),
+        isTrue,
+      );
+    });
+  });
+
+  /// One rule for every path that shows a Quick Help title: an EMPTY
+  /// title is no title, so the context bar never blanks.
+  group('quickHelpTitleOf', () {
+    test('a card title is the title', () {
+      expect(
+        quickHelpTitleOf({'id': 'births', 'resolvedTitle': 'Naissances'}),
+        'Naissances',
+      );
+    });
+
+    test('an empty title is no title', () {
+      expect(quickHelpTitleOf({'id': 'births', 'resolvedTitle': ''}), isNull);
+    });
+
+    test('a card without a title has no title', () {
+      expect(quickHelpTitleOf({'id': 'births'}), isNull);
+      expect(quickHelpTitleOf(null), isNull);
+    });
+  });
+
+  /// The ONE button-identity lookup — the restore and the locale
+  /// re-title must resolve the same entity for the same id.
+  group('quickHelpButtonById', () {
+    test('finds the button an id names', () {
+      final births = {'id': 'births', 'resolvedTitle': 'Births'};
+      final crops = {'id': 'crops', 'resolvedTitle': 'Crops'};
+
+      expect(quickHelpButtonById([births, crops], 'crops'), same(crops));
+    });
+
+    test('a null or empty id names no button', () {
+      final buttons = [
+        {'id': 'births', 'resolvedTitle': 'Births'},
+      ];
+
+      expect(quickHelpButtonById(buttons, null), isNull);
+      expect(quickHelpButtonById(buttons, ''), isNull);
+    });
+
+    test('an id no button declares names none', () {
+      final buttons = [
+        {'id': 'births', 'resolvedTitle': 'Births'},
+      ];
+
+      expect(quickHelpButtonById(buttons, 'crops'), isNull);
+    });
+  });
 }

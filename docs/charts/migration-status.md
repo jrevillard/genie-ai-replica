@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-28)
 
-- **Chart `genieai-umbrella` at 0.2.113**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.114**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,36 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 40 (0.2.114)** — 4 findings from the sixteenth
+  `/code-review`, all in the required-Secrets contract's assertion half.
+  - *keycloak-admin-credentials was asserted narrower than its
+    consumer* — the assertion sat under the convergence Job's toggle,
+    but the Keycloak CR names the Secret unconditionally within the
+    identity tier: a keycloak-on/convergence-off install consumed the
+    Secret with nothing asserting it (the exact drift class pass 15
+    closed for redisCache, reopened one block over). The assertion
+    moved under `keycloak.enabled` alone; the convergence envSecrets
+    rows stay under their own toggle.
+  - *The pre-baked Gateway TLS Secret was never asserted* —
+    `ingress.tls.secretName` is the operator-pre baked certificate the
+    Gateway's certificateRefs point at (with it set, no cert-manager
+    Certificate renders and nothing else materializes the Secret). It
+    joins `required_secrets` and the gate, matching the test's own
+    contract for operator-provided Secrets.
+  - *The vllm-api-key assertion could fire with no consumer* — the
+    mirror image of pass 15's gap: with the backend disabled but a
+    translation endpoint named, the test demanded a Secret nothing in
+    the render consumes. The gate operand and the assertion branch
+    both require `backend.enabled` now.
+  - *The two test pods re-declared ~40 lines of scaffolding* — bound
+    once as `genieai-umbrella.testPodScaffolding` in
+    `templates/_lib/_tests.tpl` (a .tpl file, because helm lint parses
+    .yaml templates as YAML and a `define` body is not YAML). The
+    byte-compare against the 0.2.113 render shows the only spec change
+    is the data-deps container's name (`t` → `test`); the first
+    attempt, defined inside the .yaml file and included with a
+    whitespace-trimming dash, broke the YAML parse — both caught by
+    lint before any push.
 - **Review loop, pass 39 (0.2.113)** — 4 findings from the fifteenth
   `/code-review`: three fixed, one declined as machinery (with a
   mitigation).
@@ -1761,7 +1791,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.113** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.114** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

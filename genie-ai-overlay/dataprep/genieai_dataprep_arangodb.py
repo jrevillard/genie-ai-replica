@@ -19,7 +19,7 @@ from typing import Any
 import aiohttp
 from opentelemetry import propagate
 
-from core.model_cache import get_model_id
+from core.model_cache import require_model_id
 from core.model_http_policy import (
     AIOHTTP_CONNECT_TIMEOUT_SECONDS,
     CONTROL_PLANE_TIMEOUT_SECONDS,
@@ -741,8 +741,10 @@ through post-harvest for cucumber crops in tropical climates."}
 def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
     """Construct the AsyncOpenAI client for the self-hosted vLLM and resolve the model.
 
-    Auto-detects the loaded model on a remote GPU node (TTL-cached, see
-    core/model_cache.py) so VLLM_MODEL_ID need not match the GPU deployment.
+    The explicit VLLM_MODEL_ID env wins (deployer override); otherwise the
+    model id is discovered at VLLM_ENDPOINT (TTL-cached, see
+    core/model_cache.py) and fails loudly when nothing answers — a guessed
+    name is rejected by vLLM's model-name validation.
     Shared by labeling and Contextual-Retrieval context generation.
     """
     _api_key = os.getenv("VLLM_API_KEY", "EMPTY")
@@ -758,14 +760,10 @@ def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
         timeout=http_timeout(LLM_TIMEOUT_SECONDS),
         max_retries=LLM_MAX_RETRIES,
     )
-    model = os.getenv("VLLM_MODEL_ID")
-    if os.getenv("GPU_NODE_HOST"):
-        detected = get_model_id(_vllm_endpoint)
-        if detected:
-            model = detected
-            logger.info(f"Auto-detected remote vLLM model: {model}")
+    model = os.getenv("VLLM_MODEL_ID", "")
     if not model:
-        raise RuntimeError("VLLM_MODEL_ID not set and auto-detection failed")
+        model = require_model_id(_vllm_endpoint)
+        logger.info(f"Auto-discovered vLLM model: {model}")
     return client, model
 
 
@@ -1831,23 +1829,23 @@ class GenieArangoDataprep(OpeaArangoDataprep):
     def _initialize_llm(self, *args, **kwargs):
         """Override parent to auto-detect model on remote GPU node.
 
-        The parent reads VLLM_MODEL_ID from env var, which may not match
-        the model actually loaded on the remote GPU node. When GPU_NODE_HOST
-        is set, probe the vLLM /v1/models API (TTL-cached, see core/model_cache.py)
-        and override the env var before calling the parent method.
+        The parent reads VLLM_MODEL_ID from env/constant: the explicit env
+        wins untouched; when it is unset, the id discovered at VLLM_ENDPOINT
+        (TTL-cached, see core/model_cache.py — loud when nothing answers) is
+        written into os.environ AND the parent module constant before calling
+        the parent method.
         """
         _vllm_endpoint = os.getenv("VLLM_ENDPOINT", "")
 
-        if os.getenv("GPU_NODE_HOST") and _vllm_endpoint:
-            detected = get_model_id(_vllm_endpoint)
-            if detected:
-                os.environ["VLLM_MODEL_ID"] = detected
-                # Patch the parent module constant (captured at parent import
-                # time — os.environ alone does not update it). The parent reads
-                # VLLM_MODEL_ID as a module constant, so this reassignment is
-                # the runtime mechanism for remote-model auto-detection.
-                _parent_mod.VLLM_MODEL_ID = detected
-                logger.info(f"Auto-detected remote vLLM model for graph extraction: {detected}")
+        if not os.getenv("VLLM_MODEL_ID"):
+            detected = require_model_id(_vllm_endpoint)
+            os.environ["VLLM_MODEL_ID"] = detected
+            # Patch the parent module constant (captured at parent import
+            # time — os.environ alone does not update it). The parent reads
+            # VLLM_MODEL_ID as a module constant, so this reassignment is
+            # the runtime mechanism for model discovery.
+            _parent_mod.VLLM_MODEL_ID = detected
+            logger.info(f"Auto-discovered vLLM model for graph extraction: {detected}")
 
         super()._initialize_llm(*args, **kwargs)
 

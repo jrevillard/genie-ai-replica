@@ -26,8 +26,8 @@ from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from core.label_contract import build_filter_labels
-from core.model_cache import get_model_id
+from core.label_contract import build_filter_labels, decode_filter_labels
+from core.model_cache import require_model_id
 from core.model_http_policy import LLM_MAX_RETRIES, SUMMARIZER_TIMEOUT_SECONDS, http_timeout
 from core.span_attrs import ATTRIBUTE_NAMES as A
 from core.span_attrs import QUERY_ID_KEY, label_digest, query_id_from_baggage
@@ -95,7 +95,6 @@ from .config import (
     VLLM_API_KEY,
     VLLM_ENDPOINT,
     VLLM_MAX_NEW_TOKENS,
-    VLLM_MODEL_ID,
     VLLM_TEMPERATURE,
     VLLM_TIMEOUT,
     VLLM_TOP_P,
@@ -594,9 +593,9 @@ class GenieaiArangoRetriever(OpeaComponent):
     def _initialize_llm(self):
         """Initialize the language model for summarization if enabled.
 
-        When GPU_NODE_HOST is set, auto-detects the vLLM model (with TTL cache,
-        see core/model_cache.py) instead of using the config default VLLM_MODEL_ID.
-        Falls back to the config default on any probe failure.
+        The VLLM_MODEL_ID env wins as-is; without it, the model id is
+        discovered at VLLM_ENDPOINT (with TTL cache, see core/model_cache.py)
+        and fails loudly when nothing answers — never a compiled-in default.
         """
         with background_span("retriever.initialize_llm"):
             if OPENAI_API_KEY and OPENAI_CHAT_ENABLED:
@@ -660,17 +659,16 @@ class GenieaiArangoRetriever(OpeaComponent):
     def _resolve_vllm_model_id(self) -> str:
         """Return the vLLM model ID for summarization.
 
-        Auto-detects (TTL-cached) from the remote vLLM when GPU_NODE_HOST is set;
-        otherwise returns the VLLM_MODEL_ID env/config default.
-
-        Logging is deferred to _get_llm() which logs only on model change.
+        The explicit VLLM_MODEL_ID env wins (deployer override); otherwise
+        the id discovered at VLLM_ENDPOINT — loud (ModelDiscoveryError),
+        because the summarization payloads must carry the name vLLM actually
+        serves and vLLM rejects unknown ones. Logging is deferred to
+        _get_llm() which logs only on model change.
         """
-        if os.getenv("GPU_NODE_HOST") and VLLM_ENDPOINT:
-            detected = get_model_id(VLLM_ENDPOINT)
-            if detected:
-                os.environ["VLLM_MODEL_ID"] = detected
-                return detected
-        return os.getenv("VLLM_MODEL_ID", VLLM_MODEL_ID)
+        env_model = os.getenv("VLLM_MODEL_ID", "")
+        if env_model:
+            return env_model
+        return require_model_id(VLLM_ENDPOINT)
 
     def _create_vllm_client(self, model_id: str) -> ChatOpenAI:
         """Create a ChatOpenAI client targeting the vLLM endpoint."""
@@ -699,7 +697,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         model baked into the current client (e.g. the GPU node changed models), the
         ChatOpenAI client is recreated.
         """
-        if VLLM_ENDPOINT and os.getenv("GPU_NODE_HOST"):
+        if VLLM_ENDPOINT:
             current_id = self._resolve_vllm_model_id()
             if current_id != getattr(self, "_llm_model_id", None):
                 logger.info(f"Summarizer model changed: {self._llm_model_id} -> {current_id}, recreating client")

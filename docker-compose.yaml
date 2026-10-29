@@ -1924,6 +1924,10 @@ services:
       RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE: ${RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE:-2000}
       # AI services endpoints
       VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://vllm:8000}
+      # Same source as the vLLM container's --served-model-name: the explicit
+      # env is the deployer override the summarizer uses as-is (no boot-time
+      # probe race against a still-loading vLLM).
+      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
       HF_TOKEN: ${VLLM_API_KEY:-}
       VLLM_API_KEY: ${VLLM_API_KEY:-}

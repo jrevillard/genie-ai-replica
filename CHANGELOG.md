@@ -439,8 +439,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   always come from the tokenizer of whatever model is actually deployed. The
   model name sent to the LLM server is discovered from the server itself
   (`/v1/models`) instead of falling back to a compiled-in name — vLLM validates
-  the name and rejects unknown ones. Counting failures abort the request loudly
-  rather than silently feeding a zero into the truncation budget. (#631)
+  the name and rejects unknown ones. The same discovery now backs the
+  retriever's summarizer and dataprep's labelling/graph-extraction clients
+  (previously gated on `GPU_NODE_HOST`, silently falling back to a name that
+  could diverge from the deployed model); the compose retriever service now
+  receives `VLLM_MODEL_ID` like dataprep, so its explicit env wins without a
+  boot-time probe race. Counting failures abort the request loudly rather than
+  silently feeding a zero into the truncation budget. (#631)
 - **The labelling prompt was different on every ingestion run.** The candidate
   labels sent to the labelling LLM were collected in a Python set, whose order
   follows the hash seed of the process that built it — so every container sent

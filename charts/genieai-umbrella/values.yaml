@@ -50,10 +50,13 @@ global:
   # they must keep their public registry. Empty = docker.io.
   toolingImageRegistry: ""
   # Hook + test-pod init containers curl-download kubectl from the
-  # public releases. In air-gapped environments set this to an
-  # internal mirror URL (no scheme) so the init container hits a
-  # local proxy; the path /release/v1.33.0/bin/linux/amd64/kubectl is
-  # appended automatically. Default = empty (use the public URLs).
+  # public releases. In air-gapped environments set this to an internal
+  # mirror — [http[s]://]host[:port][/prefix]; the scheme is optional
+  # (scheme-less makes curl use plain HTTP against the local proxy), and
+  # the path /release/v1.33.0/bin/linux/amd64/kubectl is appended
+  # automatically. The render rejects any other shape: the value is
+  # interpolated into the init container's shell. Default = empty (use
+  # the public URLs).
   kubeletToolsMirror: ""
   # Global pull-policy override for the service images. Leave empty: the
   # default follows the tag (mutable tags — main, latest, stable* — pull

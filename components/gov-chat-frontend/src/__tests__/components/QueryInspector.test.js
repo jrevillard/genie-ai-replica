@@ -301,20 +301,25 @@ describe('QueryInspectorList', () => {
     expect(wrapper.find('[data-testid="qi-scope"]').text()).toContain('Taxes & Revenue');
   });
 
-  it('should show the legacy plural category spelling as the scope', () => {
+  it('should show the legacy plural category spelling as the scope, without empty entries', () => {
+    // The pipeline drops empty and null labels before filtering
+    // (build_filter_labels); an empty entry rendered here would name a scope
+    // that never filtered.
     const queries = [
       {
         _key: 'q1',
         timestamp: '2025-05-28T10:00:00Z',
         text: 'What is the tax rate?',
         metadata: { abstained: true, abstention_reason: 'no_documents_retrieved' },
-        context: { categoryLabels: ['Taxes & Revenue'] },
+        context: { categoryLabels: ['', 'Taxes & Revenue'] },
         responseTime: 500
       }
     ];
     const wrapper = mountList({ queries, pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 } });
 
-    expect(wrapper.find('[data-testid="qi-scope"]').text()).toContain('Taxes & Revenue');
+    const scope = wrapper.find('[data-testid="qi-scope"]').text();
+    expect(scope).toContain('Taxes & Revenue');
+    expect(scope).not.toContain(', ');
   });
 
   it('should not mark a query that answered', () => {

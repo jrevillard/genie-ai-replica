@@ -1378,6 +1378,12 @@ def _retriever_matched_no_document(result_dict: dict) -> bool:
     for key, val in (result_dict or {}).items():
         if key.startswith("retriever"):
             docs = val.get("retrieved_docs") if isinstance(val, dict) else getattr(val, "retrieved_docs", None)
+            if docs is None:
+                # A retriever output without the key is a malformed or
+                # error-shaped node result, not a scope that matched nothing:
+                # claim no abstention about it (the grounding decision makes
+                # the same conservative call).
+                return False
             return not docs
     return False
 

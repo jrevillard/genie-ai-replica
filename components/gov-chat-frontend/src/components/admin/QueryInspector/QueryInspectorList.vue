@@ -54,7 +54,7 @@
           <td class="qi-list__cell--time">{{ formatTime(query.timestamp) }}</td>
           <td class="qi-list__cell--question">{{ truncate(query.text, 80) }}</td>
           <td class="qi-list__cell--scope" data-testid="qi-scope">
-            <span v-if="scopeText(query)" class="qi-list__scope-labels">{{ scopeText(query) }}</span>
+            <span v-if="scopeText(query)">{{ scopeText(query) }}</span>
             <span v-else class="qi-list__muted">—</span>
           </td>
           <td class="qi-list__cell--center">
@@ -181,15 +181,17 @@ export default {
      */
     scopeText(query) {
       const context = query.context || {};
-      const services = Array.isArray(context.serviceLabels)
-        ? context.serviceLabels.filter((label) => label !== '' && label != null)
-        : [];
+      // Nothing is not a label: the pipeline drops empty and null entries
+      // before filtering, and showing one here would name a scope that never
+      // filtered.
+      const isLabel = (label) => label !== '' && label != null;
+      const services = Array.isArray(context.serviceLabels) ? context.serviceLabels.filter(isLabel) : [];
       if (services.length) {
         return services.join(', ');
       }
       const labels = [];
-      if (context.categoryLabel) labels.push(context.categoryLabel);
-      if (Array.isArray(context.categoryLabels)) labels.push(...context.categoryLabels);
+      if (isLabel(context.categoryLabel)) labels.push(context.categoryLabel);
+      if (Array.isArray(context.categoryLabels)) labels.push(...context.categoryLabels.filter(isLabel));
       return labels.join(', ');
     },
     confidenceVariant(score) {

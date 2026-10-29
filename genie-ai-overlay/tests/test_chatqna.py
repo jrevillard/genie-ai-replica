@@ -2701,6 +2701,20 @@ class TestStreamWithMetadata:
         assert '"abstained": true' not in joined
 
     @pytest.mark.asyncio
+    async def test_a_malformed_retriever_output_is_not_reported_as_an_empty_scope(self):
+        """A retriever node result without retrieved_docs is a fault, not a
+        scope that matched nothing: claiming an abstention about it would send
+        the operator after the taxonomy while the real problem is the
+        pipeline shape."""
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body(["data: b'I cannot answer that'\n\n", "data: [DONE]\n\n"])
+        result_dict = {"retriever": {"error": "shape changed"}}
+        out = await self._drain(svc._stream_with_metadata(body, result_dict, token="t"))
+        joined = "".join(out)
+        assert '"abstained": true' not in joined
+
+    @pytest.mark.asyncio
     async def test_appends_done_if_missing(self):
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))

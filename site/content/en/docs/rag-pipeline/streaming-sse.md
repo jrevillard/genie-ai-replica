@@ -172,13 +172,13 @@ forwarded to VictoriaMetrics:
 
 | Metric | Type | Attributes |
 |---|---|---|
-| `chat_requests_total` | Counter | `response_type` (`streaming`/`sync`), `abstained` (`true`/`false` — `true` when the turn abstained: the retrieval returned no document, or the reranker refused the input), `error` (`true`/`false`), `retrieval_source` (`chunk`/`chunk_label_filter`/`hybrid`). |
+| `chat_requests_total` | Counter | `response_type` (`streaming`/`sync`), `abstained` (`true`/`false` — `true` when the retrieval returned no document or the reranker refused the input; with the default abstention enforcement such a turn abstains), `error` (`true`/`false`), `retrieval_source` (`chunk`/`chunk_label_filter`/`hybrid`; the condense-rewrite failure path records the request's `search_type` verbatim, e.g. `similarity_score_threshold`). |
 | `chat_rag_duration_seconds` | Histogram | `response_type`, `abstained`, `error`, `retrieval_source`. |
 
 A PromQL probe to graph RAG latency over the last 5 minutes:
 
 ```promql
-histogram_quantile(0.95, sum(rate(genie_ai_chat_rag_latency_seconds_bucket[5m])) by (le))
+histogram_quantile(0.95, sum(rate(chat_rag_duration_seconds_bucket[5m])) by (le))
 ```
 
 ## Curl probe

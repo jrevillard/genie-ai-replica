@@ -125,7 +125,12 @@ it('large bodies render async across chunks and complete (Page Unresponsive fix,
   expect(wrapper.vm.rendering).toBe(false); // pipeline completed
   expect(wrapper.vm.renderedHtml).toContain('START-MARKER');
   expect(wrapper.vm.renderedHtml).toContain('END-MARKER');
-});
+  // A ~130k-char body rendered in chunks is legitimately slower than jest
+  // 5s default: it ran ~15s on a CI runner that was already thrashing
+  // (2026-10-29, MR2 pipeline) and the timeout - not the pipeline - was
+  // the failure. 30s bounds the slowest sane environment without hiding
+  // a real hang.
+}, 30000);
 
 it('frontmatter is split cheaply: fm block parsed, body preserved verbatim', async () => {
   const wrapper = mountEditor({

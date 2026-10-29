@@ -541,9 +541,31 @@ expect_fail "a kubeletToolsMirror with a non-http scheme" \
   "kubeletToolsMirror" \
   $(valid_flags) --set 'global.kubeletToolsMirror=file://mirror.internal'
 
-expect_fail "a kubeletToolsMirror with a colon-host (no numeric port)" \
+expect_fail "a kubeletToolsMirror with a scheme-position colon" \
   "kubeletToolsMirror" \
   $(valid_flags) --set 'global.kubeletToolsMirror=https:mirror.internal:8443'
+
+# The delivery pin covers every documented shape: the default (no
+# mirror), the scheme-less air-gapped form (with the multi-segment
+# Nexus/Artifactory prefix), and the uppercase-scheme form the regex
+# admits for RFC 3986's case-insensitive scheme names. The schema cases
+# above pin only the key name — helm's schema error embeds the whole
+# pattern, so a clause-specific needle would pin the pattern TEXT and
+# break on every refinement; the inputs are the discrimination.
+expect_render_contains \
+  "the default mirror reaches the init shell" \
+  'BASE="https://dl.k8s.io"' \
+  $(valid_flags)
+
+expect_render_contains \
+  "a scheme-less multi-segment mirror reaches the init shell verbatim" \
+  'BASE="mirror.internal/repository/k8s-releases"' \
+  $(valid_flags) --set global.kubeletToolsMirror=mirror.internal/repository/k8s-releases
+
+expect_render_contains \
+  "an uppercase-scheme mirror reaches the init shell verbatim" \
+  'BASE="HTTPS://mirror.internal:8443"' \
+  $(valid_flags) --set 'global.kubeletToolsMirror=HTTPS://mirror.internal:8443'
 
 # 34b. The two global tooling keys are interpolated into the tools-init
 #      container's shell: the values schema constrains them to the URL /

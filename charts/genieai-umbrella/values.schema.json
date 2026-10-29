@@ -455,8 +455,8 @@
         },
         "kubeletToolsMirror": {
           "type": "string",
-          "pattern": "^(|((https?)://)?[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]+)?(/[A-Za-z0-9._~%-]*)?)$",
-          "description": "Internal mirror for the kubectl download: [http[s]://]host[:port][/prefix] \u2014 the scheme is optional (a scheme-less mirror makes curl use plain HTTP), /release/... is appended. The host admits a colon only before a numeric port and the scheme only http(s): the value is interpolated into the tools-init container's shell inside double quotes, and any other shape (file://, https:mirror, shell metacharacters) is rejected at render."
+          "pattern": "^(|(([Hh][Tt][Tt][Pp][Ss]?://)?[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]+)?(/[A-Za-z0-9._~%-]+)*/?))$",
+          "description": "Internal mirror for the kubectl download: [http[s]://]host[:port][/multi/segment/prefix] \u2014 the scheme is optional and case-insensitive (scheme-less makes curl use plain HTTP), /release/... is appended, and the prefix may carry multiple path segments (the Nexus/Artifactory repository topology). The host admits a colon only before a numeric port and the scheme only http(s): the value is interpolated into the tools-init container's shell inside double quotes, and any other shape (file://, https:mirror, shell metacharacters) is rejected at render."
         }
       }
     }

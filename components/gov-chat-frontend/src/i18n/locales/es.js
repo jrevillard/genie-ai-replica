@@ -1,5 +1,3 @@
-// src/i18n/locales/es.js
-
 export default {
   countries: {
     AF: 'Afganistán',
@@ -219,17 +217,16 @@ export default {
     monthlyActiveUsers: 'Usuarios Activos Mensuales (MAU)',
     fromLastMonth: 'del mes pasado',
     today: 'Hoy',
-    // --- UPDATED TABS ---
     tabs: {
       overview: 'Salud del Sistema',
-      hierarchy: 'Jerarquía de Conocimiento', // NEW
-      documents: 'Gestión de Documentos', // NEW
+      hierarchy: 'Jerarquía de Conocimiento',
+      documents: 'Gestión de Documentos',
       database: 'Base de Datos',
       logs: 'Registros',
       security: 'Seguridad',
-      users: 'Usuarios'
+      users: 'Usuarios',
+      models: 'Modelos'
     },
-    // --- NEW KEYS ---
     contentManagement: 'GESTIÓN DE CONTENIDO',
     knowledgeHierarchy: 'Jerarquía de Conocimiento',
     documentManagement: 'Gestión de Documentos',
@@ -246,7 +243,6 @@ export default {
       defaultTitle: 'Confirmar',
       defaultMessage: '¿Está seguro?'
     },
-    // --- END NEW KEYS ---
     systemHealthStatus: 'Estado de Salud del Sistema',
     runDiagnostics: 'Ejecutar Diagnósticos',
     resourceUsage: 'Uso de Recursos',
@@ -444,10 +440,8 @@ export default {
       lineNumbers: 'Números de Línea',
       showLess: 'Mostrar Menos',
       showMore: 'Mostrar Todos los Problemas',
-      // --- NEW KEY ---
       lastScanJustNow: 'Justo ahora'
     },
-    // --- NEW OBJECT ---
     hierarchy: {
       title: 'Gestión de la Jerarquía de Conocimiento (nota: siempre en inglés - añadir traducciones)',
       addCategory: 'Añadir Nueva Categoría',
@@ -487,7 +481,6 @@ export default {
       deleteErrorService: 'Error al eliminar el Servicio.',
       duplicateLangError: 'Se encontraron idiomas duplicados en las traducciones. Por favor, elimínelos.'
     },
-    // --- NEW OBJECT ---
     documents: {
       title: 'Gestión de Documentos',
       addLink: 'Añadir desde Enlace',
@@ -497,11 +490,9 @@ export default {
       statusPending: 'Pendiente',
       statusIngested: 'Ingerido',
       statusRetracted: 'Retractado',
-      // --- NEW STATUSES ADDED ---
       statusIngesting: 'Ingiriendo',
       statusError: 'Error de Ingestión',
       statusWarning: 'Ingerido con Advertencias',
-      // ---
       ingestSelected: 'Ingerir Seleccionados',
       colFileName: 'Nombre de Archivo',
       colStatus: 'Estado',
@@ -525,11 +516,71 @@ export default {
       retractQueuedSuccess: '{count} archivo(s) ha(n) sido puesto(s) en cola para retracción.',
       retractQueuedError: 'Ocurrió un error durante el proceso de retracción por lotes.',
       retractPartialFailure: '{successCount} de {count} retractado(s). Fallaron: {detail}',
+      deleteSelected: 'Delete Selected',
+      confirmDeleteTitle: 'Confirm Batch Deletion',
+      confirmDeleteSelected:
+        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
+      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
+      deleteQueuedError: 'An error occurred during the batch deletion process.',
+      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
+      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
+      deleteRefuseReason: "{'{'}count{'}'} file(s) are still ingested — retract them first.",
       retractAllFailed: 'Todos los {count} archivo(s) fallaron: {detail}',
       uploadSuccessMultiple: '{count} archivo(s) subido(s) correctamente.',
       linkSubmitSuccess: 'Se ha rastreado y guardado "{fileName}" correctamente.',
       actionSuccess: 'La acción "{action}" en el archivo {fileId} fue exitosa.',
-      metadataUpdateSuccess: 'Los metadatos del archivo {fileId} se actualizaron.'
+      metadataUpdateSuccess: 'Los metadatos del archivo {fileId} se actualizaron.',
+      deletePartialNotice:
+        "{'{'{'}'}blocked{'}'} archivo(s) seleccionado(s) no se pueden eliminar ({'{'{'}'}reason{'}'}) — solo se eliminarán los otros {'{'{'}'}n{'}'}.",
+      confirmDeleteSkipped:
+        "{'{'{'}'}count{'}'} archivo(s) ingerido(s)/en curso se OMITIRÁN — retráquelos primero para eliminarlos."
+    },
+    queryInspector: {
+      search: 'Buscar',
+      searchPlaceholder: 'Buscar texto de consulta...',
+      minConfidence: 'Confianza mínima',
+      maxConfidence: 'Confianza máxima',
+      from: 'Desde',
+      to: 'Hasta',
+      reset: 'Restablecer',
+      colTime: 'Tiempo',
+      colQuestion: 'Pregunta del usuario',
+      colConfidence: 'Confianza',
+      colResponseTime: 'Tiempo de respuesta',
+      colSources: 'Fuentes',
+      colFeedback: 'Comentarios',
+      colActions: 'Acciones',
+      inspect: 'Inspeccionar',
+      noResults: 'No se encontraron consultas que coincidan con sus filtros.',
+      prev: 'Anterior',
+      pageInfo: 'Página {current} de {total} ({count} en total)',
+      next: 'Siguiente',
+      backToList: 'Volver a la lista',
+      detailTitle: 'Inspector de consultas',
+      sectionQuestion: 'Pregunta del usuario',
+      user: 'Usuario',
+      time: 'Tiempo',
+      responseTime: 'Tiempo de respuesta',
+      mode: 'Modo',
+      sectionContext: 'Contexto (Etiquetas enviadas a RAG)',
+      category: 'Categoría',
+      serviceLabels: 'Etiquetas de servicio',
+      language: 'Idioma',
+      sectionMessages: 'Mensajes enviados al pipeline',
+      sectionDocuments: 'Documentos recuperados (Resultados de Vector DB)',
+      score: 'Puntuación',
+      labels: 'Etiquetas',
+      viewDoc: 'Ver documento',
+      noDocuments: 'No se recuperaron documentos de origen para esta consulta.',
+      sectionResponse: 'Respuesta LLM',
+      confidenceScore: 'Puntuación de confianza',
+      retrievalConfidenceScore: 'Confianza de recuperación',
+      selfConfidence: 'Autoconfianza (LLM)',
+      sectionFeedback: 'Comentarios del usuario',
+      rating: 'Calificación',
+      comment: 'Comentario',
+      providedAt: 'Proporcionado el',
+      loadError: 'Error al cargar las consultas.'
     }
   },
   auth: {
@@ -796,113 +847,63 @@ export default {
   leftPanel: {
     cat1: {
       name: '1. Identidad y Registro Civil',
-      children: [
-        'Certificados de nacimiento',
-        'Tarjetas de ID nacional',
-        'Pasaportes',
-        'Certificados de matrimonio y defunción',
-        'Registro de votantes'
-      ]
+      children:
+        'Certificados de nacimiento,Tarjetas de ID nacional,Pasaportes,Certificados de matrimonio y defunción,Registro de votantes'
     },
     cat2: {
       name: '2. Salud y Servicios Sociales',
-      children: [
-        'Acceso a salud pública',
-        'Programas de vacunación',
-        'Seguro de salud',
-        'Beneficios por discapacidad',
-        'Asistencia social y alimentaria'
-      ]
+      children:
+        'Acceso a salud pública,Programas de vacunación,Seguro de salud,Beneficios por discapacidad,Asistencia social y alimentaria'
     },
     cat3: {
       name: '3. Educación y Aprendizaje',
-      children: [
-        'Escuelas públicas y universidades',
-        'Becas y préstamos estudiantiles',
-        'Programas de educación para adultos',
-        'Recursos de aprendizaje en línea'
-      ]
+      children:
+        'Escuelas públicas y universidades,Becas y préstamos estudiantiles,Programas de educación para adultos,Recursos de aprendizaje en línea'
     },
     cat4: {
       name: '4. Empleo y Servicios Laborales',
-      children: [
-        'Búsqueda de empleo y beneficios por desempleo',
-        'Protecciones laborales y derechos de los trabajadores',
-        'Regulaciones de seguridad en el trabajo',
-        'Entrenamiento de habilidades y aprendizajes'
-      ]
+      children:
+        'Búsqueda de empleo y beneficios por desempleo,Protecciones laborales y derechos de los trabajadores,Regulaciones de seguridad en el trabajo,Entrenamiento de habilidades y aprendizajes'
     },
     cat5: {
       name: '5. Impuestos y Ingresos',
-      children: [
-        'Presentación de impuestos sobre la renta y reembolsos',
-        'Pagos de impuestos sobre la propiedad',
-        'Cumplimiento fiscal empresarial',
-        'Aduanas y derechos de importación'
-      ]
+      children:
+        'Presentación de impuestos sobre la renta y reembolsos,Pagos de impuestos sobre la propiedad,Cumplimiento fiscal empresarial,Aduanas y derechos de importación'
     },
     cat6: {
       name: '6. Seguridad Pública y Justicia',
-      children: [
-        'Policía y servicios de emergencia',
-        'Tribunales y servicios de ayuda legal',
-        'Reporte de crímenes',
-        'Leyes de protección al consumidor'
-      ]
+      children:
+        'Policía y servicios de emergencia,Tribunales y servicios de ayuda legal,Reporte de crímenes,Leyes de protección al consumidor'
     },
     cat7: {
       name: '7. Transporte y Movilidad',
-      children: [
-        'Licencias de conducir y registro de vehículos',
-        'Transporte público e infraestructura',
-        'Violaciones de tráfico y multas',
-        'Programas de seguridad vial'
-      ]
+      children:
+        'Licencias de conducir y registro de vehículos,Transporte público e infraestructura,Violaciones de tráfico y multas,Programas de seguridad vial'
     },
     cat8: {
       name: '8. Vivienda y Desarrollo Urbano',
-      children: [
-        'Asistencia para vivienda pública',
-        'Registro de propiedades y registros de tierras',
-        'Préstamos y subsidios para vivienda',
-        'Zonificación y permisos de construcción'
-      ]
+      children:
+        'Asistencia para vivienda pública,Registro de propiedades y registros de tierras,Préstamos y subsidios para vivienda,Zonificación y permisos de construcción'
     },
     cat9: {
       name: '9. Servicios Públicos y Medio Ambiente',
-      children: [
-        'Servicios de agua y electricidad',
-        'Gestión de residuos y reciclaje',
-        'Regulaciones ambientales',
-        'Iniciativas de energía renovable'
-      ]
+      children:
+        'Servicios de agua y electricidad,Gestión de residuos y reciclaje,Regulaciones ambientales,Iniciativas de energía renovable'
     },
     cat10: {
       name: '10. Negocios y Comercio',
-      children: [
-        'Registro y licencias de negocios',
-        'Regulaciones y permisos comerciales',
-        'Subvenciones e incentivos para pequeñas empresas',
-        'Soporte para e-commerce y negocios digitales'
-      ]
+      children:
+        'Registro y licencias de negocios,Regulaciones y permisos comerciales,Subvenciones e incentivos para pequeñas empresas,Soporte para e-commerce y negocios digitales'
     },
     cat11: {
       name: '11. Seguridad Social y Pensiones',
-      children: [
-        'Beneficios de jubilación',
-        'Gestión de fondos de pensiones',
-        'Beneficios para sobrevivientes',
-        'Pensiones por discapacidad'
-      ]
+      children:
+        'Beneficios de jubilación,Gestión de fondos de pensiones,Beneficios para sobrevivientes,Pensiones por discapacidad'
     },
     cat12: {
       name: '12. Comunidad y Participación Cívica',
-      children: [
-        'Votación y elecciones',
-        'Retroalimentación pública y quejas ciudadanas',
-        'Voluntariado y programas comunitarios',
-        'Participación en gobierno local'
-      ]
+      children:
+        'Votación y elecciones,Retroalimentación pública y quejas ciudadanas,Voluntariado y programas comunitarios,Participación en gobierno local'
     }
   },
   settings: {
@@ -1128,6 +1129,7 @@ export default {
     },
     notifications: {
       saveSuccess: 'Perfil guardado con éxito',
+      saved: 'Frontmatter guardado',
       saveFailed: 'Falló el guardado del perfil',
       loadSuccess: 'Perfil cargado con éxito',
       loadFailed: 'Falló la carga del perfil',
@@ -1241,137 +1243,10 @@ export default {
     noMatchingCountries: 'No se encontraron países coincidentes',
     noMatchingDisciplines: 'No se encontraron disciplinas coincidentes',
     noMatchingDegrees: 'No se encontraron grados coincidentes',
-    educationOptions: [
-      'Contabilidad',
-      'Ingeniería Aeroespacial',
-      'Ciencia Agrícola',
-      'Antropología',
-      'Arquitectura',
-      'Historia del Arte',
-      'Inteligencia Artificial',
-      'Astronomía',
-      'Astrofísica',
-      'Bioquímica',
-      'Ingeniería Biomédica',
-      'Biotecnología',
-      'Administración de Empresas',
-      'Ingeniería Química',
-      'Química',
-      'Ingeniería Civil',
-      'Comunicaciones',
-      'Ingeniería Informática',
-      'Ciencia de la Computación',
-      'Gestión de Construcción',
-      'Justicia Criminal',
-      'Ciberseguridad',
-      'Ciencia de Datos',
-      'Odontología',
-      'Economía',
-      'Educación',
-      'Ingeniería Eléctrica',
-      'Educación Primaria',
-      'Literatura Inglesa',
-      'Ingeniería Ambiental',
-      'Ciencia Ambiental',
-      'Diseño de Moda',
-      'Estudios Cinematográficos',
-      'Finanzas',
-      'Bellas Artes',
-      'Ciencia de los Alimentos',
-      'Ciencia Forense',
-      'Diseño de Juegos',
-      'Geografía',
-      'Geología',
-      'Diseño Gráfico',
-      'Administración de Salud',
-      'Historia',
-      'Gestión Hotelera',
-      'Recursos Humanos',
-      'Diseño Industrial',
-      'Ingeniería Industrial',
-      'Sistemas de Información',
-      'Tecnología de la Información',
-      'Diseño de Interiores',
-      'Negocios Internacionales',
-      'Relaciones Internacionales',
-      'Periodismo',
-      'Derecho',
-      'Biblioteconomía',
-      'Lingüística',
-      'Gestión',
-      'Marketing',
-      'Ciencia de Materiales',
-      'Matemáticas',
-      'Ingeniería Mecánica',
-      'Estudios de Medios',
-      'Medicina',
-      'Meteorología',
-      'Microbiología',
-      'Música',
-      'Nanotecnología',
-      'Enfermería',
-      'Nutrición',
-      'Terapia Ocupacional',
-      'Oceanografía',
-      'Ingeniería Petrolera',
-      'Farmacia',
-      'Filosofía',
-      'Fotografía',
-      'Educación Física',
-      'Terapia Física',
-      'Física',
-      'Ciencia Política',
-      'Psicología',
-      'Administración Pública',
-      'Salud Pública',
-      'Relaciones Públicas',
-      'Robótica',
-      'Educación Secundaria',
-      'Trabajo Social',
-      'Sociología',
-      'Ingeniería de Software',
-      'Educación Especial',
-      'Gestión Deportiva',
-      'Estadística',
-      'Ingeniería de Sistemas',
-      'Artes Teatrales',
-      'Turismo',
-      'Planificación Urbana',
-      'Medicina Veterinaria',
-      'Desarrollo Web',
-      'Biología de la Fauna',
-      'Zoología'
-    ],
-    degreeOptions: [
-      'Grado Asociado',
-      'Licenciatura en Artes (BA)',
-      'Licenciatura en Ciencias (BS)',
-      'Licenciatura en Ingeniería (BEng)',
-      'Licenciatura en Administración de Empresas (BBA)',
-      'Licenciatura en Bellas Artes (BFA)',
-      'Licenciatura en Educación (BEd)',
-      'Licenciatura en Medicina (MBBS)',
-      'Licenciatura en Derecho (LLB)',
-      'Maestría en Artes (MA)',
-      'Maestría en Ciencias (MS)',
-      'Maestría en Administración de Empresas (MBA)',
-      'Maestría en Ingeniería (MEng)',
-      'Maestría en Bellas Artes (MFA)',
-      'Maestría en Educación (MEd)',
-      'Maestría en Derecho (LLM)',
-      'Maestría en Salud Pública (MPH)',
-      'Doctorado en Filosofía (PhD)',
-      'Doctorado en Medicina (MD)',
-      'Doctorado en Educación (EdD)',
-      'Doctorado en Administración de Empresas (DBA)',
-      'Doctorado en Jurisprudencia (JD)',
-      'Diploma Profesional',
-      'Diploma Técnico',
-      'Certificado Vocacional',
-      'Certificado de Posgrado',
-      'Diploma de Posgrado',
-      'Posdoctorado'
-    ],
+    educationOptions:
+      'Contabilidad,Ingeniería Aeroespacial,Ciencia Agrícola,Antropología,Arquitectura,Historia del Arte,Inteligencia Artificial,Astronomía,Astrofísica,Bioquímica,Ingeniería Biomédica,Biotecnología,Administración de Empresas,Ingeniería Química,Química,Ingeniería Civil,Comunicaciones,Ingeniería Informática,Ciencia de la Computación,Gestión de Construcción,Justicia Criminal,Ciberseguridad,Ciencia de Datos,Odontología,Economía,Educación,Ingeniería Eléctrica,Educación Primaria,Literatura Inglesa,Ingeniería Ambiental,Ciencia Ambiental,Diseño de Moda,Estudios Cinematográficos,Finanzas,Bellas Artes,Ciencia de los Alimentos,Ciencia Forense,Diseño de Juegos,Geografía,Geología,Diseño Gráfico,Administración de Salud,Historia,Gestión Hotelera,Recursos Humanos,Diseño Industrial,Ingeniería Industrial,Sistemas de Información,Tecnología de la Información,Diseño de Interiores,Negocios Internacionales,Relaciones Internacionales,Periodismo,Derecho,Biblioteconomía,Lingüística,Gestión,Marketing,Ciencia de Materiales,Matemáticas,Ingeniería Mecánica,Estudios de Medios,Medicina,Meteorología,Microbiología,Música,Nanotecnología,Enfermería,Nutrición,Terapia Ocupacional,Oceanografía,Ingeniería Petrolera,Farmacia,Filosofía,Fotografía,Educación Física,Terapia Física,Física,Ciencia Política,Psicología,Administración Pública,Salud Pública,Relaciones Públicas,Robótica,Educación Secundaria,Trabajo Social,Sociología,Ingeniería de Software,Educación Especial,Gestión Deportiva,Estadística,Ingeniería de Sistemas,Artes Teatrales,Turismo,Planificación Urbana,Medicina Veterinaria,Desarrollo Web,Biología de la Fauna,Zoología',
+    degreeOptions:
+      'Grado Asociado,Licenciatura en Artes (BA),Licenciatura en Ciencias (BS),Licenciatura en Ingeniería (BEng),Licenciatura en Administración de Empresas (BBA),Licenciatura en Bellas Artes (BFA),Licenciatura en Educación (BEd),Licenciatura en Medicina (MBBS),Licenciatura en Derecho (LLB),Maestría en Artes (MA),Maestría en Ciencias (MS),Maestría en Administración de Empresas (MBA),Maestría en Ingeniería (MEng),Maestría en Bellas Artes (MFA),Maestría en Educación (MEd),Maestría en Derecho (LLM),Maestría en Salud Pública (MPH),Doctorado en Filosofía (PhD),Doctorado en Medicina (MD),Doctorado en Educación (EdD),Doctorado en Administración de Empresas (DBA),Doctorado en Jurisprudencia (JD),Diploma Profesional,Diploma Técnico,Certificado Vocacional,Certificado de Posgrado,Diploma de Posgrado,Posdoctorado',
     aria: {
       tabList: 'Secciones del formulario de perfil',
       nextButton: 'Ir a la siguiente sección',
@@ -1394,11 +1269,11 @@ export default {
     streamTimeout: 'El asistente no responde: la solicitud ha expirado.',
     nothingToSave: 'Nada que guardar todavía: todas las respuestas fallaron. Reintente primero la conversación.',
     unsupportedLanguage: 'Este idioma no está disponible para este despliegue.',
-    welcomeMessage: 'Welcome! How can I assist you today?',
-    aiGeneratedNoDocs: 'Generado por IA — no basado en los documentos de la biblioteca',
     translationUnavailable: 'Traducción no disponible: esta respuesta puede contener texto sin traducir.',
+    welcomeMessage: '¡Le damos la bienvenida! ¿Cómo puedo asistirle hoy?',
+    aiGeneratedNoDocs: 'Generado por IA — no basado en documentos de la biblioteca',
     configMismatchWarning:
-      'Incoherencia de configuración: {warnings}. Verifique la configuración de Ayuda Rápida y la jerarquía de conocimiento.',
+      'Discrepancia de configuración: {warnings}. Por favor, revise la Ayuda Rápida y la configuración de la jerarquía de conocimiento.',
     categoryNotFound: 'Categoría "{label}" no encontrada en la jerarquía de conocimiento',
     quickHelpLabelGone:
       'Problema de configuración: la etiqueta «{labels}» ya no existe en la jerarquía de conocimiento. Este botón no se puede usar hasta que su configuración se actualice.',
@@ -1409,8 +1284,8 @@ export default {
     scopeNotNameable:
       'Problema de configuración: el alcance seleccionado no tiene nombre en inglés en la jerarquía de conocimiento, por lo que no se puede determinar el alcance de la consulta. No se envió.',
     serviceLabelMismatch:
-      'Servicio "{label}" utiliza una etiqueta de UI que puede no coincidir con la jerarquía de conocimiento',
-    noFilterWarning: 'Sin filtro de contexto activo — la consulta no será filtrada.',
+      'El servicio "{label}" utiliza una etiqueta de interfaz de usuario que podría no coincidir con la jerarquía de conocimiento',
+    noFilterWarning: 'No hay filtro de contexto activo — la consulta no se filtrará.',
     placeholder: 'Escriba su consulta aquí...',
     composerPlaceholder: 'Haz una pregunta, explora conocimientos...',
     composerAttachTitle: 'Los archivos adjuntos aún no están disponibles',
@@ -1470,37 +1345,24 @@ export default {
     removeItem: 'Eliminar'
   },
   quickhelp: {
-    // Labels (Short for UI)
-
-    // User Prompts (Visible Text - First Person - what user sees in chat)
-
-    // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:
-      "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Actúe como un experto resolutivo en registro civil de Kenia. Explique los pasos para obtener un documento nacional de identidad (Maisha Namba) o reemplazar uno extraviado. IMPORTANTE: Proporcione una lista clara de los documentos requeridos (p. ej., certificado de nacimiento, copias de los documentos de identidad de los progenitores) y aconseje al usuario acudir a su Huduma Centre o a la oficina de Registrar of Persons más cercana. REGLA: Refiérase siempre a la aplicación como 'Genie AI'.",
     payTaxesPrompt:
-      "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Actúe como guía de la KRA (Kenya Revenue Authority). Explique el procedimiento para presentar declaraciones, solicitar un PIN de KRA o restablecer la contraseña en el portal iTax. IMPORTANTE: Recuerde al usuario el plazo límite del 30 de junio para las declaraciones anuales e indíquele cómo presentar declaraciones sin actividad (Nil returns) en caso de no haber percibido ingresos. REGLA: Refiérase siempre a la aplicación como 'Genie AI'.",
     startBusinessPrompt:
-      "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Actúe como consultor de negocios para los trámites de eCitizen. Guíe al usuario a lo largo de la reserva de denominación social y la constitución de empresas en Kenia. IMPORTANTE: Detalle los costes vigentes de búsqueda de nombre y registro, y canalice al usuario al portal oficial de eCitizen para formalizar la solicitud. REGLA: Refiérase siempre a la aplicación como 'Genie AI'.",
     findHealthcarePrompt:
-      "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Actúe como orientador de servicios sanitarios. Facilite información sobre la transición de NHIF a SHIF (Social Health Insurance Fund) y cómo registrarse. IMPORTANTE: Comparta los códigos USSD oficiales (como *263#) o los enlaces web para el registro y detalle los beneficios de la cobertura médica pública. REGLA: Refiérase siempre a la aplicación como 'Genie AI'.",
     educationServicesPrompt:
-      "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Actúe como orientador educativo. Exponga el plan de estudios CBC, el registro en NEMIS o la asignación universitaria a través de KUCCPS. IMPORTANTE: Explique cómo los padres pueden consultar las calificaciones de exámenes nacionales vía SMS o en el portal KNEC cuando se publiquen. REGLA: Refiérase siempre a la aplicación como 'Genie AI'.",
     transportLicensesPrompt:
-      "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Actúe como guía para los servicios de la NTSA. Detalle los pasos para la renovación del carné de conducir, la inspección técnica vehicular o la gestión de cuentas TIMS. IMPORTANTE: Oriente al usuario sobre cómo iniciar sesión en el portal eCitizen NTSA para solicitar su Smart DL o concertar una cita de inspección. REGLA: Refiérase siempre a la aplicación como 'Genie AI'.",
     housingProgramsPrompt:
-      "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Actúe como asesor de programas de vivienda. Explique el Affordable Housing Program (Boma Yangu), el proceso de inscripción y los aportes voluntarios. IMPORTANTE: Remita al usuario al portal de Boma Yangu para consultar proyectos y detalle los criterios de idoneidad para la adjudicación. REGLA: Refiérase siempre a la aplicación como 'Genie AI'.",
     findJobsPrompt:
-      "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Actúe como asesor profesional de empleo público. Oriente al usuario sobre la creación de un perfil y la postulación a vacantes a través del portal de la Public Service Commission (PSC). IMPORTANTE: Aconseje al usuario tener listos sus certificados académicos y revisar con regularidad la web de la PSC o la prensa local para convocatorias de MyGov. REGLA: Refiérase siempre a la aplicación como 'Genie AI'.",
     justChatPrompt:
-      "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+      "Actúe como un compañero local cercano. Sea educado, servicial y demuestre dominio de la cultura keniana y su vida cotidiana. IMPORTANTE: Recuerde al usuario que, si bien puede conversar de cualquier tema, su principal competencia es orientarle en gestiones con el gobierno de Kenia como **documentos de identidad**, **impuestos** y **registro de empresas**. REGLA: Refiérase siempre a la aplicación como 'Genie AI'."
   },
   common: {
     cancel: 'Cancelar',
@@ -1508,7 +1370,6 @@ export default {
     save: 'Guardar',
     move: 'Mover',
     delete: 'Eliminar',
-    // --- NEW KEYS ADDED ---
     ok: 'Aceptar',
     ingest: 'Ingerir',
     retract: 'Retractar',
@@ -1567,12 +1428,18 @@ export default {
     fileSize: 'Tamaño del archivo',
     uploadDate: 'Fecha de subida',
     hash: 'Hash SHA256',
-    // --- NEW: TABS ---
     tabs: {
       details: 'Detalles',
-      ingestionLog: 'Registro de Ingestión'
+      ingestionLog: 'Registro de Ingestión',
+      detailsHint:
+        'Metadatos de este archivo: nombre, autor y las etiquetas de jerarquía de conocimiento que utiliza la IA para enrutar las preguntas. Ingest requiere al menos una etiqueta.',
+      dashboardHint:
+        'Vista en directo del rastreo web de este archivo: velocidad, cola, errores y progreso. Cuando el rastreo se completa con éxito, el pie de página inferior lo convierte en un repositorio OKF.',
+      crawlLogHint:
+        'Registro por página del rastreo web: qué URL se obtuvieron, se redirigieron o fallaron. Se escribe mientras se ejecuta el rastreo.',
+      ingestionLogHint:
+        'Progreso fase por fase de la preparación de este archivo para respuestas de IA: división en fragmentos (chunking), etiquetado, generación de incrustaciones (embedding) e indexación. Los errores aquí muestran exactamente dónde se detuvo ingest.'
     },
-    // --- NEW: LOG TAB ---
     log: {
       killActions: 'Acciones de Detención:',
       killDocument: 'Detener este Documento',
@@ -1602,7 +1469,6 @@ export default {
       retractError: 'Error al retractar el archivo.',
       deleteSuccess: 'Archivo eliminado correctamente.',
       deleteError: 'Error al eliminar el archivo.',
-      // --- NEW NOTIFICATIONS ---
       ingestLabelRequired: 'Por favor, seleccione al menos una etiqueta antes de ingerir.',
       ingestSaving: 'Guardando metadatos antes de la ingestión...',
       ingestSaveFailed: 'Error al guardar metadatos. Ingestión cancelada.',
@@ -1614,7 +1480,6 @@ export default {
       ingest: '¿Está seguro de que desea ingerir este archivo? Esto iniciará el proceso de tratamiento de datos.',
       retract: '¿Está seguro de que desea retractar este archivo?',
       delete: '¿Está seguro de que desea eliminar permanentemente este archivo? Esta acción no se puede deshacer.',
-      // --- NEW CONFIRMATIONS ---
       ingestTitle: 'Confirmar Ingestión',
       retractTitle: 'Confirmar Retracción',
       deleteTitle: 'Confirmar Eliminación',
@@ -1642,6 +1507,2202 @@ export default {
       duplicate: 'El archivo "{fileName}" ya ha sido agregado.',
       uploadSuccess: '{fileName} subido con éxito',
       uploadFailed: 'Falló la subida de {fileName}.'
+    },
+    ragTip:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+  },
+  okf: {
+    models: {
+      title: 'Configuraciones de modelo',
+      add: 'Nueva configuración',
+      hint: 'Endpoints de modelos remotos con nombre para juzgar y generar — cualquier superficie compatible con OpenAI (OpenAI, una pasarela LiteLLM, vLLM, Gemini-compat, Ollama) o Anthropic directo. Exactamente UNA configuración puede estar activa; sin ninguna, se usa el modelo por defecto configurado del despliegue. Las claves se guardan en el servidor y nunca se muestran.',
+      name: 'Nombre',
+      provider: 'Proveedor',
+      providerOpenai: 'Compatible con OpenAI (OpenAI, LiteLLM, vLLM…)',
+      providerAnthropic: 'Anthropic (API nativa)',
+      baseUrl: 'URL base',
+      apiKey: 'Clave API',
+      apiKeyKeep: 'sin cambios',
+      model: 'Modelo',
+      modelPick: 'Seleccionar un modelo…',
+      modelFreeText: 'id del modelo (texto libre)',
+      modelFetch: 'Obtener modelos',
+      modelFetching: 'Obteniendo…',
+      modelsEmpty: 'El endpoint no devolvió modelos — escriba el id del modelo.',
+      modelsFailed: 'Error al listar modelos — escriba el id del modelo.',
+      modelsLoaded: '{n} modelos cargados — elija de la lista desplegable o escriba libremente',
+      test: 'Probar conexión',
+      testing: 'Probando…',
+      testTitle: 'Sondear el endpoint y (con un modelo elegido) una generación de un token',
+      testOkModel: '✓ Conectado — el modelo respondió ({ms} ms)',
+      testOkEndpoint: '✓ Endpoint accesible — {n} modelos listados (elija un modelo para probar también la generación)',
+      testGenFail: '✗ Endpoint OK, pero la llamada al modelo falló',
+      testNotListed: ' — nota: “{model}” no está en la lista de modelos del endpoint',
+      testFail: '✗ prueba fallida — sin respuesta',
+      services: 'Usar esta configuración para',
+      svcJudge: 'Benchmarks (juez RAGAS + asesor)',
+      svcJudgeShort: 'benchmarks',
+      svcCuration: 'Curación de conceptos',
+      svcCurationShort: 'curación',
+      svcTagging: 'Temas y etiquetas',
+      svcTaggingShort: 'temas/etiquetas',
+      svcOpenaiOnly:
+        'La curación de conceptos y los temas/etiquetas usan el formato OpenAI — necesitan un endpoint compatible con OpenAI.',
+      colServices: 'Usada por',
+      svcNone: 'nada (inactiva)',
+      groupTestLab: 'Pipelines del Test Lab',
+      groupDataPrep: 'Pipeline de preparación de datos',
+      groupInference: 'Pipeline de inferencia',
+      mockNote: 'previsto — aún no configurable',
+      svcAnswers:
+        'Respuestas de benchmark — solo reproducción sin conexión (el Lab responde a través del chat del despliegue)',
+      svcAnswersShort: 'respuestas de benchmark (solo sin conexión)',
+      mockContextual: 'Contextual retrieval (contexto del documento)',
+      mockChunkLabeling: 'Etiquetado de fragmentos',
+      mockGraphExtraction: 'Extracción del grafo de conocimiento',
+      mockChatServing: 'Respuesta del chat',
+      mockTranslation: 'Traducción del chat',
+      svcOpenaiOnlyShort: 'Solo endpoints compatibles con OpenAI',
+      providerTipOpenai:
+        'Endpoints compatibles con OpenAI verificados: OpenAI https://api.openai.com/v1 · MiniMax https://api.minimax.io/v1 · z.ai https://api.z.ai/api/paas/v4 · un gateway LiteLLM http://your-gateway:4000/v1',
+      providerTipAnthropic:
+        'Endpoints nativos de Anthropic verificados: Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
+      baseUrlTip:
+        'El servidor lista modelos en esta base + /models (OpenAI-compatible) o + /v1/models (Anthropic — un /v1 final se normaliza), y Test connection genera en + /chat/completions o + /v1/messages. Las cuatro rutas estándar verificadas en vivo el 2026-10-20.',
+      save: 'Guardar cambios',
+      create: 'Crear',
+      cancel: 'Cancelar',
+      colName: 'Nombre',
+      colProvider: 'Proveedor',
+      colUrl: 'Endpoint',
+      colKey: 'Clave',
+      colModel: 'Modelo',
+      colState: 'Estado',
+      active: 'activa',
+      inactive: 'inactiva',
+      edit: 'Renombrar / modificar',
+      copy: 'Copiar',
+      activate: 'Activar (solo una está activa)',
+      deactivate: 'Desactivar — se usará el modelo por defecto',
+      delete: 'Eliminar',
+      deleteConfirm: '¿Eliminar la configuración de modelo «{name}»?',
+      empty: 'Aún no hay configuraciones de modelo — se usa el modelo por defecto (env).',
+      adminOnly: 'Las configuraciones de modelo requieren el rol de administrador de plataforma.'
+    },
+    versions: {
+      bundle: 'Paquete',
+      col: {
+        concepts: 'Conceptos',
+        curator: 'Curador',
+        minted: 'Creado',
+        tag: 'Etiqueta',
+        trigger: 'Desencadenador',
+        version: 'Versión'
+      },
+      current: 'actual',
+      loadFailed: 'Error al cargar las versiones',
+      none: 'Aún no se han emitido versiones — ejecutar publish crea v1.',
+      notServing: 'No está sirviendo',
+      publish: 'Crear nueva versión',
+      published: 'Versión v{v} publicada — paquete {f} guardado en el repositorio de documentos.',
+      serving: 'Ingestado (sirviendo)',
+      title: 'Versiones'
+    },
+    shell: {
+      back: 'Panel de Studio',
+      building: 'Construyendo…',
+      buildingHint: 'El archivo fuente aún se está procesando',
+      delete: {
+        body: 'Esto elimina de forma permanente el repositorio, sus conceptos, el contenido indexado, el grafo y los artefactos del paquete.',
+        confirm: 'Eliminar',
+        title: 'Eliminar repositorio'
+      },
+      export: 'Exportar .zip',
+      logs: 'Registros',
+      pii: {
+        ack: 'Confirmar entidades marcadas y publicar',
+        note: 'Las entidades marcadas forman parte del contenido publicado. Si las ha revisado (por ejemplo, datos de contacto oficiales), confirme y continúe.'
+      },
+      publish: {
+        body: 'Al ejecutar publish se acuña v{n} y se almacena el paquete "{file}" en el repositorio de documentos, reemplazando cualquier zip anterior. La nueva versión no estará en serving hasta que ejecute Ingest.',
+        confirm: 'Publicar',
+        inProgress: 'Publicando — exportando y transfiriendo el paquete…',
+        title: 'Publicar'
+      },
+      readonly: 'CONTENIDO SOLO LECTURA — head/etiquetas editables',
+      serving: 'Sirviendo',
+      state: {
+        ingested: 'Ingestado'
+      },
+      tab: {
+        editor: 'Editor',
+        wizard: 'Asistente'
+      },
+      version: 'v{n}',
+      versions: 'Versiones',
+      deleteLabel: 'Eliminar',
+      testingLab: 'Testing Lab'
+    },
+    logs: {
+      labeled: 'etiquetados: {n}',
+      fallbacks: 'alternativas de LLM: {n}',
+      concepts: 'conceptos: {n}',
+      col: {
+        action: 'Acción',
+        description: 'Descripción',
+        user: 'Usuario',
+        when: 'Fecha y hora'
+      },
+      count: '{n} entradas',
+      loadFailed: 'Error al cargar el registro de actividad.',
+      none: 'No hay actividad registrada todavía — las acciones del repositorio aparecerán aquí a medida que ocurran.',
+      title: 'Registro de actividad'
+    },
+    graph: {
+      aria: 'Grafo de conceptos',
+      building: 'Preparando el grafo…',
+      concepts: 'conceptos',
+      empty: 'Sin conceptos todavía — no hay nada que representar en el grafo.',
+      fit: 'Ajustar gráfico',
+      hub: 'Mostrar u ocultar el nodo central de índice (sus enlaces de contenido son estructura, no conocimiento)',
+      layouting: 'Diseñando…',
+      legend: 'índice',
+      links: 'enlaces',
+      zoomIn: 'Acercar',
+      zoomOut: 'Alejar',
+      card: {
+        links: '{n} enlaces',
+        chunks: '{n} fragmentos',
+        failed: 'indexación fallida',
+        flagged: 'entidades marcadas',
+        hub: 'Hub del índice',
+        pending: 'aún no indexado'
+      }
+    },
+    import: {
+      title: 'Importar documentos en un nuevo repositorio OKF',
+      hint: 'Los documentos se convierten en UN repositorio — segmentados, enlazados y etiquetados en conjunto. Nada se publica; sigue el flujo normal: revisión → publicar → ingest.',
+      name: 'Nombre del repositorio',
+      namePh: 'p. ej. Paquete de políticas',
+      domain: 'Área temática (dominio)',
+      strategy: 'Estrategia de clasificación',
+      stratHeuristics: 'Heurística (rápida, sin LLM)',
+      stratLlm: 'Clasificación LLM',
+      stratHybrid: 'Híbrida',
+      files: 'Documentos seleccionados',
+      servingBadge: 'sirve al RAG libre',
+      alreadyBadge: 'ya en un repositorio OKF',
+      servingTip:
+        'Este documento sirve actualmente al corpus libre — el nuevo repositorio no puede ingerirse hasta retirarlo.',
+      alreadyTip: 'Este documento ya es origen de otro repositorio OKF.',
+      servingWarn:
+        '{n} documento(s) aún sirven al corpus libre. La importación tiene éxito, pero este repositorio no puede ingerirse hasta retirarlos.',
+      cancel: 'Cancelar',
+      importing: 'Importando…',
+      go: 'Importar',
+      dupRepo: 'Ese nombre de repositorio ya existe — elige otro.',
+      failed: 'No se pudo iniciar la importación. Revisa los documentos e inténtalo de nuevo.'
+    },
+    editor: {
+      addConcept: {
+        bodyLabel: 'Markdown (pegar o dejar vacío)',
+        bodyPh: '# Encabezado\n\nPegue markdown aquí; el frontmatter se añadirá automáticamente.',
+        create: 'Crear archivo',
+        failed: 'No se pudo crear el archivo.',
+        title: 'Añadir archivo de concepto',
+        titleLabel: 'Título',
+        titlePh: 'ej. Fauna salvaje en el Mara',
+        updateIndex: 'Añadir a la lista de contenido del índice'
+      },
+      access: {
+        label: 'Acceso al repositorio',
+        title: 'Control de acceso',
+        restricted: 'Restringido',
+        openForAll: 'Abierto a todos',
+        hintRestricted:
+          'Solo los usuarios autorizados (y los stewards) pueden consultar este repositorio. Concede acceso abajo — surte efecto en el próximo inicio de sesión.',
+        hintOpen:
+          'Cualquier usuario autenticado puede consultar este repositorio. Restríngelo para limitarlo y concede acceso por usuario.',
+        unrestrict: 'Abrir a todos',
+        restrict: 'Restringir repositorio',
+        unconfiguredTip:
+          'Conceder/revocar requiere credenciales de Keycloak en el servidor (KC_OKF_ACCESS_CLIENT_SECRET). La restricción funciona igualmente.',
+        revoke: 'Revocar',
+        error: 'La operación falló.',
+        grantedNotice: 'Acceso concedido — efectivo en el próximo inicio de sesión.',
+        revokedNotice: 'Acceso revocado — surte efecto en el próximo inicio de sesión del usuario.',
+        nowRestricted: 'Repositorio restringido.',
+        nowOpen: 'Repositorio abierto a todos.',
+        grantUsersCta: 'Conceder acceso a usuarios…',
+        pickerTitle: 'Conceder acceso de consulta',
+        pickerSearch: 'Buscar usuarios por nombre, usuario o correo',
+        pickerSearching: 'Buscando…',
+        pickerMatching: '{n} usuarios coinciden con esta búsqueda',
+        pickerSelectAll: 'Seleccionar los {n}',
+        pickerAllSelected: 'Seleccionados los {n} usuarios que coinciden',
+        pickerClearSelection: 'Limpiar',
+        pickerHasAccess: 'tiene acceso',
+        pickerEmpty: 'Ningún usuario coincide.',
+        pickerGrant: 'Conceder acceso ({n})',
+        pickerGranting: 'Concediendo acceso a {n} usuarios…',
+        pickerLargeHint:
+          'Para conjuntos muy grandes, prefiera conceder a un grupo — una sola operación para cualquier número de usuarios.',
+        grantedQueryNotice:
+          'Acceso concedido a {n} usuarios — surte efecto en el próximo inicio de sesión de cada usuario.',
+        col: {
+          user: 'Usuario',
+          group: 'Grupo'
+        },
+        viaRole: 'rol directo',
+        noHolders: 'Ningún usuario ni grupo con acceso.',
+        groupPlaceholder: 'Elegir un grupo…',
+        groupSearch: 'Buscar grupos',
+        groupNoResults: 'Ningún grupo coincide',
+        grantGroup: 'Conceder al grupo',
+        groupHint:
+          'Cada miembro del grupo obtiene acceso en su próximo inicio de sesión — una sola operación para cualquier número de usuarios.',
+        grantedSomeNotice: 'Concedidos {n} — desconocidos: {m}',
+        grantedGroupNotice: 'Grupo concedido — cada miembro obtiene acceso en su próximo inicio de sesión.'
+      },
+      autocorrect: {
+        blankBefore: '(vacío)',
+        blankBadge: 'sin frontmatter — propuesta completa',
+        applyField: 'Aplicar',
+        apply: 'Aplicar correcciones',
+        body: 'Correcciones de frontmatter planificadas en todos los conceptos. Los cuerpos nunca se modifican.',
+        button: 'Autocorrección',
+        clean: 'Nada que corregir — todo el frontmatter cumple con la norma.',
+        col: {
+          field: 'Campo',
+          after: 'Después',
+          before: 'Antes',
+          concept: 'Concepto'
+        },
+        failed: 'Escaneo fallido.',
+        scanning: 'Escaneando…',
+        title: 'Autocorrección (solo frontmatter)'
+      },
+      concepts: {
+        originTip: 'Cómo se curó este concepto',
+        add: 'Añadir concepto',
+        addLabel: 'Establecer etiqueta',
+        delete: 'Eliminar archivo',
+        empty: 'Sin archivos todavía: añada un concepto o vuelva a dividir desde el origen.',
+        filter: 'Filtrar archivos',
+        failedCard: {
+          title: 'Fallo al ingestar',
+          problem: 'El problema',
+          noError: 'Marcado como fallido sin motivo registrado.',
+          fixLabel: 'Cómo corregirlo',
+          attempts: 'Attempts: {n}',
+          when: 'Last attempt {when}',
+          fix: {
+            reaper:
+              'El trabajador de ingest dejó de esperar dentro de su ventana de gracia (el drenaje estaba saturado) — el contenido está intacto. Solución: edita ligeramente este archivo y guarda para re-encolarlo, o retira y re-ingesta el repositorio completo.',
+            dataprep:
+              'El servicio de preparación de contenido falló en este ingest. Solución: edita y guarda para re-encolarlo; si se repite, revisa la salud del servicio dataprep.',
+            generic:
+              'Falló la indexación. Solución: edita el contenido y guarda para re-encolarlo, o retira y re-ingesta el repositorio completo.'
+          }
+        },
+        indexBadge: 'índice',
+        label: 'Conceptos',
+        loading: 'Cargando…',
+        resplit: 'Re-dividir',
+        flagged: 'marcado',
+        flaggedTip:
+          'Conceptos con entidades marcadas — abra cada uno, elimine o modifique la entidad y guarde (se vuelve a analizar automáticamente); o acéptelas al hacer publish.',
+        piiBadge: 'PII',
+        piiTip:
+          'Entidades marcadas: {k}. Ábralas, elimínelas o modifíquelas, y luego guarde — se volverá a analizar automáticamente.',
+        piiTipBare: 'Entidades marcadas — abrir, revisar y guardar para volver a analizar.',
+        sourceLabel: 'Documento de origen',
+        sourceView: 'Abrir el documento de origen',
+        bulkAccept: 'Aceptar todo',
+        bulkRedact: 'Redactar todo',
+        bulkRemove: 'Eliminar todo',
+        loadProgress: 'Cargando archivos {done}/{total}',
+        addSource: '+ From documents',
+        reingest: 'Reingerir este concepto',
+        reingestBusy:
+          'Ya hay una ingesta RAG en curso para este repositorio: espera a que termine y vuelve a intentarlo.',
+        reingestFailed: 'La reingesta ha fallado: inténtalo de nuevo.'
+      },
+      delete: {
+        body: 'Esto elimina permanentemente el archivo, sus fragmentos indexados y sus enlaces del grafo.',
+        confirm: 'Eliminar',
+        title: 'Eliminar archivo'
+      },
+      label: 'Editor del repositorio',
+      loadFailed: 'No se pudo cargar este concepto.',
+      loadingConcept: 'Cargando concepto…',
+      meta: {
+        label: 'Metadatos del concepto',
+        labelLabel: 'Etiqueta (Jerarquía de conocimiento)',
+        noLabel: 'Sin etiqueta',
+        none: 'Ningún concepto seleccionado',
+        saveFailed: 'Error al guardar los metadatos',
+        saved: 'Metadatos guardados',
+        status: 'Estado del índice',
+        title: 'Título',
+        trust: 'Nivel de confianza',
+        type: 'Tipo',
+        typePlaceholder: 'Seleccionar tipo…',
+        hide: 'Hide metadata',
+        show: 'Show metadata'
+      },
+      pane: {
+        files: 'Archivos',
+        graph: 'Gráfico'
+      },
+      pickConcept: 'Seleccione un concepto de la lista para comenzar a editar.',
+      resplit: {
+        body: 'Esto elimina todos los conceptos actuales y el grafo derivado, y luego vuelve a importar el archivo fuente con la nueva división. Las ediciones de conceptos se perderán.',
+        confirm: 'Re-dividir',
+        failed: 'Error en la nueva división — compruebe el enlace del archivo fuente.',
+        modeA: 'Un concepto para todo el rastreo',
+        modeAHint: 'Megaconcepto — todo el contenido en un solo concepto',
+        modeB: 'Un concepto por página',
+        modeBHint: 'Divide según los marcadores `## Source:` del rastreador (recomendado)',
+        modeC: 'Utilizar extracción de temas por LLM',
+        modeCHint: 'Historia 10.6 — próximamente',
+        title: 'Volver a dividir desde el origen'
+      },
+      save: 'Guardar',
+      saved: 'Guardado',
+      saving: 'Guardando…',
+      unsaved: 'Cambios sin guardar',
+      view: {
+        rendered: 'Renderizado',
+        source: 'Fuente'
+      },
+      viewToggle: 'Vista de editor',
+      paneLabel: 'Panel de vista',
+      saveFailed: 'Error al guardar — reintentar',
+      piiRescan: {
+        label: 'Datos personales',
+        button: 'Reexaminar todas las páginas',
+        working: 'Reexaminando todas las páginas…',
+        progress: 'Reexaminando… {done} de {total} páginas',
+        progressIdle: 'Reexaminando… leyendo el repositorio',
+        done: '{n} página(s) reexaminada(s).',
+        partial:
+          '{n} página(s) reexaminada(s). {e} siguen fallando: su veredicto de escaneo no cambió, por lo que la publicación sigue bloqueada para ellas.',
+        noKey:
+          'El servidor aceptó el reescaneo pero no devolvió ningún identificador de ejecución, así que su progreso no puede seguirse. No se informó nada.',
+        missing:
+          'El reescaneo no está disponible en este servidor (404). No se cambió nada: las páginas cuyo escaneo falló siguen bloqueando la publicación.',
+        frozen: 'Reescaneo rechazado: el repositorio se está publicando (409). No se cambió nada.',
+        failed:
+          'El reescaneo falló. No se cambió nada: las páginas cuyo escaneo falló siguen bloqueando la publicación.',
+        scanned: '{n} página(s) reexaminada(s)',
+        clean: 'limpias',
+        hit: 'marcadas',
+        error: 'error de escaneo',
+        vanished: 'desaparecidas',
+        stillBlocking: 'Siguen bloqueando'
+      },
+      piiBulk: {
+        done_accept:
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
+        title: {
+          redact: 'Ocultar todo el contenido marcado',
+          remove: 'Eliminar todo el contenido marcado',
+          accept: 'Aceptar todas las entidades marcadas'
+        },
+        body: {
+          redact:
+            'El cuerpo de cada concepto marcado se sustituye por el aviso de rediseño o supresión. No se puede deshacer.',
+          remove: 'Se vacía el cuerpo de cada concepto marcado. No se puede deshacer.',
+          accept:
+            'Todas las entidades marcadas se etiquetan como revisadas y conservadas — no se volverán a marcar a menos que ejecute un nuevo análisis.'
+        },
+        scope: 'Conceptos afectados: {n}.',
+        confirm: 'Aplicar',
+        failed: 'Falló la acción masiva de PII — inténtelo de nuevo.'
+      },
+      actions: {
+        bulkPii: 'Aplicando acción masiva de PII',
+        deleting: 'Eliminando'
+      },
+      addSources: {
+        working: 'Converting sources…',
+        done: '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).',
+        failed: 'A conversion failed — check the logs; the rest may still have queued.',
+        landed: 'Conversions complete — {t} topics now in the tree.'
+      }
+    },
+    dashboard: {
+      bulk: {
+        body: 'Cada repositorio se publica con el control de barrera completo (revisión de PII, indexación, conformidad). Resultados por repositorio:',
+        pending: 'Confirme para ejecutar publish en los repositorios seleccionados.',
+        publishConfirm: 'Publicar {n}',
+        title: 'Publicar repositorios seleccionados'
+      },
+      card: {
+        actions: 'Acciones para {name}',
+        building: 'Construyendo…',
+        buildingAria: 'En construcción — el archivo fuente aún se está procesando',
+        delete: 'Eliminar',
+        export: 'Exportar',
+        ingesting: 'Ingestando…',
+        logs: 'Registros',
+        rename: 'Renombrar',
+        versions: 'Versiones',
+        testingLab: 'Testing Lab'
+      },
+      delete: {
+        body: 'Esto elimina permanentemente el repositorio, sus conceptos, contenido indexado, grafo y artefactos de paquete. No se puede deshacer.',
+        confirm: 'Eliminar',
+        title: 'Eliminar repositorio'
+      },
+      filter: {
+        domain: 'Filtrar por área temática',
+        allDomains: 'Todas las áreas temáticas'
+      },
+      new: '+ Nuevo repositorio',
+      pii: {
+        ack: 'Confirmar entidades marcadas y publicar',
+        note: 'Las entidades marcadas forman parte del contenido publicado. Si las ha revisado (por ejemplo, datos de contacto oficiales), confirme y continúe.'
+      },
+      publish: {
+        body: 'Al ejecutar publish se acuña v{n} y se almacena el paquete "{file}" en el repositorio de documentos, reemplazando el zip anterior. La nueva versión no estará en serving hasta que ejecute Ingest.',
+        confirm: 'Publicar',
+        title: 'Publicar'
+      },
+      search: 'Buscar...',
+      select: 'Seleccionar {name} para publicación masiva',
+      stage: {
+        drainFailed: 'Error en ingest',
+        queueBehind: '{n} en cola · ingest en {m} repo(s)',
+        redraining: 'Re-drenando…',
+        building: 'Construyendo…',
+        draft: 'Borrador',
+        inReview: 'En revisión',
+        ingested: 'Ingest completado en v{n}',
+        published: 'Publicado v{n}',
+        retracted: 'Retirado',
+        stepOf: 'Step {n} of 10'
+      },
+      title: 'Repositorios',
+      topics: 'temas',
+      unpublish: {
+        title: 'Despublicar',
+        body: 'Esto deja de servir {name} a los agentes RAG de inmediato. El zip del paquete publicado y el historial de versiones se conservan; el repositorio vuelve a En Revisión para corregirlo. Publique de nuevo y haga Ingest para volver a servirlo.',
+        confirm: 'Despublicar'
+      },
+      lane: {
+        draft: 'Importar',
+        in_review: 'En revisión',
+        published: 'Publicado',
+        ingested: 'Ingestado',
+        retracted: 'Retirado'
+      },
+      laneEmpty: {
+        draft: 'Aún no se ha importado nada',
+        in_review: 'Nada en revisión',
+        published: 'Aún no hay repositorios publicados',
+        ingested: 'Aún no se ha ingestado nada',
+        retracted: 'Nada retirado'
+      },
+      reingest: {
+        failed: 'La reingesta ha fallado ({n})',
+        title: 'Reingerir conceptos fallidos',
+        confirm: 'Reingerir',
+        counting: 'Comprobando cuántos conceptos han fallado…',
+        countFailed: 'No se ha podido leer el número de conceptos fallidos. Inténtalo de nuevo.',
+        none: '{name} no tiene conceptos fallidos: todos los conceptos se han indexado correctamente.',
+        body: '{n} concepto(s) de {name} no se han podido indexar y faltan en RAG. La reingesta reintenta solo esos; los conceptos ya indexados no se tocan. Si vuelve a fallar, el error se mostrará en el concepto.'
+      }
+    },
+    build: {
+      drainFailed: {
+        more: '+ {n} más',
+        fixPath: 'Vuelva a ejecutar ingest para reintentar: retract → crear versión → ingest.'
+      },
+      curation: {
+        fallbacks: 'alternativas de LLM',
+        curated: 'Curado',
+        typed: 'Clasificado',
+        labeled: 'Etiquetado',
+        described: 'Descrito'
+      },
+      batches: 'Lotes almacenados',
+      bytes: 'Fuente leída',
+      conceptsIndexed: 'conceptos indexados',
+      elapsed: {
+        hr: 'Iniciado hace {n} h',
+        lt1: 'Iniciado hace menos de un minuto',
+        min: 'Iniciado hace {n} min'
+      },
+      hint: {
+        import: 'El repositorio permanece en Import hasta que finalice la conversión de archivos.',
+        rag: 'El índice RAG se está construyendo — la versión entra en serving una vez indexado cada concepto.',
+        serving: 'Esta versión está en serving para tráfico RAG — aplique retract para realizar cambios.',
+        review: 'En review — un revisor valida, luego el administrador ejecuta publish e ingest.',
+        retracted: 'Fuera de servicio — submit → review → approve → publish → ingest para volver a serving.',
+        idle: 'Importación completada — haga submit para review y continuar con el flujo de trabajo.'
+      },
+      pages: 'Páginas procesadas',
+      serving: {
+        graph: 'Grafo de serving',
+        version: 'Versión en serving'
+      },
+      stage: {
+        indexing: 'Indexando',
+        serving: 'Sirviendo',
+        label: 'Etapa'
+      },
+      title: {
+        import: 'Progreso de importación',
+        rag: 'Progreso de ingest',
+        serving: 'Estado de serving',
+        review: 'Estado de review',
+        retracted: 'Estado de retract',
+        idle: 'Estado del repositorio'
+      },
+      lifecycle: {
+        importing: 'Importando',
+        reviewing: 'En revisión',
+        ingesting: 'Ingestando',
+        serving: 'Sirviendo',
+        retracted: 'Retirado'
+      },
+      row: {
+        subject: 'Área temática',
+        topics: 'Temas',
+        lastVersion: 'Última versión'
+      }
+    },
+    create: {
+      zipOnly: 'Seleccione un archivo de paquete .zip.',
+      stagedFile: 'Preparado: {name}',
+      staged: 'Paquete preparado — haga clic en Crear repositorio para iniciar la importación.',
+      openExisting: 'Abrir repositorio existente',
+      name: 'Nombre del repositorio',
+      importing: 'Importando paquete…',
+      importHint: 'O importe un paquete zip existente como un nuevo repositorio.',
+      importDefaultName: 'Repositorio importado',
+      failed: 'Error al crear el repositorio',
+      duplicateInline: 'Ya existe un repositorio con este nombre. Ábralo o elija otro nombre.',
+      duplicate: 'Ya existe un repositorio con este nombre — ábralo desde el panel o elija otro nombre.',
+      domain: 'Área temática',
+      create: 'Crear repositorio',
+      title: 'Nuevo repositorio OKF',
+      hint: 'Crea un repositorio vacío con un index.md que puede editar en el editor de Studio.',
+      domainPlaceholder: 'Seleccione un área temática…',
+      domainRequired: 'Elija un área temática primero — no se puede cambiar tras la creación.',
+      classLabel: 'Clasificación de conceptos',
+      classHeuristics: 'Heurística (predeterminado)',
+      classLlm: 'Asistido por LLM',
+      classHybrid: 'Híbrido'
+    },
+    fm: {
+      errKeyCurated: 'Nombre de campo reservado.',
+      errKeyDuplicate: 'El nombre de campo se utiliza dos veces.',
+      errJson: 'JSON no válido',
+      errNumber: 'Debe ser un número',
+      kind: {
+        json: 'JSON',
+        array: 'Lista',
+        boolean: 'Verdadero/Falso',
+        number: 'Número',
+        string: 'Texto'
+      },
+      removeKey: 'Eliminar campo',
+      kindLabel: 'Tipo de valor',
+      keyPh: 'nombre del campo',
+      fullHint: 'Cada campo de frontmatter es editable. Añada o elimine claves libremente.',
+      errRemovalPending:
+        'La eliminación de campos requiere el contrato de servidor merge-delete (disponible en breve).',
+      errKeyRequired: 'Cada campo requiere un nombre.',
+      arrayPh: 'valores separados por comas',
+      addKey: 'Añadir campo',
+      saved: 'Frontmatter guardado',
+      label: 'Metadatos',
+      tipLabel: '¿Qué es Frontmatter?',
+      edit: 'Editar',
+      empty: 'Sin frontmatter todavía — Editar añade tipo, título y etiquetas.',
+      type: 'Tipo',
+      noType: 'Sin tipo',
+      titleLabel: 'Título',
+      labelsLabel: 'Etiqueta (Jerarquía de conocimiento)',
+      noLabel: 'Sin etiqueta',
+      descriptionLabel: 'Descripción',
+      save: 'Guardar frontmatter',
+      saveFailed: 'Error al guardar frontmatter',
+      perRepoTitle: 'Routing tags — what this repo is about',
+      perRepoHint:
+        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+      perRepoField: {
+        topic: 'Topic',
+        entity: 'Entity',
+        scope: 'Scope',
+        forbidden: 'Forbidden',
+        summary: 'Summary',
+        keyword: 'Keyword'
+      },
+      perRepoPh: {
+        topic: 'One topic per line',
+        entity: 'One entity per line',
+        forbidden: 'One forbidden topic per line',
+        keyword: 'One keyword per line'
+      },
+      perRepoHelp: {
+        topic: 'Add, modify or remove topics — one per line. Empty lines are ignored.',
+        entity: 'Add, modify or remove entities — one per line. Empty lines are ignored.',
+        forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
+        keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
+      },
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'Las etiquetas a nivel de repositorio ({summary}) viven en el repositorio, no en este concepto — gestiónelas en el panel de etiquetas del raíl derecho.'
+    },
+    piiReview: {
+      title: 'Comprobación de datos personales',
+      checking: 'Comprobando…',
+      checkingBody: 'Leyendo el estado de datos personales de cada página…',
+      unreadableTitle: 'Estado desconocido',
+      unreadableBody:
+        'No se pudo leer el estado de datos personales de este repositorio. Si se encontró algo se DESCONOCE: este no es un resultado limpio.',
+      unscanned: 'Sin escanear',
+      unscannedBody:
+        'Ningún escaneo completo de datos personales cubre este repositorio ({n} página(s) nunca escaneadas). No se sabe que estén libres de datos personales: la publicación no está bloqueada por hallazgos, pero no hay escaneo detrás de este veredicto.',
+      errorTitle: 'Escaneo fallido',
+      errorBody:
+        '{n} página(s) no pudieron escanearse. Su contenido NO se leyó correctamente, así que si contienen datos personales se DESCONOCE: no están limpias y bloquean la publicación.',
+      unreviewed: 'Marcadas, sin revisar',
+      unreviewedBody:
+        'El escáner encontró posibles datos personales en {n} página(s) y nadie los ha revisado. La publicación está permitida, pero nada en esas páginas ha sido revisado.',
+      reviewed: 'Marcadas, revisadas',
+      reviewedBody: '{n} página(s) contienen datos personales marcados que un custodio reconoció ({by} el {at}).',
+      cleanVerdict: 'Escaneado: no se encontró nada',
+      cleanBody: 'Todas las páginas se escanearon y no se encontraron datos personales.',
+      staleAck:
+        'Un reconocimiento anterior registró {a} página(s) marcada(s) el {at}; ahora hay {n}, así que no las cubre.',
+      bannerTitle: 'Nadie ha revisado estos hallazgos.',
+      bannerBody:
+        'La publicación sigue permitida y ninguna comprobación se lo impedirá, pero las páginas marcadas entrarán en el repositorio publicado tal cual. Abra cada una y decida antes de publicar.',
+      unknownActor: 'desconocido'
+    },
+    glossary: {
+      addConcept:
+        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+      title:
+        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus:
+        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier:
+        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+      concept:
+        'Una entrada en su repositorio — normalmente una sola página o tema. Cada concepto cuenta con frontmatter estructurado que lee el asistente, más el texto markdown con el que formula respuestas.',
+      repository:
+        'Una colección de conceptos curados en torno a un área temática. Se convierte en un paquete OKF que usted publica, versiona y pone a disposición del asistente.',
+      subjectArea:
+        '¿A qué ámbito pertenece este conocimiento? El área temática agrupa su repositorio y delimita qué etiquetas puede elegir. No se puede modificar tras su creación.',
+      selectSubjectArea: 'Seleccione un área temática…',
+      subjectAreaMissing:
+        'El área temática de este repositorio no figura en la jerarquía de conocimiento — mostrando todas las etiquetas.',
+      label:
+        'Una categoría de la jerarquía de conocimiento que indica al asistente qué clase de entidad es este concepto. Las etiquetas permiten que las respuestas localicen el contenido adecuado.',
+      bundle:
+        'La exportación en zip de un repositorio — sus conceptos, estructura y metadatos en un solo archivo. Los paquetes permiten transferir repositorios entre sistemas.',
+      version:
+        'Una instantánea fija de un repositorio en el momento de publish. Las modificaciones continúan en la siguiente versión — las versiones publicadas nunca cambian.',
+      serving:
+        'Esta versión está activa: el asistente consulta su contenido al responder. Aplique retract para realizar cambios.',
+      ingestion:
+        'El paso en el que se prepara una versión publicada para responder consultas — el texto se divide, se incrusta y se vincula. Nada llega al asistente antes de esto.',
+      classification:
+        'Cómo determinamos qué ES cada concepto (un tema, una entidad, un proceso…). La heurística lee la página automáticamente; la opción LLM es más lenta pero gestiona páginas complejas.',
+      resplit:
+        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+      saveFailed: 'Fallo al guardar',
+      importFailedTitle: 'Falló la importación — no se pudo convertir el archivo fuente.',
+      importFailedHint: 'Elimine este repositorio e importe el archivo fuente de nuevo.',
+      frontmatter:
+        'La información estructurada en la parte superior de cada archivo — tipo, título, etiquetas. El asistente la utiliza para saber de qué trata cada concepto.',
+      pickSource:
+        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+      classificationStrategy:
+        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
+      clsHeur: 'Heuristics (fast, no LLM)',
+      clsLlm: 'LLM classification',
+      clsHybrid: 'Hybrid',
+      fsPick:
+        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+      autocorrect:
+        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+      handoff:
+        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+      lifecycle:
+        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+      labelsAuto:
+        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+      reviewHandoff:
+        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+      piiReview:
+        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+    },
+    md: {
+      toolbar: 'Formato',
+      bold: 'Negrita',
+      italic: 'Cursiva',
+      h1: 'Encabezado 1',
+      h2: 'Encabezado 2',
+      h3: 'Encabezado 3',
+      bullet: 'Lista de viñetas',
+      numbered: 'Lista numerada',
+      link: 'Insertar enlace',
+      code: 'Código en línea',
+      table: 'Insertar tabla',
+      split: 'Dividir',
+      rendering: 'Renderizando…'
+    },
+    narrative: {
+      intro:
+        'Un repositorio OKF es una colección estructurada y versionada de temas que sus respuestas de chat pueden citar. Piense en él como una capa ontológica ligera para su dominio — las etiquetas definen las categorías, los temas definen las entidades y las fuentes definen la procedencia.',
+      step0:
+        'Un repositorio OKF es una colección curada y versionada de temas. Piense en él como una capa ontológica ligera para su dominio — las etiquetas definen categorías, los temas definen entidades y las fuentes definen la procedencia. Una vez publicado, las respuestas del chat citan estos temas por su ID.',
+      step1:
+        'Tres formas de inicializar un repositorio OKF: extraer temas de un rastreo web, extraerlos de documentos ya cargados o empezar desde un lienzo en blanco. Clonar un repositorio existente copia sus temas y le permite bifurcar el trabajo.',
+      step2:
+        'Cada documento se convierte en una fuente de temas. El productor los analiza, extrae temas candidatos y propone una jerarquía. Revisará cada tema en el siguiente paso — nada queda consolidado hasta que usted lo apruebe.',
+      step3:
+        'Estamos analizando sus fuentes y proponiendo temas. Los temas se agrupan bajo las etiquetas de categoría que elija. El productor es conservador — prefiere sugerir un menor número de temas bien formulados antes que muchos imprecisos.',
+      step4:
+        'Las etiquetas son los ejes categóricos de su ontología — ¿qué clase de entidad es este tema? Se asignan automáticamente desde la Jerarquía de conocimiento, limitadas al Área Temática de este repositorio.',
+      step5:
+        'Este es el núcleo del trabajo. Cada tema es una unidad pequeña y citable de conocimiento. Los temas reciben un título, una descripción y reciben las etiquetas de la Jerarquía de conocimiento. Su función es hacerlo riguroso: renombre títulos vagos, fusione duplicados cercanos y descarte los que no pueda respaldar con una fuente.',
+      step6:
+        'Ejecutamos comprobaciones de conformidad: ¿cada tema tiene título? ¿Las etiquetas son válidas? ¿Las atribuciones de fuente están intactas? Los problemas bloqueantes deben corregirse antes de entregar el repositorio; las advertencias se pueden reconocer.',
+      step7:
+        'Algunas advertencias pueden corregirse automáticamente: los valores de estado pueden ajustarse a enumeraciones válidas y los campos ausentes pueden rellenarse con valores predeterminados adecuados. Aplique las correcciones que considere oportunas y vuelva al curador para revisarlas.',
+      step8:
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+      step9:
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+      docMgmtEntry:
+        'Cree un nuevo repositorio OKF a partir de los documentos seleccionados. Los documentos se convertirán en fuentes; usted revisará y nombrará los temas que generen antes de publicar nada.',
+      crawlSegment:
+        'Un repositorio OKF es una colección estructurada y versionada de temas que sus respuestas de chat pueden citar.',
+      emptyDashboard:
+        'Todavía no ha creado ningún repositorio OKF. Un repositorio OKF es un conjunto estructurado y citable de temas del cual pueden nutrirse sus respuestas de chat.',
+      labels:
+        'Las etiquetas son los ejes categóricos de su ontología — responden a "¿qué clase de entidad es este tema?".',
+      hide: 'Ocultar',
+      whatIsThis: '¿Qué es esto?'
+    },
+    common: {
+      close: 'Cerrar',
+      cancel: 'Cancelar',
+      save: 'Guardar',
+      clear: 'Limpiar',
+      delete: 'Eliminar'
+    },
+    studio: {
+      title: 'OKF Studio',
+      help: 'Ayuda',
+      helpTitle: 'Acerca de OKF Studio',
+      helpBody:
+        'Los repositorios OKF son una capa ontológica ligera: las etiquetas definen categorías, los temas definen entidades y las fuentes definen la procedencia. Tras su publicación, las respuestas del chat citan los temas por su ID y muestran su trazabilidad.',
+      view: {
+        dashboard: 'Panel',
+        wizard: 'Asistente'
+      },
+      clonedFrom: 'Clonado de {name} · versión {version}',
+      context: {
+        title: 'Repositorio',
+        untitled: 'Repositorio sin título',
+        trust: 'Confianza',
+        sources: 'Fuentes',
+        concepts: 'Conceptos hasta ahora',
+        stale: 'obsoleto'
+      },
+      status: {
+        draft: 'en curso',
+        inReview: 'en revisión',
+        published: 'publicado'
+      },
+      stage: {
+        inReview: 'En review',
+        stepOf: 'Paso {n} de 10',
+        draft: 'Borrador'
+      },
+      dashboard: {
+        title: 'Repositorios',
+        new: '+ Nuevo repositorio',
+        search: 'Buscar…',
+        empty: 'Aún no hay repositorios aquí.',
+        topics: 'temas',
+        select: 'Seleccionar {name} para publicación masiva',
+        stale: 'obsoleto',
+        stage: {
+          inReview: 'En review',
+          stepOf: 'Paso {n} de 10',
+          draft: 'Borrador'
+        },
+        bulk: {
+          selected: '{n} seleccionados',
+          publish: 'Publicar seleccionados',
+          title: 'Publicar repositorios seleccionados',
+          body: 'Una vez publicados, las respuestas downstream del chat podrán utilizarlos. A continuación se detalla el resultado de cada repositorio.',
+          results: 'Resultados',
+          publishConfirm: 'Publicar {n}',
+          col: {
+            name: 'Nombre',
+            status: 'Estado',
+            topics: 'Temas'
+          },
+          status: {
+            ready: 'Listo'
+          }
+        }
+      },
+      draft: {
+        notReady: 'Los borradores aún no pueden guardarse en el servidor; guardados localmente.'
+      },
+      mode: {
+        basic: 'Básico',
+        expert: 'Experto'
+      }
+    },
+    wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        retracted: 'Retracted',
+        publish: 'Ready to ingest'
+      },
+      status: {
+        published: 'publicado',
+        inReview: 'en revisión',
+        draft: 'en progreso'
+      },
+      exit: 'Volver al panel',
+      context: {
+        version: 'Version',
+        untitled: 'Repositorio sin título',
+        trust: 'Confianza',
+        title: 'Repositorio',
+        stale: 'obsoleto',
+        sources: 'Fuentes',
+        concepts: 'Conceptos hasta ahora'
+      },
+      label: 'Asistente de OKF Studio',
+      back: 'Atrás',
+      continue: 'Continuar',
+      finish: 'Open the Editor'
+    },
+    steps: {
+      entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
+        title: 'Nombre del repositorio y área temática',
+        hint: 'Asigne un nombre claro a este repositorio OKF y seleccione su área temática.',
+        nameLabel: 'Nombre del repositorio',
+        namePh: 'ej. Permisos de transporte NL',
+        domainLabel: 'Área temática'
+      },
+      choose: {
+        title: '¿Dónde debería comenzar este repositorio OKF?',
+        hint: 'Elija cómo desea inicializar este repositorio. Podrá cambiarlo más adelante.',
+        source: {
+          documents: {
+            title: 'Documentos',
+            desc: 'Extraiga temas de documentos que ya haya subido.'
+          },
+          crawl: {
+            title: 'Rastreo de sitio web',
+            desc: 'Rastree un sitio web y proponga temas a partir de sus páginas.'
+          },
+          manual: {
+            title: 'Lienzo en blanco',
+            desc: 'Comience desde cero y redacte los temas usted mismo.'
+          },
+          clone: {
+            title: 'Clon de un repositorio existente',
+            desc: 'Bifurque los temas y la estructura de otro repositorio OKF.'
+          }
+        },
+        cloneSource: 'Source repository (not yet serving)',
+        clonePh: 'Select the repository to clone from',
+        cloning: 'Cloning topics into this repository…',
+        cloneNeed: 'Pick the repository to clone from first.',
+        cloneBusy: 'The previous repository is still being removed — go Back and Continue again in a moment.',
+        cloneFailed: 'The clone failed — try again.'
+      },
+      input: {
+        title: 'Entradas',
+        documents: 'Seleccione los documentos que servirán de base para la lista de temas.',
+        crawl: 'Seleccione el sitio o sitios web a rastrear.',
+        manual: 'Podrá redactar temas directamente en el siguiente paso.',
+        clone: 'Seleccione el repositorio existente para clonar.',
+        placeholder: 'La interfaz del paso se integrará en una historia posterior.',
+        chooseCrawl: 'Choose crawled documents',
+        chooseDocs: 'Choose source documents',
+        writeOne: '+ Write a concept',
+        fsPick: '+ Import markdown from this computer',
+        fsBusy: 'Importing your files…',
+        fsFailed: 'Import failed — check the files and retry.',
+        skippedEmpty: '{n} empty file(s) skipped.',
+        noneSelected: 'No sources selected yet.',
+        selectedN: 'Selected: {n}',
+        moreN: ' +{n} more',
+        noRepo: 'Create the repository first (go back to Entry).',
+        noRepoYet: 'Create the repository first (go back to Entry).',
+        benchTitle: 'Topics in this repository',
+        benchCount: '{n}',
+        benchLoading: 'Reading topics…',
+        benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
+        benchFailed: 'Could not read the topics right now.',
+        editTitle: 'Edit concept',
+        deleteFailed: 'Could not delete the concept.',
+        added: '{n} topic(s) in this repository so far.',
+        deleteTitle: 'Delete topic',
+        deleteBody: 'This permanently removes the topic from this repository.',
+        labelFailed: 'Could not set the label.',
+        cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
+      },
+      produce: {
+        title: 'Generar temas',
+        hint: 'Estamos leyendo sus fuentes y proponiendo temas.',
+        progress: 'Productor en ejecución...',
+        placeholder: 'El servicio de producción se integrará en una historia posterior.',
+        retry: 'Retry conversion',
+        restart: 'Run again',
+        running: 'Converting… you can watch progress here; nothing is committed until you review in Curate.',
+        failed: 'The conversion failed — retry, or go back and pick different inputs.',
+        done: '{n} topic(s) are ready — continue to review them in Curate.',
+        noSources: 'No sources selected — go back to Input.',
+        neverStarted: 'The conversion did not start — retry.',
+        manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
+        labelDone: 'Conversion complete',
+        dupContent:
+          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
+        inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          complete: 'Complete',
+          unavailable: 'Count unavailable',
+          waiting: 'Waiting'
+        },
+        filesNote: '{done} of {total} documents converted',
+        pagesNote: '{done} of {total} pages converted',
+        pagesSoFar: '{n} pages converted so far',
+        sourceStat: '+{n} new (total {t})',
+        sourceStatMerged: '+{n} new · {m} merged by slug (total {t})',
+        docsLeg: '{n} selected document(s)',
+        legWait: 'Waiting for the previous conversion to release…'
+      },
+      label: {
+        title: 'Etiquetas — automatizadas',
+        hint: 'Las etiquetas se asignan automáticamente desde la Jerarquía de conocimiento — limitadas al Área Temática de este repositorio.',
+        loading: 'Reading labels…',
+        preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
+        unlabeled: 'no labels yet',
+        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
+        loadFailed: 'Could not read the labels right now.'
+      },
+      curate: {
+        embedHint:
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
+        title: 'Revisar los temas',
+        hint: 'Cada tema es una pequeña unidad citable de conocimiento. Edite el título y la descripción.',
+        placeholder: 'El árbol del curador y el editor estarán disponibles en la historia 3-8.'
+      },
+      validate: {
+        title: 'Comprobar incidencias',
+        hint: 'Ejecutamos comprobaciones de conformidad. Los problemas bloqueantes deben corregirse antes de entregar el repositorio.',
+        placeholder: 'El panel de validación estará disponible en la historia 3-8.'
+      },
+      autocorrect: {
+        title: 'Corrección automática',
+        hint: 'Algunas advertencias pueden corregirse automáticamente. Aplique las correcciones con las que esté de acuerdo y luego regrese al curador para revisarlas.',
+        placeholder: 'El servicio de autocorrección estará disponible en la historia 10.2.',
+        noRepo: 'No repository yet — go back to Entry and create one first.',
+        applied: 'Fixes applied — continue, or go back to Curate to review the result.'
+      },
+      review: {
+        title: 'Revisión',
+        hint: 'Un resumen de lo que ha creado — el envío, la aprobación y la publicación ocurren en el panel y en el editor.',
+        repo: 'Repositorio',
+        topics: 'Temas',
+        labels: 'Etiquetas',
+        sources: 'Fuentes',
+        state: 'Lifecycle state',
+        labelsSet: 'set per topic in Curate',
+        browserHint:
+          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
+        noRepo: 'No repository yet — the file review appears here once a repository exists.',
+        ritualOutside:
+          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+        versions: 'Versions',
+        logs: 'Action log',
+        rename: 'Rename',
+        noVersions: 'No versions yet — versions are minted during the approval ritual.',
+        versionSummary: '{n} version(s) · latest v{latest}'
+      },
+      publish: {
+        title: 'Asegurar y finalizar',
+        hint: 'Este repositorio está listo para revisión. Aquí nunca se publica — envíelo para aprobación desde el panel; la aprobación y la publicación se realizan desde el panel o el editor.',
+        nameOk: 'Nombre del repositorio establecido',
+        labelsOk: 'Etiquetas seleccionadas',
+        topicsOk: 'Temas revisados',
+        topicsPending: 'No topics yet',
+        topicsServing: 'Topics serving',
+        noTopics: 'No topics yet — go back to Curate to produce or write them.',
+        frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
+        ritual:
+          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+        openDashboard: 'Open the Dashboard'
+      }
+    },
+    trust: {
+      tier: {
+        unverified: 'no verificado',
+        'machine-confirmed': 'confirmado por máquina',
+        'human-reviewed': 'revisado por personas'
+      }
+    },
+    repos: {
+      retract: {
+        notReady: 'La interfaz de usuario para retract estará disponible en la historia 3.9.'
+      },
+      manifest: {
+        notReady: 'El servicio de manifiesto del paquete se integrará en una historia posterior.'
+      }
+    },
+    docs: {
+      createRepo: 'Crear repositorio OKF',
+      gate: {
+        emptySelection: 'Seleccione al menos un documento',
+        alreadyInOkf: 'Eliminar documentos que ya están en un repositorio OKF',
+        alreadyIngested: 'Eliminar documentos ya procesados en ingest',
+        servingWarn:
+          '{n} documento(s) seleccionado(s) aún sirven al corpus libre: el nuevo repositorio no puede ingerirse hasta que se retiren.'
+      },
+      produce: {
+        notReady: 'El productor se integrará en una historia posterior.'
+      }
+    },
+    crawl: {
+      domainLabel: 'Área temática',
+      domainPlaceholder: 'Seleccione un área temática…',
+      classLabel: 'Clasificación de conceptos',
+      classHeuristics: 'Heurística (predeterminado)',
+      classHeuristicsHint:
+        'Clasificación rápida basada en reglas — sin coste de LLM, ideal para rastreos bien estructurados.',
+      classLlm: 'Asistido por LLM',
+      classLlmHint:
+        'El LLM cura cada concepto — tipo, etiqueta de jerarquía de conocimiento y descripción. Mucho más preciso y completo que la heurística; requiere tiempo adicional por concepto.',
+      classHybrid: 'Híbrido',
+      classHybridHint:
+        'Heurística primero; el LLM revisa los casos inciertos y cubre lagunas. Equilibrio entre tiempo y exhaustividad.',
+      targetLabel: '¿Adónde debe ir esto?',
+      target: {
+        freeform: 'Rastrear a corpus libre',
+        okfRepo: 'Repositorio OKF'
+      },
+      targetHint: 'Le mostraremos los temas encontrados antes de guardar nada.',
+      createOkfFromCrawl: 'Crear repositorio OKF a partir de este rastreo',
+      splitLabel: 'División de conceptos',
+      splitA: 'Un concepto para todo el rastreo',
+      splitB: 'Un concepto por página (recomendado)',
+      splitC: 'Utilizar extracción de temas por LLM',
+      splitCHint: 'Historia 10.6 — próximamente',
+      splitBHint: 'Cada página rastreada se convierte en su propio concepto — la IA puede citar páginas individuales.',
+      splitAHint: 'Todo el rastreo se convierte en un único gran concepto — óptimo para sitios pequeños.',
+      progressDownload: 'Descargando contenido rastreado...',
+      progressSplit: 'Dividiendo en conceptos...',
+      progressIngest: 'Añadiendo conceptos (lote [i] de [n])...',
+      postCrawlHint:
+        'Una vez finalizado el rastreo, puede convertirlo en un repositorio OKF desde la pestaña Panel del archivo.',
+      creating: 'Creando repositorio OKF...',
+      createOk: 'Repositorio OKF creado. Abriendo Studio para curar.',
+      createOkRenamed: 'Repositorio OKF creado como "[name]". Abriendo Studio para curar.',
+      createFailed: 'No se pudo crear el repositorio OKF a partir de este rastreo.',
+      conversionsTitle: 'Repositorios creados a partir de este rastreo',
+      convQueued: 'En cola...',
+      convDownloading: 'Descargando rastreo...',
+      convSplitting: 'Dividiendo en conceptos...',
+      convAdding: 'Añadiendo conceptos ([p] páginas hasta ahora)...',
+      convDone: 'Creado ([p] páginas)',
+      convFailed: 'Fallido',
+      createStarted: 'Creando "[name]" — siga el progreso abajo.',
+      modelTier: {
+        label: 'Modelo',
+        options: {
+          'local-small': 'Local · pequeño',
+          'local-medium': 'Local · mediano',
+          'sovereign-large': 'Soberano · grande'
+        }
+      },
+      gate: {
+        notSucceeded: 'El rastreo debe finalizar antes de crear un repositorio OKF.',
+        alreadyInOkf: 'Este rastreo ya está en un repositorio OKF.'
+      }
+    },
+    curator: {
+      placeholder: 'Seleccione un tema a la izquierda para ver y editar.',
+      search: 'Buscar temas',
+      noTopics: 'Sin temas todavía.',
+      labels: {
+        title: 'Ajustar etiquetas',
+        body: 'Las etiquetas son los ejes categóricos de su ontología — ¿qué clase de entidad es este tema?',
+        edit: 'Ajustar etiquetas',
+        add: 'Añadir',
+        addPh: 'ej. Permisos',
+        remove: 'Eliminar',
+        empty: 'Sin etiquetas todavía.',
+        notReady: 'Etiquetas guardadas localmente — sincronización con el servidor próximamente.'
+      },
+      frontmatter: {
+        label: 'Metadatos (Frontmatter)',
+        edit: 'Editar frontmatter',
+        dialogTitle: 'Editar frontmatter',
+        okfVersion: 'okf_version',
+        status: 'lifecycle.status',
+        staleAfter: 'lifecycle.stale_after',
+        trustTier: 'trust_tier',
+        attestation: 'attestation',
+        sources: 'provenance.sources',
+        onlyOnIndex: 'Per-repo tags live on the index concept only — open the index to see them.'
+      },
+      showSource: 'Mostrar origen',
+      issue: {
+        missingType: 'Falta el tipo en el concepto.',
+        badActor: 'El actor de origen debe comenzar con agent:/human:/tool:/process:.'
+      },
+      saveBlocked: 'Guardado bloqueado: resuelva los problemas de conformidad primero.'
+    },
+    validation: {
+      frozen:
+        'Contenido fijado en {v} — vista previa de solo lectura. Aplique retract en la versión en serving para hacer cambios.',
+      none: 'Ninguno',
+      expertHint:
+        'Cambie al modo Experto para ver el JSON sin procesar de validación, filtrar por gravedad e ignorar comprobaciones.',
+      headline: {
+        blockers: '{n} problema(s) bloqueante(s) — corríjalos antes de entregar el repositorio',
+        warnings: '{n} elemento(s) requieren su revisión',
+        ok: 'Todo correcto. Nada que corregir.'
+      },
+      summary: '{clean} sin errores · {warnings} requieren revisión · {blockers} bloqueantes',
+      formatter: {
+        notReady: 'El formateador estará disponible en la historia 4.2b.'
+      },
+      run: {
+        notReady: 'La validación se integrará en una historia posterior.'
+      },
+      piiTitle: 'Personal data — review each flagged concept',
+      loading: 'Checking the repository…',
+      loadFailed: 'Could not load the validation report.',
+      retry: 'Retry',
+      issuesTitle: 'Issues to review',
+      howToFix: 'How to fix',
+      indexFailed: 'Re-index failed — edit or re-split the page.',
+      indexFailedRemedy:
+        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+      severity: {
+        blocker: 'Blocking',
+        warning: 'Needs review',
+        info: 'Info'
+      },
+      type: {
+        conformance: 'Frontmatter',
+        orphan: 'Not linked',
+        near_duplicate: 'Near-duplicate',
+        citation: 'Citations',
+        index_failed: 'Index'
+      },
+      topicLinks: {
+        title: 'Cross-link topics',
+        tip: 'Reads every page in this repository and writes links between the pages that genuinely belong together — the same processing the import wizard runs. It is safe to re-run: existing links are kept and only new ones are added.',
+        progress: 'Cross-linking… {done} of {total} batches',
+        progressIdle: 'Cross-linking… reading the repository',
+        done: 'Added {n} link(s) across {c} page(s).',
+        failed: 'Cross-linking failed: {msg}'
+      },
+      action: {
+        suggestLinks: 'Suggest links',
+        accept: 'Accept',
+        dismiss: 'Dismiss',
+        delete: 'Delete',
+        working: 'Working…',
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"',
+        preview: 'Preview duplicates',
+        hidePreview: 'Hide preview'
+      },
+      actionDone: {
+        done: 'Done'
+      },
+      suggest: {
+        working: 'Asking the assistant for link suggestions…',
+        empty: 'No suggestions — link it manually in the editor.'
+      },
+      nearDup: {
+        keepHint: 'Keep one copy — delete the rest.'
+      },
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      mergedPages: '{n} pages',
+      preview: {
+        loading: 'Loading page contents…',
+        truncated: 'First {n} characters — open the editor for the full page.'
+      },
+      tip: {
+        conformance:
+          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+        orphan:
+          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+        near_duplicate:
+          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+        citation:
+          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+        index_failed:
+          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      },
+      piiRescan: 'Re-scan all pages',
+      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanPartial:
+        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+      piiRescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      piiRescanFailed:
+        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
+      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+      piiRescanNoKey:
+        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+      piiStateError: 'Scan error',
+      piiTally: {
+        scanned: '{n} page(s) re-scanned',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'scan error',
+        stillBlocking: 'Still blocking'
+      }
+    },
+    pii: {
+      panel: 'Entidades marcadas',
+      nFlagged: '{n} encontradas',
+      rescan: 'Volver a escanear',
+      stateError: 'Scan failed',
+      errorTitle: 'This page is blocking the hand-off.',
+      errorBody:
+        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+      rescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
+      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
+      scanning: 'Escaneando…',
+      clean: 'Sin entidades marcadas — este concept está limpio.',
+      how: 'Solución: elimínelo o cámbielo (p. ej., por el cargo en lugar del nombre), luego guarde — el nuevo escaneo actualiza esta lista.',
+      descFallback:
+        'Se detectaron datos personales aquí (RGPD Art. 4(1) — relacionados con una persona identificable).',
+      scanError: 'Análisis no disponible',
+      type: {
+        PERSON: 'Nombre de persona',
+        LOCATION: 'Ubicación',
+        DATE_TIME: 'Fecha u hora',
+        EMAIL_ADDRESS: 'Dirección de correo electrónico',
+        PHONE_NUMBER: 'Número de teléfono',
+        IP_ADDRESS: 'Dirección IP',
+        NRP: 'Número de registro nacional',
+        BD_NATIONAL_ID: 'Número de documento nacional de identidad'
+      },
+      desc: {
+        PERSON:
+          'Se detectó el nombre de una persona. Los nombres pueden identificar directamente a una persona física.',
+        LOCATION: 'Se detectó el nombre de un lugar. Combinado con otros datos puede identificar a una persona.',
+        DATE_TIME: 'Se detectó una fecha u hora. Las fechas pueden contribuir a identificar a una persona.',
+        EMAIL_ADDRESS:
+          'Se detectó una dirección de correo electrónico. Identifica directamente a una persona contactable.',
+        PHONE_NUMBER: 'Se detectó un número de teléfono. Identifica directamente a una persona contactable.',
+        IP_ADDRESS: 'Se detectó una dirección IP. Puede identificar un dispositivo o un hogar.',
+        NRP: 'Se detectó un número de registro nacional. Identifica fuertemente a una persona.',
+        BD_NATIONAL_ID: 'Se detectó un número de identificación nacional. Identifica fuertemente a una persona.'
+      },
+      allClear: 'Limpio',
+      redactFile: 'Ocultar archivo completo',
+      confirmRedactFile: 'Confirmar: ¿ocultar el archivo completo?',
+      locateTip: 'Mostrar este texto en el editor',
+      file: {
+        label: 'Archivo completo:',
+        redact: 'Ocultar archivo',
+        remove: 'Eliminar cuerpo',
+        accept: 'Aceptar todo',
+        confirmRedact: 'Confirmar: ¿ocultar el archivo completo?',
+        confirmRemove: 'Confirmar: ¿eliminar todo el cuerpo?'
+      },
+      action: {
+        redact: 'Ocultar',
+        replace: 'Reemplazar',
+        remove: 'Eliminar',
+        accept: 'Aceptar',
+        replacement: 'Texto de sustitución',
+        apply: 'Aplicar',
+        cancel: 'Cancelar'
+      },
+      resolved: {
+        title: 'Procesado en este archivo',
+        redacted: 'Oculto',
+        replaced: 'Reemplazado',
+        removed: 'Eliminado',
+        accepted: 'Aceptado',
+        fileRedacted: 'Archivo ocultado',
+        kept: 'conservado en el texto',
+        removedWord: 'eliminado',
+        wholeFile: 'Cuerpo del archivo completo ocultado'
+      }
+    },
+    lifecycle: {
+      submit: 'Enviar para revisión',
+      approve: 'Aprobar',
+      publish: 'Publicar',
+      ingest: 'Ingestar',
+      retract: 'Retirar',
+      unpublish: 'Despublicar'
+    },
+    src: {
+      title: 'Choose the source documents',
+      hint: 'Pick sources from the document repository, upload new ones from this computer, or both.',
+      repoSec: 'From the document repository',
+      searchPh: 'Search by name or site…',
+      chipsLabel: 'Filter by origin',
+      chipAll: 'All',
+      chipCrawl: 'Crawls',
+      chipUpload: 'Uploads',
+      noMatches: 'Nothing matches this search or filter.',
+      crawlBadge: 'crawl',
+      crawlTip: 'Crawled from: {url}',
+      total: '{n} document(s)',
+      titleSingle: 'Choose the crawled document',
+      loading: 'Loading documents…',
+      retry: 'Retry',
+      empty: 'No documents in the repository yet — upload some below.',
+      more: 'Load more',
+      fsSec: 'From this computer',
+      fsPick: '+ Upload files',
+      uploading: 'Uploading…',
+      uploaded: '{n} file(s) uploaded.',
+      uploadFailed: 'An upload failed — check the files and retry.',
+      fsNote: 'Uploaded files join the document repository and are selected here automatically.',
+      count: 'Selected: {n}',
+      needOne: 'Select at least one source.',
+      confirm: 'Use {n} source(s)',
+      cancel: 'Cancel',
+      loadFailed: 'Could not load the document list.',
+      servingBadge: 'serving free-form RAG',
+      servingTip:
+        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+      alreadyBadge: 'already in an OKF repo',
+      alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
+    },
+    frontmatter: {
+      title: 'Frontmatter tags — what this repo is about',
+      help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',
+      refresh: 'Refresh suggestions',
+      suggesting: 'Curating…',
+      suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestCoverage:
+        'Derivado de {sampled} de {total} conceptos, repartidos en {labels} etiquetas de la jerarquía del conocimiento.',
+      suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
+      removeTag: 'Remove tag',
+      fieldEmpty: '—',
+      addPlaceholder: 'Add {field}',
+      add: 'Add',
+      saving: 'Saving…',
+      save: 'Save tags',
+      saved: 'Saved',
+      error: 'Save failed.',
+      errorWithStep: 'Save failed at step "{step}" ({code}) — retry.',
+      field: {
+        topic: 'Topic',
+        entity: 'Entity',
+        scope: 'Scope',
+        forbidden: 'Forbidden',
+        summary: 'Summary',
+        keyword: 'Keyword'
+      }
+    },
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
+      badge: {
+        present: 'head ready',
+        stale: 'head stale',
+        missing: 'no head'
+      },
+      tab: {
+        head: 'Head',
+        test: 'Test',
+        suites: 'Suites & analytics',
+        ragas: 'Pruebas comparativas de RAGAS',
+        models: 'Modelos'
+      },
+      head: {
+        dim: 'Dimensions',
+        model: 'Model',
+        version: 'Head version',
+        computedAt: 'Computed',
+        staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
+        missingNote:
+          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+        rebuild: 'Rebuild head',
+        rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
+        rebuildBusy: 'Rebuilding — embedding the tag fields…'
+      },
+      test: {
+        placeholder: 'e.g. cancer screening guidelines',
+        run: 'Run test',
+        running: 'Embedding the query and scoring the heads…',
+        adversarial: 'Adversarial — this query should NOT select this repository (a forbidden/adjacent topic)',
+        embeddedWith: 'Embedded with',
+        col: {
+          repo: 'Repository',
+          state: 'State',
+          headScore: 'Head score',
+          rank: 'Rank',
+          claimed: 'Claims query'
+        },
+        provenance: 'Routing provenance',
+        empty:
+          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
+        pass: 'PASS — this repository wins the head routing.',
+        fail: 'FAIL — {repo} wins the head routing for this query.',
+        passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
+        failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
+        passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
+        notSelectedSuppressed:
+          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+        claimed: 'claims',
+        suppressed: 'suppressed'
+      },
+      gate: {
+        title: 'Filtro',
+        floor: 'Piso mínimo',
+        veto: 'Etiquetas prohibidas',
+        margin: 'Margen',
+        claim: 'Reclama',
+        pass: 'pasa',
+        fail: 'falla',
+        na: 'n/a'
+      },
+      counts: {
+        positive: 'Positivas',
+        negative: 'Confundibles',
+        negativeRandom: 'Fuera de dominio',
+        meta: 'Meta',
+        nearMiss: 'Casi acierto',
+        hint: 'Las filas derivadas de etiquetas prohibidas escalan con la cantidad de etiquetas prohibidas del repositorio; no se pueden fijar aquí.'
+      },
+      cls: {
+        nearMiss: 'Casi acierto',
+        confusable: 'Confundible',
+        forbidden: 'Prohibida',
+        offDomain: 'Fuera de dominio',
+        meta: 'Meta'
+      },
+      teach: {
+        claim:
+          'La cabecera RECLAMA esta consulta — pasó las tres compuertas. Si NO debería enrutar aquí, pida etiquetas prohibidas que excluyan su tema, añádalas y reconstruya la cabecera.',
+        explain: 'Explicar y sugerir',
+        explainBusy: 'Explicando — el modelo propone etiquetas prohibidas…',
+        addTag: 'Añadir a etiquetas prohibidas',
+        suggestNone:
+          'No se sugirió ninguna etiqueta prohibida — revise la consulta frente al alcance declarado manualmente.',
+        added: 'Añadidas a las etiquetas prohibidas — reconstruya la cabecera para aplicarlas.',
+        rebuildRerun: 'Reconstruir cabecera y repetir',
+        savingTag: 'Guardando la etiqueta prohibida…',
+        rebuildBusy: 'Reconstruyendo la cabecera y repitiendo…',
+        title: 'Qué significa esto',
+        veto: 'Esta consulta coincide fuertemente con la etiqueta prohibida «{tag}». Si DEBERÍA pertenecer a este repositorio, elimine «{tag}» de las etiquetas prohibidas en el Frontmatter y vuelva a publicar para reconstruir el head.',
+        floor:
+          'La consulta no guarda relación con la temática de este repositorio (puntuación por debajo del piso mínimo del dominio) — ningún cambio de etiquetas lo corrige; es un descarte correcto.',
+        rejected:
+          'Descartado por el guardián — una etiqueta prohibida no debe coincidir con el propio tema de este repositorio.'
+      },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
+      },
+      suites: {
+        generate: 'Generate test suite',
+        generateTip:
+          'El LLM escribe las consultas en lotes de 30 por clase — una petición grande (100+) tarda unos minutos. La suite aparece aquí y en suites guardadas al terminar.',
+        generating: 'Generando por lotes — las peticiones grandes tardan unos minutos…',
+        run: 'Run all queries',
+        running: 'Running every suite query…',
+        current: 'Current suite',
+        col: {
+          query: 'Query',
+          kind: 'Kind',
+          outcome: 'Outcome',
+          run: 'Run',
+          when: 'When',
+          passRate: 'Pass rate',
+          headVersion: 'Head',
+          tags: 'Etiquetas',
+          actions: 'Editar',
+          name: 'Nombre',
+          corpus: 'Corpus'
+        },
+        notEvaluatable: 'not evaluatable (no competitors)',
+        pass: 'pass',
+        fail: 'fail',
+        passRate: 'Pass rate',
+        positives: 'Positives',
+        negatives: 'Negatives',
+        noCompetitors: 'n/a — no competing heads yet',
+        avgMargin: 'Avg margin',
+        steal: '{repo} stole {n} queries',
+        addPlaceholder: 'Your own probe query…',
+        add: 'Add to suite',
+        kindPositive: 'should select',
+        kindNegative: 'should NOT select',
+        history: 'Run history',
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'Explicar fallos',
+        explainBusy: 'Explicando los fallos — una llamada al modelo para cada negativo fallido…',
+        batchTitle: 'Por qué los negativos fallidos enrutaron aquí',
+        batchNone:
+          'No se sugirió ninguna corrección — revise las consultas fallidas frente al alcance declarado manualmente.',
+        addAll: 'Añadir todas',
+        rebuildRerun: 'Reconstruir cabecera y repetir la suite',
+        positiveFailuresTitle: 'Por qué los positivos dejaron de pasar',
+        positiveFailures:
+          '{n} prueba(s) positiva(s) fueron suprimidas en esta ejecución — las etiquetas prohibidas sobre-coinciden con el alcance del repositorio.',
+        vetoedBy: 'Vetado por',
+        marginKilled: '{n} prueba(s) positiva(s) perdieron por margen (sin etiqueta de veto única).',
+        removals: 'Etiquetas a eliminar (vetan los positivos propios de este repositorio)',
+        removeTip: 'Eliminar "{tag}" — vetó {n} prueba(s) positiva(s)',
+        tripwire: 'Este ciclo rompió {n} pruebas positivas — las etiquetas añadidas sobre-suprimen. ¿Revertir?',
+        tripwireRevert: 'Ver opciones de reversión',
+        staleSnapshot:
+          'Las etiquetas cambiaron desde que se generó esta suite — regenere para obtener filas prohibidas actualizadas.',
+        revertTitle: 'Revertir etiquetas',
+        revertForbiddenCount: '{n} etiquetas prohibidas',
+        revertAction: 'Revertir',
+        revertBusy: 'Cargando el historial de guardado…',
+        revertSaving: 'Restaurando el frontmatter…',
+        revertEmpty: 'Aún no hay guardados de frontmatter registrados.',
+        revertDone: 'Frontmatter restaurado — reconstruya la cabecera y vuelva a ejecutar para aplicarlo.',
+        removeTag: 'Quitar de las etiquetas prohibidas',
+        tagsetTip: 'Etiquetas prohibidas de esta ejecución',
+        savedTitle: 'Suites guardadas',
+        savedTip:
+          'Cada suite generada o importada se guarda aquí, por repositorio. Dos tipos comparten esta lista: suites de cabecera (conjuntos de consultas derivados de etiquetas y frontmatter, con recuentos de positivos/negativos) y suites de referencia RAGAS (conjuntos de preguntas con respuestas esperadas, con distintivo RAGAS y recuento de entradas). Cargar muestra una suite de cabecera en esta pestaña y una suite RAGAS en la pestaña RAGAS Benchmarks, donde puede ejecutarse y puntuarse contra el corpus activo. Eliminar borra la suite permanentemente; el renombrado es directo sobre el nombre.',
+        load: 'Cargar',
+        flipTip: 'Cambiar debe-seleccionar / no-debe-seleccionar',
+        deleteTip: 'Quitar esta fila de la suite',
+        namePlaceholder: 'Nombre de la suite (opcional): p. ej. conjunto de regresión ECD',
+        probeTip: 'Probar esta consulta contra el corpus real',
+        deleteSuiteTip: 'Eliminar esta suite y su historial',
+        corpusNeedsIngest: 'Ingera primero el repositorio — la prueba del corpus busca en el corpus ingerido',
+        deleteConfirmTitle: '¿Eliminar esta suite?',
+        deleteConfirmBody: 'Esto elimina permanentemente la suite y su historial de ejecuciones. No se puede deshacer.',
+        deleteConfirm: 'Eliminar suite',
+        deleteCancel: 'Cancelar',
+        unnamedFallback: 'suite sin nombre'
+      },
+      error: {
+        explain: 'La explicación falló',
+        saveTag: 'No se pudo guardar la etiqueta prohibida',
+        rebuild: 'Head rebuild failed',
+        test: 'Routing test failed',
+        generate: 'Suite generation failed',
+        run: 'Suite run failed',
+        add: 'Could not add the query',
+        history: 'No se pudo cargar el historial de guardado',
+        revert: 'No se pudo revertir el frontmatter',
+        advisor: 'Fallo del asesor',
+        noSuite: 'Genera primero una suite y luego reconstruye y relanza.',
+        applyNoSuite: 'Etiquetas guardadas y head reconstruido: genera una suite y ejecuta todo para ver el efecto.',
+        suiteLoad: 'No se pudo cargar la suite',
+        suiteUpdate: 'No se pudo actualizar la suite',
+        suiteRename: 'No se pudo renombrar la suite',
+        generateTimeout:
+          'La suite está tardando demasiado — puede que aparezca en suites guardadas; revise en un minuto.',
+        probe: 'Falló la prueba del corpus',
+        suiteDelete: 'No se pudo eliminar la suite',
+        noFrontmatter:
+          'Este repositorio aún no tiene etiquetas de cabecera: cree etiquetas en el panel Frontmatter (o use Sugerir etiquetas) y luego genere una suite.'
+      },
+      footer: {
+        unpublish: 'Unpublish to review'
+      },
+      publishCard: {
+        present:
+          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
+        stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
+        missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'Asesor: recomendar cambios de etiquetas',
+        busy: 'Simulando cambios de etiquetas en las ejecuciones recientes…',
+        title: 'Recomendación de etiquetas (simulada en las ejecuciones recientes)',
+        apply: 'Aplicar cambios, reconstruir y relanzar la suite',
+        scorecard: 'positivos {p}/{pt} aceptados · negativos {n}/{nt} suprimidos',
+        now: 'Ahora',
+        predicted: 'previsto',
+        scope: ' (sobre {q} consultas de las últimas {r} ejecuciones)',
+        applying: 'Aplicando: guardando etiquetas, reconstruyendo el head, relanzando la suite…',
+        blockedTitle: 'Eliminaciones bloqueadas — haga clic para incluirlas en Aplicar',
+        blockedGain: 'recupera {n} positiva(s)',
+        narrowTitle: 'Reemplazos más estrechos — recupera positivas sin readmitir negativas',
+        narrowChip: 'Quitar la etiqueta amplia, añadir la estrecha',
+        reasonCurator: 'usted declaró esta etiqueta originalmente — confirme antes de quitarla',
+        reasonRotated: 'el historial pasó la línea base — confirme antes de quitarla',
+        scopeDetail: 'suites: {s} · conjuntos de etiquetas: {t}',
+        rowActionsTitle:
+          'Cambios respaldados por el corpus — el corpus responde a estos "negativos": conviértelos en positivos',
+        flipToPositive: 'Convertir en positivo',
+        ungroundedNote:
+          '{n} negativo(s) fallido(s) sin respaldo en el corpus y sin palanca de etiquetas segura: el repositorio competidor debe ganarlos.'
+      },
+      probe: {
+        answerable: 'respondible',
+        weak: 'coincidencia débil',
+        unanswerable: 'no está en el corpus',
+        unknown: 'desconocido',
+        title: 'Prueba del corpus — resumen',
+        close: 'Cerrar el resumen',
+        chunksScanned: 'fragmentos del corpus analizados',
+        headLeg: 'Veredicto Head',
+        headNotClaimed: 'sin atribución',
+        corpusLeg: 'Cobertura del corpus',
+        files: 'Archivos de referencia',
+        colScore: 'Puntuación de rerank',
+        colFile: 'Archivo',
+        colContent: 'Contenido del fragmento'
+      }
+    },
+    ragas: {
+      dropped: {
+        note: '{kept} de {requested} preguntas — {dropped} no se pudieron generar',
+        reason: {
+          rate_limited: 'el modelo limitó la generación por cuota'
+        }
+      },
+      corpus: {
+        capped: 'Basado en {parts} (presupuesto de corpus)',
+        part: '{used} de {total} fragmentos'
+      },
+      gen: {
+        eta: 'quedan ~{t}',
+        elapsed: 'en ejecución {t}',
+        calls: '{n} llamadas al LLM',
+        replays: '{n} llamadas reproducidas desde la caché',
+        underMin: 'menos de un minuto',
+        minutes: '{m} min',
+        hours: '{h} h {m} min'
+      },
+      paneTitle: 'Pruebas comparativas de RAGAS',
+      about:
+        'RAGAS puntúa qué tan bien el asistente recupera y responde — fidelidad, precisión y recuperación de contexto, relevancia de la respuesta y más. Ejecute una suite de pruebas comparativas para medir el repositorio como base de conocimiento.',
+      aboutLabel: '¿Qué es RAGAS?',
+      aboutLink: 'Lea más en ragas.io',
+      help: {
+        show: 'Ayuda',
+        hide: 'Ocultar ayuda',
+        more: 'Lea más en ragas.io',
+        repositories: {
+          title: 'Repositorios',
+          text: 'Qué repositorios alimentan la generación — solo el actual, o junto con relacionados. Varios repositorios permiten que las preguntas de saltos múltiples crucen sus fronteras.'
+        },
+        questions: {
+          title: 'Preguntas',
+          text: 'Cuántas preguntas sintetizar (20 por defecto). Los conjuntos más grandes tardan proporcionalmente más en generarse y ejecutarse.'
+        },
+        singleHop: {
+          title: 'Salto único %',
+          text: 'Proporción de preguntas extraídas de un solo concepto.'
+        },
+        multiAbstract: {
+          title: 'Saltos múltiples (abstracto) %',
+          text: 'Proporción de preguntas que combinan varios conceptos y razonan más allá de su texto literal.'
+        },
+        multiSpecific: {
+          title: 'Saltos múltiples (específico) %',
+          text: 'Proporción de preguntas que combinan varios conceptos manteniéndose fieles a su redacción exacta. Las tres proporciones deben sumar 100.'
+        },
+        personas: {
+          title: 'Personas',
+          text: 'Cuántas personas sintéticas varían la formulación y la perspectiva de las preguntas generadas.'
+        },
+        generate: {
+          title: 'Generar',
+          text: 'Construye la suite con el LLM: primero un recorrido del grafo de conocimiento sobre el corpus (la parte que tarda minutos), luego la síntesis de preguntas. Se ejecuta en segundo plano — puede cerrar el Lab sin perder nada. Eliminar una suite en generación cancela el trabajo.'
+        },
+        importSuite: {
+          title: 'Importar suite (.xlsx)',
+          text: 'Carga una suite existente en el formato xlsx de pruebas comparativas, compatible con el flujo de referencia de tests/rag-benchmarks.'
+        },
+        entries: {
+          title: 'Entradas de la prueba comparativa',
+          text: 'Una fila por pregunta con su respuesta esperada y pasajes de referencia. Edite una pregunta, pruébela contra el corpus real, sáquela del alcance (se conserva por contraste, excluida de la puntuación) o elimínela.'
+        },
+        metrics: {
+          title: 'Métricas',
+          text: 'Las cuatro predeterminadas — fidelidad, precisión del contexto, exhaustividad del contexto, pertinencia de la respuesta — más el catálogo ampliado de RAGAS. Las métricas que necesitan un modelo de embeddings se descartan con un aviso cuando no hay ninguno configurado.'
+        },
+        run: {
+          title: 'Ejecutar la prueba comparativa',
+          text: 'Repite la recuperación para cada entrada, genera respuestas y luego el modelo juez puntúa cada respuesta contra las referencias. El progreso se informa por fase; los resultados llegan al completarse la ejecución.'
+        },
+        results: {
+          title: 'Resultados',
+          text: 'Medias de las métricas como medidores con umbrales de aprobación, la tendencia entre ejecuciones y el detalle por pregunta con cada respuesta y sus puntuaciones.'
+        },
+        explain: {
+          title: 'Explicar los fallos',
+          text: 'Atribuye cada fila fallida a la recuperación, a la respuesta o a la propia referencia — y sugiere correcciones cautelosas, incluidos cambios a nivel de repositorio como etiquetas y curaduría de conceptos.'
+        },
+        exports: {
+          title: 'Exportaciones',
+          text: 'Suites y resultados como xlsx (compatibles con las herramientas de pruebas comparativas) y un informe PDF de los gráficos.'
+        }
+      },
+      // GUIDE (David, 2026-10-23) — the operator playbook behind
+      // the "Guide" button. See en.js for the key-shape contract.
+      guide: {
+        open: 'Guía',
+        title: 'Guía de pruebas comparativas con RAGAS',
+        intro:
+          'Cómo construir, curar y ejecutar suites de pruebas comparativas — qué hacer, qué evitar y qué esperar en cada paso. El panel de Ayuda junto a este botón documenta los controles; este documento las decisiones.',
+        close: 'Cerrar',
+        more: 'Lea más en ragas.io',
+        labels: {
+          do: 'Haga esto',
+          dont: 'No',
+          expect: 'Qué esperar'
+        },
+        chapters: {
+          generate: {
+            title: 'Construir la suite',
+            intro:
+              'Una suite solo es tan buena como el corpus del que se generó. La generación es un trabajo del LLM en dos fases y es la mitad costosa de todo el flujo: primero un recorrido del grafo de conocimiento sobre el corpus que seleccionó y luego la síntesis de preguntas.',
+            d1: 'Publique antes de generar. La generación lee conceptos del repositorio, y una suite construida sobre un repositorio sin publicar o que aún se está drenando mide un corpus que el asistente realmente no puede ver.',
+            d2: 'Lea la nota de cobertura. Cuando el corpus es más grande que el presupuesto de fragmentos (1,600 fragmentos por defecto), la suite lo dice — «fundamentada en 1600 de 5590 fragmentos». Esa es una prueba comparativa válida de una porción, nunca del repositorio completo. Aumente OKF_RAGAS_MAX_CORPUS_CHUNKS si necesita todos.',
+            d3: 'Dimensione la suite según la pregunta que se está haciendo. Veinte preguntas son una prueba de humo, cien son una comparación. El costo crece de forma aproximadamente lineal en ambas ramas, y la rama de puntuación la domina.',
+            d4: 'Mezcle a propósito la distribución de saltos. El single-hop prueba la recuperación; el multi-hop (específico) prueba que el reranker combina la evidencia; el multi-hop (abstracto) prueba que el modelo razona más allá del texto literal. Una suite 100 % single-hop nunca puede revelar un fallo de composición.',
+            x1: 'No genere contra un repositorio que esté a medio drenar. Los conceptos que aún se están indexando son invisibles para la recuperación, así que la suite se escribe contra un corpus que diferirá del que después puntúe.',
+            x2: 'No lea los primeros minutos de la barra de progreso como una paralización. La fase del grafo de conocimiento puede permanecer sin completar un lote durante mucho tiempo; el reloj transcurrido y el contador de llamadas al modelo son las señales honestas.',
+            x3: 'No lea una suite corta como una buena generación. Los modelos con límite de cuota pierden preguntas, y el panel informa cuántas se descartaron. Revise la cantidad descartada antes de confiar en la suite.',
+            expect:
+              'Presupueste aproximadamente una llamada al modelo por fragmento del corpus en la fase del grafo, más unas cuantas por pregunta. En un corpus de 1,075 fragmentos, esa sola fase ha tardado más de dos horas. La generación continúa en segundo plano — puede cerrar el Lab y volver más tarde.'
+          },
+          curate: {
+            title: 'Mejorar la suite',
+            intro:
+              'Una suite generada es un primer borrador. Las dos mitades de cada entrada — la pregunta y la respuesta esperada — fueron escritas por una máquina, y la medición es tan confiable como ellas.',
+            d1: 'Pruebe antes de conservar. El botón ▶ ejecuta una pregunta contra el corpus real e informa si siquiera es respondible. Una pregunta que no devuelve nada es una pregunta sobre contenido que usted no tiene.',
+            d2: 'Marque las irrelevantes como fuera de alcance en lugar de eliminarlas. Las filas fuera de alcance se conservan para contraste y se excluyen de la puntuación. Eliminarlas pierde el hecho de que existieron.',
+            d3: 'Corrija la respuesta esperada, no la pregunta, cuando la referencia está mal. Las métricas faithfulness y answer relevancy se miden contra la referencia, de modo que una referencia que ningún modelo podría producir castiga una respuesta correcta.',
+            d4: 'Agregue sus propias preguntas difíciles. El generador escribe preguntas que el corpus responde de forma literal. Los fallos que vale la pena encontrar son los que escribe un curador desde la experiencia — la redacción ambigua, los dos documentos que se contradicen, el dato que se enuncia una vez y nunca se repite.',
+            x1: 'No reescriba una pregunta para que coincida con lo que el sistema responde hoy. Eso convierte la prueba comparativa en un test de regresión de la puntuación actual y oculta exactamente el defecto que buscaba.',
+            x2: 'No escale a una pregunta por concepto sin probar antes. La generación lee un presupuesto de fragmentos, no la estructura de sus documentos, así que una pregunta puede apoyarse en un pasaje que nunca estuvo en el corpus.',
+            x3: 'No cure contra una puntuación. Cure antes de ejecutar; editar la suite después de ver un resultado mueve la vara e invalida la comparación.',
+            expect:
+              'Cuarenta buenas preguntas son mejores que cien mezcladas. La cobertura del conjunto de conceptos importa más que el número en bruto — una suite que se deja la mitad de sus conceptos informará encantada una media alta para la mitad que sí cubre.'
+          },
+          run: {
+            title: 'Ejecutar la prueba comparativa',
+            intro:
+              'Una ejecución tiene tres fases — recuperación, respuesta y juicio — que se informan por separado para que siempre sepa en cuál está esperando. Solo la tercera consume llamadas al modelo juez, y es donde se va el tiempo.',
+            d1: 'Ejecute primero las cuatro predeterminadas: faithfulness, context precision, context recall y answer relevancy son el núcleo comparable. El catálogo ampliado multiplica el costo, no la información, hasta que ya sabe dónde está el fallo.',
+            d2: 'Vigile el contador de llamadas, no solo la barra. La fase de juicio avanza una fila a la vez, y en un endpoint de modelo con carga alta una ejecución choca con el límite de cuota con tanta frecuencia que los reintentos dominan el tiempo real. Un contador congelado con un reloj en marcha significa reintentos, no una ejecución colgada.',
+            d3: 'Cancele en lugar de abandonar. «Cancelar ejecución» detiene la ejecución de forma limpia y registra lo que se completó; cerrar la pestaña del navegador no — la ejecución sigue adelante y usted pierde la vista en vivo de ella.',
+            d4: 'Mantenga una sola ejecución por repositorio a la vez. Las ejecuciones comparten el endpoint del modelo; dos ejecuciones concurrentes se reparten el rendimiento y ambas se ralentizan, y ninguna informa por qué.',
+            x1: 'No compare una ejecución de cuatro métricas con una de diez métricas. El catálogo ampliado cambia el tiempo real unas cuatro veces, y las medias no son una serie comparable.',
+            x2: 'No vuelva a ejecutar para reemplazar una cifra que no le gustó. Una nueva ejecución con un modelo juez distinto, un top-N de recuperación distinto o una suite editada es una medición nueva — regístrela como tal.',
+            x3: 'No inicie una ejecución mientras una ingesta se está drenando. A medio drenar, parte del corpus falta en la recuperación, y la puntuación cae por un motivo que no tiene nada que ver con sus cambios.',
+            expect:
+              'Cuatro métricas cuestan aproximadamente siete llamadas al juez por pregunta — 7,1 medidos en una ejecución de cien preguntas. Eso da alrededor de una hora y media por cada cien preguntas en un endpoint con límite de cuota, y más cuando el modelo está más cargado. Tómelo como un mínimo, no como una promesa: el reloj y el contador de llamadas de la propia ejecución son la autoridad.'
+          },
+          models: {
+            title: 'Modelos, y qué esperar',
+            intro:
+              'Participan tres modelos distintos y no son intercambiables: el modelo que responde, el modelo que juzga y el modelo que genera los embeddings. Mueven la puntuación por motivos completamente diferentes.',
+            d1: 'El modelo de respuesta es el que está bajo prueba — pero en el Lab las respuestas vienen del modelo de chat DESPLEGADO, a través de la cadena desplegada, así que cambiar el modelo de chat del despliegue cambia la respuesta. La vía de reproducción sin conexión (la recuperación y la respuesta reproducidas dentro del servidor OKF) existe para ejecuciones whatif y hoy no se puede iniciar desde el Lab, de modo que la opción «respuestas de benchmark» no cambia ninguna prueba comparativa que pueda ejecutar aquí.',
+            d2: 'El juez debe ser fuerte y estable. Puntúa contra las referencias, de modo que un juez débil deprime todas las métricas a la vez y la ejecución sigue pareciendo completa. Las respuestas del juez se guardan en caché por identidad de juez — cambiar el juez o el modelo invalida esa caché y vuelve a puntuar cada fila.',
+            d3: 'El modelo de embeddings forma parte de la medición de la recuperación. Cámbielo y se mueven las métricas context precision y context recall, mientras que la puntuación de faithfulness por lo general no se mueve. Esa asimetría es una señal sobre dónde aterrizó el cambio, no ruido.',
+            d4: 'Registre el modelo junto con la ejecución. Cada ejecución guarda qué configuración y qué modelo produjeron las respuestas y las puntuaciones; dos ejecuciones solo son comparables cuando esos elementos coinciden.',
+            x1: 'No espere que un cambio de puntuación sea atribuible salvo que se haya movido exactamente una cosa. Una ejecución con un modelo de respuesta nuevo, un juez nuevo y un modelo de embeddings nuevo mide las tres cosas a la vez y no puede separarlas.',
+            x2: 'No lea una puntuación alta de faithfulness como un buen resultado por sí sola. Una puntuación alta de faithfulness con un context recall bajo significa que la respuesta está fundamentada en lo que se recuperó — y lo que se recuperó es demasiado poco.',
+            x3: 'No trate un modelo de razonamiento como algo gratuito. Gasta cientos de tokens antes de escribir una palabra; cuando el presupuesto de respuesta es menor que eso, cada respuesta se trunca, se descarta y se vuelve a llamar, y la ejecución paga dos veces por cada pregunta sin que se note.',
+            expect:
+              'Espere que la ejecución se ralentice y que la puntuación se mueva cada vez que cambie un modelo. Ninguna de las dos direcciones es un veredicto sobre el modelo: el juez, los parámetros de recuperación y la suite deciden en conjunto cuánto de ese movimiento es real.'
+          },
+          read: {
+            title: 'Leer los resultados',
+            intro:
+              'Cada métrica de RAGAS mide algo distinto, y una de ellas funciona al revés. Lea cada cifra por lo que realmente mide antes de actuar en consecuencia.',
+            d1: 'Lea primero el aviso de ejecución no válida. Una ejecución cuyas respuestas fallaron, o en la que ninguna métrica cubrió todas las filas dentro del alcance, no es una medición — las medias de abajo cubren únicamente las filas que sí se puntuaron.',
+            d2: 'Verifique la dirección de cada métrica. Casi todas son «cuanto más, mejor». La métrica noise sensitivity es la excepción: cuanto más bajo, mejor, así que una ejecución que puntúa mal en ella está fallando por el lado bueno.',
+            d3: 'Lea las filas que fallaron, no solo la media. Una pregunta rota entre cuarenta desplaza la media más que el cambio que intentaba medir.',
+            d4: 'Use Explain failures antes de cambiar nada. Atribuye cada fila fallida a una etapa demostrada contra el corpus — retrieved, reranker, vector-recall, corpus, judge, answer o unmeasured — y muestra dónde se perdió el pasaje y en qué puesto habría quedado. Un veredicto corpus significa que el pasaje esperado no está en el corpus: esa pregunta es injusta, mide el benchmark y no al asistente, y se marca así para que regenere la entrada en lugar de escribir contenido que ya existe. Sus sugerencias están protegidas: propone, usted decide.',
+            x1: 'No compare medias entre conjuntos de métricas distintos, jueces distintos o una suite editada. Ninguno de esos casos es la misma medición, y la diferencia que ve no es un cambio de calidad.',
+            x2: 'No ajuste la recuperación contra una sola cifra. La precisión y la exhaustividad se compensan entre sí; un cambio que eleva una normalmente cuesta la otra, y el intercambio suele ser la parte interesante.',
+            x3: 'No trate una puntuación nula como una puntuación baja. Un reintento agotado produce un nulo que se excluye de la media, así que sin puntuación no hay medición — vuelva a ejecutar la fila en lugar de asumir lo peor.',
+            expect:
+              'Una cifra de prueba comparativa es una comparación entre ejecuciones de la misma suite, no una calificación para el asistente. Exporte el xlsx cuando necesite conservar la evidencia: la línea de tendencia del panel solo conserva las ejecuciones guardadas en este repositorio.',
+            table: {
+              title: 'Lo que hay en pantalla, y qué significa',
+              col: {
+                element: 'En pantalla',
+                meaning: 'Qué es',
+                effect: 'Qué hacer con ello'
+              },
+              mean: {
+                element: 'La media',
+                meaning:
+                  'La media de esa métrica sobre las filas que el juez puntuó. No es una puntuación de todo el conjunto.',
+                effect:
+                  'Léala junto a la fracción que tiene al lado. Una media sobre unas pocas filas mide esas filas, no el conjunto.'
+              },
+              coverage: {
+                element: 'La fracción (55/100)',
+                meaning:
+                  'El juez midió esa métrica en 55 de las 100 filas del conjunto dentro del alcance. La media cubre solo esas 55 filas; las otras 45 quedan fuera — nunca se cuentan como cero. Los controles fuera de alcance no forman parte de las 100.',
+                effect:
+                  'Una fracción pequeña significa que el número dice poco sobre el conjunto. Revise la métrica que le importa, no el proceso completo.'
+              },
+              banner: {
+                element: 'El banner de proceso no válido',
+                meaning:
+                  'La ejecución tuvo respuestas fallidas, o ninguna métrica cubrió todas las filas dentro del alcance. Su cifra de cobertura es la métrica mejor cubierta, así que una métrica en 21/100 no lo activa.',
+                effect: 'Lea usted mismo las fracciones por métrica. El banner es un suelo, no un resumen.'
+              },
+              runName: {
+                element: 'El nombre del proceso y su juez',
+                meaning:
+                  'El juez que puntuó ese proceso, y la configuración de la que salió. La clave debajo es para soporte.',
+                effect:
+                  'Dos procesos con jueces distintos no son la misma medición. Compare cosas equivalentes, o vuelva a puntuar uno de ellos.'
+              },
+              rescore: {
+                element: 'Volver a puntuar',
+                meaning:
+                  'Vuelve a puntuar las mismas respuestas con el juez que usted elija — las respuestas y los contextos se copian tal cual, no se recupera ni se escribe nada. El diálogo precarga el juez propio de la ejecución de origen, de modo que volver a puntuar por defecto es una comprobación de ESTABILIDAD (¿es reproducible este juez?), no una segunda opinión.',
+                effect:
+                  'Para averiguar si un fallo es la severidad del juez o un fallo real, vuelva a puntuar con un juez DISTINTO. Dos jueces sobre las mismas filas es mucho más barato que una ejecución nueva, y así se prueba un cambio de juez.'
+              },
+              status: {
+                element: 'El estado',
+                meaning: 'Si el proceso ha terminado. Las medias de un proceso en curso todavía se mueven.',
+                effect: 'Espere a que termine antes de leer un número.'
+              }
+            }
+          },
+          errors: {
+            title: 'Errores, y qué le hacen al resultado',
+            intro:
+              'Un benchmark nunca mide todas las filas de cada conjunto de pruebas: una fila puede fallar en la cadena, el asistente puede negarse a responder, el juez puede no ser capaz de medir una métrica, y una métrica puede quedar por debajo de su umbral. Nada de eso es un cero y nada de eso está oculto. Este capítulo es el mapa — qué significa cada estado y qué le hace al número que está leyendo. Una cosa que conviene saber antes de leerlo: una fila que NO produjo RESPUESTA nunca se entrega al juez — no hay nada con qué juzgarla — así que queda fuera de las medias, nunca se cuenta como un cero y además reduce la cobertura medida. Un RECHAZO no es una sola cosa, sino dos. Un rechazo que llegó CON respuesta sí se juzgó: sin nada que lo respaldara, sus métricas de contexto volvieron como 0, así que esos ceros SÍ cuentan en las medias. Un rechazo que llegó SIN respuesta no se juzgó en absoluto: no lleva ninguna puntuación, queda fuera de las medias y reduce la cobertura medida igual que una fila con error. Por eso una ejecución con una fila fallida o no juzgada se marca como inválida en lugar de considerarse fiable.',
+            d1: 'Lea primero el aviso de ejecución no válida y después las medias. Significa que las puntuaciones de abajo no son una medición del sistema, y el aviso nombra la causa: respuestas que fallaron, o un juez que midió solo una parte de la suite. Corrija la causa y vuelva a ejecutar.',
+            d2: 'Revise la cobertura de cada métrica antes de comparar dos ejecuciones. El panel indica cuántas filas midió realmente el juez para esa métrica; una media sobre una fracción de la suite no es la puntuación de la suite, y no es comparable con una ejecución que midió todas.',
+            d3: 'Corrija una fila con error en su causa: la cadena de recuperación, el servicio previo, el tiempo de espera agotado; y vuelva a ejecutar. Modificar la suite para quitar la fila que una y otra vez falla oculta precisamente el defecto que la prueba comparativa existe para encontrar.',
+            d4: 'Trate un rechazo como un resultado, no como un defecto. Un rechazo que llegó con respuesta dice que el asistente juzgó que el corpus no responde a la pregunta, lo cual es una propiedad del corpus y de la pregunta. Léala como la cobertura de lo que sus usuarios se van a encontrar.',
+            x1: 'No lea una métrica no medida como un cero. Un juez cuya respuesta la métrica no pudo analizar deja esa métrica en null para esa fila; null queda fuera de la media y nunca se promedia como un fallo.',
+            x2: 'No cuente un rechazo como un error, ni tampoco como un acierto. Se informa en su propia columna precisamente porque no es ni lo uno ni lo otro — y un rechazo que llegó sin respuesta no se juzgó en absoluto, así que tampoco aporta ningún cero.',
+            x3: 'No publique una cifra de una ejecución que el panel marcó como no válida, y no promedie dos ejecuciones para disimularlo. Una ejecución medida solo en parte no tiene cifra que publicar: tiene una ejecución que arreglar.',
+            expect:
+              'Una ejecución limpia no tiene filas con error, no tiene filas no juzgadas y cada métrica está medida en todas las filas dentro del alcance; ese es el único estado en el que las medias son la prueba comparativa. Todo lo demás es una ejecución que arreglar, no un resultado sobre el que actuar.',
+            table: {
+              title: 'Cómo se refleja cada estado en el resultado',
+              col: {
+                state: 'Estado',
+                meaning: 'Qué significa',
+                effect: 'Qué le hace al resultado'
+              },
+              error: {
+                state: 'error',
+                meaning:
+                  'La canalización falló en esta fila — la recuperación, un servicio previo o un tiempo de espera agotado. No se produjo ninguna respuesta.',
+                effect:
+                  'La fila NO se entrega al juez — no tiene respuesta, y no hay nada con qué juzgarla. No lleva ninguna puntuación: queda fuera de las medias (nunca se cuenta como un cero) y se cuenta en la columna de error, y el run se marca como inválido — el banner dice que las puntuaciones no son una medición del sistema. Corrige la causa — la cadena de recuperación, el servicio aguas arriba, el tiempo de espera — y vuelve a ejecutar. Las filas que sí respondieron siguen puntuándose, pero un run medido parcialmente es un run que hay que arreglar, no un resultado que publicar.'
+              },
+              abstained: {
+                state: 'abstención',
+                meaning:
+                  'El asistente se negó a responder pero aun así produjo una respuesta — chatqna lo dijo, o se mostró cauto. La canalización no falló.',
+                effect:
+                  'La fila SÍ se entrega al juez, así que aporta una puntuación — sin nada que la respalde, las métricas de contexto vuelven con 0, y esos ceros SÍ se cuentan en las medias. Cuenta en su propia columna, nunca en la de errores y, por sí sola, no invalida la ejecución. El panel la etiqueta como «abstención» en lugar de aprobado o fallido. Un rechazo que NO produjo respuesta es un estado distinto — vea «rechazado, no juzgado».'
+              },
+              declinedUnjudged: {
+                state: 'rechazado, no juzgado',
+                meaning:
+                  'El asistente se negó a responder y no dijo nada — no se produjo ninguna respuesta. La canalización no falló.',
+                effect:
+                  'La fila NO se entrega al juez — no tiene respuesta, así que no hay nada con qué juzgarla. No lleva ninguna puntuación: queda fuera de las medias (nunca se cuenta como un cero), reduce la cobertura medida y puede marcar la ejecución como inválida. El panel la etiqueta como «rechazado — no juzgado» para que pueda distinguirla de un rechazo que sí se juzgó.'
+              },
+              unmeasured: {
+                state: 'sin medir',
+                meaning:
+                  'El juez produjo una respuesta que esa métrica no pudo analizar, por ejemplo una afirmación de corrección factual que no pudo verificar.',
+                effect:
+                  'Esa métrica queda en null para esa fila: se excluye de la media, nunca es un cero. El panel muestra cuántas filas midió realmente el juez para ella. Una métrica en 21/100 NO invalida una ejecución — el aviso solo aparece cuando NINGUNA métrica cubrió todas las filas dentro del alcance, así que lea usted mismo las fracciones por métrica.'
+              },
+              belowThreshold: {
+                state: 'por debajo del umbral',
+                meaning: 'La métrica se midió y su puntuación queda por debajo de la barra fijada para ella.',
+                effect:
+                  'La fila FALLA en esa métrica. Una fila falla si falla cualquiera de las métricas seleccionadas.'
+              },
+              outOfScope: {
+                state: 'fuera de alcance',
+                meaning:
+                  'La pregunta es deliberadamente sin respuesta: se conserva en la suite como contraste, nunca como prueba.',
+                effect:
+                  'Nunca se cuenta como un fallo y nunca entra en una media: es un control, no un resultado. El panel no lo apila en la barra de resultados, y su puntuación no entra ni en un promedio ni en una fracción de cobertura.'
+              }
+            }
+          }
+        }
+      },
+      current: 'actual',
+      generate: {
+        title: 'Generar una suite de pruebas comparativas',
+        hint: 'Sintetiza preguntas con salidas esperadas a partir de los repositorios seleccionados — uno o más: el actual solo o junto con repositorios relacionados.',
+        size: 'Preguntas',
+        config: 'Configuración del modelo de generación',
+        default: 'Predeterminado del despliegue (.env)',
+        defaultNamed: 'Configuración activa — {name}{model}',
+        effective: 'Evaluando con {name}{model}',
+        effectiveGenerating: 'Generando con {name}{model}',
+        envDefault: 'valor por defecto del entorno',
+        envJudge: 'Predeterminado del despliegue (.env){model}',
+        envJudgePlain: 'Predeterminado del despliegue (.env)',
+        model: 'Modelo',
+        modelPick: 'Predeterminado de la configuración',
+        modelDefault: 'predeterminado de la configuración',
+        note: 'El modelo que sintetiza preguntas y puntúa respuestas. Una configuración activa (★, pestaña Modelos) se aplica automáticamente; elegir una aquí la sobrescribe solo para esta operación. Jueces más potentes mejoran notablemente el recall de entidades y la calidad de los consejos.',
+        single: 'Salto único %',
+        multiAbstract: 'Saltos múltiples (abstracto) %',
+        multiSpecific: 'Saltos múltiples (específico) %',
+        personas: 'Personas',
+        button: 'Generar',
+        working: 'Generando — esto tarda unos minutos…',
+        cancel: 'Cancelar',
+        cancelling: 'Cancelando…',
+
+        inFlight: 'Ya se está generando una suite de benchmarks para este repositorio: te estamos conectando a ella.'
+      },
+      import: {
+        button: 'Importar suite (.xlsx)',
+        working: 'Importando…'
+      },
+      suite: {
+        namePlaceholder: 'Nombre de la prueba comparativa (opcional)',
+        add: 'Añadir pregunta',
+        addPrompt: 'Pregunta a añadir:',
+        addReference: 'Respuesta esperada (opcional):',
+        flipTip: 'Alternar dentro del alcance / fuera del alcance',
+        probeTip: 'Probar esta pregunta contra el corpus real',
+        removeTip: 'Quitar esta pregunta'
+      },
+      col: {
+        query: 'Pregunta',
+        reference: 'Respuesta esperada',
+        passages: 'Pasajes',
+        scope: 'Alcance'
+      },
+      oos: 'fuera del alcance',
+      inscope: 'dentro del alcance',
+      metrics: {
+        label: 'Métricas:'
+      },
+      run: {
+        button: 'Ejecutar la prueba comparativa',
+        working: 'Ejecutando…',
+        judge: 'Configuración del modelo juez',
+        retrieved: 'recuperados',
+        pass: 'aprobado',
+        fail: 'fallido',
+        abstained: 'abstenido',
+        declinedUnjudged: 'rechazado — no juzgado',
+        rowError: 'error',
+        cancel: 'Cancelar ejecución',
+        phase: {
+          'building-knowledge-graph': 'Construyendo el grafo de conocimiento',
+          'synthesizing-questions': 'Sintetizando preguntas',
+          retrieval: 'recuperando',
+          judge: 'calificando'
+        }
+      },
+      export: {
+        suite: 'Exportar suite (.xlsx)',
+        results: 'Exportar resultados (.xlsx)'
+      },
+      results: {
+        title: 'Resultados de la prueba comparativa',
+        failing: '{n} con fallos',
+        advisorHint:
+          '{n} preguntas están por debajo de sus umbrales de métricas. Ejecute el asesor para atribuir cada fallo a una etapa del pipeline y obtener acciones concretas.',
+        copy: 'Copiar la respuesta completa',
+        coverageTitle: 'El juez puntuó esta métrica en {n} de {total} filas — la puntuación solo cubre esas filas.',
+        colResizeTip: 'Arrastre el tirador para redimensionar — doble clic en el encabezado para restablecer',
+        trendTitle: 'Tendencia de métricas por ejecución',
+        trendNote:
+          'Cada línea es la media de una métrica RAGAS por ejecución, de la más antigua a la más reciente, y nunca cruza un límite de juez — cada etiqueta del eje X nombra al juez que puntuó la ejecución. Las respuestas juzgadas se cachean; repeticiones idénticas solo difieren donde cambió la respuesta o la recuperación.',
+        trendMixedJudges:
+          'Los jueces difieren entre estas ejecuciones — compare dentro de un segmento del mismo juez, no entre segmentos',
+        statusTitle: 'Resultados por pregunta',
+        statusNote:
+          'Cada pregunta dentro del alcance de esta ejecución, apilada por resultado: respondida, reprobada (alguna métrica elegida por debajo de su umbral), abstención (quien responde se abstuvo) o error de pipeline (la cadena falló en esa fila). Los controles fuera de alcance no se cuentan — son un control, no un resultado.',
+        allPass: 'todas superadas',
+        invalidTitle: 'Esta ejecución no es una medición válida',
+        invalidPill: 'ejecución no válida',
+        invalidErrors:
+          '{n} de {total} respuestas fallaron — estas puntuaciones no miden el sistema. Vuelve a ejecutar la prueba.',
+        invalidCoverage:
+          'El juez midió {measured} de {total} filas — los promedios siguientes cubren solo las filas evaluadas.',
+        failingShort: 'con fallos',
+        answer: 'Respuesta',
+        state: 'Estado',
+        error: 'error',
+        abstained: 'abstenido',
+        declinedUnjudged: 'rechazado — no juzgado',
+        declinedUnjudgedTitle:
+          'Quien responde se negó y no dijo nada, así que esta fila nunca se entregó al juez. No lleva puntuación y queda fuera de las medias — y reduce la cobertura medida.',
+        answered: 'respondido',
+        noisy: 'respuesta correcta — ruido de recuperación',
+        noisyTitle:
+          'La respuesta superó todas las métricas de calidad de la respuesta; solo el conjunto de contextos entregado (precisión/exhaustividad) quedó por debajo del umbral',
+        pdf: 'Exportar informe PDF'
+      },
+      explain: {
+        button: 'Explicar los fallos',
+        working: 'Explicando fallos…',
+        advising: 'El asesor está pensando — {n} filas fallidas',
+        guarding: 'Verificando sugerencias de etiquetas…',
+        title: 'Atribución de fallos y consejos',
+        none: 'No hay filas fallidas que atribuir.',
+        stage: 'Etapa',
+        fails: 'Métricas fallidas',
+        recommendation: 'Recomendación',
+        unfair: 'pregunta injusta',
+        unfairTitle: 'El pasaje esperado no está en el corpus: esta fila evalúa el benchmark, no al asistente',
+        evidenceTitle:
+          'Pasajes encontrados en el corpus / conjunto de candidatos / entregados al modelo. Método: {method}',
+        facts: 'Datos de la ejecución: {rows} filas · {abstentions} abstenciones · ~{chars} caracteres por respuesta',
+        rankTitle: 'El pasaje está en el corpus pero fuera del conjunto de candidatos: ocupa la posición #{n}.'
+      },
+      history: {
+        title: 'Historial de ejecuciones',
+        run: 'Ejecución',
+        when: 'Cuándo',
+        status: 'Estado',
+        load: 'Ver',
+        delete: 'Eliminar',
+        rescore: 'Reevaluar',
+        rescoreOf: 'reevaluado desde {key}',
+        judgeEnv: 'predeterminado del sistema',
+        judgeUnknown: 'Juez no registrado'
+      },
+      rescore: {
+        title: 'Reevaluar con otro juez',
+        body: 'Las respuestas almacenadas se reevalúan con otro juez: no se regeneran. El resultado es una ejecución independiente.',
+        source: 'Ejecución de origen',
+        judge: 'Configuración del juez',
+        confirm: 'Reevaluar',
+        failed: 'No se pudo reevaluar la ejecución.'
+      },
+      runDelete: {
+        title: 'Eliminar ejecución',
+        body: 'Esto elimina de forma permanente la ejecución y su explicación de fallos. La suite y sus preguntas se conservan.',
+        confirm: 'Eliminar',
+        inFlight: 'Esta ejecución sigue en curso — cancélala primero.',
+        explainInFlight: 'Hay una explicación de fallos en curso para esta ejecución — espera a que termine.',
+        failed: 'No se pudo eliminar la ejecución.'
+      },
+      advice: {
+        knob: 'parámetro',
+        tag: 'etiqueta del repositorio',
+        content: 'contenido',
+        prompt: 'prompt',
+        env: 'cambios de entorno',
+        envComponent: 'componente',
+        envChange: 'cambio',
+        envTargets: 'objetivos',
+        envWhy: 'por qué',
+        envTradeOff: 'contrapartida',
+        envApply: 'cómo aplicar',
+        envVerify: 'verificar'
+      },
+      metric: {
+        faithfulness: 'fidelidad',
+        context_precision: 'precisión del contexto',
+        context_recall: 'exhaustividad del contexto',
+        answer_relevancy: 'pertinencia de la respuesta',
+        context_utilization: 'utilización del contexto',
+        context_entities_recall: 'exhaustividad de entidades del contexto',
+        factual_correctness: 'corrección factual',
+        answer_correctness: 'corrección de la respuesta',
+        answer_similarity: 'similitud de la respuesta',
+        noise_sensitivity: 'sensibilidad al ruido',
+        note: {
+          faithfulness:
+            'Qué tan fundamentada está la respuesta en los pasajes recuperados: la proporción de afirmaciones que las fuentes respaldan. Bajo significa que la respuesta afirma cosas que la evidencia no dice (alucinación).',
+          context_precision:
+            'Si los pasajes que importan quedaron arriba del conjunto recuperado. Bajo significa que la evidencia correcta se recuperó pero quedó enterrada bajo fragmentos menos relevantes.',
+          context_recall:
+            'Si los pasajes recuperados cubren todo lo que la respuesta de referencia exige. Bajo significa que la recuperación omitió evidencia que la pregunta necesitaba.',
+          answer_relevancy:
+            'Qué tan bien la respuesta aborda la pregunta: RAGAS regenera preguntas a partir del texto de la respuesta y las compara con la original por similitud de embeddings. NO verifica corrección factual — las respuestas verbosas puntúan bajo aun siendo correctas.',
+          context_utilization:
+            'Si el contexto recuperado basta para producir la respuesta de referencia — una verificación de completitud de la recuperación.',
+          context_entities_recall:
+            'Recall a nivel de entidades: la proporción de entidades nombradas en los pasajes de referencia de la entrada (empresas, fechas, importes, lugares) que también aparecen en los fragmentos recuperados. Un valor bajo significa que la recuperación trajo fragmentos que omiten entidades de la referencia. Sensible al juez — una puntuación baja con el recall de contexto aprobado suele significar que la extracción de entidades del juez falló, no que falte contenido.',
+          factual_correctness:
+            'Coincidencia factual a nivel de afirmaciones con la referencia — el juez descompone ambas y puntúa el solape. La métrica de corrección más estricta.',
+          answer_correctness:
+            'Calidad global frente a la referencia — corrección factual combinada con similitud semántica. La métrica más cercana a «¿dio la respuesta correcta?».',
+          answer_similarity:
+            'Similitud semántica (embeddings) entre la respuesta generada y la de referencia — alto significa que transmiten lo mismo.',
+          noise_sensitivity:
+            'Cuánto se degrada la respuesta cuando se mezclan pasajes irrelevantes en el contexto — una medida de robustez. MÁS BAJO es mejor; su umbral está invertido.'
+        }
+      },
+      pdf: {
+        title: 'Informe de pruebas comparativas RAGAS',
+        suite: 'Suite',
+        run: 'Ejecución',
+        summary: 'Resumen',
+        perQuery: 'Puntuaciones por pregunta',
+        status: 'Resultados',
+        n: 'preguntas',
+        evaluable: 'evaluables',
+        abstained: 'abstenciones',
+        compare: 'Comparación entre ejecuciones (delta vs la primera)'
+      }
     }
+  },
+  link: {
+    ragTip:
+      'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
   }
 };

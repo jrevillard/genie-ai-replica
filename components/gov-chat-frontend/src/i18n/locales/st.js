@@ -1,5 +1,3 @@
-// src/i18n/locales/st.js
-
 export default {
   countries: {
     AF: 'Afganistan',
@@ -37,7 +35,7 @@ export default {
     CF: 'Central African Republic',
     TD: 'Chad',
     CL: 'Chile',
-    CN: 'China',
+    CN: 'Chaena',
     CO: 'Colombia',
     KM: 'Comoros',
     CG: 'Congo',
@@ -187,7 +185,7 @@ export default {
     UA: 'Ukraine',
     AE: 'United Arab Emirates',
     GB: 'United Kingdom',
-    US: 'United States',
+    US: 'Amerika',
     UY: 'Uruguay',
     UZ: 'Uzbekistan',
     VU: 'Vanuatu',
@@ -226,7 +224,8 @@ export default {
       database: 'Datha (Database)',
       logs: 'Lilog',
       security: 'Tshireletso',
-      users: 'Basebedisi'
+      users: 'Basebedisi',
+      models: 'Mesebetsi'
     },
     contentManagement: 'TSAMAISO YA MOKOTLA',
     knowledgeHierarchy: 'Tharollo ya Tsebo',
@@ -517,11 +516,71 @@ export default {
       retractQueuedSuccess: 'Difaele tse {count} di hlophisitswe molemong wa ho hulelwa.',
       retractQueuedError: 'Ho bile le phoso nakong ya tshebetso ya ho hulela sehlopha.',
       retractPartialFailure: '{count} ho tsoa {successCount} li huletswe. Li hlolehile: {detail}',
+      deleteSelected: 'Delete Selected',
+      confirmDeleteTitle: 'Confirm Batch Deletion',
+      confirmDeleteSelected:
+        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
+      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
+      deleteQueuedError: 'An error occurred during the batch deletion process.',
+      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
+      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
+      deleteRefuseReason: "{'{'}count{'}'} file(s) are still ingested — retract them first.",
       retractAllFailed: 'Difaele tsohle tse {count} li hlolehile: {detail}',
       uploadSuccessMultiple: 'Difaele tse {count} di kentswe ka katleho.',
       linkSubmitSuccess: 'E fetile le ho boloka "{fileName}" ka katleho.',
       actionSuccess: 'Keto ya "{action}" faeleng ya {fileId} e bile le katleho.',
-      metadataUpdateSuccess: 'Metadata ya faele ya {fileId} e ntlafaditswe.'
+      metadataUpdateSuccess: 'Metadata ya faele ya {fileId} e ntlafaditswe.',
+      deletePartialNotice:
+        "{'{'{'}'}blocked{'}'} lifaele tse khethiloeng ha li ka tlosoa ({'{'{'}'}reason{'}'}) — feela tse ling {'{'{'}'}n{'}'} li tla tlosoa.",
+      confirmDeleteSkipped:
+        "{'{'{'}'}count{'}'} lifaele tse kennyeng/tsa kennyang li TLA TLOHESOA — di khutlisa pele ho li tlosa."
+    },
+    queryInspector: {
+      search: 'Batla',
+      searchPlaceholder: 'Batla mongolo oa potso...',
+      minConfidence: 'Tšepo e Tlaase',
+      maxConfidence: 'Tšepo e Phahameng',
+      from: 'Ho tloha ho',
+      to: 'Ho',
+      reset: 'Seta bocha',
+      colTime: 'Nako',
+      colQuestion: 'Potso ea Mosebelisi',
+      colConfidence: 'Tšepo',
+      colResponseTime: 'Nako ea Karabo',
+      colSources: 'Mehloli',
+      colFeedback: 'Maikutlo',
+      colActions: 'Liketso',
+      inspect: 'Hlahloba',
+      noResults: 'Ha ho lipotso tse fumanoeng tse tšoanang le li-filter tsa hau.',
+      prev: 'E fetileng',
+      pageInfo: 'Leqephe {current} ho {total} ({count} kaofela)',
+      next: 'E latelang',
+      backToList: 'Khutlela lenaneng',
+      detailTitle: 'Mohlahlami oa Lipotso',
+      sectionQuestion: 'Potso ea Mosebelisi',
+      user: 'Mosebelisi',
+      time: 'Nako',
+      responseTime: 'Nako ea Karabo',
+      mode: 'Mokhoa',
+      sectionContext: 'Moelelo (Li-label tse rometsoeng ho RAG)',
+      category: 'Sehlopha',
+      serviceLabels: 'Li-label tsa Tšebeletso',
+      language: 'Puo',
+      sectionMessages: 'Melaetsa e Rometsoeng ho Pipeline',
+      sectionDocuments: 'Litokomane tse Fumanoeng (Liphetho tsa Vector DB)',
+      score: 'Lintlha',
+      labels: 'Li-label',
+      viewDoc: 'Sheba Tokomane',
+      noDocuments: 'Ha ho litokomane tse fumanoeng bakeng sa potso ena.',
+      sectionResponse: 'Karabo ea LLM',
+      confidenceScore: 'Lintlha tsa Tšepo',
+      retrievalConfidenceScore: 'Tšepo ea ho Fumana',
+      selfConfidence: 'Boitšepo (LLM)',
+      sectionFeedback: 'Maikutlo a Mosebelisi',
+      rating: 'Lintlha',
+      comment: 'Maikutlo',
+      providedAt: 'E fanoe ka',
+      loadError: 'Ho hlolehile ho kenya lipotso.'
     }
   },
   auth: {
@@ -667,7 +726,7 @@ export default {
     }
   },
   services: {
-    eCitizen: 'eCitizen Portal',
+    eCitizen: 'Portal ea eCitizen',
     taxFiling: 'Sistimi ya ho Kenya Lekgetho',
     idApplication: 'Kopo ya ID',
     businessReg: 'Ngwadisong ya Kgwebo',
@@ -787,113 +846,63 @@ export default {
   leftPanel: {
     cat1: {
       name: '1. Boitsebiso & Ngwadisong ya Baahi',
-      children: [
-        'Difiketi tsa tswalo',
-        'Dikarata tsa naha tsa ID',
-        'Dipasporoto',
-        'Difiketi tsa lenyalo le lefu',
-        'Ngwadisong ya bakgethi'
-      ]
+      children:
+        'Difiketi tsa tswalo,Dikarata tsa naha tsa ID,Dipasporoto,Difiketi tsa lenyalo le lefu,Ngwadisong ya bakgethi'
     },
     cat2: {
       name: '2. Bophelo bo Botle & Ditshebeletso tsa Setjhaba',
-      children: [
-        'Ho fihlella tlhokomelo ya bophelo ya setjhaba',
-        'Mananeo a ho enta',
-        'Inshorense ya bophelo bo botle',
-        'Melemo ya ho holofala',
-        'Thuso ya thepa le dijo'
-      ]
+      children:
+        'Ho fihlella tlhokomelo ya bophelo ya setjhaba,Mananeo a ho enta,Inshorense ya bophelo bo botle,Melemo ya ho holofala,Thuso ya thepa le dijo'
     },
     cat3: {
       name: '3. Thuto & Ho Ithuta',
-      children: [
-        'Dikolo tsa setjhaba le diyunivesithi',
-        'Dikhau tsa thuto le dikadimo tsa baithuti',
-        'Mananeo a thuto ya batho ba baholo',
-        'Dihlolwa tsa ho ithuta inthaneteng'
-      ]
+      children:
+        'Dikolo tsa setjhaba le diyunivesithi,Dikhau tsa thuto le dikadimo tsa baithuti,Mananeo a thuto ya batho ba baholo,Dihlolwa tsa ho ithuta inthaneteng'
     },
     cat4: {
       name: '4. Mesebetsi & Ditshebeletso tsa Basebetsi',
-      children: [
-        'Patlo ya mosebetsi le melemo ya ho hloka mosebetsi',
-        'Tshireletso ya basebetsi le ditokelo tsa basebetsi',
-        'Melawana ya tshireletso ya mosebetsing',
-        'Koetliso ya tsebo le mananeo a koetliso'
-      ]
+      children:
+        'Patlo ya mosebetsi le melemo ya ho hloka mosebetsi,Tshireletso ya basebetsi le ditokelo tsa basebetsi,Melawana ya tshireletso ya mosebetsing,Koetliso ya tsebo le mananeo a koetliso'
     },
     cat5: {
       name: '5. Lekgetho & Lekeno',
-      children: [
-        'Puseletso le faele ya lekgetho la lekeno',
-        'Ditefello tsa lekgetho la thepa',
-        'Ho ipapisa le lekgetho la kgwebo',
-        'Mekgwa ya mesebetsi le mesebetsi ya ho reka thepa kantle'
-      ]
+      children:
+        'Puseletso le faele ya lekgetho la lekeno,Ditefello tsa lekgetho la thepa,Ho ipapisa le lekgetho la kgwebo,Mekgwa ya mesebetsi le mesebetsi ya ho reka thepa kantle'
     },
     cat6: {
       name: '6. Tshireletso ya Setjhaba & Toka',
-      children: [
-        'Maponesa le ditshebeletso tsa tshohanyetso',
-        'Makgotla le ditshebeletso tsa thuso ya molao',
-        'Ho tlaleha botlokotsebe',
-        'Melao ya tshireletso ya bareki'
-      ]
+      children:
+        'Maponesa le ditshebeletso tsa tshohanyetso,Makgotla le ditshebeletso tsa thuso ya molao,Ho tlaleha botlokotsebe,Melao ya tshireletso ya bareki'
     },
     cat7: {
       name: '7. Dipalangwang & Tsela',
-      children: [
-        'Dilaesense tsa bakhanni le ngwadisong ya makoloi',
-        'Lipalangwa tsa setjhaba le mehaho',
-        'Ditlolo tsa molao wa sephethephethe le ditefiso',
-        'Mananeo a tshireletso ya tsela'
-      ]
+      children:
+        'Dilaesense tsa bakhanni le ngwadisong ya makoloi,Lipalangwa tsa setjhaba le mehaho,Ditlolo tsa molao wa sephethephethe le ditefiso,Mananeo a tshireletso ya tsela'
     },
     cat8: {
       name: '8. Matlo & Ntshetsopele ya Ditoropo',
-      children: [
-        'Thuso ya matlo a setjhaba',
-        'Ngwadisong ya thepa le ditlaleho tsa mobu',
-        'Dikadimo tsa matlo le dithuso',
-        'Diforomo tsa meaho le dilaesense'
-      ]
+      children:
+        'Thuso ya matlo a setjhaba,Ngwadisong ya thepa le ditlaleho tsa mobu,Dikadimo tsa matlo le dithuso,Diforomo tsa meaho le dilaesense'
     },
     cat9: {
       name: '9. Ditshebeletso tse Sebetsang & Tikoloho',
-      children: [
-        'Ditshebeletso tsa metsi le motlakase',
-        'Tsamaiso ya ditshila le ho sebetsa botjha',
-        'Melawana ya tikoloho',
-        'Mehato ya eneji e ntjhafatsoang'
-      ]
+      children:
+        'Ditshebeletso tsa metsi le motlakase,Tsamaiso ya ditshila le ho sebetsa botjha,Melawana ya tikoloho,Mehato ya eneji e ntjhafatsoang'
     },
     cat10: {
       name: '10. Kgwebo & Kgwebo e Bohareng',
-      children: [
-        'Ngwadisong ya kgwebo le laesense',
-        'Melawana ya kgwebo le diforomo',
-        'Dikhau tsa kgwebo e nyane le dithuso',
-        'Tshetsopele ya e-commerce le theknoloji ya kgwebo'
-      ]
+      children:
+        'Ngwadisong ya kgwebo le laesense,Melawana ya kgwebo le diforomo,Dikhau tsa kgwebo e nyane le dithuso,Tshetsopele ya e-commerce le theknoloji ya kgwebo'
     },
     cat11: {
       name: '11. Tshireletso ya Setjhaba & Dipenshene',
-      children: [
-        'Melemo ya ho tlohela mosebetsi',
-        'Tsamaiso ya letlole la penshene',
-        'Melemo ya baphonyohi',
-        'Dipenshene tsa ho holofala'
-      ]
+      children:
+        'Melemo ya ho tlohela mosebetsi,Tsamaiso ya letlole la penshene,Melemo ya baphonyohi,Dipenshene tsa ho holofala'
     },
     cat12: {
       name: '12. Setjhaba & Ho Nka Karolo ha Setjhaba',
-      children: [
-        'Dikgetho le ho vouta',
-        'Maikutlo a setjhaba le ditletlebo tsa baahi',
-        'Ho ithaopa le mananeo a setjhaba',
-        'Ho nka karolo mmusong wa lehae'
-      ]
+      children:
+        'Dikgetho le ho vouta,Maikutlo a setjhaba le ditletlebo tsa baahi,Ho ithaopa le mananeo a setjhaba,Ho nka karolo mmusong wa lehae'
     }
   },
   settings: {
@@ -1121,6 +1130,7 @@ export default {
     },
     notifications: {
       saveSuccess: 'Profaele e bolokilwe ka katleho',
+      saved: 'Frontmatter e bolokiloe',
       saveFailed: 'Ho hlolehile ho boloka profaele',
       loadSuccess: 'Profaele e kentswe ka katleho',
       loadFailed: 'Ho hlolehile ho kenya profaele',
@@ -1235,137 +1245,10 @@ export default {
     noMatchingCountries: 'Ha ho dinaha tse fumanweng',
     noMatchingDisciplines: 'Ha ho dithuto tse fumanweng',
     noMatchingDegrees: 'Ha ho didigrii tse fumanweng',
-    educationOptions: [
-      'Accounting',
-      'Aerospace Engineering',
-      'Agricultural Science',
-      'Anthropology',
-      'Architecture',
-      'Art History',
-      'Artificial Intelligence',
-      'Astronomy',
-      'Astrophysics',
-      'Biochemistry',
-      'Biomedical Engineering',
-      'Biotechnology',
-      'Business Administration',
-      'Chemical Engineering',
-      'Chemistry',
-      'Civil Engineering',
-      'Communications',
-      'Computer Engineering',
-      'Computer Science',
-      'Construction Management',
-      'Criminal Justice',
-      'Cybersecurity',
-      'Data Science',
-      'Dentistry',
-      'Economics',
-      'Education',
-      'Electrical Engineering',
-      'Elementary Education',
-      'English Literature',
-      'Environmental Engineering',
-      'Environmental Science',
-      'Fashion Design',
-      'Film Studies',
-      'Finance',
-      'Fine Arts',
-      'Food Science',
-      'Forensic Science',
-      'Game Design',
-      'Geography',
-      'Geology',
-      'Graphic Design',
-      'Health Administration',
-      'History',
-      'Hospitality Management',
-      'Human Resources',
-      'Industrial Design',
-      'Industrial Engineering',
-      'Information Systems',
-      'Information Technology',
-      'Interior Design',
-      'International Business',
-      'International Relations',
-      'Journalism',
-      'Law',
-      'Library Science',
-      'Linguistics',
-      'Management',
-      'Marketing',
-      'Materials Science',
-      'Mathematics',
-      'Mechanical Engineering',
-      'Media Studies',
-      'Medicine',
-      'Meteorology',
-      'Microbiology',
-      'Music',
-      'Nanotechnology',
-      'Nursing',
-      'Nutrition',
-      'Occupational Therapy',
-      'Oceanography',
-      'Petroleum Engineering',
-      'Pharmacy',
-      'Philosophy',
-      'Photography',
-      'Physical Education',
-      'Physical Therapy',
-      'Physics',
-      'Political Science',
-      'Psychology',
-      'Public Administration',
-      'Public Health',
-      'Public Relations',
-      'Robotics',
-      'Secondary Education',
-      'Social Work',
-      'Sociology',
-      'Software Engineering',
-      'Special Education',
-      'Sports Management',
-      'Statistics',
-      'Systems Engineering',
-      'Theatre Arts',
-      'Tourism',
-      'Urban Planning',
-      'Veterinary Medicine',
-      'Web Development',
-      'Wildlife Biology',
-      'Zoology'
-    ],
-    degreeOptions: [
-      'Associate Degree',
-      'Bachelor of Arts (BA)',
-      'Bachelor of Science (BS)',
-      'Bachelor of Engineering (BEng)',
-      'Bachelor of Business Administration (BBA)',
-      'Bachelor of Fine Arts (BFA)',
-      'Bachelor of Education (BEd)',
-      'Bachelor of Medicine (MBBS)',
-      'Bachelor of Laws (LLB)',
-      'Master of Arts (MA)',
-      'Master of Science (MS)',
-      'Master of Business Administration (MBA)',
-      'Master of Engineering (MEng)',
-      'Master of Fine Arts (MFA)',
-      'Master of Education (MEd)',
-      'Master of Laws (LLM)',
-      'Master of Public Health (MPH)',
-      'Doctor of Philosophy (PhD)',
-      'Doctor of Medicine (MD)',
-      'Doctor of Education (EdD)',
-      'Doctor of Business Administration (DBA)',
-      'Doctor of Jurisprudence (JD)',
-      'Professional Diploma',
-      'Technical Diploma',
-      'Vocational Certificate',
-      'Graduate Certificate',
-      'Post-Graduate Diploma',
-      'Post-Doctoral'
-    ],
+    educationOptions:
+      'Accounting,Aerospace Engineering,Agricultural Science,Anthropology,Architecture,Art History,Artificial Intelligence,Astronomy,Astrophysics,Biochemistry,Biomedical Engineering,Biotechnology,Business Administration,Chemical Engineering,Chemistry,Civil Engineering,Communications,Computer Engineering,Computer Science,Construction Management,Criminal Justice,Cybersecurity,Data Science,Dentistry,Economics,Education,Electrical Engineering,Elementary Education,English Literature,Environmental Engineering,Environmental Science,Fashion Design,Film Studies,Finance,Fine Arts,Food Science,Forensic Science,Game Design,Geography,Geology,Graphic Design,Health Administration,History,Hospitality Management,Human Resources,Industrial Design,Industrial Engineering,Information Systems,Information Technology,Interior Design,International Business,International Relations,Journalism,Law,Library Science,Linguistics,Management,Marketing,Materials Science,Mathematics,Mechanical Engineering,Media Studies,Medicine,Meteorology,Microbiology,Music,Nanotechnology,Nursing,Nutrition,Occupational Therapy,Oceanography,Petroleum Engineering,Pharmacy,Philosophy,Photography,Physical Education,Physical Therapy,Physics,Political Science,Psychology,Public Administration,Public Health,Public Relations,Robotics,Secondary Education,Social Work,Sociology,Software Engineering,Special Education,Sports Management,Statistics,Systems Engineering,Theatre Arts,Tourism,Urban Planning,Veterinary Medicine,Web Development,Wildlife Biology,Zoology',
+    degreeOptions:
+      'Associate Degree,Bachelor of Arts (BA),Bachelor of Science (BS),Bachelor of Engineering (BEng),Bachelor of Business Administration (BBA),Bachelor of Fine Arts (BFA),Bachelor of Education (BEd),Bachelor of Medicine (MBBS),Bachelor of Laws (LLB),Master of Arts (MA),Master of Science (MS),Master of Business Administration (MBA),Master of Engineering (MEng),Master of Fine Arts (MFA),Master of Education (MEd),Master of Laws (LLM),Master of Public Health (MPH),Doctor of Philosophy (PhD),Doctor of Medicine (MD),Doctor of Education (EdD),Doctor of Business Administration (DBA),Doctor of Jurisprudence (JD),Professional Diploma,Technical Diploma,Vocational Certificate,Graduate Certificate,Post-Graduate Diploma,Post-Doctoral',
     aria: {
       tabList: 'Dikarolo tsa foromo ya profaele',
       nextButton: 'Eya karolong e latelang',
@@ -1388,12 +1271,15 @@ export default {
     streamTimeout: 'Mothisi ha a araba — kopo e feta nako.',
     nothingToSave: 'Ha ho se letho le ka bolokang — likarabo tsohle li fsane. Leka qoetsano ea lipuiso pele.',
     unsupportedLanguage: 'This language is not available for this deployment.',
-    aiGeneratedNoDocs: 'AI-generated — not based on library documents',
+    aiGeneratedNoDocs: "E hlahisitsoe ke AI — ha e ea thehoa holim'a litokomane tsa laeborari",
     translationUnavailable: 'Translation unavailable — this answer may contain untranslated text.',
-    welcomeMessage: 'Welcome! How can I assist you today?',
+    welcomeMessage: 'Rea u amohela! Nka u thusa joang kajeno?',
     configMismatchWarning:
-      'Configuration mismatch: {warnings}. Please check the Quick Help and knowledge hierarchy configuration.',
-    categoryNotFound: 'Category "{label}" not found in knowledge hierarchy',
+      'Ho se lumellane ha tlhophiso: {warnings}. Ka kopo hlahloba Thuso e Potlakileng le tlhophiso ea thulaganyo ea tsebo.',
+    categoryNotFound: 'Sehlopha sa "{label}" ha se ea fumanoa thulaganyong ea tsebo',
+    serviceLabelMismatch:
+      'Tšebeletso ea "{label}" e sebelisa leibole ea UI e ka \'nang ea se ke ea lumellana le thulaganyo ea tsebo',
+    noFilterWarning: 'Ha ho sefe ea maemo e sebetsang — patlo e ke ke ea sefuoa.',
     quickHelpLabelGone:
       'Configuration problem: the label "{labels}" no longer exists in the knowledge hierarchy. This button cannot be used until its configuration is updated.',
     quickHelpCategoryGone:
@@ -1402,8 +1288,6 @@ export default {
       "Configuration problem: the knowledge hierarchy could not be loaded, so this button's scope cannot be verified. This button cannot be used until the hierarchy is available.",
     scopeNotNameable:
       'Configuration problem: the selected scope has no English name in the knowledge hierarchy, so the query cannot be scoped. It was not sent.',
-    serviceLabelMismatch: 'Service "{label}" uses a UI label that may not match the knowledge hierarchy',
-    noFilterWarning: 'No context filter active — query will be unfiltered.',
     placeholder: 'Ngola potso ya hao mona...',
     composerPlaceholder: 'Botsa potso, hlahloba tsebo...',
     composerAttachTitle: 'Lihokelo ha li fumanehe hajoale',
@@ -1463,37 +1347,24 @@ export default {
     removeItem: 'Susa'
   },
   quickhelp: {
-    // Labels (Short for UI)
-
-    // User Prompts (Visible Text - First Person - what user sees in chat)
-
-    // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:
-      "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Sebetsa joaloka setsebi se thusang sa ngoliso ea baahi ba Kenya. Hlalosa mehato ea ho fumana Karata ea Boitsebiso ea Naha (Maisha Namba) kapa ho fetola e lahlehileng. EA BOHLOKOA: Fana ka lethathamo le hlakileng la litokomane tse hlokahalang (mohlala, Setifikeiti sa Tsoalo, likopi tsa boitsebiso ba batsoali) 'me u eletse mosebelisi ho etela Setsi sa Huduma kapa ofisi ea Registrar of Persons e haufi le bona. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'.",
     payTaxesPrompt:
-      "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Sebetsa joaloka motataisi oa KRA (Kenya Revenue Authority). Hlalosa mokhoa oa ho faela lekhetho, ho etsa kopo ea KRA PIN, kapa ho seta phasewete bocha ho portal ea iTax. EA BOHLOKOA: Hopotsa mosebelisi ka nako ea ho qetela ea la 30 Phuptjane bakeng sa lifaele tsa selemo le selemo 'me u ba tataise mabapi le mokhoa oa ho faela lifaele tsa Nil haeba ba ne ba se na chelete e kenang. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'.",
     startBusinessPrompt:
-      "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Sebetsa joaloka moeletsi oa khoebo bakeng sa lits'ebeletso tsa eCitizen. Tataisa mosebelisi mabapi le ho boloka lebitso la khoebo le ngoliso ea k'hamphani Kenya. EA BOHLOKOA: Hlalosa litšenyehelo tsa hajoale tsa patlo ea lebitso le ngoliso, 'me u tataisetse mosebelisi ho portal ea molao ea eCitizen ho phethela kopo. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'.",
     findHealthcarePrompt:
-      "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Sebetsa joaloka motataisi oa lits'ebeletso tsa bophelo bo botle. Fana ka leseli mabapi le phetoho ho tloha ho NHIF ho ea ho SHIF (Social Health Insurance Fund) le mokhoa oa ho ingolisa. EA BOHLOKOA: Arolelana likhoutu tsa molao tsa USSD (joaloka *263#) kapa lihokelo tsa sebaka sa marang-rang bakeng sa ngoliso le ho hlalosa melemo ea inshorense ea bophelo bo botle ea sechaba. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'.",
     educationServicesPrompt:
-      "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Sebetsa joaloka moeletsi oa thuto. Bua ka kharikhulamo ea CBC, ngoliso ea NEMIS, kapa kabo ea liunivesithi ka KUCCPS. EA BOHLOKOA: Hlalosa kamoo batsoali ba ka hlahlobang liphetho tsa litlhahlobo tsa naha ka SMS kapa portal ea KNEC ha li lokolloa. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'.",
     transportLicensesPrompt:
-      "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Sebetsa joaloka motataisi oa lits'ebeletso tsa NTSA. Hlalosa mehato ea ho nchafatsa laesense ea ho khanna, tlhahlobo ea koloi, kapa tsamaiso ea ak'haonte ea TIMS. EA BOHLOKOA: Tataisa mosebelisi mabapi le mokhoa oa ho kena ho portal ea eCitizen NTSA ho etsa kopo ea Smart DL ea bona kapa ho behella nako ea tlhahlobo ea koloi. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'.",
     housingProgramsPrompt:
-      "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Sebetsa joaloka moeletsi oa lenaneo la matlo. Hlalosa Lenaneo la Matlo a Theko e Tlase (Boma Yangu), ngoliso le mokhoa oa ho kenya letsoho ka boithaopo. EA BOHLOKOA: Tataisa mosebelisi ho ea portal ea Boma Yangu ho bona merero le ho hlalosa mekhoa ea ho tšoaneleha bakeng sa kabo. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'.",
     findJobsPrompt:
-      "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Sebetsa joaloka mokoetlisi oa mesebetsi bakeng sa litšebeletso tsa sechaba. Tataisa mosebelisi ho theha profil le ho etsa kopo ea mesebetsi e bulehileng ka portal ea Public Service Commission (PSC). EA BOHLOKOA: Eletsa mosebelisi ho boloka litifikeiti tsa hae tsa thuto li lokile le ho hlahloba sebaka sa marang-rang sa PSC kapa likoranta tsa lehae khafetsa bakeng sa lipapatso tsa MyGov. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'.",
     justChatPrompt:
-      "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+      "Sebetsa joaloka motsoalle ea mosa oa sebaka seo. E-ba le mekhoa e metle, ea thusang, 'me u be le tsebo e batsi ka setso sa Kenya le bophelo ba letsatsi le letsatsi. EA BOHLOKOA: Hopotsa mosebelisi hore leha u ka qoqa ka eng kapa eng, matla a hau a maholo ke ho ba thusa ho tsamaea lits'ebeletsong tsa mmuso oa Kenya joaloka **Li-ID**, **Lekhetho**, le **Ngoliso ea Khoebo**. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'."
   },
   common: {
     cancel: 'Hlakola',
@@ -1561,7 +1432,15 @@ export default {
     hash: 'SHA256 Hash',
     tabs: {
       details: 'Dintlha',
-      ingestionLog: 'Log ya ho Kenya'
+      ingestionLog: 'Log ya ho Kenya',
+      detailsHint:
+        "Metadata bakeng sa faele ena: lebitso, mongoli le lileibole tsa thulaganyo ea tsebo tseo AI e li sebelisang ho tsamaisa lipotso. Ingest e hloka bonyane leibole e le 'ngoe.",
+      dashboardHint:
+        'Pono ea nako ea sebele ea ho batla ha sebaka sa marang-rang sa faele ena: lebelo, mola, liphoso le tsoelo-pele. Ha ho batla ho atlehile, karolo e ka tlaase e fetola sena polokelo ea OKF.',
+      crawlLogHint:
+        'Tlaleho ea leqephe ka leng ea ho batla ha sebaka sa marang-rang: li-URL tse fumanoeng, tse tsamaisitsoeng kapa tse hlolehileng. E ngoloa ha ho batla ho ntse ho sebetsa.',
+      ingestionLogHint:
+        'Tsoelo-pele ea mohato ka mohato ea ho lokisetsa faele ena bakeng sa likarabo tsa AI: ho arola likaroloana (chunking), ho leibola, ho etsa di-embedding le ho kenya tšebetsong ho indexa. Liphoso mona li bontša hantle moo ingest e emisitseng teng.'
     },
     log: {
       killActions: 'Diketo tsa ho Bolaya:',
@@ -1629,6 +1508,2188 @@ export default {
       duplicate: 'Faele ya "{fileName}" e se e ntse e ekeditswe.',
       uploadSuccess: 'E kentswe ka katleho {fileName}',
       uploadFailed: 'Ho hlolehile ho kenya {fileName}.'
+    },
+    ragTip:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+  },
+  okf: {
+    models: {
+      title: 'Dipehelo tsa dimela',
+      add: 'Pehelo e ncha',
+      hint: 'Diphetho tsa dimela tse holeseng tse nang le mabitso bakeng sa tolo le tlhahiso — lefapha lefe kapa lefe le tsamaisanang le OpenAI (OpenAI, gethele ya LiteLLM, vLLM, Gemini-compat, Ollama) kapa Anthropic ka otlolohile. Pehelo e le nngoe feela e ka sebelisoa nako e nngwe; ha ho ea sebelisoa, modeli ya kamehla ea hatiso e sebelisoa. Dikii di bolokwa server le ha di bontshwe kapele.',
+      name: 'Lebitso',
+      provider: 'Mofani',
+      providerOpenai: 'E tsamaisana le OpenAI (OpenAI, LiteLLM, vLLM…)',
+      providerAnthropic: 'Anthropic (API ea motheo)',
+      baseUrl: 'URL ea motheo',
+      apiKey: 'Kii ea API',
+      apiKeyKeep: 'ha e ka fetoha',
+      model: 'Modeli',
+      modelPick: 'Kgetha modeli…',
+      modelFreeText: 'ID ea modeli (mongolo o lokolohileng)',
+      modelFetch: 'Holla dimela',
+      modelFetching: 'E holla…',
+      modelsEmpty: 'Sephetho ha se kgutlisitse dimela — ngola ID ea modeli.',
+      modelsFailed: 'Ho holla lenane la dimela ho hlile — ngola ID.',
+      modelsLoaded: 'Mesebetsi e {n} e laetsweng — kgetha ho lenaneo kapa ngola ka tokoloho',
+      test: 'Lekola khokahano',
+      testing: 'E ntse e lekola…',
+      testTitle: 'Batla endpoint le (ka mohlala o kgethileng) tlhahiso ya letshwao le le leng',
+      testOkModel: '✓ Khokahano e se e lebile — mohlala o arabetse ({ms} ms)',
+      testOkEndpoint:
+        '✓ Endpoint e fihlelleha — mesebetsi e {n} kahare ho lenane (kgetha mohlala hore o lekole hape tlhahiso)',
+      testGenFail: '✗ Endpoint e lokile, empa pitso ya mohlala e hlotle',
+      testNotListed: ' — hlokomela: “{model}” ha e ho lenane la mesebetsi ya endpoint',
+      testFail: '✗ tekolo e hlotle — ha ho karabo',
+      services: 'Sebedisa sethaiseseho sena bakeng sa',
+      svcJudge: 'Litekanyo (moahlodi wa RAGAS + moluletsi)',
+      svcJudgeShort: 'ditekanyo',
+      svcCuration: 'Tlhatlhobo ya dikgopolo',
+      svcCurationShort: 'tlhatlhobo',
+      svcTagging: 'Dihlooho le dia-tag',
+      svcTaggingShort: 'dihlooho/dia-tag',
+      svcOpenaiOnly:
+        'Tlhatlhobo ya dikgopolo le dihlooho/dia-tag di sebedisa mokgwa wa OpenAI — di hloka endpoint e tsamaellanang le OpenAI.',
+      colServices: 'E sebediswa ke',
+      svcNone: 'hape (e robetse)',
+      groupTestLab: 'Ditsela tsa Laboratora ya Diteko',
+      groupDataPrep: 'Tsela ya lokiso ya data',
+      groupInference: 'Tsela ya ntsho',
+      mockNote: 'eahlohileng — ha e ka be ea hlophisa ho fihlela joale',
+      svcAnswers: 'Karabo tsa benchmark — ho phetisa offline feela (Lab e araba ka chat e deployadeng)',
+      svcAnswersShort: 'karabo tsa benchmark (offline feela)',
+      mockContextual: 'Phumisho ya mocheng (mocheng wa tokomane)',
+      mockChunkLabeling: 'Tlhatlhobo ya dikarolo',
+      mockGraphExtraction: 'Ntsho haese ya grafu ya tsebo',
+      mockChatServing: 'Karabo ya poledisano',
+      mockTranslation: 'Phetolelo ya poledisano',
+      svcOpenaiOnlyShort: 'E bang ba tsamaellanang le OpenAI feela',
+      providerTipOpenai:
+        'Methati e netefaditsweng e tsamaellanang le OpenAI: OpenAI https://api.openai.com/v1 · MiniMax https://api.minimax.io/v1 · z.ai https://api.z.ai/api/paas/v4 · gate ya LiteLLM http://your-gateway:4000/v1',
+      providerTipAnthropic:
+        'Methati ya kamehla ya Anthropic e netefaditsweng: Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
+      baseUrlTip:
+        'Seva e hlalosa mesebetsi ho motheo ona + /models (e tsamaellanang le OpenAI) kapa + /v1/models (Anthropic — /v1 ya qetela e lokiswa), mme Test connection e hlahisa ho + /chat/completions kapa + /v1/messages. Metso e mengata e ne e netefaditswe ka 2026-10-20.',
+      save: 'Boloka diphetoho',
+      create: 'Theha',
+      cancel: 'Khansela',
+      colName: 'Lebitso',
+      colProvider: 'Mofani',
+      colUrl: 'Sephetho',
+      colKey: 'Kii',
+      colModel: 'Modeli',
+      colState: 'Boemo',
+      active: 'e sebelisoa',
+      inactive: 'ha e sebelisoa',
+      edit: 'Fetola lebitso / lokisa',
+      copy: 'Kopisha',
+      activate: 'Kgutlisa (e le nngoe feela)',
+      deactivate: 'Ema — modeli ya kamehla e tla sebelisoa',
+      delete: 'Hlakola',
+      deleteConfirm: 'Hlakola pehelo ea modeli "{name}"?',
+      empty: 'Ha ho na dipehelo tsa dimela ho fihlela jwale — modeli ya kamehla (env) e sebelisoa.',
+      adminOnly: 'Dipehelo tsa dimela di hloka karolo ea molaoli oa sejalla.'
+    },
+    versions: {
+      bundle: 'Bundle',
+      col: {
+        concepts: 'Maikutlo',
+        curator: 'Mohlophisi',
+        minted: 'E Thehiloe',
+        tag: 'Tag',
+        trigger: 'Tšitiso',
+        version: 'Mofuta'
+      },
+      current: 'hona joale',
+      loadFailed: 'E hlolehile ho jarolla mefuta',
+      none: 'Ha ho mefuta e entsoeng hajoale — ho phatlalatsa ho theha v1.',
+      notServing: 'Ha e sebetse',
+      publish: 'Theha mofuta o mocha',
+      published: 'Mofuta oa v{v} o phatlalalitsoe — ngata ea {f} e bolokiloe polokelong ea litokomane.',
+      serving: 'E entsoe ingest (serving)',
+      title: 'Liphetolelo'
+    },
+    shell: {
+      back: 'Dashboard ea Studio',
+      building: 'Kaho…',
+      buildingHint: 'Faele ea mohloli e ntse e sebetsoa',
+      delete: {
+        body: 'Sena se tlosa polokelo, mehopolo ea eona, litaba tse indexiloeng, kerafo le lintho tsa ngata ruri.',
+        confirm: 'Hlakola',
+        title: 'Hlakola polokelo ruri'
+      },
+      export: 'Romela ntle .zip',
+      logs: 'Litlaleho',
+      pii: {
+        ack: 'Hlokomela mekhatlo e tšoailoeng & phatlalatsa',
+        note: "Mekhatlo e tšoailoeng ke karolo ea litaba tse phatlalalitsoeng. Haeba u li hlahlobile (mohlala, lintlha tsa molao tsa puisano), hlokomela 'me u tsoele pele."
+      },
+      publish: {
+        body: 'Ho etsa publish ho theha v{n} le ho boloka ngata ea "{file}" polokelong ea litokomane, ho nka sebaka sa zip efe kapa efe e fetileng. Mofuta o mocha ha o na ho serving ho fihlela o etsa Ingest ho oona.',
+        confirm: 'Phatlalatsa',
+        inProgress: 'E phatlalatsa — ho romela le ho fetisetsa ngata…',
+        title: 'Phatlalatsa'
+      },
+      readonly: 'CONTENT READ ONLY — head/tags stay editable',
+      serving: 'E sebeletsa',
+      state: {
+        ingested: 'Ingested'
+      },
+      tab: {
+        editor: 'Sengoli',
+        wizard: 'Wizard'
+      },
+      version: 'v{n}',
+      versions: 'Liphetolelo',
+      deleteLabel: 'Hlakola',
+      testingLab: 'Testing Lab'
+    },
+    logs: {
+      labeled: 'tse leibotsoeng: {n}',
+      fallbacks: 'mekhoa ea tšehetso ea LLM: {n}',
+      concepts: 'mehopolo: {n}',
+      col: {
+        action: 'Ketso',
+        description: 'Tlhaloso',
+        user: 'Mosebelisi',
+        when: 'Letsatsi le nako'
+      },
+      count: 'lingoliloeng tse {n}',
+      loadFailed: 'E hlolehile ho jarolla tlaleho ea mesebetsi.',
+      none: 'Ha ho mesebetsi e rekotiloeng hajoale — liketso tsa polokelo li hlaha mona ha li ntse li etsahala.',
+      title: 'Tlaleho ea tšebetso'
+    },
+    graph: {
+      aria: 'Kerafo ea mohopolo',
+      building: 'Grafo e lokisoa…',
+      concepts: 'maikutlo',
+      empty: 'Ha ho mehopolo hajoale — ha ho letho le ka etsoang kerafo.',
+      fit: 'Lokisetsa setšoantšo',
+      hub: 'Bontša kapa u pate setsi sa index (likhokahano tsa litaba tsa eona ke sebopeho, hase tsebo)',
+      layouting: 'Tlhophiso…',
+      legend: 'index',
+      links: 'lihokelo',
+      zoomIn: 'Atsa',
+      zoomOut: 'Sututsa',
+      card: {
+        links: 'likhokahano tse {n}',
+        chunks: 'likaroloana tse {n}',
+        failed: 'ho indexa ho hlolehile',
+        flagged: 'mekhatlo e tšoailoeng',
+        hub: 'Index hub',
+        pending: "ha e e-s'o indexoe"
+      }
+    },
+    import: {
+      title: 'Kenya litokomane repositoring e ncha ea OKF',
+      hint: 'Litokomane li ba repositori e le nngoe — li arola, li hokahane le ho ngolisoa hammoho. Ha ho seo e se phatlalatsa; mokhoa o tloaelehileng oa tekolo → phatlalatsa → kenya o latela.',
+      name: 'Lebitso la repositori',
+      namePh: 'mohl.: sephutheloana sa melao',
+      domain: 'Sebaka sa taba (domain)',
+      strategy: 'Leano la ho kahlola',
+      stratHeuristics: 'Heuristics (potlako, ntle le LLM)',
+      stratLlm: 'Kahlolo ea LLM',
+      stratHybrid: 'Tsoakane',
+      files: 'Litokomane tse kgethileng',
+      servingBadge: 'e fana ka RAG ea mahala',
+      alreadyBadge: 'se repositoring e nngoe ea OKF',
+      servingTip:
+        'Tokomane ena ha joale e fana ka corpus ea mahala — repositori e ncha e ke ke ea kenngoa pele e tlosoa.',
+      alreadyTip: 'Tokomane ena e se e le mohlogolosi oa repositori e nngoe ea OKF.',
+      servingWarn:
+        '{n} tokomane li sa ntse li fana ka corpus ea mahala. Kenya e atleha, empa repositori ena e ke ke ea kenngoa pele li tlosoa.',
+      cancel: 'Khutla',
+      importing: 'E kenya…',
+      go: 'Kenya',
+      dupRepo: 'Lebitso lena la repositori le se le teng — khetha le leng.',
+      failed: 'Kenya e ke ke ea qaloa. Hlahloba litokomane o leke hape.'
+    },
+    editor: {
+      addConcept: {
+        bodyLabel: 'Markdown (mamaretsa kapa u siee e se na letho)',
+        bodyPh: '# Sehlooho\n\nMamaretsa markdown mona — frontmatter e eketsetsoa uena.',
+        create: 'Etsa faele',
+        failed: 'Ha ea khona ho theha faele.',
+        title: 'Eketsa faele ea mohopolo',
+        titleLabel: 'Sehlooho',
+        titlePh: 'mohlala: Liphoofolo tse hlaha Mara',
+        updateIndex: 'Eketsa lethathamong la Tse ka Hare ho index'
+      },
+      access: {
+        label: 'Phihlelo ea polokelo',
+        title: 'Taolo ya tsamaiso',
+        restricted: 'E fokotsoeng',
+        openForAll: 'E bulehileng ho bohle',
+        hintRestricted:
+          'Basebelisi ba fuoeng phihlelo (le batsebedisi) feela ba ka botsa polokelo ena. Fana ka phihlelo ka tlase — e sebetsa ha ba kena hape.',
+        hintOpen: 'Mosebelisi ohle oa sene a ka botsa polokelo ena. E fokotse mme o fane ka phihlelo ka mosebelisi.',
+        unrestrict: 'Bulehla bohle',
+        restrict: 'Fokotsa polokelo',
+        unconfiguredTip:
+          'Ho fana/tlosa ho hloka Keycloak ho seva (KC_OKF_ACCESS_CLIENT_SECRET). Phihlelo e sebetsa ntle le eona.',
+        revoke: 'Tlosa',
+        error: 'Tshebetso e hafetsoe.',
+        grantedNotice: 'Phihlelo e fanoeng — e sebetsa ha a kena hape.',
+        revokedNotice: 'Tokelo e tsoere — e sebetsa ho keno ya mosebelisi ya hlaha.',
+        nowRestricted: 'Polokelo e fokotsoe.',
+        nowOpen: 'Polokelo e bulehile ho bohle.',
+        grantUsersCta: 'Fana ka ho basebelisi…',
+        pickerTitle: 'Fana ka tokelo ya dipotso',
+        pickerSearch: 'Batla basebelisi ka lebitso, lebitso la mosebelisi kapa imeile',
+        pickerSearching: 'E batla…',
+        pickerMatching: 'Basebelisi ba {n} ba ngolisitsoe le thupelo ena',
+        pickerSelectAll: 'Kgetha bohle ba {n}',
+        pickerAllSelected: 'Basebelisi bohle ba {n} ba ntseng ho ea thupelong ba kgethilwe',
+        pickerClearSelection: 'Hlakola',
+        pickerHasAccess: 'o na le tokelo',
+        pickerEmpty: 'Ha ho na basebelisi ba tshwanang.',
+        pickerGrant: 'Fana ka tokelo ({n})',
+        pickerGranting: 'E fana ka tokelo ho basebelisi ba {n}…',
+        pickerLargeHint:
+          'Bakeng sa dihlopha tse kholo haholo, kgetha tokelo ya sehlopha — tshebediso e le nngwe bakeng sa palo efe kapa efe ya basebelisi.',
+        grantedQueryNotice: 'Tokelo e fanowe ho basebelisi ba {n} — e sebetsa ho keno ya pele ya mosebelisi ka mong.',
+        col: {
+          user: 'Mosebelisi',
+          group: 'Group'
+        },
+        viaRole: 'role ea kgonthe',
+        noHolders: 'Ha ho mosebelisi kapa group ea fanoeng phihlelo.',
+        groupPlaceholder: 'Kgetha sehlopha…',
+        groupSearch: 'Batla dihlopha',
+        groupNoResults: 'Ha ho na dihlopha tshwanang',
+        grantGroup: 'Fana group',
+        groupHint:
+          'Setho se seng le se seng sa group se fuman phihlelo ha se kena hape — tshebetso e le nngwe bakeng sa palo efe kapa efe.',
+        grantedSomeNotice: 'E fanoeng {n} — ha e tsejoe: {m}',
+        grantedGroupNotice: 'Group e fanoeng — setho se seng le se seng se fuman phihlelo ha se kena hape.'
+      },
+      autocorrect: {
+        blankBefore: '(e se nang letho)',
+        blankBadge: 'ha ho frontmatter — tlhahiso e felletseng',
+        applyField: 'Sebelisa',
+        apply: 'Sebelisa lintlafatso',
+        body: 'Litokiso tse reriloeng tsa frontmatter mehopolong eohle. Litaba tsa mantlha ha li so ka li fetoloa.',
+        button: 'Tokiso e iketsang',
+        clean: 'Ha ho letho le lokelang ho lokisoa — frontmatter eohle e se e ntse e lumellana.',
+        col: {
+          field: 'Lebala',
+          after: 'Kamora',
+          before: 'Pele',
+          concept: 'Maikutlo'
+        },
+        failed: 'Scan e hlotsoe.',
+        scanning: 'Scanning…',
+        title: 'Tokiso e iketsang (frontmatter feela)'
+      },
+      concepts: {
+        originTip: 'Kamoo mohopolo ona o hlophisitsoeng kateng',
+        add: 'Kenya maikutlo',
+        addLabel: 'Beha label',
+        delete: 'Hlakola faele',
+        empty: 'Ha ho lifaele hajoale — eketsa mohopolo kapa u arole hape ho tsoa mohloling.',
+        filter: 'Filtara lifaele',
+        failedCard: {
+          title: 'Ho kenya ho hlolehile',
+          problem: 'Bothata',
+          noError: 'E hlahliloe e hlolehile ntle le lebaka la ngoliso.',
+          fixLabel: 'Mokhoa oa ho lokisa',
+          attempts: 'Attempts: {n}',
+          when: 'Last attempt {when}',
+          fix: {
+            reaper:
+              'Mosebetsi oa ho kenya o emetse nako eohle hobane mela e ne e tletseng — litaba li lokile. Ho lokisa: fetola faele ena hanyane obe o boloke, kapa busetsa morao repo obe o kenya hape tsohle.',
+            dataprep:
+              'Tshebeletso ea ho lokisa litaba e hlotlehile. Ho lokisa: fetola obe o boloke; ha e etsa hape, hlahloba tshebeletso ea dataprep.',
+            generic:
+              'Ho beha-index ho hlolehile. Ho lokisa: fetola litaba obe o boloke, kapa busetsa morao repo obe o kenya hape tsohle.'
+          }
+        },
+        indexBadge: 'index',
+        label: 'Maikutlo',
+        loading: 'Ho kenya…',
+        resplit: 'Khaola hape',
+        flagged: 'E tšoailoeng',
+        flaggedTip:
+          "Mehopolo e nang le mekhatlo e tšoailoeng — bula e 'ngoe le e 'ngoe, tlosa kapa u fetole mokhatlo, boloka (e hlahloba hape ka bo eona); kapa u li hlokomele ha u etsa publish.",
+        piiBadge: 'PII',
+        piiTip: 'Mekhatlo e tšoailoeng: {k}. Bula, tlosa kapa u li fetole, ebe u boloka — e hlahloba hape ka bo eona.',
+        piiTipBare: 'Mekhatlo e tšoailoeng — bula, hlahloba, ebe u boloka ho hlahloba hape.',
+        sourceLabel: 'Tokomane ea mohlogolosi',
+        sourceView: 'Bula tokomane ea mohlogolosi',
+        bulkAccept: 'Amohela tsohle',
+        bulkRedact: 'Hlakola tsohle',
+        bulkRemove: 'Tlosa tsohle',
+        loadProgress: 'Ho jarolla lifaele {done}/{total}',
+        addSource: '+ From documents',
+        reingest: 'Kena maikutlo ena',
+        reingestBusy: 'Ho na le Kenya ea RAG e sebetsang polokelong ena — ema e qetile, mme o leka hape.',
+        reingestFailed: 'Ho hlolehile ho kenya — leka hape.'
+      },
+      delete: {
+        body: 'Sena se tlosa faele, likaroloana tsa eona tse indexiloeng le likhokahano tsa eona tsa kerafo ruri.',
+        confirm: 'Hlakola',
+        title: 'Hlakola faele'
+      },
+      label: 'Morulaganyi oa polokelo',
+      loadFailed: 'Ha ea khona ho jarolla mohopolo ona.',
+      loadingConcept: 'Ho jarolla mohopolo…',
+      meta: {
+        label: 'Metadata ea mohopolo',
+        labelLabel: 'Leibole (Thulaganyo ea Tsebo)',
+        noLabel: 'Ha ho label',
+        none: 'Ha ho mohopolo o khethiloeng',
+        saveFailed: 'Ho boloka metadata ho hlolehile',
+        saved: 'Metadata e bolokiloe',
+        status: 'Boemo ba index',
+        title: 'Sehlooho',
+        trust: 'Khanya',
+        type: 'Mofuta',
+        typePlaceholder: 'Kgetha mofuta…',
+        hide: 'Hide metadata',
+        show: 'Show metadata'
+      },
+      pane: {
+        files: 'Lifaele',
+        graph: 'Setšoantšo'
+      },
+      pickConcept: 'Khetha mohopolo lethathamong ho qala ho hlophisa.',
+      resplit: {
+        body: 'Sena se hlakola mehopolo eohle ea hajoale le kerafo e thehiloeng, ebe se kenya faele ea mohloli hape ka karohano e ncha. Liphetoho tsa mehopolo li tla lahleha.',
+        confirm: 'Khaola hape',
+        failed: 'Ho arola hape ho hlolehile — hlahloba sehokelo sa faele ea mohloli.',
+        modeA: 'Mohopolo o le mong bakeng sa crawl eohle',
+        modeAHint: 'Mohopolo o moholohali — litaba tsohle mohopolong o le mong',
+        modeB: 'Mohopolo o le mong leqepheng ka leng',
+        modeBHint: 'E arola ho matšoao a batli a `## Source:` (e khothalelitsoeng)',
+        modeC: 'Sebelisa tlhahiso ea lihlooho tsa LLM',
+        modeCHint: 'Pale ea 10.6 — e tla haufinyane',
+        title: 'Arola hape ho tsoa mohloling'
+      },
+      save: 'Boloka',
+      saved: 'Bolokiloe',
+      saving: 'Ho boloka…',
+      unsaved: 'Liphetoho tse sa bolokoang',
+      view: {
+        rendered: 'E fanoe',
+        source: 'Mohloli'
+      },
+      viewToggle: 'Pono ea mohophotsi',
+      paneLabel: 'Sefate se bontšang',
+      saveFailed: 'Ho boloka ho hlolehile — leka hape',
+      piiRescan: {
+        label: 'Lintso tsa motho',
+        button: 'H scanu hape-khele',
+        working: 'Ho hana scansa mehele…',
+        progress: 'Ho hana scansa… {done} ea {total}',
+        progressIdle: 'Ho hana scansa… ho bala polokalo',
+        done: 'Li scanu {n} leqha.',
+        partial:
+          'Li scanu {n} leqha. {e} hae sa ka/on ea scan — ha bane ua fetofetsoa, kahooa ba sa lokisa the publishing.',
+        noKey:
+          'Server e ame hana scansa empa hae ho efa identifier ea run, kahooa hore progress ha ka lumelela. Ha ho na letho le tlhalosang.',
+        missing:
+          'Re-scan ha ea letho server ena (404). Ha ho na letho le fetohang — lipa tse scan tse tla thibela publishing.',
+        frozen: 'Re-scan e ame hana kena: polokalo e ntse a publish (409). Ha ho na letho le fetohang.',
+        failed:
+          'Re-scan e tla thibela. Ha ho na letho le fetohang — lipa tse scan tse tla thibela tse ntse a block publishing.',
+        scanned: 'Li scanu {n} leqha',
+        clean: 'hliama',
+        hit: 'tse ngotsoe',
+        error: 'scan e thibela',
+        vanished: 'tse iphithileng',
+        stillBlocking: 'Tse ntse a thibela'
+      },
+      piiBulk: {
+        done_accept:
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
+        title: {
+          redact: 'Sireletsa boitsebiso ho litaba tsohle tse tšoailoeng',
+          remove: 'Tlosa litaba tsohle tse tšoailoeng',
+          accept: 'Amohela mekhatlo eohle e tšoailoeng'
+        },
+        body: {
+          redact:
+            'Litaba tsa mantlha tsa mohopolo o mong le o mong o tšoailoeng li nkeloa sebaka ke tsebiso ea ho sireletsa boitsebiso. Sena se ke ke sa etsolloa.',
+          remove:
+            'Litaba tsa mantlha tsa mohopolo o mong le o mong o tšoailoeng lia tlosoa ka botlalo. Sena se ke ke sa etsolloa.',
+          accept:
+            'Mekhatlo eohle e tšoailoeng e tšoauoa e le e hlahlobiloeng-le-ho-bolokoa — e ke ke ea tšoauoa hape ntle le ha u ka hlahloba hape.'
+        },
+        scope: 'Mehopolo e amehileng: {n}.',
+        confirm: 'Sebelisa',
+        failed: 'Ketso ea bongata ea PII e hlolehile — leka hape.'
+      },
+      actions: {
+        bulkPii: 'Ho sebelisa ketso ea bongata ea PII',
+        deleting: 'Ho hlakola'
+      },
+      addSources: {
+        working: 'Converting sources…',
+        done: '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).',
+        failed: 'A conversion failed — check the logs; the rest may still have queued.',
+        landed: 'Conversions complete — {t} topics now in the tree.'
+      }
+    },
+    dashboard: {
+      bulk: {
+        body: "Polokelo ka 'ngoe e phatlalatsoa ka tlhahlobo e felletseng ea heke (tlhahlobo ea PII, ho indexa, boikamahanyo). Liphetho tsa polokelo ka 'ngoe:",
+        pending: 'Netefatsa ho etsa publish polokelong tse khethiloeng.',
+        publishConfirm: 'Phatlalatsa tse {n}',
+        title: 'Phatlalatsa lipolokelo tse khethiloeng'
+      },
+      card: {
+        actions: 'Liketso bakeng sa {name}',
+        building: 'Kaho…',
+        buildingAria: 'E ntse e hahoa — faele ea mohloli e ntse e sebetsoa',
+        delete: 'Hlakola',
+        export: 'Romela ka ntle',
+        ingesting: 'Ho ja…',
+        logs: 'Litlaleho',
+        rename: 'Nchafatsa lebitso',
+        versions: 'Liphetolelo',
+        testingLab: 'Testing Lab'
+      },
+      delete: {
+        body: 'Sena se tlosa polokelo, mehopolo ea eona, litaba tse indexiloeng, kerafo le lintho tsa ngata ruri. Ha se khone ho etsolloa.',
+        confirm: 'Hlakola',
+        title: 'Hlakola polokelo ruri'
+      },
+      filter: {
+        domain: 'Sefa ka sebaka sa taba',
+        allDomains: 'Libaka tsohle tsa litaba'
+      },
+      new: '+ Polokelo e ncha',
+      pii: {
+        ack: 'Hlokomela mekhatlo e tšoailoeng & phatlalatsa',
+        note: "Mekhatlo e tšoailoeng ke karolo ea litaba tse phatlalalitsoeng. Haeba u li hlahlobile (mohlala, lintlha tsa molao tsa puisano), hlokomela 'me u tsoele pele."
+      },
+      publish: {
+        body: 'Ho etsa publish ho theha v{n} le ho boloka ngata ea "{file}" polokelong ea litokomane, ho nka sebaka sa zip e fetileng. Mofuta o mocha ha o na ho serving ho fihlela o etsa Ingest ho oona.',
+        confirm: 'Phatlalatsa',
+        title: 'Phatlalatsa'
+      },
+      search: 'Batla...',
+      select: 'Khetha {name} bakeng sa phatlalatso e kholo',
+      stage: {
+        drainFailed: 'Ingest e hlolehile',
+        queueBehind: '{n} ka moleng · ingest ho {m} repo(s)',
+        redraining: 'Re-draining…',
+        building: 'Kaho…',
+        draft: 'Draft',
+        inReview: 'Ho hlahloba',
+        ingested: 'E entsoe ingest v{n}',
+        published: 'E phatlalalitsoe v{n}',
+        retracted: 'E khutlisitsoe',
+        stepOf: 'Step {n} of 10'
+      },
+      title: 'Lipolokelo',
+      topics: 'lihlooho',
+      unpublish: {
+        title: 'Fetola hape',
+        body: 'Seno se emisa ho fana ka {name} ho li-agent tsa RAG hangata. Sephutheli sa bundle zip se kentsoeng tsopele le nalane ya lidiphutheloana di lula; polokelo e khutla ho “E hlahlobitsoa” hore u lokise. Hatisa hape ebe o Ingest ho fana hape.',
+        confirm: 'Fetola hape'
+      },
+      lane: {
+        draft: 'Kenya',
+        in_review: 'Ho hlahloba',
+        published: 'E hatisitsoe',
+        ingested: 'Ingested',
+        retracted: 'E khutlisitsoe'
+      },
+      laneEmpty: {
+        draft: 'Ha ho letho le kentseng',
+        in_review: 'Ha ho letho le hlahlobang',
+        published: 'Ha ho lipolokelo tse hatisitsoeng',
+        ingested: 'Ha ho letho le ingested',
+        retracted: 'Ha ho letho le khutlisitsoeng'
+      },
+      reingest: {
+        failed: 'Ho hlolehile ho kenya ({n})',
+        title: 'Kena maikutlo a hlolehileng',
+        confirm: 'Kena',
+        counting: 'Ho sebetsa hore na maikutlo a ka kae a hlolehile…',
+        countFailed: 'Ha ho kgone ho bala chato ea maikutlo a hlolehileng. Leka hape.',
+        none: '{name} ha e na le maikutlo a hlolehileng — maikutlo ohle a ile a indexwa.',
+        body: '{n} maikutlo a {name} a ile a hlolehela ho indexwa, mme a lahlehile ho RAG. Ho kenya hape ho leka feela eo; maikutlo a indexiloeng ha a se ngutloeng. Ha e hlolehile hape, phoso e tla hlahloa maikutlong.'
+      }
+    },
+    build: {
+      drainFailed: {
+        more: '+ tse ling tse {n}',
+        fixPath: 'Etsa ingest hape ho leka hape: retract → theha mofuta → ingest.'
+      },
+      curation: {
+        fallbacks: 'mekhoa ea tšehetso ea LLM',
+        curated: 'E hlophisitsoeng',
+        typed: 'E theiloeng',
+        labeled: 'E nang le li-label',
+        described: 'E hlalositsoeng'
+      },
+      batches: 'Lihlopha tse bolokiloeng',
+      bytes: 'Mohloli o baliloe',
+      conceptsIndexed: 'mehopolo e indexiloeng',
+      elapsed: {
+        hr: 'E qalile lihora tse {n} tse fetileng',
+        lt1: 'E qalile ka tlase ho motsotso o le mong o fetileng',
+        min: 'E qalile metsotso e {n} e fetileng'
+      },
+      hint: {
+        import: 'Polokelo e lula ho Import ho fihlela phetoho ea faele e phetheha.',
+        rag: 'Index ea RAG e ntse e hahoa — mofuta ona o qala serving hang ha mohopolo o mong le o mong o indexiloe.',
+        serving: 'Mofuta ona o sebetsa ho serving sephethephethe sa RAG — etsa retract ho etsa liphetoho.',
+        review: 'E ho review — mohlahlobi oa saena, joale mohlokomeli o etsa publish le ingest.',
+        retracted: 'Ha e sebetse — submit → review → approve → publish → ingest ho qala serving hape.',
+        idle: 'Ho kenya ho felile — etsa submit bakeng sa review ho tsoela pele ka phallo ea mosebetsi.'
+      },
+      pages: 'Maqephe a sebelitsoeng',
+      serving: {
+        graph: 'Kerafo ea serving',
+        version: 'Mofuta oa serving'
+      },
+      stage: {
+        indexing: 'Indexing',
+        serving: 'E sebeletsa',
+        label: 'Mokhahlelo'
+      },
+      title: {
+        import: 'Tsoelo-pele ea ho kenya',
+        rag: 'Tsoelo-pele ea ingest',
+        serving: 'Boemo ba serving',
+        review: 'Boemo ba review',
+        retracted: 'Boemo ba retract',
+        idle: 'Boemo ba polokelo'
+      },
+      lifecycle: {
+        importing: 'E kenya',
+        reviewing: 'Ho hlahloba',
+        ingesting: 'Ho ja',
+        serving: 'E sebeletsa',
+        retracted: 'E khutlisitsoe'
+      },
+      row: {
+        subject: 'Sebaka sa taba',
+        topics: 'Lihlooho',
+        lastVersion: 'Mofuta oa ho qetela'
+      }
+    },
+    create: {
+      zipOnly: 'Khetha faele ea ngata ea .zip.',
+      stagedFile: 'E hlophisitsoe: {name}',
+      staged: 'Ngata e hlophisitsoe — tobetsa Theha Polokelo ho qala ho kenya.',
+      openExisting: 'Bula polokelo e teng',
+      name: 'Lebitso la polokelo',
+      importing: 'Ho kenya ngata…',
+      importHint: 'Kapa kenya ngata e teng ea zip e le polokelo e ncha.',
+      importDefaultName: 'Polokelo e kentseng',
+      failed: 'Ho thehoa ha polokelo ho hlolehile',
+      duplicateInline: 'Polokelo e nang le lebitso lena e se e ntse e le teng. E bule, kapa u khethe lebitso le leng.',
+      duplicate:
+        'Polokelo e nang le lebitso lena e se e ntse e le teng — e bule ho tsoa ho dashboard kapa u khethe lebitso le leng.',
+      domain: 'Sebaka sa taba',
+      create: 'Theha polokelo',
+      title: 'Polokelo e ncha ea OKF',
+      hint: 'E theha polokelo e se nang letho e nang le index.md eo u e hlophisang ho morulaganyi oa Studio.',
+      domainPlaceholder: 'Khetha sebaka sa taba…',
+      domainRequired: 'Khetha sebaka sa taba pele — ha se khone ho fetoloa kamora ho thehoa.',
+      classLabel: 'Kemiso ea mohopolo',
+      classHeuristics: 'Li-heuristics (ea kamehla)',
+      classLlm: 'LLM-assisted',
+      classHybrid: 'Hybrid'
+    },
+    fm: {
+      errKeyCurated: 'Lebitso la lebala le boloketsoeng morero o khethehileng.',
+      errKeyDuplicate: 'Lebitso la lebala le sebelisitsoe habeli.',
+      errJson: 'JSON e fosahetseng',
+      errNumber: 'E tlameha ho ba palo',
+      kind: {
+        json: 'JSON',
+        array: 'Lenane',
+        boolean: 'Nnete/Leshano',
+        number: 'Palo',
+        string: 'Sengoliloeng'
+      },
+      removeKey: 'Tlosa tšimo',
+      kindLabel: 'Mofuta oa theko',
+      keyPh: 'lebitso la tšimo',
+      fullHint: 'Lebala ka leng la frontmatter le ka hlophisoa. Eketsa kapa u tlose linotlolo ka bolokolohi.',
+      errRemovalPending: 'Ho tlosa mabala ho hloka konteraka ea seva ea merge-delete (e tla fihla haufinyane).',
+      errKeyRequired: 'Lebala le leng le le leng le hloka lebitso.',
+      arrayPh: 'boleng bo arohantsoeng ka likhefana',
+      addKey: 'Kenya tšimo',
+      saved: 'Frontmatter e bolokiloe',
+      label: 'Frontmatter',
+      tipLabel: 'Frontmatter ke eng?',
+      edit: 'Fetola',
+      empty: 'Ha ho frontmatter hajoale — Hlophisa e eketsa mofuta, sehlooho le lileibole.',
+      type: 'Mofuta',
+      noType: 'Ha ho mofuta',
+      titleLabel: 'Sehlooho',
+      labelsLabel: 'Leibole (Thulaganyo ea Tsebo)',
+      noLabel: 'Ha ho label',
+      descriptionLabel: 'Tlhaloso',
+      save: 'Boloka frontmatter',
+      saveFailed: 'Ho boloka frontmatter ho hlolehile',
+      perRepoTitle: 'Routing tags — what this repo is about',
+      perRepoHint:
+        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+      perRepoField: {
+        topic: 'Topic',
+        entity: 'Entity',
+        scope: 'Scope',
+        forbidden: 'Forbidden',
+        summary: 'Summary',
+        keyword: 'Keyword'
+      },
+      perRepoPh: {
+        topic: 'One topic per line',
+        entity: 'One entity per line',
+        forbidden: 'One forbidden topic per line',
+        keyword: 'One keyword per line'
+      },
+      perRepoHelp: {
+        topic: 'Add, modify or remove topics — one per line. Empty lines are ignored.',
+        entity: 'Add, modify or remove entities — one per line. Empty lines are ignored.',
+        forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
+        keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
+      },
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'Malaete a boemo ba repo ({summary}) ke a repo, eseng sa sehlooho sena — laola tsona paneleng ya malaete ka ho le letona.'
+    },
+    piiReview: {
+      title: 'Kontrollo ea lintso tsa motho',
+      checking: 'Ho kontrolla…',
+      checkingBody: 'Ho bala boemo ba lintso tsa motho kaofela lipa…',
+      unreadableTitle: 'Boemo bo sa tsebise',
+      unreadableBody:
+        'Ha ho bale boemo ba lintso tsa motho ba polokalo ena. Hore na ho na letho le fumeng ke haeba tsebisoa — ha ena se sephetho eseng se hliama.',
+      unscanned: 'Ha ea sa scanwa',
+      unscannedBody:
+        'Ha ho na scan ea lintso tsa motho e felileng e koahoa polokalo ena ({n} ha a ka scanwa). Ha ho letho le tsebisitsoeng hore le molemo — publishing ha e thibetse ka litso, empa ho na le scan boemong.',
+      errorTitle: 'Scan e thibetse',
+      errorBody:
+        '{n} ha a ka scanwa. Litokom tsa tsona ha li a baleha, kahooa hore na li na le lintso tsa motho ke haeba tsebisoa — ha li hliama empa li thibela publishing.',
+      unreviewed: 'Tse ngotsoe, eseng sa lekola',
+      unreviewedBody:
+        'Scanner o fumane lintso tse kgonehang tsa motho ka {n} leqha mme ha ho motho ea a lekolang. Publishing lumelletsoa, empa ha ho letho lekaleiloeng.',
+      reviewed: 'Tse ngotsoe, lekolehilwe',
+      reviewedBody: '{n} leqha li na le lintso tsa motho tse ngotsoeng tse tsebisitsoeng ke mphetihe ({by} ka {at}).',
+      cleanVerdict: 'Ea scanwa — ha ho letho',
+      cleanBody: 'Kopanong ea scanwa mme ha ho na letho la lintso tsa motho.',
+      staleAck: 'Tsebiso ea pele e ne e ngotsoa {a} ka {at}; hokale {n} a ngotsoe, kahooa ha e akare.',
+      bannerTitle: 'Ha ho motho ea lekolang lintso tseo.',
+      bannerBody:
+        'Publishing e lumelletsoa mme ho na le seriti se e thibetsang, empa lipa tse ngotsoe tse tla fihlela polokalo e publishuwa ka mokala. Bula e ngoe e ngoe mme o nke ka moreme.',
+      unknownActor: 'ha ea tsebise'
+    },
+    glossary: {
+      addConcept:
+        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+      title:
+        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus:
+        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier:
+        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+      concept:
+        "Kenyelletso e le 'ngoe polokelong ea hau — hangata leqephe le le leng kapa taba e le 'ngoe. Mohopolo o mong le o mong o na le frontmatter e hlophisitsoeng eo mothusi a e balang, hammoho le mongolo oa markdown oo a arabang ho tsoa ho oona.",
+      repository:
+        'Pokello ea mehopolo e hlophisitsoeng ho potoloha Sebaka se le seng sa Taba. E fetoha ngata ea OKF eo u e phatlalatsang, u e fang mofuta, le ho e etsa hore e fumanehe ho mothusi.',
+      subjectArea:
+        'Tsebo ee e hlahela kae? Sebaka sa Taba se arola polokelo ea hau le ho tsepamisa maikutlo ho lileibole tseo u ka li khethang. Ha se khone ho fetoloa kamora ho thehoa.',
+      selectSubjectArea: 'Khetha sebaka sa taba…',
+      subjectAreaMissing: "Sebaka sa Taba sa polokelo ena ha se eo ho Thulaganyo ea Tsebo — e bontša leibole ka 'ngoe.",
+      label:
+        'Sehlopha se tsoang ho Thulaganyo ea Tsebo se bolellang mothusi hore na mohopolo ona ke mofuta ofe oa ntho. Lileibole ke tsela eo likarabo li fumanang litaba tse nepahetseng ka eona.',
+      bundle:
+        "Phatlalatso ea zip ea polokelo — mehopolo ea eona, sebopeho le metadata faeleng e le 'ngoe. Dingata ke tsela eo lipolokelo li tsamaeang ka eona lipakeng tsa litsamaiso.",
+      version:
+        'Setšoantšo se tiisitsoeng sa polokelo ka nako ea publish. Ho hlophisa ho tsoela pele mofuteng o latelang — mefuta e phatlalalitsoeng ha e so ka e fetoha.',
+      serving:
+        'Mofuta ona o sebetsa hona joale: mothusi o bala litaba tsa oona ha a araba. Etsa retract ho etsa liphetoho ho oona.',
+      ingestion:
+        "Mohato oo mofuta o phatlalalitsoeng o lokisetsoang ho araba — mongolo o aroloa, o etsoa di-embedding 'me oa hokahanngoa. Ha ho letho le fihlang ho mothusi pele ho sena.",
+      classification:
+        'Kamoo re etsang qeto ea hore na mohopolo ka mong KE eng (sehlooho, mokhatlo, tshebetso…). Li-heuristics li bala leqephe ka bo tsona; khetho ea LLM e lieha haholo empa e ka khona ho sebetsana le maqephe a thata.',
+      resplit:
+        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+      saveFailed: 'Ho boloka ho hlotsoe',
+      importFailedTitle: 'Ho kenya ho hlolehile — faele ea mohloli ha ea khona ho fetoloa.',
+      importFailedHint: "Hlakola polokelo ena 'me u kenye faele ea mohloli hape.",
+      frontmatter:
+        "Tlhahisoleseling e hlophisitsoeng holimo ho faele ka 'ngoe — mofuta, sehlooho, lileibole. Mothusi o e sebelisa ho tseba hore na mohopolo ka mong o bua ka eng.",
+      pickSource:
+        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+      classificationStrategy:
+        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
+      clsHeur: 'Heuristics (fast, no LLM)',
+      clsLlm: 'LLM classification',
+      clsHybrid: 'Hybrid',
+      fsPick:
+        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+      autocorrect:
+        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+      handoff:
+        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+      lifecycle:
+        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+      labelsAuto:
+        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+      reviewHandoff:
+        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+      piiReview:
+        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+    },
+    md: {
+      toolbar: 'Fomati',
+      bold: 'Bold',
+      italic: 'Italic',
+      h1: 'Sehlooho 1',
+      h2: 'Sehlooho 2',
+      h3: 'Sehlooho 3',
+      bullet: 'Lenane la litlhaku',
+      numbered: 'Lethathamo le nang le linomoro',
+      link: 'Kenya sehokelo',
+      code: 'Inline code',
+      table: 'Kenya tafole',
+      split: 'Arola',
+      rendering: 'Ho fanaoa…'
+    },
+    narrative: {
+      intro:
+        'Polokelo ea OKF ke pokello e hlophisitsoeng, e nang le mefuta ea lihlooho tseo likarabo tsa hau tsa moqoqo li ka li qotsang. E nke e le karolo e bobebe ea sebopeho sa tsebo bakeng sa sebaka sa hau — lileibole li hlalosa lihlopha, lihlooho li hlalosa mekhatlo, mehloli e hlalosa tšimoloho.',
+      step0:
+        'Polokelo ea OKF ke pokello e hlophisitsoeng, e nang le mefuta ea lihlooho. E nke e le karolo e bobebe ea sebopeho sa tsebo bakeng sa sebaka sa hau — lileibole li hlalosa lihlopha, lihlooho li hlalosa mekhatlo, mehloli e hlalosa tšimoloho. Hang ha e se e phatlalalitsoe, likarabo tsa moqoqo li qotsa lihlooho tsena ka boitsebiso (ID).',
+      step1:
+        'Litsela tse tharo tsa ho qala polokelo ea OKF: hula lihlooho ho tsoa ho crawl ea sebaka sa marang-rang, li nke ho tsoa litokomaneng tseo u seng u li kentse, kapa u qale ka leqephe le se nang letho. Ho etsa clone ea repo e teng ho kopitsa lihlooho tsa eona mme ho o lumella ho arola le ho ntšetsa pele mosebetsi.',
+      step2:
+        "Tokomane ka 'ngoe e fetoha mohloli oa lihlooho. Moetsi o li bala, o ntša lihlooho tse ka bang teng, le ho sisinya thulaganyo. U tla hlahloba sehlooho ka seng mohatong o latelang — ha ho letho le etsoang ho fihlela u saena le ho lumela.",
+      step3:
+        "Re bala mehloli ea hau le ho sisinya lihlooho. Lihlooho li bokellana tlas'a lileibole tsa lihlopha tseo u li khethang. Moetsi o hlokolosi — o khetha ho sisinya lihlooho tse fokolang, tse entsoeng hantle ho e-na le tse ngata tse nang le lerata.",
+      step4:
+        'Lileibole ke likarolo tse arolang tsa thuto ea sebopeho sa tsebo ea hau — na taba ee ke mofuta ofe oa ntho? Li bo etsoa feela ho Hierarchy ea Tlhahabolelo, li fihlisitse ho Setsa sa Sephe sa polokotlo ena.',
+      step5:
+        'Ena ke pelo ea mosebetsi. Sehlooho ka seng ke karolo e nyane ea tsebo e ka qotsoang. Lihlooho li fumana sehlooho, tlhaloso, li fumana leebole ho Hierarchy ea Tlhahabolelo. Mosebetsi oa hau ke ho etsa hore e be e tšepahalang: reha bocha lihlooho tse sa hlakang, kopanya tse batlang li tšoana, tlosa tseo u ke keng ua li tšehetsa ka mohloli.',
+      step6:
+        'Re etsa liteko tsa tumellano: na eohle ea lihlooho e na le sehlooho? Na matlhao a utloahala? Na tlaso ea mehloli e tsotehile? Mathata a thibelang a lokisoe pele u fana ka polokelo; lithoahallo li ka amoheloa.',
+      step7:
+        'Litemoso tse ling li ka lokisoa ka bo tsona: litekanyetso tsa boemo li ka fetoloa ho li-enum tse nepahetseng, mabala a sieo a ka tlatsoa ka lintlha tse utloahalang tsa kamehla. Sebelisa litokiso tseo u lumellanang le tsona, ebe u khutlela ho mohlophisi ho hlahloba.',
+      step8:
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+      step9:
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+      docMgmtEntry:
+        'Theha polokelo e ncha ea OKF ho tsoa litokomaneng tse khethiloeng. Litokomane li tla fetoha mehloli; u tla hlahloba le ho reha lihlooho tseo li li hlahisang mabitso pele ho phatlalatsoa letho.',
+      crawlSegment:
+        'Polokelo ea OKF ke pokello e hlophisitsoeng, e nang le mefuta ea lihlooho tseo likarabo tsa hau tsa moqoqo li ka li qotsang.',
+      emptyDashboard:
+        "Ha u e-s'o thehe lipolokelo tsa OKF. Polokelo ea OKF ke sete e hlophisitsoeng, e qotsehang ea lihlooho tseo likarabo tsa hau tsa moqoqo li ka fumanang tsebo ho tsona.",
+      labels:
+        'Lileibole ke likarolo tse arolang tsa thuto ea sebopeho sa tsebo ea hau — li araba "na taba ee ke mofuta ofe oa ntho?".',
+      hide: 'Pata',
+      whatIsThis: 'See ke eng?'
+    },
+    common: {
+      close: 'Koala',
+      cancel: 'Hlakola',
+      save: 'Boloka',
+      clear: 'Hlakola tsohle',
+      delete: 'Hlakola ruri'
+    },
+    studio: {
+      title: 'OKF Studio',
+      help: 'Thuso',
+      helpTitle: 'Mabapi le OKF Studio',
+      helpBody:
+        "Lipolokelo tsa OKF ke mokhoa o bobebe oa thuto ea sebopeho sa tsebo — lileibole li hlalosa lihlopha, lihlooho li hlalosa mekhatlo, mehloli e hlalosa tšimoloho. Hang ha li phatlalalitsoe, likarabo tsa moqoqo li qotsa lihlooho ka ID 'me li senola tšimoloho ea tsona.",
+      view: {
+        dashboard: 'Letlapa la taolo',
+        wizard: 'Wizard'
+      },
+      clonedFrom: 'E kopitsitsoe ho tsoa ho {name} · mofuta oa {version}',
+      context: {
+        title: 'Polokelo',
+        untitled: 'Polokelo e se nang lebitso',
+        trust: 'Tšepo',
+        sources: 'Mehloli',
+        concepts: 'Mehopolo ho fihlela joale',
+        stale: 'e siiloe ke nako'
+      },
+      status: {
+        draft: 'e ntse e tsoela pele',
+        inReview: 'e ntse e hlahlojoa',
+        published: 'e phatlalalitsoe'
+      },
+      stage: {
+        inReview: 'E ho review',
+        stepOf: 'Mohato oa {n} ho e 10',
+        draft: 'Draft'
+      },
+      dashboard: {
+        title: 'Lipolokelo',
+        new: '+ Polokelo e ncha',
+        search: 'Batla…',
+        empty: 'Ha ho lipolokelo mona hajoale.',
+        topics: 'lihlooho',
+        select: 'Khetha {name} bakeng sa phatlalatso e kholo',
+        stale: 'e siiloe ke nako',
+        stage: {
+          inReview: 'E ho review',
+          stepOf: 'Mohato oa {n} ho e 10',
+          draft: 'Draft'
+        },
+        bulk: {
+          selected: 'ho khethiloe tse {n}',
+          publish: 'Phatlalatsa tse khethiloeng',
+          title: 'Phatlalatsa lipolokelo tse khethiloeng',
+          body: "Hang ha e phatlalalitsoe, likarabo tsa morao tsa moqoqo li ka li sebelisa. Polokelo ka 'ngoe e ka tlase e thathamisa sephetho sa eona sa ho qetela.",
+          results: 'Liphetho',
+          publishConfirm: 'Phatlalatsa tse {n}',
+          col: {
+            name: 'Lebitso',
+            status: 'Boemo',
+            topics: 'Lihlooho'
+          },
+          status: {
+            ready: 'E lokile'
+          }
+        }
+      },
+      draft: {
+        notReady: "Li-draft ha li e-s'o khone ho bolokoa lehlakoreng la seva; li bolokiloe mona sebakeng."
+      },
+      mode: {
+        basic: 'Pele',
+        expert: 'Setsebi'
+      }
+    },
+    wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        retracted: 'Retracted',
+        publish: 'Ready to ingest'
+      },
+      status: {
+        published: 'e hatisitsoe',
+        inReview: 'ho hlahloba',
+        draft: 'ho ntseng ho tsoela pele'
+      },
+      exit: 'Khutlela ho dashboard',
+      context: {
+        version: 'Version',
+        untitled: 'Polokelo e se nang lebitso',
+        trust: 'Tšepo',
+        title: 'Lefapha',
+        stale: 'e theohileng',
+        sources: 'Mehloli',
+        concepts: 'Mehopolo ho fihlela joale'
+      },
+      label: 'Wizard ea OKF Studio',
+      back: 'Morao',
+      continue: 'Tsoela pele',
+      finish: 'Open the Editor'
+    },
+    steps: {
+      entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
+        title: 'Lebitso la polokelo & sebaka sa taba',
+        hint: "Fana ka lebitso le hlakileng polokelong ena ea OKF 'me u khethe sebaka sa taba ea eona.",
+        nameLabel: 'Lebitso la polokelo',
+        namePh: 'mohlala: Litumello tsa lipalangoang NL',
+        domainLabel: 'Sebaka sa taba'
+      },
+      choose: {
+        title: 'Na polokelo ee ea OKF e lokela ho qala kae?',
+        hint: 'Khetha hore na u batla ho qala polokelo ee joang. U ka e fetola hamorao.',
+        source: {
+          documents: {
+            title: 'Litokomane',
+            desc: 'Ntša lihlooho litokomaneng tseo u seng u li kentse.'
+          },
+          crawl: {
+            title: 'Ho batla ha sebaka sa marang-rang (crawl)',
+            desc: "Batla sebaka sa marang-rang 'me u sisinye lihlooho ho tsoa maqepheng."
+          },
+          manual: {
+            title: 'Leqephe le se nang letho',
+            desc: "Qala qalong 'me u ingolle lihlooho."
+          },
+          clone: {
+            title: 'Clone ea polokelo e teng',
+            desc: "Arola lihlooho le sebopeho ho tsoa polokelong e 'ngoe ea OKF."
+          }
+        },
+        cloneSource: 'Source repository (not yet serving)',
+        clonePh: 'Select the repository to clone from',
+        cloning: 'Cloning topics into this repository…',
+        cloneNeed: 'Pick the repository to clone from first.',
+        cloneBusy: 'The previous repository is still being removed — go Back and Continue again in a moment.',
+        cloneFailed: 'The clone failed — try again.'
+      },
+      input: {
+        title: 'Lintho tse kenoang',
+        documents: 'Khetha litokomane tse lokelang ho theha lethathamo la lihlooho.',
+        crawl: 'Khetha libaka tsa marang-rang tseo u batlang ho li batla.',
+        manual: 'U ka ngola lihlooho ka kotloloho mohatong o latelang.',
+        clone: 'Khetha polokelo e teng eo u batlang ho e kopitsa.',
+        placeholder: 'UI ea mohato e tla fihla paleng e tlang.',
+        chooseCrawl: 'Choose crawled documents',
+        chooseDocs: 'Choose source documents',
+        writeOne: '+ Write a concept',
+        fsPick: '+ Import markdown from this computer',
+        fsBusy: 'Importing your files…',
+        fsFailed: 'Import failed — check the files and retry.',
+        skippedEmpty: '{n} empty file(s) skipped.',
+        noneSelected: 'No sources selected yet.',
+        selectedN: 'Selected: {n}',
+        moreN: ' +{n} more',
+        noRepo: 'Create the repository first (go back to Entry).',
+        noRepoYet: 'Create the repository first (go back to Entry).',
+        benchTitle: 'Topics in this repository',
+        benchCount: '{n}',
+        benchLoading: 'Reading topics…',
+        benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
+        benchFailed: 'Could not read the topics right now.',
+        editTitle: 'Edit concept',
+        deleteFailed: 'Could not delete the concept.',
+        added: '{n} topic(s) in this repository so far.',
+        deleteTitle: 'Delete topic',
+        deleteBody: 'This permanently removes the topic from this repository.',
+        labelFailed: 'Could not set the label.',
+        cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
+      },
+      produce: {
+        title: 'Hlahisa lihlooho',
+        hint: 'Re bala mehloli ea hau le ho sisinya lihlooho.',
+        progress: 'Moetsi o ntse a sebetsa...',
+        placeholder: 'Tšebeletso ea moetsi e tla hokahanngoa paleng e tlang.',
+        retry: 'Retry conversion',
+        restart: 'Run again',
+        running: 'Converting… you can watch progress here; nothing is committed until you review in Curate.',
+        failed: 'The conversion failed — retry, or go back and pick different inputs.',
+        done: '{n} topic(s) are ready — continue to review them in Curate.',
+        noSources: 'No sources selected — go back to Input.',
+        neverStarted: 'The conversion did not start — retry.',
+        manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
+        labelDone: 'Conversion complete',
+        dupContent:
+          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
+        inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          complete: 'Complete',
+          unavailable: 'Count unavailable',
+          waiting: 'Waiting'
+        },
+        filesNote: '{done} of {total} documents converted',
+        pagesNote: '{done} of {total} pages converted',
+        pagesSoFar: '{n} pages converted so far',
+        sourceStat: '+{n} new (total {t})',
+        sourceStatMerged: '+{n} new · {m} merged by slug (total {t})',
+        docsLeg: '{n} selected document(s)',
+        legWait: 'Waiting for the previous conversion to release…'
+      },
+      label: {
+        title: 'Leballo — li qetelloa ka bo bona',
+        hint: 'Leballo li bo etsoa feela ho Hierarchy ea Tlhahabolelo — li fihlisitse ho Setsa sa Sephe sa polokotlo ena.',
+        loading: 'Reading labels…',
+        preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
+        unlabeled: 'no labels yet',
+        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
+        loadFailed: 'Could not read the labels right now.'
+      },
+      curate: {
+        embedHint:
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
+        title: 'Hlahloba lihlooho',
+        hint: 'Sehlooho ka seng ke karolo e nyane ea tsebo e ka qotsoang. Hlophisa sehlooho le tlhaloso.',
+        placeholder: 'Sefate sa mohlophisi + morulaganyi li tla fihla ho Pale ea 3-8.'
+      },
+      validate: {
+        title: 'Hlahloba mathata',
+        hint: 'Re etsa liteko tsa tumellano. Mathata a thibelang a lokisoe pele u fana ka polokelo.',
+        placeholder: 'Phanele ea netefatso e tla fihla ho Pale ea 3-8.'
+      },
+      autocorrect: {
+        title: 'Ho lokisa ka bo eona',
+        hint: 'Litemoso tse ling li ka lokisoa ka bo tsona. Sebelisa litokiso tseo u lumellanang le tsona, ebe u khutlela ho mohlophisi ho hlahloba.',
+        placeholder: 'Tšebeletso ea ho lokisa ka bo eona e tla fihla ho Pale ea 10.2.',
+        noRepo: 'No repository yet — go back to Entry and create one first.',
+        applied: 'Fixes applied — continue, or go back to Curate to review the result.'
+      },
+      review: {
+        title: 'Hlahloba',
+        hint: 'Kakaretso ea seo u se entseng — ho romela, tumello le ho hatisoa etsahala dashboard le mohlophisi.',
+        repo: 'Polokelo',
+        topics: 'Lihlooho',
+        labels: 'Lileibole',
+        sources: 'Mehloli',
+        state: 'Lifecycle state',
+        labelsSet: 'set per topic in Curate',
+        browserHint:
+          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
+        noRepo: 'No repository yet — the file review appears here once a repository exists.',
+        ritualOutside:
+          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+        versions: 'Versions',
+        logs: 'Action log',
+        rename: 'Rename',
+        noVersions: 'No versions yet — versions are minted during the approval ritual.',
+        versionSummary: '{n} version(s) · latest v{latest}'
+      },
+      publish: {
+        title: 'Phekola e feditse',
+        hint: 'Polokelo ena e loketse hlahlobo. Ho hatisoa ha etsahala mona ka mohla — e romelle bakeng sa tumello dashboard; tumello le ho hatisoa etsahala ho tswa dashboard kapa mohlophisi.',
+        nameOk: 'Lebitso la polokelo le behiloe',
+        labelsOk: 'Lileibole li khethiloe',
+        topicsOk: 'Lihlooho li hlahlobiloe',
+        topicsPending: 'No topics yet',
+        topicsServing: 'Topics serving',
+        noTopics: 'No topics yet — go back to Curate to produce or write them.',
+        frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
+        ritual:
+          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+        openDashboard: 'Open the Dashboard'
+      }
+    },
+    trust: {
+      tier: {
+        unverified: 'ha ea netefatsoa',
+        'machine-confirmed': 'e netefalitsoe ke mochini',
+        'human-reviewed': 'e hlahlobiloe ke motho'
+      }
+    },
+    repos: {
+      retract: {
+        notReady: 'UI ea retract e tla tsoa ho Pale ea 3.9.'
+      },
+      manifest: {
+        notReady: 'Tšebeletso ea manifest ea ngata e tla hokahanngoa paleng e tlang.'
+      }
+    },
+    docs: {
+      createRepo: 'Theha polokelo ea OKF',
+      gate: {
+        emptySelection: "Khetha bonyane tokomane e le 'ngoe",
+        alreadyInOkf: "Tlosa litokomane tse seng li ntse li le ka har'a polokelo ea OKF",
+        alreadyIngested: 'Tlosa litokomane tse seng li kile tsa etsoa ingest',
+        servingWarn:
+          '{n} litokomane tse kgethileng li sebeleleta corpus ea mahala — repo e ncha e ke ke ea kenyelletsoa pele li tlosoa.'
+      },
+      produce: {
+        notReady: 'Moetsi o tla hokahanngoa paleng e tlang.'
+      }
+    },
+    crawl: {
+      domainLabel: 'Sebaka sa taba',
+      domainPlaceholder: 'Khetha sebaka sa taba…',
+      classLabel: 'Kemiso ea mohopolo',
+      classHeuristics: 'Li-heuristics (ea kamehla)',
+      classHeuristicsHint:
+        'Kemiso e potlakileng e ipapisitseng le melao — ha ho litšenyehelo tsa LLM, e ntle bakeng sa li-crawl tse hlophisitsoeng hantle.',
+      classLlm: 'LLM-assisted',
+      classLlmHint:
+        'LLM e hlophisa mohopolo o mong le o mong — mofuta, leibole ea Thulaganyo ea Tsebo le tlhaloso. E nepahetse le ho fella haholo ho feta li-heuristics; lebella nako e eketsehileng mohopolong ka mong.',
+      classHybrid: 'Hybrid',
+      classHybridHint:
+        'Li-heuristics pele; LLM e hlahloba linyeoe tse sa tsitsang le ho koala likheo. E leka-lekanya nako le botlalo.',
+      targetLabel: 'Na see se lokela ho ea kae?',
+      target: {
+        freeform: 'Batla ho ea sehlopheng sa mongolo se sa lekanyetsoang',
+        okfRepo: 'Polokelo ea OKF'
+      },
+      targetHint: 'Re tla u bontša lihlooho tseo re li fumaneng pele re boloka letho.',
+      createOkfFromCrawl: 'Theha polokelo ea OKF ho tsoa ho crawl ena',
+      splitLabel: 'Karohano ea mohopolo',
+      splitA: 'Mohopolo o le mong bakeng sa crawl eohle',
+      splitB: 'Mohopolo o le mong leqepheng ka leng (e khothalelitsoeng)',
+      splitC: 'Sebelisa tlhahiso ea lihlooho tsa LLM',
+      splitCHint: 'Pale ea 10.6 — e tla haufinyane',
+      splitBHint: 'Leqephe ka leng le batliloeng le fetoha mohopolo oa lona — AI e ka qotsa maqephe ka bomong.',
+      splitAHint: 'Crawl eohle e fetoha mohopolo o le mong o moholo — e loketse libaka tse nyane tsa marang-rang.',
+      progressDownload: 'Ho jarolla litaba tse batliloeng...',
+      progressSplit: 'Ho arola ka mehopolo...',
+      progressIngest: 'Ho eketsa mehopolo (sehlopha sa [i] ho tse [n])...',
+      postCrawlHint:
+        'Kamora hore crawl e phethehe, o ka e fetola polokelo ea OKF ho tsoa ho tab ea Dashboard ea faele.',
+      creating: 'Ho theha polokelo ea OKF...',
+      createOk: 'Polokelo ea OKF e thehiloe. Ho bula Studio ho e hlophisa.',
+      createOkRenamed: 'Polokelo ea OKF e thehiloe e le "[name]". Ho bula Studio ho e hlophisa.',
+      createFailed: 'Ha ea khona ho theha polokelo ea OKF ho tsoa ho crawl ena.',
+      conversionsTitle: '__TODO_TRANSLATE__ (en: Repositories created from this crawl)',
+      convQueued: 'Moleng...',
+      convDownloading: 'Ho jarolla crawl...',
+      convSplitting: 'Ho arola ka mehopolo...',
+      convAdding: 'Ho eketsa mehopolo (maqephe a [p] ho fihlela joale)...',
+      convDone: 'E thehiloe (maqephe a [p])',
+      convFailed: 'E hlolehile',
+      createStarted: 'Ho theha "[name]" — latela tsoelo-pele ka tlaase.',
+      modelTier: {
+        label: 'Mohlala',
+        options: {
+          'local-small': 'Ea lehae · e nyane',
+          'local-medium': 'Ea lehae · e mahareng',
+          'sovereign-large': 'Ea boipuso · e kholo'
+        }
+      },
+      gate: {
+        notSucceeded: 'Crawl e tlameha ho qeta pele ho thehoa polokelo ea OKF.',
+        alreadyInOkf: "Crawl ena e se e ntse e le ka har'a polokelo ea OKF."
+      }
+    },
+    curator: {
+      placeholder: 'Khetha taba ka ho le letšehali ho e bona le ho e hlophisa.',
+      search: 'Batla lihlooho',
+      noTopics: 'Ha ho lihlooho hajoale.',
+      labels: {
+        title: 'Fetola lileibole',
+        body: 'Lileibole ke likarolo tse arolang tsa thuto ea sebopeho sa tsebo ea hau — na taba ee ke mofuta ofe oa ntho?',
+        edit: 'Fetola lileibole',
+        add: 'Eketsa',
+        addPh: 'mohlala: Litumello',
+        remove: 'Tlosa',
+        empty: 'Ha ho lileibole hajoale.',
+        notReady: 'Lileibole li bolokiloe mona sebakeng — ho hokahana le seva ho tla haufinyane.'
+      },
+      frontmatter: {
+        label: 'Frontmatter',
+        edit: 'Hlophisa frontmatter',
+        dialogTitle: 'Hlophisa frontmatter',
+        okfVersion: 'okf_version',
+        status: 'lifecycle.status',
+        staleAfter: 'lifecycle.stale_after',
+        trustTier: 'trust_tier',
+        attestation: 'attestation',
+        sources: 'provenance.sources',
+        onlyOnIndex: 'Per-repo tags live on the index concept only — open the index to see them.'
+      },
+      showSource: 'Bontša mohloli',
+      issue: {
+        missingType: 'Mohopolo o haelloa ke mofuta.',
+        badActor: 'Moetsi oa mohloli o tlameha ho qala ka agent:/human:/tool:/process:.'
+      },
+      saveBlocked: 'Ho boloka ho thibiloe: lokisa litaba tsa boikamahanyo pele.'
+    },
+    validation: {
+      frozen:
+        'Litaba li emisitsoe ho {v} — pono ea ho bala feela. Etsa retract mofuteng o sebetsang ho serving ho etsa liphetoho.',
+      none: 'Ha e eo',
+      expertHint:
+        'Fetohela ho mokhoa oa Bo-ramahlale ho bona JSON e tala ea netefatso, sefa ka botebo ba bothata, le ho hlokomoloha licheke.',
+      headline: {
+        blockers: '{n} mathata a thibelang — a lokisoe pele u fana ka polokelo',
+        warnings: 'Lintho tse {n} li hloka tlhahlobo ea hau',
+        ok: 'E shebahala e le ntle. Ha ho letho le lokelang ho lokisoa.'
+      },
+      summary: '{clean} e hloekileng · {warnings} e hloka tlhahlobo · {blockers} e thibelang',
+      formatter: {
+        notReady: 'Sehlophisi se tla fihla ho Pale ea 4.2b.'
+      },
+      run: {
+        notReady: 'Netefatso e tla hokahanngoa paleng e tlang.'
+      },
+      piiTitle: 'Personal data — review each flagged concept',
+      loading: 'Checking the repository…',
+      loadFailed: 'Could not load the validation report.',
+      retry: 'Retry',
+      issuesTitle: 'Issues to review',
+      howToFix: 'How to fix',
+      indexFailed: 'Re-index failed — edit or re-split the page.',
+      indexFailedRemedy:
+        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+      severity: {
+        blocker: 'Blocking',
+        warning: 'Needs review',
+        info: 'Info'
+      },
+      type: {
+        conformance: 'Frontmatter',
+        orphan: 'Not linked',
+        near_duplicate: 'Near-duplicate',
+        citation: 'Citations',
+        index_failed: 'Index'
+      },
+      topicLinks: {
+        title: 'Cross-link topics',
+        tip: 'Reads every page in this repository and writes links between the pages that genuinely belong together — the same processing the import wizard runs. It is safe to re-run: existing links are kept and only new ones are added.',
+        progress: 'Cross-linking… {done} of {total} batches',
+        progressIdle: 'Cross-linking… reading the repository',
+        done: 'Added {n} link(s) across {c} page(s).',
+        failed: 'Cross-linking failed: {msg}'
+      },
+      action: {
+        suggestLinks: 'Suggest links',
+        accept: 'Accept',
+        dismiss: 'Dismiss',
+        delete: 'Delete',
+        working: 'Working…',
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"',
+        preview: 'Preview duplicates',
+        hidePreview: 'Hide preview'
+      },
+      actionDone: {
+        done: 'Done'
+      },
+      suggest: {
+        working: 'Asking the assistant for link suggestions…',
+        empty: 'No suggestions — link it manually in the editor.'
+      },
+      nearDup: {
+        keepHint: 'Keep one copy — delete the rest.'
+      },
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      mergedPages: '{n} pages',
+      preview: {
+        loading: 'Loading page contents…',
+        truncated: 'First {n} characters — open the editor for the full page.'
+      },
+      tip: {
+        conformance:
+          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+        orphan:
+          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+        near_duplicate:
+          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+        citation:
+          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+        index_failed:
+          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      },
+      piiRescan: 'Re-scan all pages',
+      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanPartial:
+        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+      piiRescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      piiRescanFailed:
+        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
+      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+      piiRescanNoKey:
+        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+      piiStateError: 'Scan error',
+      piiTally: {
+        scanned: '{n} page(s) re-scanned',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'scan error',
+        stillBlocking: 'Still blocking'
+      }
+    },
+    pii: {
+      panel: 'Mekhatlo e tšoailoeng',
+      nFlagged: '{n} e fumanoeng',
+      rescan: 'Scan hape',
+      stateError: 'Scan failed',
+      errorTitle: 'This page is blocking the hand-off.',
+      errorBody:
+        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+      rescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
+      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
+      scanning: 'Scanning…',
+      clean: 'No flagged entities — concept ena e hloekile.',
+      how: 'Lokisa: tlosa kapa fetola mantsoe (mohlala, the role ho e-na le lebitso), ebe u-save — the re-scan e tlisa sena nakong.',
+      descFallback: 'Personal data e fumanwe mona (GDPR Art. 4(1) — relating to an identifiable person).',
+      scanError: 'Ho hlahloba ha ho fumanehe',
+      type: {
+        PERSON: 'Lebitso la motho',
+        LOCATION: 'Sebaka',
+        DATE_TIME: 'Date kapa time',
+        EMAIL_ADDRESS: 'Aterese ea imeile',
+        PHONE_NUMBER: 'Nomoro ea mohala',
+        IP_ADDRESS: 'Aterese ea IP',
+        NRP: 'Nomoro ea ngoliso ea naha',
+        BD_NATIONAL_ID: 'Nomoro ea boitsebiso ea naha'
+      },
+      desc: {
+        PERSON: 'Lebitso la motho le fumanwe. Names can directly identify a natural person.',
+        LOCATION: 'Lebitso la sebaka le fumanwe. Combined with other data it can identify a person.',
+        DATE_TIME: 'Date kapa time e fumanwe. Dates can contribute to identifying a person.',
+        EMAIL_ADDRESS: 'Email address e fumanwe. It directly identifies a contactable person.',
+        PHONE_NUMBER: 'Phone number e fumanwe. It directly identifies a contactable person.',
+        IP_ADDRESS: 'IP address e fumanwe. It can identify a device or household.',
+        NRP: 'National registration number e fumanwe. It strongly identifies a person.',
+        BD_NATIONAL_ID: 'National ID number e fumanwe. It strongly identifies a person.'
+      },
+      allClear: 'Hlakola',
+      redactFile: 'Sireletsa boitsebiso faeleng eohle',
+      confirmRedactFile: 'Netefatsa: sireletsa boitsebiso faeleng eohle?',
+      locateTip: 'Bontša mongolo ona ho morulaganyi',
+      file: {
+        label: 'Faele eohle:',
+        redact: 'Hlakola faele',
+        remove: 'Tlosa mmele',
+        accept: 'Amohela tsohle',
+        confirmRedact: 'Netefatsa: sireletsa boitsebiso faeleng eohle?',
+        confirmRemove: 'Netefatsa: tlosa litaba tsohle tsa mantlha?'
+      },
+      action: {
+        redact: 'Hlakola',
+        replace: 'Fetola',
+        remove: 'Tlosa',
+        accept: 'Amohela',
+        replacement: 'Mongolo o nkelang sebaka',
+        apply: 'Sebelisa',
+        cancel: 'Hlakola'
+      },
+      resolved: {
+        title: 'E sebelitsoe faeleng ena',
+        redacted: 'Hlakotsoe',
+        replaced: 'Fetotsoe',
+        removed: 'Tlositsoe',
+        accepted: 'Amohetsoe',
+        fileRedacted: 'Faele e sirelelitsoe boitsebiso',
+        kept: 'e bolokiloe mongolong',
+        removedWord: 'tlositsoe',
+        wholeFile: 'Litaba tsohle tsa mantlha tsa faele li sirelelitsoe boitsebiso'
+      }
+    },
+    lifecycle: {
+      submit: 'Tlhahisong',
+      approve: 'Lumeletsana',
+      publish: 'Phatlalatsa',
+      ingest: 'Ho ja',
+      retract: 'Khutlisetsa morao',
+      unpublish: 'Fetola hape'
+    },
+    src: {
+      title: 'Choose the source documents',
+      hint: 'Pick sources from the document repository, upload new ones from this computer, or both.',
+      repoSec: 'From the document repository',
+      searchPh: 'Search by name or site…',
+      chipsLabel: 'Filter by origin',
+      chipAll: 'All',
+      chipCrawl: 'Crawls',
+      chipUpload: 'Uploads',
+      noMatches: 'Nothing matches this search or filter.',
+      crawlBadge: 'crawl',
+      crawlTip: 'Crawled from: {url}',
+      total: '{n} document(s)',
+      titleSingle: 'Choose the crawled document',
+      loading: 'Loading documents…',
+      retry: 'Retry',
+      empty: 'No documents in the repository yet — upload some below.',
+      more: 'Load more',
+      fsSec: 'From this computer',
+      fsPick: '+ Upload files',
+      uploading: 'Uploading…',
+      uploaded: '{n} file(s) uploaded.',
+      uploadFailed: 'An upload failed — check the files and retry.',
+      fsNote: 'Uploaded files join the document repository and are selected here automatically.',
+      count: 'Selected: {n}',
+      needOne: 'Select at least one source.',
+      confirm: 'Use {n} source(s)',
+      cancel: 'Cancel',
+      loadFailed: 'Could not load the document list.',
+      servingBadge: 'serving free-form RAG',
+      servingTip:
+        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+      alreadyBadge: 'already in an OKF repo',
+      alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
+    },
+    frontmatter: {
+      title: 'Frontmatter tags — what this repo is about',
+      help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',
+      refresh: 'Refresh suggestions',
+      suggesting: 'Curating…',
+      suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestCoverage:
+        'E qobetiloe ho {sampled} ho {total} mohlopong, maphapalong {labels} le labelo tsa hierarchyla tsebohetsoeng.',
+      suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
+      removeTag: 'Remove tag',
+      fieldEmpty: '—',
+      addPlaceholder: 'Add {field}',
+      add: 'Add',
+      saving: 'Saving…',
+      save: 'Save tags',
+      saved: 'Saved',
+      error: 'Save failed.',
+      errorWithStep: 'Save failed at step "{step}" ({code}) — retry.',
+      field: {
+        topic: 'Topic',
+        entity: 'Entity',
+        scope: 'Scope',
+        forbidden: 'Forbidden',
+        summary: 'Summary',
+        keyword: 'Keyword'
+      }
+    },
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
+      badge: {
+        present: 'head ready',
+        stale: 'head stale',
+        missing: 'no head'
+      },
+      tab: {
+        head: 'Head',
+        test: 'Test',
+        suites: 'Suites & analytics',
+        ragas: 'Ditekanyo tsa RAGAS',
+        models: 'Dimela'
+      },
+      head: {
+        dim: 'Dimensions',
+        model: 'Model',
+        version: 'Head version',
+        computedAt: 'Computed',
+        staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
+        missingNote:
+          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+        rebuild: 'Rebuild head',
+        rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
+        rebuildBusy: 'Rebuilding — embedding the tag fields…'
+      },
+      test: {
+        placeholder: 'e.g. cancer screening guidelines',
+        run: 'Run test',
+        running: 'Embedding the query and scoring the heads…',
+        adversarial: 'Adversarial — this query should NOT select this repository (a forbidden/adjacent topic)',
+        embeddedWith: 'Embedded with',
+        col: {
+          repo: 'Repository',
+          state: 'State',
+          headScore: 'Head score',
+          rank: 'Rank',
+          claimed: 'Claims query'
+        },
+        provenance: 'Routing provenance',
+        empty:
+          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
+        pass: 'PASS — this repository wins the head routing.',
+        fail: 'FAIL — {repo} wins the head routing for this query.',
+        passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
+        failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
+        passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
+        notSelectedSuppressed:
+          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+        claimed: 'claims',
+        suppressed: 'suppressed'
+      },
+      gate: {
+        title: 'Lekhalate',
+        floor: 'Moeli o tlaase',
+        veto: 'Matag a thibetsoeng',
+        margin: 'Sekgala',
+        claim: 'E bolela',
+        pass: 'fetile',
+        fail: 'hlotile',
+        na: 'n/a'
+      },
+      counts: {
+        positive: 'Tse lokileng',
+        negative: 'Tse tshulaneng',
+        negativeRandom: 'Kantle ga domene',
+        meta: 'Meta',
+        nearMiss: 'Haufi-fosaho',
+        hint: 'Mela e tsoang matag a thibetsitseng e lekana le palo ya matag a thibetsitseng a polokelo — ha e khone ho behoa mona.'
+      },
+      cls: {
+        nearMiss: 'Haufi-fosaho',
+        confusable: 'E tshulanang',
+        forbidden: 'E thibetsitseng',
+        offDomain: 'Kantle ga domene',
+        meta: 'Meta'
+      },
+      teach: {
+        claim:
+          'Hlooho e LEMELA potso ena — e fetile mekhoa e meraro. Ha e lokela ho ruta mona, kopa matag a thibetsitseng a susumantsang sehlooho sa eona, o e eketse, o ajo hlooho hape.',
+        explain: 'Hlalosa & khothaletsa',
+        explainBusy: 'E hlalosa — mohlala o fana ka matag a thibetsitseng…',
+        addTag: 'Eketsa ho matag a thibetsitseng',
+        suggestNone: 'Ha ho tag e thibetsitseng e fanoeng — hlahloba potso ka letsoho khahlano le moeli o boletsoeng.',
+        added: 'E kentswe ho matag a thibetsitseng — haha hlooho hape ho di sebelisa.',
+        rebuildRerun: 'Haha hlooho hape & phethahatsa hape',
+        savingTag: 'E boloka tag e thibetsitseng…',
+        rebuildBusy: 'E haha hlooho hape ebe e phethahatsa hape…',
+        title: 'Seo sena se bolelang',
+        veto: 'Potso ena e lumellana haholo le tag e thibetsitseng “{tag}”. Haeba e lokela ho ba la polokelo ena, tlosa “{tag}” ho matag a thibetsoeng a Frontmatter, ebe u phatlalatsa hape ho aha hlopo bocha.',
+        floor:
+          'Potso ena ha e amane le taba ea polokelo ena (score e tlaase ho moeli oa domain) — ho fetola matag ha ho lokise sena; ke thibelo e nepahetseng.',
+        rejected: 'E lokotsoe ke guardrail — tag e thibetsitseng ha eao lumana le taba ea polokelo ena ka boeona.'
+      },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
+      },
+      suites: {
+        generate: 'Generate test suite',
+        generateTip:
+          'LLM ngola lipotso ka libaka tsa 30 ka sehlopha — kopo e kholo (100+) nka nka metsotso e mmalwa. Sete se tla hlaha mona le ho tse bolokiloeng ha se feta.',
+        generating: 'E etsa ka libaka — likopo tse kholo li nka metsotso…',
+        run: 'Run all queries',
+        running: 'Running every suite query…',
+        current: 'Current suite',
+        col: {
+          query: 'Query',
+          kind: 'Kind',
+          outcome: 'Outcome',
+          run: 'Run',
+          when: 'When',
+          passRate: 'Pass rate',
+          headVersion: 'Head',
+          tags: 'Matag',
+          actions: 'Lokisa',
+          name: 'Lebitso',
+          corpus: 'Korpusi'
+        },
+        notEvaluatable: 'not evaluatable (no competitors)',
+        pass: 'pass',
+        fail: 'fail',
+        passRate: 'Pass rate',
+        positives: 'Positives',
+        negatives: 'Negatives',
+        noCompetitors: 'n/a — no competing heads yet',
+        avgMargin: 'Avg margin',
+        steal: '{repo} stole {n} queries',
+        addPlaceholder: 'Your own probe query…',
+        add: 'Add to suite',
+        kindPositive: 'should select',
+        kindNegative: 'should NOT select',
+        history: 'Run history',
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'Hlalosa tse fosahetseng',
+        explainBusy: 'E hlalosa tse fosahetseng — mohlala o bitsuetsoa hang ho tse fosahetseng…',
+        batchTitle: 'Hobaneng tse fosahetseng li fihlile mona',
+        batchNone:
+          'Ha ho tokiso e fanoeng — hlahloba dipotso tse fosahetseng ka letsoho khahlano le moeli o boletsoeng.',
+        addAll: 'Eketsa tsohle',
+        rebuildRerun: 'Haha hlooho hape & phethahatsa suite hape',
+        positiveFailuresTitle: 'Hobaneng tse mabapi li sitoa ho feta',
+        positiveFailures:
+          '{n} teko(tse) tse mabapi li thibetswe pang ena — matag a thibetsitseng a lumana haholo le sepheo sa polokelo.',
+        vetoedBy: 'E thibetsoe ke',
+        marginKilled: '{n} teko(tse) tse mabapi li lahlehile ka margin (ha ho tag e le nngoe ea veto).',
+        removals: 'Matag a tlosoang (a beha veto holim’a tse mabapi tsa polokelo ena)',
+        removeTip: 'Tlosa "{tag}" — e behile veto holim’a {n} teko(tse) tse mabapi',
+        tripwire: 'Potong ena e robile {n} teko tse mabapi — matag a kentsoeng a thibela haholo. Khutlisa?',
+        tripwireRevert: 'Likhetho tsa ho khutlisa',
+        staleSnapshot:
+          'Matag a fetoloe ho tloha ha suite ena e entsoe — hlahisa hape bakeng sa mela e macha ea thibelo.',
+        revertTitle: 'Khutlisa matag',
+        revertForbiddenCount: '{n} matag a thibetsitseng',
+        revertAction: 'Khutlisa',
+        revertBusy: 'E kenya histori ea polokelo…',
+        revertSaving: 'E busetsa frontmatter…',
+        revertEmpty: 'Ha hona polokelo ea frontmatter e ngolisitsoeng hajoale.',
+        revertDone: 'Frontmatter e khutlisitsoe — haha hlooho hape & phethahatsa hape ho e sebelisa.',
+        removeTag: 'Tlosa ho litag tse thibetsoeng',
+        tagsetTip: 'Litag tse thibetsoeng tsa tsamaello ena',
+        savedTitle: 'Liteko tse bolokiloeng',
+        savedTip:
+          'Sete e ngotsweng kapa e romoletsoeng e bolokwa mona, ka reporisari. Mefuta e mengata e arolelana lenaneong lena: di-suite tsa hlooho (di-query tse tsoang dithekeneng le frontmatter, ka palo ea positive/negative) le di-suite tsa benchmark tsa RAGAS (di-query ka likarabo tse lebellwang, ka letshao la RAGAS le palo ea li-entry). Ho bula ho bula suite ea hlooho tabeng ena le suite ea RAGAS letlapeng la RAGAS Benchmarks, moo e ka phethisoang le haoloa khahlanong le corpus ea phelang. Ho hlakola ho ntsha suite ka ho sa feleng; hobitsoa ho ka fetoa ka ho toba lebitsoeng.',
+        load: 'Jarisa',
+        flipTip: 'Fetola lokisa ho khetha / se khethe',
+        deleteTip: 'Tlosa mola ona seteng',
+        namePlaceholder: 'Lebitso la sete (ha ho hlokahale) — mohl. sete ea NCD',
+        probeTip: 'Lekola potso ena ka korpusi ea ntseng e le teng',
+        deleteSuiteTip: 'Tlosa sete sena le nalane ea sona',
+        corpusNeedsIngest: 'Kennya ntswe pele — lekala la korpusi le batla korpusing e kennyang',
+        deleteConfirmTitle: 'Tlosa li-suite tse?',
+        deleteConfirmBody: 'Sena se tlosa li-suite le nalanete ea tsona sa ho sa felise. Ha ho khutleiso.',
+        deleteConfirm: 'Tlosa li-suite',
+        deleteCancel: 'Khutlisa',
+        unnamedFallback: 'li-suite tse se nang bitso'
+      },
+      error: {
+        explain: 'Tlhaloso e hlolehile',
+        saveTag: 'Ha e khone ho boloka tag e thibetsitseng',
+        rebuild: 'Head rebuild failed',
+        test: 'Routing test failed',
+        generate: 'Suite generation failed',
+        run: 'Suite run failed',
+        add: 'Could not add the query',
+        history: 'Ha e khone ho kenya histori ea polokelo',
+        revert: 'Ha e khone ho khutlisa frontmatter',
+        advisor: 'Moeletsi o hlolehile',
+        noSuite: 'Qala ka ho etsa sete ea liteko, ebe haha hlooho hape u phethahatse hape.',
+        applyNoSuite:
+          'Matag a bolokiloe mme hlooho e ahiloe hape — etsa sete ea liteko ebe phethahatsa tsohle ho bona sehlaho.',
+        suiteLoad: 'Ho hlolehile ho jarisa sete',
+        suiteUpdate: 'Ho hlolehile ho ntlafatsa sete',
+        suiteRename: 'Ho hlolehile ho reha sete ka lebitso le lecha',
+        generateTimeout: 'Sete se nka nako e fetileng haholo — se ka hlaha ho tse bolokiloeng; sheba hape ka motsotso.',
+        probe: 'Lekala la korpusi le hlotsoe',
+        suiteDelete: 'Ha e khone ho tlosa sete',
+        noFrontmatter:
+          'Sena sena li-tag tsa hloho — etsa li-tag ka Frontmatter (kapa sebelisa Suggest tags), ebe u etsa li-suite.'
+      },
+      footer: {
+        unpublish: 'Unpublish to review'
+      },
+      publishCard: {
+        present:
+          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
+        stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
+        missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'Moeletsi: kgothaletsa diphetoho tsa litag',
+        busy: 'E papalesa diphetoho tsa litag ho tsamaello tsa kajeno…',
+        title: 'Khothaletso ea sete ea litag (e papalelitsoe ho tsamaello tsa kajeno)',
+        apply: 'Kenya liphetoho tšebetsong, haha hlooho hape & phethahatsa hape',
+        scorecard: 'tse nepahetseng {p}/{pt} tse amohetsoeng · tse fosahetseng {n}/{nt} tse thibilitseng',
+        now: 'Hona joale',
+        predicted: 'e boleloa pele',
+        scope: ' (lipotso {q} ho tswa ho tsamaello {r} tsa kajeno)',
+        applying: 'E sebelisa: ho boloka matag, ho haha hlooho hape, ho phethahatsa sete hape…',
+        blockedTitle: 'Tlosong tse koalloeng — tobetsa ho li kenyelle ho Apply',
+        blockedGain: 'e busetsa {n} e teng',
+        narrowTitle: 'Mekhopolo e tletseng — e busetsa tse teng ntle ho ho ngola tse sieo hape',
+        narrowChip: 'Tlosa lebitla se pharaletseng, kenya se lutsehisi',
+        reasonCurator: 'ke wena ya tlileng ka lebitla lena — netefatsa pele ua le tlosa',
+        reasonRotated: 'nalane e fetile motheo — netefatsa pele ua le tlosa',
+        scopeDetail: 'li-suite: {s} · mehloso ea melaetana: {t}',
+        rowActionsTitle: 'Liphetoa ka motheo wa corpus — corpus e araba tse "tse sieo": li fetole hore e be tse teng',
+        flipToPositive: 'Etsa e teng',
+        ungroundedNote:
+          '{n} tse sieo tse hlolehetseng tse se nang motheo corpus le sebaka sa tag se bolokehileng — moqhahamotsedi o tlameha o di hlola.'
+      },
+      probe: {
+        answerable: 'e ka araba',
+        weak: 'tsʼebetso e sa matla',
+        unanswerable: 'ha e korpusing',
+        unknown: 'ea sa tsejoeng',
+        title: 'Lekala la korpusi — kakaretso',
+        close: 'Kwala kakaretso',
+        chunksScanned: 'liphisego tsa korpusi li hlahlobiloe',
+        headLeg: 'Uamuzi oa Head',
+        headNotClaimed: 'ha ho boikakabelo',
+        corpusLeg: 'Tšireletseho ea korpusi',
+        files: 'Lifaele tsa motheo',
+        colScore: 'Sekala sa rerank',
+        colFile: 'Faele',
+        colContent: 'Tsa kahare tsa phisege'
+      }
+    },
+    ragas: {
+      dropped: {
+        note: '{kept} ho {requested} — {dropped} ha ka etsohleha ho hlaha',
+        reason: {
+          rate_limited: 'mohlola o lekanyeletsa sekamoo ka kotobatsa'
+        }
+      },
+      corpus: {
+        capped: 'E thehile ho {parts} (morero oa corpus)',
+        part: '{used} ho tse {total} tsa dikarolo'
+      },
+      gen: {
+        eta: '~{t} e tengile',
+        elapsed: 'e sebetsa {t}',
+        calls: '{n} mealo ea LLM',
+        replays: '{n} mealo e boetolong ho kache',
+        underMin: 'ka tlase ho motsotso',
+        minutes: '{m} metsotso',
+        hours: '{h} lihora {m} metsotso'
+      },
+      paneTitle: 'Ditekanyo tsa RAGAS',
+      about:
+        'RAGAS e hlahloba hore na mothusi o hlahisa melaetsa le ho araba joang — tumelo, nepo le pitso ea mongobo, bohlokoa ba karabo le tse ding. Matha sete sa ditekanyo ho ela repo e le base ya tsebo.',
+      aboutLabel: 'RAGAS ke eng?',
+      aboutLink: 'Bala haholo go ragas.io',
+      help: {
+        show: 'Thuso',
+        hide: 'Fihla thuso',
+        more: 'Bala haholo go ragas.io',
+        repositories: {
+          title: 'Lipolokelo',
+          text: 'Ke lipolokelo life tse fepang tlhahiso — ea kajeno feela, kapa e nang le tse amanang le eona. Lipolokelo tse ngata di dumelela dipotso tsa mahop a mangata ho feta meeli ea tsona.'
+        },
+        questions: {
+          title: 'Dipotso',
+          text: 'Dipotso tse kae tsa ho hlahiswa (tloaelo 20). Sete tse kholo di nka nako e telele ka tekano ho hlahisa le ho phethahatsa.'
+        },
+        singleHop: {
+          title: 'Hop e le nngwe %',
+          text: 'Karolo ea dipotso tse hlahisoang ho tswa mohopolong o le mong.'
+        },
+        multiAbstract: {
+          title: 'Mahop a mangata (kakaretso) %',
+          text: 'Karolo ea dipotso tse kopanyang mehopolo e mengata le ho nahana ka ho feta mongolo oa tsona oa nnete.'
+        },
+        multiSpecific: {
+          title: 'Mahop a mangata (e itseng) %',
+          text: 'Karolo ea dipotso tse kopanyang mehopolo e mengata ha di ntse di tsitsela mongolong oa tsona o nepahetseng. Karolo tsena tse tharo di tlameha ho bokella 100.'
+        },
+        personas: {
+          title: 'Mekhoa ea basebedisi',
+          text: 'Ke mekhoa e me kae ea basebedisi ea maiketsetso e fapanisang mokhoa oa ho bolela le mahlobo a dipotso tse hlahiswang.'
+        },
+        generate: {
+          title: 'Hlahisa',
+          text: 'E hlahisa sete ka LLM: ho feta ka kerafo ea tsebo holim’a korpusi pele (ena ke karolo ea metsotso e mmalwa), ebe ho hlahiswa dipotso. E sebetsa ka morao — o ka kwala Lab o sieo se seng le se seng. Ho hlakola sete e ntse e hlahiswa e fedisa mosebetsi oo.'
+        },
+        importSuite: {
+          title: 'Kenya sete (.xlsx)',
+          text: 'E kenya sete e leng teng sebakeng sa xlsx sa ditekanyo, e lumellanang le tsamaiso ea gauta ea tests/rag-benchmarks.'
+        },
+        entries: {
+          title: 'Mela ea tekanyo',
+          text: 'Mola o le mong bakeng sa potso e n’ang le karabo ea eona e lebetsweng le dikarolo tsa boitlhisohedi. Lokisa potso, e lekola khahlano le korpusi ea phelang, e fetola hore e se ka sepheong (e bolokolwa bakeng sa papiso, e sieoa tekanyong), kapa e tlosa.'
+        },
+        metrics: {
+          title: 'Ditekanyo',
+          text: 'Tse nne tsa tloaelo — boinehelo, ho nepahala ha mongobo, botlalo ba mongobo, bohlokoa ba karabo — le katalogo ea RAGAS e atolositsoeng. Ditekanyo tse hlokang mohlala oa embedding di sieoa ka tlhokomeliso ha ho ea hlophiswa.'
+        },
+        run: {
+          title: 'Phethahatsa tekanyo',
+          text: 'E buseletsa ho kgetha bakeng sa mola o mong le o mong, e hlahisa dikarabo, ebe mohlala oa moahloli o lekanya karabo e n’ngoe le e n’nge khahlano le boitlhisohedi. Tswelo pele e boleloa sethabeng se seng le se seng; litseo li fihla ha tsamaello e phethahala.'
+        },
+        results: {
+          title: 'Litseo',
+          text: 'Di-average tsa ditekanyo di bontshoa ka dial tse nang le meedi ea ho feta, mokhoa oo litsebetsano li tsamaisang ka oona, le lintlha tsa potso e n’ngoe le e n’nge le karabo ea eona le dipalo tsa eona.'
+        },
+        explain: {
+          title: 'Hlalosa tse fosahetseng',
+          text: 'E laela mola ofe kapa ofe o fosahetseng ho kgetha, ho araba, kapa boitlhisohedi bo boona — mme e khothaletsa diloki tse sireletsekileng, ho kenyelletsa liphetoho tsa boemo ba polokelo joalo ka litag le tlhokomelo ea mehopolo.'
+        },
+        exports: {
+          title: 'Ho romela ka ntle',
+          text: 'Disete le litseo e le xlsx (e lumellanang le didiriswa tsa ditekanyo) le tlaleho ea PDF ea dikerafo tsa dipalo.'
+        }
+      },
+      // GUIDE (David, 2026-10-23) — the operator playbook behind
+      // the "Guide" button. See en.js for the key-shape contract.
+      guide: {
+        open: 'Ngala',
+        title: 'Ngala ea ditekanyo tsa RAGAS',
+        intro:
+          'Mokhoa oa ho haha, ho hlokomela le ho phethahatsa disete tsa ditekanyo — ho etsa eng, ho qoboka eng, le ho lebela eng mehato ka mehato. Pane ya Thuso e fa thoko ea konopo ena e ka fa tlaleho ea lihokomiso; ena e ka fa tlaleho ea lintho tse u li etsang.',
+        close: 'Koala',
+        more: 'Bala haholo go ragas.io',
+        labels: {
+          do: 'Etsa ena',
+          dont: 'Se ka etse',
+          expect: 'Tseo o ka lebelelang'
+        },
+        chapters: {
+          generate: {
+            title: 'Haha sete',
+            intro:
+              'Sete e boole feela joalo le korpusi eo e neng e hlahiswa ho eona. Ho hlahisa ke mosebetsi oa LLM o nang le dikarolo tse ding, mme ke karolo e le ntlha ea ntle ea tsamaisohayo kaofela: pele kerafo ea tsebo holim’a korpusi oo o ile o khetha, ebe ho hlahiswa dipotso.',
+            d1: 'Hatisa pele o hlahise. Ho hlahisa ho bala mehopolo ho tswa polokelong, mme sete e hailoeng polokelong e sa phatlalatsweng kapa e ntse e ingesta e lekola korpusi e mofusi o sa bone ka nnete.',
+            d2: 'Bala tlhokomelo ea khato. Ha korpusi e le kholo ho morero oa dikarolo (1,600 dikarolo ka tloaelo) sete e tlasa o re tla — "grounded in 1600 of 5590 chunks". Hore e le tekanyo e nepahetseng ea likarolo tse ling feela, eseng le ea polokelo kaofela. Phakamisa OKF_RAGAS_MAX_CORPUS_CHUNKS ha o hloka eohle.',
+            d3: 'Bophatoloi bo sete bo lokolohela potso eo o ho botseng. Lipotso tse mashome a mantsi ke teko ea khutšo, le makolo a tekanyo ke papiso. Nako le tšebelezo di hula hangata ka mokhoa o tšoanang hodima litha tse ling, mme karolo ea ho lekanya e etsa hore e be e leholo.',
+            d4: 'Mixa kabo ea mehop ka morato. Single-hop e bopaka ho kgetha; multi-hop (e itseng) e bopaka hore reranker e kopanya bopaki; multi-hop (kakaretso) e bopaka hore modeli e nahana ka ho feta mongolo oa nnete. Sete e 100% single-hop e sa ka bontsha lehlohlo la kopano.',
+            x1: 'U se ke hlahise khahlano le polokelo e ntse e ingesta. Mehopolo e sa fihlile ea indexa ke a lekaneng ho kgetha, kahoo sete e ngwa khahlano le korpusi e tla fapana le eo o tla lekanya khale.',
+            x2: 'U se ke tlhalozia metsotso ea pele ea bar ea tsoelo-pele ho e-na le hore e eme. Karolo ea kerafo ea tsebo e ka lutsa nako e telele ho sa na le sete e felletseng; sebedi se nako se phetileng le sekheho sa mealo ea modeli ke linyane tse tšoanang.',
+            x3: 'U se ke tlhalozia sete e khutšo joalo le tlhahiso e ntle. Modeli tse lekanyang mealo li lahleheloa dipotso, mme pane e bontsha hore na ho ka e lokoeng. Lekola palo ea tse neng tsa lahloloa pele o lumela sete.',
+            expect:
+              'Ipola hoo e ka bang mealo ea modeli e le nngwe ka karolo ea korpusi bakeng sa karolo ea kerafo, ho feta tse ling ka potso. Korpusing ea dikarolo tse 1,075, karolo eo feela e ile ea matha ka hora tse ling tse haholo. Ho hlahisa ho tswela ka morao — o ka koala Lab o khutle.'
+          },
+          curate: {
+            title: 'Ntlafatsa sete',
+            intro:
+              'Sete e hlahiswang ke draft ya pele. Karolo tse peli tsa mula o mong — potso le karabo e lebetsweng — li ile tsa ngwa ho likomputha, mme tekanyo e ea tšoana feela le tseo.',
+            d1: 'Lekola pele o boloke. Mofopong o ▶ o potoloha potso khahlano le korpusi ea phelang mme o bontsha hore na e ka arabelwa hantle. Potso e ho se e khutliseng letho ke potso e ka serapeng sa lintho tseo o nang le tsona.',
+            d2: 'Fetola, u se ke tlosa, tse e sa amehang. Mela e ka ntle ho sepheo li bolokwa bakeng sa papiso mme lia sieoa tekanyong. Ho tlosa tsona o lahleheloa hore li ne li le bile.',
+            d3: 'Lokisa karabo e lebetsweng, eseng potso, ha boitlhisohedi bo fosahetse. Faithfulness le answer relevancy di tekanywa khahlano le boitlhisohedi, kahoo boitlhisohedi bo bo modeli e ka bang ea e hlahisa bo nyalatsa karabo e nepahetseng.',
+            d4: 'Eketsa dipotso tsa hao tse thata. Mohlahisi o ngwa dipotso tse korpusi e li arabang ka mokhoa o litsheo. Tse ho hlolehelwang tse ntle ho fumana ke tse ngwa ke mokgwacisi ho phola tseba — puo e sa hlalama hantle, litheko tse peli tse sa dumellane, ntho e hlalositsoeng ka boholo bo le kaeme.',
+            x1: 'U se ke ngola potso againa ho e etsa leheko le karabo ea kajeno ea sisteme. Ho etsa joalo ho fetola tekanyo ho eaba teko ea ho boetla sekhatho sa hajoa mme ho pata lehlohlo leo o o batlang.',
+            x2: 'U se ke fihlela ho potso e le nngwe ka mohopolo o sa lekole pele. Ho hlahisa ho bala morero oa dikarolo, eseng mokhoa oa litso tsa hao, kahoo potso e ka khutletsegenge karolo e neng e sa le mona korpuseng.',
+            x3: 'U se ke hlokomela ka sekhatho. Hlokomela pele o phethahatsa; ho lokisa sete ka mor’a ho bona se tsohiloa ho fika holimo ho sekheho mme ho etsa hore papiso e se sebetseng.',
+            expect:
+              'Dipotso tse mashome a mantsi tse ntle li feta le makolo a mantsi a tse hlahileng. Khato ea sete ya mehopolo e boholo ho feta palo feela — sete e lebetse eseng la bopaki boo o na le oona e tla bontsha kopo e phahameng ea la bopaki boo e koaroang.'
+          },
+          run: {
+            title: 'Phethahatsa tekanyo',
+            intro:
+              'Tsamaello e na le dikarolo tse tharo — ho kgetha, ho araba, le ho lekanya — tse bollswa ka boitumelo eo o ka lula o tseba ea o nolang eo o emang ho eona. Ea borobong feela e hlapa mealo ea modeli ea moahloli, mme eo ke nako e re neng e feta.',
+            d1: 'Phethahatsa tse nne tsa tloaelo pele. Faithfulness, context precision, context recall le answer relevancy ke bohareng bo ka bapaloa. Katalogo e atolositsoeng e multiplya tšebelezo, eseng tlhahumelo, ho fihlela u se o tsebe hore lehlohlo le le leng.',
+            d2: 'Beka sekheho sa mealo, eseng feela bar. Karolo ea moahloli e tswela mola o mong ka nako, mme mo endpoint e khahlisang ea modeli tsamaello e lekanyetsoa mealo ka makhethe a mantsi hore likhapiso li etsa boholo ba nako. Sekheho se emeng hael sa nako e tswelang ke likhapiso, eseng ho ema.',
+            d3: 'Khansela ho eaba o lahleheloa. Khansela tsamaello e ema ka hantle mme e rekota tse li qetileng; ho koala sepheo sa browser ha ho etse — tsamaello e tswela mme o lahleheloa ntla eo e phelang.',
+            d4: 'Boloka tsamaello e le nngwe ka polokelo ka nako e le nngwe. Ditsamaello di arolelana endpoint ea modeli; ditsamaello tse pedi tse parallel di arolelana ho throughput mme bobotho bo buta, mme e le e neng e bontsha hae.',
+            x1: 'U se ke bapisa tsamaello ea ditekanyo tse nne le ea ea lesome. Katalogo e atolositsoeng e fetola nako ea tsamaello ka makhethe a mane kaofela, mme di-average di se bapeheng tse tšoanang.',
+            x2: 'U se ke phethahatsa hape ho ka etsa hore o na le nomo e o sa e ratefong. Ho phethahatsa hape ka modeli e nngwe ea moahloli, top-N e nngwe ea ho kgetha kapa sete e lokisitsoeng ke tekanyo e nngwe — e rekote e le nngwe.',
+            x3: 'U se ke qala tsamaello ha ho na le ingest e sa fihlile. Karolo ea korpusi e tsohang ka nako e phatahileng e haese ho kgetha, mme sekhatho se theohile ka lebaka le se amang le liphetoho tsa hao.',
+            expect:
+              'Ditekanyo tse nne di nka hoo e ka bang mealo ea moahloli e supileng ka potso — 7,1 e ile ea lekoloa ho tsamaello ya dipotso tse makolo. Ho etsa feela hore ke hora le halete ho dipotso tse makolo ho endpoint e lekanyang mealo, mme ho fihla kapele ha modeli e kula hape kajale. U se ke u bona e-na le botsebatsi, empa ha e le boholo; sebedi sa tsamaello le sekheho sa mealo tsa tsamaello kaofela ke tseo e leng ke tseqapelo.'
+          },
+          models: {
+            title: 'Modeli le tseo o ka lebelelang',
+            intro:
+              'Modeli tse tharo tse fapaneng e nka karolo mme ha a fihlellane: modeli ea arabang, modeli ea moahloli, le modeli ea embedding. Di fetola sekhatho ka mabaka a tse fapaneng kaofela.',
+            d1: 'Modeli ea karabo ke eo e tekotsoeng — empa Lab kapa karabo li tsoka ho modeli ea chat e HILENG (DEPLOYED), ka pipeline e hlileng, kahoo ho fetola modeli ea chat ea ho deploya ho fetola karabo. Karolo e reroleng offline (ho kgetha le ho araba bo phetisoa ka server ea OKF) e teng trial bakeng sa mifumo ea whatif mme ha e ka qalisoa ho tswa Lab kajeno, kahoo seteisho "karabo tsa benchmark" ha se fetole benchmark e o ka bapala mona.',
+            d2: 'Moahloli o tlameha ho le matla le ho tshehane. O lekanya khahlano le boitlhisohedi, kahoo moahloli o mokhatho o theohisa ditekanyo tsohle ka nako e le nngwe mme tsamaello e ntse e sheba e felletseng. Dikarabo tsa moahloli di bolokwa ho latheoe mohopolong oo moahloli — ho fetola moahloli kapa modeli ho hlahisa hore boeke bo sa sebetseng mme mula o mong le o mong o hape o lekanywa.',
+            d3: 'Modeli ea embedding ke karolo ea tekanyo ea ho kgetha. E e fetotse mme context precision le context recall di fula, ha faithfulness ka tlhakoreng e sa fule. Boiketlo boo bo sa lumellane ke bopaki bo bolelang hore phetoho e fihlile kae, eseng mohumo.',
+            d4: 'Rekota modeli le tsamaello. Tsamaello e n’ngwe le e n’ngwe e boloka hore ke pehelo efe le modeli efe tse neng tsa hlahisa dikarabo le dipalo; ditsamaello tse pedi di ka bapaloa feela ha tseo di tlatswana.',
+            x1: 'U se ke lebelele hore phetoho ea sekhatho e ka attributioa ha feela ntho e le nngwe e feletse. Tsamaello e nang le modeli e nngwe ea karabo, moahloli o nngwe le modeli e nngwe ea embedding e tekanya tsohle ka nako e le nngwe mme e sa ka a arola.',
+            x2: 'U se ke bale sekhatho se phahameng sa faithfulness ho e bona se tla molemo ka sona. Faithfulness e phahameng le context recall e tlase ho bolela hore karabo e thehilwe eng eo e fumanweng — mme eo e fumanweng e le haholo ho lekana.',
+            x3: 'U se ke shebe modeli ea nahana joalo e sa ntlhise. E chaba lithente tsa maraka a makhoya a mangala pele a ka ngola lehlokobe; ha morero oa karabo o le tlase ho eo, karabo e n’ngwe le e n’ngwe e katsehang, e lahleheloa mme e bitsetsa, mme tsamaello e tjhapa e leha ka makhetlo a mangala ka potso e n’ngwe le e n’ngwe.',
+            expect:
+              'Lebela hore tsamaello e tla ba buta mme sekhatho se tla fula letsatsi la leha u fetola modeli. Boemong bo le bo ntle bo e ka nna bophatlalatsi ba modeli: moahloli, lintho tsa ho kgetha le sete li etsa hore bo nako boo bo le bo botle hore bo hokae ke bo bohlokoa.'
+          },
+          read: {
+            title: 'Bala litseo',
+            intro:
+              'Tekanyo e n’ngwe le e n’ngwe ea RAGAS e tekanya ntho e fapaneng, mme e le nngwe ea tsona e sebetsa ka tsela e tsolehileng. Bala nomo e n’ngwe le e n’ngwe ho e-na le ntho eo e tekanyang ka nnete pele o nka ntho.',
+            d1: 'Bala bane ea tsamaello e sa sebetsheng pele. Tsamaello e neng dikarabo tsa eona di hlolehile, kapa ho na le metric e sa koaleng linotso tse ka hare ho sepheo, ha e na le tekanyo — di-average tse ka tlasa di akaretsa feela mela e neng a lekanywa.',
+            d2: 'Lekola tsela ea tekanyo e n’ngwe le e n’ngwe. Bo bang bo phahameng ke boka bo botle. Noise sensitivity ke khefiso: ha e tlase e le betere, kahoo tsamaello e phathileng ka eona e hlolehela ka tsela e ntle.',
+            d3: 'Bala mela e fosahetseng, eseng feela karabo e lekanang. Potso e le nngwe e phoofolong ho feta tse mashome a mantsi e fetosa karabo e lekanang ho feta phetoho o neng o leka ho e lekanya.',
+            d4: 'Sebenzisa Hlalosa tse fosahetseng pele o fetola ntho e le nngwe. E laela mula o mong le o mong o fosahetseng ho kgetha tsela e nngwe le e nngwe e totoetseng ka corpus — retrieved, reranker, vector-recall, corpus, judge, answer kapa unmeasured — mme e bontsha hore karolo e lahlehileng kae le hore e ntle ka morato. Sehlaha sa "corpus" se bol\'a hore karolo e lebelagoa ha ho corpus — potso ena e sa lengo, e lekola benchmark eseng ha mhoabi, \'me e bontsha tselemo hore u khutsetsebenyana ho fana ntlha e nang, eseng ua ngola litsoho tse hape li kholo. Litlhutu tsa eona di sireletsekileng — e fana, o etsa qeto.',
+            x1: 'U se ke bapisa dikarabo tse lekanang mahareng ha sete tse fapaneng tsa ditekanyo, baahloli tse fapaneng, kapa sete e lokisitsoeng. Ha ho e neng ea tsona tekanyo e le nngwe, mme phapang o o bonang ha e na le phetoho boleng.',
+            x2: 'U se ke hlokomela ho kgetha ho latela nomo e le nngwe. Nepahalo le botlalo di fana ka hare; phetoho e phahamisang e le nngwe ka tlasa e le nngwe e ntle, mme kefiso ea tsona ka tlasa e le nngwe e ntle ka nako e ngata ke karolo e khahlisang.',
+            x3: 'U se ke shebe sekhatho se sehleng joalo le sekhatho se tlase. Ho pheta ka mor’a ho fihla ho hlahisa sekhatho se sehleng se neng se sa akaretswa karabong, kahoo nomo e se ho na le tekanyo — phethahatsa mula o mong hape ho e na le ho nahana ka maseo.',
+            expect:
+              'Nomo ea tekanyo ke papiso mahlare a ditsamaello tsa sete e le nngwe, eseng haholo ea mofusi. Romela xlsx ha o hloka ho boloka bopaki: mohlaka oa tsoelo-pele ka pane o na le ditsamaello tse bolokileng feela polokelong ena.',
+            table: {
+              title: 'Seo ho letho skrine, le bolelo hore na le hore',
+              col: {
+                element: 'Skrine',
+                meaning: 'Hore na le hore',
+                effect: 'Hore u ka etsa ka eona'
+              },
+              mean: {
+                element: 'Khatollo eo',
+                meaning: 'Khatello ea metrik eo moahlodi a li ferehela moo a li fa bo. Ha e na letho la suite kaofela.',
+                effect:
+                  "E bale e le letho le pel'a eona. Khatello moo ho linotso tse ling, e fereha linotso tseo, eseng suite."
+              },
+              coverage: {
+                element: 'Karohano (55/100)',
+                meaning:
+                  'Moahlodi o ile a fereha metrik eo moo linotso tse 100 tsa suite tse ka hare ho sepheo li 55. Khatello e koala linotso tseo 55 feela; tse 45 tse ling ha li kaehlohe — ha li balwe zero. Linotso tse ka ntle ho sepheo tse bapisi ha li letho ka ho lekana le tse 100.',
+                effect:
+                  'Karohano e nyenyane o bolela hore noma e se behale ka suite. sheba metrik eo e o kgatlha, eseng run kaofela.'
+              },
+              banner: {
+                element: 'Benera ea run e sa ntle',
+                meaning:
+                  'Run e bile le linotso tse neng li fetile, kapa ho na le metric e sa koaleng linotso tse ka hare ho sepheo. Nomere ea eona ke metric eo e koalang haholo, kahoo metric e le 21/100 ha e e phahamise.',
+                effect: 'Bala linotso tsa hae bakeng sa hao. Benera ke tlase, eseng kakaretso.'
+              },
+              runName: {
+                element: 'Lebitso la run le moahloli oa oona',
+                meaning:
+                  'Moahlodi o ile a fereha run eo, le configuration eo e tlang ka ho eona. Key e tlase ke bakeng sa thuso.',
+                effect:
+                  "Run tse pel'a ho na le moahlodi o fana ha se tšoantsohe. Bophela tse tšoanang, kapa o fereha e nthong."
+              },
+              rescore: {
+                element: 'Fereha hape',
+                meaning:
+                  'O fereha linye tse tšoanang le moahlodi o o ketsang — linye le likhaqana li kopana ka se khale, ho sa letho le ho ngola. Lenkopo la bona li ile ka bula moahlodi wa run ya mohloli, kahoo kadi e ncha ka mokhoa o tsengisang ke teko ea STABILITHA (na moahlodi o ka phetoloha?), eseng maqeo a mabeli.',
+                effect:
+                  'Ho tseba hore na ho hloleha ke moahlodi o thata kapa ke ho hloleha ha se ho hloleheng, fereha hape ka moahlodi O NGO. Baahloli ba mabeli mo linotso tse tšoanang ke tse nyenyane ho na le run ncha, mme ke tsela ya ho lekola moahlodi o ncha.'
+              },
+              status: {
+                element: 'Boemo',
+                meaning: 'Na run o qetile. Linotso tsa run e sa qeteng li ntse li bona.',
+                effect: 'Waita hore e qetele pele u bala noma.'
+              }
+            }
+          },
+          errors: {
+            title: 'Liphoso le tšusumetso haho ho etsa haholo',
+            intro:
+              "Haese ho boqoba ha ho sheba letho kaofela kwa bopa ba sehlopha: letho le ka lahlolo ka hore, ho ba bohlokoa ka hore, bao boholo ba ka seka ba lekola ntho e itseng, kapa ntho e itseng e ka fihlela tlase ho bophara. Ha ho letho le na le zero, 'me ha ho letho le tla qobiha. Kena e sebetsa ka lenkopo — hore na le ntho e re bolang, le hore na le tla etsa joalo ka bao e o ng o sebetsa. O tsebe o hore ka thuto ena pele o e bale: letho le ntle le bangwang karolo ha le na le karabo ea ho araba, kahoo ha ho letho le ka thusa ho lekola — kahoo le lekane le feta ka letso la boholo, 'me ha le baloe zero, 'me le fokotseha coverage eo e lekantse. HO HANA HO ARABA ha se letho le le leng, empa li mabeli. Ho hana ho araba ho nang le karabo ho ile ha lekoloa, 'me ho na le letsatsi le sebetsa, metrike tsa konteksi tsa eona lia bohile ho 0, 'me boholo bao ba baloa mooanelong. Ho hana ho araba ntle le karabo ha ho na le ho lekoloa mme ho e-na le: ha ho na le sekala, e se eona e ka baloa, 'me e ka se e phutsoe, 'me e fokotseha haholo, 'me e ka etsa run e bitsoa \"haba\". Ka nako eo, run e na le letho le hloleheng kapa letho le sa lekoloeng e bitsoa \"haba\" ho e na le tshepong ea tsatsi.",
+            d1: 'Bala benera ya "run e se ntle" pele o bala boholo. E bolela hore lintlha tseo o li bonang ha li khalehang Sisteme, mme benera e bitse lebaka: ho na le liphaseho tse neng li foetse, kapa moahlodi o ile a khala feela ka karolo ya haholo. Lokisa lebaka mme o runise hape.',
+            d2: 'Bala coverage ya kotloha e mong le e mong pele o bapisa linotso tse ling. Panel e bontsha hore moahlodi o ile a khala linotso tse ling tse ngang le ho hlala kotloha ena; boholo ba karolo ya haholo bo se boholo ba haholo, mme bo sa tshemaneho le run e ileng a khala linotso tsohle.',
+            d3: 'Lokisa ntha e foelang pele o sebetsa — sekema sa ho batla, kapa tšebeleo e hodima ka hodima, kapa nako e se e fela — mme o runise hape. Ho fetola haholo ho tlohosa ntha e foelang ka kakata e bile e ka bo e na le bothata bo benchmark e lebitseng ho e batla.',
+            d4: 'Bata ho hana ho araba e le sephetho, eseng phoso. Ho hana ho araba ho nang le karabo ho bolela hore mohlophi o ile a nahana hore ha corpus e araba potso ena — sena ke tšebalo ya corpus le potso. E bale feela e le phatelo ya tseo basebelisi ba hao tla utloana le bona.',
+            x1: 'O se o ka akara kotloha e sa lekeng ka zero. Ha moahlodi a ka eona a kgonne ho sekaseka karabo ya kotloha, kotloha ena e ntse ka null moo row eo; null e sa phakela mo boholong, mme e ka bo feela e bile ha e phele e phatlisa ho se phallang.',
+            x2: "O se o ka baleng ho hana ho araba e le phoso kapa le tsohle. E ntse ka kholo ea e itseng haka hobane ha e se eona e le phoso kapa le tsohle — 'me ho hana ho araba ntle le karabo ha ho ne ho lekoloa mme ho e-na le, kahoo e se ka etsa sezero.",
+            x3: 'O se o ka phatliseng noma eo panel e ileng a bitsa "e sa ntle", kapa o se o ka thata ka ho averija linotso tse ling ho e lefa. Run e ile a lekeng ka karolo e na le noma eo ho phatliseng; e na le run eo o lokisang.',
+            expect:
+              'Run e hantle ha e na le linotso tse foelang, le linotso tse sa lekoloeng, mme kotloha e mong le e mong e lekeng moo row e mong le e mong o ka hare ho sepheo — feela ka maemong a mang ho ka ba boholo bo tšena. Tse ling tsohle ke run eo o lokisang, eseng sephetho se o ka nka qeto ka sona.',
+            table: {
+              title: 'Hore na le boemong bo boka bo etsa ntho e itseng',
+              col: {
+                state: 'Boemong',
+                meaning: 'Bo re bolang',
+                effect: 'Tšusumetso eo e etsang'
+              },
+              error: {
+                state: 'Phoso',
+                meaning:
+                  'Pipeline e foetse moo row ena — ho batla, tšebeleo e hodima ka hodima, kapa nako e se e fela. Karabo ho e na le letho ha e a etsahala.',
+                effect:
+                  "Ha letho le NA ha romelo ho ng ho bohlokoa — ha letho na le karabo, 'me ha ho letho le ka thusa ho lekola. Ha letho le na le sekala seha: le feta ka letso la boholo (le ka baloa zero) 'me la baloa ka column ea error, 'me run e bitsoa \"haba\" — hore re na le sekala sa bokaholimo. Lokisa sebatso — pipeline ea retrieval, service ea ka hodima, timeout — 'me phapama. Letho le ile la araba le santse le lekoloa, empa run e lekoloa ka mor'a o ke ea phatlalatsa."
+              },
+              abstained: {
+                state: 'Ho hana ho araba',
+                meaning:
+                  'Mohlophi o ile a hana ho araba empa o ile a bana le karabo — chatqna o ile a re, kapa a ile a araba ka ho tshehane. Pipeline e se ntle.',
+                effect:
+                  'Row e ile ya romeloa ho moahlodi, kahoo a eketsa sekata: ntle le kontexi e tshegwang, metrike tsa kontexi lia boea ka 0, mme zero tseo bohle li baloa mo boholong. E bala kholong ea e itseng, eseng kholong ea liphoso, mme e itseng feela e se etsa run e sa ntle. Panel e e labela “Ho hana ho araba”, eseng phatello kapa ho hloleha. Ho hana ho araba ho sa ntlhise karabo e nngwe ke boemong bo bohodima — sheba “Ho hana ho araba, ha ho lekoloa”.'
+              },
+              declinedUnjudged: {
+                state: 'Ho hana ho araba, ha ho lekoloa',
+                meaning: 'Mohlophi o ile a hana mme a sa letho — ho na le letho le ka hla. Pipeline e se ntle.',
+                effect:
+                  'Row ena ha e romeloa ho moahloli — e na le letho le ka hla, kahoo ha ho letho le ka thusa ho lekola. E na le sekala seha: e feta ka letso la boholo (ha e baloe zero), e fokotseha haholo, mme e ka etsa run e bitsoa “haba”. Panel e e labela “Ho hana ho araba — ha ho lekoloa” hore o ka e phethola le ho hana ho araba ho lekoloeng.'
+              },
+              unmeasured: {
+                state: 'Ha e lekeng',
+                meaning:
+                  'Moahlodi o ile a nka karabo eo kotloha e sa kgone ho e sekaseka — mohlala o ile a ba lepola ka botopo boo a ka nna a se ka kgone ho hlola.',
+                effect:
+                  'Kotloha ena e ntse ka null moo row ena: ho se ho ekare mo boholong, mme e ka bo feela e bile ha e phele e ba zero. Panel e bontsha linotso tse moahlodi o ile a li lekeng ka nnete. Metric e le 21/100 ha e etse run e sa ntle — benera e qala feela ha ho na le metric e sa koaleng linotso tse ka hare ho sepheo, kahoo bala linotso tsa hae bakeng sa hao.'
+              },
+              belowThreshold: {
+                state: 'Ka tlase ho tekanyiso',
+                meaning: 'Kotloha e ile a lekeng, mme ha e qetile pontso e tlase ho tekanyiso eo e rereng ho eona.',
+                effect:
+                  'Row ena e hloleha kotloha ena. Row e hloleha ha e na le kotloha e ntle e le hobaneng e hlolehile.'
+              },
+              outOfScope: {
+                state: 'Ntle le sebakeng',
+                meaning:
+                  'Potso ena e ne e sa araba ka morato — e boloketse ho haholo bakeng sa bapiso, mme e ka bo feela e bile ha e phele e ba teko.',
+                effect:
+                  'E ka bo phoso feela ha e phele, mme e se ka boa ka boholo: ke taolo ya bapiso, eseng sephetho. Panel e se e hlomela oa phetho, mme sekala sa eona ha se ka se koaleng boholo bo tsena le karohano ya koatelo.'
+              }
+            }
+          }
+        }
+      },
+      current: 'ea kajeno',
+      generate: {
+        title: 'Hlahisa sete ea ditekanyo',
+        hint: 'E hlahisa dipotso tse nang le dikarabo tse lebetsweng ho tswa polokelong tse khethiloeng — e le nngwe kapa tse ngata, polokelo ea kajeno feela kapa e nang le tse amanang le eona.',
+        size: 'Dipotso',
+        config: 'Pehelo ea modeli ea mofatso',
+        default: 'Default ea deployment (.env)',
+        defaultNamed: 'Pehelo e sebetsang — {name}{model}',
+        effective: 'Kutathibiri ka {name}{model}',
+        effectiveGenerating: 'Ho etsa ka {name}{model}',
+        envDefault: 'm-simobo wa tikamiso',
+        envJudge: 'Default ea deployment (.env){model}',
+        envJudgePlain: 'Default ea deployment (.env)',
+        model: 'Modeli',
+        modelPick: 'Ya kamehla ea pehelo',
+        modelDefault: 'ya kamehla ea pehelo',
+        note: "Modeli ea hlahisang lipotso le ea hlalosang likarabo. Pehelo e sebelisoang (★, thebe ea Dimela) e sebelisa boikemelo; ho kgetha mona ho e fana ka tokiso bakeng sa ts'ebets'o ena feela. Baahloli ba matla ba ntlafatsa kutoloso ea lintho le boleng ba dingolla haholo.",
+        single: 'Hop e le nngwe %',
+        multiAbstract: 'Mahop a mangata (kakaretso) %',
+        multiSpecific: 'Mahop a mangata (e itseng) %',
+        personas: 'Mekhoa ea basebedisi',
+        button: 'Hlahisa',
+        working: 'E hlahisa — hona ho nka metsotso e mmalwa…',
+        cancel: 'Khansela',
+        cancelling: 'E khanseletswa…',
+
+        inFlight: 'Tlhahiso ya benchmark-suite e ntse e tsamaya bakeng sa repositori ena — re u kopantse le eona.'
+      },
+      import: {
+        button: 'Kenya sete (.xlsx)',
+        working: 'E kenya…'
+      },
+      suite: {
+        namePlaceholder: 'Lebitso la tekanyo (ha ho hlokahale)',
+        add: 'Eketsa potso',
+        addPrompt: 'Potso ea ho eketsewa:',
+        addReference: 'Karabo e lebetsweng (ha ho hlokahale):',
+        flipTip: 'Fetola ka hare / ka ntle ho sepheo',
+        probeTip: 'Lekola potso ena khahlano le korpusi ea phelang',
+        removeTip: 'Tlosa potso ena'
+      },
+      col: {
+        query: 'Potso',
+        reference: 'Karabo e lebetsweng',
+        passages: 'Dikarolo',
+        scope: 'Sepheo'
+      },
+      oos: 'ka ntle ho sepheo',
+      inscope: 'ka hare ho sepheo',
+      metrics: {
+        label: 'Ditekanyo:'
+      },
+      run: {
+        button: 'Phethahatsa tekanyo',
+        judge: 'Pehelo ea modeli ea moahloli',
+        working: 'E phethahatsa…',
+        retrieved: 'hlailwe',
+        pass: 'hantshwe',
+        fail: 'hlokile',
+        abstained: 'ikhethile',
+        declinedUnjudged: 'Ho hana ho araba — ha ho lekoloa',
+        rowError: 'phoso',
+        cancel: 'Khansela tsamaiso',
+        phase: {
+          'building-knowledge-graph': 'Ho haha sethalana sa tsebo',
+          'synthesizing-questions': 'Ho hlahisa dipotso',
+          retrieval: 'e kgetha',
+          judge: 'e lekanya'
+        }
+      },
+      export: {
+        suite: 'Romela sete ka ntle (.xlsx)',
+        results: 'Romela litseo ka ntle (.xlsx)'
+      },
+      results: {
+        title: 'Litseo tsa tekanyo',
+        failing: '{n} li hlolehile',
+        advisorHint:
+          'Lipotso {n} li ka tlase ho meelo ea tsona ea metriki. Mathusa moeletsi ho beha ho hloleha ho mohala oa pipeline le ho fumana liketso tse sebetsang.',
+        copy: 'Kopola karabo e felletseng',
+        coverageTitle:
+          'Kahlolo e na qaba likarabo tse {n} ho {total} tsa metsa — karabo eo na sebetsa mantsana oa tsona.',
+        colResizeTip: 'Tsoasa seatla ho fetosa boholo — tlanya habeli hlooho ho qala hape',
+        trendTitle: 'Tsoelo-pele ea liteko hara ditsamaiso',
+        trendNote:
+          'Mola o mong le o mong ke karolo ea tekong e nngwe ea RAGAS ka sesebediso, ho tloha hodilo, mme ha e tsamaee nakong ea moahloli o fapaneng — letshwao le leng le le leng la x-axis le bolela moahloli ea hlahlobileng sesebediso. Dikarabo tse hlahlojitsoeng di bolokwa; dikopiso tse tšoanang di fapana hoo fela hoo karabo kapa phumullo e fetohe.',
+        trendMixedJudges: 'Moahloli o fapana pakeng tsa li-run tsena — bapisa ka hare ho karolo ea moahloli e le ’ngoe',
+        statusTitle: 'Diphetho ka potso e nngwe le e nngwe',
+        statusNote:
+          'Potso e nngwe le e nngwe ea sehlooho sening se ka hare ho sepheo, ka phetho: e arabitse, e hlotse (teko e kgethilweng e tlase ho moelo oa eona), e ile ka thoko, kapa phoso ea moralo. Linotso tse ka ntle ho sepheo tse bapisi ha li bale — ke taolo ya bapiso, eseng sephetho.',
+        allPass: 'tsohle li feta',
+        invalidTitle: 'Sena ena ha se ne e na e sehang',
+        invalidPill: 'sena e se ntlha',
+        invalidErrors:
+          '{n} ho {total} tseeba tse hlehlehetse — lintlha tseo ha se etsahale lenatefiso lenkomo. Phapama benchmark.',
+        invalidCoverage:
+          'Mohloli o ile {measured} ho {total} mohlare — mepe e ka hare monyedong o ka sebetsa feela tse neng tse lengoe.',
+        failingShort: 'li hlolehile',
+        answer: 'Karabo',
+        state: 'Seemo',
+        error: 'phoso',
+        abstained: 'e ikgethetse',
+        declinedUnjudged: 'Ho hana ho araba — ha ho lekoloa',
+        declinedUnjudgedTitle:
+          'Mojarabo o ile a hana mme a sa letho, kahoo row ena ha e ne e romeloa ho moahloli. Ha e na le sekala mme e sa bale ho boholong — mme e fokotseha haholo.',
+        answered: 'e arabitse',
+        noisy: 'karabo e nepahetse — lerata la phumullo',
+        noisyTitle:
+          'Karabo e fetile meeli eohle ea boleng ba karabo; e le sete ea context e fanoeng feela (precision/recall) e ka tlase ea moeli',
+        pdf: 'Romela tlaleho ea PDF ka ntle'
+      },
+      explain: {
+        button: 'Hlalosa tse fosahetseng',
+        working: 'Ho hlalosa diphoso…',
+        advising: 'Molekane o nahana — {n} methalo e hlôlehileng',
+        guarding: 'Ho hlahloba ditšehetso tsa dithegi…',
+        title: 'Mabaka a ho hloleha le tataiso',
+        none: 'Ha ho mela e fosahetseng ea ho e hlalosa.',
+        stage: 'Setha',
+        fails: 'Ditekanyo tse fosahetseng',
+        recommendation: 'Khothaletso',
+        unfair: 'potso e sa molemo',
+        unfairTitle: 'Karolo eo e lebelagoa ha ho corpus — mofutofuto ena o lekola benchmark, eseng ha mhoabi',
+        evidenceTitle: 'Lifa tse tsefumaditseng, corpus / lihore tsa bakatsi / ho model. Mokhoa: {method}',
+        facts: 'Lintso tsa ho matha: {rows} mela · {abstentions} ho hana ho arabela · ~{chars} litsohore tsa karabo',
+        rankTitle: 'Karolo ena e le corpus, empa e ka ntle ho lihore tsa bakatsi — boemong # {n}.'
+      },
+      history: {
+        title: 'Histori ea tsamaello',
+        run: 'Tsamaello',
+        when: 'Neng',
+        status: 'Seemo',
+        load: 'Jarisa',
+        delete: 'Phumula',
+        rescore: 'Hahlola hape',
+        rescoreOf: 'hahlolwa ho tsa {key}',
+        judgeEnv: 'kokoana ea boemong ba sisteme',
+        judgeUnknown: 'Kahlolo ha ho ngeng'
+      },
+      rescore: {
+        title: 'Hahlola hape ka kahlolo',
+        body: 'Likarabo tse tsebokeng li hahloloa ka kahlolo o o ketsang — ha li hlahloheng. Lenkopo la bona li ile ka bula kahlolo ea run ya mohloli, kahoo kadi e ncha e sebetsa ho hlahloja hore na kahlolo eo e ka phetoloha; kha kahlolo O NGO ho fumana maqeo a mabeli a liphoso. Sehlaho ke balekila bo bo karolo.',
+        source: 'Balekila ba pele',
+        judge: 'Kopano ya kahlolo',
+        confirm: 'Hahlola hape',
+        failed: 'Ho hahlola hape balekila ho ka hlehlehela.'
+      },
+      runDelete: {
+        title: 'Phumula tsamaello',
+        body: 'Senya se tlosa tsamaello le tlhahlobo ea eona ea likhahle ka ho sa feleng. Suite le lipotso tsa eona li lula.',
+        confirm: 'Phumula',
+        inFlight: 'Tsamaello ena esale e ntse e sebetsa — e khansela pele.',
+        explainInFlight: 'Tlhahlobo ea likhahle ea tsamaello ena esale e ntse e sebetsa — emella ho fela.',
+        failed: 'Ho phumula tsamaello ho hlile.'
+      },
+      advice: {
+        knob: 'taolo',
+        tag: 'tag ea polokelo',
+        content: 'litaba',
+        prompt: 'taelo',
+        env: 'liphetoho tsa tikoloho',
+        envComponent: 'karolo',
+        envChange: 'phetoho',
+        envTargets: 'sepheo',
+        envWhy: 'hobaneng',
+        envTradeOff: 'tsholisano',
+        envApply: 'mokhoa o sebedisoang',
+        envVerify: 'hlahloba'
+      },
+      metric: {
+        faithfulness: 'boinehelo',
+        context_precision: 'ho nepahala ha mongobo',
+        context_recall: 'botlalo ba mongobo',
+        answer_relevancy: 'bohlokwa ba karabo',
+        context_utilization: 'tšebeliso ea mongobo',
+        context_entities_recall: 'botlalo ba lintho tsa mongobo',
+        factual_correctness: 'nepahalo ea lintlha',
+        answer_correctness: 'nepahalo ea karabo',
+        answer_similarity: 'ho tšoana ha dikarabo',
+        noise_sensitivity: 'kutloelo molumong o tiehang',
+        note: {
+          faithfulness:
+            'Karabo e thehilwe hakae ho ditšoanele tse fumanwego — karolo ea litšoiso tse thehilsoeng hodimo ke methopo. E tlase ho bolela karabo e bolela seo bopaki bo se bolele (bono).',
+          context_precision:
+            'Hore na ditšoanele tse ka sehloohong li ka holimo ea lintlha tse fumanwego. E tlase ho bolela bopaki bo nepahetseng bo fumanwe empa bo patiloe ke dikarolo tse sa amehang.',
+          context_recall:
+            'Hore na ditšoanele tse fumanwego di phalla ka tsohle karabo ea moelelo e hlokang. E tlase ho bolela phumullo e sieile bopaki potso e neng e se hloka.',
+          answer_relevancy:
+            'Karabo e arabatana potso ea hae: RAGAS e hlahisa dipotso hape ho mongolo oa karabo mme e li bapisa le ea pele ka ho tšoana ha embeddings. HA E hlahlobe nepo ea lintaba — dikarabo tse telele di fumana litho tse tlase le ho ba nepahetseng.',
+          context_utilization:
+            'Hore na moqoqo o fumanweng o lekane ho hlahisa karabo ea moelelo — teko ea ho phalla ha phumullo.',
+          context_entities_recall:
+            'Kutolosa boemong ba ditaba: karolo ea litaba tse bitsoang lipasseng tsa boitšoaro ba mongolo (likhamphani, dateng, mabalenyana, libaka) tse bonahalang hape ho dikhouse tse khothalelitsoeng. Palo e tlase e bolela hore ho khothalelitsoe dikhouse tse sieang metso ea boitšoaro. Toka ho moahlodi — palo e tlase ha kutolosa context se fetoheletsoe hangata ho bolela hore ntsho ea litaba ke moahloli e ile ea siea, eseng hore teng e sieo.',
+          factual_correctness:
+            'Tumellano ea nnete maemong a litšoiso le karabo ea moelelo — moahlodi o arola ka bobeli ebe o lekanya tšusumetso. Teko e thata ka ho fetisisa ea nepo.',
+          answer_correctness:
+            'Bohlebahle ho fapana le moelelo — nepo ea nnete e kopantsoe le ho tšoana ha moelelo. Teko e atamalanang le “na karabo e ne e nepahetse”.',
+          answer_similarity:
+            'Ho tšoana ha moelelo (embeddings) pakeng tsa karabo e hlahisitsoeng le ea moelelo — holimo ho bolela bobeli bo bolela se seng.',
+          noise_sensitivity:
+            'Karabo e fokotseha hakae ha dikarolo tse sa amehang di kenella moqoqong — teko ea mamello. TLASE ke e ntle; moelo oa eona o cholotsoe.'
+        }
+      },
+      pdf: {
+        title: 'Tlaleho ea ditekanyo tsa RAGAS',
+        suite: 'Sete',
+        run: 'Tsamaello',
+        summary: 'Kakaretso',
+        perQuery: 'Dipalo ka potso e nngwe le e nngwe',
+        status: 'Diphetho',
+        n: 'dipotso',
+        evaluable: 'e ka hlahlojoa',
+        abstained: 'tse ikhethetseng',
+        compare: 'Papisano hara ditsamaiso (phapang le ea pele)'
+      }
     }
+  },
+  link: {
+    ragTip:
+      'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
   }
 };

@@ -107,4 +107,134 @@ describe('Locale consistency', () => {
     }
     expect(dupMap).toEqual({});
   });
+
+  // PLACEHOLDER GUARD (David, 2026-09-30, "Step of 10"; re-inked 2026-10-09).
+  // translateMixin now does RAW message lookup (no vue-i18n compilation), so
+  // a replace()-consumed okf.* key must carry the PLAIN {x} form — the
+  // caller's .replace('{x}', …) needs to find it. The old {'{'}x{'}'} escape
+  // renders literally under raw lookup (live: the dashboard Ingested card
+  // showed "Ingested v{'{'}n{'}'}"), so every okf.* escape was un-escaped in
+  // the same change. admin.documents.* keys are the exception: their consumer
+  // is AdminDashboard.translate, which still routes through vue-i18n's
+  // compiler — there the escape form is load-bearing and a plain {x} would
+  // be swallowed as an empty named slot.
+  const RAW = /\{[a-zA-Z][a-zA-Z0-9_]*\}/;
+  const replaceConsumedPlain = [
+    'okf.dashboard.stage.stepOf',
+    'okf.studio.stage.stepOf',
+    'okf.studio.dashboard.stage.stepOf',
+    'okf.dashboard.stage.queueBehind',
+    'okf.pii.nFlagged',
+    'okf.src.total',
+    'okf.src.count',
+    'okf.src.confirm',
+    'okf.src.uploaded',
+    'okf.steps.input.benchCount',
+    'okf.steps.input.moreN',
+    // Re-ingest (David, 2026-10-14) — all three interpolated with .replace().
+    // `failed` is the card label: "Re-ingest failed ({n})".
+    'okf.dashboard.reingest.failed',
+    'okf.dashboard.reingest.body',
+    'okf.dashboard.reingest.none',
+    // #1039 batch (2026-10-03): Step-7 keys consumed via .replace()
+    'okf.validation.headline.blockers',
+    'okf.validation.headline.warnings',
+    'okf.validation.summary',
+    'okf.validation.mergedPages',
+    'okf.validation.preview.truncated',
+    'okf.validation.action.wireCreate',
+    'okf.validation.action.wireExisting',
+    'okf.validation.wireDone',
+    'okf.validation.wireCreated',
+    // #1040 follow-up: the workbench bulk-PII success lines (consumed via
+    // translate().replace('{n}') — the done_accept multiline wrap slipped a
+    // raw {n} past a scripted escape once; the guard now pins all three).
+    'okf.editor.piiBulk.done_accept',
+    'okf.editor.piiBulk.done_redact',
+    'okf.editor.piiBulk.done_remove',
+    // 6-1c picker (2026-10-17): grant-by-search counts, consumed via
+    // translate().replace('{n}') in AccessPanel.vue.
+    'okf.editor.access.pickerMatching',
+    'okf.editor.access.pickerSelectAll',
+    'okf.editor.access.pickerAllSelected',
+    'okf.editor.access.pickerGrant',
+    'okf.editor.access.pickerGranting',
+    'okf.editor.access.grantedQueryNotice',
+    // RAGAS advisor hint (2026-10-19): failing-count banner, consumed via
+    // translate().replace('{n}') in RagasPanel.vue.
+    'okf.ragas.results.advisorHint',
+    // RAGAS invalid-run banner (2026-10-21): an errored/partial run is not a
+    // measurement — both messages carry placeholders consumed via .replace().
+    'okf.ragas.results.invalidErrors',
+    'okf.ragas.results.invalidCoverage',
+    // RAGAS generation progress (2026-10-21): the LLM-call counter that
+    // moves even when the transform bar does not.
+    'okf.ragas.gen.calls',
+    // RAGAS generation progress (2026-10-26): the REPLAY counter — the
+    // calls the sidecar's cache answered, consumed the same way as the
+    // call count. A scripted escape in one locale would render a raw {n}.
+    'okf.ragas.gen.replays',
+    // RAGAS dropped questions (2026-10-21): the note that says how many
+    // questions the generation LOST and why — consumed via .replace().
+    'okf.ragas.dropped.note',
+    // RAGAS judge labels (2026-10-21): what "deployment default" resolves
+    // to, and which model the running generation is actually using.
+    'okf.ragas.generate.defaultNamed',
+    'okf.ragas.generate.effective',
+    // RAGAS run facts (2026-10-25): the row/abstention/answer-length facts
+    // the advisor CITES — consumed via .replace() for {rows}/{abstentions}/
+    // {chars}, so they must carry the plain {x} form.
+    'okf.ragas.explain.facts',
+    // RAGAS metric coverage (2026-10-25): how many rows the judge scored
+    // for a metric — consumed via .replace() for {n}/{total}.
+    'okf.ragas.results.coverageTitle',
+    // Model-config connection test (2026-10-19): composed in
+    // ModelConfigPanel.testMessage() via .replace() for {n}/{ms}/{model}.
+    'okf.models.modelsLoaded',
+    'okf.models.testOkModel',
+    'okf.models.testOkEndpoint',
+    'okf.models.testNotListed'
+  ];
+  // #1042 batch delete: consumed via AdminDashboard.translate (compiled $t).
+  const replaceConsumedEscaped = [
+    'admin.documents.confirmDeleteSelected',
+    'admin.documents.deleteQueuedSuccess',
+    'admin.documents.deletePartialFailure',
+    'admin.documents.deleteAllFailed',
+    'admin.documents.deleteRefuseReason'
+  ];
+
+  test('replace()-consumed okf.* keys carry PLAIN placeholders in every locale (mixin raw lookup)', () => {
+    const get = (o, d) => d.split('.').reduce((a, k) => (a && a[k] != null ? a[k] : undefined), o);
+    const offenders = [];
+    for (const locale of localeFiles) {
+      const data = getLocaleData(locale);
+      for (const key of replaceConsumedPlain) {
+        const v = get(data, key);
+        if (typeof v !== 'string') {
+          offenders.push(`${locale}:${key} missing`);
+        } else if (!RAW.test(v)) {
+          offenders.push(`${locale}:${key} no plain placeholder: ${v}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test('admin.documents replace()-consumed keys keep the escaped form (AdminDashboard compiled path)', () => {
+    const get = (o, d) => d.split('.').reduce((a, k) => (a && a[k] != null ? a[k] : undefined), o);
+    const offenders = [];
+    for (const locale of localeFiles) {
+      const data = getLocaleData(locale);
+      for (const key of replaceConsumedEscaped) {
+        const v = get(data, key);
+        if (typeof v !== 'string') {
+          offenders.push(`${locale}:${key} missing`);
+        } else if (RAW.test(v)) {
+          offenders.push(`${locale}:${key} raw placeholder (must stay escaped): ${v}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
 });

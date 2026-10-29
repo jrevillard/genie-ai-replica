@@ -2,6 +2,7 @@
 import { createStore } from 'vuex';
 import chatHistoryStore from './chatHistoryStore';
 import auth from './modules/auth';
+import okf from './modules/okf';
 import status from './modules/status';
 import conversation, { rehydrateConversation, subscribeConversation } from './modules/conversation';
 
@@ -10,6 +11,7 @@ const store = createStore({
   modules: {
     chatHistory: chatHistoryStore,
     auth,
+    okf,
     status,
     conversation
   },

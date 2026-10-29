@@ -107,6 +107,12 @@ jest.mock('../../services/documentFileService', () => ({
     successCount: 2,
     failureCount: 0,
     results: []
+  }),
+  // #1042: batch delete — defaults to the all-success shape so existing
+  // tests pass; individual tests override to exercise partial/all-failure.
+  deleteMultipleFiles: jest.fn().mockResolvedValue({
+    success: true,
+    results: []
   })
 }));
 
@@ -214,7 +220,7 @@ function createUnauthenticatedStore() {
 // Mount helper
 // ---------------------------------------------------------------------------
 
-function createAdminDashboardWrapper(storeOverrides = {}, extraMocks = {}) {
+function createAdminDashboardWrapper(storeOverrides = {}, extraMocks = {}, extraStubs = {}) {
   const store = createAdminStore(storeOverrides);
   return mount(AdminDashboard, {
     global: {
@@ -251,7 +257,8 @@ function createAdminDashboardWrapper(storeOverrides = {}, extraMocks = {}) {
         AddFromLinkDialog: true,
         FileDetailsDialog: true,
         ConfirmDialog: true,
-        Loader2: true
+        Loader2: true,
+        ...extraStubs
       }
     }
   });
@@ -286,19 +293,75 @@ describe('AdminDashboard', () => {
       expect(mockGetSystemHealth).toHaveBeenCalledTimes(1);
     });
 
-    it('initializes all eight admin tabs', () => {
+    it('initializes all ten admin tabs (OKF Studio next to Document Management; Models LAST)', () => {
       const wrapper = createAdminDashboardWrapper();
       const tabIds = wrapper.vm.tabs.map((t) => t.id);
+      // Story 3-7 fix (#977): OKF Studio tab moved to sit immediately after
+      // Document Management so the crawler→OKF workflow is a one-step click.
+      // Story 8-7 (David 2026-10-20): model configurations — the LAST tab.
       expect(tabIds).toEqual([
         'overview',
         'hierarchy',
         'documents',
+        'studio',
         'database',
         'logs',
         'queryInspector',
         'security',
-        'users'
+        'users',
+        'models'
       ]);
+    });
+
+    // David 2026-10-21: "the left sidebar menus need to be aligned with the
+    // tabs in the tab rack" — the Studio tab had NO sidebar entry (clicking it
+    // left the menu with no active item), and Settings listed users before
+    // security against the rack's order. The sidebar must navigate to every
+    // tab, in rack order.
+    // OKF feature flag (2026-10-21): OKF_ENABLED=0 parks the OKF surfaces —
+    // the Studio and Models tabs (rack + sidebar) disappear; Query Inspector
+    // is platform tooling and STAYS (David's call).
+    it('OKF flag off hides Studio and Models from rack and sidebar, keeps Query Inspector', async () => {
+      window.APP_CONFIG = { okfEnabled: '0' };
+      try {
+        const wrapper = createAdminDashboardWrapper(
+          {},
+          {},
+          { OkfStudioTab: true, OkfModelConfigPanel: true, QueryInspector: true }
+        );
+        const tabIds = wrapper.vm.adminTabs.map((t) => t.value);
+        expect(tabIds).not.toContain('studio');
+        expect(tabIds).not.toContain('models');
+        expect(tabIds).toContain('queryInspector'); // platform tooling stays
+        expect(tabIds).toHaveLength(8);
+        const linkText = wrapper.findAll('.sidebar .nav-link').map((l) => l.text());
+        expect(linkText.join(' | ')).not.toContain('OKF Studio');
+        expect(linkText.join(' | ')).not.toContain('admin.tabs.models');
+        expect(wrapper.findAll('.sidebar .nav-link')).toHaveLength(8);
+      } finally {
+        delete window.APP_CONFIG;
+      }
+    });
+
+    it('sidebar nav mirrors the tab rack: every tab reachable, in rack order', async () => {
+      // The heavy tab panels (Studio fetches repos on mount, Models fetches
+      // configs, Inspector mounts its own store calls) are stubbed — this
+      // test is about the NAVIGATION surface, not the panels' payloads.
+      const wrapper = createAdminDashboardWrapper(
+        {},
+        {},
+        {
+          OkfStudioTab: true,
+          OkfModelConfigPanel: true,
+          QueryInspector: true
+        }
+      );
+      const links = wrapper.findAll('.sidebar .nav-link');
+      expect(links.length).toBe(wrapper.vm.tabs.length);
+      for (let i = 0; i < wrapper.vm.tabs.length; i += 1) {
+        await links[i].trigger('click');
+        expect(wrapper.vm.activeTab).toBe(wrapper.vm.tabs[i].id);
+      }
     });
   });
 
@@ -386,7 +449,7 @@ describe('AdminDashboard', () => {
     it('adminTabs computed maps each tab to { label, value }', () => {
       const wrapper = createAdminDashboardWrapper();
       const tabs = wrapper.vm.adminTabs;
-      expect(tabs.length).toBe(8);
+      expect(tabs.length).toBe(10);
       expect(tabs[0].value).toBe('overview');
       expect(tabs[0].label).toBe('System Health'); // translate() returns the fallback label from tabs data
       expect(tabs.every((t) => typeof t.label === 'string' && typeof t.value === 'string')).toBe(true);
@@ -1800,6 +1863,119 @@ describe('AdminDashboard', () => {
       ]);
     });
 
+    // #1042 BATCH DELETE — the Delete Selected button (Document Management).
+    it('delete: passes file_id values to documentFileService.deleteMultipleFiles', async () => {
+      const documentFileService = require('../../services/documentFileService');
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'a', file_id: 'a-1', dataprep: { status: 'pending' } },
+        { _key: 'b', file_id: 'b-1', dataprep: { status: 'retracted' } }
+      ];
+      wrapper.vm.selectedDocuments = ['a-1', 'b-1'];
+
+      await wrapper.vm.handleBatchAction('delete');
+      expect(wrapper.vm.confirmDialogState.visible).toBe(true);
+      await wrapper.vm.confirmDialogState.onConfirm();
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(documentFileService.deleteMultipleFiles).toHaveBeenCalledWith(['a-1', 'b-1']);
+      // All-success default: selection clears, success toast fires.
+      const ok = mockEventBusEmit.mock.calls.find((c) => c[0] === 'notification:show' && c[1].type === 'success');
+      expect(ok).toBeTruthy();
+      expect(ok[1].message).toMatch(/deleted/i);
+      expect(wrapper.vm.selectedDocuments).toEqual([]);
+    });
+
+    it('delete: disabled with hover title when any selected file is ingested', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'a', file_id: 'a-1', dataprep: { status: 'pending' } },
+        { _key: 'b', file_id: 'b-1', dataprep: { status: 'ingested' } }
+      ];
+      wrapper.vm.selectedDocuments = ['a-1', 'b-1'];
+
+      expect(wrapper.vm.showDeleteButton).toBe(true);
+      expect(wrapper.vm.deleteRefuseReason).toMatch(/ingested/i);
+      expect(wrapper.vm.deleteRefuseReason).toMatch(/1/);
+
+      // Pure PENDING selection — button enabled, no refuse reason.
+      wrapper.vm.documents = [{ _key: 'a', file_id: 'a-1', dataprep: { status: 'pending' } }];
+      wrapper.vm.selectedDocuments = ['a-1'];
+      expect(wrapper.vm.deleteRefuseReason).toBeNull();
+    });
+
+    // 2026-10-10 (live: David selected pending rows to clean up, ONE row had
+    // gone Ingesting, the whole batch silently refused via a tooltip-only
+    // disabled button — read as "it failed"): a MIXED selection deletes the
+    // clean subset and reports the skipped rows instead of refusing.
+    it('delete: a mixed selection deletes only the deletable rows and keeps the blocked selected', async () => {
+      const documentFileService = require('../../services/documentFileService');
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'a', file_id: 'a-1', dataprep: { status: 'pending' } },
+        { _key: 'b', file_id: 'b-1', dataprep: { status: 'pending' } },
+        { _key: 'c', file_id: 'c-1', dataprep: { status: 'ingesting' } }
+      ];
+      wrapper.vm.selectedDocuments = ['a-1', 'b-1', 'c-1'];
+      expect(wrapper.vm.deletableSelection).toEqual(['a-1', 'b-1']);
+      expect(wrapper.vm.blockedSelection.map((d) => d.file_id)).toEqual(['c-1']);
+      expect(wrapper.vm.deleteRefuseReason).toMatch(/1/);
+
+      await wrapper.vm.handleBatchAction('delete');
+      expect(wrapper.vm.confirmDialogState.visible).toBe(true);
+      // The confirm names what will be skipped.
+      expect(wrapper.vm.confirmDialogState.message).toMatch(/SKIPPED/i);
+      await wrapper.vm.confirmDialogState.onConfirm();
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(documentFileService.deleteMultipleFiles).toHaveBeenCalledWith(['a-1', 'b-1']);
+      // Blocked row STAYS selected (it was not deleted); the deleted rows
+      // drop out.
+      expect(wrapper.vm.selectedDocuments).toEqual(['c-1']);
+      const ok = mockEventBusEmit.mock.calls.find((c) => c[0] === 'notification:show' && c[1].type === 'success');
+      expect(ok).toBeTruthy();
+    });
+
+    it('delete: all-blocked still refuses outright', async () => {
+      const documentFileService = require('../../services/documentFileService');
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [{ _key: 'c', file_id: 'c-1', dataprep: { status: 'ingested' } }];
+      wrapper.vm.selectedDocuments = ['c-1'];
+      await wrapper.vm.handleBatchAction('delete');
+      expect(wrapper.vm.confirmDialogState.visible).toBe(false);
+      expect(documentFileService.deleteMultipleFiles).not.toHaveBeenCalled();
+      const err = mockEventBusEmit.mock.calls.find((c) => c[0] === 'notification:show' && c[1].type === 'error');
+      expect(err).toBeTruthy();
+    });
+
+    it('delete: 403 BUNDLE_PROTECTED surfaces the verbatim backend message', async () => {
+      const documentFileService = require('../../services/documentFileService');
+      // Simulate the 403 shape doc-repo returns for bundles
+      documentFileService.deleteMultipleFiles.mockRejectedValueOnce({
+        response: {
+          status: 403,
+          data: {
+            success: false,
+            code: 'BUNDLE_PROTECTED',
+            error: 'Bundle zips are managed by the OKF lifecycle and cannot be deleted from document management',
+            message: 'Bundle zip "x-1" is owned by the OKF repository lifecycle.'
+          }
+        }
+      });
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [{ _key: 'x', file_id: 'x-1', dataprep: { status: 'pending' } }];
+      wrapper.vm.selectedDocuments = ['x-1'];
+
+      await wrapper.vm.handleBatchAction('delete');
+      await wrapper.vm.confirmDialogState.onConfirm();
+      await new Promise((r) => setTimeout(r, 0));
+
+      const err = mockEventBusEmit.mock.calls.find((c) => c[0] === 'notification:show' && c[1].type === 'error');
+      expect(err).toBeTruthy();
+      // Verbatim backend message — not the generic deleteQueuedError
+      expect(err[1].message).toMatch(/OKF repository lifecycle/);
+    });
+
     it('ingest all-failure: keeps failed selections, error toast, real failureCount', async () => {
       const documentFileService = require('../../services/documentFileService');
       documentFileService.ingestMultipleFiles.mockResolvedValueOnce({
@@ -1961,6 +2137,89 @@ describe('AdminDashboard', () => {
       ];
       wrapper.vm.selectedDocuments = ['f1', 'f2'];
       expect(wrapper.vm.showRetractButton).toBe(false);
+    });
+  });
+
+  // okfRepoGate — Story 7.7 amendment: documents still serving the free-form
+  // corpus are ALLOWED into a new OKF repository (import succeeds; the new
+  // repo's own ingest is gated until they are retracted). Only empty
+  // selections and documents already sourced by ANOTHER OKF repo refuse.
+  // -----------------------------------------------------------------------
+  describe('okfRepoGate (Story 7.7 amendment)', () => {
+    const doc = (_key, status, okf_repo_id = null) => ({
+      _key,
+      okf_repo_id,
+      dataprep: { status }
+    });
+
+    async function gateWith(docs, selected) {
+      const wrapper = createAdminDashboardWrapper();
+      await wrapper.setData({ documents: docs, selectedDocuments: selected });
+      return wrapper.vm.okfRepoGate;
+    }
+
+    it('refuses an empty selection', async () => {
+      const gate = await gateWith([doc('f1', 'Pending')], []);
+      expect(gate).toMatchObject({ visible: false, reasonKey: 'okf.docs.gate.emptySelection', warnKey: null });
+    });
+
+    it('refuses documents already sourced by another OKF repository', async () => {
+      const gate = await gateWith([doc('f1', 'Pending', 'r-other')], ['f1']);
+      expect(gate).toMatchObject({ visible: false, reasonKey: 'okf.docs.gate.alreadyInOkf', warnKey: null });
+    });
+
+    it('ALLOWS ingested documents — visible with servingWarn and the count', async () => {
+      const gate = await gateWith(
+        [doc('f1', 'Ingested'), doc('f2', 'Ingested with Warnings'), doc('f3', 'Ingesting')],
+        ['f1', 'f2', 'f3']
+      );
+      expect(gate).toMatchObject({
+        visible: true,
+        reasonKey: null,
+        warnKey: 'okf.docs.gate.servingWarn',
+        servingCount: 3
+      });
+    });
+
+    it('clean (not serving) selection → visible without a warning', async () => {
+      const gate = await gateWith(
+        [doc('f1', 'Pending'), doc('f2', 'Retracted'), doc('f3', 'Ingestion Error')],
+        ['f1', 'f2', 'f3']
+      );
+      expect(gate).toMatchObject({ visible: true, reasonKey: null, warnKey: null, servingCount: 0 });
+    });
+
+    it('gate title renders the servingWarn text with the count substituted', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      await wrapper.setData({
+        documents: [doc('f1', 'Ingested')],
+        selectedDocuments: ['f1']
+      });
+      // The factory mocks $t as identity; shadow translate so the {n} template
+      // survives to the .replace the computed applies.
+      wrapper.vm.translate = (key) => (key === 'okf.docs.gate.servingWarn' ? '{n} docs still serve' : key);
+      expect(wrapper.vm.okfGateTitle).toBe('1 docs still serve');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Story 7.7 deep link — one-shot: opens the FileDetailsDialog on click-
+  // navigation, then scrubs ?file= so a REFRESH does not re-open it.
+  // -----------------------------------------------------------------------
+  describe('applyRouteQuery deep link (one-shot)', () => {
+    it('opens the dialog and scrubs ?file= from the URL', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.$router = { replace: jest.fn().mockResolvedValue(undefined) };
+      wrapper.vm.applyRouteQuery({ tab: 'documents', file: 'f-9', keep: 'x' });
+      expect(wrapper.vm.showDetailsDialog).toBe(true);
+      expect(wrapper.vm.selectedFileId).toBe('f-9');
+      expect(wrapper.vm.$router.replace).toHaveBeenCalledWith({ query: { tab: 'documents', keep: 'x' } });
+    });
+
+    it('tolerates a missing router (unit contexts) without crashing', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.applyRouteQuery({ tab: 'documents', file: 'f-9' });
+      expect(wrapper.vm.showDetailsDialog).toBe(true);
     });
   });
 });

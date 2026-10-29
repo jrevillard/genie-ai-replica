@@ -1,0 +1,705 @@
+/**
+ * repoOkfService — read-mostly OKF repo CRUD client.
+ *
+ * Backed by the existing /api/okf/repos routes on okf-server. Some methods
+ * (manifest, metrics, clone) reference routes already shipped; mintVersion
+ * already exists (Story 2.9.7). Update + clone are server-live from 2.9.7
+ * and 4.8.
+ */
+
+import httpService from './httpService';
+
+function notReady(reason) {
+  const err = new Error('NOT_READY');
+  err.code = 'NOT_READY';
+  err.message = reason;
+  return err;
+}
+
+const repoOkfService = {
+  async list({ stage = 'all' } = {}) {
+    const res = await httpService.get(`/okf/repos?lifecycle=${encodeURIComponent(stage)}`);
+    const body = res && res.data;
+    // The list endpoint returns { items: [...], next_cursor } — unwrap it.
+    // (Returning the raw body made the store call .forEach on an object,
+    // which threw inside fetchRepos' try/catch and silently left the
+    // dashboard lanes empty: "Repositories 0" no matter what existed.)
+    if (body && Array.isArray(body.items)) return body.items;
+    if (Array.isArray(body)) return body; // legacy array shape
+    return [];
+  },
+
+  async get(repoId) {
+    const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}`);
+    return res && res.data ? res.data : null;
+  },
+
+  /**
+   * Amendment A (Labels step preview): the repo's concept meta rows —
+   * {concept_id, path, title, labels, tags, ...} per Story #978's KEEP list.
+   * The controller returns the legacy full array (no pagination opts sent).
+   * opts.strict: rethrow instead of resolving [] — callers that must
+   * DISTINGUISH failure from empty (Choose's clone, LabelOnboard's error
+   * branch) use it; previews stay permissive by default.
+   */
+  async listConcepts(repoId, opts = {}) {
+    try {
+      const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/concepts`, {}, { silent: true });
+      const body = res && res.data;
+      if (Array.isArray(body)) return body;
+      if (body && Array.isArray(body.concepts)) return body.concepts;
+      return [];
+    } catch (err) {
+      if (opts.strict) throw err;
+      return []; // a preview must never block the step
+    }
+  },
+
+  /**
+   * Amendment A (wizard clone): ONE concept's full meta row — frontmatter +
+   * body included (persisted on the meta doc since 4.8-amend content-only
+   * chunking) — so the wizard's clone path can re-import the source's
+   * concepts into the new repository via the standard /import upsert.
+   */
+  async getConcept(repoId, conceptId) {
+    const res = await httpService.get(
+      `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}`,
+      {},
+      { silent: true }
+    );
+    return res && res.data ? res.data : null;
+  },
+
+  async create(body) {
+    // silent: the create dialog owns the outcome display (e.g. a friendly
+    // DUPLICATE_REPO message) — no global toast, no console.error.
+    const res = await httpService.post('/okf/repos', body, { silent: true });
+    return res && res.data ? res.data : null;
+  },
+
+  // Story 7.7 (David, 2026-09-14): multi-select doc-repo documents into ONE
+  // OKF repository — whole-corpus linking/labeling; ingested sources allowed
+  // (the repo's own ingest is gated downstream: SOURCES_NOT_RETRACTED).
+  // Amendment A (B1): repoId targets an EXISTING repo (the wizard's Entry
+  // already created it) — the conversion lands there instead of minting one.
+  async importDocuments({ file_ids, name, domain, classification, repo_id }) {
+    // silent: the import dialog owns the outcome display.
+    const res = await httpService.post(
+      '/okf/repos/convert-from-documents',
+      { file_ids, name, domain, classification, repo_id },
+      { silent: true }
+    );
+    return res && res.data ? res.data : null;
+  },
+
+  // Amendment A (B1): crawl conversion into an EXISTING repo (wizard Input
+  // → Produce). split_mode 'B' (per-page) is the historical default.
+  async convertFromCrawlInto({ repo_id, file_id, url, crawl_job_id, classification, split_mode = 'B' }) {
+    const res = await httpService.post(
+      '/okf/repos/convert-from-crawl',
+      { repo_id, file_id, url, crawl_job_id, classification, split_mode },
+      { silent: true }
+    );
+    return res && res.data ? res.data : null;
+  },
+
+  async update(repoId, patch) {
+    const res = await httpService.patch(`/okf/repos/${encodeURIComponent(repoId)}`, patch);
+    return res && res.data ? res.data : { ok: true };
+  },
+
+  /**
+   * Studio wizard resume pointer (3.4 Amendment A, A4): best-effort
+   * persistence of the wizard's current step on the repo doc
+   * (okf_repositories.studio_step, int 0-9 or null). Silent + non-throwing:
+   * resume persistence must never break the wizard flow — a failure just
+   * means the next session resumes from the in-memory default.
+   */
+  async saveStudioStep(repoId, studioStep) {
+    try {
+      await httpService.patch(
+        `/okf/repos/${encodeURIComponent(repoId)}`,
+        { studio_step: studioStep },
+        { silent: true }
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  async getManifest(repoId) {
+    try {
+      // silent: a fresh repo's bundle is NOT settled until the indexing worker
+      // finishes — the 404 is an expected, handled outcome (the graph view
+      // renders nodes without edges). No toast, no console noise.
+      const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/manifest`, {}, { silent: true });
+      return res && res.data ? res.data : null;
+    } catch (err) {
+      if (err && (err.status === 404 || err.status === 501)) throw notReady('okf.repos.manifest.notReady');
+      throw err;
+    }
+  },
+
+  async getMetrics(repoId) {
+    try {
+      const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/metrics`);
+      return res && res.data ? res.data : null;
+    } catch (err) {
+      if (err && (err.status === 404 || err.status === 501)) return null;
+      throw err;
+    }
+  },
+
+  // --- Story 6-1c: per-repository access control (the admin facility,
+  //     enterprise scale: bulk user grants + group grants via roles). ---
+  async getAccess(repoId) {
+    const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/access`);
+    const b = res && res.data;
+    return {
+      restricted: Boolean(b && b.restricted),
+      required_scopes: (b && b.required_scopes) || [],
+      user_holders: (b && b.user_holders) || [],
+      group_holders: (b && b.group_holders) || [],
+      configured: Boolean(b && b.configured)
+    };
+  },
+  async putAccess(repoId, restricted) {
+    const res = await httpService.put(`/okf/repos/${encodeURIComponent(repoId)}/access`, { restricted });
+    return res && res.data;
+  },
+  /** Picker search: server-side Keycloak user search + has_access marks. */
+  async getAccessUsers(repoId, q) {
+    const res = await httpService.get(
+      `/okf/repos/${encodeURIComponent(repoId)}/access/users?q=${encodeURIComponent(q || '')}`
+    );
+    return res && res.data;
+  },
+  /** Group combobox search: server-side Keycloak group search + has_access. */
+  async getAccessGroups(repoId, q) {
+    const res = await httpService.get(
+      `/okf/repos/${encodeURIComponent(repoId)}/access/groups?q=${encodeURIComponent(q || '')}`
+    );
+    return res && res.data;
+  },
+  /** Grant query access — checkboxes (usernames[]), single (username), or
+   * grant-by-search (query: every matching directory user, server-side). */
+  async grantAccess(repoId, { usernames, username, query }) {
+    const body = query ? { query } : usernames ? { usernames } : { username };
+    const res = await httpService.post(`/okf/repos/${encodeURIComponent(repoId)}/access/grant`, body);
+    return res && res.data;
+  },
+  async revokeAccess(repoId, { usernames, username }) {
+    const body = usernames ? { usernames } : { username };
+    const res = await httpService.post(`/okf/repos/${encodeURIComponent(repoId)}/access/revoke`, body);
+    return res && res.data;
+  },
+  async grantGroupAccess(repoId, { group, level }) {
+    const res = await httpService.post(`/okf/repos/${encodeURIComponent(repoId)}/access/grant-group`, { group, level });
+    return res && res.data;
+  },
+  async revokeGroupAccess(repoId, { group, level }) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/access/revoke-group`,
+      level ? { group, level } : { group }
+    );
+    return res && res.data;
+  },
+
+  async getRepoLinks(repoId) {
+    // Editor graph projection (David, 2026-09-04): the LIVE author-stated
+    // edges from okf_concepts_meta — never the ArangoDB serving graph. Silent:
+    // legacy backends without the route return 404 and the graph view falls
+    // back to the settled manifest.
+    try {
+      const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/links`, {}, { silent: true });
+      return res && res.data ? res.data : null;
+    } catch (err) {
+      if (err && (err.status === 404 || err.status === 501)) return null;
+      throw err;
+    }
+  },
+
+  async mintVersion(repoId, body = {}, actor = {}) {
+    const res = await httpService.post(`/okf/repos/${encodeURIComponent(repoId)}/versions`, body, {
+      headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {}
+    });
+    return res && res.data ? res.data : { ok: true };
+  },
+
+  async clone(sourceId, body = {}) {
+    const res = await httpService.post(`/okf/repos/${encodeURIComponent(sourceId)}/clone`, body);
+    return res && res.data ? res.data : null;
+  },
+
+  /**
+   * Story #978 — Editor: PATCH a single concept's markdown (frontmatter +
+   * body). Returns { ok, concept_id, content_hash, index_status, updated_at }.
+   */
+  async patchConcept(repoId, conceptId, markdown, actor = {}) {
+    const res = await httpService.patch(
+      `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}`,
+      { markdown },
+      // The PATCH re-scans server-side (Presidio) — a big page legitimately
+      // takes a while; a default client timeout would orphan the save and
+      // re-arm the autosave loop (2026-09-09 lockup fix).
+      { headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {}, timeout: 180000 }
+    );
+    return res && res.data ? res.data : { ok: true };
+  },
+
+  /**
+   * Story #978 — body-only PATCH (labels write-through, 2026-09-05): the
+   * server replaces the body and keeps the STORED frontmatter, so the client
+   * never round-trips a frontmatter snapshot (no stale-fm clobber of a
+   * concurrent label write). Returns the same shape as patchConcept.
+   */
+  async patchConceptBody(repoId, conceptId, body, actor = {}) {
+    const res = await httpService.patch(
+      `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}`,
+      { body },
+      { headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {}, timeout: 180000 }
+    );
+    return res && res.data ? res.data : { ok: true };
+  },
+
+  /**
+   * Story #978 — Editor: re-split the repo from its source file. mode
+   * 'A' (mega) | 'B' (per `## Source:` page, default) | 'C' (LLM, 10.6).
+   * Returns { ok, mode, total, parsed, created, rejected, enqueued }.
+   */
+  async resplit(repoId, mode, fileId, actor = {}) {
+    const body = { mode };
+    if (fileId) body.file_id = fileId;
+    const res = await httpService.post(`/okf/repos/${encodeURIComponent(repoId)}/resplit`, body, {
+      headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {}
+    });
+    return res && res.data ? res.data : { ok: true };
+  },
+
+  /**
+   * Story #978 — Editor: frontmatter-only autocorrect. dry_run=true (the
+   * server default) proposes without applying; dry_run=false applies
+   * atomically. D-L/D-B (coordinator, 8f46b3345): mode 'llm'|'hybrid'
+   * returns curated proposals {ok, mode, dry_run, proposals:
+   * [{concept_id, before, after, changes}], applied} (single-concept:
+   * proposals is one object); 'heuristics' keeps the legacy
+   * {ok, changes, warnings} path byte-for-byte.
+   */
+  async autocorrect(repoId, { dryRun = true, mode, conceptId } = {}, actor = {}) {
+    const body = { dry_run: !!dryRun };
+    if (mode) body.mode = mode;
+    if (conceptId) body.concept_id = conceptId;
+    const res = await httpService.post(`/okf/repos/${encodeURIComponent(repoId)}/autocorrect`, body, {
+      headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {}
+    });
+    return res && res.data ? res.data : { ok: true };
+  },
+
+  /**
+   * Story #978 — IMPORT N concepts (also the primitive behind "create repo
+   * from scratch" and "+ Add concept"). Same shape as the crawler path.
+   * /import since David's 2026-09-04 vocabulary ruling (import ≠ RAG):
+   * importing stores parsed meta rows — NOTHING is chunked pre-ingest.
+   */
+  async importConcepts(repoId, concepts, actor = {}, extras = {}) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/import`,
+      { concepts, ...extras },
+      { headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {} }
+    );
+    return res && res.data ? res.data : { ok: true };
+  },
+
+  /**
+   * Story #978 — delete ONE concept (meta row + indexed chunks + graph).
+   */
+  async deleteConcept(repoId, conceptId, actor = {}) {
+    const res = await httpService.delete(
+      `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}`,
+      { headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {} }
+    );
+    return res && res.data ? res.data : { ok: true };
+  },
+
+  /**
+   * Story #978 lifecycle — apply ONE lifecycle transition (submit / approve /
+   * publish / ingest / retract). publish mints the next version + exports the
+   * bundle zip (<name>-v<N>.zip) to the document repository.
+   */
+  async lifecycle(repoId, action, actor = {}) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/lifecycle`,
+      { action },
+      { headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {} }
+    );
+    return res && res.data ? res.data : { ok: true };
+  },
+
+  /**
+   * Story #978 — delete the whole repository (cascade: graph + meta rows +
+   * bundle artifacts + manifests). Refused with INGESTED_DELETE_BLOCKED while
+   * an ingested version is serving.
+   */
+  async deleteRepo(repoId) {
+    const res = await httpService.delete(`/okf/repos/${encodeURIComponent(repoId)}`);
+    return res && res.data ? res.data : { ok: true };
+  },
+
+  /**
+   * Story #978 (David, 2026-08-30) — steward PII acknowledgement. Waives the
+   * PII 'hit' publish gate for REVIEWED public entities (audited server-side).
+   */
+  async acknowledgePii(repoId, acknowledge = true, actor = {}) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/pii-acknowledge`,
+      { acknowledge },
+      { headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {} }
+    );
+    return res && res.data ? res.data : { ok: true };
+  },
+
+  /**
+   * Story #978 — list the repo's version manifests (newest first). Shape:
+   * { repo_id, versions: [{bundle_version, okf_tag, trigger, curator,
+   * minted_at, concept_count}] }.
+   */
+  async listVersions(repoId) {
+    const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/versions`);
+    return res && res.data && Array.isArray(res.data.versions) ? res.data.versions : [];
+  },
+
+  /**
+   * Story #978 (David, 2026-08-31) — the repository's action/audit log
+   * (okf_audit_logs, newest first). Shape: { repo_id, logs: [{ts, actor,
+   * actor_name, action, description, details, concept_id?}] }.
+   */
+  async getRepoLogs(repoId) {
+    const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/logs`);
+    return res && res.data && Array.isArray(res.data.logs) ? res.data.logs : [];
+  },
+
+  /**
+   * PII REVIEW (David, 2026-09-09): a live Presidio scan of a concept's
+   * CURRENT content returning per-occurrence {where, type, start, end, score}
+   * so the editor can locate each flagged entity. Nothing persisted; flagged
+   * VALUES never returned — the editor renders excerpts from content it has.
+   */
+  async inspectPii(repoId, conceptId, opts = {}) {
+    // rescan (David, 2026-09-13): the explicit Re-scan button forces a live
+    // Presidio scan; plain opens are served from the server's persisted
+    // span cache when the content is unchanged.
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}/pii-inspect`,
+      { rescan: Boolean(opts.rescan) },
+      { timeout: 120000 }
+    );
+    return res && res.data ? res.data : { ok: false, occurrences: [] };
+  },
+
+  /**
+   * PII REMEDIATION (David, 2026-09-09): process one flagged issue IN PLACE —
+   * action 'redact' | 'replace' | 'remove'; selection carries the panel's
+   * occurrence (where/start/end/type/hit) and replacement is the user text
+   * for 'replace'. The server splices its own scan offsets, records the
+   * before/after resolution, re-scans, and returns the fresh payload
+   * {ok, pii_state, occurrences, resolutions, frontmatter, body}.
+   */
+  async remediatePii(repoId, conceptId, selection) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}/pii-remediate`,
+      selection,
+      { timeout: 120000 }
+    );
+    return res && res.data ? res.data : { ok: false };
+  },
+
+  /**
+   * PII REMEDIATION — ACCEPT one occurrence: the text stays, the flag is
+   * suppressed (reviewed decision; audited). SCAN-FREE server-side — state
+   * derives arithmetically. Returns {ok, pii_state, counts_by_type, ...}.
+   */
+  async acceptPii(repoId, conceptId, selection) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}/pii-accept`,
+      selection,
+      { timeout: 120000 }
+    );
+    return res && res.data ? res.data : { ok: false };
+  },
+
+  /**
+   * PII WHOLE-FILE ACTION (David, 2026-09-09): redact | remove | accept for
+   * the ENTIRE file. Occurrences ride the request (the panel's current scan)
+   * so the server path is scan-free. Returns the standard action payload.
+   */
+  async fileActionPii(repoId, conceptId, payload) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}/pii-file-action`,
+      payload,
+      { timeout: 120000 }
+    );
+    return res && res.data ? res.data : { ok: false };
+  },
+
+  /**
+   * PII REMEDIATION — REDACT THE WHOLE FILE: the body is replaced with a
+   * redaction notice (frontmatter identity preserved). Returns the same
+   * payload shape as remediatePii.
+   */
+  async redactWholeFilePii(repoId, conceptId) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}/pii-redact-file`,
+      {},
+      { timeout: 120000 }
+    );
+    return res && res.data ? res.data : { ok: false };
+  },
+
+  /**
+   * PII REPO BULK ACTION (David, 2026-09-12): redact | remove | accept
+   * applied to EVERY flagged concept of the repository in one decision
+   * (Files-view header controls). Scan-free on the server; stamps the scan
+   * marker so publish neither blocks nor re-scans. Returns
+   * {ok, action, concepts_affected}.
+   */
+  async bulkPiiAction(repoId, action) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/pii-bulk`,
+      { action },
+      { timeout: 120000 }
+    );
+    return res && res.data ? res.data : { ok: false };
+  },
+
+  /**
+   * RE-INGEST FAILED CONCEPTS (David, 2026-10-14).
+   *
+   * The recovery path the drain's dead-letter text has always promised
+   * ("recovery = re-ingest") and that never existed — the only way to retry a
+   * failed concept was retracting the whole repo, which drops the serving graph
+   * and re-ingests everything.
+   *
+   * Server-side this requeues ONLY rows at index_status='failed' AND re-arms the
+   * RAG drain (a requeue alone is invisible to the worker on a published repo,
+   * because the drain is disarmed there). Repos-only: 409 NOT_INGESTED before
+   * ingestion, 409 DRAIN_IN_PROGRESS while a drain runs.
+   *
+   * Omit conceptId for the whole repo; pass one for a single row.
+   */
+  async reingestFailed(repoId, { conceptId } = {}, actor = {}) {
+    const base = `/okf/repos/${encodeURIComponent(repoId)}`;
+    const path = conceptId ? `${base}/concepts/${encodeURIComponent(conceptId)}/reingest` : `${base}/reingest-failed`;
+    const res = await httpService.post(path, {}, { headers: { 'x-actor-sub': actor.sub } });
+    return res && res.data ? res.data : { ok: false };
+  },
+
+  /**
+   * PII RE-SCAN — THE PERSISTING PER-CONCEPT SCAN (2026-10-12).
+   *
+   * WHY THIS EXISTS. `inspectPii` is documented server-side as "Nothing
+   * persisted" — it refreshes the DISPLAYED occurrences and leaves pii_state
+   * exactly as it was. The panel's Re-scan button used to call it with
+   * {rescan:true}, so pressing Re-scan on a concept whose scan had ERRORED
+   * looked like it worked and changed nothing: the publish gate kept reading
+   * the stale 'error'.
+   *
+   * This is the `concepts[]` mode of POST /:repo_id/pii-scan — the server runs
+   * the real `piiService.scanConcept` per input and writes pii_state onto the
+   * meta row. It is the SAME route and the SAME service the repo-wide rescan
+   * uses, just scoped to one concept and answered synchronously, so the panel
+   * needs no second endpoint.
+   *
+   * The caller must supply `frontmatter` and `body` (fetch the concept with
+   * `getConcept`): the server scans the content it is given, so sending an
+   * empty body would scan nothing and write a meaningless verdict.
+   *
+   * Body:  { concepts: [{ concept_id, frontmatter, body }] }
+   * 200:    { repo_id, scanned, results: [{ concept_id, pii_state,
+   *           pii_hits_summary }], gate, version? }
+   * Errors: 400 { error:'PII_SCAN_NOTHING_SCANNED', message } (empty concepts[])
+   *         404 { error, message }  403 (repo scope)
+   *         409 (assertWritable drain freeze — the scan overwrites pii_state)
+   *
+   * FAIL-CLOSED: a sidecar transport failure is NOT an HTTP error — the server
+   * records pii_state 'error' and still answers 200. The caller must read
+   * results[].pii_state and render 'error' as blocking, never as success.
+   */
+  async scanConceptPii(repoId, conceptId, opts = {}) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/pii-scan`,
+      {
+        concepts: [
+          {
+            concept_id: conceptId,
+            frontmatter: opts.frontmatter || {},
+            body: typeof opts.body === 'string' ? opts.body : ''
+          }
+        ]
+      },
+      { timeout: 120000, silent: true }
+    );
+    return res && res.data ? res.data : null;
+  },
+
+  /**
+   * PII RE-SCAN — ARM THE REPOSITORY-WIDE CONCEPT RESCAN (2026-10-12).
+   *
+   * `POST /:repo_id/pii-scan {"scope":"concepts"}` is the ONLY server mode that
+   * reaches the rows the publish gate reads: it enumerates okf_concepts_meta
+   * and runs the persisting scanConcept on each. The sibling modes
+   * ({file_ids}/{discover:true}) scan the `files` documents and write
+   * pii_state keyed by file_id — a different subject entirely, so a perfect
+   * file scan leaves every concept row untouched.
+   *
+   * It is ASYNC: the server answers 202 and keeps working (141 concepts x one
+   * sidecar round-trip cannot finish inside a gateway timeout). Poll with
+   * `getRepoPiiScan` below — the same 202+poll idiom as the head suite run.
+   *
+   * 202:    { repo_id, scan_key, status: 'running' }
+   * Errors: 400 { error:'PII_SCAN_*', message, details? }  404 { error, message }
+   *         403 (repo scope)  409 (assertWritable drain freeze)
+   *         422 { details } (body validation)
+   */
+  async startRepoPiiScan(repoId) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/pii-scan`,
+      { scope: 'concepts' },
+      { timeout: 120000, silent: true }
+    );
+    return res && res.data ? res.data : null;
+  },
+
+  /**
+   * PII RE-SCAN — POLL an armed repository-wide concept rescan.
+   *
+   * `GET /:repo_id/pii-scan/:scan_key` (read scope, like every other poll).
+   * The response is the run document:
+   *   running → { repo_id, scan_key, status:'running', progress:{phase, done, total} }
+   *   failed  → { ..., status:'failed', error:{code, message}, tally? }
+   *   done    → { ..., scanned, clean, hit, error, missing,
+   *               results:[{ concept_id, pii_state, pii_hits_summary,
+   *                           skipped? }], gate }
+   *
+   * A 'failed' run is TERMINAL (the server reaps orphaned 'running' docs on a
+   * restart), so a poll must stop on it — never spin.
+   *
+   * Errors: 404 { error:'PII_SCAN_NOT_FOUND', message }
+   */
+  async getRepoPiiScan(repoId, scanKey) {
+    const res = await httpService.get(
+      `/okf/repos/${encodeURIComponent(repoId)}/pii-scan/${encodeURIComponent(scanKey)}`,
+      {},
+      { silent: true }
+    );
+    return res && res.data ? res.data : null;
+  }
+};
+
+export default repoOkfService;
+
+/**
+ * PII REVIEW (David, 2026-09-09): a live Presidio scan of a concept's CURRENT
+ * content returning per-occurrence {where, type, start, end, score} so the
+ * editor can locate each flagged entity. Nothing is persisted; flagged VALUES
+ * are never returned — the editor renders excerpts from the content it has.
+ */
+export async function inspectPii(repoId, conceptId) {
+  const res = await httpService.post(
+    `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}/pii-inspect`,
+    {},
+    { timeout: 120000 }
+  );
+  return res && res.data ? res.data : { ok: false, occurrences: [] };
+}
+
+/** PII REMEDIATION (David, 2026-09-09): named export twin of the class
+ * method — in-place Redact/Replace/Remove on one occurrence. */
+export async function remediatePii(repoId, conceptId, selection) {
+  return repoOkfService.remediatePii(repoId, conceptId, selection);
+}
+
+/** PII REMEDIATION: named export twin — Accept one occurrence (audited). */
+export async function acceptPii(repoId, conceptId, selection) {
+  return repoOkfService.acceptPii(repoId, conceptId, selection);
+}
+
+/** PII WHOLE-FILE ACTION: named export twin — redact | remove | accept. */
+export async function fileActionPii(repoId, conceptId, payload) {
+  return repoOkfService.fileActionPii(repoId, conceptId, payload);
+}
+
+/** PII REMEDIATION: named export twin — redact the whole file body. */
+export async function redactWholeFilePii(repoId, conceptId) {
+  return repoOkfService.redactWholeFilePii(repoId, conceptId);
+}
+
+// ─── STEP-7 VALIDATION (#1030 + #1036, David 2026-10-02) ─────────────────────
+
+/** The unified Step-7 issue list: per-concept conformance, orphaned concepts,
+ * near-duplicate groups, unlinked citations — each with severity + remedy. */
+export async function getValidation(repoId) {
+  const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/validation`, {}, { silent: true });
+  return res && res.data ? res.data : null;
+}
+
+/** CITATION HUB WIRING (#1036): create the Sources page when missing (from
+ * the citing pages' own metadata) and link every citing page to it. */
+export async function wireCitations(repoId, hubConceptId) {
+  const res = await httpService.post(
+    `/okf/repos/${encodeURIComponent(repoId)}/citations/wire`,
+    hubConceptId ? { hub_concept_id: hubConceptId } : {},
+    { silent: true }
+  );
+  return res && res.data ? res.data : null;
+}
+
+/** LINK SUGGESTIONS (#1036 Class A): the LLM proposes which existing concepts
+ * an orphaned page references. Read-only — nothing is written on accept-less. */
+export async function suggestLinks(repoId, conceptId) {
+  const res = await httpService.post(
+    `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}/link-suggestions`,
+    {},
+    { silent: true }
+  );
+  return res && res.data ? res.data : null;
+}
+
+/** ACCEPT one suggested link: a frontmatter links[] append (born right —
+ * survives body saves and feeds the editor projection + the ingest graph). */
+export async function acceptLink(repoId, conceptId, toConceptId, label) {
+  const res = await httpService.post(
+    `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}/links`,
+    { to_concept_id: toConceptId, label },
+    { silent: true }
+  );
+  return res && res.data ? res.data : null;
+}
+
+/** START a whole-corpus topic-link run (Story 1-8g-p) — the SAME generic pass
+ * the wizard runs at import time (no domain lexicon; works for any subject).
+ * Detached server-side (202), so this resolves as soon as the run is armed;
+ * poll getTopicLinkRun for progress. */
+export async function startTopicLinks(repoId, dryRun) {
+  const res = await httpService.post(
+    `/okf/repos/${encodeURIComponent(repoId)}/topic-links`,
+    dryRun ? { dry_run: true } : {},
+    { silent: true }
+  );
+  return res && res.data ? res.data : null;
+}
+
+/** The topic-link run state (poll target) — null when the repo never ran one. */
+export async function getTopicLinkRun(repoId) {
+  const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/topic-links`, {}, { silent: true });
+  return res && res.data ? res.data.run || null : null;
+}
+
+// Default-object surface (the store lazy-requires .default) — the inverse of
+// the PII twin pattern above.
+repoOkfService.getValidation = getValidation;
+repoOkfService.wireCitations = wireCitations;
+repoOkfService.suggestLinks = suggestLinks;
+repoOkfService.acceptLink = acceptLink;
+repoOkfService.startTopicLinks = startTopicLinks;
+repoOkfService.getTopicLinkRun = getTopicLinkRun;

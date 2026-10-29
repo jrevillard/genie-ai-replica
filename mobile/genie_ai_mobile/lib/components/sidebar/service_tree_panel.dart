@@ -171,17 +171,13 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     }
 
     // 3. Update Selection State
-    // Check if this specific item is already selected. The children
-    // carry no id/key, so their identity is the (category, label) pair:
-    // matching on the name alone crossed the categories — two services
-    // named alike in different categories toggled each other's scope,
-    // and the highlight desynced from what the chat received.
+    // Check if this specific item is already selected.
     //
-    // The identity is the entity KEY when both rows carry one — the tree
-    // publishes it, and neither spelling of the name is unique inside a
-    // category. Neither label is an identity while the key exists: two
-    // services can share either spelling, and tapping the second one
-    // would toggle the first one off.
+    // The identity is the entity KEY — the tree publishes it on every
+    // child, and neither spelling of the name is unique inside a
+    // category: two services can share either spelling, and matching on
+    // a name toggled the other one off (across categories on the old
+    // name rule, inside one on the label one).
     //
     // A row without a key (a tree that predates the field) falls back to
     // the ENGLISH label — the spelling the wire speaks, and the one the

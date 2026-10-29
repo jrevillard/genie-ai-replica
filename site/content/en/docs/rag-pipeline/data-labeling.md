@@ -146,8 +146,9 @@ re-ingest before that entity's scope matches documents.
 > with no EN translation row — the value clients put on the wire); the STORED
 > ENTITY carries another (the seed the write path copies into that
 > translation — see below). The write path keeps the two in sync, so they
-> carry the same text; a client filters on the tree's published value,
-> whichever of the two the tree resolved to.
+> carry the same text unless the document was edited outside it (the first
+> bullet below); a client filters on the tree's published value, whichever
+> of the two the tree resolved to — never on the document's own field.
 
 Clients put the ENGLISH value on the wire. A
 client that sent a localized display name would scope the query against

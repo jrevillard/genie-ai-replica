@@ -466,7 +466,9 @@ class ServiceCategoryService {
         // the very text the row would have carried. A BLANK row counts as
         // no row: a blank name is the very symptom this tree must not
         // publish.
-        LET categoryNameEN = LENGTH(TRIM(categoryTranslationEN)) > 0 ? categoryTranslationEN : category.nameEN
+        LET categoryNameEN = LENGTH(TRIM(categoryTranslationEN)) > 0
+            ? categoryTranslationEN
+            : (LENGTH(TRIM(category.nameEN)) > 0 ? category.nameEN : null)
         // The DISPLAY name: the locale's translation when there is one, the
         // ENGLISH one otherwise. An entity with neither keeps a null name —
         // it has nothing to show and nothing to scope on.
@@ -493,7 +495,9 @@ class ServiceCategoryService {
                   RETURN t.translation
               )
               // The same EN resolution the category gets.
-              LET serviceNameEN = LENGTH(TRIM(serviceTranslationEN)) > 0 ? serviceTranslationEN : service.nameEN
+              LET serviceNameEN = LENGTH(TRIM(serviceTranslationEN)) > 0
+                  ? serviceTranslationEN
+                  : (LENGTH(TRIM(service.nameEN)) > 0 ? service.nameEN : null)
               // And the same DISPLAY name: the locale's translation when
               // there is one, the ENGLISH one otherwise. A service nobody
               // translated in the active locale used to publish a null
@@ -574,7 +578,9 @@ class ServiceCategoryService {
               // field and no translation row at all) — the same
               // resolution the corpus's own EN lookup applies. A BLANK
               // row counts as no row.
-              LET categoryNameEN = LENGTH(TRIM(categoryTranslationEN)) > 0 ? categoryTranslationEN : category.nameEN
+              LET categoryNameEN = LENGTH(TRIM(categoryTranslationEN)) > 0
+                  ? categoryTranslationEN
+                  : (LENGTH(TRIM(category.nameEN)) > 0 ? category.nameEN : null)
               // The DISPLAY name (name below) is the locale's translation,
               // and NOTHING else — the public tree falls back to the
               // ENGLISH name, the admin tree does not. The admin panel
@@ -603,7 +609,9 @@ class ServiceCategoryService {
                                   FILTER t.code == 'en'
                                   RETURN t.translation
                           )
-                          LET serviceNameEN = LENGTH(TRIM(serviceTranslationEN)) > 0 ? serviceTranslationEN : service.nameEN
+                          LET serviceNameEN = LENGTH(TRIM(serviceTranslationEN)) > 0
+                              ? serviceTranslationEN
+                              : (LENGTH(TRIM(service.nameEN)) > 0 ? service.nameEN : null)
                           // The display name stays the locale's translation —
                           // the admin panel keys its label map by it (see
                           // the category level above).

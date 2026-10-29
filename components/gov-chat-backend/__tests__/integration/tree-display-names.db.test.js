@@ -68,7 +68,8 @@ const TAXONOMY = {
   categories: [
     { _key: 'taxes', catCode: 'taxes', order: 1, nameEN: 'Taxes' },
     { _key: 'civil', catCode: 'civil', order: 2, nameEN: 'Civil Registry' },
-    { _key: 'agri', catCode: 'agri', order: 3, nameEN: 'Agriculture' }
+    { _key: 'agri', catCode: 'agri', order: 3, nameEN: 'Agriculture' },
+    { _key: 'blank', catCode: 'blank', order: 4, nameEN: '   ' }
   ],
   services: [
     { _key: 'filing', nameEN: 'Tax Filing' },
@@ -195,9 +196,20 @@ describeWithDatabase('the category tree (against a real ArangoDB)', () => {
     expect(agri.children[0].name).toBe('Farming Subsidies');
     expect(agri.children[0].nameEN).toBe('Farming Subsidies');
 
-    // Nothing in the tree is left nameless.
-    expect(tree.every((c) => c.name && c.nameEN)).toBe(true);
+    // Nothing in the tree is left nameless — except the category whose
+    // every name source is blank, which the next test covers.
+    expect(tree.filter((c) => c.catKey !== 'blank').every((c) => c.name && c.nameEN)).toBe(true);
     expect(tree.every((c) => c.children.every((s) => s.name && s.nameEN))).toBe(true);
+  });
+
+  it('treats a whitespace-only name as no name', async () => {
+    const tree = await serviceCategoryService.getAllCategoriesWithServices('en');
+    const blank = tree.find((c) => c.catKey === 'blank');
+    // The document's nameEN is whitespace: neither the row nor the seed
+    // names the entity, and a blank name is the very symptom the tree
+    // must not publish. It stays null — the clients do not offer it.
+    expect(blank.name).toBeNull();
+    expect(blank.nameEN).toBeNull();
   });
 
   it('keeps the ADMIN tree on the localized display name — no English fallback', async () => {

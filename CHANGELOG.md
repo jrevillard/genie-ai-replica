@@ -212,8 +212,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   identifies a selected service by its entity key: the public tree's services
   now carry their `_key`, and neither spelling of the name is unique inside a
   category — two services that read the same are two scopes. An entity with
-  no name in any language is published unnamed and the clients do not offer
-  it: it cannot be scoped on.
+  no name in any language is published unnamed: the clients do not offer its
+  services (an unnamed service cannot be scoped on), and a category with no
+  name at all shows as an unlabelled group header above its services.
 
   **Upgrading a deployment whose taxonomy was seeded by the scripts**
   (`create-knowledge-hierarchy.js`) requires a **re-ingest of the corpus**

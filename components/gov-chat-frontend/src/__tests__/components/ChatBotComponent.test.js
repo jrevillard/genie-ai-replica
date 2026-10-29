@@ -5232,6 +5232,52 @@ describe('Quick Help category reference', () => {
     expect(wrapper.vm.getCategoryEnLabel('2024')).toBe('The Year Area');
   });
 
+  it('a scope restored while the hierarchy was down carries the key once it lands', async () => {
+    // The tree was not there at restore: the chips and the selected
+    // category keep the configuration's own spelling. The next save would
+    // write that spelling as the conversation's edge
+    // (`serviceCategories/<categoryId>`) — a document that does not
+    // exist. When the hierarchy lands, the installed scope is
+    // re-resolved, like the mobile twin re-resolves its restore.
+    const serviceTreeService = require('../../services/serviceTreeService');
+    let resolveTree;
+    const pendingTree = new Promise((resolve) => {
+      resolveTree = resolve;
+    });
+    // The hierarchy is down at the mount, down again at the restore's
+    // bounded retry (each failure SETTLES — the load reports a failure,
+    // it does not hang), and only the third attempt is held until the
+    // test recovers it.
+    serviceTreeService.getAllCategories
+      .mockRejectedValueOnce(new Error('hierarchy down'))
+      .mockRejectedValueOnce(new Error('hierarchy down'))
+      .mockImplementation(() => pendingTree);
+
+    const wrapper = createChatBotWrapper();
+    const vm = wrapper.vm;
+    await flushPromises();
+
+    const chatHistoryService = require('../../services/chatHistoryService');
+    chatHistoryService.getConversation.mockResolvedValueOnce({
+      _key: 'c1',
+      title: 'Saved chat',
+      messages: [],
+      tags: ['civil']
+    });
+
+    await vm.loadExistingConversation('c1');
+    // The tree was down: the scope carries the configuration's spelling.
+    expect(vm.currentCategoryId).toBe('Civil Registry');
+
+    resolveTree(TREE);
+    await vm.ensureServiceCategoriesLoaded();
+    await flushPromises();
+
+    expect(vm.currentCategoryId).toBe('2');
+    const chip = vm.selectedContextItems.find((item) => item.source === 'quickHelp');
+    expect(chip.category).toBe('2');
+  });
+
   it('the configuration reference is normalized to the hierarchy key', async () => {
     // The conversation's edge speaks the hierarchy's own key
     // (`serviceCategories/<key>`): the reference the configuration wrote

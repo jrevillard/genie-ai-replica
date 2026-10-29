@@ -1258,6 +1258,25 @@ export default {
           if (this.quickHelpButtons.length) {
             this.applyQuickHelpButtons();
           }
+          // A scope restored while the hierarchy was down carries the
+          // configuration's own spelling — the tree was not there to turn
+          // it into the key. Left alone, the next save would write that
+          // spelling as the conversation's category edge
+          // (`serviceCategories/<categoryId>`): a document that does not
+          // exist. The mobile twin re-resolves its restored scope when the
+          // tree settles; this is the web's equivalent.
+          if (this.currentCategoryId) {
+            this.currentCategoryId = this.quickHelpCategoryKey(this.currentCategoryId) ?? this.currentCategoryId;
+          }
+          const scopedChips = this.selectedContextItems.filter((item) => item.category);
+          if (scopedChips.length) {
+            this.$store.commit(
+              'conversation/setContextItems',
+              this.selectedContextItems.map((item) =>
+                item.category ? { ...item, category: this.quickHelpCategoryKey(item.category) ?? item.category } : item
+              )
+            );
+          }
         } catch (mappingError) {
           console.error(
             '[ChatBotComponent] Failed to re-resolve Quick Help buttons against the hierarchy:',
@@ -1326,13 +1345,12 @@ export default {
 
     // The hierarchy's own key for the category a reference names — what
     // the conversation's edge speaks (`serviceCategories/<key>`). Null
-    // when the hierarchy carries no such category.
+    // when the hierarchy carries no such category. Every category the
+    // index returns was addressed by its key to get there, so the
+    // resolution carries the key with it by construction.
     quickHelpCategoryKey(reference) {
       const category = this.resolveCategoryReference(reference);
-      if (!category || category.catKey === null || category.catKey === undefined) {
-        return null;
-      }
-      return category.catKey.toString();
+      return category ? category.catKey.toString() : null;
     },
 
     // The localized name of the entity whose EN label is [en] — a saved

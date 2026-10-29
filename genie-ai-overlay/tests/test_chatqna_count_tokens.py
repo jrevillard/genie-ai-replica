@@ -126,7 +126,8 @@ class TestCountTokens:
             patch.object(m, "_LLM_DISCOVERY_ENDPOINT", "http://vllm:8000"),
             patch.object(m, "_get_llm_model", return_value="m"),
             patch.dict("os.environ", {"VLLM_API_KEY": ""}, clear=False),
-            patch.object(m.httpx, "post", post),pytest.raises(ValueError)
+            patch.object(m.httpx, "post", post),
+            pytest.raises(ValueError),
         ):
             m._count_tokens("x")
 

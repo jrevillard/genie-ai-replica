@@ -835,34 +835,26 @@ export default {
       return this.getAllFolders;
     },
 
-    // The live hierarchy indexed by category key. Rebuilt only when the
-    // tree changes — the lookups below read it instead of walking the tree
-    // on every call.
-    categoryIndex() {
-      const index = new Map();
+    // The live hierarchy, indexed ONCE by the two spellings a category is
+    // addressed by. Rebuilt only when the tree changes — the lookups below
+    // read it instead of walking the tree on every call. The database key
+    // is the hierarchy's own identity (the sidebar speaks it); the EN name
+    // is the identifier a CONFIGURATION writes — the spelling a deployment
+    // can write down without reading the database, and the one the corpus
+    // filters on. An entry the hierarchy cannot address by key cannot be
+    // addressed by name either: resolving one would hand the conversation's
+    // edge a name where the backend writes `serviceCategories/<key>`.
+    // FIRST-wins on both, so one walk carries both indexes' skip rules.
+    categoryIndexes() {
+      const byKey = new Map();
+      const byNameEn = new Map();
       for (const cat of this.serviceCategories || []) {
         if (cat.catKey === null || cat.catKey === undefined) continue;
-        const id = cat.catKey.toString();
-        if (!index.has(id)) index.set(id, cat);
+        const key = cat.catKey.toString();
+        if (!byKey.has(key)) byKey.set(key, cat);
+        if (cat.nameEN && !byNameEn.has(cat.nameEN)) byNameEn.set(cat.nameEN, cat);
       }
-      return index;
-    },
-
-    // The live hierarchy indexed by category EN name — the identifier a
-    // CONFIGURATION names a category by. The database key is the
-    // hierarchy's own identity (the sidebar speaks it); the EN name is
-    // the spelling a deployment can write down without reading the
-    // database, and the one the corpus filters on. An entry the
-    // hierarchy cannot address by key cannot be addressed by name
-    // either: resolving one would hand the conversation's edge a name
-    // where the backend writes `serviceCategories/<key>`.
-    categoryIndexByNameEn() {
-      const index = new Map();
-      for (const cat of this.serviceCategories || []) {
-        if (!cat.nameEN || cat.catKey === null || cat.catKey === undefined) continue;
-        if (!index.has(cat.nameEN)) index.set(cat.nameEN, cat);
-      }
-      return index;
+      return { byKey, byNameEn };
     },
 
     // The localized name of the entity whose EN label is a given one. The
@@ -1289,22 +1281,22 @@ export default {
     // what the corpus filters on — chunk_labels carry the EN translation —
     // so the wire speaks EN and the localized name stays display-only. Null
     // when the reference names no category of the live tree: a broken scope.
-    getCategoryEnLabel(id) {
-      const category = this.resolveCategoryReference(id);
+    getCategoryEnLabel(reference) {
+      const category = this.resolveCategoryReference(reference);
       return category ? category.nameEN || null : null;
     },
 
     // The category name the user reads — the localized spelling of the
     // same entity. Display only: it never filters.
-    getCategoryDisplayName(id) {
-      const category = this.resolveCategoryReference(id);
+    getCategoryDisplayName(reference) {
+      const category = this.resolveCategoryReference(reference);
       if (!category) {
         return null;
       }
       // A category with no translation in the UI locale has no localized
       // name: the chip showed BLANK. The EN name (the wire's spelling) is
-      // a truthful display, and the id is the last resort.
-      return category.name || category.nameEN || id.toString();
+      // a truthful display, and the reference is the last resort.
+      return category.name || category.nameEN || reference.toString();
     },
 
     // The live category a reference names.
@@ -1321,7 +1313,8 @@ export default {
         return null;
       }
       const id = reference.toString();
-      return this.categoryIndexByNameEn.get(id) || this.categoryIndex.get(id) || null;
+      const { byKey, byNameEn } = this.categoryIndexes;
+      return byNameEn.get(id) || byKey.get(id) || null;
     },
 
     // The hierarchy's own key for the category a reference names — what

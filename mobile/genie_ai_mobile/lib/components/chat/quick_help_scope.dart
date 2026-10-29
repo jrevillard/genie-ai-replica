@@ -149,7 +149,7 @@ class QuickHelpScopeResolver {
         final name = entry['name'];
         return (name is String && name.isNotEmpty) ? name : '';
       }),
-      _categoryKeysByName = _indexByNameEn(enTree);
+      _categoryKeysByName = _invertByNameEn(_indexByCatKey(enTree, _enOf));
 
   /// The scope state of a button whose hierarchy has not loaded yet: it
   /// says nothing about any button.
@@ -212,20 +212,18 @@ class QuickHelpScopeResolver {
     return byKey;
   }
 
-  /// The category keys by their ENGLISH name, FIRST-wins. The name is
+  /// The category keys by their ENGLISH name, FIRST-wins — the same
+  /// key→EN mapping the label index carries, read backwards. The name is
   /// the identifier a configuration writes down; the key it resolves to
-  /// is what the rest of the app speaks.
-  static Map<String, String> _indexByNameEn(List<dynamic> enTree) {
+  /// is what the rest of the app speaks. One walk owns the tree's skip
+  /// rules; this is only its inversion.
+  static Map<String, String> _invertByNameEn(Map<String, String> labelsByKey) {
     final byName = <String, String>{};
-    for (final entry in enTree) {
-      if (entry is! Map) continue;
-      final key = entry['catKey']?.toString();
-      if (key == null || key.isEmpty) continue;
-      final name = _enOf(entry);
-      if (name.isEmpty) continue;
-      if (byName.containsKey(name)) continue;
-      byName[name] = key;
-    }
+    labelsByKey.forEach((key, en) {
+      if (en.isEmpty) return;
+      if (byName.containsKey(en)) return;
+      byName[en] = key;
+    });
     return byName;
   }
 

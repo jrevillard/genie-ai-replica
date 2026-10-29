@@ -2908,8 +2908,8 @@ reason: FIXED in wave 6 (round-3 challenge accepted) at the real location: the d
 status: RESOLVED (the appConfig-routing residue rides DW-427)
 location: components/document-repository/src/middlewares/keycloak-auth-middleware.js getJWKS; appConfig.security; KEYCLOAK_INTERNAL_URL spelling in dataprep/okf-server
 severity: medium (semantic bite with both aliases set)
-reason: Route the three vars through appConfig.security; the shared verifier's issuer MAP (DW-427) is the real fix — one issuer string cannot honor two aliases.
-status: open
+reason: FIXED in wave 6 (round-3 challenge accepted) at the real location: the doc-repo middleware now validates against an expectedIssuers ARRAY (base + public + browser, deduped; pin semantics preserved) instead of one overwritten string — both aliases set together no longer reject public-issuer tokens. Round-3 correction: shared/lib and the backend verifier copies already used a map; the named locations in the finding were wrong. appConfig routing of the three vars remains folded into DW-427.
+status: RESOLVED (the appConfig-routing residue rides DW-427)
 
 ### DW-432: okf-server specs reach into repo-root scripts/okf-testing-lab/ with a VIRTUAL mock pinned to the container path /app/shared-lib/db-connection-service — move the two specs to scripts/okf-testing-lab/__tests__/ and make the scripts' db require lazy
 origin: !597 Jerome AI review (test-audit structural, thread 270d7562, 2026-10-29)

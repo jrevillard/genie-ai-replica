@@ -371,7 +371,6 @@ from core.embedding_query_prefix import (  # noqa: F401  re-exported for backwar
 # VLLM configuration
 VLLM_API_KEY = os.getenv("VLLM_API_KEY", "EMPTY")
 VLLM_ENDPOINT = os.getenv("VLLM_ENDPOINT")
-VLLM_MODEL_ID = os.getenv("VLLM_MODEL_ID", "ibm-granite/granite-3.3-2b-instruct")
 VLLM_MAX_NEW_TOKENS = os.getenv("VLLM_MAX_NEW_TOKENS", 512)
 VLLM_TOP_P = os.getenv("VLLM_TOP_P", 0.9)
 VLLM_TEMPERATURE = os.getenv("VLLM_TEMPERATURE", 0.8)

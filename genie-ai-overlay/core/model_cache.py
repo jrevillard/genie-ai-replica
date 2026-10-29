@@ -274,6 +274,18 @@ def require_model_id(endpoint_url: str) -> str:
     return detected
 
 
+def resolve_model_id(endpoint_url: str) -> str:
+    """Model id for ``endpoint_url``: the explicit ``VLLM_MODEL_ID`` env wins
+    as the deployer override; otherwise the discovered id, loud on no answer.
+
+    The single home of that precedence: payload-building consumers (retriever
+    summarizer, dataprep labelling and graph clients) call this instead of
+    hand-rolling the env check. Chatqna's generation path has no env knob by
+    design — deployers steer it via the endpoint and the served name.
+    """
+    return os.getenv("VLLM_MODEL_ID", "") or require_model_id(endpoint_url)
+
+
 def clear_cache() -> None:
     """Clear the entire cache. Primarily for testing."""
     _cache.clear()

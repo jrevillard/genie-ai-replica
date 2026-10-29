@@ -27,7 +27,7 @@ from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from core.label_contract import build_filter_labels, decode_filter_labels
-from core.model_cache import require_model_id
+from core.model_cache import resolve_model_id
 from core.model_http_policy import LLM_MAX_RETRIES, SUMMARIZER_TIMEOUT_SECONDS, http_timeout
 from core.span_attrs import ATTRIBUTE_NAMES as A
 from core.span_attrs import QUERY_ID_KEY, label_digest, query_id_from_baggage
@@ -657,18 +657,12 @@ class GenieaiArangoRetriever(OpeaComponent):
                 )
 
     def _resolve_vllm_model_id(self) -> str:
-        """Return the vLLM model ID for summarization.
+        """Return the vLLM model ID for summarization (env wins, else the
+        discovered id — see core.model_cache.resolve_model_id).
 
-        The explicit VLLM_MODEL_ID env wins (deployer override); otherwise
-        the id discovered at VLLM_ENDPOINT — loud (ModelDiscoveryError),
-        because the summarization payloads must carry the name vLLM actually
-        serves and vLLM rejects unknown ones. Logging is deferred to
-        _get_llm() which logs only on model change.
+        Logging is deferred to _get_llm() which logs only on model change.
         """
-        env_model = os.getenv("VLLM_MODEL_ID", "")
-        if env_model:
-            return env_model
-        return require_model_id(VLLM_ENDPOINT)
+        return resolve_model_id(VLLM_ENDPOINT)
 
     def _create_vllm_client(self, model_id: str) -> ChatOpenAI:
         """Create a ChatOpenAI client targeting the vLLM endpoint."""

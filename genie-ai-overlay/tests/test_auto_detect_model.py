@@ -438,6 +438,25 @@ class TestRequireModelId:
             model_cache.require_model_id("https://gpu-host/llm")
 
 
+class TestResolveModelId:
+    """The env-wins-else-discover precedence, single-sourced next to
+    require_model_id for every payload-building consumer."""
+
+    def test_explicit_env_wins_without_probe(self, monkeypatch):
+        monkeypatch.setenv("VLLM_MODEL_ID", "explicit/model")
+
+        with patch("httpx.get") as mock_get:
+            assert model_cache.resolve_model_id("https://gpu-host/llm") == "explicit/model"
+        mock_get.assert_not_called()
+
+    def test_discovers_when_env_empty(self):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "served/model"}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert model_cache.resolve_model_id("https://gpu-host/llm") == "served/model"
+
+
 # ---------------------------------------------------------------------------
 # chatqna getters — _get_llm_model / _get_translation_model_id
 # ---------------------------------------------------------------------------
@@ -695,10 +714,8 @@ class TestChatqnaContextWindowGetters:
 # and Contextual Retrieval context generation.)
 # ---------------------------------------------------------------------------
 class TestDataprepAutoDetect:
-    """Tests for dataprep _build_vllm_client auto-detect when GPU_NODE_HOST is set.
-
-    Uses source file inspection since the module is mocked in test environment.
-    """
+    """dataprep._build_vllm_client: explicit VLLM_MODEL_ID env wins; otherwise
+    the id discovered at VLLM_ENDPOINT — loud when nothing answers."""
 
     @pytest.fixture()
     def source(self):

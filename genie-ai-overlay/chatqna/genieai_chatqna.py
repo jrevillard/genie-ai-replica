@@ -512,7 +512,10 @@ def _get_llm_model() -> str:
     the deployment grants no hub egress, so the endpoint itself is the only
     trustworthy source for the name; and every payload sent to it
     (generation, condense, tokenize) must carry the discovered id because
-    vLLM validates the model name and 404s unknown ones.
+    vLLM validates the model name and 404s unknown ones. No env override
+    exists on purpose — deployers steer this path via the endpoint and the
+    served name (unlike retriever/dataprep, whose VLLM_MODEL_ID env is the
+    documented override resolve_model_id honors).
     """
     return require_model_id(_LLM_DISCOVERY_ENDPOINT)
 

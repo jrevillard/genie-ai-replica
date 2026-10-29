@@ -19,7 +19,7 @@ from typing import Any
 import aiohttp
 from opentelemetry import propagate
 
-from core.model_cache import require_model_id
+from core.model_cache import resolve_model_id
 from core.model_http_policy import (
     AIOHTTP_CONNECT_TIMEOUT_SECONDS,
     CONTROL_PLANE_TIMEOUT_SECONDS,
@@ -760,10 +760,7 @@ def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
         timeout=http_timeout(LLM_TIMEOUT_SECONDS),
         max_retries=LLM_MAX_RETRIES,
     )
-    model = os.getenv("VLLM_MODEL_ID", "")
-    if not model:
-        model = require_model_id(_vllm_endpoint)
-        logger.info(f"Auto-discovered vLLM model: {model}")
+    model = resolve_model_id(_vllm_endpoint)
     return client, model
 
 
@@ -1838,7 +1835,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         _vllm_endpoint = os.getenv("VLLM_ENDPOINT", "")
 
         if not os.getenv("VLLM_MODEL_ID"):
-            detected = require_model_id(_vllm_endpoint)
+            detected = resolve_model_id(_vllm_endpoint)
             os.environ["VLLM_MODEL_ID"] = detected
             # Patch the parent module constant (captured at parent import
             # time — os.environ alone does not update it). The parent reads

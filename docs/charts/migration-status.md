@@ -648,6 +648,13 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     the path, out-of-enum policy rejected, all six keys rendering
     together); the closure itself mutation-proven — schema reopened,
     the typo renders (rc=0); restored, rejected naming the key.
+    Honest accounting: two of those guards first FAILED on CI after
+    passing locally — their needles quoted my helm v4.3.0's schema-
+    error phrasing while CI's helm-kubectl:3.16.0 words the same
+    rejection differently, and the guards file's own convention (pin
+    the key name, never the wording) applied to its own new cases.
+    First CI failure of the whole review loop, and it was the local/
+    CI helm version skew, not the chart.
   - *The two declined tripwires stay declined, now against the
     operator's simplicity bar*: the securityContext helper (4 blocks
     share ~3 lines and differ everywhere else — a parameter list as

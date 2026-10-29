@@ -52,23 +52,22 @@
 # NOT run by CI. This needs a live Ansible target host.
 #
 # Grounded in:
-#   deploy/ansible/group_vars/all.yml:9          deploy_dir: /opt/genieai
-#   deploy/ansible/group_vars/all.yml:21         config_dir: "{{ deploy_dir }}/config"
+#   deploy/ansible/group_vars/all.yml            deploy_dir: /opt/genieai; config_dir: "{{ deploy_dir }}/config"
 #   deploy/ansible/roles/config_bootstrap/defaults/main.yml
 #                                               config_bootstrap_pairs (dest_subdir)
 #   deploy/ansible/roles/config_bootstrap/tasks/main.yml
 #                                               rsync --archive --checksum --delete (mirror the branch)
-#   deploy/ansible/deploy.yml:418-423            play tags [config, deploy]
-#   deploy/ansible/templates/env.j2:415-416      CONFIG_DIR_FRONTEND / CONFIG_DIR_KEYCLOAK
-#   docker-compose.yaml:402                      /config  <- ${CONFIG_DIR_FRONTEND}:ro
-#   docker-compose.yaml:1629                     themes root <- ${CONFIG_DIR_KEYCLOAK}:ro
-#   components/gov-chat-frontend/nginx.conf:20-46
+#   deploy/ansible/deploy.yml                    the config deploy play: tags [config, deploy]
+#   deploy/ansible/templates/env.j2              CONFIG_DIR_FRONTEND / CONFIG_DIR_KEYCLOAK render
+#   docker-compose.yaml                          frontend mounts /config <- ${CONFIG_DIR_FRONTEND}:ro;
+#                                                Keycloak mounts the themes root <- ${CONFIG_DIR_KEYCLOAK}:ro
+#   components/gov-chat-frontend/nginx.conf
 #                                               /config vs /runtime/config.js vs /theme-fallback.css
 #   components/gov-chat-frontend/docker-entrypoint.sh
 #                                               writes /app/dist/runtime/config.js
-#   components/gov-chat-frontend/public/index.html:19-21
+#   components/gov-chat-frontend/public/index.html
 #                                               links /config/theme-variables.css, /runtime/config.js
-#   configs/keycloak/genie-realm.yaml:14-17      login/account/admin/email all = KEYCLOAK_THEME
+#   configs/keycloak/genie-realm.yaml            login/account/admin/email all = KEYCLOAK_THEME
 
 set -euo pipefail
 
@@ -220,18 +219,27 @@ RESTORE_RUNNING="false"
 # 0 = the host is back to its pre-test state (or there was nothing to
 # restore); 1 = the restore failed. The exit CODE of the run is the caller's
 # business: the traps below keep the code the run ended with.
-restore() {
-    # Runs on every exit (armed or not): scrub the become-password file first.
+# The become-password file is removed at the END of the restore, never
+# before: the restore's own ansible calls run with --become-password-file, so
+# on a host whose sudo needs a password, scrubbing first would strip the
+# restore of the credentials it needs and leave the tree unrestored.
+scrub_pw_file() {
     if [ -n "${BECOME_PW_FILE:-}" ] && [ -f "$BECOME_PW_FILE" ]; then
         rm -f "$BECOME_PW_FILE"
     fi
+}
+restore() {
     if [ "$RESTORE_RUNNING" = "true" ]; then
         # A restore is already in flight (a second signal landed mid-restore).
         # Let it finish alone: re-entering it would delete the scratch tree
-        # the first invocation is still reading.
+        # the first invocation is still reading — and scrubbing the password
+        # file here would strip the running restore of its credentials.
         return 0
     fi
-    [ "$RESTORE_ARMED" = "true" ] || return 0
+    if [ "$RESTORE_ARMED" != "true" ]; then
+        scrub_pw_file
+        return 0
+    fi
     RESTORE_RUNNING="true"
     if [ -n "$EXPECTED_PATH" ]; then
         ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
@@ -275,6 +283,7 @@ restore() {
             printf '  [ok] %s restored from pre-test backup; backup removed.\n' "$CONFIG_DIR"
             RESTORE_ARMED="false"
             RESTORE_RUNNING="false"
+            scrub_pw_file
             return 0
         fi
     fi
@@ -292,6 +301,7 @@ restore() {
     # trap does not attempt the restore a second time and print it twice.
     RESTORE_ARMED="false"
     RESTORE_RUNNING="false"
+    scrub_pw_file
     return 1
 }
 # The EXIT trap keeps the code the run ended with and turns a FAILED restore
@@ -422,16 +432,40 @@ filelist() {
     snapshot "find . -type f | sort"
 }
 
-# `ansible` prints a PLAY RECAP block to stdout alongside the task result, so
-# capture the payload between two sentinel lines instead of trusting the whole
-# stdout. Without this, a cosmetic change in Ansible's own output would be
-# reported as a config-tree change.
+# `ansible`'s display of a successful task's stdout changed across versions
+# (newer cores hide it behind callback settings), so the payload never
+# travels through the display: the command writes it to a file on the host,
+# fetch brings it to the controller, and the caller reads the file. The
+# fetched copy is what the caller sees, byte for byte.
 snapshot() {
+    local snapshot_remote="$CONFIG_PARENT/.config_bootstrap_snapshot.txt"
+    local snapshot_local
+    snapshot_local="$(mktemp "${TMPDIR:-/tmp}/config_bootstrap_snapshot.XXXXXX")"
     ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
-        -a "cd '$CONFIG_DIR' && echo __SNAPSHOT_BEGIN__ && ($1) && echo __SNAPSHOT_END__" |
-        sed -n '/^__SNAPSHOT_BEGIN__$/,/^__SNAPSHOT_END__$/p' |
-        sed '1d;$d'
+        -a "cd '$CONFIG_DIR' && { $1 ; } > '$snapshot_remote'" >/dev/null 2>&1 || true
+    ansible_run raw -i "$INVENTORY" "$HOST" -m fetch \
+        -a "src='$snapshot_remote' dest='$snapshot_local' flat=yes" >/dev/null 2>&1 || true
+    cat "$snapshot_local" 2>/dev/null
+    rm -f "$snapshot_local"
+    ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
+        -a "rm -f '$snapshot_remote'" >/dev/null 2>&1 || true
 }
+
+# The deployment's CONFIGURED theme (the one keycloak_theme names, rendered
+# into the environment next to the config dir) must have survived the mirror
+# with the same four subtrees: a run that loses the flavour's theme still has
+# genie present, and only this check sees the difference. A deployment that
+# does not name a theme in its environment serves genie, which the loop above
+# already covered.
+HOST_THEME="$(snapshot "grep -E '^KEYCLOAK_THEME=' '$CONFIG_PARENT/.env' | tail -n 1 | cut -d= -f2-" 2>/dev/null || true)"
+HOST_THEME="$(printf '%s' "$HOST_THEME" | tr -d '[:space:]')"
+if [ -n "$HOST_THEME" ] && [ "$HOST_THEME" != "genie" ]; then
+    for sub in login account admin email; do
+        remote_sh "test -f '$KEYCLOAK_THEME_DIR/$HOST_THEME/$sub/theme.properties'" ||
+            fail "configured theme incomplete: $HOST_THEME/$sub/theme.properties missing under $KEYCLOAK_THEME_DIR"
+        pass "configured theme present: $HOST_THEME/$sub/theme.properties"
+    done
+fi
 
 MANIFEST_BEFORE="$(manifest)"
 FILELIST_BEFORE="$(filelist)"

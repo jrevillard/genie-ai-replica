@@ -586,36 +586,39 @@
         label: "{{ item.label }}"
 
     # The mirror restores the archive's directory modes onto the bind-mount
-    # sources. The containers read those sources as a non-root user, so each
-    # directory must grant others read and traverse (the low octal digit >= 5
-    # in an 0o775-mode world): a restrictive mode in the archive would shadow
-    # a readable config behind a deploy that reports success. The config_dir
-    # parent itself is in the loop too: the mirror only writes the pair
-    # subtrees, so a drifted mode on it would pass every other check while
-    # the containers can no longer traverse into them.
-    - name: Check the seeded directories are readable by the containers
-      ansible.builtin.stat:
-        path: "{{ item.dest }}"
-      register: config_bootstrap_dir_stat
-      loop: "{{ config_bootstrap_mirror_specs + [{'dest': config_dir, 'label': 'config'}] }}"
-      loop_control:
-        label: "{{ item.label }}"
+    # sources. The containers read those sources as a non-root user, so every
+    # directory under the mount must grant others read and traverse: a
+    # restrictive mode anywhere in the tree (carried by the branch's archive,
+    # or changed on the host after a previous deploy) would shadow a readable
+    # config behind a deploy that reports success. One sweep covers the pair
+    # roots, their intermediates and the config_dir parent the mirror never
+    # touches — the per-directory stat loop this replaced only saw the roots.
+    - name: Find config directories the containers cannot traverse
+      become_user: root
+      ansible.builtin.command:
+        argv:
+          - find
+          - "{{ config_dir }}"
+          - -type
+          - d
+          - '!'
+          - -perm
+          - '-0005'
+      register: config_bootstrap_dir_scan
+      changed_when: false
 
-    - name: Fail when a seeded config directory is not readable
+    - name: Fail when a config directory is not traversable by the containers
       ansible.builtin.assert:
         that:
-          - (item.stat.mode | int(base=8)) % 8 >= 5
+          - config_bootstrap_dir_scan.stdout_lines | length == 0
         fail_msg: >-
-          The config directory {{ item.item.dest }} carries mode
-          {{ item.stat.mode }} after the mirror: the containers read the mount
-          as a non-root user and would not be able to traverse it. Either the
-          branch's tree carries the restrictive mode (fix it in the
-          repository) or the mode was changed on the host after a previous
-          deploy (the next run repairs it; check what changed it).
+          Directories under {{ config_dir }} deny read or traverse to others
+          (the containers read the mount as a non-root user):
+          {{ config_bootstrap_dir_scan.stdout_lines | join(', ') }}. A path
+          carried by the branch is fixed in the repository; a path changed on
+          the host after a deploy is repaired by the next run — check what
+          changed it.
         success_msg: "config_bootstrap: the seeded directories are readable"
-      loop: "{{ config_bootstrap_dir_stat.results | default([]) }}"
-      loop_control:
-        label: "{{ item.item.label | default('unknown') }}"
 
     - name: Fail when the host runtime config does not match the branch
       ansible.builtin.assert:

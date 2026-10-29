@@ -456,6 +456,20 @@ class TestResolveModelId:
         with patch("httpx.get", return_value=mock_resp):
             assert model_cache.resolve_model_id("https://gpu-host/llm") == "served/model"
 
+    def test_soft_variant_returns_none_instead_of_raising(self, monkeypatch):
+        """Telemetry reads need the same precedence without the raise."""
+        monkeypatch.delenv("VLLM_MODEL_ID", raising=False)
+
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")):
+            assert model_cache.discover_model_id("https://gpu-host/llm") is None
+
+    def test_soft_variant_honors_env(self, monkeypatch):
+        monkeypatch.setenv("VLLM_MODEL_ID", "explicit/model")
+
+        with patch("httpx.get") as mock_get:
+            assert model_cache.discover_model_id("https://gpu-host/llm") == "explicit/model"
+        mock_get.assert_not_called()
+
     def test_raises_actionable_error_when_no_endpoint_and_no_env(self, monkeypatch):
         """Neither knob configured: the error must name the two env vars to
         set, not point at a '/v1/models' URL with an empty base."""
@@ -981,6 +995,16 @@ class TestRetrieverInitializeLlmAutoDetect:
         assert llm is not None
         assert r._llm_backend == "vllm"
         assert ChatOpenAI.call_args.kwargs["model"] == "fallback-model"
+
+    def test_get_llm_returns_none_when_model_undiscovered(self):
+        """A transient discovery failure must DEGRADE the auxiliary summarizer
+        (None), never fail retrieval — the caller skips summarization."""
+        r = self._r()
+        r._llm_backend = "vllm"
+        r.llm = MagicMock()
+
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")):
+            assert r._get_llm() is None
 
     def test_get_llm_recreates_on_model_change(self):
         """The re-check runs without any GPU_NODE_HOST gate: a changed

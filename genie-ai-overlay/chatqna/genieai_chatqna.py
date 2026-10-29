@@ -24,8 +24,10 @@ from metrics import (
 from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
 from core.label_contract import build_filter_labels, encode_filter_labels
 from core.model_cache import (
+    MAX_SANE_MODEL_WINDOW_TOKENS,
     ModelDiscoveryError,
     coerce_int,
+    discover_model_id,
     get_max_model_len,
     get_model_id,
     resolve_model_id,
@@ -1966,6 +1968,10 @@ def _count_tokens(text: str) -> int:
             # 0 is an honest count for an empty piece; a negative count is a
             # lie that would silently defeat the overflow guard.
             raise ValueError(f"/tokenize count is negative: {payload!r}")
+        if coerced > MAX_SANE_MODEL_WINDOW_TOKENS:
+            # Same sanity bound as the window value: a number this large is a
+            # broken proxy, and it would wipe the history budget outright.
+            raise ValueError(f"/tokenize count is absurdly large: {payload!r}")
         span.set_attribute("token.count", coerced)
         return coerced
 
@@ -4452,10 +4458,7 @@ class ChatQnAService:
             # Telemetry only — the loud model-id gate lives in the payload
             # sites (generation, condense, tokenize); the attribute records
             # what discovery knows, never aborts the request.
-            span.set_attribute(
-                "rag.model_id",
-                os.getenv("VLLM_MODEL_ID", "") or get_model_id(_LLM_DISCOVERY_ENDPOINT) or "undiscovered",
-            )
+            span.set_attribute("rag.model_id", discover_model_id(_LLM_DISCOVERY_ENDPOINT) or "undiscovered")
             # What this request actually blended, and the answer reserve it is
             # budgeted against. The token estimate and the history counts are
             # written by align_inputs, which is the only site that measures
@@ -4678,10 +4681,10 @@ class ChatQnAService:
 
                 return {"response": final_text, "metadata": metadata}
 
-            except ModelDiscoveryError as e:
+            except (ModelDiscoveryError, httpx.HTTPError) as e:
                 # Same fail-closed contract as the condense path: a request
-                # that cannot even name its LLM is "LLM unavailable" (503),
-                # not a bug (500) — whatever the multi-turn mode.
+                # that cannot reach or name its LLM is "LLM unavailable"
+                # (503), not a bug (500) — whatever the multi-turn mode.
                 from opentelemetry.trace import StatusCode
 
                 _err_duration = time.time() - _rag_start

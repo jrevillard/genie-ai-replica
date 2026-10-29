@@ -115,6 +115,22 @@ class TestCountTokens:
             else:
                 assert m._count_tokens("x") == expected
 
+    def test_absurd_count_is_rejected(self):
+        """A count above any conceivable window (broken proxy serializing
+        1e18) would wipe the history budget — same sanity bound as the
+        window value in core/model_cache."""
+        import chatqna.genieai_chatqna as m
+
+        post = MagicMock(return_value=_resp({"count": 10**18}))
+        with (
+            patch.object(m, "_LLM_DISCOVERY_ENDPOINT", "http://vllm:8000"),
+            patch.object(m, "_get_llm_model", return_value="m"),
+            patch.dict("os.environ", {"VLLM_API_KEY": ""}, clear=False),
+            patch.object(m.httpx, "post", post),
+        ):
+            with pytest.raises(ValueError):
+                m._count_tokens("x")
+
     def test_count_tokens_emits_a_span(self, captured_spans):
         """Each count is visible in traces — the eventual offload/batching
         work needs the per-call cost on the waterfall."""

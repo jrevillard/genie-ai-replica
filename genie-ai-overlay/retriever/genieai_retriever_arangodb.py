@@ -27,7 +27,7 @@ from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from core.label_contract import build_filter_labels, decode_filter_labels
-from core.model_cache import resolve_model_id
+from core.model_cache import ModelDiscoveryError, resolve_model_id
 from core.model_http_policy import LLM_MAX_RETRIES, SUMMARIZER_TIMEOUT_SECONDS, http_timeout
 from core.span_attrs import ATTRIBUTE_NAMES as A
 from core.span_attrs import QUERY_ID_KEY, label_digest, query_id_from_baggage
@@ -695,8 +695,14 @@ class GenieaiArangoRetriever(OpeaComponent):
         """
         # Re-check only the vLLM-backed summarizer: an OpenAI-configured
         # client must survive untouched (different endpoint, different id).
+        # A failed probe DEGRADES the auxiliary summarizer (None → the caller
+        # skips summarization); retrieval itself must never fail for it.
         if VLLM_ENDPOINT and getattr(self, "_llm_backend", None) == "vllm":
-            current_id = self._resolve_vllm_model_id()
+            try:
+                current_id = self._resolve_vllm_model_id()
+            except ModelDiscoveryError:
+                logger.warning("Summarizer model id undiscovered — skipping summarization this call")
+                return None
             if current_id != getattr(self, "_llm_model_id", None):
                 logger.info(f"Summarizer model changed: {self._llm_model_id} -> {current_id}, recreating client")
                 self._llm_model_id = current_id

@@ -489,6 +489,7 @@ def discovered_llm_model():
         # a chatqna-name patch reaches it; dataprep/retriever reach the CORE
         # global through their own from-imports — both names are live.
         patch("chatqna.genieai_chatqna.get_model_id", return_value="ci-discovered/model"),
+        patch("chatqna.genieai_chatqna.discover_model_id", return_value="ci-discovered/model"),
         patch("core.model_cache.get_model_id", return_value="ci-discovered/model"),
     ):
         yield

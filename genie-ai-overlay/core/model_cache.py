@@ -266,6 +266,17 @@ def require_model_id(endpoint_url: str) -> str:
     return detected
 
 
+def discover_model_id(endpoint_url: str) -> str | None:
+    """Soft precedence read: the ``VLLM_MODEL_ID`` env if set, else the id
+    discovered at ``endpoint_url`` — None when neither answers.
+
+    For consumers that treat an unknown id as information (telemetry), not
+    as a reason to abort. Payload-building consumers use
+    :func:`resolve_model_id`, which raises instead.
+    """
+    return os.getenv("VLLM_MODEL_ID", "") or get_model_id(endpoint_url)
+
+
 def resolve_model_id(endpoint_url: str) -> str:
     """Model id for ``endpoint_url``: the explicit ``VLLM_MODEL_ID`` env wins
     as the deployer override; otherwise the discovered id, loud on no answer.

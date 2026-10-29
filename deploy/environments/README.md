@@ -7,15 +7,15 @@ It is not the model that shipped.
 
 **Where the overlays actually are.** `genie-ai-deploy` (a separate
 repository) holds one overlay per deployment target under
-`overlays/<pays>/<env>/`, each with a `kustomization.yaml` and a
+`overlays/<cluster>/<env>/`, each with a `kustomization.yaml` and a
 `values.yaml`, reconciled by Flux v2 onto the cluster. The per-release
 HelmRelease in `flux-system` is the install unit; this repository holds
 the chart it points at.
 
 ```
 genie-ai-deploy/
-├── clusters/<pays>/flux-system/     # the Flux Kustomizations themselves
-└── overlays/<pays>/<env>/           # values + the HelmRelease for that target
+├── clusters/<cluster>/flux-system/     # the Flux Kustomizations themselves
+└── overlays/<cluster>/<env>/           # values + the HelmRelease for that target
 ```
 
 The laptop target is `overlays/jrevillard-laptop/dev`, built and

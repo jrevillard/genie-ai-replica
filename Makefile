@@ -15,7 +15,7 @@ UV ?= uvx --from uv==0.10.6 uv
 
 .PHONY: lock-retriever lock-reranker keycloak-theme chart-dashboards
 
-# Repack charts/genieai-umbrella/files/keycloak-themes.tgz from
+# Repack charts/genieai-assets/files/keycloak-themes.tgz from
 # configs/keycloak/themes. Run after ANY theme edit; CI (chart:lint)
 # fails the pipeline when the committed tarball drifts from the source
 # tree.

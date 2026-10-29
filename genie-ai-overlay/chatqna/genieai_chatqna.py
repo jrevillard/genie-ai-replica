@@ -2822,7 +2822,11 @@ class ChatQnAService:
         retriever_key = self._find_node_key("retriever", result_dict)
 
         retriever_node_output = result_dict.get(retriever_key, {})
-        file_id_pairs = retriever_node_output.get("file_id_pairs", {})
+        # Same tolerance as _node_docs: a non-dict node output is a malformed
+        # result, not a crash — the grounding decision degrades instead.
+        file_id_pairs = (
+            retriever_node_output.get("file_id_pairs", {}) if isinstance(retriever_node_output, dict) else {}
+        )
         # Retriever docs carry the orchestrator id + text + similarity score (metadata.score).
         # Same accessor as the abstention flag: one node, one meaning.
         retrieved_docs = _node_docs(result_dict, "retriever") or []
@@ -4019,9 +4023,9 @@ class ChatQnAService:
                 # as the other error paths — the condense raise happens
                 # before the orchestrate-span metrics block, so the failure
                 # would otherwise be invisible to dashboards. Mirror the
-                # _chat_attrs contract (response_type / abstained / error /
-                # retrieval_source) with a local fallback for
-                # retrieval_source since retriever_parameters is not built
+                # _chat_attrs contract (response_type / abstained /
+                # abstention_reason / error / retrieval_source) with a local
+                # fallback for retrieval_source since retriever_parameters is not built
                 # yet at this point in the request.
                 _condense_start = time.time()
                 try:
@@ -4035,6 +4039,7 @@ class ChatQnAService:
                         {
                             "response_type": "streaming" if chat_request.stream else "sync",
                             "abstained": "false",
+                            "abstention_reason": "",
                             "error": "true",
                             "retrieval_source": getattr(chat_request, "search_type", None)
                             or "similarity_score_threshold",
@@ -4299,9 +4304,8 @@ class ChatQnAService:
                     "retrieval_confidence_score": 0.0,
                     "confidence_score": 0.0,
                     "is_grounded": False,
-                    "abstained": True,
-                    "abstention_reason": "reranker_input_too_long",
                 }
+                _mark_abstention(metadata, "reranker_input_too_long")
                 if chat_request.stream:
                     # The backend translates the stream. The English text goes
                     # out as it is, and the backend reports its own translation

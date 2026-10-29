@@ -287,10 +287,25 @@ describe('QueryInspectorList', () => {
     ];
     const wrapper = mountList({ queries, pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 } });
 
-    expect(wrapper.find('[data-testid="qi-abstention-marker"]').exists()).toBe(true);
+    // The marker is row-addressable: a page can carry several abstained
+    // rows, and a finder that cannot name its row validates the wrong one.
+    expect(wrapper.find('[data-testid="qi-abstention-q1"]').exists()).toBe(true);
     const scope = wrapper.find('[data-testid="qi-scope-q1"]');
     expect(scope.exists()).toBe(true);
     expect(scope.text()).toBe('Tax Payment');
+  });
+
+  it('should keep the abstention marker row-unique', () => {
+    const queries = [
+      { _key: 'q1', text: 'a', metadata: { abstained: true }, responseTime: 1 },
+      { _key: 'q2', text: 'b', metadata: { abstained: true }, responseTime: 1 },
+      { _key: 'q3', text: 'c', metadata: {}, responseTime: 1 }
+    ];
+    const wrapper = mountList({ queries, pagination: { total: 3, limit: 25, offset: 0, pages: 1, currentPage: 1 } });
+    expect(wrapper.find('[data-testid="qi-abstention-q1"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="qi-abstention-q2"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="qi-abstention-q3"]').exists()).toBe(false);
+    expect(wrapper.findAll('[data-testid="qi-abstention-q1"]')).toHaveLength(1);
   });
 
   it('should show the category as the scope when no service was named', () => {

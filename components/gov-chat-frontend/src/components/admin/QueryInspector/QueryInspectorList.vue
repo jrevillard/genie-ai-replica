@@ -54,13 +54,13 @@
           <td class="qi-list__cell--time">{{ formatTime(query.timestamp) }}</td>
           <td class="qi-list__cell--question">{{ truncate(query.text, 80) }}</td>
           <td :data-testid="`qi-scope-${query._key}`">
-            <span v-if="scopeText(query)" class="qi-list__scope-labels" :title="scopeText(query)">{{
-              scopeText(query)
+            <span v-if="scopeTexts[query._key]" class="qi-list__scope-labels" :title="scopeTexts[query._key]">{{
+              scopeTexts[query._key]
             }}</span>
             <span v-else class="qi-list__muted">—</span>
           </td>
           <td class="qi-list__cell--center">
-            <DsPill v-if="isAbstained(query)" variant="warning" data-testid="qi-abstention-marker">
+            <DsPill v-if="isAbstained(query)" variant="warning" :data-testid="`qi-abstention-${query._key}`">
               {{ translate('admin.queryInspector.abstained', 'Abstained') }}
             </DsPill>
             <span v-else class="qi-list__muted">—</span>
@@ -155,15 +155,23 @@ export default {
       }
     };
   },
-  methods: {
+  computed: {
     /**
-     * The stored scope as one string — or null when the record does not say
-     * (rendered as the dash). The three-state rule and its rendering live in
-     * query-scope.js, shared with the detail view.
+     * The stored scope as one string per row — or null when the record does
+     * not say (rendered as the dash). The three-state rule and its rendering
+     * live in query-scope.js, shared with the detail view; the map keys by
+     * row so the cell, its title and its v-if read one computed string.
      */
-    scopeText(query) {
-      return scopeDisplayText(query, this.translate('admin.queryInspector.unfiltered', 'Unfiltered'));
-    },
+    scopeTexts() {
+      const label = this.translate('admin.queryInspector.unfiltered', 'Unfiltered');
+      const map = {};
+      for (const query of this.queries) {
+        map[query._key] = scopeDisplayText(query, label);
+      }
+      return map;
+    }
+  },
+  methods: {
     isAbstained(query) {
       return queryIsAbstained(query);
     },

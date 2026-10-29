@@ -40,7 +40,8 @@ spec:
       # `registry.k8s.io/kubectl` is distroless (no /bin/sh), so this Pod
       # ships kubectl via an init container that downloads the static
       # binary into the shared `tools` emptyDir. The main container is
-      # alpine (sh is built in); kubectl is picked up via the PATH env,
+      # alpine (sh is built in); kubectl is made discoverable via the
+      # PATH env,
       # which prepends /tools/bin.
       volumes:
         - name: tools

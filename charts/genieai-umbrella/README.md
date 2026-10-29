@@ -602,12 +602,12 @@ PATH env.
 
 ### Air-gapped deployments
 
-The init containers download `kubectl` from public release URLs by
-default. For air-gapped / sovereign clusters, set
+The init container downloads the static `kubectl` binary from public
+release URLs by default. For air-gapped / sovereign clusters, set
 `global.kubeletToolsMirror` to an internal mirror —
-`[http[s]://]host[:port][/multi/segment/prefix]`; the scheme is optional
-(scheme-less makes curl use plain HTTP against the local proxy) and the
-init containers append the well-known release path
+`[http[s]://]host[:port][/multi/segment/prefix]`, no trailing slash; the
+scheme is optional (scheme-less makes curl use plain HTTP against the
+local proxy) and the init container appends the well-known release path
 (`/release/v1.33.0/bin/linux/<arch>/kubectl`). The mirror must serve
 that path from its base URL — the chart does not fall back to upstream
 when the mirror is unreachable.

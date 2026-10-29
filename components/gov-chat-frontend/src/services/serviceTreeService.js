@@ -19,8 +19,11 @@ export default {
    * Fetches all categories with their services.
    *
    * Every category and every child service carries BOTH spellings: `name`
-   * (the localized display name) and `nameEN` (the English translation — the
-   * SSOT the filter wire speaks; the localized name never filters).
+   * (the display name — the localized translation, or the ENGLISH one when
+   * the locale has no translation) and `nameEN` (the English name — the
+   * English translation row, or the entity document's own `nameEN` when
+   * there is no row; the SSOT the filter wire speaks, the localized name
+   * never filters).
    *
    * @param {String} locale - Locale code (e.g., 'en')
    * @returns {Promise} Categories with their services.
@@ -54,8 +57,11 @@ export default {
    * ({_key, name, nameEN}).
    *
    * Every category and every child service carries BOTH spellings: `name`
-   * (the localized display name) and `nameEN` (the English translation —
-   * the SSOT the filter wire speaks; the localized name never filters).
+   * (the LOCALIZED translation — the admin tree does NOT fall back to the
+   * English name: the admin panel keys its label map by this one) and
+   * `nameEN` (the English name — the English translation row, or the entity
+   * document's own `nameEN` when there is no row; the SSOT the filter wire
+   * speaks, the localized name never filters).
    *
    * @param {String} locale - Locale code (e.g., 'en')
    * @returns {Promise} Categories with detailed service objects.

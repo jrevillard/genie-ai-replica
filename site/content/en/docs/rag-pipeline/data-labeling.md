@@ -127,14 +127,24 @@ displays is a translation.**
 
 The tree endpoints (`GET /api/service-categories/categories`,
 `GET /api/services/categories`) carry BOTH spellings of every entity: the
-localized `name` the UI displays, and `nameEN` — the English translation the
-retrieval corpus filters on.
+`name` the UI displays — the translation in the active locale, or the English
+one when that locale has no translation — and `nameEN` — the English
+translation the retrieval corpus filters on.
+
+An entity nobody translated in the active locale therefore still shows its
+English name instead of disappearing from the tree, and the label the user
+reads is the label that scopes the query. An entity with no name in any
+language is published unnamed, and the clients do not offer it: it cannot be
+scoped on.
 
 > **Two different fields share the name `nameEN`.** The TREE publishes one
-> (the EN translation, the value clients put on the wire); the STORED ENTITY
-> carries another (the seed the write path copies into that translation — see
-> below). They coincide only in a hierarchy edited through the API. A client
-> filters on the tree's published translation, never on the seed.
+> (the EN translation — or the entity document's own `nameEN` for an entity
+> with no EN translation row — the value clients put on the wire); the STORED
+> ENTITY carries another (the seed the write path copies into that
+> translation — see below). The write path keeps the two in sync, so they
+> carry the same text unless the document was edited outside it (the first
+> bullet below); a client filters on the tree's published value, whichever
+> of the two the tree resolved to — never on the document's own field.
 
 Clients put the ENGLISH value on the wire. A
 client that sent a localized display name would scope the query against
@@ -174,22 +184,27 @@ every chunk of the parent category and leak the service scope into it.
 ### Which spelling the retriever matches
 
 A chunk label is the **English translation** of the taxonomy entity
-(`serviceCategoryTranslations` / `serviceTranslations`, locale `EN`). That
-translation is what the dataprep reads to build the taxonomy it offers to the
+(`serviceCategoryTranslations` / `serviceTranslations`, locale `EN`) — or,
+for an entity with no `EN` translation row, the entity document's own
+`nameEN`, which the tree publishes as its English name (see below). That
+resolution is what the dataprep reads to build the taxonomy it offers to the
 labelling LLM, and what the retriever matches afterwards.
 
 The `nameEN` field of an entity is the *seed* of that translation: the write
 path copies it into the `EN` translation when the entity is created or
 updated through the API. The two therefore coincide in a hierarchy that was
-only ever edited through the API — but the translation is what is matched, so:
+only ever edited through the API. Where they do not:
 
 - An entity edited in `nameEN` alone (without a translation update) keeps
-  filtering on its previous English translation.
-- An entity with **no** `EN` translation has no filterable label at all,
-  whatever its `nameEN` says. Filtering on its `nameEN` would match no chunk
-  and empty the corpus.
+  filtering on its previous English translation — the tree publishes the
+  translation row.
+- An entity with **no** `EN` translation row — one seeded outside the write
+  path — is published with the document's own `nameEN` as its English name.
+  The corpus carries that label only once it has been re-ingested; until
+  then a scope on that entity matches nothing and the query abstains.
 
-Match a label on the `EN` translation, never on `nameEN`.
+Match a label on the **tree's** `nameEN` — the value the wire speaks — never
+on the display name.
 
 ### When the filter matches nothing anyway
 

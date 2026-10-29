@@ -191,6 +191,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A category or a service with no translation in the active language
+  disappeared from the knowledge tree.** The public tree published the
+  localized name and nothing else, so an entity nobody had translated in the
+  language of the interface arrived with a null name: the sidebar showed a
+  blank row, and the services under it were dropped from the tree altogether —
+  the tree showed less than exists. The public tree now publishes a display
+  name for every entity: the translation in the active language when there is
+  one, and the English translation — the same name the corpus filters on —
+  when there is none. It resolves that English name the way the admin tree
+  already did: the English translation row, or the entity document's own
+  `nameEN` for an entity seeded outside the write path (the taxonomy seed
+  scripts write the document field and no translation row). The write path
+  keeps the two in sync, so the fallback only fills a missing row with the
+  text the row would have carried — the label a client puts on the wire and
+  the label the corpus filters on remain the same string. The admin tree keeps
+  its localized display name: the admin panel keys its label map by that name,
+  so an English fallback there would let two entities share one key and file a
+  label under the wrong entity. On the mobile app, the tree panel now
+  identifies a selected service by its entity key: the public tree's services
+  now carry their `_key`, and neither spelling of the name is unique inside a
+  category — two services that read the same are two scopes. An entity with
+  no name in any language is published unnamed: the clients do not offer its
+  services (an unnamed service cannot be scoped on), and a category with no
+  name at all shows as an unlabelled group header above its services (the
+  literal "Unknown Category" on the mobile app).
+
+  **Upgrading a deployment whose taxonomy was seeded by the scripts**
+  (`create-knowledge-hierarchy.js`) requires a **re-ingest of the corpus**
+  after deploying this change: those entities' labels are minted when a
+  document is ingested, and until the re-ingest every scope on them finds no
+  documents — the query abstains ("no documented information was found").
+  (#1117, !632)
 - **The admin hierarchy panel could show an empty English name.** The detailed
   tree behind it returned only the localized name; the panel worked around
   that by fetching the tree in English and relabelling the result, so the
@@ -202,8 +234,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `nameEN` as the fallback for an entity seeded outside the write path —
   and the panel reads that field. Its fetch is bounded too, so a request
   that never answers shows the failed state instead of a spinner that turns
-  forever. The public tree is unchanged by this fix: an entity with no
-  English translation row still publishes `nameEN: null` there. (#1123)
+  forever. The public tree publishes `nameEN` the same way since the
+  display-name fix above. (#1123)
 - **A selected Quick Help scope kept the title of the language it was selected
   in.** On the mobile app, switching the interface language re-resolved the
   Quick Help cards but left the context bar's title of the active Quick Help

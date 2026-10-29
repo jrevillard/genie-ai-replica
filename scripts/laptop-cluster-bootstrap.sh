@@ -133,7 +133,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-for tool in kubectl helm flux minikube; do
+for tool in kubectl helm flux minikube python3; do
   command -v "$tool" >/dev/null 2>&1 || die "$tool not found in PATH"
 done
 

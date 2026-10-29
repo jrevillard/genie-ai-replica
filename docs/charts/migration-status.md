@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-29)
 
-- **Chart `genieai-umbrella` at 0.2.117**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.118**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,30 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 44 (0.2.118)** — 4 findings from the twentieth
+  `/code-review`, all sharpening the pass-42/43 mirror contract.
+  - *The mirror pattern still admitted two shapes outside its own
+    contract* — the host charset allowed a colon anywhere, so the
+    undocumented `https:mirror` form the pass-43 commit message itself
+    named as misleading still rendered, and ANY scheme (`file://`)
+    matched the optional-scheme group. The host admits a colon only
+    before a numeric port and the scheme only http(s) now; guard cases
+    fire on both.
+  - *The values.yaml comment contradicted the schema* — it still said
+    "(no scheme)" while the schema (and the pass-43 guard) made the
+    scheme optional. All three documentary surfaces name the same
+    shape now.
+  - *The scheme-ful guard proved acceptance, not delivery* — expect_ok
+    alone would pass a template that mangled the value in transit (a
+    re-prefixed BASE, dropped quoting). The case pins the path:
+    `BASE="https://mirror.internal:8443"` must appear in the rendered
+    init containers — mutation-tested by re-prefixing BASE in
+    _tools-init.tpl (guard red, restored).
+  - *The 253-bound case's value tripped the label check too* — 254
+    characters in one label fails BOTH checks, so the case discriminated
+    only by message text. The value is 4×63-char labels + 3 dots (255
+    chars, every label legal) now: it fails the total bound alone —
+    mutation-tested by deleting the 253 check (guard red, restored).
 - **Review loop, pass 43 (0.2.117)** — 4 findings from the nineteenth
   `/code-review`, all in the pass-42 validation surface.
   - *The mirror pattern was a regression* — it enforced "no `//`"
@@ -1898,7 +1922,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.117** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.118** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

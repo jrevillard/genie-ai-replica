@@ -2603,3 +2603,12 @@ the compose config, kept verbatim; backlog.
     mentions — the frontend's `VUE_PROXY_HOST` is read by `server.js`, which
     the image never executes (the CMD runs nginx), so a naive source walk
     both over- and under-reports.
+
+  - *Clearable-gate addendum (0.2.129)*: the authed probe's env rows sat
+    inside the init container, gated on `data.arangodb.enabled` while the
+    Job itself was gated only on `services.backend.enabled` — clearing
+    `data` removed ARANGO_USER from a surviving workload, and the
+    clearable-blocks gate flagged the unowned drop. The whole Job is now
+    gated on backend AND arangodb (no Arango = nothing to migrate; the
+    backend fails its own named connection error). Baseline render
+    byte-identical; gate green.

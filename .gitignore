@@ -153,18 +153,14 @@ _bmad/render/
 _bmad-output/implementation-artifacts/orchestrate-runs/
 _bmad-output/implementation-artifacts/bmad-build-auto-result-*.md
 
-# CI-mirrored openapi-generator install (config:api-client before_script)
-.openapi-tools/
-
 # Legacy file-mode log artefacts (T8 deleted the code path)
 components/gov-chat-backend/logs/
 
 # Core dumps from test runs (pytest, bench, etc.)
 core.*
 
-# Local Python virtualenvs (genie-ai-overlay dev)
-genie-ai-overlay/.venv/
-genie-ai-overlay/.venv-linux/
+# Captured sealed-secrets PRIVATE keys (laptop-cluster-bootstrap runbook)
+sealed-secrets-key*.json
 
 # BMAD per-story worktrees (local checkouts)
 _bmad-worktrees/
@@ -206,3 +202,6 @@ smoke-*.xlsx
 
 # scratch dir used for prettier hunk checks; never committed
 .fmtcheck/
+# Captured sealed-secrets PRIVATE keys (laptop-cluster-bootstrap runbook)
+# Captured Flux GitLab PAT — same --capture mode, same one-git-add-A hazard
+flux-git-auth.json

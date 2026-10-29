@@ -88,7 +88,7 @@ router.post('/:repo_id/import', requireRepoScope('repo_id', 'admin'), ctrl.impor
 // POST /:repo_id/lifecycle {"action":"ingest"}. 410 with the pointers.
 router.post('/:repo_id/ingest', requireRepoScope('repo_id', 'admin'), ctrl.retiredIngestRoute);
 
-// Story 1-8 (2026-10-08) — Head Tester / Routing Lab. rebuild fixes a
+// Story 1-8 (2026-10-08) — Testing Lab. rebuild fixes a
 // missing/stale okf_repositories.head (publish is warn-only on a TEI
 // outage); routing-test is the two-leg simulation (head signalling
 // works PRE-INGEST; chunk-probe replay for graph-bearing repos). Both

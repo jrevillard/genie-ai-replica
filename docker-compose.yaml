@@ -809,6 +809,24 @@ services:
       # pipeline citizens use. 'whatif' runs ignore this and replay retrieval
       # in-process.
       - OKF_RAGAS_SERVE_URL=${OKF_RAGAS_SERVE_URL:-http://chatqna-xeon-backend-server:8888/v1/chatqna}
+      # Declared serve posture, forwarded so every run doc can RECORD the
+      # retrieval configuration it measured (fidelity.retrieval.posture).
+      # chatqna remains the AUTHORITATIVE reader — okf-server only snapshots
+      # these for the record. Keep the interpolation defaults identical to
+      # the chatqna block to avoid silent drift (same convention as the
+      # retriever block's inert copies). The record exists because a
+      # configuration change (RETRIEVER_ARANGO_K=54, 2026-10-27) can silence
+      # the whole pipeline (reranker per-batch token cap) — a run that
+      # abstains 100% must name the posture it ran with.
+      - RETRIEVER_ARANGO_K=${RETRIEVER_ARANGO_K:-20}
+      - RETRIEVER_ARANGO_FETCH_K=${RETRIEVER_ARANGO_FETCH_K:-30}
+      - RETRIEVER_ARANGO_SCORE_THRESHOLD=${RETRIEVER_ARANGO_SCORE_THRESHOLD:-0.2}
+      - RETRIEVER_ARANGO_DISTANCE_THRESHOLD=${RETRIEVER_ARANGO_DISTANCE_THRESHOLD:-1}
+      - RETRIEVER_ARANGO_LAMBDA_MULT=${RETRIEVER_ARANGO_LAMBDA_MULT:-0.5}
+      - RERANKING_STRATEGY=${RERANKING_STRATEGY:-slice}
+      - RERANKER_TOP_N=${RERANKER_TOP_N:-3}
+      - RERANKING_THRESHOLD=${RERANKING_THRESHOLD:-0.75}
+      - CHATQNA_ENFORCE_ABSTENTION=${CHATQNA_ENFORCE_ABSTENTION:-true}
       # The answer leg's INITIAL token budget. It was hardcoded to 800, and a
       # reasoning-capable model burns 400-700 tokens before writing a word --
       # every answer hit the length cap, was thrown away, and was re-called at
@@ -1015,6 +1033,15 @@ services:
       # now caps its own concurrency and retries a 429 with jitter.
       - RAGAS_LLM_MAX_CONCURRENCY=${RAGAS_LLM_MAX_CONCURRENCY:-8}
       - RAGAS_LLM_MAX_RETRIES=${RAGAS_LLM_MAX_RETRIES:-5}
+      # ragas's usage telemetry (2026-10-26). ragas 0.4.3 POSTs every prompt's
+      # usage event to https://t.explodinggradients.com from INSIDE the async
+      # prompt path, with a 1 s timeout — so it blocks the event loop and the
+      # configured concurrency never overlaps. Measured here: a warm CACHE HIT
+      # (no model call at all) cost 0.79 s, and 0.008 s with this off — the
+      # tax alone was ~50 min of Solar System's ~3,800-prompt graph build. It
+      # is also a sovereignty leak: a public-sector deployment must not ship
+      # per-call usage telemetry to a third-party endpoint outside it.
+      - RAGAS_DO_NOT_TRACK=${RAGAS_DO_NOT_TRACK:-true}
       # Scoring-leg throughput (2026-10-22). The leg used to be hardcoded to
       # ragas's max_workers=8 with one row per evaluate(), so a row's ~13
       # judge calls could never fill the pool: 5.4 min per row, ~8 h for 100.

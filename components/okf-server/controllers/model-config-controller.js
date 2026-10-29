@@ -12,10 +12,17 @@ function actorFrom(req) {
   };
 }
 
-async function list(_req, res, next) {
+async function list(req, res, next) {
   try {
     // listConfigs returns the full envelope {configs, env_judge, env_pick}.
-    res.status(200).json(await svc.listConfigs());
+    // The LIST is readable by any OKF user (David 2026-10-25) — the RAGAS
+    // judge picker needs the env judge, and gating the read made the whole
+    // model selection disappear for anyone without tools-admin. The key
+    // HINT stays admin-only: it is a fragment of a deployment-wide
+    // credential and has no use outside the admin Models tab.
+    const roles = (req.user && req.user.realm_access && req.user.realm_access.roles) || [];
+    const isAdmin = Array.isArray(roles) && roles.includes('tools-admin');
+    res.status(200).json(await svc.listConfigs({ includeKeyHint: isAdmin }));
   } catch (err) {
     next(err);
   }

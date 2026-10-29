@@ -1861,6 +1861,19 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   so a throttled batch came back as a synchronised herd and was
 #   throttled again. 0 disables the retry.
 #   Used by: ragas-service.
+# RAGAS_DO_NOT_TRACK=true
+#   Default: true. ragas's own usage telemetry — OFF. ragas 0.4.3 POSTs
+#   every prompt's usage event to https://t.explodinggradients.com from
+#   INSIDE the async prompt path, with a 1 s timeout, so it blocks the
+#   event loop: the 16 workers ragas asks for and RAGAS_LLM_MAX_CONCURRENCY
+#   never overlap. Measured in the sidecar (2026-10-26): a warm CACHE HIT
+#   — no model call at all — cost 0.79 s, and 0.008 s with this off. That
+#   tax was ~50 min of Solar System's ~3,800-prompt knowledge-graph build,
+#   and the same tax is charged on every judge call of every scored row.
+#   It is also a SOVEREIGNTY question: a public-sector deployment must not
+#   ship per-call usage telemetry to a third-party endpoint outside the
+#   deployment. Set false only deliberately.
+#   Used by: ragas-service.
 # RAGAS_EVAL_MAX_WORKERS=8
 #   Default: 8. How many judge calls ragas' own executor may run at once
 #   during the SCORING leg. This was hardcoded to 8 — the same number as

@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { parseEnvTemplate, getRequiredSecrets } = require('../validators/parse-env');
 const { findUnwiredDocumented, findDuplicatedDocumented } = require('../validators/unwired-documented');
 const { parseAnsibleEnvVars } = require('../validators/parse-ansible');
@@ -12,6 +13,7 @@ const {
   parseComposeServiceContracts
 } = require('../validators/parse-compose');
 const { parseEnvTemplateImageVars } = require('../validators/parse-env-template');
+const { validateRetrieverEnvCoverage } = require('../validators/validate-retriever-env');
 const { validateFeatureFlags, OPEA_VAR_NAMES } = require('../validators/validate-features');
 const {
   validateHardwareProfile,
@@ -27,8 +29,6 @@ const {
   GPU_REQUIRED_SERVICES,
   GPU_SHARED_COMPOSE_VARS
 } = require('../validators/validate-gpu-node');
-const os = require('os');
-const { validateRetrieverEnvCoverage } = require('../validators/validate-retriever-env');
 const { readLoginThemeNames } = require('../validators/validate-keycloak-theme');
 const { collectThemeIssues, inspectThemes } = require('../validators/validate-keycloak-themes');
 
@@ -933,6 +933,26 @@ describe('Configuration Validation Suite', () => {
       expect(vars.RAGAS_LLM_MAX_RETRIES && vars.RAGAS_LLM_MAX_RETRIES.default).toBe('5');
     });
 
+    test('ragas usage telemetry is OFF in all four sites (2026-10-26)', () => {
+      // RAGAS_DO_NOT_TRACK: ragas 0.4.3 POSTs every prompt's usage event to
+      // https://t.explodinggradients.com from INSIDE the async prompt path
+      // (1 s timeout), so it blocks the event loop and the configured
+      // concurrency never overlaps. Measured in the sidecar: a warm CACHE HIT
+      // — no model call at all — cost 0.79 s, and 0.008 s with this off. The
+      // tax was ~50 min of Solar System's ~3,800-prompt graph build. It is
+      // also a sovereignty leak: per-call usage telemetry must not leave a
+      // public-sector deployment.
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const ragasBlock = full.slice(full.indexOf('  ragas-service:'), full.indexOf('  document-repository:'));
+      expect(ragasBlock).toMatch(/- RAGAS_DO_NOT_TRACK=\$\{RAGAS_DO_NOT_TRACK:-true\}/);
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*RAGAS_DO_NOT_TRACK=true.*$/m);
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect(vars.RAGAS_DO_NOT_TRACK && vars.RAGAS_DO_NOT_TRACK.default).toBe('true');
+    });
+
     test('the scoring-leg throughput vars land in all four sites (2026-10-22)', () => {
       // The scoring leg's worker pool was hardcoded to 8, the same number as
       // the judge-concurrency cap, so the two ceilings could not be moved
@@ -1148,12 +1168,13 @@ describe('Configuration Validation Suite', () => {
       expect(allVarsYml).toMatch(/^okf_enabled: "0"$/m);
     });
   });
-  beforeAll(() => {
-    envParsed = parseEnvTemplate(ENV_FILE);
-    composeVars = parseComposeEnvVars(COMPOSE_FILE);
-    xRef = crossReference(composeVars, envParsed);
-  });
-
+  // --- Keycloak login theme marker ---
+  // The base login theme marks its own pages so a child theme
+  // (genie-el-salvador, parent=genie) keeps its own ground and wave. The
+  // marker follows the theme directory name: the template tests the
+  // resource path, the CSS scopes the ground and the band to the class
+  // the template emits. A rename that breaks the chain drops the ground
+  // and the wave with no error anywhere.
   describe('Keycloak login theme marker', () => {
     let names;
 
@@ -1363,7 +1384,6 @@ describe('Configuration Validation Suite', () => {
       });
     });
   });
-
   describe('Keycloak theme assets', () => {
     let root;
 

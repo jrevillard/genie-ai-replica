@@ -203,6 +203,25 @@ beforeEach(() => {
         .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
       return { all: async () => (hit ? [hit] : []) };
     }
+    if (aql.includes('rescore_of == @rk')) {
+      // The sibling-judge lookup: the lineage-linked run that scored the SAME
+      // answers with a different judge. This query fell through to the
+      // default empty result, so it never executed in any test — the
+      // advisor's headline behaviour was unverified end to end.
+      const parent = (bind && bind.parent) || '';
+      const hit = docs
+        .filter(
+          (d) =>
+            d.repo_id === bind.rid &&
+            d.suite_key === bind.sk &&
+            d.kind === 'ragas_run' &&
+            d.status === 'done' &&
+            d._key !== bind.rk &&
+            ((d.payload && d.payload.fidelity && d.payload.fidelity.rescore_of === bind.rk) || d._key === parent)
+        )
+        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
+      return { all: async () => (hit ? [hit] : []) };
+    }
     if (aql.includes('d.kind IN @kinds')) {
       const kinds = bind.kinds || [];
       const sorted = docs
@@ -721,6 +740,22 @@ describe('run', () => {
     expect(sent.metrics).toEqual(svc.DEFAULT_METRICS);
   });
 
+  // David 2026-10-25: the panel's picker and the RUNNING job must never
+  // disagree — the dropdown said GLM while the job was scoring with granite.
+  // The run's progress therefore names the judge it is using and carries the
+  // pick AS MADE, so the panel can adopt it.
+  it("the run's progress names the judge and carries the pick as made", async () => {
+    const sk = await makeSuite();
+    const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif', judge_config_key: '__env__' }, {});
+    await begun.done;
+    const doc = await svc.getRunSuite('me', sk, begun.run_key);
+    expect(doc.progress).toBeTruthy();
+    expect(doc.progress.judge).toBeTruthy();
+    expect(doc.progress.judge_pick).toEqual({ config_key: '__env__', model: null });
+    // and the force flag never leaks into the stored envelope
+    expect(doc.progress.force).toBeUndefined();
+  });
+
   it('respects an extended metric selection (default four always included)', async () => {
     const sk = await makeSuite();
     const begun = await svc.beginRunSuite('me', sk, { mode: 'whatif', metrics: ['factual_correctness'] }, {});
@@ -1118,6 +1153,11 @@ describe('explain', () => {
     expect(explained.payload.run_key).toBe(run_key);
     expect(Array.isArray(explained.payload.attributions)).toBe(true);
     expect(explained.payload.advice).toBeTruthy();
+    // The configuration adjustment cycle (David 2026-10-27): the mechanical
+    // env changes survive EVERY advisor outcome. The LLM success path
+    // replaces the whole advice object — without the re-attach the section
+    // would appear only on runs where the advisor failed (review F1).
+    expect(Array.isArray(explained.payload.advice.env_changes)).toBe(true);
   });
 
   // David 2026-10-21: "clicked explain… the UX is terrible as it does not show
@@ -1392,6 +1432,112 @@ describe('explain', () => {
     expect(payload.attributions_omitted.length).toBe(0);
   });
 
+  it('strips knob prescriptions from the advisor LLM lists mechanically, and says so', async () => {
+    // Altitude review #4 (2026-10-27): rule 10 tells the advisor not to emit
+    // configuration values, but an instruction is not a control — the same
+    // LLM violated its own stage rule 3 times out of 5 on the granite run.
+    // The guard is MECHANICAL, mirroring the content-curation guard.
+    // Failing rows are forced — the advisor call only runs when something
+    // failed (the same setup its two neighbours use).
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-knob', status: 'queued' }));
+      if (u.includes('/jobs/j-knob'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-knob',
+            status: 'done',
+            result: {
+              aggregate: {},
+              per_query: GEN_SAMPLES.map(() => ({ context_recall: 0.2, faithfulness: 1.0 })),
+              model: 'm',
+              n: 2
+            }
+          })
+        );
+      return baseFetch(url);
+    });
+    const begunSuite = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    await begunSuite.done;
+    const run = await svc.beginRunSuite('me', begunSuite.suite_key, { mode: 'whatif' }, {});
+    await run.done;
+    global.fetch = baseFetch;
+    // All passages present → no proven corpus gap → the curation guard has
+    // nothing to keep, so it fires alongside the knob guard.
+    __mockDb.__corpusRows = [
+      { key: 'k1', text: 'Plant after the last frost date.', score: 0.9 },
+      { key: 'k2', text: 'Tomatoes are a crop.', score: 0.8 }
+    ];
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        knob_changes: [
+          'Set RERANKER_TOP_N to 4 so noise is cut',
+          'a genuinely non-configuration note without identifiers'
+        ],
+        repo_tag_changes: [],
+        // A curation proposal with NO proven corpus gap (the corpus rows are
+        // all present below) — so BOTH mechanical guards fire on one
+        // response and the notes must COMPOSE, not overwrite (repeat
+        // review #4).
+        content_curation: [{ concept: 'c1', gap: 'missing frost dates' }],
+        prompt_tweaks: ['CHATQNA_SYSTEM_PROMPT: tighten grounding']
+      })
+    );
+    const begun = await svc.beginExplainFailures('me', begunSuite.suite_key, { run_key: run.run_key }, {});
+    await begun.done;
+    const explained = await svc.getExplainFailures('me', begunSuite.suite_key, run.run_key);
+    const advice = explained.payload.advice;
+    expect(advice.knob_changes).toHaveLength(1);
+    expect(advice.knob_changes[0]).not.toMatch(/RERANKER_TOP_N/);
+    expect(advice.prompt_tweaks).toHaveLength(0); // CHATQNA_* is a knob token too
+    // The mechanical env_changes table is untouched and carries the knobs.
+    expect(Array.isArray(advice.env_changes)).toBe(true);
+    // BOTH guards' notes survive — one guard must not eat the other's count.
+    expect(advice.note).toMatch(/dropped 2 advice item\(s\) that named environment knobs/);
+    expect(advice.note).toMatch(/dropped 1 content-curation suggestion\(s\)/);
+    delete __mockDb.__corpusRows;
+  });
+
+  it('keeps env_changes when the advisor LLM call FAILS — the mirror image of review F1', async () => {
+    // Review F1 was: the success path dropped the section. The mirror is
+    // the initializer losing it — then the section would vanish exactly on
+    // the runs where the operator most needs the config lever (advisor
+    // down). Pin BOTH paths.
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-kf', status: 'queued' }));
+      if (u.includes('/jobs/j-kf'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-kf',
+            status: 'done',
+            result: {
+              aggregate: {},
+              per_query: GEN_SAMPLES.map(() => ({ context_recall: 0.2, faithfulness: 1.0 })),
+              model: 'm',
+              n: 2
+            }
+          })
+        );
+      return baseFetch(url);
+    });
+    const begunSuite = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    await begunSuite.done;
+    const run = await svc.beginRunSuite('me', begunSuite.suite_key, { mode: 'whatif' }, {});
+    await run.done;
+    global.fetch = baseFetch;
+    frontmatterService.vllmChatCompletions.mockRejectedValue(new Error('advisor endpoint down'));
+    const begun = await svc.beginExplainFailures('me', begunSuite.suite_key, { run_key: run.run_key }, {});
+    await begun.done;
+    const explained = await svc.getExplainFailures('me', begunSuite.suite_key, run.run_key);
+    expect(explained.payload.advice.source).toBe('none');
+    expect(explained.payload.advice.note).toMatch(/LLM advice failed/);
+    expect(Array.isArray(explained.payload.advice.env_changes)).toBe(true);
+    expect(explained.payload.advice.env_changes.length).toBeGreaterThan(0);
+  });
+
   it('routes tag suggestions through the existing guardrail', async () => {
     // Seed a failing metric so the advice path fires (all-passing runs get
     // attribution only — by design).
@@ -1483,7 +1629,10 @@ describe('explain', () => {
     global.fetch = baseFetch;
     frontmatterService.vllmChatCompletions.mockResolvedValue(
       llmResponse({
-        knob_changes: ['raise OKF_RAGAS_CANDIDATE_K'],
+        // A NON-configuration knob item — items naming deployment env knobs
+        // are dropped mechanically now (the knob guard, 2026-10-27), which
+        // is the point of that guard, not this test's subject.
+        knob_changes: ['raise the candidate pool'],
         repo_tag_changes: [],
         content_curation: [{ concept: 'c1', gap: 'missing frost dates' }],
         prompt_tweaks: []
@@ -1495,9 +1644,10 @@ describe('explain', () => {
     // The proposal is dropped — every passage is in the corpus.
     expect(explained.payload.advice.content_curation).toEqual([]);
     expect(explained.payload.advice.rejected_curation).toBeTruthy();
-    // ...and the KNOB suggestion survives: the advice is not discarded, only
-    // the part that would send a curator to write existing content.
-    expect(explained.payload.advice.knob_changes).toEqual(['raise OKF_RAGAS_CANDIDATE_K']);
+    // ...and the non-configuration advice survives: the advice is not
+    // discarded, only the part that would send a curator to write existing
+    // content.
+    expect(explained.payload.advice.knob_changes).toEqual(['raise the candidate pool']);
     delete __mockDb.__corpusRows;
   });
 
@@ -1962,6 +2112,189 @@ describe('serve mode — the benchmark measures the SERVED system (2026-10-23)',
     expect(doc.payload.fidelity.retrieval.candidate_k).toBeGreaterThan(0);
   });
 
+  // 2026-10-27, live: RETRIEVER_ARANGO_K=54 blew the reranker's per-batch
+  // token cap and EVERY row abstained — and the run judged all 50 refusal
+  // texts and filed a 0-score "done" benchmark. An abstention is not an
+  // answer: the refusal carries text, so the old `r.answer` predicate read
+  // 50 refusals as 50 scorable rows. A run whose every row abstained is a
+  // pipeline condition, and the doc must say so.
+  it('a run whose every row abstains FAILS as MASS_ABSTENTION — refusals are never judged', async () => {
+    const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await begun.done;
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url, opts = {}) => {
+      const u = String(url);
+      if (u.includes('/v1/chatqna')) {
+        return Promise.resolve(
+          sseResponse([
+            "data: b'I cannot reliably answer this query because the retrieved documents exceed the reranker input limit.'\n\n",
+            'data: {"type":"metadata","source_documents":[],"confidence_score":0.1,' +
+              '"abstained":true,"abstention_reason":"the retrieved documents exceed the reranker input limit"}\n\n',
+            'data: [DONE]\n\n'
+          ])
+        );
+      }
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+      if (u.includes('/jobs/j-eval'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-eval',
+            kind: 'evaluate',
+            status: 'done',
+            result: { aggregate: {}, per_query: [], evaluation_log: [] }
+          })
+        );
+      return baseFetch(url, opts);
+    });
+    try {
+      const run = await svc.beginRunSuite('me', begun.suite_key, {}, { actor: { user_id: 'u1' } });
+      await run.done;
+      const doc = await svc.getRunSuite('me', begun.suite_key, run.run_key);
+      expect(doc.status).toBe('failed');
+      expect(doc.error.code).toBe('MASS_ABSTENTION');
+      expect(doc.error.message).toContain('all 2 of 2 in-scope rows abstained');
+      expect(doc.error.message).toContain('reranker input limit');
+      // The refusal texts were never submitted to the judge — scoring a
+      // refusal burns the judge and manufactures zeros.
+      expect(global.fetch.mock.calls.some((c) => String(c[0]).includes('/evaluate'))).toBe(false);
+      // getRunSuite strips a failed doc to the error envelope; read the RAW
+      // doc for the record's own configuration (the single variable that
+      // caused this) and its abstention truth.
+      const raw = __mockDb._stores.okf_head_test_runs[run.run_key];
+      expect(raw.payload.abstained).toEqual({ count: 2, rate: 1 });
+      expect(raw.payload.fidelity.retrieval.posture).toBeTruthy();
+      expect(raw.payload.fidelity.retrieval.posture.strategy).toBeTruthy();
+      expect(raw.payload.summary).toBeNull();
+    } finally {
+      global.fetch = baseFetch;
+    }
+  });
+
+  it('a partially-abstaining run judges only the answered rows and records the abstention rate', async () => {
+    const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await begun.done;
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url, opts = {}) => {
+      const u = String(url);
+      if (u.includes('/v1/chatqna')) {
+        const q = JSON.parse(opts.body).messages || '';
+        const abstain = q === GEN_SAMPLES[0].user_input;
+        return Promise.resolve(
+          sseResponse([
+            abstain
+              ? "data: b'I cannot reliably answer this query because the retrieved documents exceed the reranker input limit.'\n\n"
+              : "data: b'A grounded answer about cob rot.'\n\n",
+            'data: {"type":"metadata","source_documents":[{"document_id":"concept-1","score":0.9,"text":"Chunk one."}],' +
+              '"confidence_score":0.8,"abstained":' +
+              abstain +
+              (abstain ? ',"abstention_reason":"the retrieved documents exceed the reranker input limit"' : '') +
+              ',"is_grounded":false}\n\n',
+            'data: [DONE]\n\n'
+          ])
+        );
+      }
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+      if (u.includes('/jobs/j-eval'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-eval',
+            kind: 'evaluate',
+            status: 'done',
+            result: {
+              aggregate: { faithfulness: 1.0 },
+              per_query: [{ faithfulness: 1.0, context_precision: 0.9, context_recall: 0.9, answer_relevancy: 1.0 }],
+              evaluation_log: []
+            }
+          })
+        );
+      return baseFetch(url, opts);
+    });
+    try {
+      const run = await svc.beginRunSuite('me', begun.suite_key, {}, { actor: { user_id: 'u1' } });
+      await run.done;
+      const doc = await svc.getRunSuite('me', begun.suite_key, run.run_key);
+      expect(doc.status).toBe('done');
+      expect(doc.payload.abstained).toEqual({ count: 1, rate: 0.5 });
+      const evalCall = global.fetch.mock.calls.find((c) => String(c[0]).includes('/evaluate'));
+      const sent = JSON.parse(evalCall[1].body);
+      // ONE sample reached the judge — the refusal was excluded, so the
+      // sidecar answered in the answered-row's order only.
+      expect(sent.samples).toHaveLength(1);
+      expect(sent.samples[0].user_input).not.toBe(GEN_SAMPLES[0].user_input);
+      const abstRow = doc.payload.results.find((r) => r.abstained);
+      // Dropped rows carry an EMPTY metrics object — no numbers, so no mean
+      // is computed over them (the existing merge-back contract).
+      expect(abstRow.metrics).toEqual({});
+    } finally {
+      global.fetch = baseFetch;
+    }
+  });
+
+  it('records the declared serve posture on the run doc (the configuration it measured)', async () => {
+    const prev = { k: process.env.RETRIEVER_ARANGO_K, strategy: process.env.RERANKING_STRATEGY };
+    process.env.RETRIEVER_ARANGO_K = '20';
+    process.env.RERANKING_STRATEGY = 'adaptive';
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url, opts = {}) => {
+      const u = String(url);
+      if (u.includes('/v1/chatqna')) {
+        return Promise.resolve(
+          sseResponse([
+            "data: b'A grounded answer about cob rot.'\n\n",
+            'data: {"type":"metadata","source_documents":[{"document_id":"concept-1","score":0.9,"text":"Chunk one."}],' +
+              '"confidence_score":0.8,"abstained":false,"is_grounded":true}\n\n',
+            'data: [DONE]\n\n'
+          ])
+        );
+      }
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+      if (u.includes('/jobs/j-eval'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-eval',
+            kind: 'evaluate',
+            status: 'done',
+            result: {
+              aggregate: { faithfulness: 1.0 },
+              per_query: GEN_SAMPLES.map(() => ({
+                faithfulness: 1.0,
+                context_precision: 0.9,
+                context_recall: 0.9,
+                answer_relevancy: 1.0
+              })),
+              evaluation_log: []
+            }
+          })
+        );
+      return baseFetch(url, opts);
+    });
+    try {
+      const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+      await begun.done;
+      const run = await svc.beginRunSuite('me', begun.suite_key, {}, { actor: { user_id: 'u1' } });
+      await run.done;
+      const doc = await svc.getRunSuite('me', begun.suite_key, run.run_key);
+      expect(doc.status).toBe('done');
+      expect(doc.payload.fidelity.retrieval.posture).toEqual({
+        k: 20,
+        fetch_k: 30,
+        score_threshold: 0.2,
+        distance_threshold: 1,
+        lambda_mult: 0.5,
+        strategy: 'adaptive',
+        top_n: 3,
+        threshold: 0.75,
+        enforce_abstention: true
+      });
+    } finally {
+      global.fetch = baseFetch;
+      if (prev.k === undefined) delete process.env.RETRIEVER_ARANGO_K;
+      else process.env.RETRIEVER_ARANGO_K = prev.k;
+      if (prev.strategy === undefined) delete process.env.RERANKING_STRATEGY;
+      else process.env.RERANKING_STRATEGY = prev.strategy;
+    }
+  });
+
   it('a stream that ends WITHOUT the metadata event is an honest error row, not a silent zero-context success', async () => {
     // The contract break must be named (proxy cut the stream / chatqna died
     // post-tokens) — recording answer + contexts=[] + error:null would
@@ -2026,8 +2359,13 @@ describe('serve mode — the benchmark measures the SERVED system (2026-10-23)',
     const run = await svc.beginRunSuite('me', begun.suite_key, {}, { actor: { user_id: 'u1' } });
     await run.done;
     const doc = await svc.getRunSuite('me', begun.suite_key, run.run_key);
-    expect(doc.status).toBe('done');
-    expect(doc.payload.results[0].abstained).toBe(true);
+    // EVERY row abstained (both questions got the same nothing-retrieved
+    // stream) — since 2026-10-27 that is a MASS_ABSTENTION failure, not a
+    // scored "done" run with zeros.
+    expect(doc.status).toBe('failed');
+    expect(doc.error.code).toBe('MASS_ABSTENTION');
+    const raw = __mockDb._stores.okf_head_test_runs[run.run_key];
+    expect(raw.payload.results[0].abstained).toBe(true);
   });
 
   // David 2026-10-24 (live): the benchmark recorded 10 abstentions that the
@@ -2089,9 +2427,14 @@ describe('serve mode — the benchmark measures the SERVED system (2026-10-23)',
     });
     const run = await svc.beginRunSuite('me', begun.suite_key, {}, { actor: { user_id: 'u1' } });
     await run.done;
+    // All rows abstain → the run fails as MASS_ABSTENTION (never a scored
+    // "done"); the flag-wins contract is asserted on the raw row.
     const doc = await svc.getRunSuite('me', begun.suite_key, run.run_key);
-    expect(doc.payload.results[0].abstained).toBe(true);
-    expect(doc.payload.results[0].abstention_reason).toBe('reranker_input_too_long');
+    expect(doc.status).toBe('failed');
+    expect(doc.error.code).toBe('MASS_ABSTENTION');
+    const raw = __mockDb._stores.okf_head_test_runs[run.run_key];
+    expect(raw.payload.results[0].abstained).toBe(true);
+    expect(raw.payload.results[0].abstention_reason).toBe('reranker_input_too_long');
   });
 });
 
@@ -2394,5 +2737,1077 @@ describe('rescoreRun — re-score a finished run with a different judge (2026-10
     // The row that was never submitted carries none — and, critically, does
     // not inherit the other row's score.
     expect(out[0].metrics).toEqual({});
+  });
+});
+
+describe('rescoreRun — the re-score is a RUN: tracked, visible and cancellable (2026-10-25)', () => {
+  // David, 2026-10-25: "it also cannot be tracked and does not connect to the
+  // UI with a progress bar… I cannot stop the re-scoring". The cause: the
+  // re-score wrote its run doc only at the END of the judge leg, so the
+  // panel polled a key that did not exist yet (a 404 per poll), the cancel
+  // endpoint could not find the run, and the history showed nothing.
+  async function makeSuite() {
+    const begun = await svc.beginSuiteGeneration('me', { testset_size: 2 }, {});
+    await begun.done;
+    return begun.suite_key;
+  }
+
+  const waitFor = async (fn, ms = 2000) => {
+    const t0 = Date.now();
+    while (Date.now() - t0 < ms) {
+      if (fn()) return true;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    return false;
+  };
+
+  /** A sidecar whose evaluate job stays RUNNING until the test says so. */
+  function hangTheEvaluateJob() {
+    const state = { polls: 0, cancelled: false, submitted: false };
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url, opts) => {
+      const u = String(url);
+      const method = (opts && opts.method) || 'GET';
+      if (u.includes('/evaluate')) {
+        state.submitted = true;
+        return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+      }
+      if (u.includes('/jobs/j-eval')) {
+        if (method === 'DELETE') {
+          state.cancelled = true;
+          return Promise.resolve(okJson({ job_id: 'j-eval', status: 'cancelled' }));
+        }
+        if (state.cancelled) {
+          return Promise.resolve(okJson({ job_id: 'j-eval', kind: 'evaluate', status: 'cancelled' }));
+        }
+        state.polls += 1;
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-eval',
+            kind: 'evaluate',
+            status: 'running',
+            progress: { phase: 'scoring', done: 1, total: 2 }
+          })
+        );
+      }
+      return baseFetch(url, opts);
+    });
+    return state;
+  }
+
+  it('writes a RUNNING run doc the moment it starts — the panel can track it', async () => {
+    const sk = await makeSuite();
+    const first = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
+    await first.done;
+    const state = hangTheEvaluateJob();
+
+    const begun = await svc.rescoreRun('me', sk, first.run_key, {}, {});
+
+    // The doc EXISTS before the judge leg finishes — this is the key the
+    // panel polls. Before the fix it did not exist until the very end.
+    const store = __mockDb._stores.okf_head_test_runs;
+    expect(store[begun.run_key]).toBeDefined();
+    expect(store[begun.run_key].status).toBe('running');
+    // The lineage is visible from the FIRST poll, not only when it lands.
+    expect(store[begun.run_key].payload.fidelity.rescore_of).toBe(first.run_key);
+
+    // The read endpoint reports it as running — NOT as the "the worker died"
+    // verdict a 'running' doc used to earn, and never a 404.
+    const live = await svc.getRunSuite('me', sk, begun.run_key);
+    expect(live.status).toBe('running');
+    expect(live.run_key).toBe(begun.run_key);
+
+    // The progress reaches the doc, so the panel's bar moves. The phase is
+    // 'judge' — the locale renders it as "scoring".
+    await waitFor(() => state.polls > 0);
+    await waitFor(() => Boolean(store[begun.run_key].progress));
+    expect(store[begun.run_key].progress.phase).toBe('judge');
+    expect(store[begun.run_key].progress.done).toBe(1);
+    expect(store[begun.run_key].progress.total).toBe(2);
+
+    state.cancelled = true;
+    await begun.done.catch(() => {});
+  });
+
+  it('is CANCELLABLE — the cancel endpoint finds the re-score and stops it', async () => {
+    const sk = await makeSuite();
+    const first = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
+    await first.done;
+    const state = hangTheEvaluateJob();
+
+    const begun = await svc.rescoreRun('me', sk, first.run_key, {}, {});
+    // Wait for the sidecar job to be registered — the cancel deletes it.
+    await waitFor(() => state.polls > 0);
+
+    // The cancel must NOT answer 409 "no such run is executing": the
+    // re-score IS an executing run.
+    await expect(svc.cancelSuiteRun('me', sk, begun.run_key)).resolves.toMatchObject({
+      cancelled: true,
+      run_key: begun.run_key
+    });
+    // The sidecar job was actually deleted — the GPU stops.
+    expect(state.cancelled).toBe(true);
+
+    // The doc lands as 'cancelled' — never 'failed', and never vanishes.
+    await expect(begun.done).rejects.toMatchObject({ code: 'RAGAS_JOB_CANCELLED' });
+    const doc = await svc.getRunSuite('me', sk, begun.run_key);
+    expect(doc.status).toBe('cancelled');
+  });
+
+  it('refuses to delete a live re-score — the panel must not lose the run it polls', async () => {
+    const sk = await makeSuite();
+    const first = await svc.beginRunSuite('me', sk, { mode: 'whatif' }, {});
+    await first.done;
+    const state = hangTheEvaluateJob();
+
+    const begun = await svc.rescoreRun('me', sk, first.run_key, {}, {});
+    await waitFor(() => state.polls > 0);
+    await expect(svc.deleteRun('me', sk, begun.run_key)).rejects.toMatchObject({
+      code: 'RUN_IN_FLIGHT',
+      status: 409
+    });
+
+    state.cancelled = true;
+    await begun.done.catch(() => {});
+  });
+
+  it('names the run ONCE in the not-found message', async () => {
+    // The old message read "run rrX for suite rsY rrX not found" — the key
+    // was appended to a `what` string that already contained it.
+    const sk = await makeSuite();
+    await expect(svc.getRunSuite('me', sk, 'rr-missing')).rejects.toMatchObject({
+      code: 'RUN_NOT_FOUND',
+      status: 404,
+      message: expect.stringContaining('rr-missing')
+    });
+    await expect(svc.getRunSuite('me', sk, 'rr-missing')).rejects.toThrow(/^run rr-missing for suite \S+ not found$/);
+  });
+});
+
+describe('answerFidelity — the record must name the model that ACTUALLY answered (2026-10-25)', () => {
+  const modelConfigService = require('../services/model-config-service');
+  const OLD_ENV = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...OLD_ENV };
+    jest.restoreAllMocks();
+  });
+
+  it('serve mode records the DEPLOYMENT chat model and never consults the answers config', async () => {
+    const spy = jest.spyOn(modelConfigService, 'resolveModelOverride').mockResolvedValue({
+      provider: 'openai',
+      base_url: 'https://answers/v1',
+      model: 'glm-5.3-flash',
+      config_name: 'Answers Config',
+      source: 'active'
+    });
+    process.env.VLLM_MODEL_ID = 'ibm-granite/granite-4.1-8b';
+    delete process.env.VLLM_LLM_MODEL_ID;
+
+    // The SERVE leg answers through chatqna, which serves the deployment
+    // chat model. The served call carries no model at all, so the
+    // `ragas_answers` config was never consulted — recording it claimed a
+    // model that never answered (live 2026-10-25: a serve run recorded
+    // "glm-5.3-flash" while the answers came from the deployment chat
+    // model; David: "why does this have anything to do with glm-5.3-flash?").
+    const serve = await svc.answerFidelity({ serveMode: true });
+    expect(serve.source).toBe('deployment-chat');
+    expect(serve.config).toBeNull();
+    expect(serve.model).toBe('ibm-granite/granite-4.1-8b');
+    // The config was not even asked for.
+    expect(spy).not.toHaveBeenCalled();
+
+    // The WHATIF leg really does answer through that config — the other
+    // half of the fix, and it must still say so.
+    const whatif = await svc.answerFidelity({});
+    expect(whatif.source).toBe('config');
+    expect(whatif.config).toBe('Answers Config');
+    expect(whatif.model).toBe('glm-5.3-flash');
+    expect(spy).toHaveBeenCalledWith({ service: 'ragas_answers' });
+  });
+
+  it('falls back to the deployment chat when the answers config cannot be resolved', async () => {
+    jest.spyOn(modelConfigService, 'resolveModelOverride').mockRejectedValue(new Error('config service down'));
+    process.env.VLLM_LLM_MODEL_ID = 'ibm-granite/granite-4.1-8b';
+    delete process.env.VLLM_MODEL_ID;
+
+    const whatif = await svc.answerFidelity({});
+    expect(whatif.source).toBe('deployment-chat');
+    expect(whatif.model).toBe('ibm-granite/granite-4.1-8b');
+  });
+
+  it('reads VLLM_LLM_MODEL_ID first — the deployment spells the knob two ways', async () => {
+    process.env.VLLM_LLM_MODEL_ID = 'ibm-granite/granite-4.1-8b';
+    process.env.VLLM_MODEL_ID = 'some-other-name';
+    const serve = await svc.answerFidelity({ serveMode: true });
+    expect(serve.model).toBe('ibm-granite/granite-4.1-8b');
+  });
+});
+
+// The advisor used to ASSERT a second judge's verdict from a hardcoded
+// string: "A second judge disagrees on roughly half of these rows" and
+// "A second judge reproduces this on most of these rows". Both were true
+// of ONE offline measurement (the 2026-10-24 granite re-score) and
+// silently became lies for every other run. David 2026-10-25: "If you
+// have hard coded strings then fucking fix it!!!!!"
+//
+// The verdict is now COMPUTED from the sibling re-score — the run that
+// scored the same answers with a different judge.
+describe('the advisor’s second-judge verdict is computed, not asserted (2026-10-25)', () => {
+  const SUITE = {
+    payload: {
+      entries: [{ id: 'r1' }, { id: 'r2' }, { id: 'r3' }, { id: 'r4' }],
+      thresholds: {}
+    }
+  };
+  const runDoc = {
+    _key: 'rr-source',
+    metrics: ['factual_correctness'],
+    payload: {
+      results: [
+        { id: 'r1', metrics: { factual_correctness: 0.2 }, answer: 'a', contexts: ['x'] },
+        { id: 'r2', metrics: { factual_correctness: 0.2 }, answer: 'a', contexts: ['x'] },
+        { id: 'r3', metrics: { factual_correctness: 0.2 }, answer: 'a', contexts: ['x'] },
+        { id: 'r4', metrics: { factual_correctness: 0.9 }, answer: 'a', contexts: ['x'] }
+      ]
+    }
+  };
+
+  it('counts the rows the second judge CLEARED and the rows it KEPT FAILING', () => {
+    // The second judge cleared r1, kept r2 failing, and could not measure r3.
+    const second = {
+      _key: 'rr-second',
+      metrics: ['factual_correctness'],
+      payload: {
+        fidelity: { judge: { model: 'ibm-granite/granite-4.1-8b' } },
+        results: [
+          { id: 'r1', metrics: { factual_correctness: 0.95 } },
+          { id: 'r2', metrics: { factual_correctness: 0.1 } },
+          { id: 'r3', metrics: {} },
+          { id: 'r4', metrics: { factual_correctness: 0.95 } }
+        ]
+      }
+    };
+    const cmp = svc.compareJudges(SUITE, runDoc, second);
+    expect(cmp.source).toBe('sibling');
+    expect(cmp.second_judge).toBe('ibm-granite/granite-4.1-8b');
+    expect(cmp.second_run_key).toBe('rr-second');
+    const m = cmp.per_metric.factual_correctness;
+    // r1, r2, r3 failed here; r4 passed here (not counted).
+    expect(m.failed_here).toBe(3);
+    expect(m.cleared).toBe(1);
+    expect(m.kept_failing).toBe(1);
+    expect(m.not_measured).toBe(1);
+  });
+
+  it('says so when NO second judge has scored the run — it does not assert one', () => {
+    const cmp = svc.compareJudges(SUITE, runDoc, null);
+    expect(cmp.source).toBe('none');
+    const sentence = svc.secondJudgeSentence(cmp, 'factual_correctness');
+    expect(sentence).toMatch(/no second judge has scored this run/i);
+    // And it must NOT claim a proportion it was never given.
+    expect(sentence).not.toMatch(/roughly half|most of these rows/i);
+  });
+
+  it('quotes the computed counts, never a canned proportion', () => {
+    const second = {
+      _key: 'rr-second',
+      metrics: ['factual_correctness'],
+      payload: {
+        fidelity: { judge: { model: 'granite' } },
+        results: [
+          { id: 'r1', metrics: { factual_correctness: 0.95 } },
+          { id: 'r2', metrics: { factual_correctness: 0.1 } },
+          { id: 'r3', metrics: {} }
+        ]
+      }
+    };
+    const cmp = svc.compareJudges(SUITE, runDoc, second);
+    const sentence = svc.secondJudgeSentence(cmp, 'factual_correctness');
+    expect(sentence).toContain('granite');
+    expect(sentence).toContain('cleared 1 of the 3');
+    expect(sentence).toContain('1 still failed');
+    // The retracted canned claims must not reappear.
+    expect(sentence).not.toMatch(/roughly half/i);
+    expect(sentence).not.toMatch(/reproduces this on most of these rows/i);
+  });
+
+  it('the attribution carries the computed sentence, not a hardcoded one', () => {
+    // The judge-stage branch: faithfulness passed while factual_correctness
+    // failed — the branch that used to say "a second judge disagrees on
+    // roughly half of these rows".
+    const suite = {
+      payload: {
+        entries: [{ id: 'r1' }],
+        thresholds: {}
+      }
+    };
+    const doc = {
+      metrics: ['faithfulness', 'factual_correctness'],
+      payload: {
+        fidelity: { retrieval: { mode: 'whatif' } },
+        results: [{ id: 'r1', metrics: { faithfulness: 1.0, factual_correctness: 0.1 }, answer: 'a', contexts: ['x'] }]
+      }
+    };
+    const none = svc.attributeFailures(suite, doc, null, svc.compareJudges(suite, doc, null));
+    expect(none.length).toBe(1);
+    expect(none[0].stage).toBe('judge');
+    expect(none[0].recommendation).toMatch(/no second judge has scored this run/i);
+    expect(none[0].recommendation).not.toMatch(/roughly half/i);
+
+    const second = {
+      _key: 'rr-second',
+      metrics: ['faithfulness', 'factual_correctness'],
+      payload: {
+        fidelity: { judge: { model: 'granite' } },
+        results: [{ id: 'r1', metrics: { faithfulness: 1.0, factual_correctness: 0.95 } }]
+      }
+    };
+    const withSibling = svc.attributeFailures(suite, doc, null, svc.compareJudges(suite, doc, second));
+    expect(withSibling[0].recommendation).toContain('granite');
+    expect(withSibling[0].recommendation).toContain('cleared 1 of the 1');
+    expect(withSibling[0].recommendation).not.toMatch(/roughly half/i);
+  });
+});
+
+// The run path handed EVERY row to the judge — including the rows that
+// produced no answer. The sidecar then scored an EMPTY response, which
+// comes back as ZEROS on the context and answer metrics, and zeros are
+// numbers: they landed in the means and depressed them (measured on
+// rr1792742789648-86637b: context_recall 0.887 over all 100 rows vs
+// 0.944 over the 94 that answered).
+//
+// The run path's own comment said "Judge only the rows that produced an
+// answer" (:2287), its sibling re-score path filtered the same way
+// (:1770), and a passing test encoded the same intent (:2353-2397). The
+// payload contradicted all three.
+describe('the run path judges only the rows that produced an answer (2026-10-25)', () => {
+  it('does not submit a row with no answer, and the scores land on the right rows', async () => {
+    let submittedSamples = null;
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url, opts) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) {
+        submittedSamples = JSON.parse(opts.body).samples;
+        return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+      }
+      if (u.includes('/jobs/j-eval')) {
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-eval',
+            kind: 'evaluate',
+            status: 'done',
+            result: {
+              aggregate: {},
+              // ONE row scored — only the row that produced an answer was
+              // submitted.
+              per_query: [{ faithfulness: 1, context_recall: 0.9 }],
+              model: 'm',
+              n: 1
+            }
+          })
+        );
+      }
+      return baseFetch(url, opts);
+    });
+    const sk = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await sk.done;
+    // Row 0 loses its answer (the embedding call 429s) — nothing to judge.
+    frontmatterService.teiEmbed.mockImplementation(async ([q]) => {
+      if (q === GEN_SAMPLES[0].user_input) throw new Error('Request failed with status code 429');
+      return [[0.1, 0.2, 0.3]];
+    });
+    const run = await svc.beginRunSuite('me', sk.suite_key, { mode: 'whatif' }, { actor: { user_id: 'u1' } });
+    await run.done;
+    const doc = await svc.getRunSuite('me', sk.suite_key, run.run_key);
+
+    // The row with no answer was NOT submitted.
+    expect(submittedSamples).toHaveLength(1);
+    expect(submittedSamples[0].user_input).toBe(GEN_SAMPLES[1].user_input);
+
+    // The score landed on the row it was scored for — index-aligned through
+    // the ORIGINAL row index, not the sample order.
+    const rows = doc.payload.results;
+    const failed = rows.find((r) => r.query === GEN_SAMPLES[0].user_input);
+    const scored = rows.find((r) => r.query === GEN_SAMPLES[1].user_input);
+    expect(failed.error).toBeTruthy();
+    expect(failed.metrics).toEqual({}); // NOT zeros
+    expect(scored.metrics.faithfulness).toBe(1);
+    expect(scored.metrics.context_recall).toBe(0.9);
+
+    // The mean covers only the row that scored, and the coverage says so.
+    const summary = doc.payload.summary;
+    expect(summary.coverage.faithfulness).toEqual({ scored: 1, total: 2 });
+    expect(summary.metrics.faithfulness).toBe(1);
+
+    // And the run is still marked invalid — the failed row is counted.
+    expect(summary.n_errors).toBe(1);
+  });
+
+  it('fails the run loudly when NO row produced an answer — never a mean of zeros', async () => {
+    let evaluateCalled = false;
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) {
+        evaluateCalled = true;
+        throw new Error('the judge must never be called for an empty dataset');
+      }
+      return baseFetch(url);
+    });
+    const sk = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await sk.done;
+    // BOTH rows lose their answer.
+    frontmatterService.teiEmbed.mockImplementation(async () => {
+      throw new Error('Request failed with status code 429');
+    });
+    const run = await svc.beginRunSuite('me', sk.suite_key, { mode: 'whatif' }, { actor: { user_id: 'u1' } });
+    await run.done;
+    const doc = await svc.getRunSuite('me', sk.suite_key, run.run_key);
+    // The judge was never called with an empty dataset.
+    expect(evaluateCalled).toBe(false);
+    // The run FAILED — the read contract strips a failed doc to
+    // {run_key, suite_key, status, error}: there is no summary to read,
+    // which is the point — there is no mean of zeros to misread.
+    expect(doc.status).toBe('failed');
+    expect(doc.error).toBeTruthy();
+    expect(doc.payload).toBeUndefined();
+  });
+});
+
+// A row that produced no answer and did NOT error is still a row the
+// operator must see: it is not scored, so it has no failing metric, but
+// dropping it from the attributions would hide it completely.
+describe('a row with no answer is never silently dropped (2026-10-25)', () => {
+  it('an empty answer with no error still reaches the advisor', async () => {
+    const baseFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/evaluate')) return Promise.resolve(okJson({ job_id: 'j-eval', status: 'queued' }));
+      if (u.includes('/jobs/j-eval'))
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-eval',
+            kind: 'evaluate',
+            status: 'done',
+            result: { aggregate: {}, per_query: [{ faithfulness: 1, context_recall: 1 }], n: 1 }
+          })
+        );
+      return baseFetch(url);
+    });
+    const sk = await svc.beginSuiteGeneration('me', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    await sk.done;
+    // The answer leg returns an EMPTY answer for the FIRST question only —
+    // the second still answers, so the run completes with one judged row.
+    const baseLlm = frontmatterService.vllmChatCompletions;
+    frontmatterService.vllmChatCompletions.mockImplementation(async (messages) => {
+      const text = JSON.stringify(messages);
+      const empty = text.includes(GEN_SAMPLES[0].user_input);
+      return {
+        data: {
+          choices: [
+            { message: { content: JSON.stringify({ answer: empty ? '' : 'A grounded answer.', abstained: false }) } }
+          ]
+        }
+      };
+    });
+    try {
+      const run = await svc.beginRunSuite('me', sk.suite_key, { mode: 'whatif' }, { actor: { user_id: 'u1' } });
+      await run.done;
+      const doc = await svc.getRunSuite('me', sk.suite_key, run.run_key);
+      const empty = doc.payload.results.find((r) => !r.answer);
+      expect(empty).toBeTruthy();
+      // It carries no score — it was never judged.
+      expect(empty.metrics).toEqual({});
+
+      const explained = await svc.beginExplainFailures('me', sk.suite_key, { run_key: run.run_key }, {});
+      await explained.done;
+      const ex = await svc.getExplainFailures('me', sk.suite_key, run.run_key);
+      const attributions = ex.payload.attributions || [];
+      // The row is in the advisor's attention set — a stage is attributed,
+      // so the operator is told about it.
+      expect(attributions.length).toBeGreaterThan(0);
+      for (const a of attributions) {
+        expect(typeof a.stage).toBe('string');
+        expect(a.stage.length).toBeGreaterThan(0);
+      }
+    } finally {
+      frontmatterService.vllmChatCompletions.mockImplementation(baseLlm);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The code-review fixes (2026-10-25). Four layers reviewed the MR !598 merge
+// diff and raised 62 findings; these are the ones that changed behaviour,
+// each pinned here so it cannot regress.
+// ---------------------------------------------------------------------------
+
+describe('the outcome bar partitions ONE population (2026-10-25)', () => {
+  const suite = {
+    payload: {
+      entries: [{ id: 'in1' }, { id: 'in2' }, { id: 'in3' }, { id: 'oos1', oos: true }],
+      thresholds: {}
+    }
+  };
+
+  it('excludes an out-of-scope control from the means and the coverage', () => {
+    // The control's score is 0 (it is deliberately unanswerable). It was
+    // inside means[m] and inside the coverage denominator, so it depressed
+    // every average the operator reads — while the guide called it "a
+    // control, not a result".
+    const results = [
+      { id: 'in1', answer: 'a', metrics: { faithfulness: 1.0 } },
+      { id: 'in2', answer: 'a', metrics: { faithfulness: 1.0 } },
+      { id: 'in3', answer: 'a', metrics: { faithfulness: 0.0 } },
+      { id: 'oos1', answer: 'a', metrics: { faithfulness: 0.0 } }
+    ];
+    const summary = svc.summarizeRun(suite, results, ['faithfulness']);
+    // The in-scope mean is (1 + 1 + 0) / 3 = 0.667 — NOT 0.5, which is what
+    // the control dragged it down to.
+    expect(summary.metrics.faithfulness).toBeCloseTo(2 / 3, 5);
+    expect(summary.coverage.faithfulness).toEqual({ scored: 3, total: 3 });
+    expect(summary.n_oos).toBe(1);
+    expect(summary.n_evaluable).toBe(3);
+  });
+
+  it('computes the four buckets over the in-scope rows, each row in exactly one', () => {
+    const results = [
+      { id: 'in1', answer: 'a', metrics: { faithfulness: 1.0 } }, // answered
+      { id: 'in2', answer: 'a', metrics: { faithfulness: 0.1 } }, // failing
+      { id: 'in3', error: { code: 'X' }, metrics: {} }, // errored
+      { id: 'oos1', answer: 'a', metrics: { faithfulness: 0.0 } } // control
+    ];
+    const s = svc.summarizeRun(suite, results, ['faithfulness']);
+    expect(s.n_answered).toBe(1);
+    expect(s.n_failed).toBe(1);
+    expect(s.n_errors).toBe(1);
+    expect(s.n_abstained).toBe(0);
+    // The buckets partition the in-scope population exactly.
+    expect(s.n_answered + s.n_failed + s.n_errors + s.n_abstained).toBe(s.n_evaluable);
+    expect(s.failing_count).toBe(s.n_failed);
+  });
+
+  it('counts a decline with NO answer apart from one that was judged', () => {
+    // The measured case: 48 of 48 observed abstention rows carry an empty
+    // answer, so they were never handed to the judge and contribute NO
+    // zeros. The guide claimed the opposite.
+    const results = [
+      { id: 'in1', abstained: true, answer: '', metrics: {} }, // never judged
+      { id: 'in2', abstained: true, answer: 'I cannot answer that', metrics: { faithfulness: 0 } }, // judged
+      { id: 'in3', answer: 'a', metrics: { faithfulness: 1.0 } }
+    ];
+    const s = svc.summarizeRun(suite, results, ['faithfulness']);
+    expect(s.n_abstained).toBe(2);
+    expect(s.n_abstained_unjudged).toBe(1);
+    // The judged decline's zeros ARE in the average; the unjudged one
+    // contributes nothing.
+    expect(s.metrics.faithfulness).toBeCloseTo(0.5, 5);
+    expect(s.coverage.faithfulness).toEqual({ scored: 2, total: 3 });
+    // And the buckets still partition.
+    expect(s.n_answered + s.n_failed + s.n_errors + s.n_abstained).toBe(s.n_evaluable);
+  });
+
+  it('records the thresholds the run was scored under', () => {
+    const s = svc.summarizeRun(suite, [{ id: 'in1', answer: 'a', metrics: {} }], ['faithfulness']);
+    expect(s.thresholds).toBeTruthy();
+    expect(typeof s.thresholds.faithfulness).toBe('number');
+  });
+});
+
+describe('the second-judge verdict is honest about what it compared (2026-10-25)', () => {
+  const SUITE = {
+    payload: { entries: [{ id: 'r1' }, { id: 'r2' }], thresholds: {} }
+  };
+  const runDoc = {
+    _key: 'rr-source',
+    metrics: ['factual_correctness', 'context_entities_recall'],
+    payload: {
+      fidelity: { judge: { model: 'judge-A' } },
+      results: [
+        { id: 'r1', metrics: { factual_correctness: 0.2, context_entities_recall: 0.2 }, answer: 'a' },
+        { id: 'r2', metrics: { factual_correctness: 0.2, context_entities_recall: 0.9 }, answer: 'a' }
+      ]
+    }
+  };
+
+  it('does NOT name a metric whose numbers came from the all-metric total', () => {
+    // The second judge only scored factual_correctness, so the
+    // context_entities_recall bucket does not exist. The old code fell back
+    // to the ALL-metric total and still appended "on
+    // context_entities_recall" — a number about every metric under one
+    // metric's name.
+    const second = {
+      _key: 'rr-second',
+      metrics: ['factual_correctness'],
+      payload: {
+        fidelity: { judge: { model: 'judge-B' } },
+        results: [
+          { id: 'r1', metrics: { factual_correctness: 0.95 } },
+          { id: 'r2', metrics: { factual_correctness: 0.95 } }
+        ]
+      }
+    };
+    const cmp = svc.compareJudges(SUITE, runDoc, second);
+    expect(cmp.per_metric.context_entities_recall).toBeUndefined();
+    const sentence = svc.secondJudgeSentence(cmp, 'context_entities_recall');
+    expect(sentence).not.toMatch(/on context_entities_recall/i);
+    expect(sentence).toMatch(/did not score context_entities_recall at all/i);
+  });
+
+  it('counts ROWS, not (row, metric) pairs', () => {
+    // One row that failed two metrics is ONE row. The metrics are real
+    // ones (a metric with no configured threshold is not judged at all).
+    const one = {
+      _key: 'rr-source',
+      metrics: ['faithfulness', 'context_precision'],
+      payload: {
+        fidelity: { judge: { model: 'judge-A' } },
+        results: [{ id: 'r1', metrics: { faithfulness: 0.1, context_precision: 0.1 }, answer: 'a' }]
+      }
+    };
+    const second = {
+      _key: 'rr-second',
+      metrics: ['faithfulness', 'context_precision'],
+      payload: {
+        fidelity: { judge: { model: 'judge-B' } },
+        results: [{ id: 'r1', metrics: { faithfulness: 0.9, context_precision: 0.9 } }]
+      }
+    };
+    const cmp = svc.compareJudges(SUITE, one, second);
+    expect(cmp.total.failed_here).toBe(1);
+    expect(cmp.total.cleared).toBe(1);
+    // The per-metric buckets still count once per row each.
+    expect(cmp.per_metric.faithfulness.failed_here).toBe(1);
+    expect(cmp.per_metric.context_precision.failed_here).toBe(1);
+  });
+
+  it('recognises a SAME-judge sibling — that is a stability check, not a second opinion', () => {
+    // The re-score dialog pre-fills the source run's own judge, so the
+    // DEFAULT re-score is a same-judge re-score. Reporting "a second judge
+    // cleared 0 of 67" would attribute the judge's agreement with itself to
+    // judge disagreement.
+    const same = {
+      _key: 'rr-same',
+      metrics: ['factual_correctness'],
+      payload: {
+        fidelity: { judge: { model: 'judge-A' } },
+        results: [{ id: 'r1', metrics: { factual_correctness: 0.2 } }]
+      }
+    };
+    const cmp = svc.compareJudges(SUITE, runDoc, same);
+    expect(cmp.source).toBe('same-judge');
+    const sentence = svc.secondJudgeSentence(cmp, 'factual_correctness');
+    expect(sentence).toMatch(/SAME judge/i);
+    expect(sentence).toMatch(/stability/i);
+    expect(sentence).not.toMatch(/cleared \d+ of the \d+/i);
+  });
+
+  it('does NOT call two runs with an unknown judge "the same judge"', () => {
+    const anonymous = {
+      _key: 'rr-anon',
+      metrics: ['factual_correctness'],
+      payload: { results: [{ id: 'r1', metrics: { factual_correctness: 0.2 } }] }
+    };
+    const unknownSource = {
+      _key: 'rr-source',
+      metrics: ['factual_correctness'],
+      payload: { results: [{ id: 'r1', metrics: { factual_correctness: 0.2 } }] }
+    };
+    const cmp = svc.compareJudges(SUITE, unknownSource, anonymous);
+    expect(cmp.source).toBe('sibling');
+  });
+
+  it('judges each run under the thresholds IT was scored under', () => {
+    // The sibling was scored when the bar for factual_correctness was 0.5;
+    // the source run was scored when it was 0.9. Judging the sibling
+    // against today's bar would call a passing row a failure.
+    const source = {
+      _key: 'rr-source',
+      metrics: ['factual_correctness'],
+      payload: {
+        fidelity: { judge: { model: 'judge-A' } },
+        summary: { thresholds: { factual_correctness: 0.9 } },
+        results: [{ id: 'r1', metrics: { factual_correctness: 0.6 }, answer: 'a' }]
+      }
+    };
+    const second = {
+      _key: 'rr-second',
+      metrics: ['factual_correctness'],
+      payload: {
+        fidelity: { judge: { model: 'judge-B' } },
+        summary: { thresholds: { factual_correctness: 0.5 } },
+        results: [{ id: 'r1', metrics: { factual_correctness: 0.6 } }]
+      }
+    };
+    const cmp = svc.compareJudges(SUITE, source, second);
+    // 0.6 fails the SOURCE run's own bar (0.9) and passes the sibling's
+    // (0.5) — so this judge failed the row and the other did not.
+    expect(cmp.total.failed_here).toBe(1);
+    expect(cmp.total.cleared).toBe(1);
+  });
+});
+
+describe('the sibling-judge lookup actually runs (2026-10-25)', () => {
+  it('finds the lineage-linked sibling in the store', async () => {
+    const store = __mockDb._stores.okf_head_test_runs || (__mockDb._stores.okf_head_test_runs = {});
+    store['rr-parent'] = {
+      _key: 'rr-parent',
+      repo_id: 'me',
+      suite_key: 'sk-1',
+      kind: 'ragas_run',
+      status: 'done',
+      created_at: '2026-10-25T10:00:00.000Z',
+      metrics: ['faithfulness'],
+      payload: { fidelity: { judge: { model: 'judge-A' } }, results: [] }
+    };
+    store['rr-child'] = {
+      _key: 'rr-child',
+      repo_id: 'me',
+      suite_key: 'sk-1',
+      kind: 'ragas_run',
+      status: 'done',
+      created_at: '2026-10-25T11:00:00.000Z',
+      metrics: ['faithfulness'],
+      payload: {
+        fidelity: { judge: { model: 'judge-B' }, rescore_of: 'rr-parent' },
+        results: []
+      }
+    };
+    const found = await svc.loadSecondJudgeRun(__mockDb, 'me', 'sk-1', 'rr-parent', store['rr-parent']);
+    expect(found).toBeTruthy();
+    expect(found._key).toBe('rr-child');
+    // And from the other side: the parent's lineage points at the child.
+    const back = await svc.loadSecondJudgeRun(__mockDb, 'me', 'sk-1', 'rr-child', store['rr-child']);
+    expect(back).toBeTruthy();
+    expect(back._key).toBe('rr-parent');
+  });
+});
+
+describe('a row that was judged and measured nothing is attributed (2026-10-25)', () => {
+  it('gives it the unmeasured stage instead of dropping it', () => {
+    const suite = { payload: { entries: [{ id: 'r1' }], thresholds: {} } };
+    const runDoc = {
+      _key: 'rr-1',
+      metrics: ['faithfulness'],
+      payload: {
+        results: [
+          // Judged (submitted), but the judge returned nothing measurable.
+          { id: 'r1', answer: 'a', contexts: ['c'], judged: true, metrics: {} }
+        ]
+      }
+    };
+    const attributions = svc.attributeFailures(suite, runDoc, null, null);
+    expect(attributions).toHaveLength(1);
+    expect(attributions[0].stage).toBe('unmeasured');
+    expect(attributions[0].recommendation).toMatch(/could not measure/i);
+    // It must NOT claim a threshold breach — there is no metric.
+    expect(attributions[0].recommendation).not.toMatch(/metric below threshold/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildEnvAdvice — concrete, per-component environment changes derived from
+// the attribution (David 2026-10-27: "the goal is a cycle of adjustment that
+// improves the RAGAS scores by configuration"). The rules are MECHANICAL —
+// the advisor LLM proved it cannot hold an output shape reliably (live
+// 2026-10-27: an intermittent object-shape answer coerced to "[object
+// Object]"), so the env advice is generated from the same evidence the
+// attribution already proved, and the LLM is forbidden from contradicting it.
+describe('buildEnvAdvice — the configuration adjustment cycle (2026-10-27)', () => {
+  // The PRODUCTION shape, pinned exactly (review F2, 2026-10-27): attribution
+  // rows from attributeFailures carry `fails` (NOT `failed`), no `abstained`
+  // flag, and their own `evidence` object where the replay probe's rank lives
+  // at evidence.candidate_rank.
+  const row = (id, stage, fails, evidence) => ({ id, stage, fails: fails || [], evidence: evidence || null });
+  const atRank = (rank) => ({ ladder_applied: true, candidate_rank: rank, ladder_stage: 'vector-recall' });
+  const FACTS = { rows: 50, abstentions: 0, mean_answer_chars: 1200 };
+
+  it('recommends a concrete candidate-pool K from the observed replay ranks (serve mode)', () => {
+    const attributions = [row('new-13', 'vector-recall', ['context_recall'], atRank(43))];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    const pool = out.find((e) => e.id === 'retriever-candidate-pool');
+    expect(pool).toBeDefined();
+    const k = pool.changes.find((c) => c.env === 'RETRIEVER_ARANGO_K');
+    expect(k.to).toBe(54); // ceil(43 * 1.25) — headroom above the deepest observed rank
+    const fetch = pool.changes.find((c) => c.env === 'RETRIEVER_ARANGO_FETCH_K');
+    // A FLOOR, not a target (review F6): an operator's deliberately larger
+    // fetch pool must never be lowered by applying this advice.
+    expect(fetch.to).toBe('>= 64');
+    expect(fetch.to).toMatch(/^>= /);
+    expect(pool.rows).toEqual(['new-13']);
+    expect(pool.targets).toContain('context_recall');
+    expect(pool.why).toMatch(/replay rank \(deepest #43\)/);
+    expect(pool.trade_off).toMatch(/noise|latency|rerank/i);
+  });
+
+  it('prescribes the WHATIF cut for whatif runs, not the serve knob', () => {
+    // Review F4: a whatif run replayed retrieval through OKF_RAGAS_CANDIDATE_K
+    // inside okf-server — RETRIEVER_ARANGO_K on chatqna never influenced the
+    // measured failure, and the re-run could not improve no matter what the
+    // operator set on chatqna.
+    const attributions = [row('new-13', 'vector-recall', ['context_recall'], atRank(43))];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'whatif' });
+    const pool = out.find((e) => e.id === 'retriever-candidate-pool');
+    expect(pool).toBeDefined();
+    expect(pool.changes.map((c) => c.env)).toContain('OKF_RAGAS_CANDIDATE_K');
+    expect(pool.changes.map((c) => c.env)).not.toContain('RETRIEVER_ARANGO_K');
+    expect(pool.changes.map((c) => c.env)).not.toContain('RETRIEVER_ARANGO_FETCH_K');
+    expect(pool.apply).toMatch(/okf-server/i);
+  });
+
+  it('sizes the whatif advice against the RUN’s recorded cut, not a hardcoded default', () => {
+    // Altitude review #2: the run doc records the cut that ACTUALLY gated it
+    // (fidelity.retrieval.candidate_k). A deployment that raised the knob to
+    // 64 must not see rank-43 rows misdiagnosed as "deeper than the cut".
+    const attributions = [row('new-13', 'vector-recall', ['context_recall'], atRank(43))];
+    const raised = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'whatif', candidateK: 64 });
+    expect(raised.find((e) => e.id === 'retriever-candidate-pool')).toBeUndefined(); // 43 < 64: the cut did not lose it
+    const raised2 = svc.buildEnvAdvice({
+      attributions: [row('new-9', 'vector-recall', ['context_recall'], atRank(80))],
+      runFacts: FACTS,
+      mode: 'whatif',
+      candidateK: 64
+    });
+    const pool = raised2.find((e) => e.id === 'retriever-candidate-pool');
+    expect(pool).toBeDefined(); // 80 > 64: the recorded cut DID lose it
+    expect(pool.why).toMatch(/cut \(64\)/); // the advice names the run's own cut, not a hardcoded 24
+  });
+
+  it('does not fire the pool rule when the passage ranked inside the default cut', () => {
+    const attributions = [row('new-1', 'vector-recall', ['context_recall'], atRank(5))];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    expect(out.find((e) => e.id === 'retriever-candidate-pool')).toBeUndefined();
+  });
+
+  it('tells the operator to LOOSEN the gate for ladder gate-cut rows (stage reranker, ladder applied)', () => {
+    // Review F3: a ladder gate-cut row — the per-row recommendation says
+    // "raise RERANKER_TOP_N". A rule that read that evidence as noise and
+    // prescribed tightening would invert the proven evidence and worsen the
+    // failures it names. The ladder gate is the discriminator: stage
+    // 'reranker' has TWO production meanings, and only the ladder-applied
+    // one is a gate cut.
+    const attributions = [
+      row('new-7', 'reranker', ['context_recall'], {
+        ladder_applied: true,
+        candidate_rank: null,
+        ladder_stage: 'reranker'
+      })
+    ];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    const rerank = out.find((e) => e.id === 'reranker-posture');
+    expect(rerank).toBeDefined();
+    expect(rerank.changes.map((c) => c.env)).toContain('RERANKER_TOP_N');
+    const topN = rerank.changes.find((c) => c.env === 'RERANKER_TOP_N');
+    expect(topN.direction).toBe('raise'); // the direction is a FIELD, not prose in the value slot
+    expect(rerank.targets).toContain('context_recall');
+  });
+
+  it('prescribes the STRATEGY SWITCH, not a dead knob turn, under adaptive (David 2026-10-27)', () => {
+    // Live: the advisor prescribed RERANKER_TOP_N/RERANKING_THRESHOLD on an
+    // adaptive deployment — under adaptive NEITHER knob is read, and the
+    // operator burned a benchmark cycle discovering the turn was dead.
+    const adaptive = {
+      ...FACTS,
+      declared_posture: { k: 20, fetch_k: 30, strategy: 'adaptive', top_n: 3, threshold: 0.75 }
+    };
+    const attributions = [
+      row('new-7', 'reranker', ['context_recall'], {
+        ladder_applied: true,
+        candidate_rank: null,
+        ladder_stage: 'reranker'
+      })
+    ];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: adaptive, mode: 'serve' });
+    const rerank = out.find((e) => e.id === 'reranker-posture');
+    expect(rerank).toBeDefined();
+    // The only change offered is the strategy itself.
+    expect(rerank.changes).toHaveLength(1);
+    expect(rerank.changes[0].env).toBe('RERANKING_STRATEGY');
+    expect(rerank.changes[0].direction).toBe('switch');
+    expect(rerank.changes.map((c) => c.env)).not.toContain('RERANKER_TOP_N');
+    expect(rerank.changes.map((c) => c.env)).not.toContain('RERANKING_THRESHOLD');
+    // The why names the declared strategy and says the knobs are dead.
+    expect(rerank.why).toMatch(/RERANKING_STRATEGY=adaptive/);
+    expect(rerank.why).toMatch(/NEITHER RERANKER_TOP_N nor RERANKING_THRESHOLD/);
+    expect(rerank.apply).toMatch(/switch RERANKING_STRATEGY/i);
+  });
+
+  it('keeps only the knob the declared strategy reads (slice obeys TOP_N, not THRESHOLD)', () => {
+    const slice = { ...FACTS, declared_posture: { k: 20, fetch_k: 30, strategy: 'slice', top_n: 3, threshold: 0.75 } };
+    const attributions = [
+      row('new-7', 'reranker', ['context_recall'], {
+        ladder_applied: true,
+        candidate_rank: null,
+        ladder_stage: 'reranker'
+      })
+    ];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: slice, mode: 'serve' });
+    const rerank = out.find((e) => e.id === 'reranker-posture');
+    expect(rerank).toBeDefined();
+    expect(rerank.changes.map((c) => c.env)).toEqual(['RERANKER_TOP_N']);
+    expect(rerank.why).toMatch(/RERANKING_STRATEGY=slice/);
+    expect(rerank.why).toMatch(/RERANKER_TOP_N is the knob that actually bites/);
+    // The inert knob is named as inert, not silently dropped.
+    expect(rerank.why).toMatch(/inert/);
+    expect(rerank.apply).toMatch(/turn RERANKER_TOP_N/i);
+  });
+
+  it('does NOT prescribe a direction for the NOISE-path reranker rows (stage reranker, ladder silent)', () => {
+    // Repeat review #1: attributeFailures stages a noise-ranked-above-signal
+    // row 'reranker' too (context_utilization failed, recall passed — the
+    // ladder never ran). Reading that stage as a gate cut would prescribe
+    // RAISING the gate and worsen the very noise the row reported.
+    const attributions = [row('new-25', 'reranker', ['context_utilization'])];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    expect(out.find((e) => e.id === 'reranker-posture')).toBeUndefined();
+  });
+
+  it('merges both gate directions into ONE entry stating the tension', () => {
+    const attributions = [
+      // gate cut the passage → loosen
+      row('new-7', 'reranker', ['context_recall'], {
+        ladder_applied: true,
+        candidate_rank: null,
+        ladder_stage: 'reranker'
+      }),
+      // noise reached the context → tighten (production-realistic stage)
+      row('new-22', 'retrieved', ['noise_sensitivity'])
+    ];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    const rerank = out.filter((e) => e.id === 'reranker-posture');
+    expect(rerank).toHaveLength(1); // one posture, not two contradictory knob changes
+    expect(rerank[0].trade_off).toMatch(/noise/i);
+    expect(rerank[0].trade_off).toMatch(/completeness|context_recall|precision/i);
+    expect(rerank[0].why).toMatch(/BOTH/);
+  });
+
+  it('never names a judge/corpus row in the posture entry — the no-change entries own them', () => {
+    // Repeat review #3: a judge-staged row failing noise_sensitivity used to
+    // appear in BOTH the posture entry ("tighten") and the no-change entry
+    // ("no configuration change") — one table, two contradictory sentences.
+    const attributions = [row('new-2', 'judge', ['noise_sensitivity'])];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    expect(out.find((e) => e.id === 'no-env-change-judge')).toBeDefined();
+    const posture = out.find((e) => e.id === 'reranker-posture');
+    expect(posture === undefined || !posture.rows.includes('new-2')).toBe(true);
+  });
+
+  it('excludes retrieved-stage rows from the reranker entry — their passage was delivered', () => {
+    // Review F3: a 'retrieved' row's expected passage REACHED the context;
+    // its failure is answer-side (R3) or judge-side (R5), never the gate.
+    const attributions = [row('new-30', 'retrieved', ['factual_correctness', 'answer_correctness'])];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    const rerank = out.find((e) => e.id === 'reranker-posture');
+    expect(rerank).toBeUndefined();
+    expect(out.find((e) => e.id === 'no-env-change-judge')).toBeUndefined();
+  });
+
+  it('says NO env change for corpus and judge stages, and prescribes none for them', () => {
+    const attributions = [
+      row('new-2', 'judge', ['context_entities_recall']),
+      row('new-3', 'corpus', ['context_recall'])
+    ];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    expect(out.find((e) => e.id === 'no-env-change-corpus')).toBeDefined();
+    expect(out.find((e) => e.id === 'no-env-change-judge')).toBeDefined();
+    // No config rule may name these rows.
+    for (const entry of out.filter((e) => e.id.startsWith('no-env-change') === false)) {
+      for (const id of ['new-2', 'new-3']) {
+        expect(entry.rows || []).not.toContain(id);
+      }
+    }
+  });
+
+  it('recommends the grounding clause for llm rows and cites the run headroom', () => {
+    const attributions = [row('new-16', 'llm', ['faithfulness', 'factual_correctness'])];
+    const out = svc.buildEnvAdvice({
+      attributions,
+      runFacts: { rows: 50, abstentions: 0, mean_answer_chars: 1283 },
+      mode: 'serve'
+    });
+    const g = out.find((e) => e.id === 'grounding-prompt');
+    expect(g).toBeDefined();
+    expect(g.changes[0].env).toBe('CHATQNA_SYSTEM_PROMPT');
+    expect(g.why).toMatch(/0 abstention/);
+    expect(g.why).toMatch(/1,283/); // toLocaleString('en-US') — deterministic grouping
+    expect(g.trade_off).toMatch(/abstention|brevity|coverage/i);
+  });
+
+  it('fires the abstention rule only when the run actually abstained', () => {
+    const none = svc.buildEnvAdvice({
+      attributions: [row('new-1', 'llm', ['answer_relevancy'])],
+      runFacts: { rows: 50, abstentions: 0, mean_answer_chars: 900 },
+      mode: 'serve'
+    });
+    expect(none.find((e) => e.id === 'abstention-contract')).toBeUndefined();
+    const some = svc.buildEnvAdvice({
+      attributions: [row('new-9', 'abstention', ['answer_relevancy'])],
+      runFacts: { rows: 50, abstentions: 4, mean_answer_chars: 400 },
+      mode: 'serve'
+    });
+    const a = some.find((e) => e.id === 'abstention-contract');
+    expect(a).toBeDefined();
+    expect(a.changes.map((c) => c.env)).toContain('CHATQNA_ABSTENTION_INSTRUCTIONS');
+    expect(a.trade_off).toMatch(/hallucination|faithfulness/i);
+  });
+
+  it('escalates to the embedding-model note when the K the evidence demands crosses ~100', () => {
+    // rank 99 → K target 124 ≥ 100: widening the net that far retrieves
+    // mostly noise; the index itself is the honest lever.
+    const attributions = [row('new-47', 'vector-recall', ['context_recall'], atRank(99))];
+    const out = svc.buildEnvAdvice({ attributions, runFacts: FACTS, mode: 'serve' });
+    const esc = out.find((e) => e.id === 'embedding-escalation');
+    expect(esc).toBeDefined();
+    expect(esc.trade_off).toMatch(/re-?index|re-?ingest/i);
+    // And a mid-range rank does NOT escalate — the K raise is still the
+    // proportionate move there.
+    const mid = svc.buildEnvAdvice({
+      attributions: [row('new-13', 'vector-recall', ['context_recall'], atRank(43))],
+      runFacts: FACTS,
+      mode: 'serve'
+    });
+    expect(mid.find((e) => e.id === 'embedding-escalation')).toBeUndefined();
+  });
+
+  it('every entry is well-formed: known env names, known metrics, all four fields', () => {
+    const KNOWN_ENV = new Set([
+      'RETRIEVER_ARANGO_K',
+      'RETRIEVER_ARANGO_FETCH_K',
+      'OKF_RAGAS_CANDIDATE_K',
+      'RERANKER_TOP_N',
+      'RERANKING_THRESHOLD',
+      'CHATQNA_SYSTEM_PROMPT',
+      'CHATQNA_ABSTENTION_INSTRUCTIONS',
+      'CHATQNA_ENFORCE_ABSTENTION',
+      'EMBEDDING_MODEL_ID'
+    ]);
+    // The canonical list, not a parallel literal (reuse review #4): a metric
+    // added to ALL_METRICS must be accepted here by construction.
+    const KNOWN_METRICS = new Set(svc.ALL_METRICS);
+    const attributions = [
+      row('new-13', 'vector-recall', ['context_recall'], atRank(43)),
+      // Production-realistic stage — 'answered' is not a value
+      // attributeFailures ever emits (repeat review #6).
+      row('new-22', 'retrieved', ['noise_sensitivity']),
+      row('new-16', 'llm', ['faithfulness']),
+      row('new-9', 'abstention', ['answer_relevancy']),
+      row('new-2', 'judge', ['context_entities_recall'])
+    ];
+    const out = svc.buildEnvAdvice({
+      attributions,
+      runFacts: { rows: 50, abstentions: 4, mean_answer_chars: 1200 },
+      mode: 'serve'
+    });
+    expect(out.length).toBeGreaterThan(0);
+    for (const e of out) {
+      expect(e.component).toBeTruthy();
+      expect(e.why).toBeTruthy();
+      expect(e.trade_off).toBeTruthy();
+      expect(e.apply).toBeTruthy();
+      expect(e.verify).toBeTruthy();
+      for (const t of e.targets || []) expect(KNOWN_METRICS.has(t)).toBe(true);
+      for (const c of e.changes || []) expect(KNOWN_ENV.has(c.env)).toBe(true);
+    }
   });
 });

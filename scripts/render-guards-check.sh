@@ -548,8 +548,8 @@ expect_fail "a kubeletToolsMirror with a scheme-position colon" \
 # The delivery pins cover the documented grammar's full cross product
 # (scheme? x port? x prefix?) — bare host; scheme-less with port,
 # prefix, or both; scheme-ful without port or prefix (the default);
-# scheme-ful with port; scheme-ful with prefix; and scheme-ful with
-# both (the Nexus/Artifactory topology) — plus the uppercase-scheme
+# scheme-ful with port; scheme-ful with prefix (the Nexus/Artifactory
+# topology); and scheme-ful with both — plus the uppercase-scheme
 # variant the regex admits for RFC 3986's case-insensitive scheme
 # names. The schema cases above pin only
 # the key name — helm's schema error embeds the whole pattern, so a

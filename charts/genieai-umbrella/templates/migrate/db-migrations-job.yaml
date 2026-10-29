@@ -3,7 +3,7 @@
 {{- $servicesBackend := $services.backend | default dict -}}
 {{- $data := .Values.data | default dict -}}
 {{- $dataArangodb := $data.arangodb | default dict -}}
-{{- if $servicesBackend.enabled -}}
+{{- if and $servicesBackend.enabled $dataArangodb.enabled -}}
 {{- /*
 The migrations image (components/gov-chat-backend/Dockerfile.migrations)
 creates the ArangoDB collections the backend's user provisioning writes
@@ -12,6 +12,13 @@ to. The helm hook ordering gates the backend on this Job's success
 the Keycloak convergence Job (weight 10) on install and upgrade, and
 the backend starts unconditionally but fails its first authenticated
 request without the collections, which is what this Job prevents.
+
+The Job is gated on arangodb.enabled TOO: without ArangoDB there is
+nothing to migrate, and a Job that runs anyway would lose its init
+container's env rows while the workload survived — the clearable-blocks
+gate rightly calls that an unowned drop. With ArangoDB cleared the
+whole Job vanishes; the backend then fails its own named connection
+error on first query.
 */ -}}
 {{- $ns := .Values.namespace -}}
 {{- /* Same precedence as the service factory: the documented install

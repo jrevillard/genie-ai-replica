@@ -543,13 +543,16 @@ def _get_translation_model_id() -> str | None:
     return TRANSLATION_MODEL_ID or get_model_id(_TRANSLATION_DISCOVERY_ENDPOINT)
 
 
-def _is_translategemma() -> bool:
+def _is_translategemma(translation_model_id: str | None = None) -> bool:
     """True when the active translation model is TranslateGemma.
 
     TranslateGemma uses the completions API with a pre-formatted prompt;
-    other models use the chat completions API.
+    other models use the chat completions API. Callers that already resolved
+    the id pass it in, so one read decides the payload AND the response
+    parse (a second read would re-probe and could disagree).
     """
-    translation_model_id = _get_translation_model_id()
+    if translation_model_id is None:
+        translation_model_id = _get_translation_model_id()
     return bool(translation_model_id) and "translategemma" in translation_model_id.lower()
 
 
@@ -1959,6 +1962,10 @@ def _count_tokens(text: str) -> int:
         coerced = coerce_int(count)
         if coerced is None:
             raise ValueError(f"/tokenize count is not an integer: {payload!r}")
+        if coerced < 0:
+            # 0 is an honest count for an empty piece; a negative count is a
+            # lie that would silently defeat the overflow guard.
+            raise ValueError(f"/tokenize count is negative: {payload!r}")
         span.set_attribute("token.count", coerced)
         return coerced
 
@@ -3676,8 +3683,12 @@ class ChatQnAService:
         if isinstance(history, str):
             return await self._translate_text_chunk(history, canonical_target, source_lang_code=source_lang_code)
 
+        # One derivation per call: the payload, the log line and the response
+        # parse must branch on the SAME decision (and the same id).
+        translation_model_id = _get_translation_model_id()
+        translategemma = _is_translategemma(translation_model_id)
         # Build payload based on model type
-        if _is_translategemma():
+        if translategemma:
             # Use completions API with pre-formatted prompt (vLLM v0.10.0 cannot
             # pass structured content through chat completions to TranslateGemma's template)
             prompt = self._build_translategemma_prompt(
@@ -3692,7 +3703,7 @@ class ChatQnAService:
                 )
                 return flattened_history_string
             payload = {
-                "model": _get_translation_model_id(),
+                "model": translation_model_id,
                 "prompt": prompt,
                 "temperature": 0.0,
                 "max_tokens": output_cap,
@@ -3709,7 +3720,7 @@ class ChatQnAService:
             url = TRANSLATION_LLM_URL
 
         if logflag:
-            svc = "TranslateGemma" if _is_translategemma() else "generic"
+            svc = "TranslateGemma" if translategemma else "generic"
             logger.debug(f"Payload for translation service ({svc}): {payload}")
 
         try:
@@ -3721,7 +3732,7 @@ class ChatQnAService:
                 )
                 response.raise_for_status()
                 response_data = response.json()
-                if _is_translategemma():
+                if translategemma:
                     translated_blob = response_data["choices"][0]["text"]
                 else:
                     translated_blob = response_data["choices"][0]["message"]["content"]
@@ -3936,9 +3947,10 @@ class ChatQnAService:
             target_lang: The language name the map gives for that code.
             source_lang_code: Source ISO language code (e.g. "en"). Defaults to "en".
         """
-        # One derivation per call: the parse below must branch on the SAME
-        # decision that shaped the payload, not on a second (re-probed) read.
-        translategemma = _is_translategemma()
+        # One derivation per call: the payload, the log line and the response
+        # parse all branch on this single read.
+        translation_model_id = _get_translation_model_id()
+        translategemma = _is_translategemma(translation_model_id)
         if translategemma:
             target_lang_code = canonical_code
             prompt = self._build_translategemma_prompt(
@@ -3947,7 +3959,7 @@ class ChatQnAService:
                 target_lang_code=target_lang_code,
             )
             payload = {
-                "model": _get_translation_model_id(),
+                "model": translation_model_id,
                 "prompt": prompt,
                 "temperature": 0.0,
                 "max_tokens": _translation_base_cap(text),
@@ -3971,7 +3983,7 @@ class ChatQnAService:
             url = TRANSLATION_LLM_URL
 
         if logflag:
-            logger.debug(f"Translation payload ({'TranslateGemma' if _is_translategemma() else 'generic'}): {payload}")
+            logger.debug(f"Translation payload ({'TranslateGemma' if translategemma else 'generic'}): {payload}")
 
         try:
             async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:

@@ -961,14 +961,15 @@ class TestRetrieverInitializeLlmAutoDetect:
         mock_get.assert_not_called()
 
     def test_get_llm_recovers_to_vllm_when_openai_init_failed(self):
-        """Transient OpenAI-key failure at boot leaves llm unset; the first
-        _get_llm call degrades to the vLLM summarizer instead of handing
-        back None (an AttributeError on every retrieve)."""
+        """Transient OpenAI-key failure at boot leaves the llm attribute
+        UNASSIGNED (never None): the first _get_llm call must degrade to the
+        vLLM summarizer instead of AttributeError-ing on the missing
+        attribute or handing back None."""
         from retriever.genieai_retriever_arangodb import ChatOpenAI
 
         r = self._r()
         ChatOpenAI.reset_mock()
-        r.llm = None
+        assert not hasattr(r, "llm")  # production never assigns it on that path
 
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": [{"id": "fallback-model"}]}

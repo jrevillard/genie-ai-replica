@@ -95,6 +95,26 @@ class TestCountTokens:
         ):
             assert m._count_tokens("x") == 12
 
+    @pytest.mark.parametrize("count,expected", [(0, 0), (-1, None)])
+    def test_non_positive_count_contract(self, count, expected):
+        """0 is an honest count for an empty piece; a negative count from a
+        broken proxy is a lie that would silently defeat the overflow guard —
+        it must raise, never flow into the budget."""
+        import chatqna.genieai_chatqna as m
+
+        post = MagicMock(return_value=_resp({"count": count}))
+        with (
+            patch.object(m, "_LLM_DISCOVERY_ENDPOINT", "http://vllm:8000"),
+            patch.object(m, "_get_llm_model", return_value="m"),
+            patch.dict("os.environ", {"VLLM_API_KEY": ""}, clear=False),
+            patch.object(m.httpx, "post", post),
+        ):
+            if expected is None:
+                with pytest.raises(ValueError):
+                    m._count_tokens("x")
+            else:
+                assert m._count_tokens("x") == expected
+
     def test_count_tokens_emits_a_span(self, captured_spans):
         """Each count is visible in traces — the eventual offload/batching
         work needs the per-call cost on the waterfall."""

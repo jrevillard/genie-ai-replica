@@ -208,6 +208,7 @@ EXPECTED_PATH=""
 STRAY_PATH=""
 RESTORE_ARMED="false"
 RESTORE_RUNNING="false"
+RESTORE_ATTEMPTED="false"
 PENDING_SIGNAL=""
 
 # The restore stays armed until it SUCCEEDS, so a signal that lands mid-run
@@ -239,10 +240,14 @@ restore() {
     fi
     if [ "$RESTORE_ARMED" != "true" ]; then
         scrub_pw_file
-        # Nothing is armed: there is no recovery evidence in the test's work
-        # dir (an archive in it would have armed the restore), so the dir can
-        # go. A failed arm (the tar that never completed) leaves no residue.
-        if [ -n "${TEST_WORK_DIR:-}" ]; then
+        # No restore is armed. When no restore ever started, the work dir
+        # holds no recovery evidence (an archive in it would have armed the
+        # restore) and can go — a failed archive leaves no residue. But when
+        # a restore RAN and failed, its archive is on purpose still in the
+        # work dir: the failure path printed hand-recovery instructions
+        # pointing at it, and the next restore() call (the EXIT trap's) must
+        # not destroy what it told the operator to use.
+        if [ "$RESTORE_ATTEMPTED" != "true" ] && [ -n "${TEST_WORK_DIR:-}" ]; then
             ansible_run raw -i "$INVENTORY" "$HOST" -b -m shell \
                 -a "rm -rf '$TEST_WORK_DIR'" >/dev/null 2>&1 || true
         fi
@@ -406,15 +411,19 @@ remote_sh "test -d '$KEYCLOAK_THEME_DIR'" >/dev/null ||
 # The test's scratch files (the tree archive, the single-file backups) live in
 # a directory under CONFIG_PARENT, not in predictable /tmp paths: this test
 # writes them with elevated rights, and on a multi-user host a local user who
-# guesses the path could pre-create it and steer the write. A directory created
-# here and kept root-owned does not let them.
+# guesses the path could pre-create it and steer the write. The directory is
+# claimed with root ownership explicitly — mkdir -p alone would silently keep
+# the attacker's ownership of a pre-created directory. (The chown is allowed
+# to fail where the test runs unprivileged; there the directory is the
+# operator's own.)
 TEST_WORK_DIR="$CONFIG_PARENT/.config_bootstrap_test"
-remote_sh "mkdir -p '$TEST_WORK_DIR' && chmod 700 '$TEST_WORK_DIR'" ||
+remote_sh "mkdir -p '$TEST_WORK_DIR' && chmod 700 '$TEST_WORK_DIR' && chown root:root '$TEST_WORK_DIR' 2>/dev/null || true" ||
     die "could not create the test scratch directory $TEST_WORK_DIR on the host"
 BACKUP_ARCHIVE="$TEST_WORK_DIR/backup.tar"
 remote_sh "tar -cpf '$BACKUP_ARCHIVE' -C '$CONFIG_PARENT' '$(basename "$CONFIG_DIR")'" ||
     fail "could not archive the config tree under $CONFIG_DIR to $BACKUP_ARCHIVE"
 RESTORE_ARMED="true"
+RESTORE_ATTEMPTED="true"
 pass "backed up the config tree under $CONFIG_DIR to $BACKUP_ARCHIVE"
 
 # --- run 1: populate ----------------------------------------------------------
@@ -526,7 +535,11 @@ snapshot() {
 # evidence could not be gathered, and the run stops rather than passing
 # without the check.
 SNAP_RC=0
-HOST_THEME="$(snapshot "[ -f '$CONFIG_PARENT/.env' ] || exit 3; grep -E '^KEYCLOAK_THEME=' '$CONFIG_PARENT/.env' | tail -n 1 | cut -d= -f2-" 2>/dev/null)" || SNAP_RC=$?
+# The missing-.env case must reach snapshot()'s __RC__ line (an `exit 3`
+# would kill the remote shell before it), so the code travels as the LAST
+# command's status: 3 = no rendered environment, 1 = env present without a
+# theme line (the legitimate skip), 2 = broken channel (snapshot's own).
+HOST_THEME="$(snapshot "__e=0; [ -f '$CONFIG_PARENT/.env' ] || __e=3; if [ \$__e -eq 0 ]; then grep -E '^KEYCLOAK_THEME=' '$CONFIG_PARENT/.env' | tail -n 1 | cut -d= -f2-; __e=\$?; fi; (exit \$__e)" 2>/dev/null)" || SNAP_RC=$?
 if [ "$SNAP_RC" -eq 2 ] || [ "$SNAP_RC" -eq 3 ]; then
     die "could not read the rendered environment on the host (the configured-theme check has no evidence)"
 fi
@@ -701,7 +714,7 @@ else
     CONTRACT3_LOG="/tmp/config_bootstrap_contract3_$$.log"
     if run_role main > "$CONTRACT3_LOG" 2>&1; then
         rm -f "$CONTRACT3_LOG"
-        fail "the role accepted branch main on a host this branch does not belong to - no guard fired"
+        fail "the role accepted branch main - no guard fired. Either the theme/brand guards regressed, or this deployment's theme and brand both match main's (then main is not a foreign branch here and contract 3 has nothing to refuse)"
     fi
     if grep -qE "does not ship the Keycloak theme|ships the brand|brand file that could not be read" "$CONTRACT3_LOG"; then
         pass "a guard refused branch main"

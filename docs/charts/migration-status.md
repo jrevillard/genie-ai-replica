@@ -614,6 +614,18 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **The wall passed; the next hook broke (0.2.128)** — the 0.2.127
+  upgrade created release v12 and applied every workload (the 1 MiB fix
+  verified live), then failed on a SECOND chart bug the first live run
+  in 93 versions exposed: the db-migrations hook's wait-for-arango
+  probe curls `/_api/version` anonymously and `curl -sf` fails on the
+  401 an auth-enabled ArangoDB answers — the probe can never see the
+  200 it waits for, so every upgrade attempt died in Init:Error. The
+  manual migration job (3 days old, Completed) proves the migrations
+  themselves work. Fixed at the source: the init container carries the
+  same arango-root-secret credentials the migration run uses and the
+  probe curls with `-u` (live-verified from inside the stuck pod:
+  anonymous 401, authed 200). No other anonymous probes exist.
 - **The 1 MiB wall and the genieai-assets cargo chart (0.2.127)** — the
   first live-validation attempt on minikube (restarted for the operator's
   sequence) failed the upgrade with `Secret "sh.helm.release.v1.genieai.v12"

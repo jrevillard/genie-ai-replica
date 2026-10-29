@@ -16,7 +16,10 @@ const dbService = require('/app/shared-lib/db-connection-service');
 
 const runKey = process.argv[2];
 const metric = process.argv[3] || 'context_entities_recall';
-const metrics = metric.split(',').map((x) => x.trim()).filter(Boolean);
+const metrics = metric
+  .split(',')
+  .map((x) => x.trim())
+  .filter(Boolean);
 const SIDECAR = process.env.OKF_RAGAS_URL || 'http://ragas-service:8090';
 
 function reqJson(method, url, body) {
@@ -30,6 +33,7 @@ function reqJson(method, url, body) {
         method,
         headers: {
           'Content-Type': 'application/json',
+          // The sidecar's fail-closed service-to-service gate (app.py:49).
           'x-ragas-secret': process.env.RAGAS_INTERNAL_SECRET || process.env.OKF_INTERNAL_SECRET || ''
         }
       },
@@ -40,7 +44,7 @@ function reqJson(method, url, body) {
           try {
             resolve({ status: res.statusCode, body: JSON.parse(d) });
           } catch {
-            resolve({ status: res.statusCode, body: { raw: d.slice(0, 300) } });
+            resolve({ status: res.statusCode, body: { raw: d.slice(0, 400) } });
           }
         });
       }
@@ -97,7 +101,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     process.exit(1);
   }
   const pq = (job.result && job.result.per_query) || [];
-  const scored = pq.filter((q) => typeof q[metric] === "number" && !Number.isNaN(q[metric]));
+  const scored = pq.filter((q) => typeof q[metric] === 'number' && !Number.isNaN(q[metric]));
   const mean = scored.length ? scored.reduce((a, b) => a + b[metric], 0) / scored.length : null;
   console.log(`\nscored ${scored.length}/${pq.length}  mean=${mean === null ? '-' : mean.toFixed(4)}`);
   const old = rows.map((r) => (r.metrics || {})[metric]);
@@ -120,7 +124,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   moved
     .sort((a, b) => Math.abs(b.d) - Math.abs(a.d))
     .slice(0, 15)
-    .forEach((x) => console.log(`  ${x.id}: ${x.ov.toFixed(2)} -> ${x.nv.toFixed(2)} (${x.d >= 0 ? '+' : ''}${x.d.toFixed(2)})`));
+    .forEach((x) =>
+      console.log(`  ${x.id}: ${x.ov.toFixed(2)} -> ${x.nv.toFixed(2)} (${x.d >= 0 ? '+' : ''}${x.d.toFixed(2)})`)
+    );
   console.log('\njob result stored at /tmp/env-judge-' + runKey + '.json');
   require('fs').writeFileSync('/tmp/env-judge-' + runKey + '.json', JSON.stringify(pq));
   process.exit(0);

@@ -31,7 +31,6 @@ const axios = require('axios');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
-const { isArangoNotFound } = require('./arango-errors');
 // Single source of truth for the tag ceilings — the SAME constants the write
 // path validates against. See the block at the `cap()` definition for why the
 // suggester cannot be allowed to exceed them.
@@ -1433,54 +1432,6 @@ async function getFrontmatter(repoId) {
   return [];
 }
 
-async function getFrontmatterSummary(repoId) {
-  const db = await dbService.getConnection();
-  const fm = await readFrontmatterFromRepoDoc(repoId);
-  if (fm) {
-    return {
-      _key: repoId,
-      topic_count: Array.isArray(fm.topic) ? fm.topic.length : 0,
-      entity_count: Array.isArray(fm.entity) ? fm.entity.length : 0,
-      keyword_count: Array.isArray(fm.keyword) ? fm.keyword.length : 0,
-      forbidden_count: Array.isArray(fm.forbidden) ? fm.forbidden.length : 0,
-      summary: fm.summary || '',
-      scope: fm.scope || '',
-      version: fm.version,
-      updated_at: fm.updated_at,
-      updated_by: fm.updated_by
-    };
-  }
-  // Migration-window fall-through: the old summary row still has
-  // the combination vectors. The new retriever doesn't need the
-  // combination vectors (it embeds lazily on first read), so this
-  // fall-through returns a minimal summary derived from the count
-  // columns. The retriever ignores the missing combination vectors
-  // and computes them lazily.
-  if (IS_FRONTMATTER_COLLECTION_RETIRED) {
-    await ensureCollections(db);
-    try {
-      const doc = await db.collection(FRONTMATTER_SUMMARY_COLLECTION).document(repoId);
-      return {
-        _key: repoId,
-        topic_count: doc.topic_count || 0,
-        entity_count: doc.entity_count || 0,
-        keyword_count: doc.keyword_count || 0,
-        forbidden_count: doc.forbidden_count || 0,
-        // Combination vectors intentionally omitted — the new
-        // retriever computes them lazily. A consumer that needs
-        // the OLD combination vectors reads from the old
-        // collection directly via the migration script.
-        version: doc.version,
-        updated_at: doc.updated_at
-      };
-    } catch (err) {
-      if (isArangoNotFound(err)) return null;
-      throw err;
-    }
-  }
-  return null;
-}
-
 // Pure helper: frontmatter object → row list (the same shape the
 // old collection stored: one row per (field, value) with approved_at
 // pulled from the per-row _approved list). Used by getFrontmatter
@@ -1553,7 +1504,6 @@ module.exports = {
   vllmChatCompletions,
   // reader
   getFrontmatter,
-  getFrontmatterSummary,
   readFrontmatterFromRepoDoc,
   // constants (for tests)
   FRONTMATTER_COLLECTION,

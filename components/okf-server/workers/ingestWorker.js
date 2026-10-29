@@ -1489,6 +1489,7 @@ function start() {
     logger.info('Ingest worker DISABLED (OKF_INGEST_WORKER_ENABLED=false)');
     return;
   }
+  _stopping = false;
   const lanes = laneCount();
   logger.info('Ingest worker starting', {
     interval_ms: intervalMs(),
@@ -1538,8 +1539,13 @@ function start() {
         // clause orders by updated_at ASC).
       } finally {
         if (lanesBusyCounter) lanesBusyCounter.add(-1);
-        const i = _drainTimers.indexOf(poll);
-        _drainTimers[i >= 0 ? i : _drainTimers.length] = setTimeout(poll, intervalMs());
+        // stop() must be terminal: an in-flight cycle that settles AFTER
+        // stop() never re-arms its lane (otherwise stop leaks one more
+        // cycle and one more timer).
+        if (!_stopping) {
+          const i = _drainTimers.indexOf(poll);
+          _drainTimers[i >= 0 ? i : _drainTimers.length] = setTimeout(poll, intervalMs());
+        }
       }
     };
     poll();
@@ -1560,7 +1566,7 @@ function start() {
       logger.error('Ingest worker sweep error', { error: err.message });
     } finally {
       _sweeping = false;
-      _sweepTimer = setTimeout(sweep, sweepIntervalMs());
+      if (!_stopping) _sweepTimer = setTimeout(sweep, sweepIntervalMs());
     }
   };
   _sweepTimer = setTimeout(sweep, sweepIntervalMs());
@@ -1572,7 +1578,12 @@ function start() {
   });
 }
 
+// True between stop() and the next start(): in-flight cycles check it so
+// stop() is terminal (no re-arm-after-stop timers).
+let _stopping = false;
+
 function stop() {
+  _stopping = true;
   for (const t of _drainTimers || []) clearTimeout(t);
   _drainTimers = [];
   if (_sweepTimer) clearTimeout(_sweepTimer);

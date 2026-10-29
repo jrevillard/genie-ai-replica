@@ -3,6 +3,7 @@ const fileController = require('../controllers/fileController');
 const appConfig = require('../config/appConfig');
 const { uploadSingle, uploadMultiple, validateFiles, handleMulterError } = require('../middlewares/fileUpload');
 const { authenticateToken, authorizeRole } = require('../middlewares/keycloak-auth-middleware');
+const { ADMIN_ONLY, DOCUMENT_LIFECYCLE, SERVICE_CALLBACK, INGESTION_LOG_READ } = require('../config/rolePolicy');
 
 const router = express.Router();
 
@@ -62,7 +63,7 @@ router.use(authenticateToken);
 // warn line in the log — proof this handler was never reached.
 router.post(
   '/upload',
-  authorizeRole(['Admin']),
+  authorizeRole(ADMIN_ONLY),
   uploadSingle,
   handleMulterError,
   validateFiles,
@@ -115,7 +116,7 @@ router.post(
 // or it becomes a 500 from the global handler.
 router.post(
   '/uploads',
-  authorizeRole(['Admin']),
+  authorizeRole(ADMIN_ONLY),
   uploadMultiple,
   handleMulterError,
   validateFiles,
@@ -150,7 +151,7 @@ router.post(
  *       '403':
  *         description: Forbidden - Admin role required
  */
-router.post('/upload-link', authorizeRole(['Admin']), fileController.uploadLink);
+router.post('/upload-link', authorizeRole(ADMIN_ONLY), fileController.uploadLink);
 
 /**
  * @swagger
@@ -201,7 +202,7 @@ router.post('/upload-link', authorizeRole(['Admin']), fileController.uploadLink)
  *       '403':
  *         description: Forbidden - Admin role required
  */
-router.post('/crawl/schedule', authorizeRole(['Admin']), fileController.scheduleSiteCrawl);
+router.post('/crawl/schedule', authorizeRole(ADMIN_ONLY), fileController.scheduleSiteCrawl);
 
 /**
  * @swagger
@@ -379,7 +380,7 @@ router.get('/:fileId', fileController.getMetadata);
  *       '404':
  *         description: Job not found
  */
-router.get('/:fileId/crawl-job', authorizeRole(['Admin']), fileController.getCrawlJob);
+router.get('/:fileId/crawl-job', authorizeRole(ADMIN_ONLY), fileController.getCrawlJob);
 
 /**
  * @swagger
@@ -404,7 +405,7 @@ router.get('/:fileId/crawl-job', authorizeRole(['Admin']), fileController.getCra
  *       '403':
  *         description: Forbidden - Admin role required
  */
-router.get('/:fileId/crawl-metrics', authorizeRole(['Admin']), fileController.getCrawlMetrics);
+router.get('/:fileId/crawl-metrics', authorizeRole(ADMIN_ONLY), fileController.getCrawlMetrics);
 
 /**
  * @swagger
@@ -429,7 +430,7 @@ router.get('/:fileId/crawl-metrics', authorizeRole(['Admin']), fileController.ge
  *       '403':
  *         description: Forbidden - Admin role required
  */
-router.get('/:fileId/crawl-log', authorizeRole(['Admin']), fileController.getCrawlLogs);
+router.get('/:fileId/crawl-log', authorizeRole(ADMIN_ONLY), fileController.getCrawlLogs);
 
 /**
  * @swagger
@@ -456,7 +457,7 @@ router.get('/:fileId/crawl-log', authorizeRole(['Admin']), fileController.getCra
  *       '404':
  *         description: Job not found
  */
-router.post('/:fileId/kill-crawl', authorizeRole(['Admin']), fileController.killCrawlTask);
+router.post('/:fileId/kill-crawl', authorizeRole(ADMIN_ONLY), fileController.killCrawlTask);
 
 /**
  * @swagger
@@ -483,7 +484,7 @@ router.post('/:fileId/kill-crawl', authorizeRole(['Admin']), fileController.kill
  *       '404':
  *         description: Job not found
  */
-router.post('/:fileId/kill-ingest', authorizeRole(['Admin']), fileController.killIngestion);
+router.post('/:fileId/kill-ingest', authorizeRole(ADMIN_ONLY), fileController.killIngestion);
 
 /**
  * @swagger
@@ -616,7 +617,7 @@ router.post('/downloads', fileController.downloadMultipleFiles);
 // Story #978 lifecycle: the okf-server service account deletes SUPERSEDED
 // bundle zips at publish (one live bundle per repo) — same trust as the
 // ingest-bundle route above.
-router.delete('/:fileId', authorizeRole(['Admin', 'okf-service']), fileController.deleteFile);
+router.delete('/:fileId', authorizeRole(DOCUMENT_LIFECYCLE), fileController.deleteFile);
 
 /**
  * @swagger
@@ -646,7 +647,7 @@ router.delete('/:fileId', authorizeRole(['Admin', 'okf-service']), fileControlle
  *       '401':
  *         description: Unauthorized
  */
-router.delete('/', authorizeRole(['Admin']), fileController.deleteMultipleFiles);
+router.delete('/', authorizeRole(ADMIN_ONLY), fileController.deleteMultipleFiles);
 
 /**
  * @swagger
@@ -692,8 +693,7 @@ router.delete('/', authorizeRole(['Admin']), fileController.deleteMultipleFiles)
 // already permitted the same service account. This restores the intended
 // role; it is not an admin escalation (mapRole maps okf-service to exactly
 // that scalar — it holds no admin composite).
-const UPDATE_FILE_ROLES = ['Admin', 'okf-service'];
-router.patch('/:fileId', authorizeRole(UPDATE_FILE_ROLES), fileController.updateFile);
+router.patch('/:fileId', authorizeRole(DOCUMENT_LIFECYCLE), fileController.updateFile);
 
 /**
  * @swagger
@@ -723,7 +723,7 @@ router.patch('/:fileId', authorizeRole(UPDATE_FILE_ROLES), fileController.update
 // okf-service allowed (Story 2.9.6/2.9.4): the OKF orchestrator's worker owns
 // draining per-concept Pending files — it authenticates as the okf-server
 // service client (okf-service role), same as the enqueue route below.
-router.post('/:fileId/ingest', authorizeRole(['Admin', 'okf-service']), fileController.ingestFile);
+router.post('/:fileId/ingest', authorizeRole(DOCUMENT_LIFECYCLE), fileController.ingestFile);
 
 /**
  * @swagger
@@ -752,7 +752,7 @@ router.post('/:fileId/ingest', authorizeRole(['Admin', 'okf-service']), fileCont
  */
 // okf-service allowed: the 2.9.4 orphan sweeper retracts chunks via the service
 // client; retracts carry the file's graph_name (G5 — never the wrong graph).
-router.post('/:fileId/retract', authorizeRole(['Admin', 'okf-service']), fileController.retractFile);
+router.post('/:fileId/retract', authorizeRole(DOCUMENT_LIFECYCLE), fileController.retractFile);
 
 /**
  * @swagger
@@ -801,7 +801,7 @@ router.post('/:fileId/retract', authorizeRole(['Admin', 'okf-service']), fileCon
  *       '403':
  *         description: Forbidden - Admin role required
  */
-router.post('/ingest', authorizeRole(['Admin']), fileController.ingestMultipleFiles);
+router.post('/ingest', authorizeRole(ADMIN_ONLY), fileController.ingestMultipleFiles);
 
 /**
  * @swagger
@@ -856,7 +856,7 @@ const bundleBodyLimit = `${appConfig.upload.bundleMaxBodyMb}mb`;
 router.post(
   '/ingest-bundle',
   express.json({ limit: bundleBodyLimit }),
-  authorizeRole(['Admin', 'okf-service']),
+  authorizeRole(DOCUMENT_LIFECYCLE),
   fileController.bundleIngest
 );
 
@@ -907,7 +907,7 @@ router.post(
  *       '403':
  *         description: Forbidden - Admin role required
  */
-router.post('/retract', authorizeRole(['Admin']), fileController.retractMultipleFiles);
+router.post('/retract', authorizeRole(ADMIN_ONLY), fileController.retractMultipleFiles);
 
 /**
  * @swagger
@@ -959,11 +959,7 @@ router.post('/retract', authorizeRole(['Admin']), fileController.retractMultiple
 // 2026-08-20). The okf-server service-account client holds the bootstrap
 // `tools-admin` super-role (see genie-realm.yaml client role mapping) so
 // the worker's mirror POSTs succeed.
-router.post(
-  '/:fileId/ingestion-log',
-  authorizeRole(['Admin', 'dataprep-service', 'okf-service', 'tools-admin']),
-  fileController.addIngestionLog
-);
+router.post('/:fileId/ingestion-log', authorizeRole(SERVICE_CALLBACK), fileController.addIngestionLog);
 
 /**
  * @swagger
@@ -986,7 +982,7 @@ router.post(
  *       '401':
  *         description: Unauthorized
  */
-router.get('/:fileId/ingestion-log', authorizeRole(['Admin', 'dataprep-service']), fileController.getIngestionLogs);
+router.get('/:fileId/ingestion-log', authorizeRole(INGESTION_LOG_READ), fileController.getIngestionLogs);
 
 /**
  * @swagger
@@ -1028,13 +1024,8 @@ router.patch(
   '/:fileId/status',
   // Story 4.8-amend: the okf-server service client drives the BUNDLE state
   // machine (Pending → Ingesting → Ingested|Error) through this route.
-  authorizeRole(['Admin', 'dataprep-service', 'okf-service', 'tools-admin']),
+  authorizeRole(SERVICE_CALLBACK),
   fileController.updateFileStatus
 );
 
 module.exports = router;
-// The role list PATCH /:fileId is registered with, exported so the regression
-// that shipped the broken stamp (2026-10-11) cannot come back: the okf-server
-// orchestrator stamps okf_repo_id through this route, and the integration suite
-// mocks authorizeRole, so nothing else asserts who may write.
-module.exports.UPDATE_FILE_ROLES = UPDATE_FILE_ROLES;

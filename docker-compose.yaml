@@ -665,6 +665,10 @@ services:
     # surfaces. Same variable gates all four (env template documents it).
     profiles: ["okf"]
     logging: *fluent-logging
+    # Harden: no privilege escalation from the container — the file's
+    # convention (37 existing services set it; kics Security Opt Not Set).
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       keycloak-config:
         condition: service_healthy
@@ -927,7 +931,6 @@ services:
       - OKF_RETRIEVAL_CANDIDATE_CAP_GLOBAL=${OKF_RETRIEVAL_CANDIDATE_CAP_GLOBAL:-200}
       # --- frontmatter (frontmatter-service / retrieval-config-service) ---
       - OKF_FRONTMATTER_VALIDATE_BATCH_SIZE=${OKF_FRONTMATTER_VALIDATE_BATCH_SIZE:-4}
-      - OKF_FRONTMATTER_SUMMARY_TTL_MS=${OKF_FRONTMATTER_SUMMARY_TTL_MS:-60000}
       # --- ingest settle lease (lifecycle-service) ---
       - OKF_SETTLE_LEASE_MS=${OKF_SETTLE_LEASE_MS:-600000}
     networks:
@@ -946,6 +949,9 @@ services:
     # OKF feature flag: parked with the okf-server (see okf-server block).
     profiles: ["okf"]
     logging: *fluent-logging
+    # Harden: no privilege escalation (same convention; kics Security Opt Not Set).
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
     environment:
       # uvicorn worker processes (GIL-bound NER needs processes, not threads;

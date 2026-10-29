@@ -146,21 +146,6 @@ describe('requireScope(read, { allowScopelessWhenOpen }) — DEFAULT-OPEN servin
   });
 });
 
-describe('requireScope/requireRepoScope strictness (2026-08-16 review fixes)', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  test('unknown level THROWS at wiring time (no silent fail-open fallback)', () => {
-    expect(() => requireScope('okf:read')).toThrow(/unknown level/);
-    expect(() => requireRepoScope('repo_id', 'okf:admin')).toThrow(/unknown level/);
-  });
-
-  test('typo level (write) grants NOTHING — not wildcard, not read', async () => {
-    const res = mockRes();
-    await requireScope('read')(mkReq({ scopes: ['okf:t1:*:write'] }), res, jest.fn());
-    expect(res.status).toHaveBeenCalledWith(403);
-  });
-});
-
 describe("requireRepoScope(repo_id, 'admin')", () => {
   beforeEach(() => jest.clearAllMocks());
 

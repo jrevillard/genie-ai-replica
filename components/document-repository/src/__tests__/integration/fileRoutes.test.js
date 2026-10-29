@@ -498,9 +498,12 @@ describe('File Routes Integration', () => {
     });
 
     it('permits the okf-service role on this route (the 403 that shipped the broken stamp)', () => {
-      const roles = require('../../routes/fileRoutes').UPDATE_FILE_ROLES;
-      expect(roles).toContain('okf-service');
-      expect(roles).toContain('Admin'); // the human steward keeps access
+      // The policy lives in config/rolePolicy (the router no longer carries
+      // test-only exports); the REAL gate for this role is proven end-to-end
+      // in middlewares/keycloak-role-policy.integration.test.js.
+      const { DOCUMENT_LIFECYCLE } = require('../../config/rolePolicy');
+      expect(DOCUMENT_LIFECYCLE).toContain('okf-service');
+      expect(DOCUMENT_LIFECYCLE).toContain('Admin'); // the human steward keeps access
     });
   });
 

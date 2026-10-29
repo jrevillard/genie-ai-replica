@@ -128,7 +128,6 @@ function cosine(a, b) {
 }
 
 const POSITIVE_FIELDS = ['topic', 'entity', 'keyword', 'summary', 'scope'];
-const DEFAULT_WEIGHTS = { topic: 1.0, entity: 0.7, keyword: 0.5, summary: 0.5, scope: 0.3 };
 
 /**
  * Head score for one repo against the query embedding, plus per-field
@@ -830,16 +829,12 @@ module.exports = {
   explainRouting,
   guardSuggestions,
   embedQueryBatch,
-  // test surface
+  // test surface — ONLY the helpers the specs actually drive; everything
+  // else is exercised through the public rebuildHead/routingTest/explainRouting
+  // boundaries.
   _internals: {
-    cosine,
     scoreHead,
     qualifyProbes,
-    queryInstructionFor,
-    normalizeFormula,
-    POSITIVE_FIELDS,
-    DEFAULT_WEIGHTS,
-    GUARD_SELF_SUBJECT,
-    GUARD_DUPLICATE_FORBIDDEN
+    queryInstructionFor
   }
 };

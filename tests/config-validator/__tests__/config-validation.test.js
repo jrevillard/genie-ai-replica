@@ -567,29 +567,53 @@ describe('Configuration Validation Suite', () => {
     //
     // These are CODE defaults (PII_SERVICE_URL/PII_TIMEOUT_MS/PII_RETRIES are
     // not in the compose okf-server block), so parity here means "ansible
-    // emits them with the code's own default", not "compose agrees".
-    const PII_CODE_DEFAULTS = {
-      // 4 since !1080, matching the uvicorn --workers default in
-      // components/pii-service/Dockerfile. This map is a HAND-MAINTAINED MIRROR
-      // of the code's own defaults — the same "the same fact stated in two
-      // places" shape as BUG-11/12/15 — so it is the 4th copy to move when the
-      // default moves: Dockerfile CMD, compose, env.j2, and here. The assertion
-      // below is what makes forgetting one of them loud instead of silent.
-      PII_WEB_CONCURRENCY: '4',
-      PII_REGION_MAX_CHARS: '50000',
-      PII_CONCEPT_RETRY_PAUSE_MS: '8000',
-      PII_SERVICE_URL: 'http://pii-service:8000',
-      PII_TIMEOUT_MS: '10000',
-      PII_RETRIES: '2'
+    // emits them with the code's own default", not "compose agrees". The code
+    // side is PARSED FROM SOURCE — the Dockerfile CMD, the sidecar's app.py
+    // getenv and okf-server's config/pii-service reads — not mirrored by hand
+    // (a hand mirror stays green while env.j2 silently diverges from real
+    // behaviour, exactly half the drift this check exists to catch).
+    const piiCodeDefaults = () => {
+      const repo = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
+      const dockerfile = repo('components/pii-service/Dockerfile');
+      const appPy = repo('components/pii-service/app.py');
+      const okfConfig = repo('components/okf-server/config.js');
+      const okfPii = repo('components/okf-server/services/pii-service.js');
+      const out = {};
+
+      // ${PII_WEB_CONCURRENCY:-4} in the Dockerfile CMD (uvicorn --workers)
+      const workers = dockerfile.match(/\$\{PII_WEB_CONCURRENCY:-(\d+)\}/);
+      if (!workers) throw new Error('PII_WEB_CONCURRENCY default not found in pii-service Dockerfile CMD');
+      out.PII_WEB_CONCURRENCY = workers[1];
+
+      // os.getenv("PII_REGION_MAX_CHARS", "50000") in the sidecar
+      const region = appPy.match(/os\.getenv\(["']PII_REGION_MAX_CHARS["'],\s*["'](\d+)["']\)/);
+      if (!region) throw new Error('PII_REGION_MAX_CHARS default not found in pii-service app.py');
+      out.PII_REGION_MAX_CHARS = region[1];
+
+      // process.env.PII_CONCEPT_RETRY_PAUSE_MS) || 8000 in okf-server
+      const pause = okfPii.match(/PII_CONCEPT_RETRY_PAUSE_MS\)\s*\|\|\s*(\d+)/);
+      if (!pause) throw new Error('PII_CONCEPT_RETRY_PAUSE_MS default not found in okf-server pii-service.js');
+      out.PII_CONCEPT_RETRY_PAUSE_MS = pause[1];
+
+      // okf-server/config.js: url || '...', parseInt(env || '...', 10)
+      const url = okfConfig.match(/PII_SERVICE_URL\s*\|\|\s*'([^']+)'/);
+      const timeout = okfConfig.match(/PII_TIMEOUT_MS\s*\|\|\s*'(\d+)'/);
+      const retries = okfConfig.match(/PII_RETRIES\s*\|\|\s*'(\d+)'/);
+      if (!url || !timeout || !retries)
+        throw new Error('PII_SERVICE_URL/PII_TIMEOUT_MS/PII_RETRIES defaults not found in okf-server config.js');
+      out.PII_SERVICE_URL = url[1];
+      out.PII_TIMEOUT_MS = timeout[1];
+      out.PII_RETRIES = retries[1];
+      return out;
     };
 
     test('ansible env.j2 emits every PII var the cloud deployment needs', () => {
-      const missing = Object.keys(PII_CODE_DEFAULTS).filter((v) => !ansibleVars[v]);
+      const missing = Object.keys(piiCodeDefaults()).filter((v) => !ansibleVars[v]);
       expect(missing).toEqual([]);
     });
 
-    test('ansible PII defaults match the values the code itself defaults to', () => {
-      const mismatches = Object.entries(PII_CODE_DEFAULTS)
+    test('ansible PII defaults match the values the code itself defaults to (parsed from source)', () => {
+      const mismatches = Object.entries(piiCodeDefaults())
         .filter(([v, expected]) => ansibleVars[v] && ansibleVars[v].default !== expected)
         .map(([v, expected]) => v + ': ansible=' + ansibleVars[v].default + ' code=' + expected);
       expect(mismatches).toEqual([]);

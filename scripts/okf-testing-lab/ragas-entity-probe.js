@@ -31,6 +31,7 @@ function reqJson(method, url, body) {
         method,
         headers: {
           'Content-Type': 'application/json',
+          // The sidecar's fail-closed service-to-service gate (app.py:49).
           'x-ragas-secret': process.env.RAGAS_INTERNAL_SECRET || process.env.OKF_INTERNAL_SECRET || ''
         }
       },
@@ -41,7 +42,7 @@ function reqJson(method, url, body) {
           try {
             resolve({ status: res.statusCode, body: JSON.parse(d) });
           } catch {
-            resolve({ status: res.statusCode, body: { raw: d.slice(0, 300) } });
+            resolve({ status: res.statusCode, body: { raw: d.slice(0, 400) } });
           }
         });
       }
@@ -76,22 +77,30 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // The judges to compare: the run's own (MiniMax-M3.1-Flash) and the env
   // judge the sidecar uses by default.
-  const cfg = await col.database
-    ? null
-    : await db.collection('okf_model_configs').document('mc1792423414860-1bbfd8');
+  const cfg = (await col.database) ? null : await db.collection('okf_model_configs').document('mc1792423414860-1bbfd8');
   const judges = [
-    { name: 'Minimax-M3.1-Flash (the run judge)', judge: cfg ? {
-      provider: cfg.provider,
-      base_url: cfg.base_url,
-      model: 'MiniMax-M3.1-Flash',
-      api_key: cfg.api_key
-    } : null },
-    { name: 'MiniMax-M3', judge: cfg ? {
-      provider: cfg.provider,
-      base_url: cfg.base_url,
-      model: 'MiniMax-M3',
-      api_key: cfg.api_key
-    } : null },
+    {
+      name: 'Minimax-M3.1-Flash (the run judge)',
+      judge: cfg
+        ? {
+            provider: cfg.provider,
+            base_url: cfg.base_url,
+            model: 'MiniMax-M3.1-Flash',
+            api_key: cfg.api_key
+          }
+        : null
+    },
+    {
+      name: 'MiniMax-M3',
+      judge: cfg
+        ? {
+            provider: cfg.provider,
+            base_url: cfg.base_url,
+            model: 'MiniMax-M3',
+            api_key: cfg.api_key
+          }
+        : null
+    },
     { name: 'env judge (sidecar default)', judge: null }
   ];
 

@@ -81,7 +81,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         reference_contexts: e.reference_passages || []
       };
     });
-  console.log(`run ${runKey}: ${samples.length} samples, judge ${cfg.name} / ${judgeModel}, metrics ${metrics.join(',')}`);
+  console.log(
+    `run ${runKey}: ${samples.length} samples, judge ${cfg.name} / ${judgeModel}, metrics ${metrics.join(',')}`
+  );
   console.log(`judge base_url ${cfg.base_url}`);
 
   const submitted = await reqJson('POST', `${SIDECAR}/evaluate`, {
@@ -142,7 +144,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       m.padEnd(26),
       om == null ? '-' : om.toFixed(4),
       nm == null ? '-' : nm.toFixed(4),
-      om != null && nm != null ? ((nm - om >= 0 ? '+' : '') + (nm - om).toFixed(4)) : '-'
+      om != null && nm != null ? (nm - om >= 0 ? '+' : '') + (nm - om).toFixed(4) : '-'
     );
   }
   console.log(`\nrows whose score moved >0.1 on any metric: ${moved}/${pq.length}`);

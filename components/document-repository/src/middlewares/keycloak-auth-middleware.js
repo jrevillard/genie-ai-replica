@@ -171,27 +171,22 @@ const authenticateToken = async (req, res, next) => {
     } catch (err) {
       // [DIAG 2026-09-15] Publish 401 root cause — log full token-vs-expected
       // mismatch (issuer / signature / expiration) so the next 401 is
-      // diagnosable from the container log alone.
+      // diagnosable from the container log alone. The payload is decoded ONCE
+      // (base64url — no padding hack, which breaks unpadded base64url tokens).
+      let diagClaims = null;
+      try {
+        diagClaims = JSON.parse(Buffer.from(String(token).split('.')[1], 'base64url').toString());
+      } catch {
+        diagClaims = null; // unparseable token — the null fields say so
+      }
       logger.error('[KEYCLOAK-AUTH] jwtVerify failed', {
         path,
         err_name: err && err.name,
         err_code: err && err.code,
         err_message: err && err.message,
         expected_issuer: expectedIssuer,
-        token_issuer: (() => {
-          try {
-            return JSON.parse(Buffer.from(String(token).split('.')[1] + '==', 'base64').toString()).iss;
-          } catch {
-            return 'unparseable';
-          }
-        })(),
-        token_exp: (() => {
-          try {
-            return JSON.parse(Buffer.from(String(token).split('.')[1] + '==', 'base64').toString()).exp;
-          } catch {
-            return 0;
-          }
-        })()
+        token_issuer: (diagClaims && diagClaims.iss) || 'unparseable',
+        token_exp: (diagClaims && diagClaims.exp) || 0
       });
       if (err.name === 'JWTExpired') {
         return res.status(401).json({

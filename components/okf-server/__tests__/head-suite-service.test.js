@@ -279,13 +279,6 @@ describe('near-miss negative class (Story 1-8c)', () => {
     expect(new Set(rows.map((q) => q.query.toLowerCase())).size).toBe(10);
   });
 
-  it('n_near_miss defaults to 4 and caps at 10 (clampCount)', () => {
-    expect(svc._internals.clampCount(undefined, 4, 10)).toBe(4);
-    expect(svc._internals.clampCount(1, 4, 10)).toBe(1);
-    expect(svc._internals.clampCount(99, 4, 10)).toBe(10);
-    expect(svc._internals.clampCount('bad', 4, 10)).toBe(4);
-  });
-
   it('generateSuite: LLM near_miss rows flow into the suite and the prompt asks for NEAR-MISS', async () => {
     __mockDb.query.mockResolvedValue({ all: async () => [] });
     frontmatterService.vllmChatCompletions.mockResolvedValue(

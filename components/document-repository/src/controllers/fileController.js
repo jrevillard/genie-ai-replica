@@ -78,6 +78,36 @@ const singleIngestSchema = Joi.object({
   chunkOverlap: Joi.number().integer().min(0).max(1000).allow(null).optional()
 });
 
+// WS2 (David, 2026-09-25): bundle zips (is_bundle=true) are OKF per-version
+// ingestion artifacts — they live forever, governed by the OKF lifecycle
+// (supersede/superseded by minting a new version), not by doc-repo's
+// document management tab. Only the okf-service service account may delete
+// them; every other caller gets a 403 with code=BUNDLE_PROTECTED so the UI
+// can hide the action entirely. Live-caught 2026-09-25: all 4 ingested
+// repos' bundle zips were deleted by the hourly ingest sweep because this
+// protection did not exist; without it the entire ingest pipeline loses
+// the per-version trace. One guard serves BOTH delete handlers so the
+// policy is single-sourced — a handler renders only its own message.
+const isOkfServiceCaller = (req) => {
+  const callerRoles = req.user && Array.isArray(req.user.roles) ? req.user.roles : [];
+  return callerRoles.some((r) => String(r).toLowerCase() === 'okf-service');
+};
+
+const bundleProtectedIds = async (fileIds) => {
+  const protectedIds = [];
+  for (const fileId of fileIds) {
+    let meta = null;
+    try {
+      meta = await metadataService.getMetadataById(fileId);
+    } catch {
+      // metadata fetch failed — fall through (the delete path itself
+      // surfaces any actual error from the deletion)
+    }
+    if (meta && meta.is_bundle === true) protectedIds.push(fileId);
+  }
+  return protectedIds;
+};
+
 // Schema for file upload validation
 const uploadSchema = Joi.object({
   author: Joi.string().max(200).optional(),
@@ -725,27 +755,13 @@ class FileController {
         });
       }
 
-      // WS2 (David, 2026-09-25): bundle zips (is_bundle=true) are OKF
-      // per-version ingestion artifacts — they live forever, governed by
-      // the OKF lifecycle (supersede/superseded by minting a new version),
-      // not by doc-repo's document management tab. Only the okf-service
-      // service account may delete them; Admin / steward roles get a
-      // explicit 403 with code=BUNDLE_PROTECTED so the UI can hide the
-      // action entirely. Live-caught 2026-09-25: all 4 ingested repos'
-      // bundle zips were deleted by the hourly ingest sweep because this
-      // protection did not exist; without it the entire ingest pipeline
-      // loses the per-version trace.
-      const callerRoles = req.user && Array.isArray(req.user.roles) ? req.user.roles : [];
-      const isOkfService = callerRoles.some((r) => String(r).toLowerCase() === 'okf-service');
-      if (!isOkfService) {
-        let meta = null;
-        try {
-          meta = await metadataService.getMetadataById(fileId);
-        } catch {
-          // metadata fetch failed — fall through (the existing delete handler
-          // will surface any actual error from the deletion path itself)
-        }
-        if (meta && meta.is_bundle === true) {
+      // WS2 (David, 2026-09-25): bundle zips are OKF per-version ingestion
+      // artifacts (see bundleProtectedIds). Only the okf-service account may
+      // delete them; Admin / steward roles get an explicit 403 with
+      // code=BUNDLE_PROTECTED so the UI can hide the action entirely.
+      if (!isOkfServiceCaller(req)) {
+        const [protectedId] = await bundleProtectedIds([fileId]);
+        if (protectedId) {
           return res.status(403).json({
             success: false,
             code: 'BUNDLE_PROTECTED',
@@ -818,24 +834,15 @@ class FileController {
       // a single bundle in the batch fails the WHOLE batch with 403 so
       // the UI can surface the error clearly (partial-deletion is worse
       // than no-deletion for the bundle semantics).
-      const callerRoles = req.user && Array.isArray(req.user.roles) ? req.user.roles : [];
-      const isOkfService = callerRoles.some((r) => String(r).toLowerCase() === 'okf-service');
-      if (!isOkfService) {
-        for (const fileId of fileIds) {
-          let meta = null;
-          try {
-            meta = await metadataService.getMetadataById(fileId);
-          } catch {
-            // metadata fetch failed — fall through
-          }
-          if (meta && meta.is_bundle === true) {
-            return res.status(403).json({
-              success: false,
-              code: 'BUNDLE_PROTECTED',
-              error: 'Bundle zips are managed by the OKF lifecycle and cannot be deleted from document management',
-              message: `Bundle zip "${fileId}" is owned by the OKF repository lifecycle. Delete is only allowed via the okf-service account.`
-            });
-          }
+      if (!isOkfServiceCaller(req)) {
+        const protectedIds = await bundleProtectedIds(fileIds);
+        if (protectedIds.length > 0) {
+          return res.status(403).json({
+            success: false,
+            code: 'BUNDLE_PROTECTED',
+            error: 'Bundle zips are managed by the OKF lifecycle and cannot be deleted from document management',
+            message: `Bundle zip "${protectedIds[0]}" is owned by the OKF repository lifecycle. Delete is only allowed via the okf-service account.`
+          });
         }
       }
 

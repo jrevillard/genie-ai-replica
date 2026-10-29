@@ -28,6 +28,7 @@ jest.mock('../services/model-config-service', () => ({
 const svc = require('../services/frontmatter-service');
 const axios = require('axios');
 const { __mockDb } = require('../shared-lib/db-connection-service');
+const { updateSchema, TAG_LIMITS } = require('../validators/repository-validator');
 
 const REPO_ID = 'repo-ncd';
 
@@ -267,6 +268,48 @@ describe('frontmatterService.suggestTags — forbidden suggestion contract', () 
       { value: 'mental-health', suggested: true },
       { value: 'communicable-diseases', suggested: true }
     ]);
+  });
+
+  // !1082 — the suggester returned 22 entities against a ceiling of 20 and Joi
+  // rejects the WHOLE request body, so a curator accepting that suggestion lost
+  // the topics and every accepted entity too. The schema was always right; the
+  // producer must cap its own output. Asserted HERE at the producer boundary
+  // (an over-limit LLM payload comes back within TAG_LIMITS and schema-writable)
+  // — the old spec-side copy re-implemented cap()/clean() and validated its own
+  // output, which stayed green if the producer ever stopped capping.
+  test('an over-limit LLM payload is capped at the producer boundary (Bali !1082)', async () => {
+    seedDb();
+    axios.post.mockResolvedValue(
+      vllmResponse(
+        JSON.stringify({
+          topic: Array.from({ length: 22 }, (_, i) => `topic-${i}`),
+          entity: Array.from({ length: 22 }, (_, i) => `entity-${i}`),
+          forbidden: Array.from({ length: 30 }, (_, i) => `forbidden-${i}`),
+          keyword: Array.from({ length: 40 }, (_, i) => `keyword-${i}`),
+          scope: 'health',
+          summary: 'Over-limit payload.'
+        })
+      )
+    );
+    const out = await svc.suggestTags(REPO_ID);
+    expect(out.topic).toHaveLength(TAG_LIMITS.topic);
+    expect(out.entity).toHaveLength(TAG_LIMITS.entity);
+    expect(out.keyword).toHaveLength(TAG_LIMITS.keyword);
+    // forbidden additionally passes the mechanical label guard, which may
+    // legitimately drop rows — the ceiling still bounds it from above.
+    expect(out.forbidden.length).toBeLessThanOrEqual(TAG_LIMITS.forbidden);
+    // And the whole result is writable: the schema accepts every field.
+    const { error } = updateSchema.validate({
+      frontmatter: {
+        topic: out.topic,
+        entity: out.entity,
+        forbidden: out.forbidden,
+        keyword: out.keyword,
+        scope: out.scope,
+        summary: out.summary
+      }
+    });
+    expect(error).toBeUndefined();
   });
 });
 // ─── 1-8g-m: label-grounded suggestions ─────────────────────────────────────

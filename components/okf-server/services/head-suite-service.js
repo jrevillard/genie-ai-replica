@@ -3116,21 +3116,11 @@ module.exports = {
   recommendTagSet,
   beginRecommendTagSet,
   getRecommendJob,
-  // test surface
+  // test surface — ONLY the helpers the specs actually drive; the suite
+  // generators are exercised through the public generateSuite/runSuite
+  // boundaries.
   _internals: {
-    suitePrompt,
     summarizeRun,
-    suppressReason,
-    forbiddenDerivedQueries,
-    offDomainQueries,
-    metaQueries,
-    nearMissQueries,
-    sampleTopics,
-    OFF_DOMAIN_TOPICS,
-    OFF_DOMAIN_TEMPLATES,
-    META_TEMPLATES,
-    parseJsonObject,
-    clampCount,
-    HEAD_TEST_RUNS_COLLECTION
+    nearMissQueries
   }
 };

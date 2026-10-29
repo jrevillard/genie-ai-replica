@@ -231,7 +231,6 @@ HUGGING_FACE_HUB_TOKEN=
 # TEI_EMBED_HOST=http://embedding-tei:80
 # OKF_FRONTMATTER_TAG_BATCH_SIZE=1        # one repo at a time for suggestTags
 # OKF_FRONTMATTER_VALIDATE_BATCH_SIZE=4    # 4 parallel vLLM calls for per-tag consistency check
-# OKF_FRONTMATTER_SUMMARY_TTL_MS=60000     # 60s BFF cache for the denormalized summary
 # RERANKING_THRESHOLD=0.75
 # RERANKING_STRATEGY=slice      # slice (default) | threshold | slice_threshold | knee_threshold | adaptive
 # RERANKER_TOP_N=3              # chunks kept for slice/slice_threshold strategies (default 3)

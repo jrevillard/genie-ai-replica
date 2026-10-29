@@ -201,7 +201,7 @@ describe('concept-meta-service.upsertConceptMeta (G9)', () => {
         }
       ]
     });
-    const m = await getRepoMetrics('r1');
+    await getRepoMetrics('r1');
     expect(querySpy).toHaveBeenCalledTimes(1);
     const arg = querySpy.mock.calls[0][0];
     // The collection handle rides as aql bind param @value0 (the mock
@@ -213,13 +213,8 @@ describe('concept-meta-service.upsertConceptMeta (G9)', () => {
     // is computed from findings minus resolutions, never a literal zero.
     expect(arg.query).not.toContain('broken_link_count');
     expect(arg.query).toContain('pii_hit_count');
-    expect(m).toEqual({
-      concept_count: 2,
-      conformance_issue_count: 1,
-      stale_concept_count: 1,
-      has_reserved_index: false,
-      pii_hit_count: 0
-    });
+    // The cursor result is mapped through verbatim, so echoing the fixture
+    // back would assert nothing — the AQL pins above are the contract.
   });
 });
 
@@ -366,7 +361,9 @@ describe('concept-meta-service — 2.9.1 review findings (2026-08-16 code review
     await conceptMeta.upsertConceptMeta('r1', parsedInput());
     const doc = await conceptMeta.getConceptMeta('r1', 'concepts/health-policy');
     expect(doc).toMatchObject({ repo_id: 'r1', concept_id: 'concepts/health-policy', index_status: 'parsed' });
-    expect(doc.content_hash).toBe(conceptMeta.contentHash('# Health Policy\nGuidance for the ministry.'));
+    // Literal sha256 of the trimmed body — expected-value-equals-helper-under-test
+    // can never fail for the right reason, so the algorithm is pinned literally.
+    expect(doc.content_hash).toBe('1aec304dd0dbafcf045d641462d3876b5786ed3d681488124aadc4ea96f60385');
   });
 
   it('getConceptMeta guards falsy keys (repo-wide read hazard)', async () => {

@@ -44,12 +44,6 @@ function isArangoNotFound(err) {
   return err.code === 404 || err.statusCode === 404;
 }
 
-/** True when the COLLECTION (not the row) is missing — an infrastructure or
- * configuration fault that must NOT be reported to callers as "no row". */
-function isArangoCollectionNotFound(err) {
-  return !!(err && err.errorNum === 1203);
-}
-
 /** Unique-constraint violation (errorNum 1210/1185 or HTTP 409) — the unique-index race guard. */
 function isArangoUniqueViolation(err) {
   return !!(err && (err.errorNum === 1210 || err.errorNum === 1185 || err.code === 409));
@@ -64,7 +58,6 @@ function isArangoConflict(err) {
 
 module.exports = {
   isArangoNotFound,
-  isArangoCollectionNotFound,
   isArangoUniqueViolation,
   isArangoConflict
 };

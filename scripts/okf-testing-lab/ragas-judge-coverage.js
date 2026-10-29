@@ -15,31 +15,35 @@ const jobId = process.argv[3];
 const metrics = (process.argv[4] || 'context_entities_recall,factual_correctness,answer_relevancy').split(',');
 const SIDECAR = process.env.OKF_RAGAS_URL || 'http://ragas-service:8090';
 
-function reqJson(url) {
+function reqJson(method, url, body) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const r = http.request(
       {
         host: u.hostname,
         port: u.port || 80,
-        path: u.pathname,
-        method: 'GET',
-        headers: { 'x-ragas-secret': process.env.RAGAS_INTERNAL_SECRET || process.env.OKF_INTERNAL_SECRET || '' }
+        path: u.pathname + u.search,
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          // The sidecar's fail-closed service-to-service gate (app.py:49).
+          'x-ragas-secret': process.env.RAGAS_INTERNAL_SECRET || process.env.OKF_INTERNAL_SECRET || ''
+        }
       },
       (res) => {
         let d = '';
         res.on('data', (c) => (d += c));
         res.on('end', () => {
           try {
-            resolve(JSON.parse(d));
+            resolve({ status: res.statusCode, body: JSON.parse(d) });
           } catch {
-            resolve({});
+            resolve({ status: res.statusCode, body: { raw: d.slice(0, 400) } });
           }
         });
       }
     );
     r.on('error', reject);
-    r.end();
+    r.end(body ? JSON.stringify(body) : undefined);
   });
 }
 const http = require('http');
@@ -48,7 +52,7 @@ const http = require('http');
   const db = await dbService.getConnection();
   const run = (await db.collection('okf_head_test_runs').document(runKey)).payload;
   const rows = run.results || [];
-  const job = await reqJson(`${SIDECAR}/jobs/${jobId}`);
+  const job = (await reqJson('GET', `${SIDECAR}/jobs/${jobId}`)).body || {};
   const pq = (job.result && job.result.per_query) || [];
 
   const exCur = await db.query(

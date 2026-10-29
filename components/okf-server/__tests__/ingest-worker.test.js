@@ -867,20 +867,38 @@ describe('ingestWorker._reapStuckParsed (2-9-5 atomicity — claim-stamp reaping
 describe('ingestWorker.start (bootstrap guard)', () => {
   afterEach(() => worker.stop());
 
+  // The real contract of start/stop, observable at the worker boundary:
+  // a started worker schedules its cycle timers; stop() clears every one of
+  // them AND stays terminal (an in-flight cycle settling after stop never
+  // re-arms). Fake timers make both sides assertable.
   test('starts timers when enabled (default) and stops cleanly', async () => {
-    process.env.OKF_INGEST_WORKER_JOB_POLL_MS = '1';
-    await worker.start();
-    // a started worker schedules its first cycle immediately; stop clears it
-    worker.stop();
-    delete process.env.OKF_INGEST_WORKER_JOB_POLL_MS;
-    expect(true).toBe(true); // no throw, no hang (timers cleared)
+    jest.useFakeTimers();
+    try {
+      process.env.OKF_INGEST_WORKER_JOB_POLL_MS = '1';
+      await worker.start();
+      expect(jest.getTimerCount()).toBeGreaterThan(0); // cycle timers are scheduled
+      // settle the in-flight first cycles (mocked DB — microtasks only) so
+      // their lane re-arms land inside _drainTimers before stop clears them
+      for (let i = 0; i < 50; i++) await Promise.resolve();
+      worker.stop();
+      expect(jest.getTimerCount()).toBe(0); // terminal: nothing re-arms after stop
+    } finally {
+      jest.useRealTimers();
+      delete process.env.OKF_INGEST_WORKER_JOB_POLL_MS;
+    }
   });
 
   test('OKF_INGEST_WORKER_ENABLED=false → no timers', async () => {
-    process.env.OKF_INGEST_WORKER_ENABLED = 'false';
-    await worker.start();
-    worker.stop();
-    delete process.env.OKF_INGEST_WORKER_ENABLED;
+    jest.useFakeTimers();
+    try {
+      process.env.OKF_INGEST_WORKER_ENABLED = 'false';
+      await worker.start();
+      expect(jest.getTimerCount()).toBe(0); // the disabled state is observable: nothing scheduled
+      worker.stop();
+    } finally {
+      jest.useRealTimers();
+      delete process.env.OKF_INGEST_WORKER_ENABLED;
+    }
   });
 });
 describe('directive (David, 2026-09-04): failures reach the ingestion log; orphans never linger', () => {

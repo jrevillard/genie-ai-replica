@@ -202,7 +202,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is none. The English spelling the query wire speaks (`nameEN`) is
   unchanged, and an entity with no name in any language is still not offered:
   it cannot be scoped on. The admin tree resolves its display name the same
-  way. (#1117)
+  way. (#1117, !632)
 - **The admin hierarchy panel could show an empty English name.** The detailed
   tree behind it returned only the localized name; the panel worked around
   that by fetching the tree in English and relabelling the result, so the

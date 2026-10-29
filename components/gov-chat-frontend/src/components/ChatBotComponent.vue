@@ -835,17 +835,30 @@ export default {
       return this.getAllFolders;
     },
 
-    // The live hierarchy indexed by category key. Rebuilt only when the
-    // tree changes — the lookups below read it instead of walking the tree
-    // on every call.
-    categoryIndex() {
-      const index = new Map();
+    // The live hierarchy, indexed ONCE by the two spellings a category is
+    // addressed by. Rebuilt only when the tree changes — the lookups below
+    // read it instead of walking the tree on every call. The database key
+    // is the hierarchy's own identity (the sidebar speaks it); the EN name
+    // is the identifier a CONFIGURATION writes — the spelling a deployment
+    // can write down without reading the database, and the one the corpus
+    // filters on. An entry the hierarchy cannot address by key cannot be
+    // addressed by name either: resolving one would hand the conversation's
+    // edge a name where the backend writes `serviceCategories/<key>`.
+    // FIRST-wins on both, so one walk carries both indexes' skip rules.
+    categoryIndexes() {
+      const byKey = new Map();
+      const byNameEn = new Map();
       for (const cat of this.serviceCategories || []) {
-        if (cat.catKey === null || cat.catKey === undefined) continue;
-        const id = cat.catKey.toString();
-        if (!index.has(id)) index.set(id, cat);
+        // An EMPTY key is no key: `declaresCategoryScope` reads it as no
+        // scope, so a reference resolved to it would render the card
+        // healthy and send the query unfiltered — the mobile twin's index
+        // drops the entry for the same reason.
+        if (cat.catKey === null || cat.catKey === undefined || cat.catKey === '') continue;
+        const key = cat.catKey.toString();
+        if (!byKey.has(key)) byKey.set(key, cat);
+        if (cat.nameEN && !byNameEn.has(cat.nameEN)) byNameEn.set(cat.nameEN, cat);
       }
-      return index;
+      return { byKey, byNameEn };
     },
 
     // The localized name of the entity whose EN label is a given one. The
@@ -1236,6 +1249,27 @@ export default {
         }
         this.serviceCategories = tree;
         this.serviceCategoriesStatus = 'loaded';
+        // The Quick Help buttons name their category in the configuration's
+        // own spelling; the HIERARCHY is what turns that spelling into the
+        // category's key. The two loads are independent, so a hierarchy
+        // that lands after the configuration resolves the buttons again —
+        // synchronously here, before any consumer of this load resumes.
+        // Its OWN guard: a failure while re-mapping the buttons is a
+        // configuration problem, not a hierarchy one — swallowing it into
+        // this catch would mark the loaded tree failed and toast the
+        // wrong cause. The installed scope's re-resolution carries its
+        // own guard too, so neither recovery cancels the other.
+        try {
+          if (this.quickHelpButtons.length) {
+            this.applyQuickHelpButtons();
+          }
+        } catch (mappingError) {
+          console.error(
+            '[ChatBotComponent] Failed to re-resolve Quick Help buttons against the hierarchy:',
+            mappingError
+          );
+        }
+        this.reResolveInstalledScopeAgainstHierarchy();
       } catch (error) {
         if (seq !== this.treeLoadSeq) {
           return;
@@ -1249,33 +1283,131 @@ export default {
       }
     },
 
-    // *** UPDATED: Find category label by its key in the transformed tree data ***
     // The category the query is scoped by, in the SSOT language. English is
     // what the corpus filters on — chunk_labels carry the EN translation —
     // so the wire speaks EN and the localized name stays display-only. Null
-    // when the id names no category of the live tree: a broken scope.
-    getCategoryEnLabel(id) {
-      if (id === null || id === undefined) {
-        return null;
-      }
-      const category = this.categoryIndex.get(id.toString());
+    // when the reference names no category of the live tree: a broken scope.
+    getCategoryEnLabel(reference) {
+      const category = this.resolveCategoryReference(reference);
       return category ? category.nameEN || null : null;
     },
 
     // The category name the user reads — the localized spelling of the
     // same entity. Display only: it never filters.
-    getCategoryDisplayName(id) {
-      if (id === null || id === undefined) {
-        return null;
-      }
-      const category = this.categoryIndex.get(id.toString());
+    getCategoryDisplayName(reference) {
+      const category = this.resolveCategoryReference(reference);
       if (!category) {
         return null;
       }
       // A category with no translation in the UI locale has no localized
       // name: the chip showed BLANK. The EN name (the wire's spelling) is
-      // a truthful display, and the id is the last resort.
-      return category.name || category.nameEN || id.toString();
+      // a truthful display, and the reference is the last resort.
+      return category.name || category.nameEN || reference.toString();
+    },
+
+    // The live category a reference names.
+    //
+    // A reference is what a CONFIGURATION writes: the category's ENGLISH
+    // NAME — the label the hierarchy publishes and the corpus filters on,
+    // the one a deployment can write down without reading the database.
+    // The database key stays accepted: a configuration written before
+    // that spelling was adopted still names a category, and a
+    // deployment's configuration is edited on its own.
+    //
+    // The KEY is tried first, deliberately: every consumer of this lookup
+    // except the configuration mapping below feeds it a key-typed value —
+    // the saved conversation's edge, the legacy `category.<id>` tags, the
+    // sidebar's catKey. A hierarchy can mint a key that equals ANOTHER
+    // category's name, and on such a collision the key interpretation is
+    // the only one those consumers can survive; a configuration spelling
+    // that names nothing else unambiguously anyway.
+    resolveCategoryReference(reference) {
+      if (reference === null || reference === undefined || reference === '') {
+        return null;
+      }
+      const id = reference.toString();
+      const { byKey, byNameEn } = this.categoryIndexes;
+      return byKey.get(id) || byNameEn.get(id) || null;
+    },
+
+    // The hierarchy's own key for the category a reference names — what
+    // the conversation's edge speaks (`serviceCategories/<key>`). Null
+    // when the hierarchy carries no such category. Every category the
+    // index returns was addressed by its key to get there, so the
+    // resolution carries the key with it by construction.
+    quickHelpCategoryKey(reference) {
+      const category = this.resolveCategoryReference(reference);
+      return category ? category.catKey.toString() : null;
+    },
+
+    // The category id a configuration reference speaks: the hierarchy's
+    // own key for the category it names. The reference the hierarchy
+    // cannot name keeps its own spelling — the scope is then broken, and
+    // a broken scope is a visible error, never a silently unscoped query.
+    // 'general' (and empty) declare NO scope in every rule of this file:
+    // they are never looked up, or a hierarchy category literally named
+    // "general" would hijack a category-less selection into a real scope.
+    // The named twin of the mobile's categoryIdFor: the rules live here
+    // once, not repeated at every call site.
+    quickHelpCategoryIdFor(reference) {
+      if (!declaresCategoryScope(reference)) return reference;
+      return this.quickHelpCategoryKey(reference) ?? reference;
+    },
+
+    // A scope the chat already carries, re-resolved against the tree that
+    // just landed. A scope restored while the hierarchy was down keeps the
+    // configuration's own spelling — the tree was not there to turn it
+    // into the key — and left alone, the next save would write that
+    // spelling as the conversation's category edge
+    // (`serviceCategories/<categoryId>`): a document that does not exist.
+    // The mobile twin re-resolves its restored scope when the tree
+    // settles; this is the web's equivalent. Own guard: this recovery
+    // must not be cancelled by (nor cancel) the button re-mapping that
+    // runs beside it.
+    reResolveInstalledScopeAgainstHierarchy() {
+      try {
+        // quickHelpCategoryIdFor owns the no-scope-placeholder rule: a
+        // 'general' selection and 'general'-categoryed chips pass through
+        // untouched, whatever the hierarchy carries.
+        if (this.currentCategoryId) {
+          this.currentCategoryId = this.quickHelpCategoryIdFor(this.currentCategoryId);
+        }
+        if (!this.selectedContextItems.some((item) => item.category)) {
+          return;
+        }
+        const wasDirty = this.hasUnsavedChanges();
+        const mapped = this.selectedContextItems.map((item) => {
+          if (!item.category) return item;
+          const category = this.quickHelpCategoryIdFor(item.category);
+          const next = { ...item, category };
+          // A category-only chip's display is the category's own name —
+          // blank or raw while the tree was down, nameable now. A Quick
+          // Help chip's display is its BUTTON's title; it never re-resolves
+          // through the category.
+          if (item.categoryOnly) {
+            next.service = this.getCategoryDisplayName(category) || item.service;
+          }
+          return next;
+        });
+        const changed = mapped.some(
+          (item, index) =>
+            item.category !== this.selectedContextItems[index].category ||
+            item.service !== this.selectedContextItems[index].service
+        );
+        if (!changed) {
+          return;
+        }
+        this.$store.commit('conversation/setContextItems', mapped);
+        // The mapping moved fields the user cannot edit: a conversation
+        // that was clean before the tree landed must not read as unsaved
+        // because of it. A conversation the user HAD edited keeps its
+        // dirty state.
+        if (!wasDirty) {
+          this.$store.commit('conversation/setSavedState');
+        }
+      } catch (scopeError) {
+        console.error('[ChatBotComponent] Failed to re-resolve the installed scope against the hierarchy:', scopeError);
+      }
     },
 
     // The localized name of the entity whose EN label is [en] — a saved
@@ -1346,8 +1478,9 @@ export default {
 
     // Whether a scope can be put on the wire. A button that declares a
     // category can only NAME it through the live tree — the config carries
-    // the key, the wire needs the ENGLISH label. No label, no query: a query
-    // without it would answer from the whole corpus.
+    // the category's name (or its key, for a configuration written before
+    // that spelling), the wire needs the ENGLISH label. No label, no query:
+    // a query without it would answer from the whole corpus.
     quickHelpScopeIsNameable(categoryId) {
       // An id that declares NO category scope (empty, or the 'general'
       // placeholder) is how a selection is CLEARED — the hierarchy has
@@ -1745,7 +1878,10 @@ export default {
             visibleText: visibleText,
             hiddenPrompt: hiddenPrompt,
             icon: button.icon?.value,
-            category: button.category,
+            // The configuration names its category; the hierarchy's own key
+            // is what the rest of the app speaks — the conversation's edge
+            // (`serviceCategories/<key>`) among them.
+            category: this.quickHelpCategoryIdFor(button.category),
             styles: button.styles,
             // Pass the placement field through so the tile / composer
             // routing in the welcome panel can read it directly.
@@ -1813,10 +1949,10 @@ export default {
         return;
       }
       const categoryId = rawOption.category || (rawOption.id !== 'just-chat' ? 'general' : null);
-      // The config carries the category KEY; the wire needs its ENGLISH
-      // label, and only the live tree can say it. A tree that did not load
-      // cannot name the scope — and a query without it would answer from the
-      // whole corpus, from a button the user believes is scoped.
+      // The config names the category; the wire needs its ENGLISH label,
+      // and only the live tree can say it. A tree that did not load cannot
+      // name the scope — and a query without it would answer from the whole
+      // corpus, from a button the user believes is scoped.
       if (!this.quickHelpScopeIsNameable(categoryId)) {
         return;
       }

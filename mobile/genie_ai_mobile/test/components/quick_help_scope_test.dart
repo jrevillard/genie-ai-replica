@@ -172,6 +172,116 @@ void main() {
     });
   });
 
+  // The category a CONFIGURATION names.
+  //
+  // The configuration writes the category's ENGLISH NAME — the label the
+  // hierarchy publishes and the corpus filters on. The database key stays
+  // accepted: a configuration written before the change still names a
+  // category, and a deployment's configuration is edited on its own.
+  // The resolution is asserted at the boundaries that consume it — the
+  // grid's verdict (stateFor), the names the user reads, and the id the
+  // conversation's edge speaks (categoryIdFor) — never at the internal
+  // accessor those boundaries share.
+  group('QuickHelpScopeResolver.categoryReference', () {
+    test('a category named by its ENGLISH name resolves', () {
+      final button = {
+        'id': 'civil',
+        'serviceLabels': ['Births'],
+        'category': 'Civil Registry',
+      };
+
+      expect(resolver.stateFor(button)['broken'], isFalse);
+      expect(resolver.categoryLabelEn(button), 'Civil Registry');
+    });
+
+    test('a category named by its database key still resolves', () {
+      final button = {
+        'id': 'civil',
+        'serviceLabels': ['Births'],
+        'category': '2',
+      };
+
+      expect(resolver.stateFor(button)['broken'], isFalse);
+      expect(resolver.categoryLabelEn(button), 'Civil Registry');
+    });
+
+    test('a name the hierarchy does not carry names no category', () {
+      final state = resolver.stateFor({'id': 'civil', 'category': 'Taxes'});
+
+      expect(state['broken'], isTrue);
+      expect(state['categoryMissing'], isTrue);
+      expect(resolver.categoryLabelEn({'category': 'Taxes'}), isNull);
+    });
+
+    test('the localized name of a category named by its ENGLISH name', () {
+      expect(resolver.categoryDisplayName('Civil Registry'), 'État civil');
+    });
+
+    test('the category id a reference speaks is the hierarchy key', () {
+      expect(resolver.categoryIdFor('Civil Registry'), '2');
+      expect(resolver.categoryIdFor('2'), '2');
+    });
+
+    test(
+      'a hierarchy key that equals another category NAME resolves the keyed category',
+      () {
+        // A re-created hierarchy can mint a key that equals another
+        // category's name. The key-typed consumers — the conversation's
+        // edge, the legacy tags — must keep resolving to the KEYED
+        // category: the name interpretation would restore the wrong scope.
+        final tree = <dynamic>[
+          {
+            'catKey': '2024',
+            'name': 'The Year Area',
+            'nameEN': 'The Year Area',
+            'children': <dynamic>[],
+          },
+          {
+            'catKey': '7',
+            'name': '2024',
+            'nameEN': '2024',
+            'children': <dynamic>[],
+          },
+        ];
+        final resolver = QuickHelpScopeResolver(tree);
+
+        expect(resolver.categoryDisplayName('2024'), 'The Year Area');
+        expect(resolver.categoryLabelEn({'category': '2024'}), 'The Year Area');
+      },
+    );
+
+    test('the no-scope placeholder is never reinterpreted', () {
+      // 'general' declares NO scope in every rule of the file. A hierarchy
+      // category literally named "general" must not hijack a category-less
+      // selection into a real scope.
+      final tree = <dynamic>[
+        {
+          'catKey': '2',
+          'name': 'Civil Registry',
+          'nameEN': 'Civil Registry',
+          'children': <dynamic>[],
+        },
+        {
+          'catKey': '9',
+          'name': 'General',
+          'nameEN': 'general',
+          'children': <dynamic>[],
+        },
+      ];
+      final resolver = QuickHelpScopeResolver(tree);
+
+      expect(resolver.categoryIdFor('general'), 'general');
+      expect(resolver.categoryIdFor(''), '');
+      expect(resolver.categoryIdFor(null), isNull);
+    });
+
+    test('a reference the hierarchy cannot name keeps its own spelling', () {
+      // The scope is broken — a broken scope sends nothing — but what the
+      // configuration wrote is still what the conversation carries.
+      expect(resolver.categoryIdFor('Taxes'), 'Taxes');
+    });
+  });
+
   // The scope of a saved conversation: what the conversation was asked in,
   // resolved against the live hierarchy and the Quick Help buttons.
   group('ConversationScopeResolver.resolve', () {
@@ -207,6 +317,23 @@ void main() {
       expect(scope.categoryId, '2');
       expect(scope.categoryNameEn, 'Civil Registry');
       expect(scope.categoryName, 'Estado civil');
+      expect(scope.serviceLabelsEn, ['Births']);
+    });
+
+    test('a button that names its category by ENGLISH resolves to the key', () {
+      // The configuration names the category; the conversation's edge
+      // speaks the hierarchy's own key — the one the backend writes as
+      // `serviceCategories/<key>`.
+      final scope = convResolver([
+        {
+          'id': 'civil',
+          'category': 'Civil Registry',
+          'serviceLabels': ['Births'],
+        },
+      ]).resolve(tags: ['civil']);
+
+      expect(scope.categoryId, '2');
+      expect(scope.categoryNameEn, 'Civil Registry');
       expect(scope.serviceLabelsEn, ['Births']);
     });
 

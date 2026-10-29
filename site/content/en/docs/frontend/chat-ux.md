@@ -187,7 +187,7 @@ Card config (each entry in config.features.chat.quickHelp.buttons):
   },
   "service": "Agriculture",
   "serviceLabels": ["Farming subsidies"],
-  "category": "1",
+  "category": "Utilities & Environment",
   "icon": "agriculture.svg"
 }
 ```
@@ -196,8 +196,15 @@ Card config (each entry in config.features.chat.quickHelp.buttons):
 names the knowledge tree carries** (`nameEN`, as `GET
 /api/service-categories/categories` publishes it) — the same spelling the
 retriever filters on, so a slug like `agriculture` or `rural-development`
-names nothing and breaks the card. `category` is the category's **key**
-(`catKey`, from the same endpoint — the shipped configs use `1`…`9`). A card
+names nothing and breaks the card. `category` is the category's **English
+name** (`nameEN`, from the same endpoint — the shipped configs use `Taxes &
+Revenue`, `Identity & Civil Registration`, …): the spelling a deployment can
+write down without reading the database, and the one a re-created hierarchy
+keeps working with as long as it re-creates the categories under the same
+English names. After a re-seed whose labels drifted, re-verify the cards'
+health — a renamed category shows as an error card, never a silently
+unscoped query. The hierarchy's own `catKey` is still accepted, for
+configurations written before that spelling was adopted. A card
 in the grid whose declared labels or category are not in the live hierarchy
 renders with a danger icon and a caption naming the problem, and the click
 sends nothing: the drift is visible, never a silently reduced scope. (The

@@ -114,12 +114,12 @@ String? activeQuickHelpTitleFor(
 
 /// Checks Quick Help buttons against the live hierarchy.
 ///
-/// The hierarchy is what NAMES a scope: the config carries a category
-/// KEY, the wire carries its ENGLISH label, and only the hierarchy can
-/// say what that label is. A hierarchy that has not loaded says nothing
-/// about any button ([pending]); one that could not be loaded is the
-/// CALLER's fact — the widget marks it and passes each button through
-/// [unavailableScopeFor].
+/// The hierarchy is what NAMES a scope: the config carries the category's
+/// name (or its key, for a configuration written before that spelling), the
+/// wire carries its ENGLISH label, and only the hierarchy can say what that
+/// label is. A hierarchy that has not loaded says nothing about any button
+/// ([pending]); one that could not be loaded is the CALLER's fact — the
+/// widget marks it and passes each button through [unavailableScopeFor].
 class QuickHelpScopeResolver {
   /// The ENGLISH spelling of [entry]: its `nameEN`, or its `name` when
   /// the tree predates the dual-spelling response. The fallback is
@@ -186,9 +186,18 @@ class QuickHelpScopeResolver {
   final Map<String, String> _categoryLabelsEn;
   final Map<String, String> _categoryNames;
 
+  /// The category keys by their ENGLISH name — the identifier a
+  /// CONFIGURATION names a category by. The inversion of the label index
+  /// above: an entry the hierarchy cannot address by key cannot be
+  /// addressed by name either, and the first of two categories sharing a
+  /// name wins.
+  late final Map<String, String> _categoryKeysByName = _invertByNameEn(
+    _categoryLabelsEn,
+  );
+
   /// Categories by key, FIRST-wins, each mapped by [valueOf]. The one
-  /// walk behind both indexes (the EN-label index and the display-name
-  /// index) — a skip rule added to one belongs to both.
+  /// walk behind the two key indexes (the EN-label index and the
+  /// display-name index) — a skip rule added to one belongs to both.
   static Map<String, String> _indexByCatKey(
     List<dynamic> enTree,
     String Function(Map entry) valueOf,
@@ -202,6 +211,60 @@ class QuickHelpScopeResolver {
       byKey[key] = valueOf(entry);
     }
     return byKey;
+  }
+
+  /// The category keys by their ENGLISH name, FIRST-wins — the label
+  /// index read backwards. The name is the identifier a configuration
+  /// writes down; the key it resolves to is what the rest of the app
+  /// speaks. The walk that built the label index owns the tree's skip
+  /// rules; this is only its inversion.
+  static Map<String, String> _invertByNameEn(Map<String, String> labelsByKey) {
+    final byName = <String, String>{};
+    labelsByKey.forEach((key, en) {
+      if (en.isEmpty) return;
+      if (byName.containsKey(en)) return;
+      byName[en] = key;
+    });
+    return byName;
+  }
+
+  /// The hierarchy's own key for the category the [reference] names, or
+  /// null when the hierarchy carries no such category.
+  ///
+  /// The configuration names a category by its ENGLISH NAME — the label
+  /// the hierarchy publishes and the corpus filters on, and the one a
+  /// deployment can write down without reading the database. The
+  /// database key stays accepted: a configuration written before that
+  /// spelling was adopted still names a category, and a deployment's
+  /// configuration is edited on its own.
+  ///
+  /// The KEY is tried first, deliberately: the consumers of the resolved
+  /// key — the conversation's edge, the legacy `category.<id>` tags — all
+  /// speak keys, and a hierarchy can mint a key that equals ANOTHER
+  /// category's name. On such a collision the key interpretation is the
+  /// only one those consumers can survive; a configuration spelling that
+  /// names nothing else unambiguously anyway.
+  String? _categoryKeyFor(String? reference) {
+    if (reference == null || reference.isEmpty) return null;
+    // The legacy spelling: the key the hierarchy itself minted.
+    if (_categoryLabelsEn.containsKey(reference)) return reference;
+    return _categoryKeysByName[reference];
+  }
+
+  /// The category id a configuration reference speaks: the hierarchy's own
+  /// key for the category it names.
+  ///
+  /// The configuration names its category; the key is what the app speaks
+  /// everywhere else — the conversation's edge (`serviceCategories/<key>`)
+  /// among them. A reference the hierarchy cannot name keeps its own
+  /// spelling: the scope is then broken, and a broken scope is a visible
+  /// error, never a silently unscoped query. 'general' (and empty) declare
+  /// NO scope in every rule of this file: they are never looked up, or a
+  /// hierarchy category literally named "general" would hijack a
+  /// category-less selection into a real scope.
+  String? categoryIdFor(String? reference) {
+    if (!declaresCategoryScope(reference)) return reference;
+    return _categoryKeyFor(reference) ?? reference;
   }
 
   static Set<String> _collectEnLabels(List<dynamic> enTree) {
@@ -256,21 +319,24 @@ class QuickHelpScopeResolver {
   String? categoryLabelEn(Map<String, dynamic> button) =>
       categoryEnLabel(button['category']?.toString());
 
-  /// The ENGLISH label of the category [catKey]. Null when the hierarchy
-  /// does not carry it, or carries it without an EN translation — a scope
-  /// that cannot be named, and so cannot be put on the wire.
-  String? categoryEnLabel(String? catKey) {
-    if (catKey == null || catKey.isEmpty) return null;
-    final en = _categoryLabelsEn[catKey];
+  /// The ENGLISH label of the category the [reference] names. Null when
+  /// the hierarchy does not carry it, or carries it without an EN
+  /// translation — a scope that cannot be named, and so cannot be put on
+  /// the wire.
+  String? categoryEnLabel(String? reference) {
+    final key = _categoryKeyFor(reference);
+    if (key == null) return null;
+    final en = _categoryLabelsEn[key];
     if (en == null || en.isEmpty) return null;
     return en;
   }
 
-  /// The localized name of the category [catKey] — what the user reads.
-  /// Display only: it never filters.
-  String? categoryDisplayName(String? catKey) {
-    if (catKey == null || catKey.isEmpty) return null;
-    final name = _categoryNames[catKey];
+  /// The localized name of the category the [reference] names — what the
+  /// user reads. Display only: it never filters.
+  String? categoryDisplayName(String? reference) {
+    final key = _categoryKeyFor(reference);
+    if (key == null) return null;
+    final name = _categoryNames[key];
     if (name == null || name.isEmpty) return null;
     return name;
   }
@@ -444,7 +510,11 @@ class ConversationScopeResolver {
       // The button's own category WINS; a button that declares NONE keeps
       // the conversation's own edge — dropping it sent the follow-up
       // unscoped (a silent widening) while the web kept the edge.
-      final effectiveCategory = category ?? categoryKey;
+      // The configuration names its category; the hierarchy's own key is
+      // what the conversation's edge speaks.
+      final effectiveCategory = category == null
+          ? categoryKey
+          : _hierarchy.categoryIdFor(category);
       return ConversationScope(
         categoryId: effectiveCategory,
         categoryNameEn: _hierarchy.categoryEnLabel(effectiveCategory),
@@ -540,10 +610,10 @@ bool shouldReResolveRestoredScope({
 
 /// Whether the button's scope can be put on the wire.
 ///
-/// The config carries the category KEY; the wire needs its ENGLISH label,
-/// and only the live tree can say it. A tree that did not load cannot name
-/// the scope — and a query without it would answer from the whole corpus,
-/// from a button the user believes is scoped. No label, no query.
+/// The config names the category; the wire needs its ENGLISH label, and
+/// only the live tree can say it. A tree that did not load cannot name the
+/// scope — and a query without it would answer from the whole corpus, from
+/// a button the user believes is scoped. No label, no query.
 bool quickHelpScopeIsNameable(
   Map<String, dynamic> button,
   QuickHelpScopeResolver? resolver,

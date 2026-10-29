@@ -41,7 +41,7 @@ Configurations are JSON files in `/public/config/`, validated against a JSON sch
           - `id` (string): Unique identifier.
           - `title` (string): i18n key for button label.
           - `icon` (object): Icon configuration (`type`: `file` or `inline`, `value`: SVG path or content).
-          - `category` (string or null): Category ID for knowledge area (null for general).
+          - `category` (string or null): The knowledge area's ENGLISH name in the live hierarchy (e.g. `Taxes & Revenue`), null for general. The hierarchy's own database key is still accepted, for configurations written before that spelling.
           - `prompt` (string): i18n key for the prompt sent when clicked.
           - `styles` (object): Custom styles (`backgroundColor`, `hoverColor`, `outlineColor`).
   - **`custom`**: Arbitrary key-value pairs for custom settings.
@@ -147,7 +147,7 @@ Configurations are JSON files in `/public/config/`, validated against a JSON sch
               "type": "file",
               "value": "/config/quickhelp/tafsir-overview.svg"
             },
-            "category": "tafsir",
+            "category": "Tafsir",
             "prompt": "quickhelp.tafsirOverviewPrompt",
             "styles": {
               "backgroundColor": "#EAF4F4",
@@ -204,7 +204,7 @@ Quick Help buttons provide quick access to specific knowledge areas and predefin
      - **id**: Unique identifier for the button (e.g., `just-chat`).
      - **title**: i18n key for the button label (e.g., `quickhelp.justChat`).
      - **icon**: Specify icon `type` (`file` or `inline`) and `value` (SVG path or content).
-     - **category**: Category ID for the knowledge area (e.g., `1` for civil services, `null` for general queries).
+     - **category**: The knowledge area's ENGLISH name in the live hierarchy (e.g., `Identity & Civil Registration` for civil services, `null` for general queries). The hierarchy's own database key is still accepted, for configurations written before that spelling.
      - **prompt**: i18n key for the prompt sent to the chatbot when clicked (e.g., `quickhelp.justChatPrompt`).
      - **styles**: Define `backgroundColor`, `hoverColor`, and `outlineColor` for button styling.
    - Example: Adding a button for job search assistance:
@@ -220,7 +220,7 @@ Quick Help buttons provide quick access to specific knowledge areas and predefin
                  "type": "file",
                  "value": "/config/quickhelp/employment-labor.svg"
                },
-               "category": "4",
+               "category": "Employment & Labor Services",
                "prompt": "quickhelp.findJobsPrompt",
                "styles": {
                  "backgroundColor": "#D3E0EA",
@@ -285,7 +285,7 @@ To configure a new chatbot (e.g., "EcoChat"):
                  "type": "file",
                  "value": "/config/quickhelp/sustainability-tips.svg"
                },
-               "category": "eco",
+               "category": "Environment",
                "prompt": "quickhelp.sustainabilityTipsPrompt",
                "styles": {
                  "backgroundColor": "#E6F4EA",

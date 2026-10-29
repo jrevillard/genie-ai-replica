@@ -1,7 +1,25 @@
-{{/* Test-pod helpers. Lives in _lib/ (a .tpl file) because helm lint
-parses .yaml templates as YAML, and a `define` body inside a .yaml
-template is not YAML — lint dies on the scaffolding's colons before the
-renderer ever runs. */}}
+{{/* Test-pod helpers. Lives in _lib/ by convention (shared partials
+live in _lib/; a `define` in the consuming .yaml is legal but its
+whitespace interactions with the surrounding document are easy to get
+subtly wrong — the first version of the scaffolding include glued the
+preceding line to `spec:` with a trimming dash and lint caught the
+broken YAML). */}}
+
+{{- /* One operator-supplied Secret NAME interpolated into the test
+pods' shell script. The name reaches `sh` inside a pod carrying the
+dep-check SA — the same discipline validatedConvergenceEnvSecrets
+applies to the convergence rows, applied to every raw interpolation:
+the shape is the Kubernetes Secret-name shape, and a violation fails
+the RENDER naming the values key, never the shell. Takes
+{name, key}: `name` is the value, `key` the values path for the
+failure message. */ -}}
+{{- define "genieai-umbrella.validatedSecretName" -}}
+{{- $name := toString .name -}}
+{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" $name) -}}
+{{- fail (printf "%s (%q) is not a valid Secret name: lowercase alphanumerics, '.' and '-', bounded by alphanumerics" (.key | toString) $name) -}}
+{{- end -}}
+{{- $name -}}
+{{- end -}}
 
 {{- /* The scaffolding BOTH test pods (test-namespace, test-data-deps)
 share — SA, pull secrets, security posture, the tools emptyDir +

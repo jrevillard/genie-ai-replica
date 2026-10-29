@@ -163,8 +163,8 @@ class TestVocabularyShape:
         # key that distinguishes "hit the budget" from "still running", and a
         # shared phase ceiling needs one that says which phase ran out. Bump
         # this with the addition it accounts for.
-        # 84: answer.abstention_reason (issue #1121) — the boolean alone
-        # cannot split a spike into stale scopes vs an over-rejecting reranker.
+        # 84: answer.abstention_reason — the boolean alone cannot split a
+        # spike into stale scopes vs an over-rejecting reranker.
         assert len(ATTRIBUTE_NAMES) == 84
 
 

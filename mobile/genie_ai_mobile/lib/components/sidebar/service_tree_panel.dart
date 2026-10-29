@@ -154,7 +154,11 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     String serviceEn = "";
 
     if (serviceItem is Map) {
-      serviceId = (serviceItem['id'] ?? serviceItem['key'] ?? "").toString();
+      // The tree's children publish their entity _key: it is the
+      // identity — neither spelling of the name is unique inside a
+      // category. An empty id (a tree that predates the field) falls
+      // through to the label rules below.
+      serviceId = (serviceItem['_key'] ?? "").toString();
       serviceName = serviceItem['label'] ?? serviceItem['name'] ?? "Unknown";
       final en = serviceItem['nameEN'];
       serviceEn = (en is String) ? en : "";
@@ -165,16 +169,39 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     }
 
     // 3. Update Selection State
-    // Check if this specific item is already selected. The children
-    // carry no id/key, so their identity is the (category, name) pair:
-    // matching on the name alone crossed the categories — two services
-    // named alike in different categories toggled each other's scope,
-    // and the highlight desynced from what the chat received.
-    final existingIndex = _orderedSelection.indexWhere(
-      (item) =>
-          (item['id'] == serviceId && serviceId.isNotEmpty) ||
-          (item['name'] == serviceName && item['category_id'] == categoryId),
-    );
+    // Check if this specific item is already selected.
+    //
+    // The identity is the entity KEY — the tree publishes it on every
+    // child, and neither spelling of the name is unique inside a
+    // category: two services can share either spelling, and matching on
+    // a name toggled the other one off (across categories on the old
+    // name rule, inside one on the label one).
+    //
+    // A row without a key (a tree that predates the field) falls back to
+    // the ENGLISH label — the spelling the wire speaks, and the one the
+    // web keys on — and the display name stands in only for a row that
+    // carries no English label at all.
+    final existingIndex = _orderedSelection.indexWhere((item) {
+      final String itemId = (item['id'] as String? ?? '');
+      // A keyed stored row answers only in the key space, and the
+      // category travels with the key: categoryServices is many-to-many,
+      // so one service can sit under two categories and the web counts
+      // the two rows as two scopes.
+      if (itemId.isNotEmpty) {
+        return serviceId.isNotEmpty &&
+            itemId == serviceId &&
+            item['category_id'] == categoryId;
+      }
+      // Both rows are keyless: the ENGLISH label is the identity, the
+      // spelling the wire speaks — the display name stands in only for a
+      // row that carries no English label at all.
+      if (serviceEn.isNotEmpty) {
+        return item['nameEn'] == serviceEn && item['category_id'] == categoryId;
+      }
+      return (item['nameEn'] as String? ?? '').isEmpty &&
+          item['name'] == serviceName &&
+          item['category_id'] == categoryId;
+    });
 
     setState(() {
       if (existingIndex >= 0) {

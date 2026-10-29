@@ -303,8 +303,51 @@ describe('ServiceCategoryService', () => {
       // one. `nameEN: null` and `nameEN: serviceTranslation` both leave
       // the corpus vocabulary empty while every pattern above still
       // matches, so the shape alone does not prove the value.
-      expect(text).toMatch(/name:\s*categoryTranslation,\s*nameEN:\s*categoryTranslationEN/);
-      expect(text).toMatch(/name:\s*serviceTranslation,\s*nameEN:\s*serviceTranslationEN/);
+      expect(text).toMatch(/name:\s*categoryName,\s*nameEN:\s*categoryNameEN/);
+      expect(text).toMatch(/name:\s*serviceName,\s*nameEN:\s*serviceNameEN/);
+    });
+
+    it('falls back to the EN translation for the display name when the locale has none', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('done'));
+      await service.getAllCategoriesWithServices('fr').catch(() => {});
+
+      const queryArg = mockDb.query.mock.calls[0][0];
+      const text = queryArg.strings.join('|');
+      // An entity nobody translated in the active locale used to publish
+      // a NULL name, and the clients hid it: a blank category row, and
+      // services dropped from the tree altogether — the tree showed less
+      // than exists. The DISPLAY name falls back to the ENGLISH one, the
+      // name the corpus filters on, so the label the user reads is the
+      // label that scopes the query. The locale's own translation still
+      // wins wherever there is one.
+      expect(text).toMatch(
+        /LET categoryName = LENGTH\(TRIM\(categoryTranslation\)\) > 0 \? categoryTranslation : categoryNameEN/
+      );
+      expect(text).toMatch(
+        /LET serviceName = LENGTH\(TRIM\(serviceTranslation\)\) > 0 \? serviceTranslation : serviceNameEN/
+      );
+    });
+
+    it('falls back to the entity document nameEN when no EN translation row exists', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('done'));
+      await service.getAllCategoriesWithServices('en').catch(() => {});
+
+      const queryArg = mockDb.query.mock.calls[0][0];
+      const text = queryArg.strings.join('|');
+      // An entity seeded outside the write path (the taxonomy seed script
+      // writes the document field and no translation row at all) would
+      // publish an EMPTY English name — the very symptom the tree must not
+      // show: a blank row, and services the clients drop. The document's
+      // cached nameEN is the fallback the corpus's own EN resolution
+      // applies, so the tree must use it too. The write path keeps the
+      // document and the row in sync, so this can only fill a missing row
+      // with the text the row would have carried.
+      expect(text).toMatch(
+        /categoryTranslationEN\)\)\s*>\s*0\s*\?\s*categoryTranslationEN\s*:\s*\(LENGTH\(TRIM\(category\.nameEN\)\)\s*>\s*0\s*\?\s*category\.nameEN\s*:\s*null\)/
+      );
+      expect(text).toMatch(
+        /serviceTranslationEN\)\)\s*>\s*0\s*\?\s*serviceTranslationEN\s*:\s*\(LENGTH\(TRIM\(service\.nameEN\)\)\s*>\s*0\s*\?\s*service\.nameEN\s*:\s*null\)/
+      );
     });
 
     it('should throw on database error', async () => {
@@ -364,6 +407,24 @@ describe('ServiceCategoryService', () => {
       expect(text).toMatch(/_key:\s*service\._key,\s*name:\s*serviceTranslation,\s*nameEN:\s*serviceNameEN/);
     });
 
+    it('keeps the LOCALIZED name as its display name — no English fallback', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('done'));
+      await service.getAdminAllCategoriesWithServices('fr').catch(() => {});
+
+      const queryArg = mockDb.query.mock.calls[0][0];
+      const text = queryArg.strings.join('|');
+      // The public tree falls back to the English name for an entity the
+      // locale has no translation for; the admin tree does NOT. The admin
+      // panel keys its label map by this display name — the file's labels
+      // ARE locale names — so an English fallback here would let two
+      // entities share one key and file a label under the wrong entity.
+      // The sibling shape test above already pins what the RETURN does
+      // carry; this one fails the moment the public tree's display-name
+      // fallback is copy-pasted in.
+      expect(text).not.toMatch(/LET categoryName =/);
+      expect(text).not.toMatch(/LET serviceName =/);
+    });
+
     it('falls back to the entity document nameEN when no EN translation row exists', async () => {
       mockDb.query.mockRejectedValueOnce(new Error('done'));
       await service.getAdminAllCategoriesWithServices('en').catch(() => {});
@@ -376,8 +437,12 @@ describe('ServiceCategoryService', () => {
       // English name — the very symptom the admin panel must not show.
       // The document's cached nameEN is the fallback the corpus's own EN
       // resolution uses, so the tree must use it too.
-      expect(text).toMatch(/categoryTranslationEN\s*!=\s*null\s*\?\s*categoryTranslationEN\s*:\s*category\.nameEN/);
-      expect(text).toMatch(/serviceTranslationEN\s*!=\s*null\s*\?\s*serviceTranslationEN\s*:\s*service\.nameEN/);
+      expect(text).toMatch(
+        /categoryTranslationEN\)\)\s*>\s*0\s*\?\s*categoryTranslationEN\s*:\s*\(LENGTH\(TRIM\(category\.nameEN\)\)\s*>\s*0\s*\?\s*category\.nameEN\s*:\s*null\)/
+      );
+      expect(text).toMatch(
+        /serviceTranslationEN\)\)\s*>\s*0\s*\?\s*serviceTranslationEN\s*:\s*\(LENGTH\(TRIM\(service\.nameEN\)\)\s*>\s*0\s*\?\s*service\.nameEN\s*:\s*null\)/
+      );
     });
 
     it('should throw on database error', async () => {

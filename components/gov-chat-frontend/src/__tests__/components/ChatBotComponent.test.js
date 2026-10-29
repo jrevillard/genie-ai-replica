@@ -5147,6 +5147,11 @@ describe('Quick Help category reference', () => {
         }
       }
     });
+    // The hierarchy mock's IMPLEMENTATION survives clearAllMocks: every
+    // test starts from an empty hierarchy unless it installs its own.
+    const serviceTreeService = require('../../services/serviceTreeService');
+    serviceTreeService.getAllCategories.mockReset();
+    serviceTreeService.getAllCategories.mockResolvedValue([]);
   });
 
   afterEach(() => {

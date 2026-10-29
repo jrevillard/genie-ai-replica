@@ -934,4 +934,41 @@ void main() {
       expect(dedupeQuickHelpButtons([a, b]), [a, b]);
     });
   });
+
+  /// A locale switch reloads the buttons with the new locale's titles: the
+  /// context bar's title of an ACTIVE Quick Help scope must follow, and it
+  /// follows by IDENTITY (the button id), never by the pressed title.
+  group('activeQuickHelpTitleFor', () {
+    test('returns the reloaded button title for the active id', () {
+      // The button was pressed under 'en' ('Births'); the reload carried
+      // the 'fr' title. The active scope reads the FRENCH one.
+      final buttons = [
+        {'id': 'births', 'resolvedTitle': 'Naissances'},
+        {'id': 'crops', 'resolvedTitle': 'Cultures'},
+      ];
+
+      expect(activeQuickHelpTitleFor(buttons, 'births'), 'Naissances');
+    });
+
+    test('a null active id (sidebar scope or none) resolves nothing', () {
+      final buttons = [
+        {'id': 'births', 'resolvedTitle': 'Naissances'},
+        // A card with no id of its own must not adopt a scope-less
+        // selection: the null guard is what keeps it from matching.
+        {'resolvedTitle': 'Just chat'},
+      ];
+
+      expect(activeQuickHelpTitleFor(buttons, null), isNull);
+    });
+
+    test('a button the config no longer declares keeps its last title', () {
+      // The scope's identity is the id: a gone button must not blank the
+      // context bar — null lets the caller keep the title it has.
+      final buttons = [
+        {'id': 'crops', 'resolvedTitle': 'Cultures'},
+      ];
+
+      expect(activeQuickHelpTitleFor(buttons, 'births'), isNull);
+    });
+  });
 }

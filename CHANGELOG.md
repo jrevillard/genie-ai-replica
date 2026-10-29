@@ -203,6 +203,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that never answers shows the failed state instead of a spinner that turns
   forever. The public tree is unchanged by this fix: an entity with no
   English translation row still publishes `nameEN: null` there. (#1123)
+- **A selected Quick Help scope kept the title of the language it was selected
+  in.** On the mobile app, switching the interface language re-resolved the
+  Quick Help cards but left the context bar's title of the active Quick Help
+  scope in the old language; it now re-resolves the title by the button id,
+  the same way the web app already does on a locale switch. A button the
+  configuration no longer declares keeps its last title.
 - **The labelling prompt was different on every ingestion run.** The candidate
   labels sent to the labelling LLM were collected in a Python set, whose order
   follows the hash seed of the process that built it — so every container sent

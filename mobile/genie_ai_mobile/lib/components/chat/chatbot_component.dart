@@ -327,6 +327,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         // unavailable re-resolves now (button tags read as dead sidebar
         // tags against an empty button list).
         _maybeReResolveRestoredScope();
+        // A locale switch reloaded the buttons in the new language: the
+        // context bar's title of an ACTIVE Quick Help scope follows, by
+        // id. The restore path above only re-resolves a scope it still
+        // owns — a PRESSED scope would otherwise keep the title of the
+        // language it was pressed under (the web re-titles the same way
+        // on its locale watcher). A sidebar scope has no active button
+        // id and keeps its own name.
+        final activeTitle = activeQuickHelpTitleFor(
+          _quickHelpButtons,
+          _activeQuickHelpButtonId,
+        );
+        if (activeTitle != null) {
+          _selectedCategoryName = activeTitle;
+        }
       });
     } catch (e) {
       debugPrint("[CHATBOT] Failed to load genie-ai-config.json: $e");

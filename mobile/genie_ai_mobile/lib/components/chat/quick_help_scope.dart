@@ -42,6 +42,28 @@ List<Map<String, dynamic>> dedupeQuickHelpButtons(
   return unique;
 }
 
+/// The title of the ACTIVE Quick Help scope, re-resolved from the button
+/// list by its id — the mobile twin of the web's quickHelpTitleFor.
+///
+/// A locale switch re-resolves the buttons (a load in the new locale) and
+/// the context bar's title must follow: the scope's identity is the button
+/// id, not the title it was pressed under. A button the config no longer
+/// declares, or a null id (a sidebar scope, or none), resolves to null so
+/// the caller keeps the title it already has.
+String? activeQuickHelpTitleFor(
+  List<Map<String, dynamic>> buttons,
+  String? activeQuickHelpButtonId,
+) {
+  if (activeQuickHelpButtonId == null) return null;
+  for (final button in buttons) {
+    if (button['id']?.toString() == activeQuickHelpButtonId) {
+      final title = button['resolvedTitle']?.toString() ?? '';
+      if (title.isNotEmpty) return title;
+    }
+  }
+  return null;
+}
+
 /// Checks Quick Help buttons against the live hierarchy.
 ///
 /// The hierarchy is what NAMES a scope: the config carries a category

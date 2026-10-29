@@ -24,7 +24,7 @@ from metrics import (
 from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
 from core.label_contract import build_filter_labels, encode_filter_labels
 from core.model_cache import get_max_model_len, get_model_id
-from core.model_http_policy import AIOHTTP_CONNECT_TIMEOUT_SECONDS, CONTROL_PLANE_TIMEOUT_SECONDS
+from core.model_http_policy import AIOHTTP_CONNECT_TIMEOUT_SECONDS, CONTROL_PLANE_TIMEOUT_SECONDS, PROBE_TIMEOUT_SECONDS
 from core.span_attrs import ATTRIBUTE_NAMES, QUERY_ID_KEY, query_id_from_baggage
 from tracing import (
     get_tracer,
@@ -55,7 +55,6 @@ from fastapi import HTTPException, Request
 from fastapi.responses import StreamingResponse
 from keycloak_token_validator import JwksUnavailableError, validate_token
 from langdetect import detect
-from transformers import AutoTokenizer
 
 logger = CustomLogger("GENIE.AI_CHATQNA")
 setup_trace_logging("GENIE.AI_CHATQNA")
@@ -1895,20 +1894,57 @@ class UserContextBuilder:
 
 
 ##################################################################################################################################
-# TOKENIZER
+# TOKEN COUNTING
 ##################################################################################################################################
-TOKENIZER = None
 
 
-def get_tokenizer():
-    global TOKENIZER
-    if TOKENIZER is None:
-        TOKENIZER = AutoTokenizer.from_pretrained(
-            _get_llm_model(),
-            use_fast=True,
-            # local_files_only=True
-        )
-    return TOKENIZER
+def _count_tokens(text: str) -> int:
+    """Count tokens with the LLM server's ``/tokenize`` endpoint.
+
+    The server that serves generation tokenizes with the deployed model's
+    REAL tokenizer — the counts the context-window budget needs, for
+    whatever model is deployed, with no local tokenizer download. It
+    replaces a local ``AutoTokenizer.from_pretrained`` here, which could
+    only ever fail: the chatqna image bakes no HuggingFace cache and the
+    deployment grants no huggingface.co egress, so every chat died on
+    the first request with ``OSError: We couldn't connect to
+    'https://huggingface.co'`` (found live on the k8s deployment,
+    2026-10-29).
+
+    Same client shape as the model-id probe (core/model_cache.py): sync
+    httpx, PROBE timeout budget, ``OPEA_SSL_SKIP_VERIFY`` for the
+    self-signed GPU certs, ``Bearer VLLM_API_KEY``. The URL derives from
+    the same base the generation call and the probe use
+    (``_LLM_DISCOVERY_ENDPOINT``), so external (``VLLM_LLM_ENDPOINT``,
+    possibly a tunnel with a path prefix) and in-cluster
+    (``http://vllm:8000``) resolve identically.
+
+    A server without ``/tokenize`` (vLLM < 0.4.2) fails LOUDLY and on
+    purpose: the budget math below runs on these counts, and an
+    approximation would silently corrupt the history truncation — the
+    same reasoning that keeps the model-id probe from guessing.
+    """
+    url = f"{_LLM_DISCOVERY_ENDPOINT}/tokenize"
+    headers = {}
+    api_key = os.getenv("VLLM_API_KEY", "")
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    verify = os.getenv("OPEA_SSL_SKIP_VERIFY", "") != "1"
+    resp = httpx.post(
+        url,
+        headers=headers,
+        json={"model": _get_llm_model(), "prompt": text},
+        timeout=PROBE_TIMEOUT_SECONDS,
+        verify=verify,
+    )
+    resp.raise_for_status()
+    payload = resp.json()
+    # vLLM returns both the token list and a precomputed "count"; prefer
+    # the scalar, fall back to the list length for servers that omit it.
+    count = payload.get("count")
+    if count is None:
+        return len(payload.get("tokens", []))
+    return int(count)
 
 
 ##################################################################################################################################
@@ -2134,15 +2170,14 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # FIX: Separate system and user content for proper chat template handling
         user_content = _build_user_content(user_context_string, translated_history_string, rag_augmented_prompt)
 
-        tokenizer = get_tokenizer()
         max_model_tokens = _get_max_model_len()
         max_answer_tokens = _resolve_answer_budget_tokens(llm_parameters_dict.get("max_tokens"))
         # Count tokens part by part: the pieces feed the history budget below,
-        # so encoding them separately costs nothing extra on overflow requests.
-        # The 200-token buffer absorbs the ±1 boundary tokens the combined
-        # encode would merge.
-        system_tokens = len(tokenizer.encode(system_instructions))
-        user_content_tokens = len(tokenizer.encode(user_content))
+        # so counting them separately costs nothing extra on overflow requests.
+        # The 200-token buffer absorbs the ±1 boundary tokens a combined count
+        # would merge.
+        system_tokens = _count_tokens(system_instructions)
+        user_content_tokens = _count_tokens(user_content)
         full_prompt_tokens = system_tokens + user_content_tokens
         _active_span = otel_trace.get_current_span()
         _set_attributes(
@@ -2162,7 +2197,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             # what is finally sent. Segment separators (" |<-MSG->| ") are not
             # counted individually (~1-2 tokens per segment, absorbed by the
             # buffer).
-            skeleton_tokens = len(tokenizer.encode(_build_user_content(user_context_string, "", rag_augmented_prompt)))
+            skeleton_tokens = _count_tokens(_build_user_content(user_context_string, "", rag_augmented_prompt))
 
             max_history_tokens = max_model_tokens - system_tokens - max_answer_tokens - skeleton_tokens - 200
             # Split the history into segments (empty history = nothing to drop)
@@ -2171,7 +2206,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             current_tokens = 0
             # Start from most recent messages
             for segment in reversed(history_segments):
-                segment_tokens = len(tokenizer.encode(segment))
+                segment_tokens = _count_tokens(segment)
                 if current_tokens + segment_tokens > max_history_tokens:
                     break
                 truncated_history.insert(0, segment)  # Maintain order

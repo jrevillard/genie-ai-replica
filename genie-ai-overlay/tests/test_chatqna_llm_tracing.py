@@ -368,6 +368,14 @@ class TestAlignGeneratorWiring:
         assert len(captured_spans("llm.invoke")) == 1
 
 
+def _count_patch(tokenizer):
+    """Adapter: point ``_count_tokens`` at a mock tokenizer's ``.encode``."""
+    return patch(
+        "chatqna.genieai_chatqna._count_tokens",
+        side_effect=lambda text: len(tokenizer.encode(text)),
+    )
+
+
 class TestAlignInputsWiring:
     """The request params on chatqna.orchestrate are read from the wire body."""
 
@@ -377,7 +385,7 @@ class TestAlignInputsWiring:
         tokenizer.encode = lambda text: []
         with (
             patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-            patch("chatqna.genieai_chatqna.get_tokenizer", return_value=tokenizer),
+            _count_patch(tokenizer),
         ):
             return chatqna_module.align_inputs(
                 self_mock,

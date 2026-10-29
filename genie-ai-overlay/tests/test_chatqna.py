@@ -184,6 +184,14 @@ def _counting_tokenizer():
     return _CountingTokenizer()
 
 
+def _count_patch(tokenizer):
+    """Adapter: point ``_count_tokens`` at a mock tokenizer's ``.encode``."""
+    return patch(
+        "chatqna.genieai_chatqna._count_tokens",
+        side_effect=lambda text: len(tokenizer.encode(text)),
+    )
+
+
 @pytest.fixture(autouse=True)
 def _clear_model_len_cache():
     """Isolate the module-global model_cache TTL cache per test."""
@@ -604,7 +612,7 @@ class TestAlignInputs:
             inputs = {"inputs": "context text", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=create_mock_tokenizer({})),
+                _count_patch(create_mock_tokenizer({})),
             ):
                 result = align_inputs(self_mock, inputs, "llm_node", MagicMock(), llm_params)
             assert "messages" in result
@@ -627,7 +635,7 @@ class TestAlignInputs:
             mock_tok = create_mock_tokenizer({"system": 200, "USER": 100})
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=mock_tok),
+                _count_patch(mock_tok),
                 patch("chatqna.genieai_chatqna._GPU_NODE_HOST", ""),
                 patch("chatqna.genieai_chatqna.MAX_MODEL_LEN_TEXTGEN", 600),
             ):
@@ -663,7 +671,7 @@ class TestAlignInputs:
             models_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 65536}]}
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=counting_tok),
+                _count_patch(counting_tok),
                 patch("chatqna.genieai_chatqna._LLM_DISCOVERY_ENDPOINT", "https://gpu-host/llm"),
                 patch("httpx.get", return_value=models_resp),
             ):
@@ -688,7 +696,7 @@ class TestAlignInputs:
             models_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 65536}]}
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=counting_tok),
+                _count_patch(counting_tok),
                 patch("chatqna.genieai_chatqna._LLM_DISCOVERY_ENDPOINT", "https://gpu-host/llm"),
                 patch("httpx.get", return_value=models_resp),
                 patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
@@ -713,7 +721,7 @@ class TestAlignInputs:
             mock_tok = create_mock_tokenizer({"rag prompt": 100})
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=mock_tok),
+                _count_patch(mock_tok),
                 patch("chatqna.genieai_chatqna._LLM_DISCOVERY_ENDPOINT", "https://gpu-host/llm"),
                 patch(
                     "httpx.get", return_value=MagicMock(json=lambda: {"data": [{"id": "m", "max_model_len": 65536}]})
@@ -749,7 +757,7 @@ class TestAlignInputs:
             # kept all three.
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_Tok()),
+                _count_patch(_Tok()),
                 patch("chatqna.genieai_chatqna._GPU_NODE_HOST", ""),
                 patch("chatqna.genieai_chatqna.CHATQNA_SYSTEM_PROMPT", "SYSTOK"),
                 patch("chatqna.genieai_chatqna.MAX_MODEL_LEN_TEXTGEN", 4096),
@@ -784,7 +792,7 @@ class TestAlignInputs:
             # budget = 4096 − 3000 − 1024 − 500 − 200 < 0 → wipe.
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_Tok()),
+                _count_patch(_Tok()),
                 patch("chatqna.genieai_chatqna._GPU_NODE_HOST", ""),
                 patch("chatqna.genieai_chatqna.CHATQNA_SYSTEM_PROMPT", "SYSTOK SYSTOK SYSTOK"),
                 patch("chatqna.genieai_chatqna.MAX_MODEL_LEN_TEXTGEN", 4096),
@@ -813,7 +821,7 @@ class TestAlignInputs:
 
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_Tok()),
+                _count_patch(_Tok()),
                 patch("chatqna.genieai_chatqna._GPU_NODE_HOST", ""),
                 patch("chatqna.genieai_chatqna.CHATQNA_SYSTEM_PROMPT", "SYSTOK SYSTOK SYSTOK"),
                 patch("chatqna.genieai_chatqna.MAX_MODEL_LEN_TEXTGEN", 4096),
@@ -999,9 +1007,8 @@ class TestAlignInputsBundledDict:
         inputs = {"inputs": "rag prompt", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
         with (
             patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-            patch("chatqna.genieai_chatqna.get_tokenizer") as mock_tokenizer,
+            patch("chatqna.genieai_chatqna._count_tokens", return_value=0),
         ):
-            mock_tokenizer.return_value.encode.return_value = []
             result = align_inputs(
                 self_mock,
                 inputs,
@@ -1020,10 +1027,9 @@ class TestAlignInputsBundledDict:
         inputs = {"inputs": "rag prompt", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
         with (
             patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-            patch("chatqna.genieai_chatqna.get_tokenizer") as mock_tokenizer,
+            patch("chatqna.genieai_chatqna._count_tokens", return_value=0),
             patch("chatqna.genieai_chatqna.UserContextBuilder") as mock_builder,
         ):
-            mock_tokenizer.return_value.encode.return_value = []
             mock_builder.return_value.build_user_context_string.return_value = "user context"
             result = align_inputs(
                 self_mock,
@@ -1043,9 +1049,8 @@ class TestAlignInputsBundledDict:
         inputs = {"inputs": "rag prompt", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
         with (
             patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-            patch("chatqna.genieai_chatqna.get_tokenizer") as mock_tokenizer,
+            patch("chatqna.genieai_chatqna._count_tokens", return_value=0),
         ):
-            mock_tokenizer.return_value.encode.return_value = []
             result = align_inputs(
                 self_mock,
                 inputs,

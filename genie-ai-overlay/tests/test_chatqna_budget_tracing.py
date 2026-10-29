@@ -43,6 +43,14 @@ class _MarkerTokenizer:
         return [0] * (1000 * text.count("SYSTOK") + 100 * text.count("RAGTOK") + 500 * text.count("HISTTOK"))
 
 
+def _count_patch(tokenizer):
+    """Adapter: point ``_count_tokens`` at a mock tokenizer's ``.encode``."""
+    return patch(
+        "chatqna.genieai_chatqna._count_tokens",
+        side_effect=lambda text: len(tokenizer.encode(text)),
+    )
+
+
 def _service_node():
     node = MagicMock()
     node.service_type = FakeServiceType.LLM
@@ -331,7 +339,7 @@ class TestAlignInputsWiring:
         llm_params = {"max_tokens": 1024, "top_p": 0.9}
         with (
             patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-            patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_MarkerTokenizer()),
+            _count_patch(_MarkerTokenizer()),
             patch("chatqna.genieai_chatqna.CHATQNA_SYSTEM_PROMPT", "SYSTOK"),
             patch("chatqna.genieai_chatqna.history_truncation_total"),
         ):
@@ -397,7 +405,7 @@ class TestAlignInputsWiring:
         inputs = {"inputs": "RAGTOK", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
         with (
             patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-            patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_MarkerTokenizer()),
+            _count_patch(_MarkerTokenizer()),
             patch("chatqna.genieai_chatqna.CHATQNA_SYSTEM_PROMPT", "SYSTOK"),
             patch("chatqna.genieai_chatqna.history_truncation_total"),
         ):

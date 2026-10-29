@@ -1368,12 +1368,6 @@ def _retriever_matched_no_document(result_dict: dict) -> bool:
     reject documents the retriever DID match, and that is not a scope that
     matched nothing. This reads the retriever node, so the two cases cannot
     be confused.
-
-    Args:
-        result_dict: The megaservice orchestrator output keyed by node name.
-
-    Returns:
-        True when the retrieval produced no document.
     """
     for key, val in (result_dict or {}).items():
         if key.startswith("retriever"):
@@ -1386,6 +1380,12 @@ def _retriever_matched_no_document(result_dict: dict) -> bool:
                 return False
             return not docs
     return False
+
+
+def _mark_abstention(metadata: dict, reason: str) -> None:
+    """Mark a metadata payload as abstained, with its machine-readable cause."""
+    metadata["abstained"] = True
+    metadata["abstention_reason"] = reason
 
 
 def _count_final_chunks(result_dict: dict) -> int:
@@ -2996,8 +2996,6 @@ class ChatQnAService:
             f"-> confidence_score={_cs}"
         )
         # The retrieval produced no document: the turn has no document backing.
-        # The metadata event has to say so — an operator cannot tell an
-        # abstention from an ordinary answer by reading the response.
         abstained = _retriever_matched_no_document(result_dict)
         # Every input of the answer-level outcome is known here, so this is the
         # first point at which the span can be recorded. `sentinel_present`
@@ -3029,8 +3027,7 @@ class ChatQnAService:
             "is_grounded": is_grounded,
         }
         if abstained:
-            metadata["abstained"] = True
-            metadata["abstention_reason"] = "no_documents_retrieved"
+            _mark_abstention(metadata, "no_documents_retrieved")
         if LLM_SELF_CONFIDENCE_ENABLED:
             # Raw LLM self-assessed groundedness; None when the sentinel was
             # omitted/malformed. Never hard-fails the chat.
@@ -4400,14 +4397,11 @@ class ChatQnAService:
             # this to flag responses that have no document basis.
             "is_grounded": is_grounded,
         }
-        # The retrieval produced no document: the turn has no document backing.
-        # The metadata has to say so — an operator cannot tell an abstention
-        # from an ordinary answer by reading the response. `_abstained` was
-        # computed in the schedule block above (it also drove the metric), so
-        # the metric and this metadata cannot be computed from different runs.
+        # `_abstained` was computed in the schedule block above (it also drove
+        # the metric), so the metric and this metadata cannot come from
+        # different runs.
         if _abstained:
-            metadata["abstained"] = True
-            metadata["abstention_reason"] = "no_documents_retrieved"
+            _mark_abstention(metadata, "no_documents_retrieved")
         if LLM_SELF_CONFIDENCE_ENABLED:
             # Raw LLM self-assessed groundedness; None when the sentinel was omitted
             # or malformed.

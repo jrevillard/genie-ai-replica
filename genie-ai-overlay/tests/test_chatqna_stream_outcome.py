@@ -15,6 +15,7 @@ span carrying the right attributes on the wrong trace still hides the turn.
 """
 
 import ast
+import functools
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -377,6 +378,7 @@ class _FakeParms:
         self.__dict__.update(kwargs)
 
 
+@functools.cache
 def _function_node(name: str) -> ast.AST:
     tree = ast.parse(CHATQNA_SOURCE.read_text())
     return next(

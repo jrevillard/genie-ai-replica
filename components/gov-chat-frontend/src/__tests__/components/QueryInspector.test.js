@@ -206,6 +206,16 @@ describe('QueryInspector', () => {
 // QueryInspectorList — renders directly (no v-else wrapper issues)
 // ===========================================================================
 describe('QueryInspectorList', () => {
+  // A query that answered: grounded, one source document, no abstention.
+  const answeredQuery = {
+    _key: 'q1',
+    timestamp: '2025-05-28T10:00:00Z',
+    text: 'What is the tax rate?',
+    metadata: { confidence_score: 0.9, source_documents: [{}] },
+    context: { categoryLabel: 'Taxes & Revenue', serviceLabels: [] },
+    responseTime: 500
+  };
+
   let QueryInspectorList;
 
   beforeEach(() => {
@@ -286,17 +296,10 @@ describe('QueryInspectorList', () => {
   });
 
   it('should show the category as the scope when no service was named', () => {
-    const queries = [
-      {
-        _key: 'q1',
-        timestamp: '2025-05-28T10:00:00Z',
-        text: 'What is the tax rate?',
-        metadata: { confidence_score: 0.9, source_documents: [{}] },
-        context: { categoryLabel: 'Taxes & Revenue', serviceLabels: [] },
-        responseTime: 500
-      }
-    ];
-    const wrapper = mountList({ queries, pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 } });
+    const wrapper = mountList({
+      queries: [answeredQuery],
+      pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 }
+    });
 
     expect(wrapper.find('[data-testid="qi-scope"]').text()).toContain('Taxes & Revenue');
   });
@@ -317,23 +320,14 @@ describe('QueryInspectorList', () => {
     ];
     const wrapper = mountList({ queries, pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 } });
 
-    const scope = wrapper.find('[data-testid="qi-scope"]').text();
-    expect(scope).toContain('Taxes & Revenue');
-    expect(scope).not.toContain(', ');
+    expect(wrapper.find('[data-testid="qi-scope"]').text()).toBe('Taxes & Revenue');
   });
 
   it('should not mark a query that answered', () => {
-    const queries = [
-      {
-        _key: 'q1',
-        timestamp: '2025-05-28T10:00:00Z',
-        text: 'What is the tax rate?',
-        metadata: { confidence_score: 0.9, source_documents: [{}] },
-        context: { categoryLabel: 'Taxes & Revenue', serviceLabels: [] },
-        responseTime: 500
-      }
-    ];
-    const wrapper = mountList({ queries, pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 } });
+    const wrapper = mountList({
+      queries: [answeredQuery],
+      pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 }
+    });
 
     expect(wrapper.find('[data-testid="qi-abstention-marker"]').exists()).toBe(false);
   });

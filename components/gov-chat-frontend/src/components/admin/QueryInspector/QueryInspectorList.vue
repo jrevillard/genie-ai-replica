@@ -183,16 +183,16 @@ export default {
       const context = query.context || {};
       // Nothing is not a label: the pipeline drops empty and null entries
       // before filtering, and showing one here would name a scope that never
-      // filtered.
+      // filtered. The pipeline dedupes too.
       const isLabel = (label) => label !== '' && label != null;
       const services = Array.isArray(context.serviceLabels) ? context.serviceLabels.filter(isLabel) : [];
       if (services.length) {
-        return services.join(', ');
+        return [...new Set(services)].join(', ');
       }
       const labels = [];
       if (isLabel(context.categoryLabel)) labels.push(context.categoryLabel);
       if (Array.isArray(context.categoryLabels)) labels.push(...context.categoryLabels.filter(isLabel));
-      return labels.join(', ');
+      return [...new Set(labels)].join(', ');
     },
     confidenceVariant(score) {
       if (score >= 0.8) return 'success';

@@ -87,9 +87,8 @@ that information."
 > deployment that sets `CHATQNA_ENFORCE_ABSTENTION=false` may answer
 > without document backing instead. The `chatqna.orchestrate` root span in
 > VictoriaTraces reflects the same request for trace-level correlation.
-> The admin Query Inspector shows the marker and the scope that filtered,
-> so an operator can find the scopes that matched nothing without reading
-> every answer.
+> The admin Query Inspector shows the marker and the scope that filtered
+> (see [Admin Dashboard](/docs/frontend/admin-dashboard/)).
 
 ## Self-confidence {#self-confidence}
 

@@ -1035,6 +1035,14 @@ const Map<String, dynamic> enLocale = {
     "unsavedChanges":
         "You have unsaved changes. Are you sure you want to start a new chat?",
     "whatCanIHelp": "How can I help you today?",
+    "quickHelpLabelGone":
+        "Configuration problem: the label \"{labels}\" no longer exists in the knowledge hierarchy. This button cannot be used until its configuration is updated.",
+    "quickHelpCategoryGone":
+        "Configuration problem: this button's category no longer exists in the knowledge hierarchy. This button cannot be used until its configuration is updated.",
+    "quickHelpScopeUnavailable":
+        "Configuration problem: the knowledge hierarchy could not be loaded, so this button's scope cannot be verified. This button cannot be used until the hierarchy is available.",
+    "scopeNotNameable":
+        "Configuration problem: the selected scope has no English name in the knowledge hierarchy, so the query cannot be scoped. It was not sent.",
     "queryContext": "Query Context",
     "contextAdded": "Context added to your query",
     "contextRemoved": "Context removed from your query",

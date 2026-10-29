@@ -867,13 +867,11 @@ class TestAlignInputsBundledDict:
         inputs = {"text": "query", "search_start": "chunk"}
         with (
             patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-            patch.dict("sys.modules", {"core.label_contract": MagicMock()}),
+            patch("chatqna.genieai_chatqna.encode_filter_labels") as mock_encode,
         ):
-            # Patch the import inside the function
-            import sys
-
-            mock_contract = sys.modules["core.label_contract"]
-            mock_contract.encode_filter_labels.return_value = "chunk::labels:Tomato"
+            # chatqna binds encode_filter_labels at module load; the
+            # function-local import is gone, so patch the NAME it uses.
+            mock_encode.return_value = "chunk::labels:Tomato"
             result = align_inputs(
                 self_mock,
                 inputs,
@@ -883,7 +881,7 @@ class TestAlignInputsBundledDict:
                 genie_params={"retrieval_context": {"categoryLabels": ["Tomato"]}},
             )
         assert result["search_start"] == "chunk::labels:Tomato"
-        mock_contract.encode_filter_labels.assert_called_once_with("chunk", ["Tomato"])
+        mock_encode.assert_called_once_with("chunk", ["Tomato"])
 
     def test_rerank_extracts_reranker_parameters_from_dict(self):
         """RERANK branch reads reranker_parameters from genie_params dict."""

@@ -329,20 +329,36 @@
           </ChatComposer>
         </div>
 
-        <div class="quick-help-grid">
+        <!-- The grid waits for the hierarchy: a button carries a scope,
+             and the hierarchy is what names it. A button rendered before
+             the hierarchy is known cannot say whether its scope is valid
+             — and a click it cannot answer is a dead click. -->
+        <div v-if="quickHelpScopeSettled" class="quick-help-grid">
           <DsCard
             v-for="button in tileButtons"
             :key="button.id"
             variant="flat"
             padding="md"
-            :hoverable="true"
+            :hoverable="!quickHelpScopeState(button).broken"
             class="quick-help-item"
-            :class="{ 'just-chat': !button.category }"
+            :class="{ 'just-chat': !button.category, 'config-error': quickHelpScopeState(button).broken }"
             :style="buttonTintStyle(button)"
             @click="selectQuickHelpOption(button)"
           >
-            <img class="quick-help-icon" :src="button.icon" alt="Quick Help Icon" />
+            <AlertTriangle
+              v-if="quickHelpScopeState(button).broken"
+              class="quick-help-icon config-error-icon"
+              aria-hidden="true"
+            />
+            <img v-else class="quick-help-icon" :src="button.icon" alt="Quick Help Icon" />
             <div class="quick-help-text">{{ button.service }}</div>
+            <div
+              v-if="quickHelpScopeState(button).broken"
+              class="quick-help-error-caption"
+              data-testid="quick-help-error-caption"
+            >
+              {{ quickHelpErrorCaption(button) }}
+            </div>
           </DsCard>
         </div>
       </div>
@@ -497,6 +513,51 @@ import DOMPurify from 'dompurify';
 import jsPDF from 'jspdf';
 import { resolveConfigText } from '../utils/configResolver';
 
+// Marks a context item that came from a Quick Help button. A Quick Help item
+// is scoped by the labels the deployment declared for it; a sidebar item is
+// scoped by the label the knowledge tree shows.
+const QUICK_HELP_SOURCE = 'quickHelp';
+
+// One Quick Help selection, in the shape every context item uses — whether it
+// was picked from the overlay, restored from a saved conversation, or re-added
+// when the last selected item was removed.
+// Whether [id] names a category scope at all. An EMPTY id declares
+// nothing (it is how a selection is CLEARED), and 'general' is the
+// placeholder a category-less selection is stored under: neither is a
+// scope, in every rule that reads one. This predicate is the ONE copy —
+// the subject of this whole branch is what happens when two copies of a
+// scope rule drift apart.
+function declaresCategoryScope(id) {
+  return id != null && id !== '' && id !== 'general';
+}
+
+// A category-only chip: no label on the wire, the category's own edge
+// carries the scope. The symmetric twin of quickHelpContextItem — every
+// path that installs a category-only item (the chip-removal re-install,
+// the legacy category.<id> restore, the category-only restore) builds it
+// here, so the shape has one copy.
+function categoryOnlyItem(category, displayName) {
+  return {
+    service: displayName,
+    serviceKey: null,
+    categoryOnly: true,
+    category,
+    selected: true
+  };
+}
+
+function quickHelpContextItem(button) {
+  return {
+    service: button.service,
+    serviceLabels: button.serviceLabels || null,
+    serviceKey: button.serviceKey || button.id || button.service,
+    source: QUICK_HELP_SOURCE,
+    id: button.id,
+    category: button.category,
+    selected: true
+  };
+}
+
 // Tight-list renderer override: chat-tuned model output puts a parent
 // label and its nested sub-list on adjacent lines in the markdown source,
 // but GFM `marked` emits that as `<li><p>Label</p><ul>...</ul></li>` —
@@ -635,9 +696,24 @@ export default {
       currentLocale: (navigator.language || 'en').split('-')[0],
       showQuickHelp: true,
       currentCategoryId: null,
-      serviceCategories: [], // This will now hold the transformed tree data
+      serviceCategories: [],
+      serviceCategoriesLoadPromise: null, // The in-flight (or settled) hierarchy load
+      treeLoadSeq: 0, // Incremented per tree load; a stale response is dropped
+      // The state of the hierarchy load: 'loading' until it settles, then
+      // 'loaded' or 'failed'. The hierarchy is what NAMES a Quick Help
+      // scope, so a button cannot say whether its scope is valid before it
+      // has settled — and a button that cannot answer its click must not
+      // be offered.
+      serviceCategoriesStatus: 'loading',
       chatHistoryService: chatHistoryService,
       quickHelpButtons: [],
+      // The in-flight load of the Quick Help configuration. A restore that
+      // runs while it is pending must wait for it, otherwise the tag of a
+      // saved conversation is looked up in an empty button list.
+      quickHelpLoadPromise: null,
+      // The Quick Help configuration load failed: the next need for the
+      // buttons retries it instead of awaiting the failed promise forever.
+      quickHelpLoadFailed: false,
       showNewChatConfirm: false,
       newChatDialog: {
         title: '',
@@ -658,7 +734,12 @@ export default {
       isSaving: false, // Loading state for save operation to prevent double-save
       lastSaveSucceeded: false, // The save's own verdict for the leave arms
       loadSeq: 0, // Incremented per conversation load; stale responses are dropped
-      hiddenPromptForNextMessage: null, // Stores hidden prompt for dual-prompt mechanism
+      hiddenPromptForNextMessage: null, // The hidden prompt of a dual-prompt send
+      // The text that prompt was armed FOR: a refused send leaves the
+      // prompt armed (retrying the same question must keep it), and the
+      // binding is what stops an unrelated question from being answered
+      // by a prompt it never belonged to.
+      hiddenPromptForText: null,
       // Right sidebar width / collapsed state, both persisted in
       // localStorage and restored clamped against the current viewport.
       rightSidebarWidth: SIDEBAR_DEFAULTS.right,
@@ -721,7 +802,7 @@ export default {
       // A saved conversation keeps its title; a QuickHelp-driven chat takes
       // the option's own name; the plain just-chat surface keeps its label.
       if (this.currentChatTitle) return this.currentChatTitle;
-      const item = this.selectedContextItems.find((i) => i.source === 'quickHelp');
+      const item = this.selectedContextItems.find((i) => i.source === QUICK_HELP_SOURCE);
       if (item) return item.service;
       return this.translate('chatbot.justChat', 'Just Chat');
     },
@@ -752,6 +833,38 @@ export default {
 
     folders() {
       return this.getAllFolders;
+    },
+
+    // The live hierarchy indexed by category key. Rebuilt only when the
+    // tree changes — the lookups below read it instead of walking the tree
+    // on every call.
+    categoryIndex() {
+      const index = new Map();
+      for (const cat of this.serviceCategories || []) {
+        if (cat.catKey === null || cat.catKey === undefined) continue;
+        const id = cat.catKey.toString();
+        if (!index.has(id)) index.set(id, cat);
+      }
+      return index;
+    },
+
+    // The localized name of the entity whose EN label is a given one. The
+    // EN label is the identity (a saved conversation carries it); the name
+    // is what the user reads. The map's KEY SET is also the vocabulary the
+    // wire speaks (every EN label of the live tree): a Map answers both
+    // questions, so there is one index, not two that must stay in phase.
+    enLabelDisplayNames() {
+      const names = new Map();
+      const add = (en, name) => {
+        if (en && !names.has(en)) names.set(en, name || en);
+      };
+      for (const cat of this.serviceCategories || []) {
+        add(cat.nameEN, cat.name);
+        for (const child of cat.children || []) {
+          if (child) add(child.nameEN, child.name);
+        }
+      }
+      return names;
     },
 
     chatPreview() {
@@ -807,6 +920,25 @@ export default {
     // no schema change needed for that).
     tileButtons() {
       return this.quickHelpButtons.filter((b) => b && b.placement !== 'composer');
+    },
+    // The hierarchy has settled — it loaded, or it failed. Until then the
+    // Quick Help buttons cannot be checked against it, and a button that
+    // cannot be checked cannot be offered.
+    quickHelpScopeSettled() {
+      return this.serviceCategoriesStatus !== 'loading';
+    },
+    // Every button's scope state, computed ONCE per tree/config change:
+    // the template reads a button's state several times per render, and
+    // every streaming token re-renders the panel. The buttons are unique
+    // by id here — applyQuickHelpButtons keeps the FIRST of any duplicate
+    // — so the map needs no rule of its own.
+    quickHelpScopeStateMap() {
+      const map = new Map();
+      for (const button of this.quickHelpButtons) {
+        if (!button || !button.id) continue;
+        map.set(button.id, this.computeQuickHelpScopeState(button));
+      }
+      return map;
     }
   },
 
@@ -834,7 +966,9 @@ export default {
     },
     '$i18n.locale'(newLocale) {
       this.currentLocale = newLocale;
-      this.loadQuickHelpButtons();
+      // The runtime configuration does not change with the locale: only the
+      // display text of the buttons is resolved again.
+      this.applyQuickHelpButtons();
     }
   },
 
@@ -909,15 +1043,28 @@ export default {
         () => this.$root.$i18n.locale,
         (newLocale) => {
           this.currentLocale = newLocale;
-          // Update context labels when locale changes
-          this.$store.commit(
-            'conversation/setContextItems',
-            this.selectedContextItems.map((item) => ({
-              ...item,
-              service: this.safeTranslate(item.serviceKey || item.service)
-            }))
-          );
-          this.loadServiceCategories(); // Reload categories for the new locale
+          this.remapContextItemsToLocale(newLocale);
+          // A DIRECT load, not the assurer: the names are per-locale tree
+          // data, and the assurer no-ops once a load succeeded — a locale
+          // switch that skipped the refetch kept the old locale's names
+          // for the whole session. The mount keeps the assurer (a
+          // transient failure there is retried by the next need). The
+          // chips re-map once the NEW tree has landed — the indexes the
+          // lookups read are rebuilt by that load.
+          // The CURRENT locale, not the captured one: a rapid second
+          // switch drops this load's response (treeLoadSeq) while its
+          // promise still resolves — remapping with the captured locale
+          // would re-title the chips in a locale the installed tree does
+          // not speak.
+          // Only on a SUCCESSFUL refetch: the load swallows its own
+          // errors (the promise never rejects), and remapping after a
+          // FAILED one would rewrite the chips against the OLD locale's
+          // tree — mixed-language names until the next good load.
+          this.loadServiceCategories().then(() => {
+            if (this.serviceCategoriesStatus === 'loaded') {
+              this.remapContextItemsToLocale(this.currentLocale);
+            }
+          });
         }
       );
     }
@@ -925,7 +1072,10 @@ export default {
     eventBus.$on('treeNodeSelected', this.handleTreeNodeSelected);
     this.scrollToBottom();
     this.loadQuickHelpButtons();
-    this.loadServiceCategories(); // Fetch categories on mount
+    // Through the assurer: a transient failure at mount is not cached
+    // for the session — the next need (a restore, a locale switch)
+    // retries instead of leaving every scoped card dead.
+    this.ensureServiceCategoriesLoaded();
 
     // Removed the statusUpdateInterval
     this.updateDialogTexts();
@@ -1073,33 +1223,171 @@ export default {
 
     // *** UPDATED: Use serviceTreeService to load and transform categories ***
     async loadServiceCategories() {
+      // The mount's assurer and a locale switch's direct load can be in
+      // flight together: whichever response lands LAST wins the tree,
+      // and a slower OLD-locale response would install itself over the
+      // new locale's. The seq drops the stale one.
+      const seq = ++this.treeLoadSeq;
       try {
         // Use the service which handles transformation and localization
-        this.serviceCategories = await serviceTreeService.getAllCategories(this.currentLocale);
+        const tree = await serviceTreeService.getAllCategories(this.currentLocale);
+        if (seq !== this.treeLoadSeq) {
+          return;
+        }
+        this.serviceCategories = tree;
+        this.serviceCategoriesStatus = 'loaded';
       } catch (error) {
+        if (seq !== this.treeLoadSeq) {
+          return;
+        }
         console.error('[ChatBotComponent] Failed to load service categories:', error);
+        // The hierarchy is what names a scope: without it, no Quick Help
+        // scope can be verified — and a scope that cannot be verified must
+        // not be sent (the corpus would answer outside it).
+        this.serviceCategoriesStatus = 'failed';
         notificationService.error('Could not load service categories.');
       }
     },
 
     // *** UPDATED: Find category label by its key in the transformed tree data ***
-    getCategoryLabelById(id) {
+    // The category the query is scoped by, in the SSOT language. English is
+    // what the corpus filters on — chunk_labels carry the EN translation —
+    // so the wire speaks EN and the localized name stays display-only. Null
+    // when the id names no category of the live tree: a broken scope.
+    getCategoryEnLabel(id) {
       if (id === null || id === undefined) {
-        // Just-Chat and other no-category selections: no category filter.
-        // Returning null (not 'General') keeps it consistent with the backend,
-        // which now preserves null instead of defaulting to 'General'. 'General'
-        // is not a real KB label and would match no chunk under the retriever filter.
         return null;
       }
+      const category = this.categoryIndex.get(id.toString());
+      return category ? category.nameEN || null : null;
+    },
 
-      // The service returns `catKey` which corresponds to the numeric ID
-      const category = this.serviceCategories.find((cat) => cat.catKey == id.toString());
-      if (category) {
-        // The service already provides the localized name in the `name` property
-        return category.name || null;
+    // The category name the user reads — the localized spelling of the
+    // same entity. Display only: it never filters.
+    getCategoryDisplayName(id) {
+      if (id === null || id === undefined) {
+        return null;
       }
+      const category = this.categoryIndex.get(id.toString());
+      if (!category) {
+        return null;
+      }
+      // A category with no translation in the UI locale has no localized
+      // name: the chip showed BLANK. The EN name (the wire's spelling) is
+      // a truthful display, and the id is the last resort.
+      return category.name || category.nameEN || id.toString();
+    },
 
-      return null; // Unknown category — null means "no category filter" (do NOT send a `Category NN` string to the retriever)
+    // The localized name of the entity whose EN label is [en] — a saved
+    // conversation carries the EN label (a locale-independent identity), the
+    // chip shows the name the tree carries in the current locale.
+    displayNameForEnLabel(en) {
+      if (!en) {
+        return null;
+      }
+      return this.enLabelDisplayNames.get(en) || en;
+    },
+
+    // The scope of a Quick Help button, checked against the live EN hierarchy.
+    // A declared label the hierarchy no longer carries can never match a
+    // chunk, and a category that is gone leaves the button with no scope at
+    // all. A broken button is a VISIBLE failure — error icon, caption, no
+    // query — never a silently reduced one.
+    quickHelpScopeState(button) {
+      // The state is computed once per tree/config change (the computed
+      // map); this read is what every caller goes through — the
+      // template's several reads per render included.
+      const cached = this.quickHelpScopeStateMap.get(button && button.id);
+      if (cached) {
+        return cached;
+      }
+      return this.computeQuickHelpScopeState(button);
+    },
+
+    computeQuickHelpScopeState(button) {
+      if (this.serviceCategoriesStatus === 'failed') {
+        // The hierarchy is what NAMES a scope. Without it, no scope can be
+        // verified — and the button says so rather than looking healthy
+        // and swallowing the click. A card that declares NO scope promises
+        // nothing the hierarchy could deny: it stays usable.
+        // 'general' is the placeholder a category-less selection is stored
+        // under: it names no category, and every rule treats it as NO
+        // scope — this one included, or a category-less card would look
+        // healthy in the grid and be refused at send time.
+        const declaresScope = declaresCategoryScope(button.category) || (button.serviceLabels || []).length > 0;
+        return {
+          broken: declaresScope,
+          unavailable: declaresScope,
+          missingLabels: [],
+          categoryMissing: false
+        };
+      }
+      if (this.serviceCategoriesStatus === 'loading') {
+        // Nothing is known yet: report nothing rather than report every
+        // button broken. The grid waits for the hierarchy before it is
+        // rendered at all.
+        return { broken: false, unavailable: false, missingLabels: [], categoryMissing: false };
+      }
+      const enLabels = this.enLabelDisplayNames;
+      const missingLabels = (button.serviceLabels || []).filter((label) => !enLabels.has(label));
+      // The category is usable only when the hierarchy names it in
+      // ENGLISH: that spelling is the wire. A category the hierarchy does
+      // not carry, and a category it carries without an EN translation,
+      // are the same thing here — a scope that cannot be named.
+      const categoryMissing =
+        declaresCategoryScope(button.category) && this.getCategoryEnLabel(button.category) == null;
+      return {
+        broken: missingLabels.length > 0 || categoryMissing,
+        unavailable: false,
+        missingLabels,
+        categoryMissing
+      };
+    },
+
+    // Whether a scope can be put on the wire. A button that declares a
+    // category can only NAME it through the live tree — the config carries
+    // the key, the wire needs the ENGLISH label. No label, no query: a query
+    // without it would answer from the whole corpus.
+    quickHelpScopeIsNameable(categoryId) {
+      // An id that declares NO category scope (empty, or the 'general'
+      // placeholder) is how a selection is CLEARED — the hierarchy has
+      // nothing to deny. declaresCategoryScope is the ONE predicate.
+      if (!declaresCategoryScope(categoryId)) {
+        return true;
+      }
+      return this.getCategoryEnLabel(categoryId) != null;
+    },
+
+    quickHelpErrorCaption(button) {
+      return this.quickHelpStatesCaption([this.quickHelpScopeState(button)]);
+    },
+
+    // The caption for a set of BROKEN scope states — the ONE assembly both
+    // the grid's caption and the send-time refusal speak: an unavailable
+    // hierarchy names nothing, otherwise the gone labels (deduplicated
+    // across states) and the gone category, joined. A state that is not
+    // broken contributes nothing, so callers filter or pass as-is.
+    quickHelpStatesCaption(states) {
+      const broken = states.filter((state) => state && state.broken);
+      if (broken.length === 0) {
+        return '';
+      }
+      if (broken.some((state) => state.unavailable)) {
+        return this.translate('chatbot.quickHelpScopeUnavailable', '');
+      }
+      const parts = [];
+      const missingLabels = [...new Set(broken.flatMap((state) => state.missingLabels || []))];
+      if (missingLabels.length > 0) {
+        parts.push(
+          this.translateWithParams('chatbot.quickHelpLabelGone', {
+            labels: missingLabels.join(', ')
+          })
+        );
+      }
+      if (broken.some((state) => state.categoryMissing)) {
+        parts.push(this.translate('chatbot.quickHelpCategoryGone', ''));
+      }
+      return parts.filter(Boolean).join(' ');
     },
 
     checkContextConfig(context) {
@@ -1117,15 +1405,84 @@ export default {
       //    symptom (button clicked, but its serviceLabels/category are empty). A genuinely
       //    empty context (Just Chat, no items selected) is NOT blocked — it's an unfiltered query.
       let blocked = false;
+      let scopeNotNameableShown = false;
       if (context.categoryLabel && /^Category \d+$/.test(context.categoryLabel)) {
         blocked = true;
-        warnings.push(this.translate('chatbot.categoryNotFound', '').replace('{label}', context.categoryLabel));
+        warnings.push(this.translateWithParams('chatbot.categoryNotFound', { label: context.categoryLabel }));
       }
       const hasServiceFilter = Array.isArray(context.serviceLabels) && context.serviceLabels.length > 0;
       const isJustChat = this.selectedContextItems.some((item) => item.id === 'just-chat');
-      if (this.selectedContextItems.length > 0 && !hasServiceFilter && !context.categoryLabel && !isJustChat) {
+      // A Quick Help item scopes the answer with its own prompt, so it is
+      // allowed to declare no label at all — every shipped button config does.
+      // Blocking it would make the button do nothing. The exemption covers the
+      // Quick Help items only: another selected item that declares no label
+      // is a misconfiguration, whatever else is selected.
+      const hasSidebarItem = this.selectedContextItems.some((item) => item.source !== QUICK_HELP_SOURCE);
+      if (hasSidebarItem && !hasServiceFilter && !context.categoryLabel && !isJustChat) {
         blocked = true;
         warnings.push(this.translate('chatbot.noFilterWarning', 'No context filter active.'));
+        // The mismatch warnings above reach admins alone. The person whose
+        // question was refused sees nothing at all — and the query that was
+        // refused is the one that would have answered from the WHOLE
+        // corpus, outside the scope the selection declared.
+        notificationService.error(this.translate('chatbot.scopeNotNameable', ''));
+        scopeNotNameableShown = true;
+      }
+
+      // A sidebar item whose entity carries NO ENGLISH name cannot put its
+      // scope on the wire: the item would contribute no label, and the
+      // query would silently widen to the whole category (or the whole
+      // corpus) while the chip still names the service the user picked.
+      // No partial drop either — one unnamed item refuses the send.
+      const unnamedSidebarItem = this.selectedContextItems.some(
+        (item) =>
+          item.source !== QUICK_HELP_SOURCE &&
+          !item.categoryOnly &&
+          declaresCategoryScope(item.category) &&
+          !item.serviceKey
+      );
+      if (unnamedSidebarItem) {
+        blocked = true;
+        // The no-filter block above already toasted for the SAME items
+        // (a set category, no serviceKey, no labels): one refusal, one
+        // toast — two identical toasts for one click read as two
+        // problems.
+        if (!scopeNotNameableShown) {
+          notificationService.error(this.translate('chatbot.scopeNotNameable', ''));
+        }
+      }
+
+      // A restored tag that resolved to NOTHING is a saved scope the
+      // conversation cannot carry: the send refuses — the same
+      // no-partial-drop rule the mobile enforces with its tag count. The
+      // 'general' placeholder on the item's category must not exempt it.
+      if (this.selectedContextItems.some((item) => item.unresolved)) {
+        blocked = true;
+        if (!scopeNotNameableShown) {
+          notificationService.error(this.translate('chatbot.scopeNotNameable', ''));
+        }
+      }
+
+      // A Quick Help scope the hierarchy can no longer NAME leaves the
+      // query with no filter at all: the corpus would answer outside the
+      // scope the button declared. That is the silent reduction this
+      // branch forbids — the send is refused, and EVERY user is told why
+      // (the mismatch warnings above reach admins alone, which is not
+      // enough for the person whose question was refused).
+      // The grid and this guard are the SAME rule: a Quick Help button is
+      // broken when a declared label is gone OR its category is. The guard
+      // checked the category only, so a restored (or re-added) scope whose
+      // LABEL left the hierarchy went out carrying the dead label — an
+      // unexplained abstention, with no signal anywhere.
+      const brokenQuickHelpStates = this.selectedContextItems
+        .filter((item) => item.source === QUICK_HELP_SOURCE && item.id !== 'just-chat')
+        .map((item) => this.quickHelpScopeState(item))
+        .filter((state) => state.broken);
+      if (brokenQuickHelpStates.length > 0) {
+        blocked = true;
+        // The caption NAMES what is gone — the same assembly the grid's
+        // caption uses, through the same keys.
+        notificationService.error(this.quickHelpStatesCaption(brokenQuickHelpStates));
       }
 
       // Mismatch check: each service label must be a known KB label (in some item's
@@ -1137,18 +1494,29 @@ export default {
             (item) => (item.serviceLabels || []).includes(label) || item.serviceKey === label
           );
           if (!matched) {
-            warnings.push(this.translate('chatbot.serviceLabelMismatch', '').replace('{label}', label));
+            warnings.push(this.translateWithParams('chatbot.serviceLabelMismatch', { label }));
           }
         }
       }
 
       if (warnings.length > 0 && isAdmin) {
         notificationService.warning(
-          this.translate('chatbot.configMismatchWarning', '').replace('{warnings}', warnings.join('; ')),
+          this.translateWithParams('chatbot.configMismatchWarning', { warnings: warnings.join('; ') }),
           8000
         );
       }
       return !blocked;
+    },
+
+    // Translate a key, with the placeholders filled by the i18n layer.
+    //
+    // The placeholders are passed AS PARAMETERS: vue-i18n consumes them
+    // itself, so a message that replaces them by hand afterwards finds
+    // nothing left to replace — and the caption ends up naming no label
+    // at all.
+    translateWithParams(key, params) {
+      const value = this.$t(key, params);
+      return value !== key ? value : key;
     },
 
     // Safely translate a key, with mapping for static strings
@@ -1190,50 +1558,201 @@ export default {
       }
     },
 
-    async loadQuickHelpButtons() {
+    loadQuickHelpButtons() {
+      const loading = this.fetchQuickHelpButtons();
+      this.quickHelpLoadPromise = loading;
+      return loading;
+    },
+
+    /**
+     * The live hierarchy, once the initial load has settled. The restore path
+     * resolves a saved scope against it; restoring before the load resolved
+     * would look the tags up in an empty vocabulary and drop them.
+     */
+    async ensureServiceCategoriesLoaded() {
+      // A FAILED load is not cached: the mobile retries (its fix is in),
+      // and the web must too — one transient failure at mount must not
+      // keep every scoped card dead for the session. The promise is
+      // cleared AFTER the failure (not before the re-run): two callers
+      // arriving while the retry is still in flight share it, instead of
+      // each starting its own load.
+      if (!this.serviceCategoriesLoadPromise) {
+        this.serviceCategoriesLoadPromise = this.loadServiceCategories();
+      }
+      try {
+        await this.serviceCategoriesLoadPromise;
+      } finally {
+        if (this.serviceCategoriesStatus === 'failed') {
+          this.serviceCategoriesLoadPromise = null;
+        }
+      }
+      return this.serviceCategories;
+    },
+
+    /**
+     * The Quick Help buttons, once the runtime configuration has been read.
+     *
+     * The buttons come from a configuration file that is fetched
+     * asynchronously, so they are not there when the component is created.
+     * A saved conversation restored before the fetch resolved would look its
+     * tag up in an empty list, fall back to the sidebar branch, and send the
+     * button id as a label — an id that names no entity in the hierarchy.
+     */
+    async ensureQuickHelpLoaded() {
+      // A FAILED load is not cached: the hierarchy retry (its sibling)
+      // must not be the only one — one transient config failure at mount
+      // would leave the grid empty and every restored Quick Help tag
+      // unresolved for the whole session.
+      if (!this.quickHelpLoadPromise || this.quickHelpLoadFailed) {
+        this.quickHelpLoadFailed = false;
+        this.loadQuickHelpButtons();
+      }
+      await this.quickHelpLoadPromise;
+      return this.quickHelpButtons;
+    },
+
+    async fetchQuickHelpButtons() {
       try {
         const loadConfig = (await import('../config-loader')).default;
-        const config = await loadConfig();
-        this.cachedConfig = config;
-        const buttons = config?.features?.chat?.quickHelp?.buttons || [];
-        const locale = this.currentLocale;
-
-        // Filter hidden buttons (no matching corpus content) and resolve display text.
-        // serviceLabels (explicit English KB labels) drives the FILTER only:
-        //   - service       = localized display name (title, resolved per locale) — render only
-        //   - serviceKey    = stable English KB label (first of serviceLabels, or id/title fallback)
-        //   - serviceLabels = full English label array sent as the retriever filter
-        // Display (service) and filter (serviceKey/serviceLabels) are DECOUPLED: the button always
-        // shows its localized title, while the filter always uses English KB labels.
-        // Buttons without serviceLabels fall back to title-based behavior (backward compat).
-        this.quickHelpButtons = buttons
-          .filter((button) => !button.hidden)
-          .map((button) => {
-            const title = resolveConfigText(button.title, locale);
-            const visibleText = resolveConfigText(button.action?.visibleText, locale);
-            const hiddenPrompt = resolveConfigText(button.action?.hiddenPrompt, locale);
-            const explicitLabels = Array.isArray(button.serviceLabels) ? button.serviceLabels : null;
-
-            return {
-              service: title,
-              serviceLabels: explicitLabels,
-              serviceKey: explicitLabels ? explicitLabels[0] : button.id || title,
-              textKey: button.title,
-              visibleText: visibleText,
-              hiddenPrompt: hiddenPrompt,
-              icon: button.icon?.value,
-              category: button.category,
-              styles: button.styles,
-              // Pass the placement field through so the tile / composer
-              // routing in the welcome panel can read it directly.
-              placement: button.placement,
-              id: button.id
-            };
-          });
+        this.cachedConfig = await loadConfig();
+        this.applyQuickHelpButtons();
       } catch (error) {
         console.error('[ChatBotComponent] Failed to load Quick Help config:', error);
         this.quickHelpButtons = [];
+        this.quickHelpLoadFailed = true;
       }
+    },
+
+    /**
+     * The Quick Help buttons of the runtime configuration, resolved for the
+     * current locale.
+     *
+     * The configuration is the same for every locale — only the display text
+     * of a button is locale-dependent. So a language switch re-resolves the
+     * buttons already read instead of reading the configuration again.
+     */
+    // Re-resolve every chip's display for [locale]. A Quick Help item
+    // displays the title of its button, re-resolved from the config by
+    // the button id (applyQuickHelpButtons refreshes the buttons alone —
+    // the chips are separate store items). A SIDEBAR item's identity is
+    // its EN label: its display is the tree's localized name FOR that EN
+    // label — safeTranslate would return the EN string unchanged in a
+    // non-English UI. Called AFTER the per-locale tree refetch lands:
+    // the tree's indexes are what the lookups read, and re-mapping
+    // before the fetch would re-write the OLD locale's names.
+    remapContextItemsToLocale(locale) {
+      this.$store.commit(
+        'conversation/setContextItems',
+        this.selectedContextItems.map((item) => ({
+          ...item,
+          // A chip marked UNRESOLVED at restore time is re-checked
+          // against the tree this remap runs after: the hierarchy may
+          // have caught up (a renamed-back label), and a chip that can
+          // now be named must stop refusing the send. The tag's own
+          // text is the identity the lookup uses.
+          ...(item.unresolved && this.enLabelDisplayNames.has(item.service)
+            ? { serviceKey: item.service, unresolved: false }
+            : {}),
+          service:
+            item.source === QUICK_HELP_SOURCE
+              ? this.quickHelpTitleFor(item, locale)
+              : item.categoryOnly
+                ? this.getCategoryDisplayName(item.category)
+                : this.displayNameForEnLabel(
+                    // The un-resolve above just moved the tag INTO
+                    // serviceKey — reading the stale spread copy would
+                    // fall back to the raw EN tag until the next remap.
+                    item.unresolved && this.enLabelDisplayNames.has(item.service) ? item.service : item.serviceKey
+                  ) || this.safeTranslate(item.service)
+        }))
+      );
+    },
+
+    // A Quick Help chip's title is the BUTTON's title — localized config
+    // text. The chip is installed with the title resolved at press time;
+    // a locale switch must re-resolve it from the config (by the button
+    // id), the same way applyQuickHelpButtons re-resolves the buttons. A
+    // button the config no longer declares keeps its last title: the
+    // chip's identity is the id, not the title.
+    //
+    // The lookup runs over the DEDUPED button list — the one the grid,
+    // the click, the restore and the send guard all read. The RAW
+    // config's first entry for an id can be a card the loader dropped
+    // (hidden, or a duplicate): re-resolving from it would put a hidden
+    // card's title on a chip whose scope is the surviving card's.
+    quickHelpTitleFor(item, locale) {
+      const button = this.quickHelpButtons.find((b) => b && b.id === item.id);
+      return (button && resolveConfigText(button.textKey, locale)) || item.service;
+    },
+
+    applyQuickHelpButtons() {
+      const buttons = this.cachedConfig?.features?.chat?.quickHelp?.buttons || [];
+      const locale = this.currentLocale;
+
+      // Filter hidden buttons (no matching corpus content) and resolve display text.
+      // serviceLabels (explicit English KB labels) drives the FILTER only:
+      //   - service       = localized display name (title, resolved per locale) — render only
+      //   - serviceKey    = the id of the button. It is the IDENTITY of the button:
+      //     a saved conversation carries it, so it must not depend on the labels
+      //     the deployment declares — those are hierarchy data, and they change
+      //     when the hierarchy is reconfigured.
+      //   - serviceLabels = full English label array sent as the retriever filter
+      //     (the wire speaks ENGLISH — the SSOT the corpus filters on)
+      // Display (service), identity (serviceKey) and filter (serviceLabels) are
+      // DECOUPLED: the button shows its localized title, a saved conversation
+      // carries the button id, and the filter carries the English KB labels.
+      // A button that declares no label contributes no label of its own: the
+      // request is then scoped by the category label alone, which the backend
+      // resolves against the live hierarchy like any other label.
+      this.quickHelpButtons = buttons
+        .filter((button) => !button.hidden)
+        // The id is the button's IDENTITY — the conversation tag carries
+        // it, the restore resolves it, the grid's verdict keys on it. Two
+        // cards with one id cannot both be honoured: keeping both made
+        // the wire disagree with the verdict (the click put the CLICKED
+        // card's labels on the wire while the verdict spoke for the
+        // FIRST). The FIRST card wins; the duplicate never becomes a
+        // card, on either platform.
+        .filter((button, _index, all) => {
+          if (!button.id) return true;
+          if (all.some((b, i) => i < _index && b.id === button.id)) {
+            console.warn(
+              `[ChatBotComponent] Duplicate Quick Help button id "${button.id}" — keeping the first entry, ignoring this one`
+            );
+            return false;
+          }
+          return true;
+        })
+        .map((button) => {
+          const title = resolveConfigText(button.title, locale);
+          const visibleText = resolveConfigText(button.action?.visibleText, locale);
+          const hiddenPrompt = resolveConfigText(button.action?.hiddenPrompt, locale);
+          // A bare string where the array belongs is a config typo the
+          // wire rule already answers: ONE label, never an empty scope —
+          // mapping it to null made the card look healthy and sent the
+          // question unfiltered.
+          const explicitLabels = Array.isArray(button.serviceLabels)
+            ? button.serviceLabels
+            : typeof button.serviceLabels === 'string' && button.serviceLabels
+              ? [button.serviceLabels]
+              : null;
+
+          return {
+            service: title,
+            serviceLabels: explicitLabels,
+            serviceKey: button.id || title,
+            textKey: button.title,
+            visibleText: visibleText,
+            hiddenPrompt: hiddenPrompt,
+            icon: button.icon?.value,
+            category: button.category,
+            styles: button.styles,
+            // Pass the placement field through so the tile / composer
+            // routing in the welcome panel can read it directly.
+            placement: button.placement,
+            id: button.id
+          };
+        });
     },
 
     getWelcomeMessage() {
@@ -1255,47 +1774,72 @@ export default {
       return value !== key ? value : fallback || key;
     },
 
+    // A Quick Help card press (tile or composer) is a MODE SWITCH: it
+    // replaces the SIDEBAR selection — the two are alternative ways of
+    // scoping the same query (the mobile rules this already). Keeping
+    // both sent the card's category and the sidebar's service label
+    // together, and the wire's service-wins rule then dropped the
+    // category the card promised — a silent reduction the two platforms
+    // also disagreed about. Legacy conversations still RESTORE both
+    // (their tags say so); new selections are exclusive. Every dropped
+    // SIDEBAR item is announced on the panel's own sync channel — its
+    // highlights must not outlive the store items that backed them.
+    switchToQuickHelpMode() {
+      // A load clears the chips and the transcript BEFORE it awaits, so
+      // the welcome grid is clickable while the fetch is still in
+      // flight. A press in that window is the user SAYING which scope
+      // they want: the in-flight load of another conversation no longer
+      // owns the view and must not land over the press (the token it
+      // checks is loadSeq — the same ownership a newer load claims).
+      this.loadSeq++;
+      this.selectedContextItems
+        .filter((item) => item.source !== QUICK_HELP_SOURCE)
+        .forEach((item) => eventBus.$emit('contextItemRemoved', item));
+      this.$store.commit(
+        'conversation/setContextItems',
+        this.selectedContextItems.filter((item) => item.source === QUICK_HELP_SOURCE)
+      );
+    },
+
     selectQuickHelpOption(option) {
       const rawOption = option && option.__v_isReactive ? { ...option } : option || {};
       if (!rawOption.service) {
         return;
       }
+      // A broken scope is a VISIBLE failure: the caption on the button names
+      // the configuration problem. Never a query with a silently reduced
+      // scope — not even the auto-send path a hidden prompt would trigger.
+      if (this.quickHelpScopeState(rawOption).broken) {
+        return;
+      }
       const categoryId = rawOption.category || (rawOption.id !== 'just-chat' ? 'general' : null);
+      // The config carries the category KEY; the wire needs its ENGLISH
+      // label, and only the live tree can say it. A tree that did not load
+      // cannot name the scope — and a query without it would answer from the
+      // whole corpus, from a button the user believes is scoped.
+      if (!this.quickHelpScopeIsNameable(categoryId)) {
+        return;
+      }
 
       // Quick Help is a mode switch: replace any prior Quick Help selection.
-      // Sidebar items (source !== 'quickHelp') are additive and survive.
+      // Sidebar items (source !== QUICK_HELP_SOURCE) are additive and survive.
       // Also dedup: if the same Quick Help option is already selected, keep it as-is.
       const existingIdx = this.selectedContextItems.findIndex(
-        (item) => item.source === 'quickHelp' && item.id === rawOption.id
+        (item) => item.source === QUICK_HELP_SOURCE && item.id === rawOption.id
       );
       if (existingIdx >= 0) {
         return; // already selected — no-op (preserves prior dedup behavior)
       }
+      // ONE builder for every Quick Help item — press, restore, re-add.
+      // The spread carries the branch's own scope decision ('general'
+      // fallback for a card, no scope at all for just-chat); the builder
+      // owns the shape.
       const quickHelpItem =
         rawOption.id === 'just-chat'
-          ? {
-              // "Just Chat" clears all label filters so the retriever
-              // searches across all documents without restriction. The
-              // item stays in context so conversation history is
-              // preserved for follow-up queries.
-              service: rawOption.service,
-              serviceLabels: [],
-              serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
-              source: 'quickHelp',
-              id: rawOption.id,
-              category: null,
-              selected: true
-            }
-          : {
-              service: rawOption.service,
-              serviceLabels: rawOption.serviceLabels || null,
-              serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
-              source: 'quickHelp',
-              id: rawOption.id,
-              category: categoryId,
-              selected: true
-            };
+          ? quickHelpContextItem({ ...rawOption, serviceLabels: [], category: null })
+          : quickHelpContextItem({ ...rawOption, category: categoryId });
       this.$store.commit('conversation/replaceQuickHelpItem', quickHelpItem);
+      this.switchToQuickHelpMode();
       this.currentCategoryId = rawOption.id === 'just-chat' ? null : categoryId;
 
       this.showQuickHelp = false;
@@ -1306,6 +1850,10 @@ export default {
 
         // Store the hidden prompt to send to backend (what LLM sees)
         this.hiddenPromptForNextMessage = rawOption.hiddenPrompt || this.$t(rawOption.hiddenPromptKey);
+        // TRIMMED: the send trims the composer before comparing, and a
+        // padded visibleText that never bound sent the VISIBLE text to
+        // the LLM instead of the hidden prompt.
+        this.hiddenPromptForText = (visibleMessage || '').trim();
         this.sendMessage();
       }
     },
@@ -1325,20 +1873,62 @@ export default {
       const entry = this.composerEntry;
       // Only a real knowledge-area entry becomes a context chip — the plain
       // just-chat surface is not a domain, and a chip would promise one.
-      if (entry && entry.category) {
-        this.$store.commit('conversation/replaceQuickHelpItem', {
-          service: entry.service,
-          serviceLabels: [],
-          serviceKey: entry.serviceKey || entry.id || entry.service,
-          source: 'quickHelp',
-          id: entry.id,
-          category: entry.category,
-          selected: true
-        });
+      // The gate is DECLARES ANY SCOPE (a category, or labels): a
+      // labels-only card fell through to the just-chat branch, which
+      // strips the Quick Help context and sends UNFILTERED while the
+      // card promised the declared scope.
+      const entryDeclaresScope =
+        entry &&
+        (declaresCategoryScope(entry.category) ||
+          (Array.isArray(entry.serviceLabels) && entry.serviceLabels.length > 0) ||
+          // A PROMPT-ONLY entry still differs from the plain surface: its
+          // configured persona/domain prompt must reach the LLM. The
+          // tile path arms the same shape; a gate keyed on scope alone
+          // dropped the prompt silently.
+          Boolean(entry.hiddenPrompt));
+      if (entryDeclaresScope) {
+        // The composer card renders BEFORE the hierarchy settles (the grid
+        // waits for it), so the same gate selectQuickHelpOption enforces
+        // has to run here too: a broken card, or a scope the tree cannot
+        // EN-name yet, installs nothing and sends nothing — the query
+        // would leave unfiltered while the chip promised the card's scope.
+        if (this.quickHelpScopeState(entry).broken || !this.quickHelpScopeIsNameable(entry.category)) {
+          const caption = this.quickHelpErrorCaption(entry);
+          // A hierarchy still ON ITS WAY is not a configuration problem:
+          // the unavailable caption would point the operator at the
+          // wrong thing. The loading copy says what is happening — the
+          // CHAT's own copy, not the admin panel's (the toast is read by
+          // the person whose question was held, not by an operator).
+          notificationService.error(
+            caption ||
+              (this.serviceCategoriesStatus === 'loading'
+                ? this.translate('chatbot.loading', '')
+                : this.translate('chatbot.quickHelpScopeUnavailable', ''))
+          );
+          return;
+        }
+        // The entry's OWN declared labels and category ride along: the
+        // entry is a Quick Help card like any tile, and hardcoding an
+        // empty scope here sent its query unfiltered while the chip
+        // showed the card. One builder for every Quick Help item.
+        this.$store.commit('conversation/replaceQuickHelpItem', quickHelpContextItem(entry));
+        // The same MODE SWITCH the tile path rules — one method, two entries.
+        this.switchToQuickHelpMode();
+        this.currentCategoryId = entry.category;
+        // A composer entry can declare a hidden prompt like any tile: the
+        // typed question is what the user SEES, the configured prompt is
+        // what the LLM answers. The tile path armed these; the composer
+        // path silently sent the raw typed text.
+        if (entry.hiddenPrompt) {
+          this.hiddenPromptForNextMessage = entry.hiddenPrompt;
+          this.hiddenPromptForText = (this.newMessage || '').trim();
+        }
+        this.sendMessage();
+        return;
       } else {
         this.$store.commit(
           'conversation/setContextItems',
-          this.selectedContextItems.filter((i) => i.source !== 'quickHelp')
+          this.selectedContextItems.filter((i) => i.source !== QUICK_HELP_SOURCE)
         );
       }
       this.currentCategoryId = null;
@@ -1346,60 +1936,134 @@ export default {
       this.sendMessage();
     },
 
+    // The identity of a sidebar chip: the (EN serviceKey, category) pair —
+    // the redesign's own rule. Two services sharing a DISPLAY name in one
+    // category are two scopes; the display pair stands in only for an item
+    // with no EN name at all (it carries no label — it will refuse at
+    // send, visibly). ONE predicate for the add-branch dedup and the
+    // remove-branch lookup, so the two can never drift apart.
+    matchesContextItem(existing, item) {
+      const itemKey = item.serviceKey || null;
+      const itemDisplay = this.safeTranslate(item.service);
+      return (
+        existing.category === item.category &&
+        ((itemKey !== null && existing.serviceKey === itemKey) ||
+          (itemKey === null && existing.service === itemDisplay && !existing.serviceKey))
+      );
+    },
     handleTreeNodeSelected(item) {
       if (!item || typeof item !== 'object' || !item.service) {
         return;
       }
+      // The same supersede a Quick Help press claims (see
+      // switchToQuickHelpMode): a sidebar pick during another
+      // conversation's load window is the user's scope, and the
+      // in-flight restore must not land over it.
+      this.loadSeq++;
 
       if (item.selected) {
-        const exists = this.selectedContextItems.some(
-          (existing) => existing.service === this.safeTranslate(item.service) && existing.category === item.category
-        );
+        // The IDENTITY is the (EN serviceKey, category) pair — the
+        // redesign's own rule. Two services sharing a DISPLAY name in
+        // one category are two scopes; keying on the display swallowed
+        // the second pick while the panel highlighted it, and the
+        // deselection then removed the WRONG chip. The display pair
+        // stands in only for an item with no EN name at all (it carries
+        // no label — it will refuse at send, visibly).
+        const exists = this.selectedContextItems.some((existing) => this.matchesContextItem(existing, item));
         if (!exists) {
-          this.$store.commit('conversation/addContextItem', {
-            service: this.safeTranslate(item.service),
-            serviceKey: item.service,
-            category: item.category || 'general',
-            selected: true
-          });
+          // The mode switch is SYMMETRIC: a card press replaces the
+          // sidebar selection, and a sidebar pick replaces a live card
+          // chip — the two are alternative ways of scoping the same
+          // query, and the mixed pair is what the wire's service-wins
+          // rule silently narrows. Sidebar picks stay ADDITIVE among
+          // themselves.
+          this.$store.commit(
+            'conversation/setContextItems',
+            this.selectedContextItems
+              .filter((existing) => existing.source !== QUICK_HELP_SOURCE)
+              .concat({
+                service: this.safeTranslate(item.service),
+                // The tree panel hands over BOTH spellings: display (service)
+                // and the EN wire label (serviceKey). The filter carries the
+                // EN one — and an entity with no EN translation carries NONE:
+                // the localized name matches no chunk, so it must not stand in.
+                serviceKey: item.serviceKey || null,
+                category: item.category || 'general',
+                selected: true
+              })
+          );
           notificationService.info(this.translate('chatbot.contextAdded'), 1500);
-          if (!this.currentCategoryId) {
-            this.currentCategoryId = item.category || null;
-          }
+          // The pick owns the category now (a card's category must not
+          // outlive the chip the user replaced).
+          this.currentCategoryId = item.category || null;
         }
       } else {
-        const index = this.selectedContextItems.findIndex(
-          (existing) => existing.service === this.safeTranslate(item.service) && existing.category === item.category
-        );
+        // The same identity key the add-branch dedups on — a remove that
+        // matched a DIFFERENT chip than the row the user clicked is a
+        // silently swallowed selection.
+        const index = this.selectedContextItems.findIndex((existing) => this.matchesContextItem(existing, item));
         if (index !== -1) {
           const removedItem = this.selectedContextItems[index];
           this.$store.commit('conversation/removeContextItem', index);
           notificationService.info(this.translate('chatbot.contextRemoved'), 1500);
           eventBus.$emit('contextItemRemoved', removedItem);
+          // The same rule the chip's own X follows: the category tracks
+          // the remaining scope, never the removed item's own.
           if (this.selectedContextItems.length === 0) {
             this.currentCategoryId = null;
+          } else {
+            this.currentCategoryId = this.currentCategoryOfRemainingScope();
           }
         }
       }
+    },
+
+    // The category the REMAINING scope speaks for: the first surviving
+    // chip that HAS a category. A category-less chip first in the list
+    // must not null the id while a later chip carries a real category
+    // (the records and the saved edge would lose it).
+    currentCategoryOfRemainingScope() {
+      const withCategory = this.selectedContextItems.find(
+        (item) => item.category && item.category !== '' && item.category !== 'general'
+      );
+      return withCategory ? withCategory.category : null;
     },
 
     removeContextItem(index) {
       if (this.selectedContextItems.length > index) {
         this.$store.commit('conversation/removeContextItem', index);
       }
+      // Chips REMAIN: the category follows the remaining scope, or the
+      // queries record and the saved conversation's category edge name a
+      // category none of the remaining chips belongs to (the removed
+      // item's own).
+      if (this.selectedContextItems.length > 0) {
+        this.currentCategoryId = this.currentCategoryOfRemainingScope();
+      }
       if (this.selectedContextItems.length === 0 && this.currentCategoryId) {
-        const quickHelpOption = this.quickHelpButtons.find((option) => option.category === this.currentCategoryId);
-        if (quickHelpOption) {
+        const categoryButtons = this.quickHelpButtons.filter((option) => option.category === this.currentCategoryId);
+        const quickHelpOption = categoryButtons.length === 1 ? categoryButtons[0] : null;
+        // Several buttons share the category (the shipped configurations
+        // have up to seven in one): no state remembers WHICH one the user
+        // pressed, and re-installing an arbitrary sibling would swap the
+        // scope's labels for ones nobody chose. A single unambiguous
+        // button is re-installed; anything else re-installs the CATEGORY
+        // itself, which is the scope the chip actually showed. A BROKEN
+        // button is never re-installed: it would block every subsequent
+        // send, and removing the chip again would re-add the same broken
+        // button — the user could not recover from here.
+        if (quickHelpOption && this.quickHelpScopeState(quickHelpOption).broken) {
+          this.currentCategoryId = null;
+        } else if (quickHelpOption) {
+          this.$store.commit('conversation/setContextItems', [quickHelpContextItem(quickHelpOption)]);
+        } else if (categoryButtons.length > 1) {
+          // The same shape the conversation-restore path builds for a
+          // category scope: no label on the wire, the category's own edge
+          // restores it. A category the hierarchy no longer carries is
+          // caught at send time (no categoryLabel, no labels — refused),
+          // not by this re-install.
           this.$store.commit('conversation/setContextItems', [
-            {
-              service: quickHelpOption.service,
-              serviceLabels: quickHelpOption.serviceLabels || null,
-              serviceKey: quickHelpOption.serviceKey || quickHelpOption.id || quickHelpOption.service,
-              source: 'quickHelp',
-              id: quickHelpOption.id,
-              category: this.currentCategoryId,
-              selected: true
-            }
+            categoryOnlyItem(this.currentCategoryId, this.getCategoryDisplayName(this.currentCategoryId))
           ]);
         } else {
           this.currentCategoryId = null;
@@ -1419,26 +2083,37 @@ export default {
       if (!content) return;
 
       // For dual-prompt mechanism: use hidden prompt for backend, visible text for display
-      const messageForBackend = this.hiddenPromptForNextMessage || content;
+      // The hidden prompt is bound to the text it was armed with: a
+      // refused send leaves it armed so the SAME question keeps it, and
+      // any other question sends exactly what the user typed.
+      const messageForBackend =
+        this.hiddenPromptForNextMessage && this.hiddenPromptForText?.trim() === content
+          ? this.hiddenPromptForNextMessage
+          : content;
       const messageForDisplay = content;
 
       const useConversationContext = this.selectedContextItems.length > 0;
       const contextOption = useConversationContext ? 'conversation-with-labels' : 'single-message';
       let queryData;
-      const categoryLabel = this.getCategoryLabelById(this.currentCategoryId);
-      // The retriever filter is built from English KB labels: sidebar items
-      // carry a stable English serviceKey (the localized `service` must
-      // never reach the filter); Quick Help items carry an explicit
-      // serviceLabels array — multi-label, or explicitly empty (Just Chat,
-      // which contributes no filter).
+      // The category the query is scoped by, in the SSOT language: English.
+      // The corpus filters on the EN translation — the localized name would
+      // match no chunk and scope the query to nothing.
+      const categoryLabel = this.getCategoryEnLabel(this.currentCategoryId);
+      // The retriever filter is built from the ENGLISH labels:
+      //  - Quick Help items: only the labels the deployment declared. A
+      //    button id is not a knowledge label — sending one as a filter
+      //    narrowed the corpus to zero documents, and the LLM then had no
+      //    context to answer from.
+      //  - Sidebar items: the nameEN the tree hands over beside the
+      //    localized name (the filter speaks EN; the localized name never
+      //    filters).
       const serviceLabels = useConversationContext
-        ? this.selectedContextItems.flatMap((item) =>
-            Array.isArray(item.serviceLabels)
-              ? item.serviceLabels.length > 0
-                ? item.serviceLabels
-                : []
-              : [item.serviceKey || item.service]
-          )
+        ? this.selectedContextItems.flatMap((item) => {
+            if (item.source === QUICK_HELP_SOURCE) {
+              return Array.isArray(item.serviceLabels) ? item.serviceLabels : [];
+            }
+            return item.serviceKey ? [item.serviceKey] : [];
+          })
         : [];
       // checkContextConfig returns false when the query must be blocked
       // (unresolved category id, or no filter active) — before any turn
@@ -1467,6 +2142,7 @@ export default {
       this.isLoading = false;
       // Clear hidden prompt after use
       this.hiddenPromptForNextMessage = null;
+      this.hiddenPromptForText = null;
 
       // Placeholder bot message for streaming content; the outgoing query
       // text stays on the message so a failed turn can retry itself.
@@ -1661,7 +2337,10 @@ export default {
         this.$store.commit('conversation/setConversationId', conversation._key);
         this.currentChatId = conversation._key;
         this.$store.commit('conversation/setTitle', conversation.title || this.generateChatTitle());
-        this.currentCategoryId = conversation.categoryId || null;
+        // The conversation is linked to its category through an edge, so the
+        // key of the category comes back with it. The scope a saved query was
+        // asked in is part of the conversation.
+        this.currentCategoryId = conversation.categoryId || conversation.categories?.[0]?._key || null;
 
         // Populate related documents from history (files property from
         // backend) — the same sidebar-card shape the live stream builds.
@@ -1698,21 +2377,120 @@ export default {
         this.$store.commit('conversation/setMessages', restoredMessages);
 
         let restoredContextItems = [];
-        if (conversation.tags && Array.isArray(conversation.tags)) {
-          restoredContextItems = conversation.tags.map((tag) => ({
-            service: this.safeTranslate(tag || `category.${this.currentCategoryId || 'general'}`),
-            serviceKey: tag || `category.${this.currentCategoryId || 'general'}`,
-            category: this.currentCategoryId || 'general',
-            selected: true
-          }));
-        } else if (this.currentCategoryId) {
-          restoredContextItems = [
-            {
-              service: this.getCategoryLabelById(this.currentCategoryId),
-              serviceKey: `category.${this.currentCategoryId}`,
-              category: this.currentCategoryId,
-              selected: true
+        // The backend ALWAYS returns an array (`tags: []` when none were
+        // saved), so the array test alone cannot route a category-scoped
+        // conversation to its branch — an EMPTY tag list with a category
+        // edge must fall through to it too.
+        // The scope is resolved against TWO async sources: the buttons
+        // (a Quick Help tag is the button id) and the tree (a sidebar tag
+        // is an EN label only the tree can confirm, and the category-only
+        // branch below names its chip through it too). Waiting for the
+        // one and not the other drops the scope of the other kind of tag
+        // — and the category-only branch built its chip against a
+        // possibly-empty tree: a null name, and a load race diagnosed as
+        // a configuration problem. BOTH branches wait — but a scope-LESS
+        // conversation (no tags, no category edge) has nothing to
+        // resolve and skips the wait.
+        const carriesScope =
+          (Array.isArray(conversation.tags) && conversation.tags.length > 0) || this.currentCategoryId;
+        if (carriesScope) {
+          await Promise.all([this.ensureQuickHelpLoaded(), this.ensureServiceCategoriesLoaded()]);
+        }
+        // The wait above is a REAL await (the config fetch, the
+        // hierarchy fetch): a newer restore may have landed while it
+        // was pending, and this one must not commit its scope over
+        // the newer conversation's.
+        if (token !== this.loadSeq) {
+          return;
+        }
+        if (Array.isArray(conversation.tags) && conversation.tags.length > 0) {
+          // The tags of a saved conversation are the ids of the items it was
+          // scoped by. A Quick Help tag is only recognised once the buttons
+          // are known: looked up in an empty list, it would fall through to
+          // the sidebar branch and send the button id as a label.
+          conversation.tags.forEach((tag) => {
+            // A saved conversation keeps the tag of an item, not the item
+            // itself. A Quick Help tag is the id of the button that produced
+            // it, so the button is looked up by that id: restoring it as a
+            // plain sidebar item would drop the labels the deployment
+            // declared for it, and would make the query look like a
+            // misconfigured selection. The lookup is on the id and never on a
+            // label — a sidebar selection and a Quick Help button can carry
+            // the same label, and restoring the wrong one silently changes
+            // the scope of the saved query.
+            // The RESERVED just-chat id: a saved conversation keeps it
+            // even when the deployment's config dropped the entry — the
+            // scope it names (NONE, unfiltered by design) does not
+            // depend on the config, so the chip rebuilds from the id
+            // alone instead of restoring as a dead tag that refuses
+            // every send.
+            if (tag === 'just-chat') {
+              restoredContextItems.push(
+                quickHelpContextItem({
+                  id: 'just-chat',
+                  service: this.translate('chatbot.justChat'),
+                  serviceLabels: []
+                })
+              );
+              return;
             }
+            const button = this.quickHelpButtons.find((candidate) => candidate.id === tag);
+            if (button) {
+              restoredContextItems.push(quickHelpContextItem(button));
+              // The card knows the scope it was asked in: a conversation
+              // saved with it may carry no category edge (the chat was
+              // started before the card was used), and the restored scope is
+              // the card's.
+              if (button.category) {
+                this.currentCategoryId = button.category;
+              }
+              return;
+            }
+            // A LEGACY tag: conversations saved before the redesign carry
+            // 'category.<id>' — the old restore's own spelling for a
+            // category-only scope. The id still names the category
+            // through the live tree, so the scope restores as what it
+            // was; restoring it as a label chip made every follow-up
+            // refuse. A category the tree no longer carries still
+            // installs the item — the send is then refused visibly
+            // (nothing can name the scope), never silently widened.
+            // 'category.general' is the no-scope placeholder: it
+            // contributes nothing.
+            const legacyCategory = /^category\.(.+)$/.exec(tag);
+            if (legacyCategory) {
+              if (declaresCategoryScope(legacyCategory[1])) {
+                restoredContextItems.push(
+                  categoryOnlyItem(legacyCategory[1], this.getCategoryDisplayName(legacyCategory[1]) || tag)
+                );
+                this.currentCategoryId = legacyCategory[1];
+              }
+              return;
+            }
+            // A sidebar scope: the tag is its EN label (a locale-independent
+            // identity). The chip shows the localized name the tree carries
+            // for it; the wire carries the EN one.
+            const enLabel = this.enLabelDisplayNames.has(tag) ? tag : null;
+            restoredContextItems.push({
+              service: this.displayNameForEnLabel(enLabel || tag) || tag,
+              serviceKey: enLabel,
+              category: this.currentCategoryId || 'general',
+              // A tag that names NOTHING anymore is a SAVED SCOPE that
+              // cannot be carried. The 'general' placeholder below would
+              // exempt it from the unnamed-item rule, and the send would
+              // quietly drop the scope it stood for the moment another
+              // item provided a filter. The flag names it for the guard:
+              // no partial drop, the send refuses.
+              unresolved: enLabel === null,
+              selected: true
+            });
+          });
+        } else if (this.currentCategoryId) {
+          // The scope of this item IS the category — 'category.<id>' is
+          // not a label, and putting it on the wire would filter on a
+          // label no chunk carries (the query would abstain instead of
+          // answering from the category it was scoped by).
+          restoredContextItems = [
+            categoryOnlyItem(this.currentCategoryId, this.getCategoryDisplayName(this.currentCategoryId))
           ];
         }
         this.$store.commit('conversation/setContextItems', restoredContextItems);
@@ -1819,7 +2597,13 @@ export default {
     },
 
     getContextTags() {
-      return this.selectedContextItems.map((item) => item.serviceKey || item.service).filter((tag) => tag);
+      // A tag is the item's IDENTITY: a Quick Help button's id, or the
+      // ENGLISH label of a sidebar selection. The localized display name
+      // is not an identity — persisting it would make the conversation
+      // unresolvable on the next open (and locale-dependent). An item
+      // with no identity (a category-only scope) carries NO tag: the
+      // conversation's category edge is what restores it.
+      return this.selectedContextItems.map((item) => item.serviceKey).filter((tag) => tag);
     },
 
     async handleSaveChat() {
@@ -3208,6 +3992,22 @@ export default {
 
 .quick-help-item:hover {
   --ds-card-border-color: var(--accent-hover);
+}
+
+.quick-help-item.config-error {
+  cursor: not-allowed;
+  --ds-card-border-color: var(--danger);
+}
+
+.config-error-icon {
+  color: var(--danger);
+}
+
+.quick-help-error-caption {
+  font-size: var(--text-xs);
+  color: var(--danger);
+  margin-top: var(--space-xs);
+  text-align: left;
 }
 
 .quick-help-icon {

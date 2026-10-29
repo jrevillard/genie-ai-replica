@@ -1038,6 +1038,14 @@ const Map<String, dynamic> esLocale = {
     "unsavedChanges":
         "Tienes cambios sin guardar. ¿Estás seguro de que quieres iniciar un nuevo chat?",
     "whatCanIHelp": "¿Cómo puedo ayudarte hoy?",
+    "quickHelpLabelGone":
+        "Problema de configuración: la etiqueta «{labels}» ya no existe en la jerarquía de conocimiento. Este botón no se puede usar hasta que su configuración se actualice.",
+    "quickHelpCategoryGone":
+        "Problema de configuración: la categoría de este botón ya no existe en la jerarquía de conocimiento. Este botón no se puede usar hasta que su configuración se actualice.",
+    "quickHelpScopeUnavailable":
+        "Problema de configuración: no se pudo cargar la jerarquía de conocimiento, por lo que no se puede verificar el alcance de este botón. Este botón no se puede usar hasta que la jerarquía esté disponible.",
+    "scopeNotNameable":
+        "Problema de configuración: el alcance seleccionado no tiene nombre en inglés en la jerarquía de conocimiento, por lo que no se puede determinar el alcance de la consulta. No se envió.",
     "queryContext": "Contexto de consulta",
     "contextAdded": "Contexto añadido a tu consulta",
     "contextRemoved": "Contexto eliminado de tu consulta",

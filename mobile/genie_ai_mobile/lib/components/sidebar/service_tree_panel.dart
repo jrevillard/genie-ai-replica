@@ -139,17 +139,25 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     int index,
     String catKey,
   ) {
-    // 1. Safe Key Extraction for Category (Backup if catKey fails)
-    final String categoryId = (category['id'] ?? category['key'] ?? "")
-        .toString();
+    // 1. The category id IS the tree's catKey — the parameter is extracted
+    // from the same node this handler was invoked for. Reading the raw
+    // node's 'id'/'key' yields an empty string (the tree publishes neither)
+    // and every selection then carried an EMPTY category id: the chat read
+    // it as "no scope" and the query left unfiltered.
+    final String categoryId = catKey;
 
     // 2. Normalize Service Data (Handling the String vs Map crash)
     String serviceId;
     String serviceName;
+    // The ENGLISH translation — the SSOT the filter wire speaks. The
+    // localized name is display-only.
+    String serviceEn = "";
 
     if (serviceItem is Map) {
       serviceId = (serviceItem['id'] ?? serviceItem['key'] ?? "").toString();
       serviceName = serviceItem['label'] ?? serviceItem['name'] ?? "Unknown";
+      final en = serviceItem['nameEN'];
+      serviceEn = (en is String) ? en : "";
     } else {
       // Handle simple string case
       serviceId = serviceItem.toString();
@@ -157,11 +165,15 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     }
 
     // 3. Update Selection State
-    // Check if this specific item is already selected by ID/Name
+    // Check if this specific item is already selected. The children
+    // carry no id/key, so their identity is the (category, name) pair:
+    // matching on the name alone crossed the categories — two services
+    // named alike in different categories toggled each other's scope,
+    // and the highlight desynced from what the chat received.
     final existingIndex = _orderedSelection.indexWhere(
       (item) =>
           (item['id'] == serviceId && serviceId.isNotEmpty) ||
-          item['name'] == serviceName,
+          (item['name'] == serviceName && item['category_id'] == categoryId),
     );
 
     setState(() {
@@ -183,7 +195,11 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
         _orderedSelection.add({
           'id': serviceId,
           'name': serviceName,
+          'nameEn': serviceEn,
           'category_id': categoryId,
+          'categoryNameEn': (category['nameEN'] is String)
+              ? category['nameEN']
+              : "",
         });
 
         // Update visual highlights
@@ -203,7 +219,14 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
   void _emitSelectionChange() {
     // Case A: Nothing selected -> Clear context
     if (_orderedSelection.isEmpty) {
-      widget.onSelectionChange({'id': '', 'name': '', 'category_id': ''});
+      widget.onSelectionChange({
+        'id': '',
+        'name': '',
+        'category_id': '',
+        'categoryNameEn': '',
+        'serviceLabelsEn': const <String>[],
+        'serviceCount': 0,
+      });
       return;
     }
 
@@ -211,6 +234,12 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     final String contextString = _orderedSelection
         .map((item) => item['name'])
         .join(', ');
+
+    final List<String> serviceLabelsEn = _orderedSelection
+        .map((item) => item['nameEn'])
+        .where((en) => en != null && en.toString().isNotEmpty)
+        .cast<String>()
+        .toList();
 
     final String primaryCatId = _orderedSelection.first['category_id'];
 
@@ -222,6 +251,13 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
       'id': combinedIds,
       'name': contextString,
       'category_id': primaryCatId,
+      'categoryNameEn': _orderedSelection.first['categoryNameEn'],
+      'serviceLabelsEn': serviceLabelsEn,
+      // How many services were picked, beside the labels that survived:
+      // a picked service with no EN translation contributes no label, and
+      // the chat must refuse the send instead of quietly narrowing the
+      // query to the whole category.
+      'serviceCount': _orderedSelection.length,
     };
 
     debugPrint("[SERVICE_TREE] Emitting Multi-Selection: $payload");
@@ -346,12 +382,25 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     // Safe Property Access
     final String catLabel =
         category['label'] ?? category['name'] ?? "Unknown Category";
-    final String catKey = (category['key'] ?? category['id'] ?? index)
-        .toString();
+    final String catKey =
+        (category['catKey'] ?? category['key'] ?? category['id'] ?? index)
+            .toString();
     final List children = category['children'] ?? [];
 
     // Filter Children based on Search Query
-    final filteredChildren = children.where((child) {
+    // The filtered list keeps each child's ORIGINAL index: the selection
+    // (_selectedNodes) is tracked by that index, and a list whose
+    // composition changes with the search would point the highlight and
+    // the deselection at the wrong rows.
+    final filteredChildren = children.asMap().entries.where((entry) {
+      final child = entry.value;
+      // An entity with no display name in this locale has nothing to
+      // offer: the web hides it, and offering it here would let the user
+      // pick a scope that is guaranteed to fail the send.
+      if (child is Map &&
+          (child['name'] == null || child['name'].toString().isEmpty)) {
+        return false;
+      }
       if (_searchQuery.isEmpty) return true;
 
       String name;
@@ -395,12 +444,13 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
         leading: Icon(Icons.folder_open, color: tokens.brand, size: 20),
         childrenPadding: EdgeInsets.zero,
 
-        // Children Generation
-        children: children.asMap().entries.map((entry) {
-          final int childIndex = entry.key;
-          final dynamic child = entry.value;
-          // FIX: Pass catKey correctly to child
-          return _buildServiceItem(category, child, childIndex, catKey);
+        // Children Generation — the FILTERED list, each child carrying
+        // its ORIGINAL index: an entity with no display name in this
+        // locale is not offered (the web hides it too), and the selection
+        // keeps pointing at the row it was made on whatever the filter
+        // hides.
+        children: filteredChildren.map((entry) {
+          return _buildServiceItem(category, entry.value, entry.key, catKey);
         }).toList(),
       ),
     );

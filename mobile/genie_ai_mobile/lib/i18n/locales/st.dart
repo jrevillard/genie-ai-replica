@@ -1040,6 +1040,14 @@ const Map<String, dynamic> stLocale = {
     "unsavedChanges":
         "O na le diphetoho tse sa bolokwang. Na u na le bonnete ba hore u batla ho qala puisano e ncha?",
     "whatCanIHelp": "Nka u thusa joang kajeno?",
+    "quickHelpLabelGone":
+        "Configuration problem: the label \"{labels}\" no longer exists in the knowledge hierarchy. This button cannot be used until its configuration is updated.",
+    "quickHelpCategoryGone":
+        "Configuration problem: this button's category no longer exists in the knowledge hierarchy. This button cannot be used until its configuration is updated.",
+    "quickHelpScopeUnavailable":
+        "Configuration problem: the knowledge hierarchy could not be loaded, so this button's scope cannot be verified. This button cannot be used until the hierarchy is available.",
+    "scopeNotNameable":
+        "Configuration problem: the selected scope has no English name in the knowledge hierarchy, so the query cannot be scoped. It was not sent.",
     "queryContext": "Moelelo oa Potso",
     "contextAdded": "Moelelo o kentsoe potsong ea hao",
     "contextRemoved": "Moelelo o tlositsoe potsong ea hao",

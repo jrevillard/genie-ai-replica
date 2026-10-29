@@ -1327,6 +1327,11 @@ export default {
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning: '配置不匹配：{warnings}。请检查快速帮助和知识层次结构的配置。',
     categoryNotFound: '在知识层次结构中未找到类别"{label}"',
+    quickHelpLabelGone: '配置问题：标签“{labels}”已不存在于知识层次结构中。在更新配置之前，此按钮无法使用。',
+    quickHelpCategoryGone: '配置问题：此按钮的类别已不存在于知识层次结构中。在更新配置之前，此按钮无法使用。',
+    quickHelpScopeUnavailable:
+      '配置问题：知识层次结构无法加载，因此无法验证此按钮的范围。在层次结构可用之前，此按钮无法使用。',
+    scopeNotNameable: '配置问题：所选范围在知识层次结构中没有英文名称，因此无法确定查询的范围。该查询未发送。',
     serviceLabelMismatch: '服务"{label}"使用的UI标签可能与知识层次结构不匹配',
     noFilterWarning: '没有活动的上下文筛选器 — 查询将不被筛选。',
     placeholder: '在此输入您的查询...',

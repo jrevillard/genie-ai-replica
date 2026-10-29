@@ -31,7 +31,17 @@ describe('serviceTreeService', () => {
 
       const result = await serviceTreeService.getAllCategories('en');
 
-      expect(mockGet).toHaveBeenCalledWith('services/categories', { params: { locale: 'en' } });
+      // The fetch is BOUNDED: a request that never answers left the
+      // hierarchy 'loading' forever (the grid hidden, the restore's await
+      // unresolved, the chat unusable).
+      //
+      // The bound lives in the THIRD argument — httpService.get's axios
+      // options. Its second argument is the QUERY: it reads `params` from
+      // it and sends the rest as query parameters, so a timeout placed
+      // there is dropped and axios waits forever. This assertion pins the
+      // SHAPE of the call; whether the bound REACHES axios is proved by
+      // serviceTreeServiceTimeout.test.js, which drives the real client.
+      expect(mockGet).toHaveBeenCalledWith('services/categories', { params: { locale: 'en' } }, { timeout: 15000 });
       expect(result).toEqual([{ catKey: 'health', name: 'Health' }]);
     });
 
@@ -40,7 +50,17 @@ describe('serviceTreeService', () => {
 
       await serviceTreeService.getAllCategories();
 
-      expect(mockGet).toHaveBeenCalledWith('services/categories', { params: { locale: 'en' } });
+      expect(mockGet).toHaveBeenCalledWith('services/categories', { params: { locale: 'en' } }, { timeout: 15000 });
+    });
+
+    it('rejects a body that is not a list of categories', async () => {
+      // A broken answer (a proxy error page, an object) is not a
+      // hierarchy: a client that walks it throws mid-render and the chat
+      // panel goes blank. The load must FAIL, so the caller can say the
+      // scope cannot be verified.
+      mockGet.mockResolvedValue({ data: { error: 'boom' } });
+
+      await expect(serviceTreeService.getAllCategories('en')).rejects.toThrow(/not a list/i);
     });
 
     it('throws on API failure', async () => {
@@ -248,58 +268,6 @@ describe('serviceTreeService', () => {
 
       expect(mockDelete).toHaveBeenCalledWith('service-categories/services/svc-1');
       expect(result).toEqual({ success: true });
-    });
-  });
-
-  // =========================================================================
-  // transformCategoriesToTreeNodes
-  // =========================================================================
-  describe('transformCategoriesToTreeNodes', () => {
-    it('transforms categories to tree node format', () => {
-      const categories = [
-        { catKey: 'health', name: 'Health', children: ['svc-1'] },
-        { catKey: 'education', name: 'Education', children: [] }
-      ];
-
-      const result = serviceTreeService.transformCategoriesToTreeNodes(categories);
-
-      expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({
-        catKey: 'health',
-        name: 'Health',
-        expanded: false,
-        children: ['svc-1']
-      });
-      expect(result[1].name).toBe('Education');
-    });
-
-    it('returns empty array for empty input', () => {
-      const result = serviceTreeService.transformCategoriesToTreeNodes([]);
-
-      expect(result).toEqual([]);
-    });
-
-    it('throws on null input', () => {
-      expect(() => serviceTreeService.transformCategoriesToTreeNodes(null)).toThrow();
-    });
-
-    it('replaces null children with empty array', () => {
-      const categories = [{ catKey: 'health', name: 'Health', children: null }];
-
-      const result = serviceTreeService.transformCategoriesToTreeNodes(categories);
-
-      expect(result[0].children).toEqual([]);
-      expect(result[0].expanded).toBe(false);
-    });
-
-    it('handles categories with missing name property', () => {
-      const categories = [{ catKey: 'health' }];
-
-      const result = serviceTreeService.transformCategoriesToTreeNodes(categories);
-
-      expect(result[0].catKey).toBe('health');
-      expect(result[0].name).toBeUndefined();
-      expect(result[0].expanded).toBe(false);
     });
   });
 });

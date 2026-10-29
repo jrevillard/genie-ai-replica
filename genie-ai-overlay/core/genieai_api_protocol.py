@@ -42,6 +42,8 @@ class RequestContext(BaseModel):
     A model to hold structured context for metadata filtering during retrieval.
     """
 
+    # OVERRIDE core.genieai_api_protocol.RequestContext.categoryLabel | disposition: re-graft-to-new-API | reason: upstream declares categoryLabels only, so Pydantic drops the singular categoryLabel the backend sends and chatqna reads — category filtering was dead | test: tests/test_request_context.py  # noqa: E501
+    categoryLabel: str | None = None
     categoryLabels: list[str] | None = None
     serviceLabels: list[str] | None = None
     language: str | None = None

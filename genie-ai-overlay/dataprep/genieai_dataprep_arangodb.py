@@ -1634,21 +1634,32 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             if not isinstance(category, dict):
                                 malformed += 1
                                 continue
+                            # A category the payload does not name keeps a
+                            # group of its own: its services are not filed
+                            # under the name of the category that precedes
+                            # them. The name is set below, when the payload
+                            # carries one.
                             group_name = ""
-                            if "name" not in category:
+                            # The EN translation is the vocabulary every
+                            # chunk_label is minted from. The localized name
+                            # only happens to BE English while the fetch
+                            # carries no locale parameter — a tree older than
+                            # the both-spellings contract publishes no nameEN,
+                            # and its `name` at the default locale IS the
+                            # English translation, so it is the fallback.
+                            label = category.get("nameEN") or category.get("name")
+                            if "name" not in category and "nameEN" not in category:
                                 malformed += 1
+                            elif isinstance(label, str) and label:
+                                group_name = label
+                            elif label is None or label == "":
+                                # A category whose translation is missing
+                                # arrives as null: it has no label to offer,
+                                # and its services are kept under a nameless
+                                # group.
+                                untranslated += 1
                             else:
-                                name = category["name"]
-                                if isinstance(name, str) and name:
-                                    group_name = name
-                                elif name is None or name == "":
-                                    # A category whose translation is missing
-                                    # arrives as null: it has no label to offer,
-                                    # and its services are kept under a nameless
-                                    # group.
-                                    untranslated += 1
-                                else:
-                                    malformed += 1
+                                malformed += 1
                             # All Children (Services)
                             services: list[str] = []
                             children = category.get("children")
@@ -1657,10 +1668,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                                     # Children might be strings or objects depending on query
                                     label = ""
                                     if isinstance(child, dict):
-                                        if "name" not in child:
+                                        if "name" not in child and "nameEN" not in child:
                                             malformed += 1
                                             continue
-                                        label = child["name"]
+                                        # The EN spelling first — same rule as
+                                        # the category above.
+                                        label = child.get("nameEN") or child.get("name")
                                     elif isinstance(child, str) or child is None:
                                         # The backend returns null for a service
                                         # whose translation is missing.

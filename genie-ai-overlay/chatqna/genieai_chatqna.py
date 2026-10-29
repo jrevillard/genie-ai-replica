@@ -22,6 +22,7 @@ from metrics import (
 )
 
 from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
+from core.label_contract import build_filter_labels, encode_filter_labels
 from core.model_cache import get_max_model_len, get_model_id
 from core.model_http_policy import AIOHTTP_CONNECT_TIMEOUT_SECONDS, CONTROL_PLANE_TIMEOUT_SECONDS
 from core.span_attrs import ATTRIBUTE_NAMES, QUERY_ID_KEY, query_id_from_baggage
@@ -1519,61 +1520,6 @@ def _raise_condense_503(reason, exc):
     ) from exc
 
 
-def _build_filter_labels(retrieval_context: dict) -> list[str]:
-    """Build the retriever filter-label list from the retrieval context.
-
-    Accepts both ``categoryLabel`` (singular — the contract the frontend/backend
-    sends) and ``categoryLabels`` (plural — legacy), plus ``serviceLabels``.
-    Singular values are coerced to a single-element list. Null/empty values add
-    nothing (no category filter). Order: category, then service labels.
-
-    Extracted from ``align_inputs`` for unit testability — the label-coercion
-    logic is otherwise buried inside the 1000-line ``generate_flow`` method.
-
-    Args:
-        retrieval_context: The ``context`` dict from the chat request.
-
-    Returns:
-        A flat list of filter labels (may be empty = no filter).
-    """
-    if not retrieval_context:
-        return []
-    labels: list[str] = []
-    cat_label = retrieval_context.get("categoryLabel")
-    if cat_label:
-        # Coerce scalars to a single-element list; iterables extended as-is.
-        if isinstance(cat_label, str):
-            labels.append(cat_label)
-        elif isinstance(cat_label, list):
-            labels.extend(cat_label)
-        else:
-            labels.append(str(cat_label))
-    cat_labels = retrieval_context.get("categoryLabels")
-    if cat_labels:
-        if isinstance(cat_labels, list):
-            labels.extend(cat_labels)
-        else:
-            labels.append(str(cat_labels))
-    if retrieval_context.get("serviceLabels"):
-        svc = retrieval_context["serviceLabels"]
-        if isinstance(svc, list):
-            labels.extend(svc)
-        else:
-            labels.append(str(svc))
-    # Coerce + dedup while preserving order. Non-string non-list entries are
-    # stringified (defensive against malformed clients); falsy values dropped.
-    seen: set[str] = set()
-    deduped: list[str] = []
-    for label in labels:
-        if not label:
-            continue
-        normalized = label if isinstance(label, str) else str(label)
-        if normalized not in seen:
-            seen.add(normalized)
-            deduped.append(normalized)
-    return deduped
-
-
 ##################################################################################################################################
 # CUSTOM DATA SUBCLASSES
 ##################################################################################################################################
@@ -1932,12 +1878,10 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # The retriever parses this to build labels_to_filter for its DB-level
         # label filter (BM25 aql_filter_clause + dense post-filter).
         retrieval_context = _gp(kwargs, "retrieval_context", {})
-        # Build filter labels (category singular/plural + service). Extracted to
-        # _build_filter_labels for testability.
-        _filter_labels = _build_filter_labels(retrieval_context)
+        # Build filter labels (category singular/plural + service). The rule
+        # lives in core.label_contract, shared with the retriever.
+        _filter_labels = build_filter_labels(retrieval_context)
         if _filter_labels:
-            from core.label_contract import encode_filter_labels
-
             _base_mode = inputs.get("search_start", "chunk")
             inputs["search_start"] = encode_filter_labels(_base_mode, _filter_labels)
 

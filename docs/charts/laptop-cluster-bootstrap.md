@@ -126,11 +126,14 @@ convergence Job) run inside it.
 ```bash
 # 1. capture the cluster-only state BEFORE deleting the cluster — into
 #    ~/.genieai-sealed-secrets, NOT the repo (the capture includes the
-#    cluster's sealed-secrets PRIVATE key). The --capture mode is the
+#    cluster's sealed-secrets PRIVATE key; the script enforces
+#    owner-only file permissions). The --capture mode is the
 #    producer of exactly the files step 2 consumes — filename and file
 #    shape are owned by the script, so they cannot diverge — and it
-#    fails loudly when the active key is missing (an empty capture is
-#    the silent path to a keyless cluster). NOT
+#    fails loudly, naming anything it could not capture (a capture that
+#    exits 0 over a missing artifact — the GitLab PAT is unrecoverable
+#    once the cluster is gone — is the silent path to a keyless
+#    cluster). NOT
 #    `get secret sealed-secrets-key*`: a positional argument is an
 #    exact-name selector in kubectl, not a glob; it silently matches
 #    nothing.

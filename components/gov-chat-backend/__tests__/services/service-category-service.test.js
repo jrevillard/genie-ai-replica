@@ -342,8 +342,12 @@ describe('ServiceCategoryService', () => {
       // applies, so the tree must use it too. The write path keeps the
       // document and the row in sync, so this can only fill a missing row
       // with the text the row would have carried.
-      expect(text).toMatch(/categoryTranslationEN\)\)\s*>\s*0\s*\?\s*categoryTranslationEN\s*:\s*\(LENGTH\(TRIM\(category\.nameEN\)\)\s*>\s*0\s*\?\s*category\.nameEN\s*:\s*null\)/);
-      expect(text).toMatch(/serviceTranslationEN\)\)\s*>\s*0\s*\?\s*serviceTranslationEN\s*:\s*\(LENGTH\(TRIM\(service\.nameEN\)\)\s*>\s*0\s*\?\s*service\.nameEN\s*:\s*null\)/);
+      expect(text).toMatch(
+        /categoryTranslationEN\)\)\s*>\s*0\s*\?\s*categoryTranslationEN\s*:\s*\(LENGTH\(TRIM\(category\.nameEN\)\)\s*>\s*0\s*\?\s*category\.nameEN\s*:\s*null\)/
+      );
+      expect(text).toMatch(
+        /serviceTranslationEN\)\)\s*>\s*0\s*\?\s*serviceTranslationEN\s*:\s*\(LENGTH\(TRIM\(service\.nameEN\)\)\s*>\s*0\s*\?\s*service\.nameEN\s*:\s*null\)/
+      );
     });
 
     it('should throw on database error', async () => {
@@ -432,8 +436,12 @@ describe('ServiceCategoryService', () => {
       // English name — the very symptom the admin panel must not show.
       // The document's cached nameEN is the fallback the corpus's own EN
       // resolution uses, so the tree must use it too.
-      expect(text).toMatch(/categoryTranslationEN\)\)\s*>\s*0\s*\?\s*categoryTranslationEN\s*:\s*\(LENGTH\(TRIM\(category\.nameEN\)\)\s*>\s*0\s*\?\s*category\.nameEN\s*:\s*null\)/);
-      expect(text).toMatch(/serviceTranslationEN\)\)\s*>\s*0\s*\?\s*serviceTranslationEN\s*:\s*\(LENGTH\(TRIM\(service\.nameEN\)\)\s*>\s*0\s*\?\s*service\.nameEN\s*:\s*null\)/);
+      expect(text).toMatch(
+        /categoryTranslationEN\)\)\s*>\s*0\s*\?\s*categoryTranslationEN\s*:\s*\(LENGTH\(TRIM\(category\.nameEN\)\)\s*>\s*0\s*\?\s*category\.nameEN\s*:\s*null\)/
+      );
+      expect(text).toMatch(
+        /serviceTranslationEN\)\)\s*>\s*0\s*\?\s*serviceTranslationEN\s*:\s*\(LENGTH\(TRIM\(service\.nameEN\)\)\s*>\s*0\s*\?\s*service\.nameEN\s*:\s*null\)/
+      );
     });
 
     it('should throw on database error', async () => {

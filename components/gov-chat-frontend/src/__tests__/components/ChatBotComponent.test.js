@@ -4103,6 +4103,104 @@ describe('ChatBotComponent', () => {
       expect(vm.currentChatId).toBe('conv-B');
     });
 
+    // A load clears the chips and the transcript BEFORE it awaits, so
+    // the welcome grid is clickable while the fetch is still in flight —
+    // and a user action in that window is the user SAYING which scope
+    // they want. The restore of the loading conversation must not land
+    // over it. (The mobile platform closes the same window with its
+    // scope epoch; the web's view-ownership token serves the same role.)
+    //
+    // MUTATION CHECK: delete the loadSeq bump in switchToQuickHelpMode
+    // (card-press test) / in handleTreeNodeSelected (sidebar test) and
+    // each test fails — the restore replaces the user's chip and takes
+    // over the conversation id.
+    describe('a user action during a load window supersedes the restore', () => {
+      const pressCard = async () => {
+        mockLiveTree(treeCarrying({ 2: ['Births'] }));
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+        await vm.ensureServiceCategoriesLoaded();
+        // The card carries a hidden prompt; the send is not what is under
+        // test here.
+        const sendMessageSpy = jest.spyOn(vm, 'sendMessage').mockImplementation(() => {});
+        return { wrapper, vm, sendMessageSpy };
+      };
+
+      it('a card pressed while a load is in flight keeps its scope — the restore never lands', async () => {
+        const { wrapper, vm, sendMessageSpy } = await pressCard();
+        const chatHistoryService = require('../../services/chatHistoryService');
+        let resolveLoad;
+        chatHistoryService.getConversation.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveLoad = resolve;
+            })
+        );
+        const loadHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'load-conversation')[1];
+        const pending = loadHandler('conv-race');
+        await vm.$nextTick();
+
+        // The user presses a healthy scoped card DURING the window.
+        vm.selectQuickHelpOption({
+          service: 'Births',
+          visibleText: 'q',
+          hiddenPrompt: 'p',
+          category: '2',
+          id: 'race-card'
+        });
+        expect(vm.selectedContextItems.some((item) => item.id === 'race-card')).toBe(true);
+
+        // The load lands AFTER the press — with the conversation's own
+        // scope, which must not replace the pressed card's.
+        resolveLoad({
+          _key: 'conv-race',
+          title: 'Race',
+          messages: [{ sender: 'user', content: 'old turn' }],
+          tags: ['Births']
+        });
+        await pending;
+        await vm.$nextTick();
+
+        expect(vm.selectedContextItems.some((item) => item.id === 'race-card')).toBe(true);
+        expect(vm.conversationId).toBeNull();
+        sendMessageSpy.mockRestore();
+        wrapper.unmount();
+      });
+
+      it('a sidebar service picked while a load is in flight keeps its chip — the restore never lands', async () => {
+        const { wrapper, vm } = await pressCard();
+        const chatHistoryService = require('../../services/chatHistoryService');
+        let resolveLoad;
+        chatHistoryService.getConversation.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveLoad = resolve;
+            })
+        );
+        const loadHandler = mockEventBusOn.mock.calls.find((c) => c[0] === 'load-conversation')[1];
+        const pending = loadHandler('conv-race');
+        await vm.$nextTick();
+
+        // The user picks a sidebar service DURING the window — the same
+        // supersede, through the other scope-setting path.
+        vm.handleTreeNodeSelected({ service: 'Births', serviceKey: 'Births', category: '2', selected: true });
+        expect(vm.selectedContextItems.some((item) => item.serviceKey === 'Births')).toBe(true);
+
+        resolveLoad({
+          _key: 'conv-race',
+          title: 'Race',
+          messages: [{ sender: 'user', content: 'old turn' }],
+          tags: ['Births']
+        });
+        await pending;
+        await vm.$nextTick();
+
+        expect(vm.selectedContextItems.some((item) => item.serviceKey === 'Births')).toBe(true);
+        expect(vm.conversationId).toBeNull();
+        wrapper.unmount();
+      });
+    });
+
     it('loading a conversation drops the previous one first — even when the fetch fails', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;

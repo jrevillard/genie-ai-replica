@@ -1785,6 +1785,13 @@ export default {
     // SIDEBAR item is announced on the panel's own sync channel — its
     // highlights must not outlive the store items that backed them.
     switchToQuickHelpMode() {
+      // A load clears the chips and the transcript BEFORE it awaits, so
+      // the welcome grid is clickable while the fetch is still in
+      // flight. A press in that window is the user SAYING which scope
+      // they want: the in-flight load of another conversation no longer
+      // owns the view and must not land over the press (the token it
+      // checks is loadSeq — the same ownership a newer load claims).
+      this.loadSeq++;
       this.selectedContextItems
         .filter((item) => item.source !== QUICK_HELP_SOURCE)
         .forEach((item) => eventBus.$emit('contextItemRemoved', item));
@@ -1948,6 +1955,11 @@ export default {
       if (!item || typeof item !== 'object' || !item.service) {
         return;
       }
+      // The same supersede a Quick Help press claims (see
+      // switchToQuickHelpMode): a sidebar pick during another
+      // conversation's load window is the user's scope, and the
+      // in-flight restore must not land over it.
+      this.loadSeq++;
 
       if (item.selected) {
         // The IDENTITY is the (EN serviceKey, category) pair — the

@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-29)
 
-- **Chart `genieai-umbrella` at 0.2.115**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.116**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,40 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 42 (0.2.116)** — 7 findings from the eighteenth
+  `/code-review`: six fixed, one structural cleanup absorbed into the
+  same fix.
+  - *The convergence rows' `secretName` still reached the shell raw* —
+    the helper this pass built claims to extend "the discipline
+    validatedConvergenceEnvSecrets applies to the convergence rows",
+    but that helper's regex covered only `envVar`: the row's
+    secretName rendered verbatim into the pod's `sh -c`. The shape
+    check moved INTO validatedConvergenceEnvSecrets (all three row
+    consumers route through it), and a guard case fires on a
+    metacharacter-bearing row.
+  - *Two global tooling keys were interpolated into the tools-init
+    container's shell raw* — `kubeletToolsMirror` (into
+    `BASE="..."`, where `$(...)` executes) and `toolingArch` (into the
+    kubectl URL path), neither constrained by the schema. The schema
+    gains a `global` block: an enum for the architectures the download
+    URL accepts, and a mirror pattern admitting no shell
+    metacharacters. Two guard cases fire on violations.
+  - *The new validation helper was exercised on one row only* —
+    unwrapping the db.secretName or admin userSecret interpolations
+    landed green. A guard case per row now: unwrapping any ONE of the
+    three is red.
+  - *The guard script's header stated a false mechanism* — no CI
+    render passes `failOnPlaceholderSecrets=false`; the placeholder
+    guards are satisfied by the fixture's lint-dummy clientSecrets and
+    complete envSecrets rows. The header states the real mechanism
+    (same false-reason class the pass-41 _tests.tpl fix closed).
+  - *The render mechanics lived in four copies* — the helpers now
+    share `render_capture`, and the SIGPIPE rationale (grep -c, never
+    -q) sits beside the count logic it protects; the empty-count
+    direction is fail-safe (no evidence fails the guard, both ways).
+  - *The Secret-name shape check enforced the charset but not the
+    DNS-subdomain bounds* (253 total, 63 per label) while claiming the
+    Kubernetes shape. The length checks joined the regex.
 - **Review loop, pass 41 (0.2.115)** — 7 findings from the seventeenth
   `/code-review`: six fixed, one declined as machinery (tripwire
   recorded).
@@ -1840,7 +1874,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.115** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.116** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

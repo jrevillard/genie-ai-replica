@@ -2820,16 +2820,20 @@ export default {
       try {
         // Using the serviceTreeService to fetch data
         const categories = await serviceTreeService.getAdminCategories('en');
-        // The API returns a simple structure; adapt it for the UI.
-        // A dedicated admin endpoint should return the full object with translations.
+        // Adapt the admin tree onto the editor rows. nameEN comes from the
+        // payload — the wire spelling the tree publishes; `translations` is
+        // fetched per item when the edit form opens. The fallback to `name`
+        // covers a tree that predates the field: the panel is fetched in
+        // English, so the payload's `name` IS the English translation
+        // there — the same fallback the mobile collector makes for the
+        // same deploy window.
         this.knowledgeHierarchy = categories.map((cat) => ({
-          _key: cat.catKey, // Use _key from service
-          nameEN: cat.name,
-          translations: [], // TODO: Your API should eventually return this data
+          _key: cat.catKey,
+          nameEN: cat.nameEN ?? cat.name,
+          translations: [],
           services: (cat.children || []).map((service) => ({
-            // service is now the object {_key, name}
-            _key: service._key, // Use the REAL key from the database
-            nameEN: service.name, // Use the name property from the service object
+            _key: service._key,
+            nameEN: service.nameEN ?? service.name,
             translations: []
           }))
         }));

@@ -77,19 +77,21 @@ that information."
 > **Verifying abstention fired.** When abstention fires, the streamed
 > answer ends with the configured refusal phrase, and the SSE metadata
 > event carries `is_grounded: false`. When the retrieval returned no
-> document at all — a scoped query whose label filter matched nothing —
-> the metadata event also carries `abstained: true` with
+> document at all — the label filter matched nothing, or nothing in scope
+> was relevant enough to clear the similarity threshold — the metadata
+> event also carries `abstained: true` with
 > `abstention_reason: no_documents_retrieved`, the `chatqna.stream_outcome`
 > span records `answer.abstained` on a streamed turn, and
-> `genie_ai_chat_request_total` counts the
-> turn under `abstained="true"` — all derived from the same retrieval
-> signal. The flag reports that the retrieval produced no document; with
-> the default enforcement the answer is then an abstention, while a
-> deployment that sets `CHATQNA_ENFORCE_ABSTENTION=false` may answer
-> without document backing instead. The `chatqna.orchestrate` root span in
-> VictoriaTraces reflects the same request for trace-level correlation.
-> The admin Query Inspector shows the marker and the scope that filtered
-> (see [Admin Dashboard](/docs/frontend/admin-dashboard/)).
+> `genie_ai_chat_request_total` counts the turn under `abstained="true"` —
+> all derived from the same retrieval signal. The flag is reported while
+> the abstention instructions are enforced (`CHATQNA_ENFORCE_ABSTENTION`,
+> the default); a deployment that turned the guardrail off answers instead
+> of abstaining, and the flag stays unset. The metadata event also carries
+> `filter_labels` — the labels the retrieval filtered on, by the pipeline's
+> own rule — so the admin Query Inspector names the scope without
+> re-deriving it (see [Admin Dashboard](/docs/frontend/admin-dashboard/)).
+> The `chatqna.orchestrate` root span in VictoriaTraces reflects the same
+> request for trace-level correlation.
 
 ## Self-confidence {#self-confidence}
 

@@ -1473,6 +1473,19 @@ CHATQNA_SYSTEM_PROMPT = _CHATQNA_SYSTEM_PROMPT_BASE + (
     _CHATQNA_SELF_CONF_INSTRUCTION if LLM_SELF_CONFIDENCE_ENABLED else ""
 )
 CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "") or "true"
+
+
+def _abstention_enforced() -> bool:
+    """Whether a turn with no context is instructed to abstain.
+
+    The same predicate decides whether the abstention instructions reach the
+    prompt, so the flag that reports an abstention follows the same switch:
+    a deployment that turned the guardrail off answers instead of abstaining,
+    and the flag stays unset.
+    """
+    return str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true"
+
+
 CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", "").strip() or None
 # Default fallback when CHATQNA_ABSTENTION_INSTRUCTIONS is unset: instruct
 # the LLM to still surface partial KB content while disclosing the
@@ -2292,7 +2305,7 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             # rerank input only — it must never enter the answer-LLM prompt.
             received_prompt = _condense_raw_or(kwargs, received_prompt)
 
-            if str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true":
+            if _abstention_enforced():
                 abstention_instructions = (
                     CHATQNA_ABSTENTION_INSTRUCTIONS
                     if CHATQNA_ABSTENTION_INSTRUCTIONS is not None
@@ -2413,7 +2426,7 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         # else:
         #     prompt = ChatTemplate.generate_rag_prompt(initial_query, docs)
 
-        if not docs and str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true":
+        if not docs and _abstention_enforced():
             abstention_instructions = (
                 CHATQNA_ABSTENTION_INSTRUCTIONS
                 if CHATQNA_ABSTENTION_INSTRUCTIONS is not None
@@ -2906,7 +2919,9 @@ class ChatQnAService:
 
         return source_documents_formatted, retrieval_confidence_score, is_grounded
 
-    async def _stream_with_metadata(self, body_iterator, result_dict, token: str, parent_context=None):
+    async def _stream_with_metadata(
+        self, body_iterator, result_dict, token: str, parent_context=None, filter_labels=None
+    ):
         """Forward the LLM token stream, then append a `metadata` SSE event.
 
         The metadata event carries the reranker-grounded source documents, confidence,
@@ -3008,8 +3023,9 @@ class ChatQnAService:
             f"self={self_confidence} self_conf_enabled={LLM_SELF_CONFIDENCE_ENABLED} "
             f"-> confidence_score={_cs}"
         )
-        # The retrieval produced no document: the turn has no document backing.
-        abstained = _retriever_matched_no_document(result_dict)
+        # The retrieval produced no document and the turn was instructed to
+        # abstain: the answer is an abstention, not an answer.
+        abstained = _retriever_matched_no_document(result_dict) and _abstention_enforced()
         # Every input of the answer-level outcome is known here, so this is the
         # first point at which the span can be recorded. `sentinel_present`
         # reports whether a self-grade was actually parsed, so an operator can
@@ -3025,6 +3041,9 @@ class ChatQnAService:
         metadata = {
             "type": "metadata",
             "source_documents": source_documents,
+            # The labels the retrieval filtered on (empty when the query was
+            # unfiltered), so an operator sees the scope behind an abstention.
+            "filter_labels": list(filter_labels or []),
             # Raw retrieval confidence (rank-weighted) — always present for admin/eval.
             "retrieval_confidence_score": round(retrieval_confidence, 2),
             # Citizen-facing: the LLM self-grade when the feature is on (fallback to
@@ -4141,6 +4160,11 @@ class ChatQnAService:
                     genie_params["retriever_parameters"] = retriever_parameters
                     genie_params["reranker_parameters"] = reranker_parameters
                     genie_params["retrieval_context"] = retrieval_context
+                    # The labels the retrieval filtered on, by the pipeline's
+                    # own rule (core.label_contract): the admin Inspector reads
+                    # them from the metadata instead of re-deriving the rule
+                    # in JavaScript.
+                    filter_labels = build_filter_labels(retrieval_context)
                     result_dict, runtime_graph = await self.megaservice.schedule(
                         initial_inputs={
                             "text": retrieval_query,
@@ -4184,7 +4208,7 @@ class ChatQnAService:
                 # Record custom application metrics. The `abstained` attribute
                 # follows the same signal as the metadata event: the retrieval
                 # produced no document.
-                _abstained = _retriever_matched_no_document(result_dict)
+                _abstained = _retriever_matched_no_document(result_dict) and _abstention_enforced()
                 _metric_attrs = _chat_attrs("true" if _abstained else "false", "false")
                 chat_requests_total.add(1, _metric_attrs)
                 chat_rag_duration_seconds.record(_rag_duration, _metric_attrs)
@@ -4331,7 +4355,11 @@ class ChatQnAService:
                 # backend would re-run retrieval without the category filter / reranker.
                 return StreamingResponse(
                     self._stream_with_metadata(
-                        response.body_iterator, result_dict, token=token_str, parent_context=_orchestrate_context
+                        response.body_iterator,
+                        result_dict,
+                        token=token_str,
+                        parent_context=_orchestrate_context,
+                        filter_labels=filter_labels,
                     ),
                     media_type="text/event-stream",
                 )
@@ -4393,6 +4421,9 @@ class ChatQnAService:
         # Construct the final JSON payload
         metadata = {
             "source_documents": source_documents_formatted,
+            # The labels the retrieval filtered on (empty when the query was
+            # unfiltered), so an operator sees the scope behind an abstention.
+            "filter_labels": list(filter_labels),
             # Raw retrieval confidence (rank-weighted) — always present for admin/eval.
             "retrieval_confidence_score": round(retrieval_confidence, 2),
             # Citizen-facing: the LLM self-grade when the feature is on (fallback to

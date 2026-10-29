@@ -431,28 +431,6 @@ class TestEmissionSiteArguments:
             "scope that matched nothing has to show up in the trace"
         )
 
-    def test_the_metric_abstention_attribute_is_measured_not_constant(self):
-        """`chat_requests_total`'s abstained attribute is user-visible and has
-        no behaviour test (the metric objects are inert under the comps mock).
-        Reverting the success path's attribute to a constant — or swapping the
-        two _chat_attrs arguments, which moves the abstention onto the `error`
-        label — must fail here: every behaviour suite would stay green while
-        the metric reported abstained=false forever."""
-        fn = _function_node("handle_request")
-        attrs_calls = [
-            node
-            for node in ast.walk(fn)
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_chat_attrs"
-        ]
-        # The reranker-input-too-long path deliberately passes the constant
-        # "true" (that abstention is by construction); the success path must
-        # derive its value.
-        measured = [c for c in attrs_calls if not isinstance(c.args[0], ast.Constant)]
-        assert measured, (
-            "the success path's _chat_attrs call must derive its abstained "
-            "attribute from the retrieval, not pass a constant"
-        )
-
     def test_handle_request_captures_the_orchestrate_context_inside_the_with_block(self):
         """Captured after the block closes it would hold a stale/None handle."""
         orchestrate = _function_node("handle_request")

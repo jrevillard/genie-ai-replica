@@ -266,7 +266,9 @@ describe('QueryInspectorList', () => {
 
   it('should mark an abstained query and show the scope that filtered', () => {
     // The operator's question is "which scopes matched nothing?". The marker
-    // alone does not answer it — the scope has to sit next to it.
+    // alone does not answer it — the scope has to sit next to it. The scope
+    // is the filter labels the PIPELINE applied (chatqna reports them), not
+    // the raw request: for this query only the service filtered.
     const queries = [
       {
         _key: 'q1',
@@ -276,7 +278,8 @@ describe('QueryInspectorList', () => {
           confidence_score: 0,
           source_documents: [],
           abstained: true,
-          abstention_reason: 'no_documents_retrieved'
+          abstention_reason: 'no_documents_retrieved',
+          filter_labels: ['Tax Payment']
         },
         context: { categoryLabel: 'Taxes & Revenue', serviceLabels: ['Tax Payment'] },
         responseTime: 500
@@ -285,42 +288,31 @@ describe('QueryInspectorList', () => {
     const wrapper = mountList({ queries, pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 } });
 
     expect(wrapper.find('[data-testid="qi-abstention-marker"]').exists()).toBe(true);
-    const scope = wrapper.find('[data-testid="qi-scope"]');
+    const scope = wrapper.find('[data-testid="qi-scope-q1"]');
     expect(scope.exists()).toBe(true);
-    // The pipeline filters on the SERVICE when one is named (the service is
-    // the narrower scope — the category must not widen it into the whole
-    // category). Showing the category here would send the operator after a
-    // label that never filtered.
-    expect(scope.text()).toContain('Tax Payment');
-    expect(scope.text()).not.toContain('Taxes & Revenue');
+    expect(scope.text()).toBe('Tax Payment');
   });
 
   it('should show the category as the scope when no service was named', () => {
+    const query = { ...answeredQuery, metadata: { ...answeredQuery.metadata, filter_labels: ['Taxes & Revenue'] } };
     const wrapper = mountList({
-      queries: [answeredQuery],
+      queries: [query],
       pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 }
     });
 
-    expect(wrapper.find('[data-testid="qi-scope"]').text()).toContain('Taxes & Revenue');
+    expect(wrapper.find('[data-testid="qi-scope-q1"]').text()).toBe('Taxes & Revenue');
   });
 
-  it('should show the legacy plural category spelling as the scope, without empty entries', () => {
-    // The pipeline drops empty and null labels before filtering
-    // (build_filter_labels); an empty entry rendered here would name a scope
-    // that never filtered.
-    const queries = [
-      {
-        _key: 'q1',
-        timestamp: '2025-05-28T10:00:00Z',
-        text: 'What is the tax rate?',
-        metadata: { abstained: true, abstention_reason: 'no_documents_retrieved' },
-        context: { categoryLabels: ['', 'Taxes & Revenue'] },
-        responseTime: 500
-      }
-    ];
-    const wrapper = mountList({ queries, pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 } });
+  it('should show no scope when the retrieval ran unfiltered', () => {
+    // An unfiltered query (the single-message backend mode sends no context
+    // at all) carries an empty filter-label list, and the column says so.
+    const query = { ...answeredQuery, metadata: { ...answeredQuery.metadata, filter_labels: [] } };
+    const wrapper = mountList({
+      queries: [query],
+      pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 }
+    });
 
-    expect(wrapper.find('[data-testid="qi-scope"]').text()).toBe('Taxes & Revenue');
+    expect(wrapper.find('[data-testid="qi-scope-q1"]').text()).toContain('—');
   });
 
   it('should not mark a query that answered', () => {
@@ -518,23 +510,30 @@ describe('QueryInspectorDetail', () => {
   });
 
   it('should name the scope that filtered, next to the labels that were requested', () => {
-    // The list and the detail must not disagree about what filtered: the
-    // pipeline filters on the service when one was named (the category must
-    // not widen it into the whole category).
-    const query = { ...fullQuery, contextOption: 'conversation-with-context-labels' };
+    // The list and the detail must not disagree about what filtered. The
+    // pipeline reports the applied filter labels; the request is shown
+    // beside them so a stale label the service scope shadowed stays visible.
+    const query = {
+      ...fullQuery,
+      metadata: { ...fullQuery.metadata, filter_labels: ['Tax Payment'] }
+    };
     const wrapper = mountDetail({ query });
-    const scope = wrapper.find('[data-testid="qi-scope"]');
+    const scope = wrapper.find('[data-testid="qi-detail-scope"]');
     expect(scope.exists()).toBe(true);
     expect(scope.text()).toContain('Tax Payment');
-    expect(scope.text()).not.toContain('Taxes & Revenue');
+    // The requested category stays visible next to the scope that filtered.
+    expect(wrapper.text()).toContain('Taxes & Revenue');
   });
 
-  it('should name no scope when the backend sent no context to the RAG', () => {
-    // The single-message mode drops the context: the labels stored on the
-    // query are not a filter, and saying otherwise would send the operator
-    // after a label that never filtered.
-    const wrapper = mountDetail({ query: { ...fullQuery, contextOption: 'single-message' } });
-    expect(wrapper.find('[data-testid="qi-scope"]').text()).toContain('None');
+  it('should say the query was unfiltered when the filter list is empty', () => {
+    const query = { ...fullQuery, metadata: { ...fullQuery.metadata, filter_labels: [] } };
+    const wrapper = mountDetail({ query });
+    expect(wrapper.find('[data-testid="qi-detail-scope"]').text()).toContain('None');
+  });
+
+  it('should say the scope was not recorded for a query saved before the field existed', () => {
+    const wrapper = mountDetail({ query: fullQuery });
+    expect(wrapper.find('[data-testid="qi-detail-scope"]').text()).toContain('Not recorded');
   });
 
   it('should not show an abstention block for an ordinary answer', () => {

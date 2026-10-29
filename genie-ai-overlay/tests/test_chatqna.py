@@ -2679,10 +2679,13 @@ class TestStreamWithMetadata:
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
         body = self._make_body(["data: b'I cannot answer that'\n\n", "data: [DONE]\n\n"])
         result_dict = {"retriever": {"retrieved_docs": [], "file_id_pairs": {}}}
-        out = await self._drain(svc._stream_with_metadata(body, result_dict, token="t"))
+        out = await self._drain(svc._stream_with_metadata(body, result_dict, token="t", filter_labels=["Tax Payment"]))
         joined = "".join(out)
         assert '"abstained": true' in joined
         assert '"abstention_reason": "no_documents_retrieved"' in joined
+        # The labels the retrieval filtered on ride along: the Inspector
+        # names the scope from them.
+        assert '"filter_labels": ["Tax Payment"]' in joined
 
     @pytest.mark.asyncio
     async def test_reranker_that_dropped_every_document_is_not_reported_as_an_empty_scope(self):
@@ -3875,6 +3878,160 @@ async def test_non_streaming_abstention_follows_the_retrieval(nodes, expect_abst
         assert payload["metadata"]["abstention_reason"] == "no_documents_retrieved"
     else:
         assert payload["metadata"].get("abstained") is not True
+
+
+@pytest.mark.asyncio
+async def test_the_metadata_carries_the_labels_the_retrieval_filtered_on():
+    """The Inspector reads the scope from the metadata, so the metadata has
+    to carry the labels the pipeline filtered on — by the pipeline's own rule
+    (core.label_contract): the service is the narrower scope, the category
+    must not widen it."""
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    async def fake_schedule(**_kwargs):
+        return (
+            {"retriever": {"retrieved_docs": [], "file_id_pairs": {}}, "llm": {"text": "I cannot answer that"}},
+            None,
+        )
+
+    svc.megaservice.schedule = fake_schedule
+    svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
+
+    context = MagicMock()
+    context.model_dump.return_value = {"categoryLabel": "Taxes & Revenue", "serviceLabels": ["Tax Payment"]}
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        _patched_chat_request(stream=False, context=context),
+    ):
+        payload = await svc.handle_request(req)
+
+    assert payload["metadata"]["filter_labels"] == ["Tax Payment"]
+
+
+@pytest.mark.asyncio
+async def test_an_unfiltered_query_carries_no_filter_labels():
+    """A query the backend sent without any context (the single-message mode)
+    filtered nothing: the metadata says so with an empty list."""
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    async def fake_schedule(**_kwargs):
+        return (
+            {"retriever": {"retrieved_docs": [], "file_id_pairs": {}}, "llm": {"text": "I cannot answer that"}},
+            None,
+        )
+
+    svc.megaservice.schedule = fake_schedule
+    svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        _patched_chat_request(stream=False),
+    ):
+        payload = await svc.handle_request(req)
+
+    assert payload["metadata"]["filter_labels"] == []
+
+
+@pytest.mark.asyncio
+async def test_the_abstention_flag_follows_the_abstention_enforcement(monkeypatch):
+    """A deployment that turned the guardrail off answers instead of
+    abstaining: the flag must not claim an abstention that never happened.
+    The field means "the turn abstained" everywhere else (the backend's
+    contract comment says so)."""
+    monkeypatch.setattr(chatqna_module, "CHATQNA_ENFORCE_ABSTENTION", "false")
+
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    async def fake_schedule(**_kwargs):
+        return ({"retriever": {"retrieved_docs": [], "file_id_pairs": {}}, "llm": {"text": "Here is an answer"}}, None)
+
+    svc.megaservice.schedule = fake_schedule
+    svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        _patched_chat_request(stream=False),
+    ):
+        payload = await svc.handle_request(req)
+
+    assert payload["metadata"].get("abstained") is not True
+
+
+@pytest.mark.parametrize(
+    "retriever_docs,expected",
+    [
+        ([], "true"),
+        ([{"id": "d1", "text": "doc"}], "false"),
+    ],
+    ids=["scope_matched_nothing", "scope_matched_something"],
+)
+@pytest.mark.asyncio
+async def test_the_metric_counts_the_abstentions_it_reports(monkeypatch, retriever_docs, expected):
+    """The counter and the payload must agree: an operator reading
+    genie_ai_chat_request_total{abstained="true"} must be counting the same
+    turns the Inspector marks."""
+    recorded = []
+
+    class _Counter:
+        def add(self, amount, attributes):
+            recorded.append(attributes)
+
+    monkeypatch.setattr(chatqna_module, "chat_requests_total", _Counter())
+
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    async def fake_schedule(**_kwargs):
+        return (
+            {
+                "retriever": {"retrieved_docs": retriever_docs, "file_id_pairs": {}},
+                "llm": {"text": "an answer"},
+            },
+            None,
+        )
+
+    svc.megaservice.schedule = fake_schedule
+    svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    with (
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        _patched_chat_request(stream=False),
+    ):
+        await svc.handle_request(req)
+
+    assert recorded[-1]["abstained"] == expected
 
 
 @pytest.mark.asyncio

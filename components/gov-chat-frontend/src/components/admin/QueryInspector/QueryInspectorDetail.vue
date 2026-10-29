@@ -46,9 +46,9 @@
           </span>
         </template>
         <div class="qi-detail__box qi-detail__box--context">
-          <p data-testid="qi-scope">
+          <p data-testid="qi-detail-scope">
             <strong>{{ translate('admin.queryInspector.scopeFiltered', 'Scope that filtered') }}:</strong>
-            {{ effectiveScope(query) || translate('admin.queryInspector.scopeNone', 'None (unfiltered query)') }}
+            {{ scopeText() }}
           </p>
           <p>
             <strong>{{ translate('admin.queryInspector.category', 'Requested Category') }}:</strong>
@@ -205,7 +205,6 @@ import DsButton from '../../ds/Button.vue';
 import DsCard from '../../ds/Card.vue';
 import DsPill from '../../ds/Pill.vue';
 import DsStateDisplay from '../../ds/StateDisplay.vue';
-import { effectiveScope } from '../../../utils/effectiveScope';
 
 export default {
   name: 'QueryInspectorDetail',
@@ -251,7 +250,19 @@ export default {
     }
   },
   methods: {
-    effectiveScope,
+    /**
+     * The labels the retrieval filtered on, as one string. The pipeline
+     * decides them (chatqna sends the applied filter labels in its metadata
+     * event). A record saved before that field existed says so instead of
+     * claiming the query was unfiltered.
+     */
+    scopeText() {
+      const labels = this.query.metadata?.filter_labels;
+      if (labels === undefined) {
+        return this.translate('admin.queryInspector.scopeNotRecorded', 'Not recorded');
+      }
+      return labels.join(', ') || this.translate('admin.queryInspector.scopeNone', 'None (unfiltered query)');
+    },
     translate(key, fallback) {
       return this.$parent?.translate?.(key, fallback) ?? fallback;
     },

@@ -819,7 +819,7 @@ stable; renaming a field is a breaking change.
 | Type | Fields | Notes |
 |------|--------|-------|
 | `chunk` | `content: string` | One streaming chunk (an English text unit by default) |
-| `metadata` | `queryId: string`, `responseTime: number`, `source_documents?: array`, `confidence_score?: number`, `is_grounded?: boolean`, `retrieval_confidence_score?: number \| null`, `self_confidence?: number \| null`, `abstained?: boolean`, `abstention_reason?: string \| null` | Captured from chatqna's in-stream metadata, forwarded to client (no separate backend retrieval) |
+| `metadata` | `queryId: string`, `responseTime: number`, `source_documents?: array`, `confidence_score?: number`, `is_grounded?: boolean`, `retrieval_confidence_score?: number \| null`, `self_confidence?: number \| null`, `abstained?: boolean`, `abstention_reason?: string \| null`, `filter_labels?: string[]` | Captured from chatqna's in-stream metadata, forwarded to client (no separate backend retrieval) |
 | `translation` | `content: string` | Emitted by `/api/queries/stream` on the post-stream translation path (`STREAMING_TRANSLATION_ENABLED=0`, the English-then-flip path). The standalone `/api/translate` endpoints answer with JSON, not with stream events |
 | `chunk` | `content: string` (translated) | Emitted by streaming-translation path — see below |
 | `error` | `message: string`, `code: string` | Closes the stream after emission |
@@ -853,7 +853,8 @@ evaluation — a chat client should render `confidence_score` only.
 |-------|---------|
 | `retrieval_confidence_score` | Raw rank-weighted retrieval confidence, always present. `null` when chatqna omits it. |
 | `self_confidence` | LLM self-grade. **Keyed by presence**: absent when `LLM_SELF_CONFIDENCE_ENABLED=0`, `null` when the feature is on but the `[[CONF:…]]` sentinel was missing or malformed. Consumers must test the key, not the value, to tell "disabled" from "no sentinel". |
-| `abstained` | `true` when the turn had no document-backed answer: the retrieval returned no document (`no_documents_retrieved`) or the reranker refused the input (`reranker_input_too_long`). With the default abstention enforcement the user reads an abstention; a deployment that sets `CHATQNA_ENFORCE_ABSTENTION=false` may read an answer without document backing — see [Generation → Abstention](/docs/rag-pipeline/generation/#abstention). Defaults to `false`. |
+| `abstained` | `true` when the turn abstained: the retrieval returned no document (`no_documents_retrieved`) or the reranker refused the input (`reranker_input_too_long`). The retrieval case is reported only while the abstention instructions are enforced (`CHATQNA_ENFORCE_ABSTENTION`, the default): a deployment that turned the guardrail off answers instead of abstaining, and the flag stays unset — see [Generation → Abstention](/docs/rag-pipeline/generation/#abstention). Defaults to `false`. |
+| `filter_labels` | The labels the retrieval filtered on, by the pipeline's own rule (`core/label_contract.build_filter_labels`): the service labels when the query named one — the service is the narrower scope, the category must not widen it into the whole category — otherwise the category. Empty list when the query was unfiltered. Always present on a recorded turn; absent on a record saved before this field existed. |
 | `abstention_reason` | Machine-readable cause. `no_documents_retrieved` — the retrieval returned no document for the query (a scoped query whose label filter matched nothing); `reranker_input_too_long` — the reranker refused an oversized input. (`translation_input_too_long` is a different transport: it surfaces as an HTTP 422, not as a metadata event.) Defaults to `null`. |
 
 ### Streaming translation (issue #829)

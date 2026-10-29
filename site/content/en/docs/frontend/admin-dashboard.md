@@ -188,13 +188,14 @@ Browse and inspect individual queries that ran through the RAG pipeline. Three c
 └────────────────────────────┴─────────────────────────┘
 ```
 
-The list shows the scope that filtered each query — the service labels
-when the query named one (the service is the narrower scope; the category
-must not widen it into the whole category), otherwise the category. A
-query that abstained — the retrieval matched no document — carries an
-**Abstained** marker, so the scopes that recently matched nothing are
-visible without reading every answer. The detail view names the cause of
-the abstention.
+The list shows the scope that filtered each query — the labels the
+pipeline applied, reported by the retrieval itself (the service when the
+query named one: the service is the narrower scope, the category must not
+widen it into the whole category; otherwise the category). A query that
+abstained — the retrieval returned no document — carries an **Abstained**
+marker, so the scopes that recently retrieved nothing are visible without
+reading every answer. The detail view names the cause of the abstention
+and shows the labels that were requested next to the scope that filtered.
 
 Click a row in the list to load detail. Filters: user, date range, confidence range, label, query substring. See [Debugging with Tracing & Logs](/docs/operate/tracing-howto/) for the related backend trace view.
 

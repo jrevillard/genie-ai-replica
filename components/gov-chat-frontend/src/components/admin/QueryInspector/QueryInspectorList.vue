@@ -53,8 +53,8 @@
         <tr v-for="query in queries" :key="query._key" class="qi-list__row" @click="$emit('inspect', query._key)">
           <td class="qi-list__cell--time">{{ formatTime(query.timestamp) }}</td>
           <td class="qi-list__cell--question">{{ truncate(query.text, 80) }}</td>
-          <td class="qi-list__cell--scope" data-testid="qi-scope">
-            <span v-if="effectiveScope(query)">{{ effectiveScope(query) }}</span>
+          <td class="qi-list__cell--scope" :data-testid="`qi-scope-${query._key}`">
+            <span v-if="scopeLabels(query)" class="qi-list__scope-labels">{{ scopeLabels(query) }}</span>
             <span v-else class="qi-list__muted">—</span>
           </td>
           <td class="qi-list__cell--center">
@@ -129,7 +129,6 @@ import DsInput from '../../ds/Input.vue';
 import DsFormGroup from '../../ds/FormGroup.vue';
 import DsPill from '../../ds/Pill.vue';
 import DsStateDisplay from '../../ds/StateDisplay.vue';
-import { effectiveScope } from '../../../utils/effectiveScope';
 
 export default {
   name: 'QueryInspectorList',
@@ -154,7 +153,15 @@ export default {
     };
   },
   methods: {
-    effectiveScope,
+    /**
+     * The labels the retrieval filtered on, as one string. The pipeline
+     * decides them (chatqna sends the applied filter labels in its metadata
+     * event), so the Inspector shows what actually filtered instead of
+     * re-deriving the rule here.
+     */
+    scopeLabels(query) {
+      return (query.metadata?.filter_labels || []).join(', ');
+    },
     translate(key, fallback) {
       return this.$parent?.translate?.(key, fallback) ?? fallback;
     },
@@ -171,16 +178,6 @@ export default {
     truncate(text, max) {
       return text?.length > max ? text.substring(0, max) + '...' : text || '';
     },
-    /**
-     * The label filter the retrieval actually applied, as one string — the
-     * same rule the pipeline uses (core/label_contract.build_filter_labels):
-     * the service labels are the filter whenever they exist (the service is
-     * the narrower scope — the category must not widen it into the whole
-     * category), otherwise the category filters on its own. Both spellings
-     * of the category count (categoryLabel singular, categoryLabels legacy).
-     * This is what makes an abstention actionable: "Tax Payment matched
-     * nothing" is a fact an operator can act on.
-     */
     confidenceVariant(score) {
       if (score >= 0.8) return 'success';
       if (score >= 0.5) return 'warning';
@@ -273,6 +270,14 @@ export default {
 }
 
 .qi-list__cell--scope {
+  max-width: 260px;
+}
+
+/* The cap lives on the span: a max-width on a table cell is not a cap in an
+   auto-layout table, so a long label list would widen the table instead of
+   truncating. */
+.qi-list__scope-labels {
+  display: block;
   max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -288,6 +288,60 @@ void main() {
       expect(emitted!['serviceLabelsEn'], ['Taxes']);
     },
   );
+
+  testWidgets('one service under two categories is two scopes', (tester) async {
+    // categoryServices is many-to-many: one service can sit under two
+    // categories, and the web counts the two rows as two scopes (the
+    // identity is the key AND the category).
+    final twinCategories = [
+      {
+        'catKey': '2',
+        'name': 'Estado civil',
+        'nameEN': 'Civil Registry',
+        'children': [
+          {'_key': 'svc-1', 'name': 'Registro', 'nameEN': 'Registry'},
+        ],
+      },
+      {
+        'catKey': '3',
+        'name': 'Impuestos',
+        'nameEN': 'Taxes',
+        'children': [
+          {'_key': 'svc-1', 'name': 'Registro', 'nameEN': 'Registry'},
+        ],
+      },
+    ];
+    Map<String, dynamic>? emitted;
+    resetThemeManager();
+    final api = ServiceCategoriesApi(
+      ApiClient()..client = _MockClient(jsonEncode(twinCategories)),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [serviceCategoriesApiProvider.overrideWithValue(api)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: ServiceTreePanel(onSelectionChange: (s) => emitted = s),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Estado civil'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Registro').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Impuestos'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Registro').last);
+    await tester.pumpAndSettle();
+
+    // BOTH rows are picked: the same key under another category is
+    // another scope.
+    expect(emitted!['serviceCount'], 2);
+  });
 }
 
 class _MockClient extends http.BaseClient {

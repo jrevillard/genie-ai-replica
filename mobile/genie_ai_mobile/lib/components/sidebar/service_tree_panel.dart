@@ -183,9 +183,14 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     // carries no English label at all.
     final existingIndex = _orderedSelection.indexWhere((item) {
       final String itemId = (item['id'] as String? ?? '');
-      // A keyed stored row answers only in the key space.
+      // A keyed stored row answers only in the key space, and the
+      // category travels with the key: categoryServices is many-to-many,
+      // so one service can sit under two categories and the web counts
+      // the two rows as two scopes.
       if (itemId.isNotEmpty) {
-        return serviceId.isNotEmpty && itemId == serviceId;
+        return serviceId.isNotEmpty &&
+            itemId == serviceId &&
+            item['category_id'] == categoryId;
       }
       // Both rows are keyless: the ENGLISH label is the identity, the
       // spelling the wire speaks — the display name stands in only for a

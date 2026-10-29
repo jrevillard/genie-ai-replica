@@ -423,20 +423,13 @@ class ServiceCategoryService {
       // The tree carries BOTH spellings of every entity: the name the UI
       // displays, and the ENGLISH translation the retrieval corpus filters
       // on. English is the SSOT of the filter wire — a client that sent a
-      // localized name would scope against labels no chunk carries.
-      // Both spellings of an entity come out of ONE translation pass:
-      // the sub-iterators below run over the (at most two) documents the
-      // single index seek returned. Two FIRST() subqueries per entity —
-      // the shape this replaces — did the seek twice, and the dataprep
-      // walks this tree once per ingest.
-      //
-      // The DISPLAY name is the locale's translation when there is one and
-      // the ENGLISH one otherwise: an entity nobody translated in the
-      // active locale used to publish a NULL name, and the clients then
-      // hid it — a blank category row, and services dropped from the tree
-      // altogether. The tree showed less than exists. The English name is
-      // the same name the corpus filters on, so the label the user reads
-      // is the label that scopes the query.
+      // localized name would scope against labels no chunk carries. The
+      // DISPLAY name is the locale's translation when there is one and the
+      // ENGLISH one otherwise: an entity with no translation in the active
+      // locale is still named and offered, and the label the user reads is
+      // the label that scopes the query. Both spellings come out of ONE
+      // translation pass per entity — the dataprep walks this tree once
+      // per ingest.
       const localeCode = upperLocale.toLowerCase();
       const query = aql`
       FOR category IN serviceCategories
@@ -499,9 +492,8 @@ class ServiceCategoryService {
                   ? serviceTranslationEN
                   : (LENGTH(TRIM(service.nameEN)) > 0 ? service.nameEN : null)
               // And the same DISPLAY name: the locale's translation when
-              // there is one, the ENGLISH one otherwise. A service nobody
-              // translated in the active locale used to publish a null
-              // name, and the clients dropped it from the tree.
+              // there is one, the ENGLISH one otherwise — a service with
+              // no translation in the active locale stays offered.
               LET serviceName = LENGTH(TRIM(serviceTranslation)) > 0 ? serviceTranslation : serviceNameEN
               SORT edge.order ASC
               // The KEY travels with the spellings: a client identifies a

@@ -214,7 +214,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   category — two services that read the same are two scopes. An entity with
   no name in any language is published unnamed: the clients do not offer its
   services (an unnamed service cannot be scoped on), and a category with no
-  name at all shows as an unlabelled group header above its services.
+  name at all shows as an unlabelled group header above its services (the
+  literal "Unknown Category" on the mobile app).
 
   **Upgrading a deployment whose taxonomy was seeded by the scripts**
   (`create-knowledge-hierarchy.js`) requires a **re-ingest of the corpus**

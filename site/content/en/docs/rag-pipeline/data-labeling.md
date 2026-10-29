@@ -127,8 +127,14 @@ displays is a translation.**
 
 The tree endpoints (`GET /api/service-categories/categories`,
 `GET /api/services/categories`) carry BOTH spellings of every entity: the
-localized `name` the UI displays, and `nameEN` — the English translation the
-retrieval corpus filters on.
+`name` the UI displays — the translation in the active locale, or the English
+one when that locale has no translation — and `nameEN` — the English
+translation the retrieval corpus filters on.
+
+An entity nobody translated in the active locale therefore still shows its
+English name instead of disappearing from the tree, and the label the user
+reads is the label that scopes the query. An entity with no name in any
+language is not offered at all: it cannot be scoped on.
 
 > **Two different fields share the name `nameEN`.** The TREE publishes one
 > (the EN translation, the value clients put on the wire); the STORED ENTITY

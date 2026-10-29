@@ -161,8 +161,11 @@ core.*
 
 # Captured sealed-secrets PRIVATE keys (laptop-cluster-bootstrap runbook)
 sealed-secrets-key*.json
+<<<<<<< HEAD
 
 # Captured sealed-secrets PRIVATE keys (laptop-cluster-bootstrap runbook)
 sealed-secrets-key*.json
+=======
+>>>>>>> e9e75327f (fix(scripts): the 10 findings of code-review run 31 — capture fails loudly, completely, and privately)
 # Captured Flux GitLab PAT — same --capture mode, same one-git-add-A hazard
 flux-git-auth.json

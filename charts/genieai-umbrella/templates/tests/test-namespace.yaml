@@ -12,57 +12,7 @@ metadata:
   annotations:
     "helm.sh/hook": test
     "helm.sh/hook-delete-policy": before-hook-creation
-spec:
-  restartPolicy: Never
-  # The hook-owned dep-check SA (read-only ClusterRole grant on
-  # `namespaces`/get) — the same SA the pre-upgrade hooks and the
-  # data-deps test pod use. Reused here because the new assertion
-  # queries `kubectl get ns`, which is NOT a noop: it requires both
-  # the kubectl binary (alpine lacks it) and an SA-bound RBAC grant.
-  serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
-  {{- with $global.imagePullSecrets }}
-  imagePullSecrets:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
-  # The full `restricted`-profile set. The namespace enforces `baseline`
-  # (the GPU model tier cannot run non-root), and a test pod can carry the
-  # stricter posture for free — it keeps passing if the namespace tightens.
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 65534
-    seccompProfile:
-      type: RuntimeDefault
-  # `registry.k8s.io/kubectl` is distroless (no /bin/sh), so this Pod
-  # ships kubectl via an init container that downloads the static binary
-  # into the shared `tools` emptyDir. The main container is alpine
-  # (sh is built in); kubectl is picked up via the PATH env, which
-  # prepends /tools/bin.
-  volumes:
-    - name: tools
-      emptyDir: {}
-  initContainers:
-    {{- include "genieai-umbrella.toolsInitContainer" . | nindent 4 }}
-  containers:
-    - name: test
-      # SA = the hook-owned dep-check SA (read-only ClusterRole on namespaces).
-      image: "{{ $global.toolingImageRegistry | default "docker.io" }}/alpine:3.20"
-      imagePullPolicy: IfNotPresent
-      securityContext:
-        allowPrivilegeEscalation: false
-        readOnlyRootFilesystem: true
-        runAsNonRoot: true
-        runAsUser: 65534
-        capabilities:
-          drop:
-            - ALL
-      env:
-        - name: PATH
-          # Prepend /tools/bin so kubectl (downloaded by the `tools` init
-          # container) is discoverable by the script.
-          value: /tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      volumeMounts:
-        - name: tools
-          mountPath: /tools
+{{ include "genieai-umbrella.testPodScaffolding" . }}
       command:
         - /bin/sh
         - -c
@@ -109,7 +59,9 @@ derived defaults. */ -}}
 {{- $backend := $services.backend | default dict -}}
 {{- $translation := $backend.translation | default dict -}}
 {{- $redisCache := $services.redisCache | default dict -}}
-{{- if or $arangodb.enabled $keycloak.enabled $postgres.enabled $redisCache.enabled $opea.enabled $translation.endpoint }}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- $ingressTls := $ingress.tls | default dict -}}
+{{- if or $arangodb.enabled $keycloak.enabled $postgres.enabled $redisCache.enabled $opea.enabled (and $backend.enabled $translation.endpoint) (and $ingress.enabled $ingressTls.enabled $ingressTls.secretName) }}
 ---
 apiVersion: v1
 kind: Pod
@@ -121,50 +73,7 @@ metadata:
   annotations:
     "helm.sh/hook": test
     "helm.sh/hook-delete-policy": before-hook-creation
-spec:
-  restartPolicy: Never
-  serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
-  {{- with $global.imagePullSecrets }}
-  imagePullSecrets:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 65534
-    seccompProfile:
-      type: RuntimeDefault
-  # `registry.k8s.io/kubectl` is distroless (no /bin/sh), so this Pod
-  # ships kubectl via an init container that downloads the static binary
-  # into the shared `tools` emptyDir. The main container is alpine
-  # (sh is built in); kubectl is picked up via the PATH env, which
-  # prepends /tools/bin.
-  volumes:
-    - name: tools
-      emptyDir: {}
-  initContainers:
-    {{- include "genieai-umbrella.toolsInitContainer" . | nindent 4 }}
-  containers:
-    - name: t
-      # SA = the hook-owned dep-check SA (persists between hook fires via
-      # before-hook-creation).
-      image: "{{ $global.toolingImageRegistry | default "docker.io" }}/alpine:3.20"
-      imagePullPolicy: IfNotPresent
-      securityContext:
-        allowPrivilegeEscalation: false
-        readOnlyRootFilesystem: true
-        runAsNonRoot: true
-        runAsUser: 65534
-        capabilities:
-          drop:
-            - ALL
-      env:
-        - name: PATH
-          # Prepend /tools/bin so kubectl (downloaded by the `tools` init
-          # container) is discoverable by the script.
-          value: /tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      volumeMounts:
-        - name: tools
-          mountPath: /tools
+{{ include "genieai-umbrella.testPodScaffolding" . }}
       command:
         - /bin/sh
         - -c
@@ -201,22 +110,40 @@ spec:
           # naming the missing Secret instead.
           required_secrets="$required_secrets translation-cache-password"
           {{- end }}
-          {{- if and $keycloak.enabled $kcConvergence.enabled }}
-          # The convergence Job mounts the bootstrap admin credentials and
-          # every envSecrets row through NON-optional secretKeyRefs — a
-          # missing Secret is a CreateContainerConfigError on the
-          # post-install hook, which 'helm install --wait' reports as a
-          # pod-named failure far from its cause. The names derive from the
-          # values, so an operator who renamed the admin Secret or pointed
-          # a row elsewhere is tested against the Secrets the Job actually
-          # reads. (The proxy-client Secret is NOT asserted here by name:
-          # the backend's envFrom on it is optional:true, and when the
-          # convergence Job is disabled nothing consumes it at all — the
-          # one shape this gate used to fail falsely.)
+          {{- if $keycloak.enabled }}
+          # The Keycloak CR names the bootstrap admin Secret
+          # (bootstrapAdmin.user.secret) unconditionally within the
+          # identity tier — without it the operator cannot bootstrap the
+          # master realm admin, the CR never goes Ready, and
+          # 'helm install --wait' dies as a generic timeout. The
+          # assertion matches the CONSUMER's condition
+          # (keycloak.enabled), not the convergence Job's: a
+          # convergence-disabled install still consumes this Secret.
           required_secrets="$required_secrets {{ $bootstrapAdmin.userSecret | default "keycloak-admin-credentials" }}"
+          {{- end }}
+          {{- if and $keycloak.enabled $kcConvergence.enabled }}
+          # The convergence Job mounts every envSecrets row through
+          # NON-optional secretKeyRefs — a missing Secret is a
+          # CreateContainerConfigError on the post-install hook, which
+          # 'helm install --wait' reports as a pod-named failure far
+          # from its cause. The names derive from the values, so an
+          # operator who pointed a row elsewhere is tested against the
+          # Secrets the Job actually reads. (The proxy-client Secret is
+          # NOT asserted here by name: the backend's envFrom on it is
+          # optional:true, and when the convergence Job is disabled
+          # nothing consumes it at all — the one shape this gate used to
+          # fail falsely.)
           {{- range $e := (include "genieai-umbrella.validatedConvergenceEnvSecrets" ($kcConvergence.envSecrets | default list) | fromJsonArray) }}
           required_secrets="$required_secrets {{ $e.secretName }}"
           {{- end }}
+          {{- end }}
+          {{- if and $ingress.enabled $ingressTls.enabled $ingressTls.secretName }}
+          # The Gateway listener's certificateRefs point at this
+          # operator-pre baked Secret (ingress.tls.secretName): with it
+          # set, no cert-manager Certificate renders and nothing else
+          # materializes the Secret — the edge cannot terminate TLS
+          # without it.
+          required_secrets="$required_secrets {{ $ingressTls.secretName }}"
           {{- end }}
           {{- if $opea.enabled }}
           # The OPEA tier mounts both through NON-optional secretKeyRefs
@@ -224,13 +151,14 @@ spec:
           # dataprep) — a missing Secret is a CreateContainerConfigError
           # at first pod start, so the install must fail here instead.
           required_secrets="$required_secrets vllm-api-key kc-dataprep-client-secret"
-          {{- else if $translation.endpoint }}
-          # OPEA off but a translation endpoint EXPLICITLY named: the
-          # backend Deployment still carries a NON-optional secretKeyRef
-          # on vllm-api-key (the named API is mandatory and authenticated),
-          # so the Secret is required whatever the tier toggle says — the
-          # gate that checks it must not be narrower than the render that
-          # needs it.
+          {{- else if and $backend.enabled $translation.endpoint }}
+          # OPEA off but a translation endpoint EXPLICITLY named and the
+          # backend (its only non-OPEA consumer) rendered: the backend
+          # Deployment carries a NON-optional secretKeyRef on
+          # vllm-api-key (the named API is mandatory and authenticated),
+          # so the Secret is required. With the backend disabled nothing
+          # consumes the Secret, and asserting it would be a false
+          # positive.
           required_secrets="$required_secrets vllm-api-key"
           {{- end }}
           missing=""

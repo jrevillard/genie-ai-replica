@@ -49,9 +49,12 @@ global:
   # Container Registry; tooling images are not republished there, so
   # they must keep their public registry. Empty = docker.io.
   toolingImageRegistry: ""
-  # Hook + test-pod init containers curl-download kubectl from the
-  # public releases. In air-gapped environments set this to an internal
-  # mirror — [http[s]://]host[:port][/multi/segment/prefix]; the scheme
+  # The pre-upgrade cluster-profile hook and the test-pod init
+  # containers curl-download kubectl from the public releases (the
+  # pre-install dependency-check Job downloads nothing). In air-gapped
+  # environments set this to an internal
+  # mirror — [http[s]://]host[:port 1-65535][/multi/segment/prefix]; the
+  # scheme
   # is optional (scheme-less makes curl use plain HTTP against the
   # local proxy), no trailing slash, and the path
   # /release/v1.33.0/bin/linux/<arch>/kubectl (<arch> detected at

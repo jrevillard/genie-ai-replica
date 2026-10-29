@@ -8,7 +8,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-29)
 
-- **Chart `genieai-umbrella` at 0.2.121**, branch `feat/k8s-migration` based
+- **Chart `genieai-umbrella` at 0.2.122**, branch `feat/k8s-migration` based
   on `main` at `18d02f094` and **12 commits behind `origin/main`**
   (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
   the backend's analytics routes, the OPEA overlay (retriever/dataprep),
@@ -614,6 +614,27 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     updated.
   - Refuted: the render-guards `pipefail`-under-sh claim — the shebang
     is `#!/usr/bin/env bash` at HEAD.
+- **Review loop, pass 48 (0.2.122)** — 4 findings from the
+  twenty-fourth `/code-review`, all residue of the classes this ledger
+  already tracks.
+  - *The "binaries" plural survived in three more spots* — the tools
+    paragraph's first half, the hook template's comment, and a
+    "ships those binaries preinstalled". Singular/kubectl-only now,
+    matching the sibling sentences the pass-46 fix aligned.
+  - *"Hook + test-pod init containers" named the pre-install Job
+    implicitly* — the chart has TWO hook Jobs and one of them
+    (dependency-check) downloads nothing; an air-gap operator auditing
+    values.yaml or charts/README.md would over-open the firewall for a
+    download the pre-install never performs. Both surfaces name the
+    real consumers (the phrase the site doc already carried).
+  - *The 1-65535 port bound existed only in the schema description* —
+    the three grammar mentions (values.yaml, chart README, site doc)
+    enumerated the sibling constraints but not the numeric bound. All
+    three carry `[:port 1-65535]` now.
+  - *The delivery pins covered 5 of the documented cross-product* —
+    scheme-less+port and bare-host had no pin. Both pinned verbatim;
+    the mutation proof for the class was re-run on the default
+    (mangling `dl.k8s.io` turns the default pin red).
 - **Review loop, pass 47 (0.2.121)** — 4 findings from the twenty-third
   `/code-review`, all documentary or validation-boundary tail (no
   functional defects — the reviewer's own verdict).
@@ -2004,7 +2025,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     carried their explanation inside the command's folded scalar, so the
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
-- Chart `genieai-umbrella` at **0.2.121** on `feat/k8s-migration`; deployed on
+- Chart `genieai-umbrella` at **0.2.122** on `feat/k8s-migration`; deployed on
   the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`

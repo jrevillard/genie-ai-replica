@@ -1306,15 +1306,22 @@ export default {
     // the one a deployment can write down without reading the database.
     // The database key stays accepted: a configuration written before
     // that spelling was adopted still names a category, and a
-    // deployment's configuration is edited on its own. The name is tried
-    // first; the key is the fallback.
+    // deployment's configuration is edited on its own.
+    //
+    // The KEY is tried first, deliberately: every consumer of this lookup
+    // except the configuration mapping below feeds it a key-typed value —
+    // the saved conversation's edge, the legacy `category.<id>` tags, the
+    // sidebar's catKey. A hierarchy can mint a key that equals ANOTHER
+    // category's name, and on such a collision the key interpretation is
+    // the only one those consumers can survive; a configuration spelling
+    // that names nothing else unambiguously anyway.
     resolveCategoryReference(reference) {
       if (reference === null || reference === undefined || reference === '') {
         return null;
       }
       const id = reference.toString();
       const { byKey, byNameEn } = this.categoryIndexes;
-      return byNameEn.get(id) || byKey.get(id) || null;
+      return byKey.get(id) || byNameEn.get(id) || null;
     },
 
     // The hierarchy's own key for the category a reference names — what

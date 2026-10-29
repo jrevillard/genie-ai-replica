@@ -148,8 +148,7 @@ class QuickHelpScopeResolver {
       _categoryNames = _indexByCatKey(enTree, (entry) {
         final name = entry['name'];
         return (name is String && name.isNotEmpty) ? name : '';
-      }),
-      _categoryKeysByName = _invertByNameEn(_indexByCatKey(enTree, _enOf));
+      });
 
   /// The scope state of a button whose hierarchy has not loaded yet: it
   /// says nothing about any button.
@@ -188,11 +187,13 @@ class QuickHelpScopeResolver {
   final Map<String, String> _categoryNames;
 
   /// The category keys by their ENGLISH name — the identifier a
-  /// CONFIGURATION names a category by. The same tree and the same rules
-  /// as the key indexes: an entry the hierarchy cannot address by key
-  /// cannot be addressed by name either, and the first of two categories
-  /// sharing a name wins.
-  final Map<String, String> _categoryKeysByName;
+  /// CONFIGURATION names a category by. The inversion of the label index
+  /// above: an entry the hierarchy cannot address by key cannot be
+  /// addressed by name either, and the first of two categories sharing a
+  /// name wins.
+  late final Map<String, String> _categoryKeysByName = _invertByNameEn(
+    _categoryLabelsEn,
+  );
 
   /// Categories by key, FIRST-wins, each mapped by [valueOf]. The one
   /// walk behind the two key indexes (the EN-label index and the
@@ -212,10 +213,10 @@ class QuickHelpScopeResolver {
     return byKey;
   }
 
-  /// The category keys by their ENGLISH name, FIRST-wins — the same
-  /// key→EN mapping the label index carries, read backwards. The name is
-  /// the identifier a configuration writes down; the key it resolves to
-  /// is what the rest of the app speaks. One walk owns the tree's skip
+  /// The category keys by their ENGLISH name, FIRST-wins — the label
+  /// index read backwards. The name is the identifier a configuration
+  /// writes down; the key it resolves to is what the rest of the app
+  /// speaks. The walk that built the label index owns the tree's skip
   /// rules; this is only its inversion.
   static Map<String, String> _invertByNameEn(Map<String, String> labelsByKey) {
     final byName = <String, String>{};
@@ -236,12 +237,18 @@ class QuickHelpScopeResolver {
   /// database key stays accepted: a configuration written before that
   /// spelling was adopted still names a category, and a deployment's
   /// configuration is edited on its own.
+  ///
+  /// The KEY is tried first, deliberately: the consumers of the resolved
+  /// key — the conversation's edge, the legacy `category.<id>` tags — all
+  /// speak keys, and a hierarchy can mint a key that equals ANOTHER
+  /// category's name. On such a collision the key interpretation is the
+  /// only one those consumers can survive; a configuration spelling that
+  /// names nothing else unambiguously anyway.
   String? _categoryKeyFor(String? reference) {
     if (reference == null || reference.isEmpty) return null;
-    final byName = _categoryKeysByName[reference];
-    if (byName != null) return byName;
     // The legacy spelling: the key the hierarchy itself minted.
-    return _categoryLabelsEn.containsKey(reference) ? reference : null;
+    if (_categoryLabelsEn.containsKey(reference)) return reference;
+    return _categoryKeysByName[reference];
   }
 
   /// The category id a configuration reference speaks: the hierarchy's own

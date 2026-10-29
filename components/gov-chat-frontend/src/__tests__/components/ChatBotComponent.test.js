@@ -5162,6 +5162,15 @@ describe('Quick Help category reference', () => {
 
   afterEach(() => {
     configLoader.default.mockImplementation(originalConfig);
+    // The block restored mocks its beforeEach mutated — the file-level
+    // hooks do not run here, so a later block would inherit the empty
+    // hierarchy and the empty conversation this block installed.
+    const serviceTreeService = require('../../services/serviceTreeService');
+    serviceTreeService.getAllCategories.mockReset();
+    serviceTreeService.getAllCategories.mockResolvedValue([]);
+    const chatHistoryService = require('../../services/chatHistoryService');
+    chatHistoryService.getConversation.mockReset();
+    chatHistoryService.getConversation.mockResolvedValue({ messages: [] });
   });
 
   it('resolves a category named by its ENGLISH name', async () => {
@@ -5207,6 +5216,20 @@ describe('Quick Help category reference', () => {
 
     expect(wrapper.vm.getCategoryEnLabel('Orphan')).toBeNull();
     expect(wrapper.vm.quickHelpCategoryKey('Orphan')).toBeNull();
+  });
+
+  it('a hierarchy key that equals another category NAME resolves the keyed category', async () => {
+    // A re-created hierarchy can mint a key ("2024") that equals another
+    // category's name. Every key-typed consumer — the saved conversation's
+    // edge, the legacy tags — must keep resolving to the KEYED category:
+    // the name interpretation would restore the wrong scope.
+    const wrapper = await createChatBotWrapperAsync([
+      { catKey: '2024', name: 'The Year Area', nameEN: 'The Year Area', children: [] },
+      { catKey: '7', name: '2024', nameEN: '2024', children: [] }
+    ]);
+
+    expect(wrapper.vm.getCategoryDisplayName('2024')).toBe('The Year Area');
+    expect(wrapper.vm.getCategoryEnLabel('2024')).toBe('The Year Area');
   });
 
   it('the configuration reference is normalized to the hierarchy key', async () => {

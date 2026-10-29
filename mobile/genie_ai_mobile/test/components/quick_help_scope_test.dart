@@ -222,6 +222,34 @@ void main() {
       expect(resolver.categoryIdFor('2'), '2');
     });
 
+    test(
+      'a hierarchy key that equals another category NAME resolves the keyed category',
+      () {
+        // A re-created hierarchy can mint a key that equals another
+        // category's name. The key-typed consumers — the conversation's
+        // edge, the legacy tags — must keep resolving to the KEYED
+        // category: the name interpretation would restore the wrong scope.
+        final tree = <dynamic>[
+          {
+            'catKey': '2024',
+            'name': 'The Year Area',
+            'nameEN': 'The Year Area',
+            'children': <dynamic>[],
+          },
+          {
+            'catKey': '7',
+            'name': '2024',
+            'nameEN': '2024',
+            'children': <dynamic>[],
+          },
+        ];
+        final resolver = QuickHelpScopeResolver(tree);
+
+        expect(resolver.categoryDisplayName('2024'), 'The Year Area');
+        expect(resolver.categoryLabelEn({'category': '2024'}), 'The Year Area');
+      },
+    );
+
     test('a reference the hierarchy cannot name keeps its own spelling', () {
       // The scope is broken — a broken scope sends nothing — but what the
       // configuration wrote is still what the conversation carries.

@@ -8,18 +8,35 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
 
 ## Current state (2026-10-29)
 
-- **Chart `genieai-umbrella` at 0.2.125**, branch `feat/k8s-migration` based
-  on `main` at `18d02f094` and **12 commits behind `origin/main`**
-  (measured 2026-10-28, tip `7cdc64d06`). The gap touches the frontend,
-  the backend's analytics routes, the OPEA overlay (retriever/dataprep),
-  `docker-compose.yaml`, the site docs, the config-validator tests and
-  `.gitlab-ci.yml` (the `config:validate` job's `changes:` list) —
-  **nothing under `charts/` or `scripts/`**, so the chart's gates and
-  renders are unaffected. Two of those touch the gates indirectly: the
-  rebase brings main's `docker-compose.yaml` (the parity gate's other
-  side) and main's `.gitlab-ci.yml` (the job definitions), so both gates
-  must be re-run after the rebase. The branch is rebased onto `main`
-  before the MR leaves Draft.
+- **Chart `genieai-umbrella` at 0.2.130**, branch `feat/k8s-migration`
+  **rebased onto `origin/main` (2026-10-29, 511 commits replayed clean,
+  the vendored `charts/*.tgz` regenerated away before the replay)**. CI
+  green on the rebased tip (pipeline 14913). The MR !520 stays Draft.
+- **The dev node was rebuilt at 12288 after the 8 GiB profile died of
+  its own memory budget (0.2.130, 2026-10-29)**. A rolling upgrade (old
+  and new ReplicaSet resident at once) plus a parallel image build
+  pushed the minikube container into the **docker** OOM killer — the
+  apiserver died mid-deploy. Recreating the container (minikube's
+  resize path) loses `/etc/kubernetes`: static pod manifests live in
+  the container layer while etcd, the PKI and the PVC data live in the
+  docker volume — the cluster cannot be revived in place. All 28
+  non-regenerable Secrets (the sealed-secrets key with its
+  `sealedsecrets.bitnami.com/sealed-secrets-key=active` label, the
+  flux-git-auth PAT, the whole `genieai/` set) were decoded out of the
+  surviving etcd — k8s storage protobuf (`k8s\x00` magic + Unknown
+  wrapper + core/v1.Secret wire format), read with a scratch `etcd`
+  started inside the dead node's container from the node's own etcd
+  binary — and the bootstrap script rebuilt the cluster end to end from
+  them. Fixes folded in: the script's `MEMORY` 10240→12288 (the profile
+  records it; later `minikube start` keeps it — a `--memory` flag on an
+  existing profile is ignored), and the runbook's memory section
+  rewritten: the Xenova CPU-fallback story no longer applies to the
+  laptop overlay (a named translation endpoint is mandatory since
+  main's !578/!584 — the backend refuses to start rather than fall
+  back), so the node died of upgrade concurrency, not of a translation
+  fallback. The `--capture` mode of the bootstrap script is now the
+  documented pre-`delete` gate; the etcd protobuf pull is the emergency
+  path, not the plan.
 - **No application code in the branch**: the diff touches `charts/`,
   `scripts/`, `docs/`, `deploy/`, `tests/`, `site/`, `.gitlab-ci.yml`,
   `docker-compose.yaml`, `env`, `Makefile`, `CLAUDE.md`, `CHANGELOG.md` —

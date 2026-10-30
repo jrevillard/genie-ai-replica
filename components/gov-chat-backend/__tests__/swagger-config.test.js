@@ -180,5 +180,18 @@ describe('Swagger Configuration', () => {
       expect(swaggerOptions).toBeDefined();
       expect(swaggerOptions.definition.openapi).toBe('3.0.0');
     });
+
+    it('should define the schemas the route annotations $ref (shared swagger-schemas.js)', () => {
+      // A $ref to an undefined schema is silent at runtime — swagger-ui
+      // loses the model and the client generator drops it. This shipped
+      // once: !609 referenced CategoryTree without defining it. These four
+      // are the names the route annotations $ref; they must stay defined in
+      // the shared module index.js and scripts/generate-api-client.sh
+      // both consume.
+      const schemas = swaggerOptions.definition.components.schemas;
+      for (const name of ['Analytics', 'CategoryTree', 'Event', 'QueryContext']) {
+        expect(schemas).toHaveProperty(name);
+      }
+    });
   });
 });

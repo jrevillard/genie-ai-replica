@@ -226,8 +226,11 @@ async function callVllm(messages, { timeoutMs = TIMEOUT_MS } = {}) {
   // No endpoint at all = the deliberate opt-out (compose ships it empty).
   if (!rawBase) throw new Error('llm-not-configured');
   // Model id under the !631 policy (services/vllm-model-cache.js): pin ->
-  // /v1/models discovery -> loud ModelDiscoveryError (#1181).
-  const model = await require('./vllm-model-cache').resolveVllmModelId(rawBase);
+  // /v1/models discovery -> loud ModelDiscoveryError (#1181). The probe
+  // shares the call budget; the chat call gets what is left of it.
+  const resolvedAt = Date.now();
+  const model = await require('./vllm-model-cache').resolveVllmModelId(rawBase, { timeoutMs });
+  const chatTimeoutMs = Math.max(1, timeoutMs - (Date.now() - resolvedAt));
   const headers = {};
   const apiKey = process.env.VLLM_API_KEY;
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
@@ -241,7 +244,7 @@ async function callVllm(messages, { timeoutMs = TIMEOUT_MS } = {}) {
       max_tokens: MAX_TOKENS,
       response_format: { type: 'json_object' }
     },
-    { timeout: timeoutMs, headers }
+    { timeout: chatTimeoutMs, headers }
   );
   return (r.data?.choices?.[0]?.message?.content || '').trim();
 }

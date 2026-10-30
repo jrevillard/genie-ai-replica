@@ -870,3 +870,34 @@ describe('ensureSummary — model-id discovery (#1181)', () => {
     expect(axios.post.mock.calls[0][1].model).toBe('pinned/summarizer');
   });
 });
+
+it('r4: the chat call gets the budget left after the discovery probe', async () => {
+  const manifest = () => ({
+    _key: 'r1',
+    name: 'Demo bundle',
+    domain: 'demo',
+    version: 1,
+    concepts: [],
+    summary_stats: { concept_count: 0 },
+    summary_text: null,
+    summary_stale: false
+  });
+  await mockDb.collection('okf_bundle_manifest').save(manifest());
+  mockDb.query.mockResolvedValueOnce({ all: async () => [manifest()] });
+  // The probe burns part of the 5 s budget; the chat call must not be
+  // granted a fresh one (the caller's contract is one budget).
+  delete process.env.VLLM_MODEL_ID;
+  delete process.env.VLLM_LLM_MODEL_ID;
+  process.env.VLLM_ENDPOINT = 'http://vllm:8000';
+  require('../services/vllm-model-cache').clearModelCache();
+  const axios = require('axios');
+  axios.get.mockImplementation(
+    () => new Promise((resolve) => setTimeout(() => resolve({ data: { data: [{ id: 'served/summarizer-8b' }] } }), 60))
+  );
+  axios.post.mockResolvedValue({ data: { choices: [{ message: { content: 'Sum.' } }] } });
+  await conceptMeta.ensureSummary('r1');
+  // The LAST call — mock.calls accumulates across this file's tests.
+  const postTimeout = axios.post.mock.calls[axios.post.mock.calls.length - 1][2].timeout;
+  expect(postTimeout).toBeLessThan(5000);
+  expect(postTimeout).toBeGreaterThan(4000);
+});

@@ -17,10 +17,19 @@
  *      name and answers 404 for unknown ones, so a hardcoded name is right
  *      only by coincidence with whatever the deployment serves.
  *
- * Cache behaviour mirrors model_cache.py exactly: on probe failure the last
- * known id is served (stale is better than broken); model-id consumers retry
- * on every call after expiry — no negative cache (the Python negative window
- * covers max_model_len only; the model-id variant is deferred as #1127).
+ * Cache behaviour:
+ *   - a successful probe is cached (TTL) and served stale when a later
+ *     probe fails (stale is better than broken);
+ *   - a FAILED probe is remembered for NEGATIVE_CACHE_TTL seconds, so an
+ *     unreachable endpoint costs one probe per window instead of one per
+ *     CALL — the Node callers resolve per request (curation resolves per
+ *     concept), where the Python side resolves per file/job. Python applies
+ *     the same mechanism to its own request-path field (max_model_len); the
+ *     exact model-id negative-cache semantics stay open in #1127;
+ *   - concurrent callers share ONE in-flight probe;
+ *   - cache keys carry the CREDENTIAL as well as the base: gateways can
+ *     filter /v1/models per key, so two configs on one base must never
+ *     resolve each other's model.
  *
  * Knobs (same names and defaults as the Python side, so one .env line tunes
  * both worlds): MODEL_DETECT_TTL (seconds, default 60),
@@ -31,6 +40,9 @@ const { logger } = require('../shared-lib/logger');
 
 const MODEL_TTL_DEFAULT_SECONDS = 60;
 const PROBE_TIMEOUT_DEFAULT_MS = 10000;
+// How long a FAILED probe is remembered (seconds) — one probe per window
+// instead of one per call.
+const NEGATIVE_CACHE_TTL = 60;
 
 /** Raised when a model id is required but nothing answers. Mirrors
  * core.model_cache.ModelDiscoveryError. */
@@ -41,16 +53,26 @@ class ModelDiscoveryError extends Error {
   }
 }
 
-// baseUrl (trailing slashes stripped) -> { id, ts } — ts is the Date.now()
-// of the successful probe that filled the entry; absence of an entry means
+// cacheKey (base + credential) -> { id, ts } — ts is the Date.now() of the
+// successful probe that filled the entry; absence of an entry means
 // "never answered".
 const _cache = new Map();
+// cacheKey -> { promise } — the in-flight probe shared by concurrent callers.
+const _inflight = new Map();
+// cacheKey -> { ts } — the negative stub: a recent failure, no id.
+const _negative = new Map();
 
 /** The deployer pin, both spellings. Each spelling is trimmed BEFORE the
  * fallback so a whitespace-only VLLM_LLM_MODEL_ID cannot shadow a valid
  * VLLM_MODEL_ID. */
 function envPin() {
   return (process.env.VLLM_LLM_MODEL_ID || '').trim() || (process.env.VLLM_MODEL_ID || '').trim() || null;
+}
+
+/** The deployment credential, both spellings — the chat path accepts the
+ * same pair, so the probe must not be stricter (or looser). */
+function deploymentKey() {
+  return (process.env.VLLM_API_KEY || '').trim() || (process.env.VLLM_LLM_API_KEY || '').trim() || '';
 }
 
 function ttlSeconds() {
@@ -63,19 +85,24 @@ function probeTimeoutMs() {
   return Number.isFinite(v) && v > 0 ? v * 1000 : PROBE_TIMEOUT_DEFAULT_MS;
 }
 
-/** Probe once; on success cache and return the first served id, else null.
+/** Probe once; on success return the first served id, else null.
  *
  * Auth is EXACTLY the apiKey given by the caller — no env fallback here:
- * the deployment VLLM_API_KEY may only be aimed at the deployment
- * endpoint (resolveVllmModelId adds it for that path); a foreign base
- * (named model-config, judge base) must never receive it uninvited. */
+ * the deployment key may only be aimed at the deployment endpoint
+ * (deploymentServedModelId / resolveVllmModelId add it for that path); a
+ * foreign base (named model-config, judge base) must never receive it
+ * uninvited. */
 async function probe(baseUrl, timeoutMs, apiKey) {
   const url = require('./llm-url').openAiModelsUrl(baseUrl);
   const headers = {};
   const key = (apiKey || '').trim();
   if (key) headers.Authorization = `Bearer ${key}`;
   try {
-    const r = await axios.get(url, { headers, timeout: timeoutMs || probeTimeoutMs() });
+    // The probe timeout is the ENV ceiling (MODEL_PROBE_TIMEOUT_SECONDS);
+    // a caller's own budget may only tighten it.
+    const ceiling = probeTimeoutMs();
+    const timeout = timeoutMs ? Math.min(timeoutMs, ceiling) : ceiling;
+    const r = await axios.get(url, { headers, timeout });
     const list = r.data && Array.isArray(r.data.data) ? r.data.data : [];
     const entry = list[0] || null;
     const id = typeof entry === 'string' ? entry : entry && typeof entry.id === 'string' ? entry.id : null;
@@ -105,17 +132,33 @@ async function probe(baseUrl, timeoutMs, apiKey) {
 async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
   const base = String(baseUrl || '').replace(/\/+$/, '');
   if (!base) return null;
-  // Cache key carries the CREDENTIAL as well as the base: gateways can
-  // filter /v1/models per key, so two configs on one base must never
-  // resolve each other's model.
   const cacheKey = `${base}|${(apiKey || '').trim()}`;
   const entry = _cache.get(cacheKey);
   if (entry && Date.now() - entry.ts < ttlSeconds() * 1000) return entry.id;
-  const id = await probe(base, timeoutMs, apiKey);
-  if (id) {
-    _cache.set(cacheKey, { id, ts: Date.now() });
-    return id;
+
+  // A recent failure is remembered: answer without touching the network.
+  const failed = _negative.get(cacheKey);
+  if (failed && Date.now() - failed.ts < NEGATIVE_CACHE_TTL * 1000) {
+    return entry ? entry.id : null; // stale beats broken, null beats a storm
   }
+
+  // Concurrent callers share ONE probe.
+  let pending = _inflight.get(cacheKey);
+  if (!pending) {
+    pending = probe(base, timeoutMs, apiKey).then((id) => {
+      if (id) {
+        _cache.set(cacheKey, { id, ts: Date.now() });
+        _negative.delete(cacheKey);
+      } else {
+        _negative.set(cacheKey, { ts: Date.now() });
+      }
+      _inflight.delete(cacheKey);
+      return id;
+    });
+    _inflight.set(cacheKey, pending);
+  }
+  const id = await pending;
+  if (id) return id;
   return entry ? entry.id : null; // stale is better than broken
 }
 
@@ -144,8 +187,8 @@ async function requireServedModelId(baseUrl, opts = {}) {
 
 /** resolve_model_id twin: the single home of the precedence — pin wins,
  * else discovery, loud on no answer. This is the DEPLOYMENT path: when
- * the caller gives no key, the deployment VLLM_API_KEY is the default
- * credential for the deployment endpoint. */
+ * the caller gives no key, the deployment credential is the default for
+ * the deployment endpoint. */
 async function resolveVllmModelId(baseUrl, opts = {}) {
   const pin = envPin();
   if (pin) return pin;
@@ -154,7 +197,7 @@ async function resolveVllmModelId(baseUrl, opts = {}) {
       'no vLLM endpoint configured and no model pinned — set VLLM_ENDPOINT or VLLM_MODEL_ID'
     );
   }
-  const apiKey = (opts.apiKey || '').trim() || (process.env.VLLM_API_KEY || '').trim();
+  const apiKey = (opts.apiKey || '').trim() || deploymentKey();
   const id = await getServedModelId(baseUrl, { timeoutMs: opts.timeoutMs, apiKey });
   if (!id) throw discoveryError(baseUrl);
   return id;
@@ -168,26 +211,48 @@ function deploymentVllmBase() {
   return process.env.VLLM_ENDPOINT || 'http://vllm:8000';
 }
 
-/** The deployment endpoint's served model, soft: base AND deployment key
- * resolved in one place (the base rule and the credential must never
- * drift apart — an unauthenticated probe 401s on secured endpoints and
- * silently defeats the label). Null when nothing answers. */
+/** The deployment endpoint's served model, soft: base AND deployment
+ * credential resolved in one place (they must never drift apart — an
+ * unauthenticated probe 401s on secured endpoints and silently defeats
+ * the label). Null when nothing answers. */
 async function deploymentServedModelId() {
-  return getServedModelId(deploymentVllmBase(), { apiKey: (process.env.VLLM_API_KEY || '').trim() });
+  return getServedModelId(deploymentVllmBase(), { apiKey: deploymentKey() });
+}
+
+/** The deployment model for a PROVENANCE label: the pin when set, else
+ * the served id, else null (soft — never throws). */
+async function deploymentDiscoveredModelId() {
+  return discoverVllmModelId(deploymentVllmBase(), { apiKey: deploymentKey() });
+}
+
+/** Same origin (protocol + host + port) — the deployment credential may
+ * only travel to an endpoint that IS the deployment endpoint. */
+function sameOrigin(a, b) {
+  try {
+    const ua = new URL(String(a || ''));
+    const ub = new URL(String(b || ''));
+    return ua.protocol === ub.protocol && ua.host === ub.host;
+  } catch {
+    return false;
+  }
 }
 
 /** Test hook: drop every cached entry. */
 function clearModelCache() {
   _cache.clear();
+  _negative.clear();
+  _inflight.clear();
 }
 
 module.exports = {
   ModelDiscoveryError,
+  deploymentDiscoveredModelId,
   deploymentServedModelId,
   deploymentVllmBase,
-  getServedModelId,
   discoverVllmModelId,
+  getServedModelId,
   requireServedModelId,
   resolveVllmModelId,
+  sameOrigin,
   clearModelCache
 };

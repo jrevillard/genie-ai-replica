@@ -458,6 +458,12 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   picks the configured id instead of the
 #                                 #   served one. Raise it on a remote GPU node
 #                                 #   whose models load slowly.
+# MODEL_DETECT_TTL=60                # TTL of the /v1/models model-id cache
+#                                 #   (seconds). Shared by the Python
+#                                 #   services (retriever/dataprep/chatqna)
+#                                 #   and the OKF Node services — one value
+#                                 #   tunes both worlds. Lower = fresher
+#                                 #   model ids, more probes.
 # MODEL_RERANK_TIMEOUT_SECONDS=300 # TEI rerank. Deliberately NOT tighter than the
 #                                 #   300 s an unconfigured aiohttp session would
 #                                 #   have used: the rerank path has no fallback, so

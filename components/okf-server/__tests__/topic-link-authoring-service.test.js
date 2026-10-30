@@ -553,3 +553,24 @@ describe('callVllm — model-id discovery (#1181)', () => {
     expect(http2.post.mock.calls.filter((c) => String(c[0]).includes('/chat/completions'))).toHaveLength(0);
   });
 });
+
+it('r4: the discovery probe is bounded by the call budget, never the 10 s default', async () => {
+  const svc2 = require('../services/topic-link-authoring-service');
+  const db2 = require('../shared-lib/db-connection-service');
+  const http2 = require('axios');
+  const conceptRows = [
+    { concept_id: 'a', title: 'Alpha subject', summary: 'alpha', links: [] },
+    { concept_id: 'b', title: 'Beta subject', summary: 'beta', links: [] }
+  ];
+  db2.getConnection.mockResolvedValue({
+    query: jest.fn(() => ({ all: async () => conceptRows }))
+  });
+  http2.get.mockResolvedValue({ data: { data: [{ id: 'served/linker-8b' }] } });
+  http2.post.mockResolvedValue({
+    data: { choices: [{ message: { content: JSON.stringify({ links: [] }) } }] }
+  });
+  await svc2.authorRepoTopicLinks({ repo_id: 'r1' });
+  const probeTimeout = http2.get.mock.calls[0][1].timeout;
+  expect(probeTimeout).toBeLessThanOrEqual(10000); // the env ceiling
+  expect(probeTimeout).toBeGreaterThan(0);
+});

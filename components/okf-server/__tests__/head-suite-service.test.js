@@ -2228,6 +2228,13 @@ describe('suite generator label — model-id discovery (#1181)', () => {
   const axios = require('axios');
   const OLD_ENV = { ...process.env };
 
+  beforeEach(() => {
+    // The failed-probe negative window (60 s) is shared process-wide: a
+    // probe failure in an earlier test would answer this one from the
+    // negative stub instead of the network.
+    require('../services/vllm-model-cache').clearModelCache();
+  });
+
   afterEach(() => {
     process.env = { ...OLD_ENV };
     require('../services/vllm-model-cache').clearModelCache();

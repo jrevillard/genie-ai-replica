@@ -728,11 +728,14 @@ async function runLlmSummary(prompt, { timeoutMs = 5000 } = {}) {
   // best-effort timeout. Resolution failure keeps the lazy-summary
   // semantics: summary stays null, discovery scoring is unaffected (#1181).
   let model;
+  const resolvedAt = Date.now();
   try {
     model = await require('./vllm-model-cache').resolveVllmModelId(rawBase, { timeoutMs });
   } catch {
     return null;
   }
+  // The probe shares the call budget; the chat call gets what is left.
+  const chatTimeoutMs = Math.max(1, timeoutMs - (Date.now() - resolvedAt));
   const headers = {};
   const apiKey = process.env.VLLM_API_KEY;
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
@@ -746,7 +749,7 @@ async function runLlmSummary(prompt, { timeoutMs = 5000 } = {}) {
       max_tokens: 200,
       temperature: 0.0
     },
-    { timeout: timeoutMs, headers }
+    { timeout: chatTimeoutMs, headers }
   );
   return (r.data?.choices?.[0]?.message?.content || '').trim() || null;
 }

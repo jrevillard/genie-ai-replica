@@ -282,3 +282,72 @@ describe('review round 3 fixes (#1181)', () => {
     await expect(cache.deploymentServedModelId()).resolves.toBeNull();
   });
 });
+
+describe('review round 4 fixes (#1181)', () => {
+  test('a FAILED probe is remembered for the negative window — no re-probe per call', async () => {
+    axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
+    // Second call inside the negative window must NOT hit the network again.
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
+    expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('the negative window expires — the endpoint is probed again', async () => {
+    axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
+    Date.now.mockReturnValue(1_000_000 + 61_000);
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
+    expect(axios.get).toHaveBeenCalledTimes(2);
+  });
+
+  test('concurrent callers share ONE probe (in-flight de-duplication)', async () => {
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    const [a, b, c] = await Promise.all([
+      cache.resolveVllmModelId('http://vllm:8000'),
+      cache.resolveVllmModelId('http://vllm:8000'),
+      cache.resolveVllmModelId('http://vllm:8000')
+    ]);
+    expect([a, b, c]).toEqual(['served/model', 'served/model', 'served/model']);
+    expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('deploymentDiscoveredModelId: the pin wins, else the served id (soft, never throws)', async () => {
+    process.env.VLLM_MODEL_ID = 'pinned/model';
+    await expect(cache.deploymentDiscoveredModelId()).resolves.toBe('pinned/model');
+    expect(axios.get).not.toHaveBeenCalled();
+
+    delete process.env.VLLM_MODEL_ID;
+    cache.clearModelCache();
+    axios.get.mockResolvedValue(modelsPayload('served/deployed-8b'));
+    await expect(cache.deploymentDiscoveredModelId()).resolves.toBe('served/deployed-8b');
+  });
+
+  test('the deployment credential honours both key spellings (chat-path parity)', async () => {
+    process.env.VLLM_LLM_API_KEY = 'llm-spelled-key';
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    await cache.deploymentServedModelId();
+    expect(axios.get.mock.calls[0][1].headers).toEqual({ Authorization: 'Bearer llm-spelled-key' });
+  });
+
+  test('sameOrigin: same host+port is one endpoint, a different host is not', () => {
+    expect(cache.sameOrigin('http://vllm:8000', 'http://vllm:8000')).toBe(true);
+    expect(cache.sameOrigin('http://vllm:8000/v1', 'http://vllm:8000')).toBe(true);
+    expect(cache.sameOrigin('https://gpu.example/llm', 'https://gpu.example/llm/v1')).toBe(true);
+    expect(cache.sameOrigin('https://attacker.example/v1', 'http://vllm:8000')).toBe(false);
+    expect(cache.sameOrigin('http://vllm:8000', 'http://vllm:9000')).toBe(false);
+  });
+});
+
+describe('review round 4 — probe timeout ceiling (#1181)', () => {
+  test('the probe timeout never exceeds MODEL_PROBE_TIMEOUT_SECONDS, even with a larger call budget', async () => {
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    await cache.getServedModelId('http://vllm:8000', { timeoutMs: 60000 });
+    expect(axios.get.mock.calls[0][1].timeout).toBe(10000);
+  });
+
+  test('a SMALLER call budget tightens the probe timeout', async () => {
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    await cache.getServedModelId('http://vllm:8000', { timeoutMs: 2500 });
+    expect(axios.get.mock.calls[0][1].timeout).toBe(2500);
+  });
+});

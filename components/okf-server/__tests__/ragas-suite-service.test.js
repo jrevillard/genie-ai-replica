@@ -3830,6 +3830,13 @@ jest.mock('axios');
 describe('answerFidelity — discovery names the served deployment model (#1181)', () => {
   const OLD_ENV = { ...process.env };
 
+  beforeEach(() => {
+    // The failed-probe negative window (60 s) is shared process-wide: a
+    // probe failure in an earlier test would answer this one from the
+    // negative stub instead of the network.
+    require('../services/vllm-model-cache').clearModelCache();
+  });
+
   afterEach(() => {
     process.env = { ...OLD_ENV };
     jest.restoreAllMocks();

@@ -786,6 +786,10 @@ services:
       # guided-JSON-capable chat model (VLLM_LLM_MODEL_ID preferred).
       - VLLM_ENDPOINT=${VLLM_ENDPOINT:-}
       - VLLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-${VLLM_MODEL_ID:-}}
+      # The LLM spelling reaches okf-server too (#1181): the serve-mode
+      # fidelity label mirrors chatqna's pin precedence, and chatqna only
+      # ever receives THIS spelling.
+      - VLLM_LLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-}
       - VLLM_API_KEY=${VLLM_API_KEY:-}
       # Discovery knobs (#1181) — same names/defaults as the OPEA services
       # (one .env line tunes both worlds). The TTL needs no default here

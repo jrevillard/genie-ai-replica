@@ -932,3 +932,72 @@ describe('vllmChatCompletions — review r2 fixes (#1181)', () => {
     expect(resp.model).toBe('served/stamped-8b');
   });
 });
+
+// Review round 4 (#1181): the deployment credential must not leave the
+// deployment endpoint — a named config on a FOREIGN base gets no key at
+// all (probe AND chat call); a config pointing at the deployment endpoint
+// itself keeps the deployment key.
+describe('vllmChatCompletions — deployment-credential scope (r4 #1181)', () => {
+  const modelCache4 = require('../services/vllm-model-cache');
+  const KEYS = ['VLLM_LLM_MODEL_ID', 'VLLM_MODEL_ID', 'VLLM_API_KEY', 'VLLM_LLM_API_KEY', 'VLLM_ENDPOINT'];
+  const saved = {};
+
+  beforeEach(() => {
+    KEYS.forEach((k) => {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    });
+    modelCache4.clearModelCache();
+    axios.post.mockReset();
+    axios.get.mockReset();
+  });
+
+  afterEach(() => {
+    KEYS.forEach((k) => {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    });
+    modelCache4.clearModelCache();
+  });
+
+  test('a keyless named config on a FOREIGN base: neither probe nor chat carries the deployment key', async () => {
+    const modelConfig = require('../services/model-config-service');
+    process.env.VLLM_API_KEY = 'deployment-secret';
+    modelConfig.resolveModelOverride.mockResolvedValueOnce({
+      provider: 'openai',
+      base_url: 'https://foreign.example/v1',
+      model: 'foreign/chat',
+      api_key: '',
+      source: 'active',
+      config_key: 'mc6',
+      config_name: 'Foreign (keyless)'
+    });
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'foreign/served' }] } });
+    axios.post.mockResolvedValue(vllmResponse('{}'));
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }]);
+    // The config names its model — no discovery probe happens; what matters
+    // is that the CHAT call carries no deployment credential.
+    expect(axios.get).not.toHaveBeenCalled();
+    const [, , cfg] = axios.post.mock.calls[0];
+    expect(cfg.headers.Authorization).toBeUndefined();
+  });
+
+  test('a keyless named config on the DEPLOYMENT base keeps the deployment key', async () => {
+    const modelConfig = require('../services/model-config-service');
+    process.env.VLLM_API_KEY = 'deployment-secret';
+    process.env.VLLM_ENDPOINT = 'http://vllm:8000';
+    modelConfig.resolveModelOverride.mockResolvedValueOnce({
+      provider: 'openai',
+      base_url: 'http://vllm:8000/v1',
+      model: 'deployment/chat',
+      api_key: '',
+      source: 'active',
+      config_key: 'mc7',
+      config_name: 'Deployment (keyless)'
+    });
+    axios.post.mockResolvedValue(vllmResponse('{}'));
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }]);
+    const [, , cfg] = axios.post.mock.calls[0];
+    expect(cfg.headers.Authorization).toBe('Bearer deployment-secret');
+  });
+});

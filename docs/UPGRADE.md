@@ -6,6 +6,171 @@ change requires manual action from deployers.
 
 ---
 
+## v2.1.0 → v3.0.0
+
+v3.0.0 carries breaking changes across deployment, configuration and API.
+Read this section in full before upgrading — two of them (the host
+configuration mirror and the embedding-model default) can cause data loss or
+silent misbehaviour if skipped.
+
+### Breaking Changes
+
+#### Host configuration is now a mirror of the deployed branch
+
+The `config_bootstrap` role rsyncs the branch's theme and configuration files
+onto the node on every deployment (`--archive --checksum --delete`): a file
+edited directly on the host is reverted by the next deployment, and a file the
+branch no longer ships is removed.
+
+**Migration**: move any hand-edited host configuration into the repository
+(the flavour's configuration file). Two variables relax the new guards when
+they misfire: `config_bootstrap_allow_rebrand` (a deliberate brand rename —
+set it for the one deployment that applies the rename, unset it afterwards)
+and `config_bootstrap_theme_entrypoints` (a theme that serves only some of
+the realm's screens). A deployment that failed mid-mirror resumes by
+re-running it.
+
+#### Two new host directories are required
+
+`<config_dir>/frontend/` and `<config_dir>/keycloak/themes/` now hold the
+theme stylesheet, the runtime JSON config, the logos, the splash images and
+the whole Keycloak `genie` theme, served live from the host. Only Keycloak
+needs a restart after a theme edit
+(`docker service update --force <stack>_keycloak`).
+
+**Migration**: an Ansible deployment creates and fills both automatically. A
+hand-rolled deployment must create both directories and copy the files in, or
+the site comes up without any branding.
+
+#### Keycloak is no longer a GENIE.AI image
+
+The stack runs `quay.io/keycloak/keycloak:26.7.0` straight from upstream —
+15 GENIE.AI images instead of 16.
+
+**Migration (air-gapped)**: mirror the upstream Keycloak image in addition to
+the 15 GENIE.AI images. Theme bootstrap additionally downloads branding
+archives from the GitLab repository-archive endpoint on every deploy node —
+an air-gapped node must either reach that endpoint or pre-seed both host
+config directories by hand and set `config_bootstrap_sync_enabled: false`.
+
+**Migration**: delete `GENIE_AI_KEYCLOAK_IMAGE` and
+`GENIE_AI_KEYCLOAK_IMAGE_TAG` from any local `.env` (ignored if left in
+place).
+
+#### `OPEA_SSL_SKIP_VERIFY` is now explicit
+
+Certificate verification for the model-endpoint calls was previously disabled
+as a side effect of setting `VLLM_API_KEY` for a remote GPU.
+
+**Migration**: if your GPU node serves a self-signed certificate, set
+`OPEA_SSL_SKIP_VERIFY=1` (Ansible: `opea_ssl_skip_verify: "1"` in
+`group_vars/<env>/vars.yml`). Without it the deployment completes and fails
+at its first model call with `CERTIFICATE_VERIFY_FAILED`. Deployments using
+Let's Encrypt or a recognized CA, and deployments without a remote GPU node,
+need no change.
+
+#### Two dead API endpoints removed
+
+`POST /api/service-categories/init` and `GET /api/analytics` answered 500 on
+every call — they wired to service methods removed in earlier refactors —
+and no first-party client called either.
+
+**Migration**: none for first-party clients. Seed the taxonomy from the
+Knowledge Hierarchy tab of the Admin Dashboard (or
+`components/gov-chat-backend/scripts/new-schema-scripts/create-knowledge-hierarchy.js`);
+read `GET /api/analytics/dashboard` instead of the removed route.
+
+#### Service-category translation field names
+
+On POST/PUT of categories and services, translations now read
+`languageCode`/`translation` (was `lang`/`text`). The old names are no longer
+accepted; translations sent under them are silently lost.
+
+**Migration**: update any external client that posts category or service
+translations.
+
+#### Frontend runtime config is validated at load
+
+A `genie-ai-config*.json` that does not match its embedded schema stops the
+web app from starting, with the failing paths reported. A config that cannot
+be fetched at all still falls back to the bundled defaults.
+
+**Migration**: validate hand-edited configs before deploying —
+`npm run validate:config` in `components/gov-chat-frontend`.
+
+#### A configured GPU translation API is mandatory
+
+With `GPU_NODE_HOST` set (or a `VLLM_TRANSLATION_ENDPOINT` other than the
+in-cluster worker), the backend now refuses to start when the GPU API does
+not answer; `TRANSLATION_BACKEND` is not consulted. A failed GPU unit is
+served in English rather than silently re-translated by the CPU model.
+
+**Migration**: ensure a configured GPU endpoint is reachable at boot.
+
+#### Unsupported languages are refused
+
+The chat routes answer `400 UNSUPPORTED_LANGUAGE` instead of producing an
+answer in another language, and conversation history is normalized to English
+regardless of the requested language.
+
+**Migration**: none — inform users that requests outside the supported
+languages are refused up front.
+
+#### `MAX_MODEL_LEN_TEXTGEN` now caps instead of overriding
+
+The LLM context window is discovered at runtime from vLLM; a deployer-set
+`MAX_MODEL_LEN_TEXTGEN` caps the usable window even when discovery answers.
+
+**Migration**: if you set `MAX_MODEL_LEN_TEXTGEN` in a previous deployment
+and want the full discovered window, remove it.
+
+#### Default embedding model: bge-base → bge-large
+
+New deployments embed with `BAAI/bge-large-en-v1.5` (1024-dim): ~3× embedding
+latency, +~0.9 GB VRAM, +1 KB stored per chunk. `EMBEDDING_MODEL_ID` still
+selects bge-base.
+
+**Migration — data-loss risk**: a deployment that takes the new default
+against a corpus ingested with bge-base gets silently empty retrieval results
+(dimension mismatch). Either re-ingest the corpus after upgrading, or pin
+`EMBEDDING_MODEL_ID=BAAI/bge-base-en-v1.5` in `.env` / `vars.yml`.
+
+#### Retriever label-filter strategy variable renamed
+
+The retriever read the filter strategy under a variable name no deployment
+set, so a deployment asking for `AND` (every label present) silently filtered
+with `OR`. It now reads `RETRIEVER_ARANGO_FILTER_STRATEGY` and refuses to
+start on any other value.
+
+**Migration**: if you set the old variable name, rename it; the value must be
+`AND` or `OR`.
+
+#### Log pipeline env vars removed
+
+`LOG_TO_VICTORIALOGS`, `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`,
+`ADMIN_LOGS_SOURCE` and `VL_FAIL_OPEN` are no longer read: every log reaches
+VictoriaLogs through the single fluentd → collector channel, and a VictoriaLogs
+outage is a typed HTTP 503 on `/api/admin/logs/*`.
+
+**Migration**: delete them from `.env` / group vars (harmless if left).
+An operator who relied on `LOG_TO_FILE` file rotation must re-add the
+`/app/logs` bind mount manually.
+
+### Non-Breaking Changes Worth Noting
+
+- vLLM bumped 0.10 → 0.29 on both GPU images (CUDA crash-loop fix);
+  `--max_num_seqs` default 64 → 16.
+- LLM call budgets are unified under the `MODEL_*` env knobs (LLM default
+  180 s). Documents whose labelling exceeds the new phase ceiling land as
+  `Ingested with Warnings` — raise `MODEL_LLM_TIMEOUT_SECONDS` and
+  `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` together on a slow shared GPU.
+- The Keycloak theme now covers the admin console, account console and
+  emails; the gateway overrides theme-resource caching.
+- chatqna rejects unauthenticated requests (Bearer + Keycloak JWKS).
+- The admin Query Inspector shows abstentions and their causes.
+
+---
+
 ## v2.0.1 → v2.1.0
 
 ### Breaking Changes

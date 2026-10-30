@@ -424,7 +424,10 @@
                       {{ translate('admin.documents.title', 'Document Management') }}
                     </div>
                     <div class="card-actions">
-                      <DsButton variant="secondary" @click="addFromLink">
+                      <!-- OKF-gated (!622 wave 1): Add-from-Link IS the
+                        crawl→OKF conversion entry — with the flag parked the
+                        button must not exist, not merely fail. -->
+                      <DsButton v-if="okfEnabled" variant="secondary" @click="addFromLink">
                         {{ translate('admin.documents.addLink', 'Add from Link') }}
                       </DsButton>
                       <DsButton variant="primary" @click="uploadFiles">
@@ -1666,6 +1669,7 @@
 import serviceTreeService from '../services/serviceTreeService.js';
 import databaseOperationsService from '../services/databaseOperationsService';
 import adminDashboardService from '../services/adminDashboardService';
+import { isOkfEnabled } from '../utils/okfFlag';
 import OperationResultsModal from './OperationResultsModal.vue';
 import LogSearchDialog from './LogSearchDialog.vue';
 import UploadFilesDialog from './UploadFilesDialog.vue';
@@ -1907,13 +1911,15 @@ export default {
         : `${this.metrics.errorRate}%`;
     },
     // OKF feature flag (2026-10-21): window.APP_CONFIG.okfEnabled, written by
-    // the frontend entrypoint from OKF_ENABLED. Absent = enabled (dev builds
-    // and pre-flag deployments keep the surfaces; compose always writes it).
-    // Hides the OKF Studio and Models tabs (Query Inspector is platform
-    // tooling and stays — David's call 2026-10-21).
+    // the frontend entrypoint from OKF_ENABLED — the image default is DARK
+    // ('0' since the !622 wave-1 review; compose/ansible write it explicitly).
+    // Absent config = enabled, which is dev-server-only (`npm run serve` has
+    // no runtime config). Hides the OKF Studio and Models tabs (Query
+    // Inspector is platform tooling and stays — David's call 2026-10-21).
+    // Shared helper: the store registration and every gated surface read the
+    // same value, so the gating model cannot drift.
     okfEnabled() {
-      const cfg = typeof window !== 'undefined' ? window.APP_CONFIG : null;
-      return !cfg || String(cfg.okfEnabled == null ? '1' : cfg.okfEnabled) !== '0';
+      return isOkfEnabled();
     },
     adminTabs() {
       return this.tabs

@@ -18,7 +18,7 @@ genie-ai-deploy/
 └── overlays/<cluster>/<env>/           # values + the HelmRelease for that target
 ```
 
-The laptop target is `overlays/jrevillard-laptop/dev`, built and
+Each dev cluster gets its own overlay — e.g. `overlays/<dev>-laptop/dev` — built and
 reconciled by `scripts/laptop-cluster-bootstrap.sh`; the whole procedure
 is documented in `docs/charts/laptop-cluster-bootstrap.md`.
 

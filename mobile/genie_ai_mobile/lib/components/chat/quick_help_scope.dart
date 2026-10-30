@@ -772,6 +772,24 @@ bool quickHelpPressable(
       quickHelpTitleOf(button) != null;
 }
 
+/// Whether the card must render as the visible failure — the grid's
+/// DISPLAY twin of the press gate (quickHelpPressable): every press
+/// refusal has a face. The scope verdict alone misses the title gate:
+/// a card with no title looks pressable — an icon, an enabled ripple —
+/// while the tap refuses itself silently, so the card renders broken
+/// (danger border, caption, no tap) instead.
+///
+/// The title is a CONFIG fact, judged without the hierarchy: it holds
+/// while the tree is pending or down, and [scope]'s own verdict decides
+/// the rest exactly as the grid reads it today.
+bool quickHelpCardBroken(
+  Map<String, dynamic> button,
+  Map<String, dynamic> scope,
+) {
+  return (scope['broken'] as bool? ?? false) ||
+      quickHelpTitleOf(button) == null;
+}
+
 /// Whether the button's scope can be put on the wire.
 ///
 /// The config names the category; the wire needs its ENGLISH label, and

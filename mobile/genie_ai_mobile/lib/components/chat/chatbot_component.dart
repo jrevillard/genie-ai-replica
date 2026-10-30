@@ -2199,15 +2199,26 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                   )
                                 : (_scopeResolver?.stateFor(button) ??
                                       QuickHelpScopeResolver.pending);
-                            final broken = scope['broken'] as bool;
+                            // The caption below names WHICH failure the
+                            // card carries. Its conditions read these two
+                            // hoisted facts; the verdict derives its own
+                            // copy through the same predicates
+                            // (quickHelpTitleOf, the scope's 'broken')
+                            // — keep the three in step.
+                            final bool scopeBroken =
+                                scope['broken'] as bool? ?? false;
+                            final bool titleMissing = translatedTitle.isEmpty;
+                            final broken = quickHelpCardBroken(button, scope);
 
                             return Material(
                               color: Colors.transparent,
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(DsRadii.lg),
-                                // A broken scope is a VISIBLE failure: the
-                                // caption below names the configuration
-                                // problem, and the tap sends nothing.
+                                // A card the tap would silently refuse —
+                                // a broken scope, or one with no title —
+                                // is a VISIBLE failure: the caption below
+                                // names the configuration problem, and
+                                // the tap sends nothing.
                                 onTap: broken
                                     ? null
                                     : () => _quickHelpPressed(button),
@@ -2260,13 +2271,47 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                         ],
                                       ),
                                       if (broken)
-                                        Text(
-                                          _quickHelpErrorCaption(scope),
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(
-                                                fontSize: tokens.textXs,
-                                                color: tokens.danger,
-                                              ),
+                                        Flexible(
+                                          // The tile's height is the
+                                          // grid's aspect ratio — the
+                                          // caption can never grow it —
+                                          // so a long caption (the
+                                          // outage text, two joined
+                                          // defects) must clamp instead
+                                          // of overflowing the tile. The
+                                          // clamp covers the caption
+                                          // only: at an extreme
+                                          // accessibility font scale the
+                                          // icon row alone can outgrow
+                                          // the tile, the grid's own
+                                          // fixed-aspect property long
+                                          // before this caption.
+                                          child: Text(
+                                            // The missing-title text
+                                            // first: the clamp below
+                                            // truncates what does not
+                                            // fit, and the config
+                                            // defect is the diagnosis
+                                            // that outlives a hierarchy
+                                            // outage (the outage text
+                                            // describes a state that
+                                            // recovery ends).
+                                            [
+                                              if (titleMissing)
+                                                tr(
+                                                  'chatbot.quickHelpTitleMissing',
+                                                ),
+                                              if (scopeBroken)
+                                                _quickHelpErrorCaption(scope),
+                                            ].join(' '),
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                                  fontSize: tokens.textXs,
+                                                  color: tokens.danger,
+                                                ),
+                                            maxLines: 3,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
                                     ],
                                   ),

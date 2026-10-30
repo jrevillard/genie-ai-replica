@@ -13,7 +13,6 @@ class ChatHistoryService {
       return ChatHistoryService.instance;
     }
     this.dbService = dbService; // Store the service reference instead of the promise
-    this.analyticsService = null; // Will be set via dependency injection
     this.initialized = false;
     logger.info('ChatHistoryService constructor called');
     ChatHistoryService.instance = this;
@@ -51,15 +50,6 @@ class ChatHistoryService {
       logger.error(`Error initializing ChatHistoryService: ${error.message}`, { stack: error.stack });
       throw error;
     }
-  }
-
-  /**
-   * Set the analytics service
-   * @param {Object} analyticsService - Analytics service instance
-   */
-  setAnalyticsService(analyticsService) {
-    this.analyticsService = analyticsService;
-    logger.info('Analytics service set for ChatHistoryService');
   }
 
   /**

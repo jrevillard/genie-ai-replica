@@ -86,8 +86,24 @@ app.set('trust proxy', 1);
 // Compression middleware
 app.use(compression());
 
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
+// Body parsing middleware. POST /api/files/ingest-bundle is EXEMPT from the
+// global JSON parser — it carries base64-encoded OKF repository bundles far
+// above the normal cap (a 1000-concept repo ships ~42 MB of JSON), and it
+// mounts its own, config-driven limit in routes/fileRoutes.js. Every other
+// JSON route stays at the 10mb default. The parser is HOISTED: instantiating
+// per request built a fresh middleware object on every non-bundle call
+// (review 2026-10-29).
+const standardJsonParser = express.json({ limit: '10mb' });
+const BUNDLE_INGEST_PATH = '/api/files/ingest-bundle';
+app.use((req, res, next) => {
+  // Express non-strict routing serves the trailing-slash spelling
+  // (`/api/files/ingest-bundle/`) through the SAME route, but the exact
+  // comparison below missed it — a ~42 MB bundle POSTed with a trailing
+  // slash fell to the 10mb global parser and died with 413 (review
+  // 2026-10-29 round 3). Normalize trailing slashes before comparing.
+  if (req.method === 'POST' && req.path.replace(/\/+$/, '') === BUNDLE_INGEST_PATH) return next();
+  return standardJsonParser(req, res, next);
+});
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Create uploads directory if it doesn't exist

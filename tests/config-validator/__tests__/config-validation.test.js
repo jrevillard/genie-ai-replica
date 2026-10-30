@@ -2,6 +2,8 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { parseEnvTemplate, getRequiredSecrets } = require('../validators/parse-env');
+const { findUnwiredDocumented, findDuplicatedDocumented } = require('../validators/unwired-documented');
+const { parseAnsibleEnvVars } = require('../validators/parse-ansible');
 const {
   parseComposeEnvVars,
   crossReference,
@@ -82,6 +84,72 @@ describe('Configuration Validation Suite', () => {
     'GENIE_AI_REGISTRY',
     'GENIE_AI_GLOBAL_TAG'
   ]);
+
+  // !1073 — documented OKF_* knobs that are deliberately NOT wired to a
+  // container. Every entry needs a justification that survives review, because
+  // the default answer to "this var is in the allowlist" must be "it shouldn't
+  // be". These two are documented in `env` but read by NOTHING in the
+  // codebase — spec 1-6 assigns OKF_SEARCH_STYLE to the retriever, and the
+  // OPEA overlay never reads it; grep-verified across components/ and
+  // genie-ai-overlay/.
+  //
+  // Wiring them would put a live-looking variable in the container that changes
+  // nothing, which is worse than the honest absence: an operator would believe
+  // the knob works. Un-wired until a reader exists.
+  const UNIMPLEMENTED_OKF_KNOBS = new Set([
+    'OKF_SEARCH_STYLE', // no reader: retriever/config.py does not read it (spec 1-6 unimplemented)
+    'OKF_FRONTMATTER_TAG_BATCH_SIZE' // no reader: suggestTags concurrency is not configurable yet (spec 1-6)
+  ]);
+
+  test('AC9 (!1073): every documented OKF_* knob reaches a container', () => {
+    // The env→compose direction, which nothing asserted. There is no env_file:
+    // in docker-compose.yaml, so a variable absent from a service's
+    // environment: block is unreachable by definition — setting it in .env did
+    // nothing, silently. 28 knobs were in that state.
+    //
+    // Reads the COMMENTED `# NAME=value` channel: `env` documents these knobs
+    // as comments (86 OKF_* lines are commented against 1 active), and the
+    // parser used to skip them entirely, so they could not reach the orphan
+    // gate even in principle.
+    const { unwired, allowlisted } = findUnwiredDocumented(envParsed.documented, composeVars, {
+      allowlist: UNIMPLEMENTED_OKF_KNOBS
+    });
+
+    expect(unwired.map((u) => `${u.name} (env section: ${u.section})`)).toEqual([]);
+
+    // The allowlist is not a place to hide things: it is asserted to be EXACTLY
+    // the two documented-unimplemented knobs, so adding a third name fails here
+    // rather than quietly widening the exemption.
+    expect(allowlisted.sort()).toEqual(['OKF_FRONTMATTER_TAG_BATCH_SIZE', 'OKF_SEARCH_STYLE']);
+  });
+
+  test('AC9 parser: documented commented knobs are collected, active ones are not', () => {
+    // The gate above would pass VACUOUSLY if the parser returned nothing here
+    // — that is exactly how 28 knobs accumulated. Pin both ends.
+    expect(Array.isArray(envParsed.documented)).toBe(true);
+    expect(envParsed.documented.length).toBeGreaterThan(200);
+    expect(envParsed.documented.every((d) => d.commentedOut === true)).toBe(true);
+    expect(envParsed.variables.every((v) => v.commentedOut === false)).toBe(true);
+    expect(envParsed.documented.some((d) => d.name === 'OKF_INGEST_MAX_CONCEPTS')).toBe(true);
+  });
+
+  test('AC10 (!1073): a knob documented twice in `env` must document the SAME value', () => {
+    // 22 OKF_* knobs are stated in two sections of `env` (operator-facing block +
+    // deeper reference). They agree today and nothing enforced it — the same
+    // "same fact in two places" shape as BUG-11 (type enum), BUG-12 (hardcoded
+    // counters) and BUG-15 (tag ceilings), all of which drifted.
+    //
+    // Two of the 22 legitimately differ: OKF_INTERNAL_SECRET and
+    // OKF_CONVERSION_DEBUG are documented once as an instruction and once with
+    // a concrete example value. Those are pinned by name rather than waved
+    // through with a blanket allowance.
+    const EXAMPLE_FORMS = new Set(['OKF_INTERNAL_SECRET', 'OKF_CONVERSION_DEBUG']);
+    const conflicting = findDuplicatedDocumented(envParsed.documented, { prefix: /^OKF_/ })
+      .filter((d) => d.values.length > 1 && !EXAMPLE_FORMS.has(d.name))
+      .map((d) => `${d.name}: ${d.values.join(' vs ')}`);
+
+    expect(conflicting).toEqual([]);
+  });
 
   // --- AC #2: All docker-compose env vars are documented in env template ---
   describe('AC2: Docker-compose vars documented in env template', () => {
@@ -427,6 +495,701 @@ describe('Configuration Validation Suite', () => {
             !rendered.has(name)
         );
       expect(unrendered).toEqual([]);
+    });
+  });
+
+  // --- Story 1-8 (David 2026-10-08): Ansible stays in step with local ---
+  // 'the ansible deployment must be kept in step with the local deployment
+  // with the right env vars AND defaults' — env.j2 enumerates every var
+  // explicitly (no passthrough), so an omission silently falls back to the
+  // compose default on swarm deploys. These tests pin the OKF surface.
+  describe('AC7: OKF env parity between docker-compose and ansible env.j2', () => {
+    const ansibleVars = parseAnsibleEnvVars(
+      fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+    );
+    // The compose okf-server service block: the local-deployment truth.
+    const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
+    const okfBlock = composeText.slice(composeText.indexOf('  okf-server:'), composeText.indexOf('  pii-service:'));
+    const okfComposeVars = {};
+    for (const m of okfBlock.matchAll(new RegExp('- ([A-Z][A-Z0-9_]+)=\\$\\{[A-Z0-9_]+(?::-([^}]*))?\\}', 'g'))) {
+      okfComposeVars[m[1]] = m[2] === undefined ? '' : m[2];
+    }
+    // Parity scope: OKF feature vars + the okf-server model endpoints
+    // (topology vars like ARANGO_URL/KEYCLOAK_* are deployment-specific
+    // and intentionally compose-defaulted).
+    const PARITY_VARS = Object.keys(okfComposeVars).filter((v) =>
+      /^(OKF_|TEI_EMBED_HOST|EMBEDDING_MODEL_ID|VLLM_ENDPOINT|VLLM_MODEL_ID|VLLM_API_KEY|DATAPREP_URL)/.test(v)
+    );
+
+    // The compose VLLM_MODEL_ID entry interpolates VLLM_LLM_MODEL_ID first
+    // (`${VLLM_LLM_MODEL_ID:-${VLLM_MODEL_ID:-}}`) — an env.j2 emission of
+    // the primary alias satisfies the parity for the container-side name.
+    const ANSIBLE_ALIAS = { VLLM_MODEL_ID: 'VLLM_LLM_MODEL_ID' };
+
+    test('every OKF compose var is emitted by env.j2', () => {
+      expect(PARITY_VARS.length).toBeGreaterThanOrEqual(15); // guard: block actually parsed
+      const missing = PARITY_VARS.filter((v) => !ansibleVars[v] && !ansibleVars[ANSIBLE_ALIAS[v]]);
+      expect(missing).toEqual([]);
+    });
+
+    test('literal defaults match between compose and env.j2', () => {
+      const mismatches = [];
+      for (const v of PARITY_VARS) {
+        const a = ansibleVars[v];
+        if (!a || a.defaultIsJinja || a.default === null) continue; // guarded/no-literal: presence-only
+        const composeDefault = okfComposeVars[v];
+        if (composeDefault !== '' && a.default !== composeDefault)
+          mismatches.push(v + ': compose=' + composeDefault + ' ansible=' + a.default);
+      }
+      expect(mismatches).toEqual([]);
+    });
+
+    test('env.j2 emits each OKF var exactly once (no last-wins shadowing)', () => {
+      const dupes = Object.entries(ansibleVars)
+        .filter(([k, a]) => /^OKF_/.test(k) && a.count > 1)
+        .map(([k]) => k);
+      expect(dupes).toEqual([]);
+    });
+
+    test('TEI_EMBED_HOST defaults follow the same-host rule (Jinja-derived, presence-checked)', () => {
+      expect(ansibleVars.TEI_EMBED_HOST).toBeDefined();
+      expect(ansibleVars.TEI_EMBED_HOST.defaultIsJinja).toBe(true); // derived from gpu_node_host
+    });
+
+    // --- PII parity (David 2026-10-13) ---------------------------------------
+    //
+    // The Ansible .env carried NO PII_* vars at all, so a cloud deployment ran
+    // the sidecar at the image default while the local .env overrode it, and
+    // okf-server had no way to tune the rescan retry pace. PII_CONCEPT_RETRY_
+    // PAUSE_MS in particular must be overridable: its default has to outlast a
+    // sidecar worker respawn, and recording a PERMANENT 'error' for a respawn
+    // is what blocked a repository indefinitely on 2026-10-12.
+    //
+    // These are CODE defaults (PII_SERVICE_URL/PII_TIMEOUT_MS/PII_RETRIES are
+    // not in the compose okf-server block), so parity here means "ansible
+    // emits them with the code's own default", not "compose agrees". The code
+    // side is PARSED FROM SOURCE — the Dockerfile CMD, the sidecar's app.py
+    // getenv and okf-server's config/pii-service reads — not mirrored by hand
+    // (a hand mirror stays green while env.j2 silently diverges from real
+    // behaviour, exactly half the drift this check exists to catch).
+    const piiCodeDefaults = () => {
+      const repo = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
+      const dockerfile = repo('components/pii-service/Dockerfile');
+      const appPy = repo('components/pii-service/app.py');
+      const okfConfig = repo('components/okf-server/config.js');
+      const okfPii = repo('components/okf-server/services/pii-service.js');
+      const out = {};
+
+      // ${PII_WEB_CONCURRENCY:-4} in the Dockerfile CMD (uvicorn --workers)
+      const workers = dockerfile.match(/\$\{PII_WEB_CONCURRENCY:-(\d+)\}/);
+      if (!workers) throw new Error('PII_WEB_CONCURRENCY default not found in pii-service Dockerfile CMD');
+      out.PII_WEB_CONCURRENCY = workers[1];
+
+      // os.getenv("PII_REGION_MAX_CHARS", "50000") in the sidecar
+      const region = appPy.match(/os\.getenv\(["']PII_REGION_MAX_CHARS["'],\s*["'](\d+)["']\)/);
+      if (!region) throw new Error('PII_REGION_MAX_CHARS default not found in pii-service app.py');
+      out.PII_REGION_MAX_CHARS = region[1];
+
+      // process.env.PII_CONCEPT_RETRY_PAUSE_MS) || 8000 in okf-server
+      const pause = okfPii.match(/PII_CONCEPT_RETRY_PAUSE_MS\)\s*\|\|\s*(\d+)/);
+      if (!pause) throw new Error('PII_CONCEPT_RETRY_PAUSE_MS default not found in okf-server pii-service.js');
+      out.PII_CONCEPT_RETRY_PAUSE_MS = pause[1];
+
+      // okf-server/config.js: url || '...', parseInt(env || '...', 10)
+      const url = okfConfig.match(/PII_SERVICE_URL\s*\|\|\s*'([^']+)'/);
+      const timeout = okfConfig.match(/PII_TIMEOUT_MS\s*\|\|\s*'(\d+)'/);
+      const retries = okfConfig.match(/PII_RETRIES\s*\|\|\s*'(\d+)'/);
+      if (!url || !timeout || !retries)
+        throw new Error('PII_SERVICE_URL/PII_TIMEOUT_MS/PII_RETRIES defaults not found in okf-server config.js');
+      out.PII_SERVICE_URL = url[1];
+      out.PII_TIMEOUT_MS = timeout[1];
+      out.PII_RETRIES = retries[1];
+      return out;
+    };
+
+    test('ansible env.j2 emits every PII var the cloud deployment needs', () => {
+      const missing = Object.keys(piiCodeDefaults()).filter((v) => !ansibleVars[v]);
+      expect(missing).toEqual([]);
+    });
+
+    test('ansible PII defaults match the values the code itself defaults to (parsed from source)', () => {
+      const mismatches = Object.entries(piiCodeDefaults())
+        .filter(([v, expected]) => ansibleVars[v] && ansibleVars[v].default !== expected)
+        .map(([v, expected]) => v + ': ansible=' + ansibleVars[v].default + ' code=' + expected);
+      expect(mismatches).toEqual([]);
+    });
+
+    test('PII_WEB_CONCURRENCY is tunable per environment (not pinned)', () => {
+      // It is a memory knob: each worker holds its own ~390MB spaCy copy. A
+      // deployment on a smaller host needs to be able to LOWER it.
+      expect(ansibleVars.PII_WEB_CONCURRENCY).toBeDefined();
+      expect(ansibleVars.PII_WEB_CONCURRENCY.defaultIsJinja).toBe(false);
+    });
+
+    test('PII_REGION_MAX_CHARS is tunable per environment (not pinned)', () => {
+      // This is the knob that stops uvicorn's supervisor SIGKILLing a worker
+      // mid-scan (measured 2026-10-13: 850 KB page killed the worker 8/8).
+      // A slower cloud host MUST be able to lower it, so it cannot be pinned.
+      expect(ansibleVars.PII_REGION_MAX_CHARS).toBeDefined();
+      expect(ansibleVars.PII_REGION_MAX_CHARS.defaultIsJinja).toBe(false);
+    });
+
+    test('PII_REGION_MAX_CHARS is piped into the compose pii-service service', () => {
+      // Without the compose pipe the ansible .env value would be inert in
+      // compose mode: app.py reads it, but the container never receives it.
+      const v = composeVars.find((x) => x.name === 'PII_REGION_MAX_CHARS');
+      expect(v).toBeDefined();
+      expect(v.default).toBe('50000');
+    });
+  });
+
+  // --- Story 1-8b: retriever routing-head knobs (graph affinity + the
+  // forbidden/noise gate). The routing decision must be an affirmative claim
+  // with positive evidence, and its thresholds are calibration-sensitive —
+  // plumbing drift between the three surfaces (compose pipe / env template
+  // doc / ansible env.j2) would silently retune production routing. Defaults
+  // live in genie-ai-overlay/retriever/config.py; these pins keep the
+  // plumbing honest (code default = compose default = template doc default).
+  describe('Story 1-8b: retriever routing-head knob plumbing', () => {
+    const ROUTE_HEAD_KNOBS = {
+      RETRIEVER_ROUTE_HEAD_WEIGHT: '1.0',
+      RETRIEVER_ROUTE_HEAD_MARGIN: '0.01',
+      RETRIEVER_ROUTE_HEAD_FLOOR: '0.55',
+      RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX: '0.55',
+      RETRIEVER_ROUTE_HEADS_SUPERSEDE: 'true'
+    };
+
+    test('every routing-head knob is piped in compose with the code default', () => {
+      for (const [name, def] of Object.entries(ROUTE_HEAD_KNOBS)) {
+        const v = composeVars.find((x) => x.name === name);
+        expect({ name, found: !!v, default: v ? v.default : null }).toEqual({
+          name,
+          found: true,
+          default: def
+        });
+      }
+    });
+
+    test('every routing-head knob is documented in the env template with the same default', () => {
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      for (const [name, def] of Object.entries(ROUTE_HEAD_KNOBS)) {
+        expect(envText).toMatch(new RegExp(`^#\\s*${name}=${def.replace(/\./g, '\\.')}\\s*(#.*)?$`, 'm'));
+      }
+    });
+
+    test('every routing-head knob is emitted by ansible env.j2', () => {
+      const headVars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      const missing = Object.keys(ROUTE_HEAD_KNOBS).filter((v) => !headVars[v]);
+      expect(missing).toEqual([]);
+    });
+  });
+
+  // --- Story 1-8d: teaching-loop suggestion-guardrail knobs. The 2026-10-09
+  // poisoning (a suggested forbidden tag matching the repo's OWN subject —
+  // 'lung-cancer', its own entity tag — positives 7/8 -> 2/8) is exactly the
+  // failure these thresholds prevent, and their calibration is load-bearing:
+  // plumbing drift between the three surfaces would silently retune the
+  // guardrail. Defaults live in components/okf-server/services/
+  // head-test-service.js; the compose pipes are intentionally EMPTY (code
+  // default applies when unset), so these pins check the code default where
+  // each surface documents it: the env template comment and the env.j2
+  // emission.
+  describe('Story 1-8d: OKF suggestion-guardrail knob plumbing', () => {
+    const GUARD_KNOBS = {
+      OKF_GUARD_SELF_SUBJECT: '0.55',
+      OKF_GUARD_DUPLICATE_FORBIDDEN: '0.9'
+    };
+
+    test('both guard knobs are piped in the okf-server compose block with an empty default (code default applies)', () => {
+      const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
+      for (const name of Object.keys(GUARD_KNOBS)) {
+        expect(okfBlock).toMatch(new RegExp(`- ${name}=\\$\\{${name}:-\\}`));
+      }
+    });
+
+    test('both guard knobs are documented in the env template with the code default', () => {
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      for (const [name, def] of Object.entries(GUARD_KNOBS)) {
+        expect(envText).toMatch(new RegExp(`^#\\s*${name}=${def.replace(/\./g, '\\.')}\\s*(#.*)?$`, 'm'));
+      }
+    });
+
+    test('both guard knobs are emitted by ansible env.j2 with the code default', () => {
+      const guardVars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      for (const [name, def] of Object.entries(GUARD_KNOBS)) {
+        expect({ name, found: !!guardVars[name], default: guardVars[name] ? guardVars[name].default : null }).toEqual({
+          name,
+          found: true,
+          default: def
+        });
+      }
+    });
+  });
+
+  // --- DEFAULT-OPEN OKF read authorization (product decision 2026-10-16).
+  // The mode flag is load-bearing in the OPPOSITE direction of the guard
+  // knobs: its default ('open') is what makes serving repos reachable by
+  // regular users, so a plumbing drift that silently made it 'closed' would
+  // shut every regular user out of OKF fan-out with no error anywhere —
+  // the exact silent-wrong class this file exists to catch. The scope
+  // authority reads it per call in scope-authz-service.js.
+  describe('DEFAULT-OPEN: OKF_SCOPE_MODE plumbing', () => {
+    test('OKF_SCOPE_MODE is piped in the okf-server compose block with the open default', () => {
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const start = full.indexOf('  okf-server:');
+      const end = full.indexOf('  pii-service:');
+      // Guard both anchors: if a service is renamed/moved, indexOf returns -1
+      // and slice(start, -1) would silently span every later service block —
+      // turning "piped in the okf-server block" into "present anywhere after
+      // it", defeating the plumbing-drift catch this test exists for.
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(end).toBeGreaterThan(start);
+      const okfBlock = full.slice(start, end);
+      // Unset-only default (`${VAR-open}`, NOT `${VAR:-open}`): an explicitly
+      // empty .env value must reach the container as explicit garbage and
+      // degrade to closed — not be silently coerced to open at interpolation.
+      expect(okfBlock).toMatch(/- OKF_SCOPE_MODE=\$\{OKF_SCOPE_MODE-open\}/);
+    });
+
+    test('OKF_SCOPE_MODE is documented in the env template with the open default', () => {
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*OKF_SCOPE_MODE=open\s*(#.*)?$/m);
+    });
+
+    test('OKF_SCOPE_MODE is emitted by ansible env.j2 with the open default', () => {
+      const scopeVars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect({
+        name: 'OKF_SCOPE_MODE',
+        found: !!scopeVars.OKF_SCOPE_MODE,
+        default: scopeVars.OKF_SCOPE_MODE ? scopeVars.OKF_SCOPE_MODE.default : null
+      }).toEqual({
+        name: 'OKF_SCOPE_MODE',
+        found: true,
+        default: 'open'
+      });
+    });
+  });
+
+  // Story 1-8g: the Lab click-test reranks a query against the repo corpus
+  // through the pipeline's TEI /rerank. Empty default = the probe answers
+  // verdict=unknown with an honest note (never a fake score).
+  describe('Story 1-8g: OKF corpus-probe rerank endpoint plumbing', () => {
+    test('OKF_RERANK_ENDPOINT is piped in the okf-server compose block with an empty default', () => {
+      const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
+      expect(okfBlock).toMatch(/- OKF_RERANK_ENDPOINT=\$\{OKF_RERANK_ENDPOINT:-\}/);
+    });
+
+    test('OKF_RERANK_ENDPOINT is documented in the env template', () => {
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*OKF_RERANK_ENDPOINT=\S.*$/m);
+    });
+
+    test('OKF_RERANK_TOKEN is piped in the okf-server compose block with an empty default', () => {
+      const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
+      expect(okfBlock).toMatch(/- OKF_RERANK_TOKEN=\$\{OKF_RERANK_TOKEN:-\}/);
+    });
+
+    test('OKF_RERANK_ENDPOINT is emitted by ansible env.j2 (empty default)', () => {
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect({
+        found: !!vars.OKF_RERANK_ENDPOINT,
+        default: vars.OKF_RERANK_ENDPOINT ? vars.OKF_RERANK_ENDPOINT.default : null
+      }).toEqual({
+        found: true,
+        default: ''
+      });
+    });
+  });
+
+  // Story 8-6 (ADR-okf-043): the RAGAS benchmark sidecar + the okf-server
+  // knobs. Four-site parity: compose block, env template, ansible env.j2.
+  describe('Story 8-6: RAGAS benchmarking plumbing', () => {
+    test('OKF_RAGAS_URL is piped in the okf-server compose block with the sidecar default', () => {
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
+      expect(okfBlock).toMatch(/- OKF_RAGAS_URL=\$\{OKF_RAGAS_URL:-http:\/\/ragas-service:8090\}/);
+    });
+
+    test('the ragas-service compose block carries judge/embedder env with inherited defaults', () => {
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const block = full.slice(full.indexOf('  ragas-service:'), full.indexOf('  document-repository:'));
+      expect(block).toMatch(/- RAGAS_JUDGE_BASE_URL=\$\{RAGAS_JUDGE_BASE_URL:-http:\/\/vllm:8000\/v1\}/);
+      expect(block).toMatch(/- RAGAS_JUDGE_MODEL=\$\{RAGAS_JUDGE_MODEL:-\$\{VLLM_LLM_MODEL_ID:-\}\}/);
+      expect(block).toMatch(/- RAGAS_INTERNAL_SECRET=\$\{RAGAS_INTERNAL_SECRET:-\$\{OKF_INTERNAL_SECRET:-\}\}/);
+      // Embedder: EMBEDDING_MODEL_ID is the deployment's actual var (the stack
+      // has no EMBED_MODEL_ID); the TEI dialect default hits {base}/embed.
+      expect(block).toMatch(/- RAGAS_EMBED_BASE_URL=\$\{RAGAS_EMBED_BASE_URL:-http:\/\/tei-embedding-server:80\}/);
+      expect(block).toMatch(/- RAGAS_EMBED_MODEL=\$\{RAGAS_EMBED_MODEL:-\$\{EMBEDDING_MODEL_ID:-\}\}/);
+      expect(block).toMatch(/- RAGAS_EMBED_API=\$\{RAGAS_EMBED_API:-tei\}/);
+    });
+
+    test('OKF_RAGAS_TESTSET_SIZE_DEFAULT is documented in the env template with the 20 default', () => {
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*OKF_RAGAS_TESTSET_SIZE_DEFAULT=20.*$/m);
+    });
+
+    test('the answer leg token budget lands in all four sites (2026-10-22)', () => {
+      // The answer leg's initial budget was hardcoded to 800 tokens. A
+      // reasoning-capable model burns 400-700 tokens BEFORE writing a word,
+      // so every answer hit the length cap, was thrown away, and was
+      // re-called at 3200 by the adaptive ladder — two calls per question
+      // with the first one entirely wasted.
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
+      expect(okfBlock).toMatch(/- OKF_RAGAS_ANSWER_MAX_TOKENS=\$\{OKF_RAGAS_ANSWER_MAX_TOKENS:-5000\}/);
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*OKF_RAGAS_ANSWER_MAX_TOKENS=5000.*$/m);
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect(vars.OKF_RAGAS_ANSWER_MAX_TOKENS && vars.OKF_RAGAS_ANSWER_MAX_TOKENS.default).toBe('5000');
+    });
+
+    test('the benchmark rerank batch concurrency lands in all four sites (2026-10-23)', () => {
+      // Batch rerank calls are independent and scores are identical at any
+      // concurrency — the knob is transport only. 1 = the old sequential
+      // behaviour; 3 overlaps a 192-chunk pool into ~2 waves. The global
+      // in-flight ceiling is OKF_RAGAS_RUN_CONCURRENCY x this value.
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
+      expect(okfBlock).toMatch(/- OKF_RAGAS_RERANK_CONCURRENCY=\$\{OKF_RAGAS_RERANK_CONCURRENCY:-3\}/);
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*OKF_RAGAS_RERANK_CONCURRENCY=3.*$/m);
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect(vars.OKF_RAGAS_RERANK_CONCURRENCY && vars.OKF_RAGAS_RERANK_CONCURRENCY.default).toBe('3');
+    });
+
+    test('the SERVE-mode benchmark URL lands in all four sites (2026-10-23)', () => {
+      // SERVE is the benchmark default: the question goes through the SAME
+      // chatqna pipeline citizens use. whatif runs (knob experiments) ignore it.
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
+      expect(okfBlock).toMatch(
+        /- OKF_RAGAS_SERVE_URL=\$\{OKF_RAGAS_SERVE_URL:-http:\/\/chatqna-xeon-backend-server:8888\/v1\/chatqna\}/
+      );
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*OKF_RAGAS_SERVE_URL=http:\/\/chatqna-xeon-backend-server:8888\/v1\/chatqna.*$/m);
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect(vars.OKF_RAGAS_SERVE_URL && vars.OKF_RAGAS_SERVE_URL.default).toBe(
+        'http://chatqna-xeon-backend-server:8888/v1/chatqna'
+      );
+    });
+
+    test('the judge cache + liveness-horizon vars land in all four sites (2026-10-18 batch)', () => {
+      // compose: sidecar carries the cache; okf-server carries the horizon
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const ragasBlock = full.slice(full.indexOf('  ragas-service:'), full.indexOf('  document-repository:'));
+      expect(ragasBlock).toMatch(/- RAGAS_LLM_CACHE=\$\{RAGAS_LLM_CACHE:-1\}/);
+      expect(ragasBlock).toMatch(/- RAGAS_LLM_CACHE_DIR=\$\{RAGAS_LLM_CACHE_DIR:-\/tmp\/ragas-llm-cache\}/);
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
+      expect(okfBlock).toMatch(/- OKF_RAGAS_LONG_TIMEOUT_MS=\$\{OKF_RAGAS_LONG_TIMEOUT_MS:-3600000\}/);
+      expect(okfBlock).toMatch(/- OKF_RAGAS_JOB_POLL_MS=\$\{OKF_RAGAS_JOB_POLL_MS:-3000\}/);
+      // env template documents all of them
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*RAGAS_LLM_CACHE=1.*$/m);
+      expect(envText).toMatch(/^#\s*RAGAS_LLM_CACHE_DIR=\/tmp\/ragas-llm-cache.*$/m);
+      expect(envText).toMatch(/^#\s*OKF_RAGAS_LONG_TIMEOUT_MS=3600000.*$/m);
+      expect(envText).toMatch(/LIVENESS HORIZON, not a job deadline/);
+      // ansible env.j2 emits them
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect({
+        c: vars.RAGAS_LLM_CACHE && vars.RAGAS_LLM_CACHE.default,
+        d: vars.RAGAS_LLM_CACHE_DIR && vars.RAGAS_LLM_CACHE_DIR.default
+      }).toEqual({
+        c: '1',
+        d: '/tmp/ragas-llm-cache'
+      });
+      expect(vars.OKF_RAGAS_LONG_TIMEOUT_MS && vars.OKF_RAGAS_LONG_TIMEOUT_MS.default).toBe('3600000');
+    });
+
+    test('the cache-migration switch lands in all four sites (2026-10-21)', () => {
+      // RAGAS_LLM_CACHE_LEGACY: the judge identity in the cache key now
+      // carries the endpoint, so the entries the previous key wrote are
+      // unreachable. 1 lets an operator whose judge has NOT been repointed
+      // replay them (and migrate each to the new key on read); 0 is strict.
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const ragasBlock = full.slice(full.indexOf('  ragas-service:'), full.indexOf('  document-repository:'));
+      expect(ragasBlock).toMatch(/- RAGAS_LLM_CACHE_LEGACY=\$\{RAGAS_LLM_CACHE_LEGACY:-0\}/);
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*RAGAS_LLM_CACHE_LEGACY=0.*$/m);
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect(vars.RAGAS_LLM_CACHE_LEGACY && vars.RAGAS_LLM_CACHE_LEGACY.default).toBe('0');
+    });
+
+    test('the judge call-discipline vars land in all four sites (2026-10-21)', () => {
+      // RAGAS_LLM_MAX_CONCURRENCY / RAGAS_LLM_MAX_RETRIES: the upstream
+      // answered 82 of ~500 synthesis calls with 429 and 35 questions were
+      // dropped. The client now caps its own concurrency and retries a 429
+      // with jitter.
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const ragasBlock = full.slice(full.indexOf('  ragas-service:'), full.indexOf('  document-repository:'));
+      expect(ragasBlock).toMatch(/- RAGAS_LLM_MAX_CONCURRENCY=\$\{RAGAS_LLM_MAX_CONCURRENCY:-8\}/);
+      expect(ragasBlock).toMatch(/- RAGAS_LLM_MAX_RETRIES=\$\{RAGAS_LLM_MAX_RETRIES:-5\}/);
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*RAGAS_LLM_MAX_CONCURRENCY=8.*$/m);
+      expect(envText).toMatch(/^#\s*RAGAS_LLM_MAX_RETRIES=5.*$/m);
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect(vars.RAGAS_LLM_MAX_CONCURRENCY && vars.RAGAS_LLM_MAX_CONCURRENCY.default).toBe('8');
+      expect(vars.RAGAS_LLM_MAX_RETRIES && vars.RAGAS_LLM_MAX_RETRIES.default).toBe('5');
+    });
+
+    test('ragas usage telemetry is OFF in all four sites (2026-10-26)', () => {
+      // RAGAS_DO_NOT_TRACK: ragas 0.4.3 POSTs every prompt's usage event to
+      // https://t.explodinggradients.com from INSIDE the async prompt path
+      // (1 s timeout), so it blocks the event loop and the configured
+      // concurrency never overlaps. Measured in the sidecar: a warm CACHE HIT
+      // — no model call at all — cost 0.79 s, and 0.008 s with this off. The
+      // tax was ~50 min of Solar System's ~3,800-prompt graph build. It is
+      // also a sovereignty leak: per-call usage telemetry must not leave a
+      // public-sector deployment.
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const ragasBlock = full.slice(full.indexOf('  ragas-service:'), full.indexOf('  document-repository:'));
+      expect(ragasBlock).toMatch(/- RAGAS_DO_NOT_TRACK=\$\{RAGAS_DO_NOT_TRACK:-true\}/);
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*RAGAS_DO_NOT_TRACK=true.*$/m);
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect(vars.RAGAS_DO_NOT_TRACK && vars.RAGAS_DO_NOT_TRACK.default).toBe('true');
+    });
+
+    test('the scoring-leg throughput vars land in all four sites (2026-10-22)', () => {
+      // The scoring leg's worker pool was hardcoded to 8, the same number as
+      // the judge-concurrency cap, so the two ceilings could not be moved
+      // apart: 100 rows x ~13 judge calls at 8-way concurrency measured
+      // ~5.4 min per row (~8 h projected). The pool and the row batch have
+      // to be configurable together, and the per-call timeout has to be
+      // reachable from the deployment — a call that exceeds it scores NULL
+      // for its row without erroring the run.
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const ragasBlock = full.slice(full.indexOf('  ragas-service:'), full.indexOf('  document-repository:'));
+      expect(ragasBlock).toMatch(/- RAGAS_EVAL_MAX_WORKERS=\$\{RAGAS_EVAL_MAX_WORKERS:-8\}/);
+      expect(ragasBlock).toMatch(/- RAGAS_EVAL_BATCH_ROWS=\$\{RAGAS_EVAL_BATCH_ROWS:-1\}/);
+      expect(ragasBlock).toMatch(/- RAGAS_EVAL_TIMEOUT_SECONDS=\$\{RAGAS_EVAL_TIMEOUT_SECONDS:-600\}/);
+      const envText = fs.readFileSync(ENV_FILE, 'utf8');
+      expect(envText).toMatch(/^#\s*RAGAS_EVAL_MAX_WORKERS=8.*$/m);
+      expect(envText).toMatch(/^#\s*RAGAS_EVAL_BATCH_ROWS=1.*$/m);
+      expect(envText).toMatch(/^#\s*RAGAS_EVAL_TIMEOUT_SECONDS=600.*$/m);
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect(vars.RAGAS_EVAL_MAX_WORKERS && vars.RAGAS_EVAL_MAX_WORKERS.default).toBe('8');
+      expect(vars.RAGAS_EVAL_BATCH_ROWS && vars.RAGAS_EVAL_BATCH_ROWS.default).toBe('1');
+      expect(vars.RAGAS_EVAL_TIMEOUT_SECONDS && vars.RAGAS_EVAL_TIMEOUT_SECONDS.default).toBe('600');
+    });
+
+    test('the ragas vars are emitted by ansible env.j2 (inherited defaults)', () => {
+      const vars = parseAnsibleEnvVars(
+        fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+      );
+      expect({ found: !!vars.OKF_RAGAS_URL, url: vars.OKF_RAGAS_URL ? vars.OKF_RAGAS_URL.default : null }).toEqual({
+        found: true,
+        url: 'http://ragas-service:8090'
+      });
+      expect({
+        found: !!vars.RAGAS_JUDGE_BASE_URL,
+        url: vars.RAGAS_JUDGE_BASE_URL ? vars.RAGAS_JUDGE_BASE_URL.default : null
+      }).toEqual({
+        found: true,
+        url: 'http://vllm:8000/v1'
+      });
+      expect({
+        found: !!vars.RAGAS_EMBED_BASE_URL,
+        url: vars.RAGAS_EMBED_BASE_URL ? vars.RAGAS_EMBED_BASE_URL.default : null
+      }).toEqual({
+        found: true,
+        url: 'http://tei-embedding-server:80'
+      });
+      expect({ found: !!vars.RAGAS_EMBED_API, v: vars.RAGAS_EMBED_API ? vars.RAGAS_EMBED_API.default : null }).toEqual({
+        found: true,
+        v: 'tei'
+      });
+      expect({
+        found: !!vars.OKF_RAGAS_TESTSET_SIZE_DEFAULT,
+        v: vars.OKF_RAGAS_TESTSET_SIZE_DEFAULT ? vars.OKF_RAGAS_TESTSET_SIZE_DEFAULT.default : null
+      }).toEqual({
+        found: true,
+        v: '20'
+      });
+    });
+
+    test('the ragas-service image is in the ansible image list', () => {
+      const facts = fs.readFileSync(
+        path.resolve(__dirname, '../../../deploy/ansible/tasks/deploy-shared-facts.yml'),
+        'utf8'
+      );
+      expect(facts).toMatch(/name: "genie-ai-ragas-service"/);
+    });
+  });
+
+  // --- AC8: Contextual Retrieval knobs agree across compose and ansible -----
+  //
+  // The doc-context budget shipped as a hardcoded 6000 in docker-compose while
+  // the Python default was 100000 and three docs said 100000 — four surfaces,
+  // three answers, and 1,291 of 2,258 concept documents silently truncated
+  // because nobody could tell which one was live. AC7 could not catch it: its
+  // parity scope regex only matched DATAPREP_URL, so the whole contextual
+  // family sat outside the gate, and env.j2's `{% if %}` guards meant the vars
+  // carried no literal default for the comparison to read.
+  //
+  // The budget is now derived from VLLM_MAX_MODEL_LEN, which makes agreement
+  // between these surfaces load-bearing rather than cosmetic.
+  describe('AC8: Contextual Retrieval defaults agree across compose and ansible', () => {
+    const composeLines = fs.readFileSync(COMPOSE_FILE, 'utf8').split(/\r?\n/);
+    const blockStart = composeLines.findIndex((l) => /^  dataprep-arango-service:/.test(l));
+    let blockEnd = blockStart + 1;
+    while (blockEnd < composeLines.length && !/^  [a-z0-9-]+:/.test(composeLines[blockEnd])) blockEnd += 1;
+    const dataprepBlock = composeLines.slice(blockStart, blockEnd).join('\n');
+
+    const composeDefaults = {};
+    for (const m of dataprepBlock.matchAll(/\b([A-Z][A-Z0-9_]+):\s*\$\{\1(?::-([^}]*))?\}/g)) {
+      composeDefaults[m[1]] = m[2] === undefined ? '' : m[2];
+    }
+
+    const ansibleVars = parseAnsibleEnvVars(
+      fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+    );
+
+    const FAMILY = [
+      'DATAPREP_CONTEXTUAL_DOC_BUDGET',
+      'DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL',
+      'DATAPREP_CONTEXTUAL_MAX_TOKENS',
+      'CONTEXTUAL_STRATEGY',
+      'CONTEXTUAL_RETRIEVAL_ENABLED',
+      'CONTEXTUAL_LABEL_RAW'
+    ];
+
+    test('the dataprep compose block parsed (guard — a silent re-scope must not pass)', () => {
+      expect(blockStart).toBeGreaterThan(-1);
+      expect(blockEnd).toBeGreaterThan(blockStart);
+      for (const v of FAMILY) expect(composeDefaults[v]).toBeDefined();
+    });
+
+    test('compose and env.j2 agree on every contextual default', () => {
+      const problems = [];
+      for (const v of FAMILY) {
+        const a = ansibleVars[v];
+        if (!a) {
+          problems.push(`${v}: not emitted by env.j2`);
+          continue;
+        }
+        if (a.count !== 1) problems.push(`${v}: emitted ${a.count}x by env.j2 (last-wins shadowing)`);
+        if (a.default === null) {
+          problems.push(`${v}: env.j2 carries no literal default, so compose silently wins`);
+          continue;
+        }
+        if (a.default !== composeDefaults[v]) problems.push(`${v}: compose=${composeDefaults[v]} ansible=${a.default}`);
+      }
+      expect(problems).toEqual([]);
+    });
+
+    test('the doc-context budget is derived, not a fixed literal', () => {
+      // 0 = derive from VLLM_MAX_MODEL_LEN. A non-zero compose default would
+      // silently reinstate the one-number-for-every-hardware bug, because
+      // compose ALWAYS injects the variable — so "unset" never reaches Python.
+      expect(composeDefaults.DATAPREP_CONTEXTUAL_DOC_BUDGET).toBe('0');
+    });
+
+    test('CONTEXTUAL_STRATEGY defaults to per_chunk on both surfaces', () => {
+      // Two docs claimed a doc_level compose default; compose is per_chunk.
+      expect(composeDefaults.CONTEXTUAL_STRATEGY).toBe('per_chunk');
+      expect(ansibleVars.CONTEXTUAL_STRATEGY.default).toBe('per_chunk');
+    });
+
+    test('Contextual Retrieval and decoupled labelling are ON by default', () => {
+      // group_vars/all.yml documented both as false; code and compose say true.
+      expect(composeDefaults.CONTEXTUAL_RETRIEVAL_ENABLED).toBe('true');
+      expect(composeDefaults.CONTEXTUAL_LABEL_RAW).toBe('true');
+    });
+
+    test('the concept-document ceiling agrees across compose and env.j2', () => {
+      // okf-server splits a concept document above this; dataprep truncates the
+      // document context above the budget derived from VLLM_MAX_MODEL_LEN. If
+      // these two drift apart the corpus silently degrades again — documents get
+      // stored that will be truncated, or split that did not need it.
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
+      const m = okfBlock.match(/- OKF_MAX_CONCEPT_DOC_CHARS=\$\{OKF_MAX_CONCEPT_DOC_CHARS:-(\d+)\}/);
+      expect(m).not.toBeNull();
+      expect(ansibleVars.OKF_MAX_CONCEPT_DOC_CHARS).toBeDefined();
+      expect(ansibleVars.OKF_MAX_CONCEPT_DOC_CHARS.default).toBe(m[1]);
+    });
+
+    test('the ceiling is sized for the default window, not the historical 6000', () => {
+      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
+      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
+      const m = okfBlock.match(/- OKF_MAX_CONCEPT_DOC_CHARS=\$\{OKF_MAX_CONCEPT_DOC_CHARS:-(\d+)\}/);
+      // 6000 was the T4-sized literal that truncated 57% of a real corpus.
+      expect(Number(m[1])).toBeGreaterThan(200000);
+    });
+  });
+
+  // OKF feature flag (2026-10-21, merge prep): one variable parks the whole
+  // OKF stack — containers (replicas), Kong route (restore script), UI
+  // (entrypoint APP_CONFIG), BFF posture (short-circuit). Parity here guards
+  // that all four surfaces keep reading the SAME variable with the SAME
+  // default, and that the shipped default is parked (0) — main must behave
+  // pre-OKF until a deployment opts in.
+  describe('AC9: OKF feature flag consistency', () => {
+    const composeText = fs.readFileSync(COMPOSE_FILE, 'utf8');
+    const ansibleVars = parseAnsibleEnvVars(
+      fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/templates/env.j2'), 'utf8')
+    );
+    const allVarsYml = fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/group_vars/all.yml'), 'utf8');
+
+    test('every OKF container scales on OKF_ENABLED with default 0', () => {
+      for (const svc of ['okf-server:', 'pii-service:', 'ragas-service:']) {
+        const start = composeText.indexOf('  ' + svc);
+        expect(start).toBeGreaterThan(-1);
+        // Block ends at the next line indented exactly 2 spaces (the next
+        // top-level key) — body lines are 4+ so /\n  \S/ skips them.
+        const rest = composeText.slice(start + 10);
+        const next = rest.match(/\n  \S/);
+        const block = composeText.slice(start, next ? start + 10 + next.index : undefined);
+        expect(block).toMatch(/profiles: \["okf"\]/);
+        expect(block).toMatch(/replicas: \$\{OKF_ENABLED:-0\}/);
+      }
+    });
+
+    test('frontend, kong-config and backend all receive the flag', () => {
+      expect(composeText).toMatch(/VUE_APP_OKF_ENABLED=\$\{OKF_ENABLED:-0\}/);
+      // Backend + kong-config (the backend has no .env passthrough — without
+      // this entry a parked deployment leaves it timing out against the
+      // zero-replica okf-server).
+      expect((composeText.match(/- OKF_ENABLED=\$\{OKF_ENABLED:-0\}/g) || []).length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('env.j2 renders OKF_ENABLED (default 0) and all.yml pins okf_enabled 0', () => {
+      expect(ansibleVars.OKF_ENABLED).toBeDefined();
+      // `{{ okf_enabled | default('0') }}` is classified as literal default
+      // '0' (not a jinja expression) — same shape as ENABLE_OBSERVABILITY.
+      expect(ansibleVars.OKF_ENABLED.default).toBe('0');
+      expect(ansibleVars.OKF_ENABLED.defaultIsJinja).toBe(false);
+      expect(allVarsYml).toMatch(/^okf_enabled: "0"$/m);
     });
   });
   // --- Keycloak login theme marker ---

@@ -1264,14 +1264,6 @@ async function initializeServices() {
         logger.debug('QueryService.setChatHistoryService completed');
       }
       if (
-        services.chatHistoryService &&
-        services.analyticsService &&
-        typeof services.chatHistoryService.setAnalyticsService === 'function'
-      ) {
-        services.chatHistoryService.setAnalyticsService(services.analyticsService);
-        logger.debug('ChatHistoryService.setAnalyticsService completed');
-      }
-      if (
         services.adminDashboardService &&
         services.logsService &&
         typeof services.adminDashboardService.setLogsService === 'function'
@@ -1286,14 +1278,6 @@ async function initializeServices() {
       ) {
         services.adminDashboardService.setSecurityScanService(services.securityScanService);
         logger.debug('AdminDashboardService.setSecurityScanService completed');
-      }
-      if (
-        services.weatherService &&
-        services.analyticsService &&
-        typeof services.weatherService.setAnalyticsService === 'function'
-      ) {
-        services.weatherService.setAnalyticsService(services.analyticsService);
-        logger.debug('WeatherService.setAnalyticsService completed');
       }
     } catch (error) {
       logger.error('Failed to set service dependencies:', {

@@ -230,6 +230,23 @@ if ARANGO_FILTER_STRATEGY not in FILTER_STRATEGIES:
         f" got {ARANGO_FILTER_STRATEGY!r}"
     )
 
+# 1-8g-l (2026-10-11, live incident: Indonesia History — 144k chunks, 633k
+# entities, 1,046,217 LINKS_TO edges — starved EVERY chat answer 9/9: the
+# depth-1 traversal scores a 1024-dim cosine per visited edge, cannot finish
+# inside the 8s leg budget, and the abandoned leg discarded its own already-
+# fused 20 on-point documents → fused=0 → the LLM abstained ungrounded).
+# MAX_LINKS: skip the traversal entirely above this many <GRAPH>_LINKS_TO
+# edges — the fused vector results stand alone (0 = legacy unbounded).
+# Live calibration: indonesia 1,046,217 (skip), gov-uk 80,535 / ncd 8,546 /
+# slaughterhouse 1,623 (keep) — a 300k default separates broken from healthy
+# with >3x margin on both sides.
+ARANGO_TRAVERSAL_MAX_LINKS = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_MAX_LINKS", "300000"))
+# Per-seed-entity edge cap interpolated into the traversal AQL — bounds the
+# worst-case cosine evaluations when a hub entity carries thousands of
+# LINKS_TO edges (0 = legacy unbounded). Generous: healthy graphs never
+# approach it; pathological hub nodes no longer dominate the leg budget.
+ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE", "2000"))
+
 # Hybrid BM25 + RRF Retrieval (Contextual Retrieval Part B)
 # Opt-in lexical (BM25) channel over <GRAPH>_SOURCE.text, fused with the dense
 # results via weighted Reciprocal Rank Fusion. OFF = true no-op (dense-only).
@@ -240,6 +257,93 @@ HYBRID_BM25_CANDIDATES = int(os.getenv("RETRIEVER_HYBRID_BM25_CANDIDATES", "50")
 HYBRID_DENSE_WEIGHT = float(os.getenv("RETRIEVER_HYBRID_DENSE_WEIGHT", "1.0"))
 HYBRID_LEXICAL_WEIGHT = float(os.getenv("RETRIEVER_HYBRID_LEXICAL_WEIGHT", "1.0"))
 HYBRID_BM25_ANALYZER = os.getenv("RETRIEVER_HYBRID_BM25_ANALYZER", "text_en")
+
+# Story 1.1/1.4/1.5 (ADR-039 D4/D5/D8) — multi-graph fan-out governance.
+# The retriever reads `_encoded_graph_names` from the search_start carrier
+# (Story 1.0b / core/label_contract.py). The carrier carries ≥1 graph
+# (`_fanout_should_engage`) and the fan-out engages: per-leg timeout, the
+# dedicated extraction pool, fusion. Only the EMPTY carrier keeps the
+# original single-graph path (D8: legacy byte-identical against
+# ARANGO_GRAPH_NAME) — a single-graph okf_only carrier is deliberately
+# fan-out-managed.
+# The chat-side resolver sets per-request overrides via kwargs (Story 1.2).
+# Defaults preserve legacy behavior — fan-out is opt-in via RETRIEVER_FANOUT_ENABLED.
+FANOUT_ENABLED = os.getenv("RETRIEVER_FANOUT_ENABLED", "true").lower() == "true"
+FANOUT_MAX_GRAPHS = int(os.getenv("RETRIEVER_FANOUT_MAX_GRAPHS", "5"))
+# 8000ms (was 2000): with legs now running on worker threads the timeout is
+# actually enforceable — and 2s zeroed every large repo (bali/indonesia/
+# www-gov-uk need 5-20s warm). 8s bounds a fan-out at 2 semaphore waves to
+# ~16s worst-case while keeping the skip-on-timeout contract (ADR-039 D8).
+FANOUT_PER_GRAPH_TIMEOUT_MS = int(os.getenv("RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS", "8000"))
+# Story 1.5 (ADR-039 D4): tiered option-(d) fan-out caps — within a graph the
+# fused candidate pool is hard-capped per graph and globally before fusion.
+FANOUT_CANDIDATE_CAP_PER_GRAPH = int(os.getenv("RETRIEVER_FANOUT_CANDIDATE_CAP_PER_GRAPH", "50"))
+FANOUT_CANDIDATE_CAP_GLOBAL = int(os.getenv("RETRIEVER_FANOUT_CANDIDATE_CAP_GLOBAL", "200"))
+# Tier-1 curated-spine hops over `source='author'` edges (ADR-039 D4).
+FANOUT_SPINE_MAX_HOPS = int(os.getenv("RETRIEVER_FANOUT_SPINE_MAX_HOPS", "2"))
+# Tier-2 extracted-relation hop cap (kept low — extracted edges are noisy).
+FANOUT_EXTRACTED_HOP_CAP = int(os.getenv("RETRIEVER_FANOUT_EXTRACTED_HOP_CAP", "1"))
+
+# Story 1.3 (ADR-039 routing tier) — query-affinity graph selection. Before the
+# fan-out spawns legs, a global chunk-level competition decides which carrier
+# graphs to search: k=40 approximate-NN probes per OKF graph (parallel), merged
+# into one global top-K ranking; a graph qualifies iff it contributes >=
+# ROUTE_MIN_CHUNKS chunks. Sticky conversation graphs (carrier ::sticky:)
+# bypass qualification. Legacy GRAPH is never routed. Never all-graphs EXCEPT
+# the degraded path (probes failed after ROUTE_RETRY attempts — logged loudly).
+ROUTE_ENABLED = os.getenv("RETRIEVER_ROUTE_ENABLED", "true").lower() == "true"
+ROUTE_TOP_K = int(os.getenv("RETRIEVER_ROUTE_TOP_K", "40"))
+ROUTE_MIN_CHUNKS = int(os.getenv("RETRIEVER_ROUTE_MIN_CHUNKS", "3"))
+ROUTE_PROBE_TIMEOUT_MS = int(os.getenv("RETRIEVER_ROUTE_PROBE_TIMEOUT_MS", "2000"))
+ROUTE_RETRY = int(os.getenv("RETRIEVER_ROUTE_RETRY", "1"))
+
+# Story 1-8 MR-D (David 2026-10-08: "it only needs to look at the head …
+# it is just signalling") — vectorized-head affinity joins the global chunk
+# competition: each carrier graph's okf_repositories.head contributes ONE
+# pseudo-row (RETRIEVER_ROUTE_HEAD_WEIGHT × cosine(query, head)) to the
+# top-K pool. The head row adds +1 to its graph's qualification count and
+# can crowd a competitor's chunks out of the top-K. Guards: head.dim must
+# equal the query embedding dim; a recorded head model must be consistent
+# with this service's embedding model when both are known. Head fetch is
+# BEST-EFFORT — its failure never degrades routing (the probe results
+# alone remain valid). 0.0 disables the signal entirely (rollback knob).
+ROUTE_HEAD_WEIGHT = float(os.getenv("RETRIEVER_ROUTE_HEAD_WEIGHT", "1.0"))
+# Story 1-8a — the forbidden/noise GATE (David: "under no circumstances
+# should 'fun in Indonesia' be routed to the NCD repo"). A head's pseudo-row
+# is emitted only when cosine(q, head.vector) − cosine(q, forbidden centroid)
+# exceeds this margin; otherwise the head contributes NO vote. Calibrated on
+# NCD 2026-10-08: suppressed queries span [−0.062, −0.008], selected ≥ +0.024
+# ("genetic risk factors for cancer" — borderline IN, per David). Heads
+# without a forbidden centroid claim freely (gate degrades open).
+ROUTE_HEAD_MARGIN = float(os.getenv("RETRIEVER_ROUTE_HEAD_MARGIN", "0.01"))
+# Story 1-8b (David 2026-10-09: "forbidden is forbidden — a hard contract,
+# it should immediately score zero") — the head pseudo-row is emitted only
+# when ALL of: FLOOR (score ≥ this — unrelated queries score 0.32-0.48 on
+# any head and the margin rule is blind to them; "capital of France"
+# claimed at +0.012 under margin-only. Calibrated: unrelated ≤ 0.484,
+# legit claims ≥ 0.614 → 0.55 mid-gap), VETO (no single forbidden tag
+# matches the query at/above this — mixed-subject queries like
+# genetics+cancer slip the averaged centroid but not their dominant tag;
+# failing queries ≥ 0.567 vs their tag, legit claims ≤ 0.529), and the
+# 1-8a MARGIN. Heads without per-tag vectors (pre-1-8b rebuild) skip the
+# veto; heads without a forbidden centroid skip margin (1-8a semantics).
+ROUTE_HEAD_FLOOR = float(os.getenv("RETRIEVER_ROUTE_HEAD_FLOOR", "0.55"))
+ROUTE_FORBIDDEN_TAG_MAX = float(os.getenv("RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX", "0.55"))
+# Story 1-8f3 (David 2026-10-10: "CLEARLY IT SHOULD HAVE HIT THE NCD
+# Information graph (only)") — heads SUPERSEDE chunk competition. When ≥1
+# gate-passing head claims the query, ONLY claimed graphs route and the
+# chunk-level probe is SKIPPED entirely: headless corpora (bulk-ingested,
+# untagged, no head to gate) must not pollute the pool, and probing them
+# was the latency (live: a 4-graph probe across ~100k-chunk graphs cost
+# 78s of a 122s answer). The legacy GRAPH leg is ALSO excluded under an
+# active claim (D8 superseded for the claimed case — live: 20 unrelated
+# Kenya legacy chunks were the only content reranked for an NCD-routed
+# asthma query when the NCD leg returned 0 documents). With NO claims the
+# legacy chunk competition runs unchanged (un-headed deployments keep
+# Story 1.3 behavior; degraded all-graph fallback untouched). false
+# restores the 1-8 MR-D pool semantics (head rows as one vote among
+# chunks, GRAPH always searched).
+ROUTE_HEADS_SUPERSEDE = os.getenv("RETRIEVER_ROUTE_HEADS_SUPERSEDE", "true").lower() == "true"
 
 # Summarizer Configuration
 SUMMARIZER_ENABLED = os.getenv("RETRIEVER_SUMMARIZER_ENABLED", "false").lower() == "true"

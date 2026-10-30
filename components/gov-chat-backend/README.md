@@ -733,7 +733,6 @@ await analyticsService.init();
 // Step 4: Set cross-service dependencies
 queryService.setAnalyticsService(analyticsService);
 queryService.setChatHistoryService(chatHistoryService);
-chatHistoryService.setAnalyticsService(analyticsService);
 ```
 
 ### Service Communication Patterns

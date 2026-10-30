@@ -12,7 +12,15 @@ const { logger } = require('../../shared-lib');
 const PUBLIC_PATHS = ['/health', '/api-docs', '/api', '/api-docs.json'];
 
 let jwks = null;
-let expectedIssuer = null;
+// DW-431 (review 2026-10-29 round 3): the acceptable issuers are a LIST, not
+// one string. The old single `expectedIssuer` was overwritten in sequence —
+// KEYCLOAK_PUBLIC_URL first, then KEYCLOAK_BROWSER_ISSUER — so a deployment
+// with both set validated ONLY the browser issuer and rejected public-issuer
+// tokens, despite this block's "alongside" comment. Base + each distinct
+// alias now accumulate; jwtVerify accepts an issuer array. Single-alias
+// deployments keep the old behavior (a one-element array validates exactly
+// the one issuer the old string did).
+let expectedIssuers = [];
 
 /**
  * Get or create the JWKS key set (lazy initialization with caching)
@@ -23,9 +31,51 @@ async function getJWKS() {
   if (!jwks) {
     const keycloakUrl = appConfig.security.keycloakUrl;
     const realm = appConfig.security.keycloakRealm;
-    const jwksUri = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/certs`;
-    expectedIssuer = appConfig.security.keycloakExpectedIssuer || `${keycloakUrl}/realms/${realm}`;
+    // DAVID 2026-09-15: KEYCLOAK_JWKS_URL host override matches okf-server's
+    // shared/lib/keycloak-auth-service.js — Keycloak's discovery hands back
+    // jwks_uri based on KC_HOSTNAME, which in local Docker resolves to
+    // localhost:8080 (unreachable from containers). Operators set this to a
+    // container-reachable host. Falls back to the historical
+    // `${keycloakUrl}/realms/.../certs` derivation when unset.
+    const jwksHostOverride = process.env.KEYCLOAK_JWKS_URL;
+    const jwksUri = jwksHostOverride
+      ? jwksHostOverride
+      : `${keycloakUrl}/realms/${realm}/protocol/openid-connect/certs`;
+    // Merge 2026-10-22: main added KEYCLOAK_EXPECTED_ISSUER (appConfig
+    // `security.keycloakExpectedIssuer`) to pin the validated `iss`. It says
+    // the same thing as our two aliases below via a different variable, so the
+    // explicit pin becomes the base value and the aliases layer on top only
+    // when it is unset — a pin is never silently overridden by an alias.
+    const pinnedIssuer = appConfig.security.keycloakExpectedIssuer;
+    expectedIssuers = [pinnedIssuer || `${keycloakUrl}/realms/${realm}`];
+    // Split internal/public OIDC URLs (same pattern as shared/lib
+    // keycloak-auth-service): JWKS is fetched via the internal KEYCLOAK_URL
+    // (reachable on the container network) while tokens minted through the
+    // public endpoint carry the public issuer. KEYCLOAK_PUBLIC_URL ADDS an
+    // accepted issuer — no-op when unset (single-URL deployments).
+    const publicUrl = pinnedIssuer ? null : process.env.KEYCLOAK_PUBLIC_URL;
+    if (publicUrl) {
+      const publicIssuer = `${publicUrl.replace(/\/$/, '')}/realms/${realm}`;
+      if (!expectedIssuers.includes(publicIssuer)) {
+        logger.info(`[KEYCLOAK-AUTH] Issuer alias: also validating ${publicIssuer} (JWKS via internal ${keycloakUrl})`);
+        expectedIssuers.push(publicIssuer);
+      }
+    }
+    // DAVID 2026-09-15: browser tokens minted via the nginx /auth path carry
+    // the issuer `https://localhost/auth/realms/genie` — a path-prefix alias
+    // (/auth/realms/<realm>) that neither the internal nor the public URL
+    // produces. jwtVerify checks issuer as a literal match, so a mismatched
+    // path drops the token with JWTClaimValidationFailed. Honor
+    // KEYCLOAK_BROWSER_ISSUER as another accepted issuer ALONGSIDE the
+    // already-aliased ones (it used to overwrite them — DW-431) — no-op when
+    // unset (single-URL deployments).
+    const browserIssuer = pinnedIssuer ? null : process.env.KEYCLOAK_BROWSER_ISSUER;
+    if (browserIssuer && !expectedIssuers.includes(browserIssuer)) {
+      logger.info(`[KEYCLOAK-AUTH] Browser issuer alias: also validating ${browserIssuer}`);
+      expectedIssuers.push(browserIssuer);
+    }
     logger.info(`[KEYCLOAK-AUTH] Initializing JWKS from ${jwksUri}`);
+    logger.info(`[KEYCLOAK-AUTH] Will validate tokens with issuers=${expectedIssuers.join(', ')}`);
     jwks = jose.createRemoteJWKSet(new URL(jwksUri));
   }
   return jwks;
@@ -59,6 +109,21 @@ function mapRole(roles) {
   }
   if (roles.includes('dataprep-service')) {
     return 'dataprep-service';
+  }
+  // Story 2.9.1: the okf-server orchestrator's service-account token — must
+  // map verbatim (like dataprep-service), else the scalar falls through to the
+  // first role ('offline_access') and authorizeRole rejects it.
+  if (roles.includes('okf-service')) {
+    return 'okf-service';
+  }
+  // tools-admin super-role (fileRoutes authorizeRole lists it): same verbatim
+  // mapping rule — a tools-admin USER token's realm roles are typically
+  // ['default-roles-genie', 'offline_access', 'uma_authorization',
+  // 'tools-admin'], so without this the scalar falls through to
+  // 'Default-roles-genie' and every tools-admin grant is dead for most tokens
+  // (review 2026-10-29).
+  if (roles.includes('tools-admin')) {
+    return 'tools-admin';
   }
   return roles[0].charAt(0).toUpperCase() + roles[0].slice(1);
 }
@@ -106,13 +171,33 @@ const authenticateToken = async (req, res, next) => {
 
     let decoded;
     try {
-      // jwtVerify validates: signature, issuer, expiration, and not-before
+      // jwtVerify validates: signature, issuer (any of the acceptable
+      // issuers — jose accepts an array), expiration, and not-before
       const { payload } = await jose.jwtVerify(token, keySet, {
-        issuer: expectedIssuer,
+        issuer: expectedIssuers,
         requiredClaims: ['iss', 'exp']
       });
       decoded = payload;
     } catch (err) {
+      // [DIAG 2026-09-15] Publish 401 root cause — log full token-vs-expected
+      // mismatch (issuer / signature / expiration) so the next 401 is
+      // diagnosable from the container log alone. The payload is decoded ONCE
+      // (base64url — no padding hack, which breaks unpadded base64url tokens).
+      let diagClaims = null;
+      try {
+        diagClaims = JSON.parse(Buffer.from(String(token).split('.')[1], 'base64url').toString());
+      } catch {
+        diagClaims = null; // unparseable token — the null fields say so
+      }
+      logger.error('[KEYCLOAK-AUTH] jwtVerify failed', {
+        path,
+        err_name: err && err.name,
+        err_code: err && err.code,
+        err_message: err && err.message,
+        expected_issuers: expectedIssuers,
+        token_issuer: (diagClaims && diagClaims.iss) || 'unparseable',
+        token_exp: (diagClaims && diagClaims.exp) || 0
+      });
       if (err.name === 'JWTExpired') {
         return res.status(401).json({
           error: 'TOKEN_EXPIRED',

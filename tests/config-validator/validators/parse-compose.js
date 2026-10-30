@@ -7,9 +7,16 @@ const fs = require('fs');
  * which is NOT valid YAML. Use regex pattern matching on raw file content,
  * NOT js-yaml for variable extraction.
  *
- * Regex: /\$\{([A-Z_][A-Z0-9_]*)(?::-([^}]*))?\}/g
+ * Regex: /\$\{([A-Z_][A-Z0-9_]*)(?::?-((?:[^{}]|\$\{[^}]*\})*))?\}/g
  *   Group 1: variable name
  *   Group 2: default value (optional, may be empty string for ${VAR:-})
+ *
+ * Both compose separator forms are accepted:
+ *   ${VAR:-default} — default applies when VAR is unset OR empty
+ *   ${VAR-default}  — default applies when VAR is unset ONLY (an explicitly
+ *                     empty value passes through; used by OKF_SCOPE_MODE,
+ *                     where empty must reach the container as explicit
+ *                     garbage, not be silently defaulted)
  *
  * @param {string} filePath - Path to docker-compose.yaml
  * @returns {Array<{ name: string, default: string|null, hasDefault: boolean, raw: string }>}
@@ -26,18 +33,24 @@ function parseComposeEnvVars(filePath) {
     .split('\n')
     .filter((line) => !line.trim().startsWith('#'))
     .join('\n');
-  // Regex: /\$\{([A-Z_][A-Z0-9_]*)(?::-((?:[^{}]|\$\{[^}]*\})*))?\}/g
+  // Regex: /\$\{([A-Z_][A-Z0-9_]*)(?::?-((?:[^{}]|\$\{[^}]*\})*))?\}/g
   // Default group uses (?:[^{}]|\$\{[^}]*\})* to handle ONE level of nested
-  // ${...} in defaults (e.g. ${VAR:-${OTHER:-fallback}}).
-  const regex = /\$\{([A-Z_][A-Z0-9_]*)(?::-((?:[^{}]|\$\{[^}]*\})*))?\}/g;
+  // ${...} in defaults (e.g. ${VAR:-${OTHER:-fallback}}). The separator is
+  // :?- (optional colon, required dash) so both ${VAR:-d} and ${VAR-d}
+  // (unset-only) parse.
+  const regex = /\$\{([A-Z_][A-Z0-9_]*)(?::?-((?:[^{}]|\$\{[^}]*\})*))?\}/g;
   const seen = new Map();
 
   let match;
   while ((match = regex.exec(codeLines)) !== null) {
     const name = match[1];
     const rawDefault = match[2];
-    // ${VAR:-} means default is empty string; ${VAR} means no default at all
-    const hasDefault = match[0].includes(':');
+    // Group PARTICPATION distinguishes the forms (match[0].includes(':')
+    // would misclassify the unset-only ${VAR-default} as "no default"):
+    //   ${VAR}    → group undefined → no default
+    //   ${VAR:-}  → group ''        → default is empty string
+    //   ${VAR-d}  → group 'd'       → default 'd' (unset-only)
+    const hasDefault = match[2] !== undefined;
     const defaultVal = hasDefault ? rawDefault : null;
 
     if (!seen.has(name)) {
@@ -178,7 +191,10 @@ function parseComposeImages(filePath) {
     // Image reference: 4-space (or deeper) indent inside a service block
     const imageMatch = line.match(/^ {4,}image:\s*(.+)$/);
     if (imageMatch && currentService) {
-      const image = imageMatch[1].trim().replace(/\s+#.*$/, "").trim();
+      const image = imageMatch[1]
+        .trim()
+        .replace(/\s+#.*$/, '')
+        .trim();
       results.push({
         service: currentService,
         image,
@@ -214,7 +230,13 @@ function parseAnsibleImages(filePath) {
     if (trimmed.startsWith('#') || trimmed === '') continue;
     const match = trimmed.match(/^([\w]+_image):\s*(.+)$/);
     if (match) {
-      results.push({ name: match[1], image: match[2].trim().replace(/\s+#.*$/, "").trim() });
+      results.push({
+        name: match[1],
+        image: match[2]
+          .trim()
+          .replace(/\s+#.*$/, '')
+          .trim()
+      });
     }
   }
   return results;
@@ -256,13 +278,26 @@ function parseGitlabCiImages(filePath) {
     // Detect image reference (any indent)
     const imageMatch = trimmed.match(/^image:\s*(.+)$/);
     if (imageMatch) {
-      results.push({ job: currentJob, image: imageMatch[1].trim().replace(/\s+#.*$/, "").trim() });
+      results.push({
+        job: currentJob,
+        image: imageMatch[1]
+          .trim()
+          .replace(/\s+#.*$/, '')
+          .trim()
+      });
     }
   }
   return results;
 }
 
-module.exports = { parseComposeEnvVars, crossReference, parseComposeImages, parseAnsibleImages, parseGitlabCiImages, parseComposeServiceContracts };
+module.exports = {
+  parseComposeEnvVars,
+  crossReference,
+  parseComposeImages,
+  parseAnsibleImages,
+  parseGitlabCiImages,
+  parseComposeServiceContracts
+};
 
 /**
  * Extract per-service structural contracts (profiles + deploy.replicas) from
@@ -387,8 +422,8 @@ function parseComposeServiceContracts(filePath) {
     }
 
     // profiles: [name1, name2] or profiles: name1
-    const profilesMatch = trimmed.match(/^profiles:\s*\[([^\]]*)\]\s*$/) ||
-      trimmed.match(/^profiles:\s*\[?\s*([^\]]+?)\s*\]?\s*$/);
+    const profilesMatch =
+      trimmed.match(/^profiles:\s*\[([^\]]*)\]\s*$/) || trimmed.match(/^profiles:\s*\[?\s*([^\]]+?)\s*\]?\s*$/);
     if (profilesMatch && currentService) {
       const raw = profilesMatch[1];
       currentProfiles = raw
@@ -404,7 +439,10 @@ function parseComposeServiceContracts(filePath) {
       // Only treat as deploy.replicas if we're inside a `deploy:` block (indented ≥ 6 spaces)
       const indentMatch = line.match(/^( +)replicas:/);
       if (indentMatch && indentMatch[1].length >= 6) {
-        currentReplicas = replicasMatch[1].trim().replace(/\s+#.*$/, '').trim();
+        currentReplicas = replicasMatch[1]
+          .trim()
+          .replace(/\s+#.*$/, '')
+          .trim();
         currentReplicasLine = i + 1;
       }
     }

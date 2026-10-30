@@ -1,5 +1,3 @@
-// src/i18n/locales/de.js
-
 export default {
   countries: {
     AF: 'Afghanistan',
@@ -43,7 +41,7 @@ export default {
     CG: 'Kongo',
     CD: 'Kongo, Demokratische Republik',
     CR: 'Costa Rica',
-    CI: 'Elfenbeinküste',
+    CI: 'Côte d’Ivoire',
     HR: 'Kroatien',
     CU: 'Kuba',
     CY: 'Zypern',
@@ -219,18 +217,16 @@ export default {
     monthlyActiveUsers: 'Monatlich aktive Benutzer (MAU)',
     fromLastMonth: 'vom letzten Monat',
     today: 'Heute',
-    // --- UPDATED TABS ---
     tabs: {
       overview: 'Systemzustand',
-      hierarchy: 'Wissenshierarchie', // NEW
-      documents: 'Dokumentenverwaltung', // NEW
+      hierarchy: 'Wissenshierarchie',
+      documents: 'Dokumentenverwaltung',
       database: 'Datenbank',
       logs: 'Protokolle',
-      queryInspector: 'Abfrage-Inspektor',
       security: 'Sicherheit',
-      users: 'Benutzer'
+      users: 'Benutzer',
+      models: 'Modelle'
     },
-    // --- NEW KEYS ---
     contentManagement: 'INHALTSVERWALTUNG',
     knowledgeHierarchy: 'Wissenshierarchie',
     documentManagement: 'Dokumentenverwaltung',
@@ -247,7 +243,6 @@ export default {
       defaultTitle: 'Bestätigen',
       defaultMessage: 'Sind Sie sicher?'
     },
-    // --- END NEW KEYS ---
     systemHealthStatus: 'Systemzustandsstatus',
     runDiagnostics: 'Diagnose ausführen',
     resourceUsage: 'Ressourcennutzung',
@@ -446,10 +441,8 @@ export default {
       lineNumbers: 'Zeilennummern',
       showLess: 'Weniger anzeigen',
       showMore: 'Alle Probleme anzeigen',
-      // --- NEW KEY ---
       lastScanJustNow: 'Gerade eben'
     },
-    // --- NEW OBJECT ---
     hierarchy: {
       title: 'Wissenshierarchie-Verwaltung (Hinweis: immer Englisch - Übersetzungen hinzufügen)',
       addCategory: 'Neue Kategorie hinzufügen',
@@ -489,7 +482,6 @@ export default {
       deleteErrorService: 'Fehler beim Löschen des Dienstes.',
       duplicateLangError: 'Doppelte Sprachen in den Übersetzungen gefunden. Bitte entfernen Sie sie.'
     },
-    // --- NEW OBJECT ---
     documents: {
       title: 'Dokumentenverwaltung',
       addLink: 'Von Link hinzufügen',
@@ -499,11 +491,9 @@ export default {
       statusPending: 'Ausstehend',
       statusIngested: 'Aufgenommen',
       statusRetracted: 'Zurückgezogen',
-      // --- NEW STATUSES ADDED ---
       statusIngesting: 'In Aufnahme',
       statusError: 'Aufnahmefehler',
       statusWarning: 'Aufgenommen m. Warnungen',
-      // ---
       ingestSelected: 'Ausgewählte aufnehmen',
       colFileName: 'Dateiname',
       colStatus: 'Status',
@@ -527,16 +517,26 @@ export default {
       retractQueuedSuccess: '{count} Datei(en) wurden zur Zurückziehung in die Warteschlange gestellt.',
       retractQueuedError: 'Während des Batch-Zurückziehungsprozesses ist ein Fehler aufgetreten.',
       retractPartialFailure: '{successCount} von {count} Datei(en) zurückgezogen. Fehlgeschlagen: {detail}',
+      deleteSelected: 'Delete Selected',
+      confirmDeleteTitle: 'Confirm Batch Deletion',
+      confirmDeleteSelected:
+        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
+      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
+      deleteQueuedError: 'An error occurred during the batch deletion process.',
+      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
+      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
+      deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
       retractAllFailed: 'Alle {count} Datei(en) fehlgeschlagen: {detail}',
       uploadSuccessMultiple: '{count} Datei(en) erfolgreich hochgeladen.',
       linkSubmitSuccess: 'Erfolgreich gecrawlt und "{fileName}" gespeichert.',
       actionSuccess: 'Aktion "{action}" für Datei {fileId} war erfolgreich.',
-      metadataUpdateSuccess: 'Metadaten für Datei {fileId} wurden aktualisiert.'
+      metadataUpdateSuccess: 'Metadaten für Datei {fileId} wurden aktualisiert.',
+      deletePartialNotice:
+        "{'{'{'}'}blocked{'}'} ausgewählte Datei(en) können nicht gelöscht werden ({'{'{'}'}reason{'}'}) — nur die anderen {'{'{'}'}n{'}'} werden gelöscht.",
+      confirmDeleteSkipped:
+        "{'{'{'}'}count{'}'} inginierte/in Arbeit befindliche Datei(en) werden ÜBERSPRUNGEN — erst zurückziehen, dann löschen."
     },
     queryInspector: {
-      title: 'Abfrage-Inspektor',
-      backToList: 'Zurück zur Liste',
-      detailTitle: 'Abfrage-Inspektor',
       search: 'Suchen',
       searchPlaceholder: 'Abfragetext suchen...',
       minConfidence: 'Min. Konfidenz',
@@ -546,47 +546,50 @@ export default {
       reset: 'Zurücksetzen',
       colTime: 'Zeit',
       colQuestion: 'Benutzerfrage',
-      colScope: 'Bereich',
-      colAbstention: 'Verzicht',
       colConfidence: 'Konfidenz',
       colResponseTime: 'Antwortzeit',
       colSources: 'Quellen',
-      colFeedback: 'Benutzerfeedback',
+      colFeedback: 'Feedback',
       colActions: 'Aktionen',
-      inspect: 'Untersuchen',
+      inspect: 'Inspizieren',
+      noResults: 'Es wurden keine Abfragen gefunden, die Ihren Filtern entsprechen.',
       prev: 'Zurück',
+      pageInfo: 'Seite {current} von {total} ({count} gesamt)',
       next: 'Weiter',
-      pageInfo: 'Seite {current} von {total} ({count} insgesamt)',
-      noResults: 'Keine Abfragen entsprechen Ihren Filtern.',
-      loadError: 'Abfragen konnten nicht geladen werden.',
-      abstained: 'Verzichtet',
-      unfiltered: 'Ungefiltert',
-      scopeNotRecorded: 'Nicht aufgezeichnet',
+      backToList: 'Zurück zur Liste',
+      detailTitle: 'Abfrage-Inspektor',
       sectionQuestion: 'Benutzerfrage',
       user: 'Benutzer',
       time: 'Zeit',
       responseTime: 'Antwortzeit',
       mode: 'Modus',
-      sectionContext: 'Kontext',
-      scopeFiltered: 'Bereich, der gefiltert hat',
-      category: 'Angeforderte Kategorie',
-      serviceLabels: 'Angeforderte Service-Labels',
+      sectionContext: 'Kontext (An RAG gesendete Labels)',
+      category: 'Kategorie',
+      serviceLabels: 'Dienst-Labels',
       language: 'Sprache',
-      sectionAbstention: 'Verzicht',
-      sectionMessages: 'An die Pipeline gesendete Nachrichten',
-      sectionDocuments: 'Abrufene Dokumente (Ergebnisse der Vektordatenbank)',
-      score: 'Score',
+      sectionMessages: 'An Pipeline gesendete Nachrichten',
+      sectionDocuments: 'Abgerufene Dokumente (Vector DB Ergebnisse)',
+      score: 'Ergebnis',
       labels: 'Labels',
       viewDoc: 'Dokument anzeigen',
       noDocuments: 'Für diese Abfrage wurden keine Quelldokumente abgerufen.',
       sectionResponse: 'LLM-Antwort',
-      confidenceScore: 'Konfidenz-Score',
+      confidenceScore: 'Konfidenzwert',
       retrievalConfidenceScore: 'Abruf-Konfidenz',
-      selfConfidence: 'Selbst-Konfidenz (LLM)',
-      sectionFeedback: 'Benutzerfeedback',
+      selfConfidence: 'Selbstkonfidenz (LLM)',
+      sectionFeedback: 'Benutzer-Feedback',
       rating: 'Bewertung',
       comment: 'Kommentar',
-      providedAt: 'Übermittelt am',
+      providedAt: 'Bereitgestellt am',
+      loadError: 'Abfragen konnten nicht geladen werden.',
+      title: 'Abfrage-Inspektor',
+      colScope: 'Bereich',
+      colAbstention: 'Verzicht',
+      abstained: 'Verzichtet',
+      unfiltered: 'Ungefiltert',
+      scopeNotRecorded: 'Nicht aufgezeichnet',
+      scopeFiltered: 'Bereich, der gefiltert hat',
+      sectionAbstention: 'Verzicht',
       feedbackPositive: 'Positiv',
       feedbackNeutral: 'Neutral',
       feedbackNegative: 'Negativ',
@@ -594,12 +597,9 @@ export default {
       noResponseRecorded: 'Keine Antwort aufgezeichnet',
       notAvailable: 'N/V',
       notAvailableNoSentinel: 'N/V (kein Sentinel-Wert)',
-      abstentionNoDocuments:
-        'Für diese Abfrage wurde kein Dokument abgerufen. Die Antwort hat keine Dokument-Unterstützung.',
-      abstentionRerankerSelectedNothing:
-        'Der Abruf traf auf Dokumente, aber der Reranker behielt keinen davon. Der Bereich war in Ordnung — die Antwort hat keine Dokument-Unterstützung.',
-      abstentionRerankerInput:
-        'Der Reranker hat eine übermäßig große Eingabe abgelehnt (ein Problem auf der Ingestion-Seite). Die Antwort hat keine Dokument-Unterstützung.',
+      abstentionRerankerInput: 'Der Reranker lehnte eine zu große Eingabe ab (ein Problem auf der Ingestion-Seite). Die Antwort hat keine Dokumentgrundlage.',
+      abstentionRerankerSelectedNothing: 'Der Abruf fand Dokumente, aber der Reranker behielt keines davon. Der Scope war in Ordnung — die Antwort hat keine Dokumentgrundlage.',
+      abstentionNoDocuments: 'Für diese Abfrage wurde kein Dokument abgerufen. Die Antwort hat keine Dokumentgrundlage.',
       abstentionUnspecified: 'Die Antwort hat keine Dokument-Unterstützung.'
     }
   },
@@ -623,7 +623,7 @@ export default {
     },
     day: 'Tag',
     noData: 'Keine Daten',
-    notAvailable: 'N/A',
+    notAvailable: 'N/V',
     topQueries: 'Top-Anfragen',
     categoryDistribution: 'Nutzung nach Wissensbereich',
     usageTrend: 'Nutzungstrend'
@@ -740,7 +740,7 @@ export default {
     profile: 'Mein Profil',
     toggleSidebar: 'Seitenleiste umschalten',
     changeLanguage: 'Sprache ändern',
-    administration: 'Administration',
+    administration: 'Verwaltung',
     languages: {
       english: 'Englisch',
       french: 'Französisch',
@@ -868,108 +868,60 @@ export default {
   leftPanel: {
     cat1: {
       name: '1. Identität & Zivilregistrierung',
-      children: [
-        'Geburtsurkunden',
-        'Personalausweise',
-        'Reisepässe',
-        'Heirats- und Sterbeurkunden',
-        'Wählerregistrierung'
-      ]
+      children: 'Geburtsurkunden,Personalausweise,Reisepässe,Heirats- und Sterbeurkunden,Wählerregistrierung'
     },
     cat2: {
       name: '2. Gesundheitswesen & Sozialdienste',
-      children: [
-        'Zugang zu öffentlichem Gesundheitswesen',
-        'Impfprogramme',
-        'Krankenversicherung',
-        'Behinderungsleistungen',
-        'Wohlfahrt und Lebensmittelhilfe'
-      ]
+      children:
+        'Zugang zu öffentlichem Gesundheitswesen,Impfprogramme,Krankenversicherung,Behinderungsleistungen,Wohlfahrt und Lebensmittelhilfe'
     },
     cat3: {
       name: '3. Bildung & Lernen',
-      children: [
-        'Öffentliche Schulen und Universitäten',
-        'Stipendien und Studienkredite',
-        'Erwachsenenbildungsprogramme',
-        'Online-Lernressourcen'
-      ]
+      children:
+        'Öffentliche Schulen und Universitäten,Stipendien und Studienkredite,Erwachsenenbildungsprogramme,Online-Lernressourcen'
     },
     cat4: {
       name: '4. Beschäftigung & Arbeitsdienste',
-      children: [
-        'Arbeitssuche und Arbeitslosenunterstützung',
-        'Arbeitnehmerschutz und Arbeitsrechte',
-        'Arbeitssicherheitsvorschriften',
-        'Fähigkeitstraining und Ausbildungen'
-      ]
+      children:
+        'Arbeitssuche und Arbeitslosenunterstützung,Arbeitnehmerschutz und Arbeitsrechte,Arbeitssicherheitsvorschriften,Fähigkeitstraining und Ausbildungen'
     },
     cat5: {
       name: '5. Steuern & Einnahmen',
-      children: [
-        'Einkommenssteuererklärung und Rückerstattungen',
-        'Grundsteuerzahlungen',
-        'Gewerbesteuerkonformität',
-        'Zoll und Einfuhrzölle'
-      ]
+      children:
+        'Einkommenssteuererklärung und Rückerstattungen,Grundsteuerzahlungen,Gewerbesteuerkonformität,Zoll und Einfuhrzölle'
     },
     cat6: {
       name: '6. Öffentliche Sicherheit & Justiz',
-      children: [
-        'Polizei und Notfalldienste',
-        'Gerichte und Rechtsbeistand',
-        'Verbrechensmeldung',
-        'Verbraucherschutzgesetze'
-      ]
+      children: 'Polizei und Notfalldienste,Gerichte und Rechtsbeistand,Verbrechensmeldung,Verbraucherschutzgesetze'
     },
     cat7: {
       name: '7. Verkehr & Mobilität',
-      children: [
-        'Führerscheine und Fahrzeugregistrierung',
-        'Öffentlicher Verkehr und Infrastruktur',
-        'Verkehrsverstöße und Bußgelder',
-        'Verkehrssicherheitsprogramme'
-      ]
+      children:
+        'Führerscheine und Fahrzeugregistrierung,Öffentlicher Verkehr und Infrastruktur,Verkehrsverstöße und Bußgelder,Verkehrssicherheitsprogramme'
     },
     cat8: {
       name: '8. Wohnen & Stadtentwicklung',
-      children: [
-        'Öffentliche Wohnungsunterstützung',
-        'Immobilienregistrierung und Grundbuch',
-        'Wohnungsdarlehen und Subventionen',
-        'Zonierung und Baugenehmigungen'
-      ]
+      children:
+        'Öffentliche Wohnungsunterstützung,Immobilienregistrierung und Grundbuch,Wohnungsdarlehen und Subventionen,Zonierung und Baugenehmigungen'
     },
     cat9: {
       name: '9. Versorgungsunternehmen & Umwelt',
-      children: [
-        'Wasser- und Stromversorgung',
-        'Abfallmanagement und Recycling',
-        'Umweltvorschriften',
-        'Initiativen für erneuerbare Energien'
-      ]
+      children:
+        'Wasser- und Stromversorgung,Abfallmanagement und Recycling,Umweltvorschriften,Initiativen für erneuerbare Energien'
     },
     cat10: {
       name: '10. Wirtschaft & Handel',
-      children: [
-        'Geschäftsregistrierung und -lizenzierung',
-        'Handelsvorschriften und -genehmigungen',
-        'Zuschüsse und Anreize für kleine Unternehmen',
-        'E-Commerce und digitale Unternehmensunterstützung'
-      ]
+      children:
+        'Geschäftsregistrierung und -lizenzierung,Handelsvorschriften und -genehmigungen,Zuschüsse und Anreize für kleine Unternehmen,E-Commerce und digitale Unternehmensunterstützung'
     },
     cat11: {
       name: '11. Sozialversicherung & Renten',
-      children: ['Rentenleistungen', 'Pensionsfondsmanagement', 'Hinterbliebenenleistungen', 'Behinderungspensionen']
+      children: 'Rentenleistungen,Pensionsfondsmanagement,Hinterbliebenenleistungen,Behinderungspensionen'
     },
     cat12: {
       name: '12. Gemeinschaft & bürgerschaftliches Engagement',
-      children: [
-        'Wahlen und Abstimmungen',
-        'Öffentliches Feedback und Bürgerbeschwerden',
-        'Freiwilligen- und Gemeinschaftsprogramme',
-        'Teilnahme an der lokalen Regierung'
-      ]
+      children:
+        'Wahlen und Abstimmungen,Öffentliches Feedback und Bürgerbeschwerden,Freiwilligen- und Gemeinschaftsprogramme,Teilnahme an der lokalen Regierung'
     }
   },
   settings: {
@@ -1196,6 +1148,7 @@ export default {
     },
     notifications: {
       saveSuccess: 'Profil erfolgreich gespeichert',
+      saved: 'Frontmatter gespeichert',
       saveFailed: 'Fehler beim Speichern des Profils',
       loadSuccess: 'Profil erfolgreich geladen',
       loadFailed: 'Fehler beim Laden des Profils',
@@ -1311,137 +1264,10 @@ export default {
     noMatchingCountries: 'Keine übereinstimmenden Länder gefunden',
     noMatchingDisciplines: 'Keine übereinstimmenden Disziplinen gefunden',
     noMatchingDegrees: 'Keine übereinstimmenden Abschlüsse gefunden',
-    educationOptions: [
-      'Buchhaltung',
-      'Luft- und Raumfahrttechnik',
-      'Agrarwissenschaft',
-      'Anthropologie',
-      'Architektur',
-      'Kunstgeschichte',
-      'Künstliche Intelligenz',
-      'Astronomie',
-      'Astrophysik',
-      'Biochemie',
-      'Biomedizinische Technik',
-      'Biotechnologie',
-      'Betriebswirtschaft',
-      'Chemietechnik',
-      'Chemie',
-      'Bauingenieurwesen',
-      'Kommunikation',
-      'Informatik',
-      'Computerwissenschaft',
-      'Baumanagement',
-      'Strafjustiz',
-      'Cybersicherheit',
-      'Datenwissenschaft',
-      'Zahnmedizin',
-      'Wirtschaft',
-      'Bildung',
-      'Elektrotechnik',
-      'Grundschulbildung',
-      'Englische Literatur',
-      'Umwelttechnik',
-      'Umweltwissenschaft',
-      'Modedesign',
-      'Filmwissenschaft',
-      'Finanzen',
-      'Bildende Kunst',
-      'Lebensmittelwissenschaft',
-      'Forensische Wissenschaft',
-      'Spieldesign',
-      'Geografie',
-      'Geologie',
-      'Grafikdesign',
-      'Gesundheitsmanagement',
-      'Geschichte',
-      'Hotelmanagement',
-      'Personalwesen',
-      'Industriedesign',
-      'Industrietechnik',
-      'Informationssysteme',
-      'Informationstechnologie',
-      'Innenarchitektur',
-      'Internationales Business',
-      'Internationale Beziehungen',
-      'Journalismus',
-      'Recht',
-      'Bibliothekswissenschaft',
-      'Linguistik',
-      'Management',
-      'Marketing',
-      'Materialwissenschaft',
-      'Mathematik',
-      'Maschinenbau',
-      'Medienwissenschaft',
-      'Medizin',
-      'Meteorologie',
-      'Mikrobiologie',
-      'Musik',
-      'Nanotechnologie',
-      'Pflege',
-      'Ernährung',
-      'Arbeitstherapie',
-      'Ozeanografie',
-      'Petroleumtechnik',
-      'Pharmazie',
-      'Philosophie',
-      'Fotografie',
-      'Sportpädagogik',
-      'Physiotherapie',
-      'Physik',
-      'Politikwissenschaft',
-      'Psychologie',
-      'Öffentliche Verwaltung',
-      'Öffentliche Gesundheit',
-      'Öffentlichkeitsarbeit',
-      'Robotik',
-      'Sekundarschulbildung',
-      'Soziale Arbeit',
-      'Soziologie',
-      'Softwaretechnik',
-      'Sonderpädagogik',
-      'Sportmanagement',
-      'Statistik',
-      'Systemtechnik',
-      'Theaterkunst',
-      'Tourismus',
-      'Stadtplanung',
-      'Veterinärmedizin',
-      'Webentwicklung',
-      'Wildtierbiologie',
-      'Zoologie'
-    ],
-    degreeOptions: [
-      'Associate-Abschluss',
-      'Bachelor of Arts (BA)',
-      'Bachelor of Science (BS)',
-      'Bachelor of Engineering (BEng)',
-      'Bachelor of Business Administration (BBA)',
-      'Bachelor of Fine Arts (BFA)',
-      'Bachelor of Education (BEd)',
-      'Bachelor of Medicine (MBBS)',
-      'Bachelor of Laws (LLB)',
-      'Master of Arts (MA)',
-      'Master of Science (MS)',
-      'Master of Business Administration (MBA)',
-      'Master of Engineering (MEng)',
-      'Master of Fine Arts (MFA)',
-      'Master of Education (MEd)',
-      'Master of Laws (LLM)',
-      'Master of Public Health (MPH)',
-      'Doctor of Philosophy (PhD)',
-      'Doctor of Medicine (MD)',
-      'Doctor of Education (EdD)',
-      'Doctor of Business Administration (DBA)',
-      'Doctor of Jurisprudence (JD)',
-      'Berufliches Diplom',
-      'Technisches Diplom',
-      'Berufszertifikat',
-      'Postgraduiertenzertifikat',
-      'Postgraduiertes Diplom',
-      'Post-Doktor'
-    ],
+    educationOptions:
+      'Buchhaltung,Luft- und Raumfahrttechnik,Agrarwissenschaft,Anthropologie,Architektur,Kunstgeschichte,Künstliche Intelligenz,Astronomie,Astrophysik,Biochemie,Biomedizinische Technik,Biotechnologie,Betriebswirtschaft,Chemietechnik,Chemie,Bauingenieurwesen,Kommunikation,Informatik,Computerwissenschaft,Baumanagement,Strafjustiz,Cybersicherheit,Datenwissenschaft,Zahnmedizin,Wirtschaft,Bildung,Elektrotechnik,Grundschulbildung,Englische Literatur,Umwelttechnik,Umweltwissenschaft,Modedesign,Filmwissenschaft,Finanzen,Bildende Kunst,Lebensmittelwissenschaft,Forensische Wissenschaft,Spieldesign,Geografie,Geologie,Grafikdesign,Gesundheitsmanagement,Geschichte,Hotelmanagement,Personalwesen,Industriedesign,Industrietechnik,Informationssysteme,Informationstechnologie,Innenarchitektur,Internationales Business,Internationale Beziehungen,Journalismus,Recht,Bibliothekswissenschaft,Linguistik,Management,Marketing,Materialwissenschaft,Mathematik,Maschinenbau,Medienwissenschaft,Medizin,Meteorologie,Mikrobiologie,Musik,Nanotechnologie,Pflege,Ernährung,Arbeitstherapie,Ozeanografie,Petroleumtechnik,Pharmazie,Philosophie,Fotografie,Sportpädagogik,Physiotherapie,Physik,Politikwissenschaft,Psychologie,Öffentliche Verwaltung,Öffentliche Gesundheit,Öffentlichkeitsarbeit,Robotik,Sekundarschulbildung,Soziale Arbeit,Soziologie,Softwaretechnik,Sonderpädagogik,Sportmanagement,Statistik,Systemtechnik,Theaterkunst,Tourismus,Stadtplanung,Veterinärmedizin,Webentwicklung,Wildtierbiologie,Zoologie',
+    degreeOptions:
+      'Associate-Abschluss,Bachelor of Arts (BA),Bachelor of Science (BS),Bachelor of Engineering (BEng),Bachelor of Business Administration (BBA),Bachelor of Fine Arts (BFA),Bachelor of Education (BEd),Bachelor of Medicine (MBBS),Bachelor of Laws (LLB),Master of Arts (MA),Master of Science (MS),Master of Business Administration (MBA),Master of Engineering (MEng),Master of Fine Arts (MFA),Master of Education (MEd),Master of Laws (LLM),Master of Public Health (MPH),Doctor of Philosophy (PhD),Doctor of Medicine (MD),Doctor of Education (EdD),Doctor of Business Administration (DBA),Doctor of Jurisprudence (JD),Berufliches Diplom,Technisches Diplom,Berufszertifikat,Postgraduiertenzertifikat,Postgraduiertes Diplom,Post-Doktor',
     aria: {
       tabList: 'Profilformularabschnitte',
       nextButton: 'Zur nächsten Sektion gehen',
@@ -1467,10 +1293,10 @@ export default {
     unsupportedLanguage: 'Diese Sprache ist für diese Installation nicht verfügbar.',
     aiGeneratedNoDocs: 'KI-generiert — nicht auf Bibliotheksdokumenten basierend',
     translationUnavailable: 'Übersetzung nicht verfügbar — diese Antwort kann unübersetzten Text enthalten.',
-    welcomeMessage: 'Welcome! How can I assist you today?',
+    welcomeMessage: 'Willkommen! Wie kann ich Ihnen heute helfen?',
     configMismatchWarning:
-      'Konfigurationsfehler: {warnings}. Bitte überprüfen Sie die Schnellhilfe- und Wissenshierarchie-Konfiguration.',
-    categoryNotFound: 'Kategorie "{label}" nicht in der Wissenshierarchie gefunden',
+      'Konfigurationsdiskrepanz: {warnings}. Bitte überprüfen Sie die Schnellhilfe und die Konfiguration der Wissenshierarchie.',
+    categoryNotFound: 'Kategorie „{label}“ in der Wissenshierarchie nicht gefunden',
     quickHelpLabelGone:
       'Konfigurationsproblem: das Label „{labels}“ existiert nicht mehr in der Wissenshierarchie. Diese Schaltfläche kann nicht verwendet werden, bis ihre Konfiguration aktualisiert wurde.',
     quickHelpCategoryGone:
@@ -1480,8 +1306,8 @@ export default {
     scopeNotNameable:
       'Konfigurationsproblem: der ausgewählte Bereich trägt keinen englischen Namen in der Wissenshierarchie, daher kann der Umfang der Abfrage nicht bestimmt werden. Die Abfrage wurde nicht gesendet.',
     serviceLabelMismatch:
-      'Dienst "{label}" verwendet ein UI-Label, das möglicherweise nicht zur Wissenshierarchie passt',
-    noFilterWarning: 'Kein Kontextfilter aktiv — Abfrage wird ungefiltert sein.',
+      'Dienst „{label}“ verwendet eine UI-Bezeichnung, die möglicherweise nicht mit der Wissenshierarchie übereinstimmt',
+    noFilterWarning: 'Kein Kontextfilter aktiv — Anfrage wird ungefiltert ausgeführt.',
     placeholder: 'Geben Sie Ihre Anfrage hier ein...',
     composerPlaceholder: 'Stellen Sie eine Frage, erkunden Sie Wissen...',
     composerAttachTitle: 'Anhänge sind noch nicht verfügbar',
@@ -1541,37 +1367,24 @@ export default {
     removeItem: 'Entfernen'
   },
   quickhelp: {
-    // Labels (Short for UI)
-
-    // User Prompts (Visible Text - First Person - what user sees in chat)
-
-    // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:
-      "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Treten Sie als hilfsbereiter Experte für das kenianische Meldewesen auf. Erklären Sie die Schritte zur Beantragung eines nationalen Personalausweises (Maisha Namba) oder zum Ersatz eines verlorenen Ausweises. WICHTIG: Stellen Sie eine klare Liste der erforderlichen Dokumente bereit (z. B. Geburtsurkunde, Kopien der Ausweise der Eltern) und raten Sie dem Benutzer, das nächstgelegene Huduma Centre oder das Büro des Registrar of Persons aufzusuchen. REGEL: Bezeichnen Sie die Anwendung stets als 'Genie AI'.",
     payTaxesPrompt:
-      "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Treten Sie als Berater für die KRA (Kenya Revenue Authority) auf. Erklären Sie das Einreichen von Steuererklärungen, die Beantragung einer KRA PIN oder das Zurücksetzen von Passwörtern im iTax-Portal. WICHTIG: Erinnern Sie den Benutzer an die Frist am 30. Juni für Jahreserklärungen und erklären Sie, wie Nullmeldungen bei fehlendem Einkommen einzureichen sind. REGEL: Bezeichnen Sie die Anwendung stets als 'Genie AI'.",
     startBusinessPrompt:
-      "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Treten Sie als Unternehmensberater für eCitizen-Dienste auf. Führen Sie den Benutzer durch die Reservierung von Firmennamen und die Unternehmensregistrierung in Kenia. WICHTIG: Erläutern Sie aktuelle Gebühren für Namenssuche und Registrierung und leiten Sie den Benutzer zum offiziellen eCitizen-Portal, um den Antrag abzuschließen. REGEL: Bezeichnen Sie die Anwendung stets als 'Genie AI'.",
     findHealthcarePrompt:
-      "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Treten Sie als Lotse für Gesundheitsdienste auf. Informieren Sie über den Übergang von NHIF zu SHIF (Social Health Insurance Fund) und die Registrierung. WICHTIG: Teilen Sie offizielle USSD-Codes (wie *263#) oder Weblinks zur Registrierung und erläutern Sie die Vorteile des gesetzlichen Krankenversicherungsschutzes. REGEL: Bezeichnen Sie die Anwendung stets als 'Genie AI'.",
     educationServicesPrompt:
-      "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Treten Sie als Bildungsberater auf. Erläutern Sie den CBC-Lehrplan, die NEMIS-Registrierung oder die Studienplatzvergabe über KUCCPS. WICHTIG: Erklären Sie, wie Eltern nach deren Veröffentlichung nationale Prüfungsergebnisse per SMS oder über das KNEC-Portal abrufen können. REGEL: Bezeichnen Sie die Anwendung stets als 'Genie AI'.",
     transportLicensesPrompt:
-      "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Treten Sie als Serviceberater für die NTSA auf. Erklären Sie die Erneuerung des Führerscheins, die Fahrzeugprüfung oder die TIMS-Kontoverwaltung. WICHTIG: Leiten Sie den Benutzer an, wie er sich im eCitizen-NTSA-Portal anmeldet, um den Smart DL zu beantragen oder eine Fahrzeugprüfung zu buchen. REGEL: Bezeichnen Sie die Anwendung stets als 'Genie AI'.",
     housingProgramsPrompt:
-      "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Treten Sie als Berater für Wohnungsbauprogramme auf. Erklären Sie das Affordable Housing Program (Boma Yangu), die Registrierung und freiwillige Einzahlungen. WICHTIG: Leiten Sie den Benutzer zum Boma Yangu-Portal, um Projekte einzusehen, und erklären Sie die Kriterien für eine Zuteilung. REGEL: Bezeichnen Sie die Anwendung stets als 'Genie AI'.",
     findJobsPrompt:
-      "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Treten Sie als Karriereberater für den öffentlichen Dienst auf. Leiten Sie den Benutzer an, ein Profil zu erstellen und sich über das Portal der Public Service Commission (PSC) auf offene Stellen zu bewerben. WICHTIG: Raten Sie dem Benutzer, akademische Zeugnisse bereitzuhalten und regelmäßig die PSC-Website sowie lokale Tageszeitungen auf MyGov-Ausschreibungen zu prüfen. REGEL: Bezeichnen Sie die Anwendung stets als 'Genie AI'.",
     justChatPrompt:
-      "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+      "Treten Sie als freundlicher lokaler Begleiter auf. Seien Sie höflich, hilfsbereit und mit der kenianischen Kultur und dem Alltagsleben vertraut. WICHTIG: Weisen Sie den Benutzer darauf hin, dass Sie sich zwar über jedes Thema unterhalten können, Ihre Hauptstärke jedoch darin liegt, bei der Orientierung in kenianischen Behördendiensten wie **Ausweisen**, **Steuern** und **Unternehmensregistrierungen** zu helfen. REGEL: Bezeichnen Sie die Anwendung stets als 'Genie AI'."
   },
   common: {
     cancel: 'Abbrechen',
@@ -1579,7 +1392,6 @@ export default {
     save: 'Speichern',
     move: 'Verschieben',
     delete: 'Löschen',
-    // --- NEW KEYS ADDED ---
     ok: 'OK',
     ingest: 'Aufnehmen',
     retract: 'Zurückziehen',
@@ -1617,7 +1429,6 @@ export default {
     submit: 'Senden',
     cancel: 'Abbrechen'
   },
-  // --- NEW OBJECTS ---
   upload: {
     alt: 'Hochladen'
   },
@@ -1639,12 +1450,18 @@ export default {
     fileSize: 'Dateigröße',
     uploadDate: 'Hochladedatum',
     hash: 'SHA256-Hash',
-    // --- NEW: TABS ---
     tabs: {
       details: 'Details',
-      ingestionLog: 'Aufnahmeprotokoll'
+      ingestionLog: 'Aufnahmeprotokoll',
+      detailsHint:
+        'Metadaten für diese Datei: Name, Autor und die Labels der Wissenshierarchie, die die KI zum Weiterleiten von Fragen verwendet. Ingest erfordert mindestens ein Label.',
+      dashboardHint:
+        'Live-Ansicht des Website-Crawls dieser Datei: Rate, Warteschlange, Fehler und Fortschritt. Nach erfolgreichem Crawl wird daraus über die Fußzeile unten ein OKF-Repository erstellt.',
+      crawlLogHint:
+        'Seitenbezogenes Protokoll des Website-Crawls: welche URLs abgerufen, weitergeleitet wurden oder fehlgeschlagen sind. Wird während des Crawl-Vorgangs geschrieben.',
+      ingestionLogHint:
+        'Schrittweiser Fortschritt der Vorbereitung dieser Datei auf KI-Antworten: Chunking, Labelling, Embedding und Indexierung. Fehler hier zeigen genau an, wo der Ingest-Vorgang angehalten wurde.'
     },
-    // --- NEW: LOG TAB ---
     log: {
       killActions: 'Abbruch-Aktionen:',
       killDocument: 'Dieses Dokument abbrechen',
@@ -1674,7 +1491,6 @@ export default {
       retractError: 'Fehler beim Zurückziehen der Datei.',
       deleteSuccess: 'Datei erfolgreich gelöscht.',
       deleteError: 'Fehler beim Löschen der Datei.',
-      // --- NEW NOTIFICATIONS ---
       ingestLabelRequired: 'Bitte wählen Sie mindestens ein Etikett vor der Aufnahme aus.',
       ingestSaving: 'Speichere Metadaten vor der Aufnahme...',
       ingestSaveFailed: 'Metadaten konnten nicht gespeichert werden. Aufnahme abgebrochen.',
@@ -1686,7 +1502,6 @@ export default {
       ingest: 'Möchten Sie diese Datei wirklich aufnehmen? Dies startet die Datenverarbeitungspipeline.',
       retract: 'Möchten Sie diese Datei wirklich zurückziehen?',
       delete: 'Möchten Sie diese Datei wirklich dauerhaft löschen? Diese Aktion kann nicht rückgängig gemacht werden.',
-      // --- NEW CONFIRMATIONS ---
       ingestTitle: 'Aufnahme bestätigen',
       retractTitle: 'Zurückziehen bestätigen',
       deleteTitle: 'Löschen bestätigen',
@@ -1714,6 +1529,2204 @@ export default {
       duplicate: 'Datei "{fileName}" wurde bereits hinzugefügt.',
       uploadSuccess: '{fileName} erfolgreich hochgeladen',
       uploadFailed: 'Fehler beim Hochladen von {fileName}.'
+    },
+    ragTip:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+  },
+  okf: {
+    models: {
+      title: 'Modellkonfigurationen',
+      add: 'Neue Konfiguration',
+      hint: 'Benannte Remote-Modell-Endpunkte für Bewertung und Generierung — jede OpenAI-kompatible Oberfläche (OpenAI, ein LiteLLM-Gateway, vLLM, Gemini-kompatibel, Ollama) oder Anthropic direkt. Genau EINE Konfiguration kann aktiv sein; ohne aktive gilt das konfigurierte Standardmodell der Deployment-Umgebung. Schlüssel werden serverseitig gespeichert und nie angezeigt.',
+      name: 'Name',
+      provider: 'Anbieter',
+      providerOpenai: 'OpenAI-kompatibel (OpenAI, LiteLLM, vLLM…)',
+      providerAnthropic: 'Anthropic (native API)',
+      baseUrl: 'Basis-URL',
+      apiKey: 'API-Schlüssel',
+      apiKeyKeep: 'unverändert',
+      model: 'Modell',
+      modelPick: 'Modell auswählen…',
+      modelFreeText: 'Modell-ID (Freitext)',
+      modelFetch: 'Modelle abrufen',
+      modelFetching: 'Abrufen…',
+      modelsEmpty: 'Der Endpunkt lieferte keine Modelle — Modell-ID eingeben.',
+      modelsFailed: 'Modellliste fehlgeschlagen — Modell-ID eingeben.',
+      modelsLoaded: '{n} Modelle geladen — aus der Dropdown-Liste wählen oder frei eingeben',
+      test: 'Verbindung testen',
+      testing: 'Test läuft…',
+      testTitle: 'Endpunkt prüfen und (bei gewähltem Modell) eine Generierung mit einem Token',
+      testOkModel: '✓ Verbunden — das Modell hat geantwortet ({ms} ms)',
+      testOkEndpoint: '✓ Endpunkt erreichbar — {n} Modelle gelistet (Modell wählen, um auch die Generierung zu testen)',
+      testGenFail: '✗ Endpunkt OK, aber der Modellaufruf ist fehlgeschlagen',
+      testNotListed: ' — Hinweis: „{model}“ steht nicht in der Modellliste des Endpunkts',
+      testFail: '✗ Test fehlgeschlagen — keine Antwort',
+      services: 'Diese Konfiguration verwenden für',
+      svcJudge: 'Benchmarks (RAGAS-Juror + Advisor)',
+      svcJudgeShort: 'Benchmarks',
+      svcCuration: 'Konzept-Kuration',
+      svcCurationShort: 'Kuration',
+      svcTagging: 'Themen & Tags',
+      svcTaggingShort: 'Themen/Tags',
+      svcOpenaiOnly:
+        'Konzept-Kuration und Themen/Tags nutzen das OpenAI-Wire-Format — sie benötigen einen OpenAI-kompatiblen Endpunkt.',
+      colServices: 'Genutzt von',
+      svcNone: 'nichts (ruhend)',
+      groupTestLab: 'Test-Lab-Pipelines',
+      groupDataPrep: 'Data-Prep-Pipeline',
+      groupInference: 'Inferenz-Pipeline',
+      mockNote: 'geplant — noch nicht konfigurierbar',
+      svcAnswers: 'Benchmark-Antworten — nur Offline-Replay (das Lab antwortet über den Deployment-Chat)',
+      svcAnswersShort: 'Benchmark-Antworten (nur offline)',
+      mockContextual: 'Contextual Retrieval (Dokumentkontext)',
+      mockChunkLabeling: 'Chunk-Labeling',
+      mockGraphExtraction: 'Wissensgraph-Extraktion',
+      mockChatServing: 'Chat-Beantwortung',
+      mockTranslation: 'Chat-Übersetzung',
+      svcOpenaiOnlyShort: 'Nur OpenAI-kompatible Endpunkte',
+      providerTipOpenai:
+        'Geprüfte OpenAI-kompatible Endpunkte: OpenAI https://api.openai.com/v1 · MiniMax https://api.minimax.io/v1 · z.ai https://api.z.ai/api/paas/v4 · ein LiteLLM-Gateway http://your-gateway:4000/v1',
+      providerTipAnthropic:
+        'Geprüfte Anthropic-native Endpunkte: Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
+      baseUrlTip:
+        'Der Server listet Modelle unter dieser Basis + /models (OpenAI-kompatibel) oder + /v1/models (Anthropic — ein abschließendes /v1 wird normalisiert); Test connection generiert unter + /chat/completions bzw. + /v1/messages. Alle vier Standardpfade am 2026-10-20 live geprüft.',
+      save: 'Änderungen speichern',
+      create: 'Anlegen',
+      cancel: 'Abbrechen',
+      colName: 'Name',
+      colProvider: 'Anbieter',
+      colUrl: 'Endpunkt',
+      colKey: 'Schlüssel',
+      colModel: 'Modell',
+      colState: 'Status',
+      active: 'aktiv',
+      inactive: 'inaktiv',
+      edit: 'Umbenennen / ändern',
+      copy: 'Kopieren',
+      activate: 'Aktivieren (genau eine ist aktiv)',
+      deactivate: 'Deaktivieren — das Standardmodell wird verwendet',
+      delete: 'Löschen',
+      deleteConfirm: 'Modellkonfiguration „{name}“ löschen?',
+      empty: 'Noch keine Modellkonfigurationen — das Standardmodell (env) ist aktiv.',
+      adminOnly: 'Modellkonfigurationen erfordern die Plattform-Admin-Rolle.'
+    },
+    versions: {
+      bundle: 'Paket',
+      col: {
+        concepts: 'Konzepte',
+        curator: 'Kurator',
+        minted: 'Erstellt',
+        tag: 'Tag',
+        trigger: 'Auslöser',
+        version: 'Version'
+      },
+      current: 'aktuell',
+      loadFailed: 'Laden der Versionen fehlgeschlagen',
+      none: 'Noch keine Versionen erstellt — publish erzeugt v1.',
+      notServing: 'Nicht bereitgestellt',
+      publish: 'Neue Version erstellen',
+      published: 'Version v{v} veröffentlicht — Bundle {f} im Dokumenten-Repository gespeichert.',
+      serving: 'Aufgenommen (bereitgestellt)',
+      title: 'Versionen'
+    },
+    shell: {
+      back: 'Studio-Dashboard',
+      building: 'Wird erstellt…',
+      buildingHint: 'Die Quelldatei wird noch verarbeitet',
+      delete: {
+        body: 'Dies entfernt das Repository, seine Konzepte, indexierten Inhalte, Graphen und Bundle-Artefakte dauerhaft.',
+        confirm: 'Löschen',
+        title: 'Repository löschen'
+      },
+      export: '.zip exportieren',
+      logs: 'Protokolle',
+      pii: {
+        ack: 'Markierte Entitäten bestätigen & veröffentlichen',
+        note: 'Die markierten Entitäten sind Teil des veröffentlichten Inhalts. Wenn Sie diese überprüft haben (z. B. offizielle Kontaktdaten), bestätigen Sie dies und fahren Sie fort.'
+      },
+      publish: {
+        body: 'Das Ausführen von publish erstellt v{n} und speichert das Bundle „{file}“ im Dokumenten-Repository, wodurch jede vorherige zip ersetzt wird. Die neue Version ist erst im Status serving, wenn Sie Ingest ausführen.',
+        confirm: 'Veröffentlichen',
+        inProgress: 'Wird veröffentlicht — Bundle wird exportiert und übertragen…',
+        title: 'Veröffentlichen'
+      },
+      readonly: 'INHALT SCHREIBGESCHÜTZT — Head/Tags bearbeitbar',
+      serving: 'Wird bereitgestellt',
+      state: {
+        ingested: 'Aufgenommen'
+      },
+      tab: {
+        editor: 'Editor',
+        wizard: 'Assistent'
+      },
+      version: 'v{n}',
+      versions: 'Versionen',
+      deleteLabel: 'Löschen',
+      testingLab: 'Testing Lab'
+    },
+    logs: {
+      labeled: 'mit Label: {n}',
+      fallbacks: 'LLM-Fallbacks: {n}',
+      concepts: 'Konzepte: {n}',
+      col: {
+        action: 'Aktion',
+        description: 'Beschreibung',
+        user: 'Benutzer',
+        when: 'Datum & Uhrzeit'
+      },
+      count: '{n} Einträge',
+      loadFailed: 'Aktivitätsprotokoll konnte nicht geladen werden.',
+      none: 'Noch keine Aktivität erfasst — Aktionen am Repository erscheinen hier in Echtzeit.',
+      title: 'Aktivitätsprotokoll'
+    },
+    graph: {
+      aria: 'Konzept-Graph',
+      building: 'Graph wird vorbereitet…',
+      concepts: 'Konzepte',
+      empty: 'Noch keine Konzepte vorhanden – Darstellung im Graphen nicht möglich.',
+      fit: 'Graph anpassen',
+      hub: 'Index-Hub ein- oder ausblenden (dessen Inhaltslinks sind Struktur, kein Wissen)',
+      layouting: 'Layout wird erstellt…',
+      legend: 'Index',
+      links: 'Links',
+      zoomIn: 'Vergrößern',
+      zoomOut: 'Verkleinern',
+      card: {
+        links: '{n} Verknüpfungen',
+        chunks: '{n} Chunks',
+        failed: 'Indexierung fehlgeschlagen',
+        flagged: 'markierte Entitäten',
+        hub: 'Index-Hub',
+        pending: 'noch nicht indexiert'
+      }
+    },
+    import: {
+      title: 'Dokumente in ein neues OKF-Repository importieren',
+      hint: 'Die Dokumente werden EIN Repository — gemeinsam segmentiert, verlinkt und gelabelt. Nichts wird veröffentlicht; der normale Ablauf Review → Publish → Ingest folgt.',
+      name: 'Repository-Name',
+      namePh: 'z. B. Politikpaket',
+      domain: 'Themenbereich (Domain)',
+      strategy: 'Klassifizierungsstrategie',
+      stratHeuristics: 'Heuristik (schnell, ohne LLM)',
+      stratLlm: 'LLM-Klassifizierung',
+      stratHybrid: 'Hybrid',
+      files: 'Ausgewählte Dokumente',
+      servingBadge: 'dient dem freien RAG',
+      alreadyBadge: 'schon in einem OKF-Repo',
+      servingTip:
+        'Dieses Dokument dient derzeit dem freien Korpus — das neue Repository kann erst nach dessen Rückzug ingestiert werden.',
+      alreadyTip: 'Dieses Dokument ist bereits Quelle eines anderen OKF-Repositorys.',
+      servingWarn:
+        '{n} Dokument(e) dienen noch dem freien Korpus. Der Import gelingt, aber dieses Repository kann erst ingestiert werden, nachdem sie zurückgezogen wurden.',
+      cancel: 'Abbrechen',
+      importing: 'Importiere…',
+      go: 'Importieren',
+      dupRepo: 'Dieser Repository-Name existiert bereits — wähle einen anderen.',
+      failed: 'Der Import konnte nicht gestartet werden. Dokumente prüfen und erneut versuchen.'
+    },
+    editor: {
+      addConcept: {
+        bodyLabel: 'Markdown (einfügen oder leer lassen)',
+        bodyPh: '# Überschrift\n\nMarkdown hier einfügen – Frontmatter wird automatisch für Sie hinzugefügt.',
+        create: 'Datei erstellen',
+        failed: 'Datei konnte nicht erstellt werden.',
+        title: 'Konzeptdatei hinzufügen',
+        titleLabel: 'Titel',
+        titlePh: 'z. B. Wildtiere in der Mara',
+        updateIndex: 'An die Inhaltsliste des Index anhängen'
+      },
+      access: {
+        label: 'Repository-Zugriff',
+        title: 'Zugriffskontrolle',
+        restricted: 'Eingeschränkt',
+        openForAll: 'Für alle offen',
+        hintRestricted:
+          'Nur berechtigte Benutzer (und Stewards) können dieses Repository abfragen. Zugang unten gewähren — wirksam bei der nächsten Anmeldung.',
+        hintOpen:
+          'Jeder angemeldete Benutzer kann dieses Repository abfragen. Schränke es ein und gewähre Zugriff pro Benutzer.',
+        unrestrict: 'Für alle öffnen',
+        restrict: 'Repository einschränken',
+        unconfiguredTip:
+          'Gewähren/Widerrufen erfordert Keycloak-Zugangsdaten auf dem Server (KC_OKF_ACCESS_CLIENT_SECRET). Die Einschränkung funktioniert trotzdem.',
+        revoke: 'Widerrufen',
+        error: 'Vorgang fehlgeschlagen.',
+        grantedNotice: 'Zugang gewährt — wirksam bei der nächsten Anmeldung.',
+        revokedNotice: 'Zugriff entzogen — wirksam bei der nächsten Anmeldung des Benutzers.',
+        nowRestricted: 'Repository eingeschränkt.',
+        nowOpen: 'Repository für alle offen.',
+        grantUsersCta: 'Zugriff für Benutzer erteilen…',
+        pickerTitle: 'Abfragezugriff erteilen',
+        pickerSearch: 'Benutzer nach Name, Benutzername oder E-Mail suchen',
+        pickerSearching: 'Suche…',
+        pickerMatching: '{n} Benutzer entsprechen dieser Suche',
+        pickerSelectAll: 'Alle {n} auswählen',
+        pickerAllSelected: 'Alle {n} übereinstimmenden Benutzer ausgewählt',
+        pickerClearSelection: 'Löschen',
+        pickerHasAccess: 'hat Zugriff',
+        pickerEmpty: 'Keine Benutzer gefunden.',
+        pickerGrant: 'Zugriff erteilen ({n})',
+        pickerGranting: 'Zugriff für {n} Benutzer wird erteilt…',
+        pickerLargeHint:
+          'Bei sehr großen Mengen lieber eine Gruppenberechtigung — ein Vorgang für beliebig viele Benutzer.',
+        grantedQueryNotice: 'Zugriff für {n} Benutzer erteilt — wirksam bei der nächsten Anmeldung jedes Benutzers.',
+        col: {
+          user: 'Benutzer',
+          group: 'Gruppe'
+        },
+        viaRole: 'direkte Rolle',
+        noHolders: 'Keine Benutzer oder Gruppen mit Zugang.',
+        groupPlaceholder: 'Gruppe wählen…',
+        groupSearch: 'Gruppen suchen',
+        groupNoResults: 'Keine Gruppen gefunden',
+        grantGroup: 'Gruppe berechtigen',
+        groupHint:
+          'Jedes Gruppenmitglied erhält den Zugang bei der nächsten Anmeldung — eine Operation für beliebig viele Benutzer.',
+        grantedSomeNotice: '{n} gewährt — unbekannt: {m}',
+        grantedGroupNotice: 'Gruppe gewährt — jedes Mitglied erhält den Zugang bei der nächsten Anmeldung.'
+      },
+      autocorrect: {
+        blankBefore: '(leer)',
+        blankBadge: 'Kein Frontmatter — vollständiger Vorschlag',
+        applyField: 'Anwenden',
+        apply: 'Korrekturen anwenden',
+        body: 'Geplante Frontmatter-Korrekturen über alle Konzepte hinweg. Inhaltskörper werden nie modifiziert.',
+        button: 'Autokorrektur',
+        clean: 'Nichts zu korrigieren — alle Frontmatter-Daten sind bereits konform.',
+        col: {
+          field: 'Feld',
+          after: 'Nachher',
+          before: 'Vorher',
+          concept: 'Konzept'
+        },
+        failed: 'Scan fehlgeschlagen.',
+        scanning: 'Scannen…',
+        title: 'Autokorrektur (nur Frontmatter)'
+      },
+      concepts: {
+        originTip: 'Wie dieses Konzept kuratiert wurde',
+        add: 'Konzept hinzufügen',
+        addLabel: 'Label festlegen',
+        delete: 'Datei löschen',
+        empty: 'Noch keine Dateien vorhanden – Konzept hinzufügen oder aus der Quelle neu aufteilen.',
+        filter: 'Dateien filtern',
+        failedCard: {
+          title: 'Ingest fehlgeschlagen',
+          problem: 'Das Problem',
+          noError: 'Als fehlgeschlagen markiert — ohne aufgezeichneten Grund.',
+          fixLabel: 'So wird es behoben',
+          attempts: 'Attempts: {n}',
+          when: 'Last attempt {when}',
+          fix: {
+            reaper:
+              'Der Ingest-Worker hat innerhalb des Gnadenfensters aufgehört zu warten (die Dränage war ausgelastet) — der Inhalt ist intakt. Behebung: Datei leicht bearbeiten und speichern, um sie neu einzureihen; oder das Repo zurückziehen und komplett neu ingestieren.',
+            dataprep:
+              'Der Content-Aufbereitungsdienst hat diesen Ingest fehlschlagen lassen. Behebung: bearbeiten und speichern, um neu einzureihen; bei Wiederholung die Gesundheit des Dataprep-Dienstes prüfen.',
+            generic:
+              'Indizierung fehlgeschlagen. Behebung: Inhalt bearbeiten und speichern, um neu einzureihen — oder das Repo zurückziehen und komplett neu ingestieren.'
+          }
+        },
+        indexBadge: 'Index',
+        label: 'Konzepte',
+        loading: 'Wird geladen…',
+        resplit: 'Neu teilen',
+        flagged: 'markiert',
+        flaggedTip:
+          'Konzepte mit markierten Entitäten — jedes öffnen, Entität entfernen oder anpassen, speichern (wird automatisch neu gescannt); oder beim publish bestätigen.',
+        piiBadge: 'PII',
+        piiTip:
+          'Markierte Entitäten: {k}. Öffnen, entfernen oder anpassen, dann speichern — Scan erfolgt automatisch erneut.',
+        piiTipBare: 'Markierte Entitäten — öffnen, prüfen, dann zum erneuten Scannen speichern.',
+        sourceLabel: 'Quelldokument',
+        sourceView: 'Quelldokument öffnen',
+        bulkAccept: 'Alle akzeptieren',
+        bulkRedact: 'Alle schwärzen',
+        bulkRemove: 'Alle entfernen',
+        loadProgress: 'Dateien werden geladen {done}/{total}',
+        addSource: '+ From documents',
+        reingest: 'Dieses Konzept erneut ingestieren',
+        reingestBusy:
+          'Für dieses Repository läuft bereits ein RAG-Ingest — warte auf dessen Abschluss und versuche es dann erneut.',
+        reingestFailed: 'Erneutes Ingest fehlgeschlagen — bitte erneut versuchen.'
+      },
+      delete: {
+        body: 'Dies entfernt die Datei, ihre indexierten Chunks und ihre Graph-Verknüpfungen dauerhaft.',
+        confirm: 'Löschen',
+        title: 'Datei löschen'
+      },
+      label: 'Repository-Editor',
+      loadFailed: 'Dieses Konzept konnte nicht geladen werden.',
+      loadingConcept: 'Konzept wird geladen…',
+      meta: {
+        label: 'Konzept-Metadaten',
+        labelLabel: 'Label (Wissenshierarchie)',
+        noLabel: 'Kein Label',
+        none: 'Kein Konzept ausgewählt',
+        saveFailed: 'Speichern der Metadaten fehlgeschlagen',
+        saved: 'Metadaten gespeichert',
+        status: 'Indexstatus',
+        title: 'Titel',
+        trust: 'Vertrauensstufe',
+        type: 'Typ',
+        typePlaceholder: 'Typ auswählen…',
+        hide: 'Hide metadata',
+        show: 'Show metadata'
+      },
+      pane: {
+        files: 'Dateien',
+        graph: 'Graph'
+      },
+      pickConcept: 'Wählen Sie ein Konzept aus der Liste aus, um mit der Bearbeitung zu beginnen.',
+      resplit: {
+        body: 'Dies löscht alle aktuellen Konzepte sowie den abgeleiteten Graphen und importiert die Quelldatei mit der neuen Aufteilung erneut. Bearbeitungen an Konzepten gehen verloren.',
+        confirm: 'Neu teilen',
+        failed: 'Erneutes Aufteilen fehlgeschlagen — Link zur Quelldatei prüfen.',
+        modeA: 'Ein Konzept für den gesamten Crawl',
+        modeAHint: 'Mega-Konzept — der gesamte Inhalt in einem einzigen Konzept',
+        modeB: 'Ein Konzept pro Seite',
+        modeBHint: 'Teilt an den `## Source:`-Markierungen des Crawlers auf (empfohlen)',
+        modeC: 'LLM-Themenextraktion verwenden',
+        modeCHint: 'Story 10.6 — in Kürze verfügbar',
+        title: 'Aus Quelle neu aufteilen'
+      },
+      save: 'Speichern',
+      saved: 'Gespeichert',
+      saving: 'Wird gespeichert…',
+      unsaved: 'Ungespeicherte Änderungen',
+      view: {
+        rendered: 'Gerendert',
+        source: 'Quelle'
+      },
+      viewToggle: 'Editor-Ansicht',
+      paneLabel: 'Ansichtsbereich',
+      saveFailed: 'Speichern fehlgeschlagen — wiederholen',
+      piiRescan: {
+        label: 'Personenbezogene Daten',
+        button: 'Alle Seiten erneut scannen',
+        working: 'Alle Seiten werden erneut gescannt…',
+        progress: 'Erneuter Scan… {done} von {total} Seiten',
+        progressIdle: 'Erneuter Scan… Repository wird gelesen',
+        done: '{n} Seite(n) erneut gescannt.',
+        partial:
+          '{n} Seite(n) erneut gescannt. {e} sind weiterhin fehlgeschlagen — ihr Scan-Ergebnis hat sich nicht geändert, die Veröffentlichung bleibt für sie gesperrt.',
+        noKey:
+          'Der Server hat den erneuten Scan angenommen, aber keine Lauf-ID zurückgegeben, daher kann sein Fortschritt nicht verfolgt werden. Es wurde nichts gemeldet.',
+        missing:
+          'Der erneute Scan ist auf diesem Server nicht verfügbar (404). Es wurde nichts geändert — die Seiten mit fehlgeschlagenem Scan sperren weiterhin die Veröffentlichung.',
+        frozen: 'Erneuter Scan abgelehnt: das Repository wird veröffentlicht (409). Es wurde nichts geändert.',
+        failed:
+          'Der erneute Scan ist fehlgeschlagen. Es wurde nichts geändert — die Seiten mit fehlgeschlagenem Scan sperren weiterhin die Veröffentlichung.',
+        scanned: '{n} Seite(n) erneut gescannt',
+        clean: 'sauber',
+        hit: 'markiert',
+        error: 'Scan-Fehler',
+        vanished: 'verschwunden',
+        stillBlocking: 'Sperrt weiterhin'
+      },
+      piiBulk: {
+        done_accept:
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
+        title: {
+          redact: 'Alle markierten Inhalte schwärzen',
+          remove: 'Alle markierten Inhalte entfernen',
+          accept: 'Alle markierten Entitäten akzeptieren'
+        },
+        body: {
+          redact:
+            'Der Textkörper jedes markierten Konzepts wird durch den Schwärzungshinweis ersetzt. Dies kann nicht rückgängig gemacht werden.',
+          remove: 'Der Textkörper jedes markierten Konzepts wird geleert. Dies kann nicht rückgängig gemacht werden.',
+          accept:
+            'Alle markierten Entitäten werden als geprüft und beibehalten markiert — sie werden erst nach einem erneuten Scan wieder markiert.'
+        },
+        scope: 'Betroffene Konzepte: {n}.',
+        confirm: 'Anwenden',
+        failed: 'Die PII-Massenaktion ist fehlgeschlagen — versuchen Sie es erneut.'
+      },
+      actions: {
+        bulkPii: 'Massenaktion für PII wird angewendet',
+        deleting: 'Wird gelöscht'
+      },
+      addSources: {
+        working: 'Converting sources…',
+        done: '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).',
+        failed: 'A conversion failed — check the logs; the rest may still have queued.',
+        landed: 'Conversions complete — {t} topics now in the tree.'
+      }
+    },
+    dashboard: {
+      bulk: {
+        body: 'Jedes Repository wird mit der vollständigen Gate-Prüfung veröffentlicht (PII-Prüfung, Indexierung, Konformität). Ergebnisse pro Repository:',
+        pending: 'Bestätigen, um ausgewählte Repositories zu publish.',
+        publishConfirm: '{n} veröffentlichen',
+        title: 'Ausgewählte Repositories veröffentlichen'
+      },
+      card: {
+        actions: 'Aktionen für {name}',
+        building: 'Wird erstellt…',
+        buildingAria: 'Wird erstellt — die Quelldatei wird noch verarbeitet',
+        delete: 'Löschen',
+        export: 'Exportieren',
+        ingesting: 'Wird aufgenommen…',
+        logs: 'Protokolle',
+        rename: 'Umbenennen',
+        versions: 'Versionen',
+        testingLab: 'Testing Lab'
+      },
+      delete: {
+        body: 'Dies entfernt das Repository, seine Konzepte, indexierten Inhalte, Graphen und Bundle-Artefakte dauerhaft. Dieser Vorgang kann nicht rückgängig gemacht werden.',
+        confirm: 'Löschen',
+        title: 'Repository löschen'
+      },
+      filter: {
+        domain: 'Nach Themenbereich filtern',
+        allDomains: 'Alle Themenbereiche'
+      },
+      new: '+ Neues Repository',
+      pii: {
+        ack: 'Markierte Entitäten bestätigen & veröffentlichen',
+        note: 'Die markierten Entitäten sind Teil des veröffentlichten Inhalts. Wenn Sie diese überprüft haben (z. B. offizielle Kontaktdaten), bestätigen Sie dies und fahren Sie fort.'
+      },
+      publish: {
+        body: 'Das Ausführen von publish erstellt v{n} und speichert das Bundle „{file}“ im Dokumenten-Repository, wodurch die vorherige zip ersetzt wird. Die neue Version ist erst im Status serving, wenn Sie Ingest ausführen.',
+        confirm: 'Veröffentlichen',
+        title: 'Veröffentlichen'
+      },
+      search: 'Suchen...',
+      select: '{name} für Massenveröffentlichung auswählen',
+      stage: {
+        drainFailed: 'Ingest fehlgeschlagen',
+        queueBehind: '{n} in Warteschlange · Ingest in {m} Repo(s)',
+        redraining: 'Erneut entleeren…',
+        building: 'Wird erstellt…',
+        draft: 'Entwurf',
+        inReview: 'In Überprüfung',
+        ingested: 'Ingest abgeschlossen für v{n}',
+        published: 'Veröffentlicht v{n}',
+        retracted: 'Zurückgezogen',
+        stepOf: 'Step {n} of 10'
+      },
+      title: 'Repositories',
+      topics: 'Themen',
+      unpublish: {
+        title: 'Veröffentlichung zurückziehen',
+        body: 'Dies stoppt sofort die Bereitstellung von {name} für RAG-Agenten. Die veröffentlichte Bundle-Zip und der Versionsverlauf bleiben erhalten; das Repository kehrt zur Überprüfung zurück, damit Sie es korrigieren können. Veröffentlichen Sie erneut und führen Sie Ingest aus, um es wieder bereitzustellen.',
+        confirm: 'Veröffentlichung zurückziehen'
+      },
+      lane: {
+        draft: 'Importieren',
+        in_review: 'In Überprüfung',
+        published: 'Veröffentlicht',
+        ingested: 'Aufgenommen',
+        retracted: 'Zurückgezogen'
+      },
+      laneEmpty: {
+        draft: 'Noch nichts importiert',
+        in_review: 'Nichts in Überprüfung',
+        published: 'Noch keine veröffentlichten Repositories',
+        ingested: 'Noch nichts aufgenommen',
+        retracted: 'Nichts zurückgezogen'
+      },
+      reingest: {
+        failed: 'Erneutes Ingest fehlgeschlagen ({n})',
+        title: 'Fehlgeschlagene Konzepte erneut ingestieren',
+        confirm: 'Erneut ingestieren',
+        counting: 'Es wird geprüft, wie viele Konzepte fehlgeschlagen sind…',
+        countFailed: 'Die Anzahl der fehlgeschlagenen Konzepte konnte nicht gelesen werden. Bitte erneut versuchen.',
+        none: '{name} hat keine fehlgeschlagenen Konzepte — jedes Konzept wurde erfolgreich indiziert.',
+        body: '{n} Konzept(e) von {name} konnten nicht indiziert werden und fehlen in RAG. Das erneute Ingest versucht nur diese; indizierte Konzepte bleiben unverändert. Schlägt es erneut fehl, wird der Fehler am Konzept angezeigt.'
+      }
+    },
+    build: {
+      drainFailed: {
+        more: '+ {n} weitere',
+        fixPath: 'Erneut ingestieren für Neuversuch: retract → Version erstellen → ingest.'
+      },
+      curation: {
+        fallbacks: 'LLM-Fallbacks',
+        curated: 'Kuratiert',
+        typed: 'Typisiert',
+        labeled: 'Gekennzeichnet',
+        described: 'Beschrieben'
+      },
+      batches: 'Batches gespeichert',
+      bytes: 'Quelle gelesen',
+      conceptsIndexed: 'Konzepte indexiert',
+      elapsed: {
+        hr: 'Vor {n} Std. gestartet',
+        lt1: 'Vor weniger als einer Minute gestartet',
+        min: 'Vor {n} Min. gestartet'
+      },
+      hint: {
+        import: 'Das Repository bleibt im Status Import, bis die Dateikonvertierung abgeschlossen ist.',
+        rag: 'Der RAG-Index wird erstellt — die Version wechselt zu serving, sobald jedes Konzept indexiert ist.',
+        serving:
+          'Diese Version übernimmt das serving für RAG-Traffic — führen Sie retract aus, um Änderungen vorzunehmen.',
+        review: 'In review — ein Prüfer gibt die Freigabe, anschließend führt der Steward publish und ingest durch.',
+        retracted: 'Außer Betrieb — submit → review → approve → publish → ingest, um wieder zu serving.',
+        idle: 'Import abgeschlossen — submit zur review, um den Workflow fortzusetzen.'
+      },
+      pages: 'Seiten verarbeitet',
+      serving: {
+        graph: 'Serving-Graph',
+        version: 'Serving-Version'
+      },
+      stage: {
+        indexing: 'Indizierung',
+        serving: 'Bereitstellung',
+        label: 'Phase'
+      },
+      title: {
+        import: 'Import-Fortschritt',
+        rag: 'Ingest-Fortschritt',
+        serving: 'Serving-Status',
+        review: 'Review-Status',
+        retracted: 'Retract-Status',
+        idle: 'Repository-Status'
+      },
+      lifecycle: {
+        importing: 'Wird importiert',
+        reviewing: 'Wird überprüft',
+        ingesting: 'Wird aufgenommen',
+        serving: 'Wird bereitgestellt',
+        retracted: 'Zurückgezogen'
+      },
+      row: {
+        subject: 'Themenbereich',
+        topics: 'Themen',
+        lastVersion: 'Letzte Version'
+      }
+    },
+    create: {
+      zipOnly: 'Wählen Sie eine .zip-Bundle-Datei aus.',
+      stagedFile: 'Bereitgestellt: {name}',
+      staged: 'Bundle bereitgestellt — auf Repository erstellen klicken, um den Import zu starten.',
+      openExisting: 'Vorhandenes Repository öffnen',
+      name: 'Repository-Name',
+      importing: 'Bundle wird importiert…',
+      importHint: 'Oder importieren Sie ein vorhandenes zip-Bundle als neues Repository.',
+      importDefaultName: 'Importiertes Repository',
+      failed: 'Repository-Erstellung fehlgeschlagen',
+      duplicateInline:
+        'Ein Repository mit diesem Namen existiert bereits. Öffnen Sie es oder wählen Sie einen anderen Namen.',
+      duplicate:
+        'Ein Repository mit diesem Namen existiert bereits – öffnen Sie es über das Dashboard oder wählen Sie einen anderen Namen.',
+      domain: 'Themenbereich',
+      create: 'Repository erstellen',
+      title: 'Neues OKF-Repository',
+      hint: 'Erstellt ein leeres Repository mit einer index.md, die Sie im Studio-Editor bearbeiten.',
+      domainPlaceholder: 'Themenbereich auswählen…',
+      domainRequired: 'Zuerst Themenbereich auswählen — kann nach der Erstellung nicht mehr geändert werden.',
+      classLabel: 'Konzeptklassifizierung',
+      classHeuristics: 'Heuristiken (Standard)',
+      classLlm: 'LLM-unterstützt',
+      classHybrid: 'Hybrid'
+    },
+    fm: {
+      errKeyCurated: 'Reservierter Feldname.',
+      errKeyDuplicate: 'Feldname wird doppelt verwendet.',
+      errJson: 'Ungültiges JSON',
+      errNumber: 'Muss eine Zahl sein',
+      kind: {
+        json: 'JSON',
+        array: 'Liste',
+        boolean: 'Wahr/Falsch',
+        number: 'Zahl',
+        string: 'Text'
+      },
+      removeKey: 'Feld entfernen',
+      kindLabel: 'Werttyp',
+      keyPh: 'Feldname',
+      fullHint: 'Jedes Frontmatter-Feld ist bearbeitbar. Schlüssel können frei hinzugefügt oder entfernt werden.',
+      errRemovalPending: 'Das Entfernen von Feldern erfordert den Merge-Delete-Serververtrag (in Kürze verfügbar).',
+      errKeyRequired: 'Jedes Feld benötigt einen Namen.',
+      arrayPh: 'kommagetrennte Werte',
+      addKey: 'Feld hinzufügen',
+      saved: 'Frontmatter gespeichert',
+      label: 'Frontmatter',
+      tipLabel: 'Was ist Frontmatter?',
+      edit: 'Bearbeiten',
+      empty: 'Noch kein Frontmatter vorhanden — Bearbeiten fügt Typ, Titel und Labels hinzu.',
+      type: 'Typ',
+      noType: 'Kein Typ',
+      titleLabel: 'Titel',
+      labelsLabel: 'Label (Wissenshierarchie)',
+      noLabel: 'Kein Label',
+      descriptionLabel: 'Beschreibung',
+      save: 'Frontmatter speichern',
+      saveFailed: 'Frontmatter-Speicherung fehlgeschlagen',
+      perRepoTitle: 'Routing tags — what this repo is about',
+      perRepoHint:
+        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+      perRepoField: {
+        topic: 'Topic',
+        entity: 'Entity',
+        scope: 'Scope',
+        forbidden: 'Forbidden',
+        summary: 'Summary',
+        keyword: 'Keyword'
+      },
+      perRepoPh: {
+        topic: 'One topic per line',
+        entity: 'One entity per line',
+        forbidden: 'One forbidden topic per line',
+        keyword: 'One keyword per line'
+      },
+      perRepoHelp: {
+        topic: 'Add, modify or remove topics — one per line. Empty lines are ignored.',
+        entity: 'Add, modify or remove entities — one per line. Empty lines are ignored.',
+        forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
+        keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
+      },
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'Tags auf Repository-Ebene ({summary}) gehören zum Repository, nicht zu diesem Konzept — verwalten Sie sie im Tags-Panel in der rechten Leiste.'
+    },
+    piiReview: {
+      title: 'Prüfung personenbezogener Daten',
+      checking: 'Wird geprüft…',
+      checkingBody: 'Der Status der personenbezogenen Daten jeder Seite wird gelesen…',
+      unreadableTitle: 'Status unbekannt',
+      unreadableBody:
+        'Der Status der personenbezogenen Daten dieses Repositories konnte nicht gelesen werden. Ob etwas gefunden wurde, ist UNBEKANNT — das ist kein sauberes Ergebnis.',
+      unscanned: 'Nicht gescannt',
+      unscannedBody:
+        'Kein vollständiger Scan personenbezogener Daten deckt dieses Repository ab ({n} Seite(n) nie gescannt). Es ist nichts als frei von personenbezogenen Daten bekannt — die Veröffentlichung wird nicht durch Treffer blockiert, aber hinter diesem Urteil steht kein Scan.',
+      errorTitle: 'Scan fehlgeschlagen',
+      errorBody:
+        '{n} Seite(n) konnten nicht gescannt werden. Ihr Inhalt wurde NICHT erfolgreich gelesen, ob sie personenbezogene Daten enthalten, ist UNBEKANNT — sie sind nicht sauber und sperren die Veröffentlichung.',
+      unreviewed: 'Markiert, nicht geprüft',
+      unreviewedBody:
+        'Der Scanner hat auf {n} Seite(n) mögliche personenbezogene Daten gefunden und niemand hat sie geprüft. Die Veröffentlichung ist erlaubt, aber auf diesen Seiten wurde nichts geprüft.',
+      reviewed: 'Markiert, geprüft',
+      reviewedBody:
+        '{n} Seite(n) enthalten markierte personenbezogene Daten, die eine Stewardin oder ein Steward anerkannt hat ({by} am {at}).',
+      cleanVerdict: 'Gescannt — nichts gefunden',
+      cleanBody: 'Jede Seite wurde gescannt und es wurden keine personenbezogenen Daten gefunden.',
+      staleAck:
+        'Eine frühere Anerkennung verzeichnete am {at} {a} markierte Seite(n); jetzt sind {n} markiert, sie deckt sie daher nicht ab.',
+      bannerTitle: 'Niemand hat diese Funde geprüft.',
+      bannerBody:
+        'Die Veröffentlichung bleibt erlaubt und keine Prüfung stoppt Sie — die markierten Seiten gelangen jedoch unverändert in das veröffentlichte Repository. Öffnen Sie jede und entscheiden Sie vor der Veröffentlichung.',
+      unknownActor: 'unbekannt'
+    },
+    glossary: {
+      addConcept:
+        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+      title:
+        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus:
+        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier:
+        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+      concept:
+        'Ein Eintrag in Ihrem Repository — üblicherweise eine einzelne Seite oder ein Thema. Jedes Konzept besitzt strukturiertes Frontmatter, das der Assistent liest, sowie den Markdown-Text, aus dem Antworten generiert werden.',
+      repository:
+        'Eine Sammlung kuratierter Konzepte zu einem Themenbereich. Daraus entsteht ein OKF-Bundle, das Sie veröffentlichen, versionieren und dem Assistenten zur Verfügung stellen.',
+      subjectArea:
+        'Wohin gehört dieses Wissen? Der Themenbereich gruppiert Ihr Repository und bestimmt, welche Labels gewählt werden können. Kann nach der Erstellung nicht mehr geändert werden.',
+      selectSubjectArea: 'Themenbereich auswählen…',
+      subjectAreaMissing:
+        'Der Themenbereich dieses Repositories befindet sich nicht in der Wissenshierarchie — alle Labels werden angezeigt.',
+      label:
+        'Eine Kategorie aus der Wissenshierarchie, die dem Assistenten mitteilt, um welche Art von Gegenstand es sich bei diesem Konzept handelt. Über Labels finden Antworten den passenden Inhalt.',
+      bundle:
+        'Der zip-Export eines Repositories — seine Konzepte, Struktur und Metadaten in einer einzigen Datei. Über Bundles werden Repositories zwischen Systemen übertragen.',
+      version:
+        'Ein unveränderlicher Snapshot eines Repositories zum Zeitpunkt des publish. Die Bearbeitung wird an der nächsten Version fortgesetzt — veröffentlichte Versionen ändern sich nie.',
+      serving:
+        'Diese Version ist aktiv: Der Assistent liest ihren Inhalt bei der Beantwortung. Führen Sie retract aus, um Änderungen vorzunehmen.',
+      ingestion:
+        'Der Schritt, bei dem eine veröffentlichte Version für die Beantwortung vorbereitet wird — Text wird aufgeteilt, eingebettet und verknüpft. Davor erreicht nichts den Assistenten.',
+      classification:
+        'Wie bestimmt wird, WAS jedes Konzept ist (ein Thema, eine Entität, ein Prozess…). Heuristiken lesen die Seite automatisch; die LLM-Option ist langsamer, bewältigt aber komplexe Seiten.',
+      resplit:
+        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+      saveFailed: 'Speichern fehlgeschlagen',
+      importFailedTitle: 'Der Import ist fehlgeschlagen — die Quelldatei konnte nicht konvertiert werden.',
+      importFailedHint: 'Löschen Sie dieses Repository und importieren Sie die Quelldatei erneut.',
+      frontmatter:
+        'Die strukturierten Informationen am Anfang jeder Datei — Typ, Titel, Labels. Der Assistent nutzt dies, um zu erkennen, worum es in jedem Konzept geht.',
+      pickSource:
+        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+      classificationStrategy:
+        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
+      clsHeur: 'Heuristics (fast, no LLM)',
+      clsLlm: 'LLM classification',
+      clsHybrid: 'Hybrid',
+      fsPick:
+        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+      autocorrect:
+        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+      handoff:
+        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+      lifecycle:
+        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+      labelsAuto:
+        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+      reviewHandoff:
+        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+      piiReview:
+        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+    },
+    md: {
+      toolbar: 'Formatierung',
+      bold: 'Fett',
+      italic: 'Kursiv',
+      h1: 'Überschrift 1',
+      h2: 'Überschrift 2',
+      h3: 'Überschrift 3',
+      bullet: 'Aufzählungsliste',
+      numbered: 'Nummerierte Liste',
+      link: 'Link einfügen',
+      code: 'Inline-Code',
+      table: 'Tabelle einfügen',
+      split: 'Teilen',
+      rendering: 'Wird gerendert…'
+    },
+    narrative: {
+      intro:
+        'Ein OKF-Repository ist eine strukturierte, versionierte Sammlung von Themen, die Ihre Chat-Antworten zitieren können. Betrachten Sie es als schlanke ontologische Schicht für Ihre Domäne — Labels definieren die Kategorien, Themen definieren die Entitäten, Quellen definieren die Provenienz.',
+      step0:
+        'Ein OKF-Repository ist eine kuratierte, versionierte Sammlung von Themen. Betrachten Sie es als schlanke ontologische Schicht für Ihre Domäne — Labels definieren Kategorien, Themen definieren Entitäten, Quellen definieren Provenienz. Einmal veröffentlicht, zitieren nachgelagerte Chat-Antworten diese Themen per ID.',
+      step1:
+        'Drei Wege, um ein OKF-Repository anzulegen: Themen aus einem Website-Crawl erfassen, aus bereits hochgeladenen Dokumenten extrahieren oder mit einer leeren Vorlage starten. Das Klonen eines vorhandenen Repositories kopiert dessen Themen und erlaubt das Verzweigen der Arbeit.',
+      step2:
+        'Jedes Dokument wird zu einer Quelle für Themen. Der Producer liest diese ein, extrahiert Themenkandidaten und schlägt eine Hierarchie vor. Sie überprüfen jedes Thema im nächsten Schritt — nichts wird festgeschrieben, bevor Sie es freigeben.',
+      step3:
+        'Wir lesen Ihre Quellen und schlagen Themen vor. Themen gruppieren sich unter den von Ihnen gewählten Kategorielabels. Der Producer agiert konservativ — er schlägt lieber weniger, präzise geformte Themen vor als viele irrelevante.',
+      step4:
+        'Labels sind die kategorialen Achsen Ihrer Ontologie — um welche Art von Gegenstand handelt es sich bei diesem Thema? Sie werden automatisch aus der Wissenshierarchie vergeben, begrenzt auf das Themengebiet dieses Repositoriums.',
+      step5:
+        'Dies ist der Kern der Arbeit. Jedes Thema ist eine kleine, zitierfähige Wissenseinheit. Themen erhalten einen Titel, eine Beschreibung und erhalten die Labels aus der Wissenshierarchie. Ihre Aufgabe ist es, sie fundiert zu gestalten: unklare Titel umbenennen, Fast-Duplikate zusammenführen, unbelegte Themen entfernen.',
+      step6:
+        'Wir führen Konformitätsprüfungen durch: Hat jedes Thema einen Titel? Sind die Labels gültig? Sind die Quellenangaben intakt? Blockierende Probleme müssen behoben sein, bevor Sie das Repository übergeben; Warnungen können bestätigt werden.',
+      step7:
+        'Einige Warnungen können automatisch korrigiert werden: Statuswerte können auf gültige Enums begrenzt und fehlende Felder mit sinnvollen Standardwerten belegt werden. Wenden Sie gewünschte Korrekturen an und kehren Sie zur Prüfung zum Kurator zurück.',
+      step8:
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+      step9:
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+      docMgmtEntry:
+        'Erstellen Sie ein neues OKF-Repository aus den ausgewählten Dokumenten. Dokumente werden zu Quellen; Sie prüfen und benennen die erzeugten Themen, bevor Inhalte veröffentlicht werden.',
+      crawlSegment:
+        'Ein OKF-Repository ist eine strukturierte, versionierte Sammlung von Themen, die Ihre Chat-Antworten zitieren können.',
+      emptyDashboard:
+        'Sie haben noch keine OKF-Repositories erstellt. Ein OKF-Repository ist eine strukturierte, zitierbare Menge von Themen, auf die Ihre Chat-Antworten zurückgreifen können.',
+      labels:
+        'Labels sind die kategorialen Achsen Ihrer Ontologie — sie beantworten die Frage: „Um welche Art von Gegenstand handelt es sich bei diesem Thema?“.',
+      hide: 'Ausblenden',
+      whatIsThis: 'Was ist das?'
+    },
+    common: {
+      close: 'Schließen',
+      cancel: 'Abbrechen',
+      save: 'Speichern',
+      clear: 'Löschen',
+      delete: 'Löschen'
+    },
+    studio: {
+      title: 'OKF Studio',
+      help: 'Hilfe',
+      helpTitle: 'Über OKF Studio',
+      helpBody:
+        'OKF-Repositories sind eine schlanke ontologische Schicht — Labels definieren Kategorien, Themen definieren Entitäten, Quellen definieren Provenienz. Nach der Veröffentlichung zitieren Chat-Antworten Themen per ID und legen deren Provenienz offen.',
+      view: {
+        dashboard: 'Dashboard',
+        wizard: 'Assistent'
+      },
+      clonedFrom: 'Geklont von {name} · Version {version}',
+      context: {
+        title: 'Repository',
+        untitled: 'Unbenanntes Repository',
+        trust: 'Vertrauen',
+        sources: 'Quellen',
+        concepts: 'Bisherige Konzepte',
+        stale: 'veraltet'
+      },
+      status: {
+        draft: 'in Bearbeitung',
+        inReview: 'in Prüfung',
+        published: 'veröffentlicht'
+      },
+      stage: {
+        inReview: 'In Überprüfung',
+        stepOf: 'Schritt {n} von 10',
+        draft: 'Entwurf'
+      },
+      dashboard: {
+        title: 'Repositories',
+        new: '+ Neues Repository',
+        search: 'Suchen…',
+        empty: 'Hier befinden sich noch keine Repositories.',
+        topics: 'Themen',
+        select: '{name} für Massenveröffentlichung auswählen',
+        stale: 'veraltet',
+        stage: {
+          inReview: 'In Überprüfung',
+          stepOf: 'Schritt {n} von 10',
+          draft: 'Entwurf'
+        },
+        bulk: {
+          selected: '{n} ausgewählt',
+          publish: 'Ausgewählte veröffentlichen',
+          title: 'Ausgewählte Repositories veröffentlichen',
+          body: 'Nach dem Veröffentlichen können nachgelagerte Chat-Antworten diese nutzen. Jedes Repository unten führt sein Endergebnis auf.',
+          results: 'Ergebnisse',
+          publishConfirm: '{n} veröffentlichen',
+          col: {
+            name: 'Name',
+            status: 'Status',
+            topics: 'Themen'
+          },
+          status: {
+            ready: 'Bereit'
+          }
+        }
+      },
+      draft: {
+        notReady: 'Entwürfe können serverseitig noch nicht gespeichert werden; lokal gespeichert.'
+      },
+      mode: {
+        basic: 'Standard',
+        expert: 'Experte'
+      }
+    },
+    wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        retracted: 'Retracted',
+        publish: 'Ready to ingest'
+      },
+      status: {
+        published: 'veröffentlicht',
+        inReview: 'in Überprüfung',
+        draft: 'in Bearbeitung'
+      },
+      exit: 'Zurück zum Dashboard',
+      context: {
+        version: 'Version',
+        untitled: 'Unbenanntes Repository',
+        trust: 'Vertrauen',
+        title: 'Repository',
+        stale: 'veraltet',
+        sources: 'Quellen',
+        concepts: 'Bisherige Konzepte'
+      },
+      label: 'OKF Studio Assistent',
+      back: 'Zurück',
+      continue: 'Weiter',
+      finish: 'Open the Editor'
+    },
+    steps: {
+      entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
+        title: 'Repository-Name & Themenbereich',
+        hint: 'Geben Sie diesem OKF-Repository einen eindeutigen Namen und wählen Sie dessen Themenbereich.',
+        nameLabel: 'Repository-Name',
+        namePh: 'z. B. Transportgenehmigungen NL',
+        domainLabel: 'Themenbereich'
+      },
+      choose: {
+        title: 'Wo soll dieses OKF-Repository starten?',
+        hint: 'Wählen Sie, wie dieses Repository initiiert werden soll. Sie können dies später ändern.',
+        source: {
+          documents: {
+            title: 'Dokumente',
+            desc: 'Themen aus bereits hochgeladenen Dokumenten übernehmen.'
+          },
+          crawl: {
+            title: 'Website-Crawl',
+            desc: 'Eine Website crawlen und Themen anhand der Seiten vorschlagen.'
+          },
+          manual: {
+            title: 'Leere Vorlage',
+            desc: 'Neu beginnen und Themen selbst verfassen.'
+          },
+          clone: {
+            title: 'Klon eines bestehenden Repositories',
+            desc: 'Themen und Struktur aus einem anderen OKF-Repository forken.'
+          }
+        },
+        cloneSource: 'Source repository (not yet serving)',
+        clonePh: 'Select the repository to clone from',
+        cloning: 'Cloning topics into this repository…',
+        cloneNeed: 'Pick the repository to clone from first.',
+        cloneBusy: 'The previous repository is still being removed — go Back and Continue again in a moment.',
+        cloneFailed: 'The clone failed — try again.'
+      },
+      input: {
+        title: 'Eingaben',
+        documents: 'Wählen Sie die Dokumente aus, die als Basis für die Themenliste dienen sollen.',
+        crawl: 'Wählen Sie die zu crawlende(n) Website(s) aus.',
+        manual: 'Sie können Themen im nächsten Schritt direkt verfassen.',
+        clone: 'Wählen Sie das zu klonende Repository aus.',
+        placeholder: 'Schritt-UI folgt in einer späteren Story.',
+        chooseCrawl: 'Choose crawled documents',
+        chooseDocs: 'Choose source documents',
+        writeOne: '+ Write a concept',
+        fsPick: '+ Import markdown from this computer',
+        fsBusy: 'Importing your files…',
+        fsFailed: 'Import failed — check the files and retry.',
+        skippedEmpty: '{n} empty file(s) skipped.',
+        noneSelected: 'No sources selected yet.',
+        selectedN: 'Selected: {n}',
+        moreN: ' +{n} more',
+        noRepo: 'Create the repository first (go back to Entry).',
+        noRepoYet: 'Create the repository first (go back to Entry).',
+        benchTitle: 'Topics in this repository',
+        benchCount: '{n}',
+        benchLoading: 'Reading topics…',
+        benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
+        benchFailed: 'Could not read the topics right now.',
+        editTitle: 'Edit concept',
+        deleteFailed: 'Could not delete the concept.',
+        added: '{n} topic(s) in this repository so far.',
+        deleteTitle: 'Delete topic',
+        deleteBody: 'This permanently removes the topic from this repository.',
+        labelFailed: 'Could not set the label.',
+        cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
+      },
+      produce: {
+        title: 'Themen generieren',
+        hint: 'Wir lesen Ihre Quellen und schlagen Themen vor.',
+        progress: 'Producer läuft...',
+        placeholder: 'Producer-Dienst folgt in einer späteren Story.',
+        retry: 'Retry conversion',
+        restart: 'Run again',
+        running: 'Converting… you can watch progress here; nothing is committed until you review in Curate.',
+        failed: 'The conversion failed — retry, or go back and pick different inputs.',
+        done: '{n} topic(s) are ready — continue to review them in Curate.',
+        noSources: 'No sources selected — go back to Input.',
+        neverStarted: 'The conversion did not start — retry.',
+        manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
+        labelDone: 'Conversion complete',
+        dupContent:
+          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
+        inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          complete: 'Complete',
+          unavailable: 'Count unavailable',
+          waiting: 'Waiting'
+        },
+        filesNote: '{done} of {total} documents converted',
+        pagesNote: '{done} of {total} pages converted',
+        pagesSoFar: '{n} pages converted so far',
+        sourceStat: '+{n} new (total {t})',
+        sourceStatMerged: '+{n} new · {m} merged by slug (total {t})',
+        docsLeg: '{n} selected document(s)',
+        legWait: 'Waiting for the previous conversion to release…'
+      },
+      label: {
+        title: 'Labels — automatisiert',
+        hint: 'Labels werden automatisch aus der Wissenshierarchie vergeben — begrenzt auf das Themengebiet dieses Repositoriums.',
+        loading: 'Reading labels…',
+        preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
+        unlabeled: 'no labels yet',
+        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
+        loadFailed: 'Could not read the labels right now.'
+      },
+      curate: {
+        embedHint:
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
+        title: 'Themen überprüfen',
+        hint: 'Jedes Thema ist eine kleine, zitierfähige Wissenseinheit. Titel und Beschreibung bearbeiten.',
+        placeholder: 'Kuratierungs-Baumstruktur + Editor folgen in Story 3-8.'
+      },
+      validate: {
+        title: 'Auf Probleme prüfen',
+        hint: 'Wir führen Konformitätsprüfungen durch. Blockierende Probleme müssen behoben sein, bevor Sie das Repository übergeben.',
+        placeholder: 'Validierungs-Panel folgt in Story 3-8.'
+      },
+      autocorrect: {
+        title: 'Automatische Korrektur',
+        hint: 'Einige Warnungen können automatisch behoben werden. Wenden Sie gewünschte Korrekturen an und kehren Sie dann zur Prüfung zum Kurator zurück.',
+        placeholder: 'Autokorrektur-Dienst folgt in Story 10.2.',
+        noRepo: 'No repository yet — go back to Entry and create one first.',
+        applied: 'Fixes applied — continue, or go back to Curate to review the result.'
+      },
+      review: {
+        title: 'Überprüfen',
+        hint: 'Eine Zusammenfassung dessen, was Sie erstellt haben — Einreichung, Genehmigung und Veröffentlichung erfolgen auf dem Dashboard und im Editor.',
+        repo: 'Repository',
+        topics: 'Themen',
+        labels: 'Labels',
+        sources: 'Quellen',
+        state: 'Lifecycle state',
+        labelsSet: 'set per topic in Curate',
+        browserHint:
+          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
+        noRepo: 'No repository yet — the file review appears here once a repository exists.',
+        ritualOutside:
+          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+        versions: 'Versions',
+        logs: 'Action log',
+        rename: 'Rename',
+        noVersions: 'No versions yet — versions are minted during the approval ritual.',
+        versionSummary: '{n} version(s) · latest v{latest}'
+      },
+      publish: {
+        title: 'Absichern und fertigstellen',
+        hint: 'Dieses Repository ist bereit zur Prüfung. Die Veröffentlichung erfolgt hier nie — reichen Sie es auf dem Dashboard zur Freigabe ein; Genehmigung und Veröffentlichung erfolgen über das Dashboard oder den Editor.',
+        nameOk: 'Repository-Name festgelegt',
+        labelsOk: 'Labels ausgewählt',
+        topicsOk: 'Themen überprüft',
+        topicsPending: 'No topics yet',
+        topicsServing: 'Topics serving',
+        noTopics: 'No topics yet — go back to Curate to produce or write them.',
+        frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
+        ritual:
+          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+        openDashboard: 'Open the Dashboard'
+      }
+    },
+    trust: {
+      tier: {
+        unverified: 'ungeprüft',
+        'machine-confirmed': 'maschinell bestätigt',
+        'human-reviewed': 'menschlich überprüft'
+      }
+    },
+    repos: {
+      retract: {
+        notReady: 'Retract-UI wird in Story 3.9 ausgeliefert.'
+      },
+      manifest: {
+        notReady: 'Bundle-Manifest-Dienst folgt in einer späteren Story.'
+      }
+    },
+    docs: {
+      createRepo: 'OKF-Repository erstellen',
+      gate: {
+        emptySelection: 'Mindestens ein Dokument auswählen',
+        alreadyInOkf: 'Bereits in einem OKF-Repository enthaltene Dokumente entfernen',
+        alreadyIngested: 'Bereits ingestierte Dokumente entfernen',
+        servingWarn:
+          '{n} ausgewählte Dokumente dienen noch dem freien Korpus — das neue Repository kann erst nach deren Rückzug ingestiert werden.'
+      },
+      produce: {
+        notReady: 'Producer-Anbindung folgt in einer späteren Story.'
+      }
+    },
+    crawl: {
+      domainLabel: 'Themenbereich',
+      domainPlaceholder: 'Themenbereich auswählen…',
+      classLabel: 'Konzeptklassifizierung',
+      classHeuristics: 'Heuristiken (Standard)',
+      classHeuristicsHint:
+        'Schnelle regelbasierte Klassifizierung — keine LLM-Kosten, optimal für gut strukturierte Crawls.',
+      classLlm: 'LLM-unterstützt',
+      classLlmHint:
+        'Das LLM kuratiert jedes Konzept — Typ, Label der Wissenshierarchie und eine Beschreibung. Weit genauer und vollständiger als Heuristiken; zusätzlicher Zeitaufwand pro Konzept zu erwarten.',
+      classHybrid: 'Hybrid',
+      classHybridHint:
+        'Zuerst Heuristiken; das LLM überprüft unsichere Fälle und schließt Lücken. Ausgewogen bezüglich Zeitaufwand und Vollständigkeit.',
+      targetLabel: 'Wohin soll dies gespeichert werden?',
+      target: {
+        freeform: 'In Freiform-Korpus crawlen',
+        okfRepo: 'OKF-Repository'
+      },
+      targetHint: 'Wir zeigen Ihnen die gefundenen Themen, bevor etwas gespeichert wird.',
+      createOkfFromCrawl: 'OKF-Repository aus diesem Crawl erstellen',
+      splitLabel: 'Konzeptaufteilung',
+      splitA: 'Ein Konzept für den gesamten Crawl',
+      splitB: 'Ein Konzept pro Seite (empfohlen)',
+      splitC: 'LLM-Themenextraktion verwenden',
+      splitCHint: 'Story 10.6 — in Kürze verfügbar',
+      splitBHint: 'Jede gecrawlte Seite wird zu einem eigenen Konzept — die KI kann einzelne Seiten zitieren.',
+      splitAHint: 'Der gesamte Crawl wird zu einem einzigen großen Konzept — ideal für kleine Websites.',
+      progressDownload: 'Gecrawlter Inhalt wird heruntergeladen...',
+      progressSplit: 'Wird in Konzepte aufgeteilt...',
+      progressIngest: 'Konzepte werden hinzugefügt (Batch [i] von [n])...',
+      postCrawlHint:
+        'Nach Abschluss des Crawls können Sie diesen über den Dashboard-Tab der Datei in ein OKF-Repository umwandeln.',
+      creating: 'OKF-Repository wird erstellt...',
+      createOk: 'OKF-Repository erstellt. Studio wird zum Kuratieren geöffnet.',
+      createOkRenamed: 'OKF-Repository als „[name]“ erstellt. Studio wird zum Kuratieren geöffnet.',
+      createFailed: 'Das OKF-Repository konnte aus diesem Crawl nicht erstellt werden.',
+      conversionsTitle: 'Aus diesem Crawl erstellte Repositories',
+      convQueued: 'In Warteschlange...',
+      convDownloading: 'Crawl wird heruntergeladen...',
+      convSplitting: 'Wird in Konzepte aufgeteilt...',
+      convAdding: 'Konzepte werden hinzugefügt (bisher [p] Seiten)...',
+      convDone: 'Erstellt ([p] Seiten)',
+      convFailed: 'Fehlgeschlagen',
+      createStarted: '„[name]“ wird erstellt — Fortschritt unten verfolgen.',
+      modelTier: {
+        label: 'Modell',
+        options: {
+          'local-small': 'Lokal · klein',
+          'local-medium': 'Lokal · mittel',
+          'sovereign-large': 'Souverän · groß'
+        }
+      },
+      gate: {
+        notSucceeded: 'Der Crawl muss abgeschlossen sein, bevor ein OKF-Repository erstellt werden kann.',
+        alreadyInOkf: 'Dieser Crawl befindet sich bereits in einem OKF-Repository.'
+      }
+    },
+    curator: {
+      placeholder: 'Wählen Sie links ein Thema aus, um es anzuzeigen und zu bearbeiten.',
+      search: 'Themen durchsuchen',
+      noTopics: 'Noch keine Themen vorhanden.',
+      labels: {
+        title: 'Labels anpassen',
+        body: 'Labels sind die kategorialen Achsen Ihrer Ontologie — um welche Art von Gegenstand handelt es sich bei diesem Thema?',
+        edit: 'Labels anpassen',
+        add: 'Hinzufügen',
+        addPh: 'z. B. Genehmigungen',
+        remove: 'Entfernen',
+        empty: 'Noch keine Labels vorhanden.',
+        notReady: 'Labels lokal gespeichert — Serversynchronisierung in Kürze verfügbar.'
+      },
+      frontmatter: {
+        label: 'Frontmatter',
+        edit: 'Frontmatter bearbeiten',
+        dialogTitle: 'Frontmatter bearbeiten',
+        okfVersion: 'okf_version',
+        status: 'lifecycle.status',
+        staleAfter: 'lifecycle.stale_after',
+        trustTier: 'trust_tier',
+        attestation: 'attestation',
+        sources: 'provenance.sources',
+        onlyOnIndex: 'Per-repo tags live on the index concept only — open the index to see them.'
+      },
+      showSource: 'Quelle anzeigen',
+      issue: {
+        missingType: 'Konzept weist keinen Typ auf.',
+        badActor: 'Source Actor muss mit agent:/human:/tool:/process: beginnen.'
+      },
+      saveBlocked: 'Speichern blockiert: Beheben Sie zuerst Konformitätsprobleme.'
+    },
+    validation: {
+      frozen:
+        'Inhalt bei {v} eingefroren — schreibgeschützte Vorschau. Retract für die serving-Version ausführen, um Änderungen vorzunehmen.',
+      none: 'Keine',
+      expertHint:
+        'Wechseln Sie in den Expertenmodus, um rohes Validierungs-JSON anzuzeigen, nach Schweregrad zu filtern und Prüfungen zu überschreiben.',
+      headline: {
+        blockers: '{n} blockierende(s) Problem(e) — beheben Sie es, bevor Sie das Repository übergeben',
+        warnings: '{n} Punkt(e) erfordern Ihre Überprüfung',
+        ok: 'Sieht gut aus. Nichts zu beheben.'
+      },
+      summary: '{clean} fehlerfrei · {warnings} erfordert Prüfung · {blockers} blockierend',
+      formatter: {
+        notReady: 'Formatierer folgt in Story 4.2b.'
+      },
+      run: {
+        notReady: 'Validierungsanbindung folgt in einer späteren Story.'
+      },
+      piiTitle: 'Personal data — review each flagged concept',
+      loading: 'Checking the repository…',
+      loadFailed: 'Could not load the validation report.',
+      retry: 'Retry',
+      issuesTitle: 'Issues to review',
+      howToFix: 'How to fix',
+      indexFailed: 'Re-index failed — edit or re-split the page.',
+      indexFailedRemedy:
+        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+      severity: {
+        blocker: 'Blocking',
+        warning: 'Needs review',
+        info: 'Info'
+      },
+      type: {
+        conformance: 'Frontmatter',
+        orphan: 'Not linked',
+        near_duplicate: 'Near-duplicate',
+        citation: 'Citations',
+        index_failed: 'Index'
+      },
+      topicLinks: {
+        title: 'Cross-link topics',
+        tip: 'Reads every page in this repository and writes links between the pages that genuinely belong together — the same processing the import wizard runs. It is safe to re-run: existing links are kept and only new ones are added.',
+        progress: 'Cross-linking… {done} of {total} batches',
+        progressIdle: 'Cross-linking… reading the repository',
+        done: 'Added {n} link(s) across {c} page(s).',
+        failed: 'Cross-linking failed: {msg}'
+      },
+      action: {
+        suggestLinks: 'Suggest links',
+        accept: 'Accept',
+        dismiss: 'Dismiss',
+        delete: 'Delete',
+        working: 'Working…',
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"',
+        preview: 'Preview duplicates',
+        hidePreview: 'Hide preview'
+      },
+      actionDone: {
+        done: 'Done'
+      },
+      suggest: {
+        working: 'Asking the assistant for link suggestions…',
+        empty: 'No suggestions — link it manually in the editor.'
+      },
+      nearDup: {
+        keepHint: 'Keep one copy — delete the rest.'
+      },
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      mergedPages: '{n} pages',
+      preview: {
+        loading: 'Loading page contents…',
+        truncated: 'First {n} characters — open the editor for the full page.'
+      },
+      tip: {
+        conformance:
+          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+        orphan:
+          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+        near_duplicate:
+          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+        citation:
+          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+        index_failed:
+          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      },
+      piiRescan: 'Re-scan all pages',
+      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanPartial:
+        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+      piiRescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      piiRescanFailed:
+        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
+      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+      piiRescanNoKey:
+        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+      piiStateError: 'Scan error',
+      piiTally: {
+        scanned: '{n} page(s) re-scanned',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'scan error',
+        stillBlocking: 'Still blocking'
+      }
+    },
+    pii: {
+      panel: 'Markierte Entitäten',
+      nFlagged: '{n} gefunden',
+      rescan: 'Neu scannen',
+      stateError: 'Scan failed',
+      errorTitle: 'This page is blocking the hand-off.',
+      errorBody:
+        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+      rescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
+      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
+      scanning: 'Scannen…',
+      clean: 'Keine markierten Entitäten — dieses concept ist unbedenklich.',
+      how: 'Behebung: Entfernen oder umformulieren (z. B. in die Funktion statt des Namens ändern), dann speichern — der erneute Scan aktualisiert diese Liste.',
+      descFallback:
+        'Hier wurden personenbezogene Daten erkannt (DSGVO Art. 4(1) — beziehen sich auf eine identifizierbare Person).',
+      scanError: 'Scan nicht verfügbar',
+      type: {
+        PERSON: 'Name der Person',
+        LOCATION: 'Ort',
+        DATE_TIME: 'Datum oder Uhrzeit',
+        EMAIL_ADDRESS: 'E-Mail-Adresse',
+        PHONE_NUMBER: 'Telefonnummer',
+        IP_ADDRESS: 'IP-Adresse',
+        NRP: 'Nationale Registrierungsnummer',
+        BD_NATIONAL_ID: 'Nationale Identifikationsnummer'
+      },
+      desc: {
+        PERSON: 'Ein Personenname wurde erkannt. Namen können eine natürliche Person direkt identifizieren.',
+        LOCATION: 'Ein Ortsname wurde erkannt. In Kombination mit anderen Daten kann dies eine Person identifizieren.',
+        DATE_TIME:
+          'Ein Datum oder eine Uhrzeit wurde erkannt. Daten können zur Identifizierung einer Person beitragen.',
+        EMAIL_ADDRESS: 'Eine E-Mail-Adresse wurde erkannt. Sie identifiziert direkt eine kontaktierbare Person.',
+        PHONE_NUMBER: 'Eine Telefonnummer wurde erkannt. Sie identifiziert direkt eine kontaktierbare Person.',
+        IP_ADDRESS: 'Eine IP-Adresse wurde erkannt. Sie kann ein Gerät oder einen Haushalt identifizieren.',
+        NRP: 'Eine nationale Registrierungsnummer wurde erkannt. Sie identifiziert eine Person eindeutig.',
+        BD_NATIONAL_ID: 'Eine nationale ID-Nummer wurde erkannt. Sie identifiziert eine Person eindeutig.'
+      },
+      allClear: 'Unbedenklich',
+      redactFile: 'Ganze Datei schwärzen',
+      confirmRedactFile: 'Bestätigen: Gesamte Datei schwärzen?',
+      locateTip: 'Diesen Text im Editor anzeigen',
+      file: {
+        label: 'Ganze Datei:',
+        redact: 'Datei schwärzen',
+        remove: 'Inhalt entfernen',
+        accept: 'Alle akzeptieren',
+        confirmRedact: 'Bestätigen: Gesamte Datei schwärzen?',
+        confirmRemove: 'Bestätigen: Gesamten Textkörper entfernen?'
+      },
+      action: {
+        redact: 'Schwärzen',
+        replace: 'Ersetzen',
+        remove: 'Entfernen',
+        accept: 'Akzeptieren',
+        replacement: 'Ersetzungstext',
+        apply: 'Anwenden',
+        cancel: 'Abbrechen'
+      },
+      resolved: {
+        title: 'In dieser Datei verarbeitet',
+        redacted: 'Geschwärzt',
+        replaced: 'Ersetzt',
+        removed: 'Entfernt',
+        accepted: 'Akzeptiert',
+        fileRedacted: 'Datei geschwärzt',
+        kept: 'Im Text beibehalten',
+        removedWord: 'entfernt',
+        wholeFile: 'Gesamter Dateitext geschwärzt'
+      }
+    },
+    lifecycle: {
+      submit: 'Zur Überprüfung einreichen',
+      approve: 'Genehmigen',
+      publish: 'Veröffentlichen',
+      ingest: 'Aufnehmen',
+      retract: 'Zurückziehen',
+      unpublish: 'Veröffentlichung zurückziehen'
+    },
+    src: {
+      title: 'Choose the source documents',
+      hint: 'Pick sources from the document repository, upload new ones from this computer, or both.',
+      repoSec: 'From the document repository',
+      searchPh: 'Search by name or site…',
+      chipsLabel: 'Filter by origin',
+      chipAll: 'All',
+      chipCrawl: 'Crawls',
+      chipUpload: 'Uploads',
+      noMatches: 'Nothing matches this search or filter.',
+      crawlBadge: 'crawl',
+      crawlTip: 'Crawled from: {url}',
+      total: '{n} document(s)',
+      titleSingle: 'Choose the crawled document',
+      loading: 'Loading documents…',
+      retry: 'Retry',
+      empty: 'No documents in the repository yet — upload some below.',
+      more: 'Load more',
+      fsSec: 'From this computer',
+      fsPick: '+ Upload files',
+      uploading: 'Uploading…',
+      uploaded: '{n} file(s) uploaded.',
+      uploadFailed: 'An upload failed — check the files and retry.',
+      fsNote: 'Uploaded files join the document repository and are selected here automatically.',
+      count: 'Selected: {n}',
+      needOne: 'Select at least one source.',
+      confirm: 'Use {n} source(s)',
+      cancel: 'Cancel',
+      loadFailed: 'Could not load the document list.',
+      servingBadge: 'serving free-form RAG',
+      servingTip:
+        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+      alreadyBadge: 'already in an OKF repo',
+      alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
+    },
+    frontmatter: {
+      title: 'Frontmatter tags — what this repo is about',
+      help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',
+      refresh: 'Refresh suggestions',
+      suggesting: 'Curating…',
+      suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestCoverage: 'Abgeleitet aus {sampled} von {total} Konzepten, über {labels} Labels der Wissenshierarchie.',
+      suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
+      removeTag: 'Remove tag',
+      fieldEmpty: '—',
+      addPlaceholder: 'Add {field}',
+      add: 'Add',
+      saving: 'Saving…',
+      save: 'Save tags',
+      saved: 'Saved',
+      error: 'Save failed.',
+      errorWithStep: 'Save failed at step "{step}" ({code}) — retry.',
+      field: {
+        topic: 'Topic',
+        entity: 'Entity',
+        scope: 'Scope',
+        forbidden: 'Forbidden',
+        summary: 'Summary',
+        keyword: 'Keyword'
+      }
+    },
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
+      badge: {
+        present: 'head ready',
+        stale: 'head stale',
+        missing: 'no head'
+      },
+      tab: {
+        head: 'Head',
+        test: 'Test',
+        suites: 'Suites & analytics',
+        ragas: 'RAGAS-Vergleichstests',
+        models: 'Modelle'
+      },
+      head: {
+        dim: 'Dimensions',
+        model: 'Model',
+        version: 'Head version',
+        computedAt: 'Computed',
+        staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
+        missingNote:
+          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+        rebuild: 'Rebuild head',
+        rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
+        rebuildBusy: 'Rebuilding — embedding the tag fields…'
+      },
+      test: {
+        placeholder: 'e.g. cancer screening guidelines',
+        run: 'Run test',
+        running: 'Embedding the query and scoring the heads…',
+        adversarial: 'Adversarial — this query should NOT select this repository (a forbidden/adjacent topic)',
+        embeddedWith: 'Embedded with',
+        col: {
+          repo: 'Repository',
+          state: 'State',
+          headScore: 'Head score',
+          rank: 'Rank',
+          claimed: 'Claims query'
+        },
+        provenance: 'Routing provenance',
+        empty:
+          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
+        pass: 'PASS — this repository wins the head routing.',
+        fail: 'FAIL — {repo} wins the head routing for this query.',
+        passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
+        failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
+        passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
+        notSelectedSuppressed:
+          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+        claimed: 'claims',
+        suppressed: 'suppressed'
+      },
+      gate: {
+        title: 'Gate',
+        floor: 'Untergrenze',
+        veto: 'Verbotene Tags',
+        margin: 'Abstand',
+        claim: 'Anspruch',
+        pass: 'bestanden',
+        fail: 'nicht bestanden',
+        na: 'n/a'
+      },
+      counts: {
+        positive: 'Positive Abfragen',
+        negative: 'Verwechselbare',
+        negativeRandom: 'Außerhalb des Fachgebiets',
+        meta: 'Meta',
+        nearMiss: 'Beinahe-Treffer',
+        hint: 'Die aus verbotenen Tags abgeleiteten Zeilen richten sich nach der Anzahl der verbotenen Tags des Repositorys — sie lassen sich hier nicht einstellen.'
+      },
+      cls: {
+        nearMiss: 'Beinahe-Treffer',
+        confusable: 'Verwechselbar',
+        forbidden: 'Verboten',
+        offDomain: 'Außerhalb des Fachgebiets',
+        meta: 'Meta'
+      },
+      teach: {
+        claim:
+          'Der Head BEANSPRUCHT diese Abfrage — sie hat alle drei Schranken passiert. Soll sie NICHT hierher routen, lassen Sie verbotene Tags vorschlagen, die ihr Thema ausschließen, fügen Sie sie hinzu und bauen Sie den Head neu.',
+        explain: 'Erklären & vorschlagen',
+        explainBusy: 'Erklärung läuft — das Modell schlägt verbotene Tags vor…',
+        addTag: 'Zu verbotenen Tags hinzufügen',
+        suggestNone:
+          'Es wurde kein verbotener Tag vorgeschlagen — prüfen Sie die Abfrage manuell gegen den deklarierten Umfang.',
+        added: 'Zu den verbotenen Tags hinzugefügt — bauen Sie den Head neu, um sie anzuwenden.',
+        rebuildRerun: 'Head neu bauen & erneut testen',
+        savingTag: 'Verbotener Tag wird gespeichert…',
+        rebuildBusy: 'Head wird neu gebaut und erneut ausgeführt…',
+        title: 'Was das bedeutet',
+        veto: 'Diese Abfrage stimmt stark mit dem verbotenen Tag „{tag}“ überein. Sollte sie zu diesem Repository gehören, entfernen Sie „{tag}“ aus den verbotenen Tags im Frontmatter und veröffentlichen Sie erneut, um den Head neu zu bauen.',
+        floor:
+          'Die Abfrage hat keinen Bezug zum Thema dieses Repositorys (Wert unter der Domain-Untergrenze) — keine Tag-Änderung behebt das; die Unterdrückung ist korrekt.',
+        rejected: 'Vom Guardrail abgelehnt — ein verbotenes Tag darf nicht zum eigenen Thema des Repositorys passen.'
+      },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
+      },
+      suites: {
+        generate: 'Generate test suite',
+        generateTip:
+          'Das LLM schreibt die Abfragen in 30er-Stapeln pro Klasse — eine große Anfrage (100+) dauert einige Minuten. Die Suite erscheint hier und in den gespeicherten Suiten.',
+        generating: 'Stapelweise Generierung — große Anfragen dauern einige Minuten…',
+        run: 'Run all queries',
+        running: 'Running every suite query…',
+        current: 'Current suite',
+        col: {
+          query: 'Query',
+          kind: 'Kind',
+          outcome: 'Outcome',
+          run: 'Run',
+          when: 'When',
+          passRate: 'Pass rate',
+          headVersion: 'Head',
+          tags: 'Tags',
+          actions: 'Bearbeiten',
+          name: 'Name',
+          corpus: 'Korpus'
+        },
+        notEvaluatable: 'not evaluatable (no competitors)',
+        pass: 'pass',
+        fail: 'fail',
+        passRate: 'Pass rate',
+        positives: 'Positives',
+        negatives: 'Negatives',
+        noCompetitors: 'n/a — no competing heads yet',
+        avgMargin: 'Avg margin',
+        steal: '{repo} stole {n} queries',
+        addPlaceholder: 'Your own probe query…',
+        add: 'Add to suite',
+        kindPositive: 'should select',
+        kindNegative: 'should NOT select',
+        history: 'Run history',
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'Fehler erklären',
+        explainBusy: 'Fehler werden erklärt — ein Modellaufruf für jede fehlgeschlagene Negativ-Abfrage…',
+        batchTitle: 'Warum die fehlgeschlagenen Negativ-Abfragen hierher geroutet wurden',
+        batchNone:
+          'Es wurde keine Korrektur vorgeschlagen — prüfen Sie die fehlgeschlagenen Abfragen manuell gegen den deklarierten Umfang.',
+        addAll: 'Alle hinzufügen',
+        rebuildRerun: 'Head neu bauen & Suite erneut ausführen',
+        positiveFailuresTitle: 'Warum die Positivfälle nicht mehr bestehen',
+        positiveFailures:
+          'In diesem Durchlauf wurde(n) {n} Positiv-Test(s) unterdrückt — die verbotenen Tags treffen über das Repository-Scope hinaus zu.',
+        vetoedBy: 'Veto durch',
+        marginKilled: '{n} Positiv-Test(s) am Margin gescheitert (kein einzelnes Veto-Tag).',
+        removals: 'Zu entfernende Tags (sie legen Veto gegen die eigenen Positivfälle dieses Repositorys ein)',
+        removeTip: '"{tag}" entfernen — es hat {n} Positiv-Test(s) mit Veto blockiert',
+        tripwire:
+          'Dieser Zyklus hat {n} Positiv-Tests gebrochen — die hinzugefügten Tags unterdrücken zu viel. Zurücksetzen?',
+        tripwireRevert: 'Wiederherstellungsoptionen ansehen',
+        staleSnapshot:
+          'Tags wurden seit der Erzeugung dieser Suite geändert — für aktuelle verbotene Zeilen neu erzeugen.',
+        revertTitle: 'Tags zurücksetzen',
+        revertForbiddenCount: '{n} verbotene Tags',
+        revertAction: 'Zurücksetzen',
+        revertBusy: 'Speicherhistorie wird geladen…',
+        revertSaving: 'Frontmatter wird wiederhergestellt…',
+        revertEmpty: 'Noch keine Frontmatter-Speicherungen aufgezeichnet.',
+        revertDone: 'Frontmatter wiederhergestellt — Head neu bauen und erneut ausführen, um es anzuwenden.',
+        removeTag: 'Aus den Sperr-Tags entfernen',
+        tagsetTip: 'Sperr-Tags dieses Laufs',
+        savedTitle: 'Gespeicherte Suiten',
+        savedTip:
+          'Jede erstellte oder importierte Suite wird hier gespeichert, je Repository. Zwei Arten teilen sich diese Liste: Head-Suiten (aus Tags und Frontmatter abgeleitete Fragensätze, mit Positiv/Negativ-Zählern) und RAGAS-Benchmark-Suiten (Fragensätze mit erwarteten Antworten, mit RAGAS-Badge und Anzahl der Einträge). Laden zeigt eine Head-Suite in diesem Tab und eine RAGAS-Suite im Tab RAGAS-Benchmarks, wo sie gegen den Live-Korpus ausgeführt und bewertet werden kann. Löschen entfernt die Suite endgültig; Umbenennen erfolgt direkt im Namen.',
+        load: 'Laden',
+        flipTip: 'Wechseln zwischen soll-selektieren / nicht-selektieren',
+        deleteTip: 'Diese Zeile aus der Suite entfernen',
+        namePlaceholder: 'Suiten-Name (optional) — z. B. NCD-Regressionssatz',
+        probeTip: 'Diese Abfrage gegen den Live-Korpus testen',
+        deleteSuiteTip: 'Diese Suite und ihren Verlauf löschen',
+        corpusNeedsIngest: 'Inigieren Sie zuerst das Repository — der Korpus-Test durchsucht den inginierten Korpus',
+        deleteConfirmTitle: 'Diese Suite löschen?',
+        deleteConfirmBody: 'Dies entfernt die Suite und ihren Laufverlauf endgültig. Nicht widerrufbar.',
+        deleteConfirm: 'Suite löschen',
+        deleteCancel: 'Abbrechen',
+        unnamedFallback: 'unbenannte Suite'
+      },
+      error: {
+        explain: 'Erklärung fehlgeschlagen',
+        saveTag: 'Verbotener Tag konnte nicht gespeichert werden',
+        rebuild: 'Head rebuild failed',
+        test: 'Routing test failed',
+        generate: 'Suite generation failed',
+        run: 'Suite run failed',
+        add: 'Could not add the query',
+        history: 'Speicherhistorie konnte nicht geladen werden',
+        revert: 'Frontmatter konnte nicht zurückgesetzt werden',
+        advisor: 'Berater fehlgeschlagen',
+        noSuite: 'Erstellen Sie zuerst eine Suite, dann Head neu bauen & neu ausführen.',
+        applyNoSuite:
+          'Tags gespeichert und Head neu gebaut — erstellen Sie eine Suite und führen Sie alles aus, um den Effekt zu sehen.',
+        suiteLoad: 'Suite konnte nicht geladen werden',
+        suiteUpdate: 'Suite konnte nicht aktualisiert werden',
+        suiteRename: 'Suite konnte nicht umbenannt werden',
+        generateTimeout:
+          'Die Suite dauert ungewöhnlich lange — sie könnte in den gespeicherten Suiten landen; in einer Minute dort nachsehen.',
+        probe: 'Korpus-Test fehlgeschlagen',
+        suiteDelete: 'Suite konnte nicht gelöscht werden',
+        noFrontmatter:
+          'Dieses Repository hat noch keine Head-Tags — erstellen Sie Tags im Frontmatter-Panel (oder über Tag-Vorschläge) und generieren Sie dann eine Suite.'
+      },
+      footer: {
+        unpublish: 'Unpublish to review'
+      },
+      publishCard: {
+        present:
+          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
+        stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
+        missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'Berater: Tag-Änderungen empfehlen',
+        busy: 'Tag-Änderungen über die letzten Läufe simulieren…',
+        title: 'Tag-Set-Empfehlung (simuliert über die letzten Läufe)',
+        apply: 'Änderungen anwenden, Head neu bauen & Suite neu ausführen',
+        scorecard: 'Positive {p}/{pt} akzeptiert · Negative {n}/{nt} unterdrückt',
+        now: 'Jetzt',
+        predicted: 'prognostiziert',
+        scope: ' (über {q} Abfragen aus den letzten {r} Läufen)',
+        applying: 'Anwenden: Tags speichern, Head neu bauen, Suite neu ausführen…',
+        blockedTitle: 'Blockierte Entfernungen — klicken, um sie in Übernehmen aufzunehmen',
+        blockedGain: 'holt {n} Positive zurück',
+        narrowTitle: 'Engere Ersatz-Tags — holt Positive zurück, ohne Negative wieder zuzulassen',
+        narrowChip: 'Breites Tag entfernen, enges Tag hinzufügen',
+        reasonCurator: 'Sie haben dieses Tag ursprünglich deklariert — vor dem Entfernen bestätigen',
+        reasonRotated: 'Der Verlauf ist über die Basislinie hinaus rotiert — vor dem Entfernen bestätigen',
+        scopeDetail: 'Suiten: {s} · Tag-Sets: {t}',
+        rowActionsTitle:
+          'Korpus-begründete Umbuchungen — der Korpus beantwortet diese „Negativen“: in Positive umwandeln',
+        flipToPositive: 'Zu Positiv umwandeln',
+        ungroundedNote:
+          '{n} fehlgeschlagene Negative ohne Korpus-Abdeckung und ohne sichere Tag-Hebel — das konkurrierende Repository muss sie gewinnen.'
+      },
+      probe: {
+        answerable: 'beantwortbar',
+        weak: 'schwache Übereinstimmung',
+        unanswerable: 'nicht im Korpus',
+        unknown: 'unbekannt',
+        title: 'Korpus-Test — Zusammenfassung',
+        close: 'Zusammenfassung schließen',
+        chunksScanned: 'Korpus-Chunks durchsucht',
+        headLeg: 'Head-Urteil',
+        headNotClaimed: 'keine Zuordnung',
+        corpusLeg: 'Korpus-Abdeckung',
+        files: 'Referenzdateien',
+        colScore: 'Rerank-Score',
+        colFile: 'Datei',
+        colContent: 'Chunk-Inhalt'
+      }
+    },
+    ragas: {
+      dropped: {
+        note: '{kept} von {requested} Fragen — {dropped} konnten nicht erzeugt werden',
+        reason: {
+          rate_limited: 'das Modell hat die Erzeugung ratenbegrenzt'
+        }
+      },
+      corpus: {
+        capped: 'Basiert auf {parts} (Korpus-Budget)',
+        part: '{used} von {total} Chunks'
+      },
+      gen: {
+        eta: '~{t} verbleibend',
+        elapsed: 'läuft seit {t}',
+        calls: '{n} LLM-Aufrufe',
+        replays: '{n} Aufrufe aus dem Cache beantwortet',
+        underMin: 'unter einer Minute',
+        minutes: '{m} Min.',
+        hours: '{h} Std. {m} Min.'
+      },
+      paneTitle: 'RAGAS-Vergleichstests',
+      about:
+        'RAGAS bewertet, wie gut der Assistent abruft und antwortet — Treue, Kontextgenauigkeit und -treffer, Antwortrelevanz und mehr. Führen Sie eine Vergleichstestsuite aus, um das Repository als Wissensbasis zu messen.',
+      aboutLabel: 'Was ist RAGAS?',
+      aboutLink: 'Mehr auf ragas.io',
+      help: {
+        show: 'Hilfe',
+        hide: 'Hilfe ausblenden',
+        more: 'Mehr auf ragas.io',
+        repositories: {
+          title: 'Repositories',
+          text: 'Welche Repositories die Generierung speisen — nur das aktuelle oder zusammen mit verwandten. Mehrere Repositories erlauben es Mehrfach-Hop-Fragen, ihre Grenzen zu überschreiten.'
+        },
+        questions: {
+          title: 'Fragen',
+          text: 'Wie viele Fragen synthetisiert werden (Standard 20). Größere Sätze dauern sowohl zum Generieren als auch zum Ausführen proportional länger.'
+        },
+        singleHop: {
+          title: 'Einzel-Hop %',
+          text: 'Anteil der Fragen, die aus einem einzelnen Konzept stammen.'
+        },
+        multiAbstract: {
+          title: 'Mehrfach-Hop (abstrakt) %',
+          text: 'Anteil der Fragen, die mehrere Konzepte kombinieren und über ihren wörtlichen Text hinaus schlussfolgern.'
+        },
+        multiSpecific: {
+          title: 'Mehrfach-Hop (spezifisch) %',
+          text: 'Anteil der Fragen, die mehrere Konzepte kombinieren und ihrem genauen Wortlaut treu bleiben. Die drei Anteile sollten zusammen 100 ergeben.'
+        },
+        personas: {
+          title: 'Personas',
+          text: 'Wie viele synthetische Personas die Formulierung und Perspektive der generierten Fragen variieren.'
+        },
+        generate: {
+          title: 'Generieren',
+          text: 'Erstellt die Suite mit dem LLM: zuerst ein Wissensgraph-Durchlauf über den Korpus (der Teil, der Minuten dauert), dann die Fragesynthese. Läuft im Hintergrund — Sie können das Lab schließen, ohne etwas zu verlieren. Wird eine Suite während der Generierung gelöscht, wird die Arbeit abgebrochen.'
+        },
+        importSuite: {
+          title: 'Suite importieren (.xlsx)',
+          text: 'Lädt eine bestehende Suite im xlsx-Benchmarkformat, kompatibel mit dem Gold-Workflow von tests/rag-benchmarks.'
+        },
+        entries: {
+          title: 'Benchmark-Einträge',
+          text: 'Eine Zeile pro Frage mit erwarteter Antwort und Referenzstellen. Bearbeiten Sie eine Frage, testen Sie sie gegen den Live-Korpus, schalten Sie sie außerhalb des Geltungsbereichs (zum Kontrast aufgehoben, von der Bewertung ausgeschlossen) oder entfernen Sie sie.'
+        },
+        metrics: {
+          title: 'Metriken',
+          text: 'Die vier Standards — Treue, Kontextgenauigkeit, Kontextabdeckung, Antwortrelevanz — plus der erweiterte RAGAS-Katalog. Metriken, die ein Embedding-Modell benötigen, werden mit einer Warnung verworfen, wenn keines konfiguriert ist.'
+        },
+        run: {
+          title: 'Vergleichstest ausführen',
+          text: 'Spielt den Abruf für jeden Eintrag erneut, generiert Antworten, dann bewertet das Judge-Modell jede Antwort anhand der Referenzen. Der Fortschritt wird pro Phase gemeldet; die Ergebnisse liegen vor, sobald der Lauf abgeschlossen ist.'
+        },
+        results: {
+          title: 'Ergebnisse',
+          text: 'Metrik-Mittelwerte als Gauges mit Bestehensschwellen, der Trend über Läufe hinweg und das Detail je Frage mit jeder Antwort und ihren Scores.'
+        },
+        explain: {
+          title: 'Fehlschläge erklären',
+          text: 'Ordnet jede fehlgeschlagene Zeile dem Abruf, dem Antworten oder der Referenz selbst zu — und schlägt abgesicherte Korrekturen vor, darunter Änderungen auf Repository-Ebene wie Tags und die Kuratierung von Konzepten.'
+        },
+        exports: {
+          title: 'Exporte',
+          text: 'Suites und Ergebnisse als xlsx (kompatibel mit dem Benchmark-Tooling) und ein PDF-Bericht der Diagramme.'
+        }
+      },
+      // GUIDE (David, 2026-10-23) — the operator playbook behind
+      // the "Guide" button. See en.js for the key-shape contract.
+      guide: {
+        open: 'Leitfaden',
+        title: 'RAGAS-Benchmark-Leitfaden',
+        intro:
+          'Wie Benchmark-Suites erstellt, kuratiert und ausgeführt werden — was zu tun ist, was zu vermeiden ist und was in jedem Schritt zu erwarten ist. Das Hilfepanel neben dieser Schaltfläche dokumentiert die Bedienelemente, dieser Leitfaden die Entscheidungen.',
+        close: 'Schließen',
+        more: 'Mehr auf ragas.io',
+        labels: {
+          do: 'Das ist zu tun',
+          dont: 'Nicht tun',
+          expect: 'Was zu erwarten ist'
+        },
+        chapters: {
+          generate: {
+            title: 'Die Suite erstellen',
+            intro:
+              'Eine Suite ist nur so gut wie der Korpus, aus dem sie erzeugt wurde. Die Generierung ist eine LLM-Aufgabe in zwei Phasen und der teure Teil des gesamten Ablaufs: zuerst ein Wissensgraph-Durchlauf über den ausgewählten Korpus, dann die Fragesynthese.',
+            d1: 'Vor der Generierung veröffentlichen. Die Generierung liest Konzepte aus dem Repository, und eine Suite auf einem unveröffentlichten Repository oder auf einem, dessen Ingest noch läuft, misst einen Korpus, den der Assistent tatsächlich nicht sieht.',
+            d2: 'Die Abdeckungsnotiz lesen. Ist der Korpus größer als das Chunk-Budget (standardmäßig 1.600 Chunks), weist die Suite darauf hin — „Basiert auf 1600 von 5590 Chunks“. Das ist ein gültiger Benchmark eines Ausschnitts, niemals des gesamten Repository. OKF_RAGAS_MAX_CORPUS_CHUNKS erhöhen, wenn der ganze Korpus gebraucht wird.',
+            d3: 'Die Suite auf die Fragestellung zuschneiden. Zwanzig Fragen sind ein Smoke-Test, hundert ein Vergleich. Die Kosten wachsen in beiden Phasen — Generierung und Bewertung — ungefähr linear, und die Bewertungsphase dominiert.',
+            d4: 'Die Hop-Verteilung bewusst mischen: single-hop belegt den Abruf; multi-hop (spezifisch) belegt, dass der Reranker Belege kombiniert; multi-hop (abstrakt) belegt, dass das Modell über den wörtlichen Text hinaus schlussfolgert. Eine Suite, die zu 100 % aus single-hop-Fragen besteht, kann einen Fehler in der Zusammensetzung nie zeigen.',
+            x1: 'Nicht gegen ein Repository generieren, dessen Ingest noch läuft. Konzepte, die noch indexiert werden, sind für den Abruf unsichtbar; die Suite wird also gegen einen Korpus geschrieben, der sich von dem unterscheidet, gegen den später bewertet wird.',
+            x2: 'Die ersten Minuten des Fortschrittsbalkens nicht als Stillstand lesen. Die Wissensgraph-Phase kann lange ohne einen abgeschlossenen Batch stehen; die verstrichene Zeit und der Zähler der Modellaufrufe sind die verlässlichen Signale.',
+            x3: 'Eine kurze Suite nicht als gute Generierung lesen. Ratenbegrenzte Modelle verlieren Fragen, und das Panel meldet, wie viele verworfen wurden. Die Zahl der verworfenen Fragen prüfen, bevor der Suite Vertrauen geschenkt wird.',
+            expect:
+              'Für die Graph-Phase ist etwa ein Modellaufruf pro Korpus-Chunk einzuplanen, dazu ein paar pro Frage. Auf einem Korpus von 1.075 Chunks hat allein diese Phase über zwei Stunden gedauert. Die Generierung läuft im Hintergrund weiter — das Lab kann geschlossen und später wieder geöffnet werden.'
+          },
+          curate: {
+            title: 'Die Suite verbessern',
+            intro:
+              'Eine generierte Suite ist ein erster Entwurf. Beide Hälften jedes Eintrags — die Frage und die erwartete Antwort — sind maschinell geschrieben, und die Messung ist nur so belastbar wie diese beiden.',
+            d1: 'Erst testen, dann behalten. Die Schaltfläche ▶ spielt eine Frage gegen den Live-Korpus und meldet, ob sie überhaupt beantwortbar ist. Eine Frage ohne Ergebnis ist eine Frage über Inhalte, die nicht vorhanden sind.',
+            d2: 'Die irrelevanten umschalten, nicht löschen. Zeilen außerhalb des Geltungsbereichs bleiben zum Kontrast erhalten und werden von der Bewertung ausgenommen. Ein Löschen verliert das Faktum, dass es sie gab.',
+            d3: 'Wenn die Referenz falsch ist, die erwartete Antwort korrigieren, nicht die Frage: faithfulness und answer relevancy werden gegen die Referenz gemessen, und eine Referenz, die kein Modell liefern könnte, bestraft eine korrekte Antwort.',
+            d4: 'Eigene schwierige Fragen ergänzen. Der Generator schreibt Fragen, die der Korpus wörtlich beantwortet. Die Fehlschläge, die sich lohnen, sind die aus der Erfahrung geschriebenen — die mehrdeutige Formulierung, die beiden widersprüchlichen Dokumente, die einmal genannte und nie wiederholte Tatsache.',
+            x1: 'Eine Frage nicht so umformulieren, dass sie zur heutigen Antwort passt. Das macht aus dem Benchmark einen Regressionstest für den aktuellen Score und verdeckt genau den Defekt, der gesucht war.',
+            x2: 'Nicht ohne vorherigen Test auf eine Frage pro Konzept hochskalieren. Die Generierung liest ein Chunk-Budget, nicht die Dokumentstruktur; eine Frage kann daher auf einer Textstelle beruhen, die nie im Korpus war.',
+            x3: 'Nicht gegen einen Score kuratieren. Vor dem Lauf kuratieren; ein Bearbeiten der Suite nach gesehenem Ergebnis verschiebt die Messlatte und entwertet den Vergleich.',
+            expect:
+              'Vierzig gute Fragen schlagen hundert gemischte. Die Abdeckung des Konzeptsatzes zählt mehr als die reine Anzahl — eine Suite, die die Hälfte der Konzepte verfehlt, meldet für die abgedeckte Hälfte problemlos einen hohen Mittelwert.'
+          },
+          run: {
+            title: 'Den Benchmark ausführen',
+            intro:
+              'Ein Lauf hat drei Phasen — Abruf, Antworten und Bewertung —, die getrennt gemeldet werden, damit stets klar ist, auf welche gerade gewartet wird. Nur die dritte kostet Judge-Modell-Aufrufe, und dort geht die Zeit hin.',
+            d1: 'Zuerst die vier Standards ausführen. Der vergleichbare Kern sind faithfulness, context precision, context recall und answer relevancy. Der erweiterte Katalog vervielfacht die Kosten, nicht den Erkenntnisgewinn — solange nicht bekannt ist, wo der Fehlschlag liegt.',
+            d2: 'Den Aufrufzähler beobachten, nicht nur den Balken. Die Bewertungsphase arbeitet Zeile für Zeile, und auf einem ausgelasteten Modell-Endpunkt wird ein Lauf so oft ratenbegrenzt, dass die Wiederholungen die Laufzeit bestimmen. Ein eingefrorener Zähler bei laufender Uhr bedeutet Wiederholungen, keinen Hänger.',
+            d3: 'Abbrechen statt aufgeben. Das Abbrechen hält sauber an und hält fest, was abgeschlossen wurde; das Schließen des Browser-Tabs tut das nicht — der Lauf läuft weiter und die Live-Ansicht darauf geht verloren.',
+            d4: 'Nur einen Lauf pro Repository gleichzeitig. Läufe teilen sich den Modell-Endpunkt; zwei parallele Läufe teilen sich den Durchsatz, beide werden langsamer, und keiner der beiden meldet, warum.',
+            x1: 'Einen Lauf mit vier Metriken nicht mit einem Lauf mit zehn vergleichen. Der erweiterte Katalog verlängert die Laufzeit um etwa den Faktor vier, und die Mittelwerte sind keine vergleichbare Reihe.',
+            x2: 'Nicht erneut ausführen, um eine unliebe Zahl zu ersetzen. Ein Wiederholungslauf mit einem anderen Judge-Modell, einem anderen Abruf-Top-N oder einer bearbeiteten Suite ist eine neue Messung — und wird auch als solche erfasst.',
+            x3: 'Keinen Lauf starten, solange ein Ingest noch läuft. Ein Teil des Korpus fehlt dann beim Abruf, und der Score sinkt aus einem Grund, der mit den eigenen Änderungen nichts zu tun hat.',
+            expect:
+              'Vier Metriken kosten etwa sieben Judge-Aufrufe pro Frage — bei einem Lauf mit hundert Fragen wurden 7,1 gemessen. Das ergibt rund eineinhalb Stunden je hundert Fragen auf einem ratenbegrenzten Endpunkt und mehr, wenn das Modell stärker ausgelastet ist. Behandle das als Untergrenze, nicht als Zusage: die Laufuhr und der Aufrufzähler des Laufs selbst sind die Autorität.'
+          },
+          models: {
+            title: 'Die Modelle und was zu erwarten ist',
+            intro:
+              'Drei verschiedene Modelle sind beteiligt, und sie sind nicht austauschbar: das Antwortmodell, das Judge-Modell und das Embedding-Modell. Sie verschieben den Score aus völlig unterschiedlichen Gründen.',
+            d1: 'Das Antwortmodell ist das getestete — aber im Lab kommen die Antworten vom DEPLOYMENT-Chatmodell, über die deployte Pipeline: ein Wechsel des Chatmodells im Deployment ändert also die Antwort. Der Offline-Replay-Zweig (Abruf und Antworten, im OKF-Server nachgespielt) ist für whatif-Läufe gedacht und lässt sich heute nicht aus dem Lab starten, die Einstellung „Benchmark-Antworten“ ändert also keinen Benchmark, den Sie hier ausführen können.',
+            d2: 'Das Judge-Modell muss stark und stabil sein. Es bewertet anhand der Referenzen; ein schwaches Judge-Modell drückt daher alle Metriken gleichzeitig nach unten, und der Lauf sieht trotzdem vollständig aus. Judge-Antworten werden je Judge-Identität zwischengespeichert — ein Wechsel des Judge-Modells oder des Modells macht diesen Cache ungültig, und jede Zeile wird neu bewertet.',
+            d3: 'Das Embedding-Modell gehört zur Messung des Abrufs. Wird es gewechselt, verschieben sich context precision und context recall, faithfulness üblicherweise nicht. Diese Asymmetrie ist ein Signal darüber, wo die Änderung wirkt, kein Rauschen.',
+            d4: 'Das Modell mit dem Lauf festhalten. Jeder Lauf speichert, welche Konfiguration und welches Modell die Antworten und die Scores erzeugt hat; zwei Läufe sind nur vergleichbar, wenn diese übereinstimmen.',
+            x1: 'Nicht erwarten, dass sich eine Score-Änderung zuordnen lässt, wenn nicht genau eine Sache geändert wurde. Ein Lauf mit neuem Antwortmodell, neuem Judge und neuem Embedding-Modell misst alle drei gleichzeitig und kann sie nicht trennen.',
+            x2: 'Einen hohen Wert bei faithfulness nicht als eigenständig gutes Ergebnis lesen. Hohe faithfulness bei niedrigem context recall bedeutet, dass die Antwort auf dem beruht, was abgerufen wurde — und das Abgerufene ist zu wenig.',
+            x3: 'Ein Reasoning-Modell nicht als kostenlos behandeln. Es verbraucht Hunderte von Token, bevor es ein Wort schreibt; ist das Antwortbudget kleiner, wird jede Antwort gekürzt, verworfen und erneut aufgerufen — und der Lauf zahlt stillschweigend doppelt für jede Frage.',
+            expect:
+              'Dass der Lauf langsamer wird und sich der Score verschiebt, ist bei jedem Modellwechsel zu erwarten. Keine der beiden Richtungen ist ein Urteil über das Modell: Judge, Abruf-Stellschrauben und Suite bestimmen gemeinsam, wie viel von dieser Verschiebung echt ist.'
+          },
+          read: {
+            title: 'Die Ergebnisse lesen',
+            intro:
+              'Jede RAGAS-Metrik misst etwas anderes, und eine davon läuft umgekehrt. Jede Zahl ist danach zu lesen, was sie tatsächlich misst, bevor darauf gehandelt wird.',
+            d1: 'Zuerst das Banner zum ungültigen Lauf lesen. Ein Lauf, dessen Antworten fehlschlugen oder in dem keine Metrik alle Zeilen im Geltungsbereich abgedeckt hat, ist keine Messung — die darunter stehenden Mittelwerte decken nur die bewerteten Zeilen ab.',
+            d2: 'Die Richtung jeder Metrik prüfen. Die meisten sind höher-ist-besser. Die Ausnahme ist noise sensitivity: niedriger ist besser — ein Lauf, der dabei schlecht abschneidet, scheitert also in die gute Richtung.',
+            d3: 'Die fehlgeschlagenen Zeilen lesen, nicht nur den Mittelwert. Eine defekte Frage unter vierzig verschiebt den Mittelwert stärker als die Änderung, die gemessen werden sollte.',
+            d4: 'Nutzen Sie Explain failures, bevor Sie etwas ändern. Das Werkzeug schreibt jeder fehlgeschlagenen Zeile eine Stufe zu, die am Korpus belegt ist — retrieved, reranker, vector-recall, corpus, judge, answer oder unmeasured — und zeigt, wo der Passage verloren ging und auf welchem Rang er gelandet wäre. Ein Corpus-Votum bedeutet, dass die erwartete Passage gar nicht im Korpus ist: Diese Frage ist unfair, sie misst den Benchmark statt des Assistenten, und sie wird als solche markiert, damit Sie den Eintrag neu erzeugen, statt Inhalt zu schreiben, den es bereits gibt. Die Vorschläge sind abgesichert: das Werkzeug schlägt vor, Sie entscheiden.',
+            x1: 'Mittelwerte über verschiedene Metriksätze, verschiedene Judge-Modelle oder eine bearbeitete Suite hinweg nicht vergleichen. Keines davon ist dieselbe Messung, und der sichtbare Unterschied ist keine Änderung der Qualität.',
+            x2: 'Den Abruf nicht gegen eine einzelne Zahl optimieren. context precision und context recall stehen gegeneinander; eine Änderung, die den einen hebt, kostet normalerweise den anderen, und genau dieser Zielkonflikt ist meist der interessante Teil.',
+            x3: 'Einen null-Score nicht als niedrigen Score behandeln. Wenn alle Wiederholungsversuche aufgebraucht sind, entsteht ein null-Wert, der vom Mittelwert ausgenommen wird; kein Score bedeutet also keine Messung — die Zeile erneut ausführen, statt das Schlimmste anzunehmen.',
+            expect:
+              'Eine Benchmark-Zahl ist ein Vergleich zwischen Läufen derselben Suite, keine Note für den Assistenten. Das xlsx exportieren, wenn die Belege aufbewahrt werden sollen: die Trendlinie im Panel enthält nur die Läufe, die zu diesem Repository gespeichert sind.',
+            table: {
+              title: 'Was auf dem Bildschirm steht und was es bedeutet',
+              col: {
+                element: 'Auf dem Bildschirm',
+                meaning: 'Was es ist',
+                effect: 'Was damit zu tun ist'
+              },
+              mean: {
+                element: 'Der Mittelwert',
+                meaning:
+                  'Der Mittelwert dieser Metrik über die Zeilen, die der Judge bewertet hat. Er ist kein Wert für die gesamte Suite.',
+                effect:
+                  'Lesen Sie ihn zusammen mit dem Bruch daneben. Ein Mittelwert über wenige Zeilen misst diese Zeilen, nicht die Suite.'
+              },
+              coverage: {
+                element: 'Der Bruch (55/100)',
+                meaning:
+                  'Der Judge hat diese Metrik an 55 der 100 Zeilen im Geltungsbereich der Suite gemessen. Der Mittelwert deckt nur diese 55 Zeilen ab; die übrigen 45 bleiben draußen — sie werden nie als null gezählt. Kontrollen außerhalb des Geltungsbereichs sind nicht Teil der 100.',
+                effect:
+                  'Ein kleiner Bruch heißt, dass die Zahl wenig über die Suite aussagt. Prüfen Sie die Metrik, die Sie interessiert, nicht den Lauf als Ganzes.'
+              },
+              banner: {
+                element: 'Das Banner für einen ungültigen Lauf',
+                meaning:
+                  'Der Lauf hatte fehlgeschlagene Antworten, oder keine Metrik hat alle Zeilen im Geltungsbereich abgedeckt. Seine Abdeckungszahl ist die am besten abgedeckte Metrik, also löst eine Metrik bei 21/100 es nicht aus.',
+                effect:
+                  'Lesen Sie die Bruchwerte je Metrik selbst. Das Banner ist eine Untergrenze, keine Zusammenfassung.'
+              },
+              runName: {
+                element: 'Der Laufname und sein Judge',
+                meaning:
+                  'Der Judge, der diesen Lauf bewertet hat, und die Konfiguration, aus der er stammt. Der Schlüssel darunter ist für den Support.',
+                effect:
+                  'Zwei Läufe mit verschiedenen Judges sind nicht dieselbe Messung. Vergleichen Sie Gleiches mit Gleichem, oder bewerten Sie einen davon neu.'
+              },
+              rescore: {
+                element: 'Neu bewerten',
+                meaning:
+                  'Bewertet dieselben Antworten mit dem Judge, den Sie wählen — die Antworten und die Kontexte werden wörtlich übernommen, nichts wird neu geholt oder geschrieben. Der Dialog füllt den Judge des Ausgangslaufs vor, die erneute Bewertung ist also standardmäßig eine STABILITÄTSprüfung (ist dieser Judge reproduzierbar?), nicht eine zweite Meinung.',
+                effect:
+                  'Um herauszufinden, ob ein Fehlschlag auf die Strenge des Judges oder auf einen echten Fehlschlag zurückgeht, bewerten Sie mit einem ANDEREN Judge neu. Zwei Judges auf denselben Zeilen kosten weit weniger als ein neuer Lauf, und so testet man einen Judge-Wechsel.'
+              },
+              status: {
+                element: 'Der Status',
+                meaning: 'Ob der Lauf fertig ist. Bei einem laufenden Lauf bewegen sich die Mittelwerte noch.',
+                effect: 'Warten Sie das Ende ab, bevor Sie eine Zahl lesen.'
+              }
+            }
+          },
+          errors: {
+            title: 'Fehler – und was sie mit dem Ergebnis machen',
+            intro:
+              'Ein Benchmark misst nie jede Zeile jeder Testsuite: Eine Zeile kann in der Kette scheitern, der Assistent kann eine Antwort verweigern, der Judge kann eine Metrik nicht messen, und eine Metrik kann unter ihre Schwelle fallen. Nichts davon ist eine Null und nichts davon wird verborgen. Dieses Kapitel ist die Karte — was jeder Zustand bedeutet und was er mit der Zahl macht, die Sie lesen. Eine Sache, die Sie vorher wissen sollten: Eine Zeile, die KEINE ANTWORT produziert hat, wird dem Judge nie übergeben — es gibt nichts, womit sie zu bewerten wäre — sie bleibt also aus den Mittelwerten heraus, wird nie als Null gezählt und senkt die gemessene Abdeckung. Eine VERWEIGERUNG ist nicht eine Sache, sondern zwei. Eine Verweigerung, die MIT einer Antwort kam, wurde bewertet: Da nichts sie stützt, kamen ihre Kontextmetriken mit 0 zurück, und diese Nullen SIND in den Mittelwerten enthalten. Eine Verweigerung, die OHNE Antwort kam, wurde überhaupt nicht bewertet: Sie trägt gar keinen Score, bleibt aus den Mittelwerten heraus und senkt die gemessene Abdeckung genauso wie eine fehlgeschlagene Zeile. Deshalb ist ein Lauf mit einer fehlgeschlagenen oder einer nicht bewerteten Zeile als ungültig markiert und nicht als verlässlich genommen.',
+            d1: 'Lesen Sie zuerst das Banner zum ungültigen Lauf, dann die Mittelwerte. Es bedeutet, dass die darunter stehenden Werte keine Messung des Systems sind, und es nennt die Ursache: fehlgeschlagene Antworten oder ein Judge, der nur einen Teil der Suite gemessen hat. Beheben Sie die Ursache und starten Sie neu.',
+            d2: 'Prüfen Sie die Abdeckung jeder Metrik, bevor Sie zwei Läufe vergleichen. Das Panel zeigt, wie viele Zeilen der Judge für diese Metrik tatsächlich bewertet hat; ein Mittelwert über einen Bruchteil der Suite ist nicht die Punktzahl der Suite und nicht mit einem Lauf vergleichbar, der alle gemessen hat.',
+            d3: 'Beheben Sie eine fehlgeschlagene Zeile an ihrer Ursache – der Retrieval-Kette, dem vorgeschalteten Dienst, dem Zeitlimit – und starten Sie dann neu. Die Suite so zu ändern, dass die immer wieder fehlschlagende Zeile verschwindet, verdeckt genau den Fehler, den der Benchmark finden soll.',
+            d4: 'Betrachten Sie eine Verweigerung als Ergebnis, nicht als Fehler. Eine Verweigerung, die mit einer Antwort kam, besagt, dass der Assistent meinte, der Korpus beantworte die Frage nicht – eine Eigenschaft des Korpus und der Frage. Lesen Sie sie als die Abdeckung dessen, was Ihre Nutzer vorfinden werden.',
+            x1: 'Lesen Sie eine nicht gemessene Metrik nicht als Null. Ein Judge, dessen Antwort die Metrik nicht auswerten konnte, lässt diese Metrik für diese Zeile null; null wird aus dem Mittelwert ausgeschlossen und nie als Misserfolg hineingerechnet.',
+            x2: 'Zählen Sie eine Verweigerung weder als Fehler noch als Erfolg. Sie steht in einer eigenen Spalte, gerade weil sie weder das eine noch das andere ist – und eine Verweigerung, die ohne Antwort kam, wurde überhaupt nicht bewertet, also trägt sie erst recht keinen Nullwert bei.',
+            x3: 'Veröffentlichen Sie keine Zahl aus einem Lauf, den das Panel als ungültig markiert hat, und mitteln Sie auch nicht zwei Läufe, um das zu verdecken. Ein teilweise gemessener Lauf hat keine Zahl zu veröffentlichen; er hat einen Lauf, der repariert werden muss.',
+            expect:
+              'Ein sauberer Lauf hat keine fehlgeschlagenen Zeilen, keine nicht bewerteten Zeilen und jede Metrik auf jeder Zeile im Geltungsbereich bewertet – nur in diesem Zustand sind die Mittelwerte der Benchmark. Alles andere ist ein Lauf zum Reparieren, kein Ergebnis zum Handeln.',
+            table: {
+              title: 'Wie jeder Status auf das Ergebnis wirkt',
+              col: {
+                state: 'Status',
+                meaning: 'Was er bedeutet',
+                effect: 'Was er mit dem Ergebnis macht'
+              },
+              error: {
+                state: 'Fehler',
+                meaning:
+                  'Die Pipeline ist an dieser Zeile gescheitert — Retrieval, ein vorgelagerter Dienst oder eine Zeitüberschreitung. Es wurde keine Antwort erzeugt.',
+                effect:
+                  'Die Zeile wird dem Judge NICHT übergeben — sie hat keine Antwort, und es gibt nichts, womit sie zu bewerten wäre. Sie trägt gar keinen Score: Sie bleibt aus den Mittelwerten heraus (nie als Null gezählt) und wird in der Fehlerspalte gezählt, und der Lauf wird als ungültig markiert — das Banner sagt, dass die Scores keine Messung des Systems sind. Beheben Sie die Ursache — die Retrieval-Strecke, den vorgelagerten Dienst, das Timeout — und starten Sie erneut. Die Zeilen, die geantwortet haben, werden weiterhin bewertet, aber ein teilweise gemessener Lauf ist ein Lauf zum Reparieren, kein Ergebnis zum Veröffentlichen.'
+              },
+              abstained: {
+                state: 'Auslassung',
+                meaning:
+                  'Der Assistent hat die Antwort verweigert, aber trotzdem eine Antwort erzeugt – chatqna hat es gesagt oder er hat sich zurückgehalten. Die Pipeline ist nicht gescheitert.',
+                effect:
+                  'Die Zeile IST an den Judge übergeben worden, trägt also zur Bewertung bei – ohne stützenden Kontext liefern die Kontextmetriken 0, und diese Nullen WERDEN in den Mittelwerten mitgezählt. Sie zählt in ihrer eigenen Spalte, nie in der Fehlerspalte, und macht den Lauf für sich allein nicht ungültig. Das Panel beschriftet die Zeile als „Auslassung“ statt als bestanden oder gescheitert. Eine Verweigerung, die KEINE Antwort produziert hat, ist ein anderer Zustand – siehe „verweigert, nicht bewertet“.'
+              },
+              declinedUnjudged: {
+                state: 'verweigert, nicht bewertet',
+                meaning:
+                  'Der Assistent hat die Antwort verweigert und nichts gesagt – es wurde keine Antwort erzeugt. Die Pipeline ist nicht gescheitert.',
+                effect:
+                  'Die Zeile wurde dem Judge NICHT übergeben – sie hat keine Antwort, es gibt also nichts, womit sie zu bewerten wäre. Sie trägt gar keinen Score: Sie bleibt aus den Mittelwerten heraus (nie als Null gezählt), sie senkt die gemessene Abdeckung, und sie kann den Lauf als ungültig markieren. Das Panel beschriftet sie als „verweigert — nicht bewertet“, damit sie von einer bewerteten Verweigerung zu unterscheiden ist.'
+              },
+              unmeasured: {
+                state: 'nicht gemessen',
+                meaning:
+                  'Der Judge hat eine Antwort erzeugt, die diese Metrik nicht auswerten konnte – etwa eine Tatsachenbehauptung, die er nicht prüfen konnte.',
+                effect:
+                  'Diese Metrik ist für diese Zeile null: aus dem Mittelwert ausgeschlossen, nie eine Null. Das Panel zeigt, wie viele Zeilen der Judge dafür tatsächlich bewertet hat. Eine Metrik bei 21/100 macht einen Lauf NICHT ungültig – das Banner erscheint erst, wenn KEINE Metrik alle Zeilen im Geltungsbereich abgedeckt hat, lesen Sie die Bruchwerte je Metrik also selbst.'
+              },
+              belowThreshold: {
+                state: 'unter der Schwelle',
+                meaning: 'Die Metrik wurde gemessen, und ihr Wert liegt unter der für diese Metrik gesetzten Schwelle.',
+                effect:
+                  'Die Zeile SCHEITERT bei dieser Metrik. Eine Zeile scheitert, sobald eine der gewählten Metriken scheitert.'
+              },
+              outOfScope: {
+                state: 'außerhalb des Geltungsbereichs',
+                meaning:
+                  'Die Frage ist absichtlich nicht beantwortbar – als Kontrast in der Suite behalten, niemals als Prüfung.',
+                effect:
+                  'Nie als Misserfolg gezählt und nie in einem Mittelwert: Sie ist eine Kontrolle, kein Ergebnis. Das Panel stapelt sie nicht in die Ergebnisleiste, und ihr Wert geht weder in einen Durchschnitt noch in einen Abdeckungsanteil ein.'
+              }
+            }
+          }
+        }
+      },
+      current: 'aktuell',
+      generate: {
+        title: 'Vergleichstest-Suite generieren',
+        hint: 'Erzeugt Fragen mit erwarteten Ausgaben aus den ausgewählten Repositories — eines oder mehrere, das aktuelle Repository allein oder mit verwandten Repositories.',
+        size: 'Fragen',
+        config: 'Generierungsmodell-Konfiguration',
+        default: 'Deployment-Standard (.env)',
+        defaultNamed: 'Aktive Konfiguration — {name}{model}',
+        effective: 'Bewertung mit {name}{model}',
+        effectiveGenerating: 'Generierung mit {name}{model}',
+        envDefault: 'Umgebungs-Standard',
+        envJudge: 'Deployment-Standard (.env){model}',
+        envJudgePlain: 'Deployment-Standard (.env)',
+        model: 'Modell',
+        modelPick: 'Standard der Konfiguration',
+        modelDefault: 'Standard der Konfiguration',
+        note: 'Das Modell, das Fragen synthetisiert und Antworten bewertet. Eine aktive Konfiguration (★, Register „Modelle“) gilt automatisch; eine Auswahl hier überschreibt sie nur für diesen Vorgang. Stärkere Bewerter verbessern Entity-Recall und Hinweisqualität deutlich.',
+        single: 'Einzel-Hop %',
+        multiAbstract: 'Mehrfach-Hop (abstrakt) %',
+        multiSpecific: 'Mehrfach-Hop (spezifisch) %',
+        personas: 'Personas',
+        button: 'Generieren',
+        working: 'Wird generiert — das dauert einige Minuten…',
+        cancel: 'Abbrechen',
+        cancelling: 'Wird abgebrochen…',
+
+        inFlight: 'Für dieses Repository läuft bereits eine Benchmark-Suite-Generierung — Sie werden daran angehängt.'
+      },
+      import: {
+        button: 'Suite importieren (.xlsx)',
+        working: 'Import läuft…'
+      },
+      suite: {
+        namePlaceholder: 'Name des Vergleichstests (optional)',
+        add: 'Frage hinzufügen',
+        addPrompt: 'Hinzuzufügende Frage:',
+        addReference: 'Erwartete Antwort (optional):',
+        flipTip: 'Im Geltungsbereich / außerhalb umschalten',
+        probeTip: 'Diese Frage gegen den Live-Korpus testen',
+        removeTip: 'Diese Frage entfernen'
+      },
+      col: {
+        query: 'Frage',
+        reference: 'Erwartete Antwort',
+        passages: 'Textstellen',
+        scope: 'Geltungsbereich'
+      },
+      oos: 'außerhalb des Geltungsbereichs',
+      inscope: 'im Geltungsbereich',
+      metrics: {
+        label: 'Metriken:'
+      },
+      run: {
+        button: 'Vergleichstest ausführen',
+        working: 'Wird ausgeführt…',
+        judge: 'Judge-Modell-Konfiguration',
+        retrieved: 'abgerufen',
+        pass: 'bestanden',
+        fail: 'fehlgeschlagen',
+        abstained: 'abgelehnt',
+        declinedUnjudged: 'verweigert — nicht bewertet',
+        rowError: 'Fehler',
+        cancel: 'Lauf abbrechen',
+        phase: {
+          'building-knowledge-graph': 'Wissensgraph wird aufgebaut',
+          'synthesizing-questions': 'Fragen werden synthetisiert',
+          retrieval: 'Abruf läuft',
+          judge: 'Bewertung läuft'
+        }
+      },
+      export: {
+        suite: 'Suite exportieren (.xlsx)',
+        results: 'Ergebnisse exportieren (.xlsx)'
+      },
+      results: {
+        title: 'Ergebnisse des Vergleichstests',
+        failing: '{n} fehlgeschlagen',
+        advisorHint:
+          '{n} Fragen liegen unter ihren Metrik-Schwellenwerten. Starten Sie den Advisor, um jeden Fehlschlag einer Pipeline-Stufe zuzuordnen und konkrete Maßnahmen zu erhalten.',
+        copy: 'Vollständige Antwort kopieren',
+        coverageTitle:
+          'Der Richter hat diese Metrik in {n} von {total} Zeilen bewertet — die Punktzahl deckt nur diese Zeilen ab.',
+        colResizeTip: 'Ziehen Sie den Griff zum Skalieren — Doppelklick auf die Kopfzeile setzt zurück',
+        trendTitle: 'Metrik-Trend über Läufe',
+        trendNote:
+          'Jede Linie ist der Suite-Mittelwert einer RAGAS-Metrik pro Lauf, ältester zuerst, und überschreitet nie eine Richter-Grenze — jede X-Achsen-Beschriftung nennt den Richter, der den Lauf bewertet hat. Bewertete Antworten werden gecacht; gleiche Wiederholungen unterscheiden sich nur, wo Antworten oder Abruf sich änderten.',
+        trendMixedJudges:
+          'Die Richter unterscheiden sich zwischen diesen Läufen — vergleichen Sie innerhalb eines Richter-Abschnitts, nicht über Abschnitte hinweg',
+        statusTitle: 'Ergebnisse pro Frage',
+        statusNote:
+          'Jede Frage im Geltungsbereich dieses Laufs, gestapelt nach Ausgang: beantwortet, durchgefallen (eine gewählte Metrik unter ihrer Schwelle), enthalten (der Antwortende hat verweigert) oder Fehler (die Pipeline ist an dieser Zeile gescheitert). Kontrollen außerhalb des Geltungsbereichs werden nicht gezählt — sie sind eine Kontrolle, kein Ergebnis.',
+        allPass: 'alle bestanden',
+        invalidTitle: 'Dieser Lauf ist keine gültige Messung',
+        invalidPill: 'ungültiger Lauf',
+        invalidErrors:
+          '{n} von {total} Antworten sind fehlgeschlagen — diese Werte messen das System nicht. Benchmark erneut ausführen.',
+        invalidCoverage:
+          'Der Prüfer hat {measured} von {total} Zeilen bewertet — die Mittelwerte unten decken nur die bewerteten Zeilen ab.',
+        failingShort: 'fehlgeschlagen',
+        answer: 'Antwort',
+        state: 'Status',
+        error: 'Fehler',
+        abstained: 'enthalten',
+        declinedUnjudged: 'verweigert — nicht bewertet',
+        declinedUnjudgedTitle:
+          'Der Antwortende hat verweigert und nichts gesagt, daher wurde diese Zeile dem Judge nie übergeben. Sie trägt keinen Score und bleibt aus den Mittelwerten heraus — und sie reduziert die gemessene Abdeckung.',
+        answered: 'beantwortet',
+        noisy: 'Antwort in Ordnung — Retrieval-Rauschen',
+        noisyTitle:
+          'Die Antwort bestand jede Metrik der Antwortqualität; nur das gelieferte Kontextset (Precision/Recall) lag unter dem Schwellenwert',
+        pdf: 'PDF-Bericht exportieren'
+      },
+      explain: {
+        button: 'Fehlschläge erklären',
+        working: 'Fehler werden erklärt…',
+        advising: 'Berater denkt nach — {n} fehlgeschlagene Zeilen',
+        guarding: 'Tag-Vorschläge werden geprüft…',
+        title: 'Fehlerzuordnung und Empfehlungen',
+        none: 'Keine fehlgeschlagenen Zeilen zuzuordnen.',
+        stage: 'Phase',
+        fails: 'Fehlgeschlagene Metriken',
+        recommendation: 'Empfehlung',
+        unfair: 'unfaire Frage',
+        unfairTitle:
+          'Die erwartete Passage liegt nicht im Korpus – diese Zeile bewertet den Benchmark, nicht den Assistenten',
+        evidenceTitle: 'Im Korpus / im Kandidatenpool / an das Modell gefundene Passagen. Methode: {method}',
+        facts: 'Lauf-Fakten: {rows} Zeilen · {abstentions} Verweigerungen · ~{chars} Zeichen pro Antwort',
+        rankTitle: 'Die Passage liegt im Korpus, aber außerhalb des Kandidatenpools – sie rangiert auf Platz #{n}.'
+      },
+      history: {
+        title: 'Ausführungsverlauf',
+        run: 'Ausführung',
+        when: 'Wann',
+        status: 'Status',
+        load: 'Ansehen',
+        delete: 'Löschen',
+        rescore: 'Neu bewerten',
+        rescoreOf: 'neu bewertet aus {key}',
+        judgeEnv: 'Systemstandard',
+        judgeUnknown: 'Richter nicht erfasst'
+      },
+      rescore: {
+        title: 'Mit einem Richter neu bewerten',
+        body: 'Die gespeicherten Antworten werden mit dem Richter neu bewertet, den Sie wählen – sie werden nicht neu erzeugt. Der Dialog füllt den Richter des Ausgangslaufs vor, die Standard-Neuwertung prüft also, ob dieser Richter reproduzierbar ist; wählen Sie einen ANDEREN Richter für eine zweite Meinung zu den Fehlschlägen. Das Ergebnis ist ein eigener Lauf.',
+        source: 'Quelllauf',
+        judge: 'Richter-Konfiguration',
+        confirm: 'Neu bewerten',
+        failed: 'Die Neubewertung des Laufs ist fehlgeschlagen.'
+      },
+      runDelete: {
+        title: 'Ausführung löschen',
+        body: 'Dies entfernt die Ausführung und ihre Fehleranalyse endgültig. Die Suite und ihre Fragen bleiben erhalten.',
+        confirm: 'Löschen',
+        inFlight: 'Diese Ausführung läuft noch — brechen Sie sie zuerst ab.',
+        explainInFlight: 'Für diese Ausführung läuft noch eine Fehleranalyse — warten Sie, bis sie abgeschlossen ist.',
+        failed: 'Löschen der Ausführung fehlgeschlagen.'
+      },
+      advice: {
+        knob: 'Stellschraube',
+        tag: 'Repo-Tag',
+        content: 'Inhalt',
+        prompt: 'Prompt',
+        env: 'Umgebungsänderungen',
+        envComponent: 'Komponente',
+        envChange: 'Änderung',
+        envTargets: 'Ziele',
+        envWhy: 'Warum',
+        envTradeOff: 'Abwägung',
+        envApply: 'Anwendung',
+        envVerify: 'Prüfen'
+      },
+      metric: {
+        faithfulness: 'Treue',
+        context_precision: 'Kontextgenauigkeit',
+        context_recall: 'Kontextabdeckung',
+        answer_relevancy: 'Antwortrelevanz',
+        context_utilization: 'Kontextausnutzung',
+        context_entities_recall: 'Abdeckung der Kontext-Entitäten',
+        factual_correctness: 'faktische Korrektheit',
+        answer_correctness: 'Antwortkorrektheit',
+        answer_similarity: 'Antwortähnlichkeit',
+        noise_sensitivity: 'Rauschempfindlichkeit',
+        note: {
+          faithfulness:
+            'Wie faktenbasiert die Antwort gegenüber den abgerufenen Passagen ist — der Anteil der Aussagen, die von den Quellen gedeckt sind. Niedrig heißt: die Antwort behauptet Dinge, die die Belege nicht hergeben (Halluzination).',
+          context_precision:
+            'Ob die entscheidenden Passagen oben in der Trefferliste stehen. Niedrig heißt: die richtigen Belege wurden gefunden, aber von weniger relevanten Abschnitten verdeckt.',
+          context_recall:
+            'Ob die abgerufenen Passagen alles abdecken, was die Referenzantwort erfordert. Niedrig heißt: der Abruf hat Belege verpasst, die die Frage brauchte.',
+          answer_relevancy:
+            'Wie gut die Antwort die gestellte Frage adressiert: RAGAS erzeugt Fragen aus dem Antworttext und vergleicht sie per Embedding-Ähnlichkeit mit der Originalfrage. Faktische Richtigkeit wird NICHT geprüft — weitschweifige Antworten scoren niedrig, selbst wenn sie richtig sind.',
+          context_utilization:
+            'Ob der abgerufene Kontext ausreicht, um die Referenzantwort zu erzeugen — eine Vollständigkeitsprüfung des Abrufs.',
+          context_entities_recall:
+            'Recall auf Entitätenebene: der Anteil der benannten Entitäten in den Referenzpassagen des Eintrags (Firmen, Daten, Beträge, Orte), die auch in den abgerufenen Chunks vorkommen. Niedrig bedeutet, dass die abgerufenen Chunks Entitäten der Referenz verfehlen. Richter-sensitiv — ein niedriger Wert bei bestandenem Context-Recall bedeutet meist, dass die Entitätsextraktion des Judges versäumt hat, nicht dass Inhalt fehlt.',
+          factual_correctness:
+            'Faktische Übereinstimmung auf Aussagenebene mit der Referenzantwort — der Judge zerlegt beide in Aussagen und bewertet die Überschneidung. Die strengste Korrektheitsmetrik.',
+          answer_correctness:
+            'Gesamtqualität gegenüber der Referenzantwort — faktische Korrektheit kombiniert mit semantischer Ähnlichkeit. Die Metrik, die „ward die Antwort richtig“ am nächsten kommt.',
+          answer_similarity:
+            'Semantische (Embedding-)Ähnlichkeit zwischen erzeugter und Referenzantwort — hoch bedeutet: beide sagen dasselbe.',
+          noise_sensitivity:
+            'Wie sehr die Antwort leidet, wenn irrelevante Passagen in den Kontext gemischt werden — ein Robustheitsmaß. NIEDRIGER ist besser; die Schwelle ist invertiert.'
+        }
+      },
+      pdf: {
+        title: 'RAGAS-Vergleichstestbericht',
+        suite: 'Suite',
+        run: 'Ausführung',
+        summary: 'Zusammenfassung',
+        perQuery: 'Scores pro Frage',
+        status: 'Ergebnisse',
+        n: 'Fragen',
+        evaluable: 'bewertbar',
+        abstained: 'enthalten',
+        compare: 'Vergleich über Läufe (Delta zum ersten)'
+      }
     }
+  },
+  link: {
+    ragTip:
+      'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
   }
 };

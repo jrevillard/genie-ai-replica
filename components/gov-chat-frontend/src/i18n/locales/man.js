@@ -1,5 +1,3 @@
-// src/i18n/locales/man.js
-
 export default {
   countries: {
     AF: 'Afiganistan',
@@ -13,10 +11,10 @@ export default {
     AU: 'Ostaraliya',
     AT: 'Ostiriya',
     AZ: 'Azerbayijan',
-    BS: 'Bahamas',
+    BS: 'Bahamasi',
     BH: 'Baharayin',
     BD: 'Bangalades',
-    BB: 'Barbados',
+    BB: 'Barbadosi',
     BY: 'Belaarus',
     BE: 'Beljiyom',
     BZ: 'Beliiz',
@@ -34,7 +32,7 @@ export default {
     KH: 'Kambodiya',
     CM: 'Kamerun',
     CA: 'Kanada',
-    CF: 'Sentaral Afrika',
+    CF: 'Senteral Afrika Republik',
     TD: 'Caad',
     CL: 'Cili',
     CN: 'Siin (China)',
@@ -43,26 +41,26 @@ export default {
     CG: 'Kongo',
     CD: 'Kongo (Repubilik Demokaraatik)',
     CR: 'Kosatarika',
-    CI: 'Kodiwar',
+    CI: 'Kodiwaar',
     HR: 'Korowasiya',
     CU: 'Kuba',
     CY: 'Sipirus',
     CZ: 'Cekiya',
-    DK: 'Denmark',
+    DK: 'Danimarki',
     DJ: 'Jibuti',
     DM: 'Dominika',
-    DO: 'Dominikan Repubilik',
+    DO: 'Dominikan Republik',
     EC: 'Ekuwador',
     EG: 'Misira (Egypt)',
-    SV: 'El Salvador',
-    GQ: 'Ekuwatoriyal Gini',
+    SV: 'Salivadori',
+    GQ: 'Ginee Ekuwatoriyal',
     ER: 'Eritereya',
     EE: 'Estoniya',
     ET: 'Etiyopiya',
     FJ: 'Fiji',
-    FI: 'Finland',
+    FI: 'Finilandi',
     FR: 'Faraansi',
-    GA: 'Gabon',
+    GA: 'Gabong',
     GM: 'Gambiya',
     GE: 'Jorjiya',
     DE: 'Alimaañ (Germany)',
@@ -72,9 +70,9 @@ export default {
     GT: 'Guwatemala',
     GN: 'Gini',
     GW: 'Gini-Bisawu',
-    GY: 'Guyana',
+    GY: 'Giyana',
     HT: 'Hayiti',
-    HN: 'Honduras',
+    HN: 'Hondurasi',
     HU: 'Hungari',
     IS: 'Aysiland',
     IN: 'Indiya',
@@ -86,7 +84,7 @@ export default {
     IT: 'Itali',
     JM: 'Jamayika',
     JP: 'Japaan',
-    JO: 'Jordan',
+    JO: 'Jordani',
     KZ: 'Kajakistan',
     KE: 'Keniya',
     KI: 'Kiribati',
@@ -108,8 +106,8 @@ export default {
     MY: 'Maleesiya',
     MV: 'Maldiifs',
     ML: 'Mali',
-    MT: 'Malta',
-    MH: 'Marsal Tundol',
+    MT: 'Malita',
+    MH: 'M̧ajeļ',
     MR: 'Moritani',
     MU: 'Morisiyos',
     MX: 'Meksiko',
@@ -131,12 +129,12 @@ export default {
     NG: 'Nijeriya',
     MK: 'Masedoniya',
     NO: 'Norwey',
-    OM: 'Oman',
+    OM: 'Omani',
     PK: 'Pakistaan',
     PW: 'Palawu',
     PS: 'Falastin',
     PA: 'Panama',
-    PG: 'Papuwa Niwu Gini',
+    PG: 'Papuwa Ginee Kuta',
     PY: 'Paraguwey',
     PE: 'Peru',
     PH: 'Filipins',
@@ -160,19 +158,19 @@ export default {
     SG: 'Singapur',
     SK: 'Silovakiya',
     SI: 'Siloveniya',
-    SB: 'Solomon Tundol',
+    SB: 'Solomon Jisololu',
     SO: 'Somaliya',
     ZA: 'Safrika',
     SS: 'Sudan Batoo',
     ES: 'Sipeen',
     LK: 'Siri Lanka',
-    SD: 'Sudan',
+    SD: 'Sudani',
     SR: 'Surinam',
-    SZ: 'Eswatini',
+    SZ: 'Esiwatini',
     SE: 'Suwiden',
     CH: 'Suwiselan',
     SY: 'Siriya',
-    TJ: 'Tajikistan',
+    TJ: 'Tajikisitaani',
     TZ: 'Tanjaniya',
     TH: 'Tayiland',
     TL: 'Timor',
@@ -185,16 +183,16 @@ export default {
     TV: 'Tuvalu',
     UG: 'Uganda',
     UA: 'Ukeren',
-    AE: 'Imaaraat',
-    GB: 'Angalteer',
-    US: 'Ameriki (US)',
+    AE: 'Imaaraatu Arabu',
+    GB: 'Angiliteer',
+    US: 'Amedka',
     UY: 'Uruguwey',
     UZ: 'Ujibekistan',
     VU: 'Vanuwatu',
     VA: 'Vatikan Siti',
     VE: 'Venejuwela',
     VN: 'Viyetinam',
-    YE: 'Yemen',
+    YE: 'Yemeni',
     ZM: 'Jambiya',
     ZW: 'Jimbabuwe'
   },
@@ -225,9 +223,9 @@ export default {
       documents: 'Dokuuma lataramoo',
       database: 'Detabeesi',
       logs: 'Logolu',
-      queryInspector: 'Kweri Inspektoo',
       security: 'Kantari',
-      users: 'Moolu'
+      users: 'Moolu',
+      models: 'Models'
     },
     contentManagement: 'KONTENTI LATARAMOO',
     knowledgeHierarchy: 'Longo jukutol',
@@ -514,66 +512,79 @@ export default {
       retractQueuedSuccess: 'Fayil {count} laata ka bota.',
       retractQueuedError: 'Filiyata kafung-bota to.',
       retractPartialFailure: '{count} to {successCount} botata. Filita: {detail}',
+      deleteSelected: 'Delete Selected',
+      confirmDeleteTitle: 'Confirm Batch Deletion',
+      confirmDeleteSelected:
+        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
+      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
+      deleteQueuedError: 'An error occurred during the batch deletion process.',
+      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
+      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
+      deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
       retractAllFailed: 'Fayil {count} bee filita: {detail}',
       uploadSuccessMultiple: 'Fayil {count} yeleta benta.',
       linkSubmitSuccess: '"{fileName}" ñiningta ani a marata benta.',
       actionSuccess: 'Baara "{action}" fayil {fileId} to benta.',
-      metadataUpdateSuccess: 'Metadeta fayil {fileId} yailamata.'
+      metadataUpdateSuccess: 'Metadeta fayil {fileId} yailamata.',
+      deletePartialNotice:
+        "{'{'{'}'}blocked{'}'} selected file(s) cannot be deleted ({'{'{'}'}reason{'}'}) — only the other {'{'{'}'}n{'}'} will be deleted.",
+      confirmDeleteSkipped:
+        "{'{'{'}'}count{'}'} ingested/ingesting file(s) will be SKIPPED — retract them first to delete them."
     },
     queryInspector: {
-      title: 'Kweri Inspektoo',
-      backToList: 'Ila wo le ma',
-      detailTitle: 'Kweri Inspektoo',
-      search: 'Ñining',
-      searchPlaceholder: 'Ñining kweri kumoo...',
-      minConfidence: 'Min Konfidens',
-      maxConfidence: 'Max Konfidens',
-      from: 'Banda',
-      to: 'Daman',
-      reset: 'Fiti',
+      search: 'A nyining',
+      searchPlaceholder: 'Nyiningo safuo nyining...',
+      minConfidence: 'Laana dooyaa',
+      maxConfidence: 'Laana baa',
+      from: 'Kabo',
+      to: 'Nying ma',
+      reset: 'A kuta-kuta',
       colTime: 'Waatoo',
-      colQuestion: 'Moo-kiliya kumoo',
+      colQuestion: 'Baaralaa la Nyiningo',
+      colConfidence: 'Laana',
+      colResponseTime: 'Jaabi Waatoo',
+      colSources: 'Asiloolu',
+      colFeedback: 'Jaabiro',
+      colActions: 'Kuuolu',
+      inspect: 'A juube',
+      noResults: 'Nyiningo mang soto i la filtarolu kano.',
+      prev: 'Koma',
+      pageInfo: 'Kufuo {current} kabo {total} ({count} mumewo)',
+      next: 'Nying koo',
+      backToList: 'Sayo safoolu ma',
+      detailTitle: 'Nyiningo Juubelaa',
+      sectionQuestion: 'Baaralaa la Nyiningo',
+      user: 'Baaralaa',
+      time: 'Waatoo',
+      responseTime: 'Jaabi Waatoo',
+      mode: 'Cogo',
+      sectionContext: 'Konoo (Toholu dita RAG ye)',
+      category: 'Bolo',
+      serviceLabels: 'Baara Toholu',
+      language: 'Kango',
+      sectionMessages: 'Kilaa dita Pipeline ye',
+      sectionDocuments: 'Soto Kofoolu (Vector DB Jaa)',
+      score: 'Dan',
+      labels: 'Toholu',
+      viewDoc: 'Kofuo juube',
+      noDocuments: 'Asili kofoolu mang soto nying nyiningo ye.',
+      sectionResponse: 'LLM Jaabiro',
+      confidenceScore: 'Laana Dan',
+      retrievalConfidenceScore: 'Soto Laana',
+      selfConfidence: 'Yere-laana (LLM)',
+      sectionFeedback: 'Baaralaa la Jaabiro',
+      rating: 'Dan',
+      comment: 'Kuma',
+      providedAt: 'A dita',
+      loadError: 'Nyiningo bota.',
+      title: 'Kweri Inspektoo',
       colScope: 'Skopu (Scope)',
       colAbstention: 'Jaabi Bulaa',
-      colConfidence: 'Konfidens',
-      colResponseTime: 'Jaabi-waatoo',
-      colSources: 'Sorsolu',
-      colFeedback: 'Moo-kiliya Kumadiyaa',
-      colActions: 'Baarol',
-      inspect: 'Ka a jine',
-      prev: 'Kotoo',
-      next: 'Nuni',
-      pageInfo: 'Kafolii {current} / {total} (coko {count})',
-      noResults: 'Kweri mang soto i filtololu la.',
-      loadError: 'Kweri duluu mang ben.',
       abstained: 'Bulata',
       unfiltered: 'Mang filto',
       scopeNotRecorded: 'Mang seretoo',
-      sectionQuestion: 'Moo-kiliya kumoo',
-      user: 'Moo-kiliya',
-      time: 'Waatoo',
-      responseTime: 'Jaabi-waatoo',
-      mode: 'Modoo',
-      sectionContext: 'Konteks',
       scopeFiltered: 'Skopu wo filtaataa',
-      category: 'Kotegori wo kandiyaa',
-      serviceLabels: 'Serbisi Laboolu wo kandiyaa',
-      language: 'Kano',
       sectionAbstention: 'Jaabi Bulaa',
-      sectionMessages: 'Kumoolu dulu Pipeline kono',
-      sectionDocuments: 'Dokuuma sotoolu (Vektor Detabeesi lu)',
-      score: 'Skor',
-      labels: 'Laboolu',
-      viewDoc: 'Dokuuma jine',
-      noDocuments: 'Kweri naa dokuuma sorsolu mang soro.',
-      sectionResponse: 'LLM jaabi',
-      confidenceScore: 'Konfidens Skor',
-      retrievalConfidenceScore: 'Batoo Konfidens',
-      selfConfidence: 'A yee Konfidens (LLM)',
-      sectionFeedback: 'Moo-kiliya Kumadiyaa',
-      rating: 'Markoo',
-      comment: 'Kumadiyaa',
-      providedAt: 'Diyaa waatoo',
       feedbackPositive: 'A nyaa',
       feedbackNeutral: 'Neetal',
       feedbackNegative: 'A mang nyaa',
@@ -582,9 +593,8 @@ export default {
       notAvailable: 'Ma soro',
       notAvailableNoSentinel: 'Ma soro (sentinel mang)',
       abstentionNoDocuments: 'Kweri naa dokuuma mang soro. Jaabi mang kili dokuuma la.',
-      abstentionRerankerSelectedNothing:
-        'Batoo soto dokuumalu, koni reranker bɔɔlu mang kili. Skopu wo woote — jaabi mang kili dokuuma la.',
       abstentionRerankerInput: 'Reranker mang a kewi kumoo kabaaroo la (dataprep filiyaa). Jaabi mang kili dokuuma la.',
+      abstentionRerankerSelectedNothing: 'Kewi be doku soro, nga reranker ma o doku mulu. Scope kana ban — jaabi mang kili dokuuma la.',
       abstentionUnspecified: 'Jaabi mang kili dokuuma la.'
     }
   },
@@ -731,7 +741,7 @@ export default {
     }
   },
   services: {
-    eCitizen: 'e-Jamo Portal',
+    eCitizen: 'Portal an eCitizen',
     taxFiling: 'Jooyaa Lataramoo',
     idApplication: 'ID Ñiningo',
     businessReg: 'Bita Lataramoo',
@@ -851,67 +861,52 @@ export default {
   leftPanel: {
     cat1: {
       name: '1. Jamo ani Moo Lataramoo',
-      children: ['Bulu-lung dokuumalu', 'ID kaardolu', 'Pasport', 'Furung ani Saaya dokuumalu', 'Vote-moo lataramoo']
+      children: 'Bulu-lung dokuumalu,ID kaardolu,Pasport,Furung ani Saaya dokuumalu,Vote-moo lataramoo'
     },
     cat2: {
       name: '2. Kenda-yaa ani Jamaa Baaralu',
-      children: [
-        'Pablik kenda-yaa dulaalu',
-        'Dokotoro dulaalu',
-        'Kenda-yaa insooransi',
-        'Seng-moo la baaralu',
-        'Moolu dulaa ani nimal'
-      ]
+      children:
+        'Pablik kenda-yaa dulaalu,Dokotoro dulaalu,Kenda-yaa insooransi,Seng-moo la baaralu,Moolu dulaa ani nimal'
     },
     cat3: {
       name: '3. Karandiri ani Longo',
-      children: ['Pablik sukuul ani unibersiti', 'Karandiri jooyaa', 'Moo-baa karandiri', 'Onlayin karandiri dulaalu']
+      children: 'Pablik sukuul ani unibersiti,Karandiri jooyaa,Moo-baa karandiri,Onlayin karandiri dulaalu'
     },
     cat4: {
       name: '4. Baara ani Cee-baara Lataramoo',
-      children: [
-        'Baara ñining ani baara-balaa hako',
-        'Baarakilaa kantari',
-        'Baara dulaa kantari',
-        'Karandiri-doo (Skills)'
-      ]
+      children: 'Baara ñining ani baara-balaa hako,Baarakilaa kantari,Baara dulaa kantari,Karandiri-doo (Skills)'
     },
     cat5: {
       name: '5. Jooyaa (Taxes) ani Kodo',
-      children: ['Jooyaa muta ani murung', 'Dulaa jooyaa', 'Bita jooyaa', 'Kastom ani julo jooyaa']
+      children: 'Jooyaa muta ani murung,Dulaa jooyaa,Bita jooyaa,Kastom ani julo jooyaa'
     },
     cat6: {
       name: '6. Jamo Kantari ani Kiti-yaa',
-      children: ['Polisi ani tura-kandaa baaralu', 'Kiti-yaa ani lawu baaralu', 'Kiti-moo kili', 'Moo-kantari lawu']
+      children: 'Polisi ani tura-kandaa baaralu,Kiti-yaa ani lawu baaralu,Kiti-moo kili,Moo-kantari lawu'
     },
     cat7: {
       name: '7. Taa-ani-Naa ani Moto',
-      children: [
-        'Moto Bula-Laisins ani lataramoo',
-        'Jamo moto ani silalu',
-        'Sila-kiti ani kiti-jooyaa',
-        'Sila-kantari baaralu'
-      ]
+      children: 'Moto Bula-Laisins ani lataramoo,Jamo moto ani silalu,Sila-kiti ani kiti-jooyaa,Sila-kantari baaralu'
     },
     cat8: {
       name: '8. Dulaa ani Suw-Lataramoo',
-      children: ['Jamo dulaa baara', 'Suw lataramoo ani dokuumalu', 'Suw kodo-sing ani loo-hako', 'Suw loo permol']
+      children: 'Jamo dulaa baara,Suw lataramoo ani dokuumalu,Suw kodo-sing ani loo-hako,Suw loo permol'
     },
     cat9: {
       name: '9. Dulaa-baara ani Dulaa-Kenda-yaa (Environment)',
-      children: ['Jiyo ani elektrik baaralu', 'Nonsiyo maralaa', 'Dulaa-kantari lawu', 'Kura-kura elektiriki']
+      children: 'Jiyo ani elektrik baaralu,Nonsiyo maralaa,Dulaa-kantari lawu,Kura-kura elektiriki'
     },
     cat10: {
       name: '10. Bita ani Jula-yaa',
-      children: ['Bita lataramoo ani laisins', 'Jula-yaa lawu ani permol', 'Bita-doo kodo', 'E-komaas ani bita intanet']
+      children: 'Bita lataramoo ani laisins,Jula-yaa lawu ani permol,Bita-doo kodo,E-komaas ani bita intanet'
     },
     cat11: {
       name: '11. Pensol ani Moolu Kantari',
-      children: ['Baara-bula kodo', 'Pensol kodo lataramoo', 'Dimba-kodo', 'Seng-moo pensol']
+      children: 'Baara-bula kodo,Pensol kodo lataramoo,Dimba-kodo,Seng-moo pensol'
     },
     cat12: {
       name: '12. Jamo-Baara ani Vote',
-      children: ['Vote ani bota-moo', 'Jamo lauma ani kiti', 'Moo-dimba baara', 'Jamo lataramoo baara']
+      children: 'Vote ani bota-moo,Jamo lauma ani kiti,Moo-dimba baara,Jamo lataramoo baara'
     }
   },
   settings: {
@@ -1136,6 +1131,7 @@ export default {
     },
     notifications: {
       saveSuccess: 'Moo-kibaroo marata benta',
+      saved: 'Frontmatter em̦ōj kōjparoke',
       saveFailed: 'Moo-kibaroo mara mang ben',
       loadSuccess: 'Moo-kibaroo lootita benta',
       loadFailed: 'Moo-kibaroo looti mang ben',
@@ -1250,137 +1246,10 @@ export default {
     noMatchingCountries: 'Bankoo mang ben',
     noMatchingDisciplines: 'Baara-fata mang ben',
     noMatchingDegrees: 'Degri mang ben',
-    educationOptions: [
-      'Accounting (Kodo lataramoo)',
-      'Aerospace (Kulong-santo baara)',
-      'Sene baaralu',
-      'Moo-longo (Anthropology)',
-      'Loo baaralu',
-      'Foto tariiki',
-      'AI',
-      'Salo longoo',
-      'Salo-koo longoo',
-      'Biochemistry',
-      'Kenda-yaa Enginering',
-      'Biyo-baara',
-      'Bita Lataramoo',
-      'Kimikal Enginering',
-      'Kimikal longoo',
-      'Suw Enginering',
-      'Kuma-longo',
-      'Kompuuta Enginering',
-      'Kompuuta longoo',
-      'Loo lataramoo',
-      'Kiti-yaa longoo',
-      'Kompuuta kantari',
-      'Data longoo',
-      'Nyin longoo',
-      'Kodo-longoo',
-      'Karandiri',
-      'Elektrik Enginering',
-      'Sukuul-ding karandiri',
-      'Angalee karandiri',
-      'Dulaa-kenda-yaa Enginering',
-      'Dulaa-kenda-yaa longoo',
-      'Dondiko dada',
-      'Film longoo',
-      'Kodo (Finance)',
-      'Fayn Arts',
-      'Daa-longoo',
-      'Polisi longoo',
-      'Geym dada',
-      'Geografi',
-      'Banko longoo',
-      'Grafik dada',
-      'Kenda-yaa lataramoo',
-      'Tariiki',
-      'Makaamoo lataramoo',
-      'Moo baara',
-      'Fengo dada',
-      'Sati-baa Enginering',
-      'Kibaro lataramoo',
-      'Longo baara (IT)',
-      'Suw-kono dada',
-      'Banko-teema bita',
-      'Banko-teema kuma',
-      'Kibaro-folaa',
-      'Lawu',
-      'Buku longoo',
-      'Kang-longoo',
-      'Lataramoo',
-      'Jula-yaa (Marketing)',
-      'Murumuru longoo',
-      'Matematiki',
-      'Makin Enginering',
-      'Media longoo',
-      'Dokotoro',
-      'Sanoo longoo',
-      'Mikro-longoo',
-      'Muzik',
-      'Nanolongo',
-      'Nasi baara',
-      'Baloo longoo',
-      'Kenda-yaa baara',
-      'Baa-longoo',
-      'Jiyo Enginering',
-      'Farmasi (Basi)',
-      'Filosofi',
-      'Foto-mutalaa',
-      'Fari kenda-yaa',
-      'Fari kenda-yaa baara',
-      'Fisiks',
-      'Politiki longoo',
-      'Hakili longoo',
-      'Jamo Lataramoo',
-      'Jamo kenda-yaa',
-      'Jamo kuma',
-      'Robootik',
-      'Sukuul-teema karandiri',
-      'Moo baara',
-      'Sosioloji',
-      'Softweya Enginering',
-      'Karandiri-doo',
-      'Tolong lataramoo',
-      'Statistika',
-      'Sistem Enginering',
-      'Sinima baara',
-      'Taa-ani-Naa baara',
-      'Sati lataramoo',
-      'Bisi Dokotoro',
-      'Web dada',
-      'Wulo-sugo longoo',
-      'Sugo longoo'
-    ],
-    degreeOptions: [
-      'Associate Degri',
-      'Bachelor of Arts (BA)',
-      'Bachelor of Science (BS)',
-      'Bachelor of Engineering (BEng)',
-      'Bachelor of Business Administration (BBA)',
-      'Bachelor of Fine Arts (BFA)',
-      'Bachelor of Education (BEd)',
-      'Bachelor of Medicine (MBBS)',
-      'Bachelor of Laws (LLB)',
-      'Master of Arts (MA)',
-      'Master of Science (MS)',
-      'Master of Business Administration (MBA)',
-      'Master of Engineering (MEng)',
-      'Master of Fine Arts (MFA)',
-      'Master of Education (MEd)',
-      'Master of Laws (LLM)',
-      'Master of Public Health (MPH)',
-      'Doctor of Philosophy (PhD)',
-      'Doctor of Medicine (MD)',
-      'Doctor of Education (EdD)',
-      'Doctor of Business Administration (DBA)',
-      'Doctor of Jurisprudence (JD)',
-      'Professional Diplom',
-      'Teknikal Diplom',
-      'Vokesonal Diplom',
-      'Graduate Diplom',
-      'Post-Graduate Diplom',
-      'Post-Doctoral'
-    ],
+    educationOptions:
+      'Accounting (Kodo lataramoo),Aerospace (Kulong-santo baara),Sene baaralu,Moo-longo (Anthropology),Loo baaralu,Foto tariiki,AI,Salo longoo,Salo-koo longoo,Biochemistry,Kenda-yaa Enginering,Biyo-baara,Bita Lataramoo,Kimikal Enginering,Kimikal longoo,Suw Enginering,Kuma-longo,Kompuuta Enginering,Kompuuta longoo,Loo lataramoo,Kiti-yaa longoo,Kompuuta kantari,Data longoo,Nyin longoo,Kodo-longoo,Karandiri,Elektrik Enginering,Sukuul-ding karandiri,Angalee karandiri,Dulaa-kenda-yaa Enginering,Dulaa-kenda-yaa longoo,Dondiko dada,Film longoo,Kodo (Finance),Fayn Arts,Daa-longoo,Polisi longoo,Geym dada,Geografi,Banko longoo,Grafik dada,Kenda-yaa lataramoo,Tariiki,Makaamoo lataramoo,Moo baara,Fengo dada,Sati-baa Enginering,Kibaro lataramoo,Longo baara (IT),Suw-kono dada,Banko-teema bita,Banko-teema kuma,Kibaro-folaa,Lawu,Buku longoo,Kang-longoo,Lataramoo,Jula-yaa (Marketing),Murumuru longoo,Matematiki,Makin Enginering,Media longoo,Dokotoro,Sanoo longoo,Mikro-longoo,Muzik,Nanolongo,Nasi baara,Baloo longoo,Kenda-yaa baara,Baa-longoo,Jiyo Enginering,Farmasi (Basi),Filosofi,Foto-mutalaa,Fari kenda-yaa,Fari kenda-yaa baara,Fisiks,Politiki longoo,Hakili longoo,Jamo Lataramoo,Jamo kenda-yaa,Jamo kuma,Robootik,Sukuul-teema karandiri,Moo baara,Sosioloji,Softweya Enginering,Karandiri-doo,Tolong lataramoo,Statistika,Sistem Enginering,Sinima baara,Taa-ani-Naa baara,Sati lataramoo,Bisi Dokotoro,Web dada,Wulo-sugo longoo,Sugo longoo',
+    degreeOptions:
+      'Associate Degri,Bachelor of Arts (BA),Bachelor of Science (BS),Bachelor of Engineering (BEng),Bachelor of Business Administration (BBA),Bachelor of Fine Arts (BFA),Bachelor of Education (BEd),Bachelor of Medicine (MBBS),Bachelor of Laws (LLB),Master of Arts (MA),Master of Science (MS),Master of Business Administration (MBA),Master of Engineering (MEng),Master of Fine Arts (MFA),Master of Education (MEd),Master of Laws (LLM),Master of Public Health (MPH),Doctor of Philosophy (PhD),Doctor of Medicine (MD),Doctor of Education (EdD),Doctor of Business Administration (DBA),Doctor of Jurisprudence (JD),Professional Diplom,Teknikal Diplom,Vokesonal Diplom,Graduate Diplom,Post-Graduate Diplom,Post-Doctoral',
     aria: {
       tabList: 'Moo-kibaroo fata-fata',
       nextButton: 'Taa dulaa kura to',
@@ -1403,12 +1272,15 @@ export default {
     streamTimeout: 'Dɛmɔgɔ tɛ a jaabi la — sɛbɛnni in ka tuma dan.',
     nothingToSave: 'Tɛmɛnnin tɛ mɔgɔw ka ɛrɛ — jaabiw bɛɛ bɛnnen. A ñaa ma Ɛrɛ kɔfɛ.',
     unsupportedLanguage: 'This language is not available for this deployment.',
-    aiGeneratedNoDocs: 'AI-generated — not based on library documents',
+    aiGeneratedNoDocs: 'AI-e kõm̦m̦ane — ejjab pedped ioon peba ko ilo laibri',
     translationUnavailable: 'Translation unavailable — this answer may contain untranslated text.',
-    welcomeMessage: 'Welcome! How can I assist you today?',
+    welcomeMessage: 'Iakwe! Ewi wāween aõ maron̦ jipañ eok rainin?',
     configMismatchWarning:
-      'Configuration mismatch: {warnings}. Please check the Quick Help and knowledge hierarchy configuration.',
-    categoryNotFound: 'Category "{label}" not found in knowledge hierarchy',
+      'Kajuuj eo ejjab errā: {warnings}. Jouj im etale Jipañ M̦ōkaj eo im kajuuj eo an laajrak in jel̦āl̦o̦kjen̦.',
+    categoryNotFound: 'Katiikori "{label}" ejjab wal̦o̦k ilo laajrak in jel̦āl̦o̦kjen̦',
+    serviceLabelMismatch:
+      'Jikin jerbal "{label}" ej kōjerbal kakōl̦l̦e in UI eo emaron̦ ban errā ibben laajrak in jel̦āl̦o̦kjen̦',
+    noFilterWarning: 'Ejjel̦o̦k kajjitōk in kapijuknen em̦ool — kajjitōk enaj alikkar aolepen.',
     quickHelpLabelGone:
       'Configuration problem: the label "{labels}" no longer exists in the knowledge hierarchy. This button cannot be used until its configuration is updated.',
     quickHelpCategoryGone:
@@ -1417,8 +1289,6 @@ export default {
       "Configuration problem: the knowledge hierarchy could not be loaded, so this button's scope cannot be verified. This button cannot be used until the hierarchy is available.",
     scopeNotNameable:
       'Configuration problem: the selected scope has no English name in the knowledge hierarchy, so the query cannot be scoped. It was not sent.',
-    serviceLabelMismatch: 'Service "{label}" uses a UI label that may not match the knowledge hierarchy',
-    noFilterWarning: 'No context filter active — query will be unfiltered.',
     placeholder: 'I la ñiningo nyining jang...',
     composerPlaceholder: 'Ask a question, explore knowledge...',
     composerAttachTitle: 'Attachments are not available yet',
@@ -1478,37 +1348,24 @@ export default {
     removeItem: 'Bɔ yi'
   },
   quickhelp: {
-    // Labels (Short for UI)
-
-    // User Prompts (Visible Text - First Person - what user sees in chat)
-
-    // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:
-      "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Jerbal āinwōt juon ri-jel̦ā kōn rejistōr an armij ro ilo Kenya. Kōmel̦el̦eik buñtōn ko ñan bōk National ID (Maisha Namba) ak ukōt juon me ear joko. MEN EAUJELOK: Lelok juon laajrak ealikkar kōn peba ko rej aikuji (āinwōt Peba in L̦otak, kopi in ID ko an jinen im jemān) im kappe armij eo bwe en etal ñan Huduma Centre ak opij an Registrar of Persons eo epaaktata. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     payTaxesPrompt:
-      "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Jerbal āinwōt juon ri-tōl an KRA (Kenya Revenue Authority). Kōmel̦el̦eik wāween kōllā taaj, kajjitōk kōn KRA PIN, ak bar kōm̦m̦an password ekāāl ilo portal an iTax. MEN EAUJELOK: Kakememej armij eo kōn Raan 30 in Juun bwe eñin ej jem̦l̦o̦k eo an taaj kōn iiō eo im tōl er ilo an kōllā Nil returns ñe ejjel̦o̦k wōr aer m̦ōni. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     startBusinessPrompt:
-      "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Jerbal āinwōt juon ri-kappe kōn būjinij ilo jikin jerbal ko an eCitizen. Tōl armij eo ilo an kōjparok āt an būjinij im rejistōr kōmboni ilo Kenya. MEN EAUJELOK: Kōmel̦el̦eik on̦ean pukot āt im rejistōr kiiō, im jilkinl̦o̦k armij eo ñan portal em̦ool an eCitizen bwe en dedel̦o̦k application eo. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     findHealthcarePrompt:
-      "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Jerbal āinwōt juon ri-tōl ilo jikin jipañ ko an ājmour. Lelok melele kōn oktak jān NHIF ñan SHIF (Social Health Insurance Fund) im ewi wāween rejistōr. MEN EAUJELOK: Kwal̦o̦k code ko an USSD (āinwōt *263#) ak website ko ñan rejistōr im kōmel̦el̦eik em̦m̦an ko an jipañ in ājmour an aolep. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     educationServicesPrompt:
-      "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Jerbal āinwōt juon ri-kappe kōn jikuul̦. Kōnono kōn CBC curriculum, NEMIS registration, ak jikin ilo jikuul̦ el̦ap ikkijeen KUCCPS. MEN EAUJELOK: Kōmel̦el̦eik ewi wāween jemān im jinen remaron̦ lale jem̦l̦o̦k in ekkatak ko ikkijeen SMS ak portal an KNEC ñe rej wal̦o̦k. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     transportLicensesPrompt:
-      "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Jerbal āinwōt juon ri-tōl an jikin jerbal ko an NTSA. Kōmel̦el̦eik wāween kōkāāl laijen in tōrreep, etale wa ko, ak jerbale account an TIMS. MEN EAUJELOK: Tōl armij eo ilo wāween an deļo̧ñ ilo portal an eCitizen NTSA ñan kajjitōk kōn Smart DL ak kāālet iien ñan etale wa eo. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     housingProgramsPrompt:
-      "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Jerbal āinwōt juon ri-kappe kōn pōrōkram̦ in m̦ōn em̧m̧akūt. Kōmel̦el̦eik Affordable Housing Program (Boma Yangu) rejistōr im wāween kōllā ilo anan. MEN EAUJELOK: Tōl armij eo ñan portal an Boma Yangu bwe en lo jerbal ko im kōmel̦el̦eik kakien ko ñan bōk juon m̦weo. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     findJobsPrompt:
-      "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
-
+      "Jerbal āinwōt juon ri-kappe kōn jerbal ilo kien. Tōl armij eo ilo an kōm̦m̦an pōrofael im kajjitōk kōn jerbal ko reppālõt ikkijeen portal an Public Service Commission (PSC). MEN EAUJELOK: Kappe armij eo bwe en kōpooj peba in jikuul̦ ko an im lale website an PSC ak nuujpeba ko kōn kōkalikkar an MyGov. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     justChatPrompt:
-      "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+      "Jerbal āinwōt juon m̦ōttam̦ em̦m̦an. Kōm̦m̦an māniti, jipañ, im jel̦ā kōn mānit an Kenya im mour an kajojo raan. MEN EAUJELOK: Kakememej armij eo bwe meñe kwomaron̦ bwebwenato kōn jabdewōt men, kajoor eo am el̦aptata ej jipañ er ilo jikin jerbal ko an kien Kenya āinwōt **ID ko**, **Taaj ko**, im **Rejistōr Būjinij**. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'."
   },
   common: {
     cancel: 'A bula',
@@ -1576,7 +1433,15 @@ export default {
     hash: 'SHA256 Has',
     tabs: {
       details: 'Kibaroo',
-      ingestionLog: 'Dung Log'
+      ingestionLog: 'Dung Log',
+      detailsHint:
+        'Melele kōn fail in: ēt, ri-jeje im kakōl̦l̦e in laajrak in jel̦āl̦o̦kjen̦ ko AI ej kōjerbali ñan jilkinl̦o̦k kajjitōk ko. Ingest ej aikuj jañin kab juon kakōl̦l̦e.',
+      dashboardHint:
+        'Kalimjōk ilo iien em̦ool crawl an website kōn fail in: tōrrein, laan̦, l̦apier im wōnm̦aanl̦o̦k. Ñe em̦ōj an tōp crawl eo, jikin jeje eo ilal̦ ej kōm̦m̦an bwe en jikin kakwōn OKF.',
+      crawlLogHint:
+        'Ripot an kajojo peij kōn crawl an website: URL ta ko em̦ōj bōki, kōrōl̦o̦ki ak l̦apier. Jeje ilo iien eo crawl ej em̦m̦akūt.',
+      ingestionLogHint:
+        'Wōnm̦aanl̦o̦k an kajojo wāween kōpooj fail in ñan uwaak ko an AI: kōm̦m̦an kōkōm̧bōļ (chunking), kakōl̦l̦e, embedding im kakoba ilo laajrak. L̦apier ilo ijin rej kwal̦o̦k kajjien ia eo ingest ear bōjrak ie.'
     },
     log: {
       killActions: 'Faha Kewol (Kill Actions):',
@@ -1641,6 +1506,2164 @@ export default {
       duplicate: 'Fayil "{fileName}" kafuta le folo.',
       uploadSuccess: '{fileName} yeleta benta',
       uploadFailed: 'Filiyata {fileName} yele to.'
+    },
+    ragTip:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+  },
+  okf: {
+    models: {
+      title: 'Model configurations',
+      add: 'New configuration',
+      hint: 'Named remote-model endpoints for judging and generation — any OpenAI-compatible surface (OpenAI, a LiteLLM gateway, vLLM, Gemini-compat, Ollama) or Anthropic direct. Exactly one configuration can be active; when none is, the deployment’s configured default model is used. Keys are stored server-side and never displayed.',
+      name: 'Name',
+      provider: 'Provider',
+      providerOpenai: 'OpenAI-compatible (OpenAI, LiteLLM, vLLM…)',
+      providerAnthropic: 'Anthropic (native API)',
+      baseUrl: 'Base URL',
+      apiKey: 'API key',
+      apiKeyKeep: 'unchanged',
+      model: 'Model',
+      modelPick: 'Select a model…',
+      modelFreeText: 'model id (free text)',
+      modelFetch: 'Fetch models',
+      modelFetching: 'Fetching…',
+      modelsEmpty: 'The endpoint returned no models — type the model id.',
+      modelsFailed: 'Model listing failed — type the model id.',
+      modelsLoaded: '{n} models loaded — pick from the dropdown or type freely',
+      test: 'Test connection',
+      testing: 'Testing…',
+      testTitle: 'Probe the endpoint and (with a model chosen) a one-token generation',
+      testOkModel: '✓ Connected — the model answered ({ms} ms)',
+      testOkEndpoint: '✓ Endpoint reachable — {n} models listed (pick a model to also test generation)',
+      testGenFail: '✗ Endpoint OK, but the model call failed',
+      testNotListed: ' — note: “{model}” is not in the endpoint’s model list',
+      testFail: '✗ test failed — no response',
+      services: 'Use this configuration for',
+      svcJudge: 'Benchmarks (RAGAS judge + advisor)',
+      svcJudgeShort: 'benchmarks',
+      svcCuration: 'Concept curation',
+      svcCurationShort: 'curation',
+      svcTagging: 'Topics & tags',
+      svcTaggingShort: 'topics/tags',
+      svcOpenaiOnly:
+        'Concept curation and topics/tags speak the OpenAI wire format — they need an OpenAI-compatible endpoint.',
+      colServices: 'Used by',
+      svcNone: 'nothing (dormant)',
+      groupTestLab: 'Test Lab Pipelines',
+      groupDataPrep: 'Data Prep Pipeline',
+      groupInference: 'Inference Pipeline',
+      mockNote: 'planned — not yet configurable',
+      svcAnswers: 'Benchmark answers — offline replay kelen ye (Lab bɛ na jipa deployment chat la)',
+      svcAnswersShort: 'benchmark answers (offline kelen ye)',
+      mockContextual: 'Contextual retrieval (doc context)',
+      mockChunkLabeling: 'Chunk labeling',
+      mockGraphExtraction: 'Knowledge-graph extraction',
+      mockChatServing: 'Chat answering',
+      mockTranslation: 'Chat translation',
+      svcOpenaiOnlyShort: 'OpenAI-compatible endpoints only',
+      providerTipOpenai:
+        'Verified OpenAI-compatible endpoints: OpenAI https://api.openai.com/v1 · MiniMax https://api.minimax.io/v1 · z.ai https://api.z.ai/api/paas/v4 · a LiteLLM gateway http://your-gateway:4000/v1',
+      providerTipAnthropic:
+        'Verified Anthropic-native endpoints: Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
+      baseUrlTip:
+        'The server lists models at this base + /models (OpenAI-compatible) or + /v1/models (Anthropic — a trailing /v1 is normalized away), and Test connection generates at + /chat/completions or + /v1/messages. All four standard paths verified live 2026-10-20.',
+      save: 'Save changes',
+      create: 'Create',
+      cancel: 'Cancel',
+      colName: 'Name',
+      colProvider: 'Provider',
+      colUrl: 'Endpoint',
+      colKey: 'Key',
+      colModel: 'Model',
+      colState: 'State',
+      active: 'active',
+      inactive: 'inactive',
+      edit: 'Rename / modify',
+      copy: 'Copy',
+      activate: 'Activate (exactly one is active)',
+      deactivate: 'Deactivate — the deployment default model will be used',
+      delete: 'Delete',
+      deleteConfirm: 'Delete model configuration "{name}"?',
+      empty: 'No model configurations yet — the deployment default (env) model is in use.',
+      adminOnly: 'Model configurations require the platform admin role.'
+    },
+    versions: {
+      bundle: 'Bulo',
+      col: {
+        concepts: 'Miroolu',
+        curator: 'Juubelaa',
+        minted: 'Daa',
+        tag: 'Toh',
+        trigger: 'Madi',
+        version: 'Bero'
+      },
+      current: 'Nying waatoo',
+      loadFailed: 'Ban bōktok wāween ko',
+      none: 'Ejjan̄in wōr wāween em̦ōj kōm̦m̦an — publishing ej kōm̦m̦an v1.',
+      notServing: 'Hani baara nte',
+      publish: 'Kōm̦m̦an wāween ekāāl',
+      published: 'Wāween v{v} em̦ōj publish — bundle {f} em̦ōj kakkwon ilo jikin kakwōn peba.',
+      serving: 'A marata (baara)',
+      title: 'Berolu'
+    },
+    shell: {
+      back: 'Dashboard an Studio',
+      building: 'A bering loo…',
+      buildingHint: 'Peba in jikin eo ej pād ilo wāween jerbal',
+      delete: {
+        body: 'Men in enaj jol̦o̦k jikin kakwōn eo, kōm̦m̦an ko ie, melele ko ilo laajrak, graf im bundle ko indreo.',
+        confirm: 'A kuntu',
+        title: 'Jol̦o̦k jikin kakwōn'
+      },
+      export: 'Export .zip',
+      logs: 'Loguolu',
+      pii: {
+        ack: 'Kwal̦o̦k bwe kwojel̦ā kōn men ko rej kakōl̦l̦e & publish',
+        note: 'Men ko rej kakōl̦l̦e rej koba ilo melele ko enaj publish. Ñe kwom̦ōj am lali (āinwōt numba in talboon ko an opij), kam̦ool im wōnm̦aanl̦o̦k.'
+      },
+      publish: {
+        body: 'Publishing ej kōm̦m̦an v{n} im kakkwon bundle "{file}" ilo jikin kakwōn peba, bōk jikin jabdewōt zip m̦okta. Wāween in ekāāl ejjab serving m̦ae iien kwoj Ingest e.',
+        confirm: 'A ke',
+        inProgress: 'A kabuḷo publishing — a bōk eddo kakkwon bundle im jōt e…',
+        title: 'A ke'
+      },
+      readonly: 'CONTENT READ ONLY — head/tags stay editable',
+      serving: 'A bering baara',
+      state: {
+        ingested: 'A marata'
+      },
+      tab: {
+        editor: 'Safelaa',
+        wizard: 'Madi'
+      },
+      version: 'v{n}',
+      versions: 'Berolu',
+      deleteLabel: 'A kuntu',
+      testingLab: 'Testing Lab'
+    },
+    logs: {
+      labeled: 'kakōl̦l̦eiki: {n}',
+      fallbacks: 'jipañ ko an LLM: {n}',
+      concepts: 'kōm̦m̦an ko: {n}',
+      col: {
+        action: 'Kuu',
+        description: 'Kibaru',
+        user: 'Baaralaa',
+        when: 'Lung ani waatoo'
+      },
+      count: '{n} jikin ko',
+      loadFailed: 'Ban kōdāl̦o̦k ripot in m̦akūtkūt ko.',
+      none: 'Ejjan̄in wōr m̦akūtkūt em̦ōj jeje — jerbal ko an jikin kakwōn renaj wal̦o̦k ijin ilo aer wal̦o̦k.',
+      title: 'Baara safuo'
+    },
+    graph: {
+      aria: 'Graf in kōm̦m̦an',
+      building: 'Preparing graph…',
+      concepts: 'miroolu',
+      empty: 'Ejjan̄in wōr kōm̦m̦an - ejjel̦o̦k men in kōm̦m̦an graf ie.',
+      fit: 'Jaa loo',
+      hub: 'Kwal̦o̦k ak nooj index hub (kebaake ko an kobban rej ejjaak, ejjab jel̦āl̦o̦kjen̦)',
+      layouting: 'Layouting…',
+      legend: 'indeksi',
+      links: 'kofuolu',
+      zoomIn: 'A sutuya',
+      zoomOut: 'A masorong',
+      card: {
+        links: '{n} kebaake ko',
+        chunks: '{n} kōkōm̧bōļ ko',
+        failed: 'laajrak ear l̦apier',
+        flagged: 'men ko ewōr kakōl̦l̦e ie',
+        hub: 'Indeksi bolo',
+        pending: 'ejjan̄in pād ilo laajrak'
+      }
+    },
+    import: {
+      title: 'Import documents into a new OKF repository',
+      hint: 'The documents become one repository — segmented, cross-linked and labeled together. Nothing is published; the normal review → publish → ingest workflow follows.',
+      name: 'Repository name',
+      namePh: 'e.g. Abattoir policy pack',
+      domain: 'Subject Area (domain)',
+      strategy: 'Classification strategy',
+      stratHeuristics: 'Heuristics (fast, no LLM)',
+      stratLlm: 'LLM classification',
+      stratHybrid: 'Hybrid',
+      files: 'Selected documents',
+      servingBadge: 'serving free-form RAG',
+      alreadyBadge: 'already in an OKF repo',
+      servingTip:
+        'This document currently serves the free-form RAG corpus — the new repository cannot be ingested until it is retracted.',
+      alreadyTip: 'This document is already the source of another OKF repository.',
+      servingWarn:
+        '{n} document(s) still serve the free-form corpus. The import succeeds, but this repository cannot be ingested until they are retracted.',
+      cancel: 'Cancel',
+      importing: 'Importing…',
+      go: 'Import',
+      dupRepo: 'That repository name already exists — pick another.',
+      failed: 'The import could not be started. Check the documents and try again.'
+    },
+    editor: {
+      addConcept: {
+        bodyLabel: 'Markdown (likūt ak kōjparok bwe en ejjel̦o̦k)',
+        bodyPh: '# Bōroji\n\nLikūt markdown ijin - frontmatter enaj make koba.',
+        create: 'Kofuo daa',
+        failed: 'Ban kōm̦m̦ane fail in.',
+        title: 'Kobaiki fail in kōm̦m̦an',
+        titleLabel: 'Toh',
+        titlePh: 'āinwōt Menin mour ilo Mara',
+        updateIndex: 'Kobaiki ilo laajrak in Kobban ilo index'
+      },
+      access: {
+        label: 'Aseeg yesli depot',
+        title: 'Kontrollu di ases',
+        restricted: 'E limita',
+        openForAll: 'E aberto pa tur',
+        hintRestricted:
+          'S useris ku tin aseeg (i steward) por buska depot sta. Duna aseeg aba — e kobra ku user login li pa pruksimu.',
+        hintOpen: 'Kada user ku ta login por buska depot sta. Limita li i duna aseeg pa kada user.',
+        unrestrict: 'Abri pa tur',
+        restrict: 'Limita depot',
+        unconfiguredTip:
+          'Duna/tira aseeg presiza Keycloak kredensial na server (KC_OKF_ACCESS_CLIENT_SECRET). Limitason ta traba nhotodu.',
+        revoke: 'Tira',
+        error: 'Operason pa perde.',
+        grantedNotice: 'Aseeg duna — e kobra ku login pa pruksimu.',
+        revokedNotice: 'Ases tira — efetu na próksimu login di util.',
+        nowRestricted: 'Depot limita.',
+        nowOpen: 'Depot aberto pa tur.',
+        grantUsersCta: 'Dá ases pa utilizadon…',
+        pickerTitle: 'Dá ases pa peskiza',
+        pickerSearch: 'Purka utilizadon pa nômi, nômi di utilizador õ email',
+        pickerSearching: 'Ta purka…',
+        pickerMatching: '{n} utilizadon kurtidu ku e peskiza aki',
+        pickerSelectAll: 'Skolhe tudu {n}',
+        pickerAllSelected: 'Tudu {n} utilizadon kurtidu skolhidu',
+        pickerClearSelection: 'Limpá',
+        pickerHasAccess: 'ten ases',
+        pickerEmpty: 'Nen utilizador kurtidu.',
+        pickerGrant: 'Dá ases ({n})',
+        pickerGranting: 'Ta dá ases pa {n} utilizadon…',
+        pickerLargeHint:
+          'Pa kunjuntu grandingomu, prefere dá ases pa grupu — un operason só pa kualker númberu di utilizadon.',
+        grantedQueryNotice: 'Ases dadu pa {n} utilizadon — efetu na próksimu login di kada util.',
+        col: {
+          user: 'User',
+          group: 'Grupu'
+        },
+        viaRole: 'role diret',
+        noHolders: 'Nda user ni grupu ku tin aseeg.',
+        groupPlaceholder: 'Skolhe grupu…',
+        groupSearch: 'Purka grupu',
+        groupNoResults: 'Nen grupu kurtidu',
+        grantGroup: 'Duna pa grupu',
+        groupHint: 'Kada membro di grupu sim aseeg ku login pruksimu — un operason pa kualker number di user.',
+        grantedSomeNotice: 'Duna {n} — pa konexi: {m}',
+        grantedGroupNotice: 'Grupu duna — kada membro sim aseeg ku login pruksimu.'
+      },
+      autocorrect: {
+        blankBefore: '(fende mang soto)',
+        blankBadge: 'ejjel̦o̦k frontmatter — aolepen peba',
+        applyField: 'A ke',
+        apply: 'A ke',
+        body: 'Kōm̦m̦an bwe frontmatter en jim̦we ilo aolep kōm̦m̦an ko. Bōbba ko ban oktak.',
+        button: 'Yere-kuta',
+        clean: 'Ejjel̦o̦k men in kōm̦m̦ane — aolep frontmatter ejim̦we.',
+        col: {
+          field: 'Bolo',
+          after: 'Nying koo',
+          before: 'Nyaha',
+          concept: 'Miroo'
+        },
+        failed: 'Scan mang si.',
+        scanning: 'Scan…',
+        title: 'Make-kōjim̦we (frontmatter wōt)'
+      },
+      concepts: {
+        originTip: 'Ewi wāween kar kōm̦m̦an kōm̦m̦an in',
+        add: 'Miroo kuta',
+        addLabel: 'Toh kuta',
+        delete: 'Kofuo kuntu',
+        empty: 'Ejjan̄in wōr fail - kobaiki juon kōm̦m̦an ak bar ajeje jān jikin eo.',
+        filter: 'Kofuo filtar',
+        failedCard: {
+          title: 'Failed to ingest',
+          problem: 'The problem',
+          noError: 'Marked failed without a recorded reason.',
+          fixLabel: 'How to fix',
+          attempts: 'Attempts: {n}',
+          when: 'Last attempt {when}',
+          fix: {
+            reaper:
+              'The ingest worker gave up waiting within its grace window (the drain was saturated) — the content is intact. Fix: edit this file slightly and save to re-queue it, or retract and re-ingest the whole repo.',
+            dataprep:
+              'The content-preparation service failed this ingest. Fix: edit and save to re-queue it; if it repeats, check the dataprep service health.',
+            generic:
+              'Indexing failed. Fix: edit the content and save to re-queue it, or retract and re-ingest the whole repo.'
+          }
+        },
+        indexBadge: 'indeksi',
+        label: 'Miroolu',
+        loading: 'A bering soto…',
+        resplit: 'A farra kuta',
+        flagged: 'a juubeta',
+        flaggedTip:
+          'Kōm̦m̦an ko ewōr kakōl̦l̦e ie — kipel̦o̦k kajojo, jol̦o̦k ak ukōt men eo, kōjparok (ej make bar lale); ak kwal̦o̦k bwe kwojel̦ā ie ilo iien publish.',
+        piiBadge: 'PII',
+        piiTip: 'Men ko ewōr kakōl̦l̦e ie: {k}. Kipel̦o̦k, jol̦o̦k ak ukōti, innem kōjparok — ej make bar lale.',
+        piiTipBare: 'Men ko ewōr kakōl̦l̦e ie — kipel̦o̦k, etale, innem kōjparok bwe en bar lale.',
+        sourceLabel: 'Source document',
+        sourceView: 'Open the source document',
+        bulkAccept: 'Abee song',
+        bulkRedact: 'Abee nuun',
+        bulkRemove: 'Abee kuntu',
+        loadProgress: 'Kōdāl̦o̦k fail ko {done}/{total}',
+        addSource: '+ From documents',
+        reingest: 'Ingest nyiningo miroolu n’i',
+        reingestBusy: 'Ingest RAG dang baara e kafuolu n’i — sundi a bɔ, n’i la ñining tugung.',
+        reingestFailed: 'Ingest nyiningo ear l̦apier — ñining tugung.'
+      },
+      delete: {
+        body: 'Men in enaj jol̦o̦k fail eo, kōkōm̧bōļ ko em̦ōj laajraki, im kebaake ko an graf indreo.',
+        confirm: 'A kuntu',
+        title: 'Kofuo kuntu'
+      },
+      label: 'Jikin jeje an jikin kakwōn',
+      loadFailed: 'Ban bōktok kōm̦m̦an in.',
+      loadingConcept: 'Kōdāl̦o̦k kōm̦m̦an…',
+      meta: {
+        label: 'Melele kōn kōm̦m̦an',
+        labelLabel: 'Kakōl̦l̦e (Laajrak in Jel̦āl̦o̦kjen̦)',
+        noLabel: 'Toh nte',
+        none: 'Ejjel̦o̦k kōm̦m̦an em̦ōj kāālete',
+        saveFailed: 'Kōjparok melele ear l̦apier',
+        saved: 'Melele ko em̦ōj kōjparoki',
+        status: 'Indeksi cogo',
+        title: 'Toh',
+        trust: 'Laana',
+        type: 'Sifa',
+        typePlaceholder: 'Sifa sugu…',
+        hide: 'Hide metadata',
+        show: 'Show metadata'
+      },
+      pane: {
+        files: 'Kofuolu',
+        graph: 'Jaa'
+      },
+      pickConcept: 'Kāālet juon kōm̦m̦an jān laajrak eo bwe kwōn jino jeje.',
+      resplit: {
+        body: 'Men in enaj jol̦o̦k aolep kōm̦m̦an kiiō im graf eo, innem bar bōktok fail eo kōn ajeje ekāāl. Jeje ko am ilo kōm̦m̦an ko renaj joko.',
+        confirm: 'A farra kuta',
+        failed: 'Ajeje bar juon alen ear l̦apier — lale toor eo an fail eo.',
+        modeA: 'Juon wōt kōm̦m̦an ñan aolepen crawl eo',
+        modeAHint: 'Kōm̦m̦an ekanooj l̦ap — aolep kobban ilo juon wōt kōm̦m̦an',
+        modeB: 'Juon kōm̦m̦an ilo kajojo peij',
+        modeBHint: 'Ajeje ilo kakōl̦l̦e ko an crawler `## Source:` (karōk eo em̦m̦antata)',
+        modeC: 'Kōjerbal LLM ñan kōkalikkar un ko',
+        modeCHint: 'Bwebwenato 10.6 — etooj wōt enaj itok',
+        title: 'Bar ajeje jān jikin eo'
+      },
+      save: 'A mara',
+      saved: 'A marata',
+      saving: 'A bering mara…',
+      unsaved: 'Oktak ko rejan̄in kōjparok',
+      view: {
+        rendered: 'A keta',
+        source: 'Asili'
+      },
+      viewToggle: 'Safelaa juube',
+      paneLabel: 'Juube-dulaa',
+      saveFailed: 'Kōjparok ear l̦apier — bar kajjieon̦',
+      piiRescan: {
+        label: '个人信息',
+        button: '重新扫描所有页面',
+        working: '正在重新扫描所有页面…',
+        progress: '重新扫描…共 {total} 页中的 {done} 页',
+        progressIdle: '重新扫描…正在读取存储库',
+        done: '已重新扫描 {n} 页。',
+        partial: '已重新扫描 {n} 页。仍有 {e} 页失败 — 它们的扫描结论没有变化，因此这些页面仍会阻止发布。',
+        noKey: '服务器接受了重新扫描，但未返回运行 ID，因此无法跟踪其进度。没有报告任何结果。',
+        missing: '此服务器不支持重新扫描（404）。没有任何更改 — 扫描失败的页面仍在阻止发布。',
+        frozen: '重新扫描被拒绝：存储库正在发布（409）。没有任何更改。',
+        failed: '重新扫描失败。没有任何更改 — 扫描失败的页面仍在阻止发布。',
+        scanned: '已重新扫描 {n} 页',
+        clean: '无发现',
+        hit: '已标记',
+        error: '扫描错误',
+        vanished: '已消失',
+        stillBlocking: '仍在阻止'
+      },
+      piiBulk: {
+        done_accept:
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
+        title: {
+          redact: 'Bwōbwe aolep men ko ewōr kakōl̦l̦e ie',
+          remove: 'Jol̦o̦k aolep kobba ko ewōr kakōl̦l̦e ie',
+          accept: 'Bōk aolep men ko ewōr kakōl̦l̦e ie'
+        },
+        body: {
+          redact: 'Kobban kajojo kōm̦m̦an ewōr kakōl̦l̦e ie ej bōk jikin kōn naanin kōl̦apier. Ban maron̦ bar kōjepel̦o̦ke.',
+          remove: 'Kobban kajojo kōm̦m̦an ewōr kakōl̦l̦e ie ej ejjel̦o̦kl̦o̦k. Ban maron̦ bar kōjepel̦o̦ke.',
+          accept: 'Aolep men ko ewōr kakōl̦l̦e ie rej etale-im-kōjparok — ban bar kakōl̦l̦e m̦ae iien kwobar lale.'
+        },
+        scope: 'Kōm̦m̦an ko ear jelōti: {n}.',
+        confirm: 'A ke',
+        failed: 'Jerbal an PII l̦apier — bar kajjieon̦.'
+      },
+      actions: {
+        bulkPii: 'Jerbale kōm̦m̦an ko l̦ap an PII',
+        deleting: 'A bering kuntu'
+      },
+      addSources: {
+        working: 'Converting sources…',
+        done: '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).',
+        failed: 'A conversion failed — check the logs; the rest may still have queued.',
+        landed: 'Conversions complete — {t} topics now in the tree.'
+      }
+    },
+    dashboard: {
+      bulk: {
+        body: 'Kajojo jikin kakwōn ej publish kōn aolep etale ko (PII etale, kakoba ilo laajrak, jim̦we). Jem̦l̦o̦k an kajojo:',
+        pending: 'Kam̦ool ñan publish jikin kakwōn ko em̦ōj kāāleti.',
+        publishConfirm: '{n} Kwalok',
+        title: 'Publish jikin kakwōn ko em̦ōj kāāleti'
+      },
+      card: {
+        actions: 'Kōm̦m̦an ko ñan {name}',
+        building: 'A bering loo…',
+        buildingAria: 'Ej kōm̦m̦an — peba in jikin eo ej pād ilo wāween jerbal',
+        delete: 'A kuntu',
+        export: 'Export',
+        ingesting: 'A bering mara…',
+        logs: 'Loguolu',
+        rename: 'Toh kuta dii',
+        versions: 'Berolu',
+        testingLab: 'Testing Lab'
+      },
+      delete: {
+        body: 'Men in enaj jol̦o̦k jikin kakwōn eo, kōm̦m̦an ko ie, melele ko ilo laajrak, graf im bundle ko indreo. Ban maron̦ bar kōjepel̦o̦ke.',
+        confirm: 'A kuntu',
+        title: 'Jol̦o̦k jikin kakwōn'
+      },
+      filter: {
+        domain: 'Kāālet ekkar ñan un ko',
+        allDomains: 'Kuu dulaa bee'
+      },
+      new: '+ Jikin kakwōn ekāāl',
+      pii: {
+        ack: 'Kwal̦o̦k bwe kwojel̦ā kōn men ko rej kakōl̦l̦e & publish',
+        note: 'Men ko rej kakōl̦l̦e rej koba ilo melele ko enaj publish. Ñe kwom̦ōj am lali (āinwōt numba in talboon ko an opij), kam̦ool im wōnm̦aanl̦o̦k.'
+      },
+      publish: {
+        body: 'Publishing ej kōm̦m̦an v{n} im kakkwon bundle "{file}" ilo jikin kakwōn peba, bōk jikin zip eo m̦okta. Wāween in ekāāl ejjab serving m̦ae iien kwoj Ingest e.',
+        confirm: 'A ke',
+        title: 'A ke'
+      },
+      search: 'A nyining...',
+      select: 'Kāālet {name} ñan l̦ap an publish',
+      stage: {
+        drainFailed: 'Ingest ear l̦apier',
+        queueBehind: '{n} nderi e haande · inngest wooɗɗa {m} repo',
+        redraining: 'A bering bo-kuta…',
+        building: 'A bering loo…',
+        draft: 'Binoo',
+        inReview: 'A bering juube',
+        ingested: 'A marata v{n}',
+        published: 'A keta v{n}',
+        retracted: 'A sayita',
+        stepOf: 'Step {n} of 10'
+      },
+      title: 'Kafuolu',
+      topics: 'kuuolu',
+      unpublish: {
+        title: 'Falsifya bugbugu',
+        body: "Wannan na tsayawar ba da {name} ga wakilan RAG nan da nan. Babban bundle zip da tarihin siguna suna nan; ma'ajiyar ta koma 'Ana Duba' domin gyara. Sake bugbugu sannan ka yi Ingest don sake ba da.",
+        confirm: 'Falsifya bugbugu'
+      },
+      lane: {
+        draft: 'A sambataa',
+        in_review: 'A bering juube',
+        published: 'A keta',
+        ingested: 'A marata',
+        retracted: 'A sayita'
+      },
+      laneEmpty: {
+        draft: 'Hani fengo mang samba folo',
+        in_review: 'Hani fengo mang juube folo',
+        published: 'Kofuo mang ke folo',
+        ingested: 'Hani fengo mang mara folo',
+        retracted: 'Hani fengo mang sayi folo'
+      },
+      reingest: {
+        failed: 'Ingest nyiningo ear l̦apier ({n})',
+        title: 'Ingest nyiningo miroolu dinno l̦apier',
+        confirm: 'Ingest nyiningo',
+        counting: 'A yelema kiden miroolu l̦apier…',
+        countFailed: 'A man sogo kiden miroolu l̦apier. Ñining tugung.',
+        none: '{name} man fennd miroolu l̦apier — miroolu bees nyina a dunta.',
+        body: 'Miroolu {n} labo {name} l̦apier a mara, ko man koo RAG. Ingest nyiningo bai a nyini wooɗɗa fii n’i tirra; miroolu dinno dunta man dɔn. N’i labe a mara bi nyini, filiyata bai yelema fii miroolu.'
+      }
+    },
+    build: {
+      drainFailed: {
+        more: '+ bar {n}',
+        fixPath: 'Bar ingest ñan kajjieon̦ bar juon alen: retract → kōm̦m̦an bar juon wāween → ingest.'
+      },
+      curation: {
+        fallbacks: 'jipañ ko an LLM',
+        curated: 'A pareta',
+        typed: 'Sifa dita',
+        labeled: 'Toh dita',
+        described: 'A fota'
+      },
+      batches: 'Bōrokraam̦ ko em̦ōj kakkwon',
+      bytes: 'Asili karan',
+      conceptsIndexed: 'kōm̦m̦an ko em̦ōj laajraki',
+      elapsed: {
+        hr: 'Jinoe ilo {n} awa jim̦m̦a',
+        lt1: 'Jinoe dikl̦o̦k jān juon minit jim̦m̦a',
+        min: 'Jinoe ilo {n} minit jim̦m̦a'
+      },
+      hint: {
+        import: 'Jikin kakwōn eo ej pād ilo Import m̦ae iien peba eo ej dedel̦o̦k an oktak.',
+        rag: 'RAG index ej kōm̦m̦an — wāween in ej jino serving ñe em̦ōj laajrak aolep kōm̦m̦an ko.',
+        serving: 'Wāween in ej serving traffic an RAG — retract e bwe kwōn kōm̦m̦an oktak.',
+        review: 'Pād ilo review — ri-etale eo ej jain, innem ri-lale eo ej publish im ingest.',
+        retracted: 'Ejjab jerbal — submit → review → approve → publish → ingest bwe en bar jino serving.',
+        idle: 'Dedel̦o̦k kōdāl̦o̦k — submit ñan review bwe en wōnm̦aanl̦o̦k jerbal eo.'
+      },
+      pages: 'Peij ko em̦ōj jerbali',
+      serving: {
+        graph: 'Graf an serving',
+        version: 'Wāween in serving'
+      },
+      stage: {
+        indexing: 'Indeksi',
+        serving: 'A bering baara',
+        label: 'Waatoo'
+      },
+      title: {
+        import: 'Wōnm̦aanl̦o̦k an kōdāl̦o̦k',
+        rag: 'Wōnm̦aanl̦o̦k an ingest',
+        serving: 'Ejjāliklik eo an serving',
+        review: 'Ejjāliklik eo an review',
+        retracted: 'Ejjāliklik eo an retract',
+        idle: 'Ejjāliklik eo an jikin kakwōn'
+      },
+      lifecycle: {
+        importing: 'A bering nata',
+        reviewing: 'A bering juube',
+        ingesting: 'A bering mara',
+        serving: 'A bering baara',
+        retracted: 'A sayita'
+      },
+      row: {
+        subject: 'Kuu dulaa',
+        topics: 'Kuuolu',
+        lastVersion: 'Bero laba'
+      }
+    },
+    create: {
+      zipOnly: 'Kāālet juon fail in bundle .zip.',
+      stagedFile: 'Em̦ōj kōpooj: {name}',
+      staged: 'Bundle em̦ōj kōpooje — jidduuki Kōm̦m̦an Jikin Kakwōn ñan jino bōktok.',
+      openExisting: 'Kipel̦o̦k jikin kakwōn em̦ōj kōm̦m̦ane',
+      name: 'Āt an jikin kakwōn',
+      importing: 'Bōktok bundle…',
+      importHint: 'Ak bōktok juon zip bundle ñan kōm̦m̦an juon jikin kakwōn ekāāl.',
+      importDefaultName: 'Jikin kakwōn eo em̦ōj bōktok',
+      failed: 'Kōm̦m̦an jikin kakwōn eo ear l̦apier',
+      duplicateInline: 'Ewōr juon jikin kakwōn kōn āt in. Kipel̦o̦k, ak kāālet bar juon āt.',
+      duplicate: 'Ewōr juon jikin kakwōn kōn āt in — kipel̦o̦k jān dashboard ak kāālet bar juon āt.',
+      domain: 'Kuu dulaa',
+      create: 'Kōm̦m̦an jikin kakwōn',
+      title: 'Jikin kakwōn OKF ekāāl',
+      hint: 'Ej kōm̦m̦an juon jikin kakwōn ejjel̦o̦k kobban kōn index.md eo kwonañin jeje ilo Studio.',
+      domainPlaceholder: 'Kāālet un ko…',
+      domainRequired: 'Kāālet un ko m̦oktata — ban ukōte ālikin an kōm̦m̦an.',
+      classLabel: 'Kalikkar kōm̦m̦an eo',
+      classHeuristics: 'Heuristics (kakōl̦l̦e kajjien)',
+      classLlm: 'LLM-demba',
+      classHybrid: 'Hybird'
+    },
+    fm: {
+      errKeyCurated: 'Āt in jikin kōjparok.',
+      errKeyDuplicate: 'Āt in jikin kōjerbal ruo alen.',
+      errJson: 'JSON baata',
+      errNumber: 'Aikuj juon nōmba',
+      kind: {
+        json: 'JSON',
+        array: 'Safuo',
+        boolean: 'Tonya/Faniya',
+        number: 'Kendo',
+        string: 'Kuma'
+      },
+      removeKey: 'Bolo kuntu',
+      kindLabel: 'Sifa',
+      keyPh: 'bolo toh',
+      fullHint: 'Aolep jikin ilo frontmatter kwomaron̦ jeje ie. Kobaik ak jol̦o̦k ki ko ilo anan.',
+      errRemovalPending: 'Jol̦o̦k jikin ko aikuj kalimur an merge-delete server (etok wōt).',
+      errKeyRequired: 'Aolep jikin aikuj juon āt.',
+      arrayPh: 'uwaak ko kōkōm̧a eie',
+      addKey: 'Bolo kafu',
+      saved: 'Frontmatter em̦ōj kōjparoke',
+      label: 'Frontmatter',
+      tipLabel: 'Ta in Frontmatter?',
+      edit: 'Yelema',
+      empty: 'Ejjan̄in wōr frontmatter — Jeje ej kobaiki kain, āt im kakōl̦l̦e.',
+      type: 'Sifa',
+      noType: 'Sifa nte',
+      titleLabel: 'Toh',
+      labelsLabel: 'Kakōl̦l̦e (Laajrak in Jel̦āl̦o̦kjen̦)',
+      noLabel: 'Toh nte',
+      descriptionLabel: 'Kibaru',
+      save: 'Kōjparok frontmatter',
+      saveFailed: 'Kōjparok frontmatter ear l̦apier',
+      perRepoTitle: 'Routing tags — what this repo is about',
+      perRepoHint:
+        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+      perRepoField: {
+        topic: 'Topic',
+        entity: 'Entity',
+        scope: 'Scope',
+        forbidden: 'Forbidden',
+        summary: 'Summary',
+        keyword: 'Keyword'
+      },
+      perRepoPh: {
+        topic: 'One topic per line',
+        entity: 'One entity per line',
+        forbidden: 'One forbidden topic per line',
+        keyword: 'One keyword per line'
+      },
+      perRepoHelp: {
+        topic: 'Add, modify or remove topics — one per line. Empty lines are ignored.',
+        entity: 'Add, modify or remove entities — one per line. Empty lines are ignored.',
+        forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
+        keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
+      },
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint:
+        'Repository-level tags ({summary}) live on the repo, not this concept — manage them in the Tags panel in the right rail.'
+    },
+    piiReview: {
+      title: '个人信息检查',
+      checking: '检查中…',
+      checkingBody: '正在读取每个页面的个人信息状态…',
+      unreadableTitle: '状态未知',
+      unreadableBody: '无法读取此存储库的个人信息状态。是否发现了任何内容属未知 — 这不是干净的结果。',
+      unscanned: '未扫描',
+      unscannedBody:
+        '没有完整的个人信息扫描覆盖此存储库（有 {n} 页从未扫描）。没有任何内容被确认不含个人信息 — 发布不是被命中阻止的，但此结论背后没有扫描。',
+      errorTitle: '扫描失败',
+      errorBody: '{n} 页无法扫描。它们的文本未被成功读取，因此是否包含个人信息属未知 — 它们并不干净，并且会阻止发布。',
+      unreviewed: '已标记，未复核',
+      unreviewedBody:
+        '扫描器在 {n} 页发现了可能的个人信息，且无人查看。发布仍被允许，但这些页面上没有任何内容经过复核。',
+      reviewed: '已标记，已复核',
+      reviewedBody: '{n} 页带有已标记的个人信息，已由策展人确认（{by}，{at}）。',
+      cleanVerdict: '已扫描 — 未发现',
+      cleanBody: '每个页面都已扫描，未发现个人信息。',
+      staleAck: '先前的确认于 {at} 标记了 {a} 页；现在有 {n} 页被标记，因此它并不涵盖它们。',
+      bannerTitle: '没有人复核过这些命中。',
+      bannerBody:
+        '发布仍然被允许，也没有任何关卡会阻止你 — 但被标记的页面将原样进入已发布的存储库。请逐个打开并在发布前做出决定。',
+      unknownActor: '未知'
+    },
+    glossary: {
+      addConcept:
+        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+      title:
+        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus:
+        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier:
+        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+      concept:
+        'Juon bwijin ilo jikin kakwōn eo am — juon wōt peij ak un. Kajojo kōm̦m̦an ewōr frontmatter ie me jipañ eo ej riiti, koba markdown me ej uwaak jān e.',
+      repository:
+        'Aolep kōm̦m̦an ko kōn juon wōt Un. Enaj erom juon OKF bundle me kwoj publish, bōk nōmba, im kōpel̦o̦k ñan jipañ eo.',
+      subjectArea:
+        'Jel̦āl̦o̦kjen̦ in epād ia? Un ko rej kobaik jikin kakwōn eo am im kalikkar kakōl̦l̦e ta ko kwomaron̦ kāāleti. Ban maron̦ ukōt ālikin an kōm̦m̦an.',
+      selectSubjectArea: 'Kāālet un ko…',
+      subjectAreaMissing: 'Un an jikin kakwōn in ejjab pād ilo Laajrak in Jel̦āl̦o̦kjen̦ — kwal̦o̦k aolep kakōl̦l̦e.',
+      label:
+        'Juon laajrak jān Laajrak in Jel̦āl̦o̦kjen̦ me ej jiron̦ jipañ eo ta kain kōm̦m̦an in. Kakōl̦l̦e ko rej jipañ uwaak ko lo melele ko rejim̦we.',
+      bundle:
+        'Zip kōm̦m̦an an jikin kakwōn — kōm̦m̦an ko, ejaak im melele ko ilo juon fail. Bundle ko rej wāween an jikin kakwōn em̦m̦akūt ilo buñtōn ko.',
+      version:
+        'Juon pija em̦ōj kōjparoke ilo iien publish. Jeje ej wōnm̦aanl̦o̦k ilo wāween eo juon — wāween ko em̦ōj publish ban oktak.',
+      serving: 'Wāween in ej jerbal: jipañ eo ej riiti melele ko ilo an uwaak. Retract e bwe kwōn kōm̦m̦an oktak.',
+      ingestion:
+        'Buñtōn eo me em̦ōj publish wāween eo ñan uwaak — bōjrak, embedded im kobaiki. Ejjel̦o̦k ej tōbar jipañ eo m̦okta jān men in.',
+      classification:
+        'Ewi wāween ad kalikkar ta in kōm̦m̦an eo (un, m̦ōttan, wāween…). Heuristics ej riiti peij eo ilo make; LLM ej etto l̦o̦k ak emaron̦ jerbale peij ko rekanooj ben.',
+      resplit:
+        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+      saveFailed: 'A mara baata',
+      importFailedTitle: 'Bōktok ear l̦apier — ban ukōt fail eo.',
+      importFailedHint: 'Jol̦o̦k jikin kakwōn in innem bar bōktok fail eo jān jikin eo.',
+      frontmatter: 'Melele ko ioon aolep fail — kain, āt, kakōl̦l̦e. Jipañ eo ej kōjerbale bwe en jel̦ā ta in kōm̦m̦an eo.',
+      pickSource:
+        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+      classificationStrategy:
+        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
+      clsHeur: 'Heuristics (fast, no LLM)',
+      clsLlm: 'LLM classification',
+      clsHybrid: 'Hybrid',
+      fsPick:
+        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+      autocorrect:
+        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+      handoff:
+        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+      lifecycle:
+        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+      labelsAuto:
+        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+      reviewHandoff:
+        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+      piiReview:
+        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+    },
+    md: {
+      toolbar: 'Cogo kuta',
+      bold: 'Bold',
+      italic: 'Italic',
+      h1: 'Kuntigi 1',
+      h2: 'Kuntigi 2',
+      h3: 'Kuntigi 3',
+      bullet: 'Safuo',
+      numbered: 'Laajrak kōn nōmba',
+      link: 'Link kafu',
+      code: 'Inline code',
+      table: 'Table kafu',
+      split: 'A farra',
+      rendering: 'A bering keta…'
+    },
+    narrative: {
+      intro:
+        'Jikin kakwōn OKF ej juon ejaak, koba in un ko ewōr aer wāween me uwaak ko ilo chat remaron̦ kōjerbali. Lale āinwōt juon buñtōn kōm̦m̦an ilo domain eo am — kakōl̦l̦e ko rej kwal̦o̦k laajrak, un ko rej kwal̦o̦k men ko, jikin ko rej kwal̦o̦k ia eo ear itok jān e.',
+      step0:
+        'Jikin kakwōn OKF ej juon koba in un ko em̦ōj karōki. Kalimjōke āinwōt juon buñtōn kōm̦m̦an ilo domain eo am — kakōl̦l̦e ko rej kwal̦o̦k laajrak, un ko rej kwal̦o̦k men ko, jikin ko rej kwal̦o̦k ia eo ear itok jān e. Ñe em̦ōj publish, uwaak ko an chat rej kōjerbal un kein kōn ID.',
+      step1:
+        'Jilu wāween ñan jino jikin kakwōn OKF: bōk un ko jān crawl an website, bōki jān peba ko kwom̦ōj kalōki, ak jino jān ejjel̦o̦k men. Kōm̦m̦an kopi in juon repo ej bōk aolep un ko im kwomaron̦ wōnm̦aanl̦o̦k kōn jerbal eo.',
+      step2:
+        'Kajojo peba ej erom jikin bōk melele ñan un ko. Ri-kōm̦m̦an eo ej riiti, kalikkar un ko, im kōpooj juon laajrak. Kwonaj etale kajojo un ilo buñtōn eo juon — ejjel̦o̦k ej koba m̦ae iien kwoj kam̦ool.',
+      step3:
+        'Kōmij riiti jikin ko am im kōpooj un ko. Un ko rej koba ippān doon ilo kakōl̦l̦e ko kwoj kāāleti. Ri-kōm̦m̦an eo ej lale em̦m̦an — ej kāālet bwe en dik un ko reim̦m̦an jān an el̦ap ak bōtata.',
+      step4:
+        'Kakōl̦l̦e ko rej aolep kain laajrak ko am — ta kain men in un in? Guraayd ainn dy chòrree yn laa er y Réim Réy, fo myr Çá subject er y rívs shoh.',
+      step5:
+        'Eñin ej aolepen jerbal eo. Kajojo un ej juon m̦ōttan dik in jel̦āl̦o̦kjen̦ me kwomaron̦ kōjerbale. Un ko rej bōk āt, melele, im laa Labels ayn y Réim Réy. Jerbal eo am ej bwe en alikkar: ukōt āt ko rejjab alikkar, kobaik men ko reāinwōt doon, jol̦o̦k men ko ejjel̦o̦k jikin aer itok jān e.',
+      step6:
+        'We run conformance checks: does every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before you hand the repository off; warnings can be acknowledged.',
+      step7:
+        'Jet kakkōl remaron̦ make jim̦we: wāween ko remaron̦ pedped ioon kien ko, jikin ko ejjel̦o̦k kobbaer remaron̦ koba melele ko rejim̦we. Jerbale jim̦we ko kwotōmak ie, innem jeblak ñan ri-karōk eo ñan etale.',
+      step8:
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+      step9:
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+      docMgmtEntry:
+        'Kōm̦m̦an juon jikin kakwōn OKF ekāāl jān peba ko em̦ōj kāāleti. Peba ko renaj jikin bōk melele; kwonaj etale im nōmbaar un ko renaj kōm̦m̦ani m̦okta jān an jabdewōt publish.',
+      crawlSegment:
+        'Jikin kakwōn OKF ej juon ejaak, koba in un ko ewōr aer wāween me uwaak ko ilo chat remaron̦ kōjerbali.',
+      emptyDashboard:
+        'Kwojan̄in kōm̦m̦an jabdewōt jikin kakwōn OKF. Jikin kakwōn OKF ej juon karōk, koba in un ko kwomaron̦ kōjerbali bwe uwaak ko ilo chat ren bōk melele jān er.',
+      labels: 'Kakōl̦l̦e ko rej aolep kain laajrak ko am — rej uwaake "ta kain men in un in?".',
+      hide: 'Nooje',
+      whatIsThis: 'Ta in?'
+    },
+    common: {
+      close: 'Kilōk',
+      cancel: 'Kōtōmraak',
+      save: 'Kōjparok',
+      clear: 'Kōrreoik',
+      delete: 'Jol̦o̦k'
+    },
+    studio: {
+      title: 'OKF Studio',
+      help: 'Jipañ',
+      helpTitle: 'Kōn OKF Studio',
+      helpBody:
+        'Jikin kakwōn OKF ej juon buñtōn kōm̦m̦an me — kakōl̦l̦e ko rej kwal̦o̦k laajrak, un ko rej kwal̦o̦k men ko, jikin ko rej kwal̦o̦k ia eo ear itok jān e. Ñe em̦ōj publish, uwaak ko ilo chat rej kwal̦o̦k un ko kōn ID im kwal̦o̦k ia eo ear itok jān e.',
+      view: {
+        dashboard: 'Dajiboodi',
+        wizard: 'Madi'
+      },
+      clonedFrom: 'Kopi jān {name} · wāween {version}',
+      context: {
+        title: 'Jikin kakwōn',
+        untitled: 'Jikin kakwōn ejjel̦o̦k etan',
+        trust: 'Lōke',
+        sources: 'Jikin ko',
+        concepts: 'Kōm̦m̦an ko kiiō',
+        stale: 'ritto'
+      },
+      status: {
+        draft: 'ej wōnm̦aanl̦o̦k',
+        inReview: 'ej etale',
+        published: 'em̦ōj publish'
+      },
+      stage: {
+        inReview: 'Pād ilo review',
+        stepOf: 'Buñtōn {n} jān 10',
+        draft: 'Binoo'
+      },
+      dashboard: {
+        title: 'Jikin kakwōn ko',
+        new: '+ Jikin kakwōn ekāāl',
+        search: 'Pukot…',
+        empty: 'Ejjan̄in wōr jikin kakwōn ijin.',
+        topics: 'un ko',
+        select: 'Kāālet {name} ñan l̦ap an publish',
+        stale: 'ritto',
+        stage: {
+          inReview: 'Pād ilo review',
+          stepOf: 'Buñtōn {n} jān 10',
+          draft: 'Binoo'
+        },
+        bulk: {
+          selected: '{n} em̦ōj kāāleti',
+          publish: 'Publish men ko em̦ōj kāāleti',
+          title: 'Publish jikin kakwōn ko em̦ōj kāāleti',
+          body: 'Ñe em̦ōj publish, uwaak ko ilo chat remaron̦ kōjerbali. Kajojo jikin kakwōn ilal̦ ej kwal̦o̦k jem̦l̦o̦k eo an.',
+          results: 'Jem̦l̦o̦k ko',
+          publishConfirm: 'A ke {n}',
+          col: {
+            name: 'Āt',
+            status: 'Ejjāliklik',
+            topics: 'Un ko'
+          },
+          status: {
+            ready: 'M̦ōj kōpooj'
+          }
+        }
+      },
+      draft: {
+        notReady: 'Ban kōjparok draft ko ilo server kiiō; em̦ōj kōjparok ijin.'
+      },
+      mode: {
+        basic: 'Sabu',
+        expert: 'Ekspert'
+      }
+    },
+    wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        retracted: 'Retracted',
+        publish: 'Ready to ingest'
+      },
+      status: {
+        published: 'A keta',
+        inReview: 'A bering juube',
+        draft: 'A bering sabu'
+      },
+      exit: 'Jeblak ñan dashboard',
+      context: {
+        version: 'Version',
+        untitled: 'Jikin kakwōn ejjel̦o̦k etan',
+        trust: 'Laana',
+        title: 'Kafuolu',
+        stale: 'a korita',
+        sources: 'Asiloolu',
+        concepts: 'Kōm̦m̦an ko kiiō'
+      },
+      label: 'Wizard an OKF Studio',
+      back: 'Jeblak',
+      continue: 'Wōnm̦aanl̦o̦k',
+      finish: 'Open the Editor'
+    },
+    steps: {
+      entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
+        title: 'Āt an jikin kakwōn & un ko',
+        hint: 'Kōm̦m̦an juon āt ealikkar ñan jikin kakwōn OKF in im kāālet un ko ie.',
+        nameLabel: 'Āt an jikin kakwōn',
+        namePh: 'āinwōt Peba in ettal NL',
+        domainLabel: 'Un ko'
+      },
+      choose: {
+        title: 'Ia eo jikin kakwōn OKF in ej aikuj jino ie?',
+        hint: 'Kāālet ewi wāween am kōn̦aan jino jikin kakwōn in. Kwomaron̦ ukōte tok ālik.',
+        source: {
+          documents: {
+            title: 'Peba ko',
+            desc: 'Bōk un ko jān peba ko kwom̦ōj kalōki.'
+          },
+          crawl: {
+            title: 'Crawl an website',
+            desc: 'Crawl juon website im kōpooj un ko jān peij ko.'
+          },
+          manual: {
+            title: 'Ejjel̦o̦k kobban',
+            desc: 'Jino jān jidikdik im make jeje un ko am.'
+          },
+          clone: {
+            title: 'Kopi jān juon jikin kakwōn epād m̦okta',
+            desc: 'Bōk un ko im ejaak eo jān bar juon jikin kakwōn OKF.'
+          }
+        },
+        cloneSource: 'Source repository (not yet serving)',
+        clonePh: 'Select the repository to clone from',
+        cloning: 'Cloning topics into this repository…',
+        cloneNeed: 'Pick the repository to clone from first.',
+        cloneBusy: 'The previous repository is still being removed — go Back and Continue again in a moment.',
+        cloneFailed: 'The clone failed — try again.'
+      },
+      input: {
+        title: 'Kōdāl̦o̦k ko',
+        documents: 'Kāālet peba ko rej aikuj jino laajrak in un ko.',
+        crawl: 'Kāālet website ko kwonañin crawl iie.',
+        manual: 'Kwomaron̦ jeje un ko ilo buñtōn eo juon.',
+        clone: 'Kāālet jikin kakwōn eo em̦ōj an kōm̦m̦an bwe kwōn kopi.',
+        placeholder: 'UI an buñtōn in enaj itok ilo bwebwenato ko tok ālik.',
+        chooseCrawl: 'Choose crawled documents',
+        chooseDocs: 'Choose source documents',
+        writeOne: '+ Write a concept',
+        fsPick: '+ Import markdown from this computer',
+        fsBusy: 'Importing your files…',
+        fsFailed: 'Import failed — check the files and retry.',
+        skippedEmpty: '{n} empty file(s) skipped.',
+        noneSelected: 'No sources selected yet.',
+        selectedN: 'Selected: {n}',
+        moreN: ' +{n} more',
+        noRepo: 'Create the repository first (go back to Entry).',
+        noRepoYet: 'Create the repository first (go back to Entry).',
+        benchTitle: 'Topics in this repository',
+        benchCount: '{n}',
+        benchLoading: 'Reading topics…',
+        benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
+        benchFailed: 'Could not read the topics right now.',
+        editTitle: 'Edit concept',
+        deleteFailed: 'Could not delete the concept.',
+        added: '{n} topic(s) in this repository so far.',
+        deleteTitle: 'Delete topic',
+        deleteBody: 'This permanently removes the topic from this repository.',
+        labelFailed: 'Could not set the label.',
+        cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
+      },
+      produce: {
+        title: 'Kōm̦m̦an un ko',
+        hint: 'Kōmij riiti jikin ko am im kōpooj un ko.',
+        progress: 'Ri-kōm̦m̦an ej jerbal...',
+        placeholder: 'Jerbal in kōm̦m̦an enaj itok ilo bwebwenato ko tok ālik.',
+        retry: 'Retry conversion',
+        restart: 'Run again',
+        running: 'Converting… you can watch progress here; nothing is committed until you review in Curate.',
+        failed: 'The conversion failed — retry, or go back and pick different inputs.',
+        done: '{n} topic(s) are ready — continue to review them in Curate.',
+        noSources: 'No sources selected — go back to Input.',
+        neverStarted: 'The conversion did not start — retry.',
+        manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
+        labelDone: 'Conversion complete',
+        dupContent:
+          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
+        inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          complete: 'Complete',
+          unavailable: 'Count unavailable',
+          waiting: 'Waiting'
+        },
+        filesNote: '{done} of {total} documents converted',
+        pagesNote: '{done} of {total} pages converted',
+        pagesSoFar: '{n} pages converted so far',
+        sourceStat: '+{n} new (total {t})',
+        sourceStatMerged: '+{n} new · {m} merged by slug (total {t})',
+        docsLeg: '{n} selected document(s)',
+        legWait: 'Waiting for the previous conversion to release…'
+      },
+      label: {
+        title: 'Labels — automateet',
+        hint: 'Gur Labels ainn dy chòrree yn laa er y Réim Réy — fo myr Çá subject er y rívs shoh.',
+        loading: 'Reading labels…',
+        preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
+        unlabeled: 'no labels yet',
+        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
+        loadFailed: 'Could not read the labels right now.'
+      },
+      curate: {
+        embedHint:
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
+        title: 'Etale un ko',
+        hint: 'Kajojo un ej juon m̦ōttan dik in jel̦āl̦o̦kjen̦ me kwomaron̦ kōjerbale. Jeje āt im melele eo.',
+        placeholder: 'Wōjke in ri-karōk + ri-jeje enaj itok ilo Bwebwenato 3-8.'
+      },
+      validate: {
+        title: 'Lale eñin ewōr men enana',
+        hint: 'We run conformance checks. Blocking issues must be fixed before you hand the repository off.',
+        placeholder: 'Jikin kam̦ool enaj itok ilo Bwebwenato 3-8.'
+      },
+      autocorrect: {
+        title: 'Make-kōjim̦we',
+        hint: 'Jet kakkōl remaron̦ make jim̦we. Jerbale jim̦we ko kwotōmak ie, innem jeblak ñan ri-karōk eo ñan etale.',
+        placeholder: 'Make-kōjim̦we enaj itok ilo Bwebwenato 10.2.',
+        noRepo: 'No repository yet — go back to Entry and create one first.',
+        applied: 'Fixes applied — continue, or go back to Curate to review the result.'
+      },
+      review: {
+        title: 'Etale',
+        hint: 'A summary of what you built — submit, approval and publishing happen on the dashboard and in the editor.',
+        repo: 'Jikin kakwōn',
+        topics: 'Un ko',
+        labels: 'Kakōl̦l̦e ko',
+        sources: 'Jikin ko',
+        state: 'Lifecycle state',
+        labelsSet: 'set per topic in Curate',
+        browserHint:
+          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
+        noRepo: 'No repository yet — the file review appears here once a repository exists.',
+        ritualOutside:
+          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+        versions: 'Versions',
+        logs: 'Action log',
+        rename: 'Rename',
+        noVersions: 'No versions yet — versions are minted during the approval ritual.',
+        versionSummary: '{n} version(s) · latest v{latest}'
+      },
+      publish: {
+        title: 'Sigura i kaba',
+        hint: 'This repository is ready for review. Publishing never happens here — submit it for approval on the dashboard, then approve and publish from the dashboard or the editor.',
+        nameOk: 'Āt an jikin kakwōn em̦ōj likūti',
+        labelsOk: 'Kakōl̦l̦e ko em̦ōj kāāleti',
+        topicsOk: 'Un ko em̦ōj etale',
+        topicsPending: 'No topics yet',
+        topicsServing: 'Topics serving',
+        noTopics: 'No topics yet — go back to Curate to produce or write them.',
+        frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
+        ritual:
+          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+        openDashboard: 'Open the Dashboard'
+      }
+    },
+    trust: {
+      tier: {
+        unverified: 'ejjan̄in kam̦ool',
+        'machine-confirmed': 'injin ear kam̦ool',
+        'human-reviewed': 'armij ear etale'
+      }
+    },
+    repos: {
+      retract: {
+        notReady: 'Retract UI enaj itok ilo Bwebwenato 3.9.'
+      },
+      manifest: {
+        notReady: 'Jikin manifest an bundle enaj kobatok tok ālik.'
+      }
+    },
+    docs: {
+      createRepo: 'Kōm̦m̦an jikin kakwōn OKF',
+      gate: {
+        emptySelection: 'Kāālet juon peba ak el̦ap l̦o̦k',
+        alreadyInOkf: 'Jol̦o̦k peba ko epād m̦okta ilo jikin kakwōn OKF',
+        alreadyIngested: 'Jol̦o̦k peba ko em̦ōj an ingest',
+        servingWarn:
+          '{n} selected document(s) still serve the free-form corpus — the new repository cannot be ingested until they are retracted.'
+      },
+      produce: {
+        notReady: 'Kōm̦m̦an in ej pād ilo bwebwenato ko tok ālik.'
+      }
+    },
+    crawl: {
+      domainLabel: 'Kuu dulaa',
+      domainPlaceholder: 'Kāālet un ko…',
+      classLabel: 'Kalikkar kōm̦m̦an eo',
+      classHeuristics: 'Heuristics (kakōl̦l̦e kajjien)',
+      classHeuristicsHint: 'Laajrak m̦ōkaj kōn kien ko — ejjel̦o̦k on̦ean LLM, em̦m̦an ñan crawl ko reim̦m̦an am karōki.',
+      classLlm: 'LLM-demba',
+      classLlmHint:
+        'LLM ej kōm̦m̦an aolep kōm̦m̦an — kajejjet, kakōl̦l̦e in laajrak in jel̦āl̦o̦kjen̦ im melele. Ekanooj l̦ap an jim̦we im bwe jān heuristics; kōttar bwe en bōk iien ñan kōm̦m̦an ko.',
+      classHybrid: 'Hybird',
+      classHybridHint:
+        'Heuristics m̦oktata; LLM ej bar etale men ko rejjab alikkar im kobikobi jikin ko rebwāt. Em̦m̦an aolepen kōn iien im kadede.',
+      targetLabel: 'Eaikuj etal ñan ia?',
+      target: {
+        freeform: 'Crawl ñan jikin melele ebar karōk',
+        okfRepo: 'Jikin kakwōn OKF'
+      },
+      targetHint: 'Kōmij kwal̦o̦k un ko kōmar lo m̦okta jān aō kōjparok jabdewōt.',
+      createOkfFromCrawl: 'Kōm̦m̦an jikin kakwōn OKF jān crawl in',
+      splitLabel: 'Ajeje kōm̦m̦an ko',
+      splitA: 'Juon wōt kōm̦m̦an ñan aolepen crawl eo',
+      splitB: 'Juon kōm̦m̦an ilo kajojo peij (karōk eo em̦m̦antata)',
+      splitC: 'Kōjerbal LLM ñan kōkalikkar un ko',
+      splitCHint: 'Bwebwenato 10.6 — etooj wōt enaj itok',
+      splitBHint: 'Kajojo peij ilo crawl ej erom kōm̦m̦an eo an make — AI emaron̦ kōjerbal kajojo peij.',
+      splitAHint: 'Aolepen crawl eo ej erom juon kōm̦m̦an el̦ap — em̦m̦antata ñan jikin ko redik.',
+      progressDownload: 'Bōk koba in melele ko jān crawl...',
+      progressSplit: 'Ajeje ilo kōm̦m̦an ko...',
+      progressIngest: 'Kobaiki kōm̦m̦an ko (bōrokraam̦ [i] jān [n])...',
+      postCrawlHint: 'Ñe ededel̦o̦k crawl eo, kwomaron̦ kōm̦m̦an jikin kakwōn OKF jān taab eo ilo Dashboard an fail eo.',
+      creating: 'Kōm̦m̦an jikin kakwōn OKF...',
+      createOk: 'Jikin kakwōn OKF em̦ōj kōm̦m̦ane. Kipel̦o̦k Studio ñan kōm̦m̦an.',
+      createOkRenamed: 'Jikin kakwōn OKF em̦ōj kōm̦m̦ane āt in "[name]". Kipel̦o̦k Studio ñan kōm̦m̦an.',
+      createFailed: 'Ban kōm̦m̦an jikin kakwōn OKF jān crawl in.',
+      conversionsTitle: '__TODO_TRANSLATE__ (en: Repositories created from this crawl)',
+      convQueued: 'Pād ilo laan̦...',
+      convDownloading: 'Kōdāl̦o̦k crawl eo...',
+      convSplitting: 'Ajeje ilo kōm̦m̦an ko...',
+      convAdding: 'Kobaiki kōm̦m̦an ko ([p] peij ko kiiō)...',
+      convDone: 'Dedel̦o̦k kōm̦m̦ane ([p] peij ko)',
+      convFailed: 'Eaar l̦apier',
+      createStarted: 'Kōm̦m̦ane "[name]" — lale wōnm̦aanl̦o̦k ilal̦.',
+      modelTier: {
+        label: 'Mool',
+        options: {
+          'local-small': 'Ijin · dik',
+          'local-medium': 'Ijin · iolap',
+          'sovereign-large': 'An aelōn̄ · kileplep'
+        }
+      },
+      gate: {
+        notSucceeded: 'Aikuj dedel̦o̦k crawl eo m̦okta jān kōm̦m̦an jikin kakwōn OKF.',
+        alreadyInOkf: 'Crawl in epād m̦okta ilo jikin kakwōn OKF.'
+      }
+    },
+    curator: {
+      placeholder: 'Kāālet juon un iturōn anbwijmāroñ ñan kalimjōk + jeje.',
+      search: 'Pukot un ko',
+      noTopics: 'Ejjan̄in wōr un.',
+      labels: {
+        title: 'Kōkāāl kakōl̦l̦e ko',
+        body: 'Kakōl̦l̦e ko rej aolep kain laajrak ko am — ta kain men in un in?',
+        edit: 'Kōkāāl kakōl̦l̦e ko',
+        add: 'Kobaiki',
+        addPh: 'āinwōt Peba in kōmāl̦im',
+        remove: 'Jol̦o̦k',
+        empty: 'Ejjan̄in wōr kakōl̦l̦e.',
+        notReady: 'Kakōl̦l̦e ko rej pād wōt ijin — enaj koba ibben server ilo iien em̦ool.'
+      },
+      frontmatter: {
+        label: 'Frontmatter',
+        edit: 'Jeje frontmatter',
+        dialogTitle: 'Jeje frontmatter',
+        okfVersion: 'okf_version',
+        status: 'lifecycle.status',
+        staleAfter: 'lifecycle.stale_after',
+        trustTier: 'trust_tier',
+        attestation: 'attestation',
+        sources: 'provenance.sources',
+        onlyOnIndex: 'Per-repo tags live on the index concept only — open the index to see them.'
+      },
+      showSource: 'Kwal̦o̦k jikin eo ear itok jān e',
+      issue: {
+        missingType: 'Ejjel̦o̦k kain kōm̦m̦an ie.',
+        badActor: 'M̧akūtkūt an jikin bōk melele aikuj jino kōn agent:/human:/tool:/process:.'
+      },
+      saveBlocked: 'Bōjrak kōjparok: kōm̦m̦an bwe en jim̦we wāween ko m̦oktata.'
+    },
+    validation: {
+      frozen: 'Kobban em̦ōj kabōjrak ilo {v} — riiti wōt. Retract wāween eo ej serving bwe kwōn kōm̦m̦an oktak.',
+      none: 'Ejjel̦o̦k',
+      expertHint:
+        'Ukōt ñan wāween Expert bwe kwōn lo JSON kam̦ool eo, kāālet ekkar ñan l̦ap an l̦apier, im jol̦o̦k etale ko.',
+      headline: {
+        blockers: '{n} blocking issue(s) — fix before you hand the repository off',
+        warnings: '{n} men ko rej aikuj am bar lale',
+        ok: 'Em̦m̦an aolep men. Ejjel̦o̦k men in kōm̦m̦ane.'
+      },
+      summary: '{clean} erreo · {warnings} aikuj etale · {blockers} kabōjrak',
+      formatter: {
+        notReady: 'Ri-kōm̦m̦an enaj itok ilo Bwebwenato 4.2b.'
+      },
+      run: {
+        notReady: 'Kam̦ool enaj itok ilo bwebwenato ko tok ālik.'
+      },
+      piiTitle: 'Personal data — review each flagged concept',
+      loading: 'Checking the repository…',
+      loadFailed: 'Could not load the validation report.',
+      retry: 'Retry',
+      issuesTitle: 'Issues to review',
+      howToFix: 'How to fix',
+      indexFailed: 'Re-index failed — edit or re-split the page.',
+      indexFailedRemedy:
+        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+      severity: {
+        blocker: 'Blocking',
+        warning: 'Needs review',
+        info: 'Info'
+      },
+      type: {
+        conformance: 'Frontmatter',
+        orphan: 'Not linked',
+        near_duplicate: 'Near-duplicate',
+        citation: 'Citations',
+        index_failed: 'Index'
+      },
+      topicLinks: {
+        title: 'Cross-link topics',
+        tip: 'Reads every page in this repository and writes links between the pages that genuinely belong together — the same processing the import wizard runs. It is safe to re-run: existing links are kept and only new ones are added.',
+        progress: 'Cross-linking… {done} of {total} batches',
+        progressIdle: 'Cross-linking… reading the repository',
+        done: 'Added {n} link(s) across {c} page(s).',
+        failed: 'Cross-linking failed: {msg}'
+      },
+      action: {
+        suggestLinks: 'Suggest links',
+        accept: 'Accept',
+        dismiss: 'Dismiss',
+        delete: 'Delete',
+        working: 'Working…',
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"',
+        preview: 'Preview duplicates',
+        hidePreview: 'Hide preview'
+      },
+      actionDone: {
+        done: 'Done'
+      },
+      suggest: {
+        working: 'Asking the assistant for link suggestions…',
+        empty: 'No suggestions — link it manually in the editor.'
+      },
+      nearDup: {
+        keepHint: 'Keep one copy — delete the rest.'
+      },
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      mergedPages: '{n} pages',
+      preview: {
+        loading: 'Loading page contents…',
+        truncated: 'First {n} characters — open the editor for the full page.'
+      },
+      tip: {
+        conformance:
+          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+        orphan:
+          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+        near_duplicate:
+          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+        citation:
+          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+        index_failed:
+          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      },
+      piiRescan: 'Re-scan all pages',
+      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanPartial:
+        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+      piiRescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      piiRescanFailed:
+        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
+      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+      piiRescanNoKey:
+        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+      piiStateError: 'Scan error',
+      piiTally: {
+        scanned: '{n} page(s) re-scanned',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'scan error',
+        stillBlocking: 'Still blocking'
+      }
+    },
+    pii: {
+      panel: 'Men ko ewōr kakōl̦l̦e ie',
+      nFlagged: '{n} soto',
+      rescan: 'Scan kuta',
+      stateError: 'Scan failed',
+      errorTitle: 'This page is blocking the hand-off.',
+      errorBody:
+        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+      rescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
+      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
+      scanning: 'Scan…',
+      clean: 'Flagged entities amatta yaode — concept asi clear oire.',
+      how: 'Fix: remove nattraga reword tou (e.g. name gi mahutta role), aduga save tou — re-scan na list asi update touba ngamgani.',
+      descFallback: 'Personal data detected toure (GDPR Art. 4(1) — relating to an identifiable person).',
+      scanError: 'Ban etale',
+      type: {
+        PERSON: 'Mooko toh',
+        LOCATION: 'Dulaa',
+        DATE_TIME: 'Lung ani Waatoo',
+        EMAIL_ADDRESS: 'Jikin email',
+        PHONE_NUMBER: 'Telifon nombo',
+        IP_ADDRESS: 'IP dulaa',
+        NRP: 'Nōmba in rejistōr an aelōn̄',
+        BD_NATIONAL_ID: 'Nōmba in ID an aelōn̄'
+      },
+      desc: {
+        PERSON: 'Person gi name detected toure. Names na natural person amabu directly identify touba ngammi.',
+        LOCATION: 'Place name detected toure. Atei data ga punshillaga meeoiba ama identify touba ngammi.',
+        DATE_TIME: 'Date or time detected toure. Dates na meeoiba ama identify toubada help touba ngammi.',
+        EMAIL_ADDRESS: 'Email address detected toure. Masina directly contact touba yaba person ama identify touri.',
+        PHONE_NUMBER: 'Phone number detected toure. Masina directly contact touba yaba person ama identify touri.',
+        IP_ADDRESS: 'IP address detected toure. Masina device nattraga household ama identify touba ngammi.',
+        NRP: 'National registration number detected toure. Masina strongly meeoiba ama identify touri.',
+        BD_NATIONAL_ID: 'National ID number detected toure. Masina strongly meeoiba ama identify touri.'
+      },
+      allClear: 'A fiyendee',
+      redactFile: 'Bwōbwe aolepen fail eo',
+      confirmRedactFile: 'Kam̦ool: bwōbwe aolepen fail eo?',
+      locateTip: 'Kwal̦o̦k naan kein ilo jikin jeje',
+      file: {
+        label: 'Kofuo bee:',
+        redact: 'Kofuo nuun',
+        remove: 'Kofuo kono kuntu',
+        accept: 'Abee song',
+        confirmRedact: 'Kam̦ool: bwōbwe aolepen fail eo?',
+        confirmRemove: 'Kam̦ool: jol̦o̦k aolep kobban?'
+      },
+      action: {
+        redact: 'Nuun',
+        replace: 'A falin',
+        remove: 'A kuntu',
+        accept: 'A song',
+        replacement: 'Naan in bōk jikin',
+        apply: 'A ke',
+        cancel: 'A bula'
+      },
+      resolved: {
+        title: 'Em̦ōj jerbale ilo fail in',
+        redacted: 'A nuunta',
+        replaced: 'A falinta',
+        removed: 'A kuntuta',
+        accepted: 'A songta',
+        fileRedacted: 'Fail em̦ōj bwōbwe',
+        kept: 'kōjparok ilo jeje eo',
+        removedWord: 'kuntuta',
+        wholeFile: 'Aolepen kobban fail eo em̦ōj bwōbwe'
+      }
+    },
+    lifecycle: {
+      submit: 'A dii juube ma',
+      approve: 'Song',
+      publish: 'A ke',
+      ingest: 'A mara',
+      retract: 'A sayi',
+      unpublish: 'Falsifya bugbugu'
+    },
+    src: {
+      title: 'Choose the source documents',
+      hint: 'Pick sources from the document repository, upload new ones from this computer, or both.',
+      repoSec: 'From the document repository',
+      searchPh: 'Search by name or site…',
+      chipsLabel: 'Filter by origin',
+      chipAll: 'All',
+      chipCrawl: 'Crawls',
+      chipUpload: 'Uploads',
+      noMatches: 'Nothing matches this search or filter.',
+      crawlBadge: 'crawl',
+      crawlTip: 'Crawled from: {url}',
+      total: '{n} document(s)',
+      titleSingle: 'Choose the crawled document',
+      loading: 'Loading documents…',
+      retry: 'Retry',
+      empty: 'No documents in the repository yet — upload some below.',
+      more: 'Load more',
+      fsSec: 'From this computer',
+      fsPick: '+ Upload files',
+      uploading: 'Uploading…',
+      uploaded: '{n} file(s) uploaded.',
+      uploadFailed: 'An upload failed — check the files and retry.',
+      fsNote: 'Uploaded files join the document repository and are selected here automatically.',
+      count: 'Selected: {n}',
+      needOne: 'Select at least one source.',
+      confirm: 'Use {n} source(s)',
+      cancel: 'Cancel',
+      loadFailed: 'Could not load the document list.',
+      servingBadge: 'serving free-form RAG',
+      servingTip:
+        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+      alreadyBadge: 'already in an OKF repo',
+      alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
+    },
+    frontmatter: {
+      title: 'Frontmatter tags — what this repo is about',
+      help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',
+      refresh: 'Refresh suggestions',
+      suggesting: 'Curating…',
+      suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestCoverage: 'E qaqeeqeeq na {sampled} na {total} idee, ni {labels} wooqee hidin hibrid.',
+      suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
+      removeTag: 'Remove tag',
+      fieldEmpty: '—',
+      addPlaceholder: 'Add {field}',
+      add: 'Add',
+      saving: 'Saving…',
+      save: 'Save tags',
+      saved: 'Saved',
+      error: 'Save failed.',
+      errorWithStep: 'Save failed at step "{step}" ({code}) — retry.',
+      field: {
+        topic: 'Topic',
+        entity: 'Entity',
+        scope: 'Scope',
+        forbidden: 'Forbidden',
+        summary: 'Summary',
+        keyword: 'Keyword'
+      }
+    },
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
+      badge: {
+        present: 'head ready',
+        stale: 'head stale',
+        missing: 'no head'
+      },
+      tab: {
+        head: 'Head',
+        test: 'Test',
+        suites: 'Suites & analytics',
+        ragas: 'RAGAS Benchmarks',
+        models: 'Models'
+      },
+      head: {
+        dim: 'Dimensions',
+        model: 'Model',
+        version: 'Head version',
+        computedAt: 'Computed',
+        staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
+        missingNote:
+          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+        rebuild: 'Rebuild head',
+        rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
+        rebuildBusy: 'Rebuilding — embedding the tag fields…'
+      },
+      test: {
+        placeholder: 'e.g. cancer screening guidelines',
+        run: 'Run test',
+        running: 'Embedding the query and scoring the heads…',
+        adversarial: 'Adversarial — this query should NOT select this repository (a forbidden/adjacent topic)',
+        embeddedWith: 'Embedded with',
+        col: {
+          repo: 'Repository',
+          state: 'State',
+          headScore: 'Head score',
+          rank: 'Rank',
+          claimed: 'Claims query'
+        },
+        provenance: 'Routing provenance',
+        empty:
+          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
+        pass: 'PASS — this repository wins the head routing.',
+        fail: 'FAIL — {repo} wins the head routing for this query.',
+        passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
+        failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
+        passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
+        notSelectedSuppressed:
+          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+        claimed: 'claims',
+        suppressed: 'suppressed'
+      },
+      gate: {
+        title: 'Gate',
+        floor: 'Floor',
+        veto: 'Forbidden tags',
+        margin: 'Margin',
+        claim: 'Claim',
+        pass: 'pass',
+        fail: 'fail',
+        na: 'n/a'
+      },
+      counts: {
+        positive: 'Positives',
+        negative: 'Confusable',
+        negativeRandom: 'Off-domain',
+        meta: 'Meta',
+        nearMiss: 'Near miss',
+        hint: "Forbidden-derived rows scale with the repository's forbidden tag count — they cannot be set here."
+      },
+      cls: {
+        nearMiss: 'Near miss',
+        confusable: 'Confusable',
+        forbidden: 'Forbidden',
+        offDomain: 'Off-domain',
+        meta: 'Meta'
+      },
+      teach: {
+        claim:
+          'The head CLAIMS this query — it passed all three gates. If it should NOT route here, ask for forbidden tags that exclude its subject, add them, then rebuild the head.',
+        explain: 'Explain & suggest',
+        explainBusy: 'Explaining — the model is proposing forbidden tags…',
+        addTag: 'Add to forbidden tags',
+        suggestNone: 'No forbidden tag was suggested — review the query against the declared scope manually.',
+        added: 'Added to the forbidden tags — rebuild the head to apply them.',
+        rebuildRerun: 'Rebuild head & re-run',
+        savingTag: 'Saving the forbidden tag…',
+        rebuildBusy: 'Rebuilding the head and re-running…',
+        title: 'Ta ṇe?',
+        veto: 'Kajjitōk in ej lukkun im forbidden tag “{tag}”. Elane e jikin ilo repo in, jol̦o̦k “{tag}” ilo forbidden tags ko ilo Frontmatter, im publish ak in rebuild head eo.',
+        floor:
+          'Kajjitōk in ejab naan ko ilo repo in (score eo ej jab elōn floor eo) — tag ko enaj jab kōm̦m̦an melele; kōnka ej suppress eo em̦ōj.',
+        rejected: 'Screened out by the guardrail — a forbidden tag must not match this repository’s own subject.'
+      },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
+      },
+      suites: {
+        generate: 'Generate test suite',
+        generateTip:
+          'The LLM writes the queries in batches of 30 per class — a large ask (100+) takes a few minutes. The suite lands here and in Saved suites when done.',
+        generating: 'Generating in batches — large asks take a few minutes…',
+        run: 'Run all queries',
+        running: 'Running every suite query…',
+        current: 'Current suite',
+        col: {
+          query: 'Query',
+          kind: 'Kind',
+          outcome: 'Outcome',
+          run: 'Run',
+          when: 'When',
+          passRate: 'Pass rate',
+          headVersion: 'Head',
+          tags: 'Tags',
+          actions: 'Edit',
+          name: 'Name',
+          corpus: 'Corpus'
+        },
+        notEvaluatable: 'not evaluatable (no competitors)',
+        pass: 'pass',
+        fail: 'fail',
+        passRate: 'Pass rate',
+        positives: 'Positives',
+        negatives: 'Negatives',
+        noCompetitors: 'n/a — no competing heads yet',
+        avgMargin: 'Avg margin',
+        steal: '{repo} stole {n} queries',
+        addPlaceholder: 'Your own probe query…',
+        add: 'Add to suite',
+        kindPositive: 'should select',
+        kindNegative: 'should NOT select',
+        history: 'Run history',
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: 'Explain failures',
+        explainBusy: 'Explaining the failures — one model call for every failing negative…',
+        batchTitle: 'Why the failing negatives routed here',
+        batchNone: 'No fix was suggested — review the failing queries against the declared scope manually.',
+        addAll: 'Add all',
+        rebuildRerun: 'Rebuild head & re-run suite',
+        positiveFailuresTitle: 'Why positives stopped passing',
+        positiveFailures:
+          '{n} positive test(s) were suppressed this run — the forbidden tags over-match the repository scope.',
+        vetoedBy: 'Vetoed by',
+        marginKilled: '{n} positive test(s) lost on margin (no single veto tag).',
+        removals: 'Tags to remove (they veto this repository’s own positives)',
+        removeTip: 'Remove "{tag}" — it vetoed {n} positive test(s)',
+        tripwire: 'This cycle broke {n} positive tests — the added tags over-suppress. Revert?',
+        tripwireRevert: 'View revert options',
+        staleSnapshot: 'Tags changed since this suite was generated — regenerate for fresh forbidden rows.',
+        revertTitle: 'Revert tags',
+        revertForbiddenCount: '{n} forbidden tags',
+        revertAction: 'Revert',
+        revertBusy: 'Loading save history…',
+        revertSaving: 'Restoring the frontmatter…',
+        revertEmpty: 'No frontmatter saves recorded yet.',
+        revertDone: 'Frontmatter restored — rebuild the head and re-run to apply it.',
+        removeTag: 'Remove from forbidden tags',
+        tagsetTip: 'Forbidden tags for this run',
+        savedTitle: 'Saved suites',
+        savedTip:
+          'Every generated or imported suite is saved here, per repository. Two kinds share this list: head suites (tag- and frontmatter-derived query sets, shown with Positives/Negatives counts) and RAGAS benchmark suites (question sets with expected answers, badged with a RAGAS pill and an entries count). Load shows a head suite in this tab and a RAGAS suite into the RAGAS Benchmarks tab, where it can be run and scored against the live corpus. Delete removes the suite permanently; rename is inline on the name.',
+        load: 'Load',
+        flipTip: 'Flip should-select / should-NOT-select',
+        deleteTip: 'Remove this row from the suite',
+        namePlaceholder: 'Suite name (optional) — e.g. NCD regression set',
+        probeTip: 'Test this query against the live corpus',
+        deleteSuiteTip: 'Delete this suite and its run history',
+        corpusNeedsIngest: 'Ingest the repository first — the corpus test searches the ingested corpus',
+        deleteConfirmTitle: 'Delete this suite?',
+        deleteConfirmBody: 'This permanently removes the suite and its run history. This cannot be undone.',
+        deleteConfirm: 'Delete suite',
+        deleteCancel: 'Cancel',
+        unnamedFallback: 'unnamed suite'
+      },
+      error: {
+        explain: 'Explain failed',
+        saveTag: 'Could not save the forbidden tag',
+        rebuild: 'Head rebuild failed',
+        test: 'Routing test failed',
+        generate: 'Suite generation failed',
+        run: 'Suite run failed',
+        add: 'Could not add the query',
+        history: 'Could not load the save history',
+        revert: 'Could not revert the frontmatter',
+        advisor: 'Advisor failed',
+        noSuite: 'Generate a suite first, then rebuild + re-run.',
+        applyNoSuite: 'Tags saved and the head rebuilt — generate a suite, then Run all to see the effect.',
+        suiteLoad: 'Could not load the suite',
+        suiteUpdate: 'Could not update the suite',
+        suiteRename: 'Could not rename the suite',
+        generateTimeout:
+          'The suite is taking unusually long — it may still land in Saved suites; check there in a minute.',
+        probe: 'Corpus test failed',
+        suiteDelete: 'Could not delete the suite',
+        noFrontmatter:
+          'This repository has no head tags yet — create tags in the Frontmatter panel (or use Suggest tags), then generate a suite.'
+      },
+      footer: {
+        unpublish: 'Unpublish to review'
+      },
+      publishCard: {
+        present:
+          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
+        stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
+        missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: 'Advisor: recommend tag changes',
+        busy: 'Simulating tag changes across recent runs…',
+        title: 'Tag-set recommendation (simulated across recent runs)',
+        apply: 'Apply changes & rebuild & re-run suite',
+        scorecard: 'positives {p}/{pt} claimed · negatives {n}/{nt} suppressed',
+        now: 'Now',
+        predicted: 'predicted',
+        scope: ' (across {q} queries from the last {r} runs)',
+        applying: 'Applying: saving tags, rebuilding the head, re-running the suite…',
+        blockedTitle: 'Blocked removals — click to include in Apply',
+        blockedGain: 'recovers {n} positive(s)',
+        narrowTitle: 'Narrower replacements — recover positives without re-admitting negatives',
+        narrowChip: 'Remove the broad tag, add the narrow one',
+        reasonCurator: 'you declared this tag originally — confirm before removing',
+        reasonRotated: 'the edit history has rotated past the baseline — confirm before removing',
+        scopeDetail: 'suites: {s} · tag sets: {t}',
+        rowActionsTitle: 'Corpus-grounded flips — the corpus answers these "negatives": flip them to positives',
+        flipToPositive: 'Flip to positive',
+        ungroundedNote:
+          '{n} failing negative(s) have no corpus grounding and no safe tag lever — the competing repository must win them.'
+      },
+      probe: {
+        answerable: 'answerable',
+        weak: 'weak match',
+        unanswerable: 'not in corpus',
+        unknown: 'unknown',
+        title: 'Corpus test — summary',
+        close: 'Close the summary',
+        chunksScanned: 'corpus chunks scanned',
+        headLeg: 'Head verdict',
+        headNotClaimed: 'does not claim',
+        corpusLeg: 'Corpus coverage',
+        files: 'Reference files',
+        colScore: 'Rerank score',
+        colFile: 'File',
+        colContent: 'Chunk content'
+      }
+    },
+    ragas: {
+      dropped: {
+        note: '{kept} of {requested} — {dropped} no fandegew',
+        reason: {
+          rate_limited: 'model limiteda yiimuhang rate'
+        }
+      },
+      corpus: {
+        capped: 'Grounded in {parts} (corpus budget)',
+        part: '{used} of {total} chunks'
+      },
+      gen: {
+        eta: '~{t} left',
+        elapsed: 'running {t}',
+        calls: '{n} LLM calls',
+        replays: '{n} replayed from cache',
+        underMin: 'under a minute',
+        minutes: '{m} min',
+        hours: '{h} h {m} min'
+      },
+      paneTitle: 'RAGAS Benchmarks',
+      about:
+        'RAGAS scores how well the assistant retrieves and answers — faithfulness, context precision and recall, answer relevancy and more. Run a benchmark suite to measure the repository as a knowledge base.',
+      aboutLabel: 'What is RAGAS?',
+      aboutLink: 'Read more at ragas.io',
+      help: {
+        show: 'Help',
+        hide: 'Hide help',
+        more: 'Read more at ragas.io',
+        repositories: {
+          title: 'Repositories',
+          text: 'Which repositories feed generation — the current one alone, or with related ones. Multiple repositories let multi-hop questions cross their boundaries.'
+        },
+        questions: {
+          title: 'Questions',
+          text: 'How many questions to synthesize (default 20). Larger sets take proportionally longer to generate and to run.'
+        },
+        singleHop: {
+          title: 'Single-hop %',
+          text: 'Share of questions drawn from a single concept.'
+        },
+        multiAbstract: {
+          title: 'Multi-hop (abstract) %',
+          text: 'Share of questions that combine several concepts and reason beyond their literal text.'
+        },
+        multiSpecific: {
+          title: 'Multi-hop (specific) %',
+          text: 'Share of questions that combine several concepts while staying grounded in their exact wording. The three shares should total 100.'
+        },
+        personas: {
+          title: 'Personas',
+          text: 'How many synthetic personas vary the phrasing and perspective of the generated questions.'
+        },
+        generate: {
+          title: 'Generate',
+          text: 'Builds the suite with the LLM: a knowledge-graph pass over the corpus first (this is the minutes-long part), then question synthesis. It runs in the background — you can close the Lab and nothing is lost. Deleting a generating suite cancels the work.'
+        },
+        importSuite: {
+          title: 'Import suite (.xlsx)',
+          text: 'Loads an existing suite in the benchmark xlsx format, compatible with the tests/rag-benchmarks gold workflow.'
+        },
+        entries: {
+          title: 'Benchmark entries',
+          text: 'One row per question with its expected answer and reference passages. Edit a question, probe it against the live corpus, flip it out-of-scope (kept for contrast, excluded from scoring), or remove it.'
+        },
+        metrics: {
+          title: 'Metrics',
+          text: 'The four defaults — faithfulness, context precision, context recall, answer relevancy — plus the extended RAGAS catalog. Metrics that need an embedding model are dropped with a warning when none is configured.'
+        },
+        run: {
+          title: 'Run benchmark',
+          text: 'Replays retrieval for every entry, generates answers, then the judge model scores each answer against the references. Progress is reported per phase; results land when the run completes.'
+        },
+        results: {
+          title: 'Results',
+          text: 'Metric means as gauges with pass thresholds, the trend across runs, and per-question detail with each answer and its scores.'
+        },
+        explain: {
+          title: 'Explain failures',
+          text: 'Attributes each failing row to retrieval, answering, or the reference itself — and suggests guarded fixes, including repository-level changes such as tags and concept curation.'
+        },
+        exports: {
+          title: 'Exports',
+          text: 'Suites and results as xlsx (compatible with the benchmark tooling) and a PDF report of the charts.'
+        }
+      },
+      // GUIDE (David, 2026-10-23) — the operator playbook behind
+      // the "Guide" button. See en.js for the key-shape contract.
+      guide: {
+        open: 'Mapan',
+        title: 'RAGAS benchmark guide',
+        intro:
+          'Na kobaiki, kojepel̦o̦ke ak mara benchmark suite ko — m̦akan na ke, m̦akan na bɔ, ak m̦akan na sa bɛ step kelen. Help panel min bɛ naanin kafuolu la i yele konɔ kafuolu biniyɛ; nii yele decision biniyɛ.',
+        close: 'Datugu',
+        more: 'A keta kɛlen fɛ ragas.io',
+        labels: {
+          do: 'A ke nii',
+          dont: 'Ban a ke nii',
+          expect: 'M̦akan na bɛ'
+        },
+        chapters: {
+          generate: {
+            title: 'Kobaiki suite',
+            intro:
+              'Suite e tobɔ kɔrɔn corpus min a jɔɔ fɛ ma. Generation e LLM baara e phase juon kɛ ani e bɛ to tobɔ kɔrɔn je baara bɛɛ: nana knowledge-graph pass kɛ corpus min i laban so bɛ, ani yɛlama question synthesis.',
+            d1: 'A mara sundi a generate. Generation bɛ keta kōm̦m̦an jikin kakwōn la, ani suite min kōnin jikin kakwōn bɛ publish si bē te, sani drain bɛ sen bē, i ye corpus min assistant man bɛ na kijeraa ye.',
+            d2: 'A keta kwal̦o̦k coverage note. Corpus bɛ chunk budget (1,600 chunks by default) bɛ dɔwama, suite ye yɛlen ko — "grounded in 1600 of 5590 chunks". Ni ye valid benchmark e slice kelen la, e ka jikin kakwōn bɛɛ ye m̦okta. I bɛ so kɔbɔ aolep, marala OKF_RAGAS_MAX_CORPUS_CHUNKS.',
+            d3: 'Suite kébala bwee awinen na i nyininyin. Kujon kajjien e smoke test, azuz kajjien e comparison. Tobɔ kɔrɔn bɛ karalo approximately ko bɛ kelen kelen la, ani leg min bɛ score ye tobɔ ye.',
+            d4: 'A kwal̦o̦k single-hop: retrieval ye; multi-hop (specific): reranker ye evidence ko barkatod; multi-hop (abstract): model ye ban jalen Kuma kelen. Suite min 100% single-hop ye, composition failure man bɛ na show.',
+            x1: 'Ban a generate bwee jikin kakwōn min bɛ drain sen. Kōm̦m̦an min bɛ index kɛ sen ko, retrieval man bɛ na kijeraa ye; ani generation bɛ yele suite bwee corpus min bɛ sɔnɔ na yɛlama score kerɛ la bɛ different.',
+            x2: 'Ban a keta progress bar min bipawoo bɛ minute munkoo ke stall. Knowledge-graph phase bɛ se ka temo bɛ batch kelen kelen te — elapsed clock ani model-call counter ko ye signal munkoo ye la.',
+            x3: 'Ban a keta suite kujon ko generation munkoo. Model min rate limiteda ye, ferege dii dii ye no fandegew, ani panel ye yelen basɛo. A yelema dropped count kisa i song suite la.',
+            expect:
+              'Graph phase la, marala model call juon corpus chunk kelen kɛ, ani kujon kelen kelen kɛ la basɛ. Corpus 1,075-chunk la, phase kelen kelen ye mooo kɔrɔn juon hours bɛ kɔbɔ. Generation bɛ nyɛ̃ fɔ a telat — i bɛ na datugu Lab bɛ na seginna.'
+          },
+          curate: {
+            title: 'Kojepel̦o̦k suite',
+            intro:
+              'Suite min generation jɔɔ ye e first draft ye. Ferege kelen kelen la ban kelen ni — kajjien ani jipañ naasu — bɛ machine yele, ani measurement siriku ye bɛ nyini ko nyakwan ye.',
+            d1: 'A kwal̦o̦k ▶ kafu kisa i song. Kafu ▶ ye kajjien kelen mara corpus sundi ye yele, ani i yelen i bɛ na jipa sɔnɔ jigi. Kajjien min bɛ laban dii dii ye, e kajjien ye ko Kuma min i man kɛn ye.',
+            d2: "A bara ferege min aa nyini ye mung — ban kuntu. Ferege scope baha ye bɛ mara kontrasti n'i, ani bɛ kuntu na score. I bɔdi ke, i em̦ōj ye bɔ.",
+            d3: "Reference bɛ dɔgɛ n'i, i mara jipañ naaset — ban mara kajjien. faithfulness ani relevancy bɛ meso reference n'i la, ani reference min model kɛnata mana ye, i bɛ jipañ munkoo ye mung.",
+            d4: 'Kafu kajjien mung dɔgɛ di yele i la. Generator bɛ kajjien yele corpus ye direct jipa. Failure min kɔnata naata na bɛ nɔta, e wɛn Juubelaa bɛ yele experience ye — kajjien munkoo aa kwal̦o̦k ye, wal̦o̦k juon kelen ye bɛ disagreement, ani kuma kelen bɛ yele juon kɛ te kisa.',
+            x1: 'Ban a yele kajjien seginna sa i ye system jipañ sundi ye men. Ni bɛ benchmark bɛna regression test kɛ current score ye, ani e hide defect munkoo min i nyininyin bɔ la.',
+            x2: 'Ban a karalo bwee kajjien juon kōm̦m̦an kelen la, i nyininyin kisa. Generation bɛ keta chunk budget, e ka keta document structure i la, ani kajjien bɛ se bɛna passage min corpus taara mana te.',
+            x3: 'Ban a kojepel̦o̦k bwee score. A kojepel̦o̦k kisa i mara sundi i run; suite yele baye laban na i kɛn ye la, ani goalposts ye inen, ani comparison bɛ sɔrɔ Ejjan̄in wōr.',
+            expect:
+              'Kujon kajjien munkoo ye kaɲi azuz kajjien mixed. Coverage min kōm̦m̦an sɛbɛn ye ka yele bwee count daga — suite min i joona kōm̦m̦an i soro fɛlɛ, i bɛ na yele mean munkoo mɔɔ fɛ ferege min i jepilen ko.'
+          },
+          run: {
+            title: 'Mara benchmark',
+            intro:
+              "Run e phase tɔɔ ye — retrieval, answering, ani judging — bɛ yele kelenkita, ani i na ko n'i ye bɛ sɔrɔ bana i nyininyin ben. Phase yelema kelen kɛ tan ye judge-model call bo, ani temo bɛ minen yen.",
+            d1: 'Run default kɛlen kan yelema nana. faithfulness, context precision, context recall ani answer relevancy ye comparable core. Extended catalog bɛ tobɔ kɔrɔn fo, e ka information fo, sundi i na ko failure kɛn yen mo.',
+            d2: 'A kijeraa call counter, e ka a kijeraa bar kɛlen kelen. Judge phase bɛ yele ferege juon kɛ juon, ani model endpoint min bɛ busy ye, run bɛ rate-limited ye nana wall-clock retries ye kan bɛ dominat. Counter min em̦ōj sen, clock min bɛ yele ye — ni bɛ retries, e ka hang.',
+            d3: "A bula, e ka a bō. 'Cancel run' bɛ datugu clean, ani i yele munkoo min benta; browser tab datuge kisa bɛ juru — run bɛ nyɛ̃ fɔ, ani live view min i la i bɔ.",
+            d4: "A kafu run juon jikin kakwōn kelen kelen la. Run ko bɛ model endpoint kelen bɛ share; run juon kelen bɛ throughput divide, ani kelen kelen bɛ yɔrɔ ma, ani n'i kelen ye yelen munun na.",
+            x1: 'Ban a bēta run min metric kɛlen ye, run min metric juon ye. Extended catalog bɛ wall-clock yelema kɔbɔ approximately bēn kɛlen ye kisa, ani averages ko like-for-like kɛlen ye mana.',
+            x2: 'Ban a run seginna na i bɛ na sula number mung. Run seginna min bɛ judge model kelen ye, retrieval top-N kelen ye, sani suite yelema, e ye measurement nyini ye — a yele i la munkoo.',
+            x3: 'Ban a mara run sa ingestion kelen bɛ drain sen. Corpus min bɛ drain la sen, so bɛ te la; retrieval bɛ i ye bɔ, ani score bɛ boŋo bwee munun min i bede ye.',
+            expect:
+              'Metric kɛlen bɛ judge call wopen e kajjien kelen kɛ — azuz-kajjien run la 7.1 measured. Ni ye approximatively hour juon ani bala kelen azuz kajjien la endpoint min rate-limited ye, ani mo kisa a model bɛ busy kafo. A sɔng ni ko floor, e ka promise: run i la clock ani call counter ko ye authority ye.'
+          },
+          models: {
+            title: 'Modelu, ani m̦akan na bɛ',
+            intro:
+              "Model tɔɔ ye bɛ kɛta, ani n'i ko bɛ interchangeable kɛnata: model min bɛ jipa, model min bɛ judge, ani model min bɛ embed. N'i ko bɛ score yele bwee munun tɔɔ ye wulilen.",
+            d1: 'Answer model ye model min bɛ test la ye — walima Lab la, jipañu bɛ na yela model chat min DEPLOYED ye, deployed pipeline min bɛ kɔnɔ, sɔ deployment min chat model bɛ yele i bɛ na yele jipañ yelema. Offline replay la (retrieval ani answering bɛ jerbal kɛ OKF server ilo) ye whatif run bɛɛn ye, ani teke ma Lab bɛ na damina; sɔ «benchmark answers» setinsi a tɛ fɛn bɛ kɛn bɔ benchmark kelen ye bɛ yele i la bɛna fana kɛn ye.',
+            d2: 'Judge ko rej strong ani stable. I bɛ score yele references la, ani judge weak ye bɛ metric kelen kelen la bɛ boŋo, ani run bɛ bankun bɛna benta. Judge jipañu bɛ cached judge identity kelen kɛ — judge yelema, model yelema, cache min bɛ sɔrɔ Ejjan̄in wōr, ani ferege kelen kelen bɛ kɔbɔ yele seginna.',
+            d3: 'Embedding model ye retrieval measurement la kelen ye. I yele, context precision ani context recall bɛ yele, ani faithfulness ye usual ye bɛ yelen mɔnɲin. Ni asymmetry ye signal ye ko munun min i bede, e ka noise.',
+            d4: "A yele model bwee run la. Run kelen kelen bɛ yele configuration munkoo ani model munkoo min jipa ani score wele. Run juon kelen bɛ comparable m̦okta n'i ye kelen ye sundi ye match ye.",
+            x1: 'Ban a nyininyin score yelema bɛ attributable kɛta, i ye m̦okta munun juon kelen bē yele. Run min bɛ answer model nyini ye, judge nyini ye, ani embedding model nyini ye, i bɛ tɔɔ ye kelen kelen mesen, ani bɛ se kila ye.',
+            x2: 'Ban a keta score faithfulness high ye result munkoo ye kelen ye. faithfulness high ani context recall low ye, ni ye kɛla kɛlan ye: jipañ min bɛ grounded jōg min retrieval wele, ani retrieval min wele ye small.',
+            x3: 'Ban a sɔng model munkoo bɛ reason la ko free ye. I bɛ tokens azuz dɔgɛ kɔbɔ kisa a word kelen yele kisa; answer budget bɛ i small ye, ni kelen ye, jipañ kelen kelen bɛ truncate, bɛ bɔ, ani bɛ kɔbɔ yele seginna, ani run bɛ quiet jipa kajjien kelen kɛ to bɔ ye.',
+            expect:
+              "Nyini i yele model kelen, nyini i kɔnisa run bɛ yɔrɔ ma ani score bɛ yele. Direction kelen ye man bɛ model ye verdict kɛta: judge, retrieval knobs ani suite, n'i tɔɔ ye kelenkita ye bɛ decision ye ni yelema min ye latal ye."
+          },
+          read: {
+            title: 'A keta labang',
+            intro:
+              'RAGAS metric kelen kelen ye measures munun kelen ye, ani kelen ye bɛ run kɛ tupu. A keta number kelen kelen ko munun min i ye measura la, kisa i mara a ye.',
+            d1: 'A keta invalid-run banner yelema nana. Run min jipañu bɛ Filiyata ye, sani metric kelen ma bɛɛn bɛɛma scope la bɛ row bee la te, e ye measurement ye mana — average min i ye kɛlen ye, ferege min score ye ko kɛlen ko.',
+            d2: 'A kwal̦o̦k direction min metric kelen kelen ye. Most ko high-is-better ye. noise sensitivity ye exception ye: low ye better ye, ani run min scores ba ko ye, i bɛ failing direction munkoo ye.',
+            d3: 'A keta ferege min failing ye la, e ka mean kɛlen kelen. Kajjien juon broken kelen kɔbɔ kujon na among ko, i ye mean yele mɔɔ bwee change min i nyininyin bɔ la ye.',
+            d4: "A jerbal 'Explain failures' kisa i yele dii mana. I bɛ ferege failing kelen kelen bɛ kila stage kelen kelen ye — retrieved, reranker, vector-recall, corpus, judge, answer wallo unmeasured — ani i bɛ yele ko stage kelen kelen bɛ prove corpus la. I bɛ yele passage min bɛ bɔ kisa, ani i bɛ yele min i bɛ se bɛna kɛn mɔnɲin. 'Corpus' verdict bɛ se bɛna passage min bɛ kɛnama ka bɔ corpus la ye — kajjien min bɛ unfair ye, e bɛ benchmark ka measura, assistant ka bɛn ye. I bɛ marka bɛrɛna ko i fana entry seginna, ban a content yele min bɛ kɛn ye te kisa. Suggestion min i la ye guarded ye — i bɛ propose, i di ye decision.",
+            x1: "Ban a bēta mean sugu metric set kelen ye ye, judge kelen ye ye, sani suite yelema ye — measurement kelen ye ko mana. N'i kelen ye kɛlen ye mana, ani difference min i kɛn ye e quality change ye mana.",
+            x2: 'Ban a yele retrieval tune na number juon ye. Precision ani recall bɛ bɔdi kɛ kɔnata; change min juon ye yelema ye, bar ye bɛ to bɔ ye, ani trade min ye e na bonya na kɔnata.',
+            x3: 'Ban a sɔng score null ko score low ye. Retry min bɛ tasalan ko null bɛ kɔbɔ min bɛ kuntu na mean, ani score te ye kɛlan measurement te ye — A run ferege seginna, ban a sula worst.',
+            expect:
+              "Benchmark number ye comparison ye run ko suite kelen ye la, e ka assistant la grade ye mana. Export xlsx a i so kɔbɔ na evidence marala, ani i bɛ keta min i mara: trend line min panel la ye bɛ mara run ko repository n'i ye store ye ko kɛlen ko.",
+            table: {
+              title: 'Wɛr min bɛ na screen kan, ani a yɛri bɛ min ma',
+              col: {
+                element: 'Screen kan',
+                meaning: 'A yɛri bɛ min ma',
+                effect: 'Bɛn na yɛri bɛ min ka kan a fɛn'
+              },
+              mean: {
+                element: 'Mean',
+                meaning: 'Metric bɛɛ ma bɛ mean bɛ rows bɛ judge bɛ na seginna la. A tɛ ye suite kelen yei score ye.',
+                effect:
+                  'Ben kaa ben yɛri bɛ min kan bɛ de bɔ a jɔw ma. Mean bɛ rows bɛ kelen ye la bɛ rows minnu di bɔ n’i ye suite ye.'
+              },
+              coverage: {
+                element: 'Bɛn ari (55/100)',
+                meaning:
+                  'Judge bɛ metric bɛɛ ma bɛ rows bɛ 100 la bɛ 55 la bɛ seginna, row minnu scope la bɛ ye. Mean bɛ na fɔli bɛ rows 55 ye la; bɛ 45 minnu bɛ dɔ bɔ fɔ min i — bɛ kaɲi bɛ zero sɔrɔ. Out-of-scope control minnu bɛ rows 100 la kaa ma.',
+                effect:
+                  'Bɛn ari sɔrɔ bɛ ye, a bɛ yɛrɛ ko number bɛ suite la kuma. Awone metric bɛ min na bɛ kɔnɔ — o tɛ fɔli bɛ run bɛ min ye.'
+              },
+              banner: {
+                element: 'Run bɛ ma valid la banner',
+                meaning:
+                  'Run bɛ la a bɛ answers bɛ fɔli, walima metric kelen ye bɛ na fɔli scope la bɛ rows kelen ye la seginna. A bɛ coverage number bɛ ye metric bɛ kelen bɛ seginna ye — 21/100 la bɛ metric kelen ye bɛ na a sɔrɔ bɛ fɔli ye.',
+                effect: 'Awone bɛn ari bɛna kelen ye kaa awa. Banner ye bɛ sira bɔ ye, a tɛ fɔli bɛ sammari ye.'
+              },
+              runName: {
+                element: 'Run bɛ ma yɛri ani judge min',
+                meaning:
+                  'Judge bɛ na run bɛɛ ma seginna, ani configuration bɛ min a bɔ fɔli bɛ. Key bɛ na bɛɲi bɛ support bɛ ma.',
+                effect:
+                  'Run kelen yei bɛ judge bɛ kelen yei ma, a tɛ fɔli bɛ kelen ye measurement ye. Bɛ kelen bɛ kelen bɛ compare, walima bɛ kelen ye re-score.'
+              },
+              rescore: {
+                element: 'Score bɛ mara fana',
+                meaning:
+                  'Answer bɛ kelen yei bɛ na kaa judge min i ceng ye bɛ na seginna. Answers ani contexts bɛ bɛ bɛ kɔpɔ — bɛ dɔ fɔli bɛ walima bɛ kɛn bɔ fɔli bɛ. Dialog bɛ run min jigi judge min i bɛ yele fɔlɔ, sɔ re-score bɛ default ye STABILITY ferege ye (judge bɛ kɛn bɛ phetoloha?), e ka opinion kelen ye mung.',
+                effect:
+                  'I nyininyin ko fila bɛ judge ye kaɲi ye wallo fila bɛ fɔli la ye, re-score a kɛ judge kelen ye. Judge kelen yei bɛ rows kelen ye la bɔ a fɔli bɛ a sɔrɔ ye. A bɛ run fɛn ye dɔrɔn fɛn ye — ani judge bɛ bɔn bɛ a sɔrɔ.'
+              },
+              status: {
+                element: 'Status',
+                meaning: 'Run bɛ na ban. Run bɛ min bɛ sani na, a bɛ mean bɛ bɛn na bɛ yɛrɛ.',
+                effect: 'Number bɛ iɲɛ walima a bɛ na ban.'
+              }
+            }
+          },
+          errors: {
+            title: 'Fili kei di kɛma yɛri a yɔ bɛ min ma',
+            intro:
+              "Benchmark bɛ kelen kelen suite bɛ kelen kelen row bɛɛma ma: row kelen bɛ na fɔli pipeline la, assistant bɛ na bɔ fɔli ansa, judge bɛ na fɔli metric kelen bɛ seginna, ani metric kelen bɛ na fɔlɔ aɲi la bɔ. N'i ko zero ye, ani n'i ko suman ye mung. Bɛn e mapan ye — m̦akan na kelen ye bɛ na kɔnisa, ani m̦akan na kelen ye bɛ na kɛ benna number min i nyininyin na. A kwal̦o̦k kelen ye i nyininyin nana: row min bɛna bɔ ansa i bɛ na kelen — kaɲi ye bɛn na i judge kɛ — sɔ i bɛ dɔ bɔ min mean na, a tɛ fɛn bɛ kɛn bɔ zero ye, ani i bɛ na kɛ coverage min bɛ mesa mɔnɲin. Ansa bɔ fɔli ye kelen ye mana, fa mɔɔ bɛɛ. Ansa bɔ fɔli bɛna bɛn ansa ye, a tɛ judge kɛ, ani kaɲi ye bɛn na i tigɛ aɲi, metrike tsa context min bɛ na sɔrɔ 0, sɔ zero minnu bɛ na kaa mean la. Ansa bɔ fɔli bɛna bɔ ansa ye, a tɛ judge ma mung: a tɛ fɛn bɛ kɛn bɔ score ye, i bɛ dɔ bɔ min mean na, ani i bɛ na kɛ coverage min bɛ mesa mɔnɲin kelen kelen ye fila bɛ fɔli ye. Sɔ sɛbɛn run min bɛna bɛn row bɔ fɔli ye wallo row bɛ judge ma ye, a bɛ marka bɛrɛna «invalid» ye, e ka credd ye mung.",
+            d1: 'Lɛntɛn “run bɛ ma valid” banner la, a kɔnɔ mean bɛ yɛrɛ. I yɛri ko score bɛ min bɛ bɛn bɛɛma system bɛ measurement ye, ani banner yɛrɛ saɲi bɛ min saɲi ye: answers bɛ fɔli, walima judge bɛ na suite tan bɛɛma seginna. Saɲi ɲi wuloo, a sɛbɛn fana.',
+            d2: "Kono metric kuluw kɔfɛn kɔbɛn tugut di bɛɛrehɔ ban dɔn cili kɛn waati fɔlɔ judge bɛ na row bee la seginna. Bɛɛma bɛ fɛn bɛ kɛn bɔ n'o mɔgɔ n'i na bɔ suit bɛɛma yɔri ye, ani a tɛ fɛn bɛ kɛn bɔ run min bɛ na suun bɛɛma seginna bɛɛ kɛn bɔ fɔlɔw.",
+            d3: "Fili bɛ min bɛ fɔli la, sani a wuloo a kɔnɔ la k'a sɔrɔ la, diɲɛ bɛ fɔli ye upstream service ye wallima timeout ye — a kaa sɛbɛn fana. Suite bɛ sɔrɔ n'i fɔli bɛ san bɛ fɔli bɛ kɔnɔ na, o bɛ dɔrɔn min bɛ waati benchmark bɛ sɔrɔ ka min bɛ kijɛraa.",
+            d4: "Ansa bɔ fɔli bɛ na mara seginna, e ka fɔli. Ansa bɔ fɔli bɛna bɛn ansa ye, a yɛrɛ ko assistant y'a sɔn ko corpus bɛ kana fɔli question ye jigi ma — o bɛ corpus la ani question la bɛ ye. A lɛrɛ ko coverage bɛ min user bɛ bɛn na kɛn ye.",
+            x1: "Metric bɛ min bɛ seginna ma, a fɔlɔ zero sɔrɔ. Judge bɛ min bɛɛn b'ɛd fɔli bɛ na metric man bɛ na parse kɛ, o bɛ na metric o la bɛ na null ɲi a ɲi row la; null bɛ bɔ min mean na, ani a tɛ fɛn bɛ kɛn bɔ failure sɔrɔ.",
+            x2: 'Bɛ ansa bɔ bɛ fɔli la, a tɔnɔ error ye walima success ye. A bɛ column bɛ bɛɛn fɛnɛ min na, a kisa fɛnɛ ye te a fɛnɛ ma ye — ani ansa bɔ fɔli bɛna bɔ ansa ye, a tɛ judge ma mung, sɔ a tɛ fɛn bɛ kɛn bɔ zero bɛɛ ye mung.',
+            x3: 'Panel bɛ run bɛ min bɛ “invalid” la jurɔ la bɔ san bɛɛn bɔlɔni ye, walima run fila wuloo bɛ a sɛbɛn bɔ ye fana. Run bɛ min bɛɛma sugandi ye, a tɛ fɔli bɛ san bɛ kɛn bɔ bɛɛ min bɛ bɛna bɔn ye; a bɛ run bɛ min bɛ fɔli.',
+            expect:
+              'Run ɲuman bɛɛ fɔli row tɛ yen, row bɛ judge ma tɛ yen, ani metric bɛ kelɛ kelɛ row la seginna, row minnu scope la bɛ ye — ni kononi ye kelɛ ye gati min bɛɛn ye mean ye. O minɛ kelen ye bɛ run bɛ min bɛ fɔli la, ansa bɛ fɛn bɛ kɛn bɔ ye.',
+            table: {
+              title: 'Bɛn na state bɛɛ bɔ bɛ min na yɛri a yɔ bɛ min ma',
+              col: {
+                state: 'Cokoyaa',
+                meaning: 'A yɛri bɛ min na',
+                effect: 'A yɛri a yɔ bɛ min na yɛri bɛ min ma'
+              },
+              error: {
+                state: 'error',
+                meaning:
+                  'Pipeline bɛ fɔli o row la — retrieval, upstream service walima timeout. Answer tɛ yen bɛ kaɲi.',
+                effect:
+                  'Row bɛ tɛ judge kɛ: a tɛ yen ansa, ani kaɲi ye bɛn na i judge kɛ. A tɛ fɛn bɛ kɛn bɔ score ye mung: i bɛ dɔ bɔ min mean na (a tɛ fɛn bɛ kɛn bɔ zero ye), ani i bɛ na kaa error column la, ani run bɛ marka bɛrɛna «invalid» ye — banner bɛ yɛrɛ ko score minnu bɛ system bɛ measurement ye mung. A mara saɲi la — retrieval stack, upstream service, timeout — ani o runise fana. Row minnu bɛna ansa bɛ ye bɛ se bɛ seginna, walima run bɛ kelen kelen bɛ seginna ye bɛ run bɛ min bɛ fɔli la, ansa bɛɛn ye bɛ publish bɛn ye mung.'
+              },
+              abstained: {
+                state: 'ansaa bɔ fɔli',
+                meaning:
+                  'Assistant bɛna bɔ fɔli ansa bɛ ja ansa ye — chatqna bɛɛ a dɔ bɛ ye, walima a dɔ ye ansa kama bɛɛ. Pipeline bɛ fɔli ma.',
+                effect:
+                  'Row bɛ na kaa judge bɛɛ ma sɛn ye, sɛn i bɛ na fɔli score kelen bɛ kaɲi — context tɛ yen i fɔli la, context metrics bɛ na fɔli 0 ye, ani zero minnu bɛ mean la bɛ na kaa. A bɛ column bɛ bɛɛn fɛnɛ ma kaa, error column la ko kɛn bɛ ma, ani e ka e ye a tɛ fɛn bɛ kɛn bɔ run la invalid ye. Panel bɛ row bɛ lɛn «ansaa bɔ fɔli» ye, walima pass walima fail ye. Ansa bɔ fɔli bɛna bɔ ansa ye, e kelen ye state kelen ye — bala «ansaa bɔ fɔli, bɛ judge ma».'
+              },
+              declinedUnjudged: {
+                state: 'ansaa bɔ fɔli, bɛ judge ma',
+                meaning: 'Assistant bɛna bɔ fɔli mung ani a kaɲi — ansa tɛ yen. Pipeline bɛ fɔli ma.',
+                effect:
+                  'Row bɛ tɛ judge kɛ: a tɛ yen ansa, sɔ kaɲi ye bɛn na i judge kɛ. A tɛ fɛn bɛ kɛn bɔ score ye mung: i bɛ dɔ bɔ min mean na (a tɛ fɛn bɛ kɛn bɔ zero ye), i bɛ na kɛ coverage min bɛ mesa mɔnɲin, ani a bɛ kɛ run bɛ marka bɛrɛna «invalid» ye. Panel bɛ a lɛn «ansaa bɔ fɔli — bɛ judge ma» ye, i ng i bɛn fasa ansa bɔ fɔli bɛna judge kɛ.'
+              },
+              unmeasured: {
+                state: 'bɛ seginna ma',
+                meaning:
+                  'Judge bɛna bɛn bɛ na fɔli bɛ na metric man bɛ na parse kɛ — walima claim bɛ fɔli bɛ na judge bɛ na sɔrɔ sɛbɛn.',
+                effect:
+                  'Metric o bɛ null ɲi a ɲi row la: bɛ bɔ min mean na, a tɛ fɛn bɛ kɛn bɔ zero ye. Panel yɛrɛ bɛ row jigɛn judge bɛ na seginna. Metric kelen la 21/100 a tɛ fɛn bɛ kɛn bɔ run la invalid ye — banner bɛ na fɔli sɛbɛn metric kelen ma bɛɛn bɛɛma scope la bɛ row bee la te, sɔ i bɛ nyininyin aala ferege minnu.'
+              },
+              belowThreshold: {
+                state: 'sira la bɛ bɔ',
+                meaning: 'Metric bɛ seginna, ani score bɛ la bɔ fɔli bɛ min bɛ bɛn ka bɔ aɲi.',
+                effect: 'Row ma bɛ FAIL ɲi a ɲi metric la. Row bɛ fa bɛɛn metric bɛ kelen bɛ fɔli la, o fɔli.'
+              },
+              outOfScope: {
+                state: 'kɔfɛn na bɔ',
+                meaning:
+                  "Question bɛ bɛn bɔ fɔli la b'ɛn bɛna fɔ bɛ kana — a bɛ dɔrɔn suite la sɔnifɛ ni ka fɛnɛ bɛ ye.",
+                effect:
+                  'A tɛ fɛn bɛ kɛn bɔ failure sɔrɔ, ani a tɛ fɛn bɛ kɛn bɔ mean ko: o bɛ control ye, ansa bɛ fɛn bɛ kɛn bɔ ye. Panel bɛ a kɛ mana outcome bar la, ani score min a tɛ fɛn bɛ kɛn bɔ average la walima coverage ferege la kɛ.'
+              }
+            }
+          }
+        }
+      },
+      current: 'current',
+      generate: {
+        title: 'Generate a benchmark suite',
+        hint: 'Synthesizes questions with expected outputs from the selected repositories — one or more, the current repo alone or with related repos.',
+        size: 'Questions',
+        config: 'Generation model configuration',
+        default: 'Deployment default (.env)',
+        defaultNamed: 'Active configuration — {name}{model}',
+        effective: 'Judging with {name}{model}',
+        effectiveGenerating: 'Generating with {name}{model}',
+        envDefault: 'environment default',
+        envJudge: 'Deployment default (.env){model}',
+        envJudgePlain: 'Deployment default (.env)',
+        model: 'Model',
+        modelPick: 'Configuration default',
+        modelDefault: 'configuration default',
+        note: 'The model that synthesizes questions and scores answers. An active configuration (★, Models tab) applies automatically; picking one here overrides it for this operation only. Stronger judges make entity-recall and advice quality markedly better on small local models.',
+        single: 'Single-hop %',
+        multiAbstract: 'Multi-hop (abstract) %',
+        multiSpecific: 'Multi-hop (specific) %',
+        personas: 'Personas',
+        button: 'Generate',
+        working: 'Generating — this takes minutes…',
+        cancel: 'Cancel',
+        cancelling: 'Cancelling…',
+
+        inFlight: 'A benchmark-suite generation is already running for this repository — attaching you to it.'
+      },
+      import: {
+        button: 'Import suite (.xlsx)',
+        working: 'Importing…'
+      },
+      suite: {
+        namePlaceholder: 'Benchmark name (optional)',
+        add: 'Add question',
+        addPrompt: 'Question to add:',
+        addReference: 'Expected answer (optional):',
+        flipTip: 'Flip in-scope / out-of-scope',
+        probeTip: 'Probe this question against the live corpus',
+        removeTip: 'Remove this question'
+      },
+      col: {
+        query: 'Question',
+        reference: 'Expected answer',
+        passages: 'Passages',
+        scope: 'Scope'
+      },
+      oos: 'out-of-scope',
+      inscope: 'in scope',
+      metrics: {
+        label: 'Metrics:'
+      },
+      run: {
+        button: 'Run benchmark',
+        judge: 'Judge model configuration',
+        working: 'Running…',
+        retrieved: 'retrieved',
+        pass: 'pass',
+        fail: 'fail',
+        abstained: 'ansaa bɔ fɔli',
+        declinedUnjudged: 'ansaa bɔ fɔli — bɛ judge ma',
+        rowError: 'error',
+        cancel: 'Cancel run',
+        phase: {
+          'building-knowledge-graph': 'Building the knowledge graph',
+          'synthesizing-questions': 'Synthesizing questions',
+          retrieval: 'retrieving',
+          judge: 'scoring'
+        }
+      },
+      export: {
+        suite: 'Export suite (.xlsx)',
+        results: 'Export results (.xlsx)'
+      },
+      results: {
+        title: 'Benchmark results',
+        failing: '{n} failing',
+        advisorHint:
+          '{n} questions are below their metric thresholds. Run the advisor to attribute each failure to a pipeline stage and get concrete actions.',
+        copy: 'Copy the full answer',
+        coverageTitle: 'Ɲɛri kunnafoni kɛse: nimɔrɔ bɛn na {n} yɔrɔ niin {total} — a yɛrɛma bɛn na kelen ye.',
+        colResizeTip: 'Drag the grip to resize — double-click the header to reset',
+        trendTitle: 'Metric trend across runs',
+        trendNote:
+          'Each line is one RAGAS metric’s suite mean per run, oldest to newest, and never crosses a judge boundary — each x-label names the judge that scored the run. Judged answers are cached, so equal re-runs differ only where answers or retrieval changed.',
+        trendMixedJudges: 'Judges differ across these runs — compare within a judge segment, not across',
+        statusTitle: 'Per-question outcomes',
+        statusNote:
+          'Question kelen kelen ye suite la i nyininyin run bɛɛ ma, scope la bɛ ye, ka phetoho: jipañ bɛna ye, jipañ bɛ fɔli ye (metric kelen i ceng ye bɛ la bɔ aɲi min ye), ansaa bɔ fɔli ye (jipañ bɛna bɔ fɔli), wallo fila bɛ fɔli ye (pipeline bɛ na fila bɛ fɔli). Out-of-scope control minnu bɛ kaa ma — ni bɛ control ye, ansa bɛ fɛn bɛ kɛn bɔ ye.',
+        allPass: 'all passing',
+        invalidTitle: 'eregenere run wencike emu measuring',
+        invalidPill: 'run gebu',
+        invalidErrors:
+          '{n} ferege {total} de alingge baha — eregene score ere arai emu measuring system. Run benchmark weiya.',
+        invalidCoverage: 'Judge alima {measured} ferege {total} — average dowa arai emu latun mang hede.',
+        failingShort: 'failing',
+        answer: 'Answer',
+        state: 'State',
+        error: 'error',
+        abstained: 'ansaa bɔ fɔli',
+        declinedUnjudged: 'ansaa bɔ fɔli — bɛ judge ma',
+        declinedUnjudgedTitle:
+          'Jipañ bɛna bɔ fɔli mung ani a kaɲi, sɔ row bɛɛ a tɛ judge kɛ. A tɛ fɛn bɛ kɛn bɔ score ye mung: i bɛ dɔ bɔ min mean na — ani i bɛ na kɛ coverage min bɛ mesa mɔnɲin.',
+        answered: 'answered',
+        noisy: 'answer OK — retrieval noise',
+        noisyTitle:
+          'The answer passed every answer-quality metric; only the delivered context set (precision/recall) fell below threshold',
+        pdf: 'Export PDF report'
+      },
+      explain: {
+        button: 'Explain failures',
+        working: 'በማስታወስ ላይ…',
+        advising: 'አማካሪ እያሰበ — {n} የወደቁ ረድፎች',
+        guarding: 'የታግ ጥቆማዎች በመመርመር ላይ…',
+        title: 'Failure attribution and advice',
+        none: 'No failing rows to attribute.',
+        stage: 'Stage',
+        fails: 'Failing metrics',
+        recommendation: 'Recommendation',
+        unfair: 'soqaa milɣiɣi',
+        unfairTitle: 'Weyaa kan kee buniiru tigi e ko korpuuni — ndinɣe beeci eɣa nkaɣeɣi, Assistant ma',
+        evidenceTitle: 'Weyaa kan kee founoo e korpuuni / e kandidet koo / e Assistant ma. Modo: {method}',
+        facts: 'Run facts: {rows} rows · {abstentions} abstentions · ~{chars} answer chars',
+        rankTitle: 'Weyaa kan e korpuuni, amma kɔnɔ e kandidet kɔnɔ dɔw — e nia yɔrɔ #{n}.'
+      },
+      history: {
+        title: 'Run history',
+        run: 'Run',
+        when: 'When',
+        status: 'Status',
+        load: 'View',
+        delete: 'Delete',
+        rescore: 'Re-score',
+        rescoreOf: 're-scored from {key}',
+        judgeEnv: 'system default',
+        judgeUnknown: 'Judge not recorded'
+      },
+      rescore: {
+        title: 'Re-score ka judge',
+        body: 'Answer minnu tse bɛ bɛn bɛ re-score ka judge min i ceng ye — ni tɛ fana a generate ye mung. Dialog bɛ run min jigi judge min i bɛ yele fɔlɔ, sɔ re-score bɛ default ye bɛ check ko judge bɛ kɛn bɛ phetoloha; ceng judge kelen ye i fɔ fana a bɛ la opinion kelen ye ko failures la. I bɛ run kelen ye fana.',
+        source: 'Source run',
+        judge: 'Judge configuration',
+        confirm: 'Re-score',
+        failed: 'Re-scoring the run failed.'
+      },
+      runDelete: {
+        title: 'Delete run',
+        body: 'This permanently removes the run and its failure explanation. The suite and its queries stay.',
+        confirm: 'Delete',
+        inFlight: 'This run is still executing — cancel it first.',
+        explainInFlight: 'A failure explanation is still running for this run — wait for it to finish.',
+        failed: 'Deleting the run failed.'
+      },
+      advice: {
+        knob: 'knob',
+        tag: 'repo tag',
+        content: 'content',
+        prompt: 'prompt',
+        env: 'environment changes',
+        envComponent: 'component',
+        envChange: 'change',
+        envTargets: 'targets',
+        envWhy: 'why',
+        envTradeOff: 'trade-off',
+        envApply: 'how to apply',
+        envVerify: 'verify'
+      },
+      metric: {
+        faithfulness: 'faithfulness',
+        context_precision: 'context precision',
+        context_recall: 'context recall',
+        answer_relevancy: 'answer relevancy',
+        context_utilization: 'context utilization',
+        context_entities_recall: 'context entities recall',
+        factual_correctness: 'factual correctness',
+        answer_correctness: 'answer correctness',
+        answer_similarity: 'answer similarity',
+        noise_sensitivity: 'noise sensitivity',
+        note: {
+          faithfulness:
+            'How factually grounded the answer is against the retrieved passages — the share of the answer’s claims the sources support. Low means the answer says things the evidence does not (hallucination).',
+          context_precision:
+            'Whether the passages that matter were ranked at the top of the retrieved set. Low means the right evidence was retrieved but buried under less relevant chunks.',
+          context_recall:
+            'Whether the retrieved passages cover everything the reference answer requires — each reference claim must be attributable to retrieved context. Low means retrieval missed evidence the question needed.',
+          answer_relevancy:
+            'How well the answer addresses the question asked: RAGAS regenerates questions from the answer text and compares them to the original by embedding similarity. It does NOT check factual correctness — verbose or off-topic answers score low even when right.',
+          context_utilization:
+            'Whether the retrieved context is sufficient to produce the reference answer — a retrieval-completeness check against what the ideal answer needs.',
+          context_entities_recall:
+            'Entity-level recall: the share of named entities in the entry’s reference passages (companies, dates, amounts, places) that also appear in the retrieved chunks. Low means retrieval brought chunks that miss entities the reference names. Judge-sensitive — a low score while context recall passes usually means the judge’s entity extraction missed, not that content is missing.',
+          factual_correctness:
+            'Claim-level factual agreement with the reference answer — the judge decomposes both into claims and scores the overlap. The strictest correctness metric.',
+          answer_correctness:
+            'Overall quality versus the reference answer — factual correctness combined with semantic similarity. The closest metric to “did it give the right answer”.',
+          answer_similarity:
+            'Semantic (embedding) similarity between the generated answer and the reference answer — high means the two convey the same meaning.',
+          noise_sensitivity:
+            'How much the answer degrades when irrelevant passages are mixed into the retrieved context — a robustness measure. LOWER is better; its failure threshold is inverted.'
+        }
+      },
+      pdf: {
+        title: 'RAGAS benchmark report',
+        suite: 'Suite',
+        run: 'Run',
+        summary: 'Summary',
+        perQuery: 'Per-question scores',
+        status: 'Outcomes',
+        n: 'questions',
+        evaluable: 'evaluable',
+        abstained: 'ansaa bɔ fɔli',
+        compare: 'Compare across runs (delta vs first)'
+      }
     }
+  },
+  link: {
+    ragTip:
+      'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
   }
 };

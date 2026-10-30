@@ -1,5 +1,3 @@
-// src/i18n/locales/zh.js
-
 export default {
   countries: {
     AF: '阿富汗',
@@ -219,18 +217,16 @@ export default {
     monthlyActiveUsers: '月活跃用户 (MAU)',
     fromLastMonth: '比上月',
     today: '今天',
-    // --- UPDATED TABS ---
     tabs: {
       overview: '系统健康',
-      hierarchy: '知识层级', // NEW
-      documents: '文档管理', // NEW
+      hierarchy: '知识层级',
+      documents: '文档管理',
       database: '数据库',
       logs: '日志',
-      queryInspector: '查询检查器',
       security: '安全',
-      users: '用户'
+      users: '用户',
+      models: '模型'
     },
-    // --- NEW KEYS ---
     contentManagement: '内容管理',
     knowledgeHierarchy: '知识层级',
     documentManagement: '文档管理',
@@ -247,7 +243,6 @@ export default {
       defaultTitle: '确认',
       defaultMessage: '您确定吗？'
     },
-    // --- END NEW KEYS ---
     systemHealthStatus: '系统健康状态',
     runDiagnostics: '运行诊断',
     resourceUsage: '资源使用',
@@ -441,10 +436,8 @@ export default {
       lineNumbers: '行号',
       showLess: '显示较少',
       showMore: '显示所有问题',
-      // --- NEW KEY ---
       lastScanJustNow: '刚才'
     },
-    // --- NEW OBJECT ---
     hierarchy: {
       title: '知识层级管理 (注意: 始终为英文 - 添加翻译)',
       addCategory: '添加新类别',
@@ -482,7 +475,6 @@ export default {
       deleteErrorService: '删除服务失败。',
       duplicateLangError: '翻译中发现重复语言。请移除它们。'
     },
-    // --- NEW OBJECT ---
     documents: {
       title: '文档管理',
       addLink: '从链接添加',
@@ -492,11 +484,9 @@ export default {
       statusPending: '待处理',
       statusIngested: '已提取',
       statusRetracted: '已撤回',
-      // --- NEW STATUSES ADDED ---
       statusIngesting: '提取中',
       statusError: '提取错误',
       statusWarning: '已提取(有警告)',
-      // ---
       ingestSelected: '提取选中项',
       colFileName: '文件名',
       colStatus: '状态',
@@ -520,16 +510,25 @@ export default {
       retractQueuedSuccess: '{count} 个文件已加入撤回队列。',
       retractQueuedError: '批量撤回过程中发生错误。',
       retractPartialFailure: '已撤回 {successCount}/{count} 个文件。失败：{detail}',
+      deleteSelected: 'Delete Selected',
+      confirmDeleteTitle: 'Confirm Batch Deletion',
+      confirmDeleteSelected:
+        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
+      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
+      deleteQueuedError: 'An error occurred during the batch deletion process.',
+      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
+      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
+      deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
       retractAllFailed: '全部 {count} 个文件撤回失败：{detail}',
       uploadSuccessMultiple: '{count} 个文件上传成功。',
       linkSubmitSuccess: '成功爬取并保存 "{fileName}"。',
       actionSuccess: '对文件 {fileId} 的操作 "{action}" 成功。',
-      metadataUpdateSuccess: '文件 {fileId} 的元数据已更新。'
+      metadataUpdateSuccess: '文件 {fileId} 的元数据已更新。',
+      deletePartialNotice:
+        "{'{'{'}'}blocked{'}'} 个所选文件无法删除（{'{'{'}'}reason{'}'}）——只会删除其余的 {'{'{'}'}n{'}'} 个。",
+      confirmDeleteSkipped: "{'{'{'}'}count{'}'} 个已摄取/摄取中的文件将被跳过——请先撤回它们才能删除。"
     },
     queryInspector: {
-      title: '查询检查器',
-      backToList: '返回列表',
-      detailTitle: '查询检查器',
       search: '搜索',
       searchPlaceholder: '搜索查询文本...',
       minConfidence: '最低置信度',
@@ -539,47 +538,50 @@ export default {
       reset: '重置',
       colTime: '时间',
       colQuestion: '用户问题',
-      colScope: '范围',
-      colAbstention: '拒答',
       colConfidence: '置信度',
       colResponseTime: '响应时间',
       colSources: '来源',
-      colFeedback: '用户反馈',
+      colFeedback: '反馈',
       colActions: '操作',
-      inspect: '查看',
-      prev: '上一页',
-      next: '下一页',
+      inspect: '检查',
+      noResults: '未找到匹配您的过滤器的查询。',
+      prev: '上一步',
       pageInfo: '第 {current} 页，共 {total} 页（总计 {count} 条）',
-      noResults: '没有符合筛选条件的查询。',
-      loadError: '查询加载失败。',
-      abstained: '拒答',
-      unfiltered: '未筛选',
-      scopeNotRecorded: '未记录',
+      next: '下一步',
+      backToList: '返回列表',
+      detailTitle: '查询检查器',
       sectionQuestion: '用户问题',
       user: '用户',
       time: '时间',
       responseTime: '响应时间',
       mode: '模式',
-      sectionContext: '上下文',
-      scopeFiltered: '过滤所用范围',
-      category: '请求的分类',
-      serviceLabels: '请求的服务标签',
+      sectionContext: '上下文（发送给 RAG 的标签）',
+      category: '类别',
+      serviceLabels: '服务标签',
       language: '语言',
-      sectionAbstention: '拒答',
-      sectionMessages: '发送到流水线的消息',
-      sectionDocuments: '检索到的文档（向量数据库结果）',
+      sectionMessages: '发送到管道的消息',
+      sectionDocuments: '检索到的文档（Vector DB 结果）',
       score: '分数',
       labels: '标签',
       viewDoc: '查看文档',
-      noDocuments: '该查询未检索到任何源文档。',
+      noDocuments: '未检索到此查询的源文档。',
       sectionResponse: 'LLM 响应',
       confidenceScore: '置信度分数',
       retrievalConfidenceScore: '检索置信度',
-      selfConfidence: '自我置信度（LLM）',
+      selfConfidence: '自信度（LLM）',
       sectionFeedback: '用户反馈',
       rating: '评分',
       comment: '评论',
-      providedAt: '提交于',
+      providedAt: '提供于',
+      loadError: '加载查询失败。',
+      title: '查询检查器',
+      colScope: '范围',
+      colAbstention: '拒答',
+      abstained: '拒答',
+      unfiltered: '未筛选',
+      scopeNotRecorded: '未记录',
+      scopeFiltered: '过滤所用范围',
+      sectionAbstention: '拒答',
       feedbackPositive: '正面',
       feedbackNeutral: '中性',
       feedbackNegative: '负面',
@@ -611,7 +613,7 @@ export default {
     },
     day: '日',
     noData: '无数据',
-    notAvailable: 'N/A',
+    notAvailable: '不适用',
     topQueries: '热门查询',
     categoryDistribution: '知识领域使用',
     usageTrend: '使用趋势'
@@ -856,51 +858,51 @@ export default {
   leftPanel: {
     cat1: {
       name: '1. 身份与民事登记',
-      children: ['出生证明', '国民身份证', '护照', '结婚和死亡证明', '选民登记']
+      children: '出生证明,国民身份证,护照,结婚和死亡证明,选民登记'
     },
     cat2: {
       name: '2. 医疗与社会服务',
-      children: ['公共医疗访问', '疫苗接种计划', '医疗保险', '残疾福利', '福利和食品援助']
+      children: '公共医疗访问,疫苗接种计划,医疗保险,残疾福利,福利和食品援助'
     },
     cat3: {
       name: '3. 教育与学习',
-      children: ['公立学校和大学', '奖学金和学生贷款', '成人教育计划', '在线学习资源']
+      children: '公立学校和大学,奖学金和学生贷款,成人教育计划,在线学习资源'
     },
     cat4: {
       name: '4. 就业与劳动服务',
-      children: ['求职和失业福利', '工人保护和劳动权利', '工作场所安全规定', '技能培训和学徒制']
+      children: '求职和失业福利,工人保护和劳动权利,工作场所安全规定,技能培训和学徒制'
     },
     cat5: {
       name: '5. 税收与收入',
-      children: ['所得税申报和退款', '财产税支付', '商业税合规', '海关和进口关税']
+      children: '所得税申报和退款,财产税支付,商业税合规,海关和进口关税'
     },
     cat6: {
       name: '6. 公共安全与司法',
-      children: ['警察和紧急服务', '法院和法律援助服务', '犯罪报告', '消费者保护法']
+      children: '警察和紧急服务,法院和法律援助服务,犯罪报告,消费者保护法'
     },
     cat7: {
       name: '7. 交通与流动性',
-      children: ['驾照和车辆登记', '公共交通和基础设施', '交通违规和罚款', '道路安全计划']
+      children: '驾照和车辆登记,公共交通和基础设施,交通违规和罚款,道路安全计划'
     },
     cat8: {
       name: '8. 住房与城市发展',
-      children: ['公共住房援助', '财产登记和土地记录', '住房贷款和补贴', '分区和建筑许可']
+      children: '公共住房援助,财产登记和土地记录,住房贷款和补贴,分区和建筑许可'
     },
     cat9: {
       name: '9. 公用事业与环境',
-      children: ['水电服务', '废物管理和回收', '环境法规', '可再生能源举措']
+      children: '水电服务,废物管理和回收,环境法规,可再生能源举措'
     },
     cat10: {
       name: '10. 商业与贸易',
-      children: ['商业登记和许可', '贸易法规和许可', '小企业补助和激励', '电子商务和数字商业支持']
+      children: '商业登记和许可,贸易法规和许可,小企业补助和激励,电子商务和数字商业支持'
     },
     cat11: {
       name: '11. 社会保障与养老金',
-      children: ['退休福利', '养老金基金管理', '幸存者福利', '残疾养老金']
+      children: '退休福利,养老金基金管理,幸存者福利,残疾养老金'
     },
     cat12: {
       name: '12. 社区与公民参与',
-      children: ['投票和选举', '公众反馈和公民投诉', '志愿和社区计划', '地方政府参与']
+      children: '投票和选举,公众反馈和公民投诉,志愿和社区计划,地方政府参与'
     }
   },
   settings: {
@@ -1123,6 +1125,7 @@ export default {
     },
     notifications: {
       saveSuccess: '资料保存成功',
+      saved: 'Frontmatter 已保存',
       saveFailed: '保存资料失败',
       loadSuccess: '资料加载成功',
       loadFailed: '加载资料失败',
@@ -1236,137 +1239,10 @@ export default {
     noMatchingCountries: '未找到匹配的国家',
     noMatchingDisciplines: '未找到匹配的学科',
     noMatchingDegrees: '未找到匹配的学位',
-    educationOptions: [
-      '会计',
-      '航空工程',
-      '农业科学',
-      '人类学',
-      '建筑',
-      '艺术史',
-      '人工智能',
-      '天文学',
-      '天体物理学',
-      '生物化学',
-      '生物医学工程',
-      '生物技术',
-      '工商管理',
-      '化学工程',
-      '化学',
-      '土木工程',
-      '通信',
-      '计算机工程',
-      '计算机科学',
-      '建筑管理',
-      '刑事司法',
-      '网络安全',
-      '数据科学',
-      '牙科',
-      '经济学',
-      '教育',
-      '电气工程',
-      '小学教育',
-      '英国文学',
-      '环境工程',
-      '环境科学',
-      '时尚设计',
-      '电影研究',
-      '金融',
-      '美术',
-      '食品科学',
-      '法医学',
-      '游戏设计',
-      '地理',
-      '地质学',
-      '平面设计',
-      '卫生管理',
-      '历史',
-      '酒店管理',
-      '人力资源',
-      '工业设计',
-      '工业工程',
-      '信息系统',
-      '信息技术',
-      '室内设计',
-      '国际商务',
-      '国际关系',
-      '新闻学',
-      '法律',
-      '图书馆学',
-      '语言学',
-      '管理',
-      '营销',
-      '材料科学',
-      '数学',
-      '机械工程',
-      '媒体研究',
-      '医学',
-      '气象学',
-      '微生物学',
-      '音乐',
-      '纳米技术',
-      '护理',
-      '营养',
-      '职业治疗',
-      '海洋学',
-      '石油工程',
-      '药学',
-      '哲学',
-      '摄影',
-      '体育教育',
-      '物理治疗',
-      '物理',
-      '政治学',
-      '心理学',
-      '公共管理',
-      '公共卫生',
-      '公共关系',
-      '机器人',
-      '中学教育',
-      '社会工作',
-      '社会学',
-      '软件工程',
-      '特殊教育',
-      '体育管理',
-      '统计学',
-      '系统工程',
-      '戏剧艺术',
-      '旅游',
-      '城市规划',
-      '兽医学',
-      '网页开发',
-      '野生生物学',
-      '动物学'
-    ],
-    degreeOptions: [
-      '副学士学位',
-      '文学学士 (BA)',
-      '理学学士 (BS)',
-      '工程学学士 (BEng)',
-      '工商管理学士 (BBA)',
-      '美术学士 (BFA)',
-      '教育学学士 (BEd)',
-      '医学学士 (MBBS)',
-      '法学学士 (LLB)',
-      '文学硕士 (MA)',
-      '理学硕士 (MS)',
-      '工商管理硕士 (MBA)',
-      '工程学硕士 (MEng)',
-      '美术硕士 (MFA)',
-      '教育学硕士 (MEd)',
-      '法学硕士 (LLM)',
-      '公共卫生硕士 (MPH)',
-      '哲学博士 (PhD)',
-      '医学博士 (MD)',
-      '教育博士 (EdD)',
-      '工商管理博士 (DBA)',
-      '法学博士 (JD)',
-      '专业文凭',
-      '技术文凭',
-      '职业证书',
-      '研究生证书',
-      '研究生文凭',
-      '博士后'
-    ],
+    educationOptions:
+      '会计,航空工程,农业科学,人类学,建筑,艺术史,人工智能,天文学,天体物理学,生物化学,生物医学工程,生物技术,工商管理,化学工程,化学,土木工程,通信,计算机工程,计算机科学,建筑管理,刑事司法,网络安全,数据科学,牙科,经济学,教育,电气工程,小学教育,英国文学,环境工程,环境科学,时尚设计,电影研究,金融,美术,食品科学,法医学,游戏设计,地理,地质学,平面设计,卫生管理,历史,酒店管理,人力资源,工业设计,工业工程,信息系统,信息技术,室内设计,国际商务,国际关系,新闻学,法律,图书馆学,语言学,管理,营销,材料科学,数学,机械工程,媒体研究,医学,气象学,微生物学,音乐,纳米技术,护理,营养,职业治疗,海洋学,石油工程,药学,哲学,摄影,体育教育,物理治疗,物理,政治学,心理学,公共管理,公共卫生,公共关系,机器人,中学教育,社会工作,社会学,软件工程,特殊教育,体育管理,统计学,系统工程,戏剧艺术,旅游,城市规划,兽医学,网页开发,野生生物学,动物学',
+    degreeOptions:
+      '副学士学位,文学学士 (BA),理学学士 (BS),工程学学士 (BEng),工商管理学士 (BBA),美术学士 (BFA),教育学学士 (BEd),医学学士 (MBBS),法学学士 (LLB),文学硕士 (MA),理学硕士 (MS),工商管理硕士 (MBA),工程学硕士 (MEng),美术硕士 (MFA),教育学硕士 (MEd),法学硕士 (LLM),公共卫生硕士 (MPH),哲学博士 (PhD),医学博士 (MD),教育博士 (EdD),工商管理博士 (DBA),法学博士 (JD),专业文凭,技术文凭,职业证书,研究生证书,研究生文凭,博士后',
     aria: {
       tabList: '资料表单部分',
       nextButton: '转到下一节',
@@ -1389,18 +1265,18 @@ export default {
     streamTimeout: '助手没有响应——请求已超时。',
     nothingToSave: '暂无可保存内容——所有回答均失败。请先重试对话。',
     unsupportedLanguage: '此语言在当前部署中不可用。',
-    aiGeneratedNoDocs: 'AI 生成 — 不基于文库文档',
+    aiGeneratedNoDocs: 'AI 生成 — 非基于知识库文档',
     translationUnavailable: '翻译不可用 — 此回复可能包含未翻译的文本。',
-    welcomeMessage: 'Welcome! How can I assist you today?',
-    configMismatchWarning: '配置不匹配：{warnings}。请检查快速帮助和知识层次结构的配置。',
-    categoryNotFound: '在知识层次结构中未找到类别"{label}"',
+    welcomeMessage: '欢迎！今天有什么我可以协助您的吗？',
+    configMismatchWarning: '配置不匹配：{warnings}。请检查“快速帮助”与知识层级配置。',
+    categoryNotFound: '在知识层级中未找到分类“{label}”',
+    serviceLabelMismatch: '服务“{label}”所使用的 UI 标签可能与知识层级不匹配',
+    noFilterWarning: '未激活上下文过滤器 — 查询将不经过滤直接执行。',
     quickHelpLabelGone: '配置问题：标签“{labels}”已不存在于知识层次结构中。在更新配置之前，此按钮无法使用。',
     quickHelpCategoryGone: '配置问题：此按钮的类别已不存在于知识层次结构中。在更新配置之前，此按钮无法使用。',
     quickHelpScopeUnavailable:
       '配置问题：知识层次结构无法加载，因此无法验证此按钮的范围。在层次结构可用之前，此按钮无法使用。',
     scopeNotNameable: '配置问题：所选范围在知识层次结构中没有英文名称，因此无法确定查询的范围。该查询未发送。',
-    serviceLabelMismatch: '服务"{label}"使用的UI标签可能与知识层次结构不匹配',
-    noFilterWarning: '没有活动的上下文筛选器 — 查询将不被筛选。',
     placeholder: '在此输入您的查询...',
     composerPlaceholder: '提问、探索知识...',
     composerAttachTitle: '附件功能尚未开放',
@@ -1459,37 +1335,24 @@ export default {
     removeItem: '移除'
   },
   quickhelp: {
-    // Labels (Short for UI)
-
-    // User Prompts (Visible Text - First Person - what user sees in chat)
-
-    // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:
-      "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
-
+      '请扮演一位热心助人的肯尼亚民事登记专家。说明申领国民身份证（Maisha Namba）或补办遗失身份证的步骤。重点：提供一份清晰的必备文件清单（例如：出生证明、父母身份证复印件），并建议用户前往就近的 Huduma Centre 或 Registrar of Persons 办事处办理。规则：始终将本应用称为“Genie AI”。',
     payTaxesPrompt:
-      "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-
+      '请扮演一位 KRA（肯尼亚税务局）指引顾问。解释报税、申请 KRA PIN 码或在 iTax 门户重置密码的具体步骤。重点：提醒用户 6 月 30 日为年度个税申报截止日期，并指引其在无应税收入时如何按规定完成零申报（Nil returns）。规则：始终将本应用称为“Genie AI”。',
     startBusinessPrompt:
-      "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-
+      '请扮演一位精通 eCitizen 服务的商业顾问。引导用户在肯尼亚办理企业字号核准与公司注册登记。重点：说明当前核名与企业登记的官方规费，并引导用户前往 eCitizen 官方门户提交办结申请。规则：始终将本应用称为“Genie AI”。',
     findHealthcarePrompt:
-      "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-
+      '请扮演一位医疗卫生服务引导员。提供有关从 NHIF 向 SHIF（社会健康保险基金）过渡的信息以及登记流程。重点：分享用于注册的官方 USSD 代码（如 *263#）或官方网站链接，并阐述全民公共医疗保障的各项权益。规则：始终将本应用称为“Genie AI”。',
     educationServicesPrompt:
-      "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
-
+      '请扮演一位教育咨询师。讨论 CBC 课程体系、NEMIS 注册或通过 KUCCPS 进行的高校录取派位事宜。重点：说明家长在全国考试成绩放榜时，如何通过短信（SMS）或 KNEC 门户网站进行查询。规则：始终将本应用称为“Genie AI”。',
     transportLicensesPrompt:
-      "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-
+      '请扮演一位 NTSA（国家运输安全局）业务指引顾问。解释驾驶证期满换发、机动车年检或 TIMS 账户管理的办理流程。重点：指导用户如何登录 eCitizen NTSA 门户在线申请电子驾照（Smart DL）或预约车辆检验。规则：始终将本应用称为“Genie AI”。',
     housingProgramsPrompt:
-      "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-
+      '请扮演一位住房保障计划顾问。解释经济适用房计划（Boma Yangu）的申请流程及自愿缴费机制。重点：引导用户访问 Boma Yangu 门户网站以查阅房产项目，并说明房源配租配售的资格准入标准。规则：始终将本应用称为“Genie AI”。',
     findJobsPrompt:
-      "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
-
+      '请扮演一位公共服务职业指导顾问。指导用户如何建立个人档案，并通过公共服务委员会（PSC）门户网站申请空缺职位。重点：提醒用户备齐学历与资质证明，并定期查看 PSC 官网或当地主流日报上的 MyGov 公告。规则：始终将本应用称为“Genie AI”。',
     justChatPrompt:
-      "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+      '请扮演一位亲切随和的本地向导伙伴。言语礼貌、乐于助人，且通晓肯尼亚本土文化及市井日常生活。重点：提醒用户，虽然您可以畅聊任何话题，但您的核心专长在于协助他们轻松办理各项肯尼亚政务服务，例如**身份证**、**税务**以及**企业工商登记**。规则：始终将本应用称为“Genie AI”。'
   },
   common: {
     cancel: '取消',
@@ -1497,7 +1360,6 @@ export default {
     save: '保存',
     move: '移动',
     delete: '删除',
-    // --- NEW KEYS ADDED ---
     ok: '确定',
     ingest: '提取',
     retract: '撤回',
@@ -1556,12 +1418,16 @@ export default {
     fileSize: '文件大小',
     uploadDate: '上传日期',
     hash: 'SHA256 哈希值',
-    // --- NEW: TABS ---
     tabs: {
       details: '详情',
-      ingestionLog: '提取日志'
+      ingestionLog: '提取日志',
+      detailsHint: '该文件的元数据：名称、作者以及 AI 用于路由问题的知识层级标签。执行 ingest 至少需要一个标签。',
+      dashboardHint:
+        '该文件网站抓取状态的实时视图：速率、队列、错误与进度。抓取成功后，下方的页脚会将其转换为 OKF 知识库。',
+      crawlLogHint: '网站抓取的分页日志：哪些 URL 已成功抓取、重定向或失败。在抓取运行时实时写入。',
+      ingestionLogHint:
+        '为 AI 回答准备该文件的分阶段进度：分块（chunking）、标注、向量化（embedding）与索引编制。此处的错误会精确指示 ingest 停止的位置。'
     },
-    // --- NEW: LOG TAB ---
     log: {
       killActions: '终止操作:',
       killDocument: '终止此文档',
@@ -1591,7 +1457,6 @@ export default {
       retractError: '撤回文件失败。',
       deleteSuccess: '文件删除成功。',
       deleteError: '删除文件失败。',
-      // --- NEW NOTIFICATIONS ---
       ingestLabelRequired: '提取前请至少选择一个标签。',
       ingestSaving: '提取前正在保存元数据...',
       ingestSaveFailed: '保存元数据失败。提取已取消。',
@@ -1603,7 +1468,6 @@ export default {
       ingest: '您确定要提取此文件吗？这将启动数据处理流程。',
       retract: '您确定要撤回此文件吗？',
       delete: '您确定要永久删除此文件吗？此操作无法撤销。',
-      // --- NEW CONFIRMATIONS ---
       ingestTitle: '确认提取',
       retractTitle: '确认撤回',
       deleteTitle: '确认删除',
@@ -1617,7 +1481,7 @@ export default {
     title: '上传文件',
     dropzone: '将文件拖放到此处，或点击选择',
     allowedTypesLabel: '允许类型:',
-    buttonUpload: '上传 {count} 个文件', // Needs pluralization rules
+    buttonUpload: '上传 {count} 个文件',
     remove: '移除',
     uploading: '上传中...',
     notifications: {
@@ -1627,6 +1491,2126 @@ export default {
       duplicate: '文件 "{fileName}" 已添加。',
       uploadSuccess: '成功上传 {fileName}',
       uploadFailed: '上传 {fileName} 失败。'
+    },
+    ragTip:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+  },
+  okf: {
+    models: {
+      title: '模型配置',
+      add: '新建配置',
+      hint: '用于评判和生成的命名远程模型端点——任何 OpenAI 兼容接口（OpenAI、LiteLLM 网关、vLLM、Gemini 兼容、Ollama）或 Anthropic 直连。同一时间只能有一个配置处于激活状态；无激活配置时使用部署环境配置的默认模型。密钥仅存储在服务端，绝不显示。',
+      name: '名称',
+      provider: '提供商',
+      providerOpenai: 'OpenAI 兼容（OpenAI、LiteLLM、vLLM…）',
+      providerAnthropic: 'Anthropic（原生 API）',
+      baseUrl: '基础 URL',
+      apiKey: 'API 密钥',
+      apiKeyKeep: '不变',
+      model: '模型',
+      modelPick: '选择模型…',
+      modelFreeText: '模型 ID（自由输入）',
+      modelFetch: '获取模型列表',
+      modelFetching: '获取中…',
+      modelsEmpty: '端点未返回模型——请输入模型 ID。',
+      modelsFailed: '获取模型列表失败——请输入模型 ID。',
+      modelsLoaded: '已加载 {n} 个模型 — 从下拉列表选择或自由输入',
+      test: '测试连接',
+      testing: '测试中…',
+      testTitle: '探测端点，并（在选择模型后）进行单 token 生成测试',
+      testOkModel: '✓ 已连接 — 模型已应答（{ms} 毫秒）',
+      testOkEndpoint: '✓ 端点可达 — 已列出 {n} 个模型（选择模型后可同时测试生成）',
+      testGenFail: '✗ 端点正常，但模型调用失败',
+      testNotListed: ' — 注意：“{model}”不在端点的模型列表中',
+      testFail: '✗ 测试失败 — 无响应',
+      services: '将此配置用于',
+      svcJudge: '基准测试（RAGAS 评审 + 顾问）',
+      svcJudgeShort: '基准测试',
+      svcCuration: '概念整编',
+      svcCurationShort: '整编',
+      svcTagging: '主题与标签',
+      svcTaggingShort: '主题/标签',
+      svcOpenaiOnly: '概念整编以及主题/标签使用 OpenAI 线格式 — 需要 OpenAI 兼容端点。',
+      colServices: '使用方',
+      svcNone: '无（闲置）',
+      groupTestLab: '测试实验室流水线',
+      groupDataPrep: '数据准备流水线',
+      groupInference: '推理流水线',
+      mockNote: '已规划 — 暂不可配置',
+      svcAnswers: '基准测试答案 —— 仅限离线重放（Lab 通过部署的聊天模型作答）',
+      svcAnswersShort: '基准测试答案（仅限离线）',
+      mockContextual: '上下文检索（文档上下文）',
+      mockChunkLabeling: '分块标注',
+      mockGraphExtraction: '知识图谱抽取',
+      mockChatServing: '聊天应答',
+      mockTranslation: '聊天翻译',
+      svcOpenaiOnlyShort: '仅限 OpenAI 兼容端点',
+      providerTipOpenai:
+        '已验证的 OpenAI 兼容端点：OpenAI https://api.openai.com/v1 · MiniMax https://api.minimax.io/v1 · z.ai https://api.z.ai/api/paas/v4 · LiteLLM 网关 http://your-gateway:4000/v1',
+      providerTipAnthropic:
+        '已验证的 Anthropic 原生端点：Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
+      baseUrlTip:
+        '服务器在此基础地址 + /models（OpenAI 兼容）或 + /v1/models（Anthropic — 结尾的 /v1 会被规范化）列出模型，Test connection 在 + /chat/completions 或 + /v1/messages 生成。四条标准路径已于 2026-10-20 实测验证。',
+      save: '保存更改',
+      create: '创建',
+      cancel: '取消',
+      colName: '名称',
+      colProvider: '提供商',
+      colUrl: '端点',
+      colKey: '密钥',
+      colModel: '模型',
+      colState: '状态',
+      active: '已激活',
+      inactive: '未激活',
+      edit: '重命名 / 修改',
+      copy: '复制',
+      activate: '激活（仅一个处于激活状态）',
+      deactivate: '停用——将使用默认模型',
+      delete: '删除',
+      deleteConfirm: '删除模型配置“{name}”？',
+      empty: '尚无模型配置——正在使用部署默认（env）模型。',
+      adminOnly: '模型配置需要平台管理员角色。'
+    },
+    versions: {
+      bundle: '捆绑包',
+      col: {
+        concepts: '概念',
+        curator: '策展人',
+        minted: '已创建',
+        tag: '标签',
+        trigger: '触发器',
+        version: '版本'
+      },
+      current: '当前',
+      loadFailed: '加载版本失败',
+      none: '尚未铸造任何版本 — 执行 publish 将创建 v1。',
+      notServing: '未服务',
+      publish: '创建新版本',
+      published: '版本 v{v} 已发布 — 资产包 {f} 已存入文档库。',
+      serving: '已完成 ingest（serving）',
+      title: '版本'
+    },
+    shell: {
+      back: 'Studio 仪表盘',
+      building: '构建中…',
+      buildingHint: '源文件仍在处理中',
+      delete: {
+        body: '此操作将永久移除该知识库、其概念、已索引内容、图谱及资产包构件。',
+        confirm: '删除',
+        title: '删除知识库'
+      },
+      export: '导出 .zip',
+      logs: '日志',
+      pii: {
+        ack: '确认标记的实体并发布',
+        note: '标记的实体属于已发布内容的一部分。如果您已完成核对（例如：官方公开联络方式），请确认并继续。'
+      },
+      publish: {
+        body: '执行 publish 将生成版本 v{n}，并将资产包“{file}"存储在文档库中，取代以往的任何 zip。在对其执行 Ingest 之前，新版本暂不处于 serving 状态。',
+        confirm: '发布',
+        inProgress: '正在发布 — 正在导出并传输资产包…',
+        title: '发布'
+      },
+      readonly: '内容只读 — 头部/标签可编辑',
+      serving: '服务中',
+      state: {
+        ingested: '已摄取'
+      },
+      tab: {
+        editor: '编辑器',
+        wizard: '向导'
+      },
+      version: 'v{n}',
+      versions: '版本',
+      deleteLabel: '删除',
+      testingLab: 'Testing Lab'
+    },
+    logs: {
+      labeled: '已标注：{n}',
+      fallbacks: 'LLM 回退：{n}',
+      concepts: '概念：{n}',
+      col: {
+        action: '操作',
+        description: '描述',
+        user: '用户',
+        when: '日期和时间'
+      },
+      count: '{n} 条记录',
+      loadFailed: '加载活动日志失败。',
+      none: '暂无活动记录 — 知识库的操作发生时将实时显示于此处。',
+      title: '活动日志'
+    },
+    graph: {
+      aria: '概念图谱',
+      building: '正在准备图…',
+      concepts: '概念',
+      empty: '暂无概念 — 暂无图谱可供展示。',
+      fit: '适应图表',
+      hub: '显示或隐藏索引中枢（其目录链接仅为结构信息，非知识本身）',
+      layouting: '布局中…',
+      legend: '索引',
+      links: '链接',
+      zoomIn: '放大',
+      zoomOut: '缩小',
+      card: {
+        links: '{n} 条链接',
+        chunks: '{n} 个分块',
+        failed: '索引失败',
+        flagged: '个标记实体',
+        hub: '索引中心',
+        pending: '尚未建立索引'
+      }
+    },
+    import: {
+      title: '将文档导入新的 OKF 仓库',
+      hint: '这些文档将成为一个仓库——一起分段、链接和标注。不会发布任何内容；随后走正常的审查 → 发布 → 摄取流程。',
+      name: '仓库名称',
+      namePh: '例如：政策文件包',
+      domain: '主题领域（域）',
+      strategy: '分类策略',
+      stratHeuristics: '启发式（快速，无 LLM）',
+      stratLlm: 'LLM 分类',
+      stratHybrid: '混合',
+      files: '所选文档',
+      servingBadge: '正在服务自由 RAG',
+      alreadyBadge: '已属于某个 OKF 仓库',
+      servingTip: '该文档当前正在服务自由语料库——在撤回之前，新仓库无法被摄取。',
+      alreadyTip: '该文档已经是另一个 OKF 仓库的来源。',
+      servingWarn: '{n} 个文档仍在服务自由语料库。导入会成功，但在撤回它们之前，此仓库无法被摄取。',
+      cancel: '取消',
+      importing: '导入中…',
+      go: '导入',
+      dupRepo: '该仓库名称已存在——请换一个。',
+      failed: '无法开始导入。请检查文档后重试。'
+    },
+    editor: {
+      addConcept: {
+        bodyLabel: 'Markdown（粘贴或留空）',
+        bodyPh: '# 标题\n\n在此粘贴 markdown — frontmatter 将自动为您补齐。',
+        create: '创建文件',
+        failed: '未能创建文件。',
+        title: '添加概念文件',
+        titleLabel: '标题',
+        titlePh: '例如：马赛马拉的野生动物',
+        updateIndex: '追加至索引的目录列表'
+      },
+      access: {
+        label: '仓库访问',
+        title: '访问控制',
+        restricted: '已限制',
+        openForAll: '对所有用户开放',
+        hintRestricted: '只有被授权的用户（和管理员）可以查询此仓库。在下方授予访问权限 — 用户下次登录时生效。',
+        hintOpen: '任何已登录用户都可以查询此仓库。限制它并按用户授予访问权限。',
+        unrestrict: '对所有人开放',
+        restrict: '限制仓库',
+        unconfiguredTip:
+          '授予/撤销需要服务器上的 Keycloak 凭据（KC_OKF_ACCESS_CLIENT_SECRET）。限制本身的执行不受影响。',
+        revoke: '撤销',
+        error: '操作失败。',
+        grantedNotice: '已授予访问权限 — 下次登录时生效。',
+        revokedNotice: '已撤销访问权限 — 在该用户下次登录时生效。',
+        nowRestricted: '仓库已限制。',
+        nowOpen: '仓库已对所有用户开放。',
+        grantUsersCta: '授予用户访问权限…',
+        pickerTitle: '授予查询权限',
+        pickerSearch: '按姓名、用户名或电子邮件搜索用户',
+        pickerSearching: '搜索中…',
+        pickerMatching: '{n} 位用户与此搜索匹配',
+        pickerSelectAll: '全选 {n} 位',
+        pickerAllSelected: '已选中全部 {n} 位匹配的用户',
+        pickerClearSelection: '清除',
+        pickerHasAccess: '已有权限',
+        pickerEmpty: '没有匹配的用户。',
+        pickerGrant: '授予权限（{n}）',
+        pickerGranting: '正在授予 {n} 位用户权限…',
+        pickerLargeHint: '对于非常大的用户集，建议改用组授权 — 一次操作即可覆盖任意数量的用户。',
+        grantedQueryNotice: '已授予 {n} 位用户权限 — 在每位用户下次登录时生效。',
+        col: {
+          user: '用户',
+          group: '组'
+        },
+        viaRole: '直接角色',
+        noHolders: '尚未授予任何用户或组。',
+        groupPlaceholder: '选择组…',
+        groupSearch: '搜索组',
+        groupNoResults: '没有匹配的组',
+        grantGroup: '授予组',
+        groupHint: '组的每个成员在下次登录时获得访问权限 — 一次操作适用于任意数量的用户。',
+        grantedSomeNotice: '已授予 {n} 个 — 未找到：{m}',
+        grantedGroupNotice: '已授予组 — 每个成员在下次登录时获得访问权限。'
+      },
+      autocorrect: {
+        blankBefore: '（空白）',
+        blankBadge: '无 frontmatter — 完整补全提案',
+        applyField: '应用',
+        apply: '应用修复',
+        body: '计划针对所有概念实施 frontmatter 修复。正文内容绝不会被改动。',
+        button: '自动更正',
+        clean: '无需修复 — 所有 frontmatter 均已符合规范。',
+        col: {
+          field: '字段',
+          after: '之后',
+          before: '之前',
+          concept: '概念'
+        },
+        failed: '扫描失败。',
+        scanning: '扫描中…',
+        title: '自动更正（仅限 frontmatter）'
+      },
+      concepts: {
+        originTip: '该概念的策展途径',
+        add: '添加概念',
+        addLabel: '设置标签',
+        delete: '删除文件',
+        empty: '暂无文件 — 请添加新概念或从源文件重新切分。',
+        filter: '筛选文件',
+        failedCard: {
+          title: '摄取失败',
+          problem: '问题',
+          noError: '被标记为失败，但没有记录原因。',
+          fixLabel: '如何修复',
+          attempts: 'Attempts: {n}',
+          when: 'Last attempt {when}',
+          fix: {
+            reaper:
+              '摄取工作进程在宽限期内停止等待（排空已饱和）——内容完好无损。修复方法：对此文件稍作修改并保存即可重新入队；或撤回整个仓库并重新摄取。',
+            dataprep:
+              '内容准备服务未能处理此次摄取。修复方法：编辑并保存以重新入队；若反复失败，请检查 dataprep 服务的健康状态。',
+            generic: '索引失败。修复方法：编辑内容并保存以重新入队，或撤回整个仓库并重新摄取。'
+          }
+        },
+        indexBadge: '索引',
+        label: '概念',
+        loading: '加载中…',
+        resplit: '重新拆分',
+        flagged: '已标记',
+        flaggedTip:
+          '包含标记实体的概念 — 逐一打开并删除或修改该实体后保存（将自动重新扫描）；或在 publish 时予以确认。',
+        piiBadge: 'PII',
+        piiTip: '标记的实体：{k}。打开、删除或修改它们并保存 — 系统将自动重新扫描。',
+        piiTipBare: '标记的实体 — 打开、核对并保存以重新扫描。',
+        sourceLabel: '来源文档',
+        sourceView: '打开来源文档',
+        bulkAccept: '全部接受',
+        bulkRedact: '全部隐去',
+        bulkRemove: '全部移除',
+        loadProgress: '正在加载文件 {done}/{total}',
+        addSource: '+ From documents',
+        reingest: '重新摄取此概念',
+        reingestBusy: '该存储库已有 RAG 摄取任务正在运行——请等待其完成后再重试。',
+        reingestFailed: '重新摄取失败——请重试。'
+      },
+      delete: {
+        body: '此操作将永久移除该文件及其已索引分块和图谱链接。',
+        confirm: '删除',
+        title: '删除文件'
+      },
+      label: '知识库编辑器',
+      loadFailed: '未能加载此概念。',
+      loadingConcept: '正在加载概念…',
+      meta: {
+        label: '概念元数据',
+        labelLabel: '标签（知识层级）',
+        noLabel: '无标签',
+        none: '未选择任何概念',
+        saveFailed: '元数据保存失败',
+        saved: '元数据已保存',
+        status: '索引状态',
+        title: '标题',
+        trust: '信任层级',
+        type: '类型',
+        typePlaceholder: '选择类型…',
+        hide: 'Hide metadata',
+        show: 'Show metadata'
+      },
+      pane: {
+        files: '文件',
+        graph: '图表'
+      },
+      pickConcept: '从列表中选择一个概念以开始编辑。',
+      resplit: {
+        body: '此操作将删除当前所有概念及派生的图谱，随后按新的切分方式重新导入源文件。针对概念的手动修改将会丢失。',
+        confirm: '重新拆分',
+        failed: '重新切分失败 — 请检查源文件链接。',
+        modeA: '整个抓取内容合并为一个概念',
+        modeAHint: '巨型概念 — 全部内容收纳于单一概念中',
+        modeB: '单页对应单一概念',
+        modeBHint: '依据抓取器的 `## Source:` 标记进行切分（推荐）',
+        modeC: '使用 LLM 进行主题提取',
+        modeCHint: '用户故事 10.6 — 即将推出',
+        title: '从源文件重新切分'
+      },
+      save: '保存',
+      saved: '已保存',
+      saving: '保存中…',
+      unsaved: '未保存的更改',
+      view: {
+        rendered: '已渲染',
+        source: '源码'
+      },
+      viewToggle: '编辑器视图',
+      paneLabel: '视图窗格',
+      saveFailed: '保存失败 — 请重试',
+      piiRescan: {
+        label: '个人数据',
+        button: '重新扫描所有页面',
+        working: '正在重新扫描所有页面…',
+        progress: '正在重新扫描…第 {done} 页，共 {total} 页',
+        progressIdle: '正在重新扫描…正在读取存储库',
+        done: '已重新扫描 {n} 个页面。',
+        partial: '已重新扫描 {n} 个页面。仍有 {e} 个失败——它们的扫描结论没有变化，因此这些页面仍会阻止发布。',
+        noKey: '服务器接受了重新扫描，但未返回运行 ID，因此无法跟踪进度。没有任何结果被报告。',
+        missing: '此服务器不支持重新扫描（404）。没有任何更改——扫描失败的页面仍在阻止发布。',
+        frozen: '重新扫描被拒绝：存储库正在发布（409）。没有任何更改。',
+        failed: '重新扫描失败。没有任何更改——扫描失败的页面仍在阻止发布。',
+        scanned: '已重新扫描 {n} 个页面',
+        clean: '无发现',
+        hit: '已标记',
+        error: '扫描错误',
+        vanished: '已消失',
+        stillBlocking: '仍在阻止'
+      },
+      piiBulk: {
+        done_accept:
+          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
+        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
+        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
+        title: {
+          redact: '遮盖所有标记内容',
+          remove: '移除所有标记内容',
+          accept: '接受所有标记实体'
+        },
+        body: {
+          redact: '每个被标记概念的正文都将被替换为遮盖提示。此操作无法撤销。',
+          remove: '每个被标记概念的正文都将被清空。此操作无法撤销。',
+          accept: '所有被标记实体均被设为“已核对并保留” — 除非重新扫描，否则它们将不再被标记。'
+        },
+        scope: '受影响的概念数：{n}。',
+        confirm: '应用',
+        failed: '批量 PII 操作失败 — 请重试。'
+      },
+      actions: {
+        bulkPii: '正在应用批量 PII 处理',
+        deleting: '删除中'
+      },
+      addSources: {
+        working: 'Converting sources…',
+        done: '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).',
+        failed: 'A conversion failed — check the logs; the rest may still have queued.',
+        landed: 'Conversions complete — {t} topics now in the tree.'
+      }
+    },
+    dashboard: {
+      bulk: {
+        body: '每个知识库都会经过完整的关卡检查（PII 审查、索引编制、规范符合性）后执行 publish。按知识库分类的结果：',
+        pending: '确认对所选知识库执行 publish。',
+        publishConfirm: '发布 {n} 个',
+        title: '发布所选知识库'
+      },
+      card: {
+        actions: '{name} 的操作',
+        building: '构建中…',
+        buildingAria: '正在构建 — 源文件仍在处理中',
+        delete: '删除',
+        export: '导出',
+        ingesting: '摄取中…',
+        logs: '日志',
+        rename: '重命名',
+        versions: '版本',
+        testingLab: 'Testing Lab'
+      },
+      delete: {
+        body: '此操作将永久移除该知识库、其概念、已索引内容、图谱及资产包构件。此操作无法撤销。',
+        confirm: '删除',
+        title: '删除知识库'
+      },
+      filter: {
+        domain: '按主题领域过滤',
+        allDomains: '所有学科领域'
+      },
+      new: '+ 新建知识库',
+      pii: {
+        ack: '确认标记的实体并发布',
+        note: '标记的实体属于已发布内容的一部分。如果您已完成核对（例如：官方公开联络方式），请确认并继续。'
+      },
+      publish: {
+        body: '执行 publish 将生成版本 v{n}，并将资产包“{file}”存储在文档库中，取代此前的 zip。在对其执行 Ingest 之前，新版本暂不处于 serving 状态。',
+        confirm: '发布',
+        title: '发布'
+      },
+      search: '搜索...',
+      select: '选择 {name} 进行批量发布',
+      stage: {
+        drainFailed: 'Ingest 失败',
+        queueBehind: '{n} 个排队中 · 正在从 {m} 个仓库摄取',
+        redraining: '重新排出…',
+        building: '构建中…',
+        draft: '草稿',
+        inReview: '审核中',
+        ingested: '已完成 ingest v{n}',
+        published: '已 publish v{n}',
+        retracted: '已撤回',
+        stepOf: 'Step {n} of 10'
+      },
+      title: '存储库',
+      topics: '主题',
+      unpublish: {
+        title: '取消发布',
+        body: '这将立即停止向 RAG 智能体提供 {name}。已发布的 bundle zip 压缩包和版本历史会保留；仓库回到“审核中”状态以便更正。再次发布并摄取即可重新提供服务。',
+        confirm: '取消发布'
+      },
+      lane: {
+        draft: '导入',
+        in_review: '审核中',
+        published: '已发布',
+        ingested: '已摄取',
+        retracted: '已撤回'
+      },
+      laneEmpty: {
+        draft: '暂未导入任何内容',
+        in_review: '没有正在审核的内容',
+        published: '暂未发布任何存储库',
+        ingested: '暂未摄取任何内容',
+        retracted: '未撤回任何内容'
+      },
+      reingest: {
+        failed: '重新摄取失败 ({n})',
+        title: '重新摄取失败的概念',
+        confirm: '重新摄取',
+        counting: '正在检查有多少个概念失败…',
+        countFailed: '无法读取失败概念的数量。请重试。',
+        none: '{name} 没有失败的概念——所有概念都已成功建立索引。',
+        body: '{name} 中有 {n} 个概念建立索引失败，因此未包含在 RAG 中。重新摄取只会重试这些概念；已建立索引的概念不会受影响。如果再次失败，错误将显示在该概念上。'
+      }
+    },
+    build: {
+      drainFailed: {
+        more: '+ 另有 {n} 项',
+        fixPath: '重新执行 ingest 以重试：retract → 创建版本 → ingest。'
+      },
+      curation: {
+        fallbacks: '次 LLM 回退',
+        curated: '已策划',
+        typed: '已分类',
+        labeled: '已标记',
+        described: '已描述'
+      },
+      batches: '已存储批次',
+      bytes: '源读取',
+      conceptsIndexed: '个概念已建立索引',
+      elapsed: {
+        hr: '启动于 {n} 小时前',
+        lt1: '启动于不到 1 分钟前',
+        min: '启动于 {n} 分钟前'
+      },
+      hint: {
+        import: '知识库保持在 Import 状态，直至文件转换完成。',
+        rag: 'RAG 索引正在构建中 — 一旦所有概念完成索引编制，该版本即进入 serving 状态。',
+        serving: '此版本正在 serving RAG 流量 — 执行 retract 即可进行修改。',
+        review: '处于 review 状态 — 经审核员核准后，管护者将执行 publish 和 ingest。',
+        retracted: '已停止服务 — 依次执行 submit → review → approve → publish → ingest 以恢复 serving。',
+        idle: '导入完成 — 执行 submit 以提交 review 并继续工作流。'
+      },
+      pages: '个已处理页面',
+      serving: {
+        graph: 'Serving 图谱',
+        version: 'Serving 版本'
+      },
+      stage: {
+        indexing: '索引中',
+        serving: '服务中',
+        label: '阶段'
+      },
+      title: {
+        import: '导入进度',
+        rag: 'Ingest 进度',
+        serving: 'Serving 状态',
+        review: 'Review 状态',
+        retracted: 'Retract 状态',
+        idle: '知识库状态'
+      },
+      lifecycle: {
+        importing: '导入中',
+        reviewing: '审核中',
+        ingesting: '摄取中',
+        serving: '服务中',
+        retracted: '已撤回'
+      },
+      row: {
+        subject: '学科领域',
+        topics: '主题',
+        lastVersion: '最新版本'
+      }
+    },
+    create: {
+      zipOnly: '请选择 .zip 资产包文件。',
+      stagedFile: '已暂存：{name}',
+      staged: '资产包已暂存 — 单击“创建知识库”开始导入。',
+      openExisting: '打开已有知识库',
+      name: '知识库名称',
+      importing: '正在导入资产包…',
+      importHint: '或将现有的 zip 资产包导入为新知识库。',
+      importDefaultName: '导入的知识库',
+      failed: '知识库创建失败',
+      duplicateInline: '同名知识库已存在。请将其打开，或另选一个名称。',
+      duplicate: '同名知识库已存在 — 请从仪表盘中打开它，或另选一个名称。',
+      domain: '学科领域',
+      create: '创建知识库',
+      title: '新建 OKF 知识库',
+      hint: '创建一个带有 index.md 的空知识库，您可在 Studio 编辑器中对其进行编辑。',
+      domainPlaceholder: '选择主题领域…',
+      domainRequired: '请先选择主题领域 — 创建后将无法更改。',
+      classLabel: '概念分类',
+      classHeuristics: '启发式规则（默认）',
+      classLlm: 'LLM 辅助',
+      classHybrid: '混合'
+    },
+    fm: {
+      errKeyCurated: '系统保留字段名。',
+      errKeyDuplicate: '字段名重复出现。',
+      errJson: '无效的 JSON',
+      errNumber: '必须为数字',
+      kind: {
+        json: 'JSON',
+        array: '列表',
+        boolean: '真/假',
+        number: '数字',
+        string: '文本'
+      },
+      removeKey: '移除字段',
+      kindLabel: '值类型',
+      keyPh: '字段名称',
+      fullHint: '所有 frontmatter 字段均支持编辑。可自由增删键值。',
+      errRemovalPending: '移除字段需要服务端合并删除协议支持（即将上线）。',
+      errKeyRequired: '每个字段都必须有名称。',
+      arrayPh: '逗号分隔的数值',
+      addKey: '添加字段',
+      saved: 'Frontmatter 已保存',
+      label: 'frontmatter',
+      tipLabel: '什么是 Frontmatter？',
+      edit: '编辑',
+      empty: '暂无 frontmatter — 编辑可补齐类型、标题和标签。',
+      type: '类型',
+      noType: '无类型',
+      titleLabel: '标题',
+      labelsLabel: '标签（知识层级）',
+      noLabel: '无标签',
+      descriptionLabel: '描述',
+      save: '保存 frontmatter',
+      saveFailed: 'Frontmatter 保存失败',
+      perRepoTitle: 'Routing tags — what this repo is about',
+      perRepoHint:
+        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+      perRepoField: {
+        topic: 'Topic',
+        entity: 'Entity',
+        scope: 'Scope',
+        forbidden: 'Forbidden',
+        summary: 'Summary',
+        keyword: 'Keyword'
+      },
+      perRepoPh: {
+        topic: 'One topic per line',
+        entity: 'One entity per line',
+        forbidden: 'One forbidden topic per line',
+        keyword: 'One keyword per line'
+      },
+      perRepoHelp: {
+        topic: 'Add, modify or remove topics — one per line. Empty lines are ignored.',
+        entity: 'Add, modify or remove entities — one per line. Empty lines are ignored.',
+        forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
+        keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
+      },
+      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      repoTagsHint: '仓库级标签（{summary}）属于仓库而非此概念——请在右侧栏的标签面板中管理。'
+    },
+    piiReview: {
+      title: '个人数据检查',
+      checking: '检查中…',
+      checkingBody: '正在读取每个页面的个人数据状态…',
+      unreadableTitle: '状态未知',
+      unreadableBody: '无法读取此存储库的个人数据状态。是否发现了任何内容属未知——这不是干净的结果。',
+      unscanned: '未扫描',
+      unscannedBody:
+        '没有完整的个人数据扫描覆盖此存储库（有 {n} 个页面从未扫描）。没有任何内容被确认不含个人数据——发布不是被命中阻止的，但此结论背后没有扫描。',
+      errorTitle: '扫描失败',
+      errorBody:
+        '{n} 个页面无法扫描。它们的文本未被成功读取，因此是否包含个人数据属未知——它们并不干净，并且会阻止发布。',
+      unreviewed: '已标记，未复核',
+      unreviewedBody:
+        '扫描器在 {n} 个页面发现了可能的个人数据，且无人查看。发布仍被允许，但这些页面上没有任何内容经过复核。',
+      reviewed: '已标记，已复核',
+      reviewedBody: '{n} 个页面带有已标记的个人数据，已由策展人确认（{by}，{at}）。',
+      cleanVerdict: '已扫描——未发现',
+      cleanBody: '每个页面都已扫描，未发现个人数据。',
+      staleAck: '先前的确认记录于 {at} 标记了 {a} 个页面；现在有 {n} 个被标记，因此它并不涵盖它们。',
+      bannerTitle: '没有人复核过这些命中。',
+      bannerBody:
+        '发布仍然被允许，也没有任何关卡会阻止你——但被标记的页面将原样进入已发布的存储库。请逐个打开并在发布前做出决定。',
+      unknownActor: '未知'
+    },
+    glossary: {
+      addConcept:
+        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
+      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+      title:
+        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+      indexStatus:
+        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+      trustTier:
+        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+      concept:
+        '知识库中的一个条目 — 通常为单页或单一主题。每个概念都具备供助手读取的结构化 frontmatter，以及用于生成答案的 markdown 正文。',
+      repository:
+        '围绕某一主题领域精心策展的一组概念集合。它最终打包为 OKF 资产包，供您 publish、管理版本并提供给助手调用。',
+      subjectArea: '该知识归属于何处？主题领域用于组织您的知识库并约束可选标签范围。创建后无法更改。',
+      selectSubjectArea: '选择主题领域…',
+      subjectAreaMissing: '此知识库的主题领域不存在于知识层级中 — 现显示全部标签。',
+      label: '来自知识层级的一个分类，用于指示助手该概念的实体性质。标签是检索答案对应正确内容的纽带。',
+      bundle: '知识库的 zip 导出文件 — 将其概念、结构与元数据封装为一个文件。资产包是知识库在系统间流转的载体。',
+      version: '知识库在执行 publish 时刻的静态冻结快照。编辑操作将在后续版本上继续 — 已发布版本永不变更。',
+      serving: '此版本处于在线生效状态：助手在应答时将调阅其内容。执行 retract 即可对其进行修改。',
+      ingestion: '为已发布的版本建立应答准备的步骤 — 文本将被分块、向量化与关联。在此之前，任何内容均不会触达助手。',
+      classification:
+        '判定每个概念“究竟是什么”（主题、实体、流程…）的逻辑。启发式规则会自动解析页面；LLM 选项耗时稍长，但能处理结构复杂的页面。',
+      resplit:
+        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+      saveFailed: '保存失败',
+      importFailedTitle: '导入失败 — 源文件未能完成转换。',
+      importFailedHint: '请删除此知识库并重新导入源文件。',
+      frontmatter: '位于每个文件顶部的结构化元数据 — 包含类型、标题与标签。助手依此明确每个概念的主旨内容。',
+      pickSource:
+        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+      classificationStrategy:
+        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
+      clsHeur: 'Heuristics (fast, no LLM)',
+      clsLlm: 'LLM classification',
+      clsHybrid: 'Hybrid',
+      fsPick:
+        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+      autocorrect:
+        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+      handoff:
+        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+      lifecycle:
+        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+      labelsAuto:
+        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+      reviewHandoff:
+        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+      piiReview:
+        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+    },
+    md: {
+      toolbar: '格式化',
+      bold: '粗体',
+      italic: '斜体',
+      h1: '标题 1',
+      h2: '标题 2',
+      h3: '标题 3',
+      bullet: '项目符号列表',
+      numbered: '编号列表',
+      link: '插入链接',
+      code: '内联代码',
+      table: '插入表格',
+      split: '拆分',
+      rendering: '渲染中…'
+    },
+    narrative: {
+      intro:
+        'OKF 知识库是一个结构化、版本化的主题集合，供您的对话回答作为引用出处。可将其视为针对您业务领域的轻量本体层 — 标签定义分类，主题定义实体，来源明确出处。',
+      step0:
+        'OKF 知识库是一个经策展、带版本的结构化主题集合。可将其视为您业务领域的轻量本体层 — 标签确立分类，主题确立实体，来源追溯出处。一旦发布，下游的对话回答即可按 ID 引用这些主题。',
+      step1:
+        '启动 OKF 知识库的三种方式：从网站抓取中提取主题、从已上传文档中提炼主题，或从空白画布开始起步。克隆现有知识库将复制其主题，方便您在此基础上派生开展新工作。',
+      step2:
+        '每份文档都将成为主题的来源。生产模块会解析它们、提取候选主题并提议层级结构。您将在下一步逐一复核每个主题 — 在您审核批准前不会确认任何内容。',
+      step3:
+        '我们正在读取您的来源并提议主题。主题将归聚在您挑选的分类标签之下。生产模块秉持审慎原则 — 宁可推荐少量规整的主题，也不引入大量杂乱内容。',
+      step4:
+        '标签是您本体架构的分类维度 — 该主题属于何种实体性质？ 标签自动从知识层级分配，并限定在本仓库的主题领域内。',
+      step5:
+        '这是工作的核心所在。每个主题都是一个细粒度、可被引用的知识单元。主题拥有标题、描述并获得来自知识层级的标签。您的职责是确保其严谨可靠：更正含糊的标题、合并近似重复项、剔除缺乏来源佐证的内容。',
+      step6:
+        '我们运行合规性检查：每个主题都有标题吗？标签有效吗？来源归属完整吗？阻塞性问题必须在移交知识库之前修复；警告可以确认。',
+      step7:
+        '部分警告支持自动修复：状态值可自动对齐至有效枚举，缺失字段可由合理的默认值补齐。应用您认同的修复项，随后返回策展视图进行核对。',
+      step8:
+        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+      step9:
+        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+      docMgmtEntry:
+        '基于所选文档创建新的 OKF 知识库。文档将作为来源；在正式发布任何内容前，您将核对并命名由其生成的主题。',
+      crawlSegment: 'OKF 知识库是一个结构化、版本化的主题集合，可供对话回答作为引用出处。',
+      emptyDashboard:
+        '您尚未创建任何 OKF 知识库。OKF 知识库是一个结构化、可引用的主题集合，供您的对话回答从中提取支撑依据。',
+      labels: '标签是您本体架构的分类维度 — 旨在解答“该主题属于何种实体性质？”。',
+      hide: '隐藏',
+      whatIsThis: '这是什么？'
+    },
+    common: {
+      close: '关闭',
+      cancel: '取消',
+      save: '保存',
+      clear: '清除',
+      delete: '删除'
+    },
+    studio: {
+      title: 'OKF Studio',
+      help: '帮助',
+      helpTitle: '关于 OKF Studio',
+      helpBody:
+        'OKF 知识库是一个轻量本体层 — 标签定义分类，主题定义实体，来源追溯出处。一旦发布，对话回答将按 ID 引用各主题并呈现其数据源溯源信息。',
+      view: {
+        dashboard: '仪表盘',
+        wizard: '向导'
+      },
+      clonedFrom: '克隆自 {name} · 版本 {version}',
+      context: {
+        title: '知识库',
+        untitled: '未命名知识库',
+        trust: '置信等级',
+        sources: '来源',
+        concepts: '当前概念数',
+        stale: '已陈旧'
+      },
+      status: {
+        draft: '进行中',
+        inReview: '审核中',
+        published: '已发布'
+      },
+      stage: {
+        inReview: '处于 review 状态',
+        stepOf: '第 {n} 步，共 10 步',
+        draft: '草稿'
+      },
+      dashboard: {
+        title: '知识库列表',
+        new: '+ 新建知识库',
+        search: '搜索…',
+        empty: '此处暂无知识库。',
+        topics: '个主题',
+        select: '选择 {name} 进行批量发布',
+        stale: '已陈旧',
+        stage: {
+          inReview: '处于 review 状态',
+          stepOf: '第 {n} 步，共 10 步',
+          draft: '草稿'
+        },
+        bulk: {
+          selected: '已选择 {n} 项',
+          publish: '发布所选项',
+          title: '发布所选知识库',
+          body: '一旦发布，下游的对话回答便可调用。下方列出了每个知识库的最终产出情况。',
+          results: '结果',
+          publishConfirm: '发布 {n} 项',
+          col: {
+            name: '名称',
+            status: '状态',
+            topics: '主题'
+          },
+          status: {
+            ready: '就绪'
+          }
+        }
+      },
+      draft: {
+        notReady: '草稿暂不支持服务端保存；现已保存在本地。'
+      },
+      mode: {
+        basic: '基础',
+        expert: '专家'
+      }
+    },
+    wizard: {
+      working: 'Working…',
+      state: {
+        draft: 'In progress',
+        register: 'In progress',
+        review: 'In review',
+        approve: 'Approved',
+        retracted: 'Retracted',
+        publish: 'Ready to ingest'
+      },
+      status: {
+        published: '已发布',
+        inReview: '审核中',
+        draft: '进行中'
+      },
+      exit: '返回仪表盘',
+      context: {
+        version: 'Version',
+        untitled: '未命名知识库',
+        trust: '信任',
+        title: '存储库',
+        stale: '过时',
+        sources: '来源',
+        concepts: '当前概念数'
+      },
+      label: 'OKF Studio 向导',
+      back: '返回',
+      continue: '继续',
+      finish: 'Open the Editor'
+    },
+    steps: {
+      entry: {
+        createdHint: 'Repository created — rename it later from the editor.',
+        title: '知识库名称与主题领域',
+        hint: '为此 OKF 知识库指定明确的名称，并选定其所属的主题领域。',
+        nameLabel: '知识库名称',
+        namePh: '例如：荷兰交通运输许可证',
+        domainLabel: '主题领域'
+      },
+      choose: {
+        title: '此 OKF 知识库应从何处起步？',
+        hint: '请选择初始化此知识库的方式。稍后您仍可进行调整。',
+        source: {
+          documents: {
+            title: '文档',
+            desc: '从您已上传的文档中提取主题。'
+          },
+          crawl: {
+            title: '网站抓取',
+            desc: '抓取网站并基于网页提炼主题。'
+          },
+          manual: {
+            title: '空白画布',
+            desc: '从零开始，亲手编写主题。'
+          },
+          clone: {
+            title: '克隆已有知识库',
+            desc: '从另一个 OKF 知识库中复刻主题与架构。'
+          }
+        },
+        cloneSource: 'Source repository (not yet serving)',
+        clonePh: 'Select the repository to clone from',
+        cloning: 'Cloning topics into this repository…',
+        cloneNeed: 'Pick the repository to clone from first.',
+        cloneBusy: 'The previous repository is still being removed — go Back and Continue again in a moment.',
+        cloneFailed: 'The clone failed — try again.'
+      },
+      input: {
+        title: '输入项',
+        documents: '挑选作为主题列表来源的文档。',
+        crawl: '选择待抓取的网站。',
+        manual: '您可以在下一步中直接编写主题。',
+        clone: '选择要克隆的已有知识库。',
+        placeholder: '此步骤 UI 将在后续故事中接入。',
+        chooseCrawl: 'Choose crawled documents',
+        chooseDocs: 'Choose source documents',
+        writeOne: '+ Write a concept',
+        fsPick: '+ Import markdown from this computer',
+        fsBusy: 'Importing your files…',
+        fsFailed: 'Import failed — check the files and retry.',
+        skippedEmpty: '{n} empty file(s) skipped.',
+        noneSelected: 'No sources selected yet.',
+        selectedN: 'Selected: {n}',
+        moreN: ' +{n} more',
+        noRepo: 'Create the repository first (go back to Entry).',
+        noRepoYet: 'Create the repository first (go back to Entry).',
+        benchTitle: 'Topics in this repository',
+        benchCount: '{n}',
+        benchLoading: 'Reading topics…',
+        benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
+        benchFailed: 'Could not read the topics right now.',
+        editTitle: 'Edit concept',
+        deleteFailed: 'Could not delete the concept.',
+        added: '{n} topic(s) in this repository so far.',
+        deleteTitle: 'Delete topic',
+        deleteBody: 'This permanently removes the topic from this repository.',
+        labelFailed: 'Could not set the label.',
+        cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
+      },
+      produce: {
+        title: '生成主题',
+        hint: '我们正在读取您的来源并提炼主题建议。',
+        progress: '生产模块运行中...',
+        placeholder: '生成服务将在后续故事中接入。',
+        retry: 'Retry conversion',
+        restart: 'Run again',
+        running: 'Converting… you can watch progress here; nothing is committed until you review in Curate.',
+        failed: 'The conversion failed — retry, or go back and pick different inputs.',
+        done: '{n} topic(s) are ready — continue to review them in Curate.',
+        noSources: 'No sources selected — go back to Input.',
+        neverStarted: 'The conversion did not start — retry.',
+        manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
+        labelDone: 'Conversion complete',
+        dupContent:
+          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
+        inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        stage: {
+          files: 'Files',
+          filesCount: '{done} of {total} documents',
+          concepts: 'Concepts',
+          conceptsCount: '{done} of {total} topics',
+          conceptsSoFar: '{n} topics so far',
+          curating: 'Curating',
+          curatingCount: '{done} of {total} concepts labelled',
+          crosslink: 'Cross-linking topics',
+          linkCount: '{done} of {total} batches · {w} links written',
+          complete: 'Complete',
+          unavailable: 'Count unavailable',
+          waiting: 'Waiting'
+        },
+        filesNote: '{done} of {total} documents converted',
+        pagesNote: '{done} of {total} pages converted',
+        pagesSoFar: '{n} pages converted so far',
+        sourceStat: '+{n} new (total {t})',
+        sourceStatMerged: '+{n} new · {m} merged by slug (total {t})',
+        docsLeg: '{n} selected document(s)',
+        legWait: 'Waiting for the previous conversion to release…'
+      },
+      label: {
+        title: '标签 — 自动生成',
+        hint: '标签自动从知识层级分配——并限定在本仓库的主题领域内。',
+        loading: 'Reading labels…',
+        preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
+        unlabeled: 'no labels yet',
+        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
+        loadFailed: 'Could not read the labels right now.'
+      },
+      curate: {
+        embedHint:
+          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
+        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
+        title: '审核主题',
+        hint: '每个主题都是一个细粒度、可引用的知识单元。支持编辑标题与描述。',
+        placeholder: '策展树与编辑器将在故事 3-8 中交付。'
+      },
+      validate: {
+        title: '检查问题',
+        hint: '我们运行合规性检查。在移交知识库之前，必须修复阻塞性问题。',
+        placeholder: '校验面板将在故事 3-8 中交付。'
+      },
+      autocorrect: {
+        title: '自动修复',
+        hint: '部分警告支持自动修复。应用您认可的修复项，然后返回策展视图核对。',
+        placeholder: '自动更正服务将在故事 10.2 中落地。',
+        noRepo: 'No repository yet — go back to Entry and create one first.',
+        applied: 'Fixes applied — continue, or go back to Curate to review the result.'
+      },
+      review: {
+        title: '核对',
+        hint: '您所构建内容的摘要 — 提交、批准和发布都在仪表板和编辑器中进行。',
+        repo: '知识库',
+        topics: '主题',
+        labels: '标签',
+        sources: '来源',
+        state: 'Lifecycle state',
+        labelsSet: 'set per topic in Curate',
+        browserHint:
+          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
+        noRepo: 'No repository yet — the file review appears here once a repository exists.',
+        ritualOutside:
+          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+        versions: 'Versions',
+        logs: 'Action log',
+        rename: 'Rename',
+        noVersions: 'No versions yet — versions are minted during the approval ritual.',
+        versionSummary: '{n} version(s) · latest v{latest}'
+      },
+      publish: {
+        title: '安全设置并完成',
+        hint: '此知识库已准备就绪，可供审查。这里从不进行发布 — 请在仪表板上提交审批；批准和发布在仪表板或编辑器中进行。',
+        nameOk: '知识库名称已设定',
+        labelsOk: '标签已选定',
+        topicsOk: '主题已审核',
+        topicsPending: 'No topics yet',
+        topicsServing: 'Topics serving',
+        noTopics: 'No topics yet — go back to Curate to produce or write them.',
+        frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
+        ritual:
+          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+        openDashboard: 'Open the Dashboard'
+      }
+    },
+    trust: {
+      tier: {
+        unverified: '未验证',
+        'machine-confirmed': '机器确认',
+        'human-reviewed': '人工审核'
+      }
+    },
+    repos: {
+      retract: {
+        notReady: 'Retract 操作界面将在故事 3.9 中交付。'
+      },
+      manifest: {
+        notReady: '资产包清单服务将在后续故事中接入。'
+      }
+    },
+    docs: {
+      createRepo: '创建 OKF 知识库',
+      gate: {
+        emptySelection: '请至少选择一份文档',
+        alreadyInOkf: '移除已存在于 OKF 知识库中的文档',
+        alreadyIngested: '移除已完成 ingest 的文档',
+        servingWarn: '{n} 个所选文档仍在服务自由语料库——在撤回它们之前，新仓库无法被摄取。'
+      },
+      produce: {
+        notReady: '生产模块将在后续故事中接入。'
+      }
+    },
+    crawl: {
+      domainLabel: '学科领域',
+      domainPlaceholder: '选择主题领域…',
+      classLabel: '概念分类',
+      classHeuristics: '启发式规则（默认）',
+      classHeuristicsHint: '快速基于规则分类 — 无 LLM 成本，适用于结构规范的抓取内容。',
+      classLlm: 'LLM 辅助',
+      classLlmHint:
+        '由 LLM 策展每个概念 — 包含类型、知识层级标签与描述。相较启发式规则更加精准详尽；每个概念预计耗时更长。',
+      classHybrid: '混合',
+      classHybridHint: '启发式优先；LLM 介入复核存疑情形并填补空白。兼顾耗时与完整性。',
+      targetLabel: '目标保存位置',
+      target: {
+        freeform: '抓取至自由格式语料库',
+        okfRepo: 'OKF 知识库'
+      },
+      targetHint: '在保存任何内容之前，我们会先向您展示发现的主题。',
+      createOkfFromCrawl: '基于此抓取内容创建 OKF 知识库',
+      splitLabel: '概念切分方式',
+      splitA: '整个抓取内容合并为一个概念',
+      splitB: '单页对应单一概念（推荐）',
+      splitC: '使用 LLM 进行主题提取',
+      splitCHint: '用户故事 10.6 — 即将推出',
+      splitBHint: '抓取的每个页面都成为独立的概念 — 便于 AI 精准引用单页内容。',
+      splitAHint: '全部抓取内容将合并为一个庞大的单一概念 — 最适合小型站点。',
+      progressDownload: '正在下载抓取内容...',
+      progressSplit: '正在切分为概念...',
+      progressIngest: '正在添加概念（第 [i] 批，共 [n] 批）...',
+      postCrawlHint: '抓取完成后，您可以在该文件的“仪表盘”选项卡中将其转换为 OKF 知识库。',
+      creating: '正在创建 OKF 知识库...',
+      createOk: 'OKF 知识库已创建。正在打开 Studio 进行策展。',
+      createOkRenamed: 'OKF 知识库已创建为“[name]”。正在打开 Studio 进行策展。',
+      createFailed: '无法根据此抓取内容创建 OKF 知识库。',
+      conversionsTitle: '从此爬取创建的仓库',
+      convQueued: '排队中...',
+      convDownloading: '正在下载抓取内容...',
+      convSplitting: '正在切分为概念...',
+      convAdding: '正在添加概念（目前已处理 [p] 页）...',
+      convDone: '已创建（共 [p] 页）',
+      convFailed: '失败',
+      createStarted: '正在创建“[name]” — 请在下方跟踪进度。',
+      modelTier: {
+        label: '模型',
+        options: {
+          'local-small': '本地 · 小型',
+          'local-medium': '本地 · 中型',
+          'sovereign-large': '自主可控 · 大型'
+        }
+      },
+      gate: {
+        notSucceeded: '创建 OKF 知识库前抓取必须已完成。',
+        alreadyInOkf: '此抓取内容已存在于某个 OKF 知识库中。'
+      }
+    },
+    curator: {
+      placeholder: '从左侧选择一个主题以查看和编辑。',
+      search: '搜索主题',
+      noTopics: '暂无主题。',
+      labels: {
+        title: '调整标签',
+        body: '标签是您本体架构的分类维度 — 该主题属于何种实体性质？',
+        edit: '调整标签',
+        add: '添加',
+        addPh: '例如：许可审批',
+        remove: '移除',
+        empty: '暂无标签。',
+        notReady: '标签已保存在本地 — 服务端同步功能即将上线。'
+      },
+      frontmatter: {
+        label: 'frontmatter',
+        edit: '编辑 frontmatter',
+        dialogTitle: '编辑 frontmatter',
+        okfVersion: 'okf_version',
+        status: 'lifecycle.status',
+        staleAfter: 'lifecycle.stale_after',
+        trustTier: 'trust_tier',
+        attestation: 'attestation',
+        sources: 'provenance.sources',
+        onlyOnIndex: 'Per-repo tags live on the index concept only — open the index to see them.'
+      },
+      showSource: '显示来源',
+      issue: {
+        missingType: '概念缺失类型属性。',
+        badActor: '来源主体必须以 agent:/human:/tool:/process: 开头。'
+      },
+      saveBlocked: '保存已被阻止：请先修复规范符合性问题。'
+    },
+    validation: {
+      frozen: '内容已冻结于 {v} — 仅供只读预览。如需更改，请先对 serving 版本执行 retract。',
+      none: '无',
+      expertHint: '切换至专家模式可查看原始校验 JSON、按严重级别过滤并覆盖检查项。',
+      headline: {
+        blockers: '{n} 个阻塞性问题 — 请在移交知识库前修复',
+        warnings: '{n} 项内容需要您核对',
+        ok: '一切就绪。没有需要修复的问题。'
+      },
+      summary: '{clean} 项正常 · {warnings} 项需复核 · {blockers} 项阻断',
+      formatter: {
+        notReady: '格式化工具将在故事 4.2b 中落地。'
+      },
+      run: {
+        notReady: '校验逻辑将在后续故事中接入。'
+      },
+      piiTitle: 'Personal data — review each flagged concept',
+      loading: 'Checking the repository…',
+      loadFailed: 'Could not load the validation report.',
+      retry: 'Retry',
+      issuesTitle: 'Issues to review',
+      howToFix: 'How to fix',
+      indexFailed: 'Re-index failed — edit or re-split the page.',
+      indexFailedRemedy:
+        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+      severity: {
+        blocker: 'Blocking',
+        warning: 'Needs review',
+        info: 'Info'
+      },
+      type: {
+        conformance: 'Frontmatter',
+        orphan: 'Not linked',
+        near_duplicate: 'Near-duplicate',
+        citation: 'Citations',
+        index_failed: 'Index'
+      },
+      topicLinks: {
+        title: 'Cross-link topics',
+        tip: 'Reads every page in this repository and writes links between the pages that genuinely belong together — the same processing the import wizard runs. It is safe to re-run: existing links are kept and only new ones are added.',
+        progress: 'Cross-linking… {done} of {total} batches',
+        progressIdle: 'Cross-linking… reading the repository',
+        done: 'Added {n} link(s) across {c} page(s).',
+        failed: 'Cross-linking failed: {msg}'
+      },
+      action: {
+        suggestLinks: 'Suggest links',
+        accept: 'Accept',
+        dismiss: 'Dismiss',
+        delete: 'Delete',
+        working: 'Working…',
+        wireCreate: 'Create the Sources page and link {n} page(s)',
+        wireExisting: 'Link {n} page(s) to "{hub}"',
+        preview: 'Preview duplicates',
+        hidePreview: 'Hide preview'
+      },
+      actionDone: {
+        done: 'Done'
+      },
+      suggest: {
+        working: 'Asking the assistant for link suggestions…',
+        empty: 'No suggestions — link it manually in the editor.'
+      },
+      nearDup: {
+        keepHint: 'Keep one copy — delete the rest.'
+      },
+      wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      mergedPages: '{n} pages',
+      preview: {
+        loading: 'Loading page contents…',
+        truncated: 'First {n} characters — open the editor for the full page.'
+      },
+      tip: {
+        conformance:
+          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+        orphan:
+          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+        near_duplicate:
+          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+        citation:
+          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+        index_failed:
+          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+      },
+      piiRescan: 'Re-scan all pages',
+      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanPartial:
+        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+      piiRescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      piiRescanFailed:
+        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
+      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
+      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+      piiRescanNoKey:
+        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+      piiStateError: 'Scan error',
+      piiTally: {
+        scanned: '{n} page(s) re-scanned',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'scan error',
+        stillBlocking: 'Still blocking'
+      }
+    },
+    pii: {
+      panel: '标记的实体',
+      nFlagged: '找到 {n} 个',
+      rescan: '重新扫描',
+      stateError: 'Scan failed',
+      errorTitle: 'This page is blocking the hand-off.',
+      errorBody:
+        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+      rescanMissing:
+        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
+      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
+      scanning: '扫描中…',
+      clean: '没有标记的实体 — 此 concept 正常。',
+      how: '修复：移除或重新表述（例如将名字改为职位），然后保存 — 重新扫描会更新此列表。',
+      descFallback: '此处检测到个人数据（GDPR第4(1)条 — 涉及可识别的个人）。',
+      scanError: '扫描不可用',
+      type: {
+        PERSON: '人名',
+        LOCATION: '位置',
+        DATE_TIME: '日期或时间',
+        EMAIL_ADDRESS: '电子邮箱地址',
+        PHONE_NUMBER: '电话号码',
+        IP_ADDRESS: 'IP 地址',
+        NRP: '全国登记号',
+        BD_NATIONAL_ID: '国民身份证号'
+      },
+      desc: {
+        PERSON: '检测到人名。名字可以直接识别自然人。',
+        LOCATION: '检测到地名。与其他数据结合可能识别个人。',
+        DATE_TIME: '检测到日期或时间。日期可能有助于识别个人。',
+        EMAIL_ADDRESS: '检测到电子邮件地址。它能直接识别可联系的个人。',
+        PHONE_NUMBER: '检测到电话号码。它能直接识别可联系的个人。',
+        IP_ADDRESS: '检测到 IP 地址。它能识别设备或家庭。',
+        NRP: '检测到国家注册号码。它能强烈识别个人。',
+        BD_NATIONAL_ID: '检测到国民身份证号码。它能强烈识别个人。'
+      },
+      allClear: '正常',
+      redactFile: '遮盖整个文件',
+      confirmRedactFile: '确认：是否遮盖整个文件？',
+      locateTip: '在编辑器中定位此文本',
+      file: {
+        label: '整个文件：',
+        redact: '遮盖文件',
+        remove: '移除正文',
+        accept: '全部接受',
+        confirmRedact: '确认：是否遮盖整个文件？',
+        confirmRemove: '确认：是否清空整个正文？'
+      },
+      action: {
+        redact: '遮盖',
+        replace: '替换',
+        remove: '移除',
+        accept: '接受',
+        replacement: '替换文本',
+        apply: '应用',
+        cancel: '取消'
+      },
+      resolved: {
+        title: '在此文件中已处理',
+        redacted: '已遮盖',
+        replaced: '已替换',
+        removed: '已移除',
+        accepted: '已接受',
+        fileRedacted: '文件已遮盖',
+        kept: '保留在文本中',
+        removedWord: '已移除',
+        wholeFile: '整份文件正文已遮盖'
+      }
+    },
+    lifecycle: {
+      submit: '提交审核',
+      approve: '批准',
+      publish: '发布',
+      ingest: '摄取',
+      retract: '撤回',
+      unpublish: '取消发布'
+    },
+    src: {
+      title: 'Choose the source documents',
+      hint: 'Pick sources from the document repository, upload new ones from this computer, or both.',
+      repoSec: 'From the document repository',
+      searchPh: 'Search by name or site…',
+      chipsLabel: 'Filter by origin',
+      chipAll: 'All',
+      chipCrawl: 'Crawls',
+      chipUpload: 'Uploads',
+      noMatches: 'Nothing matches this search or filter.',
+      crawlBadge: 'crawl',
+      crawlTip: 'Crawled from: {url}',
+      total: '{n} document(s)',
+      titleSingle: 'Choose the crawled document',
+      loading: 'Loading documents…',
+      retry: 'Retry',
+      empty: 'No documents in the repository yet — upload some below.',
+      more: 'Load more',
+      fsSec: 'From this computer',
+      fsPick: '+ Upload files',
+      uploading: 'Uploading…',
+      uploaded: '{n} file(s) uploaded.',
+      uploadFailed: 'An upload failed — check the files and retry.',
+      fsNote: 'Uploaded files join the document repository and are selected here automatically.',
+      count: 'Selected: {n}',
+      needOne: 'Select at least one source.',
+      confirm: 'Use {n} source(s)',
+      cancel: 'Cancel',
+      loadFailed: 'Could not load the document list.',
+      servingBadge: 'serving free-form RAG',
+      servingTip:
+        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+      alreadyBadge: 'already in an OKF repo',
+      alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
+    },
+    frontmatter: {
+      title: 'Frontmatter tags — what this repo is about',
+      help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',
+      refresh: 'Refresh suggestions',
+      suggesting: 'Curating…',
+      suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestCoverage: '基于 {total} 个概念中的 {sampled} 个生成，覆盖 {labels} 个知识层级标签。',
+      suggestFailed: 'Suggest failed.',
+      suggestedTag: 'LLM suggestion — remove to dismiss.',
+      removeTag: 'Remove tag',
+      fieldEmpty: '—',
+      addPlaceholder: 'Add {field}',
+      add: 'Add',
+      saving: 'Saving…',
+      save: 'Save tags',
+      saved: 'Saved',
+      error: 'Save failed.',
+      errorWithStep: 'Save failed at step "{step}" ({code}) — retry.',
+      field: {
+        topic: 'Topic',
+        entity: 'Entity',
+        scope: 'Scope',
+        forbidden: 'Forbidden',
+        summary: 'Summary',
+        keyword: 'Keyword'
+      }
+    },
+    testingLab: {
+      title: 'Testing Lab',
+      cta: 'Testing Lab',
+      badge: {
+        present: 'head ready',
+        stale: 'head stale',
+        missing: 'no head'
+      },
+      tab: {
+        head: 'Head',
+        test: 'Test',
+        suites: 'Suites & analytics',
+        ragas: 'RAGAS 基准测试',
+        models: '模型'
+      },
+      head: {
+        dim: 'Dimensions',
+        model: 'Model',
+        version: 'Head version',
+        computedAt: 'Computed',
+        staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
+        missingNote:
+          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+        rebuild: 'Rebuild head',
+        rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
+        rebuildBusy: 'Rebuilding — embedding the tag fields…'
+      },
+      test: {
+        placeholder: 'e.g. cancer screening guidelines',
+        run: 'Run test',
+        running: 'Embedding the query and scoring the heads…',
+        adversarial: 'Adversarial — this query should NOT select this repository (a forbidden/adjacent topic)',
+        embeddedWith: 'Embedded with',
+        col: {
+          repo: 'Repository',
+          state: 'State',
+          headScore: 'Head score',
+          rank: 'Rank',
+          claimed: 'Claims query'
+        },
+        provenance: 'Routing provenance',
+        empty:
+          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
+        pass: 'PASS — this repository wins the head routing.',
+        fail: 'FAIL — {repo} wins the head routing for this query.',
+        passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
+        failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
+        passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
+        notSelectedSuppressed:
+          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+        claimed: 'claims',
+        suppressed: 'suppressed'
+      },
+      gate: {
+        title: '门控',
+        floor: '下限',
+        veto: '禁用标签',
+        margin: '余量',
+        claim: '认领',
+        pass: '通过',
+        fail: '未通过',
+        na: '不适用'
+      },
+      counts: {
+        positive: '正向',
+        negative: '易混淆',
+        negativeRandom: '跨域',
+        meta: '元查询',
+        nearMiss: '近似擦边',
+        hint: '禁用标签衍生的行数随仓库禁用标签的数量增减——无法在此设置。'
+      },
+      cls: {
+        nearMiss: '近似擦边',
+        confusable: '易混淆',
+        forbidden: '禁用',
+        offDomain: '跨域',
+        meta: '元查询'
+      },
+      teach: {
+        claim:
+          'Head 认领了这条查询——它通过了全部三道闸。如果它不应路由到这里，请让系统建议能排除其主题的禁用标签，添加后重建 head。',
+        explain: '解释并建议',
+        explainBusy: '解释中——模型正在建议禁用标签…',
+        addTag: '添加到禁用标签',
+        suggestNone: '没有建议任何禁用标签——请人工将查询与声明的范围进行比对。',
+        added: '已添加到禁用标签——请重建 head 以使其生效。',
+        rebuildRerun: '重建 head 并重跑',
+        savingTag: '正在保存禁用标签…',
+        rebuildBusy: '正在重建 head 并重跑…',
+        title: '这意味着什么',
+        veto: '该查询与禁用标签“{tag}”高度匹配。如果它应当属于此仓库，请在 Frontmatter 的禁用标签中移除“{tag}”，然后重新发布以重建 head。',
+        floor: '该查询与此仓库的主题无关（分数低于领域下限）——更改标签无法解决此问题；这是正确的抑制。',
+        rejected: '已被护栏过滤——禁用标签不得与该仓库自身的主题匹配。'
+      },
+      run: {
+        progress: '{done} of {total} queries ({pct}%)',
+        progressStarting: 'Starting the run…',
+        phase: {
+          routing: 'Scoring routes',
+          corpus: 'Checking the corpus'
+        }
+      },
+      suites: {
+        generate: 'Generate test suite',
+        generateTip: 'LLM 按每类 30 条分批生成 — 大批量（100+）需要几分钟。完成后测试集会出现在此处和已保存列表中。',
+        generating: '正在分批生成 — 大批量需要几分钟…',
+        run: 'Run all queries',
+        running: 'Running every suite query…',
+        current: 'Current suite',
+        col: {
+          query: 'Query',
+          kind: 'Kind',
+          outcome: 'Outcome',
+          run: 'Run',
+          when: 'When',
+          passRate: 'Pass rate',
+          headVersion: 'Head',
+          tags: '标签',
+          actions: '编辑',
+          name: '名称',
+          corpus: '语料'
+        },
+        notEvaluatable: 'not evaluatable (no competitors)',
+        pass: 'pass',
+        fail: 'fail',
+        passRate: 'Pass rate',
+        positives: 'Positives',
+        negatives: 'Negatives',
+        noCompetitors: 'n/a — no competing heads yet',
+        avgMargin: 'Avg margin',
+        steal: '{repo} stole {n} queries',
+        addPlaceholder: 'Your own probe query…',
+        add: 'Add to suite',
+        kindPositive: 'should select',
+        kindNegative: 'should NOT select',
+        history: 'Run history',
+        noRuns: 'No runs yet — generate a suite and run it.',
+        explainFailures: '解释失败项',
+        explainBusy: '正在解释失败项——对每个失败的负向查询一次模型调用…',
+        batchTitle: '失败的负向查询为何路由到这里',
+        batchNone: '没有建议任何修复——请人工将失败的查询与声明的范围进行比对。',
+        addAll: '全部添加',
+        rebuildRerun: '重建 head 并重跑测试集',
+        positiveFailuresTitle: '为什么正例不再通过',
+        positiveFailures: '本轮有 {n} 个正例测试被抑制——禁用标签过度匹配仓库范围。',
+        vetoedBy: '否决来源',
+        marginKilled: '{n} 个正例测试因 margin 落败（无单一否决标签）。',
+        removals: '建议移除的标签（它们否决了该仓库自身的正例）',
+        removeTip: '移除“{tag}”——它否决了 {n} 个正例测试',
+        tripwire: '本轮周期破坏了 {n} 个正例测试——新增标签过度抑制。是否回滚？',
+        tripwireRevert: '查看回滚选项',
+        staleSnapshot: '自该测试套件生成以来标签已变更——请重新生成以获得最新的禁用行。',
+        revertTitle: '回滚标签',
+        revertForbiddenCount: '{n} 个禁用标签',
+        revertAction: '回滚',
+        revertBusy: '正在加载保存历史…',
+        revertSaving: '正在恢复 frontmatter…',
+        revertEmpty: '尚无 frontmatter 保存记录。',
+        revertDone: 'Frontmatter 已恢复——请重建 head 并重跑以使其生效。',
+        removeTag: '从禁止标签中移除',
+        tagsetTip: '本次运行的禁止标签',
+        savedTitle: '已保存的测试集',
+        savedTip:
+          '每个生成或导入的套件都保存在这里（按存储库）。此列表包含两种类型：头部套件（源自标签和 frontmatter 的查询集，显示正/负计数）和 RAGAS 基准套件（带预期答案的问题集，带 RAGAS 徽章和条目数）。加载会在此标签页显示头部套件，在 RAGAS Benchmarks 标签页打开 RAGAS 套件，并可在其中针对实时光谱运行和评分。删除会永久移除套件；重命名可直接在名称上进行。',
+        load: '加载',
+        flipTip: '切换 应选择 / 不应选择',
+        deleteTip: '从测试集中移除此行',
+        namePlaceholder: '测试集名称（可选）— 例如：NCD 回归集',
+        probeTip: '用真实语料测试此查询',
+        deleteSuiteTip: '删除此测试集及其历史',
+        corpusNeedsIngest: '请先摄取仓库——语料测试搜索的是已摄取的语料',
+        deleteConfirmTitle: '删除这个测试集？',
+        deleteConfirmBody: '这将永久删除该测试集及其运行历史，无法撤销。',
+        deleteConfirm: '删除测试集',
+        deleteCancel: '取消',
+        unnamedFallback: '未命名测试集'
+      },
+      error: {
+        explain: '解释失败',
+        saveTag: '无法保存禁用标签',
+        rebuild: 'Head rebuild failed',
+        test: 'Routing test failed',
+        generate: 'Suite generation failed',
+        run: 'Suite run failed',
+        add: 'Could not add the query',
+        history: '加载保存历史失败',
+        revert: '回滚 frontmatter 失败',
+        advisor: '顾问失败',
+        noSuite: '请先生成测试集，然后重建并重新运行。',
+        applyNoSuite: '标签已保存、head 已重建——请生成测试集并运行全部以查看效果。',
+        suiteLoad: '无法加载测试集',
+        suiteUpdate: '无法更新测试集',
+        suiteRename: '无法重命名测试集',
+        generateTimeout: '测试集耗时异常 — 可能稍后会出现在已保存列表中；请一分钟后查看。',
+        probe: '语料测试失败',
+        suiteDelete: '无法删除测试集',
+        noFrontmatter: '该仓库还没有头部标签 — 请在 Frontmatter 面板中创建标签（或使用“建议标签”），然后再生成测试集。'
+      },
+      footer: {
+        unpublish: 'Unpublish to review'
+      },
+      publishCard: {
+        present:
+          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
+        stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
+        missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+      },
+      advisor: {
+        run: '顾问：推荐标签调整',
+        busy: '正在根据近期运行模拟标签调整…',
+        title: '标签集建议（基于近期运行模拟）',
+        apply: '应用更改、重建 head 并重新运行测试集',
+        scorecard: '正例 {p}/{pt} 通过 · 负例 {n}/{nt} 拦截',
+        now: '当前',
+        predicted: '预测',
+        scope: '（最近 {r} 次运行共 {q} 条查询）',
+        applying: '正在应用：保存标签、重建 head、重新运行测试集…',
+        blockedTitle: '受阻的移除——点击以加入"应用"',
+        blockedGain: '可挽回 {n} 个正向用例',
+        narrowTitle: '更窄的替代标签——挽回正向用例而不重新放进负向用例',
+        narrowChip: '移除宽泛标签，添加窄标签',
+        reasonCurator: '此标签由您最初声明——移除前请确认',
+        reasonRotated: '编辑历史已滚过基线——移除前请确认',
+        scopeDetail: '测试集：{s} · 标签集：{t}',
+        rowActionsTitle: '基于语料的翻转 — 语料能回答这些“负向”查询：将它们翻转为正向',
+        flipToPositive: '翻转为正向',
+        ungroundedNote: '{n} 个失败的负向查询既无语料支撑也无安全的标签杠杆 — 应由竞争仓库胜出。'
+      },
+      probe: {
+        answerable: '可回答',
+        weak: '弱匹配',
+        unanswerable: '语料中无此内容',
+        unknown: '未知',
+        title: '语料测试 — 摘要',
+        close: '关闭摘要',
+        chunksScanned: '个语料块已扫描',
+        headLeg: 'Head 判定',
+        headNotClaimed: '未归属',
+        corpusLeg: '语料覆盖',
+        files: '参考文件',
+        colScore: '重排序得分',
+        colFile: '文件',
+        colContent: '块内容'
+      }
+    },
+    ragas: {
+      dropped: {
+        note: '{requested} 个问题中生成了 {kept} 个 — 有 {dropped} 个无法生成',
+        reason: {
+          rate_limited: '模型对生成做了限流'
+        }
+      },
+      corpus: {
+        capped: '基于 {parts}（语料预算）',
+        part: '{total} 个分块中的 {used} 个'
+      },
+      gen: {
+        eta: '剩余约 {t}',
+        elapsed: '已运行 {t}',
+        calls: '{n} 次 LLM 调用',
+        replays: '{n} 次缓存重放',
+        underMin: '不到一分钟',
+        minutes: '{m} 分钟',
+        hours: '{h} 小时 {m} 分钟'
+      },
+      paneTitle: 'RAGAS 基准测试',
+      about:
+        'RAGAS 为助手的检索与回答打分——忠实度、上下文精确率与召回率、回答相关性等。运行基准测试套件，将仓库作为知识库来衡量。',
+      aboutLabel: '什么是 RAGAS？',
+      aboutLink: '在 ragas.io 阅读更多',
+      help: {
+        show: '帮助',
+        hide: '隐藏帮助',
+        more: '在 ragas.io 阅读更多',
+        repositories: {
+          title: '仓库',
+          text: '哪些仓库为生成提供来源 — 仅当前仓库，或与相关仓库一起。多个仓库让多跳问题得以跨越它们的边界。'
+        },
+        questions: {
+          title: '问题数',
+          text: '要合成多少个问题（默认 20）。集合越大，生成和运行所需的时间按比例越长。'
+        },
+        singleHop: {
+          title: '单跳 %',
+          text: '从单个概念提取的问题占比。'
+        },
+        multiAbstract: {
+          title: '多跳（抽象）%',
+          text: '组合多个概念并进行超出其字面文本的推理的问题占比。'
+        },
+        multiSpecific: {
+          title: '多跳（具体）%',
+          text: '组合多个概念同时紧扣其确切措辞的问题占比。三项占比之和应为 100。'
+        },
+        personas: {
+          title: '用户画像',
+          text: '多少个合成用户画像来变换所生成问题的措辞与视角。'
+        },
+        generate: {
+          title: '生成',
+          text: '用 LLM 构建测试集：先对语料库做一次知识图谱遍历（这是耗时数分钟的部分），然后合成问题。它在后台运行 — 你可以关闭 Lab，不会丢失任何内容。删除正在生成的测试集会取消该工作。'
+        },
+        importSuite: {
+          title: '导入测试集（.xlsx）',
+          text: '加载基准测试 xlsx 格式的现有测试集，与 tests/rag-benchmarks 的基准工作流兼容。'
+        },
+        entries: {
+          title: '基准测试条目',
+          text: '每个问题一行，含预期答案和参考段落。编辑问题、针对实时语料库探测、切换为范围外（保留作对照，不计入评分）或移除。'
+        },
+        metrics: {
+          title: '指标',
+          text: '四个默认指标 — 忠实度、上下文精确率、上下文召回率、答案相关性 — 外加扩展的 RAGAS 目录。需要嵌入模型的指标在未配置时会附带警告被丢弃。'
+        },
+        run: {
+          title: '运行基准测试',
+          text: '为每个条目重放检索，生成答案，然后由评审模型对照参考答案为每个答案评分。进度按阶段报告；运行完成后即出结果。'
+        },
+        results: {
+          title: '结果',
+          text: '指标均值以带通过阈值的仪表呈现，跨运行的趋势，以及每个问题的细节（含各答案及其得分）。'
+        },
+        explain: {
+          title: '解释失败项',
+          text: '将每个失败行归因于检索、回答或参考答案本身 — 并建议稳妥的修复措施，包括仓库层面的更改（如标签和概念整理）。'
+        },
+        exports: {
+          title: '导出',
+          text: '测试集和结果导出为 xlsx（与基准测试工具兼容），以及图表的 PDF 报告。'
+        }
+      },
+      // GUIDE (David, 2026-10-23) — the operator playbook behind
+      // the "Guide" button. See en.js for the key-shape contract.
+      guide: {
+        open: '指南',
+        title: 'RAGAS 基准测试指南',
+        intro:
+          '如何构建、策展并运行基准测试集 —— 每一步该做什么、该避免什么、以及预期结果如何。按钮旁的帮助面板说明各个控件；本指南说明的是决策。',
+        close: '关闭',
+        more: '在 ragas.io 阅读更多',
+        labels: {
+          do: '照此操作',
+          dont: '切勿',
+          expect: '预期结果'
+        },
+        chapters: {
+          generate: {
+            title: '构建测试集',
+            intro:
+              '测试集的好坏，取决于生成它所依据的语料。生成是分两个阶段的 LLM 工作，也是整个流程中开销较大的一半：先对所选语料做一次知识图谱遍历，然后合成问题。',
+            d1: '先发布，再生成。生成过程从仓库读取概念；而建立在尚未发布或仍在摄取排空中的仓库之上的测试集，衡量的是助手根本看不到的语料。',
+            d2: '阅读覆盖说明。当语料规模超过分块预算（默认 1,600 个分块）时，测试集会明示出来 —— "grounded in 1600 of 5590 chunks"。这可以作为某个切片的有效基准，但绝不是整个仓库的基准。如果需要全部语料，请调高 OKF_RAGAS_MAX_CORPUS_CHUNKS。',
+            d3: '按你要回答的问题来定测试集规模。二十个问题是冒烟测试，一百个问题才构成一次比较。两条链路的开销都大致呈线性增长，其中评分链路占主导。',
+            d4: '有意搭配不同的跳数分布。single-hop 证明检索能力；multi-hop（具体）证明重排序器能组合证据；multi-hop（抽象）证明模型能超越字面文本进行推理。全部由 single-hop 构成的测试集，永远无法暴露组合推理上的失败。',
+            x1: '不要在仓库摄取排空期间生成。仍在索引中的概念对检索不可见，因此测试集是针对一份与你随后评分所用语料并不相同的语料写成的。',
+            x2: '不要把进度条头几分钟的停滞当作卡死。知识图谱阶段可能长时间没有完成的批次；已运行计时和模型调用计数器才是可信的信号。',
+            x3: '不要把测试集数量少当作生成质量好。触发限流的模型会丢失问题，面板会报告丢弃了多少个。信任测试集之前，先查看被丢弃的数量。',
+            expect:
+              '预算上，图谱阶段大致每个语料分块一次模型调用，每个问题再加几次。在一个 1,075 个分块的语料上，仅这一阶段就已运行两个多小时。生成会在后台继续 —— 你可以关闭 Lab，稍后再回来。'
+          },
+          curate: {
+            title: '改进测试集',
+            intro:
+              '生成的测试集只是初稿。每个条目的两部分 —— 问题和预期答案 —— 都是机器写成的，因此测量的可信度不会高于这两者本身的可信度。',
+            d1: '先探测，再保留。▶ 按钮会针对实时语料运行该问题，并报告它究竟是否可答。一个没有任何返回的问题，说的就是你并不拥有的内容。',
+            d2: '对无关的问题要切换，不要删除。范围外的行会保留作为对照，并排除在评分之外；删掉它们，就抹去了它们曾经存在这一事实。',
+            d3: '当参考答案有误时，要修正预期答案，而不是改写问题。faithfulness 和 answer relevancy 都是对照参考答案来衡量的，因此一个任何模型都写不出来的参考答案，会惩罚一个正确答案。',
+            d4: '加入你自己的难题。生成器写出的问题，语料都有字面上的答案；真正值得发现的，是策展人凭经验写出的问题 —— 含糊的表述、彼此矛盾的两份文档、只说过一次再未重复的事实。',
+            x1: '不要为了迁就系统今天的回答而重写问题。那样会把基准测试变成针对当前分数的回归测试，恰恰掩盖了你正要找的那个缺陷。',
+            x2: '不要在不探测的情况下扩展到每个概念一个问题。生成读取的是一个分块预算，而不是你的文档结构，因此某个问题可能建立在一段从未进入语料的文字上。',
+            x3: '不要对照分数来策展测试集。要在运行之前完成策展；看到结果之后再编辑测试集，就等于移动了标尺，比较也随之失效。',
+            expect:
+              '四十个好问题胜过一百个混杂的问题。对概念集合的覆盖比绝对数量更重要 —— 一个遗漏了一半概念的测试集，会为它覆盖的那一半欣然报告一个很高的均值。'
+          },
+          run: {
+            title: '运行基准测试',
+            intro:
+              '一次运行分为三个阶段 —— 检索、回答和评判 —— 分别报告，因此你始终知道自己正在等哪一个。只有第三个阶段会产生评判模型调用，时间也主要耗在这里。',
+            d1: '先运行四个默认指标。faithfulness、context precision、context recall 和 answer relevancy 构成可比较的核心。在你已经知道故障位置之前，扩展指标目录只会成倍增加开销，而不会带来更多信息。',
+            d2: '要盯着调用计数器，而不只是进度条。评判阶段逐行推进；在繁忙的模型端点上，运行被限流的情况相当频繁，重试往往占据了实际耗时。计数器停住而时钟仍在走，说明是在重试，而不是卡死。',
+            d3: '要取消，而不是弃置。“取消运行”会干净地停下并记录已完成的部分；关闭浏览器标签页则不会 —— 运行会继续，而你会失去对它的实时视图。',
+            d4: '同一时间，每个仓库只保留一次运行。运行之间共享模型端点；两次并发运行会分摊吞吐，两边都变慢，而且谁都不会说明原因。',
+            x1: '不要把四项指标的运行与十项指标的运行作比较。扩展指标目录大约会让实际耗时变为四倍，而两者的均值并不是同一口径的序列。',
+            x2: '不要为了替换一个你不喜欢的数字而重跑。换了评判模型、换了检索 top-N 或编辑过测试集的重跑，都是一次新的测量 —— 请把它作为一次新的测量来记录。',
+            x3: '不要在一次摄取排空期间启动运行。排空到一半时，语料的一部分无法被检索到，分数下降的原因与你的改动毫无关系。',
+            expect:
+              '四个指标的成本大致是每个问题七次评判调用 —— 在一百题的运行中实测为 7.1 次。在限流的端点上，这相当于每一百题约一个半小时，模型更繁忙时还会更久。请把它当作下限，而不是承诺：运行自带的计时和调用计数器才是权威。'
+          },
+          models: {
+            title: '模型，以及预期结果',
+            intro:
+              '有三种不同的模型参与其中，且不可互换：负责回答的模型、负责评判的模型，以及负责嵌入的模型。它们影响分数的原因完全不同。',
+            d1: '回答模型才是被测对象——但在 Lab 中，回答来自已部署的聊天模型，经由已部署的流水线，因此更换部署的聊天模型就会改变答案。离线重放这条支路（检索与回答在 OKF server 内部重放）是为 whatif 运行而存在的，今天还不能从 Lab 启动，所以“基准测试答案”这一设置并不会改变这里能运行的任何基准测试。',
+            d2: '评判模型必须强大且稳定。它对照参考答案打分，因此弱评判模型会同时拉低所有指标，而运行看上去依然完整。评判结果按评判模型身份缓存 —— 更换评判模型或被测模型都会使该缓存失效，所有行都将重新评分。',
+            d3: '嵌入模型是检索测量的一部分。更换它，context precision 和 context recall 会随之变化，而 faithfulness 通常不会。这种不对称性说明改动落在了哪里，而不是噪声。',
+            d4: '把模型与运行一并记录下来。每次运行都会存储产生答案与分数所用的配置和模型；只有这两者一致，两次运行才可比。',
+            x1: '除非恰好只有一样东西发生了变化，否则不要指望分数变化可以归因于某一项。换了新回答模型、新评判模型和新嵌入模型的运行，是一次同时测量三者的运行，无法把它们区分开。',
+            x2: '不要把高 faithfulness 分数单独当作好结果。faithfulness 高而 context recall 低，意味着答案确实立足于检索到的内容 —— 而检索到的内容太少了。',
+            x3: '不要把推理模型当作免费的。它在写出第一个字之前就要耗费数百个 token；当答案预算比这还小时，每个答案都会被截断、丢弃并重新调用，这次运行实际上为每个问题付了两次钱。',
+            expect:
+              '每当你更换模型，都预期运行会变慢、分数会移动。任何一个方向都不是对模型本身下的定论：评判模型、检索参数和测试集共同决定了这种变化中有多少是真实的。'
+          },
+          read: {
+            title: '解读结果',
+            intro:
+              '每个 RAGAS 指标衡量的东西各不相同，其中一个的方向还是相反的。在据此行动之前，先弄清每个数字实际衡量的是什么。',
+            d1: '先看无效运行的横幅。答案报错、或没有任何一个指标覆盖到范围内全部行的运行，都不是有效的测量 —— 其下方的均值只覆盖那些被评分的行。',
+            d2: '检查每个指标的方向。多数指标是越高越好。noise sensitivity 是例外：越低越好，因此这个指标上看起来像失败的低分，恰恰是该指标表现好的一面。',
+            d3: '要读失败的那些行，而不只是均值。四十道题里坏掉一道，对均值的拉动往往超过你原本想测量的那点变化。',
+            d4: '在改动任何东西之前先用「Explain failures」。它会把每一行失败归到一个经过语料库验证的阶段——retrieved、reranker、vector-recall、corpus、judge、answer 或未测量——并显示该段落在哪一步丢失、本应排在什么位置。corpus 判定意味着期望的段落根本不在语料库中：这个题目不公平，它衡量的是基准测试而非助手，并会如此标注，以便你重新生成该条目，而不是去写已经存在的内容。它的建议经过把关：由它提议，由你决定。',
+            x1: '不要跨不同的指标集合、不同的评判模型或编辑过的测试集比较均值。这些都不是同一次测量，你看到的差异并不代表质量发生了变化。',
+            x2: '不要针对单个数字调优检索。精确率与召回率彼此此消彼长；提升一项通常会牺牲另一项，而这种权衡往往才是真正值得关注的部分。',
+            x3: '不要把 null 分数当作低分。重试耗尽会产生一个被排除在均值之外的 null，因此没有分数就是没有测量 —— 请重跑该行，而不要做最坏的假设。',
+            expect:
+              '基准测试的数字是同一测试集不同次运行之间的比较，而不是给助手打的分。需要留存证据时请导出 xlsx：面板中的趋势线只覆盖保存在本仓库上的那些运行。',
+            table: {
+              title: '屏幕上是什么，以及它意味着什么',
+              col: {
+                element: '屏幕上',
+                meaning: '它是什么',
+                effect: '该怎么用'
+              },
+              mean: {
+                element: '平均值',
+                meaning: '该指标在评判模型实际评分的那些行上的平均值。它不是整个测试集的分数。',
+                effect: '要和旁边的分数一起读。少数几行上的平均值衡量的是那几行，而不是整个测试集。'
+              },
+              coverage: {
+                element: '分数比（55/100）',
+                meaning:
+                  '评判模型在测试集 100 行中的 55 行（均在范围内）上测得了该指标。平均值只覆盖那 55 行；其余 45 行被排除在外——绝不按零计入。超出范围的对照不在这 100 行之内。',
+                effect: '分数比小，说明这个数字几乎说明不了测试集的情况。要看你真正关心的那个指标，而不是整次运行。'
+              },
+              banner: {
+                element: '运行无效的横幅',
+                meaning:
+                  '这次运行有回答失败，或没有任何一个指标覆盖到范围内的全部行。横幅上的覆盖率取的是覆盖最好的那个指标，所以某个指标只有 21/100 并不会触发它。',
+                effect: '每个指标的比值要自己看。横幅是底线，不是小结。'
+              },
+              runName: {
+                element: '运行名称及其评判模型',
+                meaning: '评判这次运行的评判模型，以及它所用的配置。下面的键是给支持人员用的。',
+                effect: '两次评判模型不同的运行不是同一次测量。要么比较可比的，要么用重新评分把其中一个拉齐。'
+              },
+              rescore: {
+                element: '重新评分',
+                meaning:
+                  '用你选定的评判模型给同样的回答重新评分——回答和上下文原样复制，不会重新检索，也不会重新生成。对话框会预先填好来源运行所用的评判模型，所以默认的重新评分是一次稳定性检查（这个评判模型可复现吗？），而不是第二意见。',
+                effect:
+                  '要弄清楚一次失败是评判模型过于严苛，还是真正的失败，就用另一个评判模型重新评分。让两个评判模型评同样的行，比新跑一次便宜得多，也是检验更换评判模型的正确做法。'
+              },
+              status: {
+                element: '状态',
+                meaning: '这次运行是否已经结束。运行中的平均值还在变动。',
+                effect: '等它结束再读数字。'
+              }
+            }
+          },
+          errors: {
+            title: '错误，以及它们对结果的影响',
+            intro:
+              '一次基准测试从来不会测到每个测试集的每一行：某一行可能在链路上失败，助手可能拒绝回答，评判模型可能测不出某个指标，某个指标也可能低于它的阈值。这些都不是零，也都不是隐藏的。本章就是这张地图——每种状态意味着什么，以及它会如何影响你正在读的那个数字。读之前先知道一件事：没有产生任何回答的那一行永远不会交给评判模型——没有东西可评——因此它不计入平均值，绝不会被当作零计算，而且会拉低实测覆盖率。弃答不是一种状态，而是两种。带着回答的弃答会被评判，而没有内容支撑它，它的上下文指标会返回 0，因此这些零确实计入了平均值。没有回答的弃答则根本没有被评判：它不带任何分数，不计入平均值，而且和出错的行一样会拉低实测覆盖率。这正是一行失败或一行未被评判时该次运行会被标记为无效、而不是被当作可信结果的原因。',
+            d1: '先看“本次运行无效”的横幅，再看平均值。它意味着下面的分数并不是对系统的测量，而横幅会指出原因：部分回答失败，或者没有任何一个指标覆盖到范围内的全部行。修好原因，然后重跑。',
+            d2: '比较两次运行之前，先看每个指标的覆盖率。面板会显示评判模型实际上为该指标评了多少行；在测试集的一部分上算出的平均值不是这个测试集的分数，也无法与测全了的运行相提并论。',
+            d3: '把出错的行修到根子上——检索链路、上游服务，或者超时——然后再重跑。为了掩盖那个一再失败的行而修改测试集，恰好会藏起基准测试本该找出的缺陷。',
+            d4: '把弃答当作结果，而不是缺陷。带着回答的弃答说明助手判断语料回答不了这个问题——这是语料和题目本身的性质。把它读作用户将会遇到什么的覆盖情况。',
+            x1: '不要把未测量的指标读成零。评判模型的回答若无法被该指标解析，该行上的此指标就是空值；空值会被排除在平均值之外，绝不会被当作失败平均进去。',
+            x2: '不要把弃答算作错误，也不要算作通过。它单列一栏，正因为它两者都不是——而没有回答的弃答根本没有被评判，所以它也不会贡献一个零。',
+            x3: '不要发布被面板标记为无效的运行所得的数字，也不要用两次运行取平均来掩饰它。部分测量的运行没有可发布的数字；它有一个需要修复的运行。',
+            expect:
+              '一次干净的运行没有出错的行，也没有未被评判的行，并且每个指标都在范围内的每一行上被评过——只有这种状态下，平均值才等于基准测试。其余一切都是需要修复的运行，而不是可以据以行动的结果。',
+            table: {
+              title: '每种状态如何映射到结果',
+              col: {
+                state: '状态',
+                meaning: '含义',
+                effect: '对结果的影响'
+              },
+              error: {
+                state: '出错',
+                meaning: '这一行在流水线上失败了——检索、上游服务或超时。没有产生任何回答。',
+                effect:
+                  '这一行不会交给评判模型——它没有回答，也就没有可评的东西。它完全不带分数：它不计入平均值（绝不按零计算），而是计入错误列，并且本次运行被标记为无效——横幅说明这些分数不是对系统的测量。修好原因——检索链路、上游服务、超时——然后重跑。有回答的那些行仍会评分，但一次只测了一部分的运行是需要修复的运行，不是可以发布的结果。'
+              },
+              abstained: {
+                state: '弃答',
+                meaning: '助手拒绝作答，却仍然给出了回答——chatqna 这么说，或者它的回答有所保留。流水线并没有失败。',
+                effect:
+                  '这一行确实会交给评判模型，因此它会贡献一个分数——没有可支撑的上下文时，上下文指标返回 0，而这些零是计入平均值的。它单列一栏，绝不会进错误列，而且单凭它并不会使本次运行无效。面板会把它标为“弃答”，而不是通过或失败。没有产生任何回答的弃答是另一种状态——参见“弃答——未评判”。'
+              },
+              declinedUnjudged: {
+                state: '弃答，未评判',
+                meaning: '助手拒绝作答且什么也没说——没有产生任何回答。流水线并没有失败。',
+                effect:
+                  '这一行不会交给评判模型——它没有回答，也就没有可评的东西。它完全不带分数：不计入平均值（绝不按零计算），会拉低实测覆盖率，并且可能使本次运行被标记为无效。面板会把它标为“弃答——未评判”，以便与已评判的弃答区分开。'
+              },
+              unmeasured: {
+                state: '未测量',
+                meaning: '评判模型给出的回答无法被该指标解析——例如一条它无法核实的事实正确性陈述。',
+                effect:
+                  '该指标在这一行上为空值：被排除在平均值之外，绝不是零。面板会显示评判模型实际为它评了多少行。某个指标只有 21/100 并不会使本次运行无效——横幅只有在没有任何一个指标覆盖到范围内的全部行时才会触发，所以各个指标的比值要自己看。'
+              },
+              belowThreshold: {
+                state: '低于门槛',
+                meaning: '该指标已被测量，其分数低于为该指标设定的门槛。',
+                effect: '该行在这一指标上判为失败。只要所选指标中有任意一个失败，该行就算失败。'
+              },
+              outOfScope: {
+                state: '超出范围',
+                meaning: '这道问题本来就答不出来——保留在测试集中作为对照，绝不作为测试。',
+                effect:
+                  '绝不计入失败，也绝不进入任何平均值：它是对照，不是结果。面板不会把它堆进结果条，它的分数既不进入平均值，也不进入任何覆盖率比例。'
+              }
+            }
+          }
+        }
+      },
+      current: '当前',
+      generate: {
+        title: '生成基准测试集',
+        hint: '从选定的仓库合成带预期答案的问题 — 可选一个或多个：仅当前仓库，或与相关仓库一起。',
+        size: '问题数',
+        config: '生成模型配置',
+        default: '部署默认（.env）',
+        defaultNamed: '激活配置 — {name}{model}',
+        effective: '使用 {name}{model} 评判',
+        effectiveGenerating: '使用 {name}{model} 生成',
+        envDefault: '环境默认值',
+        envJudge: '部署默认（.env）{model}',
+        envJudgePlain: '部署默认（.env）',
+        model: '模型',
+        modelPick: '配置默认',
+        modelDefault: '配置默认',
+        note: '合成问题并为答案评分的模型。激活的配置（★，模型标签页）自动生效；在此选择仅覆盖本次操作。更强的评判模型能显著改善实体召回和建议质量。',
+        single: '单跳 %',
+        multiAbstract: '多跳（抽象）%',
+        multiSpecific: '多跳（具体）%',
+        personas: '用户画像',
+        button: '生成',
+        working: '正在生成 — 需要几分钟…',
+        cancel: '取消',
+        cancelling: '正在取消…',
+
+        inFlight: '此仓库已有正在进行的基准套件生成——正在将您附加到该任务。'
+      },
+      import: {
+        button: '导入测试集（.xlsx）',
+        working: '正在导入…'
+      },
+      suite: {
+        namePlaceholder: '基准测试名称（可选）',
+        add: '添加问题',
+        addPrompt: '要添加的问题：',
+        addReference: '预期答案（可选）：',
+        flipTip: '切换在范围内 / 范围外',
+        probeTip: '针对实时语料库测试此问题',
+        removeTip: '移除此问题'
+      },
+      col: {
+        query: '问题',
+        reference: '预期答案',
+        passages: '段落',
+        scope: '范围'
+      },
+      oos: '范围外',
+      inscope: '范围内',
+      metrics: {
+        label: '指标：'
+      },
+      run: {
+        button: '运行基准测试',
+        working: '正在运行…',
+        judge: '评判模型配置',
+        retrieved: '已检索',
+        pass: '通过',
+        fail: '失败',
+        abstained: '弃答',
+        declinedUnjudged: '弃答——未评判',
+        rowError: '错误',
+        cancel: '取消运行',
+        phase: {
+          'building-knowledge-graph': '正在构建知识图谱',
+          'synthesizing-questions': '正在生成问题',
+          retrieval: '检索中',
+          judge: '评分中'
+        }
+      },
+      export: {
+        suite: '导出测试集（.xlsx）',
+        results: '导出结果（.xlsx）'
+      },
+      results: {
+        title: '基准测试结果',
+        failing: '{n} 项失败',
+        advisorHint: '{n} 个问题低于其指标阈值。运行顾问，将每个失败归因于某个管道阶段并获取具体操作。',
+        copy: '复制完整答案',
+        coverageTitle: '评审仅在 {total} 行中的 {n} 行上对该指标评分——得分只覆盖这些行。',
+        colResizeTip: '拖动手柄调整大小——双击表头重置',
+        trendTitle: '各次运行的指标趋势',
+        trendNote:
+          '每条线是一个 RAGAS 指标在每次运行中的均值，从旧到新，且绝不跨越评判边界——每个 x 轴标签都标明为该运行评分的评判模型。已评判的答案会缓存；相同重跑只在答案或检索变化处不同。',
+        trendMixedJudges: '这些运行的评判模型不同——请在同一评判模型的区段内比较，不要跨区段比较',
+        statusTitle: '逐题结果',
+        statusNote:
+          '本次运行中范围内的每个问题，按结果堆叠：已回答、失败（任选指标低于阈值）、弃答或流水线错误。超出范围的对照不计入——它们是对照，不是结果。',
+        allPass: '全部通过',
+        invalidTitle: '本次运行不是有效的测量结果',
+        invalidPill: '无效运行',
+        invalidErrors: '{total} 个回答中有 {n} 个失败 —— 这些分数并未衡量系统。请重新运行基准测试。',
+        invalidCoverage: '评判器测量了 {total} 行中的 {measured} 行 —— 下方的均值仅涵盖被评分的行。',
+        failingShort: '失败',
+        answer: '答案',
+        state: '状态',
+        error: '错误',
+        abstained: '已拒答',
+        declinedUnjudged: '弃答——未评判',
+        declinedUnjudgedTitle:
+          '回答方拒绝作答且什么也没说，因此这一行从未交给评判模型。它不带任何分数，不计入平均值——而且会拉低实测覆盖率。',
+        answered: '已回答',
+        noisy: '回答正常 — 检索噪声',
+        noisyTitle: '该回答通过了所有回答质量指标；仅交付的上下文集（精确率/召回率）低于阈值',
+        pdf: '导出 PDF 报告'
+      },
+      explain: {
+        button: '解释失败项',
+        working: '正在分析失败项…',
+        advising: '顾问思考中 — {n} 个失败行',
+        guarding: '正在检查标签建议…',
+        title: '失败归因与建议',
+        none: '没有可归因的失败行。',
+        stage: '阶段',
+        fails: '失败的指标',
+        recommendation: '建议',
+        unfair: '不公平的问题',
+        unfairTitle: '期望的段落不在语料库中 —— 该行衡量的是基准测试，而非助手',
+        evidenceTitle: '在语料库／候选集／传递给模型的段落数量。方法：{method}',
+        facts: '运行事实：{rows} 行 · {abstentions} 次拒答 · ~{chars} 字符答案',
+        rankTitle: '该段落存在于语料库中，但不在候选集内 —— 排名第 {n}。'
+      },
+      history: {
+        title: '运行历史',
+        run: '运行',
+        when: '时间',
+        status: '状态',
+        load: '查看',
+        delete: '删除',
+        rescore: '重新评分',
+        rescoreOf: '重新评分自 {key}',
+        judgeEnv: '系统默认',
+        judgeUnknown: '未记录评判模型'
+      },
+      rescore: {
+        title: '用评判模型重新评分',
+        body: '使用你选定的评判模型对已保存的答案重新评分——不会重新生成答案。对话框会预先填好来源运行所用的评判模型，因此默认的重新评分是检验该评判模型是否可复现；想要对这些失败得到第二意见，请选另一个评判模型。结果是一条独立的运行记录。',
+        source: '源运行',
+        judge: '评判模型配置',
+        confirm: '重新评分',
+        failed: '重新评分失败。'
+      },
+      runDelete: {
+        title: '删除运行',
+        body: '此操作将永久删除该运行及其失败分析。测试套件及其问题将保留。',
+        confirm: '删除',
+        inFlight: '该运行仍在执行中——请先取消。',
+        explainInFlight: '该运行的失败分析仍在进行中——请等待其完成。',
+        failed: '删除运行失败。'
+      },
+      advice: {
+        knob: '配置项',
+        tag: '仓库标签',
+        content: '内容',
+        prompt: '提示词',
+        env: '环境变更',
+        envComponent: '组件',
+        envChange: '变更',
+        envTargets: '目标',
+        envWhy: '原因',
+        envTradeOff: '权衡',
+        envApply: '应用方法',
+        envVerify: '验证'
+      },
+      metric: {
+        faithfulness: '忠实度',
+        context_precision: '上下文精确率',
+        context_recall: '上下文召回率',
+        answer_relevancy: '答案相关性',
+        context_utilization: '上下文利用率',
+        context_entities_recall: '上下文实体召回率',
+        factual_correctness: '事实正确性',
+        answer_correctness: '答案正确性',
+        answer_similarity: '答案相似度',
+        noise_sensitivity: '噪声敏感度',
+        note: {
+          faithfulness:
+            '答案相对检索段落的事实依据程度——答案中的论断被来源支持的比例。低分表示答案说出了证据中没有的内容（幻觉）。',
+          context_precision: '关键段落是否排在检索结果前列。低分表示正确的证据被检索到，但被较不相关的片段淹没。',
+          context_recall: '检索段落是否覆盖参考答案所需的全部内容。低分表示检索遗漏了问题所需的证据。',
+          answer_relevancy:
+            '答案对所提问题的针对程度：RAGAS 从答案文本反向生成问题并与原问题做嵌入相似度比较。它不检查事实正确性——冗长或偏题的答案即使正确也得分偏低。',
+          context_utilization: '检索到的上下文是否足以生成参考答案——对检索完整性的检查。',
+          context_entities_recall:
+            '实体级召回：条目参考段落中出现的命名实体（公司、日期、金额、地点）也出现在检索到的分块中的比例。低分表示检索返回的分块遗漏了参考中提到的实体。 对评判模型敏感——上下文召回通过时得分偏低，通常说明评判模型的实体提取遗漏，而非内容缺失。',
+          factual_correctness:
+            '与参考答案在论断层面的事实一致性——评判模型将两者分解为论断并评估重合度。最严格的正确性指标。',
+          answer_correctness: '相对参考答案的综合质量——事实正确性与语义相似度结合。最接近“答案是否正确”的指标。',
+          answer_similarity: '生成答案与参考答案之间的语义（嵌入）相似度——高表示两者表达同一含义。',
+          noise_sensitivity: '无关片段混入检索上下文时答案的退化程度——鲁棒性度量。越低越好；其阈值方向相反。'
+        }
+      },
+      pdf: {
+        title: 'RAGAS 基准测试报告',
+        suite: '测试集',
+        run: '运行',
+        summary: '摘要',
+        perQuery: '各问题得分',
+        status: '结果',
+        n: '问题',
+        evaluable: '可评估',
+        abstained: '拒答',
+        compare: '跨运行比较（相对首次的差值）'
+      }
     }
+  },
+  link: {
+    ragTip:
+      'From crawl to answers: the crawled pages become OKF repository topics that the assistant can cite. Page-per-topic crawling (the default split) keeps each retrieved answer focused on one page.'
   }
 };

@@ -5,6 +5,15 @@ const TEST_USER = {
   password: 'TestPass123!',
 };
 
+// The documents admin surface (upload, delete, lifecycle) is ADMIN_ONLY on
+// the document-repository — a plain user's POST /api/files/upload is 403 by
+// design. The admin test user is provisioned with the `admin` realm role by
+// Phase 0 of docs/e2e-tests/00-clean-start.md.
+const TEST_ADMIN_USER = {
+  username: 'testadmin',
+  password: 'TestAdmin123!',
+};
+
 const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
 // The wait from the submit click to the dashboard: the identity provider
@@ -190,5 +199,6 @@ module.exports = {
   getLastBotMessage,
   saveChat,
   TEST_USER,
+  TEST_ADMIN_USER,
   BASE_URL,
 };

@@ -1,12 +1,14 @@
 const { expect } = require('@playwright/test');
-const { loginViaUI, BASE_URL, TEST_USER } = require('./chatbot');
-const { getAdminToken, request } = require('./auth');
+const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('./chatbot');
+const { getSessionToken, request } = require('./auth');
 
 /**
  * Login and navigate to Document Management tab in Admin Dashboard.
+ * The documents surface (upload, delete, lifecycle) is ADMIN_ONLY on the
+ * document-repository, so the session is the admin test user by default.
  */
-async function navigateToDocumentManagement(page) {
-  await loginViaUI(page);
+async function navigateToDocumentManagement(page, user = TEST_ADMIN_USER) {
+  await loginViaUI(page, user);
   await page.goto(`${BASE_URL}/admin`, {
     waitUntil: 'networkidle',
     timeout: 30000,
@@ -55,7 +57,10 @@ async function uploadFile(page, filePath) {
  */
 async function waitForDocumentInTable(page, fileName, options = {}) {
   const timeout = options.timeout || 15000;
-  const row = page.locator('tr.document-row').filter({ hasText: fileName });
+  // The specs upload fixed fixture names repeatedly within one run, so a
+  // name can legitimately match more than one row — assert that the file
+  // appears (the first matching row), not that it appears exactly once.
+  const row = page.locator('tr.document-row').filter({ hasText: fileName }).first();
   await expect(row).toBeVisible({ timeout });
   return row;
 }
@@ -64,7 +69,9 @@ async function waitForDocumentInTable(page, fileName, options = {}) {
  * Search documents by typing in the search input and waiting for table refresh.
  */
 async function searchDocuments(page, query) {
-  const searchInput = page.locator('.search-input input');
+  // DsInput renders the passed class on the input element itself — the
+  // search field IS `input.search-input`, not a child of `.search-input`.
+  const searchInput = page.locator('input.search-input');
   await expect(searchInput).toBeVisible({ timeout: 5000 });
   await searchInput.clear();
   if (query) {
@@ -106,18 +113,36 @@ async function getDocumentTableRows(page) {
 
 /**
  * Delete all test documents matching a prefix via API.
- * Used for test cleanup.
+ * Used for test cleanup. Direct access grants are disabled on the realm by
+ * design, so the deletes run with a browser-session token (the master admin
+ * token is minted for the wrong issuer — the document-repository validates
+ * realm tokens only).
  */
 async function deleteAllTestDocuments(prefix = 'test-document') {
-  const token = await getAdminToken();
+  const { chromium } = require('@playwright/test');
+  const browser = await chromium.launch();
+  const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  const page = await context.newPage();
+  let token;
+  try {
+    await loginViaUI(page, TEST_ADMIN_USER);
+    token = await getSessionToken(page);
+  } finally {
+    await browser.close();
+  }
 
-  const listRes = await request('GET', '/api/files?limit=100', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  // The list endpoint validates limit <= 50 — a bigger page is a 400.
+  const files = [];
+  for (let pageNum = 1; ; pageNum++) {
+    const listRes = await request('GET', `/api/files?limit=50&page=${pageNum}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (listRes.status !== 200) break;
+    const pageFiles = listRes.data?.data || listRes.data?.files || [];
+    files.push(...pageFiles);
+    if (pageFiles.length < 50) break;
+  }
 
-  if (listRes.status !== 200) return;
-
-  const files = listRes.data.files || listRes.data;
   const testFiles = files.filter((f) => f.file_name && f.file_name.startsWith(prefix));
 
   for (const f of testFiles) {

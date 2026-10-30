@@ -38,7 +38,9 @@ test.describe('Document Upload', () => {
   }
 
   test('reject .exe file and display error message', async ({ page }) => {
-    const uploadBtn = page.locator('.filter-bar').getByText('Upload Files');
+    // Same locator rule as the helper: the button lives in the card action
+    // bar, located by role — .filter-bar holds only search and status.
+    const uploadBtn = page.getByRole('button', { name: /Upload Files/i });
     await expect(uploadBtn).toBeVisible({ timeout: 5000 });
     await uploadBtn.click();
 

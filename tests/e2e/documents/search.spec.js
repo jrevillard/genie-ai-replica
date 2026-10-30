@@ -62,7 +62,8 @@ test.describe('Document Search', () => {
     await uploadFile(page, path.join(FIXTURES_DIR, 'test-document.txt'));
     await waitForDocumentInTable(page, 'test-document.txt');
 
-    const statusFilter = page.locator('.filter-select select');
+    // DsSelect renders the passed class on the native select itself
+    const statusFilter = page.locator('select.filter-select');
     await expect(statusFilter).toBeVisible({ timeout: 5000 });
     await statusFilter.selectOption('pending');
     await page.waitForTimeout(500);

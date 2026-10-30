@@ -280,6 +280,42 @@ print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
 - Username: `testuser`
 - Password: `TestPass123!`
 
+#### 0.8b Create Test Admin (documents suites prerequisite)
+
+The documents suites (`tests/e2e/documents/`) drive the upload/delete
+surfaces, which the document-repository restricts to the `admin` realm role
+(`rolePolicy.ADMIN_ONLY`) — a plain user's upload is 403 by design. Create a
+second test user carrying that role:
+
+```bash
+# Create test admin (201 = created, 409 = already exists — OK)
+curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "testadmin",
+    "enabled": true,
+    "email": "testadmin@genie.local",
+    "firstName": "Test",
+    "lastName": "Admin",
+    "credentials": [{"type": "password", "value": "TestAdmin123!", "temporary": false}]
+  }' -w "\nHTTP: %{http_code}\n"
+
+# Grant the admin realm role
+ADMIN_ROLE_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/roles/admin" \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+TESTADMIN_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testadmin&exact=true" \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+curl -sk -X POST "https://localhost/auth/admin/realms/genie/users/${TESTADMIN_ID}/role-mappings/realm" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "[{\"id\": \"${ADMIN_ROLE_ID}\", \"name\": \"admin\"}]" -w "\nHTTP: %{http_code}\n"
+# Expected: 204
+```
+
+**Test admin credentials** (documents suites only):
+- Username: `testadmin`
+- Password: `TestAdmin123!`
+
 ### 0.9 Seed the Knowledge Hierarchy (Quick Help Prerequisite)
 
 A fresh stack has **empty** `serviceCategories`/`services` collections. The

@@ -3,7 +3,6 @@ const {
   loginViaUI,
   navigateToChatbot,
   sendMessage,
-  waitForBotResponse,
   getMessages,
   saveChat,
   BASE_URL,
@@ -11,6 +10,32 @@ const {
 const { getSessionToken } = require('../helpers/auth');
 
 const API_TIMEOUT_MS = 30000;
+
+// The save path only persists conversations carrying a completed turn
+// (isStorableTurn refuses an all-error chat), so every test drives a
+// mocked answer stream — the same posture the conversation invariants
+// suite uses. Deterministic on any stack: no LLM dependency.
+async function mockAnswerStream(page) {
+  const frames = [
+    `data: ${JSON.stringify({ type: 'chunk', content: 'Mocked answer for the history test.' })}`,
+    '',
+    `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`,
+    '',
+  ].join('\n');
+  await page.route('**/queries/stream**', async (route) => {
+    try {
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: frames });
+    } catch {
+      /* the context closed before the fulfillment */
+    }
+  });
+}
+
+// The turn's arrival signal is the rendered bot bubble — the persisted
+// conversation is only asserted after it exists.
+async function waitForBotTurn(page) {
+  await page.waitForSelector('.chat-message.bot .message-bubble', { timeout: 30000 });
+}
 
 test.describe('Conversation history persistence', () => {
   let page;
@@ -26,6 +51,7 @@ test.describe('Conversation history persistence', () => {
 
     await loginViaUI(page);
     await navigateToChatbot(page);
+    await mockAnswerStream(page);
   });
 
   test.afterEach(async () => {
@@ -66,9 +92,9 @@ test.describe('Conversation history persistence', () => {
     const userText = 'Tell me about healthcare services';
     const chatTitle = `E2E Test Chat ${Date.now()}`;
 
-    // Send a message and wait for response
+    // Send a message and wait for the mocked answer to render
     await sendMessage(page, userText);
-    await waitForBotResponse(page, { timeout: 120000 });
+    await waitForBotTurn(page);
 
     // Capture messages before save
     const messagesBefore = await getMessages(page);
@@ -135,9 +161,9 @@ test.describe('Conversation history persistence', () => {
     const userText = 'What education programs exist?';
     const chatTitle = `E2E Order Test ${Date.now()}`;
 
-    // Send a message and wait for response
+    // Send a message and wait for the mocked answer to render
     await sendMessage(page, userText);
-    await waitForBotResponse(page, { timeout: 120000 });
+    await waitForBotTurn(page);
 
     // Capture message order before save
     const messagesBefore = await getMessages(page);

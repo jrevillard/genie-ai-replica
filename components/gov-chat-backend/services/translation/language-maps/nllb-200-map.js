@@ -7,7 +7,14 @@
  *
  * This model uses FLORES-200 language codes which combine language and script.
  * Full reference: https://huggingface.co/facebook/nllb-200-distilled-600M
+ *
+ * The languages and the codes the model is asked for come from the language
+ * registry (language-registry.json), the single source of the language list
+ * shared with the chatqna service. This module only adds what is specific to
+ * the model: its name, its type, its code format.
  */
+
+const registry = require('./language-registry.json');
 
 module.exports = {
   modelName: 'nllb-200-distilled-600M',
@@ -15,54 +22,7 @@ module.exports = {
   codeFormat: 'FLORES-200',
 
   // Language code mappings from ISO 639-1 to FLORES-200 format
-  languageMap: {
-    // Original 11 languages
-    en: 'eng_Latn', // English
-    ar: 'arb_Arab', // Arabic (Modern Standard)
-    th: 'tha_Thai', // Thai
-    zh: 'zho_Hans', // Chinese (Simplified)
-    de: 'deu_Latn', // German
-    fr: 'fra_Latn', // French
-    id: 'ind_Latn', // Indonesian
-    es: 'spa_Latn', // Spanish
-    ru: 'rus_Cyrl', // Russian
-    pt: 'por_Latn', // Portuguese
-    sw: 'swh_Latn', // Kiswahili
-
-    // Newly added languages (total 41)
-    am: 'amh_Ethi', // Amharic
-    az: 'azj_Latn', // Azerbaijani (North/Latin)
-    bn: 'ben_Beng', // Bengali
-    ckb: 'ckb_Arab', // Sorani Kurdish
-    fa: 'pes_Arab', // Persian (Farsi)
-    ff: 'fuv_Latn', // Fulah (Fulfulde)
-    ha: 'hau_Latn', // Hausa
-    jv: 'jav_Latn', // Javanese
-    kk: 'kaz_Cyrl', // Kazakh
-    ku: 'kmr_Latn', // Kurdish (Kurmanji/Latin)
-    ml: 'mal_Mlym', // Malayalam
-    ms: 'zsm_Latn', // Malay (uses zsm code)
-    om: 'gaz_Latn', // Oromo (West Central)
-    pa: 'pan_Guru', // Punjabi (Gurmukhi script)
-    ps: 'pbt_Arab', // Pashto
-    sd: 'snd_Arab', // Sindhi
-    skr: 'skr_Arab', // Saraiki
-    so: 'som_Latn', // Somali
-    su: 'sun_Latn', // Sundanese
-    tr: 'tur_Latn', // Turkish
-    ug: 'uig_Arab', // Uyghur
-    ur: 'urd_Arab', // Urdu
-    uz: 'uzn_Latn', // Uzbek (Northern/Latin)
-    yo: 'yor_Latn', // Yoruba
-
-    // Newly added languages - Mandinka and Sesotho
-    man: 'dyu_Latn', // Mandinka (using Dyula as linguistic proxy - Mande language family)
-    mnk: 'dyu_Latn', // Mandinka (alternative ISO code - maps to same Dyula proxy)
-    st: 'sot_Latn', // Sesotho (Southern Sotho)
-    hi: 'hin_Deva', // Hindi
-    ja: 'jpn_Jpan', // Japanese
-    ko: 'kor_Hang' // Korean
-  },
+  languageMap: { ...registry.modelCodes['nllb-200'] },
 
   // NLLB-200 does not use prompt templates (direct model call)
   promptTemplate: null

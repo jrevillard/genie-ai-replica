@@ -498,7 +498,7 @@ genie-ai-overlay/
 ├── chatqna/                      # Main chat microservice
 │   ├── genieai_chatqna.py        # ChatQnA FastAPI app (main)
 │   ├── keycloak_token_validator.py # Keycloak token validation
-│   ├── language_codes.json       # Language code mappings
+│   ├── language_registry.json    # Language registry (symlink; single source in the backend tree)
 │   ├── Dockerfile-chatqna_genie-ai # Container image
 │   ├── entrypoint.sh             # Container startup script
 │   └── README.md                 # ChatQnA documentation

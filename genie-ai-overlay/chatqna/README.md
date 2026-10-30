@@ -277,28 +277,34 @@ The following services must be running (depending on deployment mode):
 
 ### Language Configuration
 
-The service uses `language_codes.json` for supported languages. To add new languages:
+The service reads the supported languages from the language registry
+(`language_registry.json` — in the source tree a symlink to
+`components/gov-chat-backend/services/translation/language-maps/language-registry.json`,
+the single source shared with the backend's per-model language maps). Each
+registry entry carries the canonical code, the display name and the script:
 
-1. Edit `language_codes.json` (a flat map of language code to language name):
-   ```json
-   {
-     "en": "English",
-     "fr": "French",
-     "sw": "Swahili",
-     "es": "Spanish"
-   }
-   ```
+```json
+{
+  "languages": {
+    "en": { "name": "English", "script": "Latn" },
+    "fr": { "name": "French", "script": "Latn" }
+  },
+  "modelCodes": {
+    "nllb-200": { "en": "eng_Latn" }
+  }
+}
+```
 
-2. Restart the service to apply changes.
-
-   The restart is required, not a convenience: the map is read once and cached
-   in the process (`language_codes_map()`), and every request consults that
-   cache. A running service keeps serving the map it read at startup — a
-   language added to the file is refused until the service restarts, and a
-   language removed from it is still accepted until then. (A map that could
-   not be read is the exception: the failure is remembered only for
-   `LANGUAGE_MAP_RETRY_SECONDS`, so a transient read error does not disable
-   translation for the lifetime of the process.)
+To add a new language, edit the registry (one edit serves the backend and this
+service), rebuild both images, and restart. The restart is required, not a
+convenience: the registry is read once and cached in the process
+(`language_codes_map()`), and every request consults that cache. A running
+service keeps serving the registry it read at startup — a language added to
+the file is refused until the service restarts, and a language removed from
+it is still accepted until then. (A registry that could not be read is the
+exception: the failure is remembered only for `LANGUAGE_MAP_RETRY_SECONDS`,
+so a transient read error does not disable translation for the lifetime of
+the process.)
 
 ---
 
@@ -398,7 +404,7 @@ The service uses `language_codes.json` for supported languages. To add new langu
 chatqna/
 ├── genieai_chatqna.py              # Main service implementation
 ├── entrypoint.sh                    # Service entry point
-├── language_codes.json              # Language configuration
+├── language_registry.json           # Language registry (symlink to the backend's single source)
 ├── Dockerfile-chatqna_genie-ai      # Docker build configuration
 ├── requirements.txt                 # Python dependencies
 └── README.md                        # This file

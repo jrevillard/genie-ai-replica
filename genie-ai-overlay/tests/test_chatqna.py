@@ -1906,8 +1906,17 @@ class TestTranslationHelpers:
         assert "French" in prompt
 
     def test_read_language_codes_success(self, tmp_path):
-        lang_file = tmp_path / "codes.json"
-        lang_file.write_text('{"en": "English", "fr": "French"}')
+        lang_file = tmp_path / "language_registry.json"
+        lang_file.write_text(
+            json.dumps(
+                {
+                    "languages": {
+                        "en": {"name": "English", "script": "Latn"},
+                        "fr": {"name": "French", "script": "Latn"},
+                    }
+                }
+            )
+        )
         result = chatqna_module._read_language_codes(str(lang_file))
         assert result == {"en": "English", "fr": "French"}
 

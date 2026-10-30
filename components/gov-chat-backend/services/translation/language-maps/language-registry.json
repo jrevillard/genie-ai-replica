@@ -1,0 +1,299 @@
+{
+  "languages": {
+    "am": {
+      "name": "Amharic",
+      "script": "Ethi"
+    },
+    "ar": {
+      "name": "Arabic",
+      "script": "Arab"
+    },
+    "az": {
+      "name": "Azerbaijani",
+      "script": "Latn"
+    },
+    "bn": {
+      "name": "Bengali",
+      "script": "Beng"
+    },
+    "ckb": {
+      "name": "Sorani Kurdish",
+      "script": "Arab"
+    },
+    "de": {
+      "name": "German",
+      "script": "Latn"
+    },
+    "en": {
+      "name": "English",
+      "script": "Latn"
+    },
+    "es": {
+      "name": "Spanish",
+      "script": "Latn"
+    },
+    "fa": {
+      "name": "Persian",
+      "script": "Arab"
+    },
+    "ff": {
+      "name": "Fulah",
+      "script": "Latn"
+    },
+    "fr": {
+      "name": "French",
+      "script": "Latn"
+    },
+    "ha": {
+      "name": "Hausa",
+      "script": "Latn"
+    },
+    "hi": {
+      "name": "Hindi",
+      "script": "Deva"
+    },
+    "id": {
+      "name": "Indonesian",
+      "script": "Latn"
+    },
+    "ja": {
+      "name": "Japanese",
+      "script": "Jpan"
+    },
+    "jv": {
+      "name": "Javanese",
+      "script": "Latn"
+    },
+    "kk": {
+      "name": "Kazakh",
+      "script": "Cyrl"
+    },
+    "ko": {
+      "name": "Korean",
+      "script": "Hang"
+    },
+    "ku": {
+      "name": "Kurdish",
+      "script": "Latn"
+    },
+    "man": {
+      "name": "Mandinka",
+      "script": "Latn"
+    },
+    "ml": {
+      "name": "Malayalam",
+      "script": "Mlym"
+    },
+    "mnk": {
+      "name": "Mandinka",
+      "script": "Latn"
+    },
+    "ms": {
+      "name": "Malay",
+      "script": "Latn"
+    },
+    "om": {
+      "name": "Oromo",
+      "script": "Latn"
+    },
+    "pa": {
+      "name": "Punjabi",
+      "script": "Guru"
+    },
+    "ps": {
+      "name": "Pashto",
+      "script": "Arab"
+    },
+    "pt": {
+      "name": "Portuguese",
+      "script": "Latn"
+    },
+    "ru": {
+      "name": "Russian",
+      "script": "Cyrl"
+    },
+    "sd": {
+      "name": "Sindhi",
+      "script": "Arab"
+    },
+    "skr": {
+      "name": "Saraiki",
+      "script": "Arab"
+    },
+    "so": {
+      "name": "Somali",
+      "script": "Latn"
+    },
+    "st": {
+      "name": "Sesotho",
+      "script": "Latn"
+    },
+    "su": {
+      "name": "Sundanese",
+      "script": "Latn"
+    },
+    "sw": {
+      "name": "Kiswahili",
+      "script": "Latn"
+    },
+    "th": {
+      "name": "Thai",
+      "script": "Thai"
+    },
+    "tr": {
+      "name": "Turkish",
+      "script": "Latn"
+    },
+    "ug": {
+      "name": "Uyghur",
+      "script": "Arab"
+    },
+    "ur": {
+      "name": "Urdu",
+      "script": "Arab"
+    },
+    "uz": {
+      "name": "Uzbek",
+      "script": "Latn"
+    },
+    "yo": {
+      "name": "Yoruba",
+      "script": "Latn"
+    },
+    "zh": {
+      "name": "Chinese",
+      "script": "Hans"
+    }
+  },
+  "modelCodes": {
+    "nllb-200": {
+      "am": "amh_Ethi",
+      "ar": "arb_Arab",
+      "az": "azj_Latn",
+      "bn": "ben_Beng",
+      "ckb": "ckb_Arab",
+      "de": "deu_Latn",
+      "en": "eng_Latn",
+      "es": "spa_Latn",
+      "fa": "pes_Arab",
+      "ff": "fuv_Latn",
+      "fr": "fra_Latn",
+      "ha": "hau_Latn",
+      "hi": "hin_Deva",
+      "id": "ind_Latn",
+      "ja": "jpn_Jpan",
+      "jv": "jav_Latn",
+      "kk": "kaz_Cyrl",
+      "ko": "kor_Hang",
+      "ku": "kmr_Latn",
+      "man": "dyu_Latn",
+      "ml": "mal_Mlym",
+      "mnk": "dyu_Latn",
+      "ms": "zsm_Latn",
+      "om": "gaz_Latn",
+      "pa": "pan_Guru",
+      "ps": "pbt_Arab",
+      "pt": "por_Latn",
+      "ru": "rus_Cyrl",
+      "sd": "snd_Arab",
+      "skr": "skr_Arab",
+      "so": "som_Latn",
+      "st": "sot_Latn",
+      "su": "sun_Latn",
+      "sw": "swh_Latn",
+      "th": "tha_Thai",
+      "tr": "tur_Latn",
+      "ug": "uig_Arab",
+      "ur": "urd_Arab",
+      "uz": "uzn_Latn",
+      "yo": "yor_Latn",
+      "zh": "zho_Hans"
+    },
+    "gemma-3": {
+      "am": "am",
+      "ar": "ar",
+      "az": "az",
+      "bn": "bn",
+      "ckb": "ckb",
+      "de": "de",
+      "en": "en",
+      "es": "es",
+      "fa": "fa",
+      "ff": "ff",
+      "fr": "fr",
+      "ha": "ha",
+      "hi": "hi",
+      "id": "id",
+      "ja": "ja",
+      "jv": "jv",
+      "kk": "kk",
+      "ko": "ko",
+      "ku": "ku",
+      "man": "man",
+      "ml": "ml",
+      "mnk": "mnk",
+      "ms": "ms",
+      "om": "om",
+      "pa": "pa",
+      "ps": "ps",
+      "pt": "pt",
+      "ru": "ru",
+      "sd": "sd",
+      "skr": "skr",
+      "so": "so",
+      "st": "st",
+      "su": "su",
+      "sw": "sw",
+      "th": "th",
+      "tr": "tr",
+      "ug": "ug",
+      "ur": "ur",
+      "uz": "uz",
+      "yo": "yo",
+      "zh": "zh"
+    },
+    "translategemma": {
+      "am": "am",
+      "ar": "ar",
+      "az": "az",
+      "bn": "bn",
+      "ckb": "ckb",
+      "de": "de",
+      "en": "en",
+      "es": "es",
+      "fa": "fa",
+      "ff": "ff",
+      "fr": "fr",
+      "ha": "ha",
+      "hi": "hi",
+      "id": "id",
+      "ja": "ja",
+      "jv": "jv",
+      "kk": "kk",
+      "ko": "ko",
+      "ku": "ku",
+      "man": "man",
+      "ml": "ml",
+      "mnk": "mnk",
+      "ms": "ms",
+      "om": "om",
+      "pa": "pa",
+      "ps": "ps",
+      "pt": "pt",
+      "ru": "ru",
+      "sd": "sd",
+      "skr": "skr",
+      "so": "so",
+      "st": "st",
+      "su": "su",
+      "sw": "sw",
+      "th": "th",
+      "tr": "tr",
+      "ug": "ug",
+      "ur": "ur",
+      "uz": "uz",
+      "yo": "yo",
+      "zh": "zh"
+    }
+  }
+}

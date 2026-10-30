@@ -664,13 +664,19 @@ RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.9))  # if RERANKI
 
 DOC_REPO_URL = os.getenv("DOC_REPO_URL", "http://localhost:3001")  # Document repository URL
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000")  # Backend service URL
-# The language map is the whitelist every caller-supplied language is checked
-# against, so it is resolved next to this module rather than against the
-# working directory: a service started from another directory must not
+# The language registry is the single source of the supported languages: each
+# entry carries the canonical code, the display name and the script. It lives
+# with the backend's language maps
+# (components/gov-chat-backend/services/translation/language-maps/
+# language-registry.json) and reaches this directory as a symlink in the
+# source tree and a COPY in the image, so the two runtimes cannot list
+# different languages. It is the whitelist every caller-supplied language is
+# checked against, so it is resolved next to this module rather than against
+# the working directory: a service started from another directory must not
 # silently end up with an empty map (which would refuse every language).
-LANGUAGE_CODES_FILEPATH = os.getenv(
-    "LANGUAGE_CODES_FILEPATH",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "language_codes.json"),
+LANGUAGE_REGISTRY_FILEPATH = os.getenv(
+    "LANGUAGE_REGISTRY_FILEPATH",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "language_registry.json"),
 )
 # How long an unreadable language map is remembered as unreadable. The map is
 # consulted on every request and on every translated chunk: re-reading (and
@@ -688,14 +694,10 @@ LANGUAGE_MAP_RETRY_SECONDS = 60.0
 # later change to the call site.
 HISTORY_TRANSLATION_TARGET = "en"
 
-# The script each language is written in (ISO 15924). The translation prompt
-# has to agree with the target: asking for the Latin alphabet of a language
-# written in Devanagari makes the model answer in the wrong script. Read
-# next to the language map, from the same directory, for the same reason.
-LANGUAGE_SCRIPTS_FILEPATH = os.getenv(
-    "LANGUAGE_SCRIPTS_FILEPATH",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "language_scripts.json"),
-)
+# The script each language is written in (ISO 15924) comes from the same
+# registry entry as its name. The translation prompt has to agree with the
+# target: asking for the Latin alphabet of a language written in Devanagari
+# makes the model answer in the wrong script.
 
 # The script names the prompt uses. A script that is not listed is named by
 # its code, which is still an unambiguous script tag.
@@ -818,42 +820,55 @@ _LANGUAGE_SCRIPTS_CACHE: dict | None = None
 _LANGUAGE_SCRIPTS_CACHE_AT: float | None = None
 
 
-def _read_language_table(filepath: str, label: str) -> dict:
-    """Read a language table from disk. An unreadable table reads as empty.
+def _read_language_registry(filepath: str) -> dict:
+    """Read the languages of the registry from disk. An unreadable registry
+    reads as empty.
 
-    A table is a whitelist of language codes, so a file that holds something
-    else is not a table: a list of two-letter strings reads as {"e": "n", ...},
-    and a map of objects answers every lookup with a dictionary. Both would
-    be accepted as languages nobody configured, so a file that is not a map
-    of strings is treated as unreadable. An empty table is unreadable too:
-    it refuses every language without saying why.
+    The registry is a whitelist of language codes, so a file that holds
+    something else is not a registry: a list of two-letter strings reads as
+    {"e": "n", ...}, and the flat code-to-name map this registry replaced
+    answers every script lookup with a string. Both would be accepted as
+    languages nobody configured, so a file whose entries do not each carry a
+    non-empty name and a non-empty script is treated as unreadable. An empty
+    registry is unreadable too: it refuses every language without saying why.
     """
     try:
         with open(filepath, encoding="utf-8") as file:
             loaded = json.load(file)
     except Exception as e:
-        logger.error(f"Error loading {label} from {filepath}: {e}")
+        logger.error(f"Error loading the language registry from {filepath}: {e}")
         return {}
-    if not isinstance(loaded, dict) or not all(
-        isinstance(code, str) and isinstance(value, str) for code, value in loaded.items()
+    languages = loaded.get("languages") if isinstance(loaded, dict) else None
+    if not isinstance(languages, dict) or not all(
+        isinstance(code, str)
+        and isinstance(entry, dict)
+        and isinstance(entry.get("name"), str)
+        and entry["name"]
+        and isinstance(entry.get("script"), str)
+        and entry["script"]
+        for code, entry in languages.items()
     ):
-        logger.error(f"The {label} file {filepath} is not a map of strings — ignoring it.")
+        logger.error(f"The language registry file {filepath} is not a map of named, scripted languages — ignoring it.")
         return {}
-    if not loaded:
-        logger.error(f"The {label} file {filepath} is empty — ignoring it.")
+    if not languages:
+        logger.error(f"The language registry file {filepath} is empty — ignoring it.")
         return {}
-    return loaded
+    return languages
 
 
 def _read_language_codes(filepath: str) -> dict:
-    """The language map (code → name). An unreadable map reads as empty."""
-    return _read_language_table(filepath, "language codes")
+    """The language map (code → name), derived from the registry. An
+    unreadable registry reads as empty."""
+    languages = _read_language_registry(filepath)
+    return {code: language["name"] for code, language in languages.items()}
 
 
 def _read_language_scripts(filepath: str) -> dict:
-    """The language -> script table. An unreadable table reads as empty,
-    which leaves the translation prompt without a script clause."""
-    return _read_language_table(filepath, "language scripts")
+    """The language -> script table, derived from the registry. An unreadable
+    registry reads as empty, which leaves the translation prompt without a
+    script clause."""
+    languages = _read_language_registry(filepath)
+    return {code: language["script"] for code, language in languages.items()}
 
 
 def language_scripts_map() -> dict:
@@ -882,7 +897,7 @@ def language_scripts_map() -> dict:
     if _LANGUAGE_SCRIPTS_CACHE_AT is not None and now - _LANGUAGE_SCRIPTS_CACHE_AT < LANGUAGE_MAP_RETRY_SECONDS:
         # The last read failed and the retry window has not elapsed yet.
         return {}
-    loaded = _read_language_scripts(LANGUAGE_SCRIPTS_FILEPATH)
+    loaded = _read_language_scripts(LANGUAGE_REGISTRY_FILEPATH)
     _LANGUAGE_SCRIPTS_CACHE = loaded
     _LANGUAGE_SCRIPTS_CACHE_AT = now
     return dict(loaded)
@@ -917,7 +932,7 @@ def language_codes_map() -> dict:
     if _LANGUAGE_CODES_CACHE_AT is not None and now - _LANGUAGE_CODES_CACHE_AT < LANGUAGE_MAP_RETRY_SECONDS:
         # The last read failed and the retry window has not elapsed yet.
         return {}
-    loaded = _read_language_codes(LANGUAGE_CODES_FILEPATH)
+    loaded = _read_language_codes(LANGUAGE_REGISTRY_FILEPATH)
     _LANGUAGE_CODES_CACHE = loaded
     _LANGUAGE_CODES_CACHE_AT = now
     return dict(loaded)
@@ -2957,7 +2972,7 @@ class ChatQnAService:
                     logger.error(
                         "Language map is empty or unreadable — every language is unknown, "
                         "so translation is refused and the answer is returned in English. "
-                        "Check that language_codes.json is readable at the configured path."
+                        "Check that the language registry is readable at the configured path."
                     )
                 final_text_response = llm_response
                 translation_status = "refused"

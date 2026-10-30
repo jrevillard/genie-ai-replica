@@ -1086,6 +1086,28 @@ opea:
     retrieverArangoTraversalMaxReturned: "5"           # RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED
     retrieverArangoTraversalScoreThreshold: "0.7"      # RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD
     retrieverArangoTraversalConcurrentBatches: "10"    # RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES
+    retrieverArangoTraversalMaxEdgesPerNode: "2000"    # RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE
+    retrieverArangoTraversalMaxLinks: "300000"         # RETRIEVER_ARANGO_TRAVERSAL_MAX_LINKS
+    # Fan-out retrieval: how many graphs fan out from the spine, how
+    # deep, and the per-graph budget.
+    retrieverFanoutEnabled: true                       # RETRIEVER_FANOUT_ENABLED (env string)
+    retrieverFanoutCandidateCapGlobal: "200"           # RETRIEVER_FANOUT_CANDIDATE_CAP_GLOBAL
+    retrieverFanoutCandidateCapPerGraph: "50"          # RETRIEVER_FANOUT_CANDIDATE_CAP_PER_GRAPH
+    retrieverFanoutExtractedHopCap: "1"                # RETRIEVER_FANOUT_EXTRACTED_HOP_CAP
+    retrieverFanoutMaxGraphs: "5"                      # RETRIEVER_FANOUT_MAX_GRAPHS
+    retrieverFanoutPerGraphTimeoutMs: "8000"           # RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS
+    retrieverFanoutSpineMaxHops: "2"                   # RETRIEVER_FANOUT_SPINE_MAX_HOPS
+    # Route gate: decides between lexical/dense/hybrid paths per query.
+    retrieverRouteEnabled: true                        # RETRIEVER_ROUTE_ENABLED (env string)
+    retrieverRouteProbeTimeoutMs: "2000"               # RETRIEVER_ROUTE_PROBE_TIMEOUT_MS
+    retrieverRouteRetry: "1"                           # RETRIEVER_ROUTE_RETRY
+    retrieverRouteTopK: "40"                           # RETRIEVER_ROUTE_TOP_K
+    retrieverRouteMinChunks: "3"                       # RETRIEVER_ROUTE_MIN_CHUNKS
+    retrieverRouteForbiddenTagMax: "0.55"              # RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX
+    retrieverRouteHeadsSupersede: true                 # RETRIEVER_ROUTE_HEADS_SUPERSEDE (env string)
+    retrieverRouteHeadFloor: "0.55"                    # RETRIEVER_ROUTE_HEAD_FLOOR
+    retrieverRouteHeadMargin: "0.01"                   # RETRIEVER_ROUTE_HEAD_MARGIN
+    retrieverRouteHeadWeight: "1.0"                    # RETRIEVER_ROUTE_HEAD_WEIGHT
     retrieverHybridRrfK: "60"             # RETRIEVER_HYBRID_RRF_K
     retrieverHybridBm25Candidates: "50"   # RETRIEVER_HYBRID_BM25_CANDIDATES
     retrieverHybridDenseWeight: "1.0"     # RETRIEVER_HYBRID_DENSE_WEIGHT
@@ -1111,6 +1133,8 @@ opea:
     dataprepComponentName: "GENIE_DATAPREP_ARANGODB"   # DATAPREP_COMPONENT_NAME
     arangoGraphName: "GRAPH"              # ARANGO_GRAPH_NAME
     dataprepMaxConcurrentBatches: "20"    # DATAPREP_MAX_CONCURRENT_BATCHES
+    dataprepIngestConcurrency: "1"        # DATAPREP_INGEST_CONCURRENCY (per-file ingest workers)
+    dataprepVllmMaxModelLen: "65536"      # VLLM_MAX_MODEL_LEN (the window the doc-budget derivation reads)
     dataprepLlmLabelBatchSize: "4"        # DATAPREP_LLM_LABEL_BATCH_SIZE
     dataprepChunkSizePdf: "500"           # DATAPREP_CHUNK_SIZE_PDF
     dataprepChunkSizeXlsx: "1500"         # DATAPREP_CHUNK_SIZE_XLSX

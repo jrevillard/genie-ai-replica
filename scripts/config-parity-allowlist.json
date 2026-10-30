@@ -92,7 +92,8 @@
         "TRANSLATION_SERVICE_HOST_IP": "in-cluster Service DNS instead of the Compose service name",
         "VLLM_API_KEY": "carried by the vllm-api-key Secret the operator provides",
         "VLLM_LLM_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose leaves it to the in-cluster default",
-        "VLLM_TRANSLATION_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose leaves it to the in-cluster default"
+        "VLLM_TRANSLATION_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose leaves it to the in-cluster default",
+        "VLLM_MODEL_ID": "main's compose moved to runtime model discovery (empty default, the job fails loudly on a cold vLLM) while the chart still pins the model id; the static-env vs runtime-discovery homogenization is tracked in issue #1182 — the chart re-mirrors whichever shape #1182 lands"
       },
       "codeDefault": {
         "CHATQNA_SYSTEM_PROMPT": "empty in Compose; the chart has its own prompt knob (opea.chatqna.systemPrompt) and omits the row when it is empty, so the code's built-in prompt applies on both surfaces",
@@ -130,7 +131,9 @@
         "OTEL_EXPORTER_OTLP_ENDPOINT": "the collector is an operator-managed instance with its own Service name",
         "TEI_EMBEDDING_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own TEI service",
         "VLLM_API_KEY": "carried by the vllm-api-key Secret the operator provides",
-        "VLLM_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own vLLM service"
+        "VLLM_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own vLLM service",
+        "VLLM_MODEL_ID": "main's compose moved to runtime model discovery (empty default, the job fails loudly on a cold vLLM) while the chart still pins the model id; the static-env vs runtime-discovery homogenization is tracked in issue #1182 — the chart re-mirrors whichever shape #1182 lands",
+        "DATAPREP_CONTEXTUAL_DOC_BUDGET": "the chart carries a smaller laptop-tuned budget than Compose's 100000; the budget-derivation rework (fixed vs derive-from-window) is tracked in issue #1182"
       },
       "composeOnly": {
         "NVIDIA_VISIBLE_DEVICES": "Docker GPU passthrough — Kubernetes expresses the same thing with the device plugin and a node selector, not with this variable"
@@ -155,7 +158,8 @@
         "OTEL_EXPORTER_OTLP_ENDPOINT": "the collector is an operator-managed instance with its own Service name",
         "TEI_EMBEDDING_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own TEI service",
         "VLLM_API_KEY": "carried by the vllm-api-key Secret the operator provides",
-        "VLLM_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own vLLM service"
+        "VLLM_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own vLLM service",
+        "VLLM_MODEL_ID": "main's compose moved to runtime model discovery (empty default, the job fails loudly on a cold vLLM) while the chart still pins the model id; the static-env vs runtime-discovery homogenization is tracked in issue #1182 — the chart re-mirrors whichever shape #1182 lands"
       }
     },
     "reranker": {

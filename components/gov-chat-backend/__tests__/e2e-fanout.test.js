@@ -246,9 +246,14 @@ describe('e2e fan-out wire-up (Story 1.1)', () => {
       language: 'en'
     });
     // categoryLabels (plural) rides along since main's English-SSOT wire: the
-        // chatqna contract accepts both spellings, and a declared scope must
-        // never die at this boundary.
-        expect(Object.keys(payload.context).sort()).toEqual(['categoryLabel', 'categoryLabels', 'language', 'serviceLabels']);
+    // chatqna contract accepts both spellings, and a declared scope must
+    // never die at this boundary.
+    expect(Object.keys(payload.context).sort()).toEqual([
+      'categoryLabel',
+      'categoryLabels',
+      'language',
+      'serviceLabels'
+    ]);
   });
 
   it('hybrid mode engaged: the payload carries the carrier with GRAPH first, OKF graphs after', async () => {

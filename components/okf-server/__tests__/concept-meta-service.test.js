@@ -822,22 +822,35 @@ describe('patchConceptMeta — stale park cleared on content change', () => {
 // policy: pin > /v1/models discovery; never a silent undefined (the dead
 // `config?.llm` reads are gone). Best-effort semantics are preserved — a
 // resolution failure returns the manifest with summary_text null.
-describe('ensureSummary — model-id discovery (#1181)', () => {
+// The model-id policy of the lazy summary (!631, #1181): the pin wins, else
+// the model is discovered from the endpoint, and the probe shares the
+// best-effort budget with the chat call.
+describe('ensureSummary — model-id resolution (!631 policy)', () => {
+  const cache = require('../services/vllm-model-cache');
   const axios = require('axios');
+  const ENV_KEYS = ['VLLM_MODEL_ID', 'VLLM_LLM_MODEL_ID', 'VLLM_ENDPOINT'];
+  let saved = {};
 
   beforeEach(() => {
+    saved = {};
+    for (const k of ENV_KEYS) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+    cache.clearModelCache();
     mockDb._reset();
     axios.get.mockReset();
     axios.post.mockReset();
-    delete process.env.VLLM_MODEL_ID;
-    delete process.env.VLLM_LLM_MODEL_ID;
+    // The deployment endpoint (the summary resolves against it).
     process.env.VLLM_ENDPOINT = 'http://vllm:8000';
-    require('../services/vllm-model-cache').clearModelCache();
   });
 
   afterEach(() => {
-    delete process.env.VLLM_ENDPOINT;
-    require('../services/vllm-model-cache').clearModelCache();
+    for (const k of ENV_KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+    cache.clearModelCache();
   });
 
   it('no pin: the summary call names the model discovered from the endpoint', async () => {
@@ -873,29 +886,26 @@ describe('ensureSummary — model-id discovery (#1181)', () => {
     expect(axios.get).not.toHaveBeenCalled();
     expect(axios.post.mock.calls[0][1].model).toBe('pinned/summarizer');
   });
-});
 
-const FILE_ENV = { ...process.env };
-afterEach(() => {
-  process.env = { ...FILE_ENV };
-});
-it('r4: the chat call gets the budget left after the discovery probe', async () => {
-  await mockDb.collection('okf_bundle_manifest').save(manifestFixture());
-  mockDb.query.mockResolvedValueOnce({ all: async () => [manifestFixture()] });
-  // The probe burns part of the 5 s budget; the chat call must not be
-  // granted a fresh one (the caller's contract is one budget).
-  delete process.env.VLLM_MODEL_ID;
-  delete process.env.VLLM_LLM_MODEL_ID;
-  process.env.VLLM_ENDPOINT = 'http://vllm:8000';
-  require('../services/vllm-model-cache').clearModelCache();
-  const axios = require('axios');
-  axios.get.mockImplementation(
-    () => new Promise((resolve) => setTimeout(() => resolve({ data: { data: [{ id: 'served/summarizer-8b' }] } }), 60))
-  );
-  axios.post.mockResolvedValue({ data: { choices: [{ message: { content: 'Sum.' } }] } });
-  await conceptMeta.ensureSummary('r1');
-  // The LAST call — mock.calls accumulates across this file's tests.
-  const postTimeout = axios.post.mock.calls[axios.post.mock.calls.length - 1][2].timeout;
-  expect(postTimeout).toBeLessThan(5000);
-  expect(postTimeout).toBeGreaterThan(4000);
+  it('r4: the chat call gets the budget left after the discovery probe', async () => {
+    await mockDb.collection('okf_bundle_manifest').save(manifestFixture());
+    mockDb.query.mockResolvedValueOnce({ all: async () => [manifestFixture()] });
+    // The probe burns part of the 5 s budget; the chat call must not be
+    // granted a fresh one (the caller's contract is one budget).
+    delete process.env.VLLM_MODEL_ID;
+    delete process.env.VLLM_LLM_MODEL_ID;
+    process.env.VLLM_ENDPOINT = 'http://vllm:8000';
+    require('../services/vllm-model-cache').clearModelCache();
+    const axios = require('axios');
+    axios.get.mockImplementation(
+      () =>
+        new Promise((resolve) => setTimeout(() => resolve({ data: { data: [{ id: 'served/summarizer-8b' }] } }), 60))
+    );
+    axios.post.mockResolvedValue({ data: { choices: [{ message: { content: 'Sum.' } }] } });
+    await conceptMeta.ensureSummary('r1');
+    // The LAST call — mock.calls accumulates across this file's tests.
+    const postTimeout = axios.post.mock.calls[axios.post.mock.calls.length - 1][2].timeout;
+    expect(postTimeout).toBeLessThan(5000);
+    expect(postTimeout).toBeGreaterThan(4000);
+  });
 });

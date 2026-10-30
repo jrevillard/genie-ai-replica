@@ -3827,20 +3827,29 @@ describe('buildEnvAdvice — the configuration adjustment cycle (2026-10-27)', (
 
 // #1181 — with no pin, the serve-mode fidelity label names the model the
 // deployment endpoint actually serves (!631 discovery policy), not null.
-describe('answerFidelity — discovery names the served deployment model (#1181)', () => {
-  const OLD_ENV = { ...process.env };
+// The serve-mode fidelity label (!631, #1181): it mirrors chatqna's pin
+// precedence — the LLM spelling the chatqna container receives — else the
+// served model of the deployment endpoint.
+describe('answerFidelity — the serve-mode model (!631 policy)', () => {
+  const cache = require('../services/vllm-model-cache');
+  const ENV_KEYS = ['VLLM_MODEL_ID', 'VLLM_LLM_MODEL_ID', 'VLLM_ENDPOINT'];
+  let saved = {};
 
   beforeEach(() => {
-    // The failed-probe negative window (60 s) is shared process-wide: a
-    // probe failure in an earlier test would answer this one from the
-    // negative stub instead of the network.
-    require('../services/vllm-model-cache').clearModelCache();
+    saved = {};
+    for (const k of ENV_KEYS) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+    cache.clearModelCache();
   });
 
   afterEach(() => {
-    process.env = { ...OLD_ENV };
-    jest.restoreAllMocks();
-    require('../services/vllm-model-cache').clearModelCache();
+    for (const k of ENV_KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+    cache.clearModelCache();
   });
 
   it('no pin: serve mode records the model discovered from the endpoint', async () => {
@@ -3852,19 +3861,6 @@ describe('answerFidelity — discovery names the served deployment model (#1181)
     const serve = await svc.answerFidelity({ serveMode: true });
     expect(serve.source).toBe('deployment-chat');
     expect(serve.model).toBe('served/chat-8b');
-  });
-});
-
-// Review r2 (#1181): serve-mode answers come from chatqna, whose compose
-// pin maps ONLY the VLLM_LLM_MODEL_ID spelling — the label must mirror
-// that precedence (LLM-spelling pin > served), never the fused okf pin.
-describe('answerFidelity — chatqna pin-spelling parity (r2 #1181)', () => {
-  const OLD_ENV = { ...process.env };
-
-  afterEach(() => {
-    process.env = { ...OLD_ENV };
-    jest.restoreAllMocks();
-    require('../services/vllm-model-cache').clearModelCache();
   });
 
   it('VLLM_MODEL_ID alone must NOT name the serve-mode model — the served id does', async () => {

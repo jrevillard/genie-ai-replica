@@ -2224,20 +2224,30 @@ describe('1-8g-x — run progress reporting', () => {
 // #1181 — the suite provenance label names the model the deployment
 // endpoint serves (discovery, !631 policy) instead of the never-injected
 // VLLM_LLM_MODEL_ID placeholder 'vllm'.
-describe('suite generator label — model-id discovery (#1181)', () => {
+// The suite provenance label (!631, #1181): the model that generated the
+// suite — the stamp from the generation calls, else the deployment pin or
+// the served model.
+describe('suite generator — model-id provenance (!631 policy)', () => {
+  const cache = require('../services/vllm-model-cache');
   const axios = require('axios');
-  const OLD_ENV = { ...process.env };
+  const ENV_KEYS = ['VLLM_MODEL_ID', 'VLLM_LLM_MODEL_ID', 'VLLM_ENDPOINT'];
+  let saved = {};
 
   beforeEach(() => {
-    // The failed-probe negative window (60 s) is shared process-wide: a
-    // probe failure in an earlier test would answer this one from the
-    // negative stub instead of the network.
-    require('../services/vllm-model-cache').clearModelCache();
+    saved = {};
+    for (const k of ENV_KEYS) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+    cache.clearModelCache();
   });
 
   afterEach(() => {
-    process.env = { ...OLD_ENV };
-    require('../services/vllm-model-cache').clearModelCache();
+    for (const k of ENV_KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+    cache.clearModelCache();
   });
 
   it('no pin: payload.generator names the discovered model, not a placeholder', async () => {
@@ -2256,44 +2266,40 @@ describe('suite generator label — model-id discovery (#1181)', () => {
     const s = await svc.generateSuite('me', {}, {});
     expect(s.payload.generator).toBe('llm:served/suite-8b');
   });
-});
 
-const FILE_ENV = { ...process.env };
-afterEach(() => {
-  process.env = { ...FILE_ENV };
-});
-it('F3: with VLLM_ENDPOINT unset the label still names the model the default host serves', async () => {
-  delete process.env.VLLM_MODEL_ID;
-  delete process.env.VLLM_LLM_MODEL_ID;
-  delete process.env.VLLM_ENDPOINT; // compose okf default — base falls back to the service name
-  require('axios').get.mockResolvedValue({ data: { data: [{ id: 'served/suite-8b' }] } });
-  __mockDb.query.mockResolvedValue({ all: async () => [] });
-  frontmatterService.vllmChatCompletions.mockResolvedValue(
-    llmResponse({
-      positive: [{ query: 'What is the licensing fee?', reason: 'topic hit' }],
-      negative: [],
-      keywords: []
-    })
-  );
-  const s = await svc.generateSuite('me', {}, {});
-  expect(require('axios').get).toHaveBeenCalledWith('http://vllm:8000/v1/models', expect.anything());
-  expect(s.payload.generator).toBe('llm:served/suite-8b');
-});
-
-it('r3: the generator label reads the stamped resp.model of the generation calls — no probe at all', async () => {
-  delete process.env.VLLM_MODEL_ID;
-  delete process.env.VLLM_LLM_MODEL_ID;
-  require('axios').get.mockReset(); // must NEVER be called in this path
-  __mockDb.query.mockResolvedValue({ all: async () => [] });
-  frontmatterService.vllmChatCompletions.mockResolvedValue({
-    ...llmResponse({
-      positive: [{ query: 'What is the licensing fee?', reason: 'topic hit' }],
-      negative: [],
-      keywords: []
-    }),
-    model: 'frontier/tagger-stamped'
+  it('F3: with VLLM_ENDPOINT unset the label still names the model the default host serves', async () => {
+    delete process.env.VLLM_MODEL_ID;
+    delete process.env.VLLM_LLM_MODEL_ID;
+    delete process.env.VLLM_ENDPOINT; // compose okf default — base falls back to the service name
+    require('axios').get.mockResolvedValue({ data: { data: [{ id: 'served/suite-8b' }] } });
+    __mockDb.query.mockResolvedValue({ all: async () => [] });
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        positive: [{ query: 'What is the licensing fee?', reason: 'topic hit' }],
+        negative: [],
+        keywords: []
+      })
+    );
+    const s = await svc.generateSuite('me', {}, {});
+    expect(require('axios').get).toHaveBeenCalledWith('http://vllm:8000/v1/models', expect.anything());
+    expect(s.payload.generator).toBe('llm:served/suite-8b');
   });
-  const s = await svc.generateSuite('me', {}, {});
-  expect(require('axios').get).not.toHaveBeenCalled();
-  expect(s.payload.generator).toBe('llm:frontier/tagger-stamped');
+
+  it('r3: the generator label reads the stamped resp.model of the generation calls — no probe at all', async () => {
+    delete process.env.VLLM_MODEL_ID;
+    delete process.env.VLLM_LLM_MODEL_ID;
+    require('axios').get.mockReset(); // must NEVER be called in this path
+    __mockDb.query.mockResolvedValue({ all: async () => [] });
+    frontmatterService.vllmChatCompletions.mockResolvedValue({
+      ...llmResponse({
+        positive: [{ query: 'What is the licensing fee?', reason: 'topic hit' }],
+        negative: [],
+        keywords: []
+      }),
+      model: 'frontier/tagger-stamped'
+    });
+    const s = await svc.generateSuite('me', {}, {});
+    expect(require('axios').get).not.toHaveBeenCalled();
+    expect(s.payload.generator).toBe('llm:frontier/tagger-stamped');
+  });
 });

@@ -545,11 +545,28 @@ describe('taxonomy spelling — services.nameEN vs the bounded list the LLM uses
 // #1181 — model-id resolution follows the !631 discovery policy: env pin >
 // /v1/models discovery > loud failure. The dead `config?.llm` reads are gone;
 // with the pin unset the call names the model the endpoint actually serves.
-describe('callVllm — model-id discovery (#1181)', () => {
+// The model-id policy of the curation client (!631, #1181): the pin wins,
+// else the model is discovered from the endpoint, and the probe and the
+// chat call carry the SAME credential.
+describe('curation callVllm — model-id resolution (!631 policy)', () => {
   const cache = require('../services/vllm-model-cache');
+  const ENV_KEYS = ['VLLM_MODEL_ID', 'VLLM_API_KEY', 'VLLM_LLM_API_KEY'];
+  let saved = {};
+
+  beforeEach(() => {
+    saved = {};
+    for (const k of ENV_KEYS) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+    cache.clearModelCache();
+  });
 
   afterEach(() => {
-    process.env.VLLM_MODEL_ID = 'test-model'; // restore the beforeAll pin
+    for (const k of ENV_KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
     cache.clearModelCache();
   });
 
@@ -601,18 +618,6 @@ describe('callVllm — model-id discovery (#1181)', () => {
       expect.objectContaining({ model: 'frontier/served' }),
       expect.anything()
     );
-  });
-});
-
-// Review round 5 (#1181): the chat call and the discovery probe must use
-// the SAME credential — both spellings are accepted (a probe that
-// authenticates while the chat call does not ends in a bare 401).
-describe('curation — credential parity between probe and chat (r5 #1181)', () => {
-  const cache = require('../services/vllm-model-cache');
-
-  afterEach(() => {
-    process.env.VLLM_MODEL_ID = 'test-model';
-    cache.clearModelCache();
   });
 
   it('VLLM_LLM_API_KEY only: the chat call authenticates like the probe', async () => {

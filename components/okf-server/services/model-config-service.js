@@ -650,8 +650,11 @@ function envJudgeModel() {
   // model that does not answer.
   const base = (process.env.RAGAS_JUDGE_BASE_URL || '').trim();
   if (base && !modelCache.sameOrigin(base, modelCache.deploymentVllmBase())) return null;
-  // The same pin the resolution path uses (the LLM spelling first).
-  return modelCache.envPin() || null;
+  // The SIDECAR's spelling only: its compose default fills the judge name
+  // from VLLM_LLM_MODEL_ID alone — a raw VLLM_MODEL_ID (okf-server's own
+  // escape hatch) never reaches it, and naming it here would advertise a
+  // model that never judges.
+  return modelCache.envPinLLMSpelling() || null;
 }
 
 /** What the run's fidelity block records — name + model, never the key. */

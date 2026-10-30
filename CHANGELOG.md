@@ -83,6 +83,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already needs `node_tls_reject_unauthorized: "0"` for the OKF server's
   other calls to that node — the judge leg joins them.
 
+- **The deployment vLLM bearer stays on the deployment endpoint.** The OKF
+  server used to send `VLLM_API_KEY` to whatever `RAGAS_JUDGE_BASE_URL`
+  names, and to a saved model configuration that carries no key of its own
+  — the GPU bearer traveling to a third-party host. The credential is now
+  scoped to the deployment endpoint (same host, same port, same or
+  version-prefixed path). A judge or a named config on any other endpoint
+  needs its own key: `RAGAS_JUDGE_API_KEY` (no longer defaulted from
+  `VLLM_API_KEY` in compose or the Ansible template) or the config's
+  `api_key` field — an endpoint that accepted the deployment bearer before
+  now answers 401.
+
 - **The suite provenance field `generator` names every model that produced
   the suite.** It was a constant — the deployment's model name
   from the environment, or `llm:vllm` — so it never reflected any call. It

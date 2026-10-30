@@ -117,6 +117,18 @@ root (`http://my-proxy:8080/models`) must carry its version segment
 (`http://my-proxy:8080/v1`). The chat call already resolved that base with
 the `/v1` prefix, so only the listing path changes.
 
+#### The deployment vLLM bearer no longer reaches foreign endpoints
+
+The OKF server scoped its deployment credential (`VLLM_API_KEY`) to the
+deployment endpoint. A judge at `RAGAS_JUDGE_BASE_URL`, or a saved model
+configuration without a key of its own, no longer receives it — before,
+the bearer was sent to whatever endpoint those settings named.
+
+**Migration**: an endpoint on another host that accepted the deployment
+bearer now answers 401. Give it its own credential — `RAGAS_JUDGE_API_KEY`
+for the judge (explicit only in compose and Ansible since this change), or
+the `api_key` field on the saved model configuration.
+
 #### Service-category translation field names
 
 On POST/PUT of categories and services, translations now read

@@ -518,11 +518,13 @@ describe('resolution chain (picked > active > env) + fidelity', () => {
     // the deployment's own endpoint) — the deployment's pin names it.
     delete process.env.RAGAS_JUDGE_BASE_URL;
     expect(svc.judgeFidelity(null).model).toBe('ibm-granite/granite-4.1-8b');
-    // The record names the model the RESOLUTION path pins (both spellings,
-    // the LLM one first) — never a different one.
+    // A raw VLLM_MODEL_ID (the okf-server escape hatch) never names the
+    // judge: the SIDECAR receives the LLM spelling only — with it unset
+    // its judge is "not configured", and the record must not advertise a
+    // model that never judges.
     delete process.env.VLLM_LLM_MODEL_ID;
     process.env.VLLM_MODEL_ID = 'plain/spelling-pin';
-    expect(svc.judgeFidelity(null).model).toBe('plain/spelling-pin');
+    expect(svc.judgeFidelity(null).model).toBeNull();
     delete process.env.VLLM_MODEL_ID;
   });
 });

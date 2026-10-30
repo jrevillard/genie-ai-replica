@@ -57,10 +57,10 @@
 
 const nodeCrypto = require('node:crypto');
 const axios = require('axios');
-const { logger } = require('../shared-lib/logger');
 // Deep import: the shared barrel pulls the security middleware (express
 // rate limiting, geoip) — heavyweight for a leaf helper (see
 // components/CLAUDE.md "When deep imports are unavoidable").
+const { logger } = require('../shared-lib/logger');
 const { openAiModelsUrl } = require('./llm-url');
 
 const MODEL_TTL_DEFAULT_SECONDS = 60;

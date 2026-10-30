@@ -68,7 +68,13 @@ WRAPPED_SITE = "response = await _llm_post_offloop("
 # so both names it needs (asyncio, requests) are bound before any call site
 # can reference it — and the function does not split the import block.
 IMPORT_LINE = re.compile(r"^(?:import|from)[ \t]+\S")
-REQUIRED_IMPORT = "import asyncio"
+
+# Structural anchors, not substrings: a mention of the helper's name in a
+# comment (or a commented-out `import asyncio`) must neither suppress the
+# insertion nor pass the import guard — a substring check would ship an image
+# that builds green and dies with NameError on the first streaming query.
+HELPER_DEF = re.compile(r"^async def _llm_post_offloop\(", re.MULTILINE)
+REQUIRED_IMPORT_RE = re.compile(r"^import asyncio\b", re.MULTILINE)
 
 HELPER = """
 
@@ -135,15 +141,22 @@ def apply_patch(path: Path) -> str:
             f"found {len(sites)} — wrapping a different number would leave a call on the loop or "
             "touch something the anchor was never meant to match; re-derive the patch."
         )
-    if REQUIRED_IMPORT not in original:
+    if not REQUIRED_IMPORT_RE.search(original):
         raise SystemExit(
-            f"ASSERT-ON-PATCH GUARD FAILED: {path} has no {REQUIRED_IMPORT!r} — the off-loop helper "
-            "awaits asyncio.to_thread and the image would die at import time; re-derive the patch."
+            f"ASSERT-ON-PATCH GUARD FAILED: {path} has no column-0 'import asyncio' — the off-loop "
+            "helper awaits asyncio.to_thread and the image would die at import time; re-derive the patch."
         )
 
     lines = original.splitlines(keepends=True)
     for i in sites:
-        lines[i] = _rewrap_line(lines[i])
+        rewrapped = _rewrap_line(lines[i])
+        if rewrapped is None:
+            raise SystemExit(
+                f"ASSERT-ON-PATCH GUARD FAILED: line {i + 1} of {path} matches the streaming-call "
+                f"anchor but is not a plain call site (commented out, or inside a string) — the patch "
+                "cannot rewrap it safely; re-derive the patch."
+            )
+        lines[i] = rewrapped
 
     # Insert the helper after the module's import block. If no import line
     # matches, the module changed too much to guess — the asyncio guard above
@@ -154,7 +167,7 @@ def apply_patch(path: Path) -> str:
             f"ASSERT-ON-PATCH GUARD FAILED: {path} has no import block — cannot place the off-loop "
             "helper; re-derive the patch."
         )
-    if "_llm_post_offloop" not in original:
+    if not HELPER_DEF.search(original):
         lines.insert(import_lines[-1] + 1, HELPER)
 
     patched = "".join(lines)
@@ -172,8 +185,12 @@ def apply_patch(path: Path) -> str:
 
 
 def helper_present(body: str) -> bool:
-    """The wrapped form exists AND nothing still calls requests.post on-loop."""
-    return "_llm_post_offloop" in body
+    """Whether the file defines the helper — structurally, by its def line.
+
+    A substring check would count any mention of the name (a comment, the
+    wrapped call sites themselves) and let a helper-less wrap ship.
+    """
+    return bool(HELPER_DEF.search(body))
 
 
 def main() -> int:

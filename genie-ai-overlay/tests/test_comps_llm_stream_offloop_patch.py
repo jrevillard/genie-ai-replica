@@ -41,8 +41,6 @@ def _load_module():
 
 mod = _load_module()
 
-UNPATCHED_CALL = "response = requests.post(\n"
-
 # A minimal but SYNTACTICALLY VALID stand-in for the real orchestrator module.
 # Shapes mirror the vendored comps v1.5 file exactly: ``import asyncio`` and
 # ``import requests`` at column 0, the two on-loop call sites at 20-space
@@ -161,29 +159,23 @@ def test_generator_call_sites_stay_sync(unpatched_file):
 
 
 def _normalize(lines):
-    """Strip the patch's additions and undo the rewrap, line by line.
+    """Undo the patch exactly: remove the inserted helper, rewind the rewrap.
 
-    Drops blank lines, comment lines and the inserted helper (its def line and
-    its return line); rewraps the call sites back to the upstream shape. What
-    remains must equal the original — proving nothing else changed.
+    Byte-exact inverse — no stripping of indentation or comments — so any
+    other change (a re-indent, a dropped line, a rewritten ending) breaks the
+    equality.
     """
-    out = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped == "" or stripped.startswith("#"):
-            continue
-        if stripped.startswith("async def _llm_post_offloop") or stripped.startswith("return await asyncio.to_thread("):
-            continue
-        out.append(stripped.replace("response = await _llm_post_offloop(", "response = requests.post("))
-    return out
+    text = "".join(line if line.endswith("\n") else line + "\n" for line in lines)
+    return text.replace(mod.HELPER, "").replace("response = await _llm_post_offloop(", "response = requests.post(")
 
 
 def test_patch_preserves_surrounding_source(unpatched_file):
     """Only the two call-site lines and the helper insertion may change."""
     before = unpatched_file.read_text(encoding="utf-8")
+    assert before.count("response = requests.post(") == 2
     mod.apply_patch(unpatched_file)
     after = unpatched_file.read_text(encoding="utf-8")
-    assert _normalize(before.splitlines()) == _normalize(after.splitlines())
+    assert _normalize(after.splitlines()) == before, "modulo the helper insertion and the two rewraps, byte-identical"
 
 
 def test_is_idempotent(unpatched_file):
@@ -227,6 +219,50 @@ def test_guard_fails_without_asyncio_import(tmp_path):
         mod.apply_patch(p)
 
 
+def test_guard_fails_on_commented_out_asyncio_import(tmp_path):
+    """A commented-out `import asyncio` is not a binding: the substring guard
+    would pass it, the helper would be inserted, and the image would die with
+    NameError on the first streaming query. Only a column-0 import counts."""
+    p = tmp_path / "orchestrator.py"
+    commented = "# import asyncio  # moved elsewhere\n"
+    p.write_text(FAKE_ORCHESTRATOR.replace("import asyncio\n", commented), encoding="utf-8")
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
+def test_name_mention_alone_does_not_count_as_helper(tmp_path):
+    """A file that merely mentions the helper's name must still get the def.
+
+    The insertion skip and the post-write verifier are structural (a real
+    `async def _llm_post_offloop(` line), not a substring check: a stray
+    mention would otherwise suppress the insertion while the rewrap still
+    replaces both call sites — an image that builds green and dies with
+    NameError on the first streaming query.
+    """
+    p = tmp_path / "orchestrator.py"
+    mention = "# see _llm_post_offloop discussion upstream\n"
+    body = FAKE_ORCHESTRATOR.replace("import requests\n", "import requests\n" + mention, 1)
+    p.write_text(body, encoding="utf-8")
+    assert mod.apply_patch(p) == "patched"
+    text = p.read_text(encoding="utf-8")
+    assert helper_present(text), "the helper def must be structurally present despite the stray name mention"
+    assert wrapped_call_count(text) == 2
+
+
+def test_guard_fails_on_commented_out_call_site(tmp_path):
+    """A commented-out call line matches the substring anchor but cannot be
+    rewrapped: the guard must refuse with its diagnostic instead of crashing
+    with an unhandled TypeError."""
+    p = tmp_path / "orchestrator.py"
+    body = FAKE_ORCHESTRATOR.replace(
+        "        else:\n                    response = requests.post(",
+        "        else:\n                    # response = requests.post(  # disabled upstream",
+    )
+    p.write_text(body, encoding="utf-8")
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
 def test_guard_fails_on_missing_file(tmp_path):
     with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
         mod.apply_patch(tmp_path / "nope.py")
@@ -242,8 +278,8 @@ def test_patch_preserves_line_endings(tmp_path):
 
     The real orchestrator.py is LF in the v1.5 tag, but the guard must stay
     ending-agnostic: newline="" passes bytes through, so a CRLF file stays
-    CRLF apart from the wrapped lines (which keep their own original
-    terminator).
+    CRLF — including the two wrapped lines' own terminators, asserted
+    directly: a rewrap that dropped the CR would otherwise pass unnoticed.
     """
     p = tmp_path / "orchestrator.py"
     original = FAKE_ORCHESTRATOR.replace("\n", "\r\n").encode("utf-8")
@@ -251,8 +287,8 @@ def test_patch_preserves_line_endings(tmp_path):
     assert mod.apply_patch(p) == "patched"
     raw = p.read_bytes()
     assert b"\r\n" in raw, "fixture should be CRLF"
-    assert b"response = await _llm_post_offloop(" in raw, "the patch must have been applied"
-    undone = raw.replace(b"response = await _llm_post_offloop(", b"response = requests.post(")
-    assert _normalize(undone.decode("utf-8").splitlines()) == _normalize(original.decode("utf-8").splitlines()), (
-        "only the call-site lines may change; endings stay CRLF"
+    assert raw.count(b"response = await _llm_post_offloop(\r\n") == 2, "wrapped lines keep their CRLF terminator"
+    undone = raw.replace(mod.HELPER.encode("utf-8"), b"").replace(
+        b"response = await _llm_post_offloop(", b"response = requests.post("
     )
+    assert undone == original, "modulo the helper insertion and the two rewraps, byte-identical (CRLF intact)"

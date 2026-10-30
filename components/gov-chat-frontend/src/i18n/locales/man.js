@@ -540,7 +540,7 @@ export default {
       colSources: 'Sorsolu',
       colFeedback: 'Moo-kiliya Kumadiyaa',
       colActions: 'Baarol',
-      inspect: 'Ñining',
+      inspect: 'Ka a jine',
       prev: 'Kotoo',
       next: 'Nuni',
       pageInfo: 'Kafolii {current} / {total} (coko {count})',

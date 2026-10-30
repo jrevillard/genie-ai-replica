@@ -108,10 +108,11 @@
       </DsButton>
       <span class="qi-list__page-info">
         {{
-          translate('admin.queryInspector.pageInfo', 'Page {current} of {total} ({count} total)')
-            .replace('{current}', pagination.currentPage)
-            .replace('{total}', pagination.pages)
-            .replace('{count}', pagination.total)
+          translate('admin.queryInspector.pageInfo', 'Page {current} of {total} ({count} total)', {
+            current: pagination.currentPage,
+            total: pagination.pages,
+            count: pagination.total
+          })
         }}
       </span>
       <DsButton
@@ -175,8 +176,8 @@ export default {
     isAbstained(query) {
       return queryIsAbstained(query);
     },
-    translate(key, fallback) {
-      return this.$parent?.translate?.(key, fallback) ?? fallback;
+    translate(key, fallback, named) {
+      return this.$parent?.translate?.(key, fallback, named) ?? fallback;
     },
     resetFilters() {
       this.filters = { searchText: '', minConfidence: '', maxConfidence: '', startDate: '', endDate: '' };

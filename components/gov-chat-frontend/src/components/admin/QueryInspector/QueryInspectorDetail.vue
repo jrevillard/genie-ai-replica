@@ -270,8 +270,8 @@ export default {
       const text = scopeDisplayText(this.query, this.translate('admin.queryInspector.unfiltered', 'Unfiltered'));
       return text === null ? this.translate('admin.queryInspector.scopeNotRecorded', 'Not recorded') : text;
     },
-    translate(key, fallback) {
-      return this.$parent?.translate?.(key, fallback) ?? fallback;
+    translate(key, fallback, named) {
+      return this.$parent?.translate?.(key, fallback, named) ?? fallback;
     },
     formatTime(ts) {
       return ts ? new Date(ts).toLocaleString() : 'N/A';

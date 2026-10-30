@@ -2093,14 +2093,16 @@ export default {
     },
 
     // Translation method - improved to ensure consistent behavior with SettingsComponent
-    translate(key, fallback = '') {
+    translate(key, fallback = '', named = {}) {
       if (!this.$i18n) {
         // console.warn(`[AdminDashboard] $i18n not available. Using fallback for: ${key}`);
         return fallback;
       }
       try {
-        // Force the correct locale
-        const translation = this.$i18n.t(key, { locale: this.currentLocale });
+        // Force the correct locale. The named dict must be the third argument:
+        // passing it in the { locale } slot leaves vue-i18n no interpolation
+        // params and it renders `{current}`-style placeholders as empty.
+        const translation = this.$i18n.t(key, { locale: this.currentLocale }, named);
         // Return fallback if the key is returned (meaning no translation found)
         if (translation === key) {
           // console.warn(`[AdminDashboard] No translation for key: ${key}. Using fallback.`);

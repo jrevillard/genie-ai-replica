@@ -579,7 +579,7 @@ export default {
       sectionResponse: 'Ответ LLM',
       confidenceScore: 'Оценка уверенности',
       retrievalConfidenceScore: 'Уверенность поиска',
-      selfConfidence: 'Самооценка (LLM)',
+      selfConfidence: 'Уверенность LLM в ответе',
       sectionFeedback: 'Отзыв пользователя',
       rating: 'Оценка',
       comment: 'Комментарий',

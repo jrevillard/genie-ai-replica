@@ -1471,6 +1471,14 @@ void main() {
       expect(quickHelpGridColumns({'columns': 500}, maxWidth: 25), 3);
     });
 
+    test('a width without room for two columns degrades to one', () {
+      // A negative or sub-spacing width cannot be produced by the
+      // widget's BoxConstraints, but the helper is public: its own
+      // contract (never throw) must hold for any width.
+      expect(quickHelpGridColumns({'columns': 3}, maxWidth: -50), 1);
+      expect(quickHelpGridColumns({'columns': 3}, maxWidth: 0), 1);
+    });
+
     test('an unbounded width keeps the parsed count', () {
       expect(quickHelpGridColumns({'columns': 4}), 4);
     });

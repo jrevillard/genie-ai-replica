@@ -2156,8 +2156,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                               SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: crossAxisCount,
                                 childAspectRatio: aspectRatio,
-                                mainAxisSpacing: 10,
-                                crossAxisSpacing: 10,
+                                mainAxisSpacing: quickHelpGridSpacing,
+                                crossAxisSpacing: quickHelpGridSpacing,
                               ),
                           itemCount: _quickHelpButtons.length,
                           itemBuilder: (context, index) {

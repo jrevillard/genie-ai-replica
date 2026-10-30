@@ -135,6 +135,10 @@ bool quickHelpButtonHidden(dynamic hidden) {
   return configTruthy(hidden);
 }
 
+/// The spacing between the grid's columns — the delegate's own
+/// crossAxisSpacing and the column bound's denominator are ONE value.
+const double quickHelpGridSpacing = 10;
+
 /// The grid's column count, from the config's `layout` block, bounded
 /// by [maxWidth] (the width the grid is given). A malformed value — a
 /// non-number, a non-positive or non-finite count (a JSON `1e400`
@@ -158,11 +162,12 @@ int quickHelpGridColumns(
   if (!maxWidth.isFinite) return parsed;
   // The bound delivers ONE guarantee: the delegate never lays out a
   // NEGATIVE-extent child (a debug assertion, garbage in release) —
-  // count and width must leave room for the 10px spacing between the
+  // count and width must leave room for the spacing between the
   // columns. An absurd-but-bounded count still yields sub-pixel tiles;
   // a readable-minimum policy is a layout decision no shipped
   // configuration needs (none sets a count).
-  final int byWidth = (maxWidth ~/ 10) + 1;
+  int byWidth = (maxWidth ~/ quickHelpGridSpacing) + 1;
+  if (byWidth < 1) byWidth = 1;
   return parsed.clamp(1, byWidth);
 }
 

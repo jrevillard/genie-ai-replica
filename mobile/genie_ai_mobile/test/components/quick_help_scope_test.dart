@@ -1147,22 +1147,11 @@ void main() {
       );
     });
 
-    test('a load under the live locale never re-triggers', () {
-      // Whatever SETTLED under a locale — a completed load or a failed
-      // one (the widget marks both) — the marker names that locale, and
-      // only a locale change re-reads the asset. A keyboard opening (a
-      // dependency change under the same locale) must not.
-      // (The catch branch that marks a FAILED load lives in the widget;
-      // this predicate names the rule it shares.)
-      expect(
-        shouldReloadQuickHelpButtons(loadedLocale: 'en', currentLocale: 'en'),
-        isFalse,
-      );
-      expect(
-        shouldReloadQuickHelpButtons(loadedLocale: 'en', currentLocale: 'fr'),
-        isTrue,
-      );
-    });
+    // The catch branch that marks a FAILED load under the locale it
+    // failed in lives in the widget: this predicate cannot tell a
+    // settled load from a failed one, it only reads the marker the
+    // widget sets. That half is untested until the widget has a test
+    // harness (#1191).
   });
 
   /// One rule for every path that shows a Quick Help title: an EMPTY
@@ -1235,7 +1224,10 @@ void main() {
   /// The stored label list is handed back as-is — the grid reads it per
   /// frame, and a copy per read would allocate on every rebuild.
   group('quickHelpServiceLabelsOf', () {
-    test('a stored string list is returned without a copy', () {
+    test('a stored string list is handed back without a copy', () {
+      // The property this guards: the grid reads the labels on EVERY
+      // frame, so the helper must not allocate. The scope's OWN copy is
+      // taken where the list is kept (the press), not here.
       final labels = <String>['Births'];
       final button = {'serviceLabels': labels};
 

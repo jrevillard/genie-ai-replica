@@ -1,22 +1,25 @@
 import 'package:genie_ai_mobile/utils/config_resolver.dart';
 
-// The scope of a Quick Help button, checked against the live EN hierarchy.
+// The Quick Help rules, on both sides of the button: the SCOPE it claims
+// against the live EN hierarchy, and the CONFIG shape it is parsed from.
 //
-// English is the SSOT of the filter wire: the corpus's chunk_labels carry the
-// EN translation, so a declared label the hierarchy no longer carries can
-// never match a chunk, and a category that is gone leaves the button with no
-// scope at all. A broken button is a VISIBLE failure — error state, caption,
-// no query — never a silently reduced one.
+// Scope. English is the SSOT of the filter wire: the corpus's chunk_labels
+// carry the EN translation, so a declared label the hierarchy no longer
+// carries can never match a chunk, and a category that is gone leaves the
+// button with no scope at all. A broken button is a VISIBLE failure — error
+// state, caption, no query — never a silently reduced one. The resolver
+// indexes the tree ONCE: the label vocabulary and the category keys are
+// walked a single time, then every button is checked against the index —
+// never against the tree itself.
 //
-// The resolver indexes the tree ONCE: the label vocabulary and the category
-// keys are walked a single time, then every button is checked against the
-// index — never against the tree itself.
-//
-// The CONFIG-side rules of a Quick Help button live here too: its identity
-// (its id), the title it displays, and when the loaded buttons must
-// re-resolve for a new locale. They are the same kind of rule — one copy,
-// read by every path — and they belong to the button, not to the widget
-// that shows it.
+// Config. The CONFIG-side rules live here too, because the widget that
+// shows a button must not be the only place they are read: the section
+// parse (the guarded descent, the hidden filter, the per-entry skip, the
+// button parse, the first-wins dedupe), the button's identity (its id), the
+// title it displays, when the loaded buttons must re-resolve for a new
+// locale, and the grid's layout values. They are the same kind of rule —
+// one copy, read by every path — and they belong to the button, not to the
+// widget that shows it.
 
 /// Whether [id] names a category scope at all. An EMPTY id declares
 /// nothing (it is how a selection is cleared), and 'general' is the

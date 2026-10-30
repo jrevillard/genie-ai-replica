@@ -65,4 +65,42 @@ void main() {
       expect(configTruthy(''), isFalse);
     });
   });
+
+  /// The ONE container guard, and the map branch the card label's
+  /// resolution depends on.
+  group('configMapOf', () {
+    test('a map is handed back as-is', () {
+      final map = {'en': 'Hello'};
+
+      expect(configMapOf(map), same(map));
+    });
+
+    test('anything else degrades to the empty map', () {
+      expect(configMapOf(null), isEmpty);
+      expect(configMapOf('nope'), isEmpty);
+      expect(configMapOf(['a']), isEmpty);
+      expect(configMapOf(7), isEmpty);
+    });
+  });
+
+  group('resolveConfigText locale maps', () {
+    test('the active locale wins', () {
+      expect(
+        resolveConfigText({'en': 'Hello', 'fr': 'Bonjour'}, 'fr'),
+        'Bonjour',
+      );
+    });
+
+    test('an absent locale falls back to English', () {
+      expect(resolveConfigText({'en': 'Hello'}, 'fr'), 'Hello');
+    });
+
+    test('neither present falls back to the first value', () {
+      expect(resolveConfigText({'es': 'Hola'}, 'fr'), 'Hola');
+    });
+
+    test('an empty map resolves to no text', () {
+      expect(resolveConfigText({}, 'en'), '');
+    });
+  });
 }

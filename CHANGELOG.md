@@ -74,6 +74,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the card icon the button's top-level `icon`, the same shape the web
   reads. The chips row was never affected. (#1124, !635)
 
+- **A Quick Help card that declares no hidden prompt no longer sends an empty
+  question.** The card's visible text was shown in the chat while the question
+  sent to the assistant was empty, so the assistant answered a blank prompt.
+  The card now opens the chat with its scope in place and leaves the question
+  to the user. A card whose configuration declares a hidden prompt - every
+  shipped one does - is unchanged.
+
+- **A Quick Help card marked as hidden is now hidden on the mobile app whatever
+  the shape of the flag.** The flag was read as a boolean, so a configuration
+  that writes it as a string (for example `"hidden": "false"`) kept the card on
+  the mobile app while the web hid it. Both platforms now hide it the same
+  way.
+
 - **The mobile app now shows the chat's configured welcome message on first
   render.** The message declared in the deployment configuration was computed
   before the configuration had finished loading, so the first screen showed

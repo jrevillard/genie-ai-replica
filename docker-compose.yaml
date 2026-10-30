@@ -1676,10 +1676,11 @@ services:
     #   - "5000:5000"
     environment:
       DATAPREP_COMPONENT_NAME: GENIE_DATAPREP_ARANGODB
-      # Empty by default: the served model id is DISCOVERED at /v1/models.
-      # On first boot this waits for vLLM through the standard restart cycle
-      # (unless-stopped) while the model loads. Set VLLM_LLM_MODEL_ID to pin
-      # a name and skip discovery entirely.
+      # Empty by default: the served model id is DISCOVERED per request/job.
+      # Services start immediately — while vLLM is still loading, ingestion
+      # jobs fall back to degraded labels (LLM labeling unavailable), and
+      # those labels are NOT re-computed later. Wait for vLLM health before
+      # bulk ingesting, or set VLLM_LLM_MODEL_ID to pin a name.
       VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-}
       VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://vllm:8000}
       # Two names, two consumers, and they are NOT the same knob.
@@ -1696,10 +1697,10 @@ services:
       # Single attempt, no retry: 300 s is what aiohttp applied anyway.
       MODEL_AUTH_TIMEOUT_SECONDS: ${MODEL_AUTH_TIMEOUT_SECONDS:-300}
       MODEL_CONNECT_TIMEOUT_SECONDS: ${MODEL_CONNECT_TIMEOUT_SECONDS:-30}
-      # The model-id probe behind the TTL cache. Degrades to the configured
-      # model id, so 10 s suits a warm endpoint — but a vLLM still loading
-      # weights answers in minutes, and the fallback then silently picks the
-      # configured id instead of the served one.
+      # The model-id probe behind the TTL cache. 10 s suits a warm endpoint —
+      # a vLLM still loading weights answers in minutes, and jobs running in
+      # that window fail their LLM step loudly (labeling falls back to
+      # file-level labels; there is no configured-id fallback anymore).
       MODEL_PROBE_TIMEOUT_SECONDS: ${MODEL_PROBE_TIMEOUT_SECONDS:-10}
       #
       # VLLM_TIMEOUT is deliberately NOT injected here, even though the vendored
@@ -1928,13 +1929,15 @@ services:
       RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE: ${RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE:-2000}
       # AI services endpoints
       VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://vllm:8000}
-      # Same source as the vLLM container's --served-model-name: the explicit
-      # env is the deployer override the summarizer uses as-is (no boot-time
-      # probe race against a still-loading vLLM).
-      # Empty by default: the served model id is DISCOVERED at /v1/models.
-      # On first boot this waits for vLLM through the standard restart cycle
-      # (unless-stopped) while the model loads. Set VLLM_LLM_MODEL_ID to pin
-      # a name and skip discovery entirely.
+      # Empty by default: the summarizer's model id is DISCOVERED per call.
+      # With RETRIEVER_SUMMARIZER_ENABLED=false (the shipped default) the
+      # service starts immediately and simply skips summarization while vLLM
+      # is down. Set VLLM_LLM_MODEL_ID to pin a name and skip discovery.
+      # Empty by default: the served model id is DISCOVERED per request/job.
+      # Services start immediately — while vLLM is still loading, ingestion
+      # jobs fall back to degraded labels (LLM labeling unavailable), and
+      # those labels are NOT re-computed later. Wait for vLLM health before
+      # bulk ingesting, or set VLLM_LLM_MODEL_ID to pin a name.
       VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
       HF_TOKEN: ${VLLM_API_KEY:-}

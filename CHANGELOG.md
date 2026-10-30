@@ -380,11 +380,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retriever's summarizer and dataprep's labelling/graph-extraction clients
   (previously gated on `GPU_NODE_HOST`, silently falling back to a name that
   could diverge from the deployed model). The compose services no longer pin
-  a default model name: discovery is the default everywhere, and a first
-  boot simply waits for vLLM through the standard container restart cycle
-  while the model loads. **Config note:** chatqna no longer reads `LLM_MODEL`;
-  `VLLM_MODEL_ID` is the override every Python service honors (set it only to
-  pin a name — without it the served model is discovered automatically).
+  a default model name: discovery is the default for every chat/ingest
+  Python service (chatqna, retriever, dataprep), and services start
+  immediately — **jobs run while vLLM is still loading fall back to
+  degraded labels that are not re-computed later**; wait for vLLM health
+  before bulk ingesting. **Config note:** chatqna no longer reads
+  `LLM_MODEL`; `VLLM_MODEL_ID` is the override those services honor (set it
+  only to pin a name — without it the served model is discovered
+  automatically).
   Counting failures abort the request loudly rather than silently feeding a
   zero into the truncation budget. (#631)
 - **A category or a service with no translation in the active language

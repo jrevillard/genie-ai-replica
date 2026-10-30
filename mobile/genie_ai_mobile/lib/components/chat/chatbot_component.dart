@@ -2199,6 +2199,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                   )
                                 : (_scopeResolver?.stateFor(button) ??
                                       QuickHelpScopeResolver.pending);
+                            // The caption below names WHICH failure the
+                            // card carries — it reads the two facts the
+                            // verdict composes, hoisted once per tile so
+                            // the caption conditions spell them the same
+                            // way the verdict does.
+                            final bool scopeBroken =
+                                scope['broken'] as bool? ?? false;
+                            final bool titleMissing = translatedTitle.isEmpty;
                             final broken = quickHelpCardBroken(button, scope);
 
                             return Material(
@@ -2280,10 +2288,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                             // defects, one caption
                                             // line.
                                             [
-                                              if (scope['broken'] as bool? ??
-                                                  false)
+                                              if (scopeBroken)
                                                 _quickHelpErrorCaption(scope),
-                                              if (translatedTitle.isEmpty)
+                                              if (titleMissing)
                                                 tr(
                                                   'chatbot.quickHelpTitleMissing',
                                                 ),

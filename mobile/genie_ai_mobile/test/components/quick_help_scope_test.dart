@@ -1236,11 +1236,10 @@ void main() {
     });
 
     test('a broken scope renders broken', () {
+      // The titled card, with the one field that breaks the scope changed.
       final button = {
-        'id': 'civil',
-        'resolvedTitle': 'Civil Registry',
+        ...titled,
         'serviceLabels': ['Registration'],
-        'category': '2',
       };
 
       expect(quickHelpCardBroken(button, resolver.stateFor(button)), isTrue);

@@ -45,7 +45,9 @@ function modelCodes(modelKey) {
  */
 function languageNames() {
   if (!registry.languages) {
-    throw new Error('The language registry has no languages table — the shipped registry and the language maps disagree');
+    throw new Error(
+      'The language registry has no languages table — the shipped registry and the language maps disagree'
+    );
   }
   const names = {};
   for (const [code, language] of Object.entries(registry.languages)) {

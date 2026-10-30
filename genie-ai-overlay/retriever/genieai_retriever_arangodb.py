@@ -115,7 +115,16 @@ TRAVERSAL_BUDGET_RESERVE_S = 0.75
 # process. Retrieval-leg work (the leg runner + the routing probes) therefore
 # runs on this dedicated bounded pool: abandonment costs retrieval capacity
 # only, never the process-wide default pool.
-_EXTRACTION_POOL = ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 4), thread_name_prefix="okf-extract")
+# Sized to the ADMISSION CONTROL, not the core count: legs are gated by
+# asyncio.Semaphore(FANOUT_MAX_GRAPHS), and a leg's 8s deadline starts when
+# _invoke_leg creates its task — BEFORE the queued job gets a thread. A pool
+# smaller than the semaphore let an admitted leg burn its whole budget in the
+# queue (DW-424 abandonment holds a thread ~90s) and return zero-hit without
+# its extraction ever running — silent recall loss. The leg work is I/O-bound
+# (AQL/HTTP); the extra idle threads are cheap.
+_EXTRACTION_POOL = ThreadPoolExecutor(
+    max_workers=max(FANOUT_MAX_GRAPHS, min(8, os.cpu_count() or 4)), thread_name_prefix="okf-extract"
+)
 
 
 async def _to_thread_on_pool(func, /, *args, **kwargs):

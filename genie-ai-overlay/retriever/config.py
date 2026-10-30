@@ -260,9 +260,12 @@ HYBRID_BM25_ANALYZER = os.getenv("RETRIEVER_HYBRID_BM25_ANALYZER", "text_en")
 
 # Story 1.1/1.4/1.5 (ADR-039 D4/D5/D8) — multi-graph fan-out governance.
 # The retriever reads `_encoded_graph_names` from the search_start carrier
-# (Story 1.0b / core/label_contract.py). When the carrier carries ≥2 graphs,
-# the retriever engages the additive fan-out path; with 0 or 1 graphs the
-# original single-graph path runs unchanged (D8: legacy byte-identical).
+# (Story 1.0b / core/label_contract.py). The carrier carries ≥1 graph
+# (`_fanout_should_engage`) and the fan-out engages: per-leg timeout, the
+# dedicated extraction pool, fusion. Only the EMPTY carrier keeps the
+# original single-graph path (D8: legacy byte-identical against
+# ARANGO_GRAPH_NAME) — a single-graph okf_only carrier is deliberately
+# fan-out-managed.
 # The chat-side resolver sets per-request overrides via kwargs (Story 1.2).
 # Defaults preserve legacy behavior — fan-out is opt-in via RETRIEVER_FANOUT_ENABLED.
 FANOUT_ENABLED = os.getenv("RETRIEVER_FANOUT_ENABLED", "true").lower() == "true"

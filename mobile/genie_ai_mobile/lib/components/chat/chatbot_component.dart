@@ -849,6 +849,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _selectedCategoryNameEn = '';
       _sidebarServiceLabelsEn = [];
       _sidebarServiceCount = 0;
+      // No live selection survives a new chat: the title came from one
+      // (or from a restore), and neither shape is re-named by a fetch.
+      _sidebarTitleIsSelection = false;
       _clearQuickHelpScopeFields();
     });
     widget.onRelatedDocumentsUpdate([]);
@@ -1417,6 +1420,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         _selectedCategoryNameEn = '';
         _sidebarServiceLabelsEn = [];
         _sidebarServiceCount = 0;
+        // The scope-less card clears the whole prior scope — the title
+        // flag goes with it, the same way a restore unsets it.
+        _sidebarTitleIsSelection = false;
         _clearQuickHelpScopeFields();
       });
       _inputFocusNode.requestFocus();

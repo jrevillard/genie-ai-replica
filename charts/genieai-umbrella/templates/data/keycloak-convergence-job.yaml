@@ -68,6 +68,7 @@ being set would fail this assertion on every default render.
 */ -}}
 {{- $known := list
       "KEYCLOAK_URL" "KEYCLOAK_USER" "KEYCLOAK_PASSWORD"
+      "KC_OKF_SERVER_CLIENT_SECRET"
       "KC_REALM" "KC_CLIENT_ID" "KC_PUBLIC_ORIGIN"
       "KC_MOBILE_CLIENT_ID" "KC_MOBILE_REDIRECT_SCHEME" "KC_GRAFANA_CLIENT_ID"
       "GENIE_ADMIN_USERNAME" "GENIE_ADMIN_EMAIL"
@@ -179,6 +180,19 @@ spec:
                 secretKeyRef:
                   name: {{ $secretName | quote }}
                   key: password
+            # The okf-server client's secret — the realm body carries it
+            # as $(env:KC_OKF_SERVER_CLIENT_SECRET). Optional, like the
+            # tier it serves: the OKF tier is dark by default, and a
+            # deployment that has not installed the okf-server-client-secret
+            # sealed secret converges the realm with the client created
+            # under an empty secret (kcc's own fallback) instead of
+            # failing the whole install for a workload that does not run.
+            - name: KC_OKF_SERVER_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: okf-server-client-secret
+                  key: KC_OKF_SERVER_CLIENT_SECRET
+                  optional: true
             # Keycloak takes ~70s to report Ready on a cold start. kcc's
             # availability check owns that wait, so backoffLimit above
             # covers real failures rather than startup.

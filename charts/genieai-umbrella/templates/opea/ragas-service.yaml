@@ -2,7 +2,7 @@
 Gated on okf.enabled like the rest of the tier. Environment transcribed
 from the Compose service block with the same effective defaults; the
 judge/embedding endpoints follow the tier's in-cluster addresses. */ -}}
-{{- if .Values.okf.enabled -}}
+{{- if eq true (index (.Values.okf | default dict) "enabled") -}}
 {{- $okf := .Values.okf | default dict -}}
 {{- $okfRagas := index $okf "ragas" | default dict -}}
 {{- $vals  := deepCopy .Values -}}

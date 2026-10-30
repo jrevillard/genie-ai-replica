@@ -542,31 +542,21 @@ describe('taxonomy spelling — services.nameEN vs the bounded list the LLM uses
   });
 });
 
-// #1181 — model-id resolution follows the !631 discovery policy: env pin >
-// /v1/models discovery > loud failure. The dead `config?.llm` reads are gone;
-// with the pin unset the call names the model the endpoint actually serves.
-// The model-id policy of the curation client (!631, #1181): the pin wins,
+// #1181 — the curation client's model-id policy (!631): the pin wins,
 // else the model is discovered from the endpoint, and the probe and the
 // chat call carry the SAME credential.
 describe('curation callVllm — model-id resolution (!631 policy)', () => {
   const cache = require('../services/vllm-model-cache');
+  const { isolateVllmEnv } = require('./vllm-env-helper');
   const ENV_KEYS = ['VLLM_MODEL_ID', 'VLLM_API_KEY'];
-  let saved = {};
+
+  isolateVllmEnv(ENV_KEYS);
 
   beforeEach(() => {
-    saved = {};
-    for (const k of ENV_KEYS) {
-      saved[k] = process.env[k];
-      delete process.env[k];
-    }
     cache.clearModelCache();
   });
 
   afterEach(() => {
-    for (const k of ENV_KEYS) {
-      if (saved[k] === undefined) delete process.env[k];
-      else process.env[k] = saved[k];
-    }
     cache.clearModelCache();
   });
 

@@ -3843,30 +3843,21 @@ describe('buildEnvAdvice — the configuration adjustment cycle (2026-10-27)', (
   });
 });
 
-// #1181 — with no pin, the serve-mode fidelity label names the model the
-// deployment endpoint actually serves (!631 discovery policy), not null.
-// The serve-mode fidelity label (!631, #1181): it mirrors chatqna's pin
-// precedence — the LLM spelling the chatqna container receives — else the
-// served model of the deployment endpoint.
+// #1181 — the serve-mode fidelity label (!631): it mirrors chatqna's
+// pin precedence — the LLM spelling the chatqna container receives —
+// else the served model of the deployment endpoint, never null.
 describe('answerFidelity — the serve-mode model (!631 policy)', () => {
   const cache = require('../services/vllm-model-cache');
+  const { isolateVllmEnv } = require('./vllm-env-helper');
   const ENV_KEYS = ['VLLM_MODEL_ID', 'VLLM_LLM_MODEL_ID', 'VLLM_ENDPOINT'];
-  let saved = {};
+
+  isolateVllmEnv(ENV_KEYS);
 
   beforeEach(() => {
-    saved = {};
-    for (const k of ENV_KEYS) {
-      saved[k] = process.env[k];
-      delete process.env[k];
-    }
     cache.clearModelCache();
   });
 
   afterEach(() => {
-    for (const k of ENV_KEYS) {
-      if (saved[k] === undefined) delete process.env[k];
-      else process.env[k] = saved[k];
-    }
     cache.clearModelCache();
   });
 

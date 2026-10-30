@@ -377,9 +377,8 @@ async function fetchModelList({ provider, base_url, api_key }) {
     // way the base speaks Anthropic and the provider is wrong.
     if ((resp.status === 404 || resp.status === 401) && provider === 'openai' && /\/anthropic\/?$/.test(base)) {
       hint =
-        resp.status === 401
-          ? ' — this base URL looks like an Anthropic-compatible endpoint: switch the provider to Anthropic (or check the API key)'
-          : ' — this base URL looks like an Anthropic-compatible endpoint: switch the provider to Anthropic';
+        ' — this base URL looks like an Anthropic-compatible endpoint: switch the provider to Anthropic' +
+        (resp.status === 401 ? ' (or check the API key)' : '');
     }
     throw httpErr('MODEL_LIST_FAILED', 502, `model listing returned ${resp.status}: ${body.slice(0, 200)}${hint}`);
   }

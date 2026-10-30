@@ -1016,6 +1016,10 @@ async function generateAnswer(query, contexts) {
  * The deployment model resolves under the !631 policy (see the inline
  * note at deploymentChat below): pin > /v1/models discovery. */
 async function answerFidelity(opts = {}) {
+  // The LABEL probe's deadline (both branches): a provenance label must not
+  // add a probe timeout to every benchmark run start — a slow endpoint
+  // leaves the label null rather than delaying the run.
+  const SOFT_PROBE_BUDGET_MS = 2000;
   const deploymentChat = async () => ({
     source: 'deployment-chat',
     config: null,
@@ -1026,10 +1030,7 @@ async function answerFidelity(opts = {}) {
     // serve-mode model.
     model:
       modelCache.envPinLLMSpelling() ||
-      // Bounded: the serve-mode label must not add a probe timeout to every
-      // benchmark run start (the probe deadline is 2 s; a slow endpoint
-      // leaves the label null rather than delaying the run).
-      (await modelCache.deploymentServedModelId({ timeoutMs: 2000 })) ||
+      (await modelCache.deploymentServedModelId({ timeoutMs: SOFT_PROBE_BUDGET_MS })) ||
       null
   });
   if (opts.serveMode) return deploymentChat();
@@ -1045,7 +1046,7 @@ async function answerFidelity(opts = {}) {
           // The config's own credential for its own base; the deployment
           // bearer only when the base IS the deployment endpoint.
           apiKey: modelCache.credentialForBase(ovr.base_url, ovr.api_key),
-          timeoutMs: 2000
+          timeoutMs: SOFT_PROBE_BUDGET_MS
         })) ||
         null;
       return { source: 'config', config: ovr.config_name, model };

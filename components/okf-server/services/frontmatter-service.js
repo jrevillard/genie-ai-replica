@@ -166,52 +166,17 @@ class FrontmatterError extends Error {
   }
 }
 
-// ---------- Retry helper (exponential backoff with jitter; per reference_remote-llm-endpoint.md) ----------
+// ---------- Retry helpers (exponential backoff with jitter; per reference_remote-llm-endpoint.md) ----------
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Which upstream failures are worth another attempt? TEI_EMBED_HOST and
-// VLLM_ENDPOINT both point at the SHARED remote GPU node
-// (ai.assembly.govstack.global), so a dropped connection is routine
-// rather than exceptional — it is the exact failure this wrapper is for.
-//
-// A prematurely-closed response stream was MISSING from this list until
-// 2026-10-12. axios surfaces a mid-response upstream disconnect as
-// ERR_STREAM_PREMATURE_CLOSE ("stream has been aborted"), which matches
-// neither the status codes nor the socket codes below, so the wrapper
-// fell through to `throw err` on the FIRST abort. Live proof: "Explain
-// failures" on the Alphabet repo died twice in a row with
-// `AxiosError: stream has been aborted` at frontmatter-service.js
-// withTeiRetry — zero retries — while the head-embed endpoint kept
-// resetting under the shared node's load.
-const RETRIABLE_UPSTREAM_CODES = new Set([
-  'ECONNABORTED', // our own axios timeout
-  'ECONNREFUSED',
-  'ECONNRESET', // peer reset the socket
-  'EPIPE',
-  'ETIMEDOUT',
-  'ERR_STREAM_PREMATURE_CLOSE' // axios: upstream closed mid-response
-]);
-// 429 joined 2026-10-23: the shared endpoint's burst limiter answers 429
-// long before the plan's 5-hour/weekly quotas are anywhere near spent (live:
-// 4 of 100 benchmark rows died on a 429 that sailed straight through this
-// set). A rate limit is the definition of "wait and try again" — pausing is
-// the fix, failing is not.
-const RETRIABLE_UPSTREAM_STATUS = new Set([429, 502, 503, 504]);
-
-function isRetriableUpstreamError(err) {
-  if (!err) return false;
-  const status = err.response && err.response.status;
-  if (status && RETRIABLE_UPSTREAM_STATUS.has(status)) return true;
-  if (err.code && RETRIABLE_UPSTREAM_CODES.has(err.code)) return true;
-  // Some aborts reach us as a bare Error carrying neither a code nor a
-  // response — match the message so a known-transient blip is never
-  // mistaken for a permanent failure.
-  const msg = typeof err.message === 'string' ? err.message : '';
-  return /stream has been aborted|socket hang up|premature close|ECONNRESET/i.test(msg);
-}
+// The transient-failure classifier (which upstream errors deserve another
+// attempt) is shared with the model-discovery probe — one home in
+// services/llm-transient-errors.js, so a class learned from a live incident
+// is learned once for every caller of the shared GPU node.
+const { isRetriableUpstreamError } = require('./llm-transient-errors');
 
 async function withUpstreamRetry(label, fn, ctx) {
   // Binary exponential backoff (David, 2026-10-23): 1s, 2s, 4s, 8s — four
@@ -370,13 +335,12 @@ Output ONLY a JSON object: {"results": [{"index": <int>, "match": "yes"|"no", "r
 async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   let host = modelCache.deploymentVllmBase();
   let model = null; // resolved below — explicit pick > pin > discovery (!631)
-  // Per-call read, the same one the probe uses, so the two can never
-  // disagree on credentials.
-  let apiKey = modelCache.deploymentKey();
   let viaOverride = false;
-  let viaForeignBase = false; // host switched away from the deployment base
-  let configIsDeployment = false; // the named config points at the deployment endpoint
-  const callBudgetMs = opts.timeoutMs || 60000;
+  // The endpoint's OWN credential, when the call names one (the judge's
+  // RAGAS_JUDGE_API_KEY, a named config's api_key); undefined = let the
+  // resolver apply the credential rule (deployment key on the deployment
+  // endpoint, nothing elsewhere).
+  let ownKey;
   // The ENV JUDGE is the .env RAGAS_JUDGE_* pair — the same variables the
   // sidecar's default judge and the OKF panel's "system default" label name.
   // An explicit `config: null` asks for exactly that judge, so it must read
@@ -393,21 +357,7 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
     }
     const judgeModel = (process.env.RAGAS_JUDGE_MODEL || '').trim();
     if (judgeModel) model = judgeModel;
-    // The judge base is foreign to the deployment PIN and to the deployment
-    // credential only when it is a DIFFERENT endpoint: the same server
-    // under another path (the shipped http://vllm:8000/v1 vs
-    // http://vllm:8000) serves the very model the pin names — and the pin
-    // exists precisely for endpoints whose /v1/models is unreachable. An
-    // unset judge base means the deployment endpoint itself.
-    viaForeignBase = !modelCache.sameOrigin(host, modelCache.deploymentVllmBase());
-    // The judge key: RAGAS_JUDGE_API_KEY when the operator named one, else
-    // the deployment credential — but ONLY when the judge base IS the
-    // deployment endpoint. The judge base is OPERATOR-configured (the .env
-    // RAGAS_JUDGE_* pair): a third-party judge must never receive the
-    // deployment bearer, and the shipped default (http://vllm:8000/v1) is
-    // the same server, so it keeps the deployment credential. A NAMED model
-    // config follows the same rule.
-    apiKey = modelCache.credentialForBase(host, process.env.RAGAS_JUDGE_API_KEY);
+    ownKey = process.env.RAGAS_JUDGE_API_KEY;
   }
   try {
     // opts.config === null → the caller explicitly wants the ENV judge (the
@@ -428,37 +378,31 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
       // …/paas/v4 base 404'd every benchmark answer row).
       host = ovr.base_url.replace(/\/+$/, '');
       if (ovr.model) model = ovr.model;
-      // The named-config base carries ITS key — or, when the config points
-      // at the deployment endpoint itself, the deployment credential. A
-      // third-party base gets neither: the GPU bearer must never leave the
-      // deployment endpoint (probe AND chat call).
-      apiKey = modelCache.credentialForBase(host, ovr.api_key);
-      // A config pointing at the DEPLOYMENT endpoint resolves like the
-      // deployment path (the pin applies — it exists for endpoints whose
-      // /v1/models is unreachable); any other base resolves its own served
-      // model.
+      ownKey = ovr.api_key;
       viaOverride = true;
-      configIsDeployment = modelCache.sameOrigin(host, modelCache.deploymentVllmBase());
     }
   } catch {
     /* env fallback — see docblock */
   }
-  // Model-id resolution, !631 policy (services/vllm-model-cache.js): the
-  // explicit picks above (env judge / named config) win; a named-config
-  // base resolves its OWN served model (the deployment pin never names a
-  // foreign endpoint); everything else is pin -> /v1/models discovery ->
-  // loud ModelDiscoveryError. Never a hardcoded fallback name (#1181).
-  // Resolution inside the call budget (the helper keeps what is left for
-  // the chat call — never less than a usable minimum).
-  let chatTimeoutMs = callBudgetMs;
-  if (!model) {
-    const resolved =
-      viaForeignBase || (viaOverride && !configIsDeployment)
-        ? await modelCache.resolveForeignModel({ baseUrl: host, apiKey, budgetMs: callBudgetMs })
-        : await modelCache.resolveDeploymentModel({ baseUrl: host, apiKey, budgetMs: callBudgetMs });
-    model = resolved.model;
-    chatTimeoutMs = resolved.remainingMs;
-  }
+  // Model-id + credential resolution, !631 policy (services/vllm-model-cache.js)
+  // — one home for the credential rule, the deployment-vs-foreign
+  // classification and the precedence: the explicit picks above (env judge /
+  // named config) win; a named-config base resolves its OWN served model (the
+  // deployment pin never names a foreign endpoint); everything else is pin ->
+  // /v1/models discovery -> loud ModelDiscoveryError. Never a hardcoded
+  // fallback name (#1181). Resolution inside the call budget (the helper
+  // keeps what is left for the chat call — never less than a usable minimum).
+  const {
+    model: resolvedModel,
+    apiKey,
+    remainingMs: chatTimeoutMs
+  } = await modelCache.resolveCallModel({
+    baseUrl: host,
+    ownKey,
+    model,
+    budgetMs: opts.timeoutMs
+  });
+  model = resolvedModel;
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
   const body = {
@@ -598,7 +542,7 @@ async function teiEmbed(inputs) {
   // future HF_TOKEN-only env (the HUGGINGFACEHUB_API_TOKEN form the
   // reranker uses at line 1432).
   const headers = { 'Content-Type': 'application/json' };
-  const hfKey = process.env.HF_TOKEN || process.env.HUGGINGFACEHUB_API_TOKEN || process.env.VLLM_API_KEY || '';
+  const hfKey = process.env.HF_TOKEN || process.env.HUGGINGFACEHUB_API_TOKEN || modelCache.deploymentKey();
   if (hfKey) headers.Authorization = 'Bearer ' + hfKey;
   const decode = (resp) => {
     // TEI returns either {data: [[...], ...]} (batched) or [...] depending on shape

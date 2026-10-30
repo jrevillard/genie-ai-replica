@@ -158,28 +158,13 @@ function probeTimeoutMs() {
 }
 
 // The transient classes the chat path retries (frontmatter-service's
-// withUpstreamRetry): a probe that gives up on the first blip would fail
-// the whole LLM leg, while the chat call would have recovered.
-const RETRIABLE_PROBE_CODES = new Set([
-  'ECONNABORTED',
-  'ECONNREFUSED', // the endpoint is not up yet — the chat path retries it
-  'ECONNRESET',
-  'EPIPE',
-  'ETIMEDOUT',
-  'ERR_STREAM_PREMATURE_CLOSE'
-]);
-const RETRIABLE_PROBE_STATUS = new Set([429, 502, 503, 504]);
+// withUpstreamRetry — one shared classifier in
+// services/llm-transient-errors.js): a probe that gives up on the first
+// blip would fail the whole LLM leg, while the chat call would have
+// recovered.
+const { isRetriableUpstreamError } = require('./llm-transient-errors');
 const PROBE_RETRY_DELAY_MS = 250;
 const PROBE_ATTEMPTS = 3;
-
-function isRetriableProbeError(err) {
-  if (!err) return false;
-  const status = err.response && err.response.status;
-  if (status && RETRIABLE_PROBE_STATUS.has(status)) return true;
-  if (err.code && RETRIABLE_PROBE_CODES.has(err.code)) return true;
-  const msg = typeof err.message === 'string' ? err.message : '';
-  return /stream has been aborted|socket hang up|premature close|ECONNRESET/i.test(msg);
-}
 
 /** Probe once (retrying a transient blip); on success the first served id.
  * On failure it THROWS the actionable error (the cause included) — the
@@ -208,7 +193,7 @@ async function probe(url, timeoutMs, apiKey) {
         r = await axios.get(url, { headers, timeout: left });
         break;
       } catch (err) {
-        const canRetry = attempt < PROBE_ATTEMPTS - 1 && isRetriableProbeError(err) && deadline - Date.now() > 0;
+        const canRetry = attempt < PROBE_ATTEMPTS - 1 && isRetriableUpstreamError(err) && deadline - Date.now() > 0;
         if (!canRetry) throw err;
         // Jittered backoff (the chat path jitters too): replicas that hit a
         // cold cache together must not retry in lockstep.
@@ -290,6 +275,11 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
     const stale = entry ? entry.id : null;
     if (stale) return stale; // stale beats broken
     throw failed.cause || discoveryError(modelsUrl);
+  } else if (failed) {
+    // Expired stub, swept here and now: the age sweep in pruneCache only
+    // runs when a probe settles, and this key is about to probe again —
+    // nobody else needs to see the dead entry.
+    _negative.delete(probeKey);
   }
 
   let pending = _inflight.get(probeKey);
@@ -429,6 +419,24 @@ async function resolveVllmModelId(baseUrl, opts = {}) {
   return id;
 }
 
+/** One home of the PER-CALL resolution, the piece every LLM call site
+ * reassembled by hand: the credential rule (credentialForBase), the
+ * deployment-vs-foreign classification (sameOrigin), and the precedence
+ * (an explicit `model` pick wins; otherwise the deployment path resolves
+ * pin → discovery and a foreign base resolves its OWN served model).
+ * Returns { model, apiKey, remainingMs } — the credential is included
+ * because the caller needs it for the chat call's own Authorization
+ * header, and it must be the SAME one the resolution used. */
+async function resolveCallModel({ baseUrl, ownKey, model, budgetMs, probeBudgetMs }) {
+  const apiKey = credentialForBase(baseUrl, ownKey);
+  const foreign = !sameOrigin(baseUrl, deploymentVllmBase());
+  if (model) return { model, apiKey, remainingMs: callBudget(budgetMs) };
+  const resolved = foreign
+    ? await resolveForeignModel({ baseUrl, apiKey, budgetMs, probeBudgetMs })
+    : await resolveDeploymentModel({ baseUrl, apiKey, budgetMs, probeBudgetMs });
+  return { ...resolved, apiKey };
+}
+
 /** The credential a call to `baseUrl` may use: the endpoint's own key
  * when it has one, else the deployment credential ONLY when the base IS
  * the deployment endpoint (a third-party base gets none — the GPU bearer
@@ -558,27 +566,23 @@ function sameOrigin(a, b) {
     }
     return false;
   }
-  try {
-    if (ua.protocol !== ub.protocol || ua.host !== ub.host) return false;
-    const pa = ua.pathname.replace(/\/+$/, '');
-    const pb = ub.pathname.replace(/\/+$/, '');
-    if (pa === pb) return true;
-    const [short, long] = pa.length <= pb.length ? [pa, pb] : [pb, pa];
-    // A base WITHOUT a path names the whole host — but only the
-    // version-style prefix of that host is the same endpoint (…/v1 is the
-    // OpenAI-compatible prefix of the same server); an arbitrary path
-    // (…/tenant-b) is a DIFFERENT endpoint and must not receive the
-    // deployment credential.
-    if (short === '') return /^\/v\d+$/.test(long);
-    if (!long.startsWith(`${short}/`)) return false;
-    // The child must be the OpenAI-compatible VERSION segment (/v1) — the
-    // same server under its versioned prefix. Any other child path
-    // (…/llm/tenant-b) is a DIFFERENT endpoint: it must never receive the
-    // deployment credential or the deployment's model name.
-    return /^\/v\d+$/.test(long.slice(short.length));
-  } catch {
-    return false;
-  }
+  if (ua.protocol !== ub.protocol || ua.host !== ub.host) return false;
+  const pa = ua.pathname.replace(/\/+$/, '');
+  const pb = ub.pathname.replace(/\/+$/, '');
+  if (pa === pb) return true;
+  const [short, long] = pa.length <= pb.length ? [pa, pb] : [pb, pa];
+  // A base WITHOUT a path names the whole host — but only the
+  // version-style prefix of that host is the same endpoint (…/v1 is the
+  // OpenAI-compatible prefix of the same server); an arbitrary path
+  // (…/tenant-b) is a DIFFERENT endpoint and must not receive the
+  // deployment credential.
+  if (short === '') return /^\/v\d+$/.test(long);
+  if (!long.startsWith(`${short}/`)) return false;
+  // The child must be the OpenAI-compatible VERSION segment (/v1) — the
+  // same server under its versioned prefix. Any other child path
+  // (…/llm/tenant-b) is a DIFFERENT endpoint: it must never receive the
+  // deployment credential or the deployment's model name.
+  return /^\/v\d+$/.test(long.slice(short.length));
 }
 
 /** Test hook: drop every cached entry. */
@@ -590,7 +594,6 @@ function clearModelCache() {
 }
 
 module.exports = {
-  ModelDiscoveryError,
   credentialForBase,
   deploymentKey,
   envPin,
@@ -601,8 +604,8 @@ module.exports = {
   getServedModelId,
   optedInVllmBase,
   requireServedModelId,
+  resolveCallModel,
   resolveDeploymentModel,
-  resolveForeignModel,
   resolveVllmModelId,
   sameOrigin,
   clearModelCache

@@ -83,48 +83,42 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
   // stay off until a deployment names the endpoint).
   let rawBase = modelCache.optedInVllmBase();
   let model = null; // resolved below — explicit pick > pin > discovery (!631)
-  // The deployment credential — the SAME read the probe uses, so the two
-  // can never disagree (a probe that authenticates while the chat call
-  // does not fails with a bare 401).
-  let apiKey = modelCache.deploymentKey();
   let viaOverride = false;
-  let configIsDeployment = false;
+  // The endpoint's OWN credential when a named config carries one;
+  // undefined = the resolver's credential rule (deployment key on the
+  // deployment endpoint, nothing elsewhere).
+  let ownKey;
   try {
     const ovr = await require('./model-config-service').resolveModelOverride({ service: 'okf_curation' });
     if (ovr && ovr.provider === 'openai') {
       rawBase = ovr.base_url;
       if (ovr.model) model = ovr.model;
-      // The named-config base carries ITS key — or, when the config points
-      // at the deployment endpoint itself, the deployment credential. A
-      // third-party base gets neither: the GPU bearer must never leave the
-      // deployment endpoint (probe AND chat call).
-      apiKey = modelCache.credentialForBase(rawBase, ovr.api_key);
+      ownKey = ovr.api_key;
       viaOverride = true;
-      // A config pointing at the DEPLOYMENT endpoint resolves like the
-      // deployment path (the pin applies — it exists for endpoints whose
-      // /v1/models is unreachable); any other base resolves its own served
-      // model.
-      configIsDeployment = modelCache.sameOrigin(rawBase, modelCache.deploymentVllmBase());
     }
   } catch {
     /* env fallback — see docblock */
   }
   // No endpoint at all = the deliberate opt-out (compose ships it empty).
   if (!rawBase) throw new Error('llm-not-configured');
-  // Model-id resolution, !631 policy (services/vllm-model-cache.js): a
-  // named-config base resolves its OWN served model; the deployment path
-  // is pin -> /v1/models discovery -> loud ModelDiscoveryError (#1181).
-  // Resolution inside the call budget (the helper keeps what is left for
-  // the chat call — never less than a usable minimum).
-  let chatTimeoutMs = timeoutMs;
-  if (!model) {
-    const resolved =
-      viaOverride && !configIsDeployment
-        ? await modelCache.resolveForeignModel({ baseUrl: rawBase, apiKey, budgetMs: timeoutMs })
-        : await modelCache.resolveDeploymentModel({ baseUrl: rawBase, apiKey, budgetMs: timeoutMs });
-    model = resolved.model;
-    chatTimeoutMs = resolved.remainingMs;
-  }
+  // Model-id + credential resolution, !631 policy (services/vllm-model-cache.js)
+  // — one home for the credential rule, the deployment-vs-foreign
+  // classification and the precedence: a named-config base resolves its OWN
+  // served model; the deployment path is pin -> /v1/models discovery ->
+  // loud ModelDiscoveryError (#1181). Resolution inside the call budget
+  // (the helper keeps what is left for the chat call — never less than a
+  // usable minimum).
+  const {
+    model: resolvedModel,
+    apiKey,
+    remainingMs: chatTimeoutMs
+  } = await modelCache.resolveCallModel({
+    baseUrl: rawBase,
+    ownKey,
+    model,
+    budgetMs: timeoutMs
+  });
+  model = resolvedModel;
   const headers = {};
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const body = { model, messages, temperature: 0.0, max_tokens: 300, response_format: { type: 'json_object' } };

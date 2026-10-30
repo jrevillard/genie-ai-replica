@@ -28,6 +28,7 @@ jest.mock('../services/model-config-service', () => ({
 const svc = require('../services/frontmatter-service');
 const axios = require('axios');
 const modelCache = require('../services/vllm-model-cache');
+const { isolateVllmEnv } = require('./vllm-env-helper');
 const { __mockDb } = require('../shared-lib/db-connection-service');
 const { updateSchema, TAG_LIMITS } = require('../validators/repository-validator');
 
@@ -739,15 +740,11 @@ describe('vllmChatCompletions — which judge an explicit env request actually n
   });
 });
 
-// #1181 — vLLM model-id discovery (!631 policy ported to the Node side).
-// The chat body must name a model the CALLED endpoint actually serves:
-// explicit pick (env judge / named model config) > env pin > /v1/models
-// discovery > loud failure. The old hardcoded 'ibm-granite/granite-4.1-8b'
-// fallback 404'd every call the day the endpoint served anything else.
-// The model-id policy of the shared chat client (!631, #1181): an explicit
-// pick (env judge / named model config) wins, else the deployment pin, else
-// discovery from the endpoint's /v1/models, else a loud failure — never a
-// hardcoded model name. One owner boundary for the whole client.
+// #1181 — the shared chat client's model-id policy (!631): an explicit
+// pick (env judge / named model config) wins, else the deployment pin,
+// else discovery from the endpoint's /v1/models, else a loud failure —
+// the chat body must name a model the CALLED endpoint actually serves,
+// never a hardcoded name.
 describe('vllmChatCompletions — model-id resolution (!631 policy)', () => {
   const ENV_KEYS = [
     'VLLM_LLM_MODEL_ID',
@@ -758,24 +755,15 @@ describe('vllmChatCompletions — model-id resolution (!631 policy)', () => {
     'RAGAS_JUDGE_MODEL',
     'RAGAS_JUDGE_API_KEY'
   ];
-  let saved = {};
+  isolateVllmEnv(ENV_KEYS);
 
   beforeEach(() => {
-    saved = {};
-    for (const k of ENV_KEYS) {
-      saved[k] = process.env[k];
-      delete process.env[k];
-    }
     modelCache.clearModelCache();
     axios.post.mockReset();
     axios.get.mockReset();
   });
 
   afterEach(() => {
-    for (const k of ENV_KEYS) {
-      if (saved[k] === undefined) delete process.env[k];
-      else process.env[k] = saved[k];
-    }
     modelCache.clearModelCache();
   });
 
@@ -865,9 +853,6 @@ describe('vllmChatCompletions — model-id resolution (!631 policy)', () => {
 
   test('the response names the model the SERVER served, and the host that answered', async () => {
     seedDb();
-    delete process.env.VLLM_LLM_MODEL_ID;
-    delete process.env.VLLM_MODEL_ID;
-    modelCache.clearModelCache();
     // The endpoint answers with a DIFFERENT name than the one requested
     // (a gateway aliases ids) — the provenance must name what ran.
     axios.get.mockResolvedValue({ data: { data: [{ id: 'served/tagger-8b' }] } });
@@ -881,9 +866,6 @@ describe('vllmChatCompletions — model-id resolution (!631 policy)', () => {
 
   test('suggest.start names the PIN under its own key (the tagging model is logged by suggest.done)', async () => {
     seedDb();
-    delete process.env.VLLM_LLM_MODEL_ID;
-    delete process.env.VLLM_MODEL_ID;
-    modelCache.clearModelCache();
     axios.get.mockResolvedValue({ data: { data: [{ id: 'served/tagger-8b' }] } });
     axios.post.mockResolvedValue(vllmResponse(JSON.stringify({ topic: ['x'], forbidden: [], summary: '' })));
     await svc.suggestTags(REPO_ID);
@@ -899,9 +881,6 @@ describe('vllmChatCompletions — model-id resolution (!631 policy)', () => {
 
   test('suggest.done names the model that actually tagged (cache read, no second probe)', async () => {
     seedDb();
-    delete process.env.VLLM_LLM_MODEL_ID;
-    delete process.env.VLLM_MODEL_ID;
-    modelCache.clearModelCache();
     axios.get.mockResolvedValue({ data: { data: [{ id: 'served/tagger-8b' }] } });
     axios.post.mockResolvedValue(vllmResponse(JSON.stringify({ topic: ['x'], forbidden: [], summary: '' })));
     await svc.suggestTags(REPO_ID);

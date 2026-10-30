@@ -822,25 +822,19 @@ describe('patchConceptMeta — stale park cleared on content change', () => {
   });
 });
 
-// #1181 — runLlmSummary model-id resolution follows the !631 discovery
-// policy: pin > /v1/models discovery; never a silent undefined (the dead
-// `config?.llm` reads are gone). Best-effort semantics are preserved — a
-// resolution failure returns the manifest with summary_text null.
-// The model-id policy of the lazy summary (!631, #1181): the pin wins, else
+// #1181 — the lazy summary's model-id policy (!631): the pin wins, else
 // the model is discovered from the endpoint, and the probe shares the
-// best-effort budget with the chat call.
+// best-effort budget with the chat call. Best-effort semantics are
+// preserved — a resolution failure returns the manifest, summary null.
 describe('ensureSummary — model-id resolution (!631 policy)', () => {
   const cache = require('../services/vllm-model-cache');
   const axios = require('axios');
+  const { isolateVllmEnv } = require('./vllm-env-helper');
   const ENV_KEYS = ['VLLM_MODEL_ID', 'VLLM_LLM_MODEL_ID', 'VLLM_ENDPOINT'];
-  let saved = {};
+
+  isolateVllmEnv(ENV_KEYS);
 
   beforeEach(() => {
-    saved = {};
-    for (const k of ENV_KEYS) {
-      saved[k] = process.env[k];
-      delete process.env[k];
-    }
     cache.clearModelCache();
     mockDb._reset();
     axios.get.mockReset();
@@ -850,10 +844,6 @@ describe('ensureSummary — model-id resolution (!631 policy)', () => {
   });
 
   afterEach(() => {
-    for (const k of ENV_KEYS) {
-      if (saved[k] === undefined) delete process.env[k];
-      else process.env[k] = saved[k];
-    }
     cache.clearModelCache();
   });
 
@@ -896,10 +886,6 @@ describe('ensureSummary — model-id resolution (!631 policy)', () => {
     mockDb.query.mockResolvedValueOnce({ all: async () => [manifestFixture()] });
     // The probe burns part of the 5 s budget; the chat call must not be
     // granted a fresh one (the caller's contract is one budget).
-    delete process.env.VLLM_MODEL_ID;
-    delete process.env.VLLM_LLM_MODEL_ID;
-    process.env.VLLM_ENDPOINT = 'http://vllm:8000';
-    require('../services/vllm-model-cache').clearModelCache();
     const axios = require('axios');
     axios.get.mockImplementation(
       () =>

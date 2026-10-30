@@ -40,11 +40,15 @@ function parseAnsibleEnvVars(j2Text) {
       const entry = out[m[1]] || { count: 0, default: null, defaultIsJinja: false, conditional: false };
       entry.count += 1;
       entry.conditional = entry.conditional || conditional || trimmed.startsWith('{% if');
+      // The Jinja check is INDEPENDENT of the literal capture: a default
+      // that is one inline conditional (`default('a' if c else b)`) may
+      // contain no closable `default('…')` at all, yet it is Jinja-derived
+      // and the parity checks must skip it exactly like the other kind.
+      const isJinja = JINJA_EXPR_RE.test(m[2]);
       const dm = m[2].match(DEFAULT_RE);
-      if (dm) {
-        const isJinja = JINJA_EXPR_RE.test(m[2]);
+      if (dm || isJinja) {
         entry.defaultIsJinja = entry.defaultIsJinja || isJinja;
-        if (entry.default === null && !isJinja) entry.default = dm[1];
+        if (dm && entry.default === null && !isJinja) entry.default = dm[1];
       }
       out[m[1]] = entry;
     }

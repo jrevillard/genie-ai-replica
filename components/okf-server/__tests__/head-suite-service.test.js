@@ -2221,38 +2221,26 @@ describe('1-8g-x — run progress reporting', () => {
   });
 });
 
-// #1181 — the suite provenance label names the model the deployment
-// endpoint serves (discovery, !631 policy) instead of the never-injected
-// VLLM_LLM_MODEL_ID placeholder 'vllm'.
-// The suite provenance label (!631, #1181): the model that generated the
-// suite — the stamp from the generation calls, else the deployment pin or
-// the served model.
+// #1181 — the suite provenance label (!631): the model that generated
+// the suite — the stamp from the generation calls, else the deployment
+// pin or the served model — never the never-injected placeholder 'vllm'.
 describe('suite generator — model-id provenance (!631 policy)', () => {
   const cache = require('../services/vllm-model-cache');
   const axios = require('axios');
+  const { isolateVllmEnv } = require('./vllm-env-helper');
   const ENV_KEYS = ['VLLM_MODEL_ID', 'VLLM_LLM_MODEL_ID', 'VLLM_ENDPOINT'];
-  let saved = {};
+
+  isolateVllmEnv(ENV_KEYS);
 
   beforeEach(() => {
-    saved = {};
-    for (const k of ENV_KEYS) {
-      saved[k] = process.env[k];
-      delete process.env[k];
-    }
     cache.clearModelCache();
   });
 
   afterEach(() => {
-    for (const k of ENV_KEYS) {
-      if (saved[k] === undefined) delete process.env[k];
-      else process.env[k] = saved[k];
-    }
     cache.clearModelCache();
   });
 
   it('no generation call stamped a model: the label says none — never a model that did not generate', async () => {
-    delete process.env.VLLM_MODEL_ID;
-    delete process.env.VLLM_LLM_MODEL_ID;
     process.env.VLLM_ENDPOINT = 'http://vllm:8000';
     axios.get.mockResolvedValue({ data: { data: [{ id: 'served/suite-8b' }] } });
     __mockDb.query.mockResolvedValue({ all: async () => [] });
@@ -2270,9 +2258,6 @@ describe('suite generator — model-id provenance (!631 policy)', () => {
   it('the label names EVERY model that generated the suite', async () => {
     // A suite spans many generation calls: a TTL expiry (or a model change)
     // mid-suite means two models produced it. The label must say so.
-    delete process.env.VLLM_MODEL_ID;
-    delete process.env.VLLM_LLM_MODEL_ID;
-    delete process.env.VLLM_ENDPOINT;
     require('axios').get.mockResolvedValue({ data: { data: [{ id: 'served/suite-8b' }] } });
     __mockDb.query.mockResolvedValue({ all: async () => [] });
     const body = llmResponse({
@@ -2289,9 +2274,8 @@ describe('suite generator — model-id provenance (!631 policy)', () => {
   });
 
   it('the label names the model the generation calls stamped (no probe, no placeholder)', async () => {
-    delete process.env.VLLM_MODEL_ID;
-    delete process.env.VLLM_LLM_MODEL_ID;
-    delete process.env.VLLM_ENDPOINT; // compose okf default — base falls back to the service name
+    // No endpoint (the beforeEach baseline) — the base falls back to the
+    // compose service name.
     require('axios').get.mockResolvedValue({ data: { data: [{ id: 'served/suite-8b' }] } });
     __mockDb.query.mockResolvedValue({ all: async () => [] });
     frontmatterService.vllmChatCompletions.mockResolvedValue({
@@ -2304,24 +2288,6 @@ describe('suite generator — model-id provenance (!631 policy)', () => {
     });
     const s = await svc.generateSuite('me', {}, {});
     expect(require('axios').get).not.toHaveBeenCalled(); // the stamp needs no probe
-    expect(s.payload.generator).toBe('llm:frontier/tagger-stamped');
-  });
-
-  it('r3: the generator label reads the stamped resp.model of the generation calls — no probe at all', async () => {
-    delete process.env.VLLM_MODEL_ID;
-    delete process.env.VLLM_LLM_MODEL_ID;
-    require('axios').get.mockReset(); // must NEVER be called in this path
-    __mockDb.query.mockResolvedValue({ all: async () => [] });
-    frontmatterService.vllmChatCompletions.mockResolvedValue({
-      ...llmResponse({
-        positive: [{ query: 'What is the licensing fee?', reason: 'topic hit' }],
-        negative: [],
-        keywords: []
-      }),
-      model: 'frontier/tagger-stamped'
-    });
-    const s = await svc.generateSuite('me', {}, {});
-    expect(require('axios').get).not.toHaveBeenCalled();
     expect(s.payload.generator).toBe('llm:frontier/tagger-stamped');
   });
 });

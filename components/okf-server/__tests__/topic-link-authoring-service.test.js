@@ -503,12 +503,9 @@ describe('topic-link-authoring-service — fail-soft end to end', () => {
   });
 });
 
-// #1181 — model-id resolution follows the !631 discovery policy: env pin >
-// /v1/models discovery > loud failure. With the pin unset the call names the
-// model the endpoint actually serves (the dead `config?.llm` reads are gone).
-// The model-id policy of the topic-link client (!631, #1181): the pin wins,
-// else the model is discovered from the endpoint, and the probe shares the
-// call budget.
+// #1181 — the topic-link client's model-id policy (!631): the pin wins,
+// else the model is discovered from the endpoint, and the probe shares
+// the call budget.
 describe('callVllm — model-id resolution (!631 policy)', () => {
   // The service is required INSIDE each test after a resetModules (this file
   // resets the registry in another describe) — the cache handle must come
@@ -521,15 +518,12 @@ describe('callVllm — model-id resolution (!631 policy)', () => {
     { concept_id: 'b', title: 'Beta subject', summary: 'beta', links: [] }
   ];
   const loadAll = () => ({ all: async () => rows });
+  const { isolateVllmEnv } = require('./vllm-env-helper');
   const ENV_KEYS = ['VLLM_MODEL_ID', 'VLLM_LLM_MODEL_ID', 'VLLM_ENDPOINT'];
-  let saved = {};
+
+  isolateVllmEnv(ENV_KEYS);
 
   beforeEach(() => {
-    saved = {};
-    for (const k of ENV_KEYS) {
-      saved[k] = process.env[k];
-      delete process.env[k];
-    }
     jest.resetModules();
     cache = require('../services/vllm-model-cache');
     cache.clearModelCache();
@@ -541,10 +535,6 @@ describe('callVllm — model-id resolution (!631 policy)', () => {
   });
 
   afterEach(() => {
-    for (const k of ENV_KEYS) {
-      if (saved[k] === undefined) delete process.env[k];
-      else process.env[k] = saved[k];
-    }
     cache.clearModelCache();
   });
 
@@ -576,13 +566,7 @@ describe('callVllm — model-id resolution (!631 policy)', () => {
   });
 
   it('r4: the discovery probe is bounded by the call budget', async () => {
-    process.env.VLLM_ENDPOINT = 'http://vllm.test:8000/v1';
-    require('../services/vllm-model-cache').clearModelCache();
     const svc2 = require('../services/topic-link-authoring-service');
-    // The axios mock is shared across this file's tests — count only this
-    // scenario's calls.
-    require('axios').get.mockClear();
-    require('axios').post.mockClear();
     const db2 = require('../shared-lib/db-connection-service');
     const http2 = require('axios');
     const conceptRows = [

@@ -14,6 +14,7 @@ jest.mock('../shared-lib/logger', () => ({
 const axios = require('axios');
 const { logger } = require('../shared-lib/logger');
 const cache = require('../services/vllm-model-cache');
+const { isolateVllmEnv } = require('./vllm-env-helper');
 
 const ENV_KEYS = [
   'VLLM_LLM_MODEL_ID',
@@ -32,16 +33,9 @@ function mockProbeSuccess(id) {
   axios.get = jest.fn().mockResolvedValue(modelsPayload(id));
 }
 
-let savedEnv = {};
+isolateVllmEnv(ENV_KEYS);
 
 beforeEach(() => {
-  // process.env is shared by every test file a Jest worker runs — save
-  // and restore, or this file's deletes leak into the next suite.
-  savedEnv = {};
-  for (const k of ENV_KEYS) {
-    savedEnv[k] = process.env[k];
-    delete process.env[k];
-  }
   cache.clearModelCache();
   axios.get = jest.fn();
   jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
@@ -49,10 +43,6 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.restoreAllMocks();
-  for (const k of ENV_KEYS) {
-    if (savedEnv[k] === undefined) delete process.env[k];
-    else process.env[k] = savedEnv[k];
-  }
 });
 
 describe('env pin precedence (deployer override)', () => {
@@ -272,7 +262,7 @@ describe('failure semantics', () => {
   });
 });
 
-describe('review round 1 fixes (#1181)', () => {
+describe('pin handling and the base rule', () => {
   test('whitespace-only VLLM_LLM_MODEL_ID does not shadow a valid VLLM_MODEL_ID', async () => {
     process.env.VLLM_LLM_MODEL_ID = '   ';
     process.env.VLLM_MODEL_ID = 'real/model';
@@ -302,7 +292,7 @@ describe('review round 1 fixes (#1181)', () => {
   });
 });
 
-describe('review round 2 fixes (#1181)', () => {
+describe('credential scoping (no deployment-key leak)', () => {
   beforeEach(() => {
     logger.warn.mockClear();
   });
@@ -338,7 +328,7 @@ describe('review round 2 fixes (#1181)', () => {
   });
 });
 
-describe('review round 3 fixes (#1181)', () => {
+describe('credential-scoped cache keys and the soft deployment label', () => {
   test('cache entries are keyed by base AND key — different credentials never share a resolution', async () => {
     axios.get
       .mockResolvedValueOnce({ data: { data: [{ id: 'gateway/gpt-x' }] } })
@@ -369,7 +359,7 @@ describe('review round 3 fixes (#1181)', () => {
   });
 });
 
-describe('review round 4 fixes (#1181)', () => {
+describe('negative window, shared probes, sameOrigin', () => {
   test('a FAILED probe is remembered for the negative window — no re-probe per call', async () => {
     axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
     await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
@@ -382,14 +372,6 @@ describe('review round 4 fixes (#1181)', () => {
     expect(repeat.message).toMatch(/ECONNREFUSED/);
     expect(repeat.cause).toBeUndefined();
     expect(axios.get).toHaveBeenCalledTimes(1);
-  });
-
-  test('the negative window expires — the endpoint is probed again', async () => {
-    axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
-    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
-    Date.now.mockReturnValue(1_000_000 + 61_000);
-    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
-    expect(axios.get).toHaveBeenCalledTimes(2);
   });
 
   test('concurrent callers share ONE probe (in-flight de-duplication)', async () => {
@@ -420,7 +402,7 @@ describe('review round 4 fixes (#1181)', () => {
   });
 });
 
-describe('review round 4 — probe timeout ceiling (#1181)', () => {
+describe('probe timeout ceiling', () => {
   test('the probe timeout never exceeds MODEL_PROBE_TIMEOUT_SECONDS, even with a larger call budget', async () => {
     axios.get.mockResolvedValue(modelsPayload('served/model'));
     await cache.getServedModelId('http://vllm:8000', { timeoutMs: 60000 });
@@ -434,7 +416,7 @@ describe('review round 4 — probe timeout ceiling (#1181)', () => {
   });
 });
 
-describe('review round 5 fixes (#1181)', () => {
+describe('sameOrigin tenant paths and the cool-down window', () => {
   test('sameOrigin: path-scoped tenants on one host are NOT the same endpoint', () => {
     expect(cache.sameOrigin('http://gpu:8000/tenant-a', 'http://gpu:8000/tenant-b')).toBe(false);
     expect(cache.sameOrigin('http://gpu:8000/llm', 'http://gpu:8000/llm/v1')).toBe(true);
@@ -466,7 +448,7 @@ describe('review round 5 fixes (#1181)', () => {
   });
 });
 
-describe('final review fixes (#1181)', () => {
+describe('probe retry classification and sameOrigin edges', () => {
   test('the probe retries a transient failure once', async () => {
     axios.get
       .mockRejectedValueOnce(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }))
@@ -497,7 +479,7 @@ describe('final review fixes (#1181)', () => {
   });
 });
 
-describe('review round 3 — the probe failure is actionable (#1181)', () => {
+describe('call budgets and the actionable failure', () => {
   test('a missing or invalid call budget never yields a NaN timeout (an unbounded request would hang)', async () => {
     axios.get.mockResolvedValue({ data: { data: [{ id: 'served/model' }] } });
     const res = await cache.resolveDeploymentModel({ baseUrl: 'http://vllm:8000' });
@@ -533,7 +515,7 @@ describe('review round 3 — the probe failure is actionable (#1181)', () => {
   });
 });
 
-describe('final review r2 fixes (#1181)', () => {
+describe('probe deadline and timeout parsing', () => {
   test('the probe timeout bounds the WHOLE probe — a retry gets the remaining time, not a fresh budget', async () => {
     // A real clock: the deadline shrinks with the elapsed time (the file's
     // default Date.now mock freezes it).

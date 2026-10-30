@@ -1905,25 +1905,10 @@ class TestTranslationHelpers:
         assert "Hello" in prompt
         assert "French" in prompt
 
-    def test_read_language_registry_success(self, tmp_path):
-        lang_file = tmp_path / "language-registry.json"
-        lang_file.write_text(
-            json.dumps(
-                {
-                    "languages": {
-                        "en": {"name": "English", "script": "Latn"},
-                        "fr": {"name": "French", "script": "Latn"},
-                    }
-                }
-            )
-        )
-        result = chatqna_module._read_language_registry(str(lang_file))
-        assert result == {
-            "en": {"name": "English", "script": "Latn"},
-            "fr": {"name": "French", "script": "Latn"},
-        }
-
     def test_read_language_registry_file_error(self):
+        # The well-formed/ malformed parse cases live with the language
+        # boundary suite (TestLanguageMapShape); this pins the missing-file
+        # path it does not cover.
         result = chatqna_module._read_language_registry("/nonexistent/path.json")
         assert result == {}
 

@@ -302,32 +302,22 @@ class TestLanguageMapShape:
     configured.
     """
 
-    def test_a_json_array_reads_as_empty(self, tmp_path):
-        path = tmp_path / "language-registry.json"
-        path.write_text(json.dumps(["en", "fr"]))
-        assert chatqna_module._read_language_registry(str(path)) == {}
+    # Each case is a distinct real-world corruption: a file in the wrong
+    # format entirely, the flat shape the registry replaced, an entry
+    # missing half of what the prompts consume, an empty name, a value that
+    # is not an entry at all.
+    MALFORMED_REGISTRIES = {
+        "a_json_array": ["en", "fr"],
+        "the_old_flat_code_to_name_map": {"fr": "French"},
+        "an_entry_without_a_script": {"languages": {"fr": {"name": "French"}}},
+        "an_entry_with_an_empty_name": {"languages": {"fr": {"name": "", "script": "Latn"}}},
+        "a_non_string_value": {"languages": {"fr": 42}},
+    }
 
-    def test_the_old_flat_code_to_name_shape_reads_as_empty(self, tmp_path):
-        """The registry replaced a flat map of code to name: a file still in
-        the old shape must be refused, not read as a registry with no
-        scripts."""
+    @pytest.mark.parametrize("case", sorted(MALFORMED_REGISTRIES), ids=sorted(MALFORMED_REGISTRIES))
+    def test_a_malformed_file_reads_as_empty(self, tmp_path, case):
         path = tmp_path / "language-registry.json"
-        path.write_text(json.dumps({"fr": "French"}))
-        assert chatqna_module._read_language_registry(str(path)) == {}
-
-    def test_an_entry_without_a_script_reads_as_empty(self, tmp_path):
-        path = tmp_path / "language-registry.json"
-        path.write_text(json.dumps({"languages": {"fr": {"name": "French"}}}))
-        assert chatqna_module._read_language_registry(str(path)) == {}
-
-    def test_an_entry_with_an_empty_name_reads_as_empty(self, tmp_path):
-        path = tmp_path / "language-registry.json"
-        path.write_text(json.dumps({"languages": {"fr": {"name": "", "script": "Latn"}}}))
-        assert chatqna_module._read_language_registry(str(path)) == {}
-
-    def test_a_non_string_value_reads_as_empty(self, tmp_path):
-        path = tmp_path / "language-registry.json"
-        path.write_text(json.dumps({"languages": {"fr": 42}}))
+        path.write_text(json.dumps(self.MALFORMED_REGISTRIES[case]))
         assert chatqna_module._read_language_registry(str(path)) == {}
 
     def test_a_well_formed_registry_reads_as_its_languages(self, tmp_path):
@@ -721,37 +711,15 @@ class TestTranslationPromptBoundary:
 class TestLanguageScriptsMap:
     """The script table decides the alphabet the prompt asks for.
 
-    It is a projection of the same cached registry read the name map uses,
-    so it fails the same way: a file that is not there yet reads as an empty
-    table. The empty table must not be the answer for the life of the
-    process — every later prompt would ask for a translation in the wrong
-    alphabet.
+    It is a projection of the same cached registry read the name map uses;
+    the read-once and retry-window semantics are owned by the loading tests
+    above. What is left to this class is the failure that reaches a real
+    missing file and the copy the caller is handed.
     """
 
     def test_an_unreadable_table_reads_as_empty(self):
         with patch.object(chatqna_module, "LANGUAGE_REGISTRY_FILEPATH", "/nonexistent/registry.json"):
             assert chatqna_module.language_scripts_map() == {}
-
-    def test_the_table_is_not_read_again_inside_the_retry_window(self):
-        with patch.object(chatqna_module, "LANGUAGE_REGISTRY_FILEPATH", "/nonexistent/registry.json"):
-            assert chatqna_module.language_scripts_map() == {}
-            with patch.object(chatqna_module, "_read_language_registry") as reader:
-                assert chatqna_module.language_scripts_map() == {}
-                assert not reader.called
-
-    def test_the_table_is_read_again_after_the_retry_window(self):
-        with patch.object(chatqna_module, "LANGUAGE_REGISTRY_FILEPATH", "/nonexistent/registry.json"):
-            assert chatqna_module.language_scripts_map() == {}
-        chatqna_module._LANGUAGE_REGISTRY_CACHE_AT = (
-            chatqna_module.time.monotonic() - chatqna_module.LANGUAGE_MAP_RETRY_SECONDS - 1
-        )
-        with patch.object(
-            chatqna_module,
-            "_read_language_registry",
-            return_value={"en": {"name": "English", "script": "Latn"}},
-        ) as reader:
-            assert chatqna_module.language_scripts_map() == {"en": "Latn"}
-            assert reader.called
 
     def test_the_caller_cannot_rewrite_the_table(self):
         table = chatqna_module.language_scripts_map()

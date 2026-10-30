@@ -31,8 +31,8 @@ list is the gate's real specification: a knob there that no row consumes
 proves nothing, because the factory would stringify it again before it
 reached the manifest.
 
-Usage: scripts/env-types-check.py [chart-path]
-       CHART=charts/genieai-umbrella scripts/env-types-check.py
+Usage: scripts/ci/env-types-check.py [chart-path]
+       CHART=charts/genieai-umbrella scripts/ci/env-types-check.py
 """
 
 import os

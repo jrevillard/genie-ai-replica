@@ -3172,7 +3172,7 @@ chart:lint:
     # shared render fixture — so nothing else in this pipeline could
     # catch a guard that stopped firing. This renders the values each
     # guard must reject and requires the render to fail.
-    - ./scripts/render-guards-check.sh charts/genieai-umbrella
+    - ./scripts/ci/render-guards-check.sh charts/genieai-umbrella
     # Base tier render. charts/ci/render-base-flags is the shared render
     # fixture (required deployment data + placeholder-secret off + an
     # smtp that answers nothing — see the file and the chart README's
@@ -3245,11 +3245,11 @@ chart:lint:
     # only on a CNI that enforces NetworkPolicy (the default minikube and
     # kind CNIs store the objects and drop them, so a laptop cluster looks
     # healthy while carrying a broken egress graph).
-    - python3 scripts/networkpolicy-crosscheck.py /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml
+    - python3 scripts/ci/networkpolicy-crosscheck.py /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml
     # The schema types every boolean leaf of values.yaml so a wrongly-typed
     # knob fails with the operator's path instead of "wrong type for value;
     # expected bool". This check keeps the two lists from drifting.
-    - python3 scripts/values-schema-bools-check.py charts/genieai-umbrella/values.yaml charts/genieai-umbrella/values.schema.json
+    - python3 scripts/ci/values-schema-bools-check.py charts/genieai-umbrella/values.yaml charts/genieai-umbrella/values.schema.json
     # Every key a template reads must be declared in values.yaml with its
     # template default — a tuning knob an operator cannot discover without
     # reading template source, and one a fat-fingered key silently ignores
@@ -3262,7 +3262,7 @@ chart:lint:
     # normalization. The reverse half (keys no template reads) is the
     # header's claim, not a gate: it is judged on every render by the
     # parity gate's chart-side walk.
-    - python3 scripts/values-surface-check.py
+    - python3 scripts/ci/values-surface-check.py
     # Every rendered environment value must be a STRING. `v1.EnvVar.value`
     # is typed string: the API server rejects a number or a boolean at
     # apply time — minutes after the install, with the pod's manifest as
@@ -3271,7 +3271,7 @@ chart:lint:
     # and the DEFAULTS are strings — so the gate also renders with the
     # numeric and boolean knobs overridden to a number, which is the
     # configuration that used to render `value: 42`.
-    - python3 scripts/env-types-check.py charts/genieai-umbrella
+    - python3 scripts/ci/env-types-check.py charts/genieai-umbrella
     # The chart's version moves with the chart's content: the deploy
     # repo's overlay names the version it installs, so a change that
     # leaves the version behind makes the overlay name a release the
@@ -3279,7 +3279,7 @@ chart:lint:
     # Git-path source — the install decision is the source's artifact
     # digest.) The rule is in .claude/rules/K8s-WORKFLOW.md ("Bump per
     # push, not per batch"); this gate makes it enforceable.
-    - python3 scripts/chart-version-check.py charts/genieai-umbrella
+    - python3 scripts/ci/chart-version-check.py charts/genieai-umbrella
     # Clearing a block must never crash the render. Helm's `null`
     # DELETES a key, so a cleared block turns the tier it controls OFF
     # (the same meaning as `enabled: false`) — and the chart degrades to
@@ -3293,13 +3293,13 @@ chart:lint:
     # Six review passes found that class (helm test templates, two
     # services' optional PVC block, the convergence templates, the
     # identity CR's sub-blocks, the edge tier's tls/cors blocks).
-    - python3 scripts/clearable-blocks-check.py charts/genieai-umbrella
+    - python3 scripts/ci/clearable-blocks-check.py charts/genieai-umbrella
     # The data tier's instance counts resolve the way the values say: the
     # profile map supplies the count when the operator states none, and
     # an explicit data.<tier>.instances WINS over the profile. The prod
     # profile used to hardcode 2 and 3, so an operator's 5 and 7 were
     # discarded with no warning and no error.
-    - python3 scripts/instance-count-check.py charts/genieai-umbrella
+    - python3 scripts/ci/instance-count-check.py charts/genieai-umbrella
     # No allow-list entries: the GatewayClass the edge tier renders is
     # exempt by KIND (the script's own singleton list) — a NAME entry
     # here was dead weight that would have re-permitted any
@@ -3524,7 +3524,7 @@ chart:contract:
 # The gate compares the rendered chart against docker-compose.yaml, service
 # pair by service pair. The differences that ARE the Kubernetes adaptation
 # (the addresses each surface reaches) are declared in
-# scripts/config-parity-allowlist.json, each with its reason; everything
+# scripts/ci/config-parity-allowlist.json, each with its reason; everything
 # else — timeouts, retries, feature flags, log level, identity — must
 # carry the same value.
 chart:parity:
@@ -3561,7 +3561,7 @@ chart:parity:
     # quietly greening the gate). The floor equals the count, not one
     # below it: with a floor of 171 a single reclassification was
     # invisible.
-    - python3 scripts/config-parity-check.py /tmp/rendered.yaml --min-compared=311
+    - python3 scripts/ci/config-parity-check.py /tmp/rendered.yaml --min-compared=311
   rules:
     # The gate verifies its `notRead` claims against the APPLICATION
     # source: a commit under components/ or genie-ai-overlay/ that starts
@@ -3675,23 +3675,23 @@ chart:crd-validate:
         --set ingress.tls.issuerName=selfsigned \
         --set opea.gpu.nodeHost=https://gpu.ci-render.local:444 \
         > /tmp/crd-validate-prod.yaml
-      ./scripts/validate-crds.sh /tmp/crd-validate.yaml /tmp/crd-validate-prod.yaml
+      ./scripts/ci/validate-crds.sh /tmp/crd-validate.yaml /tmp/crd-validate-prod.yaml
   rules:
-    # scripts/validate-crds.sh is the job's last step and its whole
+    # scripts/ci/validate-crds.sh is the job's last step and its whole
     # assertion: a change to the script must re-run the job, or a relaxed
     # grep ships with no pipeline ever having exercised it.
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - charts/**/*
         - scripts/install-prereqs.sh
-        - scripts/validate-crds.sh
+        - scripts/ci/validate-crds.sh
         - .gitlab-ci.yml
       when: on_success
     - if: '$CI_COMMIT_BRANCH'
       changes:
         - charts/**/*
         - scripts/install-prereqs.sh
-        - scripts/validate-crds.sh
+        - scripts/ci/validate-crds.sh
         - .gitlab-ci.yml
       when: on_success
 

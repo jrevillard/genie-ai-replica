@@ -45,7 +45,7 @@ from pathlib import Path
 
 import yaml
 
-CHART = Path(__file__).resolve().parent.parent / "charts" / "genieai-umbrella"
+CHART = Path(__file__).resolve().parent.parent.parent / "charts" / "genieai-umbrella"
 
 # Keys a template consumes but values.yaml must not declare. Each entry
 # is a guard, not a knob: the template reads the key only to REJECT it

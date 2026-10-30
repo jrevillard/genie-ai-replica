@@ -40,8 +40,8 @@ moved too. Two derivations matter:
     cluster. Both chart directories are watched; only the umbrella's
     Chart.yaml is exempt (it is the version itself).
 
-Usage: scripts/chart-version-check.py [chart-path]
-       CHART=charts/genieai-umbrella scripts/chart-version-check.py
+Usage: scripts/ci/chart-version-check.py [chart-path]
+       CHART=charts/genieai-umbrella scripts/ci/chart-version-check.py
 """
 
 import os

@@ -954,6 +954,15 @@ describe('vllmChatCompletions — model-id resolution (!631 policy)', () => {
   });
 });
 
+it('env judge without a named judge key: the deployment credential applies (the judge base is operator-configured)', async () => {
+  process.env.VLLM_API_KEY = 'deployment-secret';
+  process.env.RAGAS_JUDGE_BASE_URL = 'http://vllm:8000/v1';
+  axios.post.mockResolvedValue(vllmResponse('{}'));
+  await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }], { config: null });
+  const [, , cfg] = axios.post.mock.calls[0];
+  expect(cfg.headers.Authorization).toBe('Bearer deployment-secret');
+});
+
 it('env judge with NO judge base: the call stays on the deployment endpoint, with the deployment credential', async () => {
   process.env.VLLM_API_KEY = 'deployment-secret';
   axios.post.mockResolvedValue(vllmResponse('{}'));

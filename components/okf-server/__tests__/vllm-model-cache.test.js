@@ -168,16 +168,6 @@ describe('failure semantics', () => {
     await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
   });
 
-  test('discoverVllmModelId is soft: pin, else discovered, else null — never throws', async () => {
-    axios.get = jest.fn().mockRejectedValue(new Error('down'));
-    process.env.VLLM_MODEL_ID = 'pinned/model';
-    await expect(cache.discoverVllmModelId('http://vllm:8000')).resolves.toBe('pinned/model');
-
-    delete process.env.VLLM_MODEL_ID;
-    cache.clearModelCache();
-    await expect(cache.discoverVllmModelId('http://vllm:8000')).resolves.toBeNull();
-  });
-
   test('requireServedModelId ignores the pin and demands a served id', async () => {
     process.env.VLLM_MODEL_ID = 'pinned/model';
     mockProbeSuccess('actually-served/model');
@@ -311,17 +301,6 @@ describe('review round 4 fixes (#1181)', () => {
     expect(axios.get).toHaveBeenCalledTimes(1);
   });
 
-  test('deploymentDiscoveredModelId: the pin wins, else the served id (soft, never throws)', async () => {
-    process.env.VLLM_MODEL_ID = 'pinned/model';
-    await expect(cache.deploymentDiscoveredModelId()).resolves.toBe('pinned/model');
-    expect(axios.get).not.toHaveBeenCalled();
-
-    delete process.env.VLLM_MODEL_ID;
-    cache.clearModelCache();
-    axios.get.mockResolvedValue(modelsPayload('served/deployed-8b'));
-    await expect(cache.deploymentDiscoveredModelId()).resolves.toBe('served/deployed-8b');
-  });
-
   test('the deployment credential honours both key spellings (chat-path parity)', async () => {
     process.env.VLLM_LLM_API_KEY = 'llm-spelled-key';
     axios.get.mockResolvedValue(modelsPayload('served/model'));
@@ -403,5 +382,28 @@ describe('final review fixes (#1181)', () => {
     expect(cache.sameOrigin('http://vllm:8000', 'http://vllm:8000/v1')).toBe(true);
     expect(cache.sameOrigin('http://vllm:8000', 'http://vllm:8000/tenant-b')).toBe(false);
     expect(cache.sameOrigin('http://gpu:8000/llm', 'http://gpu:8000/llm/v1')).toBe(true);
+  });
+});
+
+describe('final review r2 fixes (#1181)', () => {
+  test('the probe timeout bounds the WHOLE probe — a retry gets the remaining time, not a fresh budget', async () => {
+    // A real clock: the deadline shrinks with the elapsed time (the file's
+    // default Date.now mock freezes it).
+    Date.now.mockRestore();
+    const timeouts = [];
+    axios.get.mockImplementation((url, opts) => {
+      timeouts.push(opts.timeout);
+      return Promise.reject(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }));
+    });
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
+    expect(timeouts.length).toBeGreaterThanOrEqual(2);
+    expect(timeouts[1]).toBeLessThan(timeouts[0]);
+  });
+
+  test('a malformed probe timeout falls back to the default (the Python twin rejects it too)', async () => {
+    process.env.MODEL_PROBE_TIMEOUT_SECONDS = '10abc';
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    await cache.getServedModelId('http://vllm:8000');
+    expect(axios.get.mock.calls[0][1].timeout).toBe(10000);
   });
 });

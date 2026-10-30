@@ -46,6 +46,7 @@
  * both worlds): MODEL_DETECT_TTL (seconds, default 60),
  * MODEL_PROBE_TIMEOUT_SECONDS (default 10). */
 
+const nodeCrypto = require('node:crypto');
 const axios = require('axios');
 const { logger } = require('../shared-lib/logger');
 // Deep import: the shared barrel pulls the security middleware (express
@@ -104,13 +105,25 @@ function deploymentKey() {
   return (process.env.VLLM_API_KEY || '').trim() || (process.env.VLLM_LLM_API_KEY || '').trim() || '';
 }
 
+/** A short, stable fingerprint of a credential — never the secret itself. */
+function credentialHash(apiKey) {
+  const key = (apiKey || '').trim();
+  if (!key) return '-';
+  return nodeCrypto.createHash('sha256').update(key).digest('hex').slice(0, 16);
+}
+
 function ttlSeconds() {
   // The repo's ONE env-int policy (components/shared/lib/validation-utils).
-  return parsePositiveInt(process.env.MODEL_DETECT_TTL, MODEL_TTL_DEFAULT_SECONDS, { min: 0 });
+  // Divergence from the Python twin: a NEGATIVE TTL falls back to the
+  // default here, while Python would cache-always-expire.
+  return parsePositiveInt(process.env.MODEL_DETECT_TTL, MODEL_TTL_DEFAULT_SECONDS);
 }
 
 function probeTimeoutMs() {
-  const v = parseFloat(process.env.MODEL_PROBE_TIMEOUT_SECONDS);
+  // Strict float (the Python twin's positive_float_env): '10abc' is NOT 10 —
+  // it is a malformed value and falls back to the default.
+  const raw = process.env.MODEL_PROBE_TIMEOUT_SECONDS;
+  const v = raw === undefined || raw === '' ? NaN : Number(raw);
   return Number.isFinite(v) && v > 0 ? v * 1000 : PROBE_TIMEOUT_DEFAULT_MS;
 }
 
@@ -126,6 +139,7 @@ const RETRIABLE_PROBE_CODES = new Set([
 ]);
 const RETRIABLE_PROBE_STATUS = new Set([429, 502, 503, 504]);
 const PROBE_RETRY_DELAY_MS = 250;
+const PROBE_ATTEMPTS = 3;
 
 function isRetriableProbeError(err) {
   if (!err) return false;
@@ -149,23 +163,26 @@ async function probe(url, timeoutMs, apiKey) {
   const key = (apiKey || '').trim();
   if (key) headers.Authorization = `Bearer ${key}`;
   try {
-    // The probe timeout is the ENV ceiling (MODEL_PROBE_TIMEOUT_SECONDS);
-    // a caller's own budget may only tighten it.
+    // The probe timeout is the ENV ceiling (MODEL_PROBE_TIMEOUT_SECONDS)
+    // and it bounds the WHOLE probe (a deadline), not one attempt: a
+    // caller's own budget may only tighten it.
     const ceiling = probeTimeoutMs();
-    const timeout = timeoutMs ? Math.min(timeoutMs, ceiling) : ceiling;
+    const budgetMs = timeoutMs ? Math.min(timeoutMs, ceiling) : ceiling;
+    const deadline = Date.now() + budgetMs;
     let r;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (let attempt = 0; attempt < PROBE_ATTEMPTS; attempt += 1) {
+      const left = deadline - Date.now();
+      if (left <= 0) throw new Error('model probe deadline exceeded');
       try {
-        r = await axios.get(url, { headers, timeout });
+        r = await axios.get(url, { headers, timeout: left });
         break;
       } catch (err) {
-        if (attempt === 0 && isRetriableProbeError(err)) {
-          // One short retry: a gateway blip must not fail the leg the way
-          // it would for a permanently broken endpoint.
-          await new Promise((resolve) => setTimeout(resolve, PROBE_RETRY_DELAY_MS));
-          continue;
-        }
-        throw err;
+        const canRetry = attempt < PROBE_ATTEMPTS - 1 && isRetriableProbeError(err) && deadline - Date.now() > 0;
+        if (!canRetry) throw err;
+        // Jittered backoff (the chat path jitters too): replicas that hit a
+        // cold cache together must not retry in lockstep.
+        const backoff = PROBE_RETRY_DELAY_MS * 2 ** attempt + Math.floor(Math.random() * PROBE_RETRY_DELAY_MS);
+        await new Promise((resolve) => setTimeout(resolve, Math.min(backoff, deadline - Date.now())));
       }
     }
     const list = r.data && Array.isArray(r.data.data) ? r.data.data : [];
@@ -197,12 +214,14 @@ async function probe(url, timeoutMs, apiKey) {
 async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
   const base = String(baseUrl || '').replace(/\/+$/, '');
   if (!base) return null;
-  // Cache key = the NORMALIZED probe URL + the credential: gateways can
-  // filter /v1/models per key, so two configs on one base must never
-  // resolve each other's model — and two spellings of one base
-  // (…/vllm vs …/vllm/v1) must not open two independent windows.
+  // Cache key = the NORMALIZED probe URL + a HASH of the credential:
+  // gateways can filter /v1/models per key, so two configs on one base
+  // must never resolve each other's model — and two spellings of one base
+  // (…/vllm vs …/vllm/v1) must not open two independent windows. The
+  // credential is hashed, never kept in the key: the map lives for the
+  // container's lifetime.
   const modelsUrl = openAiModelsUrl(base);
-  const cacheKey = `${modelsUrl}|${(apiKey || '').trim()}`;
+  const cacheKey = `${modelsUrl}|${credentialHash(apiKey)}`;
   const entry = _cache.get(cacheKey);
   if (entry && Date.now() - entry.ts < ttlSeconds() * 1000) return entry.id;
 
@@ -215,6 +234,7 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
   // Concurrent callers share ONE probe.
   let pending = _inflight.get(cacheKey);
   if (!pending) {
+    pruneCache();
     pending = probe(modelsUrl, timeoutMs, apiKey).then((id) => {
       if (id) {
         _cache.set(cacheKey, { id, ts: Date.now() });
@@ -232,10 +252,18 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
   return entry ? entry.id : null; // stale is better than broken
 }
 
-/** discover_model_id twin: soft precedence read for telemetry/provenance —
- * pin if set, else the served id, else null. Never throws. */
-async function discoverVllmModelId(baseUrl, opts) {
-  return envPin() || (await getServedModelId(baseUrl, opts));
+/** Drop the entries that no caller can use any more (the maps live for the
+ * container's lifetime; a long-lived okf-server must not accumulate one
+ * entry per model config it ever saw). */
+function pruneCache() {
+  const now = Date.now();
+  const ttlMs = ttlSeconds() * 1000;
+  for (const [key, value] of _cache) {
+    if (now - value.ts >= ttlMs) _cache.delete(key);
+  }
+  for (const [key, value] of _negative) {
+    if (now - value.ts >= NEGATIVE_CACHE_TTL * 1000) _negative.delete(key);
+  }
 }
 
 /** The loud no-answer error shared by both resolving variants. */
@@ -330,14 +358,8 @@ function optedInVllmBase() {
  * credential resolved in one place (they must never drift apart — an
  * unauthenticated probe 401s on secured endpoints and silently defeats
  * the label). Null when nothing answers. */
-async function deploymentServedModelId() {
-  return getServedModelId(deploymentVllmBase(), { apiKey: deploymentKey() });
-}
-
-/** The deployment model for a PROVENANCE label: the pin when set, else
- * the served id, else null (soft — never throws). */
-async function deploymentDiscoveredModelId() {
-  return discoverVllmModelId(deploymentVllmBase(), { apiKey: deploymentKey() });
+async function deploymentServedModelId({ timeoutMs } = {}) {
+  return getServedModelId(deploymentVllmBase(), { apiKey: deploymentKey(), timeoutMs });
 }
 
 /** Same ENDPOINT (protocol + host + port + compatible path) — the
@@ -348,9 +370,18 @@ async function deploymentDiscoveredModelId() {
  * qualifies as the same when it equals the other or is a prefix of it at
  * a '/' boundary; a base without a path ('/') covers the whole host. */
 function sameOrigin(a, b) {
+  let ua;
+  let ub;
   try {
-    const ua = new URL(String(a || ''));
-    const ub = new URL(String(b || ''));
+    ua = new URL(String(a || ''));
+    ub = new URL(String(b || ''));
+  } catch {
+    // A malformed base is a CONFIG error, not a silent "different origin":
+    // say so, because the consequence (no deployment credential) is a 401.
+    logger.warn('vllm_model_cache.malformed_base', { a: String(a || ''), b: String(b || '') });
+    return false;
+  }
+  try {
     if (ua.protocol !== ub.protocol || ua.host !== ub.host) return false;
     const pa = ua.pathname.replace(/\/+$/, '');
     const pb = ub.pathname.replace(/\/+$/, '');
@@ -378,13 +409,11 @@ function clearModelCache() {
 module.exports = {
   ModelDiscoveryError,
   credentialForBase,
-  deploymentDiscoveredModelId,
   deploymentKey,
   envPin,
   envPinLLMSpelling,
   deploymentServedModelId,
   deploymentVllmBase,
-  discoverVllmModelId,
   getServedModelId,
   optedInVllmBase,
   requireServedModelId,

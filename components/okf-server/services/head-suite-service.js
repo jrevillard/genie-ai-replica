@@ -680,11 +680,11 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       created_at: now,
       created_by: (opts.actor && opts.actor.user_id) || 'system',
       payload: {
-        // Provenance: the model that generated this suite — the stamp from
-        // the generation calls when they ran (covers named-config routing
-        // too), else the deployment pin or the served model (base + key
-        // travel together in deploymentDiscoveredModelId). 'vllm' survives
-        // only when nothing answered at all.
+        // Provenance: the model that generated this suite — the stamp the
+        // generation calls carry (it also names a named-config override).
+        // 'none' when no generation call ran or none of them carried a
+        // stamp: the suite then holds the deterministic fallback rows, and
+        // naming any model there would be a lie.
         generator: lastGenModel ? `llm:${lastGenModel}` : 'none',
         sibling_names: siblings.map((s) => s.name),
         off_domain_topics: randomTopics,

@@ -1023,7 +1023,13 @@ async function answerFidelity(opts = {}) {
     // VLLM_LLM_MODEL_ID spelling (VLLM_MODEL_ID alone in .env pins okf but
     // NOT chatqna), else it discovers the served id. The okf-side fused pin
     // must not name the serve-mode model.
-    model: modelCache.envPinLLMSpelling() || (await modelCache.deploymentServedModelId()) || null
+    model:
+      modelCache.envPinLLMSpelling() ||
+      // Bounded: the serve-mode label must not add a probe timeout to every
+      // benchmark run start (the probe deadline is 2 s; a slow endpoint
+      // leaves the label null rather than delaying the run).
+      (await modelCache.deploymentServedModelId({ timeoutMs: 2000 })) ||
+      null
   });
   if (opts.serveMode) return deploymentChat();
   try {

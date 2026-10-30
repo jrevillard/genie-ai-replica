@@ -392,7 +392,8 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
     if (process.env.RAGAS_JUDGE_BASE_URL) {
       host = process.env.RAGAS_JUDGE_BASE_URL;
     }
-    if (process.env.RAGAS_JUDGE_MODEL) model = process.env.RAGAS_JUDGE_MODEL;
+    const judgeModel = (process.env.RAGAS_JUDGE_MODEL || '').trim();
+    if (judgeModel) model = judgeModel;
     // The judge base is foreign to the deployment PIN and to the deployment
     // credential only when it is a DIFFERENT endpoint: the same server
     // under another path (the shipped http://vllm:8000/v1 vs
@@ -401,11 +402,14 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
     // unset judge base means the deployment endpoint itself.
     judgeIsDeployment = modelCache.sameOrigin(host, modelCache.deploymentVllmBase());
     viaForeignBase = !judgeIsDeployment;
-    // The judge key is EXPLICIT (RAGAS_JUDGE_API_KEY) or, when the judge
-    // base IS the deployment endpoint, the deployment credential. A foreign
-    // judge base gets its own key or none — never the GPU bearer.
-    apiKey = process.env.RAGAS_JUDGE_API_KEY || '';
-    if (!apiKey && judgeIsDeployment) apiKey = modelCache.deploymentKey();
+    // The judge key: RAGAS_JUDGE_API_KEY when the operator named one, else
+    // the deployment credential — the judge base is OPERATOR-configured
+    // (the .env RAGAS_JUDGE_* pair), and the ragas sidecar behaves the
+    // same way (its compose block defaults RAGAS_JUDGE_API_KEY to
+    // VLLM_API_KEY). A NAMED model config gets no such fallback — that
+    // base is chosen in the UI, and the deployment bearer must not follow
+    // it there.
+    apiKey = (process.env.RAGAS_JUDGE_API_KEY || '').trim() || modelCache.deploymentKey();
   }
   try {
     // opts.config === null → the caller explicitly wants the ENV judge (the
@@ -965,9 +969,9 @@ async function suggestTags(repoId, _opts = {}) {
       label_count: coverage.label_count,
       labels_represented: coverage.labels_represented,
       vllm_host: modelCache.deploymentVllmBase(),
-      // The PIN only (null when the model is discovered) — the model that
+      // The PIN (null when the model is discovered) — the model that
       // actually answered is logged by frontmatter.suggest.done.
-      model_pin: modelCache.envPin(),
+      model: modelCache.envPin(),
       prompt_chars: prompt.length
     });
     // maxTokens 1000 was NOT headroom, it was a live failure: on a 586-concept

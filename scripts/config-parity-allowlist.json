@@ -132,8 +132,7 @@
         "TEI_EMBEDDING_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own TEI service",
         "VLLM_API_KEY": "carried by the vllm-api-key Secret the operator provides",
         "VLLM_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own vLLM service",
-        "VLLM_MODEL_ID": "main's compose moved to runtime model discovery (empty default, the job fails loudly on a cold vLLM) while the chart still pins the model id; the static-env vs runtime-discovery homogenization is tracked in issue #1182 — the chart re-mirrors whichever shape #1182 lands",
-        "DATAPREP_CONTEXTUAL_DOC_BUDGET": "the chart carries a smaller laptop-tuned budget than Compose's 100000; the budget-derivation rework (fixed vs derive-from-window) is tracked in issue #1182"
+        "VLLM_MODEL_ID": "main's compose moved to runtime model discovery (empty default, the job fails loudly on a cold vLLM) while the chart still pins the model id; the static-env vs runtime-discovery homogenization is tracked in issue #1182 — the chart re-mirrors whichever shape #1182 lands"
       },
       "composeOnly": {
         "NVIDIA_VISIBLE_DEVICES": "Docker GPU passthrough — Kubernetes expresses the same thing with the device plugin and a node selector, not with this variable"

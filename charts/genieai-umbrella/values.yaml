@@ -296,6 +296,15 @@ data:
     grafanaClientId: grafana
     adminUsername: genie-admin
     defaultLocale: en
+    # Explicit Keycloak URL overrides, all empty by default: the
+    # applications derive what they need from the issuer they were
+    # given, and a default that guessed an address would override that
+    # derivation with a lie. Set one only when a deployment's topology
+    # makes the derived answer wrong.
+    publicUrl: ""
+    jwksUrl: ""
+    browserIssuer: ""
+    internalUrl: ""
     # Login/account/admin/email theme name, exported as KEYCLOAK_THEME.
     # The `genie` theme source lives at configs/keycloak/themes (the
     # same source the compose path bind-mounts since #998). The chart
@@ -952,6 +961,27 @@ services:
       storageSize: 5Gi
     podDisruptionBudget: null
 
+# OKF tier (the knowledge-frame server and its PII / RAGAS sidecars).
+# Disabled by default — the same dark default the Compose file ships
+# (`OKF_ENABLED=0`, replicas 0): the deployment wiring below (the
+# OKF_* variables the existing services export) is unconditional, but
+# the tier's own workloads render only when this is true.
+okf:
+  enabled: false
+  server:
+    # The address the other services call the OKF server at. The
+    # default is the tier's own in-cluster Service name; when the tier
+    # is dark (enabled: false) the address is still exported — the
+    # wiring matches Compose, where the variables are set while the
+    # server's replicas sit at 0.
+    url: "http://okf-server:3002"
+  retrievalConfig:
+    ttlMs: "30000"
+    timeoutMs: "3000"
+  # The largest bundle the document repository will forward to the OKF
+  # crawl pipeline, in megabytes.
+  bundleMaxMb: "100"
+
 # OPEA AI/ML tier. Disabled by default; enabling renders the six
 # OPEA services (chatqna, retriever, dataprep, reranker, embedding,
 # translation). The per-service templates carry the defaults for
@@ -1135,6 +1165,14 @@ opea:
     dataprepMaxConcurrentBatches: "20"    # DATAPREP_MAX_CONCURRENT_BATCHES
     dataprepIngestConcurrency: "1"        # DATAPREP_INGEST_CONCURRENCY (per-file ingest workers)
     dataprepVllmMaxModelLen: "65536"      # VLLM_MAX_MODEL_LEN (the window the doc-budget derivation reads)
+    # OKF labeling round-trip tuning (retry backoff, second-round delay,
+    # storm cooldown) — the tier's own defaults; see the OKF tier block.
+    okfLlmRetryAttempts: "5"              # OKF_LLM_RETRY_ATTEMPTS
+    okfLlmRetryBaseMs: "2000"             # OKF_LLM_RETRY_BASE_MS
+    okfLlmRetryMaxMs: "90000"             # OKF_LLM_RETRY_MAX_MS
+    okfLlmRound2DelayS: "45"              # OKF_LLM_ROUND2_DELAY_S
+    okfLlmStormCooldownS: "20"            # OKF_LLM_STORM_COOLDOWN_S
+    okfLlmStormCooldownMaxS: "120"        # OKF_LLM_STORM_COOLDOWN_MAX_S
     dataprepLlmLabelBatchSize: "4"        # DATAPREP_LLM_LABEL_BATCH_SIZE
     dataprepChunkSizePdf: "500"           # DATAPREP_CHUNK_SIZE_PDF
     dataprepChunkSizeXlsx: "1500"         # DATAPREP_CHUNK_SIZE_XLSX
@@ -1150,7 +1188,7 @@ opea:
     contentExtractionMethod: "docling"    # CONTENT_EXTRACTION_METHOD
     doclingDevice: "cuda"                 # DOCLING_DEVICE
     dataprepContextualModel: ""           # DATAPREP_CONTEXTUAL_MODEL; empty = reuse the chat LLM
-    dataprepContextualDocBudget: "6000"   # DATAPREP_CONTEXTUAL_DOC_BUDGET (per-chunk strategy)
+    dataprepContextualDocBudget: "0"      # DATAPREP_CONTEXTUAL_DOC_BUDGET (0 = derive from VLLM_MAX_MODEL_LEN)
     dataprepContextualDocBudgetDocLevel: "100000"  # DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL
     dataprepContextualMaxTokens: "512"    # DATAPREP_CONTEXTUAL_MAX_TOKENS
     contextualStrategy: "per_chunk"       # CONTEXTUAL_STRATEGY: per_chunk | doc_level

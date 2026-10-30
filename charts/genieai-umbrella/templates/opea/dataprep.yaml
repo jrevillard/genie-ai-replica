@@ -38,11 +38,16 @@
 {{- $llmEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "llm") -}}
 {{- $embeddingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "embedding") -}}
 {{- $doclingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "docling") -}}
+{{- /* One graph name for every service that touches it: the ARANGO_GRAPH_NAME
+row reads the retriever block's key first, the dataprep block's own key
+second — Compose carries a single ARANGO_GRAPH_NAME knob, and an
+operator overriding the retriever key must not leave dataprep
+labeling a graph under the old name. */ -}}
 {{- $tuningEnv := list
     (dict "name" "DATAPREP_COMPONENT_NAME" "value" ($opeaDataprep.dataprepComponentName | default "GENIE_DATAPREP_ARANGODB" | toString))
     (dict "name" "DATAPREP_INGEST_CONCURRENCY" "value" ($opeaDataprep.dataprepIngestConcurrency | default "1" | toString))
     (dict "name" "VLLM_MAX_MODEL_LEN" "value" ($opeaDataprep.dataprepVllmMaxModelLen | default "65536" | toString))
-    (dict "name" "ARANGO_GRAPH_NAME" "value" ($opeaDataprep.arangoGraphName | default "GRAPH" | toString))
+    (dict "name" "ARANGO_GRAPH_NAME" "value" (index ($opea.retriever | default dict) "arangoGraphName" | default ($opeaDataprep.arangoGraphName | default "GRAPH") | toString))
     (dict "name" "DATAPREP_MAX_CONCURRENT_BATCHES" "value" ($opeaDataprep.dataprepMaxConcurrentBatches | default "20" | toString))
     (dict "name" "DATAPREP_LLM_LABEL_BATCH_SIZE" "value" ($opeaDataprep.dataprepLlmLabelBatchSize | default "4" | toString))
     (dict "name" "DATAPREP_CHUNK_SIZE_PDF" "value" ($opeaDataprep.dataprepChunkSizePdf | default "500" | toString))
@@ -123,6 +128,23 @@ in the values file is honored end-to-end for multi-line prompts). */ -}}
 {{- $kcSecretEnv := list
     (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "KC_DATAPREP_CLIENT_SECRET" "secret" "kc-dataprep-client-secret" "key" "KC_DATAPREP_CLIENT_SECRET") | fromJson)
 -}}
+{{- /* The OKF wiring: the variables Compose sets on this service whether
+or not the tier is enabled. OKF_INTERNAL_SECRET is delivered through
+the okf-internal-secret Secret (optional here — the tier is dark by
+default and a deployment that has not installed the sealed secret must
+still boot), the rest are the tier's own defaults. */ -}}
+{{- $okf := .Values.okf | default dict -}}
+{{- $okfSecretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "OKF_INTERNAL_SECRET" "secret" "okf-internal-secret" "key" "OKF_INTERNAL_SECRET" "optional" true) | fromJson) -}}
+{{- $okfEnv := list
+    (dict "name" "OKF_SERVER_URL" "value" (index ($okf.server | default dict) "url" | default "http://okf-server:3002" | toString))
+    (dict "name" "OKF_LLM_RETRY_ATTEMPTS" "value" ($opeaDataprep.okfLlmRetryAttempts | default "5" | toString))
+    (dict "name" "OKF_LLM_RETRY_BASE_MS" "value" ($opeaDataprep.okfLlmRetryBaseMs | default "2000" | toString))
+    (dict "name" "OKF_LLM_RETRY_MAX_MS" "value" ($opeaDataprep.okfLlmRetryMaxMs | default "90000" | toString))
+    (dict "name" "OKF_LLM_ROUND2_DELAY_S" "value" ($opeaDataprep.okfLlmRound2DelayS | default "45" | toString))
+    (dict "name" "OKF_LLM_STORM_COOLDOWN_S" "value" ($opeaDataprep.okfLlmStormCooldownS | default "20" | toString))
+    (dict "name" "OKF_LLM_STORM_COOLDOWN_MAX_S" "value" ($opeaDataprep.okfLlmStormCooldownMaxS | default "120" | toString))
+    (dict "name" "KEYCLOAK_INTERNAL_URL" "value" (index $dataKeycloak "internalUrl" | default "" | toString))
+-}}
 {{- $gpuSecretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "HF_TOKEN" "VLLM_API_KEY" "HUGGINGFACEHUB_API_TOKEN")) | fromJsonArray -}}
 {{- /* opea.dataprep.env: see the parity gate. The rows come last so an
 operator's value wins over a derived row of the same name. */ -}}
@@ -136,7 +158,7 @@ operator's value wins over a derived row of the same name. */ -}}
     "image" (dict "repository" "genie-ai-dataprep-arango" "tag" "main")
     "port" 5000
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "2" "memory" "4Gi"))
-    "env" (concat $arangoEnv $tuningEnv $promptEnv $arangoSecretEnv $kcSecretEnv $gpuSecretEnv $opeaEnvRows)
+    "env" (concat $arangoEnv $tuningEnv $promptEnv $arangoSecretEnv $kcSecretEnv $gpuSecretEnv $okfEnv $okfSecretEnv $opeaEnvRows)
     "probes" (dict
       "readiness" (dict "tcpSocket" (dict "port" 5000) "initialDelaySeconds" 30 "periodSeconds" 15)
       "liveness"  (dict "tcpSocket" (dict "port" 5000) "initialDelaySeconds" 60 "periodSeconds" 30)

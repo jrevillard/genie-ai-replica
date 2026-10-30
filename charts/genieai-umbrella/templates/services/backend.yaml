@@ -1,5 +1,7 @@
 {{- $services := .Values.services | default dict -}}
 {{- $opea := .Values.opea | default dict -}}
+{{- $okf := .Values.okf | default dict -}}
+{{- $opeaRetriever := $opea.retriever | default dict -}}
 {{- $data := .Values.data | default dict -}}
 {{- $dataKeycloak := $data.keycloak | default dict -}}
 {{- $dataArangodb := $data.arangodb | default dict -}}
@@ -133,7 +135,14 @@ in hybrid mode — MUST match the retriever's own ARANGO_GRAPH_NAME
     (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
     (dict "name" "ARANGO_DB" "value" ($dataArangodb.database | default "_system" | toString))
     (dict "name" "ARANGO_USER" "value" "root")
-    (dict "name" "ARANGO_GRAPH_NAME" "value" (index ($opea.retriever | default dict) "arangoGraphName" | default "GRAPH" | toString))
+    (dict "name" "ARANGO_GRAPH_NAME" "value" (index $opeaRetriever "arangoGraphName" | default "GRAPH" | toString))
+    (dict "name" "KEYCLOAK_PUBLIC_URL" "value" (index ($dataKeycloak | default dict) "publicUrl" | default "" | toString))
+    (dict "name" "KEYCLOAK_JWKS_URL" "value" (index ($dataKeycloak | default dict) "jwksUrl" | default "" | toString))
+    (dict "name" "KEYCLOAK_BROWSER_ISSUER" "value" (index ($dataKeycloak | default dict) "browserIssuer" | default "" | toString))
+    (dict "name" "OKF_ENABLED" "value" (ternary "1" "0" (eq true (index $okf "enabled"))))
+    (dict "name" "OKF_SERVER_URL" "value" (index ($okf.server | default dict) "url" | default "http://okf-server:3002" | toString))
+    (dict "name" "OKF_RETRIEVAL_CONFIG_TTL_MS" "value" (index ($okf.retrievalConfig | default dict) "ttlMs" | default "30000" | toString))
+    (dict "name" "OKF_RETRIEVAL_CONFIG_TIMEOUT_MS" "value" (index ($okf.retrievalConfig | default dict) "timeoutMs" | default "3000" | toString))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
     (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
     (dict "name" "TRANSLATION_CACHE" "value" "on")

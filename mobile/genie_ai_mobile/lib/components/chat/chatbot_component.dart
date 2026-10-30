@@ -369,10 +369,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         if (activeTitle != null) {
           _selectedCategoryName = activeTitle;
         }
-        // The config just cached: the welcome message it declares lands
-        // now, not on the next locale switch.
-        _refreshWelcomeMessage();
       });
+      // The config just cached: the welcome message it declares lands
+      // now, not on the next locale switch. OUTSIDE the setState above —
+      // the refresh owns its own setState when the bubble updates.
+      _refreshWelcomeMessage();
     } catch (e) {
       debugPrint("[CHATBOT] Failed to load genie-ai-config.json: $e");
       _quickHelpLoadFailed = true;

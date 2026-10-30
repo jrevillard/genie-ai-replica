@@ -1565,6 +1565,21 @@ void main() {
     });
   });
 
+  /// The scalar half of the web's `value || ''`: a numeric or boolean
+  /// SCALAR that JS reads as falsy resolves to no text — a numeric typo
+  /// in a title degrades the same way on both platforms.
+  group('resolveConfigText scalars', () {
+    test('a plain string is itself', () {
+      expect(resolveConfigText('Ask about IDs', 'en'), 'Ask about IDs');
+    });
+
+    test('0 and false resolve to no text; a truthy number keeps its form', () {
+      expect(resolveConfigText(0, 'en'), '');
+      expect(resolveConfigText(false, 'en'), '');
+      expect(resolveConfigText(42, 'en'), '42');
+    });
+  });
+
   /// The ONE JS-truthiness read a config gate does — the shared falsy
   /// set (null, false, 0, '') every config gate on both platforms
   /// agrees on, so a numeric-typed typo degrades the same way on each.

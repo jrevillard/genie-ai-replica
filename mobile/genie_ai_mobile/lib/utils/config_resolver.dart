@@ -22,7 +22,10 @@ String resolveConfigText(dynamic value, String locale) {
     }
     return '';
   }
-  return value?.toString() ?? '';
+  // A scalar the web's `value || ''` reads as falsy (0, false) is no
+  // text; a truthy number keeps its string form, as the web renders it.
+  if (value is String) return value;
+  return configTruthy(value) ? value.toString() : '';
 }
 
 /// The config value as a map — the ONE container guard every config

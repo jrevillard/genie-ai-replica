@@ -71,7 +71,6 @@ Map<String, dynamic> parseQuickHelpButton(
     'id': btn['id'],
     'category': btn['category'],
     'serviceLabels': serviceLabels,
-    'action': action ?? {},
     'iconAsset': iconAsset,
     'resolvedTitle': resolveConfigText(btn['title'], locale),
     'resolvedVisibleText': resolveConfigText(action?['visibleText'], locale),

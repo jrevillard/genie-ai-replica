@@ -1271,7 +1271,6 @@ void main() {
         'action': 'ask',
       }, 'en');
 
-      expect(parsed['action'], {});
       expect(parsed['resolvedVisibleText'], '');
       expect(parsed['resolvedHiddenPrompt'], '');
     });

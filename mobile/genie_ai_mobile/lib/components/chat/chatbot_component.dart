@@ -1241,20 +1241,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       return;
     }
     // The parse resolved the action texts under the load's locale (the
-    // same values the web resolves at map time); an empty text pair is
-    // the just-chat signal, read off the RESOLVED strings — the raw
-    // config values are locale maps, whose string form is never empty.
+    // same values the web resolves at map time); the gates read the
+    // RESOLVED strings — the raw config values are locale maps, whose
+    // string form is never empty.
     final String visibleText = button['resolvedVisibleText']?.toString() ?? '';
     final String hiddenPrompt =
         button['resolvedHiddenPrompt']?.toString() ?? '';
 
-    // If both are empty AND the card declares NO scope, just enter Chat
-    // Mode: close overlay, clear all label filters so the retriever sees
-    // all documents, focus input. A card that DECLARES a scope but has
-    // no prompts is still a scoped card — the web installs the same
-    // card's labels without asking for a prompt, and wiping the scope
-    // here sent the question over the whole corpus while the card
-    // promised its declared one.
     final declaredLabels =
         (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
             .map((label) => label.toString())
@@ -1262,10 +1255,19 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     final declaresScope =
         declaresCategoryScope(button['category']?.toString()) ||
         declaredLabels.isNotEmpty;
-    if (visibleText.isEmpty && hiddenPrompt.isEmpty) {
+
+    // The AUTO-SEND is gated on the hidden prompt alone — the web arms
+    // its send the same way. A card with a visible text but no hidden
+    // prompt would otherwise wire an EMPTY question to the LLM while the
+    // bubble showed the visible text.
+    if (hiddenPrompt.isEmpty) {
+      // A card that DECLARES a scope but has no hidden prompt is still a
+      // scoped card — the web installs the same card's labels without
+      // asking for a prompt, and wiping the scope here sent the question
+      // over the whole corpus while the card promised its declared one.
       if (declaresScope) {
         setState(() {
-          _installQuickHelpScopeFields(button, nameFallback: '');
+          _installQuickHelpScopeFields(button, nameFallback: visibleText);
         });
         _inputFocusNode.requestFocus();
         return;
@@ -2139,15 +2141,21 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
-                        // A JSON `2.0` decodes as a double: cast through
-                        // num, not int — a hard int cast throws in the
-                        // build where the ?? default never runs.
+                        // A malformed layout value degrades to the
+                        // default, like the button fields: a hard cast
+                        // throws in the build (a JSON `2.0` is a double,
+                        // a typo is a string) and a non-positive count or
+                        // ratio trips the grid delegate's assertions.
+                        final rawColumns = _quickHelpLayout['columns'];
                         final int crossAxisCount =
-                            (_quickHelpLayout['columns'] as num?)?.toInt() ?? 2;
+                            rawColumns is num && rawColumns.toInt() >= 1
+                            ? rawColumns.toInt()
+                            : 2;
+                        final rawRatio = _quickHelpLayout['childAspectRatio'];
                         final double aspectRatio =
-                            (_quickHelpLayout['childAspectRatio'] as num?)
-                                ?.toDouble() ??
-                            3.5;
+                            rawRatio is num && rawRatio > 0
+                            ? rawRatio.toDouble()
+                            : 3.5;
 
                         return GridView.builder(
                           gridDelegate:

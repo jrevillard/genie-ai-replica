@@ -254,6 +254,18 @@ from pydantic import ValidationError  # Import Pydantic validation error
 from rank_bm25 import BM25Okapi
 
 logger = CustomLogger("GENIE_DATAPREP_ARANGODB")
+
+
+def _env_int(name: str, default: int) -> int:
+    """Parse an int env var tolerantly: unset, empty (compose's default
+    injection) or non-numeric all fall back to the default instead of
+    crash-looping the service at import."""
+    try:
+        return int(os.getenv(name) or default)
+    except ValueError:
+        return default
+
+
 setup_trace_logging("GENIE_DATAPREP_ARANGODB")
 setup_json_logging("GENIE_DATAPREP_ARANGODB")
 install_uvicorn_access_logging()
@@ -664,6 +676,13 @@ CONTEXTUAL_LABEL_RAW = os.getenv("CONTEXTUAL_LABEL_RAW", "true").lower() == "tru
 # `{"context":"..."}` was truncated mid-string -> JSONDecodeError -> raw-chunk
 # fallback. 512 gives comfortable margin at no extra cost (the model stops early).
 CONTEXTUAL_MAX_TOKENS = int(os.getenv("DATAPREP_CONTEXTUAL_MAX_TOKENS", "512"))
+# Explicit statement of the context window (tokens) the LLM endpoint serves.
+# 0 = discover it at runtime from the endpoint (see _serving_model_window);
+# >0 = the deployer states it. The override is the only lever on a strict
+# OpenAI-compatible provider (its /v1/models carries no max_model_len, so
+# discovery never answers) and the way to state the window of a
+# DATAPREP_CONTEXTUAL_MODEL that is not the model the endpoint lists first.
+DATAPREP_MAX_MODEL_LEN = _env_int("DATAPREP_MAX_MODEL_LEN", 0)
 
 # Spec 5.3: Externalized Prompt - Two-tier priority
 # Level 1: ENV VAR (highest priority) - override via .env
@@ -745,7 +764,7 @@ through post-harvest for cucumber crops in tropical climates."}
 """.strip()
 
 
-def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
+def _build_vllm_client(endpoint: str | None = None) -> tuple[AsyncOpenAI, str]:
     """Construct the AsyncOpenAI client for the self-hosted vLLM and resolve the model.
 
     The explicit VLLM_MODEL_ID env wins (deployer override); otherwise the
@@ -753,9 +772,14 @@ def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
     core/model_cache.py) and fails loudly when nothing answers — a guessed
     name is rejected by vLLM's model-name validation.
     Shared by labeling and Contextual-Retrieval context generation.
+
+    ``endpoint`` lets a caller that already read VLLM_ENDPOINT pass it in:
+    the window must be probed on the SAME server the generation calls, and
+    two independent reads of that env var are two sources of truth about
+    which server it is.
     """
     _api_key = os.getenv("VLLM_API_KEY", "EMPTY")
-    _vllm_endpoint = os.getenv("VLLM_ENDPOINT")
+    _vllm_endpoint = endpoint if endpoint is not None else os.getenv("VLLM_ENDPOINT")
     # Shared request budget (core/model_http_policy.py): the openai-python
     # defaults (600 s, 2 retries) let a heavily contended shared GPU stall
     # labeling/context batches for 10+ minutes with no feedback
@@ -771,33 +795,52 @@ def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
     return client, model
 
 
-def _env_int(name: str, default: int) -> int:
-    """Parse an int env var tolerantly: unset, empty (compose's default
-    injection) or non-numeric all fall back to the default instead of
-    crash-looping the service at import."""
-    try:
-        return int(os.getenv(name) or default)
-    except ValueError:
-        return default
+def _build_vllm_client_and_window() -> tuple[AsyncOpenAI, str, int]:
+    """Client, model and the serving model's window — resolved together.
+
+    One endpoint read, so the window is probed on the same server the
+    generation calls. One thread hop, because both probes are synchronous
+    HTTP calls that can take their whole timeout when the endpoint does not
+    answer: on the ingest path a blocked event loop freezes the phase
+    heartbeats and every concurrent request the process serves.
+
+    ``named_model`` is the model the generation requests name —
+    DATAPREP_CONTEXTUAL_MODEL when set, the resolved model id otherwise —
+    which is what the window has to match.
+    """
+    endpoint = os.getenv("VLLM_ENDPOINT", "")
+    client, model = _build_vllm_client(endpoint)
+    named_model = DATAPREP_CONTEXTUAL_MODEL.strip() or model
+    return client, model, _serving_model_window(endpoint, named_model)
 
 
-# Endpoints whose window discovery already failed (or whose discovered window
-# was found not to match the contextual model) and were warned about. The
-# warning is per endpoint, not per document: a bulk import would otherwise
-# emit one identical line per document — the volume is what teaches operators
-# to ignore the line.
+# Keys of the warnings already emitted ("already warned" set). The window
+# problems are per-deployment facts, not per-document ones: a bulk import
+# would otherwise ship one identical line per document — the volume is what
+# teaches operators to ignore the line.
 _WINDOW_WARNED: set[str] = set()
 
 
-def _serving_model_window() -> int:
+def _warn_once(key: str, message: str) -> None:
+    """Log ``message`` once per ``key`` for the lifetime of the process."""
+    if key in _WINDOW_WARNED:
+        return
+    _WINDOW_WARNED.add(key)
+    logger.warning(message)
+
+
+def _serving_model_window(endpoint: str, named_model: str) -> int:
     """The serving model's context window in tokens, in three tiers.
 
-    1. DATAPREP_MAX_MODEL_LEN (env, read at call time) wins — the deployer's
+    1. DATAPREP_MAX_MODEL_LEN (import-time constant) wins — the deployer's
        explicit statement of the window the endpoint serves. It is the lever
        for a strict OpenAI-compatible provider that serves /v1/models without
        a ``max_model_len`` field (discovery can never answer there), and for
        a deployment whose context model (DATAPREP_CONTEXTUAL_MODEL) is not
-       the one the endpoint lists first (see the mismatch note below).
+       the one the endpoint lists first (see the mismatch note below). When
+       it disagrees with the served window, that is warned about too: an
+       override larger than what the server accepts recreates exactly the
+       silent overflow this issue exists to stop.
     2. Otherwise the endpoint is probed (core/model_cache.py): the window the
        vLLM server actually serves, TTL-cached and sharing the probe with
        model-id detection — the same pattern as chatqna's _get_max_model_len.
@@ -820,57 +863,55 @@ def _serving_model_window() -> int:
     project-standard Granite window. Consolidating them is a separate change
     from this one.
     """
-    explicit = _env_int("DATAPREP_MAX_MODEL_LEN", 0)
-    if explicit > 0:
-        return explicit
+    discovered = get_max_model_len(endpoint)
+    if DATAPREP_MAX_MODEL_LEN > 0:
+        if discovered and discovered != DATAPREP_MAX_MODEL_LEN:
+            _warn_once(
+                f"override|{endpoint}",
+                f"Contextual Retrieval: DATAPREP_MAX_MODEL_LEN={DATAPREP_MAX_MODEL_LEN} does not match the "
+                f"window {endpoint} serves ({discovered} tokens) — document contexts sized for "
+                f"{DATAPREP_MAX_MODEL_LEN} are rejected when it is the larger of the two, and the "
+                f"batches fall back to raw chunks. Align the override with the served window.",
+            )
+        return DATAPREP_MAX_MODEL_LEN
+    if discovered:
+        _warn_on_contextual_model_mismatch(endpoint, discovered, named_model)
+        return discovered
 
-    endpoint = os.getenv("VLLM_ENDPOINT", "")
-    window = get_max_model_len(endpoint)
-    if window:
-        _warn_on_contextual_model_mismatch(endpoint, window)
-        return window
-
-    if endpoint not in _WINDOW_WARNED:
-        _WINDOW_WARNED.add(endpoint)
-        logger.warning(
-            f"Contextual Retrieval: no model window discovered at VLLM_ENDPOINT={endpoint or '<unset>'}; "
-            f"deriving document-context budgets from the fail-closed fallback of {DERIVE_FALLBACK_WINDOW} "
-            f"tokens (the smallest profile we support) — larger documents get their context truncated to "
-            f"that budget. Make the endpoint answer the /v1/models probe (failures logged by "
-            f"core.model_cache), set DATAPREP_MAX_MODEL_LEN to the window it serves, or set "
-            f"DATAPREP_CONTEXTUAL_DOC_BUDGET explicitly."
-        )
+    _warn_once(
+        f"fallback|{endpoint}",
+        f"Contextual Retrieval: no model window discovered at VLLM_ENDPOINT={endpoint or '<unset>'}; "
+        f"deriving document-context budgets from the fail-closed fallback of {DERIVE_FALLBACK_WINDOW} "
+        f"tokens (the smallest profile we support) — larger documents get their context truncated to "
+        f"that budget. Make the endpoint answer the /v1/models probe (failures logged by "
+        f"core.model_cache), set DATAPREP_MAX_MODEL_LEN to the window it serves, or set "
+        f"DATAPREP_CONTEXTUAL_DOC_BUDGET explicitly.",
+    )
     return DERIVE_FALLBACK_WINDOW
 
 
-def _warn_on_contextual_model_mismatch(endpoint: str, window: int) -> None:
-    """Warn when the context model is not the model the endpoint lists first.
+def _warn_on_contextual_model_mismatch(endpoint: str, window: int, named_model: str) -> None:
+    """Warn when the model the request names is not the model the endpoint lists first.
 
-    Discovery reads the FIRST entry of /v1/models (core/model_cache.py), but
-    the contexts are generated by DATAPREP_CONTEXTUAL_MODEL when it is set.
-    A vLLM server hosting several models can then serve a smaller window for
-    the context model than the one discovery reported — the budget would be
-    sized for the wrong model and the request would be rejected (silently
-    falling back to raw chunks). The mismatch cannot be resolved from here
-    (the probe exposes one model), so it is surfaced and the operator is
-    pointed at the override.
+    Discovery reads the FIRST entry of /v1/models (core/model_cache.py), so the
+    window it reports is that model's. The contexts are generated by
+    DATAPREP_CONTEXTUAL_MODEL when it is set, and otherwise by the resolved
+    model id (VLLM_MODEL_ID or the discovered one). A vLLM server hosting
+    several models can then serve a smaller window for the model that answers
+    than the one discovery reported — the budget would be sized for the wrong
+    model and the request would be rejected (silently falling back to raw
+    chunks). The mismatch cannot be resolved from here (the probe exposes one
+    model), so it is surfaced and the operator is pointed at the override.
     """
-    contextual_model = os.getenv("DATAPREP_CONTEXTUAL_MODEL", "").strip()
-    if not contextual_model:
-        return
     discovered_model = get_model_id(endpoint)
-    if not discovered_model or discovered_model == contextual_model:
+    if not discovered_model or discovered_model == named_model:
         return
-    key = f"{endpoint}|{contextual_model}"
-    if key in _WINDOW_WARNED:
-        return
-    _WINDOW_WARNED.add(key)
-    logger.warning(
-        f"Contextual Retrieval: DATAPREP_CONTEXTUAL_MODEL={contextual_model} is not the model "
-        f"VLLM_ENDPOINT={endpoint or '<unset>'} lists first ({discovered_model}), so the discovered "
-        f"window ({window} tokens) may not be the one {contextual_model} serves — document contexts "
-        f"sized for it could be rejected. Set DATAPREP_MAX_MODEL_LEN to the window "
-        f"{contextual_model} serves."
+    _warn_once(
+        f"mismatch|{endpoint}|{named_model}",
+        f"Contextual Retrieval: the contexts are generated by {named_model}, but VLLM_ENDPOINT="
+        f"{endpoint or '<unset>'} lists {discovered_model} first, so the discovered window "
+        f"({window} tokens) may not be the one {named_model} serves — document contexts sized for it "
+        f"could be rejected. Set DATAPREP_MAX_MODEL_LEN to the window {named_model} serves.",
     )
 
 
@@ -2656,7 +2697,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # (e.g. model auto-detection failure on the GPU node), skip contextualization
         # entirely and ingest raw chunks — never block ingestion (spec boundary).
         try:
-            client, default_model = _build_vllm_client()
+            client, default_model, serving_window = await asyncio.to_thread(_build_vllm_client_and_window)
         except Exception as e:
             err = f"{type(e).__name__}: {str(e)[:200]}"
             logger.error(
@@ -2672,8 +2713,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
         model = DATAPREP_CONTEXTUAL_MODEL.strip() or default_model
         total = len(chunks)
-
-        resolved_window: int | None = None
 
         async def _doc_context_or_none(chunks_: list[str], configured: int, label: str) -> str | None:
             """Resolve the budget, log any truncation, build the context.
@@ -2694,14 +2733,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             ``_write_ingestion_log`` is what makes it visible to a curator
             instead of only to whoever greps container logs.
             """
-            nonlocal resolved_window
-            if resolved_window is None:
-                # The discovery probe is a SYNC http call that can block for
-                # PROBE_TIMEOUT_SECONDS when the endpoint does not answer —
-                # off the event loop, so the ingest phase's heartbeats keep
-                # firing and concurrent requests are not stalled by it.
-                resolved_window = await asyncio.to_thread(_serving_model_window)
-            budget, source = self._resolve_doc_budget(chunks_, configured, resolved_window)
+            budget, source = self._resolve_doc_budget(chunks_, configured, serving_window)
             if budget is None:
                 return None, (DEGRADED_WINDOW_TOO_SMALL if source == "window-exhausted" else None)
 

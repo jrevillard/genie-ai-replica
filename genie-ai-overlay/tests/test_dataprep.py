@@ -3263,14 +3263,15 @@ def _recordable_doc(**kwargs):
     return SimpleNamespace(**kwargs)
 
 
-def _serve_model_window(monkeypatch, window):
-    """Point dataprep's window discovery at a fake /v1/models payload.
+def _model_endpoint(monkeypatch, window=65536, endpoint="http://gpu-test", dead=False):
+    """Aim dataprep's window discovery at a fake /v1/models endpoint.
 
     Same seam the chatqna window tests use: the real core.model_cache runs
     (coercion, TTL, negative cache) but its HTTP probe is faked, and
-    VLLM_ENDPOINT is aimed at it because dataprep discovers the window at call
-    time from the same endpoint it talks to. ``window=None`` serves a strict
-    OpenAI-compatible payload with no ``max_model_len`` field.
+    VLLM_ENDPOINT is aimed at it because dataprep discovers the window from
+    the same endpoint it talks to. ``window=None`` serves a strict
+    OpenAI-compatible payload with no ``max_model_len`` field; ``dead=True``
+    serves an endpoint nothing answers.
 
     Clears the model cache first: it is module-global and shared across tests,
     so a previously cached window for this endpoint would shadow the new one
@@ -3279,7 +3280,15 @@ def _serve_model_window(monkeypatch, window):
     from core.model_cache import clear_cache
 
     clear_cache()
-    monkeypatch.setenv("VLLM_ENDPOINT", "http://gpu-test")
+    monkeypatch.setenv("VLLM_ENDPOINT", endpoint)
+    if dead:
+
+        def _raise(*_args, **_kwargs):
+            raise ConnectionError("endpoint unreachable")
+
+        monkeypatch.setattr("httpx.get", _raise)
+        return endpoint
+
     entry = {"id": "test-model"} if window is None else {"id": "test-model", "max_model_len": window}
     resp = MagicMock()
     resp.json.return_value = {"data": [entry]}
@@ -3288,19 +3297,7 @@ def _serve_model_window(monkeypatch, window):
         return resp
 
     monkeypatch.setattr("httpx.get", _fake_get)
-
-
-def _dead_model_endpoint(monkeypatch):
-    """Window discovery aimed at an endpoint nothing answers (probe raises)."""
-    from core.model_cache import clear_cache
-
-    clear_cache()
-    monkeypatch.setenv("VLLM_ENDPOINT", "http://gpu-dead")
-
-    def _raise(*_args, **_kwargs):
-        raise ConnectionError("endpoint unreachable")
-
-    monkeypatch.setattr("httpx.get", _raise)
+    return endpoint
 
 
 class TestContextualRetrieval:
@@ -3317,16 +3314,15 @@ class TestContextualRetrieval:
         # cache both outlive a test: reset them, or a previous test's window
         # (or warning) decides this one.
         monkeypatch.setattr(dp_module, "_WINDOW_WARNED", set())
-        clear_cache()
         # The doc-context budget is DERIVED from the serving model's window.
         # Without a discovered window the derivation fails closed to the
         # smallest profile (2048) and every contextualization call is skipped
         # — correct in production, useless for tests that are exercising
         # contextualization itself. Tests that care about the fallback serve
         # their own window.
-        _serve_model_window(monkeypatch, 65536)
+        _model_endpoint(monkeypatch, 65536)
         yield
-        clear_cache()
+        clear_cache()  # the cache is module-global: do not leak it onwards
 
     @pytest.mark.asyncio
     async def test_flag_off_returns_chunks_unchanged(self, monkeypatch):
@@ -3457,25 +3453,22 @@ class TestContextualRetrieval:
         assert large > small > 0
 
     def test_budget_is_sized_exactly_from_the_given_window(self):
-        """The arithmetic, pinned exactly — not merely "a positive number".
+        """The arithmetic, pinned to a literal — not merely "a positive number".
 
         A derivation that dropped the output reservation or mis-scaled
         CHARS_PER_TOKEN would pass a "> 0" assertion and ship a budget that
         overflows the window — the failure this whole derivation exists to
-        prevent.
+        prevent. The literal is an INDEPENDENT oracle: 65536 window - 254
+        prompt tokens - 564 batch-text tokens - 2048 reserved output tokens,
+        times 4 chars per token. A change to the prompt text or to one of the
+        knobs legitimately moves it — update the number then, and the diff
+        shows the budget moved.
         """
         dp = create_dataprep()
         chunks = ["x" * 500] * 8
-        window = 65536
-        largest = sorted((len(c) for c in chunks), reverse=True)[: dp_module.LABEL_LLM_BATCH_SIZE]
-        prompt_tokens = -(-len(dp_module.CONTEXTUAL_RETRIEVAL_PROMPT) // dp_module.CHARS_PER_TOKEN)
-        batch_chars = sum(largest) + len(largest) * dp_module.JSON_ITEM_OVERHEAD_CHARS
-        batch_tokens = -(-batch_chars // dp_module.CHARS_PER_TOKEN)
-        output_tokens = dp_module.CONTEXTUAL_MAX_TOKENS * dp_module.LABEL_LLM_BATCH_SIZE
-        expected = (window - prompt_tokens - batch_tokens - output_tokens) * dp_module.CHARS_PER_TOKEN
-        budget, source = dp._resolve_doc_budget(chunks, 0, window)
+        budget, source = dp._resolve_doc_budget(chunks, 0, 65536)
         assert source == "derived"
-        assert budget == expected
+        assert budget == 250680
 
     def test_window_discovery_ignores_the_vllm_max_model_len_env(self, monkeypatch):
         """Issue #1182: VLLM_MAX_MODEL_LEN is the vLLM-side memory knob
@@ -3483,18 +3476,29 @@ class TestContextualRetrieval:
         dataprep container must not override what the endpoint actually
         serves — that silent divergence is the bug."""
         monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "2048")  # stale copy (T4-era)
-        _serve_model_window(monkeypatch, 65536)  # what the endpoint serves
-        assert dp_module._serving_model_window() == 65536
-        _serve_model_window(monkeypatch, 2048)  # what a T4 actually serves
-        assert dp_module._serving_model_window() == 2048
+        endpoint = _model_endpoint(monkeypatch, 65536)  # what the endpoint serves
+        assert dp_module._serving_model_window(endpoint, "test-model") == 65536
+        endpoint = _model_endpoint(monkeypatch, 2048)  # what a T4 actually serves
+        assert dp_module._serving_model_window(endpoint, "test-model") == 2048
 
     def test_explicit_window_override_wins_over_discovery(self, monkeypatch):
         """DATAPREP_MAX_MODEL_LEN is the tier above discovery — and the only
         lever on a strict OpenAI-compatible provider, whose /v1/models never
         carries max_model_len."""
-        monkeypatch.setenv("DATAPREP_MAX_MODEL_LEN", "4096")
-        _serve_model_window(monkeypatch, 65536)
-        assert dp_module._serving_model_window() == 4096
+        monkeypatch.setattr(dp_module, "DATAPREP_MAX_MODEL_LEN", 4096)
+        endpoint = _model_endpoint(monkeypatch, 65536)
+        assert dp_module._serving_model_window(endpoint, "test-model") == 4096
+
+    def test_window_override_that_disagrees_with_the_served_window_is_flagged(self, monkeypatch):
+        """An override LARGER than what the server accepts recreates exactly
+        the silent overflow this issue exists to stop (requests rejected ->
+        raw-chunk fallback). The disagreement is surfaced."""
+        monkeypatch.setattr(dp_module, "DATAPREP_MAX_MODEL_LEN", 65536)
+        endpoint = _model_endpoint(monkeypatch, 2048)  # the endpoint serves 2048
+        dp_module.logger.warning.reset_mock()
+        assert dp_module._serving_model_window(endpoint, "test-model") == 65536
+        warnings = [str(c.args[0]) for c in dp_module.logger.warning.call_args_list]
+        assert any("DATAPREP_MAX_MODEL_LEN" in w and "2048" in w for w in warnings)
 
     def test_unknown_window_falls_back_to_the_smallest_profile(self, monkeypatch):
         """Fails closed: defaulting high would size for hardware nobody runs.
@@ -3505,9 +3509,9 @@ class TestContextualRetrieval:
         alone fills it), so every document is window-exhausted — and
         deterministically so within the cache TTL.
         """
-        _serve_model_window(monkeypatch, None)
+        endpoint = _model_endpoint(monkeypatch, None)
         dp = create_dataprep()
-        window = dp_module._serving_model_window()
+        window = dp_module._serving_model_window(endpoint, "test-model")
         assert window == dp_module.DERIVE_FALLBACK_WINDOW
         assert dp._resolve_doc_budget(["x" * 500], 0, window) == (None, "window-exhausted")
 
@@ -3520,18 +3524,18 @@ class TestContextualRetrieval:
         def _fallback_warnings():
             return [str(c.args[0]) for c in dp_module.logger.warning.call_args_list]
 
-        _serve_model_window(monkeypatch, None)  # strict provider: field missing
+        endpoint = _model_endpoint(monkeypatch, None)  # strict provider: field missing
         dp_module.logger.warning.reset_mock()
-        dp_module._serving_model_window()
-        dp_module._serving_model_window()  # second document: no second warning
+        dp_module._serving_model_window(endpoint, "test-model")
+        dp_module._serving_model_window(endpoint, "test-model")  # second document: no second warning
         warnings = _fallback_warnings()
         assert len(warnings) == 1, warnings
         assert str(dp_module.DERIVE_FALLBACK_WINDOW) in warnings[0]
         assert "DATAPREP_MAX_MODEL_LEN" in warnings[0]
 
-        _dead_model_endpoint(monkeypatch)  # unreachable endpoint
+        endpoint = _model_endpoint(monkeypatch, dead=True, endpoint="http://gpu-dead")  # unreachable
         dp_module.logger.warning.reset_mock()
-        dp_module._serving_model_window()
+        dp_module._serving_model_window(endpoint, "test-model")
         warnings = _fallback_warnings()
         assert len(warnings) == 1, warnings
         assert str(dp_module.DERIVE_FALLBACK_WINDOW) in warnings[0]
@@ -3543,16 +3547,14 @@ class TestContextualRetrieval:
         discovered window may not be the one that model serves — the mismatch
         is surfaced and the operator is pointed at the override. When they
         are the same model, nothing is warned about."""
-        _serve_model_window(monkeypatch, 65536)  # the endpoint lists "test-model"
-        monkeypatch.setenv("DATAPREP_CONTEXTUAL_MODEL", "other-model")
+        endpoint = _model_endpoint(monkeypatch, 65536)  # the endpoint lists "test-model"
         dp_module.logger.warning.reset_mock()
-        assert dp_module._serving_model_window() == 65536
+        assert dp_module._serving_model_window(endpoint, "other-model") == 65536
         warnings = [str(c.args[0]) for c in dp_module.logger.warning.call_args_list]
         assert any("DATAPREP_MAX_MODEL_LEN" in w and "other-model" in w for w in warnings)
 
-        monkeypatch.setenv("DATAPREP_CONTEXTUAL_MODEL", "test-model")
         dp_module.logger.warning.reset_mock()
-        assert dp_module._serving_model_window() == 65536
+        assert dp_module._serving_model_window(endpoint, "test-model") == 65536
         assert dp_module.logger.warning.call_args_list == []
 
     @pytest.mark.asyncio

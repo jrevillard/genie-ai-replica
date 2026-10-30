@@ -1593,6 +1593,10 @@ import DsSelect from './ds/Select.vue';
 import { Loader2 } from '@lucide/vue';
 import { eventBus } from '../eventBus.js';
 import { getAvailableLanguages } from '../config/languageConfig.js';
+import oidcConfig from '../config/oidcConfig.js';
+import documentFileService from '../services/documentFileService.js';
+import { formatFileSize } from '../utils/fileUtils.js';
+import { themeManager } from '../utils/ThemeManager';
 
 // Shared empty named-params dict for translate() — a frozen module constant
 // so the default argument allocates once, not on every per-render call.
@@ -1601,16 +1605,13 @@ const EMPTY_NAMED = Object.freeze({});
 // A missing key's fallback stands in for the translation, so it goes through
 // the same interpolation a real message would — otherwise it renders literal
 // `{current}`-style placeholders. A null named value renders empty, matching
-// vue-i18n; an empty result falls back to the fallback, then to the key.
-// Module-level so the per-call translate() path allocates nothing.
+// vue-i18n; a fully-empty result falls back to the key rather than showing
+// the untouched braces. Module-level so the per-call translate() path
+// allocates nothing.
 function interpolateFallback(key, fallback, named) {
   const interpolated = fallback.replace(/\{(\w+)\}/g, (m, k) => (named[k] != null ? named[k] : ''));
-  return interpolated || fallback || key;
+  return interpolated || key;
 }
-import oidcConfig from '../config/oidcConfig.js';
-import documentFileService from '../services/documentFileService.js';
-import { formatFileSize } from '../utils/fileUtils.js';
-import { themeManager } from '../utils/ThemeManager';
 
 export default {
   name: 'AdminDashboard',

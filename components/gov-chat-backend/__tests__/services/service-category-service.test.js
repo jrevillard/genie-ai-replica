@@ -492,17 +492,20 @@ describe('ServiceCategoryService', () => {
     it('should return translations for a category', async () => {
       mockDb.query.mockResolvedValue(
         createMockCursor([
-          { languageCode: 'en', translation: 'Taxes' },
-          { languageCode: 'fr', translation: 'Impots' }
+          { lang: 'en', text: 'Taxes' },
+          { lang: 'fr', text: 'Impots' }
         ])
       );
 
       const result = await service.getCategoryTranslations('cat-1');
-      expect(result).toHaveLength(2);
+      expect(result).toEqual([
+        { lang: 'en', text: 'Taxes' },
+        { lang: 'fr', text: 'Impots' }
+      ]);
     });
 
     it('should throw Error when categoryKey is missing', async () => {
-      await expect(service.getCategoryTranslations(null)).rejects.toThrow('Invalid category key');
+      await expect(service.getCategoryTranslations(null)).rejects.toThrow('Invalid category key provided');
     });
   });
 

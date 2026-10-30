@@ -491,6 +491,7 @@
                         ({{ selectedDocuments.length }})
                       </DsButton>
                       <DsButton
+                        v-if="okfEnabled"
                         variant="secondary"
                         :disabled="!okfRepoGate.visible"
                         :title="okfGateTitle"

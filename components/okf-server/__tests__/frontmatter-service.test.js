@@ -952,6 +952,16 @@ describe('vllmChatCompletions — model-id resolution (!631 policy)', () => {
     expect(axios.get).toHaveBeenCalledWith('https://judge-gpu.example/v1/models', expect.anything());
     expect(axios.post.mock.calls[0][1].model).toBe('judge/served-8b');
   });
+
+  test('the env judge on a FOREIGN base without its own key carries NO deployment credential', async () => {
+    process.env.VLLM_API_KEY = 'deployment-secret';
+    process.env.RAGAS_JUDGE_BASE_URL = 'https://judge-gpu.example/v1';
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'judge/served-8b' }] } });
+    axios.post.mockResolvedValue(vllmResponse('{}'));
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }], { config: null });
+    const [, , cfg] = axios.post.mock.calls[0];
+    expect(cfg.headers.Authorization).toBeUndefined();
+  });
 });
 
 it('env judge without a named judge key: the deployment credential applies (the judge base is operator-configured)', async () => {

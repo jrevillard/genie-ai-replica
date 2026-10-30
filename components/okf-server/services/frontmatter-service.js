@@ -403,13 +403,13 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
     judgeIsDeployment = modelCache.sameOrigin(host, modelCache.deploymentVllmBase());
     viaForeignBase = !judgeIsDeployment;
     // The judge key: RAGAS_JUDGE_API_KEY when the operator named one, else
-    // the deployment credential — the judge base is OPERATOR-configured
-    // (the .env RAGAS_JUDGE_* pair), and the ragas sidecar behaves the
-    // same way (its compose block defaults RAGAS_JUDGE_API_KEY to
-    // VLLM_API_KEY). A NAMED model config gets no such fallback — that
-    // base is chosen in the UI, and the deployment bearer must not follow
-    // it there.
-    apiKey = (process.env.RAGAS_JUDGE_API_KEY || '').trim() || modelCache.deploymentKey();
+    // the deployment credential — but ONLY when the judge base IS the
+    // deployment endpoint. The judge base is OPERATOR-configured (the .env
+    // RAGAS_JUDGE_* pair): a third-party judge must never receive the
+    // deployment bearer, and the shipped default (http://vllm:8000/v1) is
+    // the same server, so it keeps the deployment credential. A NAMED model
+    // config follows the same rule.
+    apiKey = modelCache.credentialForBase(host, process.env.RAGAS_JUDGE_API_KEY);
   }
   try {
     // opts.config === null → the caller explicitly wants the ENV judge (the

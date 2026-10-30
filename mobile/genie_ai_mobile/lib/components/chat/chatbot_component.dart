@@ -311,14 +311,26 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // Cache the config for later use
       _cachedConfig = config;
 
+      final dynamic rawQuickHelp = config['features']?['chat']?['quickHelp'];
       final Map<String, dynamic> quickHelpConfig =
-          config['features']?['chat']?['quickHelp'] ?? {};
+          rawQuickHelp is Map<String, dynamic> ? rawQuickHelp : {};
+
+      // A non-map layout or a non-list buttons value is the same
+      // config-typo class the per-card parse isolates: degrade to the
+      // default shape, never throw the load away.
+      final dynamic rawLayout = quickHelpConfig['layout'];
+      final Map<String, dynamic> layout = rawLayout is Map<String, dynamic>
+          ? rawLayout
+          : {};
 
       setState(() {
-        _quickHelpLayout = quickHelpConfig['layout'] ?? {};
+        _quickHelpLayout = layout;
       });
 
-      final List<dynamic> buttonsJson = quickHelpConfig['buttons'] ?? [];
+      final dynamic rawButtons = quickHelpConfig['buttons'];
+      final List<dynamic> buttonsJson = rawButtons is List
+          ? rawButtons
+          : const <dynamic>[];
       final List<Map<String, dynamic>> loadedButtons = [];
 
       for (var btn in buttonsJson) {
@@ -327,8 +339,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         if (btn is! Map<String, dynamic>) {
           continue;
         }
-        // Skip hidden buttons (no matching corpus content).
-        if (btn['hidden'] == true) {
+        // Skip hidden buttons (no matching corpus content). The web
+        // filters on JS truthiness (`!button.hidden`), where a
+        // string-typed flag is truthy either way — this is the mobile
+        // half of that rule, not a Dart bool equality check.
+        final dynamic hiddenFlag = btn['hidden'];
+        if (hiddenFlag != null &&
+            hiddenFlag != false &&
+            hiddenFlag != 0 &&
+            hiddenFlag != '') {
           continue;
         }
         loadedButtons.add(parseQuickHelpButton(btn, _currentLocale));
@@ -1184,17 +1203,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   }
 
   // Installs a pressed Quick Help card as THE scope. ONE copy of the
-  // field list for the press paths (the scoped no-prompt card and the
-  // dual-prompt card differ only in the display-name fallback); the
-  // caller owns its own setState.
-  void _installQuickHelpScopeFields(
-    Map<String, dynamic> button, {
-    required String nameFallback,
-  }) {
-    final declaredLabels =
-        (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
-            .map((label) => label.toString())
-            .toList();
+  // field list for the press paths; the caller owns its own setState.
+  void _installQuickHelpScopeFields(Map<String, dynamic> button) {
+    final declaredLabels = quickHelpServiceLabelsOf(button);
     _showQuickHelpOverlay = false;
     // The configuration names its category; the hierarchy's own key is
     // what the conversation's edge speaks.
@@ -1202,10 +1213,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _selectedCategoryId =
         _scopeResolver?.categoryIdFor(categoryRef) ?? categoryRef;
     _selectedCategoryNameEn = _scopeResolver?.categoryLabelEn(button) ?? '';
-    // An EMPTY title is no title (the same rule the locale re-title and
-    // the restore apply): the caller's fallback name shows, never a
-    // blank context bar.
-    _selectedCategoryName = quickHelpTitleOf(button) ?? nameFallback;
+    // The context bar carries the card's TITLE — the same name the web's
+    // chip shows. An EMPTY title is no title (the same rule the locale
+    // re-title and the restore apply); a title-less card shows none, on
+    // either platform.
+    _selectedCategoryName = quickHelpTitleOf(button) ?? '';
     _sidebarServiceLabelsEn = [];
     // A mode switch clears the sidebar count: the send guard would read a
     // count that remembers services that are no longer selected.
@@ -1248,10 +1260,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     final String hiddenPrompt =
         button['resolvedHiddenPrompt']?.toString() ?? '';
 
-    final declaredLabels =
-        (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
-            .map((label) => label.toString())
-            .toList();
+    final declaredLabels = quickHelpServiceLabelsOf(button);
     final declaresScope =
         declaresCategoryScope(button['category']?.toString()) ||
         declaredLabels.isNotEmpty;
@@ -1267,7 +1276,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // over the whole corpus while the card promised its declared one.
       if (declaresScope) {
         setState(() {
-          _installQuickHelpScopeFields(button, nameFallback: visibleText);
+          _installQuickHelpScopeFields(button);
         });
         _inputFocusNode.requestFocus();
         return;
@@ -1293,7 +1302,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // The card's declared English KB labels become the retriever filter —
     // the helper installs them; _sendStreaming reads them off the scope.
     setState(() {
-      _installQuickHelpScopeFields(button, nameFallback: visibleText);
+      _installQuickHelpScopeFields(button);
     });
 
     // Send using the 2-prompt system

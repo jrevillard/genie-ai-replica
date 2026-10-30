@@ -1284,6 +1284,15 @@ void main() {
       expect(parsed['resolvedTitle'], '');
     });
 
+    test('an icon value with no basename carries no asset', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'icon': {'type': 'file', 'value': '/config/quickhelp/'},
+      }, 'en');
+
+      expect(parsed['iconAsset'], '');
+    });
+
     test('a bare-string serviceLabel is wrapped as ONE label', () {
       final parsed = parseQuickHelpButton({
         ...shippedButton,

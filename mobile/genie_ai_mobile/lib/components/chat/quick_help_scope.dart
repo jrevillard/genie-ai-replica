@@ -49,9 +49,12 @@ Map<String, dynamic> parseQuickHelpButton(
   // action is the config-typo class the bare-string label rule answers.
   final dynamic rawIcon = btn['icon'];
   final iconMap = rawIcon is Map<String, dynamic> ? rawIcon : null;
-  final iconPath = iconMap?['value']?.toString() ?? '';
-  final String iconAsset = iconPath.isNotEmpty
-      ? 'assets/config/quickhelp/${iconPath.split('/').last}'
+  // The served path's BASENAME names the bundled asset: an empty one (a
+  // value ending in '/', a bare key) names nothing — no asset, not a
+  // directory path the card cannot load.
+  final iconFile = iconMap?['value']?.toString().split('/').last ?? '';
+  final String iconAsset = iconFile.isNotEmpty
+      ? 'assets/config/quickhelp/$iconFile'
       : '';
 
   final dynamic rawAction = btn['action'];
@@ -76,6 +79,18 @@ Map<String, dynamic> parseQuickHelpButton(
     'resolvedVisibleText': resolveConfigText(action?['visibleText'], locale),
     'resolvedHiddenPrompt': resolveConfigText(action?['hiddenPrompt'], locale),
   };
+}
+
+/// The card's declared English KB labels, as strings — the ONE read of a
+/// loaded button's label list. Every scope rule (the grid verdict, the
+/// unavailable caption, the restore union, the press filter) shares it, so
+/// a change to the rule cannot drift between the copies.
+List<String> quickHelpServiceLabelsOf(Map<String, dynamic> button) {
+  final labels = button['serviceLabels'];
+  if (labels is List) {
+    return labels.map((label) => label.toString()).toList();
+  }
+  return const <String>[];
 }
 
 /// The loaded Quick Help buttons, with a duplicated id keeping only the
@@ -219,8 +234,7 @@ class QuickHelpScopeResolver {
   /// scope cannot be verified, so it says so.
   static Map<String, dynamic> unavailableScopeFor(Map<String, dynamic> button) {
     final category = button['category']?.toString();
-    final labels =
-        (button['serviceLabels'] as List<dynamic>?) ?? const <dynamic>[];
+    final labels = quickHelpServiceLabelsOf(button);
     // 'general' is the placeholder a category-less selection is stored
     // under: it names no category, and every rule treats it as NO scope —
     // this one included, or a category-less card would look healthy in
@@ -339,10 +353,7 @@ class QuickHelpScopeResolver {
 
   /// The scope state of [button] against the live tree.
   Map<String, dynamic> stateFor(Map<String, dynamic> button) {
-    final declared =
-        (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
-            .map((e) => e.toString())
-            .toList();
+    final declared = quickHelpServiceLabelsOf(button);
     final missingLabels = declared
         .where((l) => !_enLabels.contains(l))
         .toList();
@@ -528,10 +539,7 @@ class ConversationScopeResolver {
       final button = _buttons[tag];
       if (button == null) continue;
       final category = button['category']?.toString();
-      final buttonLabels =
-          (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
-              .map((label) => label.toString())
-              .toList();
+      final buttonLabels = quickHelpServiceLabelsOf(button);
       // A legacy conversation can carry SEVERAL button ids: the web
       // restores every chip and sends the union of their labels. Every
       // other button tag is CONSUMED here (counted as a sidebar tag, it
@@ -542,9 +550,7 @@ class ConversationScopeResolver {
           .toList();
       final labels = [
         ...buttonLabels,
-        for (final other in otherButtons)
-          ...(other['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
-              .map((label) => label.toString()),
+        for (final other in otherButtons) ...quickHelpServiceLabelsOf(other),
       ];
       // A LEGACY 'category.<id>' tag beside the button named the same
       // category the button declares (the old web wrote the pair): it is

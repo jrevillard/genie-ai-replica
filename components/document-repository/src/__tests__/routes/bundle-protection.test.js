@@ -147,18 +147,6 @@ describe('WS2: Bundle zip delete protection', () => {
       const res = await request(app).delete('/api/files/doc1');
       expect(res.status).toBe(200);
     });
-
-    test('A metadata transport error degrades to "no protected ids" → delete proceeds', async () => {
-      // Swallow-and-fall-through semantics: a DB hiccup must NOT 403 the delete
-      const { dbService } = require('../../../shared-lib');
-      dbService.getConnection.mockRejectedValue(new Error('arangodb unreachable'));
-      const fs = require('../../services/fileService');
-      fs.deleteFile.mockResolvedValueOnce(true);
-
-      const res = await request(app).delete('/api/files/bundle1');
-      expect(res.status).toBe(200);
-      expect(fs.deleteFile).toHaveBeenCalledWith('bundle1');
-    });
   });
 
   describe('DELETE /api/files/:fileId (okf-service caller)', () => {
@@ -198,10 +186,12 @@ describe('WS2: Bundle zip delete protection', () => {
     test('okf-service caller deleting a bundle → 200 (protection does NOT block)', async () => {
       const res = await request(app).delete('/api/files/bundle2');
       expect(res.status).toBe(200);
-      // the guard really evaluated and found the id protected
-      expect(protectedDb.query).toHaveBeenCalledWith(expect.stringContaining('is_bundle == true'), {
-        ids: ['bundle2']
-      });
+      // The bypass is by ROLE, not by degradation: the guard never even ran
+      // (the connection IS programmed, so an unprogrammed-catch pass-through
+      // could no longer fake this — review !622 wave 2, #78685).
+      expect(protectedDb.query).not.toHaveBeenCalled();
+      const fs2 = require('../../services/fileService');
+      expect(fs2.deleteFile).toHaveBeenCalledWith('bundle2');
     });
   });
 
@@ -240,8 +230,8 @@ describe('WS2: Bundle zip delete protection', () => {
       const res = await request(app).delete('/api/files/some-doc');
       expect(res.status).toBe(503);
       expect(res.body.code).toBe('BUNDLE_GUARD_UNAVAILABLE');
-      const { fileService } = require('../../services/fileService');
-      expect(fileService.deleteFile).not.toHaveBeenCalled();
+      const fs3 = require('../../services/fileService');
+      expect(fs3.deleteFile).not.toHaveBeenCalled();
     });
   });
 

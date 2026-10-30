@@ -528,7 +528,10 @@ describe('publish — mint + bundle export + serving cleared', () => {
   // minted v18/v19/v20 on Bali, each requeuing all 1001 meta rows for a
   // full re-drain while an ingest was running.
   test('a republish with UNCHANGED content is refused (PUBLISH_NO_CHANGES)', async () => {
-    seedRepo({ lifecycle_state: 'approve', version: 18 });
+    // The current version carries its bundle — a genuine nothing-changed
+    // republish (wave-2 #78657: the guard only fires when the version HAS
+    // its bundle artifact).
+    seedRepo({ lifecycle_state: 'approve', version: 18, bundles: [{ bundle_version: 18, file_id: 'file-v18' }] });
     currentFingerprint.mockResolvedValueOnce('same-fp');
     fingerprintOfCurrentVersion.mockResolvedValueOnce('same-fp');
     await expect(lifecycleService.transition(REPO, 'publish', {})).rejects.toMatchObject({
@@ -537,6 +540,23 @@ describe('publish — mint + bundle export + serving cleared', () => {
     });
     expect(mintVersion).not.toHaveBeenCalled();
     expect(exportBundle).not.toHaveBeenCalled();
+  });
+
+  test('an interrupted publish (fingerprint matches, NO bundle for the version) retries instead of 409 (#78657)', async () => {
+    seedRepo({ lifecycle_state: 'approve', version: 18, bundles: [{ bundle_version: 17, file_id: 'file-v17' }] });
+    currentFingerprint.mockResolvedValueOnce('same-fp');
+    fingerprintOfCurrentVersion.mockResolvedValueOnce('same-fp');
+    mockDb.query.mockResolvedValueOnce({ all: async () => [3] });
+    exportBundle.mockResolvedValueOnce({
+      file_id: 'file-bundle-19',
+      file_name: 'demo.zip',
+      bundle_version: 19
+    });
+    // The guard falls through: the publish COMPLETES (mint v19 + export)
+    // instead of deadlocking on PUBLISH_NO_CHANGES.
+    await lifecycleService.transition(REPO, 'publish', {});
+    expect(mintVersion).toHaveBeenCalled();
+    expect(exportBundle).toHaveBeenCalled();
   });
 
   test('changed content republishes normally', async () => {

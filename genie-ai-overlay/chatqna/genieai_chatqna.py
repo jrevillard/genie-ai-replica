@@ -12,6 +12,7 @@ import os
 import re
 import time
 from datetime import date, datetime
+from functools import lru_cache
 from urllib.parse import urlparse
 
 from metrics import (
@@ -23,8 +24,23 @@ from metrics import (
 
 from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
 from core.label_contract import build_filter_labels, encode_filter_labels
-from core.model_cache import get_max_model_len, get_model_id
-from core.model_http_policy import AIOHTTP_CONNECT_TIMEOUT_SECONDS, CONTROL_PLANE_TIMEOUT_SECONDS
+from core.model_cache import (
+    MAX_SANE_MODEL_WINDOW_TOKENS,
+    ModelDiscoveryError,
+    TokenCountError,
+    coerce_int,
+    discover_model_id,
+    get_max_model_len,
+    get_model_id,
+    resolve_model_id,
+)
+from core.model_http_policy import (
+    AIOHTTP_CONNECT_TIMEOUT_SECONDS,
+    CONTROL_PLANE_TIMEOUT_SECONDS,
+    PROBE_TIMEOUT_SECONDS,
+    endpoint_auth_headers,
+    endpoint_verify,
+)
 from core.span_attrs import ATTRIBUTE_NAMES, QUERY_ID_KEY, query_id_from_baggage
 from tracing import (
     get_tracer,
@@ -32,6 +48,7 @@ from tracing import (
     setup_json_logging,
     setup_trace_logging,
     setup_tracing,
+    with_span,
 )
 
 setup_tracing("genieai-chatqna")
@@ -55,7 +72,6 @@ from fastapi import HTTPException, Request
 from fastapi.responses import StreamingResponse
 from keycloak_token_validator import JwksUnavailableError, validate_token
 from langdetect import detect
-from transformers import AutoTokenizer
 
 logger = CustomLogger("GENIE.AI_CHATQNA")
 setup_trace_logging("GENIE.AI_CHATQNA")
@@ -497,53 +513,49 @@ if _VLLM_LLM_ENDPOINT:
     LLM_SERVER_ENDPOINT_PREFIX = _parsed.path.rstrip("/") or ""
 else:
     LLM_SERVER_ENDPOINT_PREFIX = ""
-LLM_MODEL = os.getenv("LLM_MODEL", "ibm-granite/granite-3.3-2b-instruct")
 
-# Endpoint the context-window discovery probes: the remote GPU node when
-# configured, otherwise the compose-internal vLLM (LLM_SERVER_HOST_IP:PORT —
-# chatqna already talks to it for generation). Probing is always on; when the
-# endpoint is unreachable the getters fall back to the configured constants.
+# Endpoint the model-id and context-window discovery probes: the remote GPU
+# node when configured, otherwise the compose-internal vLLM
+# (LLM_SERVER_HOST_IP:PORT — chatqna already talks to it for generation).
+# Probing is always on; the model-id getter fails loudly when nothing
+# answers, the window getters fall back to the configured constants.
 _LLM_DISCOVERY_ENDPOINT = _VLLM_LLM_ENDPOINT or f"http://{LLM_SERVER_HOST_IP}:{LLM_SERVER_PORT}"
-
-# Auto-detect remote vLLM models with TTL caching (see core/model_cache.py).
-# GPU_NODE_HOST gates this: local GPU deployments keep their explicit config
-# (VLLM_ENDPOINT has a compose default http://vllm:8000). See issue #758.
-_GPU_NODE_HOST = os.getenv("GPU_NODE_HOST", "")
 
 
 def _get_llm_model() -> str:
-    """Return the LLM model ID.
+    """Return the model ID served at ``_LLM_DISCOVERY_ENDPOINT``.
 
-    Auto-detects from remote vLLM (with TTL cache) when GPU_NODE_HOST is set;
-    otherwise returns the LLM_MODEL env/config default.
+    Standing invariants: the chatqna image bakes no HuggingFace cache and
+    the deployment grants no hub egress, so the endpoint itself is the only
+    trustworthy source for the name; and every payload sent to it
+    (generation, condense, tokenize) must carry the discovered id because
+    vLLM validates the model name and 404s unknown ones. The VLLM_MODEL_ID
+    env (core.model_cache.resolve_model_id) is the deployer's escape hatch
+    for endpoints whose /v1/models is unreachable while generation works.
     """
-    if _GPU_NODE_HOST and _VLLM_LLM_ENDPOINT:
-        detected = get_model_id(_VLLM_LLM_ENDPOINT)
-        if detected:
-            return detected
-    return LLM_MODEL
+    return resolve_model_id(_LLM_DISCOVERY_ENDPOINT)
 
 
-def _get_translation_model_id() -> str:
-    """Return the translation model ID.
+def _get_translation_model_id() -> str | None:
+    """Return the translation model ID: the explicit VLLM_TRANSLATION_MODEL_ID
+    env when the deployer set it, otherwise the id discovered at
+    ``_TRANSLATION_DISCOVERY_ENDPOINT`` — None when neither answers.
 
-    Auto-detects from remote vLLM (with TTL cache) when GPU_NODE_HOST is set;
-    otherwise returns the TRANSLATION_MODEL_ID env/config default.
+    None is a valid state: the generic translation path sends no model name;
+    only the TranslateGemma completions payloads need one.
     """
-    if _GPU_NODE_HOST and _VLLM_TRANSLATION_ENDPOINT:
-        detected = get_model_id(_VLLM_TRANSLATION_ENDPOINT)
-        if detected:
-            return detected
-    return TRANSLATION_MODEL_ID
+    return TRANSLATION_MODEL_ID or get_model_id(_TRANSLATION_DISCOVERY_ENDPOINT)
 
 
-def _is_translategemma() -> bool:
+def _is_translategemma(translation_model_id: str | None) -> bool:
     """True when the active translation model is TranslateGemma.
 
     TranslateGemma uses the completions API with a pre-formatted prompt;
-    other models use the chat completions API.
+    other models use the chat completions API. Callers pass the id they
+    already resolved, so one read decides the payload AND the response
+    parse (a second read would re-probe and could disagree).
     """
-    return "translategemma" in _get_translation_model_id().lower()
+    return bool(translation_model_id) and "translategemma" in translation_model_id.lower()
 
 
 # Window discovery shares the model-id cache entry, so the MODEL_DETECT_TTL
@@ -1895,20 +1907,83 @@ class UserContextBuilder:
 
 
 ##################################################################################################################################
-# TOKENIZER
+# TOKEN COUNTING
 ##################################################################################################################################
-TOKENIZER = None
 
 
-def get_tokenizer():
-    global TOKENIZER
-    if TOKENIZER is None:
-        TOKENIZER = AutoTokenizer.from_pretrained(
-            _get_llm_model(),
-            use_fast=True,
-            # local_files_only=True
+@lru_cache(maxsize=4)
+def _count_static_tokens(text: str) -> int:
+    """Memoized ``_count_tokens`` for request-invariant text (the system
+    prompt takes at most two values per process). A cache hit skips the HTTP
+    round-trip entirely; the bounded size keeps it from growing."""
+    return _count_tokens(text)
+
+
+def _count_tokens(text: str) -> int:
+    """Count tokens with the LLM server's ``/tokenize`` endpoint.
+
+    The server that serves generation tokenizes with the deployed model's
+    REAL tokenizer — the counts the context-window budget needs, for
+    whatever model is deployed, with no local tokenizer download: the
+    image bakes no HuggingFace cache and the deployment grants no
+    huggingface.co egress, so a local ``AutoTokenizer`` can only fail.
+
+    Same client shape as the model-id probe (core/model_http_policy.py:
+    shared ``Bearer VLLM_API_KEY`` headers and TLS-verify flag): sync httpx,
+    PROBE timeout budget. The URL derives from
+    the same base the generation call and the probe use
+    (``_LLM_DISCOVERY_ENDPOINT``), so external (``VLLM_LLM_ENDPOINT``,
+    possibly a tunnel with a path prefix) and in-cluster
+    (``http://vllm:8000``) resolve identically.
+
+    Failures are loud and on purpose: the budget math below runs on these
+    counts, so an unknown model name (vLLM validates it), an unreachable
+    endpoint, or a malformed count payload must abort the request rather
+    than silently corrupt the history truncation — the same reasoning that
+    keeps the model-id probe from guessing.
+    """
+    url = f"{_LLM_DISCOVERY_ENDPOINT}/tokenize"
+    headers = endpoint_auth_headers()
+    verify = endpoint_verify()
+    with with_span(
+        "chatqna.count_tokens",
+        attributes={ATTRIBUTE_NAMES["llm_endpoint"]: url},
+    ) as span:
+        resp = httpx.post(
+            url,
+            headers=headers,
+            json={"model": _get_llm_model(), "prompt": text},
+            timeout=PROBE_TIMEOUT_SECONDS,
+            verify=verify,
         )
-    return TOKENIZER
+        resp.raise_for_status()
+        payload = resp.json()
+        # vLLM returns both the token list and a precomputed "count"; prefer
+        # the scalar, fall back to the list length for servers that omit it.
+        if not isinstance(payload, dict):
+            raise TokenCountError(f"/tokenize returned a non-object payload: {payload!r}")
+        count = payload.get("count")
+        if count is None:
+            tokens = payload.get("tokens")
+            if not isinstance(tokens, list):
+                raise TokenCountError(f"/tokenize payload has neither a count nor a token list: {payload!r}")
+            count = len(tokens)
+        else:
+            # A proxy may serialize count as a digit string (same coercion
+            # stance as the window value); anything non-integral is malformed.
+            count = coerce_int(count)
+            if count is None:
+                raise TokenCountError(f"/tokenize count is not an integer: {payload!r}")
+            if count < 0:
+                # 0 is an honest count for an empty piece; a negative count is
+                # a lie that would silently defeat the overflow guard.
+                raise TokenCountError(f"/tokenize count is negative: {payload!r}")
+            if count > MAX_SANE_MODEL_WINDOW_TOKENS:
+                # Same sanity bound as the window value: a number this large is
+                # a broken proxy, and it would wipe the history budget outright.
+                raise TokenCountError(f"/tokenize count is absurdly large: {payload!r}")
+        span.set_attribute(ATTRIBUTE_NAMES["token_count"], count)
+        return count
 
 
 ##################################################################################################################################
@@ -2134,15 +2209,14 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # FIX: Separate system and user content for proper chat template handling
         user_content = _build_user_content(user_context_string, translated_history_string, rag_augmented_prompt)
 
-        tokenizer = get_tokenizer()
         max_model_tokens = _get_max_model_len()
         max_answer_tokens = _resolve_answer_budget_tokens(llm_parameters_dict.get("max_tokens"))
         # Count tokens part by part: the pieces feed the history budget below,
-        # so encoding them separately costs nothing extra on overflow requests.
-        # The 200-token buffer absorbs the ±1 boundary tokens the combined
-        # encode would merge.
-        system_tokens = len(tokenizer.encode(system_instructions))
-        user_content_tokens = len(tokenizer.encode(user_content))
+        # so counting them separately costs nothing extra on overflow requests.
+        # The 200-token buffer absorbs the ±1 boundary tokens a combined count
+        # would merge.
+        system_tokens = _count_static_tokens(system_instructions)
+        user_content_tokens = _count_tokens(user_content)
         full_prompt_tokens = system_tokens + user_content_tokens
         _active_span = otel_trace.get_current_span()
         _set_attributes(
@@ -2162,7 +2236,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             # what is finally sent. Segment separators (" |<-MSG->| ") are not
             # counted individually (~1-2 tokens per segment, absorbed by the
             # buffer).
-            skeleton_tokens = len(tokenizer.encode(_build_user_content(user_context_string, "", rag_augmented_prompt)))
+            skeleton_tokens = _count_tokens(_build_user_content(user_context_string, "", rag_augmented_prompt))
 
             max_history_tokens = max_model_tokens - system_tokens - max_answer_tokens - skeleton_tokens - 200
             # Split the history into segments (empty history = nothing to drop)
@@ -2171,7 +2245,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             current_tokens = 0
             # Start from most recent messages
             for segment in reversed(history_segments):
-                segment_tokens = len(tokenizer.encode(segment))
+                segment_tokens = _count_tokens(segment)
                 if current_tokens + segment_tokens > max_history_tokens:
                     break
                 truncated_history.insert(0, segment)  # Maintain order
@@ -3625,8 +3699,12 @@ class ChatQnAService:
         if isinstance(history, str):
             return await self._translate_text_chunk(history, canonical_target, source_lang_code=source_lang_code)
 
+        # One derivation per call: the payload, the log line and the response
+        # parse must branch on the SAME decision (and the same id).
+        translation_model_id = _get_translation_model_id()
+        translategemma = _is_translategemma(translation_model_id)
         # Build payload based on model type
-        if _is_translategemma():
+        if translategemma:
             # Use completions API with pre-formatted prompt (vLLM v0.10.0 cannot
             # pass structured content through chat completions to TranslateGemma's template)
             prompt = self._build_translategemma_prompt(
@@ -3641,7 +3719,7 @@ class ChatQnAService:
                 )
                 return flattened_history_string
             payload = {
-                "model": _get_translation_model_id(),
+                "model": translation_model_id,
                 "prompt": prompt,
                 "temperature": 0.0,
                 "max_tokens": output_cap,
@@ -3658,7 +3736,7 @@ class ChatQnAService:
             url = TRANSLATION_LLM_URL
 
         if logflag:
-            svc = "TranslateGemma" if _is_translategemma() else "generic"
+            svc = "TranslateGemma" if translategemma else "generic"
             logger.debug(f"Payload for translation service ({svc}): {payload}")
 
         try:
@@ -3670,7 +3748,7 @@ class ChatQnAService:
                 )
                 response.raise_for_status()
                 response_data = response.json()
-                if _is_translategemma():
+                if translategemma:
                     translated_blob = response_data["choices"][0]["text"]
                 else:
                     translated_blob = response_data["choices"][0]["message"]["content"]
@@ -3704,21 +3782,26 @@ class ChatQnAService:
             f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions"
         )
         system_prompt = os.getenv("MULTI_TURN_CONDENSE_SYSTEM_PROMPT", "").strip() or _CONDENSE_SYSTEM_PROMPT
-        payload = {
-            "model": _get_llm_model(),
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": _build_condense_user_content(history_text, last_message)},
-            ],
-            "temperature": 0.0,
-            "max_tokens": _CONDENSE_MAX_TOKENS,
-            "response_format": {"type": "json_object"},
-            "stream": False,
-        }
         tracer = get_tracer("chatqna.query_condense")
         _start = time.monotonic()
         with tracer.start_as_current_span("chatqna.query_condense") as span:
             try:
+                # Inside the classified try: building the payload calls
+                # _get_llm_model(), which raises ModelDiscoveryError when the
+                # endpoint answers nothing — that must surface as the same
+                # fail-closed 503 as every other condense failure, not as an
+                # unclassified 500 that bypasses the caller's metrics.
+                payload = {
+                    "model": _get_llm_model(),
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": _build_condense_user_content(history_text, last_message)},
+                    ],
+                    "temperature": 0.0,
+                    "max_tokens": _CONDENSE_MAX_TOKENS,
+                    "response_format": {"type": "json_object"},
+                    "stream": False,
+                }
                 async with httpx.AsyncClient(timeout=_CONDENSE_TIMEOUT_SECONDS) as client:
                     response = await client.post(
                         url, json=payload, headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}
@@ -3748,12 +3831,15 @@ class ChatQnAService:
                 span.set_attribute("genie.condense.completion_tokens", usage.get("completion_tokens", 0))
                 logger.debug(f"Condense rewrite ok: {standalone_query}")
                 return standalone_query
-            except (CondenseError, httpx.TimeoutException, httpx.HTTPError) as e:
-                reason = (
-                    e.reason
-                    if isinstance(e, CondenseError)
-                    else ("timeout" if isinstance(e, httpx.TimeoutException) else "http_error")
-                )
+            except (CondenseError, ModelDiscoveryError, httpx.TimeoutException, httpx.HTTPError) as e:
+                if isinstance(e, CondenseError):
+                    reason = e.reason
+                elif isinstance(e, ModelDiscoveryError):
+                    reason = "model_discovery"
+                elif isinstance(e, httpx.TimeoutException):
+                    reason = "timeout"
+                else:
+                    reason = "http_error"
                 _condense_span_attrs(span, "failed", round((time.monotonic() - _start) * 1000))
                 logger.warning(f"Condense rewrite failed ({reason}): {type(e).__name__}: {e}")
                 _raise_condense_503(reason, e)
@@ -3876,7 +3962,11 @@ class ChatQnAService:
             target_lang: The language name the map gives for that code.
             source_lang_code: Source ISO language code (e.g. "en"). Defaults to "en".
         """
-        if _is_translategemma():
+        # One derivation per call: the payload, the log line and the response
+        # parse all branch on this single read.
+        translation_model_id = _get_translation_model_id()
+        translategemma = _is_translategemma(translation_model_id)
+        if translategemma:
             target_lang_code = canonical_code
             prompt = self._build_translategemma_prompt(
                 text=text,
@@ -3884,7 +3974,7 @@ class ChatQnAService:
                 target_lang_code=target_lang_code,
             )
             payload = {
-                "model": _get_translation_model_id(),
+                "model": translation_model_id,
                 "prompt": prompt,
                 "temperature": 0.0,
                 "max_tokens": _translation_base_cap(text),
@@ -3908,7 +3998,7 @@ class ChatQnAService:
             url = TRANSLATION_LLM_URL
 
         if logflag:
-            logger.debug(f"Translation payload ({'TranslateGemma' if _is_translategemma() else 'generic'}): {payload}")
+            logger.debug(f"Translation payload ({'TranslateGemma' if translategemma else 'generic'}): {payload}")
 
         try:
             async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:
@@ -3919,7 +4009,7 @@ class ChatQnAService:
                 )
                 response.raise_for_status()
                 response_data = response.json()
-                if _is_translategemma():
+                if translategemma:
                     translated = response_data["choices"][0]["text"].strip()
                 else:
                     translated = response_data["choices"][0]["message"]["content"].strip()
@@ -4374,7 +4464,10 @@ class ChatQnAService:
             if _query_id:
                 span.set_attribute(QUERY_ID_KEY, _query_id)
             span.set_attribute("rag.query_length", len(last_translated_message_content))
-            span.set_attribute("rag.model_id", _get_llm_model())
+            # Telemetry only — the loud model-id gate lives in the payload
+            # sites (generation, condense, tokenize); the attribute records
+            # what discovery knows, never aborts the request.
+            span.set_attribute("rag.model_id", discover_model_id(_LLM_DISCOVERY_ENDPOINT) or "undiscovered")
             # What this request actually blended, and the answer reserve it is
             # budgeted against. The token estimate and the history counts are
             # written by align_inputs, which is the only site that measures
@@ -4600,14 +4693,18 @@ class ChatQnAService:
             except Exception as e:
                 from opentelemetry.trace import StatusCode
 
-                # Record error metric
+                # Record error metric (shared by every failure family)
                 _err_duration = time.time() - _rag_start
                 _err_attrs = _chat_attrs("false", "true")
                 chat_requests_total.add(1, _err_attrs)
                 chat_rag_duration_seconds.record(_err_duration, _err_attrs)
-
                 span.set_status(StatusCode.ERROR)
                 span.record_exception(e)
+                # Same fail-closed contract as the condense path: a request
+                # that cannot reach, name or count against its LLM is
+                # "LLM unavailable" (503), not a bug (500).
+                if isinstance(e, (ModelDiscoveryError, TokenCountError, httpx.HTTPError)):
+                    raise HTTPException(status_code=503, detail="llm_unavailable") from e
                 raise
 
         if logflag:

@@ -74,8 +74,12 @@ COPY --from=opea_example_base /src/ChatQnA/ /app/ChatQnA/
 COPY --chmod=0755 genie-ai-overlay/chatqna/entrypoint.sh /app/ChatQnA/entrypoint.sh
 
 # Step C: Install dependencies
-# Install extra dependencies from our original Dockerfile_genieai
-RUN pip install --no-cache-dir langdetect transformers "python-jose[cryptography]" \
+# Install extra dependencies from our original Dockerfile_genieai.
+# No transformers: token counting calls the vLLM /tokenize endpoint, and
+# neither this service's code nor the vendored comps modules it imports
+# (cores/mega — the transformers imports live in comps finetuning/xtune,
+# never imported here) use it. Verified against the pinned OPEA v1.5 trees.
+RUN pip install --no-cache-dir langdetect "python-jose[cryptography]" \
     "opentelemetry-api>=1.22" "opentelemetry-sdk>=1.22" \
     "opentelemetry-instrumentation-fastapi>=0.43b0" \
     "opentelemetry-instrumentation-httpx>=0.43b0" \

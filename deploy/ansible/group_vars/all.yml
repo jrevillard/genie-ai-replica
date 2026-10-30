@@ -310,9 +310,18 @@ tei_reranker_image: ghcr.io/huggingface/text-embeddings-inference:1.9.3
 docling_serve_image: ghcr.io/docling-project/docling-serve:v1.21.0
 nginx_image: nginx:1.28-alpine
 
-vllm_llm_model_id: ibm-granite/granite-4.1-8b
+# Leave vllm_llm_model_id UNDEFINED for auto-discovery (recommended): the
+# services discover whatever model the LLM endpoint serves at /v1/models.
+# CAUTION: with the var undefined, the GPU overlay starts the vLLM
+# container on its OWN template default, ibm-granite/granite-3.3-2b-instruct
+# (docker-compose.gpu.yaml.j2) — a different, smaller model than the
+# previously shipped group_vars default (granite-4.1-8b). Set the var to
+# pin a name (it must match what the GPU actually serves, or every LLM
+# call 404s).
+# vllm_llm_model_id: ibm-granite/granite-4.1-8b
 vllm_translation_model_id: google/gemma-3-4b-it
 embedding_model_id: BAAI/bge-large-en-v1.5
+#   (empty = reuse the discovered LLM model, see vllm_llm_model_id above)
 # Per-deployer query-instruction overrides for contrastive / instruction-tuned
 # embedding models (issue #1035). Built-in table covers BAAI/bge en+zh-v1.5,
 # hkunlp/instructor, and nomic-ai/nomic-embed. Use this var to:

@@ -323,7 +323,7 @@ class TestAlignInputsWiring:
     they are actually emitted onto chatqna.orchestrate in production.
     """
 
-    def _run_align_inputs(self, monkeypatch, history):
+    def _run_align_inputs(self, count_patch, monkeypatch, history):
         monkeypatch.setenv("MAX_MODEL_LEN_TEXTGEN", "4096")
         service = MagicMock()
         service.services = {"llm_node": _service_node()}
@@ -331,7 +331,7 @@ class TestAlignInputsWiring:
         llm_params = {"max_tokens": 1024, "top_p": 0.9}
         with (
             patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-            patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_MarkerTokenizer()),
+            count_patch(_MarkerTokenizer()),
             patch("chatqna.genieai_chatqna.CHATQNA_SYSTEM_PROMPT", "SYSTOK"),
             patch("chatqna.genieai_chatqna.history_truncation_total"),
         ):
@@ -346,11 +346,11 @@ class TestAlignInputsWiring:
                     full_chat_history_string=history,
                 )
 
-    def test_truncated_turn_reports_fewer_segments_than_it_came_in_with(self, monkeypatch, captured_spans):
+    def test_truncated_turn_reports_fewer_segments_than_it_came_in_with(self, monkeypatch, captured_spans, count_patch):
         # window 4096 - system 1000 - answer 1024 - skeleton (RAG 500) - 200 = 1372
         # history tokens: the newest (500) and mid (500) fit, the oldest does not.
         history = "USER: HISTTOK-old |<-MSG->| USER: HISTTOK-mid |<-MSG->| USER: HISTTOK-new"
-        result = self._run_align_inputs(monkeypatch, history)
+        result = self._run_align_inputs(count_patch, monkeypatch, history)
 
         sent = result["messages"][1]["content"]
         assert "HISTTOK-old" not in sent
@@ -361,9 +361,9 @@ class TestAlignInputsWiring:
         assert attributes[A["rag_history_segments_sent"]] == 2
         assert attributes[A["rag_history_segments_sent"]] < attributes[A["rag_history_segments_in"]]
 
-    def test_truncated_turn_emits_the_event_with_the_guards_own_numbers(self, monkeypatch, captured_spans):
+    def test_truncated_turn_emits_the_event_with_the_guards_own_numbers(self, monkeypatch, captured_spans, count_patch):
         history = "USER: HISTTOK-old |<-MSG->| USER: HISTTOK-mid |<-MSG->| USER: HISTTOK-new"
-        self._run_align_inputs(monkeypatch, history)
+        self._run_align_inputs(count_patch, monkeypatch, history)
 
         (orchestrate,) = captured_spans("chatqna.orchestrate")
         (event,) = [e for e in orchestrate.events if e.name == "context_budget.truncated"]
@@ -377,8 +377,8 @@ class TestAlignInputsWiring:
         )
         assert event.attributes["max_history_tokens"] == 1372
 
-    def test_prompt_budget_is_recorded_even_without_truncation(self, monkeypatch, captured_spans):
-        self._run_align_inputs(monkeypatch, "USER: tiny |<-MSG->| USER: tiny2")
+    def test_prompt_budget_is_recorded_even_without_truncation(self, monkeypatch, captured_spans, count_patch):
+        self._run_align_inputs(count_patch, monkeypatch, "USER: tiny |<-MSG->| USER: tiny2")
 
         (orchestrate,) = captured_spans("chatqna.orchestrate")
         attributes = dict(orchestrate.attributes)
@@ -389,7 +389,9 @@ class TestAlignInputsWiring:
         assert A["rag_history_segments_in"] not in attributes
         assert [e.name for e in orchestrate.events] == []
 
-    def test_default_answer_budget_is_recorded_when_the_request_omits_max_tokens(self, monkeypatch, captured_spans):
+    def test_default_answer_budget_is_recorded_when_the_request_omits_max_tokens(
+        self, monkeypatch, captured_spans, count_patch
+    ):
         """A request with no max_tokens still reports a reserve, not an omission."""
         monkeypatch.setenv("MAX_MODEL_LEN_TEXTGEN", "4096")
         service = MagicMock()
@@ -397,7 +399,7 @@ class TestAlignInputsWiring:
         inputs = {"inputs": "RAGTOK", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
         with (
             patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-            patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_MarkerTokenizer()),
+            count_patch(_MarkerTokenizer()),
             patch("chatqna.genieai_chatqna.CHATQNA_SYSTEM_PROMPT", "SYSTOK"),
             patch("chatqna.genieai_chatqna.history_truncation_total"),
         ):

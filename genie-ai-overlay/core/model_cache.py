@@ -18,10 +18,11 @@ can fall back to their configured window.
 
 Usage::
 
-    from core.model_cache import get_max_model_len, get_model_id
+    from core.model_cache import get_max_model_len, get_model_id, require_model_id
 
     model = get_model_id("https://gpu.example.com/llm")
     window = get_max_model_len("https://gpu.example.com/llm")
+    model = require_model_id("https://gpu.example.com/llm")  # raises if undiscovered
 """
 
 import logging
@@ -31,7 +32,7 @@ import time
 
 import httpx
 
-from core.model_http_policy import PROBE_TIMEOUT_SECONDS
+from core.model_http_policy import PROBE_TIMEOUT_SECONDS, endpoint_auth_headers, endpoint_verify
 
 logger = logging.getLogger(__name__)
 
@@ -69,15 +70,10 @@ def _probe(endpoint_url: str) -> dict | None:
     The entry carries every field the endpoint exposes (``id``, and for vLLM
     servers ``max_model_len``) so a single HTTP call feeds all accessors.
     """
-    headers = {}
-    api_key = os.getenv("VLLM_API_KEY", "")
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    # Align with the project's OPEA_SSL_SKIP_VERIFY mechanism (self-signed GPU
-    # certs). The global genie_ssl_patch.py (installed via the zz_genie_startup.pth
-    # site-init hook) also handles this, but we set verify explicitly so the probe
-    # is correct regardless of patch state.
-    verify = os.getenv("OPEA_SSL_SKIP_VERIFY", "") != "1"
+    headers = endpoint_auth_headers()
+    # Explicit verify so the probe is correct regardless of the global
+    # genie_ssl_patch.py state (installed via the zz_genie_startup.pth hook).
+    verify = endpoint_verify()
     try:
         resp = httpx.get(
             f"{endpoint_url}/v1/models",
@@ -98,6 +94,30 @@ def _probe(endpoint_url: str) -> dict | None:
     return None
 
 
+def coerce_int(value) -> int | None:
+    """Coerce a JSON scalar to ``int``: bools rejected, digit strings accepted.
+
+    Shared stance for every numeric field read out of a model-server payload
+    (context windows, tokenize counts): proxies serialize numbers as digit
+    strings, and a boolean is never a count. Returns None for anything else —
+    callers decide whether None means fallback (window getters) or a loud
+    error (payload-building sites).
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        # 12.0 is a serialization of 12; 12.5 is garbage.
+        return int(value) if math.isfinite(value) and int(value) == value else None
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
 def _coerce_max_model_len(value) -> int | None:
     """Coerce a probed ``max_model_len`` to a usable int, or None.
 
@@ -108,22 +128,7 @@ def _coerce_max_model_len(value) -> int | None:
     dropped so a bad payload never poisons the cache entry — an absurdly
     large window would silently disable the truncation guard.
     """
-    coerced = None
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        coerced = value
-    elif isinstance(value, float):
-        if not math.isfinite(value):
-            return None
-        coerced = int(value)
-        if coerced != value:
-            return None
-    elif isinstance(value, str):
-        try:
-            coerced = int(value.strip())
-        except ValueError:
-            return None
+    coerced = coerce_int(value)
     if coerced is not None and 0 < coerced <= MAX_SANE_MODEL_WINDOW_TOKENS:
         return coerced
     return None
@@ -231,6 +236,72 @@ def get_max_model_len(endpoint_url: str, ttl_seconds: int | None = None) -> int 
         the field or was never successfully probed.
     """
     return _cached_field(endpoint_url, ttl_seconds, "max_model_len")
+
+
+class TokenCountError(ValueError):
+    """A /tokenize response violated the counting contract (malformed shape,
+    non-integer, negative or absurd count). Subclasses ValueError so callers
+    of the counting helper keep a single failure family; the chat request
+    path maps it to the same fail-closed 503 as transport failures."""
+
+
+class ModelDiscoveryError(RuntimeError):
+    """No model id could be discovered for an endpoint.
+
+    Raised by :func:`require_model_id` for callers whose requests must
+    carry the name the endpoint actually serves.
+    """
+
+
+def require_model_id(endpoint_url: str) -> str:
+    """Return the model ID served at ``endpoint_url`` or raise ModelDiscoveryError.
+
+    The loud twin of :func:`get_model_id`: vLLM validates the model name on
+    ``/tokenize`` and the OpenAI endpoints and answers 404 for unknown names,
+    so a payload that must identify the served model (tokenize, direct
+    chat/completions) has no usable fallback — a hardcoded name is correct
+    only by coincidence with whatever the deployment serves. A stale cached
+    id from a previous successful probe still counts as an answer.
+    """
+    detected = get_model_id(endpoint_url)
+    if not detected:
+        raise ModelDiscoveryError(
+            f"no model id discovered at {endpoint_url}/v1/models — the endpoint "
+            "must answer the model-id probe before requests carrying a model "
+            "name can be built"
+        )
+    return detected
+
+
+def discover_model_id(endpoint_url: str) -> str | None:
+    """Soft precedence read: the ``VLLM_MODEL_ID`` env if set, else the id
+    discovered at ``endpoint_url`` — None when neither answers.
+
+    For consumers that treat an unknown id as information (telemetry), not
+    as a reason to abort. Payload-building consumers use
+    :func:`resolve_model_id`, which raises instead.
+    """
+    return os.getenv("VLLM_MODEL_ID", "") or get_model_id(endpoint_url)
+
+
+def resolve_model_id(endpoint_url: str) -> str:
+    """Model id for ``endpoint_url``: the explicit ``VLLM_MODEL_ID`` env wins
+    as the deployer override; otherwise the discovered id, loud on no answer.
+
+    The single home of that precedence: payload-building consumers call this
+    instead of hand-rolling the env check — chatqna's generation/condense/
+    tokenize payloads, the retriever summarizer, and dataprep's labelling
+    and graph clients all honor the same escape hatch.
+    """
+    env_model = os.getenv("VLLM_MODEL_ID", "")
+    if env_model:
+        return env_model
+    if not endpoint_url:
+        raise ModelDiscoveryError(
+            "no vLLM endpoint configured and VLLM_MODEL_ID is unset — "
+            "set VLLM_ENDPOINT (or VLLM_LLM_ENDPOINT) or VLLM_MODEL_ID"
+        )
+    return require_model_id(endpoint_url)
 
 
 def clear_cache() -> None:

@@ -243,8 +243,8 @@ Set in `group_vars/<env>/vars.yml`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `vllm_llm_model_id` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | Main LLM model for chat |
-| `vllm_max_model_len` | `8192` | Maximum context length |
+| `vllm_llm_model_id` | _(undefined — auto-discovery; the GPU overlay then serves its template default `ibm-granite/granite-3.3-2b-instruct`)_ | When undefined, every service discovers the served model at `/v1/models`. Define it to pin a name (must match what the GPU serves). |
+| `vllm_max_model_len` | `65536` | Maximum context length (template default; not set in group_vars) |
 | `vllm_gpu_utilization` | `0.55` | GPU memory fraction (0.1-1.0) |
 | `vllm_dtype` | `auto` | Data type (auto, half, bfloat16, float32) |
 | `vllm_api_key` | `""` | Optional vLLM API key |
@@ -362,7 +362,7 @@ Every variable below is emitted by `env.j2` with the value in the "Default" colu
 | `contextual_retrieval_enabled` | `true` | Prepend an LLM document-context prefix to each chunk so it carries the document's subject. `false` is a true no-op |
 | `contextual_strategy` | `per_chunk` | `per_chunk` (one call per batch, section-tailored) or `doc_level` (one call per document, same context on every chunk — N× cheaper) |
 | `contextual_label_raw` | `true` | Decoupled mode: label the RAW chunk, use the context ONLY for the embedding (keeps label precision while propagating the subject via the vector) |
-| `dataprep_contextual_model` | (empty) | Model for context generation; empty = auto-detect the served model; must support guided JSON |
+| `dataprep_contextual_model` | (empty) | Model for context generation; empty = discover the served model; must support guided JSON |
 | `dataprep_contextual_doc_budget` | `0` | `0` = **derived** from `vllm_max_model_len`. The context call carries system prompt + document context + batch chunk text and reserves `dataprep_contextual_max_tokens` **per chunk in the batch**; all of that is subtracted from the window and the remainder is the budget. Set `>0` only deliberately — a budget copied from a larger-window deployment overflows this one and the rejected calls fall back to raw chunks silently |
 | `dataprep_contextual_doc_budget_doc_level` | `100000` | Max chars of doc text fed to the doc_level context LLM (one call — can afford a larger window) |
 | `dataprep_contextual_max_tokens` | `512` | Max OUTPUT tokens **per chunk in the batch** for the context-generation LLM. The legacy cap of 200 truncated the JSON under load; 512 = safe margin (model stops early at ~196). A batch of 4 reserves 4× this |

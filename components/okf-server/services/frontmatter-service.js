@@ -478,10 +478,14 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
       disableThinking: viaOverride
     });
   const resp = await withVllmRetry(fn, { endpoint: url });
-  // The resolved model rides the response so callers can log provenance
+  // The SERVED model rides the response (the server names what it ran — a
+  // gateway may alias the requested id), so callers can log provenance
   // without a second probe (a minutes-long thinking-model call can outlive
   // the discovery TTL — re-probing could then name a DIFFERENT model).
-  resp.model = model;
+  resp.model = (resp.data && resp.data.model) || model;
+  // The endpoint that answered, for the same reason: the start log names
+  // the deployment base, but the call may have gone to a named config.
+  resp.host = host;
   return resp;
 }
 
@@ -966,7 +970,10 @@ async function suggestTags(repoId, _opts = {}) {
       concepts_total: coverage.concepts_total,
       label_count: coverage.label_count,
       labels_represented: coverage.labels_represented,
-      vllm_host: modelCache.deploymentVllmBase(),
+      // The DEPLOYMENT base — the call may have gone to a named model
+      // config instead; the host that answered is logged by
+      // frontmatter.suggest.done.
+      deployment_vllm_host: modelCache.deploymentVllmBase(),
       // The PIN (null when the model is discovered) — the model that
       // actually answered is logged by frontmatter.suggest.done. Its own
       // key: under `model` the start line read "model:null" on the common
@@ -1148,6 +1155,10 @@ async function suggestTags(repoId, _opts = {}) {
     logger.info('frontmatter.suggest.done', {
       repo_id: repoId,
       model: taggedWith,
+      // The endpoint that answered (the start line names the deployment
+      // base, which is NOT where the call went when a named model config
+      // is active).
+      vllm_host: resp.host || modelCache.deploymentVllmBase(),
       topic: out.topic.length,
       entity: out.entity.length,
       forbidden: out.forbidden.length,

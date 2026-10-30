@@ -1414,6 +1414,14 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # EMBEDDING_SERVICE_URL=https://${GPU_NODE_HOST}/embed
 # RERANKER_SERVICE_URL=https://${GPU_NODE_HOST}/rerank
 #
+# RAGAS_JUDGE_BASE_URL=https://${GPU_NODE_HOST}/llm/v1
+#   The benchmark judge/generator endpoint. With a REMOTE GPU the local
+#   `vllm` service does not run (the gpu-models profile is skipped), so the
+#   default (http://vllm:8000/v1) points at a service that is not there —
+#   set it to the GPU node. Point it at the DEPLOYMENT's own model server:
+#   okf-server sends the deployment credential to the judge only when the
+#   judge base IS the deployment endpoint.
+#
 # TEI_EMBED_HOST=https://${GPU_NODE_HOST}
 #   TEI embed endpoint BASE for okf-server (frontmatter tag embedding,
 #   vectorized-head build, Story 1-8 head tests). The service appends
@@ -1786,14 +1794,24 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   deployment-wide internal secret). Fail-closed: unset rejects everything.
 #   Used by: okf-server -> ragas-service auth. Compose: yes. Ansible: yes.
 # RAGAS_JUDGE_BASE_URL=http://vllm:8000/v1
-#   Default: the deployment's vLLM endpoint. OpenAI-compatible judge/generator
-#   endpoint — any local server qualifies (vLLM, LiteLLM, ollama).
+#   Default: the deployment's vLLM endpoint (the local vllm service — with
+#   a remote GPU, set it to the GPU node: see the remote-GPU section
+#   above). OpenAI-compatible judge/generator endpoint — any local server
+#   qualifies (vLLM, LiteLLM, ollama). Point it at the DEPLOYMENT's own
+#   model server: okf-server sends the deployment credential to the judge
+#   only when the judge base IS the deployment endpoint.
 # RAGAS_JUDGE_MODEL=<model id>
-#   Default: VLLM_LLM_MODEL_ID. The judge+generator model. Must meet the
-#   model-requirements minimums (strict JSON output; window sized for
-#   question+answer+contexts; no reasoning tokens in completions).
+#   Default: VLLM_LLM_MODEL_ID for the ragas sidecar. okf-server does NOT
+#   default it: the deployment's model name must never be sent to a judge
+#   base that serves another model — unset, the served model is discovered
+#   on the judge base (the deployment pin applies when the judge base IS
+#   the deployment endpoint). Must meet the model-requirements minimums
+#   (strict JSON output; window sized for question+answer+contexts; no
+#   reasoning tokens in completions).
 # RAGAS_JUDGE_API_KEY=<bearer for the judge endpoint>
-#   Default: VLLM_API_KEY.
+#   Default: VLLM_API_KEY for the ragas sidecar. okf-server sends the
+#   deployment credential to the judge only when the judge base IS the
+#   deployment endpoint; for any other judge, name the key here.
 # RAGAS_JUDGE_CONTEXT_TOKENS=<the judge model's context window>
 #   Default: VLLM_MAX_MODEL_LEN (65536 if unset). The benchmark KG-input cap
 #   derives from it (RAGAS_DOC_CHAR_CAP=auto): (window - 3072) / 2 pair-safe

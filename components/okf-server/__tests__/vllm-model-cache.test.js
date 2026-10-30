@@ -186,6 +186,18 @@ describe('TTL cache', () => {
     expect(axios.get).toHaveBeenCalledTimes(1);
   });
 
+  test('a FOREIGN base with no key of its own is probed WITHOUT the deployment bearer', async () => {
+    // The deployment bearer may only travel to the deployment endpoint: a
+    // base the caller did not name it for gets no credential.
+    process.env.VLLM_API_KEY = 'deployment-secret';
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/model' }] } });
+    await cache.resolveDeploymentModel({ baseUrl: 'https://frontier.example/v1', apiKey: '' });
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://frontier.example/v1/models',
+      expect.objectContaining({ headers: {} })
+    );
+  });
+
   test('a short-budget failure does not lock out a caller with a longer budget', async () => {
     // The best-effort summary leg probes for 1 s; a tagging call may wait
     // 10 s. The 1 s failure must not lock the tagging call out for the

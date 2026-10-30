@@ -847,6 +847,22 @@ describe('vllmChatCompletions — model-id resolution (!631 policy)', () => {
     expect(axios.post.mock.calls[0][1].model).toBe('frontier/served');
   });
 
+  test('the response names the model the SERVER served, and the host that answered', async () => {
+    seedDb();
+    delete process.env.VLLM_LLM_MODEL_ID;
+    delete process.env.VLLM_MODEL_ID;
+    modelCache.clearModelCache();
+    // The endpoint answers with a DIFFERENT name than the one requested
+    // (a gateway aliases ids) — the provenance must name what ran.
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/tagger-8b' }] } });
+    axios.post.mockResolvedValue({
+      data: { model: 'served/tagger-8b-alias', choices: [{ message: { content: JSON.stringify({ topic: ['x'] }) } }] }
+    });
+    const resp = await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }]);
+    expect(resp.model).toBe('served/tagger-8b-alias');
+    expect(resp.host).toBe('http://vllm:8000');
+  });
+
   test('suggest.start names the PIN under its own key (the tagging model is logged by suggest.done)', async () => {
     seedDb();
     delete process.env.VLLM_LLM_MODEL_ID;

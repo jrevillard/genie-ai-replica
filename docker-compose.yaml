@@ -724,7 +724,11 @@ services:
       # it every default-judged run recorded judge {model: null} while the
       # sidecar judged with the env model (2026-10-21 review F10).
       - RAGAS_JUDGE_BASE_URL=${RAGAS_JUDGE_BASE_URL:-http://vllm:8000/v1}
-      - RAGAS_JUDGE_MODEL=${RAGAS_JUDGE_MODEL:-${VLLM_LLM_MODEL_ID:-}}
+      # NO model default here: the deployment's model name must never be
+      # sent to a judge base that serves another model. Unset = the served
+      # model is DISCOVERED on the judge base (the !631 policy); the pin
+      # applies only when the judge base IS the deployment endpoint (#1181).
+      - RAGAS_JUDGE_MODEL=${RAGAS_JUDGE_MODEL:-}
       # ArangoDB — same database as the graphs (ADR-okf-018); direct arangojs, no ORM.
       - ARANGO_URL=${ARANGO_URL:-http://arango-vector-db:8529}
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
@@ -785,7 +789,11 @@ services:
       # a deployment opts IN by setting VLLM_ENDPOINT + VLLM_API_KEY and a
       # guided-JSON-capable chat model (VLLM_LLM_MODEL_ID preferred).
       - VLLM_ENDPOINT=${VLLM_ENDPOINT:-}
-      - VLLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-${VLLM_MODEL_ID:-}}
+      # The pin spelling is the one the vLLM container serves
+      # (--served-model-name VLLM_LLM_MODEL_ID) — exactly like the Python
+      # services' mapping. A raw VLLM_MODEL_ID must not pin okf-server: it
+      # would name a model the endpoint does not serve (#1181).
+      - VLLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-}
       # The LLM spelling reaches okf-server too (#1181): the serve-mode
       # fidelity label mirrors chatqna's pin precedence, and chatqna only
       # ever receives THIS spelling.

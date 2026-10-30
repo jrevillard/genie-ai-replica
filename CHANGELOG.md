@@ -79,9 +79,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ragas_judge_base_url` explicitly are unaffected.
 
 - **The suite provenance field `generator` names every model that produced
-  the suite (#1181, !640).** It was the model of the *last* generation call,
-  so a suite spanning a model change under-reported it. It now lists the
-  distinct models (`llm:model-a,llm:model-b`).
+  the suite (#1181, !640).** It was a constant — the deployment's model name
+  from the environment, or `llm:vllm` — so it never reflected any call. It
+  now lists the distinct models the generation calls actually ran under
+  (`llm:model-a,llm:model-b`).
+
+- **The OKF server no longer inherits the deployment's model NAME for the
+  benchmark judge (#1181, !640).** `RAGAS_JUDGE_MODEL` defaulted to
+  `VLLM_LLM_MODEL_ID`, so a judge pointed at another endpoint was asked
+  for the deployment's model and answered 404 (`model not found`) — a
+  failure that reads like a credentials problem. The name is now explicit
+  only: unset, the served model is discovered on the judge base. The
+  benchmark sidecar keeps its own default (its judge base IS the
+  deployment).
+
+- **`VLLM_MODEL_ID` no longer pins the OKF server on its own (#1181,
+  !640).** The pin spelling is `VLLM_LLM_MODEL_ID` — the name the vLLM
+  container is started with (`--served-model-name`), and the one every
+  Python service reads. A raw `VLLM_MODEL_ID` in `.env` named a model the
+  endpoint did not serve, and every OKF call 404'd on it while the Python
+  services discovered the right one. It now maps to the served name, like
+  every other service.
 
 - **Ansible deployments: `vllm_llm_model_id` is now undefined by default
   (auto-discovery).** Previously it pinned `ibm-granite/granite-4.1-8b` for

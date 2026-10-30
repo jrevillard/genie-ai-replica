@@ -281,7 +281,7 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
         // count-bounded prune drops the OLDEST one first.
         _cache.delete(cacheKey);
         _cache.set(cacheKey, { id, ts: Date.now() });
-        _negative.delete(cacheKey);
+        _negative.delete(probeKey);
         _inflight.delete(probeKey);
         return id;
       })
@@ -363,7 +363,11 @@ async function resolveVllmModelId(baseUrl, opts = {}) {
       'no vLLM endpoint configured and no model pinned — set VLLM_ENDPOINT or VLLM_MODEL_ID'
     );
   }
-  const apiKey = (opts.apiKey || '').trim() || deploymentKey();
+  // The deployment bearer is the DEPLOYMENT's credential: it may only be
+  // aimed at the deployment endpoint. A base the caller did not name it
+  // for gets no credential (the probe then runs unauthenticated, which is
+  // what a foreign endpoint expects).
+  const apiKey = (opts.apiKey || '').trim() || (sameOrigin(baseUrl, deploymentVllmBase()) ? deploymentKey() : '');
   const id = await getServedModelId(baseUrl, { timeoutMs: opts.timeoutMs, apiKey });
   if (!id) throw discoveryError(openAiModelsUrl(baseUrl));
   return id;

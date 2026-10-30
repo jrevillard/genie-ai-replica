@@ -23,6 +23,7 @@
 const { test, expect } = require('@playwright/test');
 const { getAdminToken, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { createUser, deleteUser } = require('../helpers/keycloak-admin');
+const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
 const REPO_NAME = process.env.OKF_SMOKE_REPO_NAME || 'El Salvador';
@@ -61,15 +62,15 @@ test.describe('the RAGAS model selection is in the UI', () => {
     const page = await context.newPage();
 
     // 1. log in through Keycloak
-    await page.goto('https://localhost/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForURL('**/protocol/openid-connect/auth**', { timeout: 20000 });
     await page.fill('#username', USER);
     await page.fill('#password', PW);
     await page.click('#kc-login');
-    await page.waitForURL('https://localhost/**', { timeout: 30000 });
+    await page.waitForURL(`${BASE_URL}/**`, { timeout: 30000 });
 
     // 2. the admin dashboard -> OKF Studio
-    await page.goto('https://localhost/admin', { waitUntil: 'networkidle', timeout: 30000 });
+    await page.goto(`${BASE_URL}/admin`, { waitUntil: 'networkidle', timeout: 30000 });
     const studioTab = page.getByRole('button', { name: /OKF Studio/i }).first();
     await expect(studioTab, 'the OKF Studio tab must be reachable').toBeVisible({ timeout: 20000 });
     await studioTab.click();
@@ -114,14 +115,14 @@ test.describe('the RAGAS model selection is in the UI', () => {
     const context = await browser.newContext({ ignoreHTTPSErrors: true, bypassCSP: true });
     const page = await context.newPage();
 
-    await page.goto('https://localhost/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForURL('**/protocol/openid-connect/auth**', { timeout: 20000 });
     await page.fill('#username', USER);
     await page.fill('#password', PW);
     await page.click('#kc-login');
-    await page.waitForURL('https://localhost/**', { timeout: 30000 });
+    await page.waitForURL(`${BASE_URL}/**`, { timeout: 30000 });
 
-    await page.goto('https://localhost/admin', { waitUntil: 'networkidle', timeout: 30000 });
+    await page.goto(`${BASE_URL}/admin`, { waitUntil: 'networkidle', timeout: 30000 });
     const modelsTab = page.getByRole('button', { name: /^Models$/i }).first();
     await expect(modelsTab, 'the Models tab must be reachable').toBeVisible({ timeout: 20000 });
     await modelsTab.click();

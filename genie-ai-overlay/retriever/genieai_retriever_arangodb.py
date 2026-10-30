@@ -24,7 +24,7 @@ from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from core.label_contract import build_filter_labels, decode_filter_labels
+from core.label_contract import build_filter_labels
 from core.model_cache import get_model_id
 from core.model_http_policy import LLM_MAX_RETRIES, SUMMARIZER_TIMEOUT_SECONDS, http_timeout
 from core.span_attrs import ATTRIBUTE_NAMES as A

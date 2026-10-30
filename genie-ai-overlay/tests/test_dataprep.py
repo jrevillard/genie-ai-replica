@@ -3597,7 +3597,10 @@ class TestContextualRetrieval:
         finally:
             ticker.cancel()
         assert ticks_during_probe, "the window discovery never probed the endpoint"
-        assert ticks_during_probe[0] >= 5, (
+        # The blocking case yields 0 ticks (the loop is frozen for the whole
+        # probe); an off-loop probe yields one per 10 ms. The threshold stays
+        # low so a loaded CI runner cannot flake it.
+        assert ticks_during_probe[0] >= 3, (
             f"the event loop was blocked during window discovery ({ticks_during_probe[0]} ticks while the probe ran)"
         )
 

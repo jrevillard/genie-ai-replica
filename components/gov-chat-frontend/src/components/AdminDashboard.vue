@@ -2080,7 +2080,11 @@ export default {
       return this.documents.filter((doc) => {
         if (!ids.has(doc.file_id)) return false;
         const s = doc.dataprep && String(doc.dataprep.status).toLowerCase().trim();
-        return s === 'ingested' || s === 'ingesting';
+        // 'ingested with warnings' IS serving (the okfRepoGate serving-count
+        // and the row badge both treat it so) — deleting the files doc under
+        // a served corpus orphans the reference (review !622 round 10,
+        // #78744).
+        return s === 'ingested' || s === 'ingesting' || s === 'ingested with warnings';
       });
     },
     /** 2026-10-10: the selected rows that ARE deletable — a mixed
@@ -2191,10 +2195,19 @@ export default {
 
     // Get current user data
     this.getCurrentUser();
+
+    // Crawl→OKF wizard hand-off relay (review !622 round 10, #78745): the
+    // crawl dialogs dispatch okf:create-from-crawl while the DOCUMENTS area
+    // is on screen, but the wizard listener lives in StudioTab — mounted only
+    // under the studio tab, so the event fired into the void. Relay it
+    // through the same switch-tab → nextTick dance
+    // onCreateOkfRepoFromSelection uses.
+    window.addEventListener('okf:create-from-crawl', this.relayCreateFromCrawl);
   },
   beforeUnmount() {
     // Clean up event listeners when component is destroyed
     window.removeEventListener('themeChange', this.handleThemeChange);
+    window.removeEventListener('okf:create-from-crawl', this.relayCreateFromCrawl);
     // Cancel any in-flight search debounce so a timer firing after the
     // component unmounts doesn't call loadDocuments() on a destroyed
     // Vue instance (Vue 'target is readonly' warn + orphaned backend
@@ -3646,6 +3659,18 @@ export default {
      * Produce's conversion). The 7.7 import dialog path is retired here —
      * one documents→repo path, the wizard.
      */
+    /** Crawl→OKF hand-off relay (#78745): switch to the studio tab, wait the
+     * tick that lets StudioTab mount its wizard listener, then re-dispatch
+     * the event flagged so this relay never re-catches its own send. */
+    async relayCreateFromCrawl(event) {
+      if (event && event.__okfRelayed) return;
+      const detail = (event && event.detail) || {};
+      this.activeTab = 'studio';
+      await this.$nextTick();
+      const relayed = new CustomEvent('okf:create-from-crawl', { detail });
+      relayed.__okfRelayed = true;
+      window.dispatchEvent(relayed);
+    },
     async onCreateOkfRepoFromSelection() {
       if (!this.okfRepoGate.visible) return;
       // file_id, not the Arango _key — the selection holds file_id's and the

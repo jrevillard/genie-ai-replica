@@ -7,7 +7,6 @@
  *   reposByStage         bucketed repo_ids { draft: [], in_review: [], published: [] }
  *   selection            { documents: [], crawlSeeds: [], clonedFrom: null } — preloaded wizard inputs
  *   gates[okfRepoButton] { visible, reasonKey, reasonParams } — gates the doc-mgmt entry button
- *   bulkPublish          { inFlight, results: [{ repo_id, ok, code?, message? }] }
  *   ui                   { expertMode } — global Basic/Expert toggle (persisted to localStorage)
  *
  * NOT_READY semantics:
@@ -41,7 +40,6 @@ const initialState = () => ({
   gates: {
     okfRepoButton: { visible: false, reasonKey: null, reasonParams: {} }
   },
-  bulkPublish: { inFlight: false, results: [] },
   versionsByRepo: {},
   // Story #978 — Studio editor state: which sub-tab (Wizard | Editor), which
   // repo is open, per-repo concept lists (left rail), the selected concept.
@@ -119,8 +117,6 @@ const getters = {
   repoById: (state) => (repoId) => state.reposById[repoId] || null,
   reposByStage: (state) => state.reposByStage,
   gate: (state) => (name) => state.gates[name] || { visible: false, reasonKey: null },
-  bulkPublishResults: (state) => state.bulkPublish.results,
-  bulkPublishInFlight: (state) => state.bulkPublish.inFlight,
   // Story #978 — editor getters.
   editorSubTab: (state) => state.editor.subTab,
   editorRepoId: (state) => state.editor.repoId,
@@ -195,18 +191,6 @@ const mutations = {
   },
   setGate(state, { name, value }) {
     state.gates = { ...state.gates, [name]: value };
-  },
-  startBulkPublish(state) {
-    state.bulkPublish = { inFlight: true, results: [] };
-  },
-  addBulkPublishResult(state, result) {
-    state.bulkPublish = {
-      ...state.bulkPublish,
-      results: [...state.bulkPublish.results, result]
-    };
-  },
-  endBulkPublish(state) {
-    state.bulkPublish = { ...state.bulkPublish, inFlight: false };
   },
   // Story #978 — editor mutations.
   setEditorSubTab(state, subTab) {
@@ -372,10 +356,17 @@ const actions = {
       const metrics = await repoOkfService.getMetrics(repoId);
       commit('setRepoMetrics', { repoId, metrics });
       return { ok: true, metrics };
-    } catch {
-      // 404 → no concepts yet; render placeholder
-      commit('setRepoMetrics', { repoId, metrics: null });
-      return { ok: true, metrics: null };
+    } catch (err) {
+      // ONLY a 404 means 'no concepts yet' — every other failure (5xx,
+      // network) must surface, not masquerade as empty placeholders
+      // (review !622 round 10, #78748).
+      const status = err && (err.status || (err.response && err.response.status));
+      if (status === 404) {
+        commit('setRepoMetrics', { repoId, metrics: null });
+        return { ok: true, metrics: null };
+      }
+      commit('setError', err.message || 'fetchRepoMetrics failed');
+      return { ok: false, code: 'METRICS_FAILED', message: err.message };
     }
   },
 
@@ -401,23 +392,6 @@ const actions = {
    * Bulk publish: iterate mintVersion per repo; collect per-row results.
    * NEVER force-publishes past a gate — a single failure does not abort the loop.
    */
-  async bulkPublish({ commit, dispatch }, { repoIds, actor, trigger = 'publish' } = {}) {
-    if (!Array.isArray(repoIds) || repoIds.length === 0) {
-      return { ok: false, code: 'VALIDATION_ERROR', message: 'repoIds required' };
-    }
-    commit('startBulkPublish');
-    for (const repoId of repoIds) {
-      const result = await dispatch('mintVersion', { repoId, body: { trigger }, actor });
-      commit('addBulkPublishResult', {
-        repo_id: repoId,
-        ok: !!result.ok,
-        code: result.code,
-        message: result.message
-      });
-    }
-    commit('endBulkPublish');
-    return { ok: true };
-  },
 
   async updateLabels({ commit }, { repoId, labels }) {
     try {
@@ -427,10 +401,18 @@ const actions = {
         commit('upsertRepo', { ...existing, labels });
       }
       return { ok: true };
-    } catch {
-      // Server endpoint may not exist yet — labels persist locally in the Vuex state
-      // via the upsertRepo call above (committed optimistically).
-      return { ok: false, code: 'NOT_READY', message: 'okf.curator.labels.notReady' };
+    } catch (err) {
+      // Nothing persisted locally on failure — the optimistic upsertRepo above
+      // runs only AFTER a successful PUT (the old comment claimed otherwise,
+      // review !622 round 10, #78749). Pass the real status through so the UI
+      // can tell 'endpoint missing' from 'labels rejected'.
+      const status = err && (err.status || (err.response && err.response.status));
+      return {
+        ok: false,
+        code: status === 404 ? 'NOT_READY' : 'LABELS_FAILED',
+        message: err.message || 'okf.curator.labels.notReady',
+        status
+      };
     }
   },
 
@@ -1268,6 +1250,9 @@ const actions = {
       // only stops the client waiting forever.
       const DEADLINE_MS = 15 * 60 * 1000;
       const deadline = Date.now() + DEADLINE_MS;
+      // A transient gateway failure must not end the explain — the server-side
+      // job completes regardless (#78747).
+      let explainMisses = 0;
       for (;;) {
         if (Date.now() > deadline) {
           return {
@@ -1278,7 +1263,17 @@ const actions = {
           };
         }
         await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        const doc = await headTestService.getExplainFailures(repoId, suiteKey, started.run_key);
+        // Same transient tolerance as the generate/run polls (kong restart =
+        // 502 must not kill the tracking loop — the server-side job keeps
+        // running; review !622 round 10, #78747).
+        let doc = null;
+        try {
+          doc = await headTestService.getExplainFailures(repoId, suiteKey, started.run_key);
+          explainMisses = 0;
+        } catch (err) {
+          if (++explainMisses >= 60) throw err;
+          continue;
+        }
         if (!doc || doc.status === 'running') continue;
         if (doc.status === 'failed') {
           return {
@@ -1947,6 +1942,9 @@ const actions = {
       const POLL_MS = 2000;
       const DEADLINE_MS = 15 * 60 * 1000;
       const deadline = Date.now() + DEADLINE_MS;
+      // A transient gateway failure must not end the explain — the
+      // server-side job completes regardless (#78747).
+      let explainMisses = 0;
       for (;;) {
         if (Date.now() > deadline) {
           return {
@@ -1956,7 +1954,15 @@ const actions = {
           };
         }
         await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        const doc = await ragasService.getExplain(repoId, suiteKey, started.run_key);
+        // Same transient tolerance as the generate/run polls (#78747).
+        let doc = null;
+        try {
+          doc = await ragasService.getExplain(repoId, suiteKey, started.run_key);
+          explainMisses = 0;
+        } catch (err) {
+          if (++explainMisses >= 60) throw err;
+          continue;
+        }
         if (!doc || doc.status === 'running') {
           // Phase + elapsed from the server's explain-progress map — the
           // advisor is ONE reasoning-judge call that can legitimately think

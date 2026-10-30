@@ -185,7 +185,10 @@ export default {
  * benchmark table with every metric selected pushed past the fixed 800px. */
 .ds-modal--auto {
   width: fit-content;
-  min-width: 800px;
+  /* min() keeps the desktop floor but respects the base max-width:90% cap —
+   * a bare min-width BEATS max-width in CSS, so the Lab clipped off-viewport
+   * on split-view laptops / phones (review !622 round 10, #78750). */
+  min-width: min(800px, 90vw);
 }
 
 .ds-modal__header {

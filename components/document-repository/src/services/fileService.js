@@ -810,6 +810,20 @@ class FileService {
         throw new Error(`File record not found in database: ${fileId}`);
       }
 
+      // SERVING GUARD (review !622 round 10, #78744 — server mirror of the
+      // AdminDashboard blockedSelection list): a still-serving document must
+      // not lose its files doc + disk file while the served corpus references
+      // it. The frontend gate is UX; this is the contract.
+      const servingStatus =
+        file.dataprep && String(file.dataprep.status || '').toLowerCase().trim();
+      if (servingStatus === 'ingested' || servingStatus === 'ingesting' || servingStatus === 'ingested with warnings') {
+        const err = new Error(
+          `File ${fileId} is still serving the corpus (dataprep status: ${file.dataprep.status}) — retract it before deleting`
+        );
+        err.statusCode = 409;
+        throw err;
+      }
+
       // prepare file path for deletion
       const fileExtension = path.extname(file.file_name).slice(1);
       const fileNameOnDisk = file.file_id + '.' + fileExtension;

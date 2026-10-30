@@ -680,6 +680,9 @@ export default {
     // (multi-crawl) or finalize. The RUNNING chain's queue is local state —
     // the draft copy exists so a restart knows a chain was mid-flight.
     async onConversionDone() {
+      // Consume this conversion's started_at — a later tick reading the SAME
+      // conversion (registry lag behind the next-leg kick) is stale (#78751).
+      this._consumedStartedAt = (this.lastConv && this.lastConv.started_at) || null;
       // B1 (audit): prefer the server's ingest summary (created/updated) over
       // the raw count delta — "updated" IS the exact-slug auto-merge count,
       // and the summary excludes the index concept the delta over-counts.
@@ -756,6 +759,19 @@ export default {
           this.liveRepo = repo; // per-stage bars read curation + link_progress off the live doc
           const st = conv ? conv.status : null;
           if (st === 'done') {
+            // Round-10 review (#78751 — Jerome marked it uncertain; the code's
+            // own audit-A3 comment confirms the registry delete lags the
+            // kick): the IMMEDIATE first tick after a next-leg kick can read
+            // the PREVIOUS leg's done conversion. A done-read whose
+            // started_at was already consumed is stale — keep polling until
+            // the new leg's conversion surfaces, instead of re-running
+            // onConversionDone (duplicate source_log row + a queue leg
+            // silently skipped).
+            const startedAt = conv && conv.started_at;
+            if (startedAt && startedAt === this._consumedStartedAt) {
+              this.status = 'running';
+              return;
+            }
             clearInterval(this.pollTimer);
             await this.onConversionDone();
           } else if (st === 'failed') {

@@ -490,7 +490,9 @@ const repoOkfService = {
   async reingestFailed(repoId, { conceptId } = {}, actor = {}) {
     const base = `/okf/repos/${encodeURIComponent(repoId)}`;
     const path = conceptId ? `${base}/concepts/${encodeURIComponent(conceptId)}/reingest` : `${base}/reingest-failed`;
-    const res = await httpService.post(path, {}, { headers: { 'x-actor-sub': actor.sub } });
+    // Conditional header like every sibling — an absent actor must not send
+    // `x-actor-sub: undefined` (review !622 round 10, #78753).
+    const res = await httpService.post(path, {}, { headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {} });
     return res && res.data ? res.data : { ok: false };
   },
 

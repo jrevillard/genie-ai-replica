@@ -422,9 +422,14 @@ export default {
       this.pickerOpen = false;
     },
     async searchUsers() {
+      // Stale-response guard (review !622 round 10, #78754 — the
+      // ConceptEditor _loadSeq pattern): a slow OLDER response must never
+      // overwrite a newer result set.
+      const seq = (this._userSearchSeq = (this._userSearchSeq || 0) + 1);
       this.pickerLoading = true;
       try {
         const out = await repoOkfService.getAccessUsers(this.repoId, this.pickerQuery);
+        if (seq !== this._userSearchSeq) return; // superseded by a newer query
         this.pickerUsers = (out && out.users) || [];
         this.pickerTotal = (out && out.total_matching) || 0;
         this.grantByQuery = null; // a new search invalidates select-all-matching
@@ -432,9 +437,10 @@ export default {
         const visible = new Set(this.pickerUsers.map((u) => u.username));
         this.pickerSelected = new Set(Array.from(this.pickerSelected).filter((u) => visible.has(u)));
       } catch (err) {
+        if (seq !== this._userSearchSeq) return;
         this.error = this.errText(err);
       } finally {
-        this.pickerLoading = false;
+        if (seq === this._userSearchSeq) this.pickerLoading = false;
       }
     },
     togglePick(u) {

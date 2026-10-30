@@ -827,6 +827,17 @@ class FileController {
         });
       }
 
+      // The serving guard (#78744): a still-serving document refuses delete
+      // with a mapped 409, not a generic 500.
+      if (error?.statusCode === 409) {
+        return res.status(409).json({
+          success: false,
+          code: 'STILL_SERVING',
+          error: 'File is still serving the corpus',
+          message: error.message
+        });
+      }
+
       res.status(500).json({
         success: false,
         error: 'Delete failed',

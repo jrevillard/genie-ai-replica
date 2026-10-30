@@ -921,6 +921,8 @@ export default {
     // assistant time), so we arm it, then poll until the run reports done or
     // failed. Re-running is safe: existing links are kept, only new ones added.
     _stopTopicLinkPolling() {
+      // Invalidate any in-flight poll (see the epoch check in _pollTopicLinks).
+      this._topicLinkEpoch = (this._topicLinkEpoch || 0) + 1;
       if (this._topicLinkTimer) {
         clearTimeout(this._topicLinkTimer);
         this._topicLinkTimer = null;
@@ -939,7 +941,13 @@ export default {
       this._pollTopicLinks();
     },
     async _pollTopicLinks() {
+      // Epoch guard (review !622 round 10, #78746 — mirrors the PII-rescan
+      // poll's fix): an in-flight poll resolving after beforeUnmount must not
+      // re-arm the 3s tick or refresh() the dead component.
+      this._topicLinkEpoch = (this._topicLinkEpoch || 0) + 1;
+      const epoch = this._topicLinkEpoch;
       const res = await this.$store.dispatch('okf/getTopicLinkRun', { repoId: this.repoId });
+      if (epoch !== this._topicLinkEpoch) return;
       const run = res && res.ok ? res.result : null;
       if (!run) {
         this.topicLinksBusy = false;

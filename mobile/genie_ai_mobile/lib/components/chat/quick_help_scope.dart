@@ -131,7 +131,7 @@ List<String> quickHelpServiceLabelsOf(Map<String, dynamic> button) {
 /// any type hides the card, so a string-typed flag hides it on both
 /// platforms alike, and a missing one hides nothing.
 bool quickHelpButtonHidden(dynamic hidden) {
-  return hidden != null && hidden != false && hidden != 0 && hidden != '';
+  return configTruthy(hidden);
 }
 
 /// The grid's column count, from the config's `layout` block. A malformed

@@ -228,19 +228,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     }
 
     // Check for language changes and update welcome message
-    final String newWelcomeMessage = _getConfigWelcomeMessage();
-
-    if (_welcomeMessage != newWelcomeMessage) {
-      // If the first message is the welcome message, update it in the UI
-      if (_messages.isNotEmpty &&
-          _messages.first['role'] == 'assistant' &&
-          _messages.first['content'] == _welcomeMessage) {
-        setState(() {
-          _messages.first['content'] = newWelcomeMessage;
-        });
-      }
-      _welcomeMessage = newWelcomeMessage;
-    }
+    _refreshWelcomeMessage();
   }
 
   String _getConfigWelcomeMessage() {
@@ -251,18 +239,40 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       'features',
       'chat',
     ])['welcomeMessage'];
-    // The web gates the configured message on truthiness: a scalar
-    // false or an empty string is no message, and neither is a locale
-    // map that resolved to nothing — the i18n default shows instead.
-    if (welcomeConfig != null &&
-        welcomeConfig != false &&
-        welcomeConfig != '') {
+    // The web gates the configured message on truthiness
+    // (configTruthy — the ONE falsy set): a scalar false, a 0 or an
+    // empty string is no message, and neither is a locale map that
+    // resolved to nothing — the i18n default shows instead.
+    if (configTruthy(welcomeConfig)) {
       final resolved = resolveConfigText(welcomeConfig, _currentLocale);
       if (resolved.isNotEmpty) {
         return resolved;
       }
     }
     return tr('chatbot.welcomeMessage');
+  }
+
+  /// Recomputes the welcome message under the CURRENT config and locale.
+  ///
+  /// The config load is asynchronous: the first render ran before the
+  /// config was cached, and the load's completion — not only a locale
+  /// switch — must land the configured message (the web is config-ready
+  /// at mount). The first message follows only while it is still the
+  /// welcome message: a conversation the user has already moved into is
+  /// not rewritten.
+  void _refreshWelcomeMessage() {
+    final String newWelcomeMessage = _getConfigWelcomeMessage();
+    if (_welcomeMessage == newWelcomeMessage) {
+      return;
+    }
+    if (_messages.isNotEmpty &&
+        _messages.first['role'] == 'assistant' &&
+        _messages.first['content'] == _welcomeMessage) {
+      setState(() {
+        _messages.first['content'] = newWelcomeMessage;
+      });
+    }
+    _welcomeMessage = newWelcomeMessage;
   }
 
   /// The Quick Help configuration load, once started. A restore that
@@ -357,6 +367,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         if (activeTitle != null) {
           _selectedCategoryName = activeTitle;
         }
+        // The config just cached: the welcome message it declares lands
+        // now, not on the next locale switch.
+        _refreshWelcomeMessage();
       });
     } catch (e) {
       debugPrint("[CHATBOT] Failed to load genie-ai-config.json: $e");

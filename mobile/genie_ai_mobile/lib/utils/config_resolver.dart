@@ -46,3 +46,12 @@ Map<String, dynamic> configSectionOf(
   }
   return node;
 }
+
+/// Whether [value] reads as TRUE the way the web's JavaScript truthiness
+/// does — the falsy set a JSON config can carry is null, false, 0 and
+/// ''. Every config gate (the welcome message, the hidden button flag)
+/// shares this one read, so a numeric-typed typo degrades the same way
+/// on both platforms.
+bool configTruthy(dynamic value) {
+  return value != null && value != false && value != 0 && value != '';
+}

@@ -1565,6 +1565,25 @@ void main() {
     });
   });
 
+  /// The ONE JS-truthiness read a config gate does — the shared falsy
+  /// set (null, false, 0, '') every config gate on both platforms
+  /// agrees on, so a numeric-typed typo degrades the same way on each.
+  group('configTruthy', () {
+    test('a string, a map or a list reads as true', () {
+      expect(configTruthy('Hello'), isTrue);
+      expect(configTruthy({'en': 'Hello'}), isTrue);
+      expect(configTruthy([]), isTrue);
+    });
+
+    test('null, false, 0 and the empty string read as false', () {
+      expect(configTruthy(null), isFalse);
+      expect(configTruthy(false), isFalse);
+      expect(configTruthy(0), isFalse);
+      expect(configTruthy(0.0), isFalse);
+      expect(configTruthy(''), isFalse);
+    });
+  });
+
   group('quickHelpGridAspectRatio', () {
     test('a positive ratio is used as-is', () {
       expect(quickHelpGridAspectRatio({'childAspectRatio': 3.5}), 3.5);

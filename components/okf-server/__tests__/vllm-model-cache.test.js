@@ -379,13 +379,6 @@ describe('review round 4 fixes (#1181)', () => {
     expect(axios.get).toHaveBeenCalledTimes(1);
   });
 
-  test('the deployment credential honours both key spellings (chat-path parity)', async () => {
-    process.env.VLLM_LLM_API_KEY = 'llm-spelled-key';
-    axios.get.mockResolvedValue(modelsPayload('served/model'));
-    await cache.deploymentServedModelId();
-    expect(axios.get.mock.calls[0][1].headers).toEqual({ Authorization: 'Bearer llm-spelled-key' });
-  });
-
   test('sameOrigin: same host+port is one endpoint, a different host is not', () => {
     expect(cache.sameOrigin('http://vllm:8000', 'http://vllm:8000')).toBe(true);
     expect(cache.sameOrigin('http://vllm:8000/v1', 'http://vllm:8000')).toBe(true);

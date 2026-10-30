@@ -754,7 +754,6 @@ describe('vllmChatCompletions — model-id resolution (!631 policy)', () => {
     'VLLM_MODEL_ID',
     'VLLM_ENDPOINT',
     'VLLM_API_KEY',
-    'VLLM_LLM_API_KEY',
     'RAGAS_JUDGE_BASE_URL',
     'RAGAS_JUDGE_MODEL',
     'RAGAS_JUDGE_API_KEY'
@@ -930,14 +929,6 @@ describe('vllmChatCompletions — model-id resolution (!631 policy)', () => {
     axios.post.mockResolvedValue(vllmResponse('{}'));
     await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }]);
     expect(axios.get.mock.calls[0][1].headers).toEqual({});
-  });
-
-  test('the deployment probe authenticates with the VLLM_LLM_API_KEY spelling like the chat path', async () => {
-    process.env.VLLM_LLM_API_KEY = 'llm-spelled-key';
-    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/model' }] } });
-    axios.post.mockResolvedValue(vllmResponse('{}'));
-    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }]);
-    expect(axios.get.mock.calls[0][1].headers).toEqual({ Authorization: 'Bearer llm-spelled-key' });
   });
 
   test('the resolved model rides the response object (resp.model) for provenance without a second probe', async () => {

@@ -114,10 +114,13 @@ function envPinLLMSpelling() {
   return (process.env.VLLM_LLM_MODEL_ID || '').trim() || null;
 }
 
-/** The deployment credential, both spellings — the chat path accepts the
- * same pair, so the probe must not be stricter (or looser). */
+/** The deployment credential: VLLM_API_KEY, the one spelling any
+ * deployment mechanism (compose, the env template, Ansible) injects into
+ * the okf-server container. A second spelling read here would be a parity
+ * the runtime can never honor — an operator setting it would stay
+ * unauthenticated while the code (and its tests) claimed otherwise. */
 function deploymentKey() {
-  return (process.env.VLLM_API_KEY || '').trim() || (process.env.VLLM_LLM_API_KEY || '').trim() || '';
+  return (process.env.VLLM_API_KEY || '').trim();
 }
 
 /** A short, stable fingerprint of a credential — never the secret itself. */
@@ -331,6 +334,14 @@ function pruneCache() {
   const now = Date.now();
   for (const [key, value] of _negative) {
     if (now - value.ts >= NEGATIVE_CACHE_TTL * 1000) _negative.delete(key);
+  }
+  // The age sweep above only runs when a probe settles — a credential that
+  // probes once and is never used again would otherwise leave its stub for
+  // the container's lifetime (each stub carries the full failure, axios
+  // cause included). Same count bound as the id cache, same eviction: the
+  // oldest stub goes, that key re-probes.
+  while (_negative.size > MAX_CACHE_ENTRIES) {
+    _negative.delete(_negative.keys().next().value);
   }
 }
 

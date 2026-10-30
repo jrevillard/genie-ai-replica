@@ -11,7 +11,9 @@
 
 'use strict';
 
-const DEFAULT_RE = /\|\s*default\('([^']*)'\)/;
+// The boolean second arg (`default('x', true)` — fire on empty too) is not
+// part of the captured default.
+const DEFAULT_RE = /\|\s*default\('([^']*)'(?:\s*,\s*true\s*)?\)/;
 // A default expression that is itself Jinja (inline conditionals etc.) —
 // parity checks skip these; presence is still enforced.
 const JINJA_EXPR_RE = /[~?]|gpu_node_host|is defined|is not/;

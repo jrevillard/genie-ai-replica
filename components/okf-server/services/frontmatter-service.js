@@ -598,12 +598,7 @@ async function teiEmbed(inputs) {
   // future HF_TOKEN-only env (the HUGGINGFACEHUB_API_TOKEN form the
   // reranker uses at line 1432).
   const headers = { 'Content-Type': 'application/json' };
-  const hfKey =
-    process.env.HF_TOKEN ||
-    process.env.HUGGINGFACEHUB_API_TOKEN ||
-    process.env.VLLM_API_KEY ||
-    process.env.VLLM_LLM_API_KEY ||
-    '';
+  const hfKey = process.env.HF_TOKEN || process.env.HUGGINGFACEHUB_API_TOKEN || process.env.VLLM_API_KEY || '';
   if (hfKey) headers.Authorization = 'Bearer ' + hfKey;
   const decode = (resp) => {
     // TEI returns either {data: [[...], ...]} (batched) or [...] depending on shape

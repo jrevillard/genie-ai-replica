@@ -550,7 +550,7 @@ describe('taxonomy spelling — services.nameEN vs the bounded list the LLM uses
 // chat call carry the SAME credential.
 describe('curation callVllm — model-id resolution (!631 policy)', () => {
   const cache = require('../services/vllm-model-cache');
-  const ENV_KEYS = ['VLLM_MODEL_ID', 'VLLM_API_KEY', 'VLLM_LLM_API_KEY'];
+  const ENV_KEYS = ['VLLM_MODEL_ID', 'VLLM_API_KEY'];
   let saved = {};
 
   beforeEach(() => {
@@ -618,21 +618,5 @@ describe('curation callVllm — model-id resolution (!631 policy)', () => {
       expect.objectContaining({ model: 'frontier/served' }),
       expect.anything()
     );
-  });
-
-  it('VLLM_LLM_API_KEY only: the chat call authenticates like the probe', async () => {
-    delete process.env.VLLM_MODEL_ID;
-    delete process.env.VLLM_API_KEY;
-    process.env.VLLM_LLM_API_KEY = 'llm-spelled-key';
-    cache.clearModelCache();
-    mockDb = makeDb([metaRow()], []);
-    axios.get.mockReset();
-    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/curator-8b' }] } });
-    axios.post.mockReset();
-    llmReply({ type: 'entity', label: 'Culture', summary: 's' });
-    await service.curateRepoConcepts(REPO, { classification: 'llm' });
-    expect(axios.get.mock.calls[0][1].headers).toEqual({ Authorization: 'Bearer llm-spelled-key' });
-    const [, , cfg] = axios.post.mock.calls[0];
-    expect(cfg.headers.Authorization).toBe('Bearer llm-spelled-key');
   });
 });

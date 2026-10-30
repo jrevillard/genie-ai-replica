@@ -970,8 +970,10 @@ async function suggestTags(repoId, _opts = {}) {
       labels_represented: coverage.labels_represented,
       vllm_host: modelCache.deploymentVllmBase(),
       // The PIN (null when the model is discovered) — the model that
-      // actually answered is logged by frontmatter.suggest.done.
-      model: modelCache.envPin(),
+      // actually answered is logged by frontmatter.suggest.done. Its own
+      // key: under `model` the start line read "model:null" on the common
+      // (discovered) path, which reads like "no model was configured".
+      model_pin: modelCache.envPin(),
       prompt_chars: prompt.length
     });
     // maxTokens 1000 was NOT headroom, it was a live failure: on a 586-concept

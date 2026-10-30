@@ -491,9 +491,11 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     const siblings = await loadSiblingContext(db, repoId);
 
     const llm = { positive: [], negative: [], off_domain: [], meta: [], near_miss: [], keywords: [] };
-    // Provenance: the model the generation calls actually used (stamped
+    // Provenance: the models the generation calls actually used (stamped
     // on each response by vllmChatCompletions) — kept for the suite doc.
-    let lastGenModel = null;
+    // A suite spans many calls: a TTL expiry (or a model change) mid-suite
+    // means two models produced it, and the label must say so.
+    const genModels = new Set();
     try {
       // temperature 0.7 (not the extraction default 0.0) — adversarial
       // negatives must VARY generation to generation. Story 1-8f: the ask
@@ -552,7 +554,7 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
           maxTokens: Math.min(6000, 500 + 34 * rowsInCall),
           temperature: 0.7
         });
-        if (resp.model) lastGenModel = resp.model;
+        if (resp.model) genModels.add(resp.model);
         const content = resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message;
         const parsed = parseJsonObject(content && content.content);
         const before =
@@ -685,7 +687,7 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         // 'none' when no generation call ran or none of them carried a
         // stamp: the suite then holds the deterministic fallback rows, and
         // naming any model there would be a lie.
-        generator: lastGenModel ? `llm:${lastGenModel}` : 'none',
+        generator: genModels.size ? [...genModels].map((m) => `llm:${m}`).join(',') : 'none',
         sibling_names: siblings.map((s) => s.name),
         off_domain_topics: randomTopics,
         // Story 1-8d — the forbidden list this suite was generated against.

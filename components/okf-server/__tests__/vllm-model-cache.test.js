@@ -138,6 +138,17 @@ describe('TTL cache', () => {
     expect(axios.get).toHaveBeenCalledTimes(2);
   });
 
+  test('a fractional TTL falls back to the default (the Python twin raises on it)', async () => {
+    // int('0.5') raises ValueError in Python → the twin keeps its 60 s
+    // window. A truncated 0 would disable the cache here (a probe per call).
+    process.env.MODEL_DETECT_TTL = '0.5';
+    mockProbeSuccess('served/model');
+    await cache.resolveVllmModelId('http://vllm:8000');
+    Date.now.mockReturnValue(1_000_000 + 30_000);
+    await cache.resolveVllmModelId('http://vllm:8000');
+    expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
   test('failed probe serves the stale cached id instead of throwing', async () => {
     mockProbeSuccess('served/model');
     await cache.resolveVllmModelId('http://vllm:8000');
@@ -146,6 +157,49 @@ describe('TTL cache', () => {
     // Mirror of model_cache.py: stale is better than broken — model_id
     // consumers keep retrying (no negative cache, #1127 stays deferred).
     await expect(cache.resolveVllmModelId('http://vllm:8000')).resolves.toBe('served/model');
+  });
+
+  test('the stale id survives the FAILED probe — the next caller still gets it', async () => {
+    mockProbeSuccess('served/model');
+    await cache.resolveVllmModelId('http://vllm:8000');
+    Date.now.mockReturnValue(1_000_000 + 61_000);
+    axios.get = jest.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).resolves.toBe('served/model');
+    // The call AFTER the failure must NOT throw: the last known id is still
+    // known and still served (the Python twin never prunes it either).
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).resolves.toBe('served/model');
+  });
+
+  test('the cache is bounded — an ancient entry is evicted (the map never grows without bound)', async () => {
+    // A long-lived okf-server sees one base per model config it ever had:
+    // the map must not grow forever. The bound is by COUNT, never by age —
+    // an entry that is merely old still holds the last known model id.
+    mockProbeSuccess('served/model');
+    await cache.resolveVllmModelId('http://vllm:8000/base-0');
+    for (let i = 1; i <= 200; i += 1) {
+      await cache.resolveVllmModelId(`http://vllm:8000/base-${i}`);
+    }
+    expect(axios.get).toHaveBeenCalledTimes(201);
+    // The first entry is long gone → its next call probes again.
+    axios.get.mockClear();
+    await cache.resolveVllmModelId('http://vllm:8000/base-0');
+    expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('a concurrent caller with an ample budget keeps its own probe', async () => {
+    // The tight-budget caller (the best-effort summary leg) must not narrow
+    // the probe of a concurrent caller that has room for a full one.
+    process.env.MODEL_PROBE_TIMEOUT_SECONDS = '30000';
+    const timeouts = [];
+    axios.get = jest.fn().mockImplementation((url, opts) => {
+      timeouts.push(opts.timeout);
+      return Promise.resolve(modelsPayload('served/model'));
+    });
+    await Promise.all([
+      cache.resolveVllmModelId('http://vllm:8000', { timeoutMs: 1000 }),
+      cache.resolveVllmModelId('http://vllm:8000', { timeoutMs: 30000 })
+    ]);
+    expect(Math.max(...timeouts)).toBe(30000);
   });
 });
 
@@ -382,6 +436,25 @@ describe('final review fixes (#1181)', () => {
     expect(cache.sameOrigin('http://vllm:8000', 'http://vllm:8000/v1')).toBe(true);
     expect(cache.sameOrigin('http://vllm:8000', 'http://vllm:8000/tenant-b')).toBe(false);
     expect(cache.sameOrigin('http://gpu:8000/llm', 'http://gpu:8000/llm/v1')).toBe(true);
+  });
+});
+
+describe('review round 3 — the probe failure is actionable (#1181)', () => {
+  test('the discovery error names the CAUSE, not just the URL', async () => {
+    axios.get.mockRejectedValue(
+      Object.assign(new Error('Request failed with status code 401'), { response: { status: 401 } })
+    );
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toThrow(/401/);
+  });
+
+  test('a refused connection is retried (the chat path retries it too)', async () => {
+    axios.get.mockRejectedValue(
+      Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:8000'), { code: 'ECONNREFUSED' })
+    );
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({
+      name: 'ModelDiscoveryError'
+    });
+    expect(axios.get).toHaveBeenCalledTimes(3);
   });
 });
 

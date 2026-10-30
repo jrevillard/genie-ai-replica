@@ -844,6 +844,24 @@ describe('vllmChatCompletions — model-id resolution (!631 policy)', () => {
     expect(axios.post.mock.calls[0][1].model).toBe('frontier/served');
   });
 
+  test('suggest.start names the PIN under its own key (the tagging model is logged by suggest.done)', async () => {
+    seedDb();
+    delete process.env.VLLM_LLM_MODEL_ID;
+    delete process.env.VLLM_MODEL_ID;
+    modelCache.clearModelCache();
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/tagger-8b' }] } });
+    axios.post.mockResolvedValue(vllmResponse(JSON.stringify({ topic: ['x'], forbidden: [], summary: '' })));
+    await svc.suggestTags(REPO_ID);
+    const logger = require('../shared-lib/logger').logger;
+    const start = [...logger.info.mock.calls].reverse().find((c) => c[0] === 'frontmatter.suggest.start');
+    expect(start).toBeTruthy();
+    // The PIN is not the model that tags (that one is DISCOVERED): it must not
+    // travel under the `model` key, or the start line reads "model:null" and
+    // reads like "no model was configured".
+    expect(start[1]).toHaveProperty('model_pin');
+    expect(start[1]).not.toHaveProperty('model');
+  });
+
   test('suggest.done names the model that actually tagged (cache read, no second probe)', async () => {
     seedDb();
     delete process.env.VLLM_LLM_MODEL_ID;
@@ -962,40 +980,42 @@ describe('vllmChatCompletions — model-id resolution (!631 policy)', () => {
     const [, , cfg] = axios.post.mock.calls[0];
     expect(cfg.headers.Authorization).toBeUndefined();
   });
-});
 
-it('env judge without a named judge key: the deployment credential applies (the judge base is operator-configured)', async () => {
-  process.env.VLLM_API_KEY = 'deployment-secret';
-  process.env.RAGAS_JUDGE_BASE_URL = 'http://vllm:8000/v1';
-  axios.post.mockResolvedValue(vllmResponse('{}'));
-  await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }], { config: null });
-  const [, , cfg] = axios.post.mock.calls[0];
-  expect(cfg.headers.Authorization).toBe('Bearer deployment-secret');
-});
-
-it('env judge with NO judge base: the call stays on the deployment endpoint, with the deployment credential', async () => {
-  process.env.VLLM_API_KEY = 'deployment-secret';
-  axios.post.mockResolvedValue(vllmResponse('{}'));
-  await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }], { config: null });
-  const [, , cfg] = axios.post.mock.calls[0];
-  expect(cfg.headers.Authorization).toBe('Bearer deployment-secret');
-});
-
-it('a named config ON the deployment endpoint, with no model: the deployment PIN applies', async () => {
-  const modelConfig = require('../services/model-config-service');
-  process.env.VLLM_MODEL_ID = 'pinned/deployment-model';
-  process.env.VLLM_ENDPOINT = 'http://vllm:8000';
-  modelConfig.resolveModelOverride.mockResolvedValueOnce({
-    provider: 'openai',
-    base_url: 'http://vllm:8000/v1',
-    model: null,
-    api_key: '',
-    source: 'active',
-    config_key: 'mc8',
-    config_name: 'Deployment (modelless)'
+  it('env judge without a named judge key: the deployment credential applies (the judge base is operator-configured)', async () => {
+    process.env.VLLM_API_KEY = 'deployment-secret';
+    process.env.RAGAS_JUDGE_BASE_URL = 'http://vllm:8000/v1';
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/deployed-8b' }] } });
+    axios.post.mockResolvedValue(vllmResponse('{}'));
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }], { config: null });
+    const [, , cfg] = axios.post.mock.calls[0];
+    expect(cfg.headers.Authorization).toBe('Bearer deployment-secret');
   });
-  axios.post.mockResolvedValue(vllmResponse('{}'));
-  await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }]);
-  expect(axios.get).not.toHaveBeenCalled(); // the pin answers it
-  expect(axios.post.mock.calls[0][1].model).toBe('pinned/deployment-model');
+
+  it('env judge with NO judge base: the call stays on the deployment endpoint, with the deployment credential', async () => {
+    process.env.VLLM_API_KEY = 'deployment-secret';
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/deployed-8b' }] } });
+    axios.post.mockResolvedValue(vllmResponse('{}'));
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }], { config: null });
+    const [, , cfg] = axios.post.mock.calls[0];
+    expect(cfg.headers.Authorization).toBe('Bearer deployment-secret');
+  });
+
+  it('a named config ON the deployment endpoint, with no model: the deployment PIN applies', async () => {
+    const modelConfig = require('../services/model-config-service');
+    process.env.VLLM_MODEL_ID = 'pinned/deployment-model';
+    process.env.VLLM_ENDPOINT = 'http://vllm:8000';
+    modelConfig.resolveModelOverride.mockResolvedValueOnce({
+      provider: 'openai',
+      base_url: 'http://vllm:8000/v1',
+      model: null,
+      api_key: '',
+      source: 'active',
+      config_key: 'mc8',
+      config_name: 'Deployment (modelless)'
+    });
+    axios.post.mockResolvedValue(vllmResponse('{}'));
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }]);
+    expect(axios.get).not.toHaveBeenCalled(); // the pin answers it
+    expect(axios.post.mock.calls[0][1].model).toBe('pinned/deployment-model');
+  });
 });

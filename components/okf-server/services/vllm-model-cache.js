@@ -52,7 +52,6 @@ const { logger } = require('../shared-lib/logger');
 // Deep import: the shared barrel pulls the security middleware (express
 // rate limiting, geoip) — heavyweight for a leaf helper (see
 // components/CLAUDE.md "When deep imports are unavoidable").
-const { parsePositiveInt } = require('../shared-lib/validation-utils');
 const { openAiModelsUrl } = require('./llm-url');
 
 const MODEL_TTL_DEFAULT_SECONDS = 60;
@@ -62,6 +61,10 @@ const PROBE_TIMEOUT_DEFAULT_MS = 10000;
 // window instead of one per call) while keeping a transient blip from
 // turning into a minute of loud failures.
 const NEGATIVE_CACHE_TTL = 10;
+// The maps are bounded by COUNT, not by age (see pruneCache): an expired
+// entry still holds the last known model id, and that id is what a failing
+// probe serves.
+const MAX_CACHE_ENTRIES = 64;
 
 /** Raised when a model id is required but nothing answers. Mirrors
  * core.model_cache.ModelDiscoveryError. */
@@ -116,7 +119,15 @@ function ttlSeconds() {
   // The repo's ONE env-int policy (components/shared/lib/validation-utils).
   // Divergence from the Python twin: a NEGATIVE TTL falls back to the
   // default here, while Python would cache-always-expire.
-  return parsePositiveInt(process.env.MODEL_DETECT_TTL, MODEL_TTL_DEFAULT_SECONDS);
+  // The Python twin: int(os.getenv('MODEL_DETECT_TTL', 60)) — a fractional
+  // or garbage value RAISES there and falls back to the default. parseInt
+  // would truncate '0.5' to 0 and silently disable the cache (a probe per
+  // call) where the twin keeps its 60 s window.
+  const raw = (process.env.MODEL_DETECT_TTL || '').trim();
+  if (!raw) return MODEL_TTL_DEFAULT_SECONDS;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) return MODEL_TTL_DEFAULT_SECONDS;
+  return value;
 }
 
 function probeTimeoutMs() {
@@ -132,6 +143,7 @@ function probeTimeoutMs() {
 // the whole LLM leg, while the chat call would have recovered.
 const RETRIABLE_PROBE_CODES = new Set([
   'ECONNABORTED',
+  'ECONNREFUSED', // the endpoint is not up yet — the chat path retries it
   'ECONNRESET',
   'EPIPE',
   'ETIMEDOUT',
@@ -166,8 +178,7 @@ async function probe(url, timeoutMs, apiKey) {
     // The probe timeout is the ENV ceiling (MODEL_PROBE_TIMEOUT_SECONDS)
     // and it bounds the WHOLE probe (a deadline), not one attempt: a
     // caller's own budget may only tighten it.
-    const ceiling = probeTimeoutMs();
-    const budgetMs = timeoutMs ? Math.min(timeoutMs, ceiling) : ceiling;
+    const budgetMs = effectiveProbeBudget(timeoutMs);
     const deadline = Date.now() + budgetMs;
     let r;
     for (let attempt = 0; attempt < PROBE_ATTEMPTS; attempt += 1) {
@@ -203,10 +214,24 @@ async function probe(url, timeoutMs, apiKey) {
       return id;
     }
     logger.warn('vllm_model_cache.no_models', { url });
+    throw new Error('the endpoint listed no model');
   } catch (e) {
     logger.warn('vllm_model_cache.probe_failed', { url, error: e.message });
+    throw probeFailure(url, e);
   }
-  return null;
+}
+
+/** The probe budget: the ENV ceiling, tightened by the caller's own budget.
+ * One rule, so the probe and the in-flight key cannot disagree. */
+function effectiveProbeBudget(timeoutMs) {
+  const ceiling = probeTimeoutMs();
+  return timeoutMs ? Math.min(timeoutMs, ceiling) : ceiling;
+}
+
+/** The in-flight key carries the probe budget (in seconds): a caller with a
+ * tight budget must not narrow the probe a concurrent caller is waiting on. */
+function probeBudgetBucket(timeoutMs) {
+  return Math.ceil(effectiveProbeBudget(timeoutMs) / 1000);
 }
 
 /** get_model_id twin: served id for baseUrl, TTL-cached, stale-served on
@@ -228,39 +253,59 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
   // A recent failure is remembered: answer without touching the network.
   const failed = _negative.get(cacheKey);
   if (failed && Date.now() - failed.ts < NEGATIVE_CACHE_TTL * 1000) {
-    return entry ? entry.id : null; // stale beats broken, null beats a storm
+    const stale = entry ? entry.id : null;
+    if (stale) return stale; // stale beats broken
+    throw failed.cause || discoveryError(modelsUrl);
   }
 
-  // Concurrent callers share ONE probe.
-  let pending = _inflight.get(cacheKey);
+  // Concurrent callers share ONE probe — per probe BUDGET: the first
+  // caller's budget must not narrow a concurrent caller's probe (the
+  // best-effort summary leg probes for 1 s while a tagging call may wait 30 s).
+  const probeKey = `${cacheKey}|${probeBudgetBucket(timeoutMs)}`;
+  let pending = _inflight.get(probeKey);
   if (!pending) {
     pruneCache();
-    pending = probe(modelsUrl, timeoutMs, apiKey).then((id) => {
-      if (id) {
+    pending = probe(modelsUrl, timeoutMs, apiKey)
+      .then((id) => {
+        // delete+set: the refreshed entry becomes the newest, so the
+        // count-bounded prune drops the OLDEST one first.
+        _cache.delete(cacheKey);
         _cache.set(cacheKey, { id, ts: Date.now() });
         _negative.delete(cacheKey);
-      } else {
-        _negative.set(cacheKey, { ts: Date.now() });
-      }
-      _inflight.delete(cacheKey);
-      return id;
-    });
-    _inflight.set(cacheKey, pending);
+        _inflight.delete(probeKey);
+        return id;
+      })
+      .catch((err) => {
+        _negative.set(cacheKey, { ts: Date.now(), cause: err });
+        _inflight.delete(probeKey);
+        throw err;
+      });
+    _inflight.set(probeKey, pending);
   }
-  const id = await pending;
-  if (id) return id;
-  return entry ? entry.id : null; // stale is better than broken
+  try {
+    return await pending;
+  } catch (err) {
+    // The probe failed: serve the last known id when there is one (stale >
+    // broken — the Python twin keeps it too), else let the cause through.
+    const stale = entry ? entry.id : null;
+    if (stale) return stale;
+    throw err;
+  }
 }
 
 /** Drop the entries that no caller can use any more (the maps live for the
  * container's lifetime; a long-lived okf-server must not accumulate one
- * entry per model config it ever saw). */
+ * entry per model config it ever saw).
+ *
+ * Bound by COUNT, never by age: an expired entry still holds the last known
+ * model id, and that id is what a failing probe serves (stale > broken —
+ * the Python twin keeps it too). Dropping it on age would turn a probe blip
+ * into a 503 for every call in the cool-down window. */
 function pruneCache() {
-  const now = Date.now();
-  const ttlMs = ttlSeconds() * 1000;
-  for (const [key, value] of _cache) {
-    if (now - value.ts >= ttlMs) _cache.delete(key);
+  while (_cache.size > MAX_CACHE_ENTRIES) {
+    _cache.delete(_cache.keys().next().value); // the oldest insertion first
   }
+  const now = Date.now();
   for (const [key, value] of _negative) {
     if (now - value.ts >= NEGATIVE_CACHE_TTL * 1000) _negative.delete(key);
   }
@@ -271,6 +316,19 @@ function discoveryError(modelsUrl) {
   return new ModelDiscoveryError(
     `no model id discovered at ${modelsUrl} — the endpoint must answer the model-id probe (or the model must be set where the call is configured)`
   );
+}
+
+/** The probe's failure, actionable: the CAUSE (401, 404, DNS) reaches the
+ * caller instead of a bare "no model id" — the operator must be able to tell
+ * "the credential is stale" from "the endpoint has no /v1/models route". */
+function probeFailure(modelsUrl, cause) {
+  const status = cause && cause.response && cause.response.status;
+  const detail = status ? `HTTP ${status}` : (cause && cause.code) || (cause && cause.message) || 'no answer';
+  const err = new ModelDiscoveryError(
+    `no model id discovered at ${modelsUrl} — the endpoint must answer the model-id probe (${detail})`
+  );
+  err.cause = cause;
+  return err;
 }
 
 /** require_model_id twin: the served id, loudly — the pin is deliberately
@@ -359,7 +417,11 @@ function optedInVllmBase() {
  * unauthenticated probe 401s on secured endpoints and silently defeats
  * the label). Null when nothing answers. */
 async function deploymentServedModelId({ timeoutMs } = {}) {
-  return getServedModelId(deploymentVllmBase(), { apiKey: deploymentKey(), timeoutMs });
+  try {
+    return await getServedModelId(deploymentVllmBase(), { apiKey: deploymentKey(), timeoutMs });
+  } catch {
+    return null; // soft: the caller labels the answer, it does not fail on it
+  }
 }
 
 /** Same ENDPOINT (protocol + host + port + compatible path) — the

@@ -2267,6 +2267,27 @@ describe('suite generator — model-id provenance (!631 policy)', () => {
     expect(s.payload.generator).toBe('none');
   });
 
+  it('the label names EVERY model that generated the suite', async () => {
+    // A suite spans many generation calls: a TTL expiry (or a model change)
+    // mid-suite means two models produced it. The label must say so.
+    delete process.env.VLLM_MODEL_ID;
+    delete process.env.VLLM_LLM_MODEL_ID;
+    delete process.env.VLLM_ENDPOINT;
+    require('axios').get.mockResolvedValue({ data: { data: [{ id: 'served/suite-8b' }] } });
+    __mockDb.query.mockResolvedValue({ all: async () => [] });
+    const body = llmResponse({
+      positive: [{ query: 'What is the licensing fee?', reason: 'topic hit' }],
+      negative: [],
+      keywords: []
+    });
+    frontmatterService.vllmChatCompletions
+      .mockResolvedValueOnce({ ...body, model: 'served/first-8b' })
+      .mockResolvedValueOnce({ ...body, model: 'served/second-8b' })
+      .mockResolvedValue({ ...body, model: 'served/second-8b' });
+    const s = await svc.generateSuite('me', {}, {});
+    expect(s.payload.generator).toBe('llm:served/first-8b,llm:served/second-8b');
+  });
+
   it('the label names the model the generation calls stamped (no probe, no placeholder)', async () => {
     delete process.env.VLLM_MODEL_ID;
     delete process.env.VLLM_LLM_MODEL_ID;

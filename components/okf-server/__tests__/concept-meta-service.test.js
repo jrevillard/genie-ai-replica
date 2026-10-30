@@ -4,8 +4,12 @@
 // FAIL against the current code (no writer exists; persistConformanceIssues is
 // a filter-and-UPDATE silent no-op) and PASS after T1+T2.
 
+// axios is mocked at the TOP level, not inside the factory below: a
+// jest.mock inside a factory only takes effect when that factory first
+// runs, so the service captured the REAL axios whenever the import order
+// changed (a real HTTP call to the configured endpoint in the unit suite).
+jest.mock('axios');
 jest.mock('../shared-lib/db-connection-service', () => {
-  jest.mock('axios');
   const mockDb = require('./mocks/arango-mock').createMockDb();
   return { getConnection: jest.fn(() => Promise.resolve(mockDb)), __mockDb: mockDb };
 });

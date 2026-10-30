@@ -1056,8 +1056,9 @@ describe('Configuration Validation Suite', () => {
   // family sat outside the gate, and env.j2's `{% if %}` guards meant the vars
   // carried no literal default for the comparison to read.
   //
-  // The budget is now derived from VLLM_MAX_MODEL_LEN, which makes agreement
-  // between these surfaces load-bearing rather than cosmetic.
+  // The budget is now derived from the serving model's discovered window,
+  // which makes agreement between these surfaces load-bearing rather than
+  // cosmetic.
   describe('AC8: Contextual Retrieval defaults agree across compose and ansible', () => {
     const composeLines = fs.readFileSync(COMPOSE_FILE, 'utf8').split(/\r?\n/);
     const blockStart = composeLines.findIndex((l) => /^  dataprep-arango-service:/.test(l));
@@ -1077,6 +1078,7 @@ describe('Configuration Validation Suite', () => {
     const FAMILY = [
       'DATAPREP_CONTEXTUAL_DOC_BUDGET',
       'DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL',
+      'DATAPREP_MAX_MODEL_LEN',
       'DATAPREP_CONTEXTUAL_MAX_TOKENS',
       'CONTEXTUAL_STRATEGY',
       'CONTEXTUAL_RETRIEVAL_ENABLED',
@@ -1108,9 +1110,10 @@ describe('Configuration Validation Suite', () => {
     });
 
     test('the doc-context budget is derived, not a fixed literal', () => {
-      // 0 = derive from VLLM_MAX_MODEL_LEN. A non-zero compose default would
-      // silently reinstate the one-number-for-every-hardware bug, because
-      // compose ALWAYS injects the variable — so "unset" never reaches Python.
+      // 0 = derive from the serving model's discovered window. A non-zero
+      // compose default would silently reinstate the one-number-for-every-
+      // hardware bug, because compose ALWAYS injects the variable — so
+      // "unset" never reaches Python.
       expect(composeDefaults.DATAPREP_CONTEXTUAL_DOC_BUDGET).toBe('0');
     });
 
@@ -1128,9 +1131,11 @@ describe('Configuration Validation Suite', () => {
 
     test('the concept-document ceiling agrees across compose and env.j2', () => {
       // okf-server splits a concept document above this; dataprep truncates the
-      // document context above the budget derived from VLLM_MAX_MODEL_LEN. If
-      // these two drift apart the corpus silently degrades again — documents get
-      // stored that will be truncated, or split that did not need it.
+      // document context above the budget it derives from the window the
+      // endpoint serves at runtime. The two are NOT derived from one source —
+      // this one is a literal — so the invariant "they stay in step" is the
+      // operator's to keep by hand. What this test CAN assert is that both
+      // deployment surfaces state the same literal.
       const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
       const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
       const m = okfBlock.match(/- OKF_MAX_CONCEPT_DOC_CHARS=\$\{OKF_MAX_CONCEPT_DOC_CHARS:-(\d+)\}/);

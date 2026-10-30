@@ -12,6 +12,7 @@ except ModuleNotFoundError:  # Windows dev checkout: locking degrades to a no-op
 import json
 import os
 import re
+import threading
 import time
 from contextlib import suppress
 from typing import Any
@@ -19,7 +20,7 @@ from typing import Any
 import aiohttp
 from opentelemetry import propagate
 
-from core.model_cache import resolve_model_id
+from core.model_cache import MAX_SANE_MODEL_WINDOW_TOKENS, get_max_model_len, get_model_id, resolve_model_id
 from core.model_http_policy import (
     AIOHTTP_CONNECT_TIMEOUT_SECONDS,
     CONTROL_PLANE_TIMEOUT_SECONDS,
@@ -254,6 +255,68 @@ from pydantic import ValidationError  # Import Pydantic validation error
 from rank_bm25 import BM25Okapi
 
 logger = CustomLogger("GENIE_DATAPREP_ARANGODB")
+
+
+def _env_int(name: str, default: int) -> int:
+    """Parse an int env var tolerantly: unset, empty (compose's default
+    injection) or non-numeric all fall back to the default instead of
+    crash-looping the service at import."""
+    try:
+        return int(os.getenv(name) or default)
+    except ValueError:
+        return default
+
+
+def _sanitize_output_tokens(value: int, default: int) -> int:
+    """Return a usable output-token reservation.
+
+    0 or a negative value is not a reservation: it inflates the derived
+    budget (the reservation is subtracted) AND reaches the API as
+    ``max_tokens``, which it rejects. An absurd value would reserve more
+    than any window holds. Both fall back to the default, loudly.
+    """
+    if value <= 0:
+        logger.warning(
+            f"DATAPREP_CONTEXTUAL_MAX_TOKENS={value} is not an output reservation — using the default "
+            f"({default}); the request would carry an invalid max_tokens."
+        )
+        return default
+    if value > 32768:
+        logger.warning(
+            f"DATAPREP_CONTEXTUAL_MAX_TOKENS={value} exceeds any context window — using the default ({default})."
+        )
+        return default
+    return value
+
+
+def _sanitize_window_override(value: int) -> int:
+    """Return a usable window size, or 0 for "unset".
+
+    A negative value is not a window (it would silently disable the
+    override) and an absurd one exceeds every real model — a budget sized
+    for it overflows every window and the calls fall back to raw chunks
+    silently. Both are corrected here, loudly: the operator learns their
+    setting was not what they wrote.
+    """
+    if value < 0:
+        logger.warning(
+            f"DATAPREP_MAX_MODEL_LEN={value} is not a window size — treating it as unset (the served "
+            f"window is discovered at runtime instead)."
+        )
+        return 0
+    if value > MAX_SANE_MODEL_WINDOW_TOKENS:
+        # Clamping to "the largest sane window" is not a guard: 10 million
+        # tokens still overflows every real model, silently. An absurd value
+        # is treated as UNSET, so discovery answers instead.
+        logger.warning(
+            f"DATAPREP_MAX_MODEL_LEN={value} exceeds the largest sane context window "
+            f"({MAX_SANE_MODEL_WINDOW_TOKENS}) — treating it as unset, so the served window is "
+            f"discovered instead; a budget sized for {value} would overflow every real window."
+        )
+        return 0
+    return value
+
+
 setup_trace_logging("GENIE_DATAPREP_ARANGODB")
 setup_json_logging("GENIE_DATAPREP_ARANGODB")
 install_uvicorn_access_logging()
@@ -499,9 +562,11 @@ DEGRADED_REMEDIES = {
         "be reachable and the model must support guided JSON (response_format=json_object)."
     ),
     DEGRADED_WINDOW_TOO_SMALL: (
-        "{phase}: VLLM_MAX_MODEL_LEN leaves no room for a document context once the system prompt, the "
-        "batch chunk text and the per-chunk output reservation are subtracted, so this document was "
-        "ingested without contexts. Raising a budget will not help — raise VLLM_MAX_MODEL_LEN, lower "
+        "{phase}: the serving model's context window leaves no room for a document context once the "
+        "system prompt, the batch chunk text and the per-chunk output reservation are subtracted, so "
+        "this document was ingested without contexts. Raising a budget will not help — set "
+        "DATAPREP_MAX_MODEL_LEN to the window the endpoint serves (the only lever when it does not "
+        "expose max_model_len), raise the model window on the GPU (vLLM --max-model-len), lower "
         "DATAPREP_LLM_LABEL_BATCH_SIZE or DATAPREP_CONTEXTUAL_MAX_TOKENS, or pin "
         "DATAPREP_CONTEXTUAL_DOC_BUDGET to a value you know fits."
     ),
@@ -612,33 +677,45 @@ DATAPREP_CONTEXTUAL_MODEL = os.getenv("DATAPREP_CONTEXTUAL_MODEL", "")
 # the T4 profile's 2048-token window and then applied to EVERY deployment —
 # including the default, which runs a 65536-token window where it uses ~4% of
 # what is available. Wrong in both directions at once. It is now DERIVED from
-# the serving model's window (see _resolve_doc_budget), and this variable is
-# only an operator override:
+# the serving model's window, discovered at runtime from the LLM endpoint (see
+# _serving_model_window / _resolve_doc_budget), and this variable is only an
+# operator override:
 #
-#   unset / 0 -> derive from VLLM_MAX_MODEL_LEN
+#   unset / 0 -> derive from the discovered serving-model window
 #   > 0       -> explicit operator override
 #   < 0       -> explicitly disable truncation
 #
 # Deriving per install is the fix; a single literal cannot be correct for a T4
 # (2048) and a default install (65536) at the same time.
-DATAPREP_CONTEXTUAL_DOC_BUDGET = int(os.getenv("DATAPREP_CONTEXTUAL_DOC_BUDGET", "0") or 0)
+DATAPREP_CONTEXTUAL_DOC_BUDGET = _env_int("DATAPREP_CONTEXTUAL_DOC_BUDGET", 0)
 # ~4 chars/token for English prose + markdown. Same figure the budget comment
 # above has always used; the clamp in _resolve_doc_budget absorbs the error.
 CHARS_PER_TOKEN = 4
-# Per-item scaffolding in the batched user turn — json.dumps of
-# {"index": i, "text": "..."} adds a key, quotes and escaping on top of the raw
-# chunk text. Measured generously; it only ever shrinks the derived budget.
-JSON_ITEM_OVERHEAD_CHARS = 64
-# When the model window is unknown, assume the SMALLEST profile we support.
-# A budget that only fits on hardware nobody runs fails closed; defaulting to
+# The document context the LLM receives is the budgeted document text PLUS
+# the lines around it: the filename line, the labels line, this header and
+# the truncation marker. None of that is inside the budget, so it is
+# measured and reserved separately — a request sized without it overflows
+# the window by exactly those characters. The filename and the labels are
+# per document and unbounded (a long file name, a long label list), so the
+# reservation is computed, not guessed: see _doc_context_scaffold_chars.
+DOC_CONTEXT_HEADER = "Document content (may be truncated):\n"
+DOC_CONTEXT_TRUNCATION_MARKER = "...[truncated]"
+# The user turn of the doc_level call (the same string the request sends).
+DOC_LEVEL_USER_TURN = "Write the document-level context."
+# When window discovery has no answer (endpoint unreachable, or a strict
+# OpenAI-compatible provider that does not expose max_model_len), assume the
+# SMALLEST profile we support — and say so (see _serving_model_window). A
+# budget that only fits on hardware nobody runs fails closed; defaulting to
 # the largest window would silently produce prompts the GPU cannot accept.
 DERIVE_FALLBACK_WINDOW = 2048
 # Doc-context budget for the doc_level strategy (ONE call, so it can afford a
-# much larger window than per_chunk). ~4 chars/token; keep below the model's
-# VLLM_MAX_MODEL_LEN minus prompt/output overhead. Docs larger than this (or the
-# model window) are truncated — Map-Reduce hierarchical summarization is the
+# much larger window than per_chunk). ~4 chars/token. This is a MAXIMUM: the
+# window the endpoint serves caps it, so the 100000-char default cannot
+# overflow a deployment that serves less (a rejected call falls back to raw
+# chunks silently). Set 0 to let the window decide entirely. Docs larger than
+# the budget are truncated — Map-Reduce hierarchical summarization is the
 # future fix for that case.
-DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL = int(os.getenv("DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL", "100000"))
+DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL = _env_int("DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL", 100000)
 # Strategy when CONTEXTUAL_RETRIEVAL_ENABLED=true:
 #   "per_chunk" (default) — one LLM call per chunk; each chunk gets a context
 #      tailored to its section (Anthropic recipe; highest quality, N calls/doc).
@@ -656,7 +733,16 @@ CONTEXTUAL_LABEL_RAW = os.getenv("CONTEXTUAL_LABEL_RAW", "true").lower() == "tru
 # legacy hard cap of 200 left no headroom, so under concurrent vLLM load the JSON
 # `{"context":"..."}` was truncated mid-string -> JSONDecodeError -> raw-chunk
 # fallback. 512 gives comfortable margin at no extra cost (the model stops early).
-CONTEXTUAL_MAX_TOKENS = int(os.getenv("DATAPREP_CONTEXTUAL_MAX_TOKENS", "512"))
+CONTEXTUAL_MAX_TOKENS = _sanitize_output_tokens(_env_int("DATAPREP_CONTEXTUAL_MAX_TOKENS", 512), 512)
+
+
+# Explicit statement of the context window (tokens) the LLM endpoint serves.
+# 0 = discover it at runtime from the endpoint (see _serving_model_window);
+# >0 = the deployer states it. The override is the only lever on a strict
+# OpenAI-compatible provider (its /v1/models carries no max_model_len, so
+# discovery never answers) and the way to state the window of a
+# DATAPREP_CONTEXTUAL_MODEL that is not the model the endpoint lists first.
+DATAPREP_MAX_MODEL_LEN = _sanitize_window_override(_env_int("DATAPREP_MAX_MODEL_LEN", 0))
 
 # Spec 5.3: Externalized Prompt - Two-tier priority
 # Level 1: ENV VAR (highest priority) - override via .env
@@ -738,7 +824,7 @@ through post-harvest for cucumber crops in tropical climates."}
 """.strip()
 
 
-def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
+def _build_vllm_client(endpoint: str | None = None) -> tuple[AsyncOpenAI, str]:
     """Construct the AsyncOpenAI client for the self-hosted vLLM and resolve the model.
 
     The explicit VLLM_MODEL_ID env wins (deployer override); otherwise the
@@ -746,9 +832,14 @@ def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
     core/model_cache.py) and fails loudly when nothing answers — a guessed
     name is rejected by vLLM's model-name validation.
     Shared by labeling and Contextual-Retrieval context generation.
+
+    ``endpoint`` lets a caller that already read VLLM_ENDPOINT pass it in:
+    the window must be probed on the SAME server the generation calls, and
+    two independent reads of that env var are two sources of truth about
+    which server it is.
     """
     _api_key = os.getenv("VLLM_API_KEY", "EMPTY")
-    _vllm_endpoint = os.getenv("VLLM_ENDPOINT")
+    _vllm_endpoint = endpoint if endpoint is not None else os.getenv("VLLM_ENDPOINT")
     # Shared request budget (core/model_http_policy.py): the openai-python
     # defaults (600 s, 2 retries) let a heavily contended shared GPU stall
     # labeling/context batches for 10+ minutes with no feedback
@@ -762,6 +853,205 @@ def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
     )
     model = resolve_model_id(_vllm_endpoint)
     return client, model
+
+
+def _build_vllm_client_and_window() -> tuple[AsyncOpenAI, str, int, bool]:
+    """Client, model, the serving model's window and whether that window is
+    authoritative — resolved together.
+
+    One endpoint read, so the window is probed on the same server the
+    generation calls. One thread hop, because both probes are synchronous
+    HTTP calls that can take their whole timeout when the endpoint does not
+    answer: on the ingest path a blocked event loop freezes the phase
+    heartbeats and every concurrent request the process serves.
+
+    The window is resolved BEFORE the client is built, so its own failure
+    (no answer, no max_model_len) is reported even when the client build
+    fails — the operator then gets the window remedy, not only a client
+    error. On a DOWN endpoint the two probes are separate requests (the
+    model-id field has no negative cache), so the first ingest waits for
+    both.
+
+    The model the generation requests name — DATAPREP_CONTEXTUAL_MODEL when
+    set, the resolved model id otherwise — is what the window has to match,
+    and it is computed here.
+    """
+    endpoint = os.getenv("VLLM_ENDPOINT", "")
+    # The window FIRST: its own failure (no answer, no max_model_len) must
+    # still be reported even when the client build below fails — otherwise
+    # the loud fallback warning is unreachable exactly when the endpoint is
+    # down, and the operator gets a client error that names no remedy.
+    window, authoritative = _serving_model_window(endpoint)
+    client, model = _build_vllm_client(endpoint)
+    # The mismatch check compares the model the request names with the one the
+    # endpoint lists first: the explicit contextual model when it is set, the
+    # resolved model id otherwise. It only makes sense for a DISCOVERED
+    # window — an override is the operator's own statement (they set it
+    # precisely because discovery could not answer), and the fail-closed
+    # fallback is a guess, not a model.
+    if DATAPREP_MAX_MODEL_LEN <= 0 and authoritative:
+        _warn_on_contextual_model_mismatch(endpoint, window, DATAPREP_CONTEXTUAL_MODEL.strip() or model)
+    return client, model, window, authoritative
+
+
+# Keys of the warnings already emitted ("already warned" set). The window
+# problems are per-deployment facts, not per-document ones: a bulk import
+# would otherwise ship one identical line per document — the volume is what
+# teaches operators to ignore the line.
+_WINDOW_WARNED: set[str] = set()
+_WINDOW_WARNED_LOCK = threading.Lock()
+
+
+def _doc_context_scaffold_chars(input) -> int:
+    """The characters a document context spends OUTSIDE the budget.
+
+    Mirrors _build_doc_context exactly: the filename line, the labels line,
+    the header and the truncation marker. The filename and the labels are
+    per document and unbounded, so they are MEASURED — a fixed allowance
+    would be exceeded by an ordinary long file name.
+    """
+    filename = os.path.basename(getattr(input, "storage_path", "") or getattr(input, "file_path", "") or "")
+    file_labels = list(getattr(input, "file_labels", []) or [])
+    prefix_parts = []
+    if filename:
+        prefix_parts.append(f"Filename: {filename}")
+    if file_labels:
+        prefix_parts.append(f"Document labels: {', '.join(file_labels)}")
+    prefix = "\n".join(prefix_parts)
+    return (
+        len(prefix)
+        + (1 if prefix else 0)  # the newline joining the prefix to the header
+        + len(DOC_CONTEXT_HEADER)
+        + len(DOC_CONTEXT_TRUNCATION_MARKER)
+    )
+
+
+def _batch_user_turn_chars(chunks: list[str]) -> int:
+    """The EXACT length of the batched user turn.
+
+    The request sends ``json.dumps([{"index": i, "text": t}, ...])``, whose
+    default ``ensure_ascii=True`` expands every non-ASCII character to a
+    six-character escape — a Spanish or French document needs a third more
+    room than its raw text suggests. Measuring the serialized payload is the
+    only way to reserve what is actually sent.
+    """
+    return len(json.dumps([{"index": i, "text": t} for i, t in enumerate(chunks)]))
+
+
+def _warn_once(key: str, message: str) -> None:
+    """Log ``message`` once per ``key`` for the lifetime of the process.
+
+    The set is shared by the worker threads that resolve the window, so the
+    check-and-add is done under a lock: without it, concurrent ingests can
+    all pass the membership test and the identical line ships N times — the
+    volume is exactly what teaches operators to ignore it.
+    """
+    with _WINDOW_WARNED_LOCK:
+        if key in _WINDOW_WARNED:
+            return
+        _WINDOW_WARNED.add(key)
+    logger.warning(message)
+
+
+def _serving_model_window(endpoint: str) -> tuple[int, bool]:
+    """The serving model's context window in tokens, in three tiers.
+
+    1. DATAPREP_MAX_MODEL_LEN (import-time constant) wins — the deployer's
+       explicit statement of the window the endpoint serves. It is the lever
+       for a strict OpenAI-compatible provider that serves /v1/models without
+       a ``max_model_len`` field (discovery can never answer there), and for
+       a deployment whose context model (DATAPREP_CONTEXTUAL_MODEL) is not
+       the one the endpoint lists first (see the mismatch note below). When
+       it disagrees with the served window, that is warned about too: an
+       override larger than what the server accepts recreates exactly the
+       silent overflow this issue exists to stop.
+    2. Otherwise the endpoint is probed (core/model_cache.py): the window the
+       vLLM server actually serves, TTL-cached and sharing the probe with
+       model-id detection — the same pattern as chatqna's _get_max_model_len.
+    3. The explicit fallback (DERIVE_FALLBACK_WINDOW, the smallest supported
+       profile) when the probe has no answer, with a warning naming the
+       consequence and the remedy.
+
+    Issue #1182: this window used to be read from the VLLM_MAX_MODEL_LEN env —
+    the vLLM-side memory knob (``--max-model-len`` in compose) — with a silent
+    2048 fallback when it did not reach the container. The env is a static copy
+    of what vLLM was configured with, not what it serves: raise the window on
+    the GPU node and the copy goes stale in every direction at once. The
+    endpoint is the source of truth.
+
+    Tiering stays here rather than in core/model_cache.py: that module owns
+    the probe and the cache, but the two consumers of ONE probe legitimately
+    disagree on the no-answer posture — dataprep sizes a request budget and
+    fails CLOSED (the smallest profile: a budget that fits nowhere fails
+    visibly), chatqna asks the model to answer and falls back to the
+    project-standard Granite window. Consolidating them is a separate change
+    from this one.
+
+    Returns ``(window, authoritative)``. ``authoritative`` is False for the
+    fail-closed fallback — a GUESS, not knowledge of the served window — and
+    the budget resolver uses that to leave an operator's explicit budget
+    alone instead of capping it against a number nobody knows.
+    """
+    discovered = get_max_model_len(endpoint)
+    if DATAPREP_MAX_MODEL_LEN > 0:
+        if discovered and discovered != DATAPREP_MAX_MODEL_LEN:
+            _warn_once(
+                f"override|{endpoint}",
+                f"Contextual Retrieval: DATAPREP_MAX_MODEL_LEN={DATAPREP_MAX_MODEL_LEN} does not match the "
+                f"window {endpoint} serves ({discovered} tokens) — document contexts sized for "
+                f"{DATAPREP_MAX_MODEL_LEN} are rejected when it is the larger of the two, and the "
+                f"batches fall back to raw chunks. Align the override with the served window.",
+            )
+        return DATAPREP_MAX_MODEL_LEN, True
+    if discovered:
+        return discovered, True
+
+    _warn_once(
+        f"fallback|{endpoint}",
+        f"Contextual Retrieval: no model window discovered at VLLM_ENDPOINT={endpoint or '<unset>'}; "
+        f"deriving document-context budgets from the fail-closed fallback of {DERIVE_FALLBACK_WINDOW} "
+        f"tokens (the smallest profile we support) — larger documents get their context truncated to "
+        f"that budget. Make the endpoint answer the /v1/models probe (failures logged by "
+        f"core.model_cache), set DATAPREP_MAX_MODEL_LEN to the window it serves, or set the "
+        f"document-context budget explicitly (DATAPREP_CONTEXTUAL_DOC_BUDGET, or "
+        f"DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL under the doc_level strategy).",
+    )
+    return DERIVE_FALLBACK_WINDOW, False
+
+
+def _warn_on_contextual_model_mismatch(endpoint: str, window: int, named_model: str) -> None:
+    """Warn when the model the request names is not the model the endpoint lists first.
+
+    Discovery reads the FIRST entry of /v1/models (core/model_cache.py), so the
+    window it reports is that model's. The contexts are generated by
+    DATAPREP_CONTEXTUAL_MODEL when it is set, and otherwise by the resolved
+    model id (VLLM_MODEL_ID or the discovered one). A vLLM server hosting
+    several models can then serve a smaller window for the model that answers
+    than the one discovery reported — the budget would be sized for the wrong
+    model and the request would be rejected (silently falling back to raw
+    chunks). The mismatch cannot be resolved from here (the probe exposes one
+    model), so it is surfaced and the operator is pointed at the override.
+    """
+    discovered_model = get_model_id(endpoint)
+    if not discovered_model:
+        return
+    # The same model is often served under a namespaced id
+    # ("ibm-granite/granite-4.1-8b") while the deployment names it without
+    # the namespace ("granite-4.1-8b") — that is an alias, not a mismatch.
+    # Two DIFFERENT namespaces are not: "org-a/granite" and "org-b/granite"
+    # can serve different windows, so the full ids are compared then.
+    discovered_ns, _, discovered_base = discovered_model.rpartition("/")
+    named_ns, _, named_base = named_model.rpartition("/")
+    same_model = discovered_model == named_model if discovered_ns and named_ns else discovered_base == named_base
+    if same_model:
+        return
+    _warn_once(
+        f"mismatch|{endpoint}|{named_model}",
+        f"Contextual Retrieval: the contexts are generated by {named_model}, but VLLM_ENDPOINT="
+        f"{endpoint or '<unset>'} lists {discovered_model} first, so the discovered window "
+        f"({window} tokens) may not be the one {named_model} serves — document contexts sized for it "
+        f"could be rejected. Set DATAPREP_MAX_MODEL_LEN to the window {named_model} serves.",
+    )
 
 
 async def ensure_vector_index(
@@ -2296,7 +2586,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         degraded: list[str] = []
         client = model = None
         try:
-            client, model = _build_vllm_client()
+            # Off the event loop, like the contextualization path: the model-id
+            # probe inside is a sync HTTP call that can take its whole timeout
+            # when the endpoint does not answer, and a frozen loop stalls
+            # every concurrent request this process serves.
+            client, model = await asyncio.to_thread(_build_vllm_client)
         except Exception as e:
             err = f"{type(e).__name__}: {str(e)[:200]}"
             logger.error(f"LLM labeling disabled for {file_id}: vLLM client init failed ({err}); using file labels.")
@@ -2430,7 +2724,27 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             "chunks": len(chunks),
         }
 
-    def _resolve_doc_budget(self, chunks: list[str], configured: int) -> tuple[int | None, str]:
+    @staticmethod
+    def _is_default_budget(configured: int, single_call: bool) -> bool:
+        """True when the configured budget is still the shipped default.
+
+        A default is not a deliberate setting: on a deployment whose window
+        is unknown it must not be sent as-is (the doc_level default of
+        100000 chars is ~25k tokens, more than a small window holds).
+        """
+        default = DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL if single_call else DATAPREP_CONTEXTUAL_DOC_BUDGET
+        return configured == default
+
+    def _resolve_doc_budget(
+        self,
+        chunks: list[str],
+        configured: int,
+        window: int,
+        *,
+        scaffold_chars: int,
+        authoritative: bool = True,
+        single_call: bool = False,
+    ) -> tuple[int | None, str]:
         """Resolve the document-context budget for this document.
 
         Returns ``(budget_chars, source)``. ``budget_chars is None`` means
@@ -2438,14 +2752,45 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         back to raw chunks. ``source`` is one of:
 
             "override"        operator set DATAPREP_CONTEXTUAL_DOC_BUDGET
-            "derived"         computed from VLLM_MAX_MODEL_LEN
+            "derived"         computed from the given serving-model window
+            "window-capped"   the operator's budget, capped by the window
             "disabled"        operator set a negative budget
             "window-exhausted" the model window cannot fit any context
 
         The prompt the context LLM receives is the system prompt + the document
         context + the batch's chunk text, and the response reserves
         DATAPREP_CONTEXTUAL_MAX_TOKENS. Only the middle term is ours to size,
-        so everything else is subtracted from VLLM_MAX_MODEL_LEN.
+        so everything else is subtracted from ``window`` — the serving model's
+        context window, which the caller obtains from _serving_model_window
+        (runtime discovery) and passes in. It is a parameter rather than a
+        lookup here because that discovery probe is a blocking HTTP call:
+        resolving it inside this function would freeze the event loop on the
+        ingest path.
+
+        ``single_call`` is the doc_level strategy: ONE call per document, so
+        the request carries the system prompt (with the document context
+        embedded in it) and reserves ONE output budget — no chunk text.
+
+        An explicit budget is a MAXIMUM, not a pin: when the window is
+        known (``authoritative`` — discovered, or stated by the operator),
+        a budget that does not fit it is capped, because a request the model
+        cannot accept is rejected and the batch falls back to raw chunks
+        silently.
+
+        When the window is only the fail-closed GUESS, a DELIBERATE operator
+        setting stands (nobody knows the real window there, so capping
+        against a guess would destroy it) — but a knob still at its shipped
+        default does not: the doc_level default of 100000 chars is ~25k
+        tokens, more than a small window holds, so it is capped like a
+        derived budget and the deployment fails closed.
+
+        The document-context scaffolding (filename line, labels line, header,
+        truncation marker, user turn) sits outside the budget and is
+        reserved separately — a request sized without it overflows the
+        window by exactly those characters. ``scaffold_chars`` is that
+        scaffolding MEASURED for this document (the filename and the labels
+        are unbounded), and the batch term is the length of the serialized
+        user turn, which is what the request actually sends.
 
         The batch term is measured from the REAL chunks rather than from the
         DATAPREP_CHUNK_SIZE_* vars: those are resolved per file extension
@@ -2455,39 +2800,61 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         """
         if configured < 0:
             return None, "disabled"
-        if configured > 0:
+        if configured > 0 and not authoritative and not self._is_default_budget(configured, single_call):
+            # The window is only the fail-closed GUESS, and the operator
+            # stated this budget DELIBERATELY: a guess may neither cap nor
+            # refuse it. Only a window somebody knows can overrule one.
             return configured, "override"
 
-        window = int(os.getenv("VLLM_MAX_MODEL_LEN", "") or DERIVE_FALLBACK_WINDOW)
-        prompt_tokens = -(-len(CONTEXTUAL_RETRIEVAL_PROMPT) // CHARS_PER_TOKEN)
-        largest = sorted((len(c) for c in chunks), reverse=True)[:LABEL_LLM_BATCH_SIZE]
-        # The user turn is json.dumps([{"index": i, "text": t}, ...]) — the raw
-        # chunk text plus per-item JSON scaffolding and escaping. Reserve it
-        # generously: over-reserving only costs a slightly smaller budget,
-        # under-reserving sends a request the model cannot accept.
-        batch_chars = sum(largest) + len(largest) * JSON_ITEM_OVERHEAD_CHARS
-        batch_tokens = -(-batch_chars // CHARS_PER_TOKEN)
-        # The batched per-chunk path reserves ONE CONTEXTUAL_MAX_TOKENS per chunk
-        # in the batch (max_tokens=CONTEXTUAL_MAX_TOKENS * len(batch)) — the
-        # response holds a context per chunk — so this scales with the batch
-        # size, it is not a flat cap. Reserving less would size the budget
-        # against a request the model would never actually complete.
-        output_tokens = CONTEXTUAL_MAX_TOKENS * LABEL_LLM_BATCH_SIZE
-        usable = window - prompt_tokens - batch_tokens - output_tokens
+        if single_call:
+            prompt_tokens = -(-len(_CONTEXTUAL_DOC_PROMPT_DEFAULT) // CHARS_PER_TOKEN)
+            batch_tokens = 0
+            output_tokens = CONTEXTUAL_MAX_TOKENS
+        else:
+            prompt_tokens = -(-len(CONTEXTUAL_RETRIEVAL_PROMPT) // CHARS_PER_TOKEN)
+            # The TEXTS of the largest chunks, not their lengths: the
+            # reservation is the serialized user turn, so it has to serialize
+            # the text that is sent.
+            largest = sorted(chunks, key=len, reverse=True)[:LABEL_LLM_BATCH_SIZE]
+            # The user turn is json.dumps([{"index": i, "text": t}, ...]) — the raw
+            # chunk text plus per-item JSON scaffolding AND the escaping of
+            # every non-ASCII character. Reserve the SERIALIZED length, which
+            # is what the request sends: a non-ASCII document needs a third
+            # more room than its raw text suggests, and under-reserving sends
+            # a request the model cannot accept.
+            batch_chars = _batch_user_turn_chars(largest)
+            batch_tokens = -(-batch_chars // CHARS_PER_TOKEN)
+            # The batched per-chunk path reserves ONE CONTEXTUAL_MAX_TOKENS per chunk
+            # in the batch (max_tokens=CONTEXTUAL_MAX_TOKENS * len(batch)) — the
+            # response holds a context per chunk — so this scales with the batch
+            # size, it is not a flat cap. Reserving less would size the budget
+            # against a request the model would never actually complete.
+            output_tokens = CONTEXTUAL_MAX_TOKENS * LABEL_LLM_BATCH_SIZE
+        if single_call:
+            scaffold_chars += len(DOC_LEVEL_USER_TURN)
+        scaffold_tokens = -(-scaffold_chars // CHARS_PER_TOKEN)
+        usable = window - prompt_tokens - batch_tokens - output_tokens - scaffold_tokens
         if usable <= 0:
             # NOT "budget 0" — in _build_doc_context a budget of 0 means "do
             # not truncate", i.e. send the whole document, which is precisely
             # what would overflow. Skip contextualization for this document.
             logger.error(
-                f"Contextual Retrieval: VLLM_MAX_MODEL_LEN={window} leaves no room for a document "
-                f"context (system prompt {prompt_tokens} + batch text {batch_tokens} + output "
-                f"{output_tokens} tokens). Using raw chunks for this document; lower "
+                f"Contextual Retrieval: the {window}-token serving-model window leaves no room for "
+                f"a document context (system prompt {prompt_tokens} + batch text {batch_tokens} + "
+                f"output {output_tokens} tokens). Using raw chunks for this document; lower "
                 f"DATAPREP_LLM_LABEL_BATCH_SIZE (currently {LABEL_LLM_BATCH_SIZE}) or "
-                f"DATAPREP_CONTEXTUAL_MAX_TOKENS (currently {CONTEXTUAL_MAX_TOKENS}), or raise "
-                f"VLLM_MAX_MODEL_LEN."
+                f"DATAPREP_CONTEXTUAL_MAX_TOKENS (currently {CONTEXTUAL_MAX_TOKENS}), or serve a "
+                f"larger window (vLLM --max-model-len)."
             )
             return None, "window-exhausted"
-        return usable * CHARS_PER_TOKEN, "derived"
+        derived = usable * CHARS_PER_TOKEN
+        if configured > 0:
+            if configured > derived:
+                # The window is the binding constraint: say so, so the operator
+                # does not read their own number back as the applied budget.
+                return derived, "window-capped"
+            return configured, "override"
+        return derived, "derived"
 
     def _build_doc_context(self, chunks: list[str], input, budget: int = 0) -> str:
         """Build the document-context string fed to the context-generation LLM.
@@ -2502,13 +2869,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         joined = "\n".join(chunks)
         truncation = self._doc_context_truncation(chunks, budget)
         if truncation is not None:
-            joined = joined[:budget] + "...[truncated]"
+            joined = joined[:budget] + DOC_CONTEXT_TRUNCATION_MARKER
         parts = []
         if filename:
             parts.append(f"Filename: {filename}")
         if file_labels:
             parts.append(f"Document labels: {', '.join(file_labels)}")
-        parts.append(f"Document content (may be truncated):\n{joined}")
+        parts.append(f"{DOC_CONTEXT_HEADER}{joined}")
         if truncation is not None:
             logger.warning(
                 f"Contextual Retrieval: document context truncated to {truncation['kept']} chars "
@@ -2542,7 +2909,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # (e.g. model auto-detection failure on the GPU node), skip contextualization
         # entirely and ingest raw chunks — never block ingestion (spec boundary).
         try:
-            client, default_model = _build_vllm_client()
+            client, default_model, serving_window, authoritative = await asyncio.to_thread(
+                _build_vllm_client_and_window
+            )
         except Exception as e:
             err = f"{type(e).__name__}: {str(e)[:200]}"
             logger.error(
@@ -2559,7 +2928,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         model = DATAPREP_CONTEXTUAL_MODEL.strip() or default_model
         total = len(chunks)
 
-        async def _doc_context_or_none(chunks_: list[str], configured: int, label: str) -> str | None:
+        async def _doc_context_or_none(
+            chunks_: list[str], configured: int, label: str, *, single_call: bool = False
+        ) -> str | None:
             """Resolve the budget, log any truncation, build the context.
 
             Returns ``(context, skip_reason)`` — ``context is None`` when this
@@ -2578,7 +2949,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             ``_write_ingestion_log`` is what makes it visible to a curator
             instead of only to whoever greps container logs.
             """
-            budget, source = self._resolve_doc_budget(chunks_, configured)
+            budget, source = self._resolve_doc_budget(
+                chunks_,
+                configured,
+                serving_window,
+                scaffold_chars=_doc_context_scaffold_chars(input),
+                authoritative=authoritative,
+                single_call=single_call,
+            )
             if budget is None:
                 return None, (DEGRADED_WINDOW_TOO_SMALL if source == "window-exhausted" else None)
 
@@ -2593,9 +2971,20 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         f"{truncation['total']} chars ({truncation['pct']}%, budget {label}/{source}) "
                         f"across {truncation['chunks']} chunks. Deep chunks get a weaker "
                         f"document context, which degrades their embedding and the "
-                        f"graph extraction. Raise DATAPREP_CONTEXTUAL_DOC_BUDGET (or "
-                        f"VLLM_MAX_MODEL_LEN) if the model window allows, or split the "
-                        f"document during curation."
+                        f"graph extraction. "
+                        + (
+                            "The served window is what binds here: raise it on the GPU "
+                            "(vLLM --max-model-len). Raising the budget alone changes nothing — "
+                            "the model rejects a request larger than the window it serves."
+                            if source == "window-capped"
+                            else (
+                                "Raise DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL"
+                                if label == "doc_level"
+                                else "Raise DATAPREP_CONTEXTUAL_DOC_BUDGET"
+                            )
+                            + " if the model window allows."
+                        )
+                        + " Or split the document during curation."
                     ),
                 )
             return self._build_doc_context(chunks_, input, budget), None
@@ -2604,7 +2993,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # chunk (uses a larger doc budget — it is a single call; N× cheaper).
         if CONTEXTUAL_STRATEGY == "doc_level":
             doc_context, skip_reason = await _doc_context_or_none(
-                chunks, DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL, "doc_level"
+                chunks, DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL, "doc_level", single_call=True
             )
             if doc_context is None:
                 # An operator-disabled budget is deliberate (no reason); a window

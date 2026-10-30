@@ -3263,20 +3263,71 @@ def _recordable_doc(**kwargs):
     return SimpleNamespace(**kwargs)
 
 
+def _scaffold():
+    """The scaffolding of the mock ingest input the tests use."""
+    return dp_module._doc_context_scaffold_chars(create_mock_ingest_input())
+
+
+def _model_endpoint(monkeypatch, window=65536, endpoint="http://gpu-test", dead=False, model_id="test-model"):
+    """Aim dataprep's window discovery at a fake /v1/models endpoint.
+
+    Same seam the chatqna window tests use: the real core.model_cache runs
+    (coercion, TTL, negative cache) but its HTTP probe is faked, and
+    VLLM_ENDPOINT is aimed at it because dataprep discovers the window from
+    the same endpoint it talks to. ``window=None`` serves a strict
+    OpenAI-compatible payload with no ``max_model_len`` field; ``dead=True``
+    serves an endpoint nothing answers.
+
+    Clears the model cache first: it is module-global and shared across tests,
+    so a previously cached window for this endpoint would shadow the new one
+    for the whole TTL.
+    """
+    from core.model_cache import clear_cache
+
+    clear_cache()
+    monkeypatch.setenv("VLLM_ENDPOINT", endpoint)
+    if dead:
+
+        def _raise(*_args, **_kwargs):
+            raise ConnectionError("endpoint unreachable")
+
+        monkeypatch.setattr("httpx.get", _raise)
+        return endpoint
+
+    entry = {"id": model_id} if window is None else {"id": model_id, "max_model_len": window}
+    resp = MagicMock()
+    resp.json.return_value = {"data": [entry]}
+
+    def _fake_get(_url, **_kwargs):
+        return resp
+
+    monkeypatch.setattr("httpx.get", _fake_get)
+    return endpoint
+
+
 class TestContextualRetrieval:
     """Tests for _apply_contextualization() / _context_single_call()."""
 
     @pytest.fixture(autouse=True)
     def _isolate_defaults(self, monkeypatch):
         """Explicit flags so tests don't depend on module defaults."""
+        from core.model_cache import clear_cache
+
         monkeypatch.setattr(dp_module, "CONTEXTUAL_STRATEGY", "per_chunk")
         monkeypatch.setattr(dp_module, "CONTEXTUAL_LABEL_RAW", False)
-        # The doc-context budget is DERIVED from this. Without it the
-        # derivation fails closed to the smallest profile (2048) and every
-        # contextualization call is skipped — correct in production, useless
-        # for tests that are exercising contextualization itself. Tests that
-        # care about the fallback set their own value.
-        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "65536")
+        # The module-global "already warned" set and the module-global model
+        # cache both outlive a test: reset them, or a previous test's window
+        # (or warning) decides this one.
+        monkeypatch.setattr(dp_module, "_WINDOW_WARNED", set())
+        # The doc-context budget is DERIVED from the serving model's window.
+        # Without a discovered window the derivation fails closed to the
+        # smallest profile (2048) and every contextualization call is skipped
+        # — correct in production, useless for tests that are exercising
+        # contextualization itself. Tests that care about the fallback serve
+        # their own window.
+        _model_endpoint(monkeypatch, 65536)
+        yield
+        clear_cache()  # the cache is module-global: do not leak it onwards
 
     @pytest.mark.asyncio
     async def test_flag_off_returns_chunks_unchanged(self, monkeypatch):
@@ -3383,40 +3434,469 @@ class TestContextualRetrieval:
     # one. These tests pin the three-way contract (unset=derive, >0=override,
     # <0=disable) and, most importantly, the property that actually matters:
     # the assembled request fits the window.
+    #
+    # The window itself comes from _serving_model_window (runtime discovery);
+    # the budget from _resolve_doc_budget's arithmetic, which takes the window
+    # as a parameter so the blocking probe never runs inside it.
 
-    def test_explicit_positive_budget_is_an_override(self, monkeypatch):
-        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "65536")
+    def test_explicit_positive_budget_is_an_override(self):
+        # A window that fits the operator's value leaves it alone.
         dp = create_dataprep()
-        assert dp._resolve_doc_budget(["abc"], 1234) == (1234, "override")
+        assert dp._resolve_doc_budget(["abc"], 1234, 65536, scaffold_chars=_scaffold()) == (1234, "override")
 
-    def test_negative_budget_disables_contextualization(self, monkeypatch):
-        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "65536")
+    def test_explicit_budget_larger_than_a_known_window_is_capped(self):
+        """An explicit budget is a MAXIMUM: a request the model cannot accept
+        is rejected, and the batch falls back to raw chunks silently. When the
+        window is known, the budget is capped to what fits — and the source
+        says so, so the operator does not read their own number back as the
+        applied budget."""
         dp = create_dataprep()
-        budget, source = dp._resolve_doc_budget(["abc"], -1)
+        budget, source = dp._resolve_doc_budget(["x" * 500] * 8, 100000, 4096, scaffold_chars=_scaffold())
+        assert source == "window-capped"
+        assert budget < 100000
+
+    def test_explicit_budget_is_kept_when_the_window_is_only_a_guess(self):
+        """The fail-closed fallback is a guess, not knowledge: capping an
+        operator's deliberate budget against it would destroy a setting that
+        may be exactly right."""
+        dp = create_dataprep()
+        budget, source = dp._resolve_doc_budget(["abc"], 1234, 2048, scaffold_chars=_scaffold(), authoritative=False)
+        assert (budget, source) == (1234, "override")
+
+    def test_negative_budget_disables_contextualization(self):
+        dp = create_dataprep()
+        budget, source = dp._resolve_doc_budget(["abc"], -1, 2048, scaffold_chars=_scaffold())
         assert budget is None and source == "disabled"
 
-    def test_budget_scales_with_the_model_window(self, monkeypatch):
+    def test_budget_scales_with_the_model_window(self):
         dp = create_dataprep()
         chunks = ["x" * 500] * 8
-        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "16384")
-        small, _ = dp._resolve_doc_budget(chunks, 0)
-        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "65536")
-        large, _ = dp._resolve_doc_budget(chunks, 0)
+        small, _ = dp._resolve_doc_budget(chunks, 0, 16384, scaffold_chars=_scaffold())
+        large, _ = dp._resolve_doc_budget(chunks, 0, 65536, scaffold_chars=_scaffold())
         assert large > small > 0
 
-    def test_unknown_window_falls_back_to_the_smallest_profile(self, monkeypatch):
-        """Fails closed: defaulting high would size for hardware nobody runs."""
-        monkeypatch.delenv("VLLM_MAX_MODEL_LEN", raising=False)
-        dp = create_dataprep()
-        assert dp._resolve_doc_budget(["x" * 500], 0) == dp._resolve_doc_budget(["x" * 500], 0)
-        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", str(dp_module.DERIVE_FALLBACK_WINDOW))
-        assert dp._resolve_doc_budget(["x" * 500], 0) == (None, "window-exhausted")
+    def test_budget_is_sized_exactly_from_the_given_window(self):
+        """The arithmetic, pinned to a literal — not merely "a positive number".
 
-    def test_window_exhausted_returns_none_not_zero(self, monkeypatch):
-        """A 0 budget means 'do not truncate' — the opposite of what we want."""
-        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "2048")  # T4
+        A derivation that dropped the output reservation or mis-scaled
+        CHARS_PER_TOKEN would pass a "> 0" assertion and ship a budget that
+        overflows the window — the failure this whole derivation exists to
+        prevent. The literal is an INDEPENDENT oracle: 65536 window - 254
+        prompt tokens - 564 batch-text tokens - 2048 reserved output tokens
+        - 256 reserved scaffolding tokens, times 4 chars per token. A change
+        to the prompt text or to one of the knobs legitimately moves it —
+        update the number then, and the diff shows the budget moved.
+        """
         dp = create_dataprep()
-        budget, source = dp._resolve_doc_budget(["x" * 500] * 8, 0)
+        chunks = ["x" * 500] * 8
+        budget, source = dp._resolve_doc_budget(chunks, 0, 65536, scaffold_chars=_scaffold())
+        assert source == "derived"
+        assert budget == 250708
+
+    def test_window_discovery_ignores_the_vllm_max_model_len_env(self, monkeypatch):
+        """Issue #1182: VLLM_MAX_MODEL_LEN is the vLLM-side memory knob
+        (--max-model-len), not a dataprep input. A stale copy of it in the
+        dataprep container must not override what the endpoint actually
+        serves — that silent divergence is the bug."""
+        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "2048")  # stale copy (T4-era)
+        endpoint = _model_endpoint(monkeypatch, 65536)  # what the endpoint serves
+        window, _ = dp_module._serving_model_window(endpoint)
+        assert window == 65536
+        endpoint = _model_endpoint(monkeypatch, 2048)  # what a T4 actually serves
+        window, _ = dp_module._serving_model_window(endpoint)
+        assert window == 2048
+
+    def test_explicit_window_override_wins_over_discovery(self, monkeypatch):
+        """DATAPREP_MAX_MODEL_LEN is the tier above discovery — and the only
+        lever on a strict OpenAI-compatible provider, whose /v1/models never
+        carries max_model_len."""
+        monkeypatch.setattr(dp_module, "DATAPREP_MAX_MODEL_LEN", 4096)
+        endpoint = _model_endpoint(monkeypatch, 65536)
+        window, _ = dp_module._serving_model_window(endpoint)
+        assert window == 4096
+
+    def test_window_override_that_disagrees_with_the_served_window_is_flagged(self, monkeypatch):
+        """An override LARGER than what the server accepts recreates exactly
+        the silent overflow this issue exists to stop (requests rejected ->
+        raw-chunk fallback). The disagreement is surfaced."""
+        monkeypatch.setattr(dp_module, "DATAPREP_MAX_MODEL_LEN", 65536)
+        endpoint = _model_endpoint(monkeypatch, 2048)  # the endpoint serves 2048
+        dp_module.logger.warning.reset_mock()
+        window, _ = dp_module._serving_model_window(endpoint)
+        assert window == 65536
+        warnings = [str(c.args[0]) for c in dp_module.logger.warning.call_args_list]
+        assert any("DATAPREP_MAX_MODEL_LEN" in w and "2048" in w for w in warnings)
+
+    def test_unknown_window_falls_back_to_the_smallest_profile(self, monkeypatch):
+        """Fails closed: defaulting high would size for hardware nobody runs.
+
+        A strict OpenAI-compatible provider (no max_model_len in /v1/models)
+        yields no window; the fallback is DERIVE_FALLBACK_WINDOW, on which
+        contextualization cannot run at all (the batch output reservation
+        alone fills it), so every document is window-exhausted — and
+        deterministically so within the cache TTL.
+        """
+        endpoint = _model_endpoint(monkeypatch, None)
+        dp = create_dataprep()
+        window, authoritative = dp_module._serving_model_window(endpoint)
+        assert window == dp_module.DERIVE_FALLBACK_WINDOW
+        assert authoritative is False, "the fail-closed fallback is a guess, not knowledge"
+        assert dp._resolve_doc_budget(
+            ["x" * 500], 0, window, scaffold_chars=_scaffold(), authoritative=authoritative
+        ) == (
+            None,
+            "window-exhausted",
+        )
+
+    def test_fallback_window_is_loud_when_discovery_has_no_answer(self, monkeypatch):
+        """The teeth of #1182: the old 2048 fallback was silent. Both
+        no-answer shapes (strict provider, dead endpoint) must warn with the
+        fallback value and the remedy, mirroring core.model_cache's own
+        probe warnings — once per endpoint, not once per document."""
+
+        def _fallback_warnings():
+            return [str(c.args[0]) for c in dp_module.logger.warning.call_args_list]
+
+        endpoint = _model_endpoint(monkeypatch, None)  # strict provider: field missing
+        dp_module.logger.warning.reset_mock()
+        dp_module._serving_model_window(endpoint)
+        dp_module._serving_model_window(endpoint)  # second document: no second warning
+        warnings = _fallback_warnings()
+        assert len(warnings) == 1, warnings
+        assert str(dp_module.DERIVE_FALLBACK_WINDOW) in warnings[0]
+        assert "DATAPREP_MAX_MODEL_LEN" in warnings[0]
+
+        endpoint = _model_endpoint(monkeypatch, dead=True, endpoint="http://gpu-dead")  # unreachable
+        dp_module.logger.warning.reset_mock()
+        dp_module._serving_model_window(endpoint)
+        warnings = _fallback_warnings()
+        assert len(warnings) == 1, warnings
+        assert str(dp_module.DERIVE_FALLBACK_WINDOW) in warnings[0]
+        assert "DATAPREP_MAX_MODEL_LEN" in warnings[0]
+
+    def test_contextual_model_mismatch_is_flagged(self, monkeypatch):
+        """Discovery reads the FIRST model /v1/models lists; the contexts are
+        generated by DATAPREP_CONTEXTUAL_MODEL. When they differ, the
+        discovered window may not be the one that model serves — the mismatch
+        is surfaced and the operator is pointed at the override. When they
+        are the same model, nothing is warned about."""
+        _model_endpoint(monkeypatch, 65536)  # the endpoint lists "test-model"
+        monkeypatch.setattr(dp_module, "DATAPREP_CONTEXTUAL_MODEL", "other-model")
+        dp_module.logger.warning.reset_mock()
+        _client, _model, window, _authoritative = dp_module._build_vllm_client_and_window()
+        assert window == 65536
+        warnings = [str(c.args[0]) for c in dp_module.logger.warning.call_args_list]
+        assert any("DATAPREP_MAX_MODEL_LEN" in w and "other-model" in w for w in warnings)
+
+        # The same model, requested by the name the endpoint lists: no alarm.
+        monkeypatch.setattr(dp_module, "DATAPREP_CONTEXTUAL_MODEL", "test-model")
+        dp_module.logger.warning.reset_mock()
+        dp_module._build_vllm_client_and_window()
+        assert dp_module.logger.warning.call_args_list == []
+
+    @pytest.mark.asyncio
+    async def test_window_discovery_does_not_block_the_event_loop(self, monkeypatch):
+        """The discovery probe is a SYNC http call that can take its whole
+        timeout when the endpoint does not answer. On the ingest path it must
+        not run on the event loop: a blocked loop freezes the phase
+        heartbeats and every concurrent request the process serves."""
+        import time as _time
+
+        ticks = 0
+        ticks_during_probe = []
+
+        def _slow_get(_url, **_kwargs):
+            before = ticks
+            _time.sleep(0.5)
+            ticks_during_probe.append(ticks - before)
+            resp = MagicMock()
+            resp.json.return_value = {"data": [{"id": "test-model", "max_model_len": 65536}]}
+            return resp
+
+        monkeypatch.setattr("httpx.get", _slow_get)
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://gpu-slow")
+        monkeypatch.setattr(dp_module, "CONTEXTUAL_RETRIEVAL_ENABLED", True)
+        monkeypatch.setenv("VLLM_API_KEY", "k")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        dp = create_dataprep()
+
+        async def _ticker():
+            nonlocal ticks
+            while True:
+                await asyncio.sleep(0.01)
+                ticks += 1
+
+        ticker = asyncio.create_task(_ticker())
+        await asyncio.sleep(0.05)  # let the ticker run BEFORE the probe starts
+        try:
+            with patch.object(dp_module, "AsyncOpenAI", return_value=AsyncMock()):
+                await dp._apply_contextualization(["chunk one"], create_mock_ingest_input(), "file1")
+        finally:
+            ticker.cancel()
+        assert ticks_during_probe, "the window discovery never probed the endpoint"
+        # The blocking case yields 0 ticks (the loop is frozen for the whole
+        # probe); an off-loop probe yields one per 10 ms. The bar is "> 0", not
+        # a count: any count would be a timing claim that a loaded CI runner
+        # can flake, and the blocking case is the only thing to separate.
+        assert ticks_during_probe[0] > 0, (
+            f"the event loop was blocked during window discovery ({ticks_during_probe[0]} ticks while the probe ran)"
+        )
+
+    def test_doc_level_budget_is_capped_by_the_window(self):
+        """The doc_level knob is a MAXIMUM: the window caps it.
+
+        One call per document, so the request carries the system prompt with
+        the document context embedded in it and reserves ONE output budget.
+        A deployment that serves 4096 tokens cannot take the 100000-char
+        default (~25k tokens) — the call would be rejected and every document
+        would silently fall back to raw chunks.
+        """
+        dp = create_dataprep()
+        budget, source = dp._resolve_doc_budget(
+            ["x" * 500] * 8, 100000, 4096, scaffold_chars=_scaffold(), single_call=True
+        )
+        assert source == "window-capped"
+        # 4096 window - 164 prompt tokens - 512 reserved output - the measured
+        # scaffolding, times 4 chars per token.
+        assert budget == 13520
+        # ...and a window that fits the operator's value leaves it alone.
+        big, big_source = dp._resolve_doc_budget(
+            ["x" * 500] * 8, 100000, 65536, scaffold_chars=_scaffold(), single_call=True
+        )
+        assert (big, big_source) == (100000, "override")
+
+    def test_doc_level_budget_on_a_tiny_window_is_refused(self):
+        """A window that cannot hold the prompt and the output reservation
+        leaves no room for a context at all — refuse, do not send it."""
+        dp = create_dataprep()
+        assert dp._resolve_doc_budget(["x" * 500] * 8, 100000, 512, scaffold_chars=_scaffold(), single_call=True) == (
+            None,
+            "window-exhausted",
+        )
+
+    def test_contextual_model_alias_is_not_flagged(self, monkeypatch):
+        """The same model under two names is not a mismatch: a vLLM server
+        lists "ibm-granite/granite-4.1-8b" while the deployment names it
+        "granite-4.1-8b". A false alarm here sends the operator to pin a
+        window that was already right."""
+        _model_endpoint(monkeypatch, 65536, model_id="ibm-granite/granite-4.1-8b")
+        monkeypatch.setattr(dp_module, "DATAPREP_CONTEXTUAL_MODEL", "granite-4.1-8b")
+        dp_module.logger.warning.reset_mock()
+        dp_module._build_vllm_client_and_window()
+        assert dp_module.logger.warning.call_args_list == []
+
+    @pytest.mark.asyncio
+    async def test_labelling_model_probe_does_not_block_the_event_loop(self, monkeypatch):
+        """The labelling path resolves the served model on the same endpoint,
+        and that probe is a synchronous HTTP call: it must not run on the
+        event loop either. A frozen loop stalls every concurrent request this
+        process serves while the probe waits."""
+        import time as _time
+
+        import core.model_cache as model_cache
+
+        ticks = 0
+        ticks_during_probe = []
+
+        def _slow_get_model_id(*_args, **_kwargs):
+            before = ticks
+            _time.sleep(0.5)
+            ticks_during_probe.append(ticks - before)
+            return "ci-discovered/model"
+
+        monkeypatch.setattr(model_cache, "get_model_id", _slow_get_model_id)
+        monkeypatch.delenv("VLLM_MODEL_ID", raising=False)
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://gpu-slow")
+        dp = create_dataprep()
+
+        async def _ticker():
+            nonlocal ticks
+            while True:
+                await asyncio.sleep(0.01)
+                ticks += 1
+
+        ticker = asyncio.create_task(_ticker())
+        await asyncio.sleep(0.05)  # let the ticker run BEFORE the probe starts
+        try:
+            with patch.object(dp_module, "AsyncOpenAI", return_value=AsyncMock()):
+                await dp._label_with_llm(["chunk one"], ["Label"], [], "file1")
+        finally:
+            ticker.cancel()
+        assert ticks_during_probe, "the model resolution never ran"
+        assert ticks_during_probe[0] > 0, "the model probe blocked the event loop"
+
+    def test_the_fallback_warning_fires_even_when_the_client_build_fails(self, monkeypatch):
+        """The window is resolved BEFORE the client is built: when the
+        endpoint is down the client build raises, but the operator must still
+        be told that the window could not be discovered and what to set."""
+        import core.model_cache as model_cache
+        from core.model_cache import ModelDiscoveryError
+
+        _model_endpoint(monkeypatch, dead=True, endpoint="http://gpu-dead")
+
+        def _no_model(*_args, **_kwargs):
+            raise ModelDiscoveryError("no model id discovered")
+
+        monkeypatch.setattr(model_cache, "get_model_id", _no_model)
+        dp_module.logger.warning.reset_mock()
+        with pytest.raises(ModelDiscoveryError):
+            dp_module._build_vllm_client_and_window()
+        warnings = [str(c.args[0]) for c in dp_module.logger.warning.call_args_list]
+        assert any("DATAPREP_MAX_MODEL_LEN" in w for w in warnings)
+
+    def test_the_window_override_is_sanitised(self):
+        """A negative value is not a window (it would silently disable the
+        override) and an absurd one exceeds every real model — a budget sized
+        for it overflows every window."""
+        assert dp_module._sanitize_window_override(-5) == 0
+        assert dp_module._sanitize_window_override(0) == 0
+        assert dp_module._sanitize_window_override(4096) == 4096
+        # An absurd value is treated as UNSET (discovery answers): clamping it
+        # to "the largest sane window" is not a guard — ten million tokens
+        # still overflows every real model.
+        assert dp_module._sanitize_window_override(dp_module.MAX_SANE_MODEL_WINDOW_TOKENS + 1) == 0
+
+    def test_contextual_model_in_a_different_namespace_is_flagged(self, monkeypatch):
+        """Two different namespaces are not an alias: "org-a/granite" and
+        "org-b/granite" can serve different windows, and the budget would be
+        sized for the wrong one."""
+        _model_endpoint(monkeypatch, 65536, model_id="org-a/granite-4.1-8b")
+        monkeypatch.setattr(dp_module, "DATAPREP_CONTEXTUAL_MODEL", "org-b/granite-4.1-8b")
+        dp_module.logger.warning.reset_mock()
+        dp_module._build_vllm_client_and_window()
+        warnings = [str(c.args[0]) for c in dp_module.logger.warning.call_args_list]
+        assert any("DATAPREP_MAX_MODEL_LEN" in w for w in warnings)
+
+    def test_the_shipped_default_is_capped_even_when_the_window_is_a_guess(self):
+        """A knob still at its shipped default is not a deliberate setting: on a
+        deployment whose window is unknown (a strict provider) the doc_level
+        default of 100000 chars is ~25k tokens, more than a small window
+        holds. It must fail closed, not be sent as-is."""
+        dp = create_dataprep()
+        budget, source = dp._resolve_doc_budget(
+            ["x" * 500] * 8,
+            dp_module.DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL,
+            dp_module.DERIVE_FALLBACK_WINDOW,
+            scaffold_chars=_scaffold(),
+            authoritative=False,
+            single_call=True,
+        )
+        assert budget is None or budget < dp_module.DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL
+        assert source in ("window-capped", "window-exhausted")
+
+    def test_a_non_ascii_batch_is_reserved_by_its_serialized_length(self):
+        """The request sends json.dumps(..., ensure_ascii=True): every
+        non-ASCII character becomes a six-character escape. Reserving the RAW
+        length under-counts a Spanish or French document by a third — and the
+        request is then rejected."""
+        dp = create_dataprep()
+        ascii_chunks = ["x" * 500] * 8
+        accented = ["á" * 500] * 8
+        raw = dp._resolve_doc_budget(ascii_chunks, 0, 16384, scaffold_chars=_scaffold())
+        escaped = dp._resolve_doc_budget(accented, 0, 16384, scaffold_chars=_scaffold())
+        assert escaped[0] < raw[0], "the escaped payload must reserve more room than the raw text"
+
+    def test_an_unbounded_filename_and_labels_are_measured(self):
+        """The scaffolding is not a fixed allowance: a long file name and a long
+        label list are per document and unbounded, and the BUDGET must shrink
+        to make room for them."""
+        from types import SimpleNamespace
+
+        dp = create_dataprep()
+        long_input = SimpleNamespace(
+            storage_path="/tmp/" + ("a" * 900) + ".pdf",
+            file_labels=["label-" + ("b" * 80)] * 15,
+        )
+        scaffold = dp_module._doc_context_scaffold_chars(long_input)
+        assert scaffold > 1000, "a long filename and labels must be measured, not assumed"
+
+        # ...and the budget the resolver derives shrinks with that scaffolding.
+        short, _ = dp._resolve_doc_budget(
+            ["x" * 500] * 8, 0, 65536, scaffold_chars=dp_module._doc_context_scaffold_chars(create_mock_ingest_input())
+        )
+        long_budget, _ = dp._resolve_doc_budget(
+            ["x" * 500] * 8, 0, 65536, scaffold_chars=dp_module._doc_context_scaffold_chars(long_input)
+        )
+        assert long_budget < short
+
+    @pytest.mark.asyncio
+    async def test_the_applied_budget_accounts_for_the_real_scaffolding(self, monkeypatch):
+        """The INGEST path must reserve the measured scaffolding: a long file
+        name and a long label list shrink the budget that is applied, because
+        they are part of the request and sit outside the budget."""
+        monkeypatch.setattr(dp_module, "CONTEXTUAL_RETRIEVAL_ENABLED", True)
+        monkeypatch.setenv("VLLM_API_KEY", "k")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        _model_endpoint(monkeypatch, 65536)
+
+        async def _fake_create(*args, **kwargs):
+            # Answer in the shape the call asks for: one context per item in a
+            # batch, one context for a single call.
+            user_turn = kwargs["messages"][-1]["content"]
+            try:
+                items = json.loads(user_turn)
+            except (TypeError, ValueError):
+                items = None
+            body = {"contexts": ["ctx"] * len(items)} if isinstance(items, list) else {"context": "ctx"}
+            resp = MagicMock()
+            resp.choices = [MagicMock()]
+            resp.choices[0].message.content = json.dumps(body)
+            resp.usage = MagicMock(completion_tokens=10, prompt_tokens=10, total_tokens=20)
+            return resp
+
+        chunks = ["chunk body text. " * 160 for _ in range(200)]
+
+        async def _applied_budget(input):
+            dp = create_dataprep()
+            log = AsyncMock()
+            dp._write_ingestion_log = log
+            client = AsyncMock()
+            client.chat.completions.create = _fake_create
+            with patch.object(dp_module, "AsyncOpenAI", return_value=client):
+                await dp._apply_contextualization(chunks, input, "file1")
+            truncations = [
+                str(c.args[3]) for c in log.await_args_list if len(c.args) > 3 and "truncated" in str(c.args[3])
+            ]
+            assert truncations, "the document should have been truncated"
+            kept = int(truncations[0].split("truncated to ")[1].split(" of ")[0])
+            return kept
+
+        short = await _applied_budget(create_mock_ingest_input())
+        long = await _applied_budget(
+            create_mock_ingest_input(
+                storage_path="/uploads/" + ("a" * 900) + ".pdf",
+                file_labels=["label-" + ("b" * 80)] * 15,
+            )
+        )
+        assert long < short, "a long filename and labels must shrink the applied budget"
+
+    def test_an_operator_stated_window_is_not_mismatch_checked(self):
+        """The mismatch check belongs to a DISCOVERED window: an override is
+        the operator's own statement (they set it precisely because discovery
+        could not answer), so warning them about it would be self-referential."""
+        monkeypatch = pytest.MonkeyPatch()
+        try:
+            monkeypatch.setattr(dp_module, "DATAPREP_MAX_MODEL_LEN", 65536)
+            _model_endpoint(monkeypatch, 65536, model_id="org-a/granite-4.1-8b")
+            monkeypatch.setattr(dp_module, "DATAPREP_CONTEXTUAL_MODEL", "org-b/granite-4.1-8b")
+            dp_module.logger.warning.reset_mock()
+            dp_module._build_vllm_client_and_window()
+            assert dp_module.logger.warning.call_args_list == []
+        finally:
+            monkeypatch.undo()
+
+    def test_the_output_token_reservation_is_sanitised(self):
+        """0 or a negative reservation is not a reservation: it inflates the
+        derived budget AND reaches the API as an invalid max_tokens."""
+        assert dp_module._sanitize_output_tokens(0, 512) == 512
+        assert dp_module._sanitize_output_tokens(-5, 512) == 512
+        assert dp_module._sanitize_output_tokens(4096, 512) == 4096
+
+    def test_window_exhausted_returns_none_not_zero(self):
+        """A 0 budget means 'do not truncate' — the opposite of what we want."""
+        dp = create_dataprep()
+        budget, source = dp._resolve_doc_budget(["x" * 500] * 8, 0, 2048, scaffold_chars=_scaffold())  # T4
         assert budget is None, "must disable contextualization, not send the whole document"
         assert source == "window-exhausted"
 
@@ -3424,10 +3904,10 @@ class TestContextualRetrieval:
         """The property that matters, end to end.
 
         Builds the ACTUAL request the batched per-chunk path sends and checks
-        prompt + completion against VLLM_MAX_MODEL_LEN. This is the assertion
-        that would have caught the original bug: at 6000 on a 2048-token
-        window the request does not fit, and every batch silently falls back to
-        raw chunks.
+        prompt + completion against the discovered serving-model window. This
+        is the assertion that would have caught the original bug: at 6000 on a
+        2048-token window the request does not fit, and every batch silently
+        falls back to raw chunks.
         """
         import json as _json
 
@@ -3439,17 +3919,16 @@ class TestContextualRetrieval:
 
         def _overhead_tokens():
             """Prompt + completion with ZERO document context — the floor."""
-            largest = sorted((len(c) for c in chunks), reverse=True)[: dp_module.LABEL_LLM_BATCH_SIZE]
+            largest = sorted(chunks, key=len, reverse=True)[: dp_module.LABEL_LLM_BATCH_SIZE]
             prompt = -(-len(dp_module.CONTEXTUAL_RETRIEVAL_PROMPT) // dp_module.CHARS_PER_TOKEN)
-            batch_chars = sum(largest) + len(largest) * dp_module.JSON_ITEM_OVERHEAD_CHARS
+            batch_chars = dp_module._batch_user_turn_chars(largest)
             return (
                 prompt + -(-batch_chars // dp_module.CHARS_PER_TOKEN),
                 dp_module.CONTEXTUAL_MAX_TOKENS * dp_module.LABEL_LLM_BATCH_SIZE,
             )
 
         for window in (4096, 8192, 16384, 65536):
-            monkeypatch.setenv("VLLM_MAX_MODEL_LEN", str(window))
-            budget, source = dp._resolve_doc_budget(chunks, 0)
+            budget, source = dp._resolve_doc_budget(chunks, 0, window, scaffold_chars=_scaffold())
 
             if budget is None:
                 # Refusing is only CORRECT if the request genuinely could not
@@ -3477,6 +3956,33 @@ class TestContextualRetrieval:
                 f"budget={budget} — request would be rejected by vLLM"
             )
 
+    def test_assembled_doc_level_request_fits_the_window(self):
+        """The doc_level request carries the document context INSIDE the system
+        prompt, and the scaffolding around it (filename line, labels line,
+        header, truncation marker, user turn) sits OUTSIDE the budget. A
+        request sized without that scaffolding overflows the window by
+        exactly those characters — and the call is then rejected, retried and
+        silently replaced by raw chunks."""
+        import json as _json
+
+        dp = create_dataprep()
+        chunks = ["chunk body text. " * 160 for _ in range(200)]
+        for window in (4096, 8192, 16384, 65536):
+            budget, _source = dp._resolve_doc_budget(
+                chunks, 100000, window, scaffold_chars=_scaffold(), single_call=True
+            )
+            if budget is None:
+                continue  # window exhausted: nothing is sent at all
+            doc_ctx = dp._build_doc_context(chunks, create_mock_ingest_input(), budget)
+            system_prompt = dp_module._CONTEXTUAL_DOC_PROMPT_DEFAULT.replace("{document_context}", doc_ctx)
+            user_turn = _json.dumps(["Write the document-level context."])
+            prompt_tokens = -(-(len(system_prompt) + len(user_turn)) // dp_module.CHARS_PER_TOKEN)
+            completion = dp_module.CONTEXTUAL_MAX_TOKENS
+            assert prompt_tokens + completion <= window, (
+                f"window={window} prompt={prompt_tokens} completion={completion} "
+                f"budget={budget} — the request would be rejected by vLLM"
+            )
+
     def test_the_old_fixed_6000_would_not_have_fit(self, monkeypatch):
         """Why deriving matters — this is the bug, stated as a test.
 
@@ -3491,12 +3997,14 @@ class TestContextualRetrieval:
         dp = create_dataprep()
         chunks = ["chunk body text. " * 160 for _ in range(200)]
         window = 4096
-        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", str(window))
 
-        budget, source = dp._resolve_doc_budget(chunks, 6000)  # the old literal
-        assert (budget, source) == (6000, "override")
+        budget, source = dp._resolve_doc_budget(chunks, 6000, window, scaffold_chars=_scaffold())  # the old literal
+        assert source in ("window-capped", "window-exhausted"), "the old literal does not fit this window"
+        assert budget is None or budget < 6000, "the old literal must not be sent as-is"
 
-        doc_ctx = dp._build_doc_context(chunks, create_mock_ingest_input(), budget)
+        # The historical claim, computed directly: the shipped literal DID
+        # overflow this window, which is why the budget is derived.
+        doc_ctx = dp._build_doc_context(chunks, create_mock_ingest_input(), 6000)
         system_prompt = dp_module.CONTEXTUAL_RETRIEVAL_PROMPT.replace("{document_context}", doc_ctx)
         batch = chunks[: dp_module.LABEL_LLM_BATCH_SIZE]
         user_turn = _json.dumps([{"index": i, "text": t} for i, t in enumerate(batch)])
@@ -3508,8 +4016,11 @@ class TestContextualRetrieval:
             "if it now fits, the overhead model changed and this test is stale"
         )
 
-        # ...and the derivation refuses rather than sending it.
-        assert dp._resolve_doc_budget(chunks, 0)[0] is None
+        # ...and the applied budget is one the window can accept (or none at
+        # all): the system refuses or corrects the request rather than sending
+        # it.
+        capped, _source = dp._resolve_doc_budget(chunks, 0, window, scaffold_chars=_scaffold())
+        assert capped is None or capped < 6000
 
     @pytest.mark.asyncio
     async def test_flag_on_prepends_context(self, monkeypatch):

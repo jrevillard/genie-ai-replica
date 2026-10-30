@@ -82,8 +82,9 @@ source first** (the file in the repo), then regenerate.
 | `RERANKER_TOP_N` | `3` | chatqna | Top chunks kept by `slice`/`slice_threshold` |
 | `CONTEXTUAL_RETRIEVAL_ENABLED` | `true` | dataprep | On by default; prepends doc-context prefix |
 | `DATAPREP_CONTEXTUAL_MODEL` | _(empty = reuse `VLLM_LLM_MODEL_ID`)_ | dataprep | Must support guided JSON |
-| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | `100000` (Python code) / `6000` (compose override) | dataprep | Max chars fed to context LLM (~1500 tokens; ≤0 disables truncation). **Compose override** — `docker-compose.yaml` sets the per-chunk default to `6000` (the doc-level sibling `_DOC_LEVEL` stays at `100000`); the compose file wins at runtime. To use the full Python default, set `DATAPREP_CONTEXTUAL_DOC_BUDGET=100000` in `.env` before `docker compose --env-file .env up -d` (or `env.t4` / `env.rtx6000` overlays per [Step 6d](/docs/deploy/docker-compose-setup/#6d-with-gpu-specific-settings)). |
+| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | `0` | dataprep | Max chars fed to the context LLM. `0` = **derived** from the window the endpoint serves, discovered at runtime from `VLLM_ENDPOINT` (the doc-level sibling `_DOC_LEVEL` is a maximum the same window caps). `>0` sets a maximum — the window still caps it whenever it is known, so a budget copied from a larger-window deployment cannot overflow a small one; the rejected calls would otherwise fall back to raw chunks silently. `<0` disables contextualization for the document. |
 | `DATAPREP_CONTEXTUAL_MAX_TOKENS` | `512` | dataprep | Per-call max output tokens for context generation |
+| `DATAPREP_MAX_MODEL_LEN` | `0` | dataprep | The context window (tokens) dataprep sizes document contexts against. `0` = discover it at runtime from `VLLM_ENDPOINT`. `>0` = the deployer states the window the endpoint serves — the only lever on a strict OpenAI-compatible provider (its `/v1/models` carries no `max_model_len`) and the way to state the window of a `DATAPREP_CONTEXTUAL_MODEL` that is not the model the endpoint lists first. |
 | `CONTEXTUAL_STRATEGY` | `per_chunk` | dataprep | `per_chunk` (Anthropic recipe — default) or `doc_level` (N× cheaper, same context for every chunk) |
 | `CONTEXTUAL_LABEL_RAW` | `true` | dataprep | `true` = label raw chunk, use context only for embedding |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:8090,http://127.0.0.1:8090,https://${NGINX_PUBLIC_DOMAIN:-localhost}` | backend | Comma-separated origins; localhost dev default |
@@ -146,9 +147,9 @@ utilization and model-length limits per profile. They are read via
 
 | Variable | env.t4 default | env.rtx6000 default | Notes |
 |---|---|---|---|
-| `VLLM_GPU_UTILIZATION` | `0.4` | `0.6` | Fraction of GPU memory vLLM pre-allocates |
-| `VLLM_MAX_MODEL_LEN` | `2048` | `4096` | Context length |
-| `VLLM_MAX_NUM_SEQS` | `64` | `1024` | Max concurrent sequences |
+| `VLLM_GPU_UTILIZATION` | `0.4` | `0.55` | Fraction of GPU memory vLLM pre-allocates |
+| `VLLM_MAX_MODEL_LEN` | `2048` | `65536` | Context length — the vLLM-side memory knob (`--max-model-len`). Dataprep does NOT read it: it discovers the served window at runtime from `VLLM_ENDPOINT` (see `DATAPREP_MAX_MODEL_LEN`) |
+| `VLLM_MAX_NUM_SEQS` | `16` | `16` | Max concurrent sequences |
 | `VLLM_DTYPE` | `half` | _(unset, defaults in docker-compose)_ | Compute dtype |
 | `VLLM_TRANSLATION_GPU_UTILIZATION` | `0.3` | `0.4` | |
 | `VLLM_TRANSLATION_MAX_MODEL_LEN` | `2048` | `8192` | |

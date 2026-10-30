@@ -295,19 +295,30 @@ HUGGING_FACE_HUB_TOKEN=
 # DATAPREP_CONTEXTUAL_MODEL=           # model for context generation; empty = reuse
 #                                      #   VLLM_LLM_MODEL_ID. MUST support guided JSON
 #                                      #   (response_format=json_object) like granite-4.1-8b.
-# DATAPREP_CONTEXTUAL_DOC_BUDGET=0     # 0 = DERIVE from VLLM_MAX_MODEL_LEN (recommended, and the
-#                                      #   default). The context LLM receives: system prompt +
+# DATAPREP_CONTEXTUAL_DOC_BUDGET=0     # 0 = DERIVE from the serving model's window (recommended,
+#                                      #   and the default). The context LLM receives: system prompt +
 #                                      #   document context + the batch's chunk text, and reserves
 #                                      #   DATAPREP_CONTEXTUAL_MAX_TOKENS *per chunk in the batch*.
 #                                      #   Everything except the document context is subtracted
 #                                      #   from the window, so the budget is right for your GPU:
-#                                      #   ~250k chars on the default 65536-token window, ~11k on
-#                                      #   env.rtx6000 (4096), none on env.t4 (2048) — see the note
-#                                      #   below. Set an explicit number to pin it; a negative
-#                                      #   value disables contextualization for the document.
+#                                      #   ~250k chars on the default 65536-token window (also
+#                                      #   env.rtx6000, which serves 65536), none on env.t4 (2048)
+#                                      #   — see the note below. Set an explicit number to pin it;
+#                                      #   a negative value disables contextualization for the
+#                                      #   document.
 #                                      #   Do NOT copy a number from another deployment: a budget
 #                                      #   sized for a big GPU overflows a small one, and the calls
 #                                      #   are rejected and silently fall back to raw chunks.
+# DATAPREP_MAX_MODEL_LEN=0             # 0 = discover the serving model's window at runtime, from
+#                                      #   VLLM_ENDPOINT (the same endpoint labeling and context
+#                                      #   generation talk to). Set it >0 to state the window the
+#                                      #   endpoint serves — the ONLY lever on a strict
+#                                      #   OpenAI-compatible provider, whose /v1/models carries
+#                                      #   no max_model_len (there, discovery has no answer and
+#                                      #   dataprep fails closed to 2048 tokens with a warning).
+#                                      #   Also state it when DATAPREP_CONTEXTUAL_MODEL points at
+#                                      #   a model other than the one the endpoint lists first.
+#                                      #   NOT the vLLM memory knob: that is VLLM_MAX_MODEL_LEN.
 # DATAPREP_CONTEXTUAL_MAX_TOKENS=512   # max OUTPUT tokens per chunk in the batch. Model writes ~196
 #                                      #   tokens; the legacy cap of 200 truncated the JSON under
 #                                      #   concurrent load. 512 = safe margin. This is PER CHUNK, so a
@@ -328,14 +339,17 @@ HUGGING_FACE_HUB_TOKEN=
 #                                      #   budget has its deep chunks embedded against a
 #                                      #   description of its start. The first part keeps the
 #                                      #   original concept_id so existing links still resolve.
-#                                      #   Must track the document-context budget above, which
-#                                      #   derives from VLLM_MAX_MODEL_LEN. If a document cannot
-#                                      #   be split without losing content, the import is rejected
-#                                      #   with CONCEPT_TOO_LARGE naming the section.
-# VLLM_MAX_MODEL_LEN                   # the serving model's context window. Set by env.t4 (2048),
-#                                      #   env.rtx6000 (4096) or the compose default (65536). This is
-#                                      #   what DATAPREP_CONTEXTUAL_DOC_BUDGET is derived from, so it
-#                                      #   is not only a vLLM tuning knob.
+#                                      #   Must stay in step with the document-context budget
+#                                      #   above, which follows the window the endpoint serves at
+#                                      #   runtime. The ceiling here is a STATIC literal — raise it
+#                                      #   by hand when the served window changes. If a document
+#                                      #   cannot be split without losing content, the import is
+#                                      #   rejected with CONCEPT_TOO_LARGE naming the section.
+# VLLM_MAX_MODEL_LEN                   # the serving model's context window (vLLM --max-model-len).
+#                                      #   Set by env.t4 (2048), env.rtx6000 (65536) or the compose
+#                                      #   default (65536). Pure vLLM memory knob — dataprep does
+#                                      #   NOT read it; it discovers the served window at runtime
+#                                      #   from VLLM_ENDPOINT (issue #1182).
 
 # Hybrid Retrieval — BM25 + Reciprocal Rank Fusion (Contextual Retrieval Part B) — ON by default, opt-out via env var.
 # --- Model-endpoint HTTP budgets (optional) ---

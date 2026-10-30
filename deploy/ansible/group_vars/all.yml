@@ -176,7 +176,16 @@ keycloak_theme: genie
 #   contextual_retrieval_enabled: false   # true (default). false is a true no-op
 #   dataprep_contextual_model: ""         # empty = auto-detect the served model;
 #                                         #   must support guided JSON (response_format=json_object)
-#   dataprep_contextual_doc_budget: 0     # 0 (default) = DERIVED from vllm_max_model_len.
+#   dataprep_max_model_len: 0             # 0 (default) = discover the served context window at
+#                                         #   runtime (from VLLM_ENDPOINT). Set >0 to state the
+#                                         #   window the endpoint serves — the only lever on a
+#                                         #   strict OpenAI-compatible provider (its /v1/models
+#                                         #   carries no max_model_len) and the way to state the
+#                                         #   window of a dataprep_contextual_model that is not
+#                                         #   the model the endpoint lists first.
+#   dataprep_contextual_doc_budget: 0     # 0 (default) = DERIVED from the window the endpoint
+#                                         #   SERVES, discovered at runtime from VLLM_ENDPOINT.
+#                                         #   (vllm_max_model_len is the vLLM-side knob only.)
 #                                         #   The context call carries the system prompt +
 #                                         #   document context + the batch's chunk text and
 #                                         #   reserves max_tokens per chunk in the batch; all of

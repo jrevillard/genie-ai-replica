@@ -1216,17 +1216,18 @@ void main() {
       expect(quickHelpPressable(button, resolver), isFalse);
     });
 
-    test(
-      'a scoped card with no hierarchy resolver refuses the press',
-      () {
-        // The one case where the nameable gate is not implied by the
-        // broken gate: no resolver, no stateFor, no broken verdict —
-        // the wire would carry a scope nothing could EN-name.
-        final button = {'id': 'civil', 'resolvedTitle': 'Civil Registry', 'category': '2'};
+    test('a scoped card with no hierarchy resolver refuses the press', () {
+      // The one case where the nameable gate is not implied by the
+      // broken gate: no resolver, no stateFor, no broken verdict —
+      // the wire would carry a scope nothing could EN-name.
+      final button = {
+        'id': 'civil',
+        'resolvedTitle': 'Civil Registry',
+        'category': '2',
+      };
 
-        expect(quickHelpPressable(button, null), isFalse);
-      },
-    );
+      expect(quickHelpPressable(button, null), isFalse);
+    });
   });
 
   /// The ONE button-identity lookup — the restore and the locale
@@ -1515,7 +1516,9 @@ void main() {
     test('descends the path to the named section', () {
       final config = {
         'features': {
-          'chat': {'welcomeMessage': {'en': 'Hello'}},
+          'chat': {
+            'welcomeMessage': {'en': 'Hello'},
+          },
         },
       };
 

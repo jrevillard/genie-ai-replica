@@ -81,7 +81,7 @@
                   @click.prevent="setActiveTab('queryInspector')"
                 >
                   <i>🔍</i>
-                  <span>{{ translate('admin.queryInspector', 'Query Inspector') }}</span>
+                  <span>{{ translate('admin.queryInspector.title', 'Query Inspector') }}</span>
                 </a>
               </li>
             </ul>
@@ -782,7 +782,7 @@
                 <div v-if="activeTab === 'queryInspector'" class="dashboard-card" style="grid-column: span 2">
                   <div class="card-header">
                     <div class="card-title">
-                      {{ translate('admin.queryInspector', 'Query Inspector') }}
+                      {{ translate('admin.queryInspector.title', 'Query Inspector') }}
                     </div>
                   </div>
                   <QueryInspector />
@@ -1598,6 +1598,21 @@ import documentFileService from '../services/documentFileService.js';
 import { formatFileSize } from '../utils/fileUtils.js';
 import { themeManager } from '../utils/ThemeManager';
 
+// Shared empty named-params dict for translate() — a frozen module constant
+// so the default argument allocates once, not on every per-render call.
+const EMPTY_NAMED = Object.freeze({});
+
+// A missing key's fallback stands in for the translation, so it goes through
+// the same interpolation a real message would — otherwise it renders literal
+// `{current}`-style placeholders. A null named value renders empty, matching
+// vue-i18n; a fully-empty result falls back to the key rather than showing
+// the untouched braces. Module-level so the per-call translate() path
+// allocates nothing.
+function interpolateFallback(key, fallback, named) {
+  const interpolated = fallback.replace(/\{(\w+)\}/g, (m, k) => (named[k] != null ? named[k] : ''));
+  return interpolated || key;
+}
+
 export default {
   name: 'AdminDashboard',
   components: {
@@ -2093,23 +2108,25 @@ export default {
     },
 
     // Translation method - improved to ensure consistent behavior with SettingsComponent
-    translate(key, fallback = '') {
+    translate(key, fallback = '', named = EMPTY_NAMED) {
       if (!this.$i18n) {
         // console.warn(`[AdminDashboard] $i18n not available. Using fallback for: ${key}`);
-        return fallback;
+        return interpolateFallback(key, fallback, named);
       }
       try {
-        // Force the correct locale
-        const translation = this.$i18n.t(key, { locale: this.currentLocale });
-        // Return fallback if the key is returned (meaning no translation found)
+        // vue-i18n's legacy t() takes the locale as a STRING second argument;
+        // an object there is parsed as named params and the locale never
+        // reaches the translator, so `named` must be the third argument.
+        const translation = this.$i18n.t(key, this.currentLocale, named);
+        // Return the interpolated fallback if the key is returned (no translation found)
         if (translation === key) {
           // console.warn(`[AdminDashboard] No translation for key: ${key}. Using fallback.`);
-          return fallback || key;
+          return interpolateFallback(key, fallback, named);
         }
         return translation;
       } catch (e) {
         console.error(`[AdminDashboard] Translation error for key ${key}:`, e);
-        return fallback || key;
+        return interpolateFallback(key, fallback, named);
       }
     },
 

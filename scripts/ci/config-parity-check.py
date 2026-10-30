@@ -102,7 +102,7 @@ import yaml
 # when the script is run from the repository root, and from anywhere
 # else the notRead walk found nothing — so every claim passed
 # unverified and the gate reported green on a claim that was false.
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # The defaults are resolved from the repository root, not the working
 # directory: the gate is run from the repo root in CI, but a developer
@@ -111,7 +111,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # nothing and therefore passed every notRead claim unverified.
 DEFAULT_COMPOSE = os.path.join(REPO_ROOT, "docker-compose.yaml")
 DEFAULT_VALUES = os.path.join(REPO_ROOT, "charts/genieai-umbrella/values.yaml")
-DEFAULT_ALLOWLIST = os.path.join(REPO_ROOT, "scripts/config-parity-allowlist.json")
+DEFAULT_ALLOWLIST = os.path.join(REPO_ROOT, "scripts/ci/config-parity-allowlist.json")
 # Where a codeDefault variable must be DOCUMENTED. A codeDefault variable
 # is one the chart leaves unset on purpose — but "unset on purpose" is
 # only sound if the operator who wants to set it can find it. The chart

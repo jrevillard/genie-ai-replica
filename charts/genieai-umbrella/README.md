@@ -404,11 +404,11 @@ wholesale, and one overlay value would silently drop the rest. The same
 map exists for the OPEA tier under `opea.<service>.env`.
 
 The values the chart sets by default are the ones Docker Compose sets on
-the same service: the parity gate (`scripts/config-parity-check.py`, the
+the same service: the parity gate (`scripts/ci/config-parity-check.py`, the
 `chart:parity` CI job) fails the build when the two surfaces drift. The
 differences that ARE the Kubernetes adaptation — the addresses each surface
 reaches, the secret delivery, the observability toggle — are declared in
-`scripts/config-parity-allowlist.json`, each with its reason, and every
+`scripts/ci/config-parity-allowlist.json`, each with its reason, and every
 Compose service that has no comparable counterpart is declared there too:
 the gate refuses to pass with a service it does not account for.
 
@@ -545,7 +545,7 @@ feeds backend `ARANGO_URL`.
 repository, dataprep, the retriever and the migrations Job. It defaults to
 `_system`, ArangoDB's own database, which exists on a fresh instance — the
 Compose deployment uses a dedicated `genie-ai` database instead, and that
-difference is declared in `scripts/config-parity-allowlist.json`. Pointing
+difference is declared in `scripts/ci/config-parity-allowlist.json`. Pointing
 an existing deployment at another database moves every collection: the
 migrations Job creates collections, it does not move them.
 

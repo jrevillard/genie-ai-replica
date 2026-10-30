@@ -44,8 +44,8 @@ Three assertions, one per failure mode:
    EXEMPT, with the reason. The default is swept, so a NEW block is
    covered the day it is added.
 
-Usage: scripts/clearable-blocks-check.py [chart-path]
-       CHART=charts/genieai-umbrella scripts/clearable-blocks-check.py
+Usage: scripts/ci/clearable-blocks-check.py [chart-path]
+       CHART=charts/genieai-umbrella scripts/ci/clearable-blocks-check.py
 """
 
 import os

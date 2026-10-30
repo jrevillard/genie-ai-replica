@@ -2262,27 +2262,40 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                         ],
                                       ),
                                       if (broken)
-                                        Text(
-                                          // The scope's caption when the
-                                          // scope is the failure; the
-                                          // missing-title text when the
-                                          // config gave the card no
-                                          // title. Both defects, one
-                                          // caption line.
-                                          [
-                                            if (scope['broken'] as bool? ??
-                                                false)
-                                              _quickHelpErrorCaption(scope),
-                                            if (translatedTitle.isEmpty)
-                                              tr(
-                                                'chatbot.quickHelpTitleMissing',
-                                              ),
-                                          ].join(' '),
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(
-                                                fontSize: tokens.textXs,
-                                                color: tokens.danger,
-                                              ),
+                                        Flexible(
+                                          // The tile's height is the
+                                          // grid's aspect ratio — the
+                                          // caption can never grow it —
+                                          // so a long caption (the
+                                          // outage text, two joined
+                                          // defects, a raised font
+                                          // scale) must clamp instead
+                                          // of overflowing the tile.
+                                          child: Text(
+                                            // The scope's caption when
+                                            // the scope is the failure;
+                                            // the missing-title text
+                                            // when the config gave the
+                                            // card no title. Both
+                                            // defects, one caption
+                                            // line.
+                                            [
+                                              if (scope['broken'] as bool? ??
+                                                  false)
+                                                _quickHelpErrorCaption(scope),
+                                              if (translatedTitle.isEmpty)
+                                                tr(
+                                                  'chatbot.quickHelpTitleMissing',
+                                                ),
+                                            ].join(' '),
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                                  fontSize: tokens.textXs,
+                                                  color: tokens.danger,
+                                                ),
+                                            maxLines: 3,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
                                     ],
                                   ),

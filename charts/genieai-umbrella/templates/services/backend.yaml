@@ -123,6 +123,9 @@ explicit `false` back to `true`. */ -}}
 {{- if kindIs "invalid" $streamingTranslation -}}
 {{- $streamingTranslation = true -}}
 {{- end -}}
+{{- /* The ARANGO_GRAPH_NAME row: the legacy graph name the BFF prepends
+in hybrid mode — MUST match the retriever's own ARANGO_GRAPH_NAME
+(opea.retriever), or the legacy leg diverges from the fan-out leg. */ -}}
 {{- $urls := list
     (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
     (dict "name" "KEYCLOAK_REALM" "value" ($dataKeycloak.realm | default "genie" | toString))
@@ -130,6 +133,7 @@ explicit `false` back to `true`. */ -}}
     (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
     (dict "name" "ARANGO_DB" "value" ($dataArangodb.database | default "_system" | toString))
     (dict "name" "ARANGO_USER" "value" "root")
+    (dict "name" "ARANGO_GRAPH_NAME" "value" (index ($opea.retriever | default dict) "arangoGraphName" | default "GRAPH" | toString))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
     (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
     (dict "name" "TRANSLATION_CACHE" "value" "on")

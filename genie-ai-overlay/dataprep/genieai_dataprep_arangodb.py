@@ -12,6 +12,7 @@ except ModuleNotFoundError:  # Windows dev checkout: locking degrades to a no-op
 import json
 import os
 import re
+import threading
 import time
 from contextlib import suppress
 from typing import Any
@@ -513,9 +514,11 @@ DEGRADED_REMEDIES = {
     DEGRADED_WINDOW_TOO_SMALL: (
         "{phase}: the serving model's context window leaves no room for a document context once the "
         "system prompt, the batch chunk text and the per-chunk output reservation are subtracted, so "
-        "this document was ingested without contexts. Raising a budget will not help — raise the "
-        "model window on the GPU (vLLM --max-model-len), lower DATAPREP_LLM_LABEL_BATCH_SIZE or "
-        "DATAPREP_CONTEXTUAL_MAX_TOKENS, or pin DATAPREP_CONTEXTUAL_DOC_BUDGET to a value you know fits."
+        "this document was ingested without contexts. Raising a budget will not help — set "
+        "DATAPREP_MAX_MODEL_LEN to the window the endpoint serves (the only lever when it does not "
+        "expose max_model_len), raise the model window on the GPU (vLLM --max-model-len), lower "
+        "DATAPREP_LLM_LABEL_BATCH_SIZE or DATAPREP_CONTEXTUAL_MAX_TOKENS, or pin "
+        "DATAPREP_CONTEXTUAL_DOC_BUDGET to a value you know fits."
     ),
 }
 
@@ -649,14 +652,12 @@ JSON_ITEM_OVERHEAD_CHARS = 64
 # the largest window would silently produce prompts the GPU cannot accept.
 DERIVE_FALLBACK_WINDOW = 2048
 # Doc-context budget for the doc_level strategy (ONE call, so it can afford a
-# much larger window than per_chunk). ~4 chars/token. This is an EXPLICIT
-# value, NOT derived from the served window: it is positive, so the budget
-# resolver takes it as an override and never consults the window. Keep it
-# below the window the endpoint actually serves — the default 100000 chars is
-# ~25k tokens, which fits the 65536-token default profile and NOT the
-# 4096-token ones, where the call is rejected and the document falls back to
-# raw chunks. Docs larger than this are truncated — Map-Reduce hierarchical
-# summarization is the future fix for that case.
+# much larger window than per_chunk). ~4 chars/token. This is a MAXIMUM: the
+# window the endpoint serves caps it, so the 100000-char default cannot
+# overflow a deployment that serves less (a rejected call falls back to raw
+# chunks silently). Set 0 to let the window decide entirely. Docs larger than
+# the budget are truncated — Map-Reduce hierarchical summarization is the
+# future fix for that case.
 DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL = int(os.getenv("DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL", "100000"))
 # Strategy when CONTEXTUAL_RETRIEVAL_ENABLED=true:
 #   "per_chunk" (default) — one LLM call per chunk; each chunk gets a context
@@ -804,9 +805,9 @@ def _build_vllm_client_and_window() -> tuple[AsyncOpenAI, str, int]:
     answer: on the ingest path a blocked event loop freezes the phase
     heartbeats and every concurrent request the process serves.
 
-    ``named_model`` is the model the generation requests name —
-    DATAPREP_CONTEXTUAL_MODEL when set, the resolved model id otherwise —
-    which is what the window has to match.
+    The model the generation requests name — DATAPREP_CONTEXTUAL_MODEL when
+    set, the resolved model id otherwise — is what the window has to match,
+    and it is computed here.
     """
     endpoint = os.getenv("VLLM_ENDPOINT", "")
     client, model = _build_vllm_client(endpoint)
@@ -819,13 +820,21 @@ def _build_vllm_client_and_window() -> tuple[AsyncOpenAI, str, int]:
 # would otherwise ship one identical line per document — the volume is what
 # teaches operators to ignore the line.
 _WINDOW_WARNED: set[str] = set()
+_WINDOW_WARNED_LOCK = threading.Lock()
 
 
 def _warn_once(key: str, message: str) -> None:
-    """Log ``message`` once per ``key`` for the lifetime of the process."""
-    if key in _WINDOW_WARNED:
-        return
-    _WINDOW_WARNED.add(key)
+    """Log ``message`` once per ``key`` for the lifetime of the process.
+
+    The set is shared by the worker threads that resolve the window, so the
+    check-and-add is done under a lock: without it, concurrent ingests can
+    all pass the membership test and the identical line ships N times — the
+    volume is exactly what teaches operators to ignore it.
+    """
+    with _WINDOW_WARNED_LOCK:
+        if key in _WINDOW_WARNED:
+            return
+        _WINDOW_WARNED.add(key)
     logger.warning(message)
 
 
@@ -904,7 +913,14 @@ def _warn_on_contextual_model_mismatch(endpoint: str, window: int, named_model: 
     model), so it is surfaced and the operator is pointed at the override.
     """
     discovered_model = get_model_id(endpoint)
-    if not discovered_model or discovered_model == named_model:
+    if not discovered_model:
+        return
+    # Compare basenames: the same model is often served under a namespaced id
+    # ("ibm-granite/granite-4.1-8b") while the deployment names it without
+    # the namespace ("granite-4.1-8b"). A name difference is not a model
+    # difference, and a false alarm here sends the operator to pin a window
+    # that was already right.
+    if discovered_model.rsplit("/", 1)[-1] == named_model.rsplit("/", 1)[-1]:
         return
     _warn_once(
         f"mismatch|{endpoint}|{named_model}",
@@ -2447,7 +2463,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         degraded: list[str] = []
         client = model = None
         try:
-            client, model = _build_vllm_client()
+            # Off the event loop, like the contextualization path: the model-id
+            # probe inside is a sync HTTP call that can take its whole timeout
+            # when the endpoint does not answer, and a frozen loop stalls
+            # every concurrent request this process serves.
+            client, model = await asyncio.to_thread(_build_vllm_client)
         except Exception as e:
             err = f"{type(e).__name__}: {str(e)[:200]}"
             logger.error(f"LLM labeling disabled for {file_id}: vLLM client init failed ({err}); using file labels.")
@@ -2581,7 +2601,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             "chunks": len(chunks),
         }
 
-    def _resolve_doc_budget(self, chunks: list[str], configured: int, window: int) -> tuple[int | None, str]:
+    def _resolve_doc_budget(
+        self, chunks: list[str], configured: int, window: int, *, single_call: bool = False
+    ) -> tuple[int | None, str]:
         """Resolve the document-context budget for this document.
 
         Returns ``(budget_chars, source)``. ``budget_chars is None`` means
@@ -2603,6 +2625,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         resolving it inside this function would freeze the event loop on the
         ingest path.
 
+        ``single_call`` is the doc_level strategy: ONE call per document, so
+        the request carries the system prompt (with the document context
+        embedded in it) and reserves ONE output budget — no chunk text. Its
+        configured value is an UPPER BOUND (the knob is "max chars"), capped
+        by what the window can hold: that is what keeps the 100000-char
+        default from overflowing a deployment that serves far less, where
+        every document would silently fall back to raw chunks. The per-chunk
+        path keeps its contract — an explicit budget is pinned verbatim.
+
         The batch term is measured from the REAL chunks rather than from the
         DATAPREP_CHUNK_SIZE_* vars: those are resolved per file extension
         upstream in the microservice, and mirroring that map here would be a
@@ -2611,23 +2642,28 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         """
         if configured < 0:
             return None, "disabled"
-        if configured > 0:
-            return configured, "override"
 
-        prompt_tokens = -(-len(CONTEXTUAL_RETRIEVAL_PROMPT) // CHARS_PER_TOKEN)
-        largest = sorted((len(c) for c in chunks), reverse=True)[:LABEL_LLM_BATCH_SIZE]
-        # The user turn is json.dumps([{"index": i, "text": t}, ...]) — the raw
-        # chunk text plus per-item JSON scaffolding and escaping. Reserve it
-        # generously: over-reserving only costs a slightly smaller budget,
-        # under-reserving sends a request the model cannot accept.
-        batch_chars = sum(largest) + len(largest) * JSON_ITEM_OVERHEAD_CHARS
-        batch_tokens = -(-batch_chars // CHARS_PER_TOKEN)
-        # The batched per-chunk path reserves ONE CONTEXTUAL_MAX_TOKENS per chunk
-        # in the batch (max_tokens=CONTEXTUAL_MAX_TOKENS * len(batch)) — the
-        # response holds a context per chunk — so this scales with the batch
-        # size, it is not a flat cap. Reserving less would size the budget
-        # against a request the model would never actually complete.
-        output_tokens = CONTEXTUAL_MAX_TOKENS * LABEL_LLM_BATCH_SIZE
+        if single_call:
+            prompt_tokens = -(-len(_CONTEXTUAL_DOC_PROMPT_DEFAULT) // CHARS_PER_TOKEN)
+            batch_tokens = 0
+            output_tokens = CONTEXTUAL_MAX_TOKENS
+        else:
+            if configured > 0:
+                return configured, "override"
+            prompt_tokens = -(-len(CONTEXTUAL_RETRIEVAL_PROMPT) // CHARS_PER_TOKEN)
+            largest = sorted((len(c) for c in chunks), reverse=True)[:LABEL_LLM_BATCH_SIZE]
+            # The user turn is json.dumps([{"index": i, "text": t}, ...]) — the raw
+            # chunk text plus per-item JSON scaffolding and escaping. Reserve it
+            # generously: over-reserving only costs a slightly smaller budget,
+            # under-reserving sends a request the model cannot accept.
+            batch_chars = sum(largest) + len(largest) * JSON_ITEM_OVERHEAD_CHARS
+            batch_tokens = -(-batch_chars // CHARS_PER_TOKEN)
+            # The batched per-chunk path reserves ONE CONTEXTUAL_MAX_TOKENS per chunk
+            # in the batch (max_tokens=CONTEXTUAL_MAX_TOKENS * len(batch)) — the
+            # response holds a context per chunk — so this scales with the batch
+            # size, it is not a flat cap. Reserving less would size the budget
+            # against a request the model would never actually complete.
+            output_tokens = CONTEXTUAL_MAX_TOKENS * LABEL_LLM_BATCH_SIZE
         usable = window - prompt_tokens - batch_tokens - output_tokens
         if usable <= 0:
             # NOT "budget 0" — in _build_doc_context a budget of 0 means "do
@@ -2642,7 +2678,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 f"larger window (vLLM --max-model-len)."
             )
             return None, "window-exhausted"
-        return usable * CHARS_PER_TOKEN, "derived"
+        derived = usable * CHARS_PER_TOKEN
+        if configured > 0:
+            # doc_level: the operator's value is a maximum, the window caps it.
+            return min(configured, derived), "override"
+        return derived, "derived"
 
     def _build_doc_context(self, chunks: list[str], input, budget: int = 0) -> str:
         """Build the document-context string fed to the context-generation LLM.
@@ -2714,7 +2754,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         model = DATAPREP_CONTEXTUAL_MODEL.strip() or default_model
         total = len(chunks)
 
-        async def _doc_context_or_none(chunks_: list[str], configured: int, label: str) -> str | None:
+        async def _doc_context_or_none(
+            chunks_: list[str], configured: int, label: str, *, single_call: bool = False
+        ) -> str | None:
             """Resolve the budget, log any truncation, build the context.
 
             Returns ``(context, skip_reason)`` — ``context is None`` when this
@@ -2733,7 +2775,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             ``_write_ingestion_log`` is what makes it visible to a curator
             instead of only to whoever greps container logs.
             """
-            budget, source = self._resolve_doc_budget(chunks_, configured, serving_window)
+            budget, source = self._resolve_doc_budget(chunks_, configured, serving_window, single_call=single_call)
             if budget is None:
                 return None, (DEGRADED_WINDOW_TOO_SMALL if source == "window-exhausted" else None)
 
@@ -2759,7 +2801,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # chunk (uses a larger doc budget — it is a single call; N× cheaper).
         if CONTEXTUAL_STRATEGY == "doc_level":
             doc_context, skip_reason = await _doc_context_or_none(
-                chunks, DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL, "doc_level"
+                chunks, DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL, "doc_level", single_call=True
             )
             if doc_context is None:
                 # An operator-disabled budget is deliberate (no reason); a window

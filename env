@@ -346,7 +346,7 @@ HUGGING_FACE_HUB_TOKEN=
 #                                      #   cannot be split without losing content, the import is
 #                                      #   rejected with CONCEPT_TOO_LARGE naming the section.
 # VLLM_MAX_MODEL_LEN                   # the serving model's context window (vLLM --max-model-len).
-#                                      #   Set by env.t4 (2048), env.rtx6000 (4096) or the compose
+#                                      #   Set by env.t4 (2048), env.rtx6000 (65536) or the compose
 #                                      #   default (65536). Pure vLLM memory knob — dataprep does
 #                                      #   NOT read it; it discovers the served window at runtime
 #                                      #   from VLLM_ENDPOINT (issue #1182).

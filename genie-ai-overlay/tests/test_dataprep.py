@@ -3263,7 +3263,7 @@ def _recordable_doc(**kwargs):
     return SimpleNamespace(**kwargs)
 
 
-def _model_endpoint(monkeypatch, window=65536, endpoint="http://gpu-test", dead=False):
+def _model_endpoint(monkeypatch, window=65536, endpoint="http://gpu-test", dead=False, model_id="test-model"):
     """Aim dataprep's window discovery at a fake /v1/models endpoint.
 
     Same seam the chatqna window tests use: the real core.model_cache runs
@@ -3289,7 +3289,7 @@ def _model_endpoint(monkeypatch, window=65536, endpoint="http://gpu-test", dead=
         monkeypatch.setattr("httpx.get", _raise)
         return endpoint
 
-    entry = {"id": "test-model"} if window is None else {"id": "test-model", "max_model_len": window}
+    entry = {"id": model_id} if window is None else {"id": model_id, "max_model_len": window}
     resp = MagicMock()
     resp.json.return_value = {"data": [entry]}
 
@@ -3598,11 +3598,89 @@ class TestContextualRetrieval:
             ticker.cancel()
         assert ticks_during_probe, "the window discovery never probed the endpoint"
         # The blocking case yields 0 ticks (the loop is frozen for the whole
-        # probe); an off-loop probe yields one per 10 ms. The threshold stays
-        # low so a loaded CI runner cannot flake it.
-        assert ticks_during_probe[0] >= 3, (
+        # probe); an off-loop probe yields one per 10 ms. The bar is "> 0", not
+        # a count: any count would be a timing claim that a loaded CI runner
+        # can flake, and the blocking case is the only thing to separate.
+        assert ticks_during_probe[0] > 0, (
             f"the event loop was blocked during window discovery ({ticks_during_probe[0]} ticks while the probe ran)"
         )
+
+    def test_doc_level_budget_is_capped_by_the_window(self):
+        """The doc_level knob is a MAXIMUM: the window caps it.
+
+        One call per document, so the request carries the system prompt with
+        the document context embedded in it and reserves ONE output budget.
+        A deployment that serves 4096 tokens cannot take the 100000-char
+        default (~25k tokens) — the call would be rejected and every document
+        would silently fall back to raw chunks.
+        """
+        dp = create_dataprep()
+        budget, source = dp._resolve_doc_budget(["x" * 500] * 8, 100000, 4096, single_call=True)
+        assert source == "override"
+        # 4096 window - 164 prompt tokens - 512 reserved output, times 4 chars.
+        assert budget == 13680
+        # ...and a window that fits the operator's value leaves it alone.
+        big, big_source = dp._resolve_doc_budget(["x" * 500] * 8, 100000, 65536, single_call=True)
+        assert (big, big_source) == (100000, "override")
+
+    def test_doc_level_budget_on_a_tiny_window_is_refused(self):
+        """A window that cannot hold the prompt and the output reservation
+        leaves no room for a context at all — refuse, do not send it."""
+        dp = create_dataprep()
+        assert dp._resolve_doc_budget(["x" * 500] * 8, 100000, 512, single_call=True) == (
+            None,
+            "window-exhausted",
+        )
+
+    def test_contextual_model_alias_is_not_flagged(self, monkeypatch):
+        """The same model under two names is not a mismatch: a vLLM server
+        lists "ibm-granite/granite-4.1-8b" while the deployment names it
+        "granite-4.1-8b". A false alarm here sends the operator to pin a
+        window that was already right."""
+        endpoint = _model_endpoint(monkeypatch, 65536, model_id="ibm-granite/granite-4.1-8b")
+        dp_module.logger.warning.reset_mock()
+        assert dp_module._serving_model_window(endpoint, "granite-4.1-8b") == 65536
+        assert dp_module.logger.warning.call_args_list == []
+
+    @pytest.mark.asyncio
+    async def test_labelling_model_probe_does_not_block_the_event_loop(self, monkeypatch):
+        """The labelling path resolves the served model on the same endpoint,
+        and that probe is a synchronous HTTP call: it must not run on the
+        event loop either. A frozen loop stalls every concurrent request this
+        process serves while the probe waits."""
+        import time as _time
+
+        import core.model_cache as model_cache
+
+        ticks = 0
+        ticks_during_probe = []
+
+        def _slow_get_model_id(*_args, **_kwargs):
+            before = ticks
+            _time.sleep(0.5)
+            ticks_during_probe.append(ticks - before)
+            return "ci-discovered/model"
+
+        monkeypatch.setattr(model_cache, "get_model_id", _slow_get_model_id)
+        monkeypatch.delenv("VLLM_MODEL_ID", raising=False)
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://gpu-slow")
+        dp = create_dataprep()
+
+        async def _ticker():
+            nonlocal ticks
+            while True:
+                await asyncio.sleep(0.01)
+                ticks += 1
+
+        ticker = asyncio.create_task(_ticker())
+        await asyncio.sleep(0.05)  # let the ticker run BEFORE the probe starts
+        try:
+            with patch.object(dp_module, "AsyncOpenAI", return_value=AsyncMock()):
+                await dp._label_with_llm(["chunk one"], ["Label"], [], "file1")
+        finally:
+            ticker.cancel()
+        assert ticks_during_probe, "the model resolution never ran"
+        assert ticks_during_probe[0] > 0, "the model probe blocked the event loop"
 
     def test_window_exhausted_returns_none_not_zero(self):
         """A 0 budget means 'do not truncate' — the opposite of what we want."""

@@ -2780,6 +2780,7 @@ class TestStreamWithMetadata:
         assert _is_usage_only_frame("plain answer text") is False
         assert _is_usage_only_frame("{broken json") is False
         assert _is_usage_only_frame("") is False
+
     async def test_the_derived_outcome_reaches_the_metadata_event(self):
         """The outcome handle_request derived (for the metric) must land in
         the metadata event verbatim — flag AND reason. Derivation itself is

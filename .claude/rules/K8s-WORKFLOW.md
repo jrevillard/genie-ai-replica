@@ -53,12 +53,16 @@ helm lint --strict charts/genieai-umbrella/
 #    prefix with `rtk proxy` to bypass the hook for this command.
 rtk proxy helm template genieai charts/genieai-umbrella/ \
   -n genieai \
-  -f <(yq -o=json '.values' overlays/jrevillard-laptop/dev/values.yaml | yq -P) \
+  -f <(yq -o=json '.values' overlays/<dev>-laptop/dev/values.yaml | yq -P) \
   > /tmp/rendered.yaml
+#    <dev>-laptop = your per-developer overlay in genie-ai-deploy
+#    (one directory per dev cluster: public values ConfigMap + the
+#    SealedSecrets sealed against THAT cluster's key). Substitute the
+#    name of the overlay your deploy-repo checkout carries.
 
 # 4. Bump chart version in two places (always together)
 #    - charts/genieai-umbrella/Chart.yaml (version + appVersion if changed)
-#    - genie-ai-deploy overlay: overlays/jrevillard-laptop/dev/helmrelease.yaml
+#    - genie-ai-deploy overlay: overlays/<dev>-laptop/dev/helmrelease.yaml
 #      spec.chart.spec.version
 #
 #    WHY, exactly: the version is the deploy repo's LABEL of the chart
@@ -338,7 +342,7 @@ eval $(minikube docker-env)
 docker build -t genie-ai-backend:dev components/gov-chat-backend/
 # repeat for every service you change
 
-# Override per-service in overlays/jrevillard-laptop/dev/values.yaml:
+# Override per-service in overlays/<dev>-laptop/dev/values.yaml:
 # services:
 #   backend:
 #     image: { repository: genie-ai-backend, tag: dev, pullPolicy: Never }

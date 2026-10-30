@@ -1398,7 +1398,7 @@ contractual evidence — a fresh clone does not carry them.)
   `/code-review`, one in the deploy repo. The theme: pass 34's own
   context, again.
   - *The deploy repo has TWO overlays, and only one got the label* —
-    the 0.2.108 bump updated `jrevillard-laptop` but left
+    the 0.2.108 bump updated the laptop overlay but left
     `overlays/minikube/dev` at 0.2.107, while both track the branch
     HEAD. (Correction, pass 36: the mismatch lives in the repo, not in
     a cluster — the minikube cluster's GitRepository tracks deploy-repo
@@ -2409,7 +2409,7 @@ contractual evidence — a fresh clone does not carry them.)
     text reached `helm` as an argument and the job failed on a message
     that read like a chart error. The comments moved above the step.
 - Chart `genieai-umbrella` at **0.2.125** on `feat/k8s-migration`; deployed on
-  the laptop minikube via Flux from `genie-ai-deploy` (`overlays/jrevillard-laptop/dev`).
+  the laptop minikube via Flux from `genie-ai-deploy` (the laptop overlay).
 - Rebased onto `main` at `18d02f094` (the tip that carries !586, !587,
   !588); the branch has since drifted 12 commits behind `origin/main`
   (see the current state above).
@@ -2591,7 +2591,7 @@ and the rows below name each plan and its outcome.
    `chart:install` settled as **manual-only** (full install ≈ 30 min on the
    runner's kind — not tenable per push; same posture as the compose E2E
    suite). The deploy repo's own CI now renders the laptop overlay
-   (`dry-run:jrevillard-laptop/dev`) instead of only parsing the Flux
+   instead of only parsing the Flux
    CRs. Residual: `ct lint`/`ct install` full suite, kind+Calico
    NetworkPolicy install gate, dashboards for chart test results.
 

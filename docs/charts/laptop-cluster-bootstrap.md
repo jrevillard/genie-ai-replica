@@ -92,7 +92,7 @@ interchangeable, and this deployment uses them for different things.
 the HelmRelease reads no `valuesFrom` Secret. The public values ride a
 plain ConfigMap (`genieai-laptop-public`); the real secrets are the
 SealedSecrets. The SOPS pair is deliberately left unwired — see
-`overlays/jrevillard-laptop/dev/kustomization.yaml` in
+`overlays/<dev>-laptop/dev/kustomization.yaml` in
 `genie-ai-deploy`.
 
 ## Installation order

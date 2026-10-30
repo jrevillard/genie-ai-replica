@@ -40,6 +40,8 @@
 {{- $doclingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "docling") -}}
 {{- $tuningEnv := list
     (dict "name" "DATAPREP_COMPONENT_NAME" "value" ($opeaDataprep.dataprepComponentName | default "GENIE_DATAPREP_ARANGODB" | toString))
+    (dict "name" "DATAPREP_INGEST_CONCURRENCY" "value" ($opeaDataprep.dataprepIngestConcurrency | default "1" | toString))
+    (dict "name" "VLLM_MAX_MODEL_LEN" "value" ($opeaDataprep.dataprepVllmMaxModelLen | default "65536" | toString))
     (dict "name" "ARANGO_GRAPH_NAME" "value" ($opeaDataprep.arangoGraphName | default "GRAPH" | toString))
     (dict "name" "DATAPREP_MAX_CONCURRENT_BATCHES" "value" ($opeaDataprep.dataprepMaxConcurrentBatches | default "20" | toString))
     (dict "name" "DATAPREP_LLM_LABEL_BATCH_SIZE" "value" ($opeaDataprep.dataprepLlmLabelBatchSize | default "4" | toString))

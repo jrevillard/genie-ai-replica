@@ -1230,6 +1230,25 @@ void main() {
     });
   });
 
+  /// The stored label list is handed back as-is — the grid reads it per
+  /// frame, and a copy per read would allocate on every rebuild.
+  group('quickHelpServiceLabelsOf', () {
+    test('a stored string list is returned without a copy', () {
+      final labels = <String>['Births'];
+      final button = {'serviceLabels': labels};
+
+      expect(quickHelpServiceLabelsOf(button), same(labels));
+    });
+
+    test('a dynamic list is mapped to strings', () {
+      final button = {
+        'serviceLabels': <dynamic>['Births', 3],
+      };
+
+      expect(quickHelpServiceLabelsOf(button), ['Births', '3']);
+    });
+  });
+
   /// The ONE button-identity lookup — the restore and the locale
   /// re-title must resolve the same entity for the same id.
   group('quickHelpButtonById', () {
@@ -1357,6 +1376,16 @@ void main() {
       }, 'en');
 
       expect(parsed['serviceLabels'], ['Births']);
+    });
+
+    test('the label list is stored as strings, ready for the wire', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'serviceLabels': ['Births', 'Weddings'],
+      }, 'en');
+
+      final labels = parsed['serviceLabels'];
+      expect(labels, isA<List<String>>());
     });
 
     test('the action texts resolve their locale maps', () {

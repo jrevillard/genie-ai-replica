@@ -251,8 +251,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       'features',
       'chat',
     ])['welcomeMessage'];
-    if (welcomeConfig != null) {
-      return resolveConfigText(welcomeConfig, _currentLocale);
+    // The web gates the configured message on truthiness: a scalar
+    // false or an empty string is no message, and neither is a locale
+    // map that resolved to nothing — the i18n default shows instead.
+    if (welcomeConfig != null &&
+        welcomeConfig != false &&
+        welcomeConfig != '') {
+      final resolved = resolveConfigText(welcomeConfig, _currentLocale);
+      if (resolved.isNotEmpty) {
+        return resolved;
+      }
     }
     return tr('chatbot.welcomeMessage');
   }
@@ -1183,10 +1191,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _selectedCategoryId =
         _scopeResolver?.categoryIdFor(categoryRef) ?? categoryRef;
     _selectedCategoryNameEn = _scopeResolver?.categoryLabelEn(button) ?? '';
-    // The context bar carries the card's TITLE — the same name the web's
-    // chip shows. An EMPTY title is no title (the same rule the locale
-    // re-title and the restore apply); a title-less card shows none, on
-    // either platform.
+    // The context bar carries the card's TITLE — the same name the
+    // web's chip shows. The press gate refuses a title-less card, so a
+    // name is always resolvable here; ?? is the map read's null
+    // boundary.
     _selectedCategoryName = quickHelpTitleOf(button) ?? '';
     _sidebarServiceLabelsEn = [];
     // A mode switch clears the sidebar count: the send guard would read a
@@ -1231,12 +1239,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         declaresCategoryScope(button['category']?.toString()) ||
         declaredLabels.isNotEmpty;
 
-    // The AUTO-SEND is gated on the hidden prompt alone — the web arms
-    // its send the same way (it also honours a legacy i18n-KEY shape the
-    // mobile bundle never carries). A card with a visible text but no
-    // hidden prompt would otherwise wire an EMPTY question to the LLM
-    // while the bubble showed the visible text.
-    if (hiddenPrompt.isEmpty) {
+    // The AUTO-SEND is armed only when BOTH texts resolved: a card with
+    // a visible text but no hidden prompt would wire an EMPTY question
+    // to the LLM while the bubble showed the visible text, and a card
+    // with a hidden prompt but no visible text would ask the send guard
+    // to bounce it after the overlay already closed. The web arms its
+    // send the same way (it also honours a legacy i18n-KEY shape the
+    // mobile bundle never carries).
+    if (hiddenPrompt.isEmpty || visibleText.isEmpty) {
       // A card that DECLARES a scope but has no hidden prompt is still a
       // scoped card — the web installs the same card's labels without
       // asking for a prompt, and wiping the scope here sent the question

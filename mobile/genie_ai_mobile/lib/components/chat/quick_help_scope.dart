@@ -62,13 +62,13 @@ Map<String, dynamic> parseQuickHelpButton(
   final action = configMapOf(btn['action']);
 
   final dynamic rawServiceLabels = btn['serviceLabels'];
-  final List<dynamic> serviceLabels;
-  if (rawServiceLabels is List<dynamic>) {
-    serviceLabels = rawServiceLabels;
+  final List<String> serviceLabels;
+  if (rawServiceLabels is List) {
+    serviceLabels = rawServiceLabels.map((label) => label.toString()).toList();
   } else if (rawServiceLabels is String && rawServiceLabels.isNotEmpty) {
     serviceLabels = [rawServiceLabels];
   } else {
-    serviceLabels = const <dynamic>[];
+    serviceLabels = const <String>[];
   }
 
   return {
@@ -114,6 +114,9 @@ Map<String, dynamic> parseQuickHelpButton(
 /// a change to the rule cannot drift between the copies.
 List<String> quickHelpServiceLabelsOf(Map<String, dynamic> button) {
   final labels = button['serviceLabels'];
+  // The parsed button stores strings: handed back as-is, no copy — the
+  // grid reads this per frame.
+  if (labels is List<String>) return labels;
   if (labels is List) {
     // The scope-less card (the common one on the grid's per-frame path)
     // allocates nothing.

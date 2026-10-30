@@ -2,7 +2,7 @@
  KG builds survive container recreation (measured ~50 min to rebuild on
  a cold cache). The chart equivalent is a PVC; an emptyDir would only
  cover pod restarts, not the reschedule that actually loses the data. */ -}}
-{{- if .Values.okf.enabled -}}
+{{- if eq true (index (.Values.okf | default dict) "enabled") -}}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

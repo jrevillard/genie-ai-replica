@@ -13,7 +13,7 @@ URLs, ArangoDB, the GPU key) use the same helpers their siblings use;
 the long tail of OKF_* tuning knobs carries Compose's defaults as
 literals — they are tuning constants, not deployment facts.
 */ -}}
-{{- if .Values.okf.enabled -}}
+{{- if eq true (index (.Values.okf | default dict) "enabled") -}}
 {{- $okf := .Values.okf | default dict -}}
 {{- $okfServer := $okf.server | default dict -}}
 {{- $vals  := deepCopy .Values -}}

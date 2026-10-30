@@ -125,8 +125,13 @@ def apply_patch(path: Path) -> str:
         raise SystemExit(f"ASSERT-ON-PATCH GUARD FAILED: {path} does not exist")
 
     original = _read(path)
+    lines = original.splitlines(keepends=True)
 
-    sites = [i for i, line in enumerate(original.splitlines(keepends=True)) if UNPATCHED_SITE in line]
+    # _rewrap_line is the single predicate for a call site: only a plain
+    # `response = requests.post(` line can be rewrapped, so the exactly-2
+    # count below covers plain sites and nothing else (a commented-out copy
+    # of the line simply is not a site).
+    sites = [i for i, line in enumerate(lines) if _rewrap_line(line) is not None]
     if not sites:
         if WRAPPED_SITE in original and helper_present(original):
             return "already-patched"
@@ -147,27 +152,15 @@ def apply_patch(path: Path) -> str:
             "helper awaits asyncio.to_thread and the image would die at import time; re-derive the patch."
         )
 
-    lines = original.splitlines(keepends=True)
     for i in sites:
-        rewrapped = _rewrap_line(lines[i])
-        if rewrapped is None:
-            raise SystemExit(
-                f"ASSERT-ON-PATCH GUARD FAILED: line {i + 1} of {path} matches the streaming-call "
-                f"anchor but is not a plain call site (commented out, or inside a string) — the patch "
-                "cannot rewrap it safely; re-derive the patch."
-            )
-        lines[i] = rewrapped
+        lines[i] = _rewrap_line(lines[i])
 
-    # Insert the helper after the module's import block. If no import line
-    # matches, the module changed too much to guess — the asyncio guard above
-    # covers the missing-dependency case, this one covers the mangled layout.
+    # Insert the helper after the module's import block. The import guard
+    # above guarantees a column-0 `import asyncio` line, so import_lines is
+    # never empty here, and both names the helper needs are bound before any
+    # call site can reference it.
     import_lines = [i for i, line in enumerate(lines) if IMPORT_LINE.match(line)]
-    if not import_lines:
-        raise SystemExit(
-            f"ASSERT-ON-PATCH GUARD FAILED: {path} has no import block — cannot place the off-loop "
-            "helper; re-derive the patch."
-        )
-    if not HELPER_DEF.search(original):
+    if not helper_present(original):
         lines.insert(import_lines[-1] + 1, HELPER)
 
     patched = "".join(lines)
@@ -185,11 +178,7 @@ def apply_patch(path: Path) -> str:
 
 
 def helper_present(body: str) -> bool:
-    """Whether the file defines the helper — structurally, by its def line.
-
-    A substring check would count any mention of the name (a comment, the
-    wrapped call sites themselves) and let a helper-less wrap ship.
-    """
+    """Whether the file defines the helper — structurally (see HELPER_DEF)."""
     return bool(HELPER_DEF.search(body))
 
 

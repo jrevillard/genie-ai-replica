@@ -904,7 +904,7 @@ contract:chatqna-server:
     # docker-cp's `contracts/` into the container. With no conftest present the
     # inventory is empty, every real comps module reads as a "missing stub", and
     # the test fails for a reason that has nothing to do with the image.
-    CONTRACT_TEST_PATTERN: "test_contract_orchestrator_wire.py test_contract_nfrp_budgets.py::test_wire_latency_within_budget"
+    CONTRACT_TEST_PATTERN: "test_contract_orchestrator_wire.py test_contract_llm_stream_offloop.py test_contract_nfrp_budgets.py::test_wire_latency_within_budget"
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never

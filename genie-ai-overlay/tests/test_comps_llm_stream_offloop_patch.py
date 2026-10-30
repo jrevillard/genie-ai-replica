@@ -20,7 +20,6 @@ with the loop still pinned. A patcher that silently no-ops is worse than no
 patcher, because the image builds and the bug ships.
 """
 
-import ast
 import importlib.util
 import sys
 from pathlib import Path
@@ -89,40 +88,6 @@ FAKE_ORCHESTRATOR = (
 )
 
 
-def helper_present(body: str) -> bool:
-    """Assert the off-loop helper exists and awaits to_thread(requests.post).
-
-    Checking for the helper's name alone would pass if the name landed
-    anywhere; parsing the module and inspecting the function makes the
-    structural claim real: an ASYNC function whose body awaits to_thread with
-    requests.post as the called callable.
-    """
-    tree = ast.parse(body)
-    for node in ast.walk(tree):
-        if isinstance(node, ast.AsyncFunctionDef) and node.name == "_llm_post_offloop":
-            for child in ast.walk(node):
-                if (
-                    isinstance(child, ast.Await)
-                    and isinstance(child.value, ast.Call)
-                    and isinstance(child.value.func, ast.Attribute)
-                    and child.value.func.attr == "to_thread"
-                    and child.value.args
-                    and isinstance(child.value.args[0], ast.Attribute)
-                    and child.value.args[0].attr == "post"
-                ):
-                    return True
-    return False
-
-
-def on_loop_call_count(body: str) -> int:
-    """Count the streaming-branch call sites still calling requests.post directly."""
-    return sum(1 for line in body.splitlines() if line.strip().startswith("response = requests.post("))
-
-
-def wrapped_call_count(body: str) -> int:
-    return sum(1 for line in body.splitlines() if line.strip().startswith("response = await _llm_post_offloop("))
-
-
 @pytest.fixture
 def unpatched_file(tmp_path):
     p = tmp_path / "orchestrator.py"
@@ -132,17 +97,30 @@ def unpatched_file(tmp_path):
     return p
 
 
+def _undo(raw: bytes) -> bytes:
+    """Byte-exact inverse of the patch: remove the helper, rewind the rewrap.
+
+    Any other change — a re-indent, a dropped line, a rewritten ending —
+    breaks the equality with the original.
+    """
+    return raw.replace(mod.HELPER.encode("utf-8"), b"").replace(
+        mod.WRAPPED_SITE.encode("utf-8"), b"response = requests.post("
+    )
+
+
 def test_patches_both_on_loop_calls(unpatched_file):
     assert mod.apply_patch(unpatched_file) == "patched"
     body = unpatched_file.read_text(encoding="utf-8")
-    assert wrapped_call_count(body) == 2, "both streaming call sites must be wrapped"
-    assert on_loop_call_count(body) == 0, "no streaming call site may stay on the loop"
+    assert body.count(mod.WRAPPED_SITE) == 2, "both streaming call sites must be wrapped"
+    assert mod.UNPATCHED_SITE not in body, "no streaming call site may stay on the loop"
 
 
 def test_helper_awaits_to_thread_of_requests_post(unpatched_file):
     mod.apply_patch(unpatched_file)
     body = unpatched_file.read_text(encoding="utf-8")
-    assert helper_present(body), "the helper must be an async def awaiting to_thread(requests.post, ...)"
+    assert "return await asyncio.to_thread(requests.post" in body, (
+        "the helper must dispatch requests.post through asyncio.to_thread"
+    )
 
 
 def test_generator_call_sites_stay_sync(unpatched_file):
@@ -158,31 +136,20 @@ def test_generator_call_sites_stay_sync(unpatched_file):
     assert "res = await" not in body, "generate() is a sync generator; it cannot await"
 
 
-def _normalize(lines):
-    """Undo the patch exactly: remove the inserted helper, rewind the rewrap.
-
-    Byte-exact inverse — no stripping of indentation or comments — so any
-    other change (a re-indent, a dropped line, a rewritten ending) breaks the
-    equality.
-    """
-    text = "".join(line if line.endswith("\n") else line + "\n" for line in lines)
-    return text.replace(mod.HELPER, "").replace("response = await _llm_post_offloop(", "response = requests.post(")
-
-
 def test_patch_preserves_surrounding_source(unpatched_file):
     """Only the two call-site lines and the helper insertion may change."""
-    before = unpatched_file.read_text(encoding="utf-8")
-    assert before.count("response = requests.post(") == 2
+    before = unpatched_file.read_bytes()
+    assert before.count(b"response = requests.post(") == 2
     mod.apply_patch(unpatched_file)
-    after = unpatched_file.read_text(encoding="utf-8")
-    assert _normalize(after.splitlines()) == before, "modulo the helper insertion and the two rewraps, byte-identical"
+    after = unpatched_file.read_bytes()
+    assert _undo(after) == before, "modulo the helper insertion and the two rewraps, byte-identical"
 
 
 def test_is_idempotent(unpatched_file):
     mod.apply_patch(unpatched_file)
     assert mod.apply_patch(unpatched_file) == "already-patched"
     body = unpatched_file.read_text(encoding="utf-8")
-    assert wrapped_call_count(body) == 2
+    assert body.count(mod.WRAPPED_SITE) == 2
 
 
 def test_guard_fails_when_only_one_site_matches(tmp_path):
@@ -245,8 +212,8 @@ def test_name_mention_alone_does_not_count_as_helper(tmp_path):
     p.write_text(body, encoding="utf-8")
     assert mod.apply_patch(p) == "patched"
     text = p.read_text(encoding="utf-8")
-    assert helper_present(text), "the helper def must be structurally present despite the stray name mention"
-    assert wrapped_call_count(text) == 2
+    assert mod.HELPER in text, "the helper def must be present despite the stray name mention"
+    assert text.count(mod.WRAPPED_SITE) == 2
 
 
 def test_guard_fails_on_commented_out_call_site(tmp_path):
@@ -287,8 +254,5 @@ def test_patch_preserves_line_endings(tmp_path):
     assert mod.apply_patch(p) == "patched"
     raw = p.read_bytes()
     assert b"\r\n" in raw, "fixture should be CRLF"
-    assert raw.count(b"response = await _llm_post_offloop(\r\n") == 2, "wrapped lines keep their CRLF terminator"
-    undone = raw.replace(mod.HELPER.encode("utf-8"), b"").replace(
-        b"response = await _llm_post_offloop(", b"response = requests.post("
-    )
-    assert undone == original, "modulo the helper insertion and the two rewraps, byte-identical (CRLF intact)"
+    assert raw.count(mod.WRAPPED_SITE.encode("utf-8") + b"\r\n") == 2, "wrapped lines keep their CRLF terminator"
+    assert _undo(raw) == original, "modulo the helper insertion and the two rewraps, byte-identical (CRLF intact)"

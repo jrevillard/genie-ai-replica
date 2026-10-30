@@ -2200,10 +2200,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                 : (_scopeResolver?.stateFor(button) ??
                                       QuickHelpScopeResolver.pending);
                             // The caption below names WHICH failure the
-                            // card carries — it reads the two facts the
-                            // verdict composes, hoisted once per tile so
-                            // the caption conditions spell them the same
-                            // way the verdict does.
+                            // card carries: it reads the same two facts
+                            // the verdict composes (both spellings go
+                            // through quickHelpTitleOf and the scope's
+                            // own 'broken' verdict), hoisted once per
+                            // tile.
                             final bool scopeBroken =
                                 scope['broken'] as bool? ?? false;
                             final bool titleMissing = translatedTitle.isEmpty;
@@ -2280,20 +2281,22 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                           // scale) must clamp instead
                                           // of overflowing the tile.
                                           child: Text(
-                                            // The scope's caption when
-                                            // the scope is the failure;
-                                            // the missing-title text
-                                            // when the config gave the
-                                            // card no title. Both
-                                            // defects, one caption
-                                            // line.
+                                            // The missing-title text
+                                            // first: the clamp below
+                                            // truncates what does not
+                                            // fit, and the config
+                                            // defect is the diagnosis
+                                            // that outlives a hierarchy
+                                            // outage (the outage text
+                                            // describes a state that
+                                            // recovery ends).
                                             [
-                                              if (scopeBroken)
-                                                _quickHelpErrorCaption(scope),
                                               if (titleMissing)
                                                 tr(
                                                   'chatbot.quickHelpTitleMissing',
                                                 ),
+                                              if (scopeBroken)
+                                                _quickHelpErrorCaption(scope),
                                             ].join(' '),
                                             style: theme.textTheme.bodySmall
                                                 ?.copyWith(

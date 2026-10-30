@@ -597,8 +597,10 @@ export default {
       notAvailable: 'Ha ho na data',
       notAvailableNoSentinel: 'Ha ho na data (ha ho na sentinel)',
       abstentionNoDocuments: 'Ha ho na tokomane e fumanoeng bakeng sa potso ena. Karabo ha e na theko ea tokomane.',
-      abstentionRerankerInput: 'Reranker e hanetse kenyelletso e kholo haholo (bothata ba lehlakoreng la ingestion). Karabo e sa theohang ditokomaneng.',
-      abstentionRerankerSelectedNothing: 'Poelo e fumane ditokomane, empa reranker ha ea boloka e mong le e mong. Scope e ne e lokile — karabo e sa theohang ditokomaneng.',
+      abstentionRerankerInput:
+        'Reranker e hanetse kenyelletso e kholo haholo (bothata ba lehlakoreng la ingestion). Karabo e sa theohang ditokomaneng.',
+      abstentionRerankerSelectedNothing:
+        'Poelo e fumane ditokomane, empa reranker ha ea boloka e mong le e mong. Scope e ne e lokile — karabo e sa theohang ditokomaneng.',
       abstentionUnspecified: 'Karabo ha e na theko ea tokomane.'
     }
   },

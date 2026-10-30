@@ -113,10 +113,17 @@ describe('documentFileService — crawler surface', () => {
     httpService.patch.mockRejectedValue(boom);
     httpService.delete.mockRejectedValue(boom);
     await expect(documentFileService.getFiles({})).rejects.toThrow('net');
+    await expect(documentFileService.getFileMetadata('f1')).rejects.toThrow('net');
     await expect(documentFileService.downloadFile('f1')).rejects.toThrow('net');
     await expect(documentFileService.uploadLink('u')).rejects.toThrow('net');
     await expect(documentFileService.updateFile('f1', {})).rejects.toThrow('net');
     await expect(documentFileService.deleteFile('f1')).rejects.toThrow('net');
+    await expect(documentFileService.getIngestionLogs('f1')).rejects.toThrow('net');
+    await expect(documentFileService.scheduleSiteCrawl({})).rejects.toThrow('net');
+    await expect(documentFileService.getCrawlJob('f1')).rejects.toThrow('net');
+    await expect(documentFileService.getCrawlMetrics('f1')).rejects.toThrow('net');
+    await expect(documentFileService.getCrawlLogs('f1')).rejects.toThrow('net');
     await expect(documentFileService.killCrawl('f1')).rejects.toThrow('net');
+    await expect(documentFileService.killIngestion('f1')).rejects.toThrow('net');
   });
 });

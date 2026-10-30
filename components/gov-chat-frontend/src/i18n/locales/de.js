@@ -597,9 +597,12 @@ export default {
       noResponseRecorded: 'Keine Antwort aufgezeichnet',
       notAvailable: 'N/V',
       notAvailableNoSentinel: 'N/V (kein Sentinel-Wert)',
-      abstentionRerankerInput: 'Der Reranker lehnte eine zu große Eingabe ab (ein Problem auf der Ingestion-Seite). Die Antwort hat keine Dokumentgrundlage.',
-      abstentionRerankerSelectedNothing: 'Der Abruf fand Dokumente, aber der Reranker behielt keines davon. Der Scope war in Ordnung — die Antwort hat keine Dokumentgrundlage.',
-      abstentionNoDocuments: 'Für diese Abfrage wurde kein Dokument abgerufen. Die Antwort hat keine Dokumentgrundlage.',
+      abstentionRerankerInput:
+        'Der Reranker lehnte eine zu große Eingabe ab (ein Problem auf der Ingestion-Seite). Die Antwort hat keine Dokumentgrundlage.',
+      abstentionRerankerSelectedNothing:
+        'Der Abruf fand Dokumente, aber der Reranker behielt keines davon. Der Scope war in Ordnung — die Antwort hat keine Dokumentgrundlage.',
+      abstentionNoDocuments:
+        'Für diese Abfrage wurde kein Dokument abgerufen. Die Antwort hat keine Dokumentgrundlage.',
       abstentionUnspecified: 'Die Antwort hat keine Dokument-Unterstützung.'
     }
   },

@@ -596,8 +596,10 @@ export default {
       noResponseRecorded: 'Tidak ada respons yang tercatat',
       notAvailable: 'T/A',
       notAvailableNoSentinel: 'T/A (tanpa nilai penanda)',
-      abstentionRerankerInput: 'Reranker menolak input yang terlalu besar (masalah di sisi ingestion). Jawaban tidak didukung dokumen.',
-      abstentionRerankerSelectedNothing: 'Pencarian menemukan dokumen, tetapi reranker tidak menyimpan satu pun. Cakupannya tidak bermasalah — jawaban tidak didukung dokumen.',
+      abstentionRerankerInput:
+        'Reranker menolak input yang terlalu besar (masalah di sisi ingestion). Jawaban tidak didukung dokumen.',
+      abstentionRerankerSelectedNothing:
+        'Pencarian menemukan dokumen, tetapi reranker tidak menyimpan satu pun. Cakupannya tidak bermasalah — jawaban tidak didukung dokumen.',
       abstentionNoDocuments: 'Tidak ada dokumen yang ditemukan untuk kueri ini. Jawaban tidak didukung dokumen.',
       abstentionUnspecified: 'Jawaban tidak memiliki dukungan dokumen.'
     }

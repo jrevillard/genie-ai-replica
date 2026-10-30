@@ -149,7 +149,7 @@ describe('model-config-controller surface', () => {
       fn.mockRejectedValueOnce(boom);
       const next = jest.fn();
       const res = fakeRes();
-       
+
       await handler(fakeReq({ params: { key: 'k' }, body: {} }), res, next);
       expect(next).toHaveBeenCalledWith(boom);
       expect(res.body).toBeUndefined();

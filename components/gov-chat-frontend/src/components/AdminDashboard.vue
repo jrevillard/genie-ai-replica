@@ -2086,9 +2086,13 @@ export default {
       // Named-param interpolation (the post-merge translate() convention):
       // the fallback path interpolates {count} itself, so a .replace chain
       // would see its placeholder consumed first (round 11, merge fallout).
-      return this.translate('admin.documents.deleteRefuseReason', '{count} file(s) are still ingested — retract them first.', {
-        count: this.blockedSelection.length
-      });
+      return this.translate(
+        'admin.documents.deleteRefuseReason',
+        '{count} file(s) are still ingested — retract them first.',
+        {
+          count: this.blockedSelection.length
+        }
+      );
     },
     /** 2026-10-10 (live): the selected rows that the delete gate BLOCKS
      * (ingested/ingesting — deleting would orphan the served corpus). */

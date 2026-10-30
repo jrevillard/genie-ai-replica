@@ -594,7 +594,8 @@ export default {
       notAvailableNoSentinel: 'Ma soro (sentinel mang)',
       abstentionNoDocuments: 'Kweri naa dokuuma mang soro. Jaabi mang kili dokuuma la.',
       abstentionRerankerInput: 'Reranker mang a kewi kumoo kabaaroo la (dataprep filiyaa). Jaabi mang kili dokuuma la.',
-      abstentionRerankerSelectedNothing: 'Kewi be doku soro, nga reranker ma o doku mulu. Scope kana ban — jaabi mang kili dokuuma la.',
+      abstentionRerankerSelectedNothing:
+        'Kewi be doku soro, nga reranker ma o doku mulu. Scope kana ban — jaabi mang kili dokuuma la.',
       abstentionUnspecified: 'Jaabi mang kili dokuuma la.'
     }
   },

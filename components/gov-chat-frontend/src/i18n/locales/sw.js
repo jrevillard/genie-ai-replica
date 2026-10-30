@@ -593,8 +593,10 @@ export default {
       notAvailable: 'Haitumiki',
       notAvailableNoSentinel: 'Haitumiki (hakuna alama-kiashiria)',
       abstentionNoDocuments: 'Hakuna nyaraka iliyopatikana kwa swali hili. Jibu halina uthibitisho wa nyaraka.',
-      abstentionRerankerInput: 'Reranker imekataa ingizo kubwa kupita kiasi (tatizo la upande wa ingestion). Jibu halingi na hati yoyote.',
-      abstentionRerankerSelectedNothing: 'Utafutaji ulipata hati, lakini reranker haikuhifadhi hata moja. Upeo ulikuwa sahihi — jibu halingi na hati yoyote.',
+      abstentionRerankerInput:
+        'Reranker imekataa ingizo kubwa kupita kiasi (tatizo la upande wa ingestion). Jibu halingi na hati yoyote.',
+      abstentionRerankerSelectedNothing:
+        'Utafutaji ulipata hati, lakini reranker haikuhifadhi hata moja. Upeo ulikuwa sahihi — jibu halingi na hati yoyote.',
       abstentionUnspecified: 'Jibu halina uthibitisho wa nyaraka.'
     }
   },

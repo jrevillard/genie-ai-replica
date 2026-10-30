@@ -1677,12 +1677,14 @@ services:
     environment:
       DATAPREP_COMPONENT_NAME: GENIE_DATAPREP_ARANGODB
       # Empty by default: the served model id is DISCOVERED per ingestion job.
-      # Services start immediately. With discovery unpinned, a job started
-      # before vLLM answers /v1/models FAILS LOUDLY and is rolled back
-      # ("Ingestion Error"); only with VLLM_LLM_MODEL_ID pinned does the job
-      # survive the window on degraded file-level labels, which are NOT
-      # re-computed later. Either way: wait for vLLM health before bulk
-      # ingesting.
+      # Services start immediately. Branches while vLLM is still loading:
+      # - unpinned, never-probed service: the job FAILS LOUDLY and is rolled
+      #   back ("Ingestion Error") — the exception is a stale cached id from
+      #   an earlier successful probe, which then degrades instead;
+      # - pinned: the job survives on degraded file-level labels, and graph
+      #   extraction fails silently — the document stores NO retrievable
+      #   chunks ("Ingested with Warnings"). Neither outcome is re-computed
+      #   later. Wait for vLLM health before bulk ingesting.
       VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-}
       VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://vllm:8000}
       # Two names, two consumers, and they are NOT the same knob.
@@ -2012,9 +2014,9 @@ services:
       MODEL_CONTROL_PLANE_TIMEOUT_SECONDS: ${MODEL_CONTROL_PLANE_TIMEOUT_SECONDS:-30}
       MODEL_CONNECT_TIMEOUT_SECONDS: ${MODEL_CONNECT_TIMEOUT_SECONDS:-30}
       # The model-id probe behind the TTL cache, shared with the retriever and
-      # dataprep. Same knob, same 10 s: with no pinned name, a failure
-      # propagates — the request fails closed (503) until the endpoint
-      # answers.
+      # dataprep (same knob, same 10 s; the failure consequences differ — see
+      # their blocks). Here, with no pinned name, a probe failure propagates:
+      # the request fails closed (503) until the endpoint answers.
       MODEL_PROBE_TIMEOUT_SECONDS: ${MODEL_PROBE_TIMEOUT_SECONDS:-10}
       MEGA_SERVICE_HOST_IP: chatqna-xeon-backend-server
       LOG_LEVEL: ${LOG_LEVEL:-info}

@@ -41,6 +41,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Ansible deployments: `vllm_llm_model_id` is now undefined by default
+  (auto-discovery).** Previously it pinned `ibm-granite/granite-4.1-8b` for
+  both the vLLM container and the chat/ingest services. With the variable
+  undefined, the GPU overlay starts vLLM on its own template default
+  (`ibm-granite/granite-3.3-2b-instruct`) and every service discovers the
+  served model at `/v1/models`. Deployments that rely on the previous 8B
+  default must now set `vllm_llm_model_id` in their group_vars. (#631)
+
 - **The OKF Lab is now the "Testing Lab" (8-6/8-7).** "Routing Lab" named a
   mechanism — routing — that is only one of the surface's four tabs (Head,
   Test, Suites & analytics, RAGAS Benchmarks) plus the advisor, so the name
@@ -98,6 +106,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Contextual Retrieval truncated the document context for most of the corpus, silently:** `DATAPREP_CONTEXTUAL_DOC_BUDGET` shipped as a hardcoded `6000` characters while the Python default and three documentation pages all said `100000`. The literal was sized for the NVIDIA T4 profile's `VLLM_MAX_MODEL_LEN=2048` and then applied to every deployment, so it was wrong in both directions — too large for a T4 (where the calls overflow the window, get rejected, and fall back to raw chunks) and roughly 40× too small for the default 65536-token window, where it used about 4% of what was available. Measured on a 2,258-document corpus, **1,291 documents (57.2%) were truncated**; chunks past the budget were embedded against a description of the *start* of their document, which also degrades the graph entities and relationships extracted from them. Nothing failed and ingestion reported success. The budget is now **derived from `VLLM_MAX_MODEL_LEN`** (system prompt + batch chunk text + the per-chunk output reservation are subtracted, and the remainder is the budget), so a deployment that provisions a larger model and raises its window automatically ingests proportionally larger documents with no other change — GENIE.AI is a framework, not pinned to one model. `VLLM_MAX_MODEL_LEN` is now passed to the dataprep container, which previously never received it, so nothing could be derived. `DATAPREP_CONTEXTUAL_DOC_BUDGET` keeps its meaning as an operator override (unset/`0` derive, `>0` pin, `<0` disable). Truncation is now written to the admin Ingestion Log instead of only to container stdout. **Behaviour change on the T4 profile:** contextualization is now skipped there (the per-chunk output reservation alone exceeds a 2048-token window) instead of failing silently — that profile ingests raw chunks by design; lower `DATAPREP_LLM_LABEL_BATCH_SIZE` to fit it. A new config-validator check (AC8) fails CI if `docker-compose.yaml` and `env.j2` disagree on these defaults, which is how the original four-way drift shipped unnoticed. Same commit corrects documentation that named the wrong default in six places, fixes an `env.j2` bug where setting only `DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL` rendered nothing (its guard was nested inside the sibling's), and stops `group_vars/all.yml` and the Ansible README teaching `contextual_retrieval_enabled: false`, `contextual_label_raw: false`, a `doc_level` strategy default and a `100000` budget — none of which matched the code.
 
 - **Concept ingestion silently lost on XML processing instructions:** a concept body containing `<?xml ... ?>` crashed `unstructured.partition.html` (`'lxml.etree._ProcessingInstruction' object has no attribute 'is_phrasing'`), so the whole concept failed to index with no query-time error — two concepts (438 and 231,890 chars) from a source PDF that teaches XML prologs never reached RAG. Root cause is in the pinned `unstructured==0.18.32`: its parser builds the package's only `etree.HTMLParser(remove_comments=True)` and the element-class lookup maps custom classes for `_Element` subclasses only, so a processing-instruction node falls through to a class without `is_phrasing`. Upstream added `remove_pis=True` to that constructor in 0.27.8 (issue #4358); a build-time patcher now applies that single constructor argument and **aborts the build** if the expected line is absent, so the image can never silently ship still-crashing. Measured: 13/13 PI documents parse, and 0 changed outputs across a 138-document previously-parsing corpus. A lxml downgrade was refuted (4.9.4 fails identically) and boundary sanitisation was rejected because it deletes legitimate content inside fenced code blocks.
+- **Chat requests no longer die on token counting.** The history-truncation
+  budget needs exact token counts, and chatqna used to load a local
+  HuggingFace tokenizer for them — the image bakes no HF cache and deployments
+  grant no huggingface.co egress, so on isolated deployments every chat died on
+  its first request (`OSError: We couldn't connect to 'https://huggingface.co'`).
+  Token counting now calls the LLM server's `/tokenize` endpoint, so the counts
+  always come from the tokenizer of whatever model is actually deployed. The
+  model name sent to the LLM server is discovered from the server itself
+  (`/v1/models`) instead of falling back to a compiled-in name — vLLM validates
+  the name and rejects unknown ones. The same discovery now backs the
+  retriever's summarizer and dataprep's labelling/graph-extraction clients
+  (previously gated on `GPU_NODE_HOST`, silently falling back to a name that
+  could diverge from the deployed model). The compose services no longer pin
+  a default model name: discovery is the default for every chat/ingest Python
+  service (chatqna, retriever, dataprep), and services start immediately.
+  Branches while vLLM is still loading: an ingest job on a service that has
+  not yet probed the endpoint **fails loudly and is rolled back**; a job with
+  a stale cached id or a pinned name survives on degraded file-level labels
+  with **no retrievable graph content** — none of these outcomes are
+  re-computed later. Wait for vLLM health before bulk ingesting.
+  **Config note:** chatqna no longer reads `LLM_MODEL`; `VLLM_MODEL_ID` is
+  the override those services honor (set it only to pin a name — without it
+  the served model is discovered automatically). Counting failures abort the
+  request loudly rather than silently feeding a zero into the truncation
+  budget. (#631)
 
 ## [3.0.0] - 2026-10-30
 
@@ -365,114 +398,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The fallback language of the translation language maps.** Each shipped map named a fallback language: a request for a language the map did not know was answered in the language the map named as its fallback — silently, in a language the caller never asked for. The shipped maps only ever named fallbacks for languages they also supported, so the chain never walked in practice, but the mechanism was one map edit away from answering a French request in Spanish. The fallback is gone from the maps and from the backends: an unknown language is now always refused, never substituted. (#1097)
 - **`LOG_TO_FILE` host bind mounts.** The `${DATA_DIR}/logs/{backend,doc-repo}:/app/logs` bind mounts are removed from `docker-compose.yaml`. The runtime `LOG_TO_FILE` boolean env var still works as an audit-retention escape hatch for operators who want to re-enable local file rotation, but they must now manually re-add the `/app/logs` bind mount if they do so (a comment in `env` documents this).
 
-### Fixed
-
-- **Chat requests no longer die on token counting.** The history-truncation
-  budget needs exact token counts, and chatqna used to load a local
-  HuggingFace tokenizer for them — the image bakes no HF cache and deployments
-  grant no huggingface.co egress, so on isolated deployments every chat died on
-  its first request (`OSError: We couldn't connect to 'https://huggingface.co'`).
-  Token counting now calls the LLM server's `/tokenize` endpoint, so the counts
-  always come from the tokenizer of whatever model is actually deployed. The
-  model name sent to the LLM server is discovered from the server itself
-  (`/v1/models`) instead of falling back to a compiled-in name — vLLM validates
-  the name and rejects unknown ones. The same discovery now backs the
-  retriever's summarizer and dataprep's labelling/graph-extraction clients
-  (previously gated on `GPU_NODE_HOST`, silently falling back to a name that
-  could diverge from the deployed model). The compose services no longer pin
-  a default model name: discovery is the default for every chat/ingest
-  Python service (chatqna, retriever, dataprep), and services start
-  immediately — an ingest job started before vLLM answers `/v1/models`
-  **fails loudly and is rolled back**; only with a pinned name does it
-  survive the load window on degraded file-level labels, which are not
-  re-computed later. Either way, wait for vLLM health before bulk
-  ingesting. **Config note:** chatqna no longer reads
-  `LLM_MODEL`; `VLLM_MODEL_ID` is the override those services honor (set it
-  only to pin a name — without it the served model is discovered
-  automatically).
-  Counting failures abort the request loudly rather than silently feeding a
-  zero into the truncation budget. (#631)
-- **A category or a service with no translation in the active language
-  disappeared from the knowledge tree.** The public tree published the
-  localized name and nothing else, so an entity nobody had translated in the
-  language of the interface arrived with a null name: the sidebar showed a
-  blank row, and the services under it were dropped from the tree altogether —
-  the tree showed less than exists. The public tree now publishes a display
-  name for every entity: the translation in the active language when there is
-  one, and the English translation — the same name the corpus filters on —
-  when there is none. It resolves that English name the way the admin tree
-  already did: the English translation row, or the entity document's own
-  `nameEN` for an entity seeded outside the write path (the taxonomy seed
-  scripts write the document field and no translation row). The write path
-  keeps the two in sync, so the fallback only fills a missing row with the
-  text the row would have carried — the label a client puts on the wire and
-  the label the corpus filters on remain the same string. The admin tree keeps
-  its localized display name: the admin panel keys its label map by that name,
-  so an English fallback there would let two entities share one key and file a
-  label under the wrong entity. On the mobile app, the tree panel now
-  identifies a selected service by its entity key: the public tree's services
-  now carry their `_key`, and neither spelling of the name is unique inside a
-  category — two services that read the same are two scopes. An entity with
-  no name in any language is published unnamed: the clients do not offer its
-  services (an unnamed service cannot be scoped on), and a category with no
-  name at all shows as an unlabelled group header above its services (the
-  literal "Unknown Category" on the mobile app).
-
-  **Upgrading a deployment whose taxonomy was seeded by the scripts**
-  (`create-knowledge-hierarchy.js`) requires a **re-ingest of the corpus**
-  after deploying this change: those entities' labels are minted when a
-  document is ingested, and until the re-ingest every scope on them finds no
-  documents — the query abstains ("no documented information was found").
-  (#1117, !632)
-- **The shipped Quick Help configurations named their categories by a database
-  key.** Every flavour configuration wrote each quick-help card's category as
-  the raw ArangoDB key (`"category": "1"`) — a value a deployer could not
-  learn from the configuration alone, and one a re-created hierarchy
-  invalidated. The configuration now writes the category's **English name**
-  (`"category": "Taxes & Revenue"`), the label the knowledge hierarchy
-  publishes and the one the retrieval filter speaks; the database key is
-  still accepted, so a configuration written before this change keeps
-  working. The web app and the mobile app both resolve the name against the
-  live hierarchy. (#1116, !633)
-- **The admin hierarchy panel could show an empty English name.** The detailed
-  tree behind it returned only the localized name; the panel worked around
-  that by fetching the tree in English and relabelling the result, so the
-  English column showed the localized name, and it was empty for any entity
-  with no English translation. The admin tree
-  (`GET /api/service-categories/categories/detailed`) now publishes `nameEN`
-  beside the localized name — the shape the public tree already had, with
-  the English translation as the source and the entity document's own
-  `nameEN` as the fallback for an entity seeded outside the write path —
-  and the panel reads that field. Its fetch is bounded too, so a request
-  that never answers shows the failed state instead of a spinner that turns
-  forever. The public tree publishes `nameEN` the same way since the
-  display-name fix above. (#1123)
-- **A selected Quick Help scope kept the title of the language it was selected
-  in.** On the mobile app, switching the interface language re-resolved the
-  Quick Help cards but left the context bar's title of the active Quick Help
-  scope in the old language; it now re-resolves the title by the button id,
-  mirroring the web app's Quick Help chip re-title on a locale switch. A
-  button the configuration no longer declares keeps its last title.
-  (#1115, !629)
-- **Chat requests no longer die on token counting.** The history-truncation
-  budget needs exact token counts, and chatqna used to load a local
-  HuggingFace tokenizer for them — the image bakes no HF cache and deployments
-  grant no huggingface.co egress, so on isolated deployments every chat died on
-  its first request (`OSError: We couldn't connect to 'https://huggingface.co'`).
-  Token counting now calls the LLM server's `/tokenize` endpoint, so the counts
-  always come from the tokenizer of whatever model is actually deployed. The
-  model name sent to the LLM server is discovered from the server itself
-  (`/v1/models`) instead of falling back to a compiled-in name — vLLM validates
-  the name and rejects unknown ones. The same discovery now backs the
-  retriever's summarizer and dataprep's labelling/graph-extraction clients
-  (previously gated on `GPU_NODE_HOST`, silently falling back to a name that
-  could diverge from the deployed model); the compose retriever service now
-  receives `VLLM_MODEL_ID` like dataprep, so its explicit env wins without a
-  boot-time probe race. **Config note:** chatqna no longer reads `LLM_MODEL`;
-  `VLLM_MODEL_ID` is the override every Python service honors (set it only to
-  pin a name — without it the served model is discovered automatically).
-  Counting failures abort the request loudly rather than silently feeding a
-  zero into the truncation budget. (#631)
 - **The labelling prompt was different on every ingestion run.** The candidate
   labels sent to the labelling LLM were collected in a Python set, whose order
   follows the hash seed of the process that built it — so every container sent

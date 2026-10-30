@@ -243,8 +243,8 @@ Set in `group_vars/<env>/vars.yml`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `vllm_llm_model_id` | _(undefined — auto-discovery)_ | When undefined: the vLLM container starts on its built-in default and every service discovers the served model at `/v1/models`. Define it only to pin a name (must match what the GPU serves). |
-| `vllm_max_model_len` | `8192` | Maximum context length |
+| `vllm_llm_model_id` | _(undefined — auto-discovery; the GPU overlay then serves its template default `ibm-granite/granite-3.3-2b-instruct`)_ | When undefined, every service discovers the served model at `/v1/models`. Define it to pin a name (must match what the GPU serves). |
+| `vllm_max_model_len` | `65536` | Maximum context length (template default; not set in group_vars) |
 | `vllm_gpu_utilization` | `0.55` | GPU memory fraction (0.1-1.0) |
 | `vllm_dtype` | `auto` | Data type (auto, half, bfloat16, float32) |
 | `vllm_api_key` | `""` | Optional vLLM API key |

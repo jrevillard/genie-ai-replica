@@ -23,7 +23,7 @@ const translator = new AqlToSqlTranslator([
   'folderConversations'
 ]);
 
-// The complete suite of 122 tests with REFINED expectedSql based on MetaAI feedback
+// The complete suite of 115 tests with REFINED expectedSql based on MetaAI feedback
 const testSuite = [
   // --- from admin-dashboard-service.js (19 tests) ---
   {
@@ -211,7 +211,7 @@ const testSuite = [
     expectedSql: `SELECT categoryId, (totalRatings > 0) ? (sumRatings / totalRatings) : 0 AS average FROM queries LET q = @this WHERE q.userFeedback != null AND q.userFeedback.rating != null AND date(q.timestamp) >= :start AND date(q.timestamp) <= :end GROUP BY categoryId = q.categoryId LET totalRatings = COUNT(*), sumRatings = sum(toFloat(q.userFeedback.rating))`
   },
 
-  // --- from chat-history-service.js (59 tests) ---
+  // --- from chat-history-service.js (53 tests) ---
   {
     description: '[CHS-1] createConversation get category name',
     aql: `FOR cat IN serviceCategories FILTER cat._key == @categoryId RETURN cat.nameEN`,
@@ -544,14 +544,14 @@ const testSuite = [
 
   // --- from service-category-service.js (8 tests) ---
   {
-    description: '[SCS-1] getTranslatedName for category',
-    aql: `FOR trans IN serviceCategoryTranslations FILTER trans.serviceCategoryId == @documentId AND trans.languageCode == @upperLocale RETURN trans.translation`,
-    expectedSql: `SELECT trans.translation FROM serviceCategoryTranslations LET trans = @this WHERE trans.serviceCategoryId == :documentId AND trans.languageCode == :upperLocale`
+    description: '[SCS-1] getCategoryTranslations',
+    aql: `FOR trans IN serviceCategoryTranslations FILTER trans.serviceCategoryId == @categoryKey RETURN { lang: LOWER(trans.languageCode), text: trans.translation }`,
+    expectedSql: `SELECT lower(trans.languageCode) AS lang, trans.translation AS text FROM serviceCategoryTranslations LET trans = @this WHERE trans.serviceCategoryId == :categoryKey`
   },
   {
-    description: '[SCS-2] getTranslatedName for service',
-    aql: `FOR trans IN serviceTranslations FILTER trans.serviceId == @documentId AND trans.languageCode == @upperLocale RETURN trans.translation`,
-    expectedSql: `SELECT trans.translation FROM serviceTranslations LET trans = @this WHERE trans.serviceId == :documentId AND trans.languageCode == :upperLocale`
+    description: '[SCS-2] getServiceTranslations',
+    aql: `FOR trans IN serviceTranslations FILTER trans.serviceId == @serviceKey RETURN { lang: LOWER(trans.languageCode), text: trans.translation }`,
+    expectedSql: `SELECT lower(trans.languageCode) AS lang, trans.translation AS text FROM serviceTranslations LET trans = @this WHERE trans.serviceId == :serviceKey`
   },
   {
     description: '[SCS-3] getAllCategoriesWithServices - REFINED',
@@ -584,7 +584,7 @@ const testSuite = [
     expectedSql: `WITH matchingCategories AS (SELECT trans.serviceCategoryId AS key, trans.translation AS name FROM serviceCategoryTranslations LET trans = @this WHERE trans.languageCode == :upperLocale AND lower(trans.translation) LIKE :lowerQuery), matchingServices AS (SELECT service._key AS key, trans.translation AS name FROM serviceTranslations LET trans = @this WHERE trans.languageCode == :upperLocale AND lower(trans.translation) LIKE :lowerQuery WITH service AS (SELECT * FROM services WHERE @rid = concat('services/', trans.serviceId))) SELECT matchingCategories, matchingServices`
   },
 
-  // --- from session-service.js (5 tests) ---
+  // --- from session-service.js (6 tests) ---
   {
     description: '[SS-1] getActiveSession',
     aql: `FOR session IN sessions FILTER session.userId == @userId AND session.active == true AND session.endTime == null SORT session.startTime DESC LIMIT 1 RETURN session`,

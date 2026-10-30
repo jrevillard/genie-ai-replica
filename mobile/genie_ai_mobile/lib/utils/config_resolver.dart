@@ -27,11 +27,13 @@ library;
 /// fall through to the next candidate.
 ///
 /// A value that is not a map resolves as the scalar it is (a falsy
-/// scalar to no text at all). Two shapes are rendered DIFFERENTLY by
-/// the two platforms, and only a malformed configuration produces
-/// them: a list (the web dumps it as JSON) and a truthy number (its
-/// Dart string form, `5.0`, where the web shows `5`) — see the
-/// branches below.
+/// scalar to no text at all). A LIST renders as its elements joined
+/// with commas on both platforms — the web's template calls the
+/// array's `toString`, which joins — and the mobile joins it the same
+/// way, ONE rule wherever the list nests. A truthy NUMBER is the one
+/// shape the platforms render differently (its Dart string form,
+/// `5.0`, where the web shows `5`) — a divergence only a malformed
+/// configuration produces; see the branches below.
 String resolveConfigText(dynamic value, String locale) {
   if (value is Map) {
     // The first NON-EMPTY text wins — the web's `||` chain: a null key
@@ -47,6 +49,11 @@ String resolveConfigText(dynamic value, String locale) {
       // skips it and falls through to the next candidate.
       if (candidate is String) {
         if (candidate.isNotEmpty) return candidate;
+      } else if (candidate is List) {
+        // A list nested in the map renders as a bare list does - the
+        // web's chain returns the array (truthy) and its template
+        // joins it; one rule for one shape, wherever it nests.
+        return _listAsConfigText(candidate);
       } else if (configTruthy(candidate)) {
         return candidate.toString();
       }
@@ -56,17 +63,20 @@ String resolveConfigText(dynamic value, String locale) {
   // A scalar the web's `value || ''` reads as falsy (0, false) is no
   // text. A truthy number keeps its DART string form, which is not
   // the web's rendering of the same value (`5.0` here, `5` there) -
-  // a malformed-configuration-only divergence, like the list below.
+  // a malformed-configuration-only divergence; the list below is the
+  // one shape that renders identically on both platforms.
   if (value is String) return value;
-  // A list is not a text value. The web dumps it as JSON and the mobile
-  // renders it as one comma-joined line - neither is the other
-  // platform's rendering, and both only happen for a malformed
-  // configuration; a card label stays a single line here.
-  if (value is List) {
-    return value.map((element) => element.toString()).join(',');
-  }
+  if (value is List) return _listAsConfigText(value);
   return configTruthy(value) ? value.toString() : '';
 }
+
+/// A list is not a text value: it renders as its elements joined with
+/// commas — the web's template calls the array's `toString`, which
+/// joins exactly this way. ONE rule for the shape, wherever it nests
+/// (a bare title or an entry inside a locale map), and only a
+/// malformed configuration produces it; a card label stays one line.
+String _listAsConfigText(List value) =>
+    value.map((element) => element.toString()).join(',');
 
 /// The config value as a map — the ONE container guard every config
 /// descent uses. A value that is not a map (a string, a list, null: the

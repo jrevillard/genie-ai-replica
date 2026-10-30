@@ -66,38 +66,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Document contexts are sized against the window the model actually serves, not a copied env var.** Dataprep derived its Contextual-Retrieval document-context budget from `VLLM_MAX_MODEL_LEN` — the vLLM memory knob (`--max-model-len`), a static copy of what the GPU node was *configured* with, not what it *serves*. When that copy did not reach the container the budget silently fell back to a 2048-token window, so a 65536-token deployment truncated document contexts to T4-sized budgets (the truncation was recorded, but nothing said the window was a guess). The window is now discovered at runtime from `VLLM_ENDPOINT` — the same endpoint labelling and context generation already talk to — and the fallback is loud: one warning per endpoint, naming the value, the consequence and the remedy. **Deployers**: `VLLM_MAX_MODEL_LEN` is no longer read by dataprep; set the new `DATAPREP_MAX_MODEL_LEN` when the endpoint does not expose `max_model_len` (a strict OpenAI-compatible provider never does) or when `DATAPREP_CONTEXTUAL_MODEL` points at a model other than the one the endpoint lists first. The concept-document ceiling (`OKF_MAX_CONCEPT_DOC_CHARS`) stays a static literal and must now be kept in step with the served window by hand. The doc-level context budget (`DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL`) is now a maximum the served window caps, so its default cannot overflow a smaller deployment. (#639)
 
-
-
-
-
-
-- **The mobile Quick Help grid rendered every card with no label and the
-  default icon.** The grid card read its label from an `appearance.label.text`
-  i18n key and its icon from `appearance.icon.value` — an `appearance` block
-  no shipped configuration declares. The card label is now the button's
-  top-level `title` locale map (the text the web's chips row already showed)
-  and the card icon the button's top-level `icon`, the same shape the web
-  reads. The chips row was never affected. (#1124, !635)
+- **The mobile Quick Help grid rendered every card with no label and the same
+  neutral icon.** The grid card read its label from an `appearance.label.text`
+  i18n key and its icon from `appearance.icon.value` — an `appearance` block no
+  shipped configuration declares — so every card showed a blank label and the
+  neutral help icon instead of its own. The card label is now the button's
+  top-level `title` locale map (the text the context bar already showed) and
+  the card icon the button's top-level `icon`, the same shape the web reads; a
+  card with no icon still shows the neutral help icon. The context bar was
+  never affected. (#1124, !635)
+- **A Quick Help card with no title does nothing when it is tapped.** A card
+  whose title resolves to nothing was pressed and installed its scope under a
+  name the card did not carry; it is now refused outright, like the web refuses
+  it. The card is still shown - a card that declares no title is a
+  configuration problem, and how it should look is tracked separately.
+  (#1192, !635)
 - **An untranslated placeholder in a configuration's locale map now falls back
   to the translated text.** A locale map whose entry for the active language
   was an empty string - the shape an untranslated translation takes - rendered
   an empty card label, and an empty welcome message, on the mobile app, where
   the web already fell back to the English text. Both platforms now read the
   first non-empty translation. (#1210, !635)
-
 - **A Quick Help card that declares no hidden prompt no longer sends an empty
   question.** The card's visible text was shown in the chat while the question
   sent to the assistant was empty, so the assistant answered a blank prompt.
   The card now opens the chat with its scope in place and leaves the question
   to the user. A card that declares BOTH texts - every card but the plain chat
   one - is unchanged. (#1210, !635)
-
 - **A Quick Help card marked as hidden is now hidden on the mobile app whatever
   the shape of the flag.** The flag was read as a boolean, so a configuration
   that writes it as a string (for example `"hidden": "false"`) kept the card on
   the mobile app while the web hid it. Both platforms now hide it the same
   way. (#1208, !635)
-
 - **The mobile app now shows the chat's configured welcome message as soon as
   the configuration has loaded.** The message declared in the deployment
   configuration was computed before the configuration had finished loading, so
@@ -106,7 +106,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   message now lands when the configuration load completes — and only while no
   conversation is open: the first bubble of a conversation restored in the
   meantime is history, not the welcome slot. (#1210, !635)
-
 - **A benchmark-suite generation no longer dies on one unparseable chunk (8-6/8-7).** The knowledge-graph phase died when a single chunk's answer came back in a shape the parser did not accept: the format-fix retry failed too, the exception escaped the transform, and the whole generation was lost (live: a Solar System generation died at 137 minutes, at chunk 1599 of 1600, after 5,989 model calls). A node whose answer cannot be parsed now degrades the way a node with a dead call always has — it keeps its other properties, the failure is counted and reported with the suite, and the rest of the corpus keeps its work. A degraded node is also excluded from the relationship pass, which raises on a missing property rather than skipping the node — without that, the tolerance only moved the death one phase later (also found live).
 
 - **The benchmark's progress line counted cache replays as LLM calls (8-6/8-7).** The generation's call counter was incremented before the sidecar's on-disk judge cache was consulted, so a call the cache answered — no request, no GPU — was reported as work the model did. On a corpus that had been generated before, the panel climbed to "673 LLM calls" while the remote GPU sat at 0 % and the remote's own request counters did not move by a single request: the run was never stuck and the model was never wrong, only the number was. The counter now counts the requests that reached the model, and the replays the cache answered are reported beside them, so a replay is never read as an LLM call. Each job also owns its counters, so a concurrent run's calls are never published as this one's.
@@ -684,7 +683,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PII redaction enforced at the OTel collector edge.** The 19-key PII list (`configs/otel/pii-key-list.md`, CODEOWNER @jrevillard) is now applied at the export boundary into VictoriaLogs, covering every log path: docker fluentd driver (non-Node services, crashed-process edge cases), Winston envelope, and any ingestion route that bypasses the in-process SDK. Previously only services with a working in-process OTel SDK LoggerProvider had redaction; the collector-edge transform closes the gap and protects services that historically bypassed it. The new `otel-pii-redact-fail` alert rule (see Added) detects silent regressions. (#343)
 
 - **The static-analysis scan surface now excludes two more trees, and one of them ships inside the mobile app.** `.gitlab-ci.yml` adds `.agents/**` (the BMAD agent-skill tree — developer tooling, never copied into an image and never executed by a deployed service) and `mobile/genie_ai_mobile/flutter_appauth/**` (the whole vendored checkout of the `flutter_appauth` plugin, a melos monorepo the app depends on through a `path:` dependency). The second exclusion covers more than the package the app compiles: the platform-interface package and the upstream GitHub Actions workflows inside that checkout are no longer scanned either — those workflows alone produced 9 findings that nobody owns. The tree carries code whose purpose is to skip TLS certificate validation (Android `InsecureConnectionBuilder`, iOS `InsecureURLProtocol`), reachable only when `KeycloakConfig.allowInsecureConnections` is true. Two tests now hold that in place: one asserts the flag is off in the `itu`, `staging` and per-institution flavor configurations and on in `dev` and `e2e`; the other asserts the gates inside the vendored fork itself, which no analyzer checks any more now that the tree is out of the scan — on Android and on both Apple platforms, structurally rather than by pattern, so a re-indented guard still passes and an unguarded one does not. The vendored fork **stays** in the repository: the instruction in the mobile `CLAUDE.md` to revert it to the upstream release before merging is removed, because upstream ignores `allowInsecureConnections` on iOS entirely. **Deployer impact — mobile release builds:** every documented build command now sets both selectors — `--flavor <name> --dart-define=FLAVOR=<name>` — and the release script refuses a build from the two flavors that arm the trust-everything client. The silent `FLAVOR` fallback itself is fixed separately — a release build without the define now fails at startup (see Fixed) — and deriving the define from the build flavor remains open on the same issue (#1099). The earlier 2.1.0 note claiming the scan exclusions covered "only dev/test-only paths" no longer holds: one of them is code that ships in the APK.
-
 
 ## [2.1.0] - 2026-08-31
 

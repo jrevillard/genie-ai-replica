@@ -111,6 +111,18 @@ void main() {
     test('an empty map resolves to no text', () {
       expect(resolveConfigText({}, 'en'), '');
     });
+
+    test('a list inside a locale map joins like a bare list', () {
+      // The web's `||` chain returns the array (it is truthy) and its
+      // template joins it — the same rendering as a bare list, and the
+      // same as this: one rule for one shape, wherever it nests.
+      expect(
+        resolveConfigText({
+          'en': ['Apply', 'Renew'],
+        }, 'en'),
+        'Apply,Renew',
+      );
+    });
   });
 
   /// The welcome message the configuration declares - the rule that

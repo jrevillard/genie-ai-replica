@@ -73,11 +73,13 @@ export NGINX_FRONTEND_PORT="${NGINX_FRONTEND_PORT:-8090}"
 export NGINX_PERMISSIONS_POLICY="${NGINX_PERMISSIONS_POLICY:-camera=(), microphone=(), geolocation=()}"
 export NGINX_HTTPS_PORT="${NGINX_HTTPS_PORT:-443}"
 
-# Render nginx config from template
+# Render nginx config from template. Non-root (#1227): conf.d is read-only
+# for uid 101, so the rendered server block lands in /tmp — the rootless main
+# config (nginx-rootless.conf) includes it from there.
 echo "Rendering nginx config from template..."
 envsubst '${NGINX_PUBLIC_DOMAIN} ${CSP_CONNECT_SRC} ${KONG_PROXY_HOST} ${NGINX_FRONTEND_HOST} ${NGINX_FRONTEND_PORT} ${NGINX_PERMISSIONS_POLICY} ${NGINX_HTTPS_PORT}' \
     < /etc/nginx/conf.d/default.conf.template \
-    > /etc/nginx/conf.d/default.conf
+    > /tmp/rendered-default.conf
 
 # Validate rendered config
 echo "Validating nginx configuration..."

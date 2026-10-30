@@ -42,7 +42,8 @@ RUN sed -i 's/^LocalSocket /#LocalSocket /' /etc/clamav/clamd.conf \
     && sed -i 's/^LocalSocketGroup /#LocalSocketGroup /' /etc/clamav/clamd.conf \
     && sed -i 's/^LocalSocketMode /#LocalSocketMode /' /etc/clamav/clamd.conf \
     && echo 'TCPSocket 3310' >> /etc/clamav/clamd.conf \
-    && echo 'TCPAddr 0.0.0.0' >> /etc/clamav/clamd.conf
+    && echo 'TCPAddr 0.0.0.0' >> /etc/clamav/clamd.conf \
+    && sed -i 's/^User /#User /' /etc/clamav/clamd.conf
 
 # Create app directory
 WORKDIR /app
@@ -58,8 +59,15 @@ COPY document-repository/src/ ./src/
 COPY document-repository/scripts/clamav-node.sh ./
 RUN chmod +x clamav-node.sh
 
-# Create directory for uploads
-RUN mkdir -p uploads
+# Non-root runtime (#1227): the entrypoint (clamav-node.sh) runs freshclam,
+# clamd and the node server all as uid 1000, so every path they write —
+# signature database, logs, runtime dir, uploads — is chowned to node here.
+# The clamd `User clamav` self-drop is disabled above: as non-root the daemon
+# keeps the invoking uid, and mixing the clamav package user (104) with the
+# node user (1000) over the same directories would fight over ownership.
+RUN mkdir -p uploads \
+    && mkdir -p /var/lib/clamav /var/log/clamav /run/clamav \
+    && chown -R node:node uploads /var/lib/clamav /var/log/clamav /run/clamav
 
 # Expose ports
 EXPOSE 3001 3310
@@ -72,6 +80,9 @@ ENV ARANGO_USER=root
 ENV UPLOAD_DIR=./uploads
 ENV MAX_FILE_SIZE=52428800
 ENV MAX_FILES_UPLOAD=10
+
+# Non-root (#1227): node (uid 1000) owns everything this container writes.
+USER node
 
 # Start the application
 CMD ["bash", "/app/clamav-node.sh"]

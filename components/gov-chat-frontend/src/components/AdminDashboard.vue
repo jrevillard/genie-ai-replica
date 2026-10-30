@@ -81,7 +81,7 @@
                   @click.prevent="setActiveTab('queryInspector')"
                 >
                   <i>🔍</i>
-                  <span>{{ translate('admin.queryInspector', 'Query Inspector') }}</span>
+                  <span>{{ translate('admin.queryInspector.title', 'Query Inspector') }}</span>
                 </a>
               </li>
             </ul>
@@ -782,7 +782,7 @@
                 <div v-if="activeTab === 'queryInspector'" class="dashboard-card" style="grid-column: span 2">
                   <div class="card-header">
                     <div class="card-title">
-                      {{ translate('admin.queryInspector', 'Query Inspector') }}
+                      {{ translate('admin.queryInspector.title', 'Query Inspector') }}
                     </div>
                   </div>
                   <QueryInspector />

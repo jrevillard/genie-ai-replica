@@ -44,8 +44,7 @@ function createMockCollection() {
     save: jest.fn().mockResolvedValue({ _key: 'cat-1' }),
     update: jest.fn().mockResolvedValue({ _key: 'cat-1' }),
     document: jest.fn().mockResolvedValue({ _key: 'cat-1', nameEN: 'Test' }),
-    remove: jest.fn().mockResolvedValue({ _key: 'cat-1' }),
-    ensureIndex: jest.fn()
+    remove: jest.fn().mockResolvedValue({ _key: 'cat-1' })
   };
 }
 

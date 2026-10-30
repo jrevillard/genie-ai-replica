@@ -752,7 +752,7 @@ async function runLlmSummary(prompt, { timeoutMs = 5000 } = {}) {
     return null;
   }
   const headers = {};
-  const apiKey = modelCache.deploymentKey(); // both spellings — same as the probe
+  const apiKey = modelCache.deploymentKey(); // the same read the probe uses
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const r = await axios.post(
     // Shared URL rule (services/llm-url.js): a versioned base keeps its

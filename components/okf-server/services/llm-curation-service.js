@@ -83,9 +83,9 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
   // stay off until a deployment names the endpoint).
   let rawBase = modelCache.optedInVllmBase();
   let model = null; // resolved below — explicit pick > pin > discovery (!631)
-  // Both key spellings — the chat call and the probe must agree on the
-  // credential (a probe that authenticates while the chat call does not
-  // fails with a bare 401).
+  // The deployment credential — the SAME read the probe uses, so the two
+  // can never disagree (a probe that authenticates while the chat call
+  // does not fails with a bare 401).
   let apiKey = modelCache.deploymentKey();
   let viaOverride = false;
   let configIsDeployment = false;

@@ -370,7 +370,7 @@ Output ONLY a JSON object: {"results": [{"index": <int>, "match": "yes"|"no", "r
 async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   let host = modelCache.deploymentVllmBase();
   let model = null; // resolved below — explicit pick > pin > discovery (!631)
-  // Per-call read (both spellings) so the probe and the chat call can never
+  // Per-call read, the same one the probe uses, so the two can never
   // disagree on credentials.
   let apiKey = modelCache.deploymentKey();
   let viaOverride = false;

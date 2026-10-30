@@ -240,7 +240,7 @@ async function callVllm(messages, { timeoutMs = TIMEOUT_MS } = {}) {
   const model = resolved.model;
   const chatTimeoutMs = resolved.remainingMs;
   const headers = {};
-  const apiKey = modelCache.deploymentKey(); // both spellings — same as the probe
+  const apiKey = modelCache.deploymentKey(); // the same read the probe uses
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const r = await axios.post(
     // Shared URL rule (services/llm-url.js) — versioned base or bare host.

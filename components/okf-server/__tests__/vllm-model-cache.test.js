@@ -169,6 +169,12 @@ describe('TTL cache', () => {
     // Mirror of model_cache.py: stale is better than broken — model_id
     // consumers keep retrying (no negative cache, #1127 stays deferred).
     await expect(cache.resolveVllmModelId('http://vllm:8000')).resolves.toBe('served/model');
+    // The degradation is VISIBLE: one serving_stale line per failure
+    // window — the provenance fields keep naming the stale id, and an
+    // operator must be able to tell that apart from a healthy answer.
+    const warns = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.serving_stale');
+    expect(warns).toHaveLength(1);
+    expect(warns[0][1]).toMatchObject({ stale_id: 'served/model' });
   });
 
   test('the stale id survives the FAILED probe — the next caller still gets it', async () => {

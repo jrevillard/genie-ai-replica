@@ -276,7 +276,12 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
   // caller's budget must not narrow a concurrent caller's probe (the
   // best-effort summary leg probes for 1 s while a tagging call may wait 30 s).
   // The failure marker is keyed the same way: a 1 s probe that gave up must
-  // not lock out a caller that had 10 s and would have answered.
+  // not lock out a caller that had 10 s and would have answered. The bucket
+  // quantizes to one SECOND: two callers inside the same bucket share the
+  // first one's raw budget, so the narrowing is bounded by the bucket's
+  // remainder (never more than 1 s) — exact per-caller budgets would mean
+  // one probe per distinct timeout, which is the storm the shared probe
+  // exists to prevent.
   const probeKey = `${cacheKey}|${probeBudgetBucket(timeoutMs)}`;
 
   // A recent failure is remembered: answer without touching the network.
@@ -307,6 +312,16 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
         // (HTTP status, error code); only the raw cause object is dropped.
         const stored = err instanceof ModelDiscoveryError && err.cause ? new ModelDiscoveryError(err.message) : err;
         _negative.set(probeKey, { ts: Date.now(), cause: stored });
+        // The degradation must be VISIBLE: every call this negative window
+        // serves resolves the STALE id while provenance fields keep naming
+        // it — one line here (not per served call) says so without flooding.
+        if (entry) {
+          logger.warn('vllm_model_cache.serving_stale', {
+            url: modelsUrl,
+            stale_id: entry.id,
+            note: 'probe failed — the stale cached id serves until the endpoint answers'
+          });
+        }
         _inflight.delete(probeKey);
         throw err;
       })
@@ -353,6 +368,13 @@ function pruneCache() {
   // oldest stub goes, that key re-probes.
   while (_negative.size > MAX_CACHE_ENTRIES) {
     _negative.delete(_negative.keys().next().value);
+  }
+  // The malformed-pair set too — a long-lived server under config churn
+  // would otherwise grow it for the container's lifetime (a redeploy that
+  // changes the deployment base doubles the pair space). The oldest pair
+  // re-warns, at most once more.
+  while (_malformedWarned.size > MAX_CACHE_ENTRIES) {
+    _malformedWarned.delete(_malformedWarned.keys().next().value);
   }
 }
 

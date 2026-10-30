@@ -98,14 +98,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the mobile app while the web hid it. Both platforms now hide it the same
   way. (#1208, !635)
 
-- **The mobile app now shows the chat's configured welcome message on first
-  render.** The message declared in the deployment configuration was computed
-  before the configuration had finished loading, so the first screen showed
-  the generic built-in greeting and the configured text appeared only after
-  the user switched language once. The configured message now lands when the
-  configuration load completes — and only while no conversation is open: the
-  first bubble of a conversation restored in the meantime is history, not the
-  welcome slot. (#1210, !635)
+- **The mobile app now shows the chat's configured welcome message as soon as
+  the configuration has loaded.** The message declared in the deployment
+  configuration was computed before the configuration had finished loading, so
+  the first screen showed the generic built-in greeting and the configured
+  text appeared only after the user switched language once. The configured
+  message now lands when the configuration load completes — and only while no
+  conversation is open: the first bubble of a conversation restored in the
+  meantime is history, not the welcome slot. (#1210, !635)
 
 - **A benchmark-suite generation no longer dies on one unparseable chunk (8-6/8-7).** The knowledge-graph phase died when a single chunk's answer came back in a shape the parser did not accept: the format-fix retry failed too, the exception escaped the transform, and the whole generation was lost (live: a Solar System generation died at 137 minutes, at chunk 1599 of 1600, after 5,989 model calls). A node whose answer cannot be parsed now degrades the way a node with a dead call always has — it keeps its other properties, the failure is counted and reported with the suite, and the rest of the corpus keeps its work. A degraded node is also excluded from the relationship pass, which raises on a missing property rather than skipping the node — without that, the tolerance only moved the death one phase later (also found live).
 

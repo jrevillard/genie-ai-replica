@@ -1,3 +1,20 @@
+/// The mobile's config-reading layer: the rules the web's config
+/// resolver applies, mirrored so both platforms read one deployment
+/// the same way.
+///
+/// It owns four rules:
+/// - the container guard ([configMapOf]) every config descent uses;
+/// - the guarded descent ([configSectionOf]) down a path of keys;
+/// - the truthiness of a config flag ([configTruthy]) — the web's
+///   `value || default`, whose falsy set JS and Dart share;
+/// - the text of a locale map ([resolveConfigText]) and of the chat's
+///   welcome message ([resolveWelcomeMessage]).
+///
+/// The Quick Help CARDS are read elsewhere: `components/chat/
+/// quick_help_scope.dart` owns the button rules, this layer owns the
+/// config they come from.
+library;
+
 /// Resolve a config value that may be a locale map or plain string.
 ///
 /// Config values for prompts and welcome messages use locale maps:

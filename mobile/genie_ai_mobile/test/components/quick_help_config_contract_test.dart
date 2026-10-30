@@ -5,12 +5,17 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/chat/quick_help_scope.dart';
 
-/// The contract between the SHIPPED configuration and the code that
-/// reads it. Issue #1124 was a silent divergence: the widget read an
-/// `appearance` block that no shipped file declares, so every card
+/// The contract between the MOBILE'S BUNDLED configuration and the code
+/// that reads it. Issue #1124 was a silent divergence: the widget read
+/// an `appearance` block that no shipped file declares, so every card
 /// rendered blank while the unit tests stayed green. A hand-written
 /// fixture moves with the code and cannot catch that class - this test
 /// reads the real asset the app bundles.
+///
+/// The configuration a DEPLOYMENT ships is the web's runtime file
+/// (`components/gov-chat-frontend/public/config/`), and the mobile app
+/// never reads it: the two are separate artifacts (the gap is tracked
+/// in #1211).
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -53,14 +58,21 @@ void main() {
         );
         // The card's ICON: the shipped icon's basename, as a bundled
         // asset that actually loads (the pre-fix fallback named a file
-        // the app never shipped).
+        // the app never shipped). A card that declares NO icon carries
+        // no asset - the neutral help icon is the contract for it.
         final iconAsset = button['iconAsset']?.toString() ?? '';
-        final shippedFile = (raw['icon']?['value']?.toString() ?? '')
-            .split('/')
-            .last;
+        final shippedValue = raw['icon']?['value']?.toString() ?? '';
+        if (shippedValue.isEmpty) {
+          expect(
+            iconAsset,
+            isEmpty,
+            reason: 'button ${button['id']} declares no icon',
+          );
+          continue;
+        }
         expect(
           iconAsset,
-          'assets/config/quickhelp/$shippedFile',
+          'assets/config/quickhelp/${shippedValue.split('/').last}',
           reason: 'button ${button['id']} does not show the shipped icon',
         );
         // The asset must LOAD: an async call cannot throw
@@ -82,27 +94,56 @@ void main() {
   /// the grid must read, and the block that does not exist must not be
   /// read.
   group('the chat widget reads the shipped shape', () {
-    test('the grid does not read the appearance block', () {
+    /// The GRID's code, comments stripped: a guard that can be
+    /// satisfied by a comment proves nothing (the mutation that
+    /// silenced the grid's title read left the identifier in a
+    /// neighbouring comment and the guard stayed green).
+    ///
+    /// The region starts at the only `GridView.builder(` in the file:
+    /// the rest of the widget reads other maps (a conversation's
+    /// title, a message's role), so a whole-file grep would bind the
+    /// wrong lines - and the grid's own title read was satisfied by
+    /// two unrelated call sites.
+    String gridCode() {
       final source = File(
         'lib/components/chat/chatbot_component.dart',
       ).readAsStringSync();
-
+      final start = source.indexOf('GridView.builder(');
       expect(
-        source.contains("['appearance']"),
+        start,
+        greaterThanOrEqualTo(0),
+        reason: 'the grid is gone from the widget',
+      );
+      return source
+          .substring(start)
+          .replaceAll(RegExp(r'///[^\n]*'), '')
+          .replaceAll(RegExp(r'//[^\n]*'), '')
+          .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '');
+    }
+
+    test('the grid does not read the appearance block', () {
+      expect(
+        RegExp(
+          r'\[\s*[\x27\x22]appearance[\x27\x22]\s*\]',
+        ).hasMatch(gridCode()),
         isFalse,
         reason: 'the widget must not read the appearance block again',
       );
     });
 
     test('the grid reads the title the parse resolved', () {
-      final source = File(
-        'lib/components/chat/chatbot_component.dart',
-      ).readAsStringSync();
-
       expect(
-        source.contains('quickHelpTitleOf(button)'),
+        RegExp(r'quickHelpTitleOf\s*\(\s*button\s*\)').hasMatch(gridCode()),
         isTrue,
         reason: 'the grid card must show the resolved title',
+      );
+    });
+
+    test('the grid does not read the raw title key', () {
+      expect(
+        RegExp(r'\[\s*[\x27\x22]title[\x27\x22]\s*\]').hasMatch(gridCode()),
+        isFalse,
+        reason: 'the raw title is a locale map, not a label',
       );
     });
   });

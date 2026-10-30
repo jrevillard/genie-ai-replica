@@ -280,6 +280,61 @@ print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
 - Username: `testuser`
 - Password: `TestPass123!`
 
+### 0.9 Seed the Knowledge Hierarchy (Quick Help Prerequisite)
+
+A fresh stack has **empty** `serviceCategories`/`services` collections. The
+Quick Help specs (e.g. `tests/e2e/chat-conversation.spec.js` — *"the header
+title reflects the QuickHelp option that opened the chat"*) fail on an empty
+hierarchy: a Quick Help option that names a category is silently refused
+when the live hierarchy cannot resolve it, and the conversation header keeps
+its fallback `Just Chat`. Seed both collections from the committed export:
+
+```bash
+EXPORT=components/gov-chat-backend/scripts/new-schema-scripts/exports/serviceCategoriesAndServices_export_2025-06-18T11-38-02.json
+
+# Split the export (one JSON object) into per-collection payloads
+python3 - "$EXPORT" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))["data"]
+for coll in ("serviceCategories", "services"):
+    with open(f"/tmp/seed-{coll}.json", "w") as f:
+        json.dump(data[coll], f)
+    print(coll, len(data[coll]))
+PY
+# Expected: serviceCategories 13, services 53
+
+BCK=$(docker ps --filter name=backend --format '{{.ID}}' | head -1)
+
+# Insert each collection (type=array bulk POST). Skip a collection that
+# already has documents — the docs carry their _key, a re-insert conflicts.
+for COLL in serviceCategories services; do
+  COUNT=$(docker exec $BCK bash -c \
+    "curl -s -u root:\${ARANGO_PASSWORD} \"http://arango-vector-db:8529/_db/\${ARANGO_DB}/_api/collection/$COLL/count\"" \
+    | python3 -c "import sys,json; print(json.load(sys.stdin).get('count', 0))")
+  if [ "$COUNT" != "0" ]; then
+    echo "$COLL already seeded ($COUNT docs), skipping"
+    continue
+  fi
+  docker exec -i $BCK bash -c \
+    "curl -s -u root:\${ARANGO_PASSWORD} -X POST \
+    \"http://arango-vector-db:8529/_db/\${ARANGO_DB}/_api/document/$COLL?type=array\" \
+    -H 'Content-Type: application/json' --data-binary @-" \
+    < /tmp/seed-$COLL.json > /dev/null && echo "$COLL seeded"
+done
+
+# Verify
+docker exec $BCK bash -c \
+  'for c in serviceCategories services; do curl -s -u root:${ARANGO_PASSWORD} \
+  "http://arango-vector-db:8529/_db/${ARANGO_DB}/_api/collection/$c/count"; echo; done'
+# Expected: {"count":13,...} and {"count":53,...}
+```
+
+**On the k8s dev cluster** the same POST runs inside the backend pod — the
+only differences are `kubectl -n genieai exec deploy/<backend-deployment> --`
+instead of `docker exec`, and the ArangoDB host
+(`arangodb-single.genieai.svc.cluster.local:8529`, DB as configured by the
+chart's `ARANGO_DB`).
+
 ---
 
 ## Get Admin Token

@@ -109,6 +109,38 @@ async function getUserToken(username, password, options = {}) {
 }
 
 /**
+ * Read the access token held by a page's own login session.
+ *
+ * Direct access grants (ROPC) are disabled on the realm by design, so a
+ * spec that already logged in through the browser must reuse that
+ * session's token instead of minting a second one with getUserToken.
+ * oidc-client-ts persists its user under a `oidc.user:` key in web
+ * storage (sessionStorage on this app).
+ * @param {import('@playwright/test').Page} page - A logged-in page
+ * @returns {Promise<string>} Access token string
+ * @throws {Error} When the page session carries no token (not logged in)
+ */
+async function getSessionToken(page) {
+  const token = await page.evaluate(() => {
+    const key = [...Object.keys(localStorage), ...Object.keys(sessionStorage)].find((k) =>
+      k.startsWith('oidc.user:'),
+    );
+    if (!key) return null;
+    try {
+      const user = JSON.parse(localStorage.getItem(key) ?? sessionStorage.getItem(key));
+      return user?.access_token || null;
+    } catch {
+      return null;
+    }
+  });
+
+  if (!token) {
+    throw new Error('No access token in the page session — the page is not logged in');
+  }
+  return token;
+}
+
+/**
  * Parse JWT claims without verification (decode payload only).
  * @param {string} token - JWT token string
  * @returns {object} Decoded claims object
@@ -129,4 +161,4 @@ function parseJwtClaims(token) {
   }
 }
 
-module.exports = { getAdminToken, getUserToken, parseJwtClaims, request };
+module.exports = { getAdminToken, getUserToken, getSessionToken, parseJwtClaims, request };

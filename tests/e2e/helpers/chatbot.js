@@ -161,12 +161,13 @@ async function getLastBotMessage(page) {
 }
 
 /**
- * Click the save chat button and fill in the save dialog.
- * Uses chat-header button selector (last button in header) to avoid
- * dependency on i18n-translated title attributes.
+ * Click the save button and fill in the save dialog.
+ * The conversation-header save button is the only save affordance that
+ * renders: ChatComposer's save-chat-btn is gated on a show-save prop no
+ * parent passes, so the header button is what the app ships.
  */
 async function saveChat(page, title) {
-  const button = page.locator('[data-testid="save-chat-btn"]');
+  const button = page.locator('[data-testid="conversation-header-save"]');
   await expect(button).toBeVisible({ timeout: 5000 });
   await button.click();
 

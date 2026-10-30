@@ -12,7 +12,10 @@ async function navigateToDocumentManagement(page) {
     timeout: 30000,
   });
 
-  const docTab = page.getByText('Document Management');
+  // The admin shell renders "Document Management" twice by design: the
+  // sidebar nav link and the DsTabs tab button. Only the sidebar entry is
+  // a link, so scope by role — a bare getByText resolves to both.
+  const docTab = page.getByRole('link', { name: /Document Management/ });
   await expect(docTab).toBeVisible({ timeout: 10000 });
   await docTab.click();
 
@@ -24,7 +27,10 @@ async function navigateToDocumentManagement(page) {
  * Opens dialog → sets file on input → confirms upload → waits for success.
  */
 async function uploadFile(page, filePath) {
-  const uploadBtn = page.locator('.filter-bar').getByText('Upload Files');
+  // The upload button lives in the documents card's action bar
+  // (.card-actions), not in .filter-bar — the filter bar holds only the
+  // search and status controls.
+  const uploadBtn = page.getByRole('button', { name: /Upload Files/i });
   await expect(uploadBtn).toBeVisible({ timeout: 5000 });
   await uploadBtn.click();
 

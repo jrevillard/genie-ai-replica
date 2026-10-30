@@ -7,9 +7,8 @@ const {
   getMessages,
   saveChat,
   BASE_URL,
-  TEST_USER,
 } = require('../helpers/chatbot');
-const { getUserToken } = require('../helpers/auth');
+const { getSessionToken } = require('../helpers/auth');
 
 const API_TIMEOUT_MS = 30000;
 
@@ -33,22 +32,33 @@ test.describe('Conversation history persistence', () => {
     await context?.close();
   });
 
-  test.afterAll(async () => {
-    const token = await getUserToken(TEST_USER.username, TEST_USER.password).catch(() => null);
-    if (!token) {
-      console.warn('cleanup: failed to get token, skipping conversation deletion');
-      return;
-    }
+  // Direct access grants are disabled on the realm by design, so the
+  // cleanup session logs in through the browser like the tests do and
+  // reuses that session's token for the API deletes.
+  test.afterAll(async ({ browser }) => {
+    if (createdConversationIds.length === 0) return;
 
-    const { request } = require('../helpers/auth');
-    for (const convId of createdConversationIds) {
-      try {
-        await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-      } catch (err) {
-        console.error(`cleanup: failed to delete conversation ${convId}: ${err.message}`);
+    const cleanupContext = await browser.newContext({
+      ignoreHTTPSErrors: true,
+      bypassCSP: true,
+    });
+    const cleanupPage = await cleanupContext.newPage();
+    try {
+      await loginViaUI(cleanupPage);
+      const token = await getSessionToken(cleanupPage);
+
+      const { request } = require('../helpers/auth');
+      for (const convId of createdConversationIds) {
+        try {
+          await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        } catch (err) {
+          console.error(`cleanup: failed to delete conversation ${convId}: ${err.message}`);
+        }
       }
+    } finally {
+      await cleanupContext.close();
     }
   });
 
@@ -76,8 +86,8 @@ test.describe('Conversation history persistence', () => {
     // Navigate to chatbot to load saved chats
     await navigateToChatbot(page);
 
-    // Verify via the chat history API
-    const token = await getUserToken(TEST_USER.username, TEST_USER.password);
+    // Verify via the chat history API, with the token the page session holds
+    const token = await getSessionToken(page);
     const conversationsResponse = await page.evaluate(async (args) => {
       const res = await fetch(`${args.baseUrl}/api/chat/conversations`, {
         headers: { Authorization: `Bearer ${args.token}` },
@@ -104,7 +114,7 @@ test.describe('Conversation history persistence', () => {
   });
 
   test('list conversations endpoint returns conversations for authenticated user', async () => {
-    const token = await getUserToken(TEST_USER.username, TEST_USER.password);
+    const token = await getSessionToken(page);
 
     const response = await page.evaluate(async (args) => {
       const res = await fetch(`${args.baseUrl}/api/chat/conversations`, {
@@ -137,8 +147,8 @@ test.describe('Conversation history persistence', () => {
     await saveChat(page, chatTitle);
     await expect(page.locator('#chatTitle')).toBeHidden({ timeout: 10000 });
 
-    // Get the saved conversation via API
-    const token = await getUserToken(TEST_USER.username, TEST_USER.password);
+    // Get the saved conversation via API, with the page session's token
+    const token = await getSessionToken(page);
     const convResponse = await page.evaluate(async (args) => {
       const res = await fetch(`${args.baseUrl}/api/chat/conversations`, {
         headers: { Authorization: `Bearer ${args.token}` },

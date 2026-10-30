@@ -198,7 +198,13 @@ describe('Swagger Configuration', () => {
       Object.assign(path, jest.requireActual('path'));
       let spec;
       try {
-        spec = swaggerJsdoc(swaggerOptions);
+        // The runtime object's apis glob is relative to the backend dir;
+        // anchor it to this file so the test does not depend on the
+        // directory jest was invoked from.
+        spec = swaggerJsdoc({
+          ...swaggerOptions,
+          apis: [path.join(__dirname, '..', 'routes', '*.js')]
+        });
       } finally {
         for (const key of Object.keys(fs)) delete fs[key];
         Object.assign(fs, mockedFs);

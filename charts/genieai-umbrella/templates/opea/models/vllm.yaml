@@ -17,7 +17,7 @@
 {{- include "genieai-umbrella.modelDeployment" (dict
       "root" .
       "name" "vllm"
-      "image" "docker.io/vllm/vllm-openai:v0.10.0"
+      "image" "docker.io/vllm/vllm-openai:v0.29.0"
       "port" 8000
       "mountPath" "/root/.cache/huggingface"
       "readinessDelay" 30

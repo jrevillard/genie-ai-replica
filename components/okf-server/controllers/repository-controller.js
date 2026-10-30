@@ -26,6 +26,19 @@ const conformanceService = require('../services/conformance-service');
 const typeInference = require('../services/type-inference-service');
 const crawlConversionService = require('../services/crawl-conversion-service');
 const producerService = require('../services/producer-service'); // Story 7.7 documents import
+// Review !622 round 9, #78670: the suite/studio/head handlers call these
+// modules — required ONCE here instead of inside every handler (61
+// in-handler requires). The services never require this controller, so
+// there is no import cycle to defer.
+const headTestService = require('../services/head-test-service');
+const headSuiteService = require('../services/head-suite-service');
+const studioDraftService = require('../services/studio-draft-service');
+const ragasSuiteService = require('../services/ragas-suite-service');
+// ...and the three the topic-link/validation/autocorrect handlers called
+// for — same rule: no cycle, no reason to defer.
+const validationService = require('../services/validation-service');
+const topicLinks = require('../services/topic-link-authoring-service');
+const llmCuration = require('../services/llm-curation-service');
 
 // Story #978 — metrics helpers (fail-soft if OTel collector is unavailable).
 // Lazy + try/catch because getMeter() may throw at module-load when the SDK
@@ -78,6 +91,24 @@ function validate(schema, body) {
   if (error) throw new ValidationError(error.details.map((d) => d.message));
   return value;
 }
+// Review !622 round 9, #78670: ONE envelope for the suite/studio/
+// frontmatter handlers — each used to paste try/require/opts/status/json/
+// next verbatim (~40 handlers). The thunk performs the service call and
+// returns the JSON body; `call` owns the status (200 default) and error
+// forwarding. Handlers with custom transports (xlsx bytes, zip streams,
+// the metrics aggregation) stay written out.
+const call =
+  (fn, { status = 200 } = {}) =>
+  async (req, res, next) => {
+    try {
+      res.status(status).json(await fn(req));
+    } catch (err) {
+      next(err);
+    }
+  };
+// The service-call opts, spelled twice instead of ~80 times.
+const adminOpts = (req) => ({ authz: authzForService(req), actor: actorFrom(req) });
+const readOpts = (req) => ({ authz: authzForService(req) });
 
 async function createRepo(req, res, next) {
   try {
@@ -117,6 +148,52 @@ async function createRepo(req, res, next) {
 }
 
 /**
+/**
+ * Review !622 round 9, #78672: the repo-targeting half of BOTH conversion
+ * endpoints, previously ~55 verbatim lines pasted twice (repo_id targeting,
+ * the 10-attempt duplicate-name suffix loop, the 409, the born-right ACL
+ * slug). An optional body.repo_id targets an EXISTING repo — authz-scoped
+ * fetch (F15: a domain-A caller cannot target a domain-B repo by id) plus
+ * writability (serving/drain-frozen content 409s); absent repo_id mints a
+ * uniquely-named repo (Wizard B1, Amendment A, 2026-09-27). Returns
+ * { repo, baseName } or { failure: { status, payload } } — the caller
+ * renders the envelope since this helper owns no res.
+ */
+async function resolveTargetRepo(body, authz, actor, defaultName) {
+  const repoDomain = body.domain || 'general';
+  const acl = { required_scopes: [`okf:t:${bundleExportService.slugFor(repoDomain)}:admin`] };
+  const baseName = typeof body.name === 'string' && body.name ? body.name : defaultName;
+  if (typeof body.repo_id === 'string' && body.repo_id.trim()) {
+    const existing = await repoService.getById(body.repo_id.trim(), { authz });
+    if (!existing || existing.deleted_at) {
+      return {
+        failure: { status: 404, payload: { error: 'REPO_NOT_FOUND', message: `Repository ${body.repo_id} not found` } }
+      };
+    }
+    assertWritable(existing);
+    return { repo: existing, baseName };
+  }
+  for (let attempt = 1; attempt <= 10; attempt++) {
+    const candidate = attempt === 1 ? baseName : `${baseName}-${attempt}`;
+    try {
+      const repo = await repoService.create({ name: candidate, domain: repoDomain, acl }, actor, {});
+      return { repo, baseName };
+    } catch (err) {
+      if (!(err && err.code === 'DUPLICATE_REPO')) throw err;
+    }
+  }
+  return {
+    failure: {
+      status: 409,
+      payload: {
+        error: 'DUPLICATE_REPO',
+        message: `Repository name "${baseName}" (and suffixed variants) already exists in domain "${repoDomain}"`
+      }
+    }
+  };
+}
+
+/**
  * POST /okf/repos/convert-from-crawl — trigger a SERVER-SIDE crawl→OKF
  * conversion (David, 2026-09-02: "a long running service through Kong will
  * not cut it" + "must support files up to 10GB").
@@ -140,48 +217,15 @@ async function convertFromCrawl(req, res, next) {
       });
     }
     const actor = actorFrom(req);
-    const repoDomain = body.domain || 'general';
     // TYPE INFERENCE contract (coordinator, 2026-09-05): 'classification' —
     // unknown/absent = heuristics (coerced, never a 400).
     const classification =
       body.classification !== undefined ? typeInference.resolveStrategy(body.classification).strategy : undefined;
-    // BORN-RIGHT SLUG (David's subject-area ruling, 2026-09-04): domains are
-    // now Knowledge-Hierarchy display text ("Water Supply") — the scope
-    // segment must be its SLUG (lowercase [a-z0-9-]), or the string cannot
-    // survive JWT scope transport (whitespace-split) or the 4-part scope
-    // grammar. Single-sourced with the bundle/graph slug. The stored domain
-    // stays display text.
-    const acl = { required_scopes: [`okf:t:${bundleExportService.slugFor(repoDomain)}:admin`] };
-    const baseName = typeof body.name === 'string' && body.name ? body.name : 'crawled-repository';
-    let repo = null;
-    // Wizard B1 (Amendment A, 2026-09-27): an optional repo_id targets an
-    // EXISTING repository — the conversion lands in it instead of minting a
-    // new one (the wizard creates the repo at Entry, then feeds it here).
-    // Additive: absent repo_id = the historical create-with-suffix loop.
-    if (typeof body.repo_id === 'string' && body.repo_id.trim()) {
-      // F15 (max-review): same narrowing + writability as every sibling
-      // mutation — an authz-scoped fetch (a domain-A caller cannot target a
-      // domain-B repo by id) and a 409 for serving/drain-frozen content.
-      repo = await repoService.getById(body.repo_id.trim(), { authz: authzForService(req) });
-      if (!repo || repo.deleted_at) {
-        return res.status(404).json({ error: 'REPO_NOT_FOUND', message: `Repository ${body.repo_id} not found` });
-      }
-      assertWritable(repo);
-    }
-    for (let attempt = 1; attempt <= 10 && !repo; attempt++) {
-      const candidate = attempt === 1 ? baseName : `${baseName}-${attempt}`;
-      try {
-        repo = await repoService.create({ name: candidate, domain: repoDomain, acl }, actor, {});
-      } catch (err) {
-        if (!(err && err.code === 'DUPLICATE_REPO')) throw err;
-      }
-    }
-    if (!repo) {
-      return res.status(409).json({
-        error: 'DUPLICATE_REPO',
-        message: `Repository name "${baseName}" (and suffixed variants) already exists in domain "${repoDomain}"`
-      });
-    }
+    // Repo targeting (see resolveTargetRepo — #78672): existing-repo branch
+    // or the create-with-suffix loop, one implementation for both endpoints.
+    const target = await resolveTargetRepo(body, authzForService(req), actor, 'crawled-repository');
+    if (target.failure) return res.status(target.failure.status).json(target.failure.payload);
+    const repo = target.repo;
     await crawlConversionService.startConversion({
       repo_id: repo.repo_id,
       file_id: body.file_id,
@@ -192,7 +236,7 @@ async function convertFromCrawl(req, res, next) {
       classification, // TYPE INFERENCE (David, 2026-09-05): rides the job → flushes
       actor
     });
-    res.status(202).json({ ...repo, name_adjusted: repo.name !== baseName });
+    res.status(202).json({ ...repo, name_adjusted: repo.name !== target.baseName });
   } catch (err) {
     next(err);
   }
@@ -216,38 +260,11 @@ async function convertFromDocuments(req, res, next) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'file_ids (non-empty array) is required' });
     }
     const actor = actorFrom(req);
-    const repoDomain = body.domain || 'general';
     const classification =
       body.classification !== undefined ? typeInference.resolveStrategy(body.classification).strategy : undefined;
-    const acl = { required_scopes: [`okf:t:${bundleExportService.slugFor(repoDomain)}:admin`] };
-    const baseName = typeof body.name === 'string' && body.name ? body.name : 'imported-repository';
-    let repo = null;
-    // Wizard B1 (Amendment A, 2026-09-27): optional repo_id targets an
-    // EXISTING repository — same additive contract as convert-from-crawl.
-    if (typeof body.repo_id === 'string' && body.repo_id.trim()) {
-      // F15 (max-review): same narrowing + writability as every sibling
-      // mutation — an authz-scoped fetch (a domain-A caller cannot target a
-      // domain-B repo by id) and a 409 for serving/drain-frozen content.
-      repo = await repoService.getById(body.repo_id.trim(), { authz: authzForService(req) });
-      if (!repo || repo.deleted_at) {
-        return res.status(404).json({ error: 'REPO_NOT_FOUND', message: `Repository ${body.repo_id} not found` });
-      }
-      assertWritable(repo);
-    }
-    for (let attempt = 1; attempt <= 10 && !repo; attempt++) {
-      const candidate = attempt === 1 ? baseName : `${baseName}-${attempt}`;
-      try {
-        repo = await repoService.create({ name: candidate, domain: repoDomain, acl }, actor, {});
-      } catch (err) {
-        if (!(err && err.code === 'DUPLICATE_REPO')) throw err;
-      }
-    }
-    if (!repo) {
-      return res.status(409).json({
-        error: 'DUPLICATE_REPO',
-        message: `Repository name "${baseName}" (and suffixed variants) already exists in domain "${repoDomain}"`
-      });
-    }
+    const target = await resolveTargetRepo(body, authzForService(req), actor, 'imported-repository');
+    if (target.failure) return res.status(target.failure.status).json(target.failure.payload);
+    const repo = target.repo;
     await producerService.startDocumentsConversion({
       repo_id: repo.repo_id,
       file_ids: fileIds,
@@ -255,7 +272,7 @@ async function convertFromDocuments(req, res, next) {
       classification,
       actor
     });
-    res.status(202).json({ ...repo, name_adjusted: repo.name !== baseName });
+    res.status(202).json({ ...repo, name_adjusted: repo.name !== target.baseName });
   } catch (err) {
     next(err);
   }
@@ -391,7 +408,6 @@ async function retiredIngestRoute(req, res) {
 async function getRepoValidation(req, res, next) {
   try {
     const { repo_id } = req.params;
-    const validationService = require('../services/validation-service');
     await repoService.getById(repo_id, { authz: authzForService(req) }); // 404 foreign repos
     const report = await validationService.getValidationReport(repo_id);
     res.status(200).json(report);
@@ -414,7 +430,6 @@ async function getRepoValidation(req, res, next) {
 async function startTopicLinks(req, res, next) {
   try {
     const { repo_id } = req.params;
-    const topicLinks = require('../services/topic-link-authoring-service');
     const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
     assertWritable(repoDoc);
     const run = await topicLinks.startTopicLinkRun(repoDoc, {
@@ -443,7 +458,6 @@ async function startTopicLinks(req, res, next) {
 async function getTopicLinks(req, res, next) {
   try {
     const { repo_id } = req.params;
-    const topicLinks = require('../services/topic-link-authoring-service');
     const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
     res.status(200).json({ success: true, run: await topicLinks.getTopicLinkRunState(repoDoc) });
   } catch (err) {
@@ -460,7 +474,6 @@ async function getTopicLinks(req, res, next) {
 async function wireRepoCitations(req, res, next) {
   try {
     const { repo_id } = req.params;
-    const validationService = require('../services/validation-service');
     const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
     assertWritable(repoDoc);
     const result = await validationService.wireCitationHub(repo_id, {
@@ -489,7 +502,6 @@ async function wireRepoCitations(req, res, next) {
 async function suggestConceptLinks(req, res, next) {
   try {
     const { repo_id, concept_id } = req.params;
-    const llmCuration = require('../services/llm-curation-service');
     const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
     const result = await llmCuration.proposeLinks(repoDoc, concept_id);
     res.status(200).json({ success: true, ...result });
@@ -1324,7 +1336,6 @@ async function autocorrectRepo(req, res, next) {
         ? repoDoc.classification
         : 'heuristics';
     if (mode !== 'heuristics') {
-      const llmCuration = require('../services/llm-curation-service');
       const proposals = await llmCuration.proposeFrontmatter(repoDoc, bodyConceptId || null, { classification: mode });
       let appliedCount = 0;
       if (!(dry_run === true)) {
@@ -1513,19 +1524,10 @@ async function getRepoMetrics(req, res, next) {
  * Fixes a missing head (publish is warn-only on a TEI outage) or a
  * stale one (frontmatter edited after publish). Admin-scoped.
  */
-async function rebuildRepoHead(req, res, next) {
-  try {
-    const headTestService = require('../services/head-test-service');
-    const head = await headTestService.rebuildHead(req.params.repo_id, {
-      authz: authzForService(req),
-      actor: actorFrom(req)
-    });
-    res.status(200).json({ ok: true, repo_id: req.params.repo_id, head });
-  } catch (err) {
-    next(err);
-  }
-}
-
+const rebuildRepoHead = call(async (req) => {
+  const head = await headTestService.rebuildHead(req.params.repo_id, adminOpts(req));
+  return { ok: true, repo_id: req.params.repo_id, head };
+});
 /**
  * Story 1-8 (2026-10-08) — POST /api/okf/repos/:repo_id/routing-test.
  * The Testing Lab: embeds the query with production
@@ -1534,19 +1536,7 @@ async function rebuildRepoHead(req, res, next) {
  * replays the Story 1.3 chunk-probe routing for repos with graphs.
  * Admin-scoped (LLM/TEI-burning surface).
  */
-async function routingTest(req, res, next) {
-  try {
-    const headTestService = require('../services/head-test-service');
-    const result = await headTestService.routingTest(req.params.repo_id, req.body || {}, {
-      authz: authzForService(req),
-      actor: actorFrom(req)
-    });
-    res.status(200).json(result);
-  } catch (err) {
-    next(err);
-  }
-}
-
+const routingTest = call((req) => headTestService.routingTest(req.params.repo_id, req.body || {}, adminOpts(req)));
 /**
  * Story 1-8d — POST /api/okf/repos/:repo_id/routing-advisor.
  * The comprehensive advisor: aggregates the queries of the last N runs
@@ -1561,70 +1551,39 @@ async function routingTest(req, res, next) {
  * endpoints: 202 {job_key, status:'running'}, poll
  * GET /routing-advisor/jobs/:job_key.
  */
-async function recommendTagSet(req, res, next) {
-  try {
-    const headSuiteService = require('../services/head-suite-service');
-    const started = await headSuiteService.beginRecommendTagSet(req.params.repo_id, req.body || {}, {
-      authz: authzForService(req),
-      actor: actorFrom(req)
-    });
-    res.status(202).json({ repo_id: req.params.repo_id, job_key: started.job_key, status: 'running' });
-  } catch (err) {
-    next(err);
-  }
-}
-
+const recommendTagSet = call(
+  async (req) => {
+    const started = await headSuiteService.beginRecommendTagSet(req.params.repo_id, req.body || {}, adminOpts(req));
+    return { repo_id: req.params.repo_id, job_key: started.job_key, status: 'running' };
+  },
+  { status: 202 }
+);
 /**
  * 2026-10-20 — GET /api/okf/repos/:repo_id/routing-advisor/jobs/:job_key.
  * The async advisor's poll: {status:'running'} | {status:'failed', error}
  * | the finished advice in `payload`.
  */
-async function recommendJob(req, res, next) {
-  try {
-    const headSuiteService = require('../services/head-suite-service');
-    const doc = await headSuiteService.getRecommendJob(req.params.repo_id, req.params.job_key);
-    res.json(doc);
-  } catch (err) {
-    next(err);
-  }
-}
-
+const recommendJob = call((req) => headSuiteService.getRecommendJob(req.params.repo_id, req.params.job_key));
 /**
  * Story 1-8d — GET /api/okf/repos/:repo_id/frontmatter/history.
  * Bounded save history for the Lab's Revert-tags panel (read scope).
  */
-async function frontmatterHistory(req, res, next) {
-  try {
-    const repoService = require('../services/repository-service');
-    const result = await repoService.frontmatterHistory(req.params.repo_id, { authz: authzForService(req) });
-    res.status(200).json(result);
-  } catch (err) {
-    next(err);
-  }
-}
-
+const frontmatterHistory = call((req) => repoService.frontmatterHistory(req.params.repo_id, readOpts(req)));
 /**
  * Story 1-8d — POST /api/okf/repos/:repo_id/frontmatter/revert  {saved_at}.
  * Restores the frontmatter shape snapshotted at saved_at. Goes back
  * through update(), so the revert itself is snapshotted. Admin-scoped.
  */
-async function revertFrontmatter(req, res, next) {
-  try {
-    const repoService = require('../services/repository-service');
-    const savedAt = req.body && typeof req.body.saved_at === 'string' ? req.body.saved_at : '';
-    if (!savedAt) {
-      const err = new Error('saved_at is required');
-      err.code = 'VALIDATION_ERROR';
-      err.status = 400;
-      throw err;
-    }
-    const result = await repoService.revertFrontmatter(req.params.repo_id, savedAt, actorFrom(req));
-    res.status(200).json(result);
-  } catch (err) {
-    next(err);
+const revertFrontmatter = call(async (req) => {
+  const savedAt = req.body && typeof req.body.saved_at === 'string' ? req.body.saved_at : '';
+  if (!savedAt) {
+    const err = new Error('saved_at is required');
+    err.code = 'VALIDATION_ERROR';
+    err.status = 400;
+    throw err;
   }
-}
-
+  return repoService.revertFrontmatter(req.params.repo_id, savedAt, actorFrom(req));
+});
 /**
  * Story 10.5 — GET /api/okf/repos/:repo_id/draft.
  * The wizard's resumable curation state. Read scope (inherited from the
@@ -1632,18 +1591,7 @@ async function revertFrontmatter(req, res, next) {
  * NEVER a 404, so the resume UI can tell that apart from a missing endpoint
  * (whose 404 it already maps to NOT_READY).
  */
-async function getStudioDraft(req, res, next) {
-  try {
-    const studioDraftService = require('../services/studio-draft-service');
-    const result = await studioDraftService.getDraft(req.params.repo_id, {
-      authz: authzForService(req)
-    });
-    res.status(200).json(result);
-  } catch (err) {
-    next(err);
-  }
-}
-
+const getStudioDraft = call((req) => studioDraftService.getDraft(req.params.repo_id, readOpts(req)));
 /**
  * Story 10.5 — PUT /api/okf/repos/:repo_id/draft.
  * Upserts the flat wire draft (the store passes its whole draft object
@@ -1652,56 +1600,22 @@ async function getStudioDraft(req, res, next) {
  * audited, lifecycle-guarded PATCH /:repo_id), so this route never doubles the
  * audit rows directive G4 removed from the wizard.
  */
-async function putStudioDraft(req, res, next) {
-  try {
-    const studioDraftService = require('../services/studio-draft-service');
-    const result = await studioDraftService.saveDraft(req.params.repo_id, req.body || {}, {
-      authz: authzForService(req),
-      actor: actorFrom(req)
-    });
-    res.status(200).json(result);
-  } catch (err) {
-    next(err);
-  }
-}
-
+const putStudioDraft = call((req) => studioDraftService.saveDraft(req.params.repo_id, req.body || {}, adminOpts(req)));
 /**
  * Story 10.5 — DELETE /api/okf/repos/:repo_id/draft.
  * Idempotent 200 (`deleted:false` when there was nothing to remove) so the
  * frontend's `catch -> {ok:true}` stays correct. Admin-scoped.
  */
-async function deleteStudioDraft(req, res, next) {
-  try {
-    const studioDraftService = require('../services/studio-draft-service');
-    const result = await studioDraftService.clearDraft(req.params.repo_id, {
-      authz: authzForService(req),
-      actor: actorFrom(req)
-    });
-    res.status(200).json(result);
-  } catch (err) {
-    next(err);
-  }
-}
-
+const deleteStudioDraft = call((req) => studioDraftService.clearDraft(req.params.repo_id, adminOpts(req)));
 /**
  * Story 1-8c — POST /api/okf/repos/:repo_id/routing-explain.
  * Explains one query's gate outcome; when it (wrongly) CLAIMS, proposes
  * forbidden tags that would exclude it. Admin-scoped — may burn one LLM
  * call for the suggestion.
  */
-async function routingExplain(req, res, next) {
-  try {
-    const headTestService = require('../services/head-test-service');
-    const result = await headTestService.explainRouting(req.params.repo_id, req.body || {}, {
-      authz: authzForService(req),
-      actor: actorFrom(req)
-    });
-    res.status(200).json(result);
-  } catch (err) {
-    next(err);
-  }
-}
-
+const routingExplain = call((req) =>
+  headTestService.explainRouting(req.params.repo_id, req.body || {}, adminOpts(req))
+);
 /**
  * Story 1-8 MR-B (2026-10-08) — POST /api/okf/repos/:repo_id/routing-testsuite.
  * Generates a test suite: ONE guided-JSON vLLM call (positives +
@@ -1709,165 +1623,76 @@ async function routingExplain(req, res, next) {
  * forbidden-derived negatives. Persists a suite doc. Admin-scoped —
  * LLM-burning (5-15s).
  */
-async function generateTestSuite(req, res, next) {
-  try {
-    const headSuiteService = require('../services/head-suite-service');
-    // Story 1-8f2 — 202 + poll. Large asks batch across minutes of LLM
-    // calls; the synchronous request died at the gateway (the suite saved
-    // at minute 5 while the browser gave up at 60s). The key is minted
-    // up-front; the UI polls GET /routing-testsuite/:key until it lands.
-    // 1-8g-u: begin is ASYNC — it validates the no-frontmatter precondition
-    // BEFORE minting, so a tag-less repo gets an immediate 409 + guidance
-    // instead of a poll of a key whose worker died in its first millisecond.
-    const { suite_key, done } = await headSuiteService.beginSuiteGeneration(req.params.repo_id, req.body || {}, {
-      authz: authzForService(req),
-      actor: actorFrom(req)
-    });
+const generateTestSuite = call(
+  async (req) => {
+    const { suite_key, done } = await headSuiteService.beginSuiteGeneration(
+      req.params.repo_id,
+      req.body || {},
+      adminOpts(req)
+    );
     done.catch(() => {}); // the service logs; the poll surfaces the timeout
-    res.status(202).json({ suite_key, status: 'generating' });
-  } catch (err) {
-    next(err);
-  }
-}
-
+    return { suite_key, status: 'generating' };
+  },
+  { status: 202 }
+);
 /**
  * Story 1-8 MR-B — POST /repos/:repo_id/routing-testsuite/:suite_key/queries.
  * Curator free-text additions to an existing suite (kind positive|negative).
  * Admin-scoped.
  */
-async function addTestSuiteQueries(req, res, next) {
-  try {
-    const headSuiteService = require('../services/head-suite-service');
-    const suite = await headSuiteService.addQueries(req.params.repo_id, req.params.suite_key, req.body || {}, {
-      authz: authzForService(req),
-      actor: actorFrom(req)
-    });
-    res.status(200).json(suite);
-  } catch (err) {
-    next(err);
-  }
-}
-
+const addTestSuiteQueries = call((req) =>
+  headSuiteService.addQueries(req.params.repo_id, req.params.suite_key, req.body || {}, adminOpts(req))
+);
 // Story 1-8f — load ONE saved suite (full rows) back into the Lab, and
 // edit its rows in place (kind flips + removes; adds stay on /queries).
 // Read scope for the load, admin for the edit — same split as the
 // runs listing vs the suite mutations.
-async function getTestSuite(req, res, next) {
-  try {
-    const headSuiteService = require('../services/head-suite-service');
-    const suite = await headSuiteService.getSuite(req.params.repo_id, req.params.suite_key, {
-      authz: authzForService(req)
-    });
-    res.status(200).json(suite);
-  } catch (err) {
-    next(err);
-  }
-}
-
-async function updateTestSuiteRows(req, res, next) {
-  try {
-    const headSuiteService = require('../services/head-suite-service');
-    const suite = await headSuiteService.updateSuiteRows(req.params.repo_id, req.params.suite_key, req.body || {}, {
-      authz: authzForService(req),
-      actor: actorFrom(req)
-    });
-    res.status(200).json(suite);
-  } catch (err) {
-    next(err);
-  }
-}
-
+const getTestSuite = call((req) => headSuiteService.getSuite(req.params.repo_id, req.params.suite_key, readOpts(req)));
+const updateTestSuiteRows = call((req) =>
+  headSuiteService.updateSuiteRows(req.params.repo_id, req.params.suite_key, req.body || {}, adminOpts(req))
+);
 // Story 1-8f — name/rename a suite (the Saved-suites table renders it).
-async function renameTestSuite(req, res, next) {
-  try {
-    const headSuiteService = require('../services/head-suite-service');
-    const suite = await headSuiteService.renameSuite(req.params.repo_id, req.params.suite_key, req.body || {}, {
-      authz: authzForService(req),
-      actor: actorFrom(req)
-    });
-    res.status(200).json(suite);
-  } catch (err) {
-    next(err);
-  }
-}
-
+const renameTestSuite = call((req) =>
+  headSuiteService.renameSuite(req.params.repo_id, req.params.suite_key, req.body || {}, adminOpts(req))
+);
 // 1-8g — DELETE the suite + its run docs (the curator's list cleanup).
-async function deleteTestSuite(req, res, next) {
-  try {
-    const headSuiteService = require('../services/head-suite-service');
-    const result = await headSuiteService.deleteSuite(req.params.repo_id, req.params.suite_key, {
-      authz: authzForService(req),
-      actor: actorFrom(req)
-    });
-    res.status(200).json(result);
-  } catch (err) {
-    next(err);
-  }
-}
-
+const deleteTestSuite = call((req) =>
+  headSuiteService.deleteSuite(req.params.repo_id, req.params.suite_key, adminOpts(req))
+);
 // 1-8g — the click-test: one query against the LIVE corpus (embed → top-K
 // from the repo's SOURCE → the pipeline's TEI rerank → coverage verdict),
 // persisted on the matching suite rows.
-async function probeTestSuiteQuery(req, res, next) {
-  try {
-    const headSuiteService = require('../services/head-suite-service');
-    const result = await headSuiteService.probeSuiteQuery(req.params.repo_id, req.params.suite_key, req.body || {}, {
-      authz: authzForService(req),
-      actor: actorFrom(req)
-    });
-    res.status(200).json(result);
-  } catch (err) {
-    next(err);
-  }
-}
-
+const probeTestSuiteQuery = call((req) =>
+  headSuiteService.probeSuiteQuery(req.params.repo_id, req.params.suite_key, req.body || {}, adminOpts(req))
+);
 /**
  * Story 1-8 MR-B — POST /repos/:repo_id/routing-testsuite/:suite_key/run.
  * Executes every suite query through the routing test, aggregates
  * pass rates / margins / steals, persists a run doc. Admin-scoped
  * (one TEI embed per query).
  */
-async function runTestSuite(req, res, next) {
-  try {
-    const headSuiteService = require('../services/head-suite-service');
-    // 1-8g-v (David: "runs like this on a large repo will always take
-    // longer than 60 seconds"): the run is ASYNC — 202 + poll. A 100+100
-    // suite finished server-side at ~70s but the gateway 504'd twice; the
-    // results existed and the curator never saw them. The placeholder run
-    // doc carries status:'running'; the poll endpoint answers running /
-    // failed / the full doc.
+const runTestSuite = call(
+  async (req) => {
+    // 1-8g: the corpus probe leg defaults ON (Run All fills the Corpus
+    // column); scripts can opt out with {"probe": false}.
     const { run_key, done } = await headSuiteService.beginRunSuite(req.params.repo_id, req.params.suite_key, {
-      authz: authzForService(req),
-      actor: actorFrom(req),
-      // 1-8g: the corpus probe leg defaults ON (Run All fills the Corpus
-      // column); scripts can opt out with {"probe": false}.
+      ...adminOpts(req),
       probe: !(req.body && req.body.probe === false)
     });
     done.catch(() => {}); // the service logs + records the failure doc
-    res.status(202).json({ run_key, status: 'running' });
-  } catch (err) {
-    next(err);
-  }
-}
-
+    return { run_key, status: 'running' };
+  },
+  { status: 202 }
+);
 /**
  * 1-8g-v — GET /repos/:repo_id/routing-testsuite/:suite_key/runs/:run_key.
  * The async run's poll: {status:'running'} keep-waiting, {status:'failed',
  * error}, or the full run doc. Read scope. Also the UI's load-one-run path
  * (a timed-out run's results were invisible even though persisted).
  */
-async function getTestSuiteRun(req, res, next) {
-  try {
-    const headSuiteService = require('../services/head-suite-service');
-    const doc = await headSuiteService.getRunSuite(req.params.repo_id, req.params.suite_key, req.params.run_key, {
-      authz: authzForService(req)
-    });
-    res.status(200).json(doc);
-  } catch (err) {
-    next(err);
-  }
-}
-
+const getTestSuiteRun = call((req) =>
+  headSuiteService.getRunSuite(req.params.repo_id, req.params.suite_key, req.params.run_key, readOpts(req))
+);
 /**
  * Story 1-8c — POST /api/okf/repos/:repo_id/routing-testsuite/:suite_key/explain.
  * BATCH advice for the latest run of the suite: every failing negative in
@@ -1881,169 +1706,83 @@ async function getTestSuiteRun(req, res, next) {
  * The placeholder doc carries status:'running'; the poll endpoint answers
  * running / failed / the finished advice.
  */
-async function explainTestSuiteFailures(req, res, next) {
-  try {
-    const headSuiteService = require('../services/head-suite-service');
-    const { run_key, done } = await headSuiteService.beginExplainFailures(req.params.repo_id, req.params.suite_key, {
-      authz: authzForService(req),
-      actor: actorFrom(req)
-    });
+const explainTestSuiteFailures = call(
+  async (req) => {
+    const { run_key, done } = await headSuiteService.beginExplainFailures(
+      req.params.repo_id,
+      req.params.suite_key,
+      adminOpts(req)
+    );
     done.catch(() => {}); // the service logs + records the failure doc
-    res.status(202).json({ run_key, status: 'running' });
-  } catch (err) {
-    next(err);
-  }
-}
-
+    return { run_key, status: 'running' };
+  },
+  { status: 202 }
+);
 /**
  * 1-8g-y — GET /repos/:repo_id/routing-testsuite/:suite_key/explain/:run_key.
  * The async explain's poll: {status:'running'} keep waiting, {status:'failed',
  * error}, or the finished advice in payload. Read scope (same as the runs
  * listing and the load-one-run path).
  */
-async function getExplainFailures(req, res, next) {
-  try {
-    const headSuiteService = require('../services/head-suite-service');
-    const doc = await headSuiteService.getExplainFailures(req.params.repo_id, req.params.suite_key, req.params.run_key);
-    res.status(200).json(doc);
-  } catch (err) {
-    next(err);
-  }
-}
-
+const getExplainFailures = call((req) =>
+  headSuiteService.getExplainFailures(req.params.repo_id, req.params.suite_key, req.params.run_key)
+);
 /**
  * Story 1-8 MR-B — GET /repos/:repo_id/routing-testsuite/runs?limit&kind.
  * Analytics history: runs (default) or suites or both — newest first,
  * summary metrics only (the full per-query payload stays in the docs).
  * Read scope.
  */
-async function listTestSuiteRuns(req, res, next) {
-  try {
-    const headSuiteService = require('../services/head-suite-service');
-    const runs = await headSuiteService.listRuns(req.params.repo_id, req.query || {});
-    res.status(200).json({ runs });
-  } catch (err) {
-    next(err);
-  }
-}
-
+const listTestSuiteRuns = call(async (req) => ({
+  runs: await headSuiteService.listRuns(req.params.repo_id, req.query || {})
+}));
 // ---------- Story 8-6 — RAGAS benchmark suites (ADR-okf-043) --------------
 // Thin wrappers over ragas-suite-service, mirroring the head-suite shapes:
 // 202+poll for the three async jobs (generate / run / explain), 200 JSON
 // for reads, xlsx bytes for the interchange routes. Sidecar absence maps
 // to 503 RAGAS_UNAVAILABLE (the service owns that mapping).
 
-async function generateRagasSuite(req, res, next) {
-  try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
-    const { suite_key, done } = await ragasSuiteService.beginSuiteGeneration(req.params.repo_id, req.body || {}, {
-      authz: authzForService(req),
-      actor: actorFrom(req)
-    });
-    done.catch(() => {});
-    res.status(202).json({ suite_key, status: 'generating' });
-  } catch (err) {
-    next(err);
-  }
-}
-
-async function getRagasSuite(req, res, next) {
-  try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
-    const doc = await ragasSuiteService.getSuite(req.params.repo_id, req.params.suite_key);
-    res.status(200).json(doc);
-  } catch (err) {
-    next(err);
-  }
-}
-
-async function cancelRagasSuiteGeneration(req, res, next) {
-  try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
-    const out = await ragasSuiteService.cancelSuiteGeneration(req.params.repo_id);
-    res.status(200).json(out);
-  } catch (err) {
-    next(err);
-  }
-}
-
-async function cancelRagasSuiteRun(req, res, next) {
-  try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
-    const out = await ragasSuiteService.cancelSuiteRun(req.params.repo_id, req.params.suite_key, req.params.run_key);
-    res.status(200).json(out);
-  } catch (err) {
-    next(err);
-  }
-}
-
-async function updateRagasSuiteRows(req, res, next) {
-  try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
-    const suite = await ragasSuiteService.updateSuiteRows(req.params.repo_id, req.params.suite_key, req.body || {}, {
-      authz: authzForService(req),
-      actor: actorFrom(req)
-    });
-    res.status(200).json(suite);
-  } catch (err) {
-    next(err);
-  }
-}
-
-async function addRagasSuiteQueries(req, res, next) {
-  try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
-    const { suite, added, duplicates_dropped } = await ragasSuiteService.addQueries(
+const generateRagasSuite = call(
+  async (req) => {
+    const { suite_key, done } = await ragasSuiteService.beginSuiteGeneration(
       req.params.repo_id,
-      req.params.suite_key,
       req.body || {},
-      { authz: authzForService(req), actor: actorFrom(req) }
+      adminOpts(req)
     );
-    res.status(200).json({ suite, added, duplicates_dropped });
-  } catch (err) {
-    next(err);
-  }
-}
-
-async function renameRagasSuite(req, res, next) {
-  try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
-    const suite = await ragasSuiteService.renameSuite(req.params.repo_id, req.params.suite_key, req.body || {}, {
-      authz: authzForService(req),
-      actor: actorFrom(req)
-    });
-    res.status(200).json(suite);
-  } catch (err) {
-    next(err);
-  }
-}
-
-async function deleteRagasSuite(req, res, next) {
-  try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
-    const out = await ragasSuiteService.deleteSuite(req.params.repo_id, req.params.suite_key);
-    res.status(200).json(out);
-  } catch (err) {
-    next(err);
-  }
-}
-
-async function deleteRagasSuiteRun(req, res, next) {
-  try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
-    const out = await ragasSuiteService.deleteRun(req.params.repo_id, req.params.suite_key, req.params.run_key);
-    res.status(200).json(out);
-  } catch (err) {
-    next(err);
-  }
-}
-
+    done.catch(() => {});
+    return { suite_key, status: 'generating' };
+  },
+  { status: 202 }
+);
+const getRagasSuite = call((req) => ragasSuiteService.getSuite(req.params.repo_id, req.params.suite_key));
+const cancelRagasSuiteGeneration = call((req) => ragasSuiteService.cancelSuiteGeneration(req.params.repo_id));
+const cancelRagasSuiteRun = call((req) =>
+  ragasSuiteService.cancelSuiteRun(req.params.repo_id, req.params.suite_key, req.params.run_key)
+);
+const updateRagasSuiteRows = call((req) =>
+  ragasSuiteService.updateSuiteRows(req.params.repo_id, req.params.suite_key, req.body || {}, adminOpts(req))
+);
+const addRagasSuiteQueries = call(async (req) => {
+  const { suite, added, duplicates_dropped } = await ragasSuiteService.addQueries(
+    req.params.repo_id,
+    req.params.suite_key,
+    req.body || {},
+    adminOpts(req)
+  );
+  return { suite, added, duplicates_dropped };
+});
+const renameRagasSuite = call((req) =>
+  ragasSuiteService.renameSuite(req.params.repo_id, req.params.suite_key, req.body || {}, adminOpts(req))
+);
+const deleteRagasSuite = call((req) => ragasSuiteService.deleteSuite(req.params.repo_id, req.params.suite_key));
+const deleteRagasSuiteRun = call((req) =>
+  ragasSuiteService.deleteRun(req.params.repo_id, req.params.suite_key, req.params.run_key)
+);
 /** Re-score a finished run with a different judge (David 2026-10-24). The
  * answers are reused verbatim; a NEW run doc carries the new scores and
  * names its judge. 202 + poll, like the other long operations. */
-async function rescoreRagasSuiteRun(req, res, next) {
-  try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
+const rescoreRagasSuiteRun = call(
+  async (req) => {
     const out = await ragasSuiteService.rescoreRun(
       req.params.repo_id,
       req.params.suite_key,
@@ -2052,97 +1791,50 @@ async function rescoreRagasSuiteRun(req, res, next) {
       { actor: actorFrom(req) }
     );
     out.done.catch(() => {});
-    res.status(202).json({ run_key: out.run_key, source_run_key: out.source_run_key, status: out.status });
-  } catch (err) {
-    next(err);
-  }
-}
-
-async function runRagasSuite(req, res, next) {
-  try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
+    return { run_key: out.run_key, source_run_key: out.source_run_key, status: out.status };
+  },
+  { status: 202 }
+);
+const runRagasSuite = call(
+  async (req) => {
     const { run_key, done } = await ragasSuiteService.beginRunSuite(
       req.params.repo_id,
       req.params.suite_key,
       req.body || {},
-      {
-        authz: authzForService(req),
-        actor: actorFrom(req)
-      }
+      adminOpts(req)
     );
     done.catch(() => {});
-    res.status(202).json({ run_key, status: 'running' });
-  } catch (err) {
-    next(err);
-  }
-}
-
-async function getRagasSuiteRun(req, res, next) {
-  try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
-    const doc = await ragasSuiteService.getRunSuite(req.params.repo_id, req.params.suite_key, req.params.run_key);
-    res.status(200).json(doc);
-  } catch (err) {
-    next(err);
-  }
-}
-
-async function listRagasSuiteRuns(req, res, next) {
-  try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
-    const runs = await ragasSuiteService.listRuns(req.params.repo_id, req.query || {});
-    res.status(200).json({ runs });
-  } catch (err) {
-    next(err);
-  }
-}
-
-async function explainRagasFailures(req, res, next) {
-  try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
+    return { run_key, status: 'running' };
+  },
+  { status: 202 }
+);
+const getRagasSuiteRun = call((req) =>
+  ragasSuiteService.getRunSuite(req.params.repo_id, req.params.suite_key, req.params.run_key)
+);
+const listRagasSuiteRuns = call(async (req) => ({
+  runs: await ragasSuiteService.listRuns(req.params.repo_id, req.query || {})
+}));
+const explainRagasFailures = call(
+  async (req) => {
     const { run_key, explain_key, done } = await ragasSuiteService.beginExplainFailures(
       req.params.repo_id,
       req.params.suite_key,
       req.body || {},
-      { authz: authzForService(req), actor: actorFrom(req) }
+      adminOpts(req)
     );
     done.catch(() => {});
-    res.status(202).json({ run_key, explain_key, status: 'running' });
-  } catch (err) {
-    next(err);
-  }
-}
-
-async function getRagasExplainFailures(req, res, next) {
-  try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
-    const doc = await ragasSuiteService.getExplainFailures(
-      req.params.repo_id,
-      req.params.suite_key,
-      req.params.run_key
-    );
-    res.status(200).json(doc);
-  } catch (err) {
-    next(err);
-  }
-}
-
-async function probeRagasEntry(req, res, next) {
-  try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
-    const probe = await ragasSuiteService.probeEntry(req.params.repo_id, req.params.suite_key, req.body || {}, {
-      authz: authzForService(req),
-      actor: actorFrom(req)
-    });
-    res.status(200).json(probe);
-  } catch (err) {
-    next(err);
-  }
-}
-
+    return { run_key, explain_key, status: 'running' };
+  },
+  { status: 202 }
+);
+const getRagasExplainFailures = call((req) =>
+  ragasSuiteService.getExplainFailures(req.params.repo_id, req.params.suite_key, req.params.run_key)
+);
+const probeRagasEntry = call((req) =>
+  ragasSuiteService.probeEntry(req.params.repo_id, req.params.suite_key, req.body || {}, adminOpts(req))
+);
 async function exportRagasSuiteXlsx(req, res, next) {
   try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
     const { body, filename } = await ragasSuiteService.exportSuiteXlsx(req.params.repo_id, req.params.suite_key);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -2154,7 +1846,6 @@ async function exportRagasSuiteXlsx(req, res, next) {
 
 async function importRagasSuiteXlsx(req, res, next) {
   try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
     const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || []);
     if (!bytes.length) {
       const err = new Error('empty upload — expected the suite xlsx as the request body');
@@ -2174,7 +1865,6 @@ async function importRagasSuiteXlsx(req, res, next) {
 
 async function exportRagasResultsXlsx(req, res, next) {
   try {
-    const ragasSuiteService = require('../services/ragas-suite-service');
     const { body, filename } = await ragasSuiteService.exportResultsXlsx(req.params.repo_id, req.body || {});
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

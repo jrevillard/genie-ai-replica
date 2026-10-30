@@ -460,7 +460,7 @@ export default {
       deleteService: 'Удалить услугу',
       empty: 'Категории не найдены. Нажмите "Добавить новую категорию", чтобы начать.',
       formTitleCreateCategory: 'Создать новую категорию',
-      formTitleAddService: 'Добавить услугу в "{categoryName}"',
+      formTitleAddService: "Добавить услугу в \"{'{'}categoryName{'}'}\"",
       formTitleEditCategory: 'Редактировать категорию: "{itemName}"',
       formTitleEditService: 'Редактировать услугу: "{itemName}"',
       nameEnLabel: 'Название (Английский)',

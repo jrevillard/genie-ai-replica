@@ -19,8 +19,17 @@
 import { mount } from '@vue/test-utils';
 import RagasGuideDialog from '@/components/okf/editor/RagasGuideDialog.vue';
 import en from '@/i18n/locales/en.js';
+import fs from 'fs';
+import path from 'path';
 
-const LOCALES = ['ar', 'bn', 'de', 'en', 'es', 'fr', 'id', 'man', 'pt', 'ru', 'st', 'sw', 'th', 'zh'];
+ // Derived, not hand-copied (review !622 round 9, #78682): a 15th locale file
+ // must join these contracts automatically, not be silently excluded by a
+ // stale literal.
+const LOCALES = fs
+  .readdirSync(path.join(__dirname, '../../../i18n/locales'))
+  .filter((f) => f.endsWith('.js'))
+  .map((f) => f.replace(/\.js$/, ''))
+  .sort();
 
 // The shape every locale must reproduce.
 const CHAPTERS = ['generate', 'curate', 'run', 'models', 'read', 'errors'];

@@ -18,6 +18,7 @@ These docs stay in the repo (not published on the site) — referenced by code a
 
 - [database-migrations.md](./database-migrations.md) — ArangoDB migration runbook
 - [roadmap-sprint-20-to-25.md](./roadmap-sprint-20-to-25.md) — sprint roadmap
+- [fcntl-locking-stub.md](./fcntl-locking-stub.md) — the ingest slot-lock mechanism (`fcntl`), the Windows type stub, and its failure modes
 - [adr/](./adr/) — architecture decision records
 - [e2e-tests/](./e2e-tests/) — end-to-end test procedures
 - [superpowers/](./superpowers/) — workflow / design specs

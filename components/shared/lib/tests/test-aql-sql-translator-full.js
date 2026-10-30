@@ -23,7 +23,7 @@ const translator = new AqlToSqlTranslator([
   'folderConversations'
 ]);
 
-// The complete suite of 122 tests with REFINED expectedSql based on MetaAI feedback
+// The complete suite of 115 tests with REFINED expectedSql based on MetaAI feedback
 const testSuite = [
   // --- from admin-dashboard-service.js (19 tests) ---
   {
@@ -542,7 +542,17 @@ const testSuite = [
     expectedSql: `SELECT msg._key AS _key, msg.conversationId AS conversationId FROM messages LET msg = @this WHERE msg._key == :messageId`
   },
 
-  // --- from service-category-service.js (6 tests) ---
+  // --- from service-category-service.js (8 tests) ---
+  {
+    description: '[SCS-1] category translation lookup',
+    aql: `FOR trans IN serviceCategoryTranslations FILTER trans.serviceCategoryId == @documentId AND trans.languageCode == @upperLocale RETURN trans.translation`,
+    expectedSql: `SELECT trans.translation FROM serviceCategoryTranslations LET trans = @this WHERE trans.serviceCategoryId == :documentId AND trans.languageCode == :upperLocale`
+  },
+  {
+    description: '[SCS-2] service translation lookup',
+    aql: `FOR trans IN serviceTranslations FILTER trans.serviceId == @documentId AND trans.languageCode == @upperLocale RETURN trans.translation`,
+    expectedSql: `SELECT trans.translation FROM serviceTranslations LET trans = @this WHERE trans.serviceId == :documentId AND trans.languageCode == :upperLocale`
+  },
   {
     description: '[SCS-3] getAllCategoriesWithServices - REFINED',
     aql: `FOR category IN serviceCategories SORT category.order ASC LET categoryTranslation = FIRST( FOR trans IN serviceCategoryTranslations FILTER trans.serviceCategoryId == category._key AND trans.languageCode == @upperLocale RETURN trans.translation ) LET services = ( FOR edge IN categoryServices FILTER edge._from == category._id FOR service IN services FILTER service._id == edge._to LET serviceTranslation = FIRST( FOR trans IN serviceTranslations FILTER trans.serviceId == service._key AND trans.languageCode == @upperLocale RETURN trans.translation ) SORT edge.order ASC RETURN serviceTranslation ) RETURN { catKey: category._key, name: categoryTranslation, children: services }`,

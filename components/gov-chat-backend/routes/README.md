@@ -331,16 +331,25 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/categories` | Get all categories with services |
+| GET | `/categories/detailed` | Get all categories with detailed services for admin |
 | GET | `/categories/:categoryId` | Get a specific category with services |
+| GET | `/:categoryId/translations` | Get all translations for a category |
+| GET | `/services/:serviceId/translations` | Get all translations for a service |
 | GET | `/search` | Search categories and services |
-| POST | `/` | Create a category |
+| POST | `/` | Create a new category |
+| POST | `/:categoryId/services` | Create a new service for a category |
+| PUT | `/:categoryId` | Update an existing category |
+| PUT | `/services/:serviceId` | Update an existing service |
 | DELETE | `/:categoryId` | Delete a category |
+| DELETE | `/services/:serviceId` | Delete a service |
 
 #### Key Parameters
 - `locale`: Language code (e.g., en, fr, sw) for localized content.
 - `categoryId`: Unique identifier for a category.
+- `serviceId`: Unique identifier for a service.
 - `query`: Search string for categories and services.
-- `nameEN`: English name of the category to create.
+- `nameEN`: English name of the category or service to write.
+- `translations`: Array of `{ languageCode, translation }` — the locale names written with the entity.
 
 #### Services Called
 - **Service Category Service**: Manages category and service data, including CRUD operations and search.

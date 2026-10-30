@@ -530,7 +530,11 @@ Manages the knowledge base structure for context retrieval:
 
 Key functions:
 - `getAllCategoriesWithServices`: Retrieval knowledge structure
+- `getAdminAllCategoriesWithServices`: Same tree for the admin panel, with the entity keys the hierarchy editor acts on
+- `getCategoryWithServices`: One category with its services
 - `searchCategoriesAndServices`: Context-aware knowledge search
+- `getCategoryTranslations` / `getServiceTranslations`: Locale names of one entity
+- `categoryExists`: Existence check for a category key
 - `createCategory` / `updateCategoryWithTranslations` / `deleteCategory`: Category lifecycle
 - `createServiceWithTranslations` / `updateServiceWithTranslations` / `deleteService`: Service lifecycle
 

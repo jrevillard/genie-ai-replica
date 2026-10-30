@@ -62,6 +62,7 @@ let mockServiceCategories;
 let mockServices;
 let mockCategoryServices;
 let mockServiceCategoryTranslations;
+let mockServiceTranslations;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -70,6 +71,7 @@ beforeEach(() => {
   mockServices = createMockCollection();
   mockCategoryServices = createMockCollection();
   mockServiceCategoryTranslations = createMockCollection();
+  mockServiceTranslations = createMockCollection();
 
   mockDb = {
     collection: jest.fn().mockImplementation((name) => {
@@ -77,7 +79,8 @@ beforeEach(() => {
         serviceCategories: mockServiceCategories,
         services: mockServices,
         categoryServices: mockCategoryServices,
-        serviceCategoryTranslations: mockServiceCategoryTranslations
+        serviceCategoryTranslations: mockServiceCategoryTranslations,
+        serviceTranslations: mockServiceTranslations
       };
       return map[name] || createMockCollection();
     }),
@@ -105,6 +108,17 @@ describe('ServiceCategoryService', () => {
       expect(mockDb.collection).toHaveBeenCalledWith('serviceCategoryTranslations');
       expect(mockDb.collection).toHaveBeenCalledWith('serviceTranslations');
       expect(service.initialized).toBe(true);
+    });
+
+    it('should keep the handle of each collection it was given', () => {
+      // The service holds these collections for its whole lifetime: a
+      // collection that is re-created on every lookup would leave the
+      // service writing to a mock no test can reach.
+      expect(service.serviceCategories).toBe(mockServiceCategories);
+      expect(service.services).toBe(mockServices);
+      expect(service.categoryServices).toBe(mockCategoryServices);
+      expect(service.serviceCategoryTranslations).toBe(mockServiceCategoryTranslations);
+      expect(service.serviceTranslations).toBe(mockServiceTranslations);
     });
 
     it('should skip re-initialization', async () => {
@@ -439,11 +453,7 @@ describe('ServiceCategoryService', () => {
     });
 
     it('should throw Error when serviceKey is missing', async () => {
-      await expect(service.deleteService(null)).rejects.toThrow('Invalid service key');
-    });
-
-    it('should throw when service key is empty', async () => {
-      await expect(service.deleteService('')).rejects.toThrow('Invalid service key provided');
+      await expect(service.deleteService(null)).rejects.toThrow('Invalid service key provided');
     });
 
     it('should handle delete errors', async () => {

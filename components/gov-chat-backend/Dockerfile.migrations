@@ -3,4 +3,8 @@ WORKDIR /app
 COPY components/gov-chat-backend/scripts/migrations ./scripts/migrations
 COPY components/gov-chat-backend/scripts/migrations/run-migrations.js .
 RUN npm install arangojs dotenv
+
+# Non-root (#1227): the runner only reads its own files and talks to
+# ArangoDB over the network — no writable path, no privileged port.
+USER node
 CMD ["node", "run-migrations.js"]

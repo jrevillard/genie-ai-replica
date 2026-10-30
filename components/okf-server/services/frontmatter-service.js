@@ -375,7 +375,6 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   let apiKey = modelCache.deploymentKey();
   let viaOverride = false;
   let viaForeignBase = false; // host switched away from the deployment base
-  let judgeIsDeployment; // the judge base IS the deployment endpoint
   let configIsDeployment = false; // the named config points at the deployment endpoint
   const callBudgetMs = opts.timeoutMs || 60000;
   // The ENV JUDGE is the .env RAGAS_JUDGE_* pair — the same variables the
@@ -400,8 +399,7 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
     // http://vllm:8000) serves the very model the pin names — and the pin
     // exists precisely for endpoints whose /v1/models is unreachable. An
     // unset judge base means the deployment endpoint itself.
-    judgeIsDeployment = modelCache.sameOrigin(host, modelCache.deploymentVllmBase());
-    viaForeignBase = !judgeIsDeployment;
+    viaForeignBase = !modelCache.sameOrigin(host, modelCache.deploymentVllmBase());
     // The judge key: RAGAS_JUDGE_API_KEY when the operator named one, else
     // the deployment credential — but ONLY when the judge base IS the
     // deployment endpoint. The judge base is OPERATOR-configured (the .env

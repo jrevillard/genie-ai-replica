@@ -636,9 +636,12 @@ describe('1-8g-m — suggestTags integration', () => {
       await new Promise((r) => setTimeout(r, 5));
     }
     // the job path's LLM call carries the raised clock — thinking models
-    // get minutes because the browser is no longer holding the connection
+    // get minutes because the browser is no longer holding the connection.
+    // The clock is the budget MINUS the model-id probe that ran first (the
+    // discovery round trip is part of the caller's budget), so it is a
+    // RANGE, not the exact 300000.
     const call = axios.post.mock.calls.find(
-      (c) => String(c[0]).includes('/chat/completions') && c[2] && c[2].timeout === 300000
+      (c) => String(c[0]).includes('/chat/completions') && c[2] && c[2].timeout >= 240000 && c[2].timeout <= 300000
     );
     expect(call).toBeTruthy();
   });

@@ -162,8 +162,9 @@ function isRetriableProbeError(err) {
   return /stream has been aborted|socket hang up|premature close|ECONNRESET/i.test(msg);
 }
 
-/** Probe once (retrying a transient blip); on success the first served id,
- * else null.
+/** Probe once (retrying a transient blip); on success the first served id.
+ * On failure it THROWS the actionable error (the cause included) — the
+ * caller decides whether to serve a stale id or let the failure through.
  *
  * Auth is EXACTLY the apiKey given by the caller — no env fallback here:
  * the deployment key may only be aimed at the deployment endpoint
@@ -235,7 +236,8 @@ function probeBudgetBucket(timeoutMs) {
 }
 
 /** get_model_id twin: served id for baseUrl, TTL-cached, stale-served on
- * probe failure, null when the endpoint never answered. */
+ * probe failure. When nothing ever answered, it THROWS the probe's cause
+ * (a null id would hide the reason from the caller). */
 async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
   const base = String(baseUrl || '').replace(/\/+$/, '');
   if (!base) return null;
@@ -375,28 +377,57 @@ function credentialForBase(baseUrl, ownKey) {
  * non-retriably on a healthy endpoint). */
 async function resolveDeploymentModel({ baseUrl, apiKey, budgetMs, probeBudgetMs }) {
   const startedAt = Date.now();
+  const budget = callBudget(budgetMs);
   const model = await resolveVllmModelId(baseUrl, {
     apiKey,
-    timeoutMs: probeBudgetMs || Math.max(1, Math.floor(budgetMs / 2))
+    timeoutMs: probeBudgetFor(budget, probeBudgetMs)
   });
-  return { model, remainingMs: Math.max(1000, budgetMs - (Date.now() - startedAt)) };
+  return { model, remainingMs: Math.max(1000, budget - (Date.now() - startedAt)) };
 }
 
 /** Same, for a FOREIGN endpoint (named model-config, judge base): the pin
  * never applies there — the served model is the only authority. */
 async function resolveForeignModel({ baseUrl, apiKey, budgetMs, probeBudgetMs }) {
   const startedAt = Date.now();
+  const budget = callBudget(budgetMs);
   const model = await requireServedModelId(baseUrl, {
     apiKey,
-    timeoutMs: probeBudgetMs || Math.max(1, Math.floor(budgetMs / 2))
+    timeoutMs: probeBudgetFor(budget, probeBudgetMs)
   });
-  return { model, remainingMs: Math.max(1000, budgetMs - (Date.now() - startedAt)) };
+  return { model, remainingMs: Math.max(1000, budget - (Date.now() - startedAt)) };
+}
+
+/** The call budget of a resolving call. A missing or non-numeric budget
+ * would become NaN downstream — and axios DROPS a NaN timeout (no timer is
+ * armed), so the request would hang instead of failing on its budget. */
+const DEFAULT_CALL_BUDGET_MS = 60000;
+function callBudget(budgetMs) {
+  return Number.isFinite(budgetMs) && budgetMs > 0 ? budgetMs : DEFAULT_CALL_BUDGET_MS;
+}
+
+/** The probe's share of the call budget: the caller's own cap when it gave
+ * one, else half of it (the discovery round trip is part of the budget). */
+function probeBudgetFor(budgetMs, probeBudgetMs) {
+  if (Number.isFinite(probeBudgetMs) && probeBudgetMs > 0) return probeBudgetMs;
+  return Math.max(1, Math.floor(budgetMs / 2));
 }
 
 /** The deployment vLLM base, same rule the chat path uses: the env
  * endpoint, else the compose service name. Single home so the call path
  * (frontmatter's VLLM_LLM_HOST) and the provenance labels can never
- * disagree on which base is "the deployment endpoint". */
+ * disagree on which base is "the deployment endpoint".
+ *
+ * TWO bases, two rules — stated here because they decide different
+ * behaviour (sameOrigin / credentialForBase compare against THIS one):
+ *   - deploymentVllmBase(): the endpoint the deployment's CHAT legs call.
+ *     It falls back to the local vLLM service, because the TAGGING leg
+ *     (the product's core) has always addressed it. In a deployment with
+ *     no local vLLM, the tagging leg fails — loudly, since the discovery
+ *     policy has no silent fallback any more.
+ *   - optedInVllmBase(): the endpoint a deployment OPTED IN for the
+ *     auxiliary legs (curation / topic-link / manifest summary). Null when
+ *     VLLM_ENDPOINT is unset, and those legs stay off.
+ */
 function deploymentVllmBase() {
   return process.env.VLLM_ENDPOINT || 'http://vllm:8000';
 }

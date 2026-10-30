@@ -273,6 +273,21 @@ describe('model listing (the config-form dropdown)', () => {
     expect(models).toEqual(['claude-x']);
   });
 
+  test("a base WITHOUT a version segment lists at {base}/v1/models (the chat path's rule)", async () => {
+    // One URL rule for the whole component: the chat call and the listing
+    // must not disagree about where /v1 goes.
+    global.fetch = jest.fn(async (url) => {
+      expect(url).toBe('https://gw:4000/v1/models');
+      return { ok: true, json: async () => ({ data: [{ id: 'm1' }] }) };
+    });
+    const { models } = await svc.listModelsPreview({
+      provider: 'openai',
+      base_url: 'https://gw:4000',
+      api_key: 'sk-typed'
+    });
+    expect(models).toEqual(['m1']);
+  });
+
   test('listing failures are honest 502s (the UI offers free-text fallback)', async () => {
     const c = await svc.createConfig({ name: 'bad', provider: 'openai', base_url: 'https://x/v1', api_key: 'k' }, {});
     global.fetch = jest.fn(async () => ({ ok: false, status: 401, text: async () => 'unauthorized' }));
@@ -421,11 +436,18 @@ describe('connection test (before enabling)', () => {
 
   test('the MiniMax mismatch names itself: openai provider + /anthropic base → hint to switch provider', async () => {
     // The live incident (2026-10-19): base https://api.minimax.io/anthropic
-    // saved under provider 'openai' lists at /anthropic/models → 404.
+    // saved under provider 'openai' — the OpenAI wire does not match it
+    // (404 on the path, 401 on the auth header).
     global.fetch = jest.fn(async (url) => {
-      expect(url).toBe('https://api.minimax.io/anthropic/models');
+      expect(url).toBe('https://api.minimax.io/anthropic/v1/models');
       return { ok: false, status: 404, text: async () => '404 page not found' };
     });
+    await expect(
+      svc.listModelsPreview({ provider: 'openai', base_url: 'https://api.minimax.io/anthropic', api_key: 'k' })
+    ).rejects.toThrow(/switch the provider to Anthropic/);
+    // The same base answering 401 (it serves the path, rejects the Bearer
+    // header) names itself too — the operator must not be left guessing.
+    global.fetch = jest.fn(async () => ({ ok: false, status: 401, text: async () => 'unauthorized' }));
     await expect(
       svc.listModelsPreview({ provider: 'openai', base_url: 'https://api.minimax.io/anthropic', api_key: 'k' })
     ).rejects.toThrow(/switch the provider to Anthropic/);

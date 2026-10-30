@@ -339,14 +339,18 @@ async function deleteConfig(key, opts = {}) {
 
 /**
  * Shared provider probe: list models at an endpoint with the given creds.
- * OpenAI-compatible bases carry their own prefix (…/v1) — list at
- * {base}/models. Anthropic's surface is always /v1/models; accept the base
- * with or without the /v1 the user may have typed. One-shot with a hard
- * timeout; throws MODEL_LIST_FAILED with the honest reason.
+ * OpenAI-compatible bases follow the ONE base-completion rule (llm-url.js):
+ * a base that already carries a version segment lists at {base}/models, a
+ * bare host at {base}/v1/models — the same rule the chat call uses, so the
+ * listing and the chat can never disagree about where /v1 goes. Anthropic's
+ * surface is always /v1/models; accept the base with or without the /v1 the
+ * user may have typed. One-shot with a hard timeout; throws MODEL_LIST_FAILED
+ * with the honest reason.
  */
 async function fetchModelList({ provider, base_url, api_key }) {
   const base = String(base_url || '').replace(/\/+$/, '');
-  const url = provider === 'anthropic' ? `${base.replace(/\/v1$/, '')}/v1/models` : `${base}/models`;
+  const url =
+    provider === 'anthropic' ? `${base.replace(/\/v1$/, '')}/v1/models` : require('./llm-url').openAiModelsUrl(base);
   const headers =
     provider === 'anthropic'
       ? { 'x-api-key': api_key, 'anthropic-version': '2023-06-01' }
@@ -365,10 +369,11 @@ async function fetchModelList({ provider, base_url, api_key }) {
     const body = await resp.text().catch(() => '');
     let hint = '';
     // The one mismatch users actually hit (live, 2026-10-19: MiniMax's
-    // /anthropic base saved under the openai provider): an OpenAI-style
-    // listing against an Anthropic-compatible base 404s because that base
-    // serves /v1/models, not /models.
-    if (resp.status === 404 && provider === 'openai' && /\/anthropic\/?$/.test(base)) {
+    // /anthropic base saved under the openai provider): the OpenAI wire
+    // does not match that base — 404 on the path it does not serve, 401 on
+    // the auth header it does not accept. Either way the base speaks
+    // Anthropic and the provider is wrong.
+    if ((resp.status === 404 || resp.status === 401) && provider === 'openai' && /\/anthropic\/?$/.test(base)) {
       hint = ' — this base URL looks like an Anthropic-compatible endpoint: switch the provider to Anthropic';
     }
     throw httpErr('MODEL_LIST_FAILED', 502, `model listing returned ${resp.status}: ${body.slice(0, 200)}${hint}`);

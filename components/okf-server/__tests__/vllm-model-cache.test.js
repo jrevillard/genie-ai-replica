@@ -440,6 +440,23 @@ describe('final review fixes (#1181)', () => {
 });
 
 describe('review round 3 — the probe failure is actionable (#1181)', () => {
+  test('a missing or invalid call budget never yields a NaN timeout (an unbounded request would hang)', async () => {
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/model' }] } });
+    const res = await cache.resolveDeploymentModel({ baseUrl: 'http://vllm:8000' });
+    expect(Number.isFinite(res.remainingMs)).toBe(true);
+    expect(res.remainingMs).toBeGreaterThan(0);
+    // An invalid PROBE budget must not reach the probe either: a negative
+    // deadline would fail the probe before it ever left the process.
+    cache.clearModelCache();
+    const res2 = await cache.resolveDeploymentModel({
+      baseUrl: 'http://vllm:8000',
+      budgetMs: 5000,
+      probeBudgetMs: -1
+    });
+    expect(Number.isFinite(res2.remainingMs)).toBe(true);
+    expect(res2.remainingMs).toBeGreaterThan(0);
+  });
+
   test('the discovery error names the CAUSE, not just the URL', async () => {
     axios.get.mockRejectedValue(
       Object.assign(new Error('Request failed with status code 401'), { response: { status: 401 } })

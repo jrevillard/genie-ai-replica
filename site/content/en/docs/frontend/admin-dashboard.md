@@ -1,10 +1,10 @@
 ---
-title: "Admin Dashboard"
-description: "The 8-tab admin surface — overview, knowledge hierarchy, documents, database, logs, query inspector, security, users — and the unsaved-changes guard."
+title: 'Admin Dashboard'
+description: 'The 8-tab admin surface — overview, knowledge hierarchy, documents, database, logs, query inspector, security, users — and the unsaved-changes guard.'
 weight: 7
 mode: reference
 persona: developer
-owner: "docs-stewards"
+owner: 'docs-stewards'
 last_reviewed: 2026-09-18
 ---
 
@@ -20,16 +20,16 @@ last_reviewed: 2026-09-18
 
 `AdminDashboard.vue` renders a fixed left sidebar with four sections and eight tabs. The active tab is local component state (`activeTab`), defaulting to `overview`.
 
-| Section | Tab | Key |
-|---------|-----|-----|
-| **Dashboard** | Overview | `overview` |
-| **Content Management** | Knowledge Hierarchy | `hierarchy` |
-| | Document Management | `documents` |
-| **System** | Database | `database` |
-| | Logs | `logs` |
-| | Query Inspector | `queryInspector` |
-| **Settings** | User Management | `users` |
-| | Security | `security` |
+| Section                | Tab                 | Key              |
+| ---------------------- | ------------------- | ---------------- |
+| **Dashboard**          | Overview            | `overview`       |
+| **Content Management** | Knowledge Hierarchy | `hierarchy`      |
+|                        | Document Management | `documents`      |
+| **System**             | Database            | `database`       |
+|                        | Logs                | `logs`           |
+|                        | Query Inspector     | `queryInspector` |
+| **Settings**           | User Management     | `users`          |
+|                        | Security            | `security`       |
 
 The section headers (`Dashboard` / `Content Management` / `System` / `Settings`) are static labels — they do not collapse, and they do not gate content. Tab gating is by role.
 
@@ -54,13 +54,13 @@ The other tabs do not gate navigation the same way — the document table does n
 
 The landing tab. Quick health tiles and stats pulled from `/api/admin/system-health` and `/api/admin/analytics/overview`.
 
-| Tile | Source | Refresh |
-|------|--------|---------|
-| Service status pills | `/api/admin/system-health` (ArangoDB, Dataprep, OTel, Embedding, Retriever, Reranker, Translation, LLM) | On tab open + manual refresh |
-| CPU / Memory / Disk / Network | OTel collector metrics via VictoriaMetrics | 30 s polling |
-| Monthly Active Users | Analytics query | On tab open |
-| Active conversations | Analytics query | On tab open |
-| Knowledge-base document count | Documents table count | On tab open |
+| Tile                          | Source                                                                                                  | Refresh                      |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Service status pills          | `/api/admin/system-health` (ArangoDB, Dataprep, OTel, Embedding, Retriever, Reranker, Translation, LLM) | On tab open + manual refresh |
+| CPU / Memory / Disk / Network | OTel collector metrics via VictoriaMetrics                                                              | 30 s polling                 |
+| Monthly Active Users          | Analytics query                                                                                         | On tab open                  |
+| Active conversations          | Analytics query                                                                                         | On tab open                  |
+| Knowledge-base document count | Documents table count                                                                                   | On tab open                  |
 
 Empty / loading / error states use `DsStateDisplay`. The tiles do not auto-poll — operators refresh manually with the toolbar refresh button.
 
@@ -68,13 +68,13 @@ Empty / loading / error states use `DsStateDisplay`. The tiles do not auto-poll 
 
 Manage the **service category → service** taxonomy that the chat's service-tree filter consumes.
 
-| Element | Behaviour |
-|---------|-----------|
-| Tree view | Categories with collapsible child services. Click-to-expand. |
-| Add Category / Add Service | Inline modal form (`DsModal`) — name, optional parent (for services), description. |
-| Edit | Same modal pre-filled. The `admin.hierarchy.title` i18n key is intentionally **not translated** — hierarchy names are always English (product decision for data consistency). |
-| Delete | Confirmation via `ConfirmDialog`. Refuses to delete a category that still has services. |
-| Unsaved-changes guard | Yes — switching tabs triggers the modal described above. |
+| Element                    | Behaviour                                                                                                                                                                     |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tree view                  | Categories with collapsible child services. Click-to-expand.                                                                                                                  |
+| Add Category / Add Service | Inline modal form (`DsModal`) — name, optional parent (for services), description.                                                                                            |
+| Edit                       | Same modal pre-filled. The `admin.hierarchy.title` i18n key is intentionally **not translated** — hierarchy names are always English (product decision for data consistency). |
+| Delete                     | Confirmation via `ConfirmDialog`. Refuses to delete a category that still has services.                                                                                       |
+| Unsaved-changes guard      | Yes — switching tabs triggers the modal described above.                                                                                                                      |
 
 ### Data flow
 
@@ -95,31 +95,31 @@ The knowledge-base file surface. Sortable table + upload dialogs + ingestion det
 
 ### Table columns
 
-| Column | Sortable | Notes |
-|--------|----------|-------|
-| ☐ select-all + per-row checkbox | No | Multi-select for bulk actions. |
-| File name | Yes | Click opens `FileDetailsDialog`. |
-| Status | Yes | `dataprep.status` mapped via `DsStatusTag` (success / error / warning / info / pending). |
-| Upload date | Yes | ISO → locale-formatted. |
-| File size | Yes | Bytes → human-readable. |
+| Column                          | Sortable | Notes                                                                                    |
+| ------------------------------- | -------- | ---------------------------------------------------------------------------------------- |
+| ☐ select-all + per-row checkbox | No       | Multi-select for bulk actions.                                                           |
+| File name                       | Yes      | Click opens `FileDetailsDialog`.                                                         |
+| Status                          | Yes      | `dataprep.status` mapped via `DsStatusTag` (success / error / warning / info / pending). |
+| Upload date                     | Yes      | ISO → locale-formatted.                                                                  |
+| File size                       | Yes      | Bytes → human-readable.                                                                  |
 
 ### Upload flows
 
-| Dialog | Trigger | Use |
-|--------|---------|-----|
-| `UploadFilesDialog` | Toolbar **Upload** button | Drag-and-drop one or more files. Allowed extensions enforced server-side. Multi-file progress bars. |
+| Dialog              | Trigger                          | Use                                                                                                                          |
+| ------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `UploadFilesDialog` | Toolbar **Upload** button        | Drag-and-drop one or more files. Allowed extensions enforced server-side. Multi-file progress bars.                          |
 | `AddFromLinkDialog` | Toolbar **Add from link** button | Single page (`mode=single`, depth ignored) vs full-site async crawl (`mode=full`, depth=1..5). Triggers a backend crawl job. |
-| `FileDetailsDialog` | Row click | Details tab + ingestion dashboard tab (live-dot indicator while a crawl is running). |
+| `FileDetailsDialog` | Row click                        | Details tab + ingestion dashboard tab (live-dot indicator while a crawl is running).                                         |
 
 ### Ingestion lifecycle
 
-| `dataprep.status` value | Triggered by | UI |
-|------------------------|--------------|-----|
-| `pending` | Initial upload | `DsStatusTag pending` + spinner in detail dialog |
-| `processing` | Backend started processing | Same — spinner in detail dialog |
-| `completed` | Dataprep finished | Green status tag |
-| `failed` | Error during chunking / embedding / labelling | Red status tag + error message in detail dialog |
-| `crawling` (during a link crawl) | Backend crawl running | Live-dot pulsing indicator |
+| `dataprep.status` value          | Triggered by                                  | UI                                               |
+| -------------------------------- | --------------------------------------------- | ------------------------------------------------ |
+| `pending`                        | Initial upload                                | `DsStatusTag pending` + spinner in detail dialog |
+| `processing`                     | Backend started processing                    | Same — spinner in detail dialog                  |
+| `completed`                      | Dataprep finished                             | Green status tag                                 |
+| `failed`                         | Error during chunking / embedding / labelling | Red status tag + error message in detail dialog  |
+| `crawling` (during a link crawl) | Backend crawl running                         | Live-dot pulsing indicator                       |
 
 The live-dot uses `DsSpinner size="sm"` with a custom CSS animation. The dot disappears when `dataprep.status` transitions out of `pending` / `processing` / `crawling`.
 
@@ -127,13 +127,13 @@ The live-dot uses `DsSpinner size="sm"` with a custom CSS animation. The dot dis
 
 Action cards for operational tasks. Each card triggers a backend operation and renders the result in `OperationResultsModal.vue`.
 
-| Card | Backend call | Output |
-|------|--------------|--------|
-| Backup | `POST /api/database/backup` | Modal shows: backup file path, size, completion timestamp, download link. |
-| Optimize | `POST /api/database/optimize` | Modal shows: per-collection index report, before/after row counts. |
-| Rollover Logs | `POST /api/admin/logs/rollover` | Modal shows: rotated file count, archived file paths. |
-| Search Logs | Opens `LogSearchDialog` | Sub-flow — see Logs tab. |
-| Run Diagnostics | `POST /api/admin/diagnostics` | Modal shows: diagnostic report (CPU, memory, connection pools, slow queries). |
+| Card              | Backend call                    | Output                                                                        |
+| ----------------- | ------------------------------- | ----------------------------------------------------------------------------- |
+| Backup            | `POST /api/database/backup`     | Modal shows: backup file path, size, completion timestamp, download link.     |
+| Optimize          | `POST /api/database/optimize`   | Modal shows: per-collection index report, before/after row counts.            |
+| Rollover Logs     | `POST /api/admin/logs/rollover` | Modal shows: rotated file count, archived file paths.                         |
+| Search Logs       | Opens `LogSearchDialog`         | Sub-flow — see Logs tab.                                                      |
+| Run Diagnostics   | `POST /api/admin/diagnostics`   | Modal shows: diagnostic report (CPU, memory, connection pools, slow queries). |
 | Run Security Scan | `POST /api/admin/security-scan` | Modal shows: scan report (findings by severity, file paths, recommendations). |
 
 ### Operation results
@@ -159,13 +159,13 @@ Destructive operations (Rollover, Security Scan) require an additional `ConfirmD
 
 Live tail + filter of application logs. Backend proxies VictoriaLogs (`SELECT * FROM logs WHERE ...` over HTTP). See [Operations → Admin logs](/docs/operate/admin-logs/) for the storage layer.
 
-| Filter | Source |
-|--------|--------|
-| Time range | Date picker (`DsFormGroup` + 2× `DsInput type=datetime-local`) |
-| Service | Multi-select (`DsCombobox`) — Backend, Dataprep, ChatQnA, Retriever, Reranker, Translation, Keycloak |
-| Log level | Multi-select — INFO, WARNING, ERROR, DEBUG |
-| Search | Full-text substring (`_msg` contains) |
-| Limit | 100, 500, 1000 |
+| Filter     | Source                                                                                               |
+| ---------- | ---------------------------------------------------------------------------------------------------- |
+| Time range | Date picker (`DsFormGroup` + 2× `DsInput type=datetime-local`)                                       |
+| Service    | Multi-select (`DsCombobox`) — Backend, Dataprep, ChatQnA, Retriever, Reranker, Translation, Keycloak |
+| Log level  | Multi-select — INFO, WARNING, ERROR, DEBUG                                                           |
+| Search     | Full-text substring (`_msg` contains)                                                                |
+| Limit      | 100, 500, 1000                                                                                       |
 
 Results render in a virtual-scrolling table (`<table class="log-table">`). Click a row to expand the raw JSON. The `LogSearchDialog` from the Database tab is the same component, used standalone.
 
@@ -181,10 +181,28 @@ Browse and inspect individual queries that ran through the RAG pipeline. Three c
 │ - timestamp                │ - request               │
 │ - user                     │ - retrieved chunks      │
 │ - query text               │ - response              │
-│ - response time            │ - metadata              │
-│ - confidence               │ - confidence            │
+│ - scope                    │ - metadata              │
+│ - abstention               │ - confidence            │
+│ - response time            │ - abstention            │
+│ - confidence               │                         │
 └────────────────────────────┴─────────────────────────┘
 ```
+
+The list shows the scope that filtered each query — the labels the
+pipeline applied, reported by the retrieval itself (the service when the
+query named one: the service is the narrower scope, the category must not
+widen it into the whole category; otherwise the category). A query the
+pipeline REPORTS as an abstention (one of the three causes below, derived
+from the retrieval and reranker shapes) carries an **Abstained** marker,
+so the scopes that recently retrieved nothing are visible without reading
+every answer. The flag follows the retrieval signal, not the answer text:
+a turn whose file-metadata lookups all failed renders ungrounded with no
+marker — that is a metadata-layer failure, not a scope that matched
+nothing. The detail view names the cause of the abstention
+(`no_documents_retrieved` — the scope matched nothing;
+`reranker_selected_nothing` — the scope matched, the reranker kept none;
+`reranker_input_too_long` — an ingestion-side input overflow) and shows
+the labels that were requested next to the scope that filtered.
 
 Click a row in the list to load detail. Filters: user, date range, confidence range, label, query substring. See [Debugging with Tracing & Logs](/docs/operate/tracing-howto/) for the related backend trace view.
 
@@ -212,13 +230,13 @@ There is no CSP/CORS editor, audit log retention input, failed-login threshold l
 
 List and manage Keycloak users visible to the current realm.
 
-| Column | Notes |
-|--------|-------|
+| Column   | Notes                                                                                 |
+| -------- | ------------------------------------------------------------------------------------- |
 | Username | Link to the Keycloak admin console (opens in a new tab with the realm URL prefilled). |
-| Email | Read-only here — editable in the Keycloak admin console. |
-| Roles | Comma-separated realm roles. Inline edit (multi-select). |
-| Status | Enabled / Disabled toggle. Disabled users are signed out on next refresh. |
-| Created | ISO → locale-formatted. |
+| Email    | Read-only here — editable in the Keycloak admin console.                              |
+| Roles    | Comma-separated realm roles. Inline edit (multi-select).                              |
+| Status   | Enabled / Disabled toggle. Disabled users are signed out on next refresh.             |
+| Created  | ISO → locale-formatted.                                                               |
 
 Pagination is 20 per page (`userSearchLimit = 20`, `AdminDashboard.vue:1711`). The list is read-only — user editing happens in Keycloak Admin Console. There are no bulk enable/disable/delete actions in `AdminDashboard.vue`.
 
@@ -226,18 +244,18 @@ Pagination is 20 per page (`userSearchLimit = 20`, `AdminDashboard.vue:1711`). T
 
 ## Failure modes & troubleshooting
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| Dashboard renders an empty page | The user has no admin role | Confirm `currentUser.roles` includes `admin` or `functional-admin`. |
-| Tabs render but data is empty | Backend `/api/admin/*` returns 200 with `[]` | Check the underlying service (ArangoDB collections, OTel collector). Most often a misconfigured connection string after a redeploy. |
-| "Backup Database" returns "Permission denied" | The backend BFF's ArangoDB user lacks dump privileges | Use a deployment-level admin user; the default app user is read-only on most collections. |
-| Knowledge Hierarchy form will not save | One of the required fields is empty, or the parent category was deleted | The modal shows field-level errors; resolve and re-submit. |
-| Document upload succeeds but ingestion never starts | The dataprep service is down or its queue is full | Check `docker service ls | grep dataprep` and the ingestion log in ArangoDB. |
-| Log search returns nothing | Time range is in the future, or the service filter is wrong | The query is sent verbatim to VictoriaLogs; reproduce via curl against `/select/logsql/query`. |
-| "Run Security Scan" is greyed out | The user is `functional-admin` only | The full scan requires `admin`. Functional admins can still trigger Backup / Optimize / Diagnostics. |
-| Query Inspector list is empty | OTel → VictoriaTraces ingestion is disabled | Enable observability: `ENABLE_OBSERVABILITY=1` in `.env` + restart. |
-| Unsaved-changes modal blocks tab switch forever | A previous "Save" left the form in a dirty state because the mutation failed silently | Hard-refresh; the dirty flag is reset on tab unmount. |
-| Users tab shows realm-level data even though user is `functional-admin` | Functional admin sees only their org's users | Confirm the org-mapping realm attribute is set on the functional admin. |
+| Symptom                                                                 | Cause                                                                                 | Fix                                                                                                                                 |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Dashboard renders an empty page                                         | The user has no admin role                                                            | Confirm `currentUser.roles` includes `admin` or `functional-admin`.                                                                 |
+| Tabs render but data is empty                                           | Backend `/api/admin/*` returns 200 with `[]`                                          | Check the underlying service (ArangoDB collections, OTel collector). Most often a misconfigured connection string after a redeploy. |
+| "Backup Database" returns "Permission denied"                           | The backend BFF's ArangoDB user lacks dump privileges                                 | Use a deployment-level admin user; the default app user is read-only on most collections.                                           |
+| Knowledge Hierarchy form will not save                                  | One of the required fields is empty, or the parent category was deleted               | The modal shows field-level errors; resolve and re-submit.                                                                          |
+| Document upload succeeds but ingestion never starts                     | The dataprep service is down or its queue is full                                     | Check `docker service ls                                                                                                            | grep dataprep` and the ingestion log in ArangoDB. |
+| Log search returns nothing                                              | Time range is in the future, or the service filter is wrong                           | The query is sent verbatim to VictoriaLogs; reproduce via curl against `/select/logsql/query`.                                      |
+| "Run Security Scan" is greyed out                                       | The user is `functional-admin` only                                                   | The full scan requires `admin`. Functional admins can still trigger Backup / Optimize / Diagnostics.                                |
+| Query Inspector list is empty                                           | OTel → VictoriaTraces ingestion is disabled                                           | Enable observability: `ENABLE_OBSERVABILITY=1` in `.env` + restart.                                                                 |
+| Unsaved-changes modal blocks tab switch forever                         | A previous "Save" left the form in a dirty state because the mutation failed silently | Hard-refresh; the dirty flag is reset on tab unmount.                                                                               |
+| Users tab shows realm-level data even though user is `functional-admin` | Functional admin sees only their org's users                                          | Confirm the org-mapping realm attribute is set on the functional admin.                                                             |
 
 ## Programmatic access
 

@@ -160,14 +160,17 @@ class TestVocabularyShape:
 
     def test_vocabulary_entry_count_is_pinned(self):
         # Pin on the vocabulary size. The pin exists so growth is a deliberate
-        # edit rather than a drifting default, not to forbid adding a key —
-        # bump this with the addition it accounts for. History: 80 → 83 for the
+        # edit rather than a drifting default, not to forbid adding a key -
+        # bump this with the addition it accounts for. History: 80 -> 83 for the
         # three bounded-LLM attributes (dataprep.llm.timed_out / .timeout_seconds
-        # / .phase, main); 83 → 93 for the ten okf.fanout.* routing attributes
+        # / .phase, main); 83 -> 93 for the ten okf.fanout.* routing attributes
         # (feat/okf-server line, first registered in the 2026-10-18 rebase),
-        # 93 → 108 for the fifteen rag.route.* head-routing keys the same
-        # branch writes (caught by this sweep at the 2026-10-21 merge).
-        assert len(ATTRIBUTE_NAMES) == 108
+        # 93 -> 108 for the fifteen rag.route.* head-routing keys the same
+        # branch writes (caught by this sweep at the 2026-10-21 merge);
+        # 108 -> 109 for answer.abstention_reason (main, Query Inspector
+        # !1121 - the boolean alone cannot split a spike into stale scopes vs
+        # an over-rejecting reranker).
+        assert len(ATTRIBUTE_NAMES) == 109
 
 
 class TestLegacyAttributeNames:
@@ -260,9 +263,10 @@ class TestLegacyAttributeNames:
         ]
 
     def test_registering_the_backlog_did_not_inflate_the_vocabulary(self):
-        # See test_vocabulary_entry_count_is_pinned — 83 (bounded-LLM wave)
-        # + 10 okf.fanout.* + 15 rag.route.* routing attributes from the okf line.
-        assert len(ATTRIBUTE_NAMES) == 108
+        # See test_vocabulary_entry_count_is_pinned - 83 (bounded-LLM wave)
+        # + 10 okf.fanout.* + 15 rag.route.* routing attributes from the okf
+        # line; 108 -> 109 with answer.abstention_reason (main, !1121).
+        assert len(ATTRIBUTE_NAMES) == 109
         assert len(LEGACY_ATTRIBUTE_NAMES) == 21
 
 

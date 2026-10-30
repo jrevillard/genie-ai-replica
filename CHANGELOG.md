@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Living Intelligence theme layer on the base theme.** A decorative layer — hero banner, dot mesh, bottom waves and corner network — is applied to the welcome screen and switched per deployment from the runtime config (`theme.visual`). The base theme ships it on; the derived flavours (`huduma`, `naat`, `original`) ship it off. Every artwork path is configurable, so an operator can swap an illustration on the host without rebuilding an image.
+- **Living Intelligence theme layer on the base theme.** A decorative layer — hero banner, dot mesh, bottom waves and corner network — is applied to the welcome screen and switched per deployment from the runtime config (`theme.visual`). The base theme ships it on; the derived flavours (`huduma`, `naat`, `original`) ship it off. Every artwork path is configurable, so an operator can swap an illustration without rebuilding an image — the change goes in the repository, in the flavour's configuration file, and the next deployment seeds it onto the nodes (see the breaking change under **Changed**).
 - **Per-category tints on the welcome-screen cards.** The nine quick-help cards now carry the background, hover and border colours that were already declared in each button's `styles` block and were never read by the frontend.
 - **`app.splash` in the runtime config.** The splash image is now a declared, per-deployment setting rather than an implicit fallback. The base theme ships the Living Intelligence globe splash; the derived flavours keep the bundled default.
 - **Benchmark rerank batches run in parallel — `OKF_RAGAS_RERANK_CONCURRENCY` (8-7).** The benchmark retrieval leg sends its candidate pool to the reranker in batches of 32, sequentially — at a raised candidate pool (192) that is 6 sequential round trips per question, and the retrieval leg of a 100-question suite measured ~1h50m, ~90 minutes of it rerank transport. The batch calls are independent (the reranker scores query–text pairs; results reassemble by index), so they now run up to `OKF_RAGAS_RERANK_CONCURRENCY` at a time (default **3**, clamp 1–8, read per call) — same scores at any value, purely transport. Measured effect at 192/100 questions: the rerank leg drops from ~90 min to ~30 min. The global in-flight ceiling is `OKF_RAGAS_RUN_CONCURRENCY` × this value (6 at the defaults) — raise on an idle GPU, set `1` when a benchmark shares the GPU with live chat traffic. Landed in all four sites (compose, `env`, Ansible `env.j2`, config-validator).
@@ -114,9 +114,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bulk-retract UI parity with bulk-ingest in Document Management** (`!469`): New "Retract Selected" button next to "Ingest Selected", mirroring the existing ingest path. Driven by the same `handleBatchAction(action)` dispatcher — `showRetractButton` computed blocks the button when any selected document is already retracted (case-insensitive, matching the symmetric `showIngestButton` filter). The handler opens a confirm dialog, calls the existing `POST /api/files/retract` batch endpoint, and surfaces per-file outcomes through the same 207 response handling. Translations added to all 14 supported locales (ar, bn, de, en, es, fr, id, man, pt, ru, st, sw, th, zh).
 - **Query-instruction prefix for contrastive / instruction-tuned embedding models.** `QueryInstructionEmbeddingsWrapper` prepends the model-specific instruction to `embed_query` only — `embed_documents` (passage encoding during ingestion) passes through verbatim, preserving the query/passage asymmetry. Built-in coverage: `BAAI/bge-{large,base,small}-{en,zh}-v1.5`, `hkunlp/instructor`, `nomic-ai/nomic-embed`. Deployers extend via the `EMBEDDING_QUERY_INSTRUCTIONS` env var (`substring=instruction,substring=instruction`). The shared TEI embedding service stays prefix-free, so dataprep ingestion (passages) and retrieval (queries) coexist on a single microservice. Measured A/B on the live corpus (42 gold queries vs 850 chunks): +1.62% retrieval recall at K=32, +1.85% at K=50. No re-ingest required. **Behavior change for deployments using the local `HuggingFaceBgeEmbeddings` fallback** (no `TEI_EMBEDDING_ENDPOINT` set): langchain's default `query_instruction` (`"Represent this question for searching relevant passages: "`, with **"question"**) is cleared and replaced by the BAAI-canonical English string (`"Represent this sentence for searching relevant passages: "`, with **"sentence"**). The wrapper applies the prefix; langchain no longer does. Deployment paths that bypass the wrapper (direct `HuggingFaceBgeEmbeddings.embed_query()` usage outside the retriever) keep the langchain default. (#1035)
 - **Condense-question rewrite (multi-turn retrieval mode):** a new `MULTI_TURN_MODE=condense` handles follow-up questions — one short LLM call rewrites each follow-up into a standalone retrieval query, so corrections ("forget the beans, tell me about maize planting") and pronoun follow-ups ("what is its yield?") retrieve the right documents instead of carrying the rejected or implicit subject in the query embedding. Retrieval and reranking use the rewritten query; the answer prompt keeps the original question and history. Fail-closed: a failed rewrite fails the turn with HTTP 503 rather than answering on a wrong retrieval. Tunables: `MULTI_TURN_CONDENSE_HISTORY_TURNS` (default 8 segments = 4 exchanges), `MULTI_TURN_CONDENSE_MAX_TOKENS` (256), `MULTI_TURN_CONDENSE_TIMEOUT_SECONDS` (5.0), `MULTI_TURN_CONDENSE_SYSTEM_PROMPT` (override the rewrite prompt — a custom prompt must still demand JSON-only output). The default mode is unchanged (`blend`).
+- **Abstentions are visible in the admin Query Inspector.** A turn the pipeline could not back with a document now carries an `abstained` flag and its cause in the stored query record, and the Inspector marks it next to the scope that filtered, so an operator can find the scopes that recently retrieved nothing without reading every answer. Two causes exist besides the pre-existing `reranker_input_too_long`: `no_documents_retrieved` (the label filter matched nothing — the scope to look at) and `reranker_selected_nothing` (the retrieval matched documents but the reranker kept none — the scope was fine). The metadata also carries `filter_labels` — the labels the retrieval filtered on, by the pipeline's own rule — so the Inspector names the scope without re-deriving it. The same signal reaches the `genie_ai_chat_request_total` metric and, on a streamed turn, the answer-level trace span (`answer.abstained`).
 
 ### Changed
 
+- **Breaking:** the deployment now seeds the host's configuration directory
+  as a **mirror of the deployed branch** (`rsync --archive --checksum
+  --delete`): a file changed on the host is reverted by the next deployment,
+  and a file the branch no longer ships is removed. **The change belongs in
+  the repository, in the flavour's configuration file** — the node's copy is
+  seeded from the branch and is no longer preserved. The deployment then
+  verifies that the host matches the branch it just seeded, and refuses to
+  sync a branch that does not ship the Keycloak theme the deployment is
+  configured to use — the one it renders into `KEYCLOAK_THEME` — or that
+  carries a different brand than the host serves. A host that kept a stale
+  configuration served a brand the branch no longer declared, and the app
+  refused to start on it — a blank landing page behind a deploy that reported
+  success. A deployment that stops on one of those checks leaves the node's
+  runtime configuration untouched and cleans up after itself (the two things
+  it may still have done: install rsync, and reap week-old scratch trees
+  from /tmp); a failure during the mirror itself
+  can leave the node half-converged, and re-running the deployment finishes
+  it. `--check` does nothing for this role. Two variables relax the guards
+  for the cases where they are wrong: `config_bootstrap_allow_rebrand` — a
+  deliberate rename in the repository reads as a re-brand until the nodes
+  have taken the new title, so set it for the deployment that applies the
+  rename and set it back afterwards — and `config_bootstrap_theme_entrypoints`
+  (a theme that serves only some of the realm's screens). Both are documented
+  in the deployment guide. **A deployment that failed mid-mirror is resumed
+  by re-running it**: the mirror is content-compared, so the re-run only
+  writes what is not already correct (resuming with `--start-at-task` is not
+  supported — the mirror tasks read variables set earlier in the play).
 - **The Keycloak theme now covers every surface, not only the login page.**
   The admin console, the account console and the Keycloak emails carry the
   Living Intelligence look: the masthead is a pale wash of the brand instead of
@@ -236,6 +264,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A category or a service with no translation in the active language
+  disappeared from the knowledge tree.** The public tree published the
+  localized name and nothing else, so an entity nobody had translated in the
+  language of the interface arrived with a null name: the sidebar showed a
+  blank row, and the services under it were dropped from the tree altogether —
+  the tree showed less than exists. The public tree now publishes a display
+  name for every entity: the translation in the active language when there is
+  one, and the English translation — the same name the corpus filters on —
+  when there is none. It resolves that English name the way the admin tree
+  already did: the English translation row, or the entity document's own
+  `nameEN` for an entity seeded outside the write path (the taxonomy seed
+  scripts write the document field and no translation row). The write path
+  keeps the two in sync, so the fallback only fills a missing row with the
+  text the row would have carried — the label a client puts on the wire and
+  the label the corpus filters on remain the same string. The admin tree keeps
+  its localized display name: the admin panel keys its label map by that name,
+  so an English fallback there would let two entities share one key and file a
+  label under the wrong entity. On the mobile app, the tree panel now
+  identifies a selected service by its entity key: the public tree's services
+  now carry their `_key`, and neither spelling of the name is unique inside a
+  category — two services that read the same are two scopes. An entity with
+  no name in any language is published unnamed: the clients do not offer its
+  services (an unnamed service cannot be scoped on), and a category with no
+  name at all shows as an unlabelled group header above its services (the
+  literal "Unknown Category" on the mobile app).
+
+  **Upgrading a deployment whose taxonomy was seeded by the scripts**
+  (`create-knowledge-hierarchy.js`) requires a **re-ingest of the corpus**
+  after deploying this change: those entities' labels are minted when a
+  document is ingested, and until the re-ingest every scope on them finds no
+  documents — the query abstains ("no documented information was found").
+  (#1117, !632)
+- **The shipped Quick Help configurations named their categories by a database
+  key.** Every flavour configuration wrote each quick-help card's category as
+  the raw ArangoDB key (`"category": "1"`) — a value a deployer could not
+  learn from the configuration alone, and one a re-created hierarchy
+  invalidated. The configuration now writes the category's **English name**
+  (`"category": "Taxes & Revenue"`), the label the knowledge hierarchy
+  publishes and the one the retrieval filter speaks; the database key is
+  still accepted, so a configuration written before this change keeps
+  working. The web app and the mobile app both resolve the name against the
+  live hierarchy. (#1116, !633)
+- **The admin hierarchy panel could show an empty English name.** The detailed
+  tree behind it returned only the localized name; the panel worked around
+  that by fetching the tree in English and relabelling the result, so the
+  English column showed the localized name, and it was empty for any entity
+  with no English translation. The admin tree
+  (`GET /api/service-categories/categories/detailed`) now publishes `nameEN`
+  beside the localized name — the shape the public tree already had, with
+  the English translation as the source and the entity document's own
+  `nameEN` as the fallback for an entity seeded outside the write path —
+  and the panel reads that field. Its fetch is bounded too, so a request
+  that never answers shows the failed state instead of a spinner that turns
+  forever. The public tree publishes `nameEN` the same way since the
+  display-name fix above. (#1123)
+- **A selected Quick Help scope kept the title of the language it was selected
+  in.** On the mobile app, switching the interface language re-resolved the
+  Quick Help cards but left the context bar's title of the active Quick Help
+  scope in the old language; it now re-resolves the title by the button id,
+  mirroring the web app's Quick Help chip re-title on a locale switch. A
+  button the configuration no longer declares keeps its last title.
+  (#1115, !629)
 - **The labelling prompt was different on every ingestion run.** The candidate
   labels sent to the labelling LLM were collected in a Python set, whose order
   follows the hash seed of the process that built it — so every container sent

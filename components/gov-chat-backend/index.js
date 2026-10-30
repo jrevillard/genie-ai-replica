@@ -113,6 +113,85 @@ const swaggerOptions = {
             }
           }
         },
+        // The hierarchy tree, as both public endpoints serve it. ONE
+        // definition: the wire contract must not be written twice. The two
+        // trees differ in ONE field: the public tree falls back to the
+        // ENGLISH name for its display name, the admin tree does not (the
+        // admin panel keys its label map by the display name) — the
+        // descriptions of `name` say which tree they describe.
+        CategoryTree: {
+          type: 'object',
+          properties: {
+            catKey: { type: 'string' },
+            catCode: { type: 'string', nullable: true },
+            name: {
+              type: 'string',
+              nullable: true,
+              description:
+                'The name the UI displays: the localized translation, or — on the PUBLIC tree — the ENGLISH one when the active locale has no translation.'
+            },
+            nameEN: {
+              type: 'string',
+              nullable: true,
+              description:
+                "The ENGLISH name — the SSOT every filter label is spoken in. Clients put THIS value on the query wire; the localized `name` is display-only. It is the English translation row, or the entity document's own `nameEN` for an entity with no English translation row."
+            },
+            children: {
+              type: 'array',
+              description: "The category's services, display + wire spellings.",
+              items: {
+                type: 'object',
+                properties: {
+                  _key: {
+                    type: 'string',
+                    description:
+                      "The service entity's stable key. Neither spelling of the name is unique inside a category, so identity that survives renames and locale switches keys on this."
+                  },
+                  name: {
+                    type: 'string',
+                    nullable: true,
+                    description:
+                      'Display name: the localized translation, or — on the PUBLIC tree — the ENGLISH one when the active locale has no translation.'
+                  },
+                  nameEN: {
+                    type: 'string',
+                    nullable: true,
+                    description:
+                      "The ENGLISH name, the filter wire (SSOT): the English translation row, or the entity document's own `nameEN` for an entity with no English translation row."
+                  }
+                }
+              }
+            }
+          }
+        },
+        // The scope a query is filtered by. The labels are ENGLISH: the
+        // corpus's chunk_labels carry the EN translation, so a localized
+        // label matches no chunk and scopes the query to nothing.
+        QueryContext: {
+          type: 'object',
+          description: 'Context labels (required for conversation mode)',
+          properties: {
+            categoryLabel: {
+              type: 'string',
+              nullable: true,
+              description:
+                "The ENGLISH label of the category — the SSOT every filter label is spoken in (the hierarchy's own `nameEN`). It is forwarded to the retriever as is: a label that matches no chunk scopes the query to nothing."
+            },
+            categoryLabels: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                'The legacy PLURAL spelling of categoryLabel (the upstream OPEA field). Honoured like the singular when present; a bare string is read as ONE label. Clients of this API should send the singular.'
+            },
+            serviceLabels: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                'ENGLISH service labels. A bare string is also accepted and read as ONE label (never as a sequence of characters, never as an empty scope).'
+            },
+            language: { type: 'string', default: 'EN' }
+          }
+        },
         Session: {
           type: 'object',
           properties: {

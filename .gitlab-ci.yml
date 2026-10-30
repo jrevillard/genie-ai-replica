@@ -2586,7 +2586,7 @@ lint:python:
         - lint-python-
   script:
     - ruff check genie-ai-overlay/
-    - ruff format --check genie-ai-overlay/ --extend-exclude '*.md'
+    - ruff format --check genie-ai-overlay/
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:

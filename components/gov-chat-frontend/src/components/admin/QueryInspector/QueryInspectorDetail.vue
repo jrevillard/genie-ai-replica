@@ -42,22 +42,41 @@
       <DsCard variant="outline">
         <template #header>
           <span class="qi-detail__section-title">
-            {{ translate('admin.queryInspector.sectionContext', 'Context (Labels sent to RAG)') }}
+            {{ translate('admin.queryInspector.sectionContext', 'Context') }}
           </span>
         </template>
         <div class="qi-detail__box qi-detail__box--context">
+          <p data-testid="qi-detail-scope">
+            <strong>{{ translate('admin.queryInspector.scopeFiltered', 'Scope that filtered') }}:</strong>
+            {{ scopeText() }}
+          </p>
           <p>
-            <strong>{{ translate('admin.queryInspector.category', 'Category') }}:</strong>
+            <strong>{{ translate('admin.queryInspector.category', 'Requested Category') }}:</strong>
             {{ query.context?.categoryLabel || 'None' }}
           </p>
           <p>
-            <strong>{{ translate('admin.queryInspector.serviceLabels', 'Service Labels') }}:</strong>
+            <strong>{{ translate('admin.queryInspector.serviceLabels', 'Requested Service Labels') }}:</strong>
             <span v-if="query.context?.serviceLabels?.length">{{ query.context.serviceLabels.join(', ') }}</span>
             <span v-else class="qi-detail__muted">None</span>
           </p>
           <p v-if="query.context?.language">
             <strong>{{ translate('admin.queryInspector.language', 'Language') }}:</strong> {{ query.context.language }}
           </p>
+        </div>
+      </DsCard>
+
+      <!-- Abstention -->
+      <DsCard v-if="isAbstained" variant="outline">
+        <template #header>
+          <span class="qi-detail__section-title">
+            {{ translate('admin.queryInspector.sectionAbstention', 'Abstention') }}
+          </span>
+        </template>
+        <div class="qi-detail__abstention">
+          <DsPill variant="warning" data-testid="qi-abstention-marker">
+            {{ translate('admin.queryInspector.abstained', 'Abstained') }}
+          </DsPill>
+          <span data-testid="qi-abstention-reason">{{ abstentionReasonText }}</span>
         </div>
       </DsCard>
 
@@ -186,6 +205,7 @@ import DsButton from '../../ds/Button.vue';
 import DsCard from '../../ds/Card.vue';
 import DsPill from '../../ds/Pill.vue';
 import DsStateDisplay from '../../ds/StateDisplay.vue';
+import { isAbstained as queryIsAbstained, scopeDisplayText } from './query-scope';
 
 export default {
   name: 'QueryInspectorDetail',
@@ -194,7 +214,62 @@ export default {
     query: { type: Object, required: true }
   },
   emits: ['back'],
+  computed: {
+    /**
+     * Whether this query abstained. `abstained` is null when the turn never
+     * produced an answer to classify, and false when it answered — only a
+     * true flag marks an abstention.
+     */
+    isAbstained() {
+      return queryIsAbstained(this.query);
+    },
+    /**
+     * The cause of the abstention, in the operator's words. The machine
+     * reason stays the source of truth; this only says what it means. An
+     * unknown code keeps the generic sentence and names the code, so a new
+     * producer never renders as bare machine tokens.
+     */
+    abstentionReasonText() {
+      const reason = this.query.metadata?.abstention_reason;
+      if (reason === 'no_documents_retrieved') {
+        return this.translate(
+          'admin.queryInspector.abstentionNoDocuments',
+          'No document was retrieved for this query. The answer has no document backing.'
+        );
+      }
+      if (reason === 'reranker_selected_nothing') {
+        return this.translate(
+          'admin.queryInspector.abstentionRerankerSelectedNothing',
+          'The retrieval matched documents, but the reranker kept none of them. The scope was fine — the answer has no document backing.'
+        );
+      }
+      if (reason === 'reranker_input_too_long') {
+        return this.translate(
+          'admin.queryInspector.abstentionRerankerInput',
+          'The reranker refused an oversized input (an ingestion-side issue). The answer has no document backing.'
+        );
+      }
+      const generic = this.translate(
+        'admin.queryInspector.abstentionUnspecified',
+        'The answer has no document backing.'
+      );
+      return reason ? `${generic} (${reason})` : generic;
+    }
+  },
   methods: {
+    /**
+     * The labels the retrieval filtered on, as one string. The pipeline
+     * decides them (chatqna sends the applied filter labels in its metadata
+     * event). A record saved before that field existed says so instead of
+     * claiming the query was unfiltered.
+     */
+    scopeText() {
+      // Absent, null, or malformed — the record does not say — reads as the
+      // dedicated label; the rest comes from the shared rendering, so the
+      // list and this panel cannot disagree.
+      const text = scopeDisplayText(this.query, this.translate('admin.queryInspector.unfiltered', 'Unfiltered'));
+      return text === null ? this.translate('admin.queryInspector.scopeNotRecorded', 'Not recorded') : text;
+    },
     translate(key, fallback) {
       return this.$parent?.translate?.(key, fallback) ?? fallback;
     },
@@ -280,6 +355,14 @@ export default {
 
 .qi-detail__box--feedback {
   border-left: 3px solid var(--success);
+}
+
+.qi-detail__abstention {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--text-sm);
+  line-height: 1.6;
 }
 
 .qi-detail__muted {

@@ -124,7 +124,15 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
       language: 'en'
     });
     // No carrier keys at all — the pre-1.1 context, byte for byte.
-    expect(Object.keys(opeaPayload.context).sort()).toEqual(['categoryLabel', 'language', 'serviceLabels']);
+    // categoryLabels (plural) rides along since main's English-SSOT wire: the
+    // chatqna contract accepts both spellings, and a declared scope must
+    // never die at this boundary.
+    expect(Object.keys(opeaPayload.context).sort()).toEqual([
+      'categoryLabel',
+      'categoryLabels',
+      'language',
+      'serviceLabels'
+    ]);
     expect(retrievalConfigClient.getAuthorizedGraphs).not.toHaveBeenCalled();
   });
 

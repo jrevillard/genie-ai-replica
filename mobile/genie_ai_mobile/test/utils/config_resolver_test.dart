@@ -112,4 +112,52 @@ void main() {
       expect(resolveConfigText({}, 'en'), '');
     });
   });
+
+  /// The welcome message the configuration declares - the rule that
+  /// decides between the configured text and the built-in greeting.
+  group('resolveWelcomeMessage', () {
+    test('the declared message is resolved under the active locale', () {
+      final config = {
+        'features': {
+          'chat': {
+            'welcomeMessage': {'en': 'Hello', 'fr': 'Bonjour'},
+          },
+        },
+      };
+
+      expect(resolveWelcomeMessage(config, 'fr'), 'Bonjour');
+      expect(resolveWelcomeMessage(config, 'en'), 'Hello');
+    });
+
+    test('a configuration that declares none has no message', () {
+      expect(resolveWelcomeMessage({}, 'en'), isNull);
+      expect(
+        resolveWelcomeMessage({
+          'features': {'chat': <String, dynamic>{}},
+        }, 'en'),
+        isNull,
+      );
+    });
+
+    test('a declared message that resolves to nothing has no message', () {
+      expect(
+        resolveWelcomeMessage({
+          'features': {
+            'chat': {
+              'welcomeMessage': {'en': ''},
+            },
+          },
+        }, 'en'),
+        isNull,
+      );
+      expect(
+        resolveWelcomeMessage({
+          'features': {
+            'chat': {'welcomeMessage': <String, dynamic>{}},
+          },
+        }, 'en'),
+        isNull,
+      );
+    });
+  });
 }

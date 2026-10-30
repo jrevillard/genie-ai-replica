@@ -72,3 +72,20 @@ bool configTruthy(dynamic value) {
   if (value is double && value.isNaN) return false;
   return value != null && value != false && value != 0 && value != '';
 }
+
+/// The path to the chat's own section of a runtime configuration.
+const List<String> chatConfigPath = <String>['features', 'chat'];
+
+/// The welcome message the configuration declares, or null when it
+/// declares none.
+///
+/// The web gates the RAW value's truthiness and can render an EMPTY
+/// resolution (a declared map of empty strings becomes a blank bubble);
+/// the mobile treats a config that resolves to nothing as UNDECLARED -
+/// the built-in greeting shows instead. A falsy scalar or an empty
+/// locale falls through on both platforms alike.
+String? resolveWelcomeMessage(Map<String, dynamic> config, String locale) {
+  final welcome = configSectionOf(config, chatConfigPath)['welcomeMessage'];
+  final resolved = resolveConfigText(welcome, locale);
+  return resolved.isNotEmpty ? resolved : null;
+}

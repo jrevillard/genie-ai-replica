@@ -1146,12 +1146,6 @@ void main() {
         isFalse,
       );
     });
-
-    // The catch branch that marks a FAILED load under the locale it
-    // failed in lives in the widget: this predicate cannot tell a
-    // settled load from a failed one, it only reads the marker the
-    // widget sets. That half is untested until the widget has a test
-    // harness (#1191).
   });
 
   /// One rule for every path that shows a Quick Help title: an EMPTY
@@ -1405,31 +1399,6 @@ void main() {
 
       expect(parsed['resolvedVisibleText'], 'Demander une CNI');
       expect(parsed['resolvedHiddenPrompt'], 'prompt-en');
-    });
-  });
-
-  /// The `hidden` filter — the mobile half of the web's JS-truthiness
-  /// `!button.hidden`: a truthy value of ANY type hides the card, so a
-  /// string-typed flag hides it on both platforms alike.
-  group('quickHelpButtonHidden', () {
-    test('a true flag hides the card', () {
-      expect(quickHelpButtonHidden(true), isTrue);
-    });
-
-    test('a string-typed flag hides the card, true or false', () {
-      expect(quickHelpButtonHidden('true'), isTrue);
-      expect(quickHelpButtonHidden('false'), isTrue);
-    });
-
-    test('a non-zero number hides the card', () {
-      expect(quickHelpButtonHidden(1), isTrue);
-    });
-
-    test('a missing or falsy flag hides nothing', () {
-      expect(quickHelpButtonHidden(null), isFalse);
-      expect(quickHelpButtonHidden(false), isFalse);
-      expect(quickHelpButtonHidden(0), isFalse);
-      expect(quickHelpButtonHidden(''), isFalse);
     });
   });
 

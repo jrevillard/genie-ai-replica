@@ -9,6 +9,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
 import 'package:genie_ai_mobile/components/chat/chat_response_feedback_dialog.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
+import 'package:genie_ai_mobile/design_system/tokens/app_tokens.dart';
 import 'package:genie_ai_mobile/design_system/tokens/color_utils.dart';
 import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
@@ -232,20 +233,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   }
 
   String _getConfigWelcomeMessage() {
-    // The same guarded descent the Quick Help section parses through: a
-    // non-map container anywhere on the way degrades to no configured
-    // message, never a throw inside the dependency change.
-    final welcomeConfig = configSectionOf(_cachedConfig ?? const {}, [
-      'features',
-      'chat',
-    ])['welcomeMessage'];
-    // The web gates the RAW value's truthiness and can return an EMPTY
-    // resolution (a declared map of empty strings renders a blank
-    // bubble); the mobile treats a config that resolves to nothing as
-    // UNDECLARED — the built-in greeting shows instead. A falsy scalar
-    // or an empty locale falls through on both platforms alike.
-    final resolved = resolveConfigText(welcomeConfig, _currentLocale);
-    return resolved.isNotEmpty ? resolved : tr('chatbot.welcomeMessage');
+    // The rule lives in the config layer, where it is unit-tested: a
+    // configuration that declares no usable message leaves the built-in
+    // greeting in place.
+    final resolved = resolveWelcomeMessage(
+      _cachedConfig ?? const {},
+      _currentLocale,
+    );
+    return resolved ?? tr('chatbot.welcomeMessage');
   }
 
   /// Recomputes the welcome message under the CURRENT config and locale.
@@ -332,6 +327,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // Cache the config for later use
       _cachedConfig = config;
 
+      // The config just landed: the welcome message it declares lands
+      // NOW - before the Quick Help section is parsed, so a malformed
+      // button cannot keep the greeting stale.
+      _refreshWelcomeMessage();
+
       // The section pipeline — descent, container guards, hidden filter,
       // per-entry skip, button parse, dedupe — runs beside the other
       // config rules, where it is unit-tested; the widget keeps only
@@ -366,10 +366,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           _selectedCategoryName = activeTitle;
         }
       });
-      // The config just cached: the welcome message it declares lands
-      // now, not on the next locale switch. OUTSIDE the setState above —
-      // the refresh owns its own setState when the bubble updates.
-      _refreshWelcomeMessage();
     } catch (e) {
       debugPrint("[CHATBOT] Failed to load genie-ai-config.json: $e");
       _quickHelpLoadFailed = true;
@@ -1202,7 +1198,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _showQuickHelpOverlay = false;
     // The configuration names its category; the hierarchy's own key is
     // what the conversation's edge speaks.
-    final categoryRef = button['category']?.toString();
+    final categoryRef = button['category'] as String?;
     _selectedCategoryId =
         _scopeResolver?.categoryIdFor(categoryRef) ?? categoryRef;
     _selectedCategoryNameEn = _scopeResolver?.categoryLabelEn(button) ?? '';
@@ -1218,7 +1214,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _scopeEpoch++;
     _restoredTags = null;
     _activeServiceLabels = declaredLabels;
-    _activeQuickHelpButtonId = button['id']?.toString();
+    _activeQuickHelpButtonId = button['id'] as String?;
     _activeQuickHelpScope = _scopeResolver?.stateFor(button);
   }
 
@@ -1231,6 +1227,33 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _activeQuickHelpButtonId = null;
     _activeQuickHelpScope = null;
     _activeServiceLabels = const [];
+  }
+
+  /// The icon a Quick Help card shows: the warning of a broken scope,
+  /// the card's own bundled asset, or the neutral help icon (no asset at
+  /// all, an asset still loading, or an asset the flavour did not
+  /// bundle). ONE copy of the neutral icon, built only where it is used.
+  Widget _quickHelpCardIcon({
+    required bool broken,
+    required String iconAsset,
+    required AppTokens tokens,
+  }) {
+    if (broken) {
+      return Icon(Icons.warning_amber_rounded, size: 18, color: tokens.danger);
+    }
+    Widget neutralIcon() =>
+        Icon(Icons.help_outline, size: 18, color: tokens.accent);
+    if (iconAsset.isEmpty) return neutralIcon();
+    return SvgPicture.asset(
+      iconAsset,
+      width: 18,
+      height: 18,
+      placeholderBuilder: (_) => neutralIcon(),
+      // A well-formed path that names an asset the flavour did not
+      // bundle degrades to the same neutral icon, instead of an empty
+      // slot.
+      errorBuilder: (_, _, _) => neutralIcon(),
+    );
   }
 
   void _quickHelpPressed(Map<String, dynamic> button) {
@@ -1251,7 +1274,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
     final declaredLabels = quickHelpServiceLabelsOf(button);
     final declaresScope =
-        declaresCategoryScope(button['category']?.toString()) ||
+        declaresCategoryScope(button['category'] as String?) ||
         declaredLabels.isNotEmpty;
 
     // The AUTO-SEND is armed only when BOTH texts resolved: a card with
@@ -2169,14 +2192,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                 quickHelpTitleOf(button) ?? '';
                             final String iconAsset =
                                 button['iconAsset']?.toString() ?? '';
-                            // ONE copy of the neutral help icon: the
-                            // no-icon card, the loading placeholder and
-                            // the failed asset all degrade to it.
-                            final neutralIcon = Icon(
-                              Icons.help_outline,
-                              size: 18,
-                              color: tokens.accent,
-                            );
                             final scope = _treeUnavailable
                                 ? QuickHelpScopeResolver.unavailableScopeFor(
                                     button,
@@ -2217,29 +2232,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                     children: [
                                       Row(
                                         children: [
-                                          broken
-                                              ? Icon(
-                                                  Icons.warning_amber_rounded,
-                                                  size: 18,
-                                                  color: tokens.danger,
-                                                )
-                                              : iconAsset.isEmpty
-                                              ? neutralIcon
-                                              : SvgPicture.asset(
-                                                  iconAsset,
-                                                  width: 18,
-                                                  height: 18,
-                                                  placeholderBuilder: (_) =>
-                                                      neutralIcon,
-                                                  // A well-formed path that
-                                                  // names an asset the
-                                                  // flavour did not bundle
-                                                  // degrades to the same
-                                                  // neutral icon, instead of
-                                                  // an empty slot.
-                                                  errorBuilder: (_, _, _) =>
-                                                      neutralIcon,
-                                                ),
+                                          // ONE copy of the neutral help
+                                          // icon: the no-icon card, the
+                                          // loading placeholder and the
+                                          // failed asset all degrade to
+                                          // it.
+                                          _quickHelpCardIcon(
+                                            broken: broken,
+                                            iconAsset: iconAsset,
+                                            tokens: tokens,
+                                          ),
                                           const SizedBox(width: 12),
                                           Expanded(
                                             child: Text(

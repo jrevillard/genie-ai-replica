@@ -66,20 +66,10 @@ Map<String, dynamic> parseQuickHelpButton(
 
   final action = configMapOf(btn['action']);
 
-  final dynamic rawServiceLabels = btn['serviceLabels'];
-  final List<String> serviceLabels;
-  if (rawServiceLabels is List) {
-    serviceLabels = rawServiceLabels.map((label) => label.toString()).toList();
-  } else if (rawServiceLabels is String && rawServiceLabels.isNotEmpty) {
-    serviceLabels = [rawServiceLabels];
-  } else {
-    serviceLabels = const <String>[];
-  }
-
   return {
-    'id': btn['id'],
-    'category': btn['category'],
-    'serviceLabels': serviceLabels,
+    'id': btn['id']?.toString(),
+    'category': btn['category']?.toString(),
+    'serviceLabels': quickHelpServiceLabelsOf(btn),
     'iconAsset': iconAsset,
     'resolvedTitle': resolveConfigText(btn['title'], locale),
     'resolvedVisibleText': resolveConfigText(action['visibleText'], locale),
@@ -98,7 +88,7 @@ Map<String, dynamic> parseQuickHelpButton(
   Map<String, dynamic> config,
   String locale,
 ) {
-  final quickHelp = configSectionOf(config, ['features', 'chat', 'quickHelp']);
+  final quickHelp = configSectionOf(config, [...chatConfigPath, 'quickHelp']);
   final layout = configMapOf(quickHelp['layout']);
 
   final buttons = <Map<String, dynamic>>[];
@@ -106,35 +96,31 @@ Map<String, dynamic> parseQuickHelpButton(
   if (rawButtons is List) {
     for (final entry in rawButtons) {
       if (entry is! Map<String, dynamic>) continue;
-      if (quickHelpButtonHidden(entry['hidden'])) continue;
+      // The web filters on JS truthiness (`!button.hidden`): a
+      // truthy value of any type hides the card on both platforms.
+      if (configTruthy(entry['hidden'])) continue;
       buttons.add(parseQuickHelpButton(entry, locale));
     }
   }
   return (layout, dedupeQuickHelpButtons(buttons));
 }
 
-/// The card's declared English KB labels, as strings — the ONE read of a
-/// loaded button's label list. Every scope rule (the grid verdict, the
-/// unavailable caption, the restore union, the press filter) shares it, so
-/// a change to the rule cannot drift between the copies.
+/// The card's declared English KB labels, as strings — the ONE rule and
+/// the ONE read of a button's label list. The parse stores what this
+/// returns; every scope rule (the grid verdict, the unavailable caption,
+/// the restore union, the press filter) reads it, so the rule cannot
+/// drift between the copies.
+///
+/// A bare STRING where the array belongs is ONE label — the wire's own
+/// rule. A stored string list is handed back as-is (the grid reads this
+/// per frame); any other list is stringified, so a card never silently
+/// loses its scope.
 List<String> quickHelpServiceLabelsOf(Map<String, dynamic> button) {
   final labels = button['serviceLabels'];
-  // The parse normalizes the labels ONCE - a bare string is wrapped as
-  // ONE label THERE - so this reader carries no rule of its own: it
-  // reads what the card carries. A stored string list is handed back
-  // as-is (the grid reads this per frame); a list of anything else is
-  // stringified, so a card never silently loses its scope.
   if (labels is List<String>) return labels;
   if (labels is List) return labels.map((label) => label.toString()).toList();
+  if (labels is String && labels.isNotEmpty) return [labels];
   return const <String>[];
-}
-
-/// Whether the config's `hidden` flag hides the button — the mobile half
-/// of the web's JS-truthiness filter (`!button.hidden`): a truthy value of
-/// any type hides the card, so a string-typed flag hides it on both
-/// platforms alike, and a missing one hides nothing.
-bool quickHelpButtonHidden(dynamic hidden) {
-  return configTruthy(hidden);
 }
 
 /// The spacing between the grid's columns — the delegate's own
@@ -195,7 +181,7 @@ List<Map<String, dynamic>> dedupeQuickHelpButtons(
   final seen = <String>{};
   final unique = <Map<String, dynamic>>[];
   for (final button in buttons) {
-    final id = button['id']?.toString();
+    final id = button['id'] as String?;
     if (id == null || id.isEmpty || seen.add(id)) {
       unique.add(button);
     }
@@ -215,7 +201,7 @@ Map<String, dynamic>? quickHelpButtonById(
 ) {
   if (id == null || id.isEmpty) return null;
   for (final button in buttons) {
-    if (button['id']?.toString() == id) {
+    if ((button['id'] as String?) == id) {
       return button;
     }
   }
@@ -322,7 +308,7 @@ class QuickHelpScopeResolver {
   /// reachable when the hierarchy is down. Every card that DOES declare a
   /// scope cannot be verified, so it says so.
   static Map<String, dynamic> unavailableScopeFor(Map<String, dynamic> button) {
-    final category = button['category']?.toString();
+    final category = button['category'] as String?;
     final labels = quickHelpServiceLabelsOf(button);
     // 'general' is the placeholder a category-less selection is stored
     // under: it names no category, and every rule treats it as NO scope —
@@ -440,6 +426,14 @@ class QuickHelpScopeResolver {
     return labels;
   }
 
+  /// Whether the card DECLARES a scope — a category the hierarchy names, or
+  /// labels it carries. ONE rule, read by the grid's unavailable verdict and
+  /// by the press path.
+  bool quickHelpDeclaresScope(Map<String, dynamic> button) {
+    return declaresCategoryScope(button['category'] as String?) ||
+        quickHelpServiceLabelsOf(button).isNotEmpty;
+  }
+
   /// The scope state of [button] against the live tree.
   Map<String, dynamic> stateFor(Map<String, dynamic> button) {
     final declared = quickHelpServiceLabelsOf(button);
@@ -447,7 +441,7 @@ class QuickHelpScopeResolver {
         .where((l) => !_enLabels.contains(l))
         .toList();
 
-    final category = button['category']?.toString();
+    final category = button['category'] as String?;
     // The category is usable only when the hierarchy names it in
     // ENGLISH: that spelling is the wire. A category the hierarchy does
     // not carry, and a category it carries without an EN translation,
@@ -469,7 +463,7 @@ class QuickHelpScopeResolver {
   /// carries it, or the entity has no EN translation (it cannot be filtered
   /// on at all).
   String? categoryLabelEn(Map<String, dynamic> button) =>
-      categoryEnLabel(button['category']?.toString());
+      categoryEnLabel(button['category'] as String?);
 
   /// The ENGLISH label of the category the [reference] names. Null when
   /// the hierarchy does not carry it, or carries it without an EN
@@ -577,7 +571,7 @@ class ConversationScopeResolver {
   ) {
     final byId = <String, Map<String, dynamic>>{};
     for (final button in buttons) {
-      final id = button['id']?.toString();
+      final id = button['id'] as String?;
       if (id == null || id.isEmpty) continue;
       if (byId.containsKey(id)) continue;
       byId[id] = button;
@@ -627,7 +621,7 @@ class ConversationScopeResolver {
     for (final tag in tagList) {
       final button = _buttons[tag];
       if (button == null) continue;
-      final category = button['category']?.toString();
+      final category = button['category'] as String?;
       final buttonLabels = quickHelpServiceLabelsOf(button);
       // A legacy conversation can carry SEVERAL button ids: the web
       // restores every chip and sends the union of their labels. Every
@@ -783,7 +777,7 @@ bool quickHelpScopeIsNameable(
   Map<String, dynamic> button,
   QuickHelpScopeResolver? resolver,
 ) {
-  final category = button['category']?.toString();
+  final category = button['category'] as String?;
   // An id that declares NO category scope (empty, or the 'general'
   // placeholder) is how a selection is cleared — the hierarchy has
   // nothing to deny. declaresCategoryScope is the ONE predicate.

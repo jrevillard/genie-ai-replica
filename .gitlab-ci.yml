@@ -3557,16 +3557,18 @@ chart:parity:
     - >
       helm template test charts/genieai-umbrella -n genieai $(cat charts/ci/render-base-flags)
       --set opea.enabled=true
+      --set okf.enabled=true
       --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
       > /tmp/rendered.yaml
-    # --min-compared is the floor on variables actually compared (172 —
-    # the number the gate compares TODAY; secretProvided, mayDiffer and
+    # --min-compared is the floor on variables actually compared (312 —
+    # the number the gate compares TODAY, with the OPEA and OKF tiers
+    # switched on; secretProvided, mayDiffer and
     # codeDefault rows are excluded from the count, so growing ANY of
     # those categories drops the number and trips the floor instead of
     # quietly greening the gate). The floor equals the count, not one
     # below it: with a floor of 171 a single reclassification was
     # invisible.
-    - python3 scripts/config-parity-check.py /tmp/rendered.yaml --min-compared=172
+    - python3 scripts/config-parity-check.py /tmp/rendered.yaml --min-compared=312
   rules:
     # The gate verifies its `notRead` claims against the APPLICATION
     # source: a commit under components/ or genie-ai-overlay/ that starts

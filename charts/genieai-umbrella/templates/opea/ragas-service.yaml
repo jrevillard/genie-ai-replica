@@ -1,0 +1,63 @@
+{{- /* The RAGAS sidecar — RAG evaluation jobs for the OKF pipeline.
+Gated on okf.enabled like the rest of the tier. Environment transcribed
+from the Compose service block with the same effective defaults; the
+judge/embedding endpoints follow the tier's in-cluster addresses. */ -}}
+{{- if .Values.okf.enabled -}}
+{{- $okf := .Values.okf | default dict -}}
+{{- $okfRagas := index $okf "ragas" | default dict -}}
+{{- $vals  := deepCopy .Values -}}
+{{- $ns := .Values.namespace -}}
+{{- $llmEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "llm") -}}
+{{- $internalSecretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "RAGAS_INTERNAL_SECRET" "secret" "okf-internal-secret" "key" "OKF_INTERNAL_SECRET" "optional" true) | fromJson)
+    (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "RAGAS_JUDGE_API_KEY" "secret" "vllm-api-key" "key" "VLLM_API_KEY" "optional" true) | fromJson) -}}
+{{- $gpuSecretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "VLLM_API_KEY")) | fromJsonArray -}}
+{{- $ragasEnv := list
+    (dict "name" "RAGAS_JUDGE_BASE_URL" "value" (printf "%s/v1" $llmEndpoint))
+    (dict "name" "RAGAS_JUDGE_MODEL" "value" "")
+    (dict "name" "RAGAS_JUDGE_CONTEXT_TOKENS" "value" "65536")
+    (dict "name" "RAGAS_EMBED_BASE_URL" "value" "http://tei-embedding-server:80")
+    (dict "name" "RAGAS_EMBED_MODEL" "value" "")
+    (dict "name" "RAGAS_EMBED_API" "value" "tei")
+    (dict "name" "RAGAS_LLM_CACHE" "value" "1")
+    (dict "name" "RAGAS_LLM_CACHE_DIR" "value" "/tmp/ragas-llm-cache")
+    (dict "name" "RAGAS_LLM_CACHE_LEGACY" "value" "0")
+    (dict "name" "RAGAS_LLM_MAX_CONCURRENCY" "value" "8")
+    (dict "name" "RAGAS_LLM_MAX_RETRIES" "value" "5")
+    (dict "name" "RAGAS_DO_NOT_TRACK" "value" "true")
+    (dict "name" "RAGAS_EVAL_MAX_WORKERS" "value" "8")
+    (dict "name" "RAGAS_EVAL_BATCH_ROWS" "value" "1")
+    (dict "name" "RAGAS_EVAL_TIMEOUT_SECONDS" "value" "600")
+    (dict "name" "LOG_LEVEL" "value" "INFO")
+-}}
+{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" ($okfRagas.env | default dict) | fromJsonArray -}}
+{{- $svcVals := dict
+    "image" (dict "repository" "genie-ai-ragas-service" "tag" "main")
+    "port" 8090
+    "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "1" "memory" "2Gi"))
+    "env" (concat $ragasEnv $internalSecretEnv $gpuSecretEnv $opeaEnvRows)
+    "probes" (dict
+      "readiness" (dict "httpGet" (dict "path" "/health" "port" 8090) "initialDelaySeconds" 10 "periodSeconds" 30 "failureThreshold" 3)
+      "liveness"  (dict "httpGet" (dict "path" "/health" "port" 8090) "initialDelaySeconds" 30 "periodSeconds" 30 "failureThreshold" 3)
+    )
+-}}
+{{- $valsServices := $vals.services | default dict -}}
+{{- $_ := set $valsServices "ragas-service" $svcVals -}}
+{{- $_ := set $vals "services" $valsServices -}}
+{{- $ctx := dict "name" "ragas-service" "component" "ragas-service" "Values" $vals "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ragas-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "ragas-service") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 8090
+      targetPort: 8090
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "ragas-service") | nindent 4 }}
+{{- end -}}

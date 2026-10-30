@@ -975,12 +975,21 @@ okf:
     # wiring matches Compose, where the variables are set while the
     # server's replicas sit at 0.
     url: "http://okf-server:3002"
+    # opea-style env override map — rows here win over the template's
+    # derived rows of the same name.
+    env: {}
   retrievalConfig:
     ttlMs: "30000"
     timeoutMs: "3000"
   # The largest bundle the document repository will forward to the OKF
   # crawl pipeline, in megabytes.
   bundleMaxMb: "100"
+  pii:
+    webConcurrency: "4"       # PII_WEB_CONCURRENCY
+    regionMaxChars: "50000"   # PII_REGION_MAX_CHARS
+    env: {}
+  ragas:
+    env: {}
 
 # OPEA AI/ML tier. Disabled by default; enabling renders the six
 # OPEA services (chatqna, retriever, dataprep, reranker, embedding,

@@ -496,6 +496,62 @@
         }
       },
       "additionalProperties": false
+    },
+    "okf": {
+      "type": "object",
+      "description": "The OKF knowledge-frame tier. Dark by default — mirrors Compose's OKF_ENABLED=0.",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "server": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "env": {
+              "type": "object"
+            }
+          }
+        },
+        "retrievalConfig": {
+          "type": "object",
+          "properties": {
+            "ttlMs": {
+              "type": "string"
+            },
+            "timeoutMs": {
+              "type": "string"
+            }
+          }
+        },
+        "bundleMaxMb": {
+          "type": "string"
+        },
+        "pii": {
+          "type": "object",
+          "properties": {
+            "webConcurrency": {
+              "type": "string"
+            },
+            "regionMaxChars": {
+              "type": "string"
+            },
+            "env": {
+              "type": "object"
+            }
+          }
+        },
+        "ragas": {
+          "type": "object",
+          "properties": {
+            "env": {
+              "type": "object"
+            }
+          }
+        }
+      }
     }
   }
 }

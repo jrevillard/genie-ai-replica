@@ -1593,6 +1593,10 @@ import DsSelect from './ds/Select.vue';
 import { Loader2 } from '@lucide/vue';
 import { eventBus } from '../eventBus.js';
 import { getAvailableLanguages } from '../config/languageConfig.js';
+
+// Shared empty named-params dict for translate() — a frozen module constant
+// so the default argument allocates once, not on every per-render call.
+const EMPTY_NAMED = Object.freeze({});
 import oidcConfig from '../config/oidcConfig.js';
 import documentFileService from '../services/documentFileService.js';
 import { formatFileSize } from '../utils/fileUtils.js';
@@ -2093,7 +2097,7 @@ export default {
     },
 
     // Translation method - improved to ensure consistent behavior with SettingsComponent
-    translate(key, fallback = '', named = {}) {
+    translate(key, fallback = '', named = EMPTY_NAMED) {
       if (!this.$i18n) {
         // console.warn(`[AdminDashboard] $i18n not available. Using fallback for: ${key}`);
         return fallback;

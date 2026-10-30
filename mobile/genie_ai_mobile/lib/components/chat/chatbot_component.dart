@@ -252,17 +252,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   /// The config load is asynchronous: the first render ran before the
   /// config was cached, and the load's completion — not only a locale
   /// switch — must land the configured message (the web is config-ready
-  /// at mount). The first message follows ONLY while it is still the
-  /// welcome text — a conversation that cleared or replaced the welcome
-  /// bubble is untouched, but a welcome bubble still sitting above
-  /// exchanged messages is re-worded, the same way the web's locale
-  /// watcher re-titles it.
+  /// at mount). The FIELD always follows, so a New Chat opened after the
+  /// load seeds the configured text; the VISIBLE bubble follows only
+  /// while NO conversation is open — the first bubble of a restored
+  /// conversation is history, not the welcome slot.
   void _refreshWelcomeMessage() {
     final String newWelcomeMessage = _getConfigWelcomeMessage();
     if (_welcomeMessage == newWelcomeMessage) {
       return;
     }
-    if (_messages.isNotEmpty &&
+    if (_currentConversationId == null &&
+        _messages.isNotEmpty &&
         _messages.first['role'] == 'assistant' &&
         _messages.first['content'] == _welcomeMessage) {
       setState(() {
@@ -367,13 +367,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       });
       // The config just cached: the welcome message it declares lands
       // now, not on the next locale switch. OUTSIDE the setState above —
-      // the refresh owns its own setState when the bubble updates — and
-      // ONLY while no conversation has been restored or started: the
-      // first bubble of a conversation saved under the i18n default is
-      // history, not the welcome slot.
-      if (_messages.length <= 1) {
-        _refreshWelcomeMessage();
-      }
+      // the refresh owns its own setState when the bubble updates.
+      _refreshWelcomeMessage();
     } catch (e) {
       debugPrint("[CHATBOT] Failed to load genie-ai-config.json: $e");
       _quickHelpLoadFailed = true;

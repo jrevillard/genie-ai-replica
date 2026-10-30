@@ -1148,10 +1148,13 @@ void main() {
       );
     });
 
-    test('a failed load marks the locale it failed under', () {
-      // The retry is scoped to a LOCALE change — the trigger the pre-fix
-      // code used. A keyboard opening (a dependency change under the
-      // same locale) must not re-read the asset.
+    test('a load under the live locale never re-triggers', () {
+      // Whatever SETTLED under a locale — a completed load or a failed
+      // one (the widget marks both) — the marker names that locale, and
+      // only a locale change re-reads the asset. A keyboard opening (a
+      // dependency change under the same locale) must not.
+      // (The catch branch that marks a FAILED load lives in the widget;
+      // this predicate names the rule it shares.)
       expect(
         shouldReloadQuickHelpButtons(loadedLocale: 'en', currentLocale: 'en'),
         isFalse,

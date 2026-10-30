@@ -90,13 +90,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   card with no icon still shows the neutral help icon. The context bar was
   never affected. (#1124, !635)
 - **A Quick Help card with no title is a visible failure, not a silent dead
-  tap.** A card whose title resolves to nothing (an empty locale map, or a map
-  with no entry for the active language) used to be pressed and install its
-  scope under a name the card did not carry; the press is now refused outright.
-  How the card looks is decided too: it renders as the configuration problem it
-  is — the same treatment a broken scope gets (danger border, explanatory
-  caption, tap disabled) instead of a blank-label card that looked alive and
-  did nothing. The caption text ships in all 14 locales. (#1192, !635, !643)
+  tap.** A card whose title resolves to nothing — the `title` is absent, an
+  empty map, a falsy scalar, or a map whose every entry is empty (the locale,
+  English and first-value fallbacks leave nothing to show) — used to be
+  pressed and install its scope under a name the card did not carry; the press
+  is now refused outright. How the card looks is decided too: it renders as
+  the configuration problem it is — the same treatment a broken scope gets
+  (danger border, explanatory caption, tap disabled) instead of a blank-label
+  card that looked alive and did nothing. The caption text ships in all 14
+  locales. (#1192, !635, !643)
 - **An untranslated placeholder in a configuration's locale map now falls back
   to the translated text.** A locale map whose entry for the active language
   was an empty string - the shape an untranslated translation takes - rendered

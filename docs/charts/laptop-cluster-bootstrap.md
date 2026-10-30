@@ -26,7 +26,7 @@ API server, and nothing ever applies them. Consequences:
 the chart is written for. The flag is stored in the profile, so later
 `minikube start` calls on that profile keep it.
 
-The static cross-check (`scripts/networkpolicy-crosscheck.py`, run by
+The static cross-check (`scripts/ci/networkpolicy-crosscheck.py`, run by
 `chart:lint` in CI) catches the same family of defects at the render
 level, without a cluster. It is the fast lane; Calico is the truth.
 

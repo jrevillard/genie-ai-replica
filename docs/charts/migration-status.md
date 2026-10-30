@@ -72,7 +72,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
   !588), each with tests. That is why the laptop overlay no longer pins a
   `feat-k8s-migration` document-repository image.
 - **Config parity is a gate, not a claim (0.2.61–0.2.64)**: the chart now
-  configures every service the way Compose does, and `scripts/config-parity-check.py`
+  configures every service the way Compose does, and `scripts/ci/config-parity-check.py`
   compares the two renders variable by variable. The gate learned to judge
   only what it was actually given (a tier-off render used to report every
   variable of every unrendered service), to report a pair it cannot judge
@@ -83,7 +83,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
   -ignore-missing-schemas` never validated a Custom Resource, and several
   operators decode their CRs strictly — `chart:crd-validate` runs the full
   render through `kubectl create --dry-run=server` against the installed
-  CRDs (`scripts/validate-crds.sh`). It caught two real defects on its
+  CRDs (`scripts/ci/validate-crds.sh`). It caught two real defects on its
   first run: `GrafanaDashboard.spec.resyncInterval` (the field is
   `resyncPeriod`, so all nine dashboards were rejected) and
   `Cluster.spec.storage.accessModes` (pruned silently; access modes
@@ -284,7 +284,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     3.16.3 prints `level=INFO msg="funcMap fail"` per guard), and every
     render in the pipeline switches the placeholder guard off through the
     shared fixture — so a guard that stopped firing was invisible to CI.
-    `scripts/render-guards-check.sh` now renders the values each guard
+    `scripts/ci/render-guards-check.sh` now renders the values each guard
     must reject and requires the render to FAIL, plus one render that
     must succeed; mutation-proven (breaking a covered guard turns the
     gate red, restoring it turns it green). The `ingress.host` guard
@@ -359,7 +359,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
   to read template source to learn the knob existed, and a misspelled
   key merged into the values and was silently ignored — lint, the schema
   gate and the parity checker all green. All eighty are now declared
-  with their template defaults, `scripts/values-surface-check.py` (wired
+  with their template defaults, `scripts/ci/values-surface-check.py` (wired
   into `chart:lint`) keeps the list complete (mutation-proven: dropping
   one declared key turns it red with the key named), and the four
   renders are byte-identical before/after except the one intentional
@@ -1868,7 +1868,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     enforced it* — 114 commits of this branch changed the chart
     without moving the version, and the deploy repo's overlay then
     named a release the cluster was not running.
-    `scripts/chart-version-check.py` fails the pipeline when the
+    `scripts/ci/chart-version-check.py` fails the pipeline when the
     content moves without the version. (The reason this pass gave —
     "Flux reconciles `spec.chart.spec.version`" — was wrong: for a
     Git-path source the field is ignored, and pass 32 corrected it.)
@@ -2043,7 +2043,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     Eight values knobs now carry the same defaults.
 - **Two gates added around the pass's own notes, and the fixes they
   found**:
-  - `scripts/clearable-blocks-check.py` — the chart's contract is that
+  - `scripts/ci/clearable-blocks-check.py` — the chart's contract is that
     a CLEARED block degrades (the per-service shape block says its
     knobs are optional; `services.backend.translation: null` is
     documented), and a block that is not clearable fails the render in
@@ -2185,7 +2185,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     `gpu=true` default. There is deliberately no "no constraint"
     configuration (the model pods need a GPU), and the comment now
     says so.
-  - *Gates around pass 17* — `scripts/instance-count-check.py` renders
+  - *Gates around pass 17* — `scripts/ci/instance-count-check.py` renders
     the three configurations the instance precedence must hold (dev,
     prod, prod with an operator override) and fails when one drifts
     (mutation-tested against the old hardcoded behaviour);
@@ -2215,7 +2215,7 @@ repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
     value nor valueFrom, and a nil value are all render-time errors.
     Both guards were mutation-tested (each renders red when its defect
     is reintroduced).
-  - *A gate for the class* — `scripts/env-types-check.py` renders the
+  - *A gate for the class* — `scripts/ci/env-types-check.py` renders the
     chart twice (defaults, then the numeric and boolean knobs
     overridden to numbers) and requires every env value to be a
     string. The defaults are strings, so the second render is the one

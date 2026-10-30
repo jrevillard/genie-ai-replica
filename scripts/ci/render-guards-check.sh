@@ -37,8 +37,8 @@
 #     knob as a boolean and rejects a non-boolean first;
 #   - the realm-file guard — it checks a file of the CHART, not a value.
 #
-# Usage: scripts/render-guards-check.sh [chart-path]
-#        CHART=charts/genieai-umbrella scripts/render-guards-check.sh
+# Usage: scripts/ci/render-guards-check.sh [chart-path]
+#        CHART=charts/genieai-umbrella scripts/ci/render-guards-check.sh
 set -uo pipefail
 
 CHART="${1:-${CHART:-charts/genieai-umbrella}}"

@@ -76,7 +76,7 @@ rtk proxy helm template genieai charts/genieai-umbrella/ \
 #    Bump per push, not per batch, so the label never names a chart
 #    that is not the one in the cluster.
 #
-#    CI enforces it: scripts/chart-version-check.py (chart:lint job) fails
+#    CI enforces it: scripts/ci/chart-version-check.py (chart:lint job) fails
 #    the pipeline when the last two chart-touching commits changed the
 #    chart's content without moving the version.
 

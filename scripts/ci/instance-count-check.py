@@ -24,8 +24,8 @@ the rendered instance counts:
   prod, no override           -> 2 and 3   (the profile map)
   prod, explicit override     -> the operator's numbers, not the profile's
 
-Usage: scripts/instance-count-check.py [chart-path]
-       CHART=charts/genieai-umbrella scripts/instance-count-check.py
+Usage: scripts/ci/instance-count-check.py [chart-path]
+       CHART=charts/genieai-umbrella scripts/ci/instance-count-check.py
 """
 
 import os

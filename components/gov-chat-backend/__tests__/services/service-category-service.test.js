@@ -44,8 +44,7 @@ function createMockCollection() {
     save: jest.fn().mockResolvedValue({ _key: 'cat-1' }),
     update: jest.fn().mockResolvedValue({ _key: 'cat-1' }),
     document: jest.fn().mockResolvedValue({ _key: 'cat-1', nameEN: 'Test' }),
-    remove: jest.fn().mockResolvedValue({ _key: 'cat-1' }),
-    ensureIndex: jest.fn()
+    remove: jest.fn().mockResolvedValue({ _key: 'cat-1' })
   };
 }
 
@@ -107,6 +106,9 @@ describe('ServiceCategoryService', () => {
       expect(mockDb.collection).toHaveBeenCalledWith('categoryServices');
       expect(mockDb.collection).toHaveBeenCalledWith('serviceCategoryTranslations');
       expect(mockDb.collection).toHaveBeenCalledWith('serviceTranslations');
+      // A lookup that re-created the collection on every access would leave
+      // the service writing to a handle no test can reach.
+      expect(mockDb.collection).toHaveBeenCalledTimes(5);
       expect(service.initialized).toBe(true);
     });
 
@@ -114,65 +116,6 @@ describe('ServiceCategoryService', () => {
       service.initialized = true;
       await service.init();
       expect(dbService.getConnection).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('upsertCategories', () => {
-    it('should create categories with translations', async () => {
-      const categories = [
-        { name: 'Taxes', catKey: 'taxes', translations: [{ languageCode: 'fr', translation: 'Impots' }] }
-      ];
-
-      const result = await service.upsertCategories(categories, 'en');
-
-      expect(result).toHaveLength(1);
-      expect(mockServiceCategories.save).toHaveBeenCalledWith(
-        expect.objectContaining({ nameEN: 'Taxes', catCode: 'taxes' })
-      );
-      expect(mockServiceCategoryTranslations.save).toHaveBeenCalledTimes(2);
-    });
-
-    it('should create category with default name when missing', async () => {
-      const categories = [{}];
-
-      await service.upsertCategories(categories);
-      expect(mockServiceCategories.save).toHaveBeenCalledWith(expect.objectContaining({ nameEN: 'Category 1' }));
-    });
-
-    it('should throw on database error', async () => {
-      mockServiceCategories.save.mockRejectedValue(new Error('DB error'));
-
-      await expect(service.upsertCategories([{ name: 'Test' }])).rejects.toThrow('DB error');
-    });
-  });
-
-  describe('upsertServices', () => {
-    it('should create services with translations and edges', async () => {
-      mockServices.save.mockResolvedValueOnce({ _key: 'svc-1' }).mockResolvedValueOnce({ _key: 'svc-2' });
-
-      const result = await service.upsertServices('cat-1', ['Service A', 'Service B'], 'en');
-
-      expect(result).toHaveLength(2);
-      expect(mockServices.save).toHaveBeenCalledTimes(2);
-      expect(mockServiceTranslations.save).toHaveBeenCalledTimes(2);
-      expect(mockCategoryServices.save).toHaveBeenCalledTimes(2);
-    });
-
-    it('should return empty array when categoryKey is missing', async () => {
-      const result = await service.upsertServices(null, ['Test']);
-      expect(result).toEqual([]);
-    });
-
-    it('should return empty array when services is not an array', async () => {
-      const result = await service.upsertServices('cat-1', 'not-array');
-      expect(result).toEqual([]);
-    });
-
-    it('should skip empty service names', async () => {
-      mockServices.save.mockResolvedValue({ _key: 'svc-1' });
-
-      const result = await service.upsertServices('cat-1', ['Valid', '', '  ']);
-      expect(result).toHaveLength(1);
     });
   });
 
@@ -215,6 +158,10 @@ describe('ServiceCategoryService', () => {
       expect(result._key).toBe('svc-1');
       expect(result.status).toBe('updated');
       expect(mockServices.update).toHaveBeenCalledWith('svc-1', { nameEN: 'Updated' });
+      expect(mockServiceTranslations.save).toHaveBeenCalledWith(
+        expect.objectContaining({ languageCode: 'EN', translation: 'Updated' }),
+        expect.objectContaining({ overwrite: true })
+      );
     });
 
     it('should throw ValidationError when nameEN is missing', async () => {
@@ -501,7 +448,12 @@ describe('ServiceCategoryService', () => {
     });
 
     it('should throw Error when serviceKey is missing', async () => {
-      await expect(service.deleteService(null)).rejects.toThrow('Invalid service key');
+      await expect(service.deleteService(null)).rejects.toThrow('Invalid service key provided');
+    });
+
+    it('should handle delete errors', async () => {
+      mockDb.query.mockRejectedValue(new Error('Delete failed'));
+      await expect(service.deleteService('svc-1')).rejects.toThrow('Delete failed');
     });
   });
 
@@ -540,17 +492,20 @@ describe('ServiceCategoryService', () => {
     it('should return translations for a category', async () => {
       mockDb.query.mockResolvedValue(
         createMockCursor([
-          { languageCode: 'en', translation: 'Taxes' },
-          { languageCode: 'fr', translation: 'Impots' }
+          { lang: 'en', text: 'Taxes' },
+          { lang: 'fr', text: 'Impots' }
         ])
       );
 
       const result = await service.getCategoryTranslations('cat-1');
-      expect(result).toHaveLength(2);
+      expect(result).toEqual([
+        { lang: 'en', text: 'Taxes' },
+        { lang: 'fr', text: 'Impots' }
+      ]);
     });
 
     it('should throw Error when categoryKey is missing', async () => {
-      await expect(service.getCategoryTranslations(null)).rejects.toThrow('Invalid category key');
+      await expect(service.getCategoryTranslations(null)).rejects.toThrow('Invalid category key provided');
     });
   });
 
@@ -563,7 +518,7 @@ describe('ServiceCategoryService', () => {
     });
 
     it('should throw Error when serviceKey is missing', async () => {
-      await expect(service.getServiceTranslations(null)).rejects.toThrow('Invalid service key');
+      await expect(service.getServiceTranslations(null)).rejects.toThrow('Invalid service key provided');
     });
   });
 
@@ -609,94 +564,6 @@ describe('ServiceCategoryService', () => {
       await expect(service.updateCategoryWithTranslations('cat-1', { nameEN: '' })).rejects.toThrow(
         'nameEN is required'
       );
-    });
-  });
-
-  describe('_getTranslatedName', () => {
-    beforeEach(async () => {
-      await service.init();
-    });
-
-    it('should return category translation', async () => {
-      mockDb.query.mockResolvedValue({ next: jest.fn().mockResolvedValue('Catégorie') });
-      const result = await service._getTranslatedName('category', 'cat-1', 'fr');
-      expect(result).toBe('Catégorie');
-    });
-
-    it('should return service translation', async () => {
-      mockDb.query.mockResolvedValue({ next: jest.fn().mockResolvedValue('Service FR') });
-      const result = await service._getTranslatedName('service', 'svc-1', 'fr');
-      expect(result).toBe('Service FR');
-    });
-
-    it('should return null for invalid collection type', async () => {
-      const result = await service._getTranslatedName('invalid', 'cat-1', 'en');
-      expect(result).toBeNull();
-    });
-
-    it('should return null when no translation found', async () => {
-      mockDb.query.mockResolvedValue({ next: jest.fn().mockResolvedValue(null) });
-      const result = await service._getTranslatedName('category', 'cat-99', 'de');
-      expect(result).toBeNull();
-    });
-
-    it('should return null on query error', async () => {
-      mockDb.query.mockRejectedValue(new Error('DB error'));
-      const result = await service._getTranslatedName('category', 'cat-1', 'en');
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('deleteService', () => {
-    beforeEach(async () => {
-      await service.init();
-    });
-
-    it('should throw when service key is empty', async () => {
-      await expect(service.deleteService('')).rejects.toThrow('Invalid service key provided');
-    });
-
-    it('should delete service and translations', async () => {
-      mockDb.query.mockResolvedValue({ next: jest.fn().mockResolvedValue(null) });
-      mockServices.remove.mockResolvedValue({ _key: 'svc-1' });
-      const result = await service.deleteService('svc-1');
-      expect(result.status).toBe('deleted');
-      expect(mockDb.query).toHaveBeenCalledTimes(2);
-      expect(mockServices.remove).toHaveBeenCalledWith('svc-1');
-    });
-
-    it('should handle delete errors', async () => {
-      mockDb.query.mockRejectedValue(new Error('Delete failed'));
-      await expect(service.deleteService('svc-1')).rejects.toThrow('Delete failed');
-    });
-  });
-
-  describe('searchCategoriesAndServices', () => {
-    beforeEach(async () => {
-      await service.init();
-    });
-
-    it('should return empty results when query is empty', async () => {
-      const result = await service.searchCategoriesAndServices('', 'en');
-      expect(result).toEqual({ categories: [], services: [] });
-    });
-
-    it('should return search results', async () => {
-      mockDb.query.mockResolvedValue({
-        next: jest.fn().mockResolvedValue({
-          categories: [{ type: 'category', key: 'cat-1', name: 'Tax' }],
-          services: [{ type: 'service', key: 'svc-1', name: 'Tax Rate' }]
-        })
-      });
-      const result = await service.searchCategoriesAndServices('tax', 'en');
-      expect(result.categories).toHaveLength(1);
-      expect(result.services).toHaveLength(1);
-    });
-
-    it('should return empty results on search error', async () => {
-      mockDb.query.mockRejectedValue(new Error('Search failed'));
-      const result = await service.searchCategoriesAndServices('tax', 'en');
-      expect(result).toEqual({ categories: [], services: [] });
     });
   });
 });

@@ -1224,33 +1224,34 @@ async def ensure_vector_index(
             return None
 
 
+def _read_positive_int_env(name: str, default: int = 1) -> int:
+    """Read an int index knob defensively: non-integer, or a value ArangoDB
+    would reject at add_index (0 / negative), logs a WARNING and falls back
+    to the default. A rejected definition is swallowed by ensure_vector_index
+    and would leave ingest to complete with NO vector index. Never raises —
+    a malformed env var must not crash ingest.
+    """
+    raw = os.getenv(name) or str(default)
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(f"Invalid {name}={raw!r}; falling back to {default}.")
+        return default
+    if value < 1:
+        logger.warning(f"Invalid {name}={value}; must be >= 1; falling back to {default}.")
+        return default
+    return value
+
+
 def _read_index_params():
     """Read RETRIEVER_ARANGO_{DISTANCE_STRATEGY,NUM_CENTROIDS,NPROBE} defensively.
 
-    Returns (metric, n_lists, n_probe). On invalid NUM_CENTROIDS or NPROBE
-    (non-integer, or an out-of-range value ArangoDB would reject), logs a
-    WARNING and falls back to 1 (the legacy default). Never raises —
-    a malformed env var must not crash ingest.
+    Returns (metric, n_lists, n_probe). Invalid int knobs log a WARNING and
+    fall back to 1 (the legacy default) — see `_read_positive_int_env`.
     """
     metric = os.getenv("RETRIEVER_ARANGO_DISTANCE_STRATEGY", "COSINE").lower()
-    raw = os.getenv("RETRIEVER_ARANGO_NUM_CENTROIDS", "1")
-    try:
-        n_lists = int(raw)
-    except ValueError:
-        logger.warning(f"Invalid RETRIEVER_ARANGO_NUM_CENTROIDS={raw!r}; falling back to 1.")
-        n_lists = 1
-    raw = os.getenv("RETRIEVER_ARANGO_NPROBE", "1")
-    try:
-        n_probe = int(raw)
-        # 0 / negative parse cleanly but ArangoDB rejects the index
-        # definition at add_index — which the helper would swallow, leaving
-        # ingest to complete with NO vector index. Reject here instead.
-        if n_probe < 1:
-            logger.warning(f"Invalid RETRIEVER_ARANGO_NPROBE={raw!r}; must be >= 1; falling back to 1.")
-            n_probe = 1
-    except ValueError:
-        logger.warning(f"Invalid RETRIEVER_ARANGO_NPROBE={raw!r}; falling back to 1.")
-        n_probe = 1
+    n_lists = _read_positive_int_env("RETRIEVER_ARANGO_NUM_CENTROIDS")
+    n_probe = _read_positive_int_env("RETRIEVER_ARANGO_NPROBE")
     return metric, n_lists, n_probe
 
 

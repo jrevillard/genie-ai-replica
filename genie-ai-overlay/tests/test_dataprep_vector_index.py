@@ -444,6 +444,17 @@ class TestReadIndexParams:
         fake_logger.warning.assert_called_once()
         assert "must be >= 1" in fake_logger.warning.call_args.args[0]
 
+    @pytest.mark.parametrize("raw_n_lists", ["0", "-5"])
+    def test_out_of_range_n_lists_falls_back(self, monkeypatch, raw_n_lists):
+        """NUM_CENTROIDS shares the range guard — same add_index rejection mode."""
+        monkeypatch.setenv("RETRIEVER_ARANGO_NUM_CENTROIDS", raw_n_lists)
+        fake_logger = MagicMock()
+        monkeypatch.setattr(dp_module, "logger", fake_logger)
+        _, n_lists, _ = dp_module._read_index_params()
+        assert n_lists == 1  # fallback, no crash
+        fake_logger.warning.assert_called_once()
+        assert "must be >= 1" in fake_logger.warning.call_args.args[0]
+
 
 class TestSafeLog:
     """`_safe_log` must swallow exceptions so the post-ingest hook never crashes."""

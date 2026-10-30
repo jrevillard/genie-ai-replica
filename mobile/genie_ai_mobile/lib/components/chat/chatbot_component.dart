@@ -257,9 +257,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   /// The config load is asynchronous: the first render ran before the
   /// config was cached, and the load's completion — not only a locale
   /// switch — must land the configured message (the web is config-ready
-  /// at mount). The first message follows only while it is still the
-  /// welcome message: a conversation the user has already moved into is
-  /// not rewritten.
+  /// at mount). The first message follows ONLY while it is still the
+  /// welcome text — a conversation that cleared or replaced the welcome
+  /// bubble is untouched, but a welcome bubble still sitting above
+  /// exchanged messages is re-worded, the same way the web's locale
+  /// watcher re-titles it.
   void _refreshWelcomeMessage() {
     final String newWelcomeMessage = _getConfigWelcomeMessage();
     if (_welcomeMessage == newWelcomeMessage) {
@@ -1256,8 +1258,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // a visible text but no hidden prompt would wire an EMPTY question
     // to the LLM while the bubble showed the visible text, and a card
     // with a hidden prompt but no visible text would ask the send guard
-    // to bounce it after the overlay already closed. The web arms its
-    // send the same way (it also honours a legacy i18n-KEY shape the
+    // to bounce it after the overlay already closed. Net rule on the
+    // web too: it arms on the hidden prompt but its sendMessage bounces
+    // the empty composer (it also honours a legacy i18n-KEY shape the
     // mobile bundle never carries).
     if (hiddenPrompt.isEmpty || visibleText.isEmpty) {
       // A card that DECLARES a scope but has no hidden prompt is still a

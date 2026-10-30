@@ -371,13 +371,13 @@ class TestAlignGeneratorWiring:
 class TestAlignInputsWiring:
     """The request params on chatqna.orchestrate are read from the wire body."""
 
-    def _run(self, llm_params, inputs):
+    def _run(self, count_patch, llm_params, inputs):
         self_mock = _orchestrator()
         tokenizer = MagicMock()
         tokenizer.encode = lambda text: []
         with (
             patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-            patch("chatqna.genieai_chatqna.get_tokenizer", return_value=tokenizer),
+            count_patch(tokenizer),
         ):
             return chatqna_module.align_inputs(
                 self_mock,
@@ -387,10 +387,11 @@ class TestAlignInputsWiring:
                 llm_params,
             )
 
-    def test_request_params_land_on_the_enclosing_orchestrate_span(self, captured_spans):
+    def test_request_params_land_on_the_enclosing_orchestrate_span(self, captured_spans, count_patch):
         tracer = chatqna_module.get_tracer("chatqna.orchestrate")
         with tracer.start_as_current_span("chatqna.orchestrate"):
             result = self._run(
+                count_patch,
                 {"max_tokens": 512, "top_p": 0.9, "temperature": 0.2, "stream": True},
                 {"inputs": "rag prompt", "stream": True, "frequency_penalty": 0.3, "temperature": 0.7},
             )
@@ -403,7 +404,7 @@ class TestAlignInputsWiring:
         assert orchestrate.attributes[A["llm_req_temperature"]] == result["temperature"]
         assert orchestrate.attributes[A["llm_req_frequency_penalty"]] == result["frequency_penalty"]
 
-    def test_span_reports_the_wire_body_not_the_parameters_dict(self, captured_spans):
+    def test_span_reports_the_wire_body_not_the_parameters_dict(self, captured_spans, count_patch):
         """Degenerate case: the two sources deliberately disagree.
 
         ``align_inputs`` writes temperature and frequency_penalty into the body
@@ -415,6 +416,7 @@ class TestAlignInputsWiring:
         tracer = chatqna_module.get_tracer("chatqna.orchestrate")
         with tracer.start_as_current_span("chatqna.orchestrate"):
             result = self._run(
+                count_patch,
                 {"max_tokens": 512, "top_p": 0.9, "temperature": 0.2, "frequency_penalty": 0.1, "stream": True},
                 {"inputs": "rag prompt", "stream": True, "frequency_penalty": 0.9, "temperature": 0.7},
             )
@@ -427,7 +429,7 @@ class TestAlignInputsWiring:
         assert orchestrate.attributes[A["llm_req_temperature"]] == 0.7
         assert orchestrate.attributes[A["llm_req_frequency_penalty"]] == 0.9
 
-    def test_repetition_penalty_is_not_recorded_because_it_is_never_sent(self, captured_spans):
+    def test_repetition_penalty_is_not_recorded_because_it_is_never_sent(self, captured_spans, count_patch):
         """A parameter chatqna does not put in the body must not be advertised.
 
         ``repetition_penalty`` is real vLLM vocabulary, but align_inputs never
@@ -436,6 +438,7 @@ class TestAlignInputsWiring:
         tracer = chatqna_module.get_tracer("chatqna.orchestrate")
         with tracer.start_as_current_span("chatqna.orchestrate"):
             result = self._run(
+                count_patch,
                 {"max_tokens": 512, "top_p": 0.9, "temperature": 0.2, "repetition_penalty": 1.1, "stream": True},
                 {"inputs": "rag prompt", "stream": True, "frequency_penalty": 0.0, "temperature": 0.7},
             )
@@ -469,23 +472,25 @@ class TestAlignInputsWiring:
         for key, _attr in chatqna_module._LLM_REQUEST_PARAM_ATTRS:
             assert f'next_inputs["{key}"]' in source, f"{key} is recorded but never sent"
 
-    def test_streaming_request_asks_for_usage(self):
+    def test_streaming_request_asks_for_usage(self, count_patch):
         result = self._run(
+            count_patch,
             {"max_tokens": 512, "top_p": 0.9, "stream": True},
             {"inputs": "rag prompt", "stream": True, "frequency_penalty": 0.0, "temperature": 0.7},
         )
 
         assert result["stream_options"] == {"include_usage": True}
 
-    def test_sync_request_does_not_send_stream_options(self):
+    def test_sync_request_does_not_send_stream_options(self, count_patch):
         result = self._run(
+            count_patch,
             {"max_tokens": 512, "top_p": 0.9, "stream": False},
             {"inputs": "rag prompt", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7},
         )
 
         assert "stream_options" not in result
 
-    def test_stream_options_is_gated_on_llm_parameters_dict_not_inputs(self):
+    def test_stream_options_is_gated_on_llm_parameters_dict_not_inputs(self, count_patch):
         """stream_options follows llm_parameters_dict; the body's stream follows inputs.
 
         A mismatch produces a request that streams without asking for usage, so
@@ -494,6 +499,7 @@ class TestAlignInputsWiring:
         not asserting the two can never differ.
         """
         result = self._run(
+            count_patch,
             {"max_tokens": 512, "top_p": 0.9, "stream": False},
             {"inputs": "rag prompt", "stream": True, "frequency_penalty": 0.0, "temperature": 0.7},
         )

@@ -584,7 +584,8 @@ services:
       # GPU translation endpoint is mandatory or one candidate among two. Without
       # it the backend cannot tell a remote GPU node from the in-cluster worker,
       # and would quietly fall back to CPU whenever a configured endpoint stops
-      # answering. chatqna, retriever and dataprep already receive it.
+      # answering. The backend is its only reader: the Python services discover
+      # their model id and endpoints at runtime.
       - GPU_NODE_HOST=${GPU_NODE_HOST:-}
       # Backend preference. `auto` (default) probes once and commits; `cpu` and
       # `gpu` skip the probe. Ignored when a GPU API is configured — see above.
@@ -1675,7 +1676,16 @@ services:
     #   - "5000:5000"
     environment:
       DATAPREP_COMPONENT_NAME: GENIE_DATAPREP_ARANGODB
-      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      # Empty by default: the served model id is DISCOVERED per ingestion job.
+      # Services start immediately. Branches while vLLM is still loading:
+      # - unpinned, never-probed service: the job FAILS LOUDLY and is rolled
+      #   back ("Ingestion Error") — the exception is a stale cached id from
+      #   an earlier successful probe, which then degrades instead;
+      # - pinned: the job survives on degraded file-level labels, and graph
+      #   extraction fails silently — the document stores NO retrievable
+      #   chunks ("Ingested with Warnings"). Neither outcome is re-computed
+      #   later. Wait for vLLM health before bulk ingesting.
+      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-}
       VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://vllm:8000}
       # Two names, two consumers, and they are NOT the same knob.
       #
@@ -1691,10 +1701,10 @@ services:
       # Single attempt, no retry: 300 s is what aiohttp applied anyway.
       MODEL_AUTH_TIMEOUT_SECONDS: ${MODEL_AUTH_TIMEOUT_SECONDS:-300}
       MODEL_CONNECT_TIMEOUT_SECONDS: ${MODEL_CONNECT_TIMEOUT_SECONDS:-30}
-      # The model-id probe behind the TTL cache. Degrades to the configured
-      # model id, so 10 s suits a warm endpoint — but a vLLM still loading
-      # weights answers in minutes, and the fallback then silently picks the
-      # configured id instead of the served one.
+      # The model-id probe behind the TTL cache. 10 s suits a warm endpoint —
+      # a vLLM still loading weights answers in minutes, and jobs running in
+      # that window fail their LLM step loudly (labeling falls back to
+      # file-level labels; there is no configured-id fallback anymore).
       MODEL_PROBE_TIMEOUT_SECONDS: ${MODEL_PROBE_TIMEOUT_SECONDS:-10}
       #
       # VLLM_TIMEOUT is deliberately NOT injected here, even though the vendored
@@ -1711,7 +1721,6 @@ services:
       # before this policy, and the right value for a phase with no degradation
       # path. Binding it differently needs a patch to the vendored source,
       # tracked in genie-ai-overlay/OVERRIDES.yaml, not a compose line.
-      GPU_NODE_HOST: ${GPU_NODE_HOST:-}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
       ARANGO_URL: http://arango-vector-db:8529
@@ -1924,6 +1933,11 @@ services:
       RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE: ${RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE:-2000}
       # AI services endpoints
       VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://vllm:8000}
+      # Empty by default: the summarizer's model id is DISCOVERED per call.
+      # With RETRIEVER_SUMMARIZER_ENABLED=false (the shipped default) the
+      # service starts immediately with summarization disabled. Set
+      # VLLM_LLM_MODEL_ID to pin a name and skip discovery.
+      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
       HF_TOKEN: ${VLLM_API_KEY:-}
       VLLM_API_KEY: ${VLLM_API_KEY:-}
@@ -1932,7 +1946,6 @@ services:
       ENABLE_OBSERVABILITY: ${ENABLE_OBSERVABILITY:-0}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
 
-      GPU_NODE_HOST: ${GPU_NODE_HOST:-}
       # Shared model-endpoint HTTP budgets (core/model_http_policy.py).
       # Only the shared name is injected here. VLLM_TIMEOUT is the retriever's
       # historical alias for the same budget (config.py resolves one to the
@@ -2001,8 +2014,9 @@ services:
       MODEL_CONTROL_PLANE_TIMEOUT_SECONDS: ${MODEL_CONTROL_PLANE_TIMEOUT_SECONDS:-30}
       MODEL_CONNECT_TIMEOUT_SECONDS: ${MODEL_CONNECT_TIMEOUT_SECONDS:-30}
       # The model-id probe behind the TTL cache, shared with the retriever and
-      # dataprep. Same knob, same 10 s: a failure degrades to the configured
-      # model id rather than propagating.
+      # dataprep (same knob, same 10 s; the failure consequences differ — see
+      # their blocks). Here, with no pinned name, a probe failure propagates:
+      # the request fails closed (503) until the endpoint answers.
       MODEL_PROBE_TIMEOUT_SECONDS: ${MODEL_PROBE_TIMEOUT_SECONDS:-10}
       MEGA_SERVICE_HOST_IP: chatqna-xeon-backend-server
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -2041,7 +2055,10 @@ services:
       LLM_SERVER_PORT: 8000
       VLLM_LLM_ENDPOINT: ${VLLM_ENDPOINT:-}
       VLLM_TRANSLATION_ENDPOINT: ${VLLM_TRANSLATION_ENDPOINT:-}
-      GPU_NODE_HOST: ${GPU_NODE_HOST:-}
+      # Escape hatch for endpoints whose /v1/models is unreachable while
+      # generation works (ACL'd proxies): empty by default, so discovery
+      # stays the source of truth; a pinned name bypasses the probe.
+      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-}
       GUARDRAIL_SERVICE_HOST_IP: guardrail
       GUARDRAIL_SERVICE_PORT: 9090
       TRANSLATION_SERVICE_HOST_IP: vllm-translation-guardrail

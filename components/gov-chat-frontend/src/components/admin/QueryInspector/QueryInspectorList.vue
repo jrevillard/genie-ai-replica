@@ -72,7 +72,7 @@
             >
               {{ formatConfidence(query.metadata.confidence_score) }}
             </DsPill>
-            <span v-else class="qi-list__muted">N/A</span>
+            <span v-else class="qi-list__muted">{{ translate('admin.queryInspector.notAvailable', 'N/A') }}</span>
           </td>
           <td class="qi-list__cell--center">{{ query.responseTime || 0 }}ms</td>
           <td class="qi-list__cell--center">{{ query.metadata?.source_documents?.length || 0 }}</td>
@@ -108,10 +108,11 @@
       </DsButton>
       <span class="qi-list__page-info">
         {{
-          translate('admin.queryInspector.pageInfo', 'Page {current} of {total} ({count} total)')
-            .replace('{current}', pagination.currentPage)
-            .replace('{total}', pagination.pages)
-            .replace('{count}', pagination.total)
+          translate('admin.queryInspector.pageInfo', 'Page {current} of {total} ({count} total)', {
+            current: pagination.currentPage,
+            total: pagination.pages,
+            count: pagination.total
+          })
         }}
       </span>
       <DsButton
@@ -175,18 +176,20 @@ export default {
     isAbstained(query) {
       return queryIsAbstained(query);
     },
-    translate(key, fallback) {
-      return this.$parent?.translate?.(key, fallback) ?? fallback;
+    translate(key, fallback, named) {
+      return this.$parent?.translate?.(key, fallback, named) ?? fallback;
     },
     resetFilters() {
       this.filters = { searchText: '', minConfidence: '', maxConfidence: '', startDate: '', endDate: '' };
       this.$emit('search', this.filters);
     },
     formatTime(ts) {
-      return ts ? new Date(ts).toLocaleString() : 'N/A';
+      return ts ? new Date(ts).toLocaleString() : this.translate('admin.queryInspector.notAvailable', 'N/A');
     },
     formatConfidence(score) {
-      return score != null ? (score * 100).toFixed(1) + '%' : 'N/A';
+      return score != null
+        ? (score * 100).toFixed(1) + '%'
+        : this.translate('admin.queryInspector.notAvailable', 'N/A');
     },
     truncate(text, max) {
       return text?.length > max ? text.substring(0, max) + '...' : text || '';
@@ -202,9 +205,9 @@ export default {
       return 'danger';
     },
     feedbackLabel(rating) {
-      if (rating >= 4) return 'Positive';
-      if (rating >= 3) return 'Neutral';
-      return 'Negative';
+      if (rating >= 4) return this.translate('admin.queryInspector.feedbackPositive', 'Positive');
+      if (rating >= 3) return this.translate('admin.queryInspector.feedbackNeutral', 'Neutral');
+      return this.translate('admin.queryInspector.feedbackNegative', 'Negative');
     }
   }
 };

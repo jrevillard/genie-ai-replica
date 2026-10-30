@@ -21,22 +21,24 @@ the response stream.
 
 ## LLM defaults
 
-The default model in docker-compose is **`meta-llama/Meta-Llama-3.1-8B-Instruct`**
-(set via `VLLM_LLM_MODEL_ID`, `docker-compose.yaml:1179`). The
+The model the vLLM container serves defaults to
+**`meta-llama/Meta-Llama-3.1-8B-Instruct`**
+(`--served-model-name ${VLLM_LLM_MODEL_ID:-…}`, `docker-compose.yaml:820`). The
 **recommended and validated** model is **`ibm-granite/granite-4.1-8b`**
 because it supports the OpenAI-compatible guided JSON
 (`response_format={"type":"json_object"}`) that dataprep needs for
 labelling — without guided JSON, labels fall back to per-chunk markdown
-parsing (slower, lower quality). The in-code fallback
-(`genieai_chatqna.py:148`) is `ibm-granite/granite-3.3-2b-instruct`,
-reached only when neither `VLLM_LLM_MODEL_ID` nor the legacy
-`LLM_MODEL` env var is set.
+parsing (slower, lower quality). There is **no in-code fallback model
+name**: chatqna discovers whatever model the LLM endpoint actually serves
+(`/v1/models`, TTL-cached) and fails the request loudly when nothing
+answers — a hardcoded name would be rejected by vLLM's model-name
+validation. The legacy `LLM_MODEL` env var is no longer read.
 
 | Source | Variable | Default | Reachable? |
 |---|---|---|---|
-| Docker compose (production) | `VLLM_LLM_MODEL_ID` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | Yes — set by `docker-compose.yaml:1179`. |
+| vLLM container | `VLLM_LLM_MODEL_ID` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | The model vLLM loads and serves. |
 | Recommended validated | `VLLM_LLM_MODEL_ID` override | `ibm-granite/granite-4.1-8b` | Override in `.env` to switch. |
-| In-code fallback | `LLM_MODEL` (legacy) | `ibm-granite/granite-3.3-2b-instruct` | Only if `VLLM_LLM_MODEL_ID` and `LLM_MODEL` are both unset. |
+| Discovery (chatqna, retriever summarizer, dataprep labelling/graph) | the endpoint's `/v1/models` | whatever is served | Always-on; `VLLM_MODEL_ID` (empty by default) pins a name and skips the probe. |
 
 All are served by vLLM (OpenAI-compatible API).
 

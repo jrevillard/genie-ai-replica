@@ -5,7 +5,6 @@ import contextlib
 import copy
 import json
 from datetime import date
-from enum import Enum
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -28,16 +27,7 @@ from chatqna.genieai_chatqna import (
     align_outputs,
 )
 from core import embedding_query_prefix as core_query_prefix
-
-
-# ---------------------------------------------------------------------------
-# FakeServiceType — real enum for align_inputs/align_outputs comparisons
-# ---------------------------------------------------------------------------
-class FakeServiceType(Enum):
-    EMBEDDING = "embedding"
-    RETRIEVER = "retriever"
-    RERANK = "rerank"
-    LLM = "llm"
+from tests.conftest import FakeServiceType, create_mock_service_node
 
 
 # ---------------------------------------------------------------------------
@@ -142,13 +132,6 @@ def create_mock_runtime_graph(downstream_nodes=None):
     graph = MagicMock()
     graph.downstream.return_value = downstream_nodes or []
     return graph
-
-
-def create_mock_service_node(service_type_value):
-    """Create a mock service node with a real service_type attribute."""
-    node = MagicMock()
-    node.service_type = service_type_value
-    return node
 
 
 def create_mock_tokenizer(token_counts):
@@ -597,14 +580,14 @@ class TestAlignInputs:
 
     # --- LLM ---
     class TestLlmInput:
-        def test_constructs_system_and_user_messages(self):
+        def test_constructs_system_and_user_messages(self, count_patch):
             self_mock = MagicMock()
             self_mock.services = {"llm_node": create_mock_service_node(FakeServiceType.LLM)}
             llm_params = {"max_tokens": 1024, "top_p": 0.9}
             inputs = {"inputs": "context text", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=create_mock_tokenizer({})),
+                count_patch(create_mock_tokenizer({})),
             ):
                 result = align_inputs(self_mock, inputs, "llm_node", MagicMock(), llm_params)
             assert "messages" in result
@@ -612,7 +595,7 @@ class TestAlignInputs:
             assert result["messages"][1]["role"] == "user"
             assert result["max_tokens"] == 1024
 
-        def test_token_limit_truncation(self):
+        def test_token_limit_truncation(self, count_patch):
             self_mock = MagicMock()
             self_mock.services = {"llm_node": create_mock_service_node(FakeServiceType.LLM)}
             llm_params = {"max_tokens": 1024, "top_p": 0.9}
@@ -627,8 +610,7 @@ class TestAlignInputs:
             mock_tok = create_mock_tokenizer({"system": 200, "USER": 100})
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=mock_tok),
-                patch("chatqna.genieai_chatqna._GPU_NODE_HOST", ""),
+                count_patch(mock_tok),
                 patch("chatqna.genieai_chatqna.MAX_MODEL_LEN_TEXTGEN", 600),
             ):
                 result = align_inputs(
@@ -645,7 +627,7 @@ class TestAlignInputs:
             assert "msg1" not in user_msg  # truncated away
             assert "rag prompt" in user_msg  # content preserved
 
-        def test_history_survives_prompt_that_fits_discovered_window(self):
+        def test_history_survives_prompt_that_fits_discovered_window(self, count_patch):
             """Prompt (~8k tokens) + answer fit the real 65536-token window discovered
             from /v1/models → the guard must not touch the chat history.
 
@@ -663,7 +645,7 @@ class TestAlignInputs:
             models_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 65536}]}
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=counting_tok),
+                count_patch(counting_tok),
                 patch("chatqna.genieai_chatqna._LLM_DISCOVERY_ENDPOINT", "https://gpu-host/llm"),
                 patch("httpx.get", return_value=models_resp),
             ):
@@ -674,7 +656,7 @@ class TestAlignInputs:
             assert "HISTTOK" in user_msg  # history intact
             assert "RAGTOK" in user_msg  # KB content preserved
 
-        def test_history_wiped_only_when_budget_truly_exhausted_and_reported(self):
+        def test_history_wiped_only_when_budget_truly_exhausted_and_reported(self, count_patch):
             """When prompt+answer genuinely exhaust the window, history is dropped —
             and the drop is reported through the truncation counter."""
             self_mock = MagicMock()
@@ -688,7 +670,7 @@ class TestAlignInputs:
             models_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 65536}]}
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=counting_tok),
+                count_patch(counting_tok),
                 patch("chatqna.genieai_chatqna._LLM_DISCOVERY_ENDPOINT", "https://gpu-host/llm"),
                 patch("httpx.get", return_value=models_resp),
                 patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
@@ -703,7 +685,7 @@ class TestAlignInputs:
             # Counts stay in the warning log; metric attributes stay low-cardinality.
             assert mock_counter.add.call_args.args[1] == {"path": "generation"}
 
-        def test_no_truncation_no_truncation_metric(self):
+        def test_no_truncation_no_truncation_metric(self, count_patch):
             """A prompt well inside the window never increments the truncation counter."""
             self_mock = MagicMock()
             self_mock.services = {"llm_node": create_mock_service_node(FakeServiceType.LLM)}
@@ -713,7 +695,7 @@ class TestAlignInputs:
             mock_tok = create_mock_tokenizer({"rag prompt": 100})
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=mock_tok),
+                count_patch(mock_tok),
                 patch("chatqna.genieai_chatqna._LLM_DISCOVERY_ENDPOINT", "https://gpu-host/llm"),
                 patch(
                     "httpx.get", return_value=MagicMock(json=lambda: {"data": [{"id": "m", "max_model_len": 65536}]})
@@ -727,7 +709,7 @@ class TestAlignInputs:
             assert "msg1" in user_msg
             mock_counter.add.assert_not_called()
 
-        def test_large_system_prompt_shrinks_history_budget(self):
+        def test_large_system_prompt_shrinks_history_budget(self, count_patch):
             """The system prompt consumes the history budget: with a 1000-token
             system prompt the oldest segment no longer fits and is dropped."""
 
@@ -749,8 +731,7 @@ class TestAlignInputs:
             # kept all three.
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_Tok()),
-                patch("chatqna.genieai_chatqna._GPU_NODE_HOST", ""),
+                count_patch(_Tok()),
                 patch("chatqna.genieai_chatqna.CHATQNA_SYSTEM_PROMPT", "SYSTOK"),
                 patch("chatqna.genieai_chatqna.MAX_MODEL_LEN_TEXTGEN", 4096),
                 patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
@@ -764,7 +745,7 @@ class TestAlignInputs:
             assert "HISTTOK-old" not in user_msg  # oldest dropped
             assert mock_counter.add.call_args.args[1] == {"path": "generation"}
 
-        def test_system_and_content_alone_over_window_wipes_history(self):
+        def test_system_and_content_alone_over_window_wipes_history(self, count_patch):
             """System prompt + RAG content alone overflow the window: the history
             budget goes negative and every segment is dropped and reported."""
 
@@ -784,8 +765,7 @@ class TestAlignInputs:
             # budget = 4096 − 3000 − 1024 − 500 − 200 < 0 → wipe.
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_Tok()),
-                patch("chatqna.genieai_chatqna._GPU_NODE_HOST", ""),
+                count_patch(_Tok()),
                 patch("chatqna.genieai_chatqna.CHATQNA_SYSTEM_PROMPT", "SYSTOK SYSTOK SYSTOK"),
                 patch("chatqna.genieai_chatqna.MAX_MODEL_LEN_TEXTGEN", 4096),
                 patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
@@ -798,7 +778,7 @@ class TestAlignInputs:
             assert "RAGTOK" in user_msg  # KB content preserved
             assert mock_counter.add.call_args.args[1] == {"path": "generation"}
 
-        def test_empty_history_never_reports_truncation(self):
+        def test_empty_history_never_reports_truncation(self, count_patch):
             """First turn (no history) with an overflowing prompt: nothing can be
             dropped, so no warning and no counter event."""
 
@@ -813,8 +793,7 @@ class TestAlignInputs:
 
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_Tok()),
-                patch("chatqna.genieai_chatqna._GPU_NODE_HOST", ""),
+                count_patch(_Tok()),
                 patch("chatqna.genieai_chatqna.CHATQNA_SYSTEM_PROMPT", "SYSTOK SYSTOK SYSTOK"),
                 patch("chatqna.genieai_chatqna.MAX_MODEL_LEN_TEXTGEN", 4096),
                 patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
@@ -999,9 +978,8 @@ class TestAlignInputsBundledDict:
         inputs = {"inputs": "rag prompt", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
         with (
             patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-            patch("chatqna.genieai_chatqna.get_tokenizer") as mock_tokenizer,
+            patch("chatqna.genieai_chatqna._count_tokens", return_value=0),
         ):
-            mock_tokenizer.return_value.encode.return_value = []
             result = align_inputs(
                 self_mock,
                 inputs,
@@ -1020,10 +998,9 @@ class TestAlignInputsBundledDict:
         inputs = {"inputs": "rag prompt", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
         with (
             patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-            patch("chatqna.genieai_chatqna.get_tokenizer") as mock_tokenizer,
+            patch("chatqna.genieai_chatqna._count_tokens", return_value=0),
             patch("chatqna.genieai_chatqna.UserContextBuilder") as mock_builder,
         ):
-            mock_tokenizer.return_value.encode.return_value = []
             mock_builder.return_value.build_user_context_string.return_value = "user context"
             result = align_inputs(
                 self_mock,
@@ -1043,9 +1020,8 @@ class TestAlignInputsBundledDict:
         inputs = {"inputs": "rag prompt", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
         with (
             patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-            patch("chatqna.genieai_chatqna.get_tokenizer") as mock_tokenizer,
+            patch("chatqna.genieai_chatqna._count_tokens", return_value=0),
         ):
-            mock_tokenizer.return_value.encode.return_value = []
             result = align_inputs(
                 self_mock,
                 inputs,
@@ -4483,6 +4459,124 @@ async def test_reranker_input_too_long_defensive_chain_walk():
     assert payload["metadata"]["abstained"] is True
     assert payload["metadata"]["abstention_reason"] == "reranker_input_too_long"
     assert "exceed the reranker's input limit" in payload["response"]
+
+
+@pytest.mark.asyncio
+async def test_tokenize_failure_mid_truncation_loop_fails_the_request_503(monkeypatch):
+    """Composition: the REAL ``_count_tokens`` (only httpx is mocked) runs
+    inside ``align_inputs``' truncation loop and dies on a history-segment
+    count, with one segment already accepted.
+
+    The loop tests fake the counter and the counter tests run standalone, so
+    before this test nothing pinned what a mid-loop transport failure does to
+    the request. The contract: the request fails with the classified 503
+    (``llm_unavailable``), the transport error rides as ``__cause__``, and no
+    partially truncated history escapes as a response.
+    """
+    chatqna_module._count_static_tokens.cache_clear()
+
+    recorded = []
+
+    class _Counter:
+        def add(self, amount, attributes):
+            recorded.append(attributes)
+
+    monkeypatch.setattr(chatqna_module, "chat_requests_total", _Counter())
+    truncation_counter = MagicMock()
+    monkeypatch.setattr(chatqna_module, "history_truncation_total", truncation_counter)
+
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+    svc.services = {"llm_node": create_mock_service_node(FakeServiceType.LLM)}
+
+    async def fake_history(history, source_lang_code="en"):
+        return "USER: HISTTOK-1 |<-MSG->| USER: HISTTOK-2 |<-MSG->| USER: HISTTOK-3 |<-MSG->| USER: HISTTOK-4"
+
+    svc._get_translated_history_string = fake_history
+
+    tokenize_calls = []
+
+    def fake_post(url, headers=None, json=None, timeout=None, verify=None):
+        prompt = json["prompt"]
+        tokenize_calls.append(prompt)
+        # The user content carries the whole history, so a segment prompt is
+        # recognised by the absence of the RAG text, not by the marker alone.
+        if "HISTTOK-3" in prompt and "RAGTOK" not in prompt:
+            raise httpx.ConnectError("vLLM died mid-loop")
+        if "RAGTOK" in prompt:
+            # 100 per RAGTOK occurrence, 510 per history segment carried in
+            # the same prompt, +10 base (mirrors _counting_tokenizer).
+            count = 100 * prompt.count("RAGTOK") + 10 + 510 * prompt.count("HISTTOK-")
+        elif "HISTTOK" in prompt:
+            count = 510
+        else:
+            count = 10  # the bare system prompt
+        return MagicMock(json=lambda: {"count": count})
+
+    async def fake_schedule(initial_inputs=None, llm_parameters=None, genie_params=None, **_kw):
+        # comps calls align_inputs for every node inside schedule() and returns
+        # (result_dict, runtime_graph); this stub replays that call shape for
+        # the LLM node. The propagation it models is UNWRAPPED: the vendored
+        # comps orchestrator is known to wrap some node exceptions (the
+        # reranker's HTTPException — see handle_request's chain walk), and if
+        # it wraps align_inputs errors the same way, production would classify
+        # differently from this pin — unobservable from this suite.
+        return (
+            align_inputs(
+                svc,
+                {"inputs": "RAGTOK" * 5, "stream": False, "frequency_penalty": 0.0, "temperature": 0.7},
+                "llm_node",
+                MagicMock(),
+                {"max_tokens": 256, "top_p": 0.9},
+                full_chat_history_string=genie_params["full_chat_history_string"],
+            ),
+            MagicMock(),
+        )
+
+    svc.megaservice.schedule = fake_schedule
+
+    models_resp = MagicMock()
+    models_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 2048}]}
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    # The lru_cache cleanup runs in a teardown, not a trailing line: this is
+    # the one test that runs the REAL ``_count_static_tokens`` against a
+    # mocked transport, and a cached system-prompt count left behind by an
+    # assertion failure would hand the next real-counter test a number its
+    # own mocks never produced — two failures where there is one.
+    try:
+        with (
+            patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+            patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+            patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+            _patched_chat_request(stream=False, max_tokens=256),
+            patch.object(chatqna_module, "detect", return_value="fr"),
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+            patch("httpx.post", side_effect=fake_post),
+            patch("httpx.get", return_value=models_resp),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await svc.handle_request(req)
+
+        assert exc_info.value.status_code == 503
+        assert exc_info.value.detail == "llm_unavailable"
+        # The classified 503 wraps the transport error that killed the loop.
+        assert isinstance(exc_info.value.__cause__, httpx.HTTPError)
+        # Died INSIDE the truncation loop: system prompt, user content and
+        # skeleton were counted first; HISTTOK-4 was accepted; HISTTOK-3's call
+        # is the one that failed.
+        assert len(tokenize_calls) == 5
+        assert "HISTTOK-4" in tokenize_calls[3]
+        assert "HISTTOK-3" in tokenize_calls[4]
+        # No partial-history response escaped: the loop never reached its
+        # bookkeeping, and the request exited through the classified error branch.
+        truncation_counter.add.assert_not_called()
+        assert recorded[-1]["error"] == "true"
+    finally:
+        chatqna_module._count_static_tokens.cache_clear()
 
 
 @pytest.mark.asyncio

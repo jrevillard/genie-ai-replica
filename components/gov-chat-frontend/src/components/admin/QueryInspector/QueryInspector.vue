@@ -50,8 +50,8 @@ export default {
     this.loadQueries();
   },
   methods: {
-    translate(key, fallback) {
-      return this.$parent?.translate?.(key, fallback) ?? fallback;
+    translate(key, fallback, named) {
+      return this.$parent?.translate?.(key, fallback, named) ?? fallback;
     },
     async loadQueries() {
       this.loading = true;

@@ -2729,10 +2729,7 @@ test:backend:
     # Pop back to the worktree root first, then descend into gov-chat-backend.
     - cd - && cd components/gov-chat-backend && npm ci
   script:
-    # --maxWorkers=2 caps concurrent jest workers: the runner cgroup OOMs
-    # (SIGKILLs workers) when default workers = cores - peak RSS = workers
-    # x heap. Same cap MR1 carries; converges when the train lands.
-    - npm test -- --maxWorkers=2 --coverage --coverageReporters=text-summary --coverageReporters=cobertura
+    - npm test -- --coverage --coverageReporters=text-summary --coverageReporters=cobertura --runInBand
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
   cache:
     - key:

@@ -1597,6 +1597,16 @@ import { getAvailableLanguages } from '../config/languageConfig.js';
 // Shared empty named-params dict for translate() — a frozen module constant
 // so the default argument allocates once, not on every per-render call.
 const EMPTY_NAMED = Object.freeze({});
+
+// A missing key's fallback stands in for the translation, so it goes through
+// the same interpolation a real message would — otherwise it renders literal
+// `{current}`-style placeholders. A null named value renders empty, matching
+// vue-i18n; an empty result falls back to the fallback, then to the key.
+// Module-level so the per-call translate() path allocates nothing.
+function interpolateFallback(key, fallback, named) {
+  const interpolated = fallback.replace(/\{(\w+)\}/g, (m, k) => (named[k] != null ? named[k] : ''));
+  return interpolated || fallback || key;
+}
 import oidcConfig from '../config/oidcConfig.js';
 import documentFileService from '../services/documentFileService.js';
 import { formatFileSize } from '../utils/fileUtils.js';
@@ -2098,14 +2108,9 @@ export default {
 
     // Translation method - improved to ensure consistent behavior with SettingsComponent
     translate(key, fallback = '', named = EMPTY_NAMED) {
-      // The fallback stands in for the translation, so it goes through the
-      // same interpolation a real message would — otherwise a missing key
-      // renders literal `{current}`-style placeholders.
-      const interpolateFallback = () =>
-        fallback.replace(/\{(\w+)\}/g, (m, k) => (named[k] != null ? named[k] : m)) || fallback || key;
       if (!this.$i18n) {
         // console.warn(`[AdminDashboard] $i18n not available. Using fallback for: ${key}`);
-        return fallback;
+        return interpolateFallback(key, fallback, named);
       }
       try {
         // vue-i18n's legacy t() takes the locale as a STRING second argument;
@@ -2115,12 +2120,12 @@ export default {
         // Return the interpolated fallback if the key is returned (no translation found)
         if (translation === key) {
           // console.warn(`[AdminDashboard] No translation for key: ${key}. Using fallback.`);
-          return Object.keys(named).length ? interpolateFallback() : fallback || key;
+          return interpolateFallback(key, fallback, named);
         }
         return translation;
       } catch (e) {
         console.error(`[AdminDashboard] Translation error for key ${key}:`, e);
-        return interpolateFallback();
+        return interpolateFallback(key, fallback, named);
       }
     },
 

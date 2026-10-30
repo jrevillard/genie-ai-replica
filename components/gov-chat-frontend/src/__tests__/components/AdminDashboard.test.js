@@ -1626,6 +1626,27 @@ describe('AdminDashboard', () => {
       expect(wrapper.vm.translate('admin.queryInspector.search', 'Search')).toBe('Search');
     });
 
+    it('interpolates the fallback on every miss path, including a throwing $i18n', () => {
+      // Every branch that misses the catalogue must come back interpolated —
+      // a literal `{current}` brace on screen is the regression. A throwing
+      // $i18n lands in the catch branch; an empty named dict falls back to
+      // the raw string, and an empty fallback falls back to the key.
+      const wrapper = createAdminDashboardWrapper(
+        {},
+        {
+          $i18n: {
+            locale: 'en',
+            t: () => {
+              throw new Error('boom');
+            }
+          }
+        }
+      );
+      expect(wrapper.vm.translate('admin.queryInspector.pageInfo', 'Page {current}', { current: 3 })).toBe('Page 3');
+      expect(wrapper.vm.translate('admin.queryInspector.search', 'Search')).toBe('Search');
+      expect(wrapper.vm.translate('admin.queryInspector.search', '', { n: 1 })).toBe('admin.queryInspector.search');
+    });
+
     it('passes an unrecognised dataprep status through unchanged', () => {
       // The translation table is not a gate: a status this build has never
       // heard of must still render, because swallowing it would show "Unknown"

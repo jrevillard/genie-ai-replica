@@ -3263,6 +3263,11 @@ def _recordable_doc(**kwargs):
     return SimpleNamespace(**kwargs)
 
 
+def _scaffold():
+    """The scaffolding of the mock ingest input the tests use."""
+    return dp_module._doc_context_scaffold_chars(create_mock_ingest_input())
+
+
 def _model_endpoint(monkeypatch, window=65536, endpoint="http://gpu-test", dead=False, model_id="test-model"):
     """Aim dataprep's window discovery at a fake /v1/models endpoint.
 
@@ -3437,7 +3442,7 @@ class TestContextualRetrieval:
     def test_explicit_positive_budget_is_an_override(self):
         # A window that fits the operator's value leaves it alone.
         dp = create_dataprep()
-        assert dp._resolve_doc_budget(["abc"], 1234, 65536) == (1234, "override")
+        assert dp._resolve_doc_budget(["abc"], 1234, 65536, scaffold_chars=_scaffold()) == (1234, "override")
 
     def test_explicit_budget_larger_than_a_known_window_is_capped(self):
         """An explicit budget is a MAXIMUM: a request the model cannot accept
@@ -3446,7 +3451,7 @@ class TestContextualRetrieval:
         says so, so the operator does not read their own number back as the
         applied budget."""
         dp = create_dataprep()
-        budget, source = dp._resolve_doc_budget(["x" * 500] * 8, 100000, 4096)
+        budget, source = dp._resolve_doc_budget(["x" * 500] * 8, 100000, 4096, scaffold_chars=_scaffold())
         assert source == "window-capped"
         assert budget < 100000
 
@@ -3455,19 +3460,19 @@ class TestContextualRetrieval:
         operator's deliberate budget against it would destroy a setting that
         may be exactly right."""
         dp = create_dataprep()
-        budget, source = dp._resolve_doc_budget(["abc"], 1234, 2048, authoritative=False)
+        budget, source = dp._resolve_doc_budget(["abc"], 1234, 2048, scaffold_chars=_scaffold(), authoritative=False)
         assert (budget, source) == (1234, "override")
 
     def test_negative_budget_disables_contextualization(self):
         dp = create_dataprep()
-        budget, source = dp._resolve_doc_budget(["abc"], -1, 2048)
+        budget, source = dp._resolve_doc_budget(["abc"], -1, 2048, scaffold_chars=_scaffold())
         assert budget is None and source == "disabled"
 
     def test_budget_scales_with_the_model_window(self):
         dp = create_dataprep()
         chunks = ["x" * 500] * 8
-        small, _ = dp._resolve_doc_budget(chunks, 0, 16384)
-        large, _ = dp._resolve_doc_budget(chunks, 0, 65536)
+        small, _ = dp._resolve_doc_budget(chunks, 0, 16384, scaffold_chars=_scaffold())
+        large, _ = dp._resolve_doc_budget(chunks, 0, 65536, scaffold_chars=_scaffold())
         assert large > small > 0
 
     def test_budget_is_sized_exactly_from_the_given_window(self):
@@ -3484,9 +3489,9 @@ class TestContextualRetrieval:
         """
         dp = create_dataprep()
         chunks = ["x" * 500] * 8
-        budget, source = dp._resolve_doc_budget(chunks, 0, 65536)
+        budget, source = dp._resolve_doc_budget(chunks, 0, 65536, scaffold_chars=_scaffold())
         assert source == "derived"
-        assert budget == 249656
+        assert budget == 250708
 
     def test_window_discovery_ignores_the_vllm_max_model_len_env(self, monkeypatch):
         """Issue #1182: VLLM_MAX_MODEL_LEN is the vLLM-side memory knob
@@ -3536,7 +3541,9 @@ class TestContextualRetrieval:
         window, authoritative = dp_module._serving_model_window(endpoint)
         assert window == dp_module.DERIVE_FALLBACK_WINDOW
         assert authoritative is False, "the fail-closed fallback is a guess, not knowledge"
-        assert dp._resolve_doc_budget(["x" * 500], 0, window, authoritative=authoritative) == (
+        assert dp._resolve_doc_budget(
+            ["x" * 500], 0, window, scaffold_chars=_scaffold(), authoritative=authoritative
+        ) == (
             None,
             "window-exhausted",
         )
@@ -3645,20 +3652,24 @@ class TestContextualRetrieval:
         would silently fall back to raw chunks.
         """
         dp = create_dataprep()
-        budget, source = dp._resolve_doc_budget(["x" * 500] * 8, 100000, 4096, single_call=True)
+        budget, source = dp._resolve_doc_budget(
+            ["x" * 500] * 8, 100000, 4096, scaffold_chars=_scaffold(), single_call=True
+        )
         assert source == "window-capped"
-        # 4096 window - 164 prompt tokens - 512 reserved output - 256 reserved
+        # 4096 window - 164 prompt tokens - 512 reserved output - the measured
         # scaffolding, times 4 chars per token.
-        assert budget == 12656
+        assert budget == 13520
         # ...and a window that fits the operator's value leaves it alone.
-        big, big_source = dp._resolve_doc_budget(["x" * 500] * 8, 100000, 65536, single_call=True)
+        big, big_source = dp._resolve_doc_budget(
+            ["x" * 500] * 8, 100000, 65536, scaffold_chars=_scaffold(), single_call=True
+        )
         assert (big, big_source) == (100000, "override")
 
     def test_doc_level_budget_on_a_tiny_window_is_refused(self):
         """A window that cannot hold the prompt and the output reservation
         leaves no room for a context at all — refuse, do not send it."""
         dp = create_dataprep()
-        assert dp._resolve_doc_budget(["x" * 500] * 8, 100000, 512, single_call=True) == (
+        assert dp._resolve_doc_budget(["x" * 500] * 8, 100000, 512, scaffold_chars=_scaffold(), single_call=True) == (
             None,
             "window-exhausted",
         )
@@ -3740,10 +3751,10 @@ class TestContextualRetrieval:
         assert dp_module._sanitize_window_override(-5) == 0
         assert dp_module._sanitize_window_override(0) == 0
         assert dp_module._sanitize_window_override(4096) == 4096
-        assert (
-            dp_module._sanitize_window_override(dp_module.MAX_SANE_MODEL_WINDOW_TOKENS + 1)
-            == dp_module.MAX_SANE_MODEL_WINDOW_TOKENS
-        )
+        # An absurd value is treated as UNSET (discovery answers): clamping it
+        # to "the largest sane window" is not a guard — ten million tokens
+        # still overflows every real model.
+        assert dp_module._sanitize_window_override(dp_module.MAX_SANE_MODEL_WINDOW_TOKENS + 1) == 0
 
     def test_contextual_model_in_a_different_namespace_is_flagged(self, monkeypatch):
         """Two different namespaces are not an alias: "org-a/granite" and
@@ -3756,10 +3767,136 @@ class TestContextualRetrieval:
         warnings = [str(c.args[0]) for c in dp_module.logger.warning.call_args_list]
         assert any("DATAPREP_MAX_MODEL_LEN" in w for w in warnings)
 
+    def test_the_shipped_default_is_capped_even_when_the_window_is_a_guess(self):
+        """A knob still at its shipped default is not a deliberate setting: on a
+        deployment whose window is unknown (a strict provider) the doc_level
+        default of 100000 chars is ~25k tokens, more than a small window
+        holds. It must fail closed, not be sent as-is."""
+        dp = create_dataprep()
+        budget, source = dp._resolve_doc_budget(
+            ["x" * 500] * 8,
+            dp_module.DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL,
+            dp_module.DERIVE_FALLBACK_WINDOW,
+            scaffold_chars=_scaffold(),
+            authoritative=False,
+            single_call=True,
+        )
+        assert budget is None or budget < dp_module.DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL
+        assert source in ("window-capped", "window-exhausted")
+
+    def test_a_non_ascii_batch_is_reserved_by_its_serialized_length(self):
+        """The request sends json.dumps(..., ensure_ascii=True): every
+        non-ASCII character becomes a six-character escape. Reserving the RAW
+        length under-counts a Spanish or French document by a third — and the
+        request is then rejected."""
+        dp = create_dataprep()
+        ascii_chunks = ["x" * 500] * 8
+        accented = ["á" * 500] * 8
+        raw = dp._resolve_doc_budget(ascii_chunks, 0, 16384, scaffold_chars=_scaffold())
+        escaped = dp._resolve_doc_budget(accented, 0, 16384, scaffold_chars=_scaffold())
+        assert escaped[0] < raw[0], "the escaped payload must reserve more room than the raw text"
+
+    def test_an_unbounded_filename_and_labels_are_measured(self):
+        """The scaffolding is not a fixed allowance: a long file name and a long
+        label list are per document and unbounded, and the BUDGET must shrink
+        to make room for them."""
+        from types import SimpleNamespace
+
+        dp = create_dataprep()
+        long_input = SimpleNamespace(
+            storage_path="/tmp/" + ("a" * 900) + ".pdf",
+            file_labels=["label-" + ("b" * 80)] * 15,
+        )
+        scaffold = dp_module._doc_context_scaffold_chars(long_input)
+        assert scaffold > 1000, "a long filename and labels must be measured, not assumed"
+
+        # ...and the budget the resolver derives shrinks with that scaffolding.
+        short, _ = dp._resolve_doc_budget(
+            ["x" * 500] * 8, 0, 65536, scaffold_chars=dp_module._doc_context_scaffold_chars(create_mock_ingest_input())
+        )
+        long_budget, _ = dp._resolve_doc_budget(
+            ["x" * 500] * 8, 0, 65536, scaffold_chars=dp_module._doc_context_scaffold_chars(long_input)
+        )
+        assert long_budget < short
+
+    @pytest.mark.asyncio
+    async def test_the_applied_budget_accounts_for_the_real_scaffolding(self, monkeypatch):
+        """The INGEST path must reserve the measured scaffolding: a long file
+        name and a long label list shrink the budget that is applied, because
+        they are part of the request and sit outside the budget."""
+        monkeypatch.setattr(dp_module, "CONTEXTUAL_RETRIEVAL_ENABLED", True)
+        monkeypatch.setenv("VLLM_API_KEY", "k")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        _model_endpoint(monkeypatch, 65536)
+
+        async def _fake_create(*args, **kwargs):
+            # Answer in the shape the call asks for: one context per item in a
+            # batch, one context for a single call.
+            user_turn = kwargs["messages"][-1]["content"]
+            try:
+                items = json.loads(user_turn)
+            except (TypeError, ValueError):
+                items = None
+            body = {"contexts": ["ctx"] * len(items)} if isinstance(items, list) else {"context": "ctx"}
+            resp = MagicMock()
+            resp.choices = [MagicMock()]
+            resp.choices[0].message.content = json.dumps(body)
+            resp.usage = MagicMock(completion_tokens=10, prompt_tokens=10, total_tokens=20)
+            return resp
+
+        chunks = ["chunk body text. " * 160 for _ in range(200)]
+
+        async def _applied_budget(input):
+            dp = create_dataprep()
+            log = AsyncMock()
+            dp._write_ingestion_log = log
+            client = AsyncMock()
+            client.chat.completions.create = _fake_create
+            with patch.object(dp_module, "AsyncOpenAI", return_value=client):
+                await dp._apply_contextualization(chunks, input, "file1")
+            truncations = [
+                str(c.args[3]) for c in log.await_args_list if len(c.args) > 3 and "truncated" in str(c.args[3])
+            ]
+            assert truncations, "the document should have been truncated"
+            kept = int(truncations[0].split("truncated to ")[1].split(" of ")[0])
+            return kept
+
+        short = await _applied_budget(create_mock_ingest_input())
+        long = await _applied_budget(
+            create_mock_ingest_input(
+                storage_path="/uploads/" + ("a" * 900) + ".pdf",
+                file_labels=["label-" + ("b" * 80)] * 15,
+            )
+        )
+        assert long < short, "a long filename and labels must shrink the applied budget"
+
+    def test_an_operator_stated_window_is_not_mismatch_checked(self):
+        """The mismatch check belongs to a DISCOVERED window: an override is
+        the operator's own statement (they set it precisely because discovery
+        could not answer), so warning them about it would be self-referential."""
+        monkeypatch = pytest.MonkeyPatch()
+        try:
+            monkeypatch.setattr(dp_module, "DATAPREP_MAX_MODEL_LEN", 65536)
+            _model_endpoint(monkeypatch, 65536, model_id="org-a/granite-4.1-8b")
+            monkeypatch.setattr(dp_module, "DATAPREP_CONTEXTUAL_MODEL", "org-b/granite-4.1-8b")
+            dp_module.logger.warning.reset_mock()
+            dp_module._build_vllm_client_and_window()
+            assert dp_module.logger.warning.call_args_list == []
+        finally:
+            monkeypatch.undo()
+
+    def test_the_output_token_reservation_is_sanitised(self):
+        """0 or a negative reservation is not a reservation: it inflates the
+        derived budget AND reaches the API as an invalid max_tokens."""
+        assert dp_module._sanitize_output_tokens(0, 512) == 512
+        assert dp_module._sanitize_output_tokens(-5, 512) == 512
+        assert dp_module._sanitize_output_tokens(4096, 512) == 4096
+
     def test_window_exhausted_returns_none_not_zero(self):
         """A 0 budget means 'do not truncate' — the opposite of what we want."""
         dp = create_dataprep()
-        budget, source = dp._resolve_doc_budget(["x" * 500] * 8, 0, 2048)  # T4
+        budget, source = dp._resolve_doc_budget(["x" * 500] * 8, 0, 2048, scaffold_chars=_scaffold())  # T4
         assert budget is None, "must disable contextualization, not send the whole document"
         assert source == "window-exhausted"
 
@@ -3782,16 +3919,16 @@ class TestContextualRetrieval:
 
         def _overhead_tokens():
             """Prompt + completion with ZERO document context — the floor."""
-            largest = sorted((len(c) for c in chunks), reverse=True)[: dp_module.LABEL_LLM_BATCH_SIZE]
+            largest = sorted(chunks, key=len, reverse=True)[: dp_module.LABEL_LLM_BATCH_SIZE]
             prompt = -(-len(dp_module.CONTEXTUAL_RETRIEVAL_PROMPT) // dp_module.CHARS_PER_TOKEN)
-            batch_chars = sum(largest) + len(largest) * dp_module.JSON_ITEM_OVERHEAD_CHARS
+            batch_chars = dp_module._batch_user_turn_chars(largest)
             return (
                 prompt + -(-batch_chars // dp_module.CHARS_PER_TOKEN),
                 dp_module.CONTEXTUAL_MAX_TOKENS * dp_module.LABEL_LLM_BATCH_SIZE,
             )
 
         for window in (4096, 8192, 16384, 65536):
-            budget, source = dp._resolve_doc_budget(chunks, 0, window)
+            budget, source = dp._resolve_doc_budget(chunks, 0, window, scaffold_chars=_scaffold())
 
             if budget is None:
                 # Refusing is only CORRECT if the request genuinely could not
@@ -3831,7 +3968,9 @@ class TestContextualRetrieval:
         dp = create_dataprep()
         chunks = ["chunk body text. " * 160 for _ in range(200)]
         for window in (4096, 8192, 16384, 65536):
-            budget, _source = dp._resolve_doc_budget(chunks, 100000, window, single_call=True)
+            budget, _source = dp._resolve_doc_budget(
+                chunks, 100000, window, scaffold_chars=_scaffold(), single_call=True
+            )
             if budget is None:
                 continue  # window exhausted: nothing is sent at all
             doc_ctx = dp._build_doc_context(chunks, create_mock_ingest_input(), budget)
@@ -3859,7 +3998,7 @@ class TestContextualRetrieval:
         chunks = ["chunk body text. " * 160 for _ in range(200)]
         window = 4096
 
-        budget, source = dp._resolve_doc_budget(chunks, 6000, window)  # the old literal
+        budget, source = dp._resolve_doc_budget(chunks, 6000, window, scaffold_chars=_scaffold())  # the old literal
         assert source in ("window-capped", "window-exhausted"), "the old literal does not fit this window"
         assert budget is None or budget < 6000, "the old literal must not be sent as-is"
 
@@ -3880,7 +4019,7 @@ class TestContextualRetrieval:
         # ...and the applied budget is one the window can accept (or none at
         # all): the system refuses or corrects the request rather than sending
         # it.
-        capped, _source = dp._resolve_doc_budget(chunks, 0, window)
+        capped, _source = dp._resolve_doc_budget(chunks, 0, window, scaffold_chars=_scaffold())
         assert capped is None or capped < 6000
 
     @pytest.mark.asyncio

@@ -141,6 +141,12 @@ bool quickHelpButtonHidden(dynamic hidden) {
 /// decodes to an infinite double) — degrades to 2, and a count wider
 /// than the grid is bounded by the width, so neither throws inside the
 /// build nor trips the grid delegate's assertions.
+///
+/// The WEB never reads this field: its grid is CSS auto-fit (a 217px
+/// card minimum, up to 4 columns). No shipped configuration sets a
+/// count, so the platforms' default layouts differ — mobile's fixed 2,
+/// the web's responsive — an accepted divergence, not a shared
+/// contract.
 int quickHelpGridColumns(
   Map<String, dynamic> layout, {
   double maxWidth = double.infinity,

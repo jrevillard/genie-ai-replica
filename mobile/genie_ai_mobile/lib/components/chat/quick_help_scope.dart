@@ -49,19 +49,17 @@ Map<String, dynamic> parseQuickHelpButton(
   // label rule answers. (The web degrades per VALUE and keeps a
   // malformed ENTRY as an empty card; the mobile drops the entry —
   // a blank card is not a card the user can act on.)
-  final dynamic rawIcon = btn['icon'];
-  final iconMap = rawIcon is Map<String, dynamic> ? rawIcon : null;
+  final iconMap = configMapOf(btn['icon']);
   // The served path's BASENAME names the bundled asset. A NON-STRING
   // value, or one with no basename, names nothing — no asset, not a
   // garbage path the card cannot load.
-  final dynamic rawIconValue = iconMap?['value'];
+  final dynamic rawIconValue = iconMap['value'];
   final iconFile = rawIconValue is String ? rawIconValue.split('/').last : '';
   final String iconAsset = iconFile.isNotEmpty
       ? 'assets/config/quickhelp/$iconFile'
       : '';
 
-  final dynamic rawAction = btn['action'];
-  final action = rawAction is Map<String, dynamic> ? rawAction : null;
+  final action = configMapOf(btn['action']);
 
   final dynamic rawServiceLabels = btn['serviceLabels'];
   final List<dynamic> serviceLabels;
@@ -79,8 +77,8 @@ Map<String, dynamic> parseQuickHelpButton(
     'serviceLabels': serviceLabels,
     'iconAsset': iconAsset,
     'resolvedTitle': resolveConfigText(btn['title'], locale),
-    'resolvedVisibleText': resolveConfigText(action?['visibleText'], locale),
-    'resolvedHiddenPrompt': resolveConfigText(action?['hiddenPrompt'], locale),
+    'resolvedVisibleText': resolveConfigText(action['visibleText'], locale),
+    'resolvedHiddenPrompt': resolveConfigText(action['hiddenPrompt'], locale),
   };
 }
 
@@ -729,12 +727,6 @@ bool shouldReResolveRestoredScope({
   return (restoredTags?.isNotEmpty ?? false) || restoredCategoryKey != null;
 }
 
-/// Whether the button's scope can be put on the wire.
-///
-/// The config names the category; the wire needs its ENGLISH label, and
-/// only the live tree can say it. A tree that did not load cannot name the
-/// scope — and a query without it would answer from the whole corpus, from
-/// a button the user believes is scoped. No label, no query.
 /// Whether a tap on the card may proceed at all — the three refusals the
 /// web's selectQuickHelpOption applies before any branch, ONE predicate:
 /// a broken scope is a visible failure the tap must not send, a scope
@@ -749,6 +741,12 @@ bool quickHelpPressable(
       quickHelpTitleOf(button) != null;
 }
 
+/// Whether the button's scope can be put on the wire.
+///
+/// The config names the category; the wire needs its ENGLISH label, and
+/// only the live tree can say it. A tree that did not load cannot name the
+/// scope — and a query without it would answer from the whole corpus, from
+/// a button the user believes is scoped. No label, no query.
 bool quickHelpScopeIsNameable(
   Map<String, dynamic> button,
   QuickHelpScopeResolver? resolver,

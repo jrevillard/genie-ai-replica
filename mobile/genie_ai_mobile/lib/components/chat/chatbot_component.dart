@@ -1227,9 +1227,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         declaredLabels.isNotEmpty;
 
     // The AUTO-SEND is gated on the hidden prompt alone — the web arms
-    // its send the same way. A card with a visible text but no hidden
-    // prompt would otherwise wire an EMPTY question to the LLM while the
-    // bubble showed the visible text.
+    // its send the same way (it also honours a legacy i18n-KEY shape the
+    // mobile bundle never carries). A card with a visible text but no
+    // hidden prompt would otherwise wire an EMPTY question to the LLM
+    // while the bubble showed the visible text.
     if (hiddenPrompt.isEmpty) {
       // A card that DECLARES a scope but has no hidden prompt is still a
       // scoped card — the web installs the same card's labels without

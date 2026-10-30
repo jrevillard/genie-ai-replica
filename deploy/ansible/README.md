@@ -244,6 +244,7 @@ Set in `group_vars/<env>/vars.yml`:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `vllm_llm_model_id` | _(undefined — auto-discovery; the GPU overlay then serves its template default `ibm-granite/granite-3.3-2b-instruct`)_ | When undefined, every service discovers the served model at `/v1/models`. Define it to pin a name (must match what the GPU serves). |
+| `vllm_model_id` | _(undefined)_ | The raw pin spelling — okf-server's escape hatch for a deployment whose OKF legs talk to another server (a proxy whose `/v1/models` is not readable). Applied only while `vllm_llm_model_id` is undefined, and it must name a model the called endpoint serves. |
 | `vllm_max_model_len` | `65536` | Maximum context length (template default; not set in group_vars) |
 | `vllm_gpu_utilization` | `0.55` | GPU memory fraction (0.1-1.0) |
 | `vllm_dtype` | `auto` | Data type (auto, half, bfloat16, float32) |

@@ -368,7 +368,13 @@ describe('review round 4 fixes (#1181)', () => {
     axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
     await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
     // Second call inside the negative window must NOT hit the network again.
-    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
+    // The STORED failure is sanitized: the axios cause (the request
+    // config, Authorization header included) must not sit in the stub for
+    // the container's lifetime — the message keeps the actionable detail.
+    const repeat = await cache.resolveVllmModelId('http://vllm:8000').catch((e) => e);
+    expect(repeat.name).toBe('ModelDiscoveryError');
+    expect(repeat.message).toMatch(/ECONNREFUSED/);
+    expect(repeat.cause).toBeUndefined();
     expect(axios.get).toHaveBeenCalledTimes(1);
   });
 

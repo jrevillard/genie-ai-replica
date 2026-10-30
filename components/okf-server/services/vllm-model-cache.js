@@ -300,7 +300,13 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
         return id;
       })
       .catch((err) => {
-        _negative.set(probeKey, { ts: Date.now(), cause: err });
+        // Stored SANITIZED: the axios error retains the request config —
+        // Authorization header included — and a stub can outlive its
+        // config by the container's lifetime (a deleted model config's
+        // stub is never swept). The message keeps the actionable detail
+        // (HTTP status, error code); only the raw cause object is dropped.
+        const stored = err instanceof ModelDiscoveryError && err.cause ? new ModelDiscoveryError(err.message) : err;
+        _negative.set(probeKey, { ts: Date.now(), cause: stored });
         _inflight.delete(probeKey);
         throw err;
       })
@@ -393,10 +399,9 @@ async function resolveVllmModelId(baseUrl, opts = {}) {
     );
   }
   // The deployment bearer is the DEPLOYMENT's credential: it may only be
-  // aimed at the deployment endpoint. A base the caller did not name it
-  // for gets no credential (the probe then runs unauthenticated, which is
-  // what a foreign endpoint expects).
-  const apiKey = (opts.apiKey || '').trim() || (sameOrigin(baseUrl, deploymentVllmBase()) ? deploymentKey() : '');
+  // aimed at the deployment endpoint (credentialForBase owns that rule —
+  // one home, like the precedence above).
+  const apiKey = credentialForBase(baseUrl, opts.apiKey);
   const id = await getServedModelId(baseUrl, { timeoutMs: opts.timeoutMs, apiKey });
   if (!id) throw discoveryError(openAiModelsUrl(baseUrl));
   return id;
@@ -509,9 +514,11 @@ async function servedModelId(baseUrl, { apiKey, timeoutMs } = {}) {
  * deployment credential may only travel to an endpoint that IS the
  * deployment endpoint. The path matters: a sovereign deployment serves
  * the model server behind a path prefix (…/llm), and two tenants on one
- * host (…/tenant-a vs …/tenant-b) are NOT the same endpoint. A path
- * qualifies as the same when it equals the other or is a prefix of it at
- * a '/' boundary; a base without a path ('/') covers the whole host. */
+ * host (…/tenant-a vs …/tenant-b) are NOT the same endpoint. Two paths
+ * are the same endpoint only when they are equal, or the longer one is
+ * the shorter plus a bare version segment (/vN — the OpenAI-compatible
+ * prefix of the same server). A base without a path does NOT cover the
+ * host's other paths (the inline rule below says why). */
 function sameOrigin(a, b) {
   let ua;
   let ub;

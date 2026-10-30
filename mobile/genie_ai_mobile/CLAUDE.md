@@ -53,11 +53,11 @@ final profile = jsonDecode(response.body);
 | Class | Endpoints |
 |-------|-----------|
 | `CurrentUserApi` | `/api/me`, `/api/me/context`, `/api/me/delete` |
-| `ChatHistoryApi` | `/chat/conversations`, `/chat/messages`, `/chat/folders` |
-| `ServiceCategoriesApi` | `/service-categories/*` |
-| `AuthenticationApi` | `/auth/logout` |
-| `AnalyticsApi` | `/analytics/*` |
-| `TranslationApi` | `/translate`, `/translate/markdown` |
+| `ChatHistoryApi` | `/api/chat/conversations`, `/api/chat/messages`, `/api/chat/folders` |
+| `ServiceCategoriesApi` | `/api/service-categories/*` |
+| `AuthenticationApi` | `/api/auth/logout` |
+| `AnalyticsApi` | `/api/analytics/*` |
+| `TranslationApi` | `/api/translate`, `/api/translate/markdown` |
 
 ## Design System
 

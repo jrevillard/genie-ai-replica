@@ -21,7 +21,8 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BACKEND_DIR="$PROJECT_ROOT/components/gov-chat-backend"
 OUTPUT_DIR="$PROJECT_ROOT/mobile/genie_ai_mobile/openapi_client"
 SPEC_FILE="$(mktemp /tmp/genie-openapi.XXXXXX.json)"
-trap 'rm -f "$SPEC_FILE"' EXIT
+CHECK_DIR=""
+trap 'rm -f "$SPEC_FILE"; if [ -n "$CHECK_DIR" ]; then rm -rf "$CHECK_DIR"; fi' EXIT
 DIFF_EXCLUDES=(--exclude=.dart_tool --exclude=pubspec.lock --exclude=.openapi-generator-ignore)
 IGNORE_FILE="$OUTPUT_DIR/.openapi-generator-ignore"
 
@@ -119,13 +120,11 @@ if [ "${1:-}" = "--check" ]; then
   patch_client "$CHECK_DIR"
   if diff -r "${DIFF_EXCLUDES[@]}" "$CHECK_DIR" "$OUTPUT_DIR" > /dev/null; then
     echo "==> Client is up to date with the backend spec"
-    rm -rf "$CHECK_DIR"
     exit 0
   fi
   echo "ERROR: the committed client is stale against the backend spec."
   echo "       Run ./scripts/generate-api-client.sh and commit the result."
   diff -rq "${DIFF_EXCLUDES[@]}" "$CHECK_DIR" "$OUTPUT_DIR" | head -20 || true
-  rm -rf "$CHECK_DIR"
   exit 1
 fi
 

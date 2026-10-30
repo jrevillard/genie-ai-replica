@@ -221,7 +221,7 @@ describe('Swagger Configuration', () => {
           }
         }
       };
-      walk(spec.paths);
+      walk(spec);
       expect(refs.size).toBeGreaterThan(0);
       const dangling = [...refs].filter((name) => !defined.has(name));
       expect(dangling).toEqual([]);

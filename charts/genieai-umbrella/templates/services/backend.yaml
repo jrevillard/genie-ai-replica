@@ -374,6 +374,19 @@ spec:
         - protocol: TCP
           port: 8888
     {{- end }}
+    {{- if eq true (index $okf "enabled") }}
+    # OKF retrieval posture: with the tier on, the backend's retrieval
+    # client dials okf-server (OKF_SERVER_URL:3002) on every query —
+    # under default-deny a missing rule here is a 3 s timeout per chat
+    # and a dead retrieval path, not an error anywhere.
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: okf-server
+      ports:
+        - protocol: TCP
+          port: 3002
+    {{- end }}
     {{- if and $opea.enabled (eq $opeaGpu.mode "in-cluster") }}
     # In-cluster translation model (VLLM_TRANSLATION_ENDPOINT default).
     - to:

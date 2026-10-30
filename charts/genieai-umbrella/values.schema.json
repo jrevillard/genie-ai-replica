@@ -411,6 +411,15 @@
             },
             "retrieverHybridRetrievalEnabled": {
               "type": "boolean"
+            },
+            "retrieverFanoutEnabled": {
+              "type": "boolean"
+            },
+            "retrieverRouteEnabled": {
+              "type": "boolean"
+            },
+            "retrieverRouteHeadsSupersede": {
+              "type": "boolean"
             }
           }
         }
@@ -550,6 +559,9 @@
               "type": "object"
             }
           }
+        },
+        "ragasCacheSize": {
+          "type": "string"
         }
       }
     }

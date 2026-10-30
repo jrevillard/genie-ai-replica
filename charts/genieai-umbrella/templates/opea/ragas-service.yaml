@@ -8,15 +8,18 @@ judge/embedding endpoints follow the tier's in-cluster addresses. */ -}}
 {{- $vals  := deepCopy .Values -}}
 {{- $ns := .Values.namespace -}}
 {{- $llmEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "llm") -}}
+{{- $embeddingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "embedding") -}}
+{{- $opeaModels := index (.Values.opea | default dict) "models" | default dict -}}
+{{- $opea := .Values.opea | default dict -}}
 {{- $internalSecretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "RAGAS_INTERNAL_SECRET" "secret" "okf-internal-secret" "key" "OKF_INTERNAL_SECRET" "optional" true) | fromJson)
     (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "RAGAS_JUDGE_API_KEY" "secret" "vllm-api-key" "key" "VLLM_API_KEY" "optional" true) | fromJson) -}}
 {{- $gpuSecretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "VLLM_API_KEY")) | fromJsonArray -}}
 {{- $ragasEnv := list
     (dict "name" "RAGAS_JUDGE_BASE_URL" "value" (printf "%s/v1" $llmEndpoint))
-    (dict "name" "RAGAS_JUDGE_MODEL" "value" "")
+    (dict "name" "RAGAS_JUDGE_MODEL" "value" (index (index ($opeaModels | default dict) "llm" | default dict) "modelId" | default "" | toString))
     (dict "name" "RAGAS_JUDGE_CONTEXT_TOKENS" "value" "65536")
-    (dict "name" "RAGAS_EMBED_BASE_URL" "value" "http://tei-embedding-server:80")
-    (dict "name" "RAGAS_EMBED_MODEL" "value" "")
+    (dict "name" "RAGAS_EMBED_BASE_URL" "value" $embeddingEndpoint)
+    (dict "name" "RAGAS_EMBED_MODEL" "value" (index (index ($opea | default dict) "embedding" | default dict) "modelId" | default "" | toString))
     (dict "name" "RAGAS_EMBED_API" "value" "tei")
     (dict "name" "RAGAS_LLM_CACHE" "value" "1")
     (dict "name" "RAGAS_LLM_CACHE_DIR" "value" "/tmp/ragas-llm-cache")
@@ -35,6 +38,8 @@ judge/embedding endpoints follow the tier's in-cluster addresses. */ -}}
     "port" 8090
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "1" "memory" "2Gi"))
     "env" (concat $ragasEnv $internalSecretEnv $gpuSecretEnv $opeaEnvRows)
+    "volumes" (list (dict "name" "ragas-llm-cache" "persistentVolumeClaim" (dict "claimName" "ragas-llm-cache")))
+    "volumeMounts" (list (dict "name" "ragas-llm-cache" "mountPath" "/tmp/ragas-llm-cache"))
     "probes" (dict
       "readiness" (dict "httpGet" (dict "path" "/health" "port" 8090) "initialDelaySeconds" 10 "periodSeconds" 30 "failureThreshold" 3)
       "liveness"  (dict "httpGet" (dict "path" "/health" "port" 8090) "initialDelaySeconds" 30 "periodSeconds" 30 "failureThreshold" 3)

@@ -1,7 +1,7 @@
 {{- /* The PII sidecar — scrubs personally identifiable information for
 the OKF pipeline. Gated on okf.enabled like the rest of the tier; the
 Compose service carries two tuning knobs and a readiness endpoint. */ -}}
-{{- if .Values.okf.enabled -}}
+{{- if eq true (index (.Values.okf | default dict) "enabled") -}}
 {{- $okfPii := index (.Values.okf | default dict) "pii" | default dict -}}
 {{- $vals  := deepCopy .Values -}}
 {{- $piiTuningEnv := list

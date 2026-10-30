@@ -2479,6 +2479,27 @@ and the rows below name each plan and its outcome.
   chart-internal `ai.*` services. The shipped design keeps the compose
   topology (six OPEA orchestrators) with the GPU backend as a binary external/
   in-cluster choice — one template set, two endpoint worlds.
+- **The OKF integration (0.2.131–0.2.134, 2026-10-30):** main's OKF
+  foundation merge gave the platform three new dark services plus a wave of
+  wiring on the existing ones; the chart carries both. Verified accounting
+  for the whole series, measured with SHA-pinned renders: the parity state
+  went from **52 gap lines to 0** (16 service pairs, 312 variables compared
+  with the OPEA and OKF tiers rendered on, `--min-compared` moved to the
+  new count) — 25 gaps closed by carrying values identical to Compose, 3
+  closed by honest mayDiffer entries, 21 closed by the tier itself being
+  rendered and paired, 3 Keycloak URL family rows carried empty with
+  `data.keycloak` overrides. Two defect classes the increments fixed along
+  the way: the parity gate's Compose resolver could not resolve NESTED
+  defaults (`${A:-${B:-}}` — it compared the inner template text; the loop
+  is mutation-tested), and the convergence Job's optional-secret design
+  was wrong twice over — kcc's `UNDEFINEDISERROR` default means an absent
+  secret fails the IMPORT (not a pod-level error the `optional` flag can
+  absorb), so the two OKF sealed secrets are REQUIRED on every deployment
+  whose convergence Job runs, and the deploy overlay now ships them. Three
+  review rounds ran over the series (one per commit, plus the two
+  incremental rounds); the final whole-integration review covers
+  transcription fidelity, the dark default end to end, the installed
+  cluster state and the gate reconfiguration.
 
 ## Remaining phases
 

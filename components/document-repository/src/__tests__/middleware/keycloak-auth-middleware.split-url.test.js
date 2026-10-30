@@ -41,8 +41,23 @@ function runAuth(middleware) {
 }
 
 describe('keycloak-auth-middleware — KEYCLOAK_PUBLIC_URL issuer alias', () => {
+  // ENV HYGIENE (review !622 round 9, #78686): loadMiddleware permanently
+  // sets KEYCLOAK_URL / KC_REALM and the DW-431 test adds
+  // KEYCLOAK_BROWSER_ISSUER — snapshot EVERYTHING the suite touches and
+  // restore it, or sibling suites in the same jest worker inherit this
+  // suite's Keycloak topology (order-dependent flakiness).
+  let envSnapshot;
+  beforeAll(() => {
+    envSnapshot = {};
+    for (const k of ['KEYCLOAK_URL', 'KC_REALM', 'KEYCLOAK_PUBLIC_URL', 'KEYCLOAK_BROWSER_ISSUER']) {
+      envSnapshot[k] = process.env[k];
+    }
+  });
   afterAll(() => {
-    delete process.env.KEYCLOAK_PUBLIC_URL;
+    for (const [k, v] of Object.entries(envSnapshot)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
   });
 
   test('validates against the public issuer when set; JWKS stays on the internal URL', async () => {

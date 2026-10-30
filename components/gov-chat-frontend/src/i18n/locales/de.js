@@ -454,7 +454,7 @@ export default {
       deleteService: 'Dienst löschen',
       empty: 'Keine Kategorien gefunden. Klicken Sie auf "Neue Kategorie hinzufügen", um zu beginnen.',
       formTitleCreateCategory: 'Neue Kategorie erstellen',
-      formTitleAddService: 'Dienst zu "{categoryName}" hinzufügen',
+      formTitleAddService: "Dienst zu \"{'{'}categoryName{'}'}\" hinzufügen",
       formTitleEditCategory: 'Kategorie bearbeiten: "{itemName}"',
       formTitleEditService: 'Dienst bearbeiten: "{itemName}"',
       nameEnLabel: 'Name (Englisch)',

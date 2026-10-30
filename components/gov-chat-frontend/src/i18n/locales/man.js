@@ -451,7 +451,7 @@ export default {
       deleteService: 'Baara Fiti',
       empty: 'Katifo mang je. Piti "Katifo Kura Kafu" ka a damina.',
       formTitleCreateCategory: 'Katifo Kura Dada',
-      formTitleAddService: 'Baara Kafu "{categoryName}" to',
+      formTitleAddService: "Baara Kafu \"{'{'}categoryName{'}'}\" to",
       formTitleEditCategory: 'Katifo Dada: "{itemName}"',
       formTitleEditService: 'Baara Dada: "{itemName}"',
       nameEnLabel: 'Toh (Angalee)',

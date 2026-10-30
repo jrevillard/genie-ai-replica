@@ -452,7 +452,7 @@ export default {
       deleteService: 'ลบบริการ',
       empty: 'ไม่พบหมวดหมู่ คลิก "เพิ่มหมวดหมู่ใหม่" เพื่อเริ่มต้น',
       formTitleCreateCategory: 'สร้างหมวดหมู่ใหม่',
-      formTitleAddService: 'เพิ่มบริการใน "{categoryName}"',
+      formTitleAddService: "เพิ่มบริการใน \"{'{'}categoryName{'}'}\"",
       formTitleEditCategory: 'แก้ไขหมวดหมู่: "{itemName}"',
       formTitleEditService: 'แก้ไขบริการ: "{itemName}"',
       nameEnLabel: 'ชื่อ (ภาษาอังกฤษ)',

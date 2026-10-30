@@ -449,7 +449,7 @@ export default {
       deleteService: '删除服务',
       empty: '未找到类别。点击 "添加新类别" 开始。',
       formTitleCreateCategory: '创建新类别',
-      formTitleAddService: '向 "{categoryName}" 添加服务',
+      formTitleAddService: "向 \"{'{'}categoryName{'}'}\" 添加服务",
       formTitleEditCategory: '编辑类别: "{itemName}"',
       formTitleEditService: '编辑服务: "{itemName}"',
       nameEnLabel: '名称 (英文)',

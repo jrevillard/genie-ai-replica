@@ -452,7 +452,7 @@ export default {
       deleteService: 'Hapus Layanan',
       empty: 'Tidak ada kategori ditemukan. Klik "Tambah Kategori Baru" untuk memulai.',
       formTitleCreateCategory: 'Buat Kategori Baru',
-      formTitleAddService: 'Tambah Layanan ke "{categoryName}"',
+      formTitleAddService: "Tambah Layanan ke \"{'{'}categoryName{'}'}\"",
       formTitleEditCategory: 'Ubah Kategori: "{itemName}"',
       formTitleEditService: 'Ubah Layanan: "{itemName}"',
       nameEnLabel: 'Nama (Inggris)',

@@ -395,14 +395,20 @@ async function routingTest(repoId, payload = {}, opts = {}) {
     );
 
     // 1. The repo under test (authz pre-gate like every admin action).
-    const underTest = await repositoryService.getById(repoId, { authz: opts.authz });
+    // Review !622 round 9, #78665: batch callers (head-suite runSuite)
+    // prefetch this static context ONCE and pass it via opts.prefetched —
+    // getById also computes repo metrics + doc-repo refs per call and
+    // loadSiblings re-scans okf_repositories per row. A prefetcher has
+    // already run the same authz-gated getById this branch would have.
+    const prefetched = opts.prefetched || {};
+    const underTest = prefetched.underTest || (await repositoryService.getById(repoId, { authz: opts.authz }));
     // 2. Embed with production fidelity.
     const emb = await embedQuery(query);
     span.setAttribute('okf.headtest.query_chars', query.length);
 
     // 3. Head leg (LEG A) — under test + every sibling with a head.
     const db = await dbService.getConnection();
-    const siblings = await loadSiblings(db, repoId);
+    const siblings = prefetched.siblings || (await loadSiblings(db, repoId));
 
     const headRows = [];
     const utHead = scoreHead(underTest.head, emb.vector, formula);
@@ -826,6 +832,7 @@ async function guardSuggestions(repoId, candidates, opts = {}) {
 module.exports = {
   rebuildHead,
   routingTest,
+  loadSiblings,
   explainRouting,
   guardSuggestions,
   embedQueryBatch,

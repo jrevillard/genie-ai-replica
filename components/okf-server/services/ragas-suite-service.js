@@ -46,8 +46,16 @@ const dbService = require('../shared-lib/db-connection-service');
 const frontmatterService = require('./frontmatter-service');
 const repositoryService = require('./repository-service');
 const headTestService = require('./head-test-service');
+// ONE rerank client (review !622 round 9, #78662): the private copy moved
+// to ./rerank-client verbatim — batching, pool, retry ladder and all.
+const { rerankTexts } = require('./rerank-client');
 const modelConfigService = require('./model-config-service');
 const ragasAttributionService = require('./ragas-attribution-service');
+const { AsyncJobGate } = require('./async-job-gate');
+// ONE query-normalization helper (review !622 round 9, #78698): the six
+// scattered copies differed on collapse-vs-lowercase order — invisible drift
+// on a helper that feeds comparison keys. The attribution service owns it.
+const norm = ragasAttributionService.norm;
 // Serve-mode calls hit chatqna, whose handler 401s ANY unauthenticated
 // request (genieai_chatqna.py handle_request) — the same service-account
 // bearer the doc-repo calls use authenticates the benchmark's serve leg.
@@ -550,154 +558,7 @@ async function pollSidecarJobOwned(jobId, meta, { onProgress } = {}) {
 
 // ---------- retrieval leg (Lab-internal replay) ---------------------------
 
-// Four attempts with binary exponential backoff (0.5s..8s + jitter) —
-// enough to outlive a gateway burst limiter without stalling a run.
-const RERANK_RETRY_ATTEMPTS = 4;
-const RERANK_RETRY_STATUSES = new Set([429, 502, 503, 504]);
-// Ceiling for a server-provided Retry-After (review 2026-10-23): the
-// server's number wins over our ladder, but never past 60s — an uncapped
-// 'Retry-After: 3600' would sleep an hour per attempt.
-const RETRY_AFTER_CAP_MS = 60000;
-// 30s, matching teiEmbed's budget: a full batch is 32 texts of up to 2,000
-// chars through a cross-encoder on a GPU that also serves chat. The old 15s
-// aborted healthy-but-busy batches (live 2026-10-23, 2 of 100 rows) — and an
-// abort used to be non-retryable on top.
-const RERANK_TIMEOUT_MS = 30000;
-// TEI rerankers cap batches (live 2026-10-18: "batch size 48 > maximum
-// allowed batch size 32" — 24 candidates x 2 graphs 422'd EVERY probe and
-// run row, surfacing as "unknown" answers). Client-side batching like
-// teiEmbed's TEI_EMBED_CHUNK: every caller is bounded regardless of fanout.
-const RERANK_BATCH = 32;
 const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/**
- * How many rerank batch calls may be in flight at once (2026-10-23, David:
- * "the reranker is lightweight and there is no pressure on the GPU server;
- * benchmarks and curation will not be running while users are using the
- * system"). The batch calls are INDEPENDENT — the reranker scores
- * (query, text) pairs, and results reassemble by index — so overlapping them
- * changes transport only, never scores. 1 = the old polite sequential
- * behaviour; the default 3 turns a 6-batch pool from ~6 sequential round
- * trips into ~2 waves. Read per call so a deployment can turn it without
- * touching code, and clamped hard because a retry stampede helps nobody.
- */
-function rerankConcurrency() {
-  const n = parseInt(process.env.OKF_RAGAS_RERANK_CONCURRENCY || '3', 10);
-  if (!Number.isFinite(n)) return 3;
-  return Math.max(1, Math.min(n, 8));
-}
-
-/** Same TEI rerank contract as head-suite's rerankTexts (env-shared).
- * Batches at RERANK_BATCH and remaps chunk-local indices to global ones.
- * Batches run up to rerankConcurrency() at a time; per-batch retry keeps its
- * jittered backoff (retryDelayMs randomises, so parallel retries do not
- * synchronise into a stampede). */
-async function rerankTexts(query, texts) {
-  const rerankUrl = process.env.OKF_RERANK_ENDPOINT || '';
-  if (!rerankUrl) {
-    const err = new Error('rerank endpoint not configured (OKF_RERANK_ENDPOINT)');
-    err.code = 'RERANK_NOT_CONFIGURED';
-    throw err;
-  }
-  const headers = { 'Content-Type': 'application/json' };
-  const token = process.env.OKF_RERANK_TOKEN || '';
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const batches = [];
-  for (let offset = 0; offset < texts.length; offset += RERANK_BATCH) {
-    batches.push({ offset, batch: texts.slice(offset, offset + RERANK_BATCH) });
-  }
-  const concurrency = rerankConcurrency();
-  const started = Date.now();
-  logger.info('ragas-suite.rerank.start', {
-    texts: texts.length,
-    batches: batches.length,
-    concurrency
-  });
-
-  async function rerankBatch(batch) {
-    let decoded;
-    let attempts = 0;
-    for (let attempt = 1; attempt <= RERANK_RETRY_ATTEMPTS; attempt += 1) {
-      attempts = attempt;
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), RERANK_TIMEOUT_MS);
-      try {
-        const resp = await fetch(rerankUrl, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ query, texts: batch }),
-          signal: controller.signal
-        });
-        if (!resp.ok) {
-          const err = new Error(`HTTP ${resp.status}`);
-          err.status = resp.status;
-          err.retryable = RERANK_RETRY_STATUSES.has(resp.status);
-          const ra = Number(resp.headers && resp.headers.get && resp.headers.get('retry-after'));
-          if (Number.isFinite(ra) && ra > 0) err.retryAfterMs = ra * 1000;
-          throw err;
-        }
-        decoded = await resp.json();
-        if (!Array.isArray(decoded)) throw new Error('unexpected rerank response shape');
-        break;
-      } catch (e) {
-        // Our own RERANK_TIMEOUT_MS abort (Node fetch rejects with a
-        // DOMException, name AbortError / code 20) is transient by
-        // definition — the endpoint was busy, not wrong. Live 2026-10-23:
-        // 2 of 100 rows died on exactly this at a 6x-bigger pool because an
-        // abort carried no retryable marker and sailed straight through.
-        if (e && (e.name === 'AbortError' || e.code === 20 || e.code === 'ABORT_ERR')) {
-          e.retryable = true;
-        }
-        if (e.retryable === true && attempt < RERANK_RETRY_ATTEMPTS) {
-          await sleepMs(retryDelayMs(e, attempt));
-          continue;
-        }
-        throw e;
-      } finally {
-        clearTimeout(timer);
-      }
-    }
-    return { decoded, attempts };
-  }
-
-  // Worker pool over the batch list: each worker takes the next batch index
-  // when it frees up, so a slow batch never idles the other workers. Results
-  // land in decodedByBatch[i] — batch order is preserved regardless of
-  // completion order.
-  const decodedByBatch = new Array(batches.length);
-  let retries = 0;
-  let next = 0;
-  const worker = async () => {
-    for (;;) {
-      const i = next;
-      if (i >= batches.length) return;
-      next += 1;
-      const { decoded, attempts } = await rerankBatch(batches[i].batch);
-      retries += attempts - 1;
-      decodedByBatch[i] = decoded;
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(concurrency, batches.length) || 1 }, worker));
-
-  // chunk-local indices -> global indices before merging
-  const merged = [];
-  batches.forEach(({ offset, batch }, i) => {
-    for (const r of decodedByBatch[i] || []) {
-      const idx = Number(r && r.index);
-      if (Number.isInteger(idx) && idx >= 0 && idx < batch.length) {
-        merged.push({ index: idx + offset, score: Number(r && r.score) || 0 });
-      }
-    }
-  });
-  logger.info('ragas-suite.rerank.done', {
-    texts: texts.length,
-    batches: batches.length,
-    concurrency,
-    retries,
-    wall_ms: Date.now() - started
-  });
-  return merged;
-}
 
 // ---------- serve mode (the benchmark measures the SERVED system) ----------
 //
@@ -905,36 +766,31 @@ async function serveAnswer(query, graphs) {
   }
 }
 
-function retryDelayMs(e, attempt) {
-  // Binary exponential backoff (David, 2026-10-23): 0.5s, 1s, 2s, ... capped
-  // at 8s, jittered so parallel batches do not synchronise into a stampede.
-  // The server's own Retry-After wins when it sends one — a rate limiter
-  // that says "come back in 3s" knows better than our ladder — but CAPPED:
-  // a limiter that says "come back in an hour" must not park the benchmark
-  // (or an interactive caller) for an hour per attempt.
-  if (e.retryAfterMs) return Math.min(RETRY_AFTER_CAP_MS, e.retryAfterMs);
-  return Math.min(8000, 500 * Math.pow(2, attempt - 1)) + Math.floor(Math.random() * 250);
-}
-
 /**
  * Multi-repo retrieval: embed once, top-K per selected repo's _SOURCE,
  * unified rerank over the union, top-N contexts. Mirrors the retriever's
  * per-graph fan-out; per-repo attribution is kept on every candidate.
  */
 async function retrieveContexts(db, graphNames, query, emb) {
-  const perGraph = [];
-  for (const g of graphNames) {
-    const rows = await (
-      await db.query(
-        `FOR c IN \`${g}_SOURCE\` ` +
-          'LET s = APPROX_NEAR_COSINE(c.embedding, @emb) ' +
-          'SORT s DESC LIMIT @k ' +
-          'RETURN { key: c._key, text: c.text, score: s }',
-        { emb, k: CANDIDATE_K }
-      )
-    ).all();
-    for (const r of rows) perGraph.push({ ...r, graph: g });
-  }
+  // The per-graph top-K AQLs are read-only on DISTINCT collections — run
+  // them concurrently and reassemble in graph order (review !622 round 9,
+  // #78668: the sequential loop serialized graphs × entries under the run
+  // pool).
+  const perGraphArrays = await Promise.all(
+    graphNames.map((g) =>
+      db
+        .query(
+          `FOR c IN \`${g}_SOURCE\` ` +
+            'LET s = APPROX_NEAR_COSINE(c.embedding, @emb) ' +
+            'SORT s DESC LIMIT @k ' +
+            'RETURN { key: c._key, text: c.text, score: s }',
+          { emb, k: CANDIDATE_K }
+        )
+        .then((cur) => cur.all())
+        .then((rows) => rows.map((r) => ({ ...r, graph: g })))
+    )
+  );
+  const perGraph = perGraphArrays.flat();
   if (!perGraph.length) {
     return { contexts: [], context_keys: [], candidate_keys: [], candidates: [] };
   }
@@ -1145,19 +1001,14 @@ async function graphNamesFor(db, repoIds) {
   return names;
 }
 
-const genInFlight = new Map(); // repo_id -> suite_key
+const genInFlight = new AsyncJobGate(); // repo_id -> suite_key (#78664: one gate, the F12 race fixed in one place)
 const genFailure = new Map(); // repo_id -> {suite_key, code, message, at}
 const genProgress = new Map(); // suite_key -> live sidecar progress {phase, done, total}
 
 async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
-  const inflight = genInFlight.get(repoId);
-  if (inflight) {
-    const err = new Error('a benchmark-suite generation is already running for this repository');
-    err.code = 'GENERATION_IN_FLIGHT';
-    err.status = 409;
-    err.details = { suite_key: inflight };
-    throw err;
-  }
+  genInFlight.assertFree(repoId, {
+    message: 'a benchmark-suite generation is already running for this repository'
+  });
   const repoIds = normalizeRepoIds(repoId, payload.repo_ids);
   for (const rid of repoIds) {
     await repositoryService.getById(rid, { authz: opts.authz }); // 404 now, not mid-poll
@@ -1173,14 +1024,11 @@ async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
   // (or two clients) passed the check twice and started TWO GPU generations
   // — the second overwrote the first's key and the first finisher's
   // .finally deleted the lock while the second still ran.
-  if (genInFlight.has(repoId)) {
-    const err = new Error('a benchmark-suite generation is already running for this repository');
-    err.code = 'GENERATION_IN_FLIGHT';
-    err.status = 409;
-    err.details = { suite_key: genInFlight.get(repoId) };
-    throw err;
-  }
-  genInFlight.set(repoId, suiteKey);
+  // F12 reservation — re-checked synchronously here (the awaited repo
+  // lookups above straddled the old check-then-set).
+  genInFlight.reserve(repoId, suiteKey, {
+    message: 'a benchmark-suite generation is already running for this repository'
+  });
   // Seed the phase immediately so the synthetic list row (and any adoption)
   // has something to show before the sidecar's first poll lands.
   genProgress.set(suiteKey, { phase: 'building-knowledge-graph' });
@@ -1200,7 +1048,7 @@ async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
     .finally(() => {
       // Key-scoped release: a finisher never deletes a DIFFERENT
       // generation's lock (2026-10-21 review F12).
-      if (genInFlight.get(repoId) === suiteKey) genInFlight.delete(repoId);
+      if (genInFlight.get(repoId) === suiteKey) genInFlight.release(repoId);
       genProgress.delete(suiteKey);
     });
   done.catch((e) => {
@@ -1602,11 +1450,6 @@ async function addQueries(repoId, suiteKey, payload = {}, _opts = {}) {
       err.status = 400;
       throw err;
     }
-    const norm = (s) =>
-      String(s || '')
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, ' ');
     const existing = new Set(suite.payload.entries.map((e) => norm(e.query)));
     const fresh = [];
     let duplicatesDropped = 0;
@@ -1763,6 +1606,120 @@ async function deleteRun(repoId, suiteKey, runKey) {
  * the judge, `rescore_of` pointing at the source). The source run is never
  * modified.
  */
+/**
+ * Review !622 round 9, #78666: ONE judge/evaluate leg for runSuite and
+ * rescoreRun. The two private copies had drifted — the unsubmitted-row
+ * reset cleared ragas_nan only in the run copy, so a re-score could
+ * inherit a stale ALL_NAN flag from the source run — and every sidecar
+ * transport fix had to land twice. Submits the samples to /evaluate,
+ * registers the sidecar job id on the run doc (a second replica reads it
+ * instead of declaring the run interrupted), honours a cancel that lands
+ * during the submit, polls, maps per_query back through the ORIGINAL row
+ * index (the sample list excludes unanswered rows — index-aligning against
+ * `results` directly scores the wrong answer against the wrong query), and
+ * resets the rows that were not submitted (empty metrics, judged:false,
+ * ragas_nan:false). Returns { evaluation, perQuery }.
+ */
+async function runJudgePhase({
+  db,
+  repoId,
+  suiteKey,
+  runKey,
+  results,
+  scorable,
+  samples,
+  metrics,
+  effectiveJudge,
+  cancelLabel,
+  logPrefix,
+  onProgress
+}) {
+  const started = await sidecarSubmitWithRetry(
+    '/evaluate',
+    {
+      samples,
+      metrics,
+      // An override without a model falls back to the env judge
+      judge: effectiveJudge
+        ? {
+            provider: effectiveJudge.provider,
+            base_url: effectiveJudge.base_url,
+            model: effectiveJudge.model,
+            api_key: effectiveJudge.api_key
+          }
+        : null
+    },
+    { repo_id: repoId, suite_key: suiteKey, run_key: runKey }
+  );
+  const body = await started.json();
+  // The sidecar job id goes into the DOC (not only into memory): it is how
+  // a second replica — or a restarted server — can tell that this run is
+  // still being judged instead of declaring it interrupted and rewriting
+  // its doc as failed.
+  await db
+    .collection(COLLECTION)
+    .update(runKey, { sidecar_job_id: body.job_id })
+    .catch((e) => logger.warn(logPrefix + '.job_id_write_failed', { run_key: runKey, error: e.message }));
+  // Cancel-race guard (live 2026-10-23): a cancel that lands while the
+  // SUBMIT is still in flight finds NOTHING in activeSidecarJobs to cancel
+  // (the job is not registered until pollSidecarJobOwned runs) — the
+  // evaluate job would run UNCANCELLED for hours of judge calls while the
+  // doc already says cancelled. Re-check here, after the submit: kill the
+  // job we just created and honour the cancel.
+  if (userCancelledRun.has(runKey)) {
+    await cancelSidecarJob(body.job_id, cancelLabel + ' cancelled by user (landed during judge submit)');
+    const cancelled = new Error(cancelLabel + ' cancelled by user');
+    cancelled.code = 'RAGAS_JOB_CANCELLED';
+    throw cancelled;
+  }
+  const evaluation = await pollSidecarJobOwned(
+    body.job_id,
+    { kind: 'evaluate', repo_id: repoId, suite_key: suiteKey, run_key: runKey },
+    { onProgress }
+  );
+  const perQuery = Array.isArray(evaluation.per_query) ? evaluation.per_query : [];
+  if (perQuery.length !== scorable.length) {
+    logger.warn(logPrefix + '.row_count_mismatch', {
+      run_key: runKey,
+      submitted: scorable.length,
+      returned: perQuery.length
+    });
+  }
+  // The sidecar returns rows in SAMPLE order (EvaluationDataset preserves
+  // it), and the sample list EXCLUDES the rows with no answer — so
+  // per_query is mapped back through the ORIGINAL row index (see
+  // `scorable` at the callers). Aligning it against `results` directly
+  // would shift every row after the first dropped one.
+  scorable.forEach(({ i }, k) => {
+    const q = perQuery[k] || {};
+    results[i].metrics = q || {};
+    delete results[i].metrics.user_input;
+    delete results[i].metrics.retrieved_contexts;
+    delete results[i].metrics.response;
+    delete results[i].metrics.reference;
+    results[i].ragas_nan = q.ragas_nan === 'ALL_NAN';
+    // Handed to the judge — so this row WAS judged. The flag separates
+    // "judged and the judge could not measure it" (metrics all null) from
+    // "never handed to the judge" (no answer): two states the panel and
+    // the guide must not conflate.
+    results[i].judged = true;
+  });
+  // The rows that were NOT submitted carry no score at all — empty
+  // metrics, so the mean excludes them and the coverage counts them as
+  // NOT measured. They are never a zero. ragas_nan resets too: a re-score
+  // copies the source run's result rows, and without this the ALL_NAN
+  // flag of a row the new judge never saw would survive from the source
+  // run (the drift between the two private copies, #78666).
+  const submitted = new Set(scorable.map((s) => s.i));
+  for (let i = 0; i < results.length; i += 1) {
+    if (submitted.has(i)) continue;
+    results[i].metrics = {};
+    results[i].judged = false;
+    results[i].ragas_nan = false;
+  }
+  return { evaluation, perQuery };
+}
+
 async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
   const db = await dbService.getConnection();
   await ensureCollection(db);
@@ -1901,92 +1858,31 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
   });
   const done = (async () => {
     try {
-      const started = await sidecarSubmitWithRetry(
-        '/evaluate',
-        {
-          samples,
-          metrics,
-          judge: effectiveJudge
-            ? {
-                provider: effectiveJudge.provider,
-                base_url: effectiveJudge.base_url,
-                model: effectiveJudge.model,
-                api_key: effectiveJudge.api_key
-              }
-            : null
-        },
-        { repo_id: repoId, suite_key: suiteKey, run_key: newRunKey }
-      );
-      const body = await started.json();
-      // The sidecar job id goes into the DOC (not only into memory): it is
-      // how a second replica — or a restarted server — can tell that this
-      // re-score is still being judged instead of declaring it interrupted
-      // and rewriting its doc as failed.
-      await db
-        .collection(COLLECTION)
-        .update(newRunKey, { sidecar_job_id: body.job_id })
-        .catch((e) => logger.warn('ragas-suite.rescore.job_id_write_failed', { run_key: newRunKey, error: e.message }));
-      // A cancel that landed while the SUBMIT was still in flight: the sidecar
-      // job is not registered yet, so the cancel endpoint had nothing to
-      // delete. Honour the intent here rather than letting the judge leg run
-      // to the end for a run the user already stopped.
-      if (userCancelledRun.has(newRunKey)) {
-        await cancelSidecarJob(body.job_id, `re-score cancelled by user (${newRunKey})`);
-        const cancelled = new Error('re-score cancelled by user');
-        cancelled.code = 'RAGAS_JOB_CANCELLED';
-        throw cancelled;
-      }
-      const evaluation = await pollSidecarJobOwned(
-        body.job_id,
-        {
-          kind: 'evaluate',
-          repo_id: repoId,
-          suite_key: suiteKey,
-          run_key: newRunKey
-        },
-        {
-          // The sidecar's rows-done/rows-total becomes the re-score's
-          // progress (the panel polls it while the judge leg runs). The
-          // FIRST tick carries the judge and the pick, so the panel names
-          // the model the re-score is using and its picker adopts it
-          // (David 2026-10-25).
-          onProgress: (p) =>
-            report({
-              phase: 'judge',
-              done: Number(p && p.done) || 0,
-              total: Number(p && p.total) || samples.length,
-              force: true,
-              judge: modelConfigService.judgeFidelity(effectiveJudge),
-              judge_pick: { config_key: opts.judge_config_key || null, model: opts.judge_model || null }
-            })
-        }
-      );
-      const perQuery = Array.isArray(evaluation.per_query) ? evaluation.per_query : [];
-      if (perQuery.length !== scorable.length) {
-        logger.warn('ragas-suite.rescore.row_count_mismatch', {
-          run_key: newRunKey,
-          submitted: scorable.length,
-          returned: perQuery.length
-        });
-      }
-      // Map back through the ORIGINAL row index (see `scorable` above).
-      scorable.forEach(({ i }, k) => {
-        const q = perQuery[k] || {};
-        results[i].metrics = q || {};
-        delete results[i].metrics.user_input;
-        delete results[i].metrics.retrieved_contexts;
-        delete results[i].metrics.response;
-        delete results[i].metrics.reference;
-        results[i].ragas_nan = q.ragas_nan === 'ALL_NAN';
-        results[i].judged = true;
+      await runJudgePhase({
+        db,
+        repoId,
+        suiteKey,
+        runKey: newRunKey,
+        results,
+        scorable,
+        samples,
+        metrics,
+        effectiveJudge,
+        cancelLabel: 're-score',
+        logPrefix: 'ragas-suite.rescore',
+        // The FIRST tick carries the judge and the pick (force), so the
+        // panel names the model the re-score is using and its picker
+        // adopts it (David 2026-10-25).
+        onProgress: (p) =>
+          report({
+            phase: 'judge',
+            done: Number(p && p.done) || 0,
+            total: Number(p && p.total) || samples.length,
+            force: true,
+            judge: modelConfigService.judgeFidelity(effectiveJudge),
+            judge_pick: { config_key: opts.judge_config_key || null, model: opts.judge_model || null }
+          })
       });
-      // The rows the re-score did NOT hand to the judge carry no score.
-      const resubmitted = new Set(scorable.map((s) => s.i));
-      for (let i = 0; i < results.length; i += 1) {
-        if (resubmitted.has(i)) continue;
-        results[i].metrics = {};
-        results[i].judged = false;
-      }
       const summary = summarizeRun(suite, results, metrics);
       // The banner's coverage figure, computed over the IN-SCOPE population
       // (the same rule the run path uses) — without this block a re-score
@@ -2636,99 +2532,27 @@ async function runSuite(repoId, suiteKey, opts = {}) {
         reference_contexts: e.reference_passages || []
       };
     });
-    const evalStarted = await sidecarSubmitWithRetry(
-      '/evaluate',
-      {
-        samples,
-        metrics: opts.metrics,
-        // An override without a model falls back to the env judge
-        judge: effectiveJudge
-          ? {
-              provider: effectiveJudge.provider,
-              base_url: effectiveJudge.base_url,
-              model: effectiveJudge.model,
-              api_key: effectiveJudge.api_key
-            }
-          : null
-      },
-      { repo_id: repoId, suite_key: suiteKey, run_key: opts.runKey }
-    );
-    const evalStartedBody = await evalStarted.json();
-    // The sidecar job id goes into the DOC: it is how a second replica — or
-    // a restarted server — can tell that this run is still being judged
-    // instead of declaring it interrupted and rewriting its doc as failed.
-    await db
-      .collection(COLLECTION)
-      .update(opts.runKey, { sidecar_job_id: evalStartedBody.job_id })
-      .catch((e) => logger.warn('ragas-suite.run.job_id_write_failed', { run_key: opts.runKey, error: e.message }));
-    // Cancel-race guard (live 2026-10-23): a cancel that lands between the
-    // pre-judge check above and this submission finds NOTHING in
-    // activeSidecarJobs to cancel (the job is not registered until
-    // pollSidecarJobOwned runs) — so the evaluate job would run UNCANCELLED
-    // for hours of judge calls while the run doc already says cancelled.
-    // Re-check here, after the submit: if the user cancelled meanwhile, kill
-    // the job we just created and honour the cancel.
-    if (userCancelledRun.has(opts.runKey)) {
-      await cancelSidecarJob(evalStartedBody.job_id, 'run cancelled by user (landed during judge submit)');
-      const cancelled = new Error('run cancelled by user');
-      cancelled.code = 'RAGAS_JOB_CANCELLED';
-      throw cancelled;
-    }
-    const evaluation = await pollSidecarJobOwned(
-      evalStartedBody.job_id,
-      {
-        kind: 'evaluate',
-        repo_id: repoId,
-        suite_key: suiteKey,
-        run_key: opts.runKey
-      },
-      {
-        // the sidecar's rows-done/rows-total becomes the run's judge-phase
-        // progress (David 2026-10-18: per-phase progress bars)
-        onProgress: (p) =>
-          report(opts, {
-            phase: 'judge',
-            done: Number(p && p.done) || 0,
-            total: Number(p && p.total) || total
-          })
-      }
-    );
-    const perQuery = Array.isArray(evaluation.per_query) ? evaluation.per_query : [];
-    // The sidecar returns rows in SAMPLE order (EvaluationDataset preserves
-    // it), and the sample list EXCLUDES the rows with no answer — so
-    // per_query is mapped back through the ORIGINAL row index (see
-    // `scorable` above). Aligning it against `results` directly would shift
-    // every row after the first dropped one.
-    scorable.forEach(({ i }, k) => {
-      const q = perQuery[k] || {};
-      results[i].metrics = q || {};
-      delete results[i].metrics.user_input;
-      delete results[i].metrics.retrieved_contexts;
-      delete results[i].metrics.response;
-      delete results[i].metrics.reference;
-      results[i].ragas_nan = q.ragas_nan === 'ALL_NAN';
-      // Handed to the judge — so this row WAS judged. The flag separates
-      // "judged and the judge could not measure it" (metrics all null) from
-      // "never handed to the judge" (no answer): two states the panel and
-      // the guide must not conflate.
-      results[i].judged = true;
+    const { evaluation, perQuery } = await runJudgePhase({
+      db,
+      repoId,
+      suiteKey,
+      runKey: opts.runKey,
+      results,
+      scorable,
+      samples,
+      metrics: opts.metrics,
+      effectiveJudge,
+      cancelLabel: 'run',
+      logPrefix: 'ragas-suite.run',
+      // the sidecar's rows-done/rows-total becomes the run's judge-phase
+      // progress (David 2026-10-18: per-phase progress bars)
+      onProgress: (p) =>
+        report(opts, {
+          phase: 'judge',
+          done: Number(p && p.done) || 0,
+          total: Number(p && p.total) || total
+        })
     });
-    // The rows that were NOT submitted carry no score at all — empty
-    // metrics, so the mean excludes them and the coverage counts them as
-    // NOT measured. They are never a zero.
-    const submitted = new Set(scorable.map((s) => s.i));
-    for (let i = 0; i < results.length; i += 1) {
-      if (submitted.has(i)) continue;
-      results[i].metrics = {};
-      results[i].judged = false;
-      results[i].ragas_nan = false;
-    }
-    // Judge COVERAGE (2026-10-21 sidecar review F2): the sidecar averages the
-    // rows that scored and nulls the ones that failed, so a judge that died
-    // on half the rows still produced a healthy-looking mean over the
-    // survivors. The run records the per-metric scored-row count so the
-    // panel can say "12 of 20 rows measured" instead of presenting a partial
-    // average as the benchmark.
     const judgeCoverage = evaluation.coverage && typeof evaluation.coverage === 'object' ? evaluation.coverage : null;
     const summary = summarizeRun(suite, results, opts.metrics);
     // The banner's coverage figure: how many rows the BEST-covered metric
@@ -4199,13 +4023,6 @@ function retrievalLadder(ev, r, passages, serveMode) {
   };
 }
 
-function norm(s) {
-  return String(s || '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 /**
  * Verbatim containment of a passage inside the SERVED contexts.
  *
@@ -4290,6 +4107,7 @@ async function collectAttributionEvidence(db, suite, runDoc) {
   // Rank-probe the rows where the dense stage lost the passage: the rank
   // is the actionable half of "the vector search missed it".
   const serveMode = isServeRun(runDoc);
+  const probeTargets = [];
   for (const row of failing) {
     const ev = evidence.byRow.get(row.id);
     if (!ev) continue;
@@ -4312,15 +4130,27 @@ async function collectAttributionEvidence(db, suite, runDoc) {
       lost = present.flatMap((c) => c.chunks).find((ch) => !candidateKeys.has(ch.key));
     }
     if (!lost) continue;
-    const rank = await ragasAttributionService.probeCandidateRank(db, {
-      graphs,
-      query: row.query,
-      carrierKey: lost.key
+    probeTargets.push({ row, ev, lost });
+  }
+  // Concurrent probes (review !622 round 9, #78667): each is an independent
+  // embed + per-graph vector search; sequentially the wall time was
+  // Σ(latencies) over the failing rows. Small pool, graph fan-out bounded.
+  const PROBE_POOL = 4;
+  for (let i = 0; i < probeTargets.length; i += PROBE_POOL) {
+    const slice = probeTargets.slice(i, i + PROBE_POOL);
+    const ranks = await Promise.all(
+      slice.map((t) =>
+        ragasAttributionService
+          .probeCandidateRank(db, { graphs, query: t.row.query, carrierKey: t.lost.key })
+          .catch(() => null)
+      )
+    );
+    ranks.forEach((rank, k) => {
+      if (rank) {
+        slice[k].ev.rank = rank;
+        slice[k].ev.rank_owner = slice[k].row.id;
+      }
     });
-    if (rank) {
-      ev.rank = rank;
-      ev.rank_owner = row.id;
-    }
   }
   // The rank belongs to the row that owns it; attributeFailures reads it
   // from the evidence row, so carry it into the ladder there.
@@ -5009,6 +4839,10 @@ async function probeEntry(repoId, suiteKey, payload = {}, opts = {}) {
 }
 
 module.exports = {
+  // Test hook (the _resetLaneCooldown precedent): the deleteSuite
+  // RUN_IN_FLIGHT guard reads THIS map — a test cannot hold a run open
+  // through the real sidecar path cheaply, so the guard state is exposed.
+  __testRunInFlight: runInFlight,
   ALL_METRICS,
   DEFAULT_METRICS,
   rerankTexts,

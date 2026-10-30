@@ -452,7 +452,7 @@ export default {
       deleteService: 'Futa Huduma',
       empty: 'Hakuna vitengo vilivyopatikana. Bofya "Ongeza Kitengo Kipya" ili kuanza.',
       formTitleCreateCategory: 'Unda Kitengo Kipya',
-      formTitleAddService: 'Ongeza Huduma kwa "{categoryName}"',
+      formTitleAddService: "Ongeza Huduma kwa \"{'{'}categoryName{'}'}\"",
       formTitleEditCategory: 'Hariri Kitengo: "{itemName}"',
       formTitleEditService: 'Hariri Huduma: "{itemName}"',
       nameEnLabel: 'Jina (Kiingereza)',

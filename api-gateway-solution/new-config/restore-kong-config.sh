@@ -143,7 +143,18 @@ restore_config() {
     # surfaces are gated by the same variable.
     if [ "${OKF_ENABLED:-0}" != "1" ]; then
         log "OKF_ENABLED=${OKF_ENABLED:-0} — parking the OKF API surface"
-        for route_id in $(curl -s "$KONG_ADMIN_URL/routes" < /dev/null | jq -r '.data[] | select((.tags // []) | index("okf")) | .id'); do
+        # Paginate (review !622 round 9, #78688): Kong caps /routes at a default
+        # page size — beyond page one, okf-tagged routes survived the 1->0 flip
+        # while the declarative filter stripped them from the applied config.
+        route_ids=""
+        offset=""
+        while :; do
+            page=$(curl -s "$KONG_ADMIN_URL/routes?size=1000${offset:+&offset=$offset}" < /dev/null)
+            route_ids="$route_ids $(echo "$page" | jq -r '.data[] | select((.tags // []) | index("okf")) | .id')"
+            offset=$(echo "$page" | jq -r '.offset // empty')
+            [ -z "$offset" ] && break
+        done
+        for route_id in $route_ids; do
             response=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$KONG_ADMIN_URL/routes/$route_id" < /dev/null)
             log "Deleted okf route $route_id (HTTP $response)"
         done

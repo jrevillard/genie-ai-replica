@@ -1166,6 +1166,19 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 #   1           — the full OKF feature set (current feat/okf-server behavior).
 # MUST be 0 or 1, not true/false. Ansible: okf_enabled in group_vars.
 # The local/dev build and el-salvador run with 1; main ships 0.
+#
+# COMPOSE PROFILE PAIRING (review !622 round 9, #78687 — READ THIS before
+# setting OKF_ENABLED=1 in a NON-SWARM `docker compose` deployment): the
+# three OKF containers sit behind the `okf` compose profile. Docker Swarm
+# ignores profiles entirely (the replicas gate is enough), but plain
+# `docker compose up -d` does NOT: with OKF_ENABLED=1 and no `okf` profile
+# you get the frontend OKF tabs, the Kong /api/okf route and a backend
+# calling a stack that never started — every /api/okf request refused.
+# When enabling OKF under plain compose, ALWAYS pair the flag with the
+# profile — either:
+#   docker compose --profile opea --profile okf up -d
+# or (persistent, survives bare `docker compose up`):
+#   COMPOSE_PROFILES=opea,okf      # in this env file
 # OKF_ENABLED=1
 #
 # Uncomment to override defaults (all have sensible defaults in docker-compose):

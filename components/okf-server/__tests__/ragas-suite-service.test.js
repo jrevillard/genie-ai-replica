@@ -693,15 +693,23 @@ describe('management parity', () => {
     expect(back.reference_passages).toEqual(before);
   });
 
-  it('rename and delete work; delete refuses mid-run', async () => {
+  it('rename and delete work; delete refuses mid-run with the real 409', async () => {
     const sk = await makeSuite();
     const renamed = await svc.renameSuite('me', sk, { name: 'My benchmark' }, {});
     expect(renamed.name).toBe('My benchmark');
-    // pin a fake in-flight run
-    const runInFlight = new Map();
+    // Hold a run open against the guard the service ACTUALLY reads (the
+    // module-level runInFlight map, exposed as __testRunInFlight) — the old
+    // shape built a local Map nothing read, so the 409 branch had zero test
+    // callers (review !622 round 9, #78681).
+    svc.__testRunInFlight.set(sk, 'rr-test-run');
+    await expect(svc.deleteSuite('me', sk)).rejects.toMatchObject({
+      code: 'RUN_IN_FLIGHT',
+      status: 409
+    });
+    // Clearing the guard lets the delete through.
+    svc.__testRunInFlight.delete(sk);
     const out = await svc.deleteSuite('me', sk);
     expect(out.deleted).toBe(sk);
-    expect(runInFlight.size).toBe(0);
   });
 
   it('probeEntry runs the retrieval leg and persists lastProbe', async () => {

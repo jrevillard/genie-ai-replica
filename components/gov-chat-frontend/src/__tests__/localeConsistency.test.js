@@ -119,114 +119,129 @@ describe('Locale consistency', () => {
   // compiler — there the escape form is load-bearing and a plain {x} would
   // be swallowed as an empty named slot.
   const RAW = /\{[a-zA-Z][a-zA-Z0-9_]*\}/;
-  const replaceConsumedPlain = [
-    'okf.dashboard.stage.stepOf',
-    'okf.studio.stage.stepOf',
-    'okf.studio.dashboard.stage.stepOf',
-    'okf.dashboard.stage.queueBehind',
-    'okf.pii.nFlagged',
-    'okf.src.total',
-    'okf.src.count',
-    'okf.src.confirm',
-    'okf.src.uploaded',
-    'okf.steps.input.benchCount',
-    'okf.steps.input.moreN',
-    // Re-ingest (David, 2026-10-14) — all three interpolated with .replace().
-    // `failed` is the card label: "Re-ingest failed ({n})".
-    'okf.dashboard.reingest.failed',
-    'okf.dashboard.reingest.body',
-    'okf.dashboard.reingest.none',
-    // #1039 batch (2026-10-03): Step-7 keys consumed via .replace()
-    'okf.validation.headline.blockers',
-    'okf.validation.headline.warnings',
-    'okf.validation.summary',
-    'okf.validation.mergedPages',
-    'okf.validation.preview.truncated',
-    'okf.validation.action.wireCreate',
-    'okf.validation.action.wireExisting',
-    'okf.validation.wireDone',
-    'okf.validation.wireCreated',
-    // #1040 follow-up: the workbench bulk-PII success lines (consumed via
-    // translate().replace('{n}') — the done_accept multiline wrap slipped a
-    // raw {n} past a scripted escape once; the guard now pins all three).
-    'okf.editor.piiBulk.done_accept',
-    'okf.editor.piiBulk.done_redact',
-    'okf.editor.piiBulk.done_remove',
-    // 6-1c picker (2026-10-17): grant-by-search counts, consumed via
-    // translate().replace('{n}') in AccessPanel.vue.
-    'okf.editor.access.pickerMatching',
-    'okf.editor.access.pickerSelectAll',
-    'okf.editor.access.pickerAllSelected',
-    'okf.editor.access.pickerGrant',
-    'okf.editor.access.pickerGranting',
-    'okf.editor.access.grantedQueryNotice',
-    // RAGAS advisor hint (2026-10-19): failing-count banner, consumed via
-    // translate().replace('{n}') in RagasPanel.vue.
-    'okf.ragas.results.advisorHint',
-    // RAGAS invalid-run banner (2026-10-21): an errored/partial run is not a
-    // measurement — both messages carry placeholders consumed via .replace().
-    'okf.ragas.results.invalidErrors',
-    'okf.ragas.results.invalidCoverage',
-    // RAGAS generation progress (2026-10-21): the LLM-call counter that
-    // moves even when the transform bar does not.
-    'okf.ragas.gen.calls',
-    // RAGAS generation progress (2026-10-26): the REPLAY counter — the
-    // calls the sidecar's cache answered, consumed the same way as the
-    // call count. A scripted escape in one locale would render a raw {n}.
-    'okf.ragas.gen.replays',
-    // RAGAS dropped questions (2026-10-21): the note that says how many
-    // questions the generation LOST and why — consumed via .replace().
-    'okf.ragas.dropped.note',
-    // RAGAS judge labels (2026-10-21): what "deployment default" resolves
-    // to, and which model the running generation is actually using.
-    'okf.ragas.generate.defaultNamed',
-    'okf.ragas.generate.effective',
-    // RAGAS run facts (2026-10-25): the row/abstention/answer-length facts
-    // the advisor CITES — consumed via .replace() for {rows}/{abstentions}/
-    // {chars}, so they must carry the plain {x} form.
-    'okf.ragas.explain.facts',
-    // RAGAS metric coverage (2026-10-25): how many rows the judge scored
-    // for a metric — consumed via .replace() for {n}/{total}.
-    'okf.ragas.results.coverageTitle',
-    // Model-config connection test (2026-10-19): composed in
-    // ModelConfigPanel.testMessage() via .replace() for {n}/{ms}/{model}.
-    'okf.models.modelsLoaded',
-    'okf.models.testOkModel',
-    'okf.models.testOkEndpoint',
-    'okf.models.testNotListed'
-  ];
-  // #1042 batch delete: consumed via AdminDashboard.translate (compiled $t).
-  const replaceConsumedEscaped = [
-    'admin.documents.confirmDeleteSelected',
-    'admin.documents.deleteQueuedSuccess',
-    'admin.documents.deletePartialFailure',
-    'admin.documents.deleteAllFailed',
-    'admin.documents.deleteRefuseReason'
-  ];
 
-  test('replace()-consumed okf.* keys carry PLAIN placeholders in every locale (mixin raw lookup)', () => {
+  // DERIVED, NOT CURATED (review !622 round 9, #78680): the consumed-key sets
+  // are scanned from the consumer source, so a new translate().replace()
+  // call site is guarded the moment it ships — the hand inventory this
+  // replaces was itself the failure mode (an unlisted key slipped the
+  // escaped-vs-plain check and rendered literally in the UI).
+  //
+  // Classification is by CONSUMER FILE: AdminDashboard.translate routes
+  // through vue-i18n's compiler (there the escaped {'{'}x{'}'} form is
+  // load-bearing — a plain {x} is swallowed as an empty named slot), while
+  // the mixin translate does RAW lookup (there the plain {x} form is
+  // required). A future compiled-path consumer file is one entry in
+  // COMPILED_FILES — one line, not an inventory.
+  const COMPILED_FILES = ['AdminDashboard.vue'];
+  const TRANSLATE_REPLACE_RE = new RegExp(
+    "(?:this\\.|[^\\w.])translate\\(\\s*'([a-zA-Z][\\w.]*)'\\s*(?:,\\s*'(?:[^'\\\\]|\\\\.)*'\\s*)?\\)\\s*\\.replace\\(",
+    'g'
+  );
+  function deriveReplaceConsumed() {
+    const plain = new Map(); // key -> Set of placeholder tokens consumed via .replace
+    const escaped = new Set();
+    const roots = ['components', 'services', 'store'].map((r) => path.join(__dirname, '..', r));
+    const walk = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name !== '__tests__') walk(full);
+          continue;
+        }
+        if (!entry.name.endsWith('.vue') && !entry.name.endsWith('.js')) continue;
+        // strip comments first — a translate() inside a comment must not count
+        const src = fs
+          .readFileSync(full, 'utf8')
+          .replace(new RegExp('/\\*[\\s\\S]*?\\*/', 'g'), ' ')
+          .replace(new RegExp('(^|[^:])//[^\\n]*', 'g'), '$1 ');
+        const compiled = COMPILED_FILES.includes(entry.name);
+        let m;
+        TRANSLATE_REPLACE_RE.lastIndex = 0;
+        while ((m = TRANSLATE_REPLACE_RE.exec(src)) !== null) {
+          if (compiled) {
+            escaped.add(m[1]);
+            continue;
+          }
+          // Walk the .replace CHAIN — each link is 'token', args) followed by
+          // an unbroken `.replace(`. Walking links (not a character window)
+          // is what keeps a `+ this.translate(...)` sibling statement's
+          // replaces from bleeding into this key's token set.
+          if (!plain.has(m[1])) plain.set(m[1], new Set());
+          let i = m.index + m[0].length; // right after the first `.replace(`
+          for (;;) {
+            const tm = /^\s*'([^']+)'/.exec(src.slice(i));
+            if (!tm) break;
+            plain.get(m[1]).add(tm[1]);
+            // skip to the matching close-paren of this replace( — quote-aware
+            let depth = 1;
+            let j = i + tm[0].length;
+            while (j < src.length && depth > 0) {
+              const ch = src[j];
+              if (ch === "'" || ch === '"' || ch === '`') {
+                const q = ch;
+                j++;
+                while (j < src.length && src[j] !== q) {
+                  if (src[j] === '\\') j++;
+                  j++;
+                }
+              } else if (ch === '(') depth++;
+              else if (ch === ')') depth--;
+              j++;
+            }
+            const cont = /^\s*\.\s*replace\s*\(/.exec(src.slice(j));
+            if (!cont) break; // chain ends — a `+` sibling must not be read
+            i = j + cont[0].length;
+          }
+        }
+      }
+    };
+    roots.forEach(walk);
+    return { plain, escaped: Array.from(escaped).sort() };
+  }
+  const derivedReplace = deriveReplaceConsumed();
+
+
+    test('the consumer scan actually finds call sites (a silently empty scan guards nothing)', () => {
+    // round-9 ground truth: ~45 curated entries existed; the scan must see
+    // at least that many, and the compiled path must yield its 5 admin keys.
+    expect(derivedReplace.plain.size).toBeGreaterThan(40);
+    expect(derivedReplace.escaped.length).toBeGreaterThanOrEqual(5);
+  });
+
+test('replace()-consumed keys carry every consumed placeholder verbatim in every locale (mixin raw lookup)', () => {
     const get = (o, d) => d.split('.').reduce((a, k) => (a && a[k] != null ? a[k] : undefined), o);
     const offenders = [];
-    for (const locale of localeFiles) {
-      const data = getLocaleData(locale);
-      for (const key of replaceConsumedPlain) {
-        const v = get(data, key);
+    const en = getLocaleData('en');
+    for (const [key, tokens] of derivedReplace.plain) {
+      // A key absent from en falls back to the caller's default string, which
+      // carries the same placeholders — nothing to assert. (Cross-locale
+      // presence is the deep-identity test's job.)
+      if (get(en, key) == null) continue;
+      for (const locale of localeFiles) {
+        const v = get(getLocaleData(locale), key);
         if (typeof v !== 'string') {
           offenders.push(`${locale}:${key} missing`);
-        } else if (!RAW.test(v)) {
-          offenders.push(`${locale}:${key} no plain placeholder: ${v}`);
+          continue;
+        }
+        for (const token of tokens) {
+          // Literal containment covers BOTH failure modes in one check: the
+          // escaped {'{'}n{'}'} form does not contain the literal '{n}', and a
+          // translated-away '[p]' does not contain '[p]'.
+          if (!v.includes(token)) offenders.push(`${locale}:${key} missing ${token}: ${v}`);
         }
       }
     }
     expect(offenders).toEqual([]);
-  });
+    });
 
   test('admin.documents replace()-consumed keys keep the escaped form (AdminDashboard compiled path)', () => {
     const get = (o, d) => d.split('.').reduce((a, k) => (a && a[k] != null ? a[k] : undefined), o);
     const offenders = [];
+    const en = getLocaleData('en');
     for (const locale of localeFiles) {
       const data = getLocaleData(locale);
-      for (const key of replaceConsumedEscaped) {
+      for (const key of derivedReplace.escaped) {
+        if (get(en, key) == null) continue; // caller-default fallback — nothing to assert
         const v = get(data, key);
         if (typeof v !== 'string') {
           offenders.push(`${locale}:${key} missing`);
@@ -236,5 +251,5 @@ describe('Locale consistency', () => {
       }
     }
     expect(offenders).toEqual([]);
-  });
+    });
 });

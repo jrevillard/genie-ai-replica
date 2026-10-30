@@ -29,6 +29,10 @@ jest.mock('../services/repository-service', () => ({
 jest.mock('../services/head-test-service', () => ({
   routingTest: jest.fn(),
   guardSuggestions: jest.fn(),
+  // #78665: runSuite prefetches the static per-row context through this
+  // export — the run tests below assert on routingTest behavior, not the
+  // sibling scan, so the default is an empty universe.
+  loadSiblings: jest.fn(async () => []),
   // 1-8g-b: the advisor's simulation embeds through the GATE's prefixed
   // contract now — the mock returns one vector per query by default.
   embedQueryBatch: jest.fn(async (queries) => ({
@@ -1938,8 +1942,8 @@ describe('1-8g — default suite naming, delete, and the corpus probe', () => {
       process.env.OKF_RERANK_ENDPOINT = 'https://tei.example/rerank';
       const res = await svc.probeSuiteQuery('me', suite._key, { query: 'q' }, {});
       expect(res.verdict).toBe('unknown');
-      expect(res.note).toMatch(/HTTP 429 after 3 attempts/);
-      expect(global.fetch).toHaveBeenCalledTimes(3); // bounded — not an infinite loop
+      expect(res.note).toMatch(/HTTP 429 after 4 attempts/);
+      expect(global.fetch).toHaveBeenCalledTimes(4); // bounded — not an infinite loop
     } finally {
       global.fetch = realFetch;
       delete process.env.OKF_RERANK_ENDPOINT;

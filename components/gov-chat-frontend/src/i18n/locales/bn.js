@@ -453,7 +453,7 @@ export default {
       deleteService: 'পরিষেবা মুছুন',
       empty: 'কোনো বিভাগ পাওয়া যায়নি। শুরু করতে "নতুন বিভাগ যোগ করুন" এ ক্লিক করুন।',
       formTitleCreateCategory: 'নতুন বিভাগ তৈরি করুন',
-      formTitleAddService: '"{categoryName}" এ পরিষেবা যোগ করুন',
+      formTitleAddService: "\"{'{'}categoryName{'}'}\" এ পরিষেবা যোগ করুন",
       formTitleEditCategory: 'বিভাগ সম্পাদনা করুন: "{itemName}"',
       formTitleEditService: 'পরিষেবা সম্পাদনা করুন: "{itemName}"',
       nameEnLabel: 'নাম (ইংরেজি)',

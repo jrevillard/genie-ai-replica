@@ -453,7 +453,7 @@ export default {
       deleteService: 'حذف الخدمة',
       empty: 'لم يتم العثور على فئات. انقر فوق "إضافة فئة جديدة" للبدء.',
       formTitleCreateCategory: 'إنشاء فئة جديدة',
-      formTitleAddService: 'إضافة خدمة إلى "{categoryName}"',
+      formTitleAddService: "إضافة خدمة إلى \"{'{'}categoryName{'}'}\"",
       formTitleEditCategory: 'تعديل الفئة: "{itemName}"',
       formTitleEditService: 'تعديل الخدمة: "{itemName}"',
       nameEnLabel: 'الاسم (الإنجليزية)',

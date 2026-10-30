@@ -451,7 +451,7 @@ export default {
       deleteService: 'Delete Service',
       empty: 'No categories found. Click "Add New Category" to start.',
       formTitleCreateCategory: 'Create New Category',
-      formTitleAddService: 'Add Service to "{categoryName}"',
+      formTitleAddService: "Add Service to \"{'{'}categoryName{'}'}\"",
       formTitleEditCategory: 'Edit Category: "{itemName}"',
       formTitleEditService: 'Edit Service: "{itemName}"',
       nameEnLabel: 'Name (English)',

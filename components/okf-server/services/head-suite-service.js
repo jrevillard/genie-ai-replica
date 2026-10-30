@@ -54,10 +54,19 @@ const { isArangoNotFound } = require('./arango-errors');
 const { withSpan } = require('../shared-lib/tracing');
 const { createHash } = require('node:crypto');
 const dbService = require('../shared-lib/db-connection-service');
+const { AsyncJobGate } = require('./async-job-gate');
+// ONE query-normalization helper (review !622 round 9, #78698): see
+// ragas-suite-service — the attribution service owns the canonical form.
+const { norm } = require('./ragas-attribution-service');
+const normText = norm; // legacy name at the collapse-order call sites
 
 const frontmatterService = require('./frontmatter-service');
 const repositoryService = require('./repository-service');
 const headTestService = require('./head-test-service');
+// ONE rerank client (review !622 round 9, #78662): the private copy is
+// gone — batching, the pool, the shared retry ladder and the abort-retryable
+// rule all come from ./rerank-client now.
+const { rerankTexts } = require('./rerank-client');
 
 const HEAD_TEST_RUNS_COLLECTION = 'okf_head_test_runs';
 // Story 1-8f — per-class generation ceilings ("any number of tests for any
@@ -498,10 +507,6 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       // until every class is satisfied, no progress, or a hard call guard.
       // One giant guided-JSON call truncates at the token budget (the
       // reason the old 20-positive cap existed).
-      const norm = (s) =>
-        String(s || '')
-          .trim()
-          .toLowerCase();
       const seen = {
         positive: new Set(),
         negative: new Set(),
@@ -637,11 +642,7 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     // first occurrence wins, order preserved; a text that is already a
     // positive is dropped from the negatives entirely (a row can never sit
     // in both arrays — the same contradiction updateSuiteRows rejects).
-    const normText = (s) =>
-      String(s || '')
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, ' ');
+
     const seenPos = new Set();
     const dedupedPositives = positive.filter((q) => {
       const k = normText(q.query);
@@ -721,7 +722,7 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
 // the key, kicks the worker DETACHED, and returns immediately; the UI
 // polls GET /routing-testsuite/:key until the doc lands. One generation
 // per repo at a time (a second begin while one is in flight is a 409).
-const suiteGenInFlight = new Map(); // repo_id -> suite_key
+const suiteGenInFlight = new AsyncJobGate(); // repo_id -> suite_key (review !622 #78664: one gate, the F12 reservation race fixed in one place)
 // 1-8g-u: the last async generation FAILURE per repo — the poll consults
 // it so a dead generation answers {status:'failed', error} instead of
 // 404-ing forever (live 2026-10-11: a tag-less repo's generation died on
@@ -757,17 +758,9 @@ function suiteGenerationFailed(repoId, suiteKey) {
  * gate that keeps 202-and-poll honest for validation-class failures.
  */
 async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
-  const inflight = suiteGenInFlight.get(repoId);
-  if (inflight) {
-    const err = new Error('a suite generation is already running for this repository');
-    err.code = 'GENERATION_IN_FLIGHT';
-    err.status = 409;
-    err.suite_key = inflight;
-    // 1-8g-w: parity with RUN_IN_FLIGHT — the key rides `details` so the
-    // client can adopt the in-flight generation.
-    err.details = { suite_key: inflight };
-    throw err;
-  }
+  suiteGenInFlight.assertFree(repoId, {
+    message: 'a suite generation is already running for this repository'
+  });
   const fm = await frontmatterService.readFrontmatterFromRepoDoc(repoId);
   if (!fm) {
     const err = new Error(
@@ -778,11 +771,15 @@ async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
     throw err;
   }
   const suiteKey = `s${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
-  suiteGenInFlight.set(repoId, suiteKey);
+  // F12 reservation (see the gate): re-checked synchronously after the
+  // awaited frontmatter read, so a double-click cannot start two jobs.
+  suiteGenInFlight.reserve(repoId, suiteKey, {
+    message: 'a suite generation is already running for this repository'
+  });
   suiteGenFailure.delete(repoId); // a fresh attempt supersedes the last failure
   const done = generateSuite(repoId, payload, { ...opts, suiteKey })
     .then((suite) => suite)
-    .finally(() => suiteGenInFlight.delete(repoId));
+    .finally(() => suiteGenInFlight.release(repoId));
   // The controller responds 202 without awaiting `done`; a hard failure
   // (DB down) means no doc ever lands — the poll reads the recorded
   // failure from suiteGenFailure (terminal, honest) instead of 404-ing.
@@ -834,11 +831,7 @@ async function addQueries(repoId, suiteKey, payload = {}, opts = {}) {
     // kind — a cross-kind dup is the very contradiction updateSuiteRows
     // rejects) is dropped, not appended; the response reports the count so
     // the curator is never silently ignored.
-    const normText = (s) =>
-      String(s || '')
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, ' ');
+
     const existing = new Set(
       [...(suite.payload.positive || []), ...(suite.payload.negative || [])].map((q) => normText(q.query))
     );
@@ -959,10 +952,6 @@ async function updateSuiteRows(repoId, suiteKey, payload = {}, opts = {}) {
     let relabeled = 0;
     // 1-8g-p — duplicates absorbed by flips + by the normalization sweep.
     let normalizedAway = 0;
-    const norm = (s) =>
-      String(s || '')
-        .trim()
-        .toLowerCase();
 
     // 1. Removes — every {query, kind} match goes, in BOTH arrays (a
     //    mislabeled kind:'negative' row can sit inside payload.positive).
@@ -1218,7 +1207,6 @@ async function deleteSuite(repoId, suiteKey, opts = {}) {
 
 const PROBE_TOP_K = 24;
 const PROBE_TEXT_CAP = 4000; // rerankers truncate ~512 tokens; bound the body
-const PROBE_TIMEOUT_MS = 15000;
 
 function probeVerdict(topScore) {
   if (topScore == null) return 'unknown';
@@ -1328,83 +1316,6 @@ function probeReason(verdict, topScore, best, query) {
 }
 
 /**
- * 1-8g — ONE rerank call through the SAME endpoint the pipeline grounds on.
- * The remote TEI's nginx 401s by client fingerprint: aiohttp (the reranker
- * service) passes anonymously, node fetch does not — send the Bearer token
- * explicitly when configured (live 2026-10-10: anonymous node fetch → HTTP
- * 401 on every call). Returns the decoded score array; throws on failure.
- *
- * 1-8g-o (live 2026-10-10): the remote TEI also rate-limits bursty probe
- * pools with HTTP 429 — David's Run All came back with 19/116 rows
- * 'unknown', every note "rerank failed: HTTP 429", while the individual
- * probes that followed (1-at-a-time) all succeeded. The batch embeds never
- * failed (teiEmbed already retries) — only the bare rerank call had no
- * retry. Retry the transient statuses with jittered backoff (a burst token
- * bucket refills in ~1s, so the next attempt lands); Retry-After wins when
- * the server sends it. Timeouts are NOT retried — a hanging endpoint must
- * stay bounded at PROBE_TIMEOUT_MS per attempt, not 3×.
- */
-const RERANK_RETRY_STATUSES = new Set([429, 502, 503, 504]);
-const RERANK_RETRY_ATTEMPTS = 3;
-const RERANK_RETRY_BASE_MS = 600;
-
-const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-async function rerankTexts(query, texts) {
-  const rerankUrl = process.env.OKF_RERANK_ENDPOINT || '';
-  if (!rerankUrl) {
-    const err = new Error('rerank endpoint not configured (OKF_RERANK_ENDPOINT)');
-    err.code = 'RERANK_NOT_CONFIGURED';
-    throw err;
-  }
-  const rerankToken = process.env.OKF_RERANK_TOKEN || '';
-  const headers = { 'Content-Type': 'application/json' };
-  if (rerankToken) headers.Authorization = `Bearer ${rerankToken}`;
-  for (let attempt = 1; attempt <= RERANK_RETRY_ATTEMPTS; attempt += 1) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-    try {
-      const resp = await fetch(rerankUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ query, texts }),
-        signal: controller.signal
-      });
-      if (!resp.ok) {
-        const err = new Error(`HTTP ${resp.status}`);
-        err.status = resp.status;
-        err.retryable = RERANK_RETRY_STATUSES.has(resp.status);
-        const ra = Number(resp.headers && resp.headers.get && resp.headers.get('retry-after'));
-        if (Number.isFinite(ra) && ra > 0) err.retryAfterMs = ra * 1000;
-        if (err.retryable && attempt >= RERANK_RETRY_ATTEMPTS) {
-          err.message = `HTTP ${resp.status} after ${RERANK_RETRY_ATTEMPTS} attempts`;
-        }
-        throw err;
-      }
-      const decoded = await resp.json();
-      if (!Array.isArray(decoded)) throw new Error('unexpected rerank response shape');
-      return decoded;
-    } catch (e) {
-      if (e.retryable === true && attempt < RERANK_RETRY_ATTEMPTS) {
-        const delay = e.retryAfterMs || RERANK_RETRY_BASE_MS * attempt + Math.floor(Math.random() * 250);
-        logger.warn('head-suite.rerank_retry', {
-          attempt,
-          status: e.status,
-          delay_ms: delay,
-          texts: texts.length
-        });
-        await sleepMs(delay);
-        continue;
-      }
-      throw e;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-  throw new Error('rerank failed: retry loop exited unexpectedly'); // defensive, unreachable
-}
-
-/**
  * 1-8g — the LIGHT probe: embed → top-K from the repo's ingested corpus →
  * rerank → coverage verdict. This is the per-row core of probeSuiteQuery
  * WITHOUT the panel extras (head leg, reference files, top-chunk table) —
@@ -1415,15 +1326,21 @@ async function probeQueryLight(db, graphName, query) {
   const at = new Date().toISOString();
   const probe = { at, query, docs: 0, top_score: null, verdict: 'unknown' };
   try {
-    // 1. Embed (same TEI + BGE query-prefix contract as routing).
-    const embeddings = await frontmatterService.teiEmbed([query]);
-    const emb = Array.isArray(embeddings) && embeddings[0];
+    // 1. Embed — via headTestService.embedQueryBatch (review !622 round 9,
+    // #78663): the BGE query-prefix contract lives THERE (bare vs prefixed
+    // embedding puts the query in a different vector space and flips
+    // verdicts wholesale — live bug 1-8g-b). The old bare teiEmbed call
+    // scored this probe's top-K in the wrong space.
+    const embedded = await headTestService.embedQueryBatch([query]);
+    const emb = embedded && embedded.vectors && embedded.vectors[0];
     if (!emb) {
       probe.note = 'query embedding failed';
       return probe;
     }
 
-    // 2. Top-K chunks from THIS repo's ingested corpus.
+    // 2. Top-K chunks from THIS repo's ingested corpus — the same AQL shape
+    // as headTestService.probeGraph's replay (kept local: the light probe
+    // adds a rerank step the replay does not have).
     const rows = (
       await (
         await db.query(
@@ -1677,6 +1594,13 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       throw err;
     }
 
+    // Review !622 round 9, #78665: prefetch the static per-row context ONCE
+    // (after the suite check, so a 404 does not pay for it). routingTest
+    // re-fetches the repo (getById → metrics + doc-repo refs) and re-scans
+    // the sibling list per call, and Run-All executes it once per suite row.
+    // Both objects are read-only inside routingTest, so the 4-way worker
+    // pool shares them safely. Single-test endpoints pass no prefetch.
+    const prefetched = { underTest: repo, siblings: await headTestService.loadSiblings(db, repoId) };
     const all = [...suite.payload.positive.map((q) => ({ ...q })), ...suite.payload.negative.map((q) => ({ ...q }))];
     // 1-8g-x (David: "the UI should show a progress bar for the run"): the
     // worker reports {phase, done, total} through opts.reportProgress — the
@@ -1706,7 +1630,11 @@ async function runSuite(repoId, suiteKey, opts = {}) {
         if (!item) return;
         const { q, i } = item;
         try {
-          const r = await headTestService.routingTest(repoId, { query: q.query, include_probes: false }, opts);
+          const r = await headTestService.routingTest(
+            repoId,
+            { query: q.query, include_probes: false },
+            { ...opts, prefetched }
+          );
           results[i] = {
             query: q.query,
             kind: q.kind,

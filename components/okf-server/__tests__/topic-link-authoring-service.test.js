@@ -387,9 +387,19 @@ describe('topic-link-authoring-service — batching spans source documents', () 
     expect(new Set(flat).size).toBe(concepts.length);
   });
 
-  it('is deterministic — a re-run batches identically (the cap is order-sensitive)', () => {
+  it('is deterministic and order-sensitive — batches pinned against a literal', () => {
     const concepts = Array.from({ length: 30 }, (_, i) => concept(`d${i % 6}-sec${i}`, `T${i}`));
-    expect(buildBatches(concepts, 7)).toEqual(buildBatches(concepts, 7));
+    // A self-comparison (toEqual of two in-process calls) could only fail on
+    // nondeterminism — an input-order change altered the batches while the
+    // assertion stayed green (review !622 round 9, #78683). The membership
+    // is pinned instead.
+    expect(buildBatches(concepts, 7).map((b) => b.map((c) => c.concept_id))).toEqual([
+      ['d0-sec0', 'd1-sec1', 'd2-sec2', 'd3-sec3', 'd4-sec4', 'd5-sec5'],
+      ['d0-sec6', 'd1-sec7', 'd2-sec8', 'd3-sec9', 'd4-sec10', 'd5-sec11', 'd0-sec12'],
+      ['d1-sec13', 'd2-sec14', 'd3-sec15', 'd4-sec16', 'd5-sec17', 'd0-sec18', 'd1-sec19'],
+      ['d2-sec20', 'd3-sec21', 'd4-sec22', 'd5-sec23', 'd0-sec24', 'd1-sec25', 'd2-sec26'],
+      ['d3-sec27', 'd4-sec28', 'd5-sec29']
+    ]);
   });
 });
 

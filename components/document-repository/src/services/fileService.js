@@ -815,7 +815,10 @@ class FileService {
       // not lose its files doc + disk file while the served corpus references
       // it. The frontend gate is UX; this is the contract.
       const servingStatus =
-        file.dataprep && String(file.dataprep.status || '').toLowerCase().trim();
+        file.dataprep &&
+        String(file.dataprep.status || '')
+          .toLowerCase()
+          .trim();
       if (servingStatus === 'ingested' || servingStatus === 'ingesting' || servingStatus === 'ingested with warnings') {
         const err = new Error(
           `File ${fileId} is still serving the corpus (dataprep status: ${file.dataprep.status}) — retract it before deleting`

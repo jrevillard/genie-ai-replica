@@ -453,7 +453,7 @@ export default {
       deleteService: 'Hlakola Tshebeletso',
       empty: 'Ha ho dihlopha tse fumanweng. Tobetsa "Eketsa Sehlopha se Setjha" ho qala.',
       formTitleCreateCategory: 'Theha Sehlopha se Setjha',
-      formTitleAddService: 'Eketsa Tshebeletso ho "{categoryName}"',
+      formTitleAddService: "Eketsa Tshebeletso ho \"{'{'}categoryName{'}'}\"",
       formTitleEditCategory: 'Fetola Sehlopha: "{itemName}"',
       formTitleEditService: 'Fetola Tshebeletso: "{itemName}"',
       nameEnLabel: 'Lebitso (Senyesemane)',

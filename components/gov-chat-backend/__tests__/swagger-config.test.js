@@ -104,6 +104,7 @@ afterAll(() => {
 });
 
 // Access the exported config objects directly — no capture mocking needed
+const swaggerJsdoc = require('swagger-jsdoc');
 const { swaggerOptions, swaggerUiSetupOptions } = require('../index');
 
 describe('Swagger Configuration', () => {
@@ -179,6 +180,57 @@ describe('Swagger Configuration', () => {
     it('should generate the Swagger spec without errors', () => {
       expect(swaggerOptions).toBeDefined();
       expect(swaggerOptions.definition.openapi).toBe('3.0.0');
+    });
+
+    it('should resolve every $ref in the route annotations to a defined schema', () => {
+      // A $ref to an undefined schema is silent at runtime — swagger-ui
+      // loses the model and the client generator drops it. This shipped
+      // once: !609 referenced CategoryTree without defining it. Build the
+      // merged spec exactly as the runtime does and assert every local
+      // schema $ref resolves.
+      const fs = require('fs');
+      const path = require('path');
+      const mockedFs = { ...fs };
+      const mockedPath = { ...path };
+      // This suite mocks fs (index.js's uploads-dir probe) and path; the
+      // spec build needs the real ones. Restore, build, put the mocks back.
+      Object.assign(fs, jest.requireActual('fs'));
+      Object.assign(path, jest.requireActual('path'));
+      let spec;
+      try {
+        // The runtime object's apis glob is relative to the backend dir;
+        // anchor it to this file so the test does not depend on the
+        // directory jest was invoked from.
+        spec = swaggerJsdoc({
+          ...swaggerOptions,
+          apis: [path.join(__dirname, '..', 'routes', '*.js')]
+        });
+      } finally {
+        for (const key of Object.keys(fs)) delete fs[key];
+        Object.assign(fs, mockedFs);
+        for (const key of Object.keys(path)) delete path[key];
+        Object.assign(path, mockedPath);
+      }
+      const defined = new Set(Object.keys(spec.components?.schemas || {}));
+      const refs = new Set();
+      const walk = (node) => {
+        if (!node || typeof node !== 'object') return;
+        if (Array.isArray(node)) {
+          node.forEach(walk);
+          return;
+        }
+        for (const [key, value] of Object.entries(node)) {
+          if (key === '$ref' && typeof value === 'string' && value.startsWith('#/components/schemas/')) {
+            refs.add(value.replace('#/components/schemas/', ''));
+          } else {
+            walk(value);
+          }
+        }
+      };
+      walk(spec);
+      expect(refs.size).toBeGreaterThan(0);
+      const dangling = [...refs].filter((name) => !defined.has(name));
+      expect(dangling).toEqual([]);
     });
   });
 });

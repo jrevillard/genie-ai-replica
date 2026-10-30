@@ -34,7 +34,7 @@ void main() {
       // TODO
     });
 
-    // ApiQueriesPostRequestContext context
+    // QueryContext context
     test('to test the property `context`', () async {
       // TODO
     });

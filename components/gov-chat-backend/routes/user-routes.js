@@ -12,23 +12,6 @@ const { JIT_FORWARD_FIELDS } = require('../constants/jit-fields');
  *   - name: Current User
  *     description: Authenticated user profile management (/api/me singleton)
  *
- * components:
- *   schemas:
- *     User:
- *       type: object
- *       properties:
- *         email:
- *           type: string
- *           format: email
- *           description: User's email address
- *         createdAt:
- *           type: string
- *           format: date-time
- *           description: Account creation timestamp
- *         updatedAt:
- *           type: string
- *           format: date-time
- *           description: Last update timestamp
  */
 
 // Configure multer for in-memory file storage

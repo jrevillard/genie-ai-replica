@@ -1676,7 +1676,11 @@ services:
     #   - "5000:5000"
     environment:
       DATAPREP_COMPONENT_NAME: GENIE_DATAPREP_ARANGODB
-      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      # Empty by default: the served model id is DISCOVERED at /v1/models.
+      # On first boot this waits for vLLM through the standard restart cycle
+      # (unless-stopped) while the model loads. Set VLLM_LLM_MODEL_ID to pin
+      # a name and skip discovery entirely.
+      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-}
       VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://vllm:8000}
       # Two names, two consumers, and they are NOT the same knob.
       #
@@ -1927,7 +1931,11 @@ services:
       # Same source as the vLLM container's --served-model-name: the explicit
       # env is the deployer override the summarizer uses as-is (no boot-time
       # probe race against a still-loading vLLM).
-      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      # Empty by default: the served model id is DISCOVERED at /v1/models.
+      # On first boot this waits for vLLM through the standard restart cycle
+      # (unless-stopped) while the model loads. Set VLLM_LLM_MODEL_ID to pin
+      # a name and skip discovery entirely.
+      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
       HF_TOKEN: ${VLLM_API_KEY:-}
       VLLM_API_KEY: ${VLLM_API_KEY:-}

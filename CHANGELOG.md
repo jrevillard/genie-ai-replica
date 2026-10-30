@@ -367,7 +367,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-
+- **Chat requests no longer die on token counting.** The history-truncation
+  budget needs exact token counts, and chatqna used to load a local
+  HuggingFace tokenizer for them — the image bakes no HF cache and deployments
+  grant no huggingface.co egress, so on isolated deployments every chat died on
+  its first request (`OSError: We couldn't connect to 'https://huggingface.co'`).
+  Token counting now calls the LLM server's `/tokenize` endpoint, so the counts
+  always come from the tokenizer of whatever model is actually deployed. The
+  model name sent to the LLM server is discovered from the server itself
+  (`/v1/models`) instead of falling back to a compiled-in name — vLLM validates
+  the name and rejects unknown ones. The same discovery now backs the
+  retriever's summarizer and dataprep's labelling/graph-extraction clients
+  (previously gated on `GPU_NODE_HOST`, silently falling back to a name that
+  could diverge from the deployed model). The compose services no longer pin
+  a default model name: discovery is the default everywhere, and a first
+  boot simply waits for vLLM through the standard container restart cycle
+  while the model loads. **Config note:** chatqna no longer reads `LLM_MODEL`;
+  `VLLM_MODEL_ID` is the override every Python service honors (set it only to
+  pin a name — without it the served model is discovered automatically).
+  Counting failures abort the request loudly rather than silently feeding a
+  zero into the truncation budget. (#631)
 - **A category or a service with no translation in the active language
   disappeared from the knowledge tree.** The public tree published the
   localized name and nothing else, so an entity nobody had translated in the

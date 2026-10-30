@@ -56,7 +56,6 @@ const { createHash } = require('node:crypto');
 const dbService = require('../shared-lib/db-connection-service');
 
 const frontmatterService = require('./frontmatter-service');
-const modelCache = require('./vllm-model-cache');
 const repositoryService = require('./repository-service');
 const headTestService = require('./head-test-service');
 
@@ -686,7 +685,7 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         // too), else the deployment pin or the served model (base + key
         // travel together in deploymentDiscoveredModelId). 'vllm' survives
         // only when nothing answered at all.
-        generator: `llm:${lastGenModel || (await modelCache.deploymentDiscoveredModelId()) || 'vllm'}`,
+        generator: lastGenModel ? `llm:${lastGenModel}` : 'none',
         sibling_names: siblings.map((s) => s.name),
         off_domain_topics: randomTopics,
         // Story 1-8d — the forbidden list this suite was generated against.

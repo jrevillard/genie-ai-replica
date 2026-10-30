@@ -224,7 +224,9 @@ function buildNeighborIndex(concepts, k = DEFAULT_NEIGHBORS) {
 /** vLLM chat call — mirrors llm-curation-service.callVllm (endpoint/bearer
  * normalization + strict JSON) so both curation passes behave identically. */
 async function callVllm(messages, { timeoutMs = TIMEOUT_MS } = {}) {
-  const rawBase = process.env.VLLM_ENDPOINT;
+  // The opt-in gate: compose ships VLLM_ENDPOINT empty (the OKF LLM legs
+  // stay off until a deployment names the endpoint).
+  const rawBase = modelCache.optedInVllmBase();
   // No endpoint at all = the deliberate opt-out (compose ships it empty).
   if (!rawBase) throw new Error('llm-not-configured');
   // Model id under the !631 policy (services/vllm-model-cache.js): pin ->

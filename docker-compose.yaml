@@ -791,14 +791,12 @@ services:
       # ever receives THIS spelling.
       - VLLM_LLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-}
       - VLLM_API_KEY=${VLLM_API_KEY:-}
-      # Discovery knobs (#1181) — same names/defaults as the OPEA services
-      # (one .env line tunes both worlds). The TTL needs no default here
-      # (code default 60 s); the probe timeout matters when vLLM is still
-      # loading weights (see the OPEA note at the dataprep block).
-      # Model-id cache TTL — one knob for the Python services and the OKF
-      # Node services (the OPEA blocks read the same variable).
+      # Discovery knobs (#1181) — the same names and defaults as the OPEA
+      # blocks, so one .env line tunes both worlds. The TTL is the model-id
+      # cache window; the probe timeout bounds the /v1/models probe (raise
+      # it when vLLM is still loading weights — see the dataprep block).
       - MODEL_DETECT_TTL=${MODEL_DETECT_TTL:-60}
-      - MODEL_PROBE_TIMEOUT_SECONDS=${MODEL_PROBE_TIMEOUT_SECONDS:-}
+      - MODEL_PROBE_TIMEOUT_SECONDS=${MODEL_PROBE_TIMEOUT_SECONDS:-10}
       # Judge key: EXPLICIT only (no VLLM_API_KEY default here — the
       # deployment bearer must not be manufactured for a judge base the
       # operator may point anywhere; the service only sends it when the

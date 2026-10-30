@@ -375,7 +375,8 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   let apiKey = modelCache.deploymentKey();
   let viaOverride = false;
   let viaForeignBase = false; // host switched away from the deployment base
-  let judgeIsDeployment = false; // the judge base IS the deployment endpoint
+  let judgeIsDeployment; // the judge base IS the deployment endpoint
+  let configIsDeployment = false; // the named config points at the deployment endpoint
   const callBudgetMs = opts.timeoutMs || 60000;
   // The ENV JUDGE is the .env RAGAS_JUDGE_* pair — the same variables the
   // sidecar's default judge and the OKF panel's "system default" label name.
@@ -390,19 +391,19 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
     // the deployment pin never names a model on another endpoint.
     if (process.env.RAGAS_JUDGE_BASE_URL) {
       host = process.env.RAGAS_JUDGE_BASE_URL;
-      // The judge base is foreign to the deployment PIN only when it is a
-      // DIFFERENT endpoint: the same server under another path (the
-      // shipped http://vllm:8000/v1 vs http://vllm:8000) serves the very
-      // model the pin names — and the pin exists precisely for endpoints
-      // whose /v1/models is unreachable.
-      judgeIsDeployment = modelCache.sameOrigin(host, modelCache.deploymentVllmBase());
-      viaForeignBase = !judgeIsDeployment;
     }
     if (process.env.RAGAS_JUDGE_MODEL) model = process.env.RAGAS_JUDGE_MODEL;
-    // Judge-key parity with the sidecar (compose defaults RAGAS_JUDGE_API_KEY
-    // to VLLM_API_KEY) — but the deployment key only travels to the judge
-    // base when that IS the deployment endpoint: a foreign judge base gets
-    // its own key or none, never the GPU bearer.
+    // The judge base is foreign to the deployment PIN and to the deployment
+    // credential only when it is a DIFFERENT endpoint: the same server
+    // under another path (the shipped http://vllm:8000/v1 vs
+    // http://vllm:8000) serves the very model the pin names — and the pin
+    // exists precisely for endpoints whose /v1/models is unreachable. An
+    // unset judge base means the deployment endpoint itself.
+    judgeIsDeployment = modelCache.sameOrigin(host, modelCache.deploymentVllmBase());
+    viaForeignBase = !judgeIsDeployment;
+    // The judge key is EXPLICIT (RAGAS_JUDGE_API_KEY) or, when the judge
+    // base IS the deployment endpoint, the deployment credential. A foreign
+    // judge base gets its own key or none — never the GPU bearer.
     apiKey = process.env.RAGAS_JUDGE_API_KEY || '';
     if (!apiKey && judgeIsDeployment) apiKey = modelCache.deploymentKey();
   }
@@ -430,7 +431,12 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
       // third-party base gets neither: the GPU bearer must never leave the
       // deployment endpoint (probe AND chat call).
       apiKey = modelCache.credentialForBase(host, ovr.api_key);
+      // A config pointing at the DEPLOYMENT endpoint resolves like the
+      // deployment path (the pin applies — it exists for endpoints whose
+      // /v1/models is unreachable); any other base resolves its own served
+      // model.
       viaOverride = true;
+      configIsDeployment = modelCache.sameOrigin(host, modelCache.deploymentVllmBase());
     }
   } catch {
     /* env fallback — see docblock */
@@ -445,7 +451,7 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   let chatTimeoutMs = callBudgetMs;
   if (!model) {
     const resolved =
-      viaOverride || viaForeignBase
+      viaForeignBase || (viaOverride && !configIsDeployment)
         ? await modelCache.resolveForeignModel({ baseUrl: host, apiKey, budgetMs: callBudgetMs })
         : await modelCache.resolveDeploymentModel({ baseUrl: host, apiKey, budgetMs: callBudgetMs });
     model = resolved.model;
@@ -959,9 +965,9 @@ async function suggestTags(repoId, _opts = {}) {
       label_count: coverage.label_count,
       labels_represented: coverage.labels_represented,
       vllm_host: modelCache.deploymentVllmBase(),
-      // The pin only — the id itself is discovered at call time inside
-      // vllmChatCompletions (this log fires before the resolution).
-      model: modelCache.envPin(),
+      // The PIN only (null when the model is discovered) — the model that
+      // actually answered is logged by frontmatter.suggest.done.
+      model_pin: modelCache.envPin(),
       prompt_chars: prompt.length
     });
     // maxTokens 1000 was NOT headroom, it was a live failure: on a 586-concept

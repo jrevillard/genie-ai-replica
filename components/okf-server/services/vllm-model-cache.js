@@ -114,7 +114,30 @@ function probeTimeoutMs() {
   return Number.isFinite(v) && v > 0 ? v * 1000 : PROBE_TIMEOUT_DEFAULT_MS;
 }
 
-/** Probe once; on success return the first served id, else null.
+// The transient classes the chat path retries (frontmatter-service's
+// withUpstreamRetry): a probe that gives up on the first blip would fail
+// the whole LLM leg, while the chat call would have recovered.
+const RETRIABLE_PROBE_CODES = new Set([
+  'ECONNABORTED',
+  'ECONNRESET',
+  'EPIPE',
+  'ETIMEDOUT',
+  'ERR_STREAM_PREMATURE_CLOSE'
+]);
+const RETRIABLE_PROBE_STATUS = new Set([429, 502, 503, 504]);
+const PROBE_RETRY_DELAY_MS = 250;
+
+function isRetriableProbeError(err) {
+  if (!err) return false;
+  const status = err.response && err.response.status;
+  if (status && RETRIABLE_PROBE_STATUS.has(status)) return true;
+  if (err.code && RETRIABLE_PROBE_CODES.has(err.code)) return true;
+  const msg = typeof err.message === 'string' ? err.message : '';
+  return /stream has been aborted|socket hang up|premature close|ECONNRESET/i.test(msg);
+}
+
+/** Probe once (retrying a transient blip); on success the first served id,
+ * else null.
  *
  * Auth is EXACTLY the apiKey given by the caller — no env fallback here:
  * the deployment key may only be aimed at the deployment endpoint
@@ -130,7 +153,21 @@ async function probe(url, timeoutMs, apiKey) {
     // a caller's own budget may only tighten it.
     const ceiling = probeTimeoutMs();
     const timeout = timeoutMs ? Math.min(timeoutMs, ceiling) : ceiling;
-    const r = await axios.get(url, { headers, timeout });
+    let r;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        r = await axios.get(url, { headers, timeout });
+        break;
+      } catch (err) {
+        if (attempt === 0 && isRetriableProbeError(err)) {
+          // One short retry: a gateway blip must not fail the leg the way
+          // it would for a permanently broken endpoint.
+          await new Promise((resolve) => setTimeout(resolve, PROBE_RETRY_DELAY_MS));
+          continue;
+        }
+        throw err;
+      }
+    }
     const list = r.data && Array.isArray(r.data.data) ? r.data.data : [];
     const entry = list[0] || null;
     const id = typeof entry === 'string' ? entry : entry && typeof entry.id === 'string' ? entry.id : null;
@@ -250,22 +287,22 @@ function credentialForBase(baseUrl, ownKey) {
  * the call budget: the discovery round trip is part of the budget, and the
  * chat call must never be handed a useless remainder (a 1 ms timeout fails
  * non-retriably on a healthy endpoint). */
-async function resolveDeploymentModel({ baseUrl, apiKey, budgetMs }) {
+async function resolveDeploymentModel({ baseUrl, apiKey, budgetMs, probeBudgetMs }) {
   const startedAt = Date.now();
   const model = await resolveVllmModelId(baseUrl, {
     apiKey,
-    timeoutMs: Math.max(1, Math.floor(budgetMs / 2))
+    timeoutMs: probeBudgetMs || Math.max(1, Math.floor(budgetMs / 2))
   });
   return { model, remainingMs: Math.max(1000, budgetMs - (Date.now() - startedAt)) };
 }
 
 /** Same, for a FOREIGN endpoint (named model-config, judge base): the pin
  * never applies there — the served model is the only authority. */
-async function resolveForeignModel({ baseUrl, apiKey, budgetMs }) {
+async function resolveForeignModel({ baseUrl, apiKey, budgetMs, probeBudgetMs }) {
   const startedAt = Date.now();
   const model = await requireServedModelId(baseUrl, {
     apiKey,
-    timeoutMs: Math.max(1, Math.floor(budgetMs / 2))
+    timeoutMs: probeBudgetMs || Math.max(1, Math.floor(budgetMs / 2))
   });
   return { model, remainingMs: Math.max(1000, budgetMs - (Date.now() - startedAt)) };
 }
@@ -276,6 +313,17 @@ async function resolveForeignModel({ baseUrl, apiKey, budgetMs }) {
  * disagree on which base is "the deployment endpoint". */
 function deploymentVllmBase() {
   return process.env.VLLM_ENDPOINT || 'http://vllm:8000';
+}
+
+/** The endpoint the deployment OPTED IN for the OKF LLM legs: the env
+ * endpoint, or null when it is unset. Compose ships VLLM_ENDPOINT empty
+ * on purpose ("a deployment opts IN by setting VLLM_ENDPOINT +
+ * VLLM_API_KEY"), so the curation / topic-link / summary legs stay off
+ * until it is set — unlike the tagging leg, which has always addressed
+ * the local vLLM service. Named here so the gate is not re-implemented
+ * as a raw env read in three services. */
+function optedInVllmBase() {
+  return process.env.VLLM_ENDPOINT || null;
 }
 
 /** The deployment endpoint's served model, soft: base AND deployment
@@ -308,7 +356,13 @@ function sameOrigin(a, b) {
     const pb = ub.pathname.replace(/\/+$/, '');
     if (pa === pb) return true;
     const [short, long] = pa.length <= pb.length ? [pa, pb] : [pb, pa];
-    return long.startsWith(short === '' ? '/' : `${short}/`);
+    // A base WITHOUT a path names the whole host — but only the
+    // version-style prefix of that host is the same endpoint (…/v1 is the
+    // OpenAI-compatible prefix of the same server); an arbitrary path
+    // (…/tenant-b) is a DIFFERENT endpoint and must not receive the
+    // deployment credential.
+    if (short === '') return /^\/v\d+$/.test(long);
+    return long.startsWith(`${short}/`);
   } catch {
     return false;
   }
@@ -332,6 +386,7 @@ module.exports = {
   deploymentVllmBase,
   discoverVllmModelId,
   getServedModelId,
+  optedInVllmBase,
   requireServedModelId,
   resolveDeploymentModel,
   resolveForeignModel,

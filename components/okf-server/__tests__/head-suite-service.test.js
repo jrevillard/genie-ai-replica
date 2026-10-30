@@ -2250,7 +2250,7 @@ describe('suite generator — model-id provenance (!631 policy)', () => {
     cache.clearModelCache();
   });
 
-  it('no pin: payload.generator names the discovered model, not a placeholder', async () => {
+  it('no generation call stamped a model: the label says none — never a model that did not generate', async () => {
     delete process.env.VLLM_MODEL_ID;
     delete process.env.VLLM_LLM_MODEL_ID;
     process.env.VLLM_ENDPOINT = 'http://vllm:8000';
@@ -2264,10 +2264,10 @@ describe('suite generator — model-id provenance (!631 policy)', () => {
       })
     );
     const s = await svc.generateSuite('me', {}, {});
-    expect(s.payload.generator).toBe('llm:served/suite-8b');
+    expect(s.payload.generator).toBe('none');
   });
 
-  it('F3: with VLLM_ENDPOINT unset the label still names the model the default host serves', async () => {
+  it('the label names the model the generation calls stamped (no probe, no placeholder)', async () => {
     delete process.env.VLLM_MODEL_ID;
     delete process.env.VLLM_LLM_MODEL_ID;
     delete process.env.VLLM_ENDPOINT; // compose okf default — base falls back to the service name
@@ -2280,9 +2280,17 @@ describe('suite generator — model-id provenance (!631 policy)', () => {
         keywords: []
       })
     );
+    frontmatterService.vllmChatCompletions.mockResolvedValue({
+      ...llmResponse({
+        positive: [{ query: 'What is the licensing fee?', reason: 'topic hit' }],
+        negative: [],
+        keywords: []
+      }),
+      model: 'frontier/tagger-stamped'
+    });
     const s = await svc.generateSuite('me', {}, {});
-    expect(require('axios').get).toHaveBeenCalledWith('http://vllm:8000/v1/models', expect.anything());
-    expect(s.payload.generator).toBe('llm:served/suite-8b');
+    expect(require('axios').get).not.toHaveBeenCalled(); // the stamp needs no probe
+    expect(s.payload.generator).toBe('llm:frontier/tagger-stamped');
   });
 
   it('r3: the generator label reads the stamped resp.model of the generation calls — no probe at all', async () => {

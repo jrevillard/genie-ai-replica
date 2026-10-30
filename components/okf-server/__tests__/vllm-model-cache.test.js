@@ -383,3 +383,25 @@ describe('review round 5 fixes (#1181)', () => {
     expect(axios.get).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('final review fixes (#1181)', () => {
+  test('the probe retries a transient failure once', async () => {
+    axios.get
+      .mockRejectedValueOnce(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }))
+      .mockResolvedValueOnce(modelsPayload('served/model'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).resolves.toBe('served/model');
+    expect(axios.get).toHaveBeenCalledTimes(2);
+  });
+
+  test('a permanent failure is NOT retried', async () => {
+    axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
+    expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('sameOrigin: a path-less base matches a version prefix, never an arbitrary path', () => {
+    expect(cache.sameOrigin('http://vllm:8000', 'http://vllm:8000/v1')).toBe(true);
+    expect(cache.sameOrigin('http://vllm:8000', 'http://vllm:8000/tenant-b')).toBe(false);
+    expect(cache.sameOrigin('http://gpu:8000/llm', 'http://gpu:8000/llm/v1')).toBe(true);
+  });
+});

@@ -79,13 +79,16 @@ async function resolveAreaContext(domain) {
  * JSON 502. */
 async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
   const t0 = Date.now();
-  let rawBase = process.env.VLLM_ENDPOINT;
+  // The opt-in gate: compose ships VLLM_ENDPOINT empty (the OKF LLM legs
+  // stay off until a deployment names the endpoint).
+  let rawBase = modelCache.optedInVllmBase();
   let model = null; // resolved below — explicit pick > pin > discovery (!631)
   // Both key spellings — the chat call and the probe must agree on the
   // credential (a probe that authenticates while the chat call does not
   // fails with a bare 401).
   let apiKey = modelCache.deploymentKey();
   let viaOverride = false;
+  let configIsDeployment = false;
   try {
     const ovr = await require('./model-config-service').resolveModelOverride({ service: 'okf_curation' });
     if (ovr && ovr.provider === 'openai') {
@@ -97,6 +100,11 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
       // deployment endpoint (probe AND chat call).
       apiKey = modelCache.credentialForBase(rawBase, ovr.api_key);
       viaOverride = true;
+      // A config pointing at the DEPLOYMENT endpoint resolves like the
+      // deployment path (the pin applies — it exists for endpoints whose
+      // /v1/models is unreachable); any other base resolves its own served
+      // model.
+      configIsDeployment = modelCache.sameOrigin(rawBase, modelCache.deploymentVllmBase());
     }
   } catch {
     /* env fallback — see docblock */
@@ -110,9 +118,10 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
   // the chat call — never less than a usable minimum).
   let chatTimeoutMs = timeoutMs;
   if (!model) {
-    const resolved = viaOverride
-      ? await modelCache.resolveForeignModel({ baseUrl: rawBase, apiKey, budgetMs: timeoutMs })
-      : await modelCache.resolveDeploymentModel({ baseUrl: rawBase, apiKey, budgetMs: timeoutMs });
+    const resolved =
+      viaOverride && !configIsDeployment
+        ? await modelCache.resolveForeignModel({ baseUrl: rawBase, apiKey, budgetMs: timeoutMs })
+        : await modelCache.resolveDeploymentModel({ baseUrl: rawBase, apiKey, budgetMs: timeoutMs });
     model = resolved.model;
     chatTimeoutMs = resolved.remainingMs;
   }

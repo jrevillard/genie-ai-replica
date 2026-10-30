@@ -905,7 +905,9 @@ describe('ensureSummary — model-id resolution (!631 policy)', () => {
     await conceptMeta.ensureSummary('r1');
     // The LAST call — mock.calls accumulates across this file's tests.
     const postTimeout = axios.post.mock.calls[axios.post.mock.calls.length - 1][2].timeout;
-    expect(postTimeout).toBeLessThan(5000);
-    expect(postTimeout).toBeGreaterThan(4000);
+    // The chat call stays inside the 5 s budget and never below the usable
+    // floor (a 1 ms timeout would fail non-retriably on a healthy endpoint).
+    expect(postTimeout).toBeLessThanOrEqual(5000);
+    expect(postTimeout).toBeGreaterThanOrEqual(1000);
   });
 });

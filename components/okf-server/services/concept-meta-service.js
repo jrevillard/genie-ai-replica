@@ -723,7 +723,9 @@ function buildSummaryPrompt(m) {
  * verbatim produced `/v1/v1/...`. Short timeout — best-effort, off the
  * ingestion hot path. */
 async function runLlmSummary(prompt, { timeoutMs = 5000 } = {}) {
-  const rawBase = process.env.VLLM_ENDPOINT;
+  // The opt-in gate: compose ships VLLM_ENDPOINT empty (the OKF LLM legs
+  // stay off until a deployment names the endpoint).
+  const rawBase = modelCache.optedInVllmBase();
   if (!rawBase) return null;
   // Model id under the !631 policy (services/vllm-model-cache.js): pin ->
   // /v1/models discovery -> loud. The probe budget stays inside the caller's
@@ -735,7 +737,10 @@ async function runLlmSummary(prompt, { timeoutMs = 5000 } = {}) {
     const resolved = await modelCache.resolveDeploymentModel({
       baseUrl: rawBase,
       apiKey: modelCache.deploymentKey(),
-      budgetMs: timeoutMs
+      budgetMs: timeoutMs,
+      // A best-effort summary: a slow probe must not eat half of its
+      // answer window — the probe gets 1 s, the answer the rest.
+      probeBudgetMs: Math.min(1000, timeoutMs)
     });
     model = resolved.model;
     chatTimeoutMs = resolved.remainingMs;

@@ -531,7 +531,6 @@ Manages the knowledge base structure for context retrieval:
 Key functions:
 - `getAllCategoriesWithServices`: Retrieval knowledge structure
 - `searchCategoriesAndServices`: Context-aware knowledge search
-- `upsertCategories`: Manages knowledge base updates
 
 ### User Profile Service
 **File**: `user-profile-service.js`

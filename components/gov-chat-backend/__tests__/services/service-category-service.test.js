@@ -117,65 +117,6 @@ describe('ServiceCategoryService', () => {
     });
   });
 
-  describe('upsertCategories', () => {
-    it('should create categories with translations', async () => {
-      const categories = [
-        { name: 'Taxes', catKey: 'taxes', translations: [{ languageCode: 'fr', translation: 'Impots' }] }
-      ];
-
-      const result = await service.upsertCategories(categories, 'en');
-
-      expect(result).toHaveLength(1);
-      expect(mockServiceCategories.save).toHaveBeenCalledWith(
-        expect.objectContaining({ nameEN: 'Taxes', catCode: 'taxes' })
-      );
-      expect(mockServiceCategoryTranslations.save).toHaveBeenCalledTimes(2);
-    });
-
-    it('should create category with default name when missing', async () => {
-      const categories = [{}];
-
-      await service.upsertCategories(categories);
-      expect(mockServiceCategories.save).toHaveBeenCalledWith(expect.objectContaining({ nameEN: 'Category 1' }));
-    });
-
-    it('should throw on database error', async () => {
-      mockServiceCategories.save.mockRejectedValue(new Error('DB error'));
-
-      await expect(service.upsertCategories([{ name: 'Test' }])).rejects.toThrow('DB error');
-    });
-  });
-
-  describe('upsertServices', () => {
-    it('should create services with translations and edges', async () => {
-      mockServices.save.mockResolvedValueOnce({ _key: 'svc-1' }).mockResolvedValueOnce({ _key: 'svc-2' });
-
-      const result = await service.upsertServices('cat-1', ['Service A', 'Service B'], 'en');
-
-      expect(result).toHaveLength(2);
-      expect(mockServices.save).toHaveBeenCalledTimes(2);
-      expect(mockServiceTranslations.save).toHaveBeenCalledTimes(2);
-      expect(mockCategoryServices.save).toHaveBeenCalledTimes(2);
-    });
-
-    it('should return empty array when categoryKey is missing', async () => {
-      const result = await service.upsertServices(null, ['Test']);
-      expect(result).toEqual([]);
-    });
-
-    it('should return empty array when services is not an array', async () => {
-      const result = await service.upsertServices('cat-1', 'not-array');
-      expect(result).toEqual([]);
-    });
-
-    it('should skip empty service names', async () => {
-      mockServices.save.mockResolvedValue({ _key: 'svc-1' });
-
-      const result = await service.upsertServices('cat-1', ['Valid', '', '  ']);
-      expect(result).toHaveLength(1);
-    });
-  });
-
   describe('createServiceWithTranslations', () => {
     it('should create service with correct order', async () => {
       mockDb.query.mockResolvedValue(createMockCursor([2]));

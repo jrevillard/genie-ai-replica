@@ -6,6 +6,26 @@ change requires manual action from deployers.
 
 ---
 
+## Unreleased
+
+### Breaking Changes
+
+#### Translation language overrides: `LANGUAGE_CODES_FILEPATH` / `LANGUAGE_SCRIPTS_FILEPATH` → `LANGUAGE_REGISTRY_FILEPATH`
+
+The supported translation languages are now read from a single canonical
+registry (`components/gov-chat-backend/services/translation/language-maps/language-registry.json`),
+not from the two chatqna JSON files or the per-model backend maps (now
+derived). The two old env overrides are gone.
+
+**Migration:** if your deployment set `LANGUAGE_CODES_FILEPATH` and/or
+`LANGUAGE_SCRIPTS_FILEPATH`, set `LANGUAGE_REGISTRY_FILEPATH` to the registry
+file instead (in the chatqna image the default already resolves next to the
+service module — most deployments need no change). A file left in the old
+flat shape is refused: the chatqna service logs an error and answers every
+request in English.
+
+---
+
 ## v2.1.0 → v3.0.0
 
 v3.0.0 carries breaking changes across deployment, configuration and API.

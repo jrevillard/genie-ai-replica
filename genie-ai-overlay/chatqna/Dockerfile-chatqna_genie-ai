@@ -124,8 +124,12 @@ COPY genie-ai-overlay/core/constants.py /home/user/comps/cores/mega/constants.py
 COPY genie-ai-overlay/chatqna/genieai_chatqna.py /app/ChatQnA/genieai_chatqna.py
 COPY genie-ai-overlay/chatqna/keycloak_token_validator.py /app/ChatQnA/keycloak_token_validator.py
 COPY genie-ai-overlay/chatqna/metrics.py /app/ChatQnA/metrics.py
-COPY genie-ai-overlay/chatqna/language_codes.json /app/ChatQnA/language_codes.json
-COPY genie-ai-overlay/chatqna/language_scripts.json /app/ChatQnA/language_scripts.json
+# The language registry is the single source of the supported languages,
+# shared with the backend's language maps. In the source tree the chatqna
+# directory reaches it through a symlink (language-registry.json); the image
+# gets a real COPY of the file it points at, so the runtime default of
+# LANGUAGE_REGISTRY_FILEPATH (next to the module) resolves.
+COPY components/gov-chat-backend/services/translation/language-maps/language-registry.json /app/ChatQnA/language-registry.json
 
 # Step E: Ensure all application files are owned by user
 RUN chown -R user:user /app

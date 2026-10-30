@@ -203,12 +203,20 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     // 2026-09-13): the row was claimed yet never kicked, and a stamped claim
     // left to age past the reaper's grace window during a saturated drain
     // gets a healthy concept dead-lettered as "stuck".
-    expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledTimes(1);
-    expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledWith(
-      REPO,
-      { concept_id: 'a', repo_id: REPO },
-      { patch: { worker_claimed_at: null } }
-    );
+    // Wave-2 review (#78658): the clear UN-COUNTS the stamped attempt too —
+    // one AQL UPDATE that nulls the claim and decrements ingest_attempts, so
+    // the poison-pill reaper only ever sees REAL kicked attempts.
+    expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
+    // aql documents expose the SQL on .query (positional binds in bindVars)
+    const unclaimCall = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .find((q) => {
+        const s = String((q && q.query) || '');
+        return s.includes('worker_claimed_at: null') && s.includes('ingest_attempts');
+      });
+    expect(unclaimCall).toBeDefined();
+    expect(unclaimCall.query).toContain('- 1, 0)');
+    expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
     // 429 LANE COOL-DOWN (incident 2026-09-28): the NEXT cycle must not claim
     // while the cool-down is armed — the old 1/sec hot loop across a saturated
     // queue kept the machine loaded enough to wedge Indonesia's settle. The
@@ -216,7 +224,10 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     // only the lane pauses.
     const res2 = await worker._processOneJob();
     expect(res2).toEqual({ outcome: 'idle' });
-    expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledTimes(1); // no second claim/kick
+    // Wave-2 (#78658): the 429 path talks to the meta store through the ONE
+    // unclaim AQL — conceptMeta.upsertConceptMeta stays at ZERO calls, and
+    // still no second claim/kick after the cool-down armed.
+    expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
   });
 
   test('dataprep transport error → outcome error; row TOUCHED (queue advances) but NOT transitioned', async () => {

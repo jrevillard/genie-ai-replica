@@ -721,6 +721,7 @@ const SERVE_URL = () => process.env.OKF_RAGAS_SERVE_URL || 'http://chatqna-xeon-
 // The backslash-sentinel regex is hoisted (review !622 wave 2, #78669): it
 // used to be compiled per streamed SSE line — thousands per run row. Safe to
 // share: String.replace with a global regex resets lastIndex per call.
+// eslint-disable-next-line no-control-regex -- the sentinel IS control chars, mirror of the backend
 const BS_RESTORE_RE = new RegExp('\x00BS\x00', 'g');
 function decodePyRepr(content, quote) {
   const out = content

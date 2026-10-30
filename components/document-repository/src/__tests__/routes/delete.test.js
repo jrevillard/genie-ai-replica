@@ -30,6 +30,16 @@ jest.mock('../../middlewares/keycloak-auth-middleware', () => ({
   isPublicRoute: jest.fn(() => false),
   mapRole: jest.fn()
 }));
+// Wave-2 review (#78677): the bundle-protection guard is FAIL-CLOSED — every
+// delete-route fixture programs it with an empty protected set (no bundle
+// rows), so a guard lookup answers [] and the delete proceeds; an unprogrammed
+// connection now means 503, not a silent skip.
+beforeEach(() => {
+  const { dbService } = require('../../../shared-lib');
+  dbService.getConnection.mockResolvedValue({
+    query: jest.fn().mockResolvedValue({ all: jest.fn().mockResolvedValue([]) })
+  });
+}); // guardProgrammed
 
 jest.mock('../../config/appConfig', () => ({
   upload: {

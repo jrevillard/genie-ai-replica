@@ -27,9 +27,11 @@ library;
 /// fall through to the next candidate.
 ///
 /// A value that is not a map resolves as the scalar it is (a falsy
-/// scalar to no text at all). A LIST is not a text value and the two
-/// platforms render it differently (the web dumps it as JSON) — see the
-/// branch below.
+/// scalar to no text at all). Two shapes are rendered DIFFERENTLY by
+/// the two platforms, and only a malformed configuration produces
+/// them: a list (the web dumps it as JSON) and a truthy number (its
+/// Dart string form, `5.0`, where the web shows `5`) — see the
+/// branches below.
 String resolveConfigText(dynamic value, String locale) {
   if (value is Map) {
     // The first NON-EMPTY text wins — the web's `||` chain: a null key
@@ -52,7 +54,9 @@ String resolveConfigText(dynamic value, String locale) {
     return '';
   }
   // A scalar the web's `value || ''` reads as falsy (0, false) is no
-  // text; a truthy number keeps its string form, as the web renders it.
+  // text. A truthy number keeps its DART string form, which is not
+  // the web's rendering of the same value (`5.0` here, `5` there) -
+  // a malformed-configuration-only divergence, like the list below.
   if (value is String) return value;
   // A list is not a text value. The web dumps it as JSON and the mobile
   // renders it as one comma-joined line - neither is the other

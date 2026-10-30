@@ -51,9 +51,17 @@ void main() {
         );
 
         // The card's LABEL: the shipped title, resolved under English.
+        // The shipped shape is a locale map; a scalar is a legal title
+        // too (resolveConfigText reads one), so it is compared as
+        // itself - a shape change FAILS the assertion, it does not
+        // throw on the dynamic read.
+        final shippedTitle = raw['title'];
+        final expectedTitle = shippedTitle is Map
+            ? shippedTitle['en']
+            : shippedTitle;
         expect(
           button['resolvedTitle'],
-          raw['title']?['en'],
+          expectedTitle,
           reason: 'button ${button['id']} does not show the shipped title',
         );
         // The card's ICON: the shipped icon's basename, as a bundled
@@ -90,44 +98,71 @@ void main() {
   /// issue #1124 lived here - the grid read `button['appearance']`
   /// while the parse was correct - and a widget test would bind it
   /// (#1191). Until that harness exists, this is the cheapest guard
-  /// that fails when the contract changes: the shipped key is the one
-  /// the grid must read, and the block that does not exist must not be
-  /// read.
+  /// that fails when the contract changes. Two regions, because the
+  /// bug had two halves in different places:
+  ///
+  /// - the RAW config blocks (`appearance`, `action`) must not be read
+  ///   ANYWHERE in the widget: the parse owns them, and the press
+  ///   path sits far above the grid;
+  /// - the grid's card must read the title the parse resolved, scoped
+  ///   to the grid itself: a whole-file grep was satisfied by two
+  ///   unrelated call sites, and the raw `title` key IS read from
+  ///   other maps elsewhere in the file (a conversation's title).
+  ///
+  /// A source guard has limits a behaviour test does not: it greps
+  /// text, and a string literal containing `//` truncates the comment
+  /// strip from there (it can miss a violation on that line; it
+  /// cannot invent one). #1191 replaces this group.
   group('the chat widget reads the shipped shape', () {
-    /// The GRID's code, comments stripped: a guard that can be
+    /// The source with comments stripped: a guard that can be
     /// satisfied by a comment proves nothing (the mutation that
     /// silenced the grid's title read left the identifier in a
     /// neighbouring comment and the guard stayed green).
-    ///
-    /// The region starts at the only `GridView.builder(` in the file:
-    /// the rest of the widget reads other maps (a conversation's
-    /// title, a message's role), so a whole-file grep would bind the
-    /// wrong lines - and the grid's own title read was satisfied by
-    /// two unrelated call sites.
+    String stripComments(String source) {
+      return source
+          .replaceAll(RegExp(r'///[^\n]*'), '')
+          .replaceAll(RegExp(r'//[^\n]*'), '')
+          .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '');
+    }
+
+    String sourceOf() =>
+        File('lib/components/chat/chatbot_component.dart').readAsStringSync();
+
+    /// The GRID's card only: from the file's single `GridView.builder(`
+    /// to the next section marker. Bounded on both ends, because the
+    /// dialogs below the grid read their own maps and are not this
+    /// contract.
     String gridCode() {
-      final source = File(
-        'lib/components/chat/chatbot_component.dart',
-      ).readAsStringSync();
+      final source = sourceOf();
       final start = source.indexOf('GridView.builder(');
       expect(
         start,
         greaterThanOrEqualTo(0),
         reason: 'the grid is gone from the widget',
       );
-      return source
-          .substring(start)
-          .replaceAll(RegExp(r'///[^\n]*'), '')
-          .replaceAll(RegExp(r'//[^\n]*'), '')
-          .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '');
+      expect(
+        source.indexOf('GridView.builder(', start + 1),
+        -1,
+        reason: 'a second grid exists - the guard must name its own',
+      );
+      final end = source.indexOf('// Confirm Dialogs & Save/Export Alerts');
+      expect(
+        end,
+        greaterThan(start),
+        reason: 'the section after the grid is gone - re-bound the guard',
+      );
+      return stripComments(source.substring(start, end));
     }
 
-    test('the grid does not read the appearance block', () {
+    test('the widget does not read the raw config blocks', () {
       expect(
         RegExp(
-          r'\[\s*[\x27\x22]appearance[\x27\x22]\s*\]',
-        ).hasMatch(gridCode()),
+          r'\[\s*[\x27\x22](appearance|action)[\x27\x22]\s*\]',
+        ).hasMatch(stripComments(sourceOf())),
         isFalse,
-        reason: 'the widget must not read the appearance block again',
+        reason:
+            'the parse owns the raw blocks; the widget reads what it '
+            'resolved (the grid AND the press path)',
       );
     });
 

@@ -12,7 +12,7 @@
 # (access modes belong under `pvcTemplate`). Only an API server asked to
 # validate the object against the installed CRD catches them.
 #
-# Usage: ./scripts/validate-crds.sh /tmp/rendered.yaml [...]
+# Usage: ./scripts/ci/validate-crds.sh /tmp/rendered.yaml [...]
 #
 # Requires on PATH: kubectl, python3 (+ pyyaml). The cluster must already
 # carry the operator CRDs — scripts/install-prereqs.sh installs them.

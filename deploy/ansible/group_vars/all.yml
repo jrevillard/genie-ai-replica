@@ -260,6 +260,11 @@ keycloak_theme: genie
 #                                         #   not seconds — and the fallback then
 #                                         #   silently picks the wrong id.
 #                                         #   Raise it on a remote GPU node.
+#   model_detect_ttl: 60                  # TTL of the /v1/models model-id
+#                                         #   cache (seconds) — shared by the
+#                                         #   Python services and the OKF Node
+#                                         #   services. Lower = fresher model
+#                                         #   ids, more probes.
 #   model_rerank_timeout_seconds: 300     # TEI rerank — no fallback path, so a
 #                                         #   tighter budget turns slow successes
 #                                         #   into 500s on the chat request

@@ -871,6 +871,10 @@ describe('ensureSummary — model-id discovery (#1181)', () => {
   });
 });
 
+const R4_ENV = { ...process.env };
+afterEach(() => {
+  process.env = { ...R4_ENV };
+});
 it('r4: the chat call gets the budget left after the discovery probe', async () => {
   const manifest = () => ({
     _key: 'r1',

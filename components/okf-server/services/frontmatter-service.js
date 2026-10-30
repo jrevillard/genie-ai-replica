@@ -399,7 +399,12 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
     // the deployment pin never names a model on another endpoint.
     if (process.env.RAGAS_JUDGE_BASE_URL) {
       host = process.env.RAGAS_JUDGE_BASE_URL;
-      viaForeignBase = true;
+      // The judge base is foreign to the deployment PIN only when it is a
+      // DIFFERENT endpoint: the same server under another path (the
+      // shipped http://vllm:8000/v1 vs http://vllm:8000) serves the very
+      // model the pin names — and the pin exists precisely for endpoints
+      // whose /v1/models is unreachable.
+      viaForeignBase = !sameOrigin(host, deploymentBase());
     }
     if (process.env.RAGAS_JUDGE_MODEL) model = process.env.RAGAS_JUDGE_MODEL;
     // Judge-key parity with the sidecar (compose defaults RAGAS_JUDGE_API_KEY
@@ -447,15 +452,17 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   // loud ModelDiscoveryError. Never a hardcoded fallback name (#1181).
   const modelCache = require('./vllm-model-cache');
   const resolvedAt = Date.now();
+  const probeBudgetMs = Math.max(1, Math.floor(callBudgetMs / 2));
   if (!model) {
     model =
       viaOverride || viaForeignBase
-        ? await modelCache.requireServedModelId(host, { apiKey: probeKey, timeoutMs: callBudgetMs })
-        : await modelCache.resolveVllmModelId(host, { apiKey: probeKey, timeoutMs: callBudgetMs });
+        ? await modelCache.requireServedModelId(host, { apiKey: probeKey, timeoutMs: probeBudgetMs })
+        : await modelCache.resolveVllmModelId(host, { apiKey: probeKey, timeoutMs: probeBudgetMs });
   }
   // The discovery round trip is part of the call budget: the chat call
-  // gets what is left of it.
-  const chatTimeoutMs = Math.max(1, callBudgetMs - (Date.now() - resolvedAt));
+  // gets what is left of it — never less than a usable minimum (a 1 ms
+  // timeout would fail non-retriably on a healthy endpoint).
+  const chatTimeoutMs = Math.max(1000, callBudgetMs - (Date.now() - resolvedAt));
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
   const body = {

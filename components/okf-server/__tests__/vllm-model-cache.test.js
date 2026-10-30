@@ -351,3 +351,35 @@ describe('review round 4 — probe timeout ceiling (#1181)', () => {
     expect(axios.get.mock.calls[0][1].timeout).toBe(2500);
   });
 });
+
+describe('review round 5 fixes (#1181)', () => {
+  test('sameOrigin: path-scoped tenants on one host are NOT the same endpoint', () => {
+    expect(cache.sameOrigin('http://gpu:8000/tenant-a', 'http://gpu:8000/tenant-b')).toBe(false);
+    expect(cache.sameOrigin('http://gpu:8000/llm', 'http://gpu:8000/llm/v1')).toBe(true);
+    expect(cache.sameOrigin('http://gpu:8000/llm', 'http://gpu:8000/other')).toBe(false);
+  });
+
+  test('the discovery error is structured: 503 + a machine-readable code', async () => {
+    axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({
+      name: 'ModelDiscoveryError',
+      status: 503,
+      code: 'MODEL_DISCOVERY_FAILED'
+    });
+  });
+
+  test('two spellings of one base share ONE cache entry (one probe, one window)', async () => {
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    await cache.getServedModelId('http://vllm:8000');
+    await cache.getServedModelId('http://vllm:8000/v1');
+    expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('the failed-probe cool-down is short (a blip does not become a minute of failures)', async () => {
+    axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
+    Date.now.mockReturnValue(1_000_000 + 6_000); // past the cool-down
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
+    expect(axios.get).toHaveBeenCalledTimes(2);
+  });
+});

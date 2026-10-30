@@ -26,6 +26,11 @@ const { DateTime } = require('luxon');
 const matter = require('gray-matter');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
+/** The deployment credential (both spellings) — the chat call and the
+ * discovery probe must agree on it. */
+const deploymentKey = () =>
+  (process.env.VLLM_API_KEY || '').trim() || (process.env.VLLM_LLM_API_KEY || '').trim() || '';
+
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
 const { isArangoNotFound, isArangoUniqueViolation } = require('./arango-errors');
@@ -729,15 +734,24 @@ async function runLlmSummary(prompt, { timeoutMs = 5000 } = {}) {
   // semantics: summary stays null, discovery scoring is unaffected (#1181).
   let model;
   const resolvedAt = Date.now();
+  const probeBudgetMs = Math.max(1, Math.floor(timeoutMs / 2));
   try {
-    model = await require('./vllm-model-cache').resolveVllmModelId(rawBase, { timeoutMs });
-  } catch {
+    model = await require('./vllm-model-cache').resolveVllmModelId(rawBase, {
+      timeoutMs: probeBudgetMs,
+      apiKey: deploymentKey()
+    });
+  } catch (err) {
+    // Loud in the LOG even though the summary stays null (best-effort
+    // surface): the operator must be able to tell "no model configured"
+    // from "the endpoint is down" from "the model could not be discovered".
+    logger.warn('concept_meta.summary_model_unresolved', { endpoint: rawBase, error: err.message });
     return null;
   }
-  // The probe shares the call budget; the chat call gets what is left.
-  const chatTimeoutMs = Math.max(1, timeoutMs - (Date.now() - resolvedAt));
+  // The probe shares the call budget; the chat call gets what is left —
+  // never less than a usable minimum.
+  const chatTimeoutMs = Math.max(1000, timeoutMs - (Date.now() - resolvedAt));
   const headers = {};
-  const apiKey = process.env.VLLM_API_KEY;
+  const apiKey = deploymentKey(); // both spellings — same as the probe
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const r = await axios.post(
     // Shared URL rule (services/llm-url.js): a versioned base keeps its

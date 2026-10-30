@@ -90,7 +90,10 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
   const t0 = Date.now();
   let rawBase = process.env.VLLM_ENDPOINT;
   let model = null; // resolved below — explicit pick > pin > discovery (!631)
-  let apiKey = process.env.VLLM_API_KEY;
+  // Both key spellings — the chat call and the probe must agree on the
+  // credential (a probe that authenticates while the chat call does not
+  // fails with a bare 401).
+  let apiKey = deploymentKey();
   let probeKey = apiKey; // the key the DISCOVERY probe may use
   let viaOverride = false;
   try {
@@ -116,14 +119,15 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
   // is pin -> /v1/models discovery -> loud ModelDiscoveryError (#1181).
   const modelCache = require('./vllm-model-cache');
   const resolvedAt = Date.now();
+  const probeBudgetMs = Math.max(1, Math.floor(timeoutMs / 2));
   if (!model) {
     model = viaOverride
-      ? await modelCache.requireServedModelId(rawBase, { apiKey: probeKey, timeoutMs })
-      : await modelCache.resolveVllmModelId(rawBase, { apiKey: probeKey, timeoutMs });
+      ? await modelCache.requireServedModelId(rawBase, { apiKey: probeKey, timeoutMs: probeBudgetMs })
+      : await modelCache.resolveVllmModelId(rawBase, { apiKey: probeKey, timeoutMs: probeBudgetMs });
   }
   // The discovery round trip is part of the call budget: the chat call
-  // gets what is left of it.
-  const chatTimeoutMs = Math.max(1, timeoutMs - (Date.now() - resolvedAt));
+  // gets what is left of it — never less than a usable minimum.
+  const chatTimeoutMs = Math.max(1000, timeoutMs - (Date.now() - resolvedAt));
   const headers = {};
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const body = { model, messages, temperature: 0.0, max_tokens: 300, response_format: { type: 'json_object' } };

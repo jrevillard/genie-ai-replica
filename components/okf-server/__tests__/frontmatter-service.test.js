@@ -1001,3 +1001,50 @@ describe('vllmChatCompletions — deployment-credential scope (r4 #1181)', () =>
     expect(cfg.headers.Authorization).toBe('Bearer deployment-secret');
   });
 });
+
+// Review round 5 (#1181): the judge base that IS the deployment endpoint
+// (same server, another path — the shipped http://vllm:8000/v1) keeps the
+// deployment PIN: the pin exists for endpoints whose /v1/models is
+// unreachable.
+describe('vllmChatCompletions — env judge on the deployment endpoint (r5 #1181)', () => {
+  const modelCache5 = require('../services/vllm-model-cache');
+  const KEYS = ['VLLM_LLM_MODEL_ID', 'VLLM_MODEL_ID', 'RAGAS_JUDGE_BASE_URL', 'RAGAS_JUDGE_MODEL'];
+  const saved = {};
+
+  beforeEach(() => {
+    KEYS.forEach((k) => {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    });
+    modelCache5.clearModelCache();
+    axios.post.mockReset();
+    axios.get.mockReset();
+  });
+
+  afterEach(() => {
+    KEYS.forEach((k) => {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    });
+    modelCache5.clearModelCache();
+  });
+
+  test('same deployment server (another path): the pin applies, no probe', async () => {
+    process.env.VLLM_MODEL_ID = 'pinned/deployment-model';
+    process.env.RAGAS_JUDGE_BASE_URL = 'http://vllm:8000/v1';
+    axios.post.mockResolvedValue(vllmResponse('{}'));
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }], { config: null });
+    expect(axios.get).not.toHaveBeenCalled();
+    expect(axios.post.mock.calls[0][1].model).toBe('pinned/deployment-model');
+  });
+
+  test('a DIFFERENT endpoint: the pin does not cross — discovery runs on the judge base', async () => {
+    process.env.VLLM_MODEL_ID = 'pinned/deployment-model';
+    process.env.RAGAS_JUDGE_BASE_URL = 'https://judge-gpu.example/v1';
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'judge/served-8b' }] } });
+    axios.post.mockResolvedValue(vllmResponse('{}'));
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }], { config: null });
+    expect(axios.get).toHaveBeenCalledWith('https://judge-gpu.example/v1/models', expect.anything());
+    expect(axios.post.mock.calls[0][1].model).toBe('judge/served-8b');
+  });
+});

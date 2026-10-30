@@ -40,9 +40,11 @@ const { logger } = require('../shared-lib/logger');
 
 const MODEL_TTL_DEFAULT_SECONDS = 60;
 const PROBE_TIMEOUT_DEFAULT_MS = 10000;
-// How long a FAILED probe is remembered (seconds) — one probe per window
-// instead of one per call.
-const NEGATIVE_CACHE_TTL = 60;
+// How long a FAILED probe is remembered (seconds). Deliberately SHORT: it
+// is a cool-down, not a cache — it bounds the probe storm (one probe per
+// window instead of one per call) while keeping a transient blip from
+// turning into a minute of loud failures.
+const NEGATIVE_CACHE_TTL = 5;
 
 /** Raised when a model id is required but nothing answers. Mirrors
  * core.model_cache.ModelDiscoveryError. */
@@ -50,6 +52,11 @@ class ModelDiscoveryError extends Error {
   constructor(message) {
     super(message);
     this.name = 'ModelDiscoveryError';
+    // Structured like the other service errors: the API layer answers 503
+    // with a machine-readable code, and the actionable message reaches the
+    // caller instead of a bare INTERNAL_ERROR.
+    this.status = 503;
+    this.code = 'MODEL_DISCOVERY_FAILED';
   }
 }
 
@@ -132,7 +139,11 @@ async function probe(baseUrl, timeoutMs, apiKey) {
 async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
   const base = String(baseUrl || '').replace(/\/+$/, '');
   if (!base) return null;
-  const cacheKey = `${base}|${(apiKey || '').trim()}`;
+  // Cache key = the NORMALIZED probe URL + the credential: gateways can
+  // filter /v1/models per key, so two configs on one base must never
+  // resolve each other's model — and two spellings of one base
+  // (…/vllm vs …/vllm/v1) must not open two independent windows.
+  const cacheKey = `${require('./llm-url').openAiModelsUrl(base)}|${(apiKey || '').trim()}`;
   const entry = _cache.get(cacheKey);
   if (entry && Date.now() - entry.ts < ttlSeconds() * 1000) return entry.id;
 
@@ -225,13 +236,23 @@ async function deploymentDiscoveredModelId() {
   return discoverVllmModelId(deploymentVllmBase(), { apiKey: deploymentKey() });
 }
 
-/** Same origin (protocol + host + port) — the deployment credential may
- * only travel to an endpoint that IS the deployment endpoint. */
+/** Same ENDPOINT (protocol + host + port + compatible path) — the
+ * deployment credential may only travel to an endpoint that IS the
+ * deployment endpoint. The path matters: a sovereign deployment serves
+ * the model server behind a path prefix (…/llm), and two tenants on one
+ * host (…/tenant-a vs …/tenant-b) are NOT the same endpoint. A path
+ * qualifies as the same when it equals the other or is a prefix of it at
+ * a '/' boundary; a base without a path ('/') covers the whole host. */
 function sameOrigin(a, b) {
   try {
     const ua = new URL(String(a || ''));
     const ub = new URL(String(b || ''));
-    return ua.protocol === ub.protocol && ua.host === ub.host;
+    if (ua.protocol !== ub.protocol || ua.host !== ub.host) return false;
+    const pa = ua.pathname.replace(/\/+$/, '');
+    const pb = ub.pathname.replace(/\/+$/, '');
+    if (pa === pb) return true;
+    const [short, long] = pa.length <= pb.length ? [pa, pb] : [pb, pa];
+    return long.startsWith(short === '' ? '/' : `${short}/`);
   } catch {
     return false;
   }

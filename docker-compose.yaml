@@ -797,10 +797,11 @@ services:
       # loading weights (see the OPEA note at the dataprep block).
       - MODEL_DETECT_TTL=${MODEL_DETECT_TTL:-}
       - MODEL_PROBE_TIMEOUT_SECONDS=${MODEL_PROBE_TIMEOUT_SECONDS:-}
-      # Env-judge key parity with the ragas sidecar (its block defaults
-      # RAGAS_JUDGE_API_KEY to VLLM_API_KEY): the advisor's judge leg and
-      # the sidecar must authenticate identically against the judge base.
-      - RAGAS_JUDGE_API_KEY=${RAGAS_JUDGE_API_KEY:-${VLLM_API_KEY:-}}
+      # Judge key: EXPLICIT only (no VLLM_API_KEY default here — the
+      # deployment bearer must not be manufactured for a judge base the
+      # operator may point anywhere; the service only sends it when the
+      # judge base IS the deployment endpoint).
+      - RAGAS_JUDGE_API_KEY=${RAGAS_JUDGE_API_KEY:-}
       # Model-endpoint externalization (David 2026-10-08: all OKF env vars
       # live in .env with documented defaults — compose is only the pipe).
       # TEI embed base for tag embedding + vectorized-head build + the
@@ -1723,6 +1724,9 @@ services:
       # that window fail their LLM step loudly (labeling falls back to
       # file-level labels; there is no configured-id fallback anymore).
       MODEL_PROBE_TIMEOUT_SECONDS: ${MODEL_PROBE_TIMEOUT_SECONDS:-10}
+      # Model-id cache TTL — one knob for the Python services and the OKF
+      # Node services (the OKF block below reads the same variable).
+      MODEL_DETECT_TTL: ${MODEL_DETECT_TTL:-60}
       #
       # VLLM_TIMEOUT is deliberately NOT injected here, even though the vendored
       # comps reads it: OpeaArangoDataprep builds its LLMGraphTransformer with
@@ -1974,6 +1978,9 @@ services:
       # image.
       MODEL_LLM_TIMEOUT_SECONDS: ${MODEL_LLM_TIMEOUT_SECONDS:-180}
       MODEL_PROBE_TIMEOUT_SECONDS: ${MODEL_PROBE_TIMEOUT_SECONDS:-10}
+      # Model-id cache TTL — one knob for the Python services and the OKF
+      # Node services (the OKF block below reads the same variable).
+      MODEL_DETECT_TTL: ${MODEL_DETECT_TTL:-60}
       MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
       MODEL_EMBEDDING_TIMEOUT_SECONDS: ${MODEL_EMBEDDING_TIMEOUT_SECONDS:-600}
       # 600 is a NEW ceiling, not the openai default kept — langchain-openai
@@ -2036,6 +2043,9 @@ services:
       # their blocks). Here, with no pinned name, a probe failure propagates:
       # the request fails closed (503) until the endpoint answers.
       MODEL_PROBE_TIMEOUT_SECONDS: ${MODEL_PROBE_TIMEOUT_SECONDS:-10}
+      # Model-id cache TTL — one knob for the Python services and the OKF
+      # Node services (the OKF block below reads the same variable).
+      MODEL_DETECT_TTL: ${MODEL_DETECT_TTL:-60}
       MEGA_SERVICE_HOST_IP: chatqna-xeon-backend-server
       LOG_LEVEL: ${LOG_LEVEL:-info}
       EMBEDDING_SERVER_HOST_IP: embedding

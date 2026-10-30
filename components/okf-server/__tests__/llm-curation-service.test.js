@@ -603,3 +603,31 @@ describe('callVllm — model-id discovery (#1181)', () => {
     );
   });
 });
+
+// Review round 5 (#1181): the chat call and the discovery probe must use
+// the SAME credential — both spellings are accepted (a probe that
+// authenticates while the chat call does not ends in a bare 401).
+describe('curation — credential parity between probe and chat (r5 #1181)', () => {
+  const cache = require('../services/vllm-model-cache');
+
+  afterEach(() => {
+    process.env.VLLM_MODEL_ID = 'test-model';
+    cache.clearModelCache();
+  });
+
+  it('VLLM_LLM_API_KEY only: the chat call authenticates like the probe', async () => {
+    delete process.env.VLLM_MODEL_ID;
+    delete process.env.VLLM_API_KEY;
+    process.env.VLLM_LLM_API_KEY = 'llm-spelled-key';
+    cache.clearModelCache();
+    mockDb = makeDb([metaRow()], []);
+    axios.get.mockReset();
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/curator-8b' }] } });
+    axios.post.mockReset();
+    llmReply({ type: 'entity', label: 'Culture', summary: 's' });
+    await service.curateRepoConcepts(REPO, { classification: 'llm' });
+    expect(axios.get.mock.calls[0][1].headers).toEqual({ Authorization: 'Bearer llm-spelled-key' });
+    const [, , cfg] = axios.post.mock.calls[0];
+    expect(cfg.headers.Authorization).toBe('Bearer llm-spelled-key');
+  });
+});

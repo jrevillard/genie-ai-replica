@@ -554,8 +554,14 @@ describe('callVllm — model-id discovery (#1181)', () => {
   });
 });
 
-it('r4: the discovery probe is bounded by the call budget, never the 10 s default', async () => {
+it('r4: the discovery probe is bounded by the call budget', async () => {
+  process.env.VLLM_ENDPOINT = 'http://vllm.test:8000/v1';
+  require('../services/vllm-model-cache').clearModelCache();
   const svc2 = require('../services/topic-link-authoring-service');
+  // The axios mock is shared across this file's tests — count only this
+  // scenario's calls.
+  require('axios').get.mockClear();
+  require('axios').post.mockClear();
   const db2 = require('../shared-lib/db-connection-service');
   const http2 = require('axios');
   const conceptRows = [
@@ -570,6 +576,8 @@ it('r4: the discovery probe is bounded by the call budget, never the 10 s defaul
     data: { choices: [{ message: { content: JSON.stringify({ links: [] }) } }] }
   });
   await svc2.authorRepoTopicLinks({ repo_id: 'r1' });
+  // This scenario's own probe (the mock is fresh here).
+  expect(http2.get).toHaveBeenCalledTimes(1);
   const probeTimeout = http2.get.mock.calls[0][1].timeout;
   expect(probeTimeout).toBeLessThanOrEqual(10000); // the env ceiling
   expect(probeTimeout).toBeGreaterThan(0);

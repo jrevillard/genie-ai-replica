@@ -2258,6 +2258,10 @@ describe('suite generator label — model-id discovery (#1181)', () => {
   });
 });
 
+const F3_ENV = { ...process.env };
+afterEach(() => {
+  process.env = { ...F3_ENV };
+});
 it('F3: with VLLM_ENDPOINT unset the label still names the model the default host serves', async () => {
   delete process.env.VLLM_MODEL_ID;
   delete process.env.VLLM_LLM_MODEL_ID;

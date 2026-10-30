@@ -4,9 +4,38 @@ Single-page map of the migration effort: which plans shipped, which were
 superseded, what remains. Companion to `plan-defects.md` (review ledger) and
 the design of record ([`helm-charts-design.md`](helm-charts-design.md)).
 Plan checkboxes are not a status source — evidence is the chart, the deploy
-repo, the cluster, and the SDD ledgers under `.superpowers/sdd/`.
+repo, the cluster and the CI pipeline. (The SDD ledgers under
+`.superpowers/sdd/` are working history on the author's machine, not
+contractual evidence — a fresh clone does not carry them.)
 
-## Current state (2026-10-29)
+## Current state (2026-10-30)
+
+- **The OKF integration is complete and reviewed (0.2.131–0.2.136)** —
+  the parity gate compares 311 variables across 16 service pairs with
+  zero gaps, the whole-integration review's eight findings closed, the
+  verification pass confirmed against the rendered manifests and the
+  live cluster, and the clearable-blocks gate crash the tier's first
+  renders carried is fixed (the four tier templates now gate
+  nil-safe). Details and the full accounting: the OKF entry below.
+- **The chatqna tokenizer defect is FIXED on main (!631)** — the
+  service counts tokens through the vLLM `/tokenize` API instead of a
+  local `AutoTokenizer` load; it works in both GPU topologies and was
+  verified live on the laptop (a fresh pod with no HF cache serves
+  chat). The `MAIN-SIDE DEFECT` entry below predates the fix and is
+  kept for the record.
+- **The GPU API is reached by its public route** —
+  `ai.assembly.govstack.global:444` (NAT → `10.0.0.110:444`) replaced
+  the SSH docker-bridge tunnel in the laptop overlay, for both
+  `opea.gpu.nodeHost` and the backend translation endpoint. The
+  egress NetworkPolicy pins the resolved `49.13.243.43/32` (a DNS
+  name needs `opea.gpu.allowedCIDRs`). Verified live: all four GPU
+  paths answer 200 from inside the pods, the backend's mandatory-GPU
+  boot gate passes against the public endpoint, and a French chat
+  streams end-to-end with citations.
+- **The CI gates live in `scripts/ci/`** — the eleven gate scripts the
+  pipeline invokes moved out of the flat `scripts/` (operator and
+  dev-node tools stay); every reference swept and the gates proven
+  green from the new depth.
 
 - **All six live checks green at 0.2.130 on the rebuilt node (2026-10-29,
   16:20)** — health through the Envoy edge, genie theme + register link,

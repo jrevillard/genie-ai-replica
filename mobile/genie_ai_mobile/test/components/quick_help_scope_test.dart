@@ -1365,6 +1365,94 @@ void main() {
     });
   });
 
+  /// The section-level pipeline: the descent to `features.chat.quickHelp`,
+  /// the container guards, the hidden filter, the per-entry skip, the
+  /// button parse and the first-wins dedupe — the same resolve pass the
+  /// web runs, so the widget keeps only cache, mount and state.
+  group('parseQuickHelpConfig', () {
+    const justChat = {
+      'id': 'just-chat',
+      'title': {'en': 'Just Chat', 'fr': 'Discuter'},
+      'icon': {'type': 'file', 'value': '/config/quickhelp/just-chat.svg'},
+      'category': null,
+    };
+    final section = {
+      'features': {
+        'chat': {
+          'quickHelp': {
+            'layout': {'columns': 3},
+            'buttons': [
+              justChat,
+              {
+                'id': 'dup',
+                'title': {'en': 'Second'},
+              },
+              {
+                'id': 'dup',
+                'title': {'en': 'Dropped'},
+              },
+              {
+                'id': 'gone',
+                'title': {'en': 'Hidden'},
+                'hidden': true,
+              },
+              'a stray string',
+            ],
+          },
+        },
+      },
+    };
+
+    test(
+      'parses the section: buttons in order, first of a duplicate id wins',
+      () {
+        final (layout, buttons) = parseQuickHelpConfig(section, 'en');
+
+        expect(layout, {'columns': 3});
+        expect(buttons.map((b) => b['id']), ['just-chat', 'dup']);
+        expect(buttons[0]['resolvedTitle'], 'Just Chat');
+      },
+    );
+
+    test('a hidden card is dropped, string-typed flag included', () {
+      final (layout, buttons) = parseQuickHelpConfig({
+        'features': {
+          'chat': {
+            'quickHelp': {
+              'buttons': [
+                {
+                  'id': 'gone',
+                  'title': {'en': 'Hidden'},
+                  'hidden': 'true',
+                },
+              ],
+            },
+          },
+        },
+      }, 'en');
+
+      expect(buttons, isEmpty);
+    });
+
+    test('a missing or malformed container degrades to the empty section', () {
+      for (final config in <Map<String, dynamic>>[
+        {},
+        {'features': 'oops'},
+        {
+          'features': {
+            'chat': {
+              'quickHelp': {'layout': 'wide', 'buttons': {}},
+            },
+          },
+        },
+      ]) {
+        final (layout, buttons) = parseQuickHelpConfig(config, 'en');
+        expect(layout, isEmpty);
+        expect(buttons, isEmpty);
+      }
+    });
+  });
+
   group('quickHelpGridAspectRatio', () {
     test('a positive ratio is used as-is', () {
       expect(quickHelpGridAspectRatio({'childAspectRatio': 3.5}), 3.5);

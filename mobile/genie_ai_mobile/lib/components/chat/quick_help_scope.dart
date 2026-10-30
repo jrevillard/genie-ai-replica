@@ -82,6 +82,36 @@ Map<String, dynamic> parseQuickHelpButton(
   };
 }
 
+/// The Quick Help section of a runtime configuration, parsed under
+/// [locale]: the grid layout and the loaded buttons. One resolve pass,
+/// the way the web runs it — the descent to `features.chat.quickHelp`
+/// guarded container by container, hidden cards dropped, malformed
+/// entries skipped, every button parsed, duplicates resolved FIRST-wins.
+/// The section rules live here so the widget keeps only cache, mount
+/// and state.
+(Map<String, dynamic>, List<Map<String, dynamic>>) parseQuickHelpConfig(
+  Map<String, dynamic> config,
+  String locale,
+) {
+  final quickHelp = configMapOf(
+    configMapOf(
+      configMapOf(configMapOf(config)['features'])['chat'],
+    )['quickHelp'],
+  );
+  final layout = configMapOf(quickHelp['layout']);
+
+  final buttons = <Map<String, dynamic>>[];
+  final rawButtons = quickHelp['buttons'];
+  if (rawButtons is List) {
+    for (final entry in rawButtons) {
+      if (entry is! Map<String, dynamic>) continue;
+      if (quickHelpButtonHidden(entry['hidden'])) continue;
+      buttons.add(parseQuickHelpButton(entry, locale));
+    }
+  }
+  return (layout, dedupeQuickHelpButtons(buttons));
+}
+
 /// The card's declared English KB labels, as strings — the ONE read of a
 /// loaded button's label list. Every scope rule (the grid verdict, the
 /// unavailable caption, the restore union, the press filter) shares it, so
@@ -89,6 +119,9 @@ Map<String, dynamic> parseQuickHelpButton(
 List<String> quickHelpServiceLabelsOf(Map<String, dynamic> button) {
   final labels = button['serviceLabels'];
   if (labels is List) {
+    // The scope-less card (the common one on the grid's per-frame path)
+    // allocates nothing.
+    if (labels.isEmpty) return const <String>[];
     return labels.map((label) => label.toString()).toList();
   }
   return const <String>[];

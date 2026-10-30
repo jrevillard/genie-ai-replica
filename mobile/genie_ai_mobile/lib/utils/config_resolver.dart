@@ -18,3 +18,11 @@ String resolveConfigText(dynamic value, String locale) {
   }
   return value?.toString() ?? '';
 }
+
+/// The config value as a map — the ONE container guard every config
+/// descent uses. A value that is not a map (a string, a list, null: the
+/// config-typo class) degrades to the EMPTY map, never a throw; the
+/// callers' key reads then resolve to null and the section defaults.
+Map<String, dynamic> configMapOf(dynamic value) {
+  return value is Map<String, dynamic> ? value : const {};
+}

@@ -311,57 +311,18 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // Cache the config for later use
       _cachedConfig = config;
 
-      // Every container on the way in is type-checked: a String or a
-      // List where a map belongs is the same config-typo class the
-      // per-card parse isolates — degrade, never throw the load away.
-      final dynamic rawFeatures = config['features'];
-      final dynamic rawChat = rawFeatures is Map<String, dynamic>
-          ? rawFeatures['chat']
-          : null;
-      final dynamic rawQuickHelp = rawChat is Map<String, dynamic>
-          ? rawChat['quickHelp']
-          : null;
-      final Map<String, dynamic> quickHelpConfig =
-          rawQuickHelp is Map<String, dynamic> ? rawQuickHelp : {};
-
-      // A non-map layout or a non-list buttons value is the same
-      // config-typo class the per-card parse isolates: degrade to the
-      // default shape, never throw the load away.
-      final dynamic rawLayout = quickHelpConfig['layout'];
-      final Map<String, dynamic> layout = rawLayout is Map<String, dynamic>
-          ? rawLayout
-          : {};
+      // The section pipeline — descent, container guards, hidden filter,
+      // per-entry skip, button parse, dedupe — runs beside the other
+      // config rules, where it is unit-tested; the widget keeps only
+      // cache, mount and state.
+      final (layout, buttons) = parseQuickHelpConfig(config, _currentLocale);
 
       setState(() {
         _quickHelpLayout = layout;
-      });
-
-      final dynamic rawButtons = quickHelpConfig['buttons'];
-      final List<dynamic> buttonsJson = rawButtons is List
-          ? rawButtons
-          : const <dynamic>[];
-      final List<Map<String, dynamic>> loadedButtons = [];
-
-      for (var btn in buttonsJson) {
-        // One malformed entry degrades ONE card, never the load: a
-        // non-map entry (a stray string) is not a card at all.
-        if (btn is! Map<String, dynamic>) {
-          continue;
-        }
-        // Skip hidden buttons (no matching corpus content) — the mobile
-        // half of the web's JS-truthiness filter, one copy beside the
-        // other config rules.
-        if (quickHelpButtonHidden(btn['hidden'])) {
-          continue;
-        }
-        loadedButtons.add(parseQuickHelpButton(btn, _currentLocale));
-      }
-
-      setState(() {
         // The id is the button's IDENTITY. Two cards sharing one is a
         // configuration error: the FIRST wins and the duplicate never
         // becomes a card — the same rule the web applies at its own load.
-        _quickHelpButtons = dedupeQuickHelpButtons(loadedButtons);
+        _quickHelpButtons = buttons;
         // The locale these titles were resolved under — the drift marker
         // didChangeDependencies reloads on.
         _quickHelpButtonsLocale = _currentLocale;
@@ -2185,6 +2146,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                 quickHelpTitleOf(button) ?? '';
                             final String iconAsset =
                                 button['iconAsset']?.toString() ?? '';
+                            // ONE copy of the neutral help icon: the
+                            // no-icon card, the loading placeholder and
+                            // the failed asset all degrade to it.
+                            final neutralIcon = Icon(
+                              Icons.help_outline,
+                              size: 20,
+                              color: tokens.accent,
+                            );
                             final scope = _treeUnavailable
                                 ? QuickHelpScopeResolver.unavailableScopeFor(
                                     button,
@@ -2232,26 +2201,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                                   color: tokens.danger,
                                                 )
                                               : iconAsset.isEmpty
-                                              ? Icon(
-                                                  // A button with no icon
-                                                  // carries no asset: the
-                                                  // neutral help icon, the
-                                                  // way the web renders an
-                                                  // empty image.
-                                                  Icons.help_outline,
-                                                  size: 20,
-                                                  color: tokens.accent,
-                                                )
+                                              ? neutralIcon
                                               : SvgPicture.asset(
                                                   iconAsset,
                                                   width: 18,
                                                   height: 18,
                                                   placeholderBuilder: (_) =>
-                                                      Icon(
-                                                        Icons.help_outline,
-                                                        size: 20,
-                                                        color: tokens.accent,
-                                                      ),
+                                                      neutralIcon,
                                                   // A well-formed path that
                                                   // names an asset the
                                                   // flavour did not bundle
@@ -2259,11 +2215,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                                   // neutral icon, instead of
                                                   // an empty slot.
                                                   errorBuilder: (_, _, _) =>
-                                                      Icon(
-                                                        Icons.help_outline,
-                                                        size: 20,
-                                                        color: tokens.accent,
-                                                      ),
+                                                      neutralIcon,
                                                 ),
                                           const SizedBox(width: 12),
                                           Expanded(

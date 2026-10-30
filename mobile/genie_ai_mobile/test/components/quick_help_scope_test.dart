@@ -1215,6 +1215,88 @@ void main() {
     });
   });
 
+  /// The grid's DISPLAY verdict — the twin of the press gate
+  /// (quickHelpPressable): every press refusal must have a face, so a
+  /// card the tap would silently refuse renders as the visible failure
+  /// (danger border, caption, no tap). The title gate is the one
+  /// refusal the scope verdict does not carry: a title-less card looks
+  /// pressable — an icon, an enabled ripple — while the tap does
+  /// nothing.
+  group('quickHelpCardBroken', () {
+    final titled = {
+      'id': 'civil',
+      'resolvedTitle': 'Civil Registry',
+      'serviceLabels': ['Births'],
+      'category': '2',
+    };
+    final titleless = {'id': 'blank', 'resolvedTitle': '', 'category': null};
+
+    test('a healthy card with a title is not broken', () {
+      expect(quickHelpCardBroken(titled, resolver.stateFor(titled)), isFalse);
+    });
+
+    test('a broken scope renders broken', () {
+      // The titled card, with the one field that breaks the scope changed.
+      final button = {
+        ...titled,
+        'serviceLabels': ['Registration'],
+      };
+
+      expect(quickHelpCardBroken(button, resolver.stateFor(button)), isTrue);
+    });
+
+    test('a card with no title renders broken — the silent dead tap', () {
+      // The scope is healthy and the hierarchy is up: the ONLY defect
+      // is the missing title, and the press gate refuses the tap with
+      // no feedback at all.
+      expect(
+        quickHelpCardBroken(titleless, resolver.stateFor(titleless)),
+        isTrue,
+      );
+    });
+
+    test('a title-less card stays broken while the hierarchy is pending', () {
+      // The title is a CONFIG fact: it needs no hierarchy to be judged.
+      expect(
+        quickHelpCardBroken(titleless, QuickHelpScopeResolver.pending),
+        isTrue,
+      );
+    });
+
+    test('a titled scope-less card stays healthy while the tree is down', () {
+      // unavailableScopeFor marks only the cards that DECLARE a scope;
+      // the "just chat" card keeps its title and must not wear the
+      // failure state of an outage it does not suffer.
+      final justChat = {
+        'id': 'just-chat',
+        'resolvedTitle': 'Just chat',
+        'serviceLabels': <dynamic>[],
+        'category': 'general',
+      };
+
+      expect(
+        quickHelpCardBroken(
+          justChat,
+          QuickHelpScopeResolver.unavailableScopeFor(justChat),
+        ),
+        isFalse,
+      );
+    });
+
+    test('a title-less card is broken even when the outage broke nothing', () {
+      // The outage and the missing title are independent failures:
+      // unavailableScopeFor leaves a scope-less card healthy, the
+      // title gate must still fire.
+      expect(
+        quickHelpCardBroken(
+          titleless,
+          QuickHelpScopeResolver.unavailableScopeFor(titleless),
+        ),
+        isTrue,
+      );
+    });
+  });
+
   /// The declared labels of a LOADED button - the parse normalizes them
   /// (a bare string is wrapped as ONE label there), so this reader
   /// returns what the card carries.

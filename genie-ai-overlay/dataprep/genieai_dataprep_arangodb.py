@@ -19,7 +19,7 @@ from typing import Any
 import aiohttp
 from opentelemetry import propagate
 
-from core.model_cache import get_max_model_len, resolve_model_id
+from core.model_cache import get_max_model_len, get_model_id, resolve_model_id
 from core.model_http_policy import (
     AIOHTTP_CONNECT_TIMEOUT_SECONDS,
     CONTROL_PLANE_TIMEOUT_SECONDS,
@@ -637,10 +637,14 @@ JSON_ITEM_OVERHEAD_CHARS = 64
 # the largest window would silently produce prompts the GPU cannot accept.
 DERIVE_FALLBACK_WINDOW = 2048
 # Doc-context budget for the doc_level strategy (ONE call, so it can afford a
-# much larger window than per_chunk). ~4 chars/token; keep below the model's
-# context window minus prompt/output overhead. Docs larger than this (or the
-# model window) are truncated — Map-Reduce hierarchical summarization is the
-# future fix for that case.
+# much larger window than per_chunk). ~4 chars/token. This is an EXPLICIT
+# value, NOT derived from the served window: it is positive, so the budget
+# resolver takes it as an override and never consults the window. Keep it
+# below the window the endpoint actually serves — the default 100000 chars is
+# ~25k tokens, which fits the 65536-token default profile and NOT the
+# 4096-token ones, where the call is rejected and the document falls back to
+# raw chunks. Docs larger than this are truncated — Map-Reduce hierarchical
+# summarization is the future fix for that case.
 DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL = int(os.getenv("DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL", "100000"))
 # Strategy when CONTEXTUAL_RETRIEVAL_ENABLED=true:
 #   "per_chunk" (default) — one LLM call per chunk; each chunk gets a context
@@ -767,37 +771,107 @@ def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
     return client, model
 
 
+def _env_int(name: str, default: int) -> int:
+    """Parse an int env var tolerantly: unset, empty (compose's default
+    injection) or non-numeric all fall back to the default instead of
+    crash-looping the service at import."""
+    try:
+        return int(os.getenv(name) or default)
+    except ValueError:
+        return default
+
+
+# Endpoints whose window discovery already failed (or whose discovered window
+# was found not to match the contextual model) and were warned about. The
+# warning is per endpoint, not per document: a bulk import would otherwise
+# emit one identical line per document — the volume is what teaches operators
+# to ignore the line.
+_WINDOW_WARNED: set[str] = set()
+
+
 def _serving_model_window() -> int:
-    """The serving model's context window in tokens, discovered at runtime.
+    """The serving model's context window in tokens, in three tiers.
+
+    1. DATAPREP_MAX_MODEL_LEN (env, read at call time) wins — the deployer's
+       explicit statement of the window the endpoint serves. It is the lever
+       for a strict OpenAI-compatible provider that serves /v1/models without
+       a ``max_model_len`` field (discovery can never answer there), and for
+       a deployment whose context model (DATAPREP_CONTEXTUAL_MODEL) is not
+       the one the endpoint lists first (see the mismatch note below).
+    2. Otherwise the endpoint is probed (core/model_cache.py): the window the
+       vLLM server actually serves, TTL-cached and sharing the probe with
+       model-id detection — the same pattern as chatqna's _get_max_model_len.
+    3. The explicit fallback (DERIVE_FALLBACK_WINDOW, the smallest supported
+       profile) when the probe has no answer, with a warning naming the
+       consequence and the remedy.
 
     Issue #1182: this window used to be read from the VLLM_MAX_MODEL_LEN env —
     the vLLM-side memory knob (``--max-model-len`` in compose) — with a silent
     2048 fallback when it did not reach the container. The env is a static copy
     of what vLLM was configured with, not what it serves: raise the window on
     the GPU node and the copy goes stale in every direction at once. The
-    endpoint is the source of truth. Discovery probes VLLM_ENDPOINT (the same
-    endpoint labeling and context generation talk to), TTL-cached and sharing
-    the probe with model-id detection (core/model_cache.py) — the same pattern
-    as chatqna's _get_max_model_len.
+    endpoint is the source of truth.
 
-    Fails closed to DERIVE_FALLBACK_WINDOW (the smallest supported profile)
-    when discovery has no answer — and loudly: the probe failure itself is
-    already logged by core.model_cache; this adds the consequence and the
-    remedy, so a silently T4-sized budget on a 65536-token deployment cannot
-    go unnoticed again.
+    Tiering stays here rather than in core/model_cache.py: that module owns
+    the probe and the cache, but the two consumers of ONE probe legitimately
+    disagree on the no-answer posture — dataprep sizes a request budget and
+    fails CLOSED (the smallest profile: a budget that fits nowhere fails
+    visibly), chatqna asks the model to answer and falls back to the
+    project-standard Granite window. Consolidating them is a separate change
+    from this one.
     """
+    explicit = _env_int("DATAPREP_MAX_MODEL_LEN", 0)
+    if explicit > 0:
+        return explicit
+
     endpoint = os.getenv("VLLM_ENDPOINT", "")
     window = get_max_model_len(endpoint)
     if window:
+        _warn_on_contextual_model_mismatch(endpoint, window)
         return window
-    logger.warning(
-        f"Contextual Retrieval: no model window discovered at VLLM_ENDPOINT={endpoint or '<unset>'}; "
-        f"deriving document-context budgets from the fail-closed fallback of {DERIVE_FALLBACK_WINDOW} "
-        f"tokens (the smallest profile we support) — larger documents get their context truncated to "
-        f"that budget. Make the endpoint answer the /v1/models probe (failures logged by "
-        f"core.model_cache) or set DATAPREP_CONTEXTUAL_DOC_BUDGET explicitly."
-    )
+
+    if endpoint not in _WINDOW_WARNED:
+        _WINDOW_WARNED.add(endpoint)
+        logger.warning(
+            f"Contextual Retrieval: no model window discovered at VLLM_ENDPOINT={endpoint or '<unset>'}; "
+            f"deriving document-context budgets from the fail-closed fallback of {DERIVE_FALLBACK_WINDOW} "
+            f"tokens (the smallest profile we support) — larger documents get their context truncated to "
+            f"that budget. Make the endpoint answer the /v1/models probe (failures logged by "
+            f"core.model_cache), set DATAPREP_MAX_MODEL_LEN to the window it serves, or set "
+            f"DATAPREP_CONTEXTUAL_DOC_BUDGET explicitly."
+        )
     return DERIVE_FALLBACK_WINDOW
+
+
+def _warn_on_contextual_model_mismatch(endpoint: str, window: int) -> None:
+    """Warn when the context model is not the model the endpoint lists first.
+
+    Discovery reads the FIRST entry of /v1/models (core/model_cache.py), but
+    the contexts are generated by DATAPREP_CONTEXTUAL_MODEL when it is set.
+    A vLLM server hosting several models can then serve a smaller window for
+    the context model than the one discovery reported — the budget would be
+    sized for the wrong model and the request would be rejected (silently
+    falling back to raw chunks). The mismatch cannot be resolved from here
+    (the probe exposes one model), so it is surfaced and the operator is
+    pointed at the override.
+    """
+    contextual_model = os.getenv("DATAPREP_CONTEXTUAL_MODEL", "").strip()
+    if not contextual_model:
+        return
+    discovered_model = get_model_id(endpoint)
+    if not discovered_model or discovered_model == contextual_model:
+        return
+    key = f"{endpoint}|{contextual_model}"
+    if key in _WINDOW_WARNED:
+        return
+    _WINDOW_WARNED.add(key)
+    logger.warning(
+        f"Contextual Retrieval: DATAPREP_CONTEXTUAL_MODEL={contextual_model} is not the model "
+        f"VLLM_ENDPOINT={endpoint or '<unset>'} lists first ({discovered_model}), so the discovered "
+        f"window ({window} tokens) may not be the one {contextual_model} serves — document contexts "
+        f"sized for it could be rejected. Set DATAPREP_MAX_MODEL_LEN to the window "
+        f"{contextual_model} serves."
+    )
 
 
 async def ensure_vector_index(
@@ -2466,7 +2540,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             "chunks": len(chunks),
         }
 
-    def _resolve_doc_budget(self, chunks: list[str], configured: int) -> tuple[int | None, str]:
+    def _resolve_doc_budget(self, chunks: list[str], configured: int, window: int) -> tuple[int | None, str]:
         """Resolve the document-context budget for this document.
 
         Returns ``(budget_chars, source)``. ``budget_chars is None`` means
@@ -2474,15 +2548,19 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         back to raw chunks. ``source`` is one of:
 
             "override"        operator set DATAPREP_CONTEXTUAL_DOC_BUDGET
-            "derived"         computed from the discovered serving-model window
+            "derived"         computed from the given serving-model window
             "disabled"        operator set a negative budget
             "window-exhausted" the model window cannot fit any context
 
         The prompt the context LLM receives is the system prompt + the document
         context + the batch's chunk text, and the response reserves
         DATAPREP_CONTEXTUAL_MAX_TOKENS. Only the middle term is ours to size,
-        so everything else is subtracted from the serving model's window
-        (runtime discovery — _serving_model_window).
+        so everything else is subtracted from ``window`` — the serving model's
+        context window, which the caller obtains from _serving_model_window
+        (runtime discovery) and passes in. It is a parameter rather than a
+        lookup here because that discovery probe is a blocking HTTP call:
+        resolving it inside this function would freeze the event loop on the
+        ingest path.
 
         The batch term is measured from the REAL chunks rather than from the
         DATAPREP_CHUNK_SIZE_* vars: those are resolved per file extension
@@ -2495,7 +2573,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         if configured > 0:
             return configured, "override"
 
-        window = _serving_model_window()
         prompt_tokens = -(-len(CONTEXTUAL_RETRIEVAL_PROMPT) // CHARS_PER_TOKEN)
         largest = sorted((len(c) for c in chunks), reverse=True)[:LABEL_LLM_BATCH_SIZE]
         # The user turn is json.dumps([{"index": i, "text": t}, ...]) — the raw
@@ -2596,6 +2673,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         model = DATAPREP_CONTEXTUAL_MODEL.strip() or default_model
         total = len(chunks)
 
+        resolved_window: int | None = None
+
         async def _doc_context_or_none(chunks_: list[str], configured: int, label: str) -> str | None:
             """Resolve the budget, log any truncation, build the context.
 
@@ -2615,7 +2694,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             ``_write_ingestion_log`` is what makes it visible to a curator
             instead of only to whoever greps container logs.
             """
-            budget, source = self._resolve_doc_budget(chunks_, configured)
+            nonlocal resolved_window
+            if resolved_window is None:
+                # The discovery probe is a SYNC http call that can block for
+                # PROBE_TIMEOUT_SECONDS when the endpoint does not answer —
+                # off the event loop, so the ingest phase's heartbeats keep
+                # firing and concurrent requests are not stalled by it.
+                resolved_window = await asyncio.to_thread(_serving_model_window)
+            budget, source = self._resolve_doc_budget(chunks_, configured, resolved_window)
             if budget is None:
                 return None, (DEGRADED_WINDOW_TOO_SMALL if source == "window-exhausted" else None)
 

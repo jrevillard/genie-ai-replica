@@ -1697,10 +1697,10 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   Ansible: yes (guarded).
 #   THE PIN SPELLING: the name the vLLM container is started with
 #   (--served-model-name) and the one every service reads — VLLM_MODEL_ID is
-#   filled from it. okf-server also reads VLLM_MODEL_ID on its own: the
-#   escape hatch for a deployment whose OKF legs talk to ANOTHER server (a
-#   proxy whose /v1/models is not readable). A pin must name a model the
-#   CALLED endpoint serves — a name it does not serve 404s every call.
+#   filled from it for the Python services. okf-server reads BOTH spellings
+#   raw (VLLM_LLM_MODEL_ID first — envPin() in vllm-model-cache.js decides);
+#   a raw VLLM_MODEL_ID is its escape hatch and wins only while this
+#   variable is unset. A pin must name a model the CALLED endpoint serves.
 # VLLM_API_KEY=secret
 #   Default: '' (Bearer on vLLM + TEI calls). Compose: yes. Ansible: yes.
 # OKF_CURATION_TIMEOUT_MS=30000

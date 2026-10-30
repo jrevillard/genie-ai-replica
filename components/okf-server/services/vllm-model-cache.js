@@ -106,9 +106,10 @@ function envPin() {
 }
 
 /** The LLM-spelling pin only — the spelling the model server is started
- * with (`--served-model-name`) and the one every service reads (the
- * compose blocks map VLLM_MODEL_ID from VLLM_LLM_MODEL_ID alone, so a raw
- * VLLM_MODEL_ID in .env pins nothing). */
+ * with (`--served-model-name`) and the spelling CHATQNA receives (its
+ * compose block fills VLLM_MODEL_ID from the LLM spelling alone; the
+ * okf-server block passes both spellings through raw, and envPin() above
+ * decides which one wins). */
 function envPinLLMSpelling() {
   return (process.env.VLLM_LLM_MODEL_ID || '').trim() || null;
 }
@@ -286,8 +287,6 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
         // count-bounded prune drops the OLDEST one first.
         _cache.delete(cacheKey);
         _cache.set(cacheKey, { id, ts: Date.now() });
-        // Prune AFTER the insert: the map never sits above its bound.
-        pruneCache();
         _negative.delete(probeKey);
         _inflight.delete(probeKey);
         return id;
@@ -295,12 +294,13 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
       .catch((err) => {
         _negative.set(probeKey, { ts: Date.now(), cause: err });
         _inflight.delete(probeKey);
-        // Prune on the failure path too: an endpoint that stays down would
-        // otherwise leave one negative entry per (base, credential, budget)
-        // for the container's lifetime.
-        pruneCache();
         throw err;
-      });
+      })
+      // Prune on BOTH settle paths, after the insert: the maps never sit
+      // above their bounds — an endpoint that stays down would otherwise
+      // leave one negative entry per (base, credential, budget) for the
+      // container's lifetime.
+      .finally(pruneCache);
     _inflight.set(probeKey, pending);
   }
   try {

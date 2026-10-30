@@ -789,12 +789,13 @@ services:
       # a deployment opts IN by setting VLLM_ENDPOINT + VLLM_API_KEY and a
       # guided-JSON-capable chat model (VLLM_LLM_MODEL_ID preferred).
       - VLLM_ENDPOINT=${VLLM_ENDPOINT:-}
-      # The pin spelling is the one the vLLM container serves
-      # (--served-model-name VLLM_LLM_MODEL_ID); VLLM_MODEL_ID is the
-      # escape hatch for a deployment whose OKF legs talk to ANOTHER server
-      # (a proxy whose /v1/models is not readable) — it must then name a
-      # model THAT server serves (#1181).
-      - VLLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-${VLLM_MODEL_ID:-}}
+      # The pin spellings pass through RAW — envPin() (vllm-model-cache.js)
+      # owns the precedence (VLLM_LLM_MODEL_ID first). A raw VLLM_MODEL_ID
+      # is the escape hatch for a deployment whose OKF legs talk to ANOTHER
+      # server (a proxy whose /v1/models is not readable): it wins only
+      # while VLLM_LLM_MODEL_ID is unset and must name a model the CALLED
+      # endpoint serves (#1181).
+      - VLLM_MODEL_ID=${VLLM_MODEL_ID:-}
       # The LLM spelling reaches okf-server too (#1181): the serve-mode
       # fidelity label mirrors chatqna's pin precedence, and chatqna only
       # ever receives THIS spelling.

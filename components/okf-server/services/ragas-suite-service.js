@@ -1020,10 +1020,10 @@ async function answerFidelity(opts = {}) {
     source: 'deployment-chat',
     config: null,
     // The model CHATQNA would answer with — its compose pin maps ONLY the
-    // VLLM_LLM_MODEL_ID spelling (a raw VLLM_MODEL_ID in .env pins neither
-    // chatqna nor okf: every service reads VLLM_MODEL_ID, which compose
-    // fills from VLLM_LLM_MODEL_ID), else it discovers the served id. The
-    // okf-side fused pin must not name the serve-mode model.
+    // VLLM_LLM_MODEL_ID spelling (chatqna never receives the raw spelling;
+    // okf-server does, but this label must mirror chatqna, not okf), else
+    // it discovers the served id. The okf-side fused pin must not name the
+    // serve-mode model.
     model:
       modelCache.envPinLLMSpelling() ||
       // Bounded: the serve-mode label must not add a probe timeout to every

@@ -107,11 +107,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   service reads (`VLLM_MODEL_ID` is filled from it). Before, the OKF server
   carried a hardcoded model name instead, so a `.env` carrying only
   `VLLM_MODEL_ID` left it naming a model the endpoint did not serve — every
-  call 404'd while the Python services discovered the right one. It now maps
-  to the served name, like every other service. `VLLM_MODEL_ID` on its own
-  still pins the OKF legs: that is the escape hatch for a deployment whose
-  OKF legs talk to another server (a proxy whose `/v1/models` is not
-  readable) — it must then name a model THAT server serves.
+  call 404'd while the Python services discovered the right one. The pin is
+  now the served name (`envPin()` resolves the two spellings, the LLM one
+  first). `VLLM_MODEL_ID` on its own still pins the OKF legs — the escape
+  hatch for a deployment whose OKF legs talk to another server (a proxy
+  whose `/v1/models` is not readable); it wins only while
+  `VLLM_LLM_MODEL_ID` is unset, and must name a model the CALLED endpoint
+  serves.
 
 - **The OKF server's tagging logs name their fields explicitly.** The
   `frontmatter.suggest.start` line carried the deployment's pin under the

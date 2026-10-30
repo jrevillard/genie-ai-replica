@@ -40,7 +40,12 @@
  *   - the credential is scoped: a probe never carries the deployment
  *     bearer to an endpoint it was not aimed at; Python has one global
  *     credential;
- *   - the cache key carries the credential and the NORMALIZED probe URL.
+ *   - the cache key carries the credential and the NORMALIZED probe URL;
+ *   - the probe URL follows the shared base-completion rule (llm-url.js): a
+ *     base that already carries a version segment is listed at {base}/models,
+ *     a bare host at {base}/v1/models. The twin appends /v1 models
+ *     unconditionally, so for a base that already ends in /v1 the two worlds
+ *     probe different URLs (the twin 404s, this one answers).
  *
  * Knobs (same names and defaults as the Python side, so one .env line tunes
  * both worlds): MODEL_DETECT_TTL (seconds, default 60),
@@ -252,18 +257,21 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
   const entry = _cache.get(cacheKey);
   if (entry && Date.now() - entry.ts < ttlSeconds() * 1000) return entry.id;
 
+  // Concurrent callers share ONE probe — per probe BUDGET: the first
+  // caller's budget must not narrow a concurrent caller's probe (the
+  // best-effort summary leg probes for 1 s while a tagging call may wait 30 s).
+  // The failure marker is keyed the same way: a 1 s probe that gave up must
+  // not lock out a caller that had 10 s and would have answered.
+  const probeKey = `${cacheKey}|${probeBudgetBucket(timeoutMs)}`;
+
   // A recent failure is remembered: answer without touching the network.
-  const failed = _negative.get(cacheKey);
+  const failed = _negative.get(probeKey);
   if (failed && Date.now() - failed.ts < NEGATIVE_CACHE_TTL * 1000) {
     const stale = entry ? entry.id : null;
     if (stale) return stale; // stale beats broken
     throw failed.cause || discoveryError(modelsUrl);
   }
 
-  // Concurrent callers share ONE probe — per probe BUDGET: the first
-  // caller's budget must not narrow a concurrent caller's probe (the
-  // best-effort summary leg probes for 1 s while a tagging call may wait 30 s).
-  const probeKey = `${cacheKey}|${probeBudgetBucket(timeoutMs)}`;
   let pending = _inflight.get(probeKey);
   if (!pending) {
     pruneCache();
@@ -278,7 +286,7 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
         return id;
       })
       .catch((err) => {
-        _negative.set(cacheKey, { ts: Date.now(), cause: err });
+        _negative.set(probeKey, { ts: Date.now(), cause: err });
         _inflight.delete(probeKey);
         throw err;
       });
@@ -448,10 +456,16 @@ function optedInVllmBase() {
  * unauthenticated probe 401s on secured endpoints and silently defeats
  * the label). Null when nothing answers. */
 async function deploymentServedModelId({ timeoutMs } = {}) {
+  return servedModelId(deploymentVllmBase(), { apiKey: deploymentKey(), timeoutMs });
+}
+
+/** The served model of ANY base, soft: null when nothing answers. The
+ * provenance callers record what answered — they must not fail on it. */
+async function servedModelId(baseUrl, { apiKey, timeoutMs } = {}) {
   try {
-    return await getServedModelId(deploymentVllmBase(), { apiKey: deploymentKey(), timeoutMs });
+    return await getServedModelId(baseUrl, { timeoutMs, apiKey });
   } catch {
-    return null; // soft: the caller labels the answer, it does not fail on it
+    return null;
   }
 }
 
@@ -506,6 +520,7 @@ module.exports = {
   envPin,
   envPinLLMSpelling,
   deploymentServedModelId,
+  servedModelId,
   deploymentVllmBase,
   getServedModelId,
   optedInVllmBase,

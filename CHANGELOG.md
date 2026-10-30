@@ -60,6 +60,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   point `LANGUAGE_REGISTRY_FILEPATH` at the registry file instead — a file
   still in the old flat shape is refused (translation answers in English).
   See `docs/UPGRADE.md`.
+- **The OKF admin model listing follows the chat path's URL rule (#1181,
+  !640).** A base that already carries a version segment lists at
+  `{base}/models`, a bare host at `{base}/v1/models` — the one rule the
+  chat call uses. A stored configuration whose base serves the list at the
+  root (`http://my-proxy:8080/models`) must now carry its version segment
+  (`http://my-proxy:8080/v1`); before, the listing and the chat call
+  disagreed about where `/v1` goes, and the admin panel showed a broken
+  credentials form next to a working server.
+
+- **Ansible deployments with a remote GPU node now default
+  `RAGAS_JUDGE_BASE_URL` to the GPU's own model server (#1181, !640).** The
+  default was the local `http://vllm:8000/v1`, and the local vLLM service
+  does not run on the app node when the models are remote — the judge base
+  pointed at a service that was not there. The default is now
+  `https://<gpu>:<port>/llm/v1`, the deployment's own endpoint (only that
+  endpoint may receive the deployment credential). Deployments that set
+  `ragas_judge_base_url` explicitly are unaffected.
+
+- **The suite provenance field `generator` names every model that produced
+  the suite (#1181, !640).** It was the model of the *last* generation call,
+  so a suite spanning a model change under-reported it. It now lists the
+  distinct models (`llm:model-a,llm:model-b`).
 
 - **Ansible deployments: `vllm_llm_model_id` is now undefined by default
   (auto-discovery).** Previously it pinned `ibm-granite/granite-4.1-8b` for
@@ -84,7 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **OKF LLM calls name the model the endpoint actually serves (#1181, !640).** The OKF server's vLLM calls resolved their model id from a hardcoded fallback (`ibm-granite/granite-4.1-8b`) that — because the compose service never receives `VLLM_LLM_MODEL_ID` — was the *only* value ever used: the day the GPU serves a different model, vLLM's name validation rejects every call with 404. The curation, topic-link and manifest-summary paths had the mirror problem — an empty `VLLM_MODEL_ID` (the default since the discovery policy landed) silently disabled them. All of these now follow the same policy as the Python services: the env pin wins, otherwise the model id is discovered from the endpoint's `/v1/models` (cached 60 s, same `MODEL_DETECT_TTL` / `MODEL_PROBE_TIMEOUT_SECONDS` knobs), and a call that cannot name a served model fails loudly instead of guessing. Suite and benchmark provenance labels (the suite `generator`, the serve-mode answer fidelity) now record the discovered model instead of a placeholder.
+- **OKF LLM calls name the model the endpoint actually serves (#1181, !640).** The OKF server's vLLM calls resolved their model id from a hardcoded fallback (`ibm-granite/granite-4.1-8b`) that — because the compose service never receives `VLLM_LLM_MODEL_ID` — was the *only* value ever used: the day the GPU serves a different model, vLLM's name validation rejects every call with 404. The curation, topic-link and manifest-summary paths had the mirror problem — an empty `VLLM_MODEL_ID` (the default since the discovery policy landed) silently disabled them. All of these now follow the same policy as the Python services: the env pin wins, otherwise the model id is discovered from the endpoint's `/v1/models` (cached 60 s, same `MODEL_DETECT_TTL` / `MODEL_PROBE_TIMEOUT_SECONDS` knobs), and a call that cannot name a served model fails loudly instead of guessing — the one exception is the bundle-manifest summary, which stays best-effort by design (it logs the failure and leaves the summary empty). Suite and benchmark provenance labels (the suite `generator`, the serve-mode answer fidelity) now record the discovered model instead of a placeholder.
 
 - **Document contexts are sized against the window the model actually serves, not a copied env var.** Dataprep derived its Contextual-Retrieval document-context budget from `VLLM_MAX_MODEL_LEN` — the vLLM memory knob (`--max-model-len`), a static copy of what the GPU node was *configured* with, not what it *serves*. When that copy did not reach the container the budget silently fell back to a 2048-token window, so a 65536-token deployment truncated document contexts to T4-sized budgets (the truncation was recorded, but nothing said the window was a guess). The window is now discovered at runtime from `VLLM_ENDPOINT` — the same endpoint labelling and context generation already talk to — and the fallback is loud: one warning per endpoint, naming the value, the consequence and the remedy. **Deployers**: `VLLM_MAX_MODEL_LEN` is no longer read by dataprep; set the new `DATAPREP_MAX_MODEL_LEN` when the endpoint does not expose `max_model_len` (a strict OpenAI-compatible provider never does) or when `DATAPREP_CONTEXTUAL_MODEL` points at a model other than the one the endpoint lists first. The concept-document ceiling (`OKF_MAX_CONCEPT_DOC_CHARS`) stays a static literal and must now be kept in step with the served window by hand. The doc-level context budget (`DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL`) is now a maximum the served window caps, so its default cannot overflow a smaller deployment. (#639)
 

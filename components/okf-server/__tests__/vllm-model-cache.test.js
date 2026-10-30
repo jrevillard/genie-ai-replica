@@ -186,6 +186,18 @@ describe('TTL cache', () => {
     expect(axios.get).toHaveBeenCalledTimes(1);
   });
 
+  test('a short-budget failure does not lock out a caller with a longer budget', async () => {
+    // The best-effort summary leg probes for 1 s; a tagging call may wait
+    // 10 s. The 1 s failure must not lock the tagging call out for the
+    // whole cool-down window — it would have answered.
+    axios.get.mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }));
+    await expect(cache.resolveVllmModelId('http://vllm:8000', { timeoutMs: 1000 })).rejects.toMatchObject({
+      name: 'ModelDiscoveryError'
+    });
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/model' }] } });
+    await expect(cache.resolveVllmModelId('http://vllm:8000', { timeoutMs: 10000 })).resolves.toBe('served/model');
+  });
+
   test('a concurrent caller with an ample budget keeps its own probe', async () => {
     // The tight-budget caller (the best-effort summary leg) must not narrow
     // the probe of a concurrent caller that has room for a full one.

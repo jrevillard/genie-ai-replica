@@ -2939,6 +2939,24 @@ describe('answerFidelity — the record must name the model that ACTUALLY answer
     expect(spy).toHaveBeenCalledWith({ service: 'ragas_answers' });
   });
 
+  it('a config that names NO model records the model that answered (discovery on its base)', async () => {
+    const axios = require('axios');
+    jest.spyOn(modelConfigService, 'resolveModelOverride').mockResolvedValue({
+      provider: 'openai',
+      base_url: 'https://answers/v1',
+      model: null, // no default_model on the config
+      api_key: 'answers-key',
+      config_name: 'Answers Config',
+      source: 'active'
+    });
+    require('../services/vllm-model-cache').clearModelCache();
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/answers-8b' }] } });
+    const whatif = await svc.answerFidelity({});
+    expect(whatif.source).toBe('config');
+    // The record must say what answered — the served model, not null.
+    expect(whatif.model).toBe('served/answers-8b');
+  });
+
   it('falls back to the deployment chat when the answers config cannot be resolved', async () => {
     jest.spyOn(modelConfigService, 'resolveModelOverride').mockRejectedValue(new Error('config service down'));
     process.env.VLLM_LLM_MODEL_ID = 'ibm-granite/granite-4.1-8b';

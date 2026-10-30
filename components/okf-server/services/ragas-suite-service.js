@@ -1035,7 +1035,19 @@ async function answerFidelity(opts = {}) {
   try {
     const ovr = await modelConfigService.resolveModelOverride({ service: 'ragas_answers' });
     if (ovr && ovr.provider === 'openai') {
-      return { source: 'config', config: ovr.config_name, model: ovr.model };
+      // A config that names NO model leaves the id to DISCOVERY — the served
+      // model answers. The record must name what answered (the same rule
+      // the serve-mode branch follows), not null.
+      const model =
+        ovr.model ||
+        (await modelCache.servedModelId(ovr.base_url, {
+          // The config's own credential for its own base; the deployment
+          // bearer only when the base IS the deployment endpoint.
+          apiKey: modelCache.credentialForBase(ovr.base_url, ovr.api_key),
+          timeoutMs: 2000
+        })) ||
+        null;
+      return { source: 'config', config: ovr.config_name, model };
     }
   } catch {
     /* resolution failure — the deployment answerer applies */

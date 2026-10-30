@@ -1,18 +1,12 @@
 'use strict';
 
-// Closure-based references for jest.mock hoisting compatibility
+// Closure-based references for jest.mock hoisting compatibility.
+// The service only ever calls httpService.get — the read-only analytics
+// routes are the only ones it consumes.
 const mockGet = jest.fn();
-const mockPost = jest.fn();
-const mockPut = jest.fn();
-const mockDelete = jest.fn();
-const mockPatch = jest.fn();
 
 jest.mock('@/services/httpService', () => ({
-  get: (...args) => mockGet(...args),
-  post: (...args) => mockPost(...args),
-  put: (...args) => mockPut(...args),
-  delete: (...args) => mockDelete(...args),
-  patch: (...args) => mockPatch(...args)
+  get: (...args) => mockGet(...args)
 }));
 
 // Mock window.APP_CONFIG for baseUrl resolution

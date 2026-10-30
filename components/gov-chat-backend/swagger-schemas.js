@@ -1,8 +1,9 @@
 // Shared OpenAPI component schemas — the single source of truth for the
-// wire contract shapes referenced by the route annotations.
-// Consumed by index.js (the runtime swagger spec) and by
-// scripts/generate-api-client.sh (the mobile client generation spec), so
-// both specs carry the same schemas.
+// components.schemas section of the runtime spec. Some are $ref'd from the
+// route annotations (Analytics, CategoryTree, Event, QueryContext); the rest
+// document the runtime contract in swagger-ui. Consumed by index.js (the
+// runtime swagger spec) and by scripts/generate-api-client.sh (the mobile
+// client generation spec), so both specs carry the same schemas.
 module.exports = {
   Event: {
     type: 'object',

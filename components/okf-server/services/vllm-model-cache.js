@@ -97,6 +97,10 @@ const _cache = new Map();
 const _inflight = new Map();
 // cacheKey -> { ts } — the negative stub: a recent failure, no id.
 const _negative = new Map();
+// Pairs already warned about (malformed bases): sameOrigin runs per call —
+// twice per LLM call in the curation loops — and a malformed base is a
+// CONFIG error, not a per-call event. One line per pair, ever.
+const _malformedWarned = new Set();
 
 /** The deployer pin, both spellings. Each spelling is trimmed BEFORE the
  * fallback so a whitespace-only VLLM_LLM_MODEL_ID cannot shadow a valid
@@ -229,7 +233,8 @@ async function probe(url, timeoutMs, apiKey) {
       }
       return id;
     }
-    logger.warn('vllm_model_cache.no_models', { url });
+    // No inner warn line: the outer probe_failed catch below carries this
+    // exact message — one incident must be one line in VL, not two.
     throw new Error('the endpoint listed no model');
   } catch (e) {
     logger.warn('vllm_model_cache.probe_failed', { url, error: e.message });
@@ -516,7 +521,12 @@ function sameOrigin(a, b) {
   } catch {
     // A malformed base is a CONFIG error, not a silent "different origin":
     // say so, because the consequence (no deployment credential) is a 401.
-    logger.warn('vllm_model_cache.malformed_base', { a: String(a || ''), b: String(b || '') });
+    // Once per pair — the call sites sit in per-concept loops.
+    const pair = `${a}|${b}`;
+    if (!_malformedWarned.has(pair)) {
+      _malformedWarned.add(pair);
+      logger.warn('vllm_model_cache.malformed_base', { a: String(a || ''), b: String(b || '') });
+    }
     return false;
   }
   try {
@@ -546,6 +556,7 @@ function sameOrigin(a, b) {
 function clearModelCache() {
   _cache.clear();
   _negative.clear();
+  _malformedWarned.clear();
   _inflight.clear();
 }
 

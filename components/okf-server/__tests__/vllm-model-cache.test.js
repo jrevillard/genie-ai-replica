@@ -32,8 +32,16 @@ function mockProbeSuccess(id) {
   axios.get = jest.fn().mockResolvedValue(modelsPayload(id));
 }
 
+let savedEnv = {};
+
 beforeEach(() => {
-  for (const k of ENV_KEYS) delete process.env[k];
+  // process.env is shared by every test file a Jest worker runs — save
+  // and restore, or this file's deletes leak into the next suite.
+  savedEnv = {};
+  for (const k of ENV_KEYS) {
+    savedEnv[k] = process.env[k];
+    delete process.env[k];
+  }
   cache.clearModelCache();
   axios.get = jest.fn();
   jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
@@ -41,6 +49,10 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.restoreAllMocks();
+  for (const k of ENV_KEYS) {
+    if (savedEnv[k] === undefined) delete process.env[k];
+    else process.env[k] = savedEnv[k];
+  }
 });
 
 describe('env pin precedence (deployer override)', () => {
@@ -377,6 +389,14 @@ describe('review round 4 fixes (#1181)', () => {
     ]);
     expect([a, b, c]).toEqual(['served/model', 'served/model', 'served/model']);
     expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('a malformed base warns ONCE per pair — per-concept loops must not flood VL', () => {
+    cache.sameOrigin('gpu-host-without-scheme', 'http://vllm:8000');
+    cache.sameOrigin('gpu-host-without-scheme', 'http://vllm:8000');
+    cache.sameOrigin('gpu-host-without-scheme', 'http://vllm:8000');
+    const calls = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.malformed_base');
+    expect(calls).toHaveLength(1);
   });
 
   test('sameOrigin: same host+port is one endpoint, a different host is not', () => {

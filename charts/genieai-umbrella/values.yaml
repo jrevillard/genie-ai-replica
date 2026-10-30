@@ -990,6 +990,9 @@ okf:
     env: {}
   ragas:
     env: {}
+  # The RAGAS judge cache PVC size — the KG builds that the cache spares
+  # cost ~50 minutes on a cold cache.
+  ragasCacheSize: "5Gi"
 
 # OPEA AI/ML tier. Disabled by default; enabling renders the six
 # OPEA services (chatqna, retriever, dataprep, reranker, embedding,

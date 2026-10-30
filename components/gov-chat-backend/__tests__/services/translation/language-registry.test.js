@@ -19,7 +19,17 @@ const REGISTRY_PATH = path.join(MAPS_DIR, 'language-registry.json');
  * the FLORES-200 code that encodes it. The checks below are the ones that
  * catch those.
  */
-const registry = JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf8'));
+function loadRegistry() {
+  // A missing registry reads as a named failure, not as an opaque
+  // module-load error: the file ships with the maps this suite also reads
+  // from the same directory, so its absence means a broken checkout.
+  if (!fs.existsSync(REGISTRY_PATH)) {
+    throw new Error(`Could not locate ${REGISTRY_PATH}. The language registry ships with the backend's language maps.`);
+  }
+  return JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf8'));
+}
+
+const registry = loadRegistry();
 
 /**
  * Every shipped language map, read from the directory rather than from a

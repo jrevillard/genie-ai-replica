@@ -868,9 +868,11 @@ def language_registry() -> dict:
     The registry is never None: an unreadable registry is an empty registry,
     and an empty registry means every language is unknown.
 
-    The returned registry is a copy. The cache is the whitelist every request
-    is checked against, and a caller that mutated what it got back would
-    rewrite that whitelist for the whole process.
+    The returned registry is a copy of the cache's top level; the per-language
+    entries are shared and treated as immutable — the service only reads
+    their name and script, never writes them. (The projections are called on
+    every request and every translated chunk, so they copy one flat dict,
+    not one dict per language.)
 
     The retry read is a blocking read of a small file, at most once a minute,
     and only for as long as the file stays unreadable.
@@ -879,7 +881,7 @@ def language_registry() -> dict:
 
     cached = _LANGUAGE_REGISTRY_CACHE
     if cached:
-        return {code: dict(language) for code, language in cached.items()}
+        return dict(cached)
     now = time.monotonic()
     if _LANGUAGE_REGISTRY_CACHE_AT is not None and now - _LANGUAGE_REGISTRY_CACHE_AT < LANGUAGE_MAP_RETRY_SECONDS:
         # The last read failed and the retry window has not elapsed yet.
@@ -887,7 +889,7 @@ def language_registry() -> dict:
     loaded = _read_language_registry(LANGUAGE_REGISTRY_FILEPATH)
     _LANGUAGE_REGISTRY_CACHE = loaded
     _LANGUAGE_REGISTRY_CACHE_AT = now
-    return {code: dict(language) for code, language in loaded.items()}
+    return dict(loaded)
 
 
 def language_codes_map() -> dict:

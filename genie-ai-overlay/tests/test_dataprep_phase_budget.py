@@ -49,6 +49,10 @@ def _workable_contextual_window(monkeypatch):
     default-profile window instead.
     """
     monkeypatch.setattr(dataprep, "get_max_model_len", lambda _url, _ttl=None: 65536)
+    # The model id comes from the same probe; stubbing it too keeps the suite
+    # from making real outbound HTTP calls (a probe that answers, or hangs,
+    # would decide what these tests measure).
+    monkeypatch.setattr(dataprep, "get_model_id", lambda _url, _ttl=None: "test-model")
 
 
 async def _noop_log(*_args, **_kwargs):

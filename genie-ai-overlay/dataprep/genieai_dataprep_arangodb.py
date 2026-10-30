@@ -20,7 +20,7 @@ from typing import Any
 import aiohttp
 from opentelemetry import propagate
 
-from core.model_cache import get_max_model_len, get_model_id, resolve_model_id
+from core.model_cache import MAX_SANE_MODEL_WINDOW_TOKENS, get_max_model_len, get_model_id, resolve_model_id
 from core.model_http_policy import (
     AIOHTTP_CONNECT_TIMEOUT_SECONDS,
     CONTROL_PLANE_TIMEOUT_SECONDS,
@@ -641,6 +641,12 @@ DATAPREP_CONTEXTUAL_DOC_BUDGET = int(os.getenv("DATAPREP_CONTEXTUAL_DOC_BUDGET",
 # ~4 chars/token for English prose + markdown. Same figure the budget comment
 # above has always used; the clamp in _resolve_doc_budget absorbs the error.
 CHARS_PER_TOKEN = 4
+# The document context the LLM receives is the budgeted document text PLUS
+# scaffolding: the filename line, the labels line, the "Document content"
+# header, the truncation marker and (doc_level) the user turn. None of that
+# is inside the budget, so it is reserved separately — a request sized
+# without it overflows the window by exactly those characters.
+DOC_CONTEXT_SCAFFOLD_CHARS = 1024
 # Per-item scaffolding in the batched user turn — json.dumps of
 # {"index": i, "text": "..."} adds a key, quotes and escaping on top of the raw
 # chunk text. Measured generously; it only ever shrinks the derived budget.
@@ -658,7 +664,7 @@ DERIVE_FALLBACK_WINDOW = 2048
 # chunks silently). Set 0 to let the window decide entirely. Docs larger than
 # the budget are truncated — Map-Reduce hierarchical summarization is the
 # future fix for that case.
-DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL = int(os.getenv("DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL", "100000"))
+DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL = _env_int("DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL", 100000)
 # Strategy when CONTEXTUAL_RETRIEVAL_ENABLED=true:
 #   "per_chunk" (default) — one LLM call per chunk; each chunk gets a context
 #      tailored to its section (Anthropic recipe; highest quality, N calls/doc).
@@ -676,14 +682,41 @@ CONTEXTUAL_LABEL_RAW = os.getenv("CONTEXTUAL_LABEL_RAW", "true").lower() == "tru
 # legacy hard cap of 200 left no headroom, so under concurrent vLLM load the JSON
 # `{"context":"..."}` was truncated mid-string -> JSONDecodeError -> raw-chunk
 # fallback. 512 gives comfortable margin at no extra cost (the model stops early).
-CONTEXTUAL_MAX_TOKENS = int(os.getenv("DATAPREP_CONTEXTUAL_MAX_TOKENS", "512"))
+CONTEXTUAL_MAX_TOKENS = _env_int("DATAPREP_CONTEXTUAL_MAX_TOKENS", 512)
+
+
 # Explicit statement of the context window (tokens) the LLM endpoint serves.
 # 0 = discover it at runtime from the endpoint (see _serving_model_window);
 # >0 = the deployer states it. The override is the only lever on a strict
 # OpenAI-compatible provider (its /v1/models carries no max_model_len, so
 # discovery never answers) and the way to state the window of a
 # DATAPREP_CONTEXTUAL_MODEL that is not the model the endpoint lists first.
-DATAPREP_MAX_MODEL_LEN = _env_int("DATAPREP_MAX_MODEL_LEN", 0)
+def _sanitize_window_override(value: int) -> int:
+    """Return a usable window size, or 0 for "unset".
+
+    A negative value is not a window (it would silently disable the
+    override) and an absurd one exceeds every real model — a budget sized
+    for it overflows every window and the calls fall back to raw chunks
+    silently. Both are corrected here, loudly: the operator learns their
+    setting was not what they wrote.
+    """
+    if value < 0:
+        logger.warning(
+            f"DATAPREP_MAX_MODEL_LEN={value} is not a window size — treating it as unset (the served "
+            f"window is discovered at runtime instead)."
+        )
+        return 0
+    if value > MAX_SANE_MODEL_WINDOW_TOKENS:
+        logger.warning(
+            f"DATAPREP_MAX_MODEL_LEN={value} exceeds the largest sane context window "
+            f"({MAX_SANE_MODEL_WINDOW_TOKENS}) — clamping it; a budget sized for it would overflow "
+            f"every real window."
+        )
+        return MAX_SANE_MODEL_WINDOW_TOKENS
+    return value
+
+
+DATAPREP_MAX_MODEL_LEN = _sanitize_window_override(_env_int("DATAPREP_MAX_MODEL_LEN", 0))
 
 # Spec 5.3: Externalized Prompt - Two-tier priority
 # Level 1: ENV VAR (highest priority) - override via .env
@@ -796,7 +829,7 @@ def _build_vllm_client(endpoint: str | None = None) -> tuple[AsyncOpenAI, str]:
     return client, model
 
 
-def _build_vllm_client_and_window() -> tuple[AsyncOpenAI, str, int]:
+def _build_vllm_client_and_window() -> tuple[AsyncOpenAI, str, int, bool]:
     """Client, model and the serving model's window — resolved together.
 
     One endpoint read, so the window is probed on the same server the
@@ -810,9 +843,17 @@ def _build_vllm_client_and_window() -> tuple[AsyncOpenAI, str, int]:
     and it is computed here.
     """
     endpoint = os.getenv("VLLM_ENDPOINT", "")
+    # The window FIRST: its own failure (no answer, no max_model_len) must
+    # still be reported even when the client build below fails — otherwise
+    # the loud fallback warning is unreachable exactly when the endpoint is
+    # down, and the operator gets a client error that names no remedy.
+    window, authoritative = _serving_model_window(endpoint)
     client, model = _build_vllm_client(endpoint)
-    named_model = DATAPREP_CONTEXTUAL_MODEL.strip() or model
-    return client, model, _serving_model_window(endpoint, named_model)
+    # The mismatch check compares the model the request names with the one the
+    # endpoint lists first: the explicit contextual model when it is set, the
+    # resolved model id otherwise.
+    _warn_on_contextual_model_mismatch(endpoint, window, DATAPREP_CONTEXTUAL_MODEL.strip() or model)
+    return client, model, window, authoritative
 
 
 # Keys of the warnings already emitted ("already warned" set). The window
@@ -838,7 +879,7 @@ def _warn_once(key: str, message: str) -> None:
     logger.warning(message)
 
 
-def _serving_model_window(endpoint: str, named_model: str) -> int:
+def _serving_model_window(endpoint: str) -> tuple[int, bool]:
     """The serving model's context window in tokens, in three tiers.
 
     1. DATAPREP_MAX_MODEL_LEN (import-time constant) wins — the deployer's
@@ -871,6 +912,11 @@ def _serving_model_window(endpoint: str, named_model: str) -> int:
     visibly), chatqna asks the model to answer and falls back to the
     project-standard Granite window. Consolidating them is a separate change
     from this one.
+
+    Returns ``(window, authoritative)``. ``authoritative`` is False for the
+    fail-closed fallback — a GUESS, not knowledge of the served window — and
+    the budget resolver uses that to leave an operator's explicit budget
+    alone instead of capping it against a number nobody knows.
     """
     discovered = get_max_model_len(endpoint)
     if DATAPREP_MAX_MODEL_LEN > 0:
@@ -882,10 +928,9 @@ def _serving_model_window(endpoint: str, named_model: str) -> int:
                 f"{DATAPREP_MAX_MODEL_LEN} are rejected when it is the larger of the two, and the "
                 f"batches fall back to raw chunks. Align the override with the served window.",
             )
-        return DATAPREP_MAX_MODEL_LEN
+        return DATAPREP_MAX_MODEL_LEN, True
     if discovered:
-        _warn_on_contextual_model_mismatch(endpoint, discovered, named_model)
-        return discovered
+        return discovered, True
 
     _warn_once(
         f"fallback|{endpoint}",
@@ -896,7 +941,7 @@ def _serving_model_window(endpoint: str, named_model: str) -> int:
         f"core.model_cache), set DATAPREP_MAX_MODEL_LEN to the window it serves, or set "
         f"DATAPREP_CONTEXTUAL_DOC_BUDGET explicitly.",
     )
-    return DERIVE_FALLBACK_WINDOW
+    return DERIVE_FALLBACK_WINDOW, False
 
 
 def _warn_on_contextual_model_mismatch(endpoint: str, window: int, named_model: str) -> None:
@@ -915,12 +960,15 @@ def _warn_on_contextual_model_mismatch(endpoint: str, window: int, named_model: 
     discovered_model = get_model_id(endpoint)
     if not discovered_model:
         return
-    # Compare basenames: the same model is often served under a namespaced id
+    # The same model is often served under a namespaced id
     # ("ibm-granite/granite-4.1-8b") while the deployment names it without
-    # the namespace ("granite-4.1-8b"). A name difference is not a model
-    # difference, and a false alarm here sends the operator to pin a window
-    # that was already right.
-    if discovered_model.rsplit("/", 1)[-1] == named_model.rsplit("/", 1)[-1]:
+    # the namespace ("granite-4.1-8b") — that is an alias, not a mismatch.
+    # Two DIFFERENT namespaces are not: "org-a/granite" and "org-b/granite"
+    # can serve different windows, so the full ids are compared then.
+    discovered_ns, _, discovered_base = discovered_model.rpartition("/")
+    named_ns, _, named_base = named_model.rpartition("/")
+    same_model = discovered_model == named_model if discovered_ns and named_ns else discovered_base == named_base
+    if same_model:
         return
     _warn_once(
         f"mismatch|{endpoint}|{named_model}",
@@ -2602,7 +2650,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         }
 
     def _resolve_doc_budget(
-        self, chunks: list[str], configured: int, window: int, *, single_call: bool = False
+        self,
+        chunks: list[str],
+        configured: int,
+        window: int,
+        *,
+        authoritative: bool = True,
+        single_call: bool = False,
     ) -> tuple[int | None, str]:
         """Resolve the document-context budget for this document.
 
@@ -2612,6 +2666,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
             "override"        operator set DATAPREP_CONTEXTUAL_DOC_BUDGET
             "derived"         computed from the given serving-model window
+            "window-capped"   the operator's budget, capped by the window
             "disabled"        operator set a negative budget
             "window-exhausted" the model window cannot fit any context
 
@@ -2627,12 +2682,20 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
         ``single_call`` is the doc_level strategy: ONE call per document, so
         the request carries the system prompt (with the document context
-        embedded in it) and reserves ONE output budget — no chunk text. Its
-        configured value is an UPPER BOUND (the knob is "max chars"), capped
-        by what the window can hold: that is what keeps the 100000-char
-        default from overflowing a deployment that serves far less, where
-        every document would silently fall back to raw chunks. The per-chunk
-        path keeps its contract — an explicit budget is pinned verbatim.
+        embedded in it) and reserves ONE output budget — no chunk text.
+
+        An explicit budget is a MAXIMUM, not a pin: when the window is
+        known (``authoritative`` — discovered, or stated by the operator),
+        a budget that does not fit it is capped, because a request the model
+        cannot accept is rejected and the batch falls back to raw chunks
+        silently. When the window is only the fail-closed GUESS, the
+        operator's value stands: nobody knows the real window there, so
+        capping against a guess would destroy a deliberate setting.
+
+        The document-context scaffolding (filename line, labels line, header,
+        truncation marker, user turn) sits outside the budget and is
+        reserved separately — a request sized without it overflows the
+        window by exactly those characters.
 
         The batch term is measured from the REAL chunks rather than from the
         DATAPREP_CHUNK_SIZE_* vars: those are resolved per file extension
@@ -2642,14 +2705,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         """
         if configured < 0:
             return None, "disabled"
+        if configured > 0 and not authoritative:
+            # The window is only the fail-closed GUESS: it may neither cap nor
+            # refuse a deliberate operator setting. Only a window somebody
+            # knows can overrule one.
+            return configured, "override"
 
         if single_call:
             prompt_tokens = -(-len(_CONTEXTUAL_DOC_PROMPT_DEFAULT) // CHARS_PER_TOKEN)
             batch_tokens = 0
             output_tokens = CONTEXTUAL_MAX_TOKENS
         else:
-            if configured > 0:
-                return configured, "override"
             prompt_tokens = -(-len(CONTEXTUAL_RETRIEVAL_PROMPT) // CHARS_PER_TOKEN)
             largest = sorted((len(c) for c in chunks), reverse=True)[:LABEL_LLM_BATCH_SIZE]
             # The user turn is json.dumps([{"index": i, "text": t}, ...]) — the raw
@@ -2664,7 +2730,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # size, it is not a flat cap. Reserving less would size the budget
             # against a request the model would never actually complete.
             output_tokens = CONTEXTUAL_MAX_TOKENS * LABEL_LLM_BATCH_SIZE
-        usable = window - prompt_tokens - batch_tokens - output_tokens
+        scaffold_tokens = -(-DOC_CONTEXT_SCAFFOLD_CHARS // CHARS_PER_TOKEN)
+        usable = window - prompt_tokens - batch_tokens - output_tokens - scaffold_tokens
         if usable <= 0:
             # NOT "budget 0" — in _build_doc_context a budget of 0 means "do
             # not truncate", i.e. send the whole document, which is precisely
@@ -2680,8 +2747,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             return None, "window-exhausted"
         derived = usable * CHARS_PER_TOKEN
         if configured > 0:
-            # doc_level: the operator's value is a maximum, the window caps it.
-            return min(configured, derived), "override"
+            if authoritative and configured > derived:
+                # The window is the binding constraint: say so, so the operator
+                # does not read their own number back as the applied budget.
+                return derived, "window-capped"
+            return configured, "override"
         return derived, "derived"
 
     def _build_doc_context(self, chunks: list[str], input, budget: int = 0) -> str:
@@ -2737,7 +2807,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # (e.g. model auto-detection failure on the GPU node), skip contextualization
         # entirely and ingest raw chunks — never block ingestion (spec boundary).
         try:
-            client, default_model, serving_window = await asyncio.to_thread(_build_vllm_client_and_window)
+            client, default_model, serving_window, authoritative = await asyncio.to_thread(
+                _build_vllm_client_and_window
+            )
         except Exception as e:
             err = f"{type(e).__name__}: {str(e)[:200]}"
             logger.error(
@@ -2775,10 +2847,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             ``_write_ingestion_log`` is what makes it visible to a curator
             instead of only to whoever greps container logs.
             """
-            budget, source = self._resolve_doc_budget(chunks_, configured, serving_window, single_call=single_call)
+            budget, source = self._resolve_doc_budget(
+                chunks_, configured, serving_window, authoritative=authoritative, single_call=single_call
+            )
             if budget is None:
                 return None, (DEGRADED_WINDOW_TOO_SMALL if source == "window-exhausted" else None)
 
+            # The knob the strategy actually uses: the doc_level budget is
+            # DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL, not the per-chunk one.
+            budget_knob = (
+                "DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL" if label == "doc_level" else "DATAPREP_CONTEXTUAL_DOC_BUDGET"
+            )
             truncation = self._doc_context_truncation(chunks_, budget)
             if truncation is not None:
                 await self._write_ingestion_log(
@@ -2790,9 +2869,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         f"{truncation['total']} chars ({truncation['pct']}%, budget {label}/{source}) "
                         f"across {truncation['chunks']} chunks. Deep chunks get a weaker "
                         f"document context, which degrades their embedding and the "
-                        f"graph extraction. Raise DATAPREP_CONTEXTUAL_DOC_BUDGET or the model "
-                        f"window on the GPU (vLLM --max-model-len) if it allows, or split the "
-                        f"document during curation."
+                        f"graph extraction. "
+                        + (
+                            "The served window is what binds here: raise it on the GPU "
+                            "(vLLM --max-model-len) or state it with DATAPREP_MAX_MODEL_LEN."
+                            if source == "window-capped"
+                            else f"Raise {budget_knob} if the model window allows."
+                        )
+                        + " Or split the document during curation."
                     ),
                 )
             return self._build_doc_context(chunks_, input, budget), None

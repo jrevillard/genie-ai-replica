@@ -465,7 +465,8 @@ defaults.
 | `MULTI_TURN_BLEND_ALPHA` | number | no | `0.7` | Query weight α in `V = α·EQ + (1-α)·EH` |
 | `MULTI_TURN_HISTORY_TURNS` | number | no | `1` | Prior turns blended into history embedding |
 | `DATAPREP_CONTEXTUAL_MODEL` | string | no | (empty) | Model for context generation (empty = `VLLM_LLM_MODEL_ID`); must support guided JSON |
-| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | number | no | `6000` (compose) / `100000` (Python code) | Max chars of doc text fed to context LLM (~1500 tokens); `<=0` disables truncation (sibling `_DOC_LEVEL` variant defaults to `100000`). Compose wins at runtime; set in `.env` to override |
+| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | number | no | `0` | Max chars of doc text fed to the context LLM. `0` = derived from the context window the endpoint actually serves (discovered at runtime from `VLLM_ENDPOINT`); `>0` sets a maximum the served window still caps; `<0` disables contextualization for the document (the sibling `_DOC_LEVEL` variant is a maximum defaulting to `100000`) |
+| `DATAPREP_MAX_MODEL_LEN` | number | no | `0` | The context window (tokens) dataprep sizes document contexts against. `0` = discovered at runtime from `VLLM_ENDPOINT`; `>0` states the window the endpoint serves — the only lever on a provider whose `/v1/models` carries no `max_model_len` |
 | `DATAPREP_CONTEXTUAL_MAX_TOKENS` | number | no | `512` | Max output tokens for context-gen LLM (was 200, truncated under load) |
 
 #### Retriever

@@ -6,12 +6,12 @@ description: |
   per-cluster Kustomize overlays (overlays/<cluster>/<env>/) in the
   genie-ai-deploy repo.
 type: application
-version: 0.2.130
+version: 0.2.131
 # `appVersion` mirrors the chart version deliberately: it tracks the chart
 # layout, not the GENIE.AI product release (the two versions on independent
 # axes; deployed image tags are governed by values, not by appVersion).
 # Never "latest" — OCI registries reject it for immutable promotion.
-appVersion: 0.2.130
+appVersion: 0.2.131
 keywords:
   - genie-ai
   - umbrella

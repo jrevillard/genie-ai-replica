@@ -2,6 +2,7 @@
 
 import os
 import sys
+from enum import Enum
 
 os.makedirs("reports", exist_ok=True)
 from pathlib import Path
@@ -208,6 +209,26 @@ def set_env_vars(monkeypatch):
     monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
     monkeypatch.setenv("LOCAL_EMBEDDING_MODEL", "BAAI/bge-large-en-v1.5")
     monkeypatch.setenv("RETRIEVER_MODEL_ID", "BAAI/bge-large-en-v1.5")
+
+
+# ---------------------------------------------------------------------------
+# align_inputs / align_outputs test harness, shared by the chatqna test
+# modules. The real ``ServiceType`` is a comps-mocked attribute, so tests
+# patch ``chatqna.genieai_chatqna.ServiceType`` with this real Enum and build
+# service nodes whose ``service_type`` is one of its values.
+# ---------------------------------------------------------------------------
+class FakeServiceType(Enum):
+    EMBEDDING = "embedding"
+    RETRIEVER = "retriever"
+    RERANK = "rerank"
+    LLM = "llm"
+
+
+def create_mock_service_node(service_type_value):
+    """Create a mock service node with a real service_type attribute."""
+    node = MagicMock()
+    node.service_type = service_type_value
+    return node
 
 
 @pytest.fixture

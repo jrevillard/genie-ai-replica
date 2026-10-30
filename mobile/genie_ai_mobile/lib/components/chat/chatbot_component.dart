@@ -9,6 +9,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
 import 'package:genie_ai_mobile/components/chat/chat_response_feedback_dialog.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
+import 'package:genie_ai_mobile/design_system/tokens/app_tokens.dart';
 import 'package:genie_ai_mobile/design_system/tokens/color_utils.dart';
 import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
@@ -228,28 +229,43 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     }
 
     // Check for language changes and update welcome message
-    final String newWelcomeMessage = _getConfigWelcomeMessage();
-
-    if (_welcomeMessage != newWelcomeMessage) {
-      // If the first message is the welcome message, update it in the UI
-      if (_messages.isNotEmpty &&
-          _messages.first['role'] == 'assistant' &&
-          _messages.first['content'] == _welcomeMessage) {
-        setState(() {
-          _messages.first['content'] = newWelcomeMessage;
-        });
-      }
-      _welcomeMessage = newWelcomeMessage;
-    }
+    _refreshWelcomeMessage();
   }
 
   String _getConfigWelcomeMessage() {
-    final welcomeConfig =
-        _cachedConfig?['features']?['chat']?['welcomeMessage'];
-    if (welcomeConfig != null) {
-      return resolveConfigText(welcomeConfig, _currentLocale);
+    // The rule lives in the config layer, where it is unit-tested: a
+    // configuration that declares no usable message leaves the built-in
+    // greeting in place.
+    final resolved = resolveWelcomeMessage(
+      _cachedConfig ?? const {},
+      _currentLocale,
+    );
+    return resolved ?? tr('chatbot.welcomeMessage');
+  }
+
+  /// Recomputes the welcome message under the CURRENT config and locale.
+  ///
+  /// The config load is asynchronous: the first render ran before the
+  /// config was cached, and the load's completion — not only a locale
+  /// switch — must land the configured message (the web is config-ready
+  /// at mount). The FIELD always follows, so a New Chat opened after the
+  /// load seeds the configured text; the VISIBLE bubble follows only
+  /// while NO conversation is open — the first bubble of a restored
+  /// conversation is history, not the welcome slot.
+  void _refreshWelcomeMessage() {
+    final String newWelcomeMessage = _getConfigWelcomeMessage();
+    if (_welcomeMessage == newWelcomeMessage) {
+      return;
     }
-    return tr('chatbot.welcomeMessage');
+    if (_currentConversationId == null &&
+        _messages.isNotEmpty &&
+        _messages.first['role'] == 'assistant' &&
+        _messages.first['content'] == _welcomeMessage) {
+      setState(() {
+        _messages.first['content'] = newWelcomeMessage;
+      });
+    }
+    _welcomeMessage = newWelcomeMessage;
   }
 
   /// The Quick Help configuration load, once started. A restore that
@@ -311,76 +327,23 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // Cache the config for later use
       _cachedConfig = config;
 
-      final Map<String, dynamic> quickHelpConfig =
-          config['features']?['chat']?['quickHelp'] ?? {};
+      // The config just landed: the welcome message it declares lands
+      // NOW - before the Quick Help section is parsed, so a malformed
+      // button cannot keep the greeting stale.
+      _refreshWelcomeMessage();
+
+      // The section pipeline — descent, container guards, hidden filter,
+      // per-entry skip, button parse, dedupe — runs beside the other
+      // config rules, where it is unit-tested; the widget keeps only
+      // cache, mount and state.
+      final (layout, buttons) = parseQuickHelpConfig(config, _currentLocale);
 
       setState(() {
-        _quickHelpLayout = quickHelpConfig['layout'] ?? {};
-      });
-
-      final List<dynamic> buttonsJson = quickHelpConfig['buttons'] ?? [];
-      final List<Map<String, dynamic>> loadedButtons = [];
-
-      for (var btn in buttonsJson) {
-        // Skip hidden buttons (no matching corpus content).
-        if (btn['hidden'] == true) {
-          continue;
-        }
-        // Safe parsing: use map access with defaults to prevent null crashes
-        final appearance = btn['appearance'] as Map<String, dynamic>?;
-        final iconMap = appearance?['icon'] as Map<String, dynamic>?;
-        final iconPath = iconMap?['value']?.toString() ?? '';
-
-        final String localIconAsset = iconPath.isNotEmpty
-            ? 'assets/config/quickhelp/${iconPath.split('/').last}'
-            : 'assets/config/quickhelp/default.svg';
-
-        // Resolve text with locale maps
-        final resolvedTitle = resolveConfigText(btn['title'], _currentLocale);
-        final action = btn['action'] as Map<String, dynamic>?;
-        final resolvedVisibleText = resolveConfigText(
-          action?['visibleText'],
-          _currentLocale,
-        );
-        final resolvedHiddenPrompt = resolveConfigText(
-          action?['hiddenPrompt'],
-          _currentLocale,
-        );
-
-        // Explicit English KB labels for the retriever filter. A bare
-        // STRING where the array belongs is the config typo the web half
-        // wraps as ONE label — the wire's own bare-string rule — and the
-        // parse must agree: the hard cast made the WHOLE config load
-        // throw (Quick Help dead for the session) while the web filtered
-        // correctly on the same file.
-        final dynamic rawServiceLabels = btn['serviceLabels'];
-        final List<dynamic> serviceLabels;
-        if (rawServiceLabels is List<dynamic>) {
-          serviceLabels = rawServiceLabels;
-        } else if (rawServiceLabels is String && rawServiceLabels.isNotEmpty) {
-          serviceLabels = [rawServiceLabels];
-        } else {
-          serviceLabels = const <dynamic>[];
-        }
-
-        loadedButtons.add({
-          'id': btn['id'],
-          'category': btn['category'],
-          'serviceLabels': serviceLabels,
-          'action': action ?? {},
-          'appearance': appearance ?? {},
-          'iconAsset': localIconAsset,
-          'resolvedTitle': resolvedTitle,
-          'resolvedVisibleText': resolvedVisibleText,
-          'resolvedHiddenPrompt': resolvedHiddenPrompt,
-        });
-      }
-
-      setState(() {
+        _quickHelpLayout = layout;
         // The id is the button's IDENTITY. Two cards sharing one is a
         // configuration error: the FIRST wins and the duplicate never
         // becomes a card — the same rule the web applies at its own load.
-        _quickHelpButtons = dedupeQuickHelpButtons(loadedButtons);
+        _quickHelpButtons = buttons;
         // The locale these titles were resolved under — the drift marker
         // didChangeDependencies reloads on.
         _quickHelpButtonsLocale = _currentLocale;
@@ -1226,28 +1189,27 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   }
 
   // Installs a pressed Quick Help card as THE scope. ONE copy of the
-  // field list for the press paths (the scoped no-prompt card and the
-  // dual-prompt card differ only in the display-name fallback); the
-  // caller owns its own setState.
-  void _installQuickHelpScopeFields(
-    Map<String, dynamic> button, {
-    required String nameFallback,
-  }) {
-    final declaredLabels =
-        (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
-            .map((label) => label.toString())
-            .toList();
+  // field list for the press paths; the caller owns its own setState.
+  void _installQuickHelpScopeFields(Map<String, dynamic> button) {
+    // A card with no title installs NOTHING: the context bar would go
+    // blank. The press gate refuses such a card before it gets here —
+    // this is the callee's own guarantee, not the caller's.
+    final name = quickHelpTitleOf(button);
+    if (name == null) return;
+    // A COPY: the conversation's filter labels live as long as the
+    // scope, and the card's own list must not be aliased by them (an
+    // in-place edit would rewrite the card's scope verdict).
+    final declaredLabels = List<String>.of(quickHelpServiceLabelsOf(button));
     _showQuickHelpOverlay = false;
     // The configuration names its category; the hierarchy's own key is
     // what the conversation's edge speaks.
-    final categoryRef = button['category']?.toString();
+    final categoryRef = quickHelpFieldOf(button, 'category');
     _selectedCategoryId =
         _scopeResolver?.categoryIdFor(categoryRef) ?? categoryRef;
     _selectedCategoryNameEn = _scopeResolver?.categoryLabelEn(button) ?? '';
-    // An EMPTY title is no title (the same rule the locale re-title and
-    // the restore apply): the caller's fallback name shows, never a
-    // blank context bar.
-    _selectedCategoryName = quickHelpTitleOf(button) ?? nameFallback;
+    // The context bar carries the card's TITLE — the same name the
+    // web's chip shows.
+    _selectedCategoryName = name;
     _sidebarServiceLabelsEn = [];
     // A mode switch clears the sidebar count: the send guard would read a
     // count that remembers services that are no longer selected.
@@ -1255,7 +1217,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _scopeEpoch++;
     _restoredTags = null;
     _activeServiceLabels = declaredLabels;
-    _activeQuickHelpButtonId = button['id']?.toString();
+    _activeQuickHelpButtonId = quickHelpFieldOf(button, 'id');
     _activeQuickHelpScope = _scopeResolver?.stateFor(button);
   }
 
@@ -1270,40 +1232,68 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _activeServiceLabels = const [];
   }
 
-  void _quickHelpPressed(Map<String, dynamic> button) {
-    // A broken scope is a VISIBLE failure: the overlay caption names the
-    // configuration problem. Never a query with a silently reduced scope.
-    if ((_scopeResolver?.stateFor(button)['broken'] as bool?) ?? false) {
-      return;
+  /// The icon a Quick Help card shows: the warning of a broken scope,
+  /// the card's own bundled asset, or the neutral help icon (no asset at
+  /// all, an asset still loading, or an asset the flavour did not
+  /// bundle). ONE copy of the neutral icon, built only where it is used.
+  Widget _quickHelpCardIcon({
+    required bool broken,
+    required String iconAsset,
+    required AppTokens tokens,
+  }) {
+    if (broken) {
+      return Icon(Icons.warning_amber_rounded, size: 18, color: tokens.danger);
     }
-    // The config names the category; the wire needs its ENGLISH label, and
-    // only the live tree can say it. A tree that did not load cannot name
-    // the scope — and a query without it would answer from the whole corpus.
-    if (!quickHelpScopeIsNameable(button, _scopeResolver)) {
-      return;
-    }
-    final Map<String, dynamic> action = button['action'] ?? {};
-    final String visibleTextKey = action['visibleText']?.toString() ?? '';
-    final String hiddenPromptKey = action['hiddenPrompt']?.toString() ?? '';
+    Widget neutralIcon() =>
+        Icon(Icons.help_outline, size: 18, color: tokens.accent);
+    if (iconAsset.isEmpty) return neutralIcon();
+    return SvgPicture.asset(
+      iconAsset,
+      width: 18,
+      height: 18,
+      placeholderBuilder: (_) => neutralIcon(),
+      // A well-formed path that names an asset the flavour did not
+      // bundle degrades to the same neutral icon, instead of an empty
+      // slot.
+      errorBuilder: (_, _, _) => neutralIcon(),
+    );
+  }
 
-    // If both are empty AND the card declares NO scope, just enter Chat
-    // Mode: close overlay, clear all label filters so the retriever sees
-    // all documents, focus input. A card that DECLARES a scope but has
-    // no prompts is still a scoped card — the web installs the same
-    // card's labels without asking for a prompt, and wiping the scope
-    // here sent the question over the whole corpus while the card
-    // promised its declared one.
-    final declaredLabels =
-        (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
-            .map((label) => label.toString())
-            .toList();
-    final declaresScope =
-        declaresCategoryScope(button['category']?.toString()) ||
-        declaredLabels.isNotEmpty;
-    if (visibleTextKey.isEmpty && hiddenPromptKey.isEmpty) {
+  void _quickHelpPressed(Map<String, dynamic> button) {
+    // One predicate for the three press refusals — a broken scope (a
+    // VISIBLE failure: the overlay caption names the problem), a scope
+    // the tree cannot EN-name, a card with no title — the same gates the
+    // web's selectQuickHelpOption applies before any branch.
+    if (!quickHelpPressable(button, _scopeResolver)) {
+      return;
+    }
+    // The parse resolved the action texts under the load's locale (the
+    // same values the web resolves at map time); the gates read the
+    // RESOLVED strings — the raw config values are locale maps, whose
+    // string form is never empty.
+    final String visibleText = button['resolvedVisibleText']?.toString() ?? '';
+    final String hiddenPrompt =
+        button['resolvedHiddenPrompt']?.toString() ?? '';
+
+    // ONE scope rule, shared with the grid's unavailable verdict.
+    final declaresScope = quickHelpDeclaresScope(button);
+
+    // The AUTO-SEND is armed only when BOTH texts resolved: a card with
+    // a visible text but no hidden prompt would wire an EMPTY question
+    // to the LLM while the bubble showed the visible text, and a card
+    // with a hidden prompt but no visible text would ask the send guard
+    // to bounce it after the overlay already closed. Net rule on the
+    // web too: it arms on the hidden prompt but its sendMessage bounces
+    // the empty composer (it also honours a legacy i18n-KEY shape the
+    // mobile bundle never carries).
+    if (hiddenPrompt.isEmpty || visibleText.isEmpty) {
+      // A card that DECLARES a scope but has no hidden prompt is still a
+      // scoped card — the web installs the same card's labels without
+      // asking for a prompt, and wiping the scope here sent the question
+      // over the whole corpus while the card promised its declared one.
       if (declaresScope) {
         setState(() {
-          _installQuickHelpScopeFields(button, nameFallback: '');
+          _installQuickHelpScopeFields(button);
         });
         _inputFocusNode.requestFocus();
         return;
@@ -1326,19 +1316,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       return;
     }
 
-    // Use pre-resolved values from button map with i18n fallback
-    final String visibleText =
-        button['resolvedVisibleText'] ??
-        (visibleTextKey.isNotEmpty ? tr(visibleTextKey) : '');
-    // If hiddenPromptKey is empty, fallback to visible text
-    final String hiddenPrompt =
-        button['resolvedHiddenPrompt'] ??
-        (hiddenPromptKey.isNotEmpty ? tr(hiddenPromptKey) : visibleText);
-
     // The card's declared English KB labels become the retriever filter —
     // the helper installs them; _sendStreaming reads them off the scope.
     setState(() {
-      _installQuickHelpScopeFields(button, nameFallback: visibleText);
+      _installQuickHelpScopeFields(button);
     });
 
     // Send using the 2-prompt system
@@ -2186,31 +2167,30 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
-                        final int crossAxisCount =
-                            _quickHelpLayout['columns'] as int? ?? 2;
-                        final double aspectRatio =
-                            (_quickHelpLayout['childAspectRatio'] as num?)
-                                ?.toDouble() ??
-                            3.5;
+                        // The layout reads degrade to the defaults for
+                        // any malformed value — one copy beside the other
+                        // config rules (see quick_help_scope.dart).
+                        final int crossAxisCount = quickHelpGridColumns(
+                          _quickHelpLayout,
+                          maxWidth: constraints.maxWidth,
+                        );
+                        final double aspectRatio = quickHelpGridAspectRatio(
+                          _quickHelpLayout,
+                        );
 
                         return GridView.builder(
                           gridDelegate:
                               SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: crossAxisCount,
                                 childAspectRatio: aspectRatio,
-                                mainAxisSpacing: 10,
-                                crossAxisSpacing: 10,
+                                mainAxisSpacing: quickHelpGridSpacing,
+                                crossAxisSpacing: quickHelpGridSpacing,
                               ),
                           itemCount: _quickHelpButtons.length,
                           itemBuilder: (context, index) {
                             final button = _quickHelpButtons[index];
-                            final labelMap =
-                                button['appearance']?['label']
-                                    as Map<String, dynamic>? ??
-                                {};
-                            final String titleKey =
-                                labelMap['text']?.toString() ?? '';
-                            final String translatedTitle = tr(titleKey);
+                            final String translatedTitle =
+                                quickHelpTitleOf(button) ?? '';
                             final String iconAsset =
                                 button['iconAsset']?.toString() ?? '';
                             final scope = _treeUnavailable
@@ -2253,23 +2233,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                     children: [
                                       Row(
                                         children: [
-                                          broken
-                                              ? Icon(
-                                                  Icons.warning_amber_rounded,
-                                                  size: 18,
-                                                  color: tokens.danger,
-                                                )
-                                              : SvgPicture.asset(
-                                                  iconAsset,
-                                                  width: 18,
-                                                  height: 18,
-                                                  placeholderBuilder: (_) =>
-                                                      Icon(
-                                                        Icons.help_outline,
-                                                        size: 20,
-                                                        color: tokens.accent,
-                                                      ),
-                                                ),
+                                          // ONE copy of the neutral help
+                                          // icon: the no-icon card, the
+                                          // loading placeholder and the
+                                          // failed asset all degrade to
+                                          // it.
+                                          _quickHelpCardIcon(
+                                            broken: broken,
+                                            iconAsset: iconAsset,
+                                            tokens: tokens,
+                                          ),
                                           const SizedBox(width: 12),
                                           Expanded(
                                             child: Text(

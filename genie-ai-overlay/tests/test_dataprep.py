@@ -9,7 +9,6 @@ utility methods with fully mocked ArangoDB, LangChain, aiohttp, and OpenAI deps.
 
 import asyncio
 import contextlib
-import fcntl
 import json
 import os
 import subprocess
@@ -19,11 +18,23 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
+
+try:
+    import fcntl  # POSIX file locking — the service runs in a Linux container
+except ModuleNotFoundError:  # Windows dev checkout: locking degrades to a no-op
+    fcntl = None  # type: ignore[assignment]
 
 import dataprep.genieai_dataprep_arangodb as dp_module
 import dataprep.genieai_dataprep_microservice as ms
 from dataprep.genieai_dataprep_arangodb import GenieArangoDataprep
 from tests.conftest import OVERLAY_ROOT
+
+# The lock-acquisition tests assert on fcntl itself. POSIX locking does not
+# exist on a Windows dev checkout, so those tests are skipped there (the
+# microservice degrades to a no-op lock); they run everywhere else, including
+# CI and the Linux container image.
+requires_fcntl = pytest.mark.skipif(fcntl is None, reason="POSIX fcntl is unavailable on this platform")
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -63,6 +74,11 @@ def create_dataprep(db_mock=None, embeddings_mock=None, graph_mock=None):
     dp.graph = graph_mock or MagicMock()
     dp.llm_transformer = MagicMock()
     dp._log_semaphore = asyncio.Semaphore(100)
+    # Story 4.8-amend follow-up (David's 4th-time directive, 2026-08-21):
+    # the bundle mirror helper looks up the concept file name from a cache.
+    # __new__ skips __init__, so initialize the cache here too.
+    dp._concept_file_name_cache = {}
+    dp._bundle_file_id_cache = {}
     dp._initialize_llm = MagicMock()
     dp._initialize_embeddings = MagicMock()
     return dp
@@ -1305,10 +1321,17 @@ class TestDataprepInputTooLong:
         assert _is_vllm_input_overflow(exc) is False
 
     @pytest.mark.asyncio
-    async def test_context_single_call_overflow_raises_typed(self, monkeypatch):
-        """_context_single_call: vLLM context overflow raises DataprepInputTooLongError instead of returning ''."""
-        from dataprep.genieai_dataprep_arangodb import DataprepInputTooLongError
+    async def test_context_single_call_overflow_returns_raw_no_retry(self, monkeypatch):
+        """_context_single_call: vLLM context overflow degrades to the raw chunk
+        (returns '') after ONE attempt — a 400 is deterministic, retrying the
+        identical prompt is wasted calls.
 
+        Bali regression (2026-10-16): this site used to raise
+        DataprepInputTooLongError, which killed the WHOLE ingest (0 chunks
+        persisted, concept terminal-failed) — breaking the documented
+        "never blocks ingestion (raw-chunk fallback)" contextualization
+        contract. The fail-loud contract above stays for LABELING only.
+        """
         dp = create_dataprep()
         monkeypatch.setenv("VLLM_API_KEY", "test-key")
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
@@ -1318,21 +1341,23 @@ class TestDataprepInputTooLong:
         mock_client.chat.completions.create = AsyncMock(
             side_effect=Exception("Error code: 400 - context length exceeded (max 4096 tokens)")
         )
+        write_log = AsyncMock()
 
         with (
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
-            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
-            pytest.raises(DataprepInputTooLongError),
+            patch.object(dp, "_write_ingestion_log", write_log),
         ):
-            await dp._context_single_call(mock_client, "m", "sys", 0, "chunk text", "file1")
-        # Fail-loud: exactly one attempt, not three.
-        assert mock_client.chat.completions.create.call_count == 1
+            ctx = await dp._context_single_call(mock_client, "m", "sys", 0, "chunk text", "file1")
+
+        assert ctx == ""  # caller keeps the raw chunk
+        assert mock_client.chat.completions.create.call_count == 1  # no 3x retry on a deterministic 400
+        assert any("overflow" in str(c.args[3]).lower() for c in write_log.await_args_list)
 
     @pytest.mark.asyncio
-    async def test_context_doc_call_overflow_raises_typed(self, monkeypatch):
-        """_context_doc_call: doc-level context overflow raises DataprepInputTooLongError instead of returning ''."""
-        from dataprep.genieai_dataprep_arangodb import DataprepInputTooLongError
-
+    async def test_context_doc_call_overflow_returns_raw_no_retry(self, monkeypatch):
+        """_context_doc_call: doc-level context overflow degrades to raw chunks
+        (returns '') after ONE attempt — Bali regression 2026-10-16, see the
+        single-call test above."""
         dp = create_dataprep()
         monkeypatch.setenv("VLLM_API_KEY", "test-key")
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
@@ -1342,14 +1367,89 @@ class TestDataprepInputTooLong:
         mock_client.chat.completions.create = AsyncMock(
             side_effect=Exception("This model's maximum context length is 2048 tokens. Please reduce the length.")
         )
+        write_log = AsyncMock()
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", write_log),
+        ):
+            ctx = await dp._context_doc_call(mock_client, "m", "sys", "file1")
+
+        assert ctx == ""  # caller (_contextualize_doc_level) falls back to raw chunks
+        assert mock_client.chat.completions.create.call_count == 1
+        assert any("overflow" in str(c.args[3]).lower() for c in write_log.await_args_list)
+
+    @pytest.mark.asyncio
+    async def test_context_batch_call_overflow_falls_back_per_chunk(self, monkeypatch):
+        """Bali regression (2026-10-16): the batch context call 400'd by ONE token
+        (Cyrillic-heavy doc at ~1.75 chars/token vs the CHARS_PER_TOKEN=4
+        derivation estimate) and the fatal raise killed the whole ingest. The
+        overflow must fall back to per-chunk calls — a per-chunk call reserves
+        512 output tokens instead of the batch's N x 512, which is exactly the
+        term that overflowed."""
+
+        def ok_response(i):
+            resp = MagicMock()
+            resp.choices = [MagicMock()]
+            resp.choices[0].message.content = json.dumps({"context": f"ctx {i}"})
+            resp.usage = MagicMock(completion_tokens=5, prompt_tokens=10)
+            return resp
+
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        calls = {"n": 0}
+
+        async def fake_create(**kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                # The batch call overflows; every per-chunk call then succeeds.
+                raise Exception(
+                    "Error code: 400 - {'error': {'message': \"This model's maximum context "
+                    "length is 65536 tokens. However, you requested 8192 output tokens and "
+                    'your prompt contains at least 57345 input tokens."}}'
+                )
+            return ok_response(calls["n"])
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(side_effect=fake_create)
+        write_log = AsyncMock()
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", write_log),
+        ):
+            out = await dp._context_batch_call(mock_client, "m", "sys", [(0, "a"), (1, "b"), (2, "c")], "file1")
+
+        assert out == {0: "ctx 2", 1: "ctx 3", 2: "ctx 4"}  # all chunks contextualized
+        assert calls["n"] == 4  # 1 failed batch + 3 per-chunk recoveries
+        assert any("overflow" in str(c.args[3]).lower() for c in write_log.await_args_list)
+
+    @pytest.mark.asyncio
+    async def test_context_batch_call_overflow_then_single_overflow_yields_raw(self, monkeypatch):
+        """Worst case: the doc context alone exceeds the window, so batch AND
+        every per-chunk call overflow. Every chunk must come back '' (raw), and
+        NOTHING may raise — the ingest completes on raw chunks."""
+
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("BadRequestError: This model's maximum context length is 65536 tokens")
+        )
 
         with (
             patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
-            pytest.raises(DataprepInputTooLongError),
         ):
-            await dp._context_doc_call(mock_client, "m", "sys", "file1")
-        assert mock_client.chat.completions.create.call_count == 1
+            out = await dp._context_batch_call(mock_client, "m", "sys", [(0, "a"), (1, "b")], "file1")
+
+        assert out == {0: "", 1: ""}  # raw chunks — the ingest is NOT failed
 
 
 # ---------------------------------------------------------------------------
@@ -1429,6 +1529,346 @@ class TestLabelWithBm25:
 
 
 # ---------------------------------------------------------------------------
+# TestIsConceptId (review 2026-10-29 round 3: the old first-char-digit
+# heuristic misclassified digit-leading concept ids like '3d_printing_guide'
+# as doc-repo file_ids, silently skipping their bundle-log mirror)
+# ---------------------------------------------------------------------------
+
+
+class TestIsConceptId:
+    """Tests for _is_concept_id() — the bundle-mirror eligibility predicate.
+
+    Invariant: a value is a doc-repo file_id ONLY when it matches the
+    timestamped shape `<millis>_<hex8+>` (fileUtils.generateUniqueFileId);
+    every other value is a concept id whose ingestion log must mirror into
+    the bundle.
+    """
+
+    def test_digit_leading_concept_id_is_a_concept(self):
+        """'3d_printing_guide' begins with a digit but is a bare concept id —
+        it must mirror (the old value[0].isdigit() check excluded it)."""
+        dp = create_dataprep()
+        assert dp._is_concept_id("3d_printing_guide") is True
+
+    def test_timestamped_doc_repo_file_id_is_not_a_concept(self):
+        """The real doc-repo shape (`${Date.now()}_${uuidv4()[:8]}`) is a
+        file_id — no bundle mirror."""
+        dp = create_dataprep()
+        assert dp._is_concept_id("1774623200119_e9887fa8") is False
+
+    def test_bare_word_concept_ids_are_concepts(self):
+        dp = create_dataprep()
+        assert dp._is_concept_id("ecitizen_digital_payments") is True
+        assert dp._is_concept_id("index") is True
+
+    def test_empty_and_none_are_safely_not_concepts(self):
+        """Empty/None are not concept ids — callers treat False as 'do not
+        mirror' without raising."""
+        dp = create_dataprep()
+        assert dp._is_concept_id("") is False
+        assert dp._is_concept_id(None) is False
+
+
+# ---------------------------------------------------------------------------
+# TestUpdateDocStatusRouting (2026-10-10 live: 6× ERROR "Metadata not found"
+# during the Slaugherhouse ingest — a call site that lost concept_id still
+# carried a CONCEPT id as file_id and the fallthrough PATCHed doc-repo,
+# which rightly has no metadata for concept ids. An OKF-context job must
+# route to the OKF control plane even without concept_id.)
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateDocStatusRouting:
+    """Tests for _update_doc_status() endpoint routing."""
+
+    def _mock_session(self):
+        import aiohttp as aiohttp_mod
+
+        mock_session = MagicMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.text = AsyncMock(return_value="ok")
+        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_resp.__aexit__ = AsyncMock(return_value=False)
+        mock_session.patch.return_value = mock_resp
+        aiohttp_mod.ClientSession.return_value = mock_session
+        aiohttp_mod.ClientTimeout.return_value = MagicMock()
+        return mock_session
+
+    @pytest.mark.asyncio
+    async def test_okf_context_without_concept_id_routes_to_okf_server(self):
+        """file_id is a CONCEPT id and concept_id was lost — the OKF ingest
+        context (repo_id in ctx) still routes the callback to the OKF
+        control plane, never to doc-repo (the 404-noise origin fix)."""
+        dp = create_dataprep()
+        dp._current_repo_id = None
+        token = dp_module._INGEST_CTX.set({"repo_id": "repo-1"})
+        try:
+            with (
+                patch.object(
+                    dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}
+                ),
+                patch.object(dp_module, "OKF_SERVER_URL", "http://okf-test:3002"),
+                patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
+                patch.object(dp_module.propagate, "inject"),
+            ):
+                session = self._mock_session()
+                await dp._update_doc_status("guidance-doc-import-smoke-1789404732138-sec5", "Ingested", chunk_count=8)
+
+            called_url = session.patch.call_args[0][0]
+            assert "/api/okf/internal/concepts/" in called_url
+            assert "/api/files/" not in called_url
+            payload = session.patch.call_args[1]["json"]
+            assert payload["repo_id"] == "repo-1"
+            assert payload["file_id"] == "guidance-doc-import-smoke-1789404732138-sec5"
+        finally:
+            dp_module._INGEST_CTX.reset(token)
+
+    @pytest.mark.asyncio
+    async def test_ctx_bound_okf_graph_hint_routes_without_repo_id(self):
+        """An OKF_-graph ingest carries NO repo_id (a graph name is a name,
+        not an identity field) — the ctx-bound okf_graph_hint must make
+        is_okf_job true on its own, so the completion routes to the OKF
+        control plane instead of the hardcoded-False legacy route (review
+        round 2, thread e0e879eb). The payload claims no repo (there is
+        none to claim)."""
+        dp = create_dataprep()
+        dp._current_repo_id = None
+        token = dp_module._INGEST_CTX.set({"repo_id": None, "okf_graph_hint": True})
+        try:
+            with (
+                patch.object(
+                    dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}
+                ),
+                patch.object(dp_module, "OKF_SERVER_URL", "http://okf-test:3002"),
+                patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
+                patch.object(dp_module.propagate, "inject"),
+            ):
+                session = self._mock_session()
+                await dp._update_doc_status("guidance-doc-import-smoke-1789404732138-sec5", "Ingested", chunk_count=3)
+
+            called_url = session.patch.call_args[0][0]
+            assert "/api/okf/internal/concepts/" in called_url
+            assert "/api/files/" not in called_url
+            payload = session.patch.call_args[1]["json"]
+            assert "repo_id" not in payload  # nothing to claim — no repo_id in ctx
+        finally:
+            dp_module._INGEST_CTX.reset(token)
+
+    @pytest.mark.asyncio
+    async def test_ctx_bound_false_hint_routes_to_doc_repo(self):
+        """A legacy-graph ingest binds okf_graph_hint=False in the ctx — the
+        ctx-bound branch reads the hint (no longer hardcodes it) and still
+        routes to doc-repo."""
+        dp = create_dataprep()
+        dp._current_repo_id = None
+        token = dp_module._INGEST_CTX.set({"repo_id": None, "okf_graph_hint": False})
+        try:
+            with (
+                patch.object(
+                    dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}
+                ),
+                patch.object(dp_module, "OKF_SERVER_URL", "http://okf-test:3002"),
+                patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
+                patch.object(dp_module.propagate, "inject"),
+            ):
+                session = self._mock_session()
+                await dp._update_doc_status("1791566703011_a807dad8", "Ingested", chunk_count=12)
+
+            called_url = session.patch.call_args[0][0]
+            assert "/api/files/1791566703011_a807dad8/status" in called_url
+            assert "/api/okf/" not in called_url
+        finally:
+            dp_module._INGEST_CTX.reset(token)
+
+    @pytest.mark.asyncio
+    async def test_legacy_job_without_okf_context_routes_to_doc_repo(self):
+        """No concept_id and no OKF context = a legacy single-file ingest —
+        the doc-repo status PATCH is preserved unchanged."""
+        dp = create_dataprep()
+        dp._current_repo_id = None
+        token = dp_module._INGEST_CTX.set({})
+        try:
+            with (
+                patch.object(
+                    dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}
+                ),
+                patch.object(dp_module, "OKF_SERVER_URL", "http://okf-test:3002"),
+                patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
+                patch.object(dp_module.propagate, "inject"),
+            ):
+                session = self._mock_session()
+                await dp._update_doc_status("1791566703011_a807dad8", "Ingested", chunk_count=12)
+
+            called_url = session.patch.call_args[0][0]
+            assert "/api/files/1791566703011_a807dad8/status" in called_url
+            assert "/api/okf/" not in called_url
+            payload = session.patch.call_args[1]["json"]
+            assert payload["dataprep"]["status"] == "Ingested"
+        finally:
+            dp_module._INGEST_CTX.reset(token)
+
+    # -----------------------------------------------------------------
+    # Retry contract (review 2026-10-29 round 3): this PATCH is the ONLY
+    # channel that flips a meta row to 'indexed'. The loop used to return on
+    # ANY response — a single transient 5xx discarded the whole ~30-min
+    # ingest, the row never reached 'indexed', and the worker re-billed it
+    # in full. Only the documented success status (200) may end the loop.
+    # -----------------------------------------------------------------
+
+    @staticmethod
+    def _mock_session_with_statuses(statuses):
+        """A session whose successive PATCH calls return the given statuses."""
+        import aiohttp as aiohttp_mod
+
+        mock_session = MagicMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        responses = []
+        for status in statuses:
+            resp = MagicMock()
+            resp.status = status
+            resp.text = AsyncMock(return_value=f"body-{status}")
+            resp.__aenter__ = AsyncMock(return_value=resp)
+            resp.__aexit__ = AsyncMock(return_value=False)
+            responses.append(resp)
+        mock_session.patch = MagicMock(side_effect=responses)
+        aiohttp_mod.ClientSession.return_value = mock_session
+        aiohttp_mod.ClientTimeout.return_value = MagicMock()
+        return mock_session
+
+    @pytest.mark.asyncio
+    async def test_non_200_response_is_retried_until_success(self):
+        """503 then 200: the non-200 attempt must be retried, not swallowed."""
+        dp = create_dataprep()
+        dp._current_repo_id = None
+        token = dp_module._INGEST_CTX.set({})
+        try:
+            with (
+                patch.object(
+                    dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}
+                ),
+                patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
+                patch.object(dp_module.propagate, "inject"),
+                patch("dataprep.genieai_dataprep_arangodb.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            ):
+                session = self._mock_session_with_statuses([503, 200])
+                await dp._update_doc_status("1791566703011_a807dad8", "Ingested", chunk_count=12)
+
+            assert session.patch.call_count == 2, "the 503 attempt must be retried"
+            mock_sleep.assert_awaited_once()  # backoff between attempt 1 and 2
+        finally:
+            dp_module._INGEST_CTX.reset(token)
+
+    @pytest.mark.asyncio
+    async def test_persistent_non_200_exhausts_three_attempts_without_raising(self):
+        """All 500s: 3 attempts with backoff, then give up best-effort — the
+        callback must never raise into the ingest's error path."""
+        dp = create_dataprep()
+        dp._current_repo_id = None
+        token = dp_module._INGEST_CTX.set({})
+        try:
+            with (
+                patch.object(
+                    dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}
+                ),
+                patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
+                patch.object(dp_module.propagate, "inject"),
+                patch("dataprep.genieai_dataprep_arangodb.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            ):
+                session = self._mock_session_with_statuses([500, 500, 500, 500])
+                await dp._update_doc_status("1791566703011_a807dad8", "Ingested")
+
+            assert session.patch.call_count == 3
+            assert mock_sleep.await_count == 2  # between 1->2 and 2->3 only
+        finally:
+            dp_module._INGEST_CTX.reset(token)
+
+    @pytest.mark.asyncio
+    async def test_first_attempt_200_returns_immediately(self):
+        """A genuine 200 on the first attempt returns at once — no retry, no
+        backoff (the old fast path, unchanged)."""
+        dp = create_dataprep()
+        dp._current_repo_id = None
+        token = dp_module._INGEST_CTX.set({})
+        try:
+            with (
+                patch.object(
+                    dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}
+                ),
+                patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
+                patch.object(dp_module.propagate, "inject"),
+            ):
+                session = self._mock_session_with_statuses([200])
+                await dp._update_doc_status("1791566703011_a807dad8", "Ingested", chunk_count=12)
+
+            assert session.patch.call_count == 1
+        finally:
+            dp_module._INGEST_CTX.reset(token)
+
+    # -----------------------------------------------------------------
+    # Standalone-retract routing (review 2026-10-29 round 3): retract_file
+    # runs OUTSIDE any ingest context, so _update_doc_status's legacy
+    # fallback read the singleton attrs — whatever repo a CONCURRENT ingest
+    # last stashed on self. Routing must come from the retract request's own
+    # OKF_ graph marker instead.
+    # -----------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_standalone_okf_retract_routes_by_own_graph_name(self):
+        """An OKF retract (graph OKF_...) routes its 'Retracted' callback to
+        the OKF control plane even with another ingest's repo on the
+        singleton — and claims no repo identity the request never carried."""
+        dp = create_dataprep()
+        dp._current_repo_id = "repo-from-concurrent-ingest"
+        dp.db.aql.execute = MagicMock(return_value=TestRetractFile._empty_chunk_cursor())
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}),
+            patch.object(dp_module, "OKF_SERVER_URL", "http://okf-test:3002"),
+            patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
+            patch.object(dp_module.propagate, "inject"),
+        ):
+            session = self._mock_session()
+            await dp.retract_file("concept-3d-printing", "OKF_repo_1")
+
+        called_url = session.patch.call_args[0][0]
+        assert "/api/okf/internal/concepts/" in called_url
+        assert "/api/files/" not in called_url
+        payload = session.patch.call_args[1]["json"]
+        assert payload["status"] == "Retracted"
+        # No repo identity is claimed on the retract's behalf: the request
+        # carries none, and the singleton value belongs to another ingest.
+        assert "repo_id" not in payload
+
+    @pytest.mark.asyncio
+    async def test_standalone_legacy_retract_ignores_stale_okf_singleton(self):
+        """A legacy-graph retract must PATCH doc-repo even when a concurrent
+        OKF ingest left its repo_id on the singleton — the stale value must
+        not misroute the callback (the regression this pins)."""
+        dp = create_dataprep()
+        dp._current_repo_id = "repo-from-concurrent-okf-ingest"
+        dp.db.aql.execute = MagicMock(return_value=TestRetractFile._empty_chunk_cursor())
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_service_headers", new_callable=AsyncMock, return_value={"Authorization": "Bearer t"}),
+            patch.object(dp_module, "OKF_SERVER_URL", "http://okf-test:3002"),
+            patch.object(dp_module, "DOCUMENT_REPOSITORY_URL", "http://docrepo-test:3001"),
+            patch.object(dp_module.propagate, "inject"),
+        ):
+            session = self._mock_session()
+            await dp.retract_file("1791566703011_a807dad8", "GRAPH")
+
+        called_url = session.patch.call_args[0][0]
+        assert "/api/files/1791566703011_a807dad8/status" in called_url
+        assert "/api/okf/" not in called_url
+        payload = session.patch.call_args[1]["json"]
+        assert payload["dataprep"]["status"] == "Retracted"
+
+
+# ---------------------------------------------------------------------------
 # TestIngestFileWithGuardrail
 # ---------------------------------------------------------------------------
 
@@ -1480,6 +1920,136 @@ class TestIngestFileWithGuardrail:
         status_calls = [c.args[1] for c in mock_status.call_args_list]
         assert "Ingesting" in status_calls
         assert "Ingested" in status_calls
+
+    @staticmethod
+    def _ctx_capture_patches(dp, inp):
+        """Happy-path patch set for ingest_file_with_guardrail, with the
+        first _update_doc_status call capturing the request ctx that the
+        ingest start bound (the ctx is set BEFORE 'Ingesting', so the
+        side_effect reads the production-shape dict)."""
+        captured = {}
+
+        async def _capture_ctx(file_id, status, **kwargs):
+            captured.setdefault("ctx", dp_module._INGEST_CTX.get())
+
+        patches = [
+            patch.object(dp, "_update_doc_status", new_callable=AsyncMock, side_effect=_capture_ctx),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["Healthcare"]),
+            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["chunk1", "chunk2"]),
+            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            patch.object(
+                dp,
+                "_apply_contextualization",
+                new_callable=AsyncMock,
+                side_effect=lambda chunks, inp, fid: (list(chunks), []),
+            ),
+            patch.object(
+                dp,
+                "_apply_labels",
+                new_callable=AsyncMock,
+                return_value=(
+                    [
+                        {"text": "chunk1", "labels": ["A"]},
+                        {"text": "chunk2", "labels": ["B"]},
+                    ],
+                    [],
+                ),
+            ),
+            patch.object(dp, "_process_batch", new_callable=AsyncMock),
+            patch.object(dp_module, "ArangoGraph"),
+        ]
+        return patches, captured
+
+    @pytest.mark.asyncio
+    async def test_okf_graph_ingest_binds_the_hint_into_the_request_ctx(self):
+        """OKF_-graph ingest WITHOUT a repo_id: the ingest-start ctx binds
+        okf_graph_hint=True NEXT TO repo_id=None — one per-request source
+        carries both routing values, so a bound context no longer means the
+        hint is hardcoded False (review round 2, thread e0e879eb)."""
+        dp = create_dataprep()
+        inp = create_mock_ingest_input(file_id="ctx-hint-okf", graph_name="OKF_ncd_v1", repo_id=None)
+        patches, captured = self._ctx_capture_patches(dp, inp)
+
+        try:
+            with contextlib.ExitStack() as stack:
+                for p in patches:
+                    stack.enter_context(p)
+                result = await dp.ingest_file_with_guardrail(inp, lock_file=None)
+        finally:
+            dp_module._INGEST_CTX.set(None)
+
+        assert result["status"] == 200
+        assert captured["ctx"] is not None
+        assert captured["ctx"]["repo_id"] is None
+        assert captured["ctx"]["okf_graph_hint"] is True
+
+    @pytest.mark.asyncio
+    async def test_legacy_graph_ingest_binds_hint_false_in_the_request_ctx(self):
+        """A legacy-graph (non-OKF_) ingest without repo_id binds the hint
+        False — the ctx-bound completion still routes to doc-repo."""
+        dp = create_dataprep()
+        inp = create_mock_ingest_input(file_id="ctx-hint-legacy", graph_name="GRAPH", repo_id=None)
+        patches, captured = self._ctx_capture_patches(dp, inp)
+
+        try:
+            with contextlib.ExitStack() as stack:
+                for p in patches:
+                    stack.enter_context(p)
+                result = await dp.ingest_file_with_guardrail(inp, lock_file=None)
+        finally:
+            dp_module._INGEST_CTX.set(None)
+
+        assert result["status"] == 200
+        assert captured["ctx"] is not None
+        assert captured["ctx"]["okf_graph_hint"] is False
+
+    @pytest.mark.asyncio
+    async def test_zero_batch_ingest_completes_as_honest_empty_success(self):
+        """A zero-batch ingest (no graph tasks scheduled) must complete as an
+        honest empty success, not crash.
+
+        Regression (review 2026-10-29 round 3): `results` was only assigned
+        under `if tasks:`, so a zero-batch run hit the totals with the name
+        unbound — UnboundLocalError — and the generic handler falsely marked
+        the file 'Ingestion Error' and auto-retracted a valid (if empty) run.
+        """
+        dp = create_dataprep()
+        inp = create_mock_ingest_input()
+
+        with (
+            patch.object(dp, "_update_doc_status", new_callable=AsyncMock) as mock_status,
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["Healthcare"]),
+            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["chunk1"]),
+            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            patch.object(
+                dp,
+                "_apply_contextualization",
+                new_callable=AsyncMock,
+                side_effect=lambda chunks, inp, fid: (list(chunks), []),
+            ),
+            # The labeling stage yields NO documents -> zero graph batches.
+            patch.object(
+                dp,
+                "_apply_labels",
+                new_callable=AsyncMock,
+                return_value=([], []),
+            ),
+            patch.object(dp, "_process_batch", new_callable=AsyncMock) as mock_process_batch,
+            patch.object(dp_module, "ArangoGraph"),
+        ):
+            result = await dp.ingest_file_with_guardrail(inp, lock_file=None)
+
+        # Zero batches scheduled: no batch work ran, and the run still
+        # completes 'Ingested' — never the UnboundLocalError -> 'Ingestion
+        # Error' path.
+        mock_process_batch.assert_not_awaited()
+        assert result["status"] == 200
+        status_calls = [c.args[1] for c in mock_status.call_args_list]
+        assert "Ingesting" in status_calls
+        assert "Ingested" in status_calls
+        assert "Ingestion Error" not in status_calls
 
     @pytest.mark.asyncio
     async def test_no_content_raises_and_retracts(self):
@@ -1596,6 +2166,51 @@ class TestIngestFileWithGuardrail:
         assert doc.metadata["file_id"] == "test-file-123"
         assert doc.metadata["chunk_index"] == 0
         assert doc.metadata["chunk_labels"] == ["Healthcare"]
+        # Story 2.9.7 (ADR-031) "threaded everywhere": a request WITHOUT a minted
+        # version gets NO bundle_version stamp (the MagicMock default would be a
+        # truthy mock — this asserts the strict None guard).
+        assert doc.metadata.get("bundle_version") is None
+
+    @pytest.mark.asyncio
+    async def test_document_metadata_bundle_version_stamped(self):
+        """Story 2.9.7: a request carrying bundle_version stamps EVERY chunk doc
+        with it (version-pinned citation), and the value rides the metadata."""
+        dp = create_dataprep()
+        inp = create_mock_ingest_input()
+        inp.bundle_version = 3  # the minted version (absent on the base mock)
+
+        captured_docs = []
+
+        async def capture_batch(batch, *args, **kwargs):
+            captured_docs.extend(batch)
+
+        with (
+            patch.object(dp, "_update_doc_status", new_callable=AsyncMock),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["A"]),
+            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["chunk1", "chunk2"]),
+            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            patch.object(
+                dp,
+                "_apply_labels",
+                new_callable=AsyncMock,
+                return_value=(
+                    [
+                        {"text": "chunk1", "labels": ["Healthcare"]},
+                        {"text": "chunk2", "labels": ["Healthcare"]},
+                    ],
+                    [],
+                ),
+            ),
+            patch.object(dp, "_process_batch", new_callable=AsyncMock, side_effect=capture_batch),
+            patch.object(dp_module, "ArangoGraph"),
+            patch.object(dp_module, "Document", side_effect=lambda **kw: type("Doc", (), kw)),
+        ):
+            await dp.ingest_file_with_guardrail(inp, lock_file=None)
+
+        assert len(captured_docs) == 2
+        for doc in captured_docs:
+            assert doc.metadata["bundle_version"] == 3
 
     @pytest.mark.asyncio
     async def test_document_metadata_sequential_indices(self):
@@ -1701,6 +2316,146 @@ class TestRetractFile:
         assert result["status"] == 200
         assert result["details"]["deleted_chunks"] == 2
         assert result["details"]["deleted_edges"] == 1
+
+    # -----------------------------------------------------------------
+    # Zero-chunk outcome is LEADING, not trailing (2026-10-13 incident)
+    #
+    # The curator read the bundle Ingestion Log, saw "Starting retraction
+    # analysis..." as the first line of a perfectly normal ingest, and
+    # concluded his data was being deleted. Nothing was deleted: the
+    # defensive pre-POST sweep found 0 chunks and moved on. These tests pin
+    # the log SHAPE so the alarming intent-first line cannot come back.
+    # -----------------------------------------------------------------
+
+    @staticmethod
+    def _empty_chunk_cursor():
+        """A cursor yielding no chunks.
+
+        Models the WORLD: the ArangoDB driver returns a cursor that is
+        iterable, so a plain list-backed iterator is a faithful stand-in for
+        the zero-row result set (a bare MagicMock would iterate as empty too,
+        but would also silently satisfy any access pattern).
+        """
+        return MagicMock(__iter__=MagicMock(return_value=iter([])))
+
+    @pytest.mark.asyncio
+    async def test_zero_chunks_log_leads_with_reassuring_outcome(self):
+        """The zero-chunk path must NOT emit an alarming intent-first line.
+
+        Non-vacuous: reverting the production fix (restoring the unconditional
+        "Starting retraction analysis..." line) fails this test.
+        """
+        dp = create_dataprep()
+        dp.db.aql.execute = MagicMock(return_value=self._empty_chunk_cursor())
+
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as mock_log,
+            patch.object(dp, "_update_doc_status", new_callable=AsyncMock),
+        ):
+            result = await dp.retract_file("file-zero", "GRAPH")
+
+        messages = [call.args[3] for call in mock_log.await_args_list]
+        assert messages, "the zero-chunk path must still log its outcome (audit trail)"
+
+        # ROUTING, not just wording. _write_ingestion_log(self, file_id, level,
+        # stage, message) — args[0] is the concept the row is filed UNDER.
+        # The message assertions below CANNOT catch a mis-routed log: the
+        # message interpolates the same local variable, so `assert "file-zero"
+        # in messages[0]` is tautological and stays green even when the call is
+        # filed under a different file_id. Proven by mutation: substituting a
+        # different routing key left every other assertion passing. (Adversarial
+        # review, 2026-10-13.)
+        for logged_call in mock_log.await_args_list:
+            assert logged_call.args[0] == "file-zero", (
+                f"ingestion-log row filed under the wrong concept: {logged_call.args[0]!r}"
+            )
+
+        # The defect itself: an intent line that reads as "deletion starting"
+        # must not appear at all when nothing is being deleted.
+        for msg in messages:
+            assert "Starting retraction analysis" not in msg, (
+                f"zero-chunk path emitted an alarming intent-first line: {msg!r}"
+            )
+
+        # The outcome must be explicitly reassuring — a curator reading the
+        # FIRST line alone must conclude "nothing happened", not "data is gone".
+        first_line = messages[0].lower()
+        assert "nothing to retract" in first_line, f"first log line is not reassuring: {messages[0]!r}"
+        assert "no data was removed" in first_line, f"first log line lacks the no-deletion assurance: {messages[0]!r}"
+
+        # Auditability is preserved: the find evidence (count, collection,
+        # file_id) is still in the log, so the orphan-cleanup guard stays
+        # reviewable after the fact.
+        assert "0 chunks" in messages[0]
+        assert "GRAPH_SOURCE" in messages[0]
+        assert "file-zero" in messages[0]
+
+        # Behaviour is unchanged: still a no-op retraction.
+        assert result["status"] == 200
+        assert result["message"] == "No chunks found."
+        assert result["details"]["deleted_chunks"] == 0
+
+    @pytest.mark.asyncio
+    async def test_zero_chunks_still_runs_the_analysis(self):
+        """The find MUST run even when nothing is found — it is the orphan guard.
+
+        Guards against a "fix" that silences the noise by skipping the query:
+        that would silently disable stale-chunk cleanup for every ingest.
+        """
+        dp = create_dataprep()
+        dp.db.aql.execute = MagicMock(return_value=self._empty_chunk_cursor())
+
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_update_doc_status", new_callable=AsyncMock),
+        ):
+            await dp.retract_file("file-zero", "GRAPH")
+
+        # The chunk-find query executed against the SOURCE collection, bound
+        # to this file_id.
+        dp.db.aql.execute.assert_called_once()
+        query = dp.db.aql.execute.call_args.args[0]
+        bind_vars = dp.db.aql.execute.call_args.kwargs["bind_vars"]
+        assert "@@col_source" in query
+        assert bind_vars["@col_source"] == "GRAPH_SOURCE"
+        assert bind_vars["file_id"] == "file-zero"
+
+        # ...and exactly one query: no deletion AQL was issued.
+        assert dp.db.aql.execute.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_nonzero_chunks_still_announces_retraction(self):
+        """The reassuring-zero case must not have silenced the real retraction.
+
+        When chunks DO exist, the intent line must still be emitted (post-find,
+        pre-delete) so a genuine cascade delete is never invisible.
+        """
+        dp = create_dataprep()
+
+        chunk_cursor = MagicMock(__iter__=MagicMock(return_value=iter([{"key": "c1", "id": "SOURCE/c1"}])))
+        edge_cursor = MagicMock(__iter__=MagicMock(return_value=iter([])))
+        del_chunk_cursor = MagicMock(__iter__=MagicMock(return_value=iter(["SOURCE/c1"])))
+        del_links_cursor = MagicMock(__iter__=MagicMock(return_value=iter([])))
+        orphan_cursor = MagicMock(__iter__=MagicMock(return_value=iter([])))
+
+        dp.db.aql.execute = MagicMock(
+            side_effect=[chunk_cursor, edge_cursor, del_chunk_cursor, del_links_cursor, orphan_cursor]
+        )
+
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as mock_log,
+            patch.object(dp, "_update_doc_status", new_callable=AsyncMock),
+        ):
+            result = await dp.retract_file("file-real", "GRAPH")
+
+        messages = [call.args[3] for call in mock_log.await_args_list]
+        announcement = [m for m in messages if "Starting retraction analysis" in m]
+        assert len(announcement) == 1, f"a real retraction must be announced: {messages!r}"
+        # The announcement carries its own evidence, so it can never read as a
+        # false alarm on its own.
+        assert "1 chunk(s)" in announcement[0]
+        assert "file-real" in announcement[0]
+        assert result["details"]["deleted_chunks"] == 1
 
     @pytest.mark.asyncio
     async def test_no_chunks_returns_early(self):
@@ -2388,6 +3143,7 @@ class TestDocRepoIngestPayload:
             yield ms, mock_loader, flock_mock
 
     @pytest.mark.asyncio
+    @requires_fcntl
     async def test_chunk_overlap_rejects_negative(self):
         """Negative chunkOverlap would collapse the splitter into a single mega-chunk; rejected with 400 pre-lock."""
         from fastapi import HTTPException
@@ -2405,6 +3161,7 @@ class TestDocRepoIngestPayload:
         "bad_name",
         ["../escape.md", "/absolute/path.md", "a\x00b.md", "..", ""],
     )
+    @requires_fcntl
     async def test_file_name_must_be_bare(self, bad_name):
         """A non-bare fileName is a traversal write/delete primitive; rejected with 400 pre-lock."""
         from fastapi import HTTPException
@@ -2417,6 +3174,7 @@ class TestDocRepoIngestPayload:
         flock_mock.assert_not_called()
 
     @pytest.mark.asyncio
+    @requires_fcntl
     async def test_failed_start_releases_the_lock(self):
         """A cancellation between lock acquisition and task creation must unlock.
 
@@ -2440,6 +3198,7 @@ class TestDocRepoIngestPayload:
         lock_mock.close.assert_called_once()
 
     @pytest.mark.asyncio
+    @requires_fcntl
     async def test_successful_start_keeps_the_lock_with_the_task(self):
         """On the success path the handler must NOT release the lock or close
         the file: the background task owns both until it finishes."""
@@ -2447,6 +3206,14 @@ class TestDocRepoIngestPayload:
         lock_mock = MagicMock()
         with self._ingest_mocks() as (_ms, mock_loader, flock_mock):
             fake_task = MagicMock()
+            # A task that has just been created is NOT done. The bare
+            # MagicMock answers every attribute with a truthy mock, so
+            # `fake_task.done()` would claim the task had ALREADY FINISHED —
+            # and the handler's slot-lifetime guard, which releases the lock
+            # only when the task is finished or was never created, would then
+            # take the lock away from a task that is still running. Model the
+            # real thing: a live task.
+            fake_task.done.return_value = False
             with (
                 patch.object(ms.os, "open", return_value=7),
                 patch.object(ms.os, "fdopen", return_value=lock_mock),
@@ -2462,6 +3229,7 @@ class TestDocRepoIngestPayload:
         lock_mock.close.assert_not_called()
 
     @pytest.mark.asyncio
+    @requires_fcntl
     async def test_failed_start_removes_the_saved_file(self):
         """A failure after the upload was written but before the task exists
         must reclaim the partially written file."""
@@ -2503,6 +3271,12 @@ class TestContextualRetrieval:
         """Explicit flags so tests don't depend on module defaults."""
         monkeypatch.setattr(dp_module, "CONTEXTUAL_STRATEGY", "per_chunk")
         monkeypatch.setattr(dp_module, "CONTEXTUAL_LABEL_RAW", False)
+        # The doc-context budget is DERIVED from this. Without it the
+        # derivation fails closed to the smallest profile (2048) and every
+        # contextualization call is skipped — correct in production, useless
+        # for tests that are exercising contextualization itself. Tests that
+        # care about the fallback set their own value.
+        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "65536")
 
     @pytest.mark.asyncio
     async def test_flag_off_returns_chunks_unchanged(self, monkeypatch):
@@ -2530,6 +3304,212 @@ class TestContextualRetrieval:
         assert "Filename: test_document.pdf" in ctx
         assert "Document labels: Healthcare, Public Services" in ctx
         assert "[truncated]" in ctx  # joined content exceeded the 40-char budget
+
+    # --- truncation must be VISIBLE, not just logged to container stdout ------
+    #
+    # A truncated document context silently degrades the chunk embedding AND the
+    # graph extraction (both read the contextualized text) while ingestion still
+    # reports success. For a whole corpus that is invisible: the only trace was
+    # a logger.warning nobody reads. These tests pin that the fact now reaches
+    # the admin Ingestion Log, and — just as important — that it does NOT fire
+    # when the document fits.
+
+    def test_doc_context_truncation_is_none_when_within_budget(self):
+        dp = create_dataprep()
+        assert dp._doc_context_truncation(["abc", "def"], 100) is None
+
+    def test_doc_context_truncation_is_none_when_budget_disables_truncation(self):
+        # <=0 disables truncation (documented contract), so it must never report.
+        dp = create_dataprep()
+        assert dp._doc_context_truncation(["a" * 5000], 0) is None
+        assert dp._doc_context_truncation(["a" * 5000], -1) is None
+
+    def test_doc_context_truncation_reports_kept_total_and_ratio(self):
+        dp = create_dataprep()
+        t = dp._doc_context_truncation(["x" * 900, "y" * 100], 500)
+        assert t is not None
+        assert t["kept"] == 500
+        assert t["total"] == 1001  # 900 + 100 joined by a single "\n"
+        assert t["pct"] == 49
+        assert t["chunks"] == 2
+
+    @pytest.mark.asyncio
+    async def test_truncation_is_written_to_the_ingestion_log(self, monkeypatch):
+        dp = create_dataprep()
+        monkeypatch.setattr(dp_module, "CONTEXTUAL_RETRIEVAL_ENABLED", True)
+        monkeypatch.setattr(dp_module, "DATAPREP_CONTEXTUAL_DOC_BUDGET", 40)
+        monkeypatch.setenv("VLLM_API_KEY", "k")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        log = AsyncMock()
+        dp._write_ingestion_log = log
+        with patch.object(dp_module, "AsyncOpenAI", return_value=AsyncMock()):
+            await dp._apply_contextualization(["aaaaaaaaaa" * 20, "tail"], create_mock_ingest_input(), "file1")
+
+        # Contextualization writes other log lines on this path (LLM failure
+        # fallbacks etc.), so assert on the TRUNCATION line specifically rather
+        # than on a total call count.
+        truncations = [c for c in log.await_args_list if len(c.args) > 3 and "truncated" in str(c.args[3]).lower()]
+        assert len(truncations) == 1, [c.args for c in log.await_args_list]
+        args = truncations[0].args
+        assert args[0] == "file1"
+        assert args[1] == "WARN"
+        assert args[2] == "Contextualization"
+        assert "40" in args[3]  # names the budget that was applied
+
+    @pytest.mark.asyncio
+    async def test_no_truncation_log_write_when_document_fits(self, monkeypatch):
+        """The negative control: a warning that fires on every document is noise."""
+        dp = create_dataprep()
+        monkeypatch.setattr(dp_module, "CONTEXTUAL_RETRIEVAL_ENABLED", True)
+        monkeypatch.setattr(dp_module, "DATAPREP_CONTEXTUAL_DOC_BUDGET", 100000)
+        monkeypatch.setenv("VLLM_API_KEY", "k")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        log = AsyncMock()
+        dp._write_ingestion_log = log
+        with patch.object(dp_module, "AsyncOpenAI", return_value=AsyncMock()):
+            await dp._apply_contextualization(["short one", "short two"], create_mock_ingest_input(), "file1")
+
+        truncations = [c for c in log.await_args_list if len(c.args) > 3 and "truncated" in str(c.args[3]).lower()]
+        assert truncations == []
+
+    # --- the budget is DERIVED from the model window, not hard-coded ----------
+    #
+    # The shipped literal (6000) was sized for the T4 profile's 2048-token
+    # window and applied to every deployment including the default 65536-token
+    # one. These tests pin the three-way contract (unset=derive, >0=override,
+    # <0=disable) and, most importantly, the property that actually matters:
+    # the assembled request fits the window.
+
+    def test_explicit_positive_budget_is_an_override(self, monkeypatch):
+        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "65536")
+        dp = create_dataprep()
+        assert dp._resolve_doc_budget(["abc"], 1234) == (1234, "override")
+
+    def test_negative_budget_disables_contextualization(self, monkeypatch):
+        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "65536")
+        dp = create_dataprep()
+        budget, source = dp._resolve_doc_budget(["abc"], -1)
+        assert budget is None and source == "disabled"
+
+    def test_budget_scales_with_the_model_window(self, monkeypatch):
+        dp = create_dataprep()
+        chunks = ["x" * 500] * 8
+        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "16384")
+        small, _ = dp._resolve_doc_budget(chunks, 0)
+        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "65536")
+        large, _ = dp._resolve_doc_budget(chunks, 0)
+        assert large > small > 0
+
+    def test_unknown_window_falls_back_to_the_smallest_profile(self, monkeypatch):
+        """Fails closed: defaulting high would size for hardware nobody runs."""
+        monkeypatch.delenv("VLLM_MAX_MODEL_LEN", raising=False)
+        dp = create_dataprep()
+        assert dp._resolve_doc_budget(["x" * 500], 0) == dp._resolve_doc_budget(["x" * 500], 0)
+        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", str(dp_module.DERIVE_FALLBACK_WINDOW))
+        assert dp._resolve_doc_budget(["x" * 500], 0) == (None, "window-exhausted")
+
+    def test_window_exhausted_returns_none_not_zero(self, monkeypatch):
+        """A 0 budget means 'do not truncate' — the opposite of what we want."""
+        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "2048")  # T4
+        dp = create_dataprep()
+        budget, source = dp._resolve_doc_budget(["x" * 500] * 8, 0)
+        assert budget is None, "must disable contextualization, not send the whole document"
+        assert source == "window-exhausted"
+
+    def test_assembled_prompt_fits_the_window(self, monkeypatch):
+        """The property that matters, end to end.
+
+        Builds the ACTUAL request the batched per-chunk path sends and checks
+        prompt + completion against VLLM_MAX_MODEL_LEN. This is the assertion
+        that would have caught the original bug: at 6000 on a 2048-token
+        window the request does not fit, and every batch silently falls back to
+        raw chunks.
+        """
+        import json as _json
+
+        dp = create_dataprep()
+        # Deliberately LARGER than every budget under test, so the doc context
+        # actually fills the derived budget. A document smaller than the budget
+        # would never truncate, and the property would hold vacuously.
+        chunks = ["chunk body text. " * 160 for _ in range(200)]  # 2720 chars each, ~500k total
+
+        def _overhead_tokens():
+            """Prompt + completion with ZERO document context — the floor."""
+            largest = sorted((len(c) for c in chunks), reverse=True)[: dp_module.LABEL_LLM_BATCH_SIZE]
+            prompt = -(-len(dp_module.CONTEXTUAL_RETRIEVAL_PROMPT) // dp_module.CHARS_PER_TOKEN)
+            batch_chars = sum(largest) + len(largest) * dp_module.JSON_ITEM_OVERHEAD_CHARS
+            return (
+                prompt + -(-batch_chars // dp_module.CHARS_PER_TOKEN),
+                dp_module.CONTEXTUAL_MAX_TOKENS * dp_module.LABEL_LLM_BATCH_SIZE,
+            )
+
+        for window in (4096, 8192, 16384, 65536):
+            monkeypatch.setenv("VLLM_MAX_MODEL_LEN", str(window))
+            budget, source = dp._resolve_doc_budget(chunks, 0)
+
+            if budget is None:
+                # Refusing is only CORRECT if the request genuinely could not
+                # fit even with no document context at all. A refusal with room
+                # to spare would silently disable the feature.
+                prompt_tokens, completion = _overhead_tokens()
+                assert prompt_tokens + completion >= window, (
+                    f"refused at window={window} but the empty prompt fits in {prompt_tokens + completion} tokens"
+                )
+                continue
+
+            assert source == "derived", f"window {window} produced {source}"
+            assert budget < sum(len(c) for c in chunks), "budget must bind for this test to mean anything"
+
+            doc_ctx = dp._build_doc_context(chunks, create_mock_ingest_input(), budget)
+            system_prompt = dp_module.CONTEXTUAL_RETRIEVAL_PROMPT.replace("{document_context}", doc_ctx)
+            batch = chunks[: dp_module.LABEL_LLM_BATCH_SIZE]
+            user_turn = _json.dumps([{"index": i, "text": t} for i, t in enumerate(batch)])
+
+            prompt_chars = len(system_prompt) + len(user_turn)
+            prompt_tokens = -(-prompt_chars // dp_module.CHARS_PER_TOKEN)
+            completion = dp_module.CONTEXTUAL_MAX_TOKENS * len(batch)
+            assert prompt_tokens + completion <= window, (
+                f"window={window} prompt={prompt_tokens} completion={completion} "
+                f"budget={budget} — request would be rejected by vLLM"
+            )
+
+    def test_the_old_fixed_6000_would_not_have_fit(self, monkeypatch):
+        """Why deriving matters — this is the bug, stated as a test.
+
+        The shipped literal (6000 chars) is not merely too small on a default
+        install; on the constrained GPU profiles it is too LARGE, and every
+        contextualization call overflows the window and silently falls back to
+        raw chunks. This pins that fact so the derivation is not "simplified"
+        back to a constant later.
+        """
+        import json as _json
+
+        dp = create_dataprep()
+        chunks = ["chunk body text. " * 160 for _ in range(200)]
+        window = 4096
+        monkeypatch.setenv("VLLM_MAX_MODEL_LEN", str(window))
+
+        budget, source = dp._resolve_doc_budget(chunks, 6000)  # the old literal
+        assert (budget, source) == (6000, "override")
+
+        doc_ctx = dp._build_doc_context(chunks, create_mock_ingest_input(), budget)
+        system_prompt = dp_module.CONTEXTUAL_RETRIEVAL_PROMPT.replace("{document_context}", doc_ctx)
+        batch = chunks[: dp_module.LABEL_LLM_BATCH_SIZE]
+        user_turn = _json.dumps([{"index": i, "text": t} for i, t in enumerate(batch)])
+        prompt_tokens = -(-(len(system_prompt) + len(user_turn)) // dp_module.CHARS_PER_TOKEN)
+        completion = dp_module.CONTEXTUAL_MAX_TOKENS * len(batch)
+
+        assert prompt_tokens + completion > window, (
+            "expected the historical 6000-char budget to overflow this window; "
+            "if it now fits, the overhead model changed and this test is stale"
+        )
+
+        # ...and the derivation refuses rather than sending it.
+        assert dp._resolve_doc_budget(chunks, 0)[0] is None
 
     @pytest.mark.asyncio
     async def test_flag_on_prepends_context(self, monkeypatch):
@@ -3018,6 +3998,496 @@ class TestContextualRetrieval:
         assert result == {0: "single-ctx"}
         single.assert_awaited_once()
         mock_client.chat.completions.create.assert_not_called()  # no batch call for single
+
+
+# ---------------------------------------------------------------------------
+# Story 2.6a — ACL-label preserve (OKF gap G4)
+# _finalize_chunk_labels previously used file_labels ONLY as a scope filter and
+# never unioned ACL-prefixed (t:/r:/d:) file_labels into the output, so they
+# never reached chunk_labels. _apply_labels now short-circuits the LLM call when
+# file_labels carries ACL prefixes. These tests pin the fix + the no-regression
+# contract for the free-form GRAPH corpus.
+# ---------------------------------------------------------------------------
+
+
+class TestAclPredicate:
+    """The _is_acl_label predicate (module-level, single-sourced)."""
+
+    def test_acl_predicate_membership(self):
+        assert dp_module._is_acl_label("t:x") is True
+        assert dp_module._is_acl_label("r:y") is True
+        assert dp_module._is_acl_label("d:z") is True
+        assert dp_module._is_acl_label("Healthcare") is False
+        # Case-sensitive by design (pins the L4 canonicalization boundary).
+        assert dp_module._is_acl_label("T:x") is False
+        assert dp_module._is_acl_label("R:y") is False
+        assert dp_module._is_acl_label("D:z") is False
+        # Empty-value degenerate token still detected (value sanitization is
+        # owned by the orchestrator 2.9.1 / L3, not 2.6a).
+        assert dp_module._is_acl_label("t:") is True
+        # Non-str guard (None / int must not raise AttributeError).
+        assert dp_module._is_acl_label(None) is False
+        assert dp_module._is_acl_label(123) is False
+
+
+class TestFinalizeChunkLabelsAcl:
+    """Direct unit tests for _finalize_chunk_labels — the G4 bug site."""
+
+    @pytest.mark.asyncio
+    async def test_acl_prefixed_file_labels_preserved(self):
+        dp = create_dataprep()
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
+            result = await dp._finalize_chunk_labels(
+                0,
+                ["Cucumber"],
+                ["Cucumber"],
+                "file1",
+                ["Cucumber", "t:t1", "r:r1", "d:dom"],
+            )
+        # Cucumber survives scope (in file_labels); ACL labels unioned verbatim.
+        assert "Cucumber" in result
+        assert "t:t1" in result
+        assert "r:r1" in result
+        assert "d:dom" in result
+
+    @pytest.mark.asyncio
+    async def test_acl_only_file_labels_preserved_when_no_taxonomy_match(self):
+        dp = create_dataprep()
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
+            result = await dp._finalize_chunk_labels(0, [], ["Healthcare"], "file1", ["t:t1"])
+        assert result == ["t:t1"]
+
+    @pytest.mark.asyncio
+    async def test_no_acl_no_behavior_change(self):
+        """Free-form GRAPH corpus docs (no ACL prefixes) are a true no-op."""
+        dp = create_dataprep()
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
+            result = await dp._finalize_chunk_labels(0, ["Healthcare"], ["Healthcare"], "file1", ["Healthcare"])
+        assert result == ["Healthcare"]
+
+    @pytest.mark.asyncio
+    async def test_finalize_excludes_acl_from_new_labels(self):
+        """ACL labels must never trigger the 'add to Knowledge Hierarchy' WARN."""
+        dp = create_dataprep()
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as log:
+            await dp._finalize_chunk_labels(0, ["t:t1"], [], "file1", ["t:t1"])
+        # No WARN emitted (new_labels excludes the ACL label) + label preserved.
+        levels = [call.args[1] for call in log.await_args_list]
+        assert "WARN" not in levels
+
+    @pytest.mark.asyncio
+    async def test_finalize_skips_null_suggestions_instead_of_crashing(self):
+        """A malformed LLM response can put null/non-string entries in the
+        suggestion list — they must be SKIPPED, never crash the file ingest
+        (live 2026-09-14: vLLM returned a null label and `label.lower()`
+        500'd every ingest of the affected file)."""
+        dp = create_dataprep()
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
+            result = await dp._finalize_chunk_labels(
+                0,
+                ["Healthcare", None, "", 123],  # malformed entries ride along
+                ["Healthcare"],
+                "file1",
+                ["Healthcare"],
+            )
+        assert result == ["Healthcare"]
+
+
+class TestApplyLabelsAclPoolSemantics:
+    """REVISED (David's directive, 2026-08-23 - the skip is REMOVED): bundle
+    labels are a CANDIDATE POOL, never forced attachments. The strategy RUNS
+    for ACL-carrying file_labels; per-chunk applicability is decided by
+    content. The llm path scopes via _finalize_chunk_labels (pool intersect
+    taxonomy + ACL verbatim); embedding/bm25 union ONLY the ACL tokens."""
+
+    @pytest.mark.asyncio
+    async def test_llm_runs_when_acl_present(self):
+        """The strategy must NOT be skipped for ACL-carrying labels - the old
+        blanket stamp made every chunk match every scoped query."""
+        dp = create_dataprep()
+        with (
+            patch.object(dp, "_label_with_llm", new_callable=AsyncMock) as llm,
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            llm.return_value = ([{"text": "chunk", "labels": ["Healthcare"]}], [])
+            result, _reasons = await dp._apply_labels(
+                ["chunk"], ["Healthcare"], ["t:t1", "r:r1", "d:dom", "Healthcare"], "file1"
+            )
+        llm.assert_called_once()
+        assert result[0]["labels"] == ["Healthcare"]
+
+    @pytest.mark.asyncio
+    async def test_llm_still_called_when_no_acl(self):
+        """Pins the predicate: file_labels WITHOUT ACL prefixes must still run
+        the LLM (else every legacy Gov-Chat doc skips labeling)."""
+        dp = create_dataprep()
+        with (
+            patch.object(dp, "_label_with_llm", new_callable=AsyncMock) as llm,
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            llm.return_value = [{"text": "chunk", "labels": ["Healthcare"]}]
+            await dp._apply_labels(["chunk"], ["Healthcare"], ["Healthcare"], "file1")
+        llm.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_embedding_strategy_runs_and_preserves_acl(self):
+        dp = create_dataprep()
+        with (
+            patch.object(dp_module, "LABELING_STRATEGY", "embedding"),
+            patch.object(dp, "_label_with_embedding") as emb,
+            patch.object(dp, "_label_with_llm", new_callable=AsyncMock) as llm,
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            emb.return_value = [{"text": "chunk", "labels": ["Healthcare"]}]
+            result, _reasons = await dp._apply_labels(["chunk"], ["Healthcare"], ["t:t1", "Healthcare"], "file1")
+        emb.assert_called_once()
+        llm.assert_not_called()
+        labels = result[0]["labels"]
+        assert "Healthcare" in labels  # per-chunk applicability kept
+        assert "t:t1" in labels  # ACL token unioned verbatim
+        assert labels.count("t:t1") == 1  # dedup
+
+    @pytest.mark.asyncio
+    async def test_bm25_strategy_runs_and_preserves_acl(self):
+        dp = create_dataprep()
+        with (
+            patch.object(dp_module, "LABELING_STRATEGY", "bm25"),
+            patch.object(dp, "_label_with_bm25") as bm25,
+            patch.object(dp, "_label_with_llm", new_callable=AsyncMock) as llm,
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            bm25.return_value = [{"text": "chunk", "labels": ["Healthcare"]}]
+            result, _reasons = await dp._apply_labels(["chunk"], ["Healthcare"], ["t:t1", "d:dom"], "file1")
+        bm25.assert_called_once()
+        llm.assert_not_called()
+        labels = result[0]["labels"]
+        assert "Healthcare" in labels
+        assert "t:t1" in labels and "d:dom" in labels
+
+    @pytest.mark.asyncio
+    async def test_no_acl_embedding_labels_unchanged(self):
+        """Without ACL tokens the embedding path returns selections untouched
+        (legacy behavior)."""
+        dp = create_dataprep()
+        with (
+            patch.object(dp_module, "LABELING_STRATEGY", "embedding"),
+            patch.object(dp, "_label_with_embedding") as emb,
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            emb.return_value = [{"text": "chunk", "labels": ["Healthcare"]}]
+            result, _reasons = await dp._apply_labels(["chunk"], ["Healthcare"], ["Healthcare"], "file1")
+        assert result[0]["labels"] == ["Healthcare"]
+
+
+class TestPerChunkFallbackAclPreserve:
+    """The per-chunk fallback (_llm_call_single returns file_labels as suggested
+    after exhausting retries) also preserves ACL labels via the
+    _finalize_chunk_labels union (critic gap #1). Tested by calling
+    _label_with_llm directly (Part 2 makes the fallback unreachable for ACL
+    docs via _apply_labels in production)."""
+
+    @pytest.mark.asyncio
+    async def test_acl_survives_per_chunk_fallback(self, monkeypatch):
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        # Force the real _llm_call_single to exhaust its 3 retries and return
+        # file_labels as suggested (the line-976 fallback).
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(side_effect=Exception("LLM error"))
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            result, _reasons = await dp._label_with_llm(
+                ["chunk"],
+                ["Healthcare"],
+                ["t:t1", "r:r1", "d:dom", "Healthcare"],
+                "file1",
+            )
+        labels = result[0]["labels"]
+        for acl in ("t:t1", "r:r1", "d:dom"):
+            assert acl in labels
+        assert "Healthcare" in labels
+        assert mock_client.chat.completions.create.call_count == 3  # exhausted retries
+
+
+class TestLlmLabelLogClassification:
+    """David, 2026-09-15: transient LLM failures (self-healed by the retry
+    ladder) are WARN, but the TERMINAL per-chunk fallback (all 3 attempts
+    exhausted — the chunk permanently loses LLM labeling) must log at ERROR.
+    Live: the shared vLLM gateway flapped 502s during the Bali ingest and 229
+    permanently-degraded chunks sat in the log as warnings."""
+
+    @pytest.mark.asyncio
+    async def test_terminal_fallback_is_error_and_transients_are_warn(self):
+        dp = create_dataprep()
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(side_effect=Exception("502 Bad Gateway"))
+
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as log:
+            await dp._llm_call_single(mock_client, "test-model", "sys", 42, "chunk text", "file1", ["Healthcare"])
+
+        levels = [call.args[1] for call in log.call_args_list]
+        assert levels == ["WARN", "WARN", "WARN", "ERROR"]  # attempts 1-3 then the terminal row
+        # The transient rows say they are retrying; the terminal row says the
+        # chunk degraded to file labels.
+        assert all("retrying" in call.args[3] for call in log.call_args_list[:3])
+        assert "falls back to file labels" in log.call_args_list[3].args[3]
+
+
+class TestAclLabelPreserveE2E:
+    """End-to-end: ACL labels survive ingest_file_with_guardrail into the
+    persisted chunk's metadata.chunk_labels. REVISED (2026-08-23): _apply_labels
+    is still NOT mocked, but since the skip removal the REAL labeling strategy
+    runs for ACL-bearing file_labels — the inner LLM call is mocked at
+    _label_with_llm level (per-chunk applicability returns Healthcare), and the
+    real _finalize_chunk_labels must preserve the ACL tokens verbatim."""
+
+    @pytest.mark.asyncio
+    async def test_acl_file_labels_reach_chunk_labels_metadata(self):
+        dp = create_dataprep()
+        inp = create_mock_ingest_input(file_labels=["t:tenant1", "r:repoA", "d:health", "Healthcare"])
+
+        captured_docs = []
+
+        async def capture_batch(batch, *args, **kwargs):
+            captured_docs.extend(batch)
+
+        with (
+            patch.object(dp, "_update_doc_status", new_callable=AsyncMock),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["Healthcare"]),
+            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["chunk1"]),
+            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            # Pass-through: contextualization returns chunks unchanged so the
+            # labeling input is the raw chunk (CONTEXTUAL_LABEL_RAW default).
+            patch.object(dp, "_apply_contextualization", new_callable=AsyncMock, return_value=(["chunk1"], [])),
+            # The real _apply_labels dispatches to the (mocked) LLM strategy;
+            # the REAL _finalize_chunk_labels then scopes to the pool and
+            # preserves the ACL tokens verbatim.
+            patch.object(
+                dp,
+                "_label_with_llm",
+                new_callable=AsyncMock,
+                return_value=([{"text": "chunk1", "labels": ["Healthcare", "t:tenant1", "r:repoA", "d:health"]}], []),
+            ),
+            patch.object(dp, "_process_batch", new_callable=AsyncMock, side_effect=capture_batch),
+            patch.object(dp_module, "ArangoGraph"),
+            patch.object(dp_module, "Document", side_effect=lambda **kw: type("Doc", (), kw)),
+        ):
+            await dp.ingest_file_with_guardrail(inp, lock_file=None)
+
+        assert len(captured_docs) == 1
+        chunk_labels = captured_docs[0].metadata["chunk_labels"]
+        # The 3 ACL prefixes + the taxonomy label all reach chunk_labels.
+        assert "t:tenant1" in chunk_labels
+        assert "r:repoA" in chunk_labels
+        assert "d:health" in chunk_labels
+        assert "Healthcare" in chunk_labels
+
+    @pytest.mark.asyncio
+    async def test_all_batches_failed_never_reports_ingested(self):
+        """P0 (David, 2026-09-09, Kenya v8): batch/model failures (remote LLM
+        502s) were swallowed per batch while the pipeline still reported
+        'Ingested' — meta rows went 'indexed' with chunk_counts over a
+        ZERO-write graph and an empty graph SERVED. The gather site must
+        refuse success when every batch failed and nothing landed; the raise
+        routes into the designed 'Ingestion Error' path."""
+        dp = create_dataprep()
+        inp = create_mock_ingest_input()
+        statuses = []
+
+        async def fake_status(file_id, status, chunk_count=None, concept_id=None, error=None):
+            statuses.append(status)
+
+        async def failing_batch(batch_docs, *a, **k):
+            return {"inserted": 0, "failed": True}
+
+        with (
+            patch.object(dp, "_update_doc_status", new=AsyncMock(side_effect=fake_status)),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["L"]),
+            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["c1", "c2"]),
+            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            patch.object(
+                dp,
+                "_apply_labels",
+                new_callable=AsyncMock,
+                return_value=([{"text": "c1", "labels": ["L"]}, {"text": "c2", "labels": ["L"]}], []),
+            ),
+            patch.object(dp, "_process_batch", new=AsyncMock(side_effect=failing_batch)),
+            patch.object(dp, "retract_file", new_callable=AsyncMock),
+            patch.object(dp_module, "ArangoGraph"),
+            pytest.raises(HTTPException),
+        ):
+            await dp.ingest_file_with_guardrail(inp)
+
+        assert "Ingested" not in statuses
+        assert "Ingestion Error" in statuses
+
+    @pytest.mark.asyncio
+    async def test_honest_empty_extraction_stays_ingested(self):
+        """A batch that completes WITHOUT exception and extracts no entities is
+        an honest empty — not a failure. Zero inserts with zero failed batches
+        keeps the 'Ingested' verdict (unchanged behavior, pinned so the P0
+        refusal never over-fires on entity-free content)."""
+        dp = create_dataprep()
+        inp = create_mock_ingest_input()
+        statuses = []
+
+        async def fake_status(file_id, status, chunk_count=None, concept_id=None, error=None):
+            statuses.append(status)
+
+        async def empty_batch(batch_docs, *a, **k):
+            return {"inserted": 0, "failed": False}
+
+        with (
+            patch.object(dp, "_update_doc_status", new=AsyncMock(side_effect=fake_status)),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["L"]),
+            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["c1"]),
+            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            patch.object(
+                dp, "_apply_labels", new_callable=AsyncMock, return_value=([{"text": "c1", "labels": ["L"]}], [])
+            ),
+            # Not degraded: no vLLM is reachable here, and the real
+            # _apply_contextualization would report a client-init degradation
+            # unrelated to the empty-extraction behavior under test.
+            patch.object(
+                dp,
+                "_apply_contextualization",
+                new_callable=AsyncMock,
+                side_effect=lambda chunks, inp, fid: (list(chunks), []),
+            ),
+            patch.object(dp, "_process_batch", new=AsyncMock(side_effect=empty_batch)),
+            patch.object(dp_module, "ArangoGraph"),
+        ):
+            await dp.ingest_file_with_guardrail(inp)
+
+        assert statuses[-1] == "Ingested"
+
+    @pytest.mark.asyncio
+    async def test_partial_batch_success_still_ingests(self):
+        """Some batches landed, some failed -> 'Ingested' (per-batch warnings
+        stay in the ingestion log); the P0 refusal fires only when NOTHING
+        was written."""
+        dp = create_dataprep()
+        inp = create_mock_ingest_input()
+        statuses = []
+
+        async def fake_status(file_id, status, chunk_count=None, concept_id=None, error=None):
+            statuses.append(status)
+
+        async def mixed_batch(batch_docs, current_batch_num, *a, **k):
+            if current_batch_num == 1:
+                return {"inserted": 3, "failed": False}
+            return {"inserted": 0, "failed": True}
+
+        with (
+            patch.object(dp, "_update_doc_status", new=AsyncMock(side_effect=fake_status)),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["L"]),
+            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["c1", "c2", "c3", "c4"]),
+            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            patch.object(
+                dp,
+                "_apply_labels",
+                new_callable=AsyncMock,
+                return_value=([{"text": c, "labels": ["L"]} for c in ["c1", "c2", "c3", "c4"]], []),
+            ),
+            # Not degraded: with no vLLM reachable the real _apply_contextualization
+            # reports a client-init degradation that flips the status for reasons
+            # unrelated to the partial-batch behavior under test.
+            patch.object(
+                dp,
+                "_apply_contextualization",
+                new_callable=AsyncMock,
+                side_effect=lambda chunks, inp, fid: (list(chunks), []),
+            ),
+            patch.object(dp, "_process_batch", new=AsyncMock(side_effect=mixed_batch)),
+            patch.object(dp_module, "ArangoGraph"),
+        ):
+            await dp.ingest_file_with_guardrail(inp)
+
+        assert statuses[-1] == "Ingested"
+
+
+# ── Remote-LLM resilience (David, 2026-09-09) ──
+class TestLlmResilience:
+    def _patch_clock(self, monkeypatch):
+        # No real waiting: delays collapse to zero, sleeps are recorded.
+        # Module storm state resets per test (it is shared global state).
+        dp_module._LLM_STORM_UNTIL = 0.0
+        dp_module._LLM_STORM_STRIKES = 0
+        calls = {"sleeps": [], "delays": []}
+        monkeypatch.setattr(dp_module, "_llm_retry_delay_s", lambda attempt: calls["delays"].append(attempt) or 0.0)
+
+        async def fake_sleep(s):
+            calls["sleeps"].append(s)
+
+        monkeypatch.setattr(dp_module.asyncio, "sleep", fake_sleep)
+        return calls
+
+    def test_transient_502_burst_recovers(self, monkeypatch):
+        self._patch_clock(monkeypatch)
+        attempts = {"n": 0}
+
+        async def flaky():
+            attempts["n"] += 1
+            if attempts["n"] < 3:
+                raise RuntimeError("InternalServerError: 502 Bad Gateway")
+            return "ok"
+
+        import asyncio
+
+        result = asyncio.run(dp_module._call_llm_resilient(flaky, what="test"))
+        assert result == "ok"
+        assert attempts["n"] == 3
+
+    def test_permanent_502_exhausts_ladder_and_raises_last(self, monkeypatch):
+        self._patch_clock(monkeypatch)
+        attempts = {"n": 0}
+
+        async def always_502():
+            attempts["n"] += 1
+            raise RuntimeError("InternalServerError: 502 Bad Gateway")
+
+        import asyncio
+
+        with pytest.raises(RuntimeError):
+            asyncio.run(dp_module._call_llm_resilient(always_502, what="test"))
+        assert attempts["n"] == dp_module._LLM_RETRY_ATTEMPTS
+
+    def test_4xx_fails_fast(self, monkeypatch):
+        calls = self._patch_clock(monkeypatch)
+        attempts = {"n": 0}
+
+        async def bad_request():
+            attempts["n"] += 1
+            raise RuntimeError("BadRequestError: 400")
+
+        import asyncio
+
+        with pytest.raises(RuntimeError):
+            asyncio.run(dp_module._call_llm_resilient(bad_request, what="test"))
+        assert attempts["n"] == 1
+        assert calls["sleeps"] == []
+
+    def test_storm_cooldown_advances_after_transient_failure(self, monkeypatch):
+        self._patch_clock(monkeypatch)
+        import asyncio
+
+        async def once_502():
+            raise RuntimeError("502 Bad Gateway")
+
+        with pytest.raises(RuntimeError):
+            asyncio.run(dp_module._call_llm_resilient(once_502, what="test"))
+        assert dp_module._LLM_STORM_STRIKES >= 1
+        assert dp_module._LLM_STORM_UNTIL > 0
 
 
 class TestInitializeClient:

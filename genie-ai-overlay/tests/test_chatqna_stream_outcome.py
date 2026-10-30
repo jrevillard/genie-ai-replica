@@ -385,7 +385,7 @@ class _FakeParms:
 
 @functools.cache
 def _function_node(name: str) -> ast.AST:
-    tree = ast.parse(CHATQNA_SOURCE.read_text())
+    tree = ast.parse(CHATQNA_SOURCE.read_text(encoding="utf-8"))
     return next(
         node
         for node in ast.walk(tree)

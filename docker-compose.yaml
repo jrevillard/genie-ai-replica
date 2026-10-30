@@ -65,6 +65,7 @@ volumes:
   certbot-webroot:
   certbot-etc:
   vm-data:
+  ragas_llm_cache:
   grafana-data:
   vlogs-data:
   vtraces-data:
@@ -201,6 +202,9 @@ services:
       - TARGET_HOST=backend
       - TARGET_PORT=3000
       - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
+      # OKF feature flag: 0 strips the okf-server service + /api/okf route
+      # from the declarative apply (and deletes any existing okf entities).
+      - OKF_ENABLED=${OKF_ENABLED:-0}
     command: ["-b", "/opt/kong-config/kong_config.json"]
     deploy:
       replicas: 1
@@ -398,6 +402,11 @@ services:
       - VUE_PROXY_HOST=${VUE_PROXY_HOST:-localhost}
       - VUE_APP_CSP_CONNECT_SRC=${VUE_APP_CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}
       - VUE_APP_AVAILABLE_LOCALES=${VUE_APP_AVAILABLE_LOCALES:-}
+      # OKF feature flag (2026-10-21): the entrypoint writes it into
+      # window.APP_CONFIG.okfEnabled; the Admin Dashboard hides the OKF
+      # Studio and Models tabs (and their sidebar entries) when '0'.
+      # Same variable that parks the okf containers and the Kong route.
+      - VUE_APP_OKF_ENABLED=${OKF_ENABLED:-0}
       - VUE_APP_STREAM_IDLE_TIMEOUT_MS=${VUE_APP_STREAM_IDLE_TIMEOUT_MS:-}
     volumes:
       - ${CONFIG_DIR_FRONTEND:-./components/gov-chat-frontend/public/config}:/app/dist/config:ro
@@ -543,6 +552,14 @@ services:
       # Keycloak OIDC discovery — must use the public URL (via NGINX proxy),
       # not the internal Docker URL, so the issuer matches the JWT's iss claim.
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
+      # Split-URL OIDC: KEYCLOAK_PUBLIC_URL aliases the browser-facing issuer to
+      # the same JWKS when discovery is fetched via a different (internal) URL;
+      # KEYCLOAK_JWKS_URL pins the JWKS fetch host; KEYCLOAK_BROWSER_ISSUER adds
+      # a second accepted issuer alongside it. No-op when unset (cloud) —
+      # mirrors the okf-server block.
+      - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
+      - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
+      - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
       - KEYCLOAK_REALM=${KEYCLOAK_REALM:-genie}
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       # Additional Keycloak realms for multi-realm token validation (JSON map: {"realm":"client-id"})
@@ -591,6 +608,23 @@ services:
       - EMAIL_FROM=${EMAIL_FROM}
       # OPEA AI/ML service (the code default is the same service name)
       - OPEA_HOST=${OPEA_HOST:-chatqna-xeon-backend-server}
+      # Story 1.1 (BFF fan-out wire-up): okf-server internal endpoint for the
+      # retrieval posture + per-caller authz graph resolution. Code default
+      # matches (http://okf-server:3002); the entry exists so an operator can
+      # override it without an image rebuild.
+      - OKF_SERVER_URL=${OKF_SERVER_URL:-http://okf-server:3002}
+      # OKF feature flag: must reach the backend explicitly (no .env passthrough)
+      # — a parked deployment (0) short-circuits the retrieval-config client to
+      # the legacy default instead of timing out against a zero-replica okf-server.
+      - OKF_ENABLED=${OKF_ENABLED:-0}
+      # The legacy graph name the BFF prepends in hybrid mode — MUST match the
+      # retriever's ARANGO_GRAPH_NAME or the legacy leg diverges.
+      - ARANGO_GRAPH_NAME=${ARANGO_GRAPH_NAME:-GRAPH}
+      # Story 1.1 cache tuning (code defaults 30000/3000; clamped ≥1000/≥100):
+      # the posture/authz window and per-call timeout. Defaults mirror the
+      # authz-resolver's SERVING_TTL_MS — override only for latency tuning.
+      - OKF_RETRIEVAL_CONFIG_TTL_MS=${OKF_RETRIEVAL_CONFIG_TTL_MS:-30000}
+      - OKF_RETRIEVAL_CONFIG_TIMEOUT_MS=${OKF_RETRIEVAL_CONFIG_TIMEOUT_MS:-3000}
       # Conversation mode: conversation-with-context-labels (full context) or single-message (legacy)
       - CONTEXT_OPTION=${CONTEXT_OPTION:-conversation-with-context-labels}
       # Logging (error, warn, info, debug)
@@ -631,6 +665,439 @@ services:
         delay: 5s
         max_attempts: 10
 
+  okf-server:
+    # OKF feature flag (merge prep 2026-10-21): OKF_ENABLED=1 activates the OKF
+    # stack. Off = parked — compose mode needs --profile okf to start it, swarm
+    # runs 0 replicas, Kong gets no /api/okf route, the frontend hides the OKF
+    # surfaces. Same variable gates all four (env template documents it).
+    profiles: ["okf"]
+    logging: *fluent-logging
+    # Harden: no privilege escalation from the container — the file's
+    # convention (37 existing services set it; kics Security Opt Not Set).
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      keycloak-config:
+        condition: service_healthy
+    restart: unless-stopped
+    build:
+      context: components/
+      dockerfile: okf-server/Dockerfile
+    image: ${GENIE_AI_OKF_SERVER_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-okf-server}:${GENIE_AI_OKF_SERVER_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - "${DATA_DIR:-./data}/logs/okf-server:/app/logs"
+    # Allow okf-server to resolve NGINX_PUBLIC_DOMAIN to the Docker host so OIDC
+    # discovery/JWKS fetches (KEYCLOAK_URL → public NGINX) reach the host-published 80/443.
+    extra_hosts:
+      - "${NGINX_PUBLIC_DOMAIN:-localhost}:host-gateway"
+    environment:
+      - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-genie}
+      - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      - SERVICE_NAME=genie-okf-server
+      - NODE_ENV=production
+      # Split-URL OIDC: KEYCLOAK_PUBLIC_URL aliases the browser-facing issuer to the same JWKS;
+      # KEYCLOAK_JWKS_URL pins the JWKS fetch host; KEYCLOAK_BROWSER_ISSUER adds a second accepted
+      # issuer alongside it. No-op in cloud (equals KEYCLOAK_URL); active where internal/public
+      # issuers differ (local build).
+      - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
+      - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
+      - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
+      # Service-account mints (okf-server → doc-repo/dataprep) are server-to-server:
+      # prefer the container-reachable INTERNAL Keycloak; the browser-facing public
+      # alias stays only a late fallback. Mirrors the dataprep block.
+      - KEYCLOAK_INTERNAL_URL=${KEYCLOAK_INTERNAL_URL:-}
+      # TLS verification for okf-server → NGINX OIDC discovery/JWKS fetches.
+      # Default 1 (strict, production); set 0 in .env for dev with self-signed certs.
+      - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-1}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
+      # The env judge the ragas sidecar uses (RAGAS_JUDGE_* is also wired into
+      # the sidecar). okf-server needs it for the run's FIDELITY block: without
+      # it every default-judged run recorded judge {model: null} while the
+      # sidecar judged with the env model (2026-10-21 review F10).
+      - RAGAS_JUDGE_BASE_URL=${RAGAS_JUDGE_BASE_URL:-http://vllm:8000/v1}
+      - RAGAS_JUDGE_MODEL=${RAGAS_JUDGE_MODEL:-${VLLM_LLM_MODEL_ID:-}}
+      # ArangoDB — same database as the graphs (ADR-okf-018); direct arangojs, no ORM.
+      - ARANGO_URL=${ARANGO_URL:-http://arango-vector-db:8529}
+      - ARANGO_DB=${ARANGO_DB:-genie-ai}
+      - ARANGO_USER=${ARANGO_USER:-root}
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD}
+      # Repository soft-delete grace window (hours) before hard delete (sweep deferred to Story 4.6).
+      - OKF_DELETE_GRACE_HOURS=${OKF_DELETE_GRACE_HOURS:-168}
+      # Bundle-store POST timeout during publish (large bundles + ClamAV scan)
+      - OKF_BUNDLE_STORE_TIMEOUT_MS=${OKF_BUNDLE_STORE_TIMEOUT_MS:-300000}
+      # Story 6.1 (RFC 8707): activate audience binding by setting e.g. okf-server.
+      # Empty default = off (deployments without the audience mapper keep working).
+      - OKF_AUDIENCE=${OKF_AUDIENCE:-}
+      # DEFAULT-OPEN OKF read authorization (product decision 2026-10-16):
+      # 'open' (default) — a caller with NO okf:* scopes is authorized for ALL
+      # serving repos, so any regular user's chat query can reach every
+      # ingested+published repo. 'closed' — the historical default-deny
+      # (nothing granted = nothing authorized). Any granted scope still
+      # restricts to its exact list; the WRITE side is closed in both modes.
+      # Unset-only default (`-`, not `:-`): an explicitly EMPTY value must
+      # reach the container as explicit garbage and degrade to closed (with
+      # a warning), per the env-file contract — not silently become open.
+      - OKF_SCOPE_MODE=${OKF_SCOPE_MODE-open}
+      # Story 2.9.1: service-account credentials for okf-server → doc-repo HTTP
+      # (the okf-server Keycloak client provisioned by Story 6.1). Empty = calls
+      # go unauthenticated and doc-repo rejects them (loud one-time warning).
+      - KC_OKF_SERVER_CLIENT_ID=${KC_OKF_SERVER_CLIENT_ID:-okf-server}
+      - KC_OKF_SERVER_CLIENT_SECRET=${KC_OKF_SERVER_CLIENT_SECRET:-}
+      # Story 6-1c: credentials for the OKF access-control GRANT/REVOKE facility
+      # (Keycloak Admin API via the genie-proxy-client service account). Empty
+      # secret = the facility answers 503 ACCESS_CONTROL_UNCONFIGURED; the
+      # read-path RESTRICTION enforcement needs no Keycloak and keeps working.
+      - KC_OKF_ACCESS_CLIENT_ID=${KC_OKF_ACCESS_CLIENT_ID:-genie-proxy-client}
+      - KC_OKF_ACCESS_CLIENT_SECRET=${KC_OKF_ACCESS_CLIENT_SECRET:-}
+      # Story 2.9.4: the ingestion worker (crawlWorker pattern — poll loop over
+      # Pending OKF files docs; sequential by design, dataprep is single-flight).
+      - OKF_INGEST_WORKER_ENABLED=${OKF_INGEST_WORKER_ENABLED:-true}
+      - OKF_INGEST_WORKER_INTERVAL_MS=${OKF_INGEST_WORKER_INTERVAL_MS:-15000}
+      - OKF_INGEST_WORKER_SWEEP_INTERVAL_MS=${OKF_INGEST_WORKER_SWEEP_INTERVAL_MS:-3600000}
+      - OKF_INGEST_CONCURRENCY=${OKF_INGEST_CONCURRENCY:-1}
+      # Max characters in ONE concept document. A document larger than this has
+      # its deep chunks embedded against a description of its start (the
+      # Contextual Retrieval document context is truncated to the same budget),
+      # so imports split such a document rather than storing it degraded.
+      # The default is sized for the 65536-token compose window (~250k chars);
+      # it must track VLLM_MAX_MODEL_LEN, which dataprep derives the matching
+      # budget from. AC8 in tests/config-validator keeps the two in step.
+      - OKF_MAX_CONCEPT_DOC_CHARS=${OKF_MAX_CONCEPT_DOC_CHARS:-250000}
+      # Lane cool-down after a dataprep 429 (slot busy): without it a saturated
+      # queue hot-loops at ~1 claim/sec (incident 2026-09-28 — 434 rows bouncing
+      # while one slot was held for hours during a vLLM outage). Rows never
+      # park; only the lane pauses before the next claim.
+      - OKF_KICK_429_COOLDOWN_MS=${OKF_KICK_429_COOLDOWN_MS:-15000}
+      # D-B curation engine (8f46b3345): okf-server owns the vLLM client
+      # (DP-8 deviation). Empty values = engine fail-softs to heuristics;
+      # a deployment opts IN by setting VLLM_ENDPOINT + VLLM_API_KEY and a
+      # guided-JSON-capable chat model (VLLM_LLM_MODEL_ID preferred).
+      - VLLM_ENDPOINT=${VLLM_ENDPOINT:-}
+      - VLLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-${VLLM_MODEL_ID:-}}
+      - VLLM_API_KEY=${VLLM_API_KEY:-}
+      # Model-endpoint externalization (David 2026-10-08: all OKF env vars
+      # live in .env with documented defaults — compose is only the pipe).
+      # TEI embed base for tag embedding + vectorized-head build + the
+      # Story 1-8 head tests (frontmatter-service appends /embed). Same
+      # host:port as the inference server; unset = local full-stack TEI.
+      - TEI_EMBED_HOST=${TEI_EMBED_HOST:-http://tei:80}
+      # Embedding model id — keys the BGE query-instruction prefix for
+      # the head-test query embeds (production chatqna parity). Unset =
+      # no prefix, honestly reported by the lab as "unknown (no prefix)".
+      - EMBEDDING_MODEL_ID=${EMBEDDING_MODEL_ID:-}
+      # Story 1-8d teaching-loop guardrail — mechanical rejection of suggested
+      # forbidden tags that are self-forbidding (cosine vs the repo's OWN
+      # topic/entity/keyword vectors >= threshold; the 2026-10-09 poisoning
+      # forbade 'lung-cancer', the repo's own entity tag) or near-duplicates
+      # of already-forbidden tags. Defaults live in the service (0.55 / 0.9).
+      - OKF_GUARD_SELF_SUBJECT=${OKF_GUARD_SELF_SUBJECT:-}
+      - OKF_GUARD_DUPLICATE_FORBIDDEN=${OKF_GUARD_DUPLICATE_FORBIDDEN:-}
+      # Story 1-8g — the Lab click-test reranks a query against the repo
+      # corpus through the SAME TEI /rerank the pipeline grounds on. Empty =
+      # the probe reports verdict unknown with an honest note.
+      - OKF_RERANK_ENDPOINT=${OKF_RERANK_ENDPOINT:-}
+      - OKF_RERANK_TOKEN=${OKF_RERANK_TOKEN:-}
+      # Story 8-6 — the RAGAS benchmark sidecar. URL of the ragas-service
+      # container; the suite/run/explain/xlsx routes degrade to honest 503
+      # RAGAS_UNAVAILABLE when it is unreachable. Concurrency/size knobs
+      # bound LLM cost on the shared GPU (defaults live in the service).
+      - OKF_RAGAS_URL=${OKF_RAGAS_URL:-http://ragas-service:8090}
+      - RAGAS_INTERNAL_SECRET=${RAGAS_INTERNAL_SECRET:-${OKF_INTERNAL_SECRET:-}}
+      - OKF_RAGAS_TESTSET_SIZE_DEFAULT=${OKF_RAGAS_TESTSET_SIZE_DEFAULT:-20}
+      - OKF_RAGAS_MAX_ENTRIES=${OKF_RAGAS_MAX_ENTRIES:-200}
+      - OKF_RAGAS_RUN_CONCURRENCY=${OKF_RAGAS_RUN_CONCURRENCY:-2}
+      # Benchmark rerank batch concurrency (2026-10-23). Batch calls are
+      # independent and scores are identical at any concurrency — transport
+      # only. 1 = sequential; default 3 overlaps a 6-batch pool into ~2 waves
+      # (~3x faster retrieval leg). Global in-flight ceiling is
+      # OKF_RAGAS_RUN_CONCURRENCY x this value.
+      - OKF_RAGAS_RERANK_CONCURRENCY=${OKF_RAGAS_RERANK_CONCURRENCY:-3}
+      # SERVE mode (the default): the benchmark answers via the SAME chatqna
+      # pipeline citizens use. 'whatif' runs ignore this and replay retrieval
+      # in-process.
+      - OKF_RAGAS_SERVE_URL=${OKF_RAGAS_SERVE_URL:-http://chatqna-xeon-backend-server:8888/v1/chatqna}
+      # Declared serve posture, forwarded so every run doc can RECORD the
+      # retrieval configuration it measured (fidelity.retrieval.posture).
+      # chatqna remains the AUTHORITATIVE reader — okf-server only snapshots
+      # these for the record. Keep the interpolation defaults identical to
+      # the chatqna block to avoid silent drift (same convention as the
+      # retriever block's inert copies). The record exists because a
+      # configuration change (RETRIEVER_ARANGO_K=54, 2026-10-27) can silence
+      # the whole pipeline (reranker per-batch token cap) — a run that
+      # abstains 100% must name the posture it ran with.
+      - RETRIEVER_ARANGO_K=${RETRIEVER_ARANGO_K:-20}
+      - RETRIEVER_ARANGO_FETCH_K=${RETRIEVER_ARANGO_FETCH_K:-30}
+      - RETRIEVER_ARANGO_SCORE_THRESHOLD=${RETRIEVER_ARANGO_SCORE_THRESHOLD:-0.2}
+      - RETRIEVER_ARANGO_DISTANCE_THRESHOLD=${RETRIEVER_ARANGO_DISTANCE_THRESHOLD:-1}
+      - RETRIEVER_ARANGO_LAMBDA_MULT=${RETRIEVER_ARANGO_LAMBDA_MULT:-0.5}
+      - RERANKING_STRATEGY=${RERANKING_STRATEGY:-slice}
+      - RERANKER_TOP_N=${RERANKER_TOP_N:-3}
+      - RERANKING_THRESHOLD=${RERANKING_THRESHOLD:-0.75}
+      - CHATQNA_ENFORCE_ABSTENTION=${CHATQNA_ENFORCE_ABSTENTION:-true}
+      # The answer leg's INITIAL token budget. It was hardcoded to 800, and a
+      # reasoning-capable model burns 400-700 tokens before writing a word --
+      # every answer hit the length cap, was thrown away, and was re-called at
+      # 3200 by the adaptive ladder: two calls per question, the first one
+      # entirely wasted. max_tokens is a CAP, not a reservation, so a model
+      # that needs less never pays for it.
+      - OKF_RAGAS_ANSWER_MAX_TOKENS=${OKF_RAGAS_ANSWER_MAX_TOKENS:-5000}
+      # Liveness horizon (NOT a job deadline): a reachable running job is
+      # never timed out; this bounds only the unreachable-sidecar retries.
+      # Cancel is the user's call (David 2026-10-18).
+      - OKF_RAGAS_LONG_TIMEOUT_MS=${OKF_RAGAS_LONG_TIMEOUT_MS:-3600000}
+      - OKF_RAGAS_JOB_POLL_MS=${OKF_RAGAS_JOB_POLL_MS:-3000}
+      # The benchmark answer leg serves with the deployment's chat contract:
+      # a pinned CHATQNA_SYSTEM_PROMPT must reach okf-server too, or the
+      # run scores a different answerer than the one users get (2026-10-19).
+      - CHATQNA_SYSTEM_PROMPT=${CHATQNA_SYSTEM_PROMPT:-}
+      - OKF_CURATION_TIMEOUT_MS=${OKF_CURATION_TIMEOUT_MS:-}
+      - OKF_CURATION_LANES=${OKF_CURATION_LANES:-}
+      # Story 1-8g-p: whole-corpus TOPIC-LINK AUTHORING. The import wizard runs
+      # it automatically and the editor re-runs it on demand; it authors the
+      # cross-links a corpus that never cites itself is born without. Generic
+      # by construction (no domain lexicon), so it behaves identically for any
+      # subject matter. Set OKF_TOPIC_LINK_ENABLED=0 to skip the import-time
+      # pass (the LLM cost is the reason to switch it off).
+      - OKF_TOPIC_LINK_ENABLED=${OKF_TOPIC_LINK_ENABLED:-true}
+      - OKF_TOPIC_LINK_TIMEOUT_MS=${OKF_TOPIC_LINK_TIMEOUT_MS:-}
+      - OKF_TOPIC_LINK_LANES=${OKF_TOPIC_LINK_LANES:-}
+      - OKF_TOPIC_LINK_BATCH=${OKF_TOPIC_LINK_BATCH:-}
+      - OKF_TOPIC_LINK_MAX_PER_CONCEPT=${OKF_TOPIC_LINK_MAX_PER_CONCEPT:-}
+      # Stuck-parsed reaper signals (claim-stamp semantics): a claimed row with
+      # no terminal callback after REAP_GRACE_MS, or one claimed too many
+      # times, is dead-lettered. WAITING rows are never reaped.
+      - OKF_INGEST_WORKER_REAP_GRACE_MS=${OKF_INGEST_WORKER_REAP_GRACE_MS:-3600000}
+      - OKF_INGEST_WORKER_MAX_CLAIMS=${OKF_INGEST_WORKER_MAX_CLAIMS:-8}
+      # Story 4.8-amend: content-only chunking — the worker POSTs the concept's
+      # markdown DIRECTLY to dataprep (no doc-repo files doc). Empty default =
+      # fail-closed; the controller refuses every callback without a secret
+      # configured, so the .env / deployment MUST set both ends to the same value.
+      - DATAPREP_URL=${DATAPREP_URL:-http://dataprep-arango-service:5000}
+      - OKF_INTERNAL_SECRET=${OKF_INTERNAL_SECRET:-}
+      # Server-side crawl→OKF conversion: max crawled-source file size (MB).
+      # Authoritative pre-flight against doc-repo Content-Length. Default
+      # 10240 (10 GB) in the service when unset.
+      - OKF_MAX_CRAWL_SOURCE_MB=${OKF_MAX_CRAWL_SOURCE_MB:-}
+      # Fine-grained per-page/per-flush conversion logging when =1.
+      - OKF_CONVERSION_DEBUG=${OKF_CONVERSION_DEBUG:-}
+      # Import pipeline parallelism (perf 2026-09-05): per-concept import
+      # lanes in ingest-service. PAIRED with the pii-service's
+      # PII_WEB_CONCURRENCY — import lanes above the sidecar's worker count
+      # queue instead of adding throughput (!1080). Both ≈ min(16, cores/2);
+      # 4/4 is a floor for a 24-core host, which measured ~18% utilisation.
+      # Every import logs the capacity it got ("OKF import lane capacity").
+      - OKF_IMPORT_CONCURRENCY=${OKF_IMPORT_CONCURRENCY:-4}
+      # ================================================================
+      # !1073 — the knobs `env` documents as operator-facing but never
+      # actually reached a container. There is NO env_file: anywhere in this
+      # file, so a variable absent from a service's environment: block is
+      # unreachable by definition: setting it in .env did nothing, silently.
+      # All 26 below are read by okf-server (grep-verified against the code,
+      # not inferred from the name). Defaults are the SERVICE's own defaults,
+      # repeated here so `env` and compose cannot disagree.
+      #
+      # The 27th and 28th documented OKF_* vars — OKF_SEARCH_STYLE and
+      # OKF_FRONTMATTER_TAG_BATCH_SIZE — are deliberately NOT wired: nothing
+      # in the codebase reads either (spec 1-6 assigns OKF_SEARCH_STYLE to the
+      # retriever, but the overlay never reads it). Wiring them would put a
+      # live-looking variable in the container that changes nothing, which is
+      # worse than the current honest absence. Filed as unimplemented.
+      # ================================================================
+      # --- ingest-worker timing (workers/ingestWorker.js) ---
+      - OKF_INGEST_WORKER_JOB_POLL_MS=${OKF_INGEST_WORKER_JOB_POLL_MS:-5000}
+      - OKF_INGEST_WORKER_JOB_TIMEOUT_MS=${OKF_INGEST_WORKER_JOB_TIMEOUT_MS:-1800000}
+      - OKF_INGEST_WORKER_CYCLE_TIMEOUT_MS=${OKF_INGEST_WORKER_CYCLE_TIMEOUT_MS:-1800000}
+      - OKF_INGEST_WORKER_SWEEP_GRACE_MS=${OKF_INGEST_WORKER_SWEEP_GRACE_MS:-3600000}
+      # --- size-adaptive job windows (spec #1020 §5.9) ---
+      - OKF_JOB_WINDOW_ADAPTIVE=${OKF_JOB_WINDOW_ADAPTIVE:-false}
+      - OKF_JOB_WINDOW_FLOOR_MS=${OKF_JOB_WINDOW_FLOOR_MS:-1800000}
+      - OKF_JOB_WINDOW_MAX_MS=${OKF_JOB_WINDOW_MAX_MS:-21600000}
+      - OKF_JOB_WINDOW_SEC_PER_CHUNK_MS=${OKF_JOB_WINDOW_SEC_PER_CHUNK_MS:-5000}
+      # --- claim / scheduling (fair claim, spec #1020 §5.2) ---
+      - OKF_CLAIM_STRATEGY=${OKF_CLAIM_STRATEGY:-fifo}
+      - OKF_REPO_INGEST_CAP=${OKF_REPO_INGEST_CAP:-0}
+      # --- 5xx kick backoff (spec #1020 §5.5) ---
+      - OKF_KICK_BACKOFF_BASE_MS=${OKF_KICK_BACKOFF_BASE_MS:-0}
+      - OKF_KICK_BACKOFF_MAX_MS=${OKF_KICK_BACKOFF_MAX_MS:-900000}
+      # --- import caps (ingest-service / converters) ---
+      - OKF_INGEST_MAX_CONCEPTS=${OKF_INGEST_MAX_CONCEPTS:-1000}
+      - OKF_INGEST_MAX_ZIP_BYTES=${OKF_INGEST_MAX_ZIP_BYTES:-268435456}
+      - OKF_MAX_CONCURRENT_CONVERSIONS=${OKF_MAX_CONCURRENT_CONVERSIONS:-2}
+      - OKF_XLSX_ROWS_PER_CONCEPT=${OKF_XLSX_ROWS_PER_CONCEPT:-200}
+      - OKF_CSV_ROWS_PER_CONCEPT=${OKF_CSV_ROWS_PER_CONCEPT:-200}
+      # --- retrieval routing (config.js) ---
+      - OKF_RETRIEVAL_MODE=${OKF_RETRIEVAL_MODE:-legacy}
+      - OKF_RETRIEVAL_MAX_FANOUT_GRAPHS=${OKF_RETRIEVAL_MAX_FANOUT_GRAPHS:-5}
+      - OKF_RETRIEVAL_SPINE_MAX_HOPS=${OKF_RETRIEVAL_SPINE_MAX_HOPS:-2}
+      - OKF_RETRIEVAL_EXTRACTED_HOP_CAP=${OKF_RETRIEVAL_EXTRACTED_HOP_CAP:-1}
+      - OKF_RETRIEVAL_CANDIDATE_CAP_PER_GRAPH=${OKF_RETRIEVAL_CANDIDATE_CAP_PER_GRAPH:-50}
+      - OKF_RETRIEVAL_CANDIDATE_CAP_GLOBAL=${OKF_RETRIEVAL_CANDIDATE_CAP_GLOBAL:-200}
+      # --- frontmatter (frontmatter-service / retrieval-config-service) ---
+      - OKF_FRONTMATTER_VALIDATE_BATCH_SIZE=${OKF_FRONTMATTER_VALIDATE_BATCH_SIZE:-4}
+      # --- ingest settle lease (lifecycle-service) ---
+      - OKF_SETTLE_LEASE_MS=${OKF_SETTLE_LEASE_MS:-600000}
+    networks:
+      - genieai_network
+    deploy:
+      replicas: ${OKF_ENABLED:-0}
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 10
+
+  pii-service:
+    # OKF feature flag: parked with the okf-server (see okf-server block).
+    profiles: ["okf"]
+    logging: *fluent-logging
+    # Harden: no privilege escalation (same convention; kics Security Opt Not Set).
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    environment:
+      # uvicorn worker processes (GIL-bound NER needs processes, not threads;
+      # raise on many-core deployments)
+      - PII_WEB_CONCURRENCY=${PII_WEB_CONCURRENCY:-4}
+      # Max chars per analyze() call. Bounds how long ONE scan holds the GIL,
+      # which is what starves uvicorn's supervisor into SIGKILLing the worker
+      # (measured 2026-10-13: an 850 KB page killed the worker 8/8 times).
+      # Sized so a region stays under the supervisor's 5 s liveness ping;
+      # lower it on a slower host, raise it only if a region is provably <5 s.
+      - PII_REGION_MAX_CHARS=${PII_REGION_MAX_CHARS:-50000}
+    build:
+      context: components/pii-service/
+      dockerfile: Dockerfile
+    image: ${GENIE_AI_PII_SERVICE_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-pii-service}:${GENIE_AI_PII_SERVICE_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    # Internal only (never publicly routed) — the okf-server calls it
+    # container-to-container on genieai_network, same as doc-repo -> dataprep.
+    # Healthcheck hits /ready (not /health) so the spaCy model loads at startup,
+    # not on the first scan request (code-review #9).
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=8)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    networks:
+      - genieai_network
+    deploy:
+      replicas: ${OKF_ENABLED:-0}
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 10
+
+  # Story 8-6 (ADR-okf-043) — RAGAS benchmarking sidecar. Stateless Python
+  # (ragas 0.4.3, deps frozen to the tests/rag-benchmarks runner's pins):
+  # testset generation, metric evaluation, and xlsx serialization. INTERNAL
+  # only — the okf-server calls it container-to-container on genieai_network
+  # (like pii-service); the Lab degrades to honest 503 RAGAS_UNAVAILABLE
+  # when it is absent. Judge/embedder point at the deployment's local
+  # vLLM/TEI (RAGAS_JUDGE_* / RAGAS_EMBED_* below); NO feature is indexed
+  # on a specific model — minimums live in the spec's model-requirements.
+  ragas-service:
+    # OKF feature flag: parked with the okf-server (see okf-server block).
+    profiles: ["okf"]
+    logging: *fluent-logging
+    # Harden: no privilege escalation from the container — the file's
+    # convention (kics Security Opt Not Set).
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    environment:
+      # Shared secret with okf-server (fail-closed when unset). Defaults to
+      # the dataprep-callback secret — one deployment-wide internal secret.
+      - RAGAS_INTERNAL_SECRET=${RAGAS_INTERNAL_SECRET:-${OKF_INTERNAL_SECRET:-}}
+      # Judge LLM (OpenAI-compatible) — defaults inherit the deployment's
+      # LLM config; override per endpoint freely (model-requirements minimums).
+      - RAGAS_JUDGE_BASE_URL=${RAGAS_JUDGE_BASE_URL:-http://vllm:8000/v1}
+      - RAGAS_JUDGE_MODEL=${RAGAS_JUDGE_MODEL:-${VLLM_LLM_MODEL_ID:-}}
+      - RAGAS_JUDGE_API_KEY=${RAGAS_JUDGE_API_KEY:-${VLLM_API_KEY:-}}
+      # The judge's context window — RAGAS sizes its KG-input cap from it
+      # ('auto': pair-safe derivation, see ragas_engine._doc_char_cap), so
+      # transform prompts always fit whatever model is selected.
+      - RAGAS_JUDGE_CONTEXT_TOKENS=${RAGAS_JUDGE_CONTEXT_TOKENS:-${VLLM_MAX_MODEL_LEN:-65536}}
+      # Embedder (answer_relevancy + testset KG transforms). Default
+      # dialect is TEI-native ({base}/embed, the project's TEI-behind-
+      # nginx contract); RAGAS_EMBED_API=openai switches to any
+      # OpenAI-compatible embeddings endpoint (/embeddings).
+      - RAGAS_EMBED_BASE_URL=${RAGAS_EMBED_BASE_URL:-http://tei-embedding-server:80}
+      - RAGAS_EMBED_MODEL=${RAGAS_EMBED_MODEL:-${EMBEDDING_MODEL_ID:-}}
+      - RAGAS_EMBED_API=${RAGAS_EMBED_API:-tei}
+      # Disk judge cache (2026-10-18): responses keyed by prompt+params
+      # persist on the ragas_llm_cache VOLUME — repeat generations of the
+      # same repos skip the whole KG phase and suite re-runs re-judge only
+      # what changed, surviving container recreates. 0 disables; the dir is
+      # best-effort only.
+      - RAGAS_LLM_CACHE=${RAGAS_LLM_CACHE:-1}
+      - RAGAS_LLM_CACHE_DIR=${RAGAS_LLM_CACHE_DIR:-/tmp/ragas-llm-cache}
+      # Migration switch for the 2026-10-21 cache-key fix (the judge identity
+      # in the key now carries the endpoint). 1 lets a deployment whose judge
+      # has NOT been repointed replay the entries the previous key wrote, and
+      # migrates each one to the new key on read. 0 = strict (default).
+      - RAGAS_LLM_CACHE_LEGACY=${RAGAS_LLM_CACHE_LEGACY:-0}
+      # Judge call discipline (2026-10-21): the upstream answered 82 of ~500
+      # synthesis calls with 429 and 35 questions were dropped. The client
+      # now caps its own concurrency and retries a 429 with jitter.
+      - RAGAS_LLM_MAX_CONCURRENCY=${RAGAS_LLM_MAX_CONCURRENCY:-8}
+      - RAGAS_LLM_MAX_RETRIES=${RAGAS_LLM_MAX_RETRIES:-5}
+      # ragas's usage telemetry (2026-10-26). ragas 0.4.3 POSTs every prompt's
+      # usage event to https://t.explodinggradients.com from INSIDE the async
+      # prompt path, with a 1 s timeout — so it blocks the event loop and the
+      # configured concurrency never overlaps. Measured here: a warm CACHE HIT
+      # (no model call at all) cost 0.79 s, and 0.008 s with this off — the
+      # tax alone was ~50 min of Solar System's ~3,800-prompt graph build. It
+      # is also a sovereignty leak: a public-sector deployment must not ship
+      # per-call usage telemetry to a third-party endpoint outside it.
+      - RAGAS_DO_NOT_TRACK=${RAGAS_DO_NOT_TRACK:-true}
+      # Scoring-leg throughput (2026-10-22). The leg used to be hardcoded to
+      # ragas's max_workers=8 with one row per evaluate(), so a row's ~13
+      # judge calls could never fill the pool: 5.4 min per row, ~8 h for 100.
+      # MAX_WORKERS and BATCH_ROWS have to move together — a single row only
+      # has ~13 calls to offer the pool. TIMEOUT_SECONDS bounds a stuck
+      # judge call; a call that exceeds it scores NULL for that row
+      # (raise_exceptions=False), which is silent.
+      - RAGAS_EVAL_MAX_WORKERS=${RAGAS_EVAL_MAX_WORKERS:-8}
+      - RAGAS_EVAL_BATCH_ROWS=${RAGAS_EVAL_BATCH_ROWS:-1}
+      - RAGAS_EVAL_TIMEOUT_SECONDS=${RAGAS_EVAL_TIMEOUT_SECONDS:-600}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ragas_llm_cache:/tmp/ragas-llm-cache
+    build:
+      context: components/ragas-service/
+      dockerfile: Dockerfile
+    image: ${GENIE_AI_RAGAS_SERVICE_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-ragas-service}:${GENIE_AI_RAGAS_SERVICE_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=8)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - genieai_network
+    deploy:
+      replicas: ${OKF_ENABLED:-0}
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 10
+
   document-repository:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
     cap_drop:
@@ -660,6 +1127,13 @@ services:
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
       - ARANGO_URL=http://arango-vector-db:8529
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
+      # Split-URL OIDC: KEYCLOAK_PUBLIC_URL overrides the expected issuer when
+      # JWKS is fetched via a different (internal) URL; KEYCLOAK_JWKS_URL pins
+      # the JWKS fetch host; KEYCLOAK_BROWSER_ISSUER adds another accepted
+      # issuer alongside it. No-op when unset (cloud).
+      - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
+      - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
+      - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
       - KC_REALM=${KEYCLOAK_REALM:-genie}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -669,6 +1143,9 @@ services:
       # applies to both services that read from the MELT seam.
       - VICTORIALOGS_URL=${VICTORIALOGS_URL:-http://victorialogs:9428}
       - VICTORIALOGS_TENANT_ID=${VICTORIALOGS_TENANT_ID:-0:0}
+      # OKF publish bundle-ingest body cap (base64-in-JSON, 10× the app's 10mb
+      # JSON cap — see upload.bundleMaxBodyMb in src/config/appConfig.js)
+      - OKF_BUNDLE_MAX_MB=${OKF_BUNDLE_MAX_MB:-100}
       # TLS verification for document-repository → NGINX OIDC discovery/JWKS fetches.
       # Default: 1 (strict, for production). Set to 0 in .env for dev with self-signed certs.
       - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-1}
@@ -1244,7 +1721,20 @@ services:
       ARANGO_PASSWORD: ${ARANGO_PASSWORD}
       DOCUMENT_REPOSITORY_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
+      # Story 4.8-amend: content-only chunking — OKF concept completion callbacks
+      # (dataprep → okf-server internal endpoint) instead of doc-repo. Empty
+      # default = fail-closed; the okf-server controller refuses every callback
+      # without a matching shared secret, so the .env / deployment MUST set both
+      # ends to the same value.
+      OKF_SERVER_URL: http://okf-server:3002
+      OKF_INTERNAL_SECRET: ${OKF_INTERNAL_SECRET:-}
       KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
+      # Split-URL OIDC (local builds): when the public KEYCLOAK_URL is
+      # unreachable from the container (Docker Desktop WSL2), set
+      # KEYCLOAK_INTERNAL_URL (e.g. http://keycloak:8080) to mint the
+      # service-account token internally. Empty default — cloud/Swarm use
+      # KEYCLOAK_URL unchanged (same pattern as chatqna's validator).
+      KEYCLOAK_INTERNAL_URL: ${KEYCLOAK_INTERNAL_URL:-}
       KC_REALM: ${KEYCLOAK_REALM:-genie}
       KC_DATAPREP_CLIENT_ID: ${KC_DATAPREP_CLIENT_ID:-dataprep-service-client}
       KC_DATAPREP_CLIENT_SECRET: ${KC_DATAPREP_CLIENT_SECRET:-}
@@ -1253,6 +1743,21 @@ services:
       BM25_LABEL_THRESHOLD: ${BM25_LABEL_THRESHOLD:-2.00}
       CONTENT_EXTRACTION_METHOD: ${CONTENT_EXTRACTION_METHOD:-docling}
       DATAPREP_MAX_CONCURRENT_BATCHES: ${DATAPREP_MAX_CONCURRENT_BATCHES:-20}
+      # PARALLEL INGEST (David, 2026-09-03): concurrent ingest slots per
+      # dataprep container (flock slot pool; 429 only when all busy). Default
+      # 1 = the historical single-flight. Pair with okf-server's
+      # OKF_INGEST_CONCURRENCY drain lanes.
+      DATAPREP_INGEST_CONCURRENCY: ${DATAPREP_INGEST_CONCURRENCY:-1}
+      # REMOTE-LLM RESILIENCE (David, 2026-09-09): the remote vLLM gateway
+      # throws transient 502/503/504 storms — dataprep absorbs them with a
+      # per-call retry ladder + shared storm cool-down + one failed-batch
+      # retry round. Defaults live in code; override in .env when needed.
+      OKF_LLM_RETRY_ATTEMPTS: ${OKF_LLM_RETRY_ATTEMPTS:-5}
+      OKF_LLM_RETRY_BASE_MS: ${OKF_LLM_RETRY_BASE_MS:-2000}
+      OKF_LLM_RETRY_MAX_MS: ${OKF_LLM_RETRY_MAX_MS:-90000}
+      OKF_LLM_STORM_COOLDOWN_S: ${OKF_LLM_STORM_COOLDOWN_S:-20}
+      OKF_LLM_STORM_COOLDOWN_MAX_S: ${OKF_LLM_STORM_COOLDOWN_MAX_S:-120}
+      OKF_LLM_ROUND2_DELAY_S: ${OKF_LLM_ROUND2_DELAY_S:-45}
       DATAPREP_LLM_LABEL_BATCH_SIZE: ${DATAPREP_LLM_LABEL_BATCH_SIZE:-4}
       DOCLING_DEVICE: ${DOCLING_DEVICE:-cuda}
       DOCLING_ENDPOINT: ${DOCLING_ENDPOINT:-}
@@ -1268,8 +1773,16 @@ services:
       LABEL_SELECTOR_SYSTEM_PROMPT: ${LABEL_SELECTOR_SYSTEM_PROMPT:-}
       CONTEXTUAL_RETRIEVAL_ENABLED: ${CONTEXTUAL_RETRIEVAL_ENABLED:-true}
       DATAPREP_CONTEXTUAL_MODEL: ${DATAPREP_CONTEXTUAL_MODEL:-}
-      DATAPREP_CONTEXTUAL_DOC_BUDGET: ${DATAPREP_CONTEXTUAL_DOC_BUDGET:-6000}
+      # 0 = derive from VLLM_MAX_MODEL_LEN (see genieai_dataprep_arangodb.py).
+      # The old literal default of 6000 was sized for the T4 profile's
+      # 2048-token window and applied to every deployment, including the
+      # default 65536-token one where it used ~4% of the available window.
+      DATAPREP_CONTEXTUAL_DOC_BUDGET: ${DATAPREP_CONTEXTUAL_DOC_BUDGET:-0}
       DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL: ${DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL:-100000}
+      # Read by dataprep to size the doc-context budget above. Only the vLLM
+      # service's command interpolation used this before, so dataprep could not
+      # derive anything and every profile inherited the fixed literal.
+      VLLM_MAX_MODEL_LEN: ${VLLM_MAX_MODEL_LEN:-65536}
       DATAPREP_CONTEXTUAL_MAX_TOKENS: ${DATAPREP_CONTEXTUAL_MAX_TOKENS:-512}
       CONTEXTUAL_RETRIEVAL_PROMPT: ${CONTEXTUAL_RETRIEVAL_PROMPT:-}
       # Log level threshold for the OTel Python LoggingHandler installed in
@@ -1355,6 +1868,21 @@ services:
       RETRIEVER_ARANGO_SCORE_THRESHOLD: ${RETRIEVER_ARANGO_SCORE_THRESHOLD:-0.2}
       RETRIEVER_ARANGO_DISTANCE_THRESHOLD: ${RETRIEVER_ARANGO_DISTANCE_THRESHOLD:-1}
       RETRIEVER_ARANGO_LAMBDA_MULT: ${RETRIEVER_ARANGO_LAMBDA_MULT:-0.5}
+      # Fan-out spine knobs (ADR-039 option-d): defaults mirror retriever/config.py —
+      # opt-in via RETRIEVER_FANOUT_ENABLED, legacy byte-identical when disabled.
+      RETRIEVER_FANOUT_ENABLED: ${RETRIEVER_FANOUT_ENABLED:-true}
+      RETRIEVER_FANOUT_MAX_GRAPHS: ${RETRIEVER_FANOUT_MAX_GRAPHS:-5}
+      RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS: ${RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS:-8000}
+      RETRIEVER_FANOUT_CANDIDATE_CAP_PER_GRAPH: ${RETRIEVER_FANOUT_CANDIDATE_CAP_PER_GRAPH:-50}
+      RETRIEVER_FANOUT_CANDIDATE_CAP_GLOBAL: ${RETRIEVER_FANOUT_CANDIDATE_CAP_GLOBAL:-200}
+      RETRIEVER_FANOUT_SPINE_MAX_HOPS: ${RETRIEVER_FANOUT_SPINE_MAX_HOPS:-2}
+      RETRIEVER_FANOUT_EXTRACTED_HOP_CAP: ${RETRIEVER_FANOUT_EXTRACTED_HOP_CAP:-1}
+      # Query-affinity routing knobs (ADR-039): defaults mirror retriever/config.py.
+      RETRIEVER_ROUTE_ENABLED: ${RETRIEVER_ROUTE_ENABLED:-true}
+      RETRIEVER_ROUTE_TOP_K: ${RETRIEVER_ROUTE_TOP_K:-40}
+      RETRIEVER_ROUTE_MIN_CHUNKS: ${RETRIEVER_ROUTE_MIN_CHUNKS:-3}
+      RETRIEVER_ROUTE_PROBE_TIMEOUT_MS: ${RETRIEVER_ROUTE_PROBE_TIMEOUT_MS:-2000}
+      RETRIEVER_ROUTE_RETRY: ${RETRIEVER_ROUTE_RETRY:-1}
       RETRIEVER_ARANGO_SEARCH_START: ${RETRIEVER_ARANGO_SEARCH_START:-chunk}
       RETRIEVER_ARANGO_SEARCH_MODE: ${RETRIEVER_ARANGO_SEARCH_MODE:-vector}
       RETRIEVER_ARANGO_USE_APPROX_SEARCH: ${RETRIEVER_ARANGO_USE_APPROX_SEARCH:-false}
@@ -1374,12 +1902,26 @@ services:
       # for the adaptive reranker (keep aligned with chatqna's RERANKING_STRATEGY).
       RERANKING_STRATEGY: ${RERANKING_STRATEGY:-slice}
       RETRIEVER_SUMMARIZER_ENABLED: ${RETRIEVER_SUMMARIZER_ENABLED:-false}
+      # Story 1-8 routing head — OKF graph affinity + the forbidden/noise gate
+      # (read only by the retriever's graph routing; knob semantics + calibration
+      # in genie-ai-overlay/retriever/config.py; rollback: WEIGHT=0.0).
+      RETRIEVER_ROUTE_HEAD_WEIGHT: ${RETRIEVER_ROUTE_HEAD_WEIGHT:-1.0}
+      RETRIEVER_ROUTE_HEAD_MARGIN: ${RETRIEVER_ROUTE_HEAD_MARGIN:-0.01}
+      RETRIEVER_ROUTE_HEAD_FLOOR: ${RETRIEVER_ROUTE_HEAD_FLOOR:-0.55}
+      RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX: ${RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX:-0.55}
+      RETRIEVER_ROUTE_HEADS_SUPERSEDE: ${RETRIEVER_ROUTE_HEADS_SUPERSEDE:-true}
       # Graph traversal
       RETRIEVER_ARANGO_TRAVERSAL_ENABLED: ${RETRIEVER_ARANGO_TRAVERSAL_ENABLED:-true}
       RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH: ${RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH:-2}
       RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED: ${RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED:-5}
       RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD: ${RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD:-0.7}
       RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES: ${RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES:-10}
+      # 1-8g-l — traversal bounds: skip the graph traversal above this many
+      # <GRAPH>_LINKS_TO edges (the fused vector results stand alone) and cap
+      # per-hop edge visits inside the AQL. Live: Indonesia History (1.05M
+      # edges) starved every chat answer inside the 8s leg budget.
+      RETRIEVER_ARANGO_TRAVERSAL_MAX_LINKS: ${RETRIEVER_ARANGO_TRAVERSAL_MAX_LINKS:-300000}
+      RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE: ${RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE:-2000}
       # AI services endpoints
       VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://vllm:8000}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
@@ -1507,6 +2049,10 @@ services:
       DOC_REPO_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
       KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
+      # Split-URL OIDC (local builds): internal Keycloak for the JWKS fetch when
+      # the public URL is unreachable from the container. Empty default — cloud
+      # uses KEYCLOAK_URL unchanged.
+      KEYCLOAK_INTERNAL_URL: ${KEYCLOAK_INTERNAL_URL:-}
       KC_REALM: ${KEYCLOAK_REALM:-genie}
       KC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-genie-app}
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
@@ -1769,6 +2315,7 @@ services:
       - GENIE_ADMIN_EMAIL=${GENIE_ADMIN_EMAIL}
       - KC_PROXY_CLIENT_SECRET=${KEYCLOAK_PROXY_CLIENT_SECRET}
       - KC_DATAPREP_CLIENT_SECRET=${KC_DATAPREP_CLIENT_SECRET}
+      - KC_OKF_SERVER_CLIENT_SECRET=${KC_OKF_SERVER_CLIENT_SECRET:-}
       - KC_GRAFANA_CLIENT_ID=${KC_GRAFANA_CLIENT_ID:-grafana}
       - KC_GRAFANA_CLIENT_SECRET=${KC_GRAFANA_CLIENT_SECRET}
       - KC_MOBILE_CLIENT_ID=${KC_MOBILE_CLIENT_ID}

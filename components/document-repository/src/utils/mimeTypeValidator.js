@@ -2,7 +2,6 @@
 // Used by validateFiles middleware in fileUpload.js to perform
 // extension checking and magic-byte validation on uploaded files
 
-console.log('VALIDATOR_FILE', __filename);
 const mime = require('mime-types');
 const config = require('../config/appConfig');
 const { logger } = require('../../shared-lib');

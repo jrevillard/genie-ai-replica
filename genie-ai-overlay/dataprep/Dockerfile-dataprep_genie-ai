@@ -117,6 +117,31 @@ COPY --from=opea_base /src/comps/ /app/comps/
 COPY --from=deps_builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=deps_builder /usr/local/bin /usr/local/bin
 
+# Step E.5: Patch the pinned unstructured so XML processing instructions cannot
+# crash partition_html (upstream issue #4358).
+#
+# WHY HERE, AND WHY A PATCH. An XML processing instruction in a concept body
+# reaches partition_html and kills the node: parser.py:929 builds the package's
+# only etree.HTMLParser(remove_comments=True), and the ElementNamespaceClassLookup
+# at :933 maps custom classes for _Element SUBCLASSES only, so a PI node falls
+# through to lxml's bare class with no `is_phrasing`. Measured on the local
+# stack 2026-10-13: two concepts (438 and 231,890 chars) from a PDF that teaches
+# XML prologs silently never reached RAG. Upstream added remove_pis=True to that
+# same constructor in 0.27.8; we are pinned to 0.18.32 and the upgrade spans 9
+# minor releases across a 374-package --require-hashes lock, so we apply the one
+# constructor argument instead.
+#
+# NOT A SITE GUARD. Patching the three traversal sites that assume a mapped node
+# (:423/:628/:750) is incomplete — guarding :423 alone leaves 5 of 13
+# PI-bearing documents still crashing — and a break-style guard merely relocates
+# the failure to the assert at :360. Patching the CONSTRUCTION site makes the
+# module correct by construction, so the PI node is never created.
+#
+# FAIL-LOUD BY DESIGN. The patcher aborts the BUILD if it cannot find the line
+# it expects, rather than silently shipping an image that still crashes.
+COPY genie-ai-overlay/build-patches/unstructured_html_pi_patch.py /tmp/unstructured_html_pi_patch.py
+RUN python /tmp/unstructured_html_pi_patch.py && rm -f /tmp/unstructured_html_pi_patch.py
+
 # EasyOCR models from the builder stage (served from /home/user/.EasyOCR at runtime)
 RUN mkdir -p /home/user/.EasyOCR
 COPY --from=deps_builder /opt/easyocr/model /home/user/.EasyOCR/model

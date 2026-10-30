@@ -29,13 +29,31 @@ async function extractMetadata(filePath, fileInfo = {}) {
     create_date: fileInfo.create_date || stats.birthtime.toISOString(),
     crawl_date: fileInfo.crawl_date || '',
     source_url: fileInfo.source_url || '',
+    // Story 3.10 T1 (D1): origin stamps ride the caller's record through —
+    // uploadFile computes them once; anything calling this without stamps is
+    // by definition an upload-path doc (bundles are filtered out of the
+    // wizard picker by is_bundle and never surface as sources).
+    source: fileInfo.source || 'upload',
+    crawl_session_id: fileInfo.crawl_session_id || null,
     language: fileInfo.language ?? 'unknown',
+    graph_name: fileInfo.graph_name || null,
+    repo_id: fileInfo.repo_id || null,
+    // Story 2.9.7 (ADR-031): the minted repo version rides the files doc →
+    // forwarded to datapretreat at kick time → stamped onto every chunk doc.
+    bundle_version: fileInfo.bundle_version != null ? fileInfo.bundle_version : null,
     chunk_count: 0,
-    dataprep: {
+    // A caller MAY override the dataprep state (a bundle-zip file doc is
+    // stored at 'Pending' like every file — the bundle is the ingestion INPUT,
+    // its concepts are enqueued separately; it is never re-chunked, and the
+    // okf-server drives the Ingesting → Ingested transition). Default =
+    // 'Pending' (unchanged).
+    dataprep: fileInfo.dataprep || {
       status: 'Pending', // Changed to capitalized 'Pending' per spec
       ingest_date: '',
       retract_date: ''
-    }
+    },
+    // Bundle-zip file doc marker (the zip that fed the ingestion process).
+    is_bundle: fileInfo.is_bundle || false
   };
 
   return baseMeta;
@@ -190,7 +208,7 @@ class MetadataService {
       }
 
       // Update metadata with provided updates. Only update allowed fields.
-      const allowedFields = ['dataprep', 'chunk_count'];
+      const allowedFields = ['dataprep', 'chunk_count', 'graph_name', 'repo_id'];
 
       const updateObj = {};
       for (const key of Object.keys(updates)) {

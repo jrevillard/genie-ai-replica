@@ -151,10 +151,14 @@ def test_no_overlay_module_imports_core_without_being_pinned(overlay_sources) ->
     each one to appear in the pin. A new module that imports ``core.*`` now
     fails here by name rather than failing to fail at all.
     """
+    # ``as_posix()``: the SERVICE_IMAGES keys are spelled with forward slashes
+    # (they are image-relative paths, and the Dockerfile COPY lines use them),
+    # while ``str(Path.relative_to(...))`` renders the OS separator — a
+    # backslash on Windows, so every module would read as unpinned there.
     unpinned = sorted(
-        str(path.relative_to(OVERLAY_ROOT))
+        path.relative_to(OVERLAY_ROOT).as_posix()
         for path in overlay_sources
-        if str(path.relative_to(OVERLAY_ROOT)) not in SERVICE_IMAGES and _core_imports(path)
+        if path.relative_to(OVERLAY_ROOT).as_posix() not in SERVICE_IMAGES and _core_imports(path)
     )
     assert not unpinned, (
         f"modules importing core.* but not listed in SERVICE_IMAGES: {unpinned}. "

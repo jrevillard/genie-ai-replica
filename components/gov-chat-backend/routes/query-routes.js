@@ -300,6 +300,12 @@ module.exports = (queryService) => {
    *         description: Streaming is disabled
    */
   router.post('/stream', async (req, res) => {
+    // True end-to-end latency: measured from ROUTE ENTRY (request receipt) to
+    // stream completion — including fan-out posture resolution, embedding,
+    // retrieval, rerank and queueing. It was previously set after chatqna's
+    // response headers arrived, which reported only the token-stream tail and
+    // under-reported a 97s request as ~5s (live-caught 2026-10-06).
+    const streamStartTime = Date.now();
     const streamingEnabled = process.env.OPEA_STREAMING !== 'false';
     if (!streamingEnabled) {
       return res.status(501).json({
@@ -389,7 +395,6 @@ module.exports = (queryService) => {
 
       const stream = opeaResponse.data;
       let fullResponseText = '';
-      const startTime = Date.now();
       let buffer = '';
       const doneState = { handled: false };
       // Metadata emitted by chatqna in-stream (reranker-grounded source docs + is_grounded),
@@ -524,7 +529,7 @@ module.exports = (queryService) => {
               // so the chain never rejects; awaiting it just orders completion before 'done'.
               await translationChain;
             }
-            await handleStreamDone(queryId, fullResponseText, startTime, res, capturedMetadata, {
+            await handleStreamDone(queryId, fullResponseText, streamStartTime, res, capturedMetadata, {
               targetLanguage,
               translator,
               skipPostStreamTranslation: true,
@@ -533,7 +538,7 @@ module.exports = (queryService) => {
           } else {
             // The post-stream translation runs here, and the client may be
             // gone by the time it answers.
-            await handleStreamDone(queryId, fullResponseText, startTime, res, capturedMetadata, {
+            await handleStreamDone(queryId, fullResponseText, streamStartTime, res, capturedMetadata, {
               targetLanguage,
               translator
             });
@@ -646,7 +651,7 @@ module.exports = (queryService) => {
               .finalizeStreamQuery(
                 queryId,
                 fullResponseText,
-                Date.now() - startTime,
+                Date.now() - streamStartTime,
                 capturedMetadata || emptyStreamMetadata()
               )
               .catch((err) => logger.error('QueryService.partial_save_failed', { queryId, error: err.message }));
@@ -665,7 +670,12 @@ module.exports = (queryService) => {
       if (keepalive !== null) clearInterval(keepalive);
       logger.error('QueryService.stream_setup_error', { error: error.message });
       if (!res.headersSent) {
-        if (error.code === 'ECONNABORTED' || error.code === 'ERR_CANCELED') {
+        if (error.statusCode === 401) {
+          // Story 1.1: an expired/invalid bearer caught during fan-out
+          // resolution propagates as 401 — never silently degraded to the
+          // legacy path (the request itself is invalid).
+          res.status(401).json({ error: 'UNAUTHENTICATED', message: error.message });
+        } else if (error.code === 'ECONNABORTED' || error.code === 'ERR_CANCELED') {
           res.status(504).json({ error: 'CHATQNA_UNAVAILABLE', message: 'ChatQnA service unavailable or timed out' });
         } else {
           res.status(500).json({ error: 'STREAM_ERROR', message: error.message });
@@ -876,6 +886,14 @@ module.exports = (queryService) => {
       res.status(201).json(query);
     } catch (error) {
       logger.error(`Error creating query: ${error.message}`, { stack: error.stack });
+      // Review 2026-10-29 round 3: a bearer failure caught while resolving the
+      // OKF fan-out posture (OkfAuthzUnauthorizedError, statusCode 401)
+      // propagates — the same error already maps to 401 on the streaming path;
+      // wrapping it in a 500 here mislabelled an invalid request as a server
+      // fault.
+      if (error.statusCode === 401) {
+        return res.status(401).json({ error: 'UNAUTHENTICATED', message: error.message });
+      }
       res.status(500).json({ message: error.message });
     }
   });

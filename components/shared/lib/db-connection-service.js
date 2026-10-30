@@ -10,6 +10,41 @@ const { AqlToSqlTranslator } = require('./aql-to-sql');
 const { ArangoToArcadeGraphTranslator } = require('./arango-to-arcade-graph');
 
 /**
+ * Is this error the EXPECTED "that row is not there" outcome rather than a
+ * fault? Used ONLY to pick a log severity — never to change control flow
+ * (see _executeWithRetry). Exported for the regression test.
+ *
+ * MEASURED against arangojs 10.1.2 + ArangoDB:
+ *   collection.document('MISSING') -> errorNum 1202, code 404  -> expected
+ *   collection('nope').document()   -> errorNum 1203, code 404  -> NOT expected
+ *
+ * 1203 is a MISSING COLLECTION — an infrastructure/configuration fault, and it
+ * deliberately stays out of this predicate so it keeps reaching the error log.
+ * All three arrive with code 404, so the errorNum is what separates them.
+ *
+ * 1204 ("no match") is ALSO expected: the driver throws it when a query matches
+ * nothing (firstExample). That method was removed in arangojs 10, so it cannot
+ * be provoked from this driver — the code is recorded here and in the fixtures
+ * of okf-server/__tests__/concept-meta-service.test.js, which is where the
+ * behaviour is actually pinned. It was nearly lost by trusting one measurement
+ * over the fixtures; the full suite is what caught it.
+ *
+ * The message fallback is deliberately narrow — it is not the general
+ * /not found/i used elsewhere, which would also swallow 1203 and gateway
+ * route-not-found.
+ */
+function _isExpectedAbsence(error) {
+  if (!error) return false;
+  if (error.errorNum === 1202 || error.errorNum === 1204) return true;
+  if (error.errorNum != null) return false; // 1203 and friends are real faults
+  return (
+    String(error.message || '')
+      .trim()
+      .toLowerCase() === 'no match'
+  );
+}
+
+/**
  * Enhanced singleton class to manage long-lived database connections with COMPLETE RECOVERY.
  * This service now supports both ArangoDB and ArcadeDB as backends, determined by DB_TYPE.
  * The interface remains IDENTICAL to the client, ensuring transparent switching.
@@ -74,6 +109,16 @@ class DatabaseService {
       const password = process.env.ARANGO_PASSWORD;
       const maxSockets = process.env.MAX_SOCKETS || 100;
       const maxFreeSockets = process.env.MAX_FREE_SOCKETS || 50;
+      // ARANGO_AGENT_TIMEOUT_MS (settle-rewrite incident 2026-09-28): the agent
+      // socket timeout bounds how long one legitimate long-running AQL statement
+      // may hold the socket. 120s aborted the idempotent no-op edge-endpoint
+      // rewrite scans (~99s quiet, >120s under load) mid-settle; the execute
+      // wrapper's retry then write-write conflicted with the orphaned
+      // server-side first attempt (Bali 2026-09, Indonesia 2026-09-28 ×2).
+      // Default UNCHANGED (120000) — long-pipeline deployments opt in via env.
+      const arangoAgentTimeoutMs = parseInt(process.env.ARANGO_AGENT_TIMEOUT_MS || '', 10);
+      const agentTimeout =
+        Number.isFinite(arangoAgentTimeoutMs) && arangoAgentTimeoutMs > 0 ? arangoAgentTimeoutMs : 120000;
 
       logger.info(`process.env.ARANGO_URL:` + process.env.ARANGO_URL);
       logger.info(`process.env.ARANGO_DB:` + process.env.ARANGO_DB);
@@ -93,7 +138,7 @@ class DatabaseService {
           keepAliveMsecs: 60000,
           maxSockets: maxSockets,
           maxFreeSockets: maxFreeSockets,
-          timeout: 120000,
+          timeout: agentTimeout,
           freeSocketTimeout: 1800000
         },
         timeout: 60000
@@ -1195,16 +1240,36 @@ class DatabaseService {
         return result;
       } catch (error) {
         lastError = error;
-        logger.warn(`[DB_EXECUTE] ${operationName} failed on ${connectionName} (attempt ${attempt}): ${error.message}`);
-        logger.debug(
-          `[DB_EXECUTE] Error details: ${JSON.stringify({
-            code: error.code,
-            name: error.name,
-            status: error.response?.status || error.status,
-            errorNum: error.errorNum,
-            message: error.message
-          })}`
-        );
+        // A document miss is a NORMAL application outcome — "this row is not
+        // there" — not a fault. It was reaching the ERROR log 24 times per two
+        // minutes during a clean drain that completed with 0 failed concepts,
+        // which buries real errors (lock timeouts, socket hangs, retry
+        // exhaustion) and leaves the admin Logs view permanently red, since
+        // anything scoped to level=error is dominated by routine misses.
+        //
+        // IT IS STILL RE-THROWN. 18 call sites depend on the throw to tell
+        // "absent" from "failed" (`if (!isArangoNotFound(err)) throw err`,
+        // `if (isArangoNotFound(err)) return null`). Swallowing it here would
+        // turn every one of those into a silent "no row" — the exact failure
+        // mode this whole layer exists to distinguish. Only the SEVERITY
+        // changes; control flow does not.
+        const expectedAbsence = _isExpectedAbsence(error);
+        if (expectedAbsence) {
+          logger.debug(`[DB_EXECUTE] ${operationName} on ${connectionName}: no such document (expected, not an error)`);
+        } else {
+          logger.warn(
+            `[DB_EXECUTE] ${operationName} failed on ${connectionName} (attempt ${attempt}): ${error.message}`
+          );
+          logger.debug(
+            `[DB_EXECUTE] Error details: ${JSON.stringify({
+              code: error.code,
+              name: error.name,
+              status: error.response?.status || error.status,
+              errorNum: error.errorNum,
+              message: error.message
+            })}`
+          );
+        }
 
         if (this._isConnectionError(error) && attempt < maxRetries) {
           logger.warn(`[DB_EXECUTE] Connection error detected, triggering recovery for ${connectionName}`);
@@ -1219,10 +1284,14 @@ class DatabaseService {
             }
           }
         } else if (attempt >= maxRetries) {
-          logger.error(`[DB_EXECUTE] Max retries exceeded for ${connectionName}`);
+          if (!expectedAbsence) logger.error(`[DB_EXECUTE] Max retries exceeded for ${connectionName}`);
           break;
         } else {
-          logger.error(`[DB_EXECUTE] Non-connection error for ${operationName} on ${connectionName}: ${error.message}`);
+          if (!expectedAbsence) {
+            logger.error(
+              `[DB_EXECUTE] Non-connection error for ${operationName} on ${connectionName}: ${error.message}`
+            );
+          }
           throw error;
         }
       }
@@ -1754,6 +1823,11 @@ class DatabaseService {
 // Create and export singleton instance
 logger.info('Creating enhanced singleton DatabaseService instance with COMPLETE RECOVERY');
 const dbService = new DatabaseService();
+// Exposed for the !1072 regression test. Attached BEFORE the freeze (assigning
+// onto a frozen object silently fails) and as an instance property rather than
+// a named export, so the singleton export shape every existing
+// `require('./db-connection-service')` caller sees is unchanged.
+dbService._isExpectedAbsence = _isExpectedAbsence;
 Object.freeze(dbService);
 
 module.exports = dbService;

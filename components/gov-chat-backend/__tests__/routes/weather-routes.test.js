@@ -26,8 +26,7 @@ jest.mock('../../services/weather-service', () => {
       location: { name: 'Jakarta', country: 'Indonesia' },
       current: { temp: 30, condition: 'Cloudy' },
       forecast: []
-    }),
-    setAnalyticsService: jest.fn()
+    })
   }));
 });
 

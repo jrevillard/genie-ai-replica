@@ -68,6 +68,30 @@ describe('metadataService', () => {
       expect(savedArg.chunk_count).toBe(0);
     });
 
+    // Story 3.10 T1 (D1): origin stamps ride the caller's record through —
+    // unstamped callers default to 'upload' (the pre-stamp world).
+    it('should carry origin stamps through and default unstamped docs to upload', async () => {
+      const mockStats = { size: 1024, birthtime: new Date('2025-01-01') };
+      fs.stat.mockResolvedValue(mockStats);
+
+      const saved = [];
+      const mockCollection = { save: jest.fn(async (doc) => saved.push(doc)) };
+      const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
+
+      await metadataService.addMetadata('/fake/crawl.md', {
+        file_name: 'crawl.md',
+        source: 'crawl',
+        crawl_session_id: 'file-crawl1'
+      });
+      await metadataService.addMetadata('/fake/plain.pdf', { file_name: 'plain.pdf' });
+
+      expect(saved[0].source).toBe('crawl');
+      expect(saved[0].crawl_session_id).toBe('file-crawl1');
+      expect(saved[1].source).toBe('upload');
+      expect(saved[1].crawl_session_id).toBeNull();
+    });
+
     it('should use fileInfo overrides when provided', async () => {
       const mockStats = { size: 2048, birthtime: new Date('2025-02-01') };
       fs.stat.mockResolvedValue(mockStats);

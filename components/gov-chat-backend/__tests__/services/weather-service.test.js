@@ -179,15 +179,6 @@ describe('WeatherService', () => {
     });
   });
 
-  describe('setAnalyticsService', () => {
-    it('should set analytics service', () => {
-      const { service } = setupService();
-      const analytics = { recordWeatherRequest: jest.fn() };
-      service.setAnalyticsService(analytics);
-      expect(service.analyticsService).toBe(analytics);
-    });
-  });
-
   describe('getCityName', () => {
     let service;
 
@@ -373,27 +364,16 @@ describe('WeatherService', () => {
       }
     });
 
-    it('should record analytics when analyticsService is set', async () => {
-      const mockAnalytics = { recordWeatherRequest: jest.fn().mockResolvedValue({}) };
-      service.setAnalyticsService(mockAnalytics);
-      axios.get.mockResolvedValueOnce(openMeteoResponse);
-
-      await service.getWeather({ latitude: 13.7942, longitude: -88.8965, userId: 'user-1' });
-
-      expect(mockAnalytics.recordWeatherRequest).toHaveBeenCalledWith(
-        expect.objectContaining({ _key: 'wr-1', userId: 'user-1', city: 'San Salvador, SV' })
-      );
-    });
-
-    it('should handle analytics recording failure gracefully', async () => {
-      const mockAnalytics = { recordWeatherRequest: jest.fn().mockRejectedValue(new Error('Analytics down')) };
-      service.setAnalyticsService(mockAnalytics);
-      axios.get.mockResolvedValueOnce(openMeteoResponse);
-
-      const result = await service.getWeather({ latitude: 13.7942, longitude: -88.8965 });
-
-      expect(result).toBeDefined();
-      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('record_analytics_failed'), expect.any(Object));
+    it('carries no analytics plumbing — recordWeatherRequest has no shipped implementation', () => {
+      // The old tests asserted a call into this.analyticsService
+      // .recordWeatherRequest — a method that exists only in an unmerged
+      // May-2026 side-branch; the shipped AnalyticsService never had it, so
+      // the block threw per request (old guard) or was skipped silently
+      // (requestId guard). The write-only dead field and setter are removed
+      // (review 2026-10-29); this pins the removal so the plumbing cannot
+      // come back by accident.
+      expect(service.analyticsService).toBeUndefined();
+      expect(service.setAnalyticsService).toBeUndefined();
     });
 
     it('should throw a typed 503 CITY_NOT_FOUND when no city is within the lookup radius', async () => {
@@ -459,9 +439,40 @@ describe('WeatherService', () => {
         windSpeed: 10
       });
       expect(logger.warn).toHaveBeenCalledWith(
-        'WeatherService.request_persistence_skipped',
-        expect.objectContaining({ reason: 'collection_unavailable' })
+        'WeatherService.persistence_unavailable_skipping_save',
+        expect.objectContaining({ reason: 'weatherRequests collection not initialized (init() likely failed)' })
       );
+    });
+
+    // Bug fix: WeatherService crashed with 500 when init() never ran (e.g. ipapi.co
+    // unreachable at boot) — `weatherRequests` stayed null and `.save()` threw
+    // `Cannot read properties of null (reading 'save')`. The service must now
+    // return weather data and skip persistence with a clear log line.
+    it('should return weather data and skip persistence when weatherRequests is null', async () => {
+      // Simulate init() never ran successfully
+      service.initialized = true;
+      service.weatherRequests = null;
+      service.serverLocation = { latitude: 46.2, longitude: 6.15, city: 'Geneva, Switzerland' };
+      axios.get.mockResolvedValueOnce(openMeteoResponse);
+
+      const result = await service.getWeather({ latitude: 46.2, longitude: 6.15, userId: 'user-1' });
+
+      expect(result).toBeDefined();
+      expect(result.current).toEqual(expect.objectContaining({ temperature: 22 }));
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('persistence_unavailable'), expect.any(Object));
+    });
+
+    // Bug fix: if .save() itself throws (e.g. transient Arango error), the
+    // service must still return the weather data — persistence is best-effort.
+    it('should return weather data when weatherRequests.save throws', async () => {
+      mockWeatherRequests.save.mockRejectedValueOnce(new Error('Arango unavailable'));
+      axios.get.mockResolvedValueOnce(openMeteoResponse);
+
+      const result = await service.getWeather({ latitude: 46.2, longitude: 6.15, userId: 'user-1' });
+
+      expect(result).toBeDefined();
+      expect(result.current).toEqual(expect.objectContaining({ temperature: 22 }));
+      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('save_request_failed'), expect.any(Object));
     });
   });
 });

@@ -19,6 +19,12 @@ variables:
   GIT_DEPTH: "0"  # full history needed for CI_COMMIT_SHORT_SHA stability across matrix jobs
   TRIVY_IMAGE_TAG: "aquasec/trivy:0.57.0"
   SYFT_VERSION: "v1.26.0"
+  # --- OKF content-only chunking (Story 4.8-amend) ---
+  # The okf-server internal concept-status callback is fail-closed: any test
+  # that exercises the live dataprep → okf-server path needs this same value on
+  # both ends. Unit tests mock it; the CI default is a non-prod sentinel.
+  OKF_INTERNAL_SECRET: "ci-okf-internal-secret-not-for-production"
+  DATAPREP_URL: "http://dataprep-arango-service:5000"
   # --- SAST exclusions: dev/test-only paths and known-not-relevant targets ---
   # Variable consumed by both semgrep-sast and kics-iac-sast (both honor
   # SAST_EXCLUDED_PATHS). Do NOT use SEARCH_IGNORED — it is not honored by
@@ -69,6 +75,13 @@ variables:
   # - **/scripts/**: dev/migration scripts NOT shipped in container. We list specific
   #   sub-patterns (rather than the broad **/scripts/) so the production entrypoint
   #   `components/document-repository/scripts/clamav-node.sh` stays scanned.
+  # - scripts/okf-testing-lab/**: RAGAS testing-lab CLI helpers, run by hand —
+  #   NOT shipped in a container. CAVEAT (review 2026-10-29): two of these
+  #   modules are REQUIRED by CI-run okf-server Jest suites since commit
+  #   c40e9ea03 (ragas-compare-runs.js, ragas-regenerate-entry.js), so their
+  #   SAST findings are invisible by construction — and any future lab helper
+  #   a test needs lands in the same blind spot. Moving the shared helpers to
+  #   a scanned location belongs to the post-train slimming pass.
   # - **/seed-*.js: synthetic data generators, never executed at runtime
   # - **/__tests__/, **/__mocks__/, **/tests/, **/coverage/: test code + generated reports
   # - .claude/**: Claude Code agent skills, hooks, BMAD orchestration YAML. Not
@@ -96,6 +109,7 @@ variables:
     **/seed-*.js,
     **/scripts/seed-*.js,
     **/scripts/migrations/**,
+    scripts/okf-testing-lab/**,
     **/scripts/new-schema-scripts/**,
     **/__tests__/**,
     **/__mocks__/**,
@@ -435,6 +449,11 @@ workflow:
       echo "E2E_BASE_URL=${E2E_BASE_URL}" > .e2e-ropc-env
       echo "ADMIN_TOKEN=${ADMIN_TOKEN}" >> .e2e-ropc-env
       echo "CLIENT_UUID=${CLIENT_UUID}" >> .e2e-ropc-env
+    # tests/e2e/okf/ stays OUT until MR2 lands: the OKF Studio UI those specs
+    # drive ships in MR 2 (this train is MR1, dark), they hardcode
+    # https://localhost while CI serves E2E_BASE_URL=https://nginx, and they
+    # need an OKF-enabled deployment (OKF_ENABLED=1). Including them here
+    # guaranteed three red specs on every merge train.
     - BASE_URL="${E2E_BASE_URL}" npx playwright test tests/e2e/chatbot/ tests/e2e/documents/ tests/e2e/theme-runtime-config.spec.js --project=chromium
   after_script:
     - |
@@ -563,23 +582,18 @@ container_scanning:
   # The artifact paths override remains so `promote:IMAGE` can still
   # fetch the report and SBOM as paths via
   # `needs: [scan:IMAGE, artifacts: true]`.
-  artifacts:
-    paths:
-      - gl-container-scanning-report.json
-      - "**/gl-sbom-*.cdx.json"
-  # Override the natif template's artifact upload. The natif
-  # `container_scanning` job uploads `gl-container-scanning-report.json`
-  # and `**/gl-sbom-*.cdx.json` (CycloneDX SBOM) automatically. We
-  # disable BOTH uploads here:
-  #  - The vulnerability report stays as a job artifact path so that
-  #    `promote:IMAGE` can fetch it via `artifacts: true` and rewrite the
-  #    image name (`tmp/IMAGE:cand` → `IMAGE:primary_tag`) before doing
-  #    the single GitLab-schema-compliant upload.
-  #  - The CycloneDX SBOM goes through the same path — promote fetches,
-  #    rewrites the image reference inside the SBOM JSON, then re-uploads
-  #    so the SBOM tab tracks the released image, not the tmp/ scratch
-  #    ref. Without this, users would see a SBOM whose `metadata.component`
-  #    references `tmp/genie-ai-frontend:mr-123-abc` — a deleted image.
+  #
+  # This overrides the natif template's artifact upload: the natif
+  # `container_scanning` job uploads the vulnerability report and
+  # `**/gl-sbom-*.cdx.json` (CycloneDX SBOM) as GitLab REPORT artifacts
+  # automatically. We re-declare them as PATHS artifacts here so that
+  # `promote:IMAGE` can fetch them (`artifacts: true` on the needs entry),
+  # rewrite the image reference inside both JSONs
+  # (`tmp/IMAGE:cand` → `IMAGE:primary_tag`) and re-upload — so the
+  # SBOM/vulnerability tabs track the released image, not the tmp/
+  # scratch ref. Without this, users would see a SBOM whose
+  # `metadata.component` references `tmp/genie-ai-frontend:mr-123-abc` —
+  # a deleted image.
   artifacts:
     paths:
       - gl-container-scanning-report.json
@@ -590,6 +604,12 @@ container_scanning:
   image: docker:28
   tags: [docker]
   interruptible: true
+  # Builds consume only the checkout (docker buildx) — no upstream artifacts.
+  # Without this, GitLab's default makes every build job download ALL
+  # test-stage artifacts (scan reports, JUnit XML) — pure waste, and the
+  # 2026-09-02/03 instance flake (intermittent 403 on artifact downloads,
+  # uploads fine) killed builds before their script ran.
+  dependencies: []
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - if [ -n "$DOCKER_HUB_USER" ]; then echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USER" --password-stdin docker.io; fi
@@ -1088,6 +1108,287 @@ promote:backend:
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
         paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-okf-server
+build:okf-server:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-okf-server"
+    CONTEXT: "components/"
+    DOCKERFILE: "components/okf-server/Dockerfile"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+
+scan:okf-server:
+  <<: *scan_template
+  # ADR-0001 / NFR-S5: container scan is a BLOCKING gate for the OKF Server image
+  # (overrides .scan_template's advisory allow_failure: true).
+  allow_failure: false
+  needs:
+    - job: build:okf-server
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-okf-server"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+
+promote:okf-server:
+  <<: *promote_template
+  needs:
+    - job: scan:okf-server
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-okf-server"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-pii-service (OKF PII sidecar — ADR-okf-004 rev; model baked in)
+build:pii-service:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-pii-service"
+    CONTEXT: "components/pii-service/"
+    DOCKERFILE: "components/pii-service/Dockerfile"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+
+# The spaCy model baked into the image trips AS advisories — advisory (default)
+# until the accepted-findings baseline is documented. TODO(code-review #23):
+# record the accepted-findings baseline (model-license/known-CVEs) in
+# docs/security/pii-service-accepted-findings.md before promoting to blocking.
+scan:pii-service:
+  <<: *scan_template
+  needs:
+    - job: build:pii-service
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-pii-service"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+
+promote:pii-service:
+  <<: *promote_template
+  needs:
+    - job: scan:pii-service
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-pii-service"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-pii-service — test lane (code-review #5): the real-presidio
+# integration test (test_real_engine_detects_person) must RUN in CI, not skip.
+test:pii-service:
+  stage: test
+  image: python:3.11-slim
+  before_script:
+    - pip install --no-cache-dir -r components/pii-service/requirements.txt ruff pytest
+    - python -m spacy download en_core_web_md
+  script:
+    - cd components/pii-service
+    - ruff check app.py tests/
+    - python -m pytest tests/ -q --junitxml=reports/pytest-report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: components/pii-service/reports/pytest-report.xml
+    paths:
+      - components/pii-service/reports/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-ragas-service (OKF RAGAS benchmark sidecar — Story 8-6, ADR-okf-043)
+build:ragas-service:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-ragas-service"
+    CONTEXT: "components/ragas-service/"
+    DOCKERFILE: "components/ragas-service/Dockerfile"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+
+scan:ragas-service:
+  <<: *scan_template
+  needs:
+    - job: build:ragas-service
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-ragas-service"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+
+promote:ragas-service:
+  <<: *promote_template
+  needs:
+    - job: scan:ragas-service
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-ragas-service"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-ragas-service — test lane (mirror of the pii-service lane):
+# ruff + pytest against the real pinned stack.
+test:ragas-service:
+  stage: test
+  image: python:3.11-slim
+  before_script:
+    - pip install --no-cache-dir -r components/ragas-service/requirements.txt ruff pytest
+  script:
+    - cd components/ragas-service
+    - ruff check app.py ragas_engine.py xlsx_io.py tests/
+    - python -m pytest tests/ -q --junitxml=reports/pytest-report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: components/ragas-service/reports/pytest-report.xml
+    paths:
+      - components/ragas-service/reports/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/ragas-service/**/*", ".gitlab-ci.yml"]
 
 # genie-ai-db-migrations
 build:db-migrations:
@@ -2129,6 +2430,14 @@ lint:backend:
   variables:
     npm_config_sharp_libvips_binary_host: "https://npmmirror.com/mirrors/sharp-libvips"
     npm_config_sharp_binary_host: "https://npmmirror.com/mirrors/sharp"
+    # Full-depth fetch (2026-10-19): the default depth-20 fetch on the MR
+    # pipeline's reused runner workspace left stale bytes of files UNCHANGED
+    # within the shallow window — prettier then linted main's unformatted
+    # copies of keycloak-auth-service.js / tracing.js against a branch whose
+    # own copies are clean (branch pipeline green, exact docker repro green).
+    # A full fetch makes git re-checkout every differing path, so workspace
+    # residue from other refs cannot masquerade as this ref's content.
+    GIT_DEPTH: 0
   before_script:
     - cd components/gov-chat-backend && npm ci
   script:
@@ -2200,6 +2509,34 @@ lint:doc-repo:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - "components/document-repository/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+lint:okf-server:
+  extends: .lint_node
+  # Companion to test:okf-server (2026-10-16 review finding): the component
+  # had no lint coverage in CI either — eslint/prettier ran only locally.
+  before_script:
+    - cd components/okf-server && npm ci
+  script:
+    - npm run lint
+    - npm run format:check
+  cache:
+    - key:
+        files:
+          - components/okf-server/package-lock.json
+        prefix: lint-okf-server
+      paths:
+        - components/okf-server/node_modules/
+      fallback_keys:
+        - "lint-okf-server-$CI_DEFAULT_BRANCH"
+        - "lint-okf-server-"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "components/okf-server/**/*"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
@@ -2420,7 +2757,11 @@ test:frontend:
   before_script:
     - cd components/gov-chat-frontend && npm ci
   script:
-    - npm test -- --coverage --coverageReporters=text-summary --coverageReporters=cobertura
+    # --maxWorkers=2 caps concurrent jest workers: the runner's cgroup OOM
+    # reaper SIGKILLed workers on the heaviest suite 3 pipelines running
+    # (default workers = cores → peak RSS = workers × heap). Heap-limit
+    # bumps would make cgroup OOM MORE likely, not less.
+    - npm test -- --maxWorkers=2 --coverage --coverageReporters=text-summary --coverageReporters=cobertura
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
   cache:
     - key:
@@ -2469,6 +2810,48 @@ test:doc-repo:
         path: components/document-repository/coverage/cobertura-coverage.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+test:okf-server:
+  extends: .test_node
+  # 2026-10-16 review finding: this component shipped build/scan/promote jobs
+  # but NO test job — a 1,291-test suite (auth, authz, retrieval-config, the
+  # whole OKF surface) ran only on developer machines. Mirrors test:backend.
+  before_script:
+    # shared/lib must install first — okf-server's jest roots include
+    # ../shared/lib/__tests__ (same pattern as backend) and its suites require
+    # shared/lib/node_modules in the resolution path.
+    - cd components/shared/lib && npm ci
+    - cd - && cd components/okf-server && npm ci
+  script:
+    # --maxWorkers=2 caps concurrent jest workers (cgroup OOM reaper kills
+    # default workers × heap on this suite size — see test:frontend's note).
+    - npm test -- --maxWorkers=2 --coverage --coverageReporters=text-summary --coverageReporters=cobertura
+  coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
+  cache:
+    - key:
+        files:
+          - components/okf-server/package-lock.json
+        prefix: test-okf-server
+      paths:
+        - components/okf-server/node_modules/
+      fallback_keys:
+        - "test-okf-server-$CI_DEFAULT_BRANCH"
+        - "test-okf-server-"
+  artifacts:
+    reports:
+      junit: components/okf-server/reports/jest-okf-server.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: components/okf-server/coverage/cobertura-coverage.xml
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "components/okf-server/**/*"
+        - "components/shared/**/*"
+        - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
@@ -2678,6 +3061,7 @@ e2e:playwright:
       changes:
         - tests/e2e/chatbot/**/*
         - tests/e2e/documents/**/*
+        - tests/e2e/okf/**/*
         - components/gov-chat-frontend/**/*
         - components/gov-chat-backend/**/*
         - components/document-repository/**/*
@@ -2699,6 +3083,13 @@ e2e:playwright:
   stage: config
   image: python:3.11-slim
   interruptible: true
+  # The lock check is self-contained (uv sync --dry-run + grep against the
+  # checked-out files) — it must not pull upstream artifacts. Without this,
+  # GitLab's default makes the job download EVERY test-stage artifact (scan
+  # reports, JUnit XML), so an unrelated artifact-download failure kills the
+  # lock check before its script even runs (2026-09-02: instance artifact
+  # downloads 403'd pipeline-wide while uploads succeeded).
+  dependencies: []
   variables:
     UV_VERSION: "0.10.6"
   before_script:
@@ -2790,6 +3181,11 @@ verify:overlay-locks:reranker:
 config:validate:
   extends: .node_base
   stage: config
+  # Self-contained env-coverage checks (npm test on the checkout) — no
+  # upstream artifacts needed. Same rationale as verify:dataprep-lock:
+  # the default artifact coupling made this job 403-flake with the
+  # 2026-09-02/03 instance artifact-download problem.
+  dependencies: []
   before_script:
     - cd tests/config-validator && npm ci
     - cd ${CI_PROJECT_DIR}/api-gateway-solution/new-config && npm ci
@@ -2988,6 +3384,45 @@ manual:rag-quality:
     reports:
       junit: genie-ai-overlay/reports/rag-quality.xml
 
+
+# --- Documentation site build check ---
+# The pages job below publishes on main ONLY, so a docs change on a merge
+# request is never built until it lands — and a broken front-matter block,
+# shortcode or relref then fails the PUBLISH rather than the merge, on the
+# default branch, where it is most expensive to notice.
+#
+# This is the same build with no publish step, run on MRs. It exists so nobody
+# has to install Hugo locally to find out whether a markdown edit compiles —
+# which is the only reason this job is worth its runner minutes.
+docs:build:
+  stage: lint
+  image: docker.io/hugomods/hugo:exts
+  variables:
+    GIT_SUBMODULE_STRATEGY: none
+    HUGO_CACHEDIR: "$CI_PROJECT_DIR/.cache/hugo"
+    HUGO_ENVIRONMENT: ci
+  cache:
+    key: hugo-docs
+    paths:
+      - .cache/hugo
+  script:
+    - cd site
+    - hugo mod tidy
+    # No --baseURL override: a relref that cannot resolve fails the build, which
+    # is the whole point of running this before merge rather than after.
+    - hugo --gc --minify --destination "$CI_PROJECT_DIR/.hugo-check"
+    # Prove the build actually produced pages — a silent empty output would
+    # otherwise read as success.
+    - test -f "$CI_PROJECT_DIR/.hugo-check/index.html"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - site/**/*
+        - .gitlab-ci.yml
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - site/**/*
+        - .gitlab-ci.yml
 
 # --- Documentation site -> GitLab Pages ---
 # Builds the Hugo + Docsy site in site/ and publishes to GitLab Pages.

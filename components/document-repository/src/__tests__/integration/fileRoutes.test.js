@@ -103,7 +103,13 @@ jest.mock('../../middlewares/fileUpload', () => ({
     ];
     next();
   }),
-  validateFiles: jest.fn((req, res, next) => next())
+  validateFiles: jest.fn((req, res, next) => next()),
+  // Mounted in fileRoutes.js between the multer middleware and validateFiles
+  // (2026-10-12). Express throws at router-registration time if a layer is not
+  // a function, so every suite that replaces this whole module must provide it.
+  // Pass-through: these suites inject no multer errors, so nothing should reach
+  // the global handler via this path.
+  handleMulterError: jest.fn((err, req, res, next) => next(err))
 }));
 
 jest.mock('../../config/appConfig', () => ({
@@ -118,6 +124,7 @@ jest.mock('../../config/appConfig', () => ({
     ],
     allowedExtensions: ['.pdf', '.txt', '.html', '.md', '.docx'],
     maxFileSize: 52428800,
+    bundleMaxBodyMb: 100,
     maxFilesUpload: 5
   },
   labels: {
@@ -466,6 +473,38 @@ describe('File Routes Integration', () => {
 
       expect(res.status).toBe(400);
     });
+
+    // Story 1-8g-q (2026-10-11): okf-server stamps okf_repo_id through this
+    // route so the wizard can tell a file that already belongs to a repository
+    // from a free-form one. The stamp failed on EVERY imported file for two
+    // independent reasons, neither covered by a test: the route was Admin-only
+    // while the stamp is sent with the okf-service token, and Joi rejects
+    // unknown keys so the body was refused even once the gate was fixed. The
+    // integration suite mocks authorizeRole, so the role list is asserted
+    // directly below; the schema case is a real request.
+    it('accepts the okf_repo_id stamp (the okf-server service client writes it)', async () => {
+      const mockCursor = { next: jest.fn().mockResolvedValue(mockFileRecord) };
+      const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
+      fileService.getDb.mockResolvedValue(mockDb);
+      metadataService.getMetadataById.mockResolvedValue(mockFileRecord);
+
+      const res = await request(app).patch('/api/files/file-abc123').send({ okf_repo_id: 'repo-abc' });
+
+      expect(res.status).toBe(200);
+      expect(mockDb.query).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ updates: expect.objectContaining({ okf_repo_id: 'repo-abc' }) })
+      );
+    });
+
+    it('permits the okf-service role on this route (the 403 that shipped the broken stamp)', () => {
+      // The policy lives in config/rolePolicy (the router no longer carries
+      // test-only exports); the REAL gate for this role is proven end-to-end
+      // in middlewares/keycloak-role-policy.integration.test.js.
+      const { DOCUMENT_LIFECYCLE } = require('../../config/rolePolicy');
+      expect(DOCUMENT_LIFECYCLE).toContain('okf-service');
+      expect(DOCUMENT_LIFECYCLE).toContain('Admin'); // the human steward keeps access
+    });
   });
 
   // --- Site crawl ---
@@ -677,6 +716,26 @@ describe('File Routes Integration', () => {
       );
     });
 
+    it('forwards the minted bundle_version to datapretreat (Story 2.9.7)', async () => {
+      const mockVersionedFile = {
+        ...mockFileRecord,
+        bundle_version: 3,
+        dataprep: { status: 'Pending', ingest_date: '', retract_date: '' }
+      };
+      metadataService.getMetadataById.mockResolvedValue(mockVersionedFile);
+      readFile.mockResolvedValue(Buffer.from('test file content'));
+      access.mockResolvedValue();
+      axios.post.mockResolvedValue({ data: { success: true, chunk_count: 2 } });
+
+      const res = await request(app).post('/api/files/file-abc123/ingest');
+
+      expect(res.status).toBe(200);
+      expect(axios.post).toHaveBeenCalledWith(
+        'http://dataprep:5000/v1/dataprep',
+        expect.objectContaining({ fileId: 'file-abc123', bundleVersion: 3 })
+      );
+    });
+
     it('should return 429 when dataprep service is busy', async () => {
       metadataService.getMetadataById.mockResolvedValue(mockFileRecord);
       readFile.mockResolvedValue(Buffer.from('test file content'));
@@ -691,6 +750,13 @@ describe('File Routes Integration', () => {
       expect(res.status).toBe(429);
       expect(res.body.success).toBe(false);
       expect(res.body.error).toBe('Too Many Requests');
+      // 429 = TRANSIENT busy, not a file failure: the file must NOT be marked
+      // 'Ingestion Error' (Story 2.9.4 — a poisoned file is never re-claimed
+      // by the ingestion worker; live-caught run 9). It stays Pending.
+      expect(metadataService.updateMetadata).not.toHaveBeenCalledWith(
+        'file-abc123',
+        expect.objectContaining({ dataprep: expect.objectContaining({ status: 'Ingestion Error' }) })
+      );
     });
 
     it('should return 500 when dataprep service fails', async () => {
@@ -703,6 +769,12 @@ describe('File Routes Integration', () => {
 
       expect(res.status).toBe(500);
       expect(res.body.success).toBe(false);
+      // A REAL dataprep failure DOES transition the file to 'Ingestion Error'
+      // (contrast with the transient 429 above).
+      expect(metadataService.updateMetadata).toHaveBeenCalledWith(
+        'file-abc123',
+        expect.objectContaining({ dataprep: expect.objectContaining({ status: 'Ingestion Error' }) })
+      );
     });
 
     it('should skip already ingested files', async () => {
@@ -825,7 +897,12 @@ describe('File Routes Integration', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(axios.post).toHaveBeenCalledWith('http://dataprep:5000/v1/dataprep/retract', { fileId: 'file-abc123' });
+      // graphName: null when the file has no graph (dataprep falls back to its
+      // unified default — Story 2.9.6 G5 fix).
+      expect(axios.post).toHaveBeenCalledWith('http://dataprep:5000/v1/dataprep/retract', {
+        fileId: 'file-abc123',
+        graphName: null
+      });
       expect(metadataService.updateMetadata).toHaveBeenCalledWith(
         'file-abc123',
         expect.objectContaining({
@@ -833,6 +910,31 @@ describe('File Routes Integration', () => {
           chunk_count: 0
         })
       );
+    });
+
+    it('should retract into the file OWN graph (OKF per-repo graph_name — Story 2.9.6 G5)', async () => {
+      const repoId = '99999999-9999-4999-8999-999999999999';
+      const mockIngestedFile = {
+        ...mockFileRecord,
+        graph_name: `OKF_${repoId}`,
+        dataprep: { status: 'Ingested', ingest_date: '2025-06-01T11:00:00.000Z', retract_date: '' }
+      };
+
+      metadataService.getMetadataById.mockResolvedValue(mockIngestedFile);
+      axios.post.mockResolvedValue({ data: { success: true } });
+      metadataService.updateMetadata.mockResolvedValue({
+        ...mockIngestedFile,
+        dataprep: { status: 'retracted', ingest_date: '', retract_date: new Date().toISOString() },
+        chunk_count: 0
+      });
+
+      const res = await request(app).post('/api/files/file-abc123/retract');
+
+      expect(res.status).toBe(200);
+      expect(axios.post).toHaveBeenCalledWith('http://dataprep:5000/v1/dataprep/retract', {
+        fileId: 'file-abc123',
+        graphName: `OKF_${repoId}`
+      });
     });
 
     it('should return 404 when file not found', async () => {
@@ -876,6 +978,50 @@ describe('File Routes Integration', () => {
       expect(res.status).toBe(500);
       expect(res.body.success).toBe(false);
       expect(res.body.message).toBe('Failed to send kill signal');
+    });
+
+    // Live 2026-09-15: dataprep reports "no active task" as {success:false,
+    // status:404} inside a 200 body — forwarding it verbatim made the UI toast
+    // "Kill request sent" for a file whose ingest had already completed.
+    it('should forward dataprep no-active-task as a 404 error, not success', async () => {
+      axios.post.mockResolvedValue({
+        data: { success: false, status: 404, message: 'No active ingestion task found for this file.' }
+      });
+
+      const res = await request(app).post('/api/files/file-abc123/kill-ingest');
+
+      expect(res.status).toBe(404);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBe('NO_ACTIVE_INGEST');
+      expect(res.body.message).toContain('No active ingestion task');
+    });
+
+    // Review 2026-10-29 round 3: the upstream body's status must NOT be
+    // echoed verbatim. A 200 body carrying {success:false, status:200} used
+    // to answer 200 with an error body (false success toast); a garbage
+    // string used to be echoed as an invalid HTTP status. Only the documented
+    // 404 maps through — everything else is 502.
+    it('maps an upstream status:200 echo to 502, never a false 200 success', async () => {
+      axios.post.mockResolvedValue({
+        data: { success: false, status: 200, message: 'no task' }
+      });
+
+      const res = await request(app).post('/api/files/file-abc123/kill-ingest');
+
+      expect(res.status).toBe(502);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBe('NO_ACTIVE_INGEST');
+    });
+
+    it('maps a garbage upstream status string to 502 (never echoed as a status)', async () => {
+      axios.post.mockResolvedValue({
+        data: { success: false, status: 'garbage-not-a-number', message: 'no task' }
+      });
+
+      const res = await request(app).post('/api/files/file-abc123/kill-ingest');
+
+      expect(res.status).toBe(502);
+      expect(res.body.success).toBe(false);
     });
   });
 

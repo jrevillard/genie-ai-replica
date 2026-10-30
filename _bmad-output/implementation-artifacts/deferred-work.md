@@ -2845,3 +2845,199 @@ location: configs/grafana/provisioning/__tests__/alert-rules-disk-threshold.test
 severity: medium (test-correctness only)
 reason: Test was added in commit `bda03488e` (2026-09-17) with no `.gitlab-ci.yml` hookup — `.gitlab-ci.yml` does not gate `configs/grafana/provisioning/__tests__/` in any pipeline. Also the assertion was wrong: yml uses `vm_free_disk_space_bytes` + `type: lt` (correct for "low free space" semantic), test claimed `gt` is mandatory. Both layers of neglect stacked. Resolution: deleted the test outright — it had been dormant for 8 days since the fix commit and was producing no signal. Alerting yml itself is left untouched; its on-call behaviour is correct.
 status: RESOLVED in MR !343 follow-up commit (test file deleted 2026-09-25)
+
+### DW-424: Retriever extraction timeouts abandon work on the SHARED default `to_thread` executor — a timeout storm starves unrelated users of the pool
+origin: !597 Jerome AI review (efficiency, thread e4860a47, 2026-10-29)
+location: genie-ai-overlay/retriever/genieai_retriever_arangodb.py (_extract_for_graph timeout path; vector/BM25 phases have no cooperative deadline)
+severity: medium
+reason: FIXED in wave 6 (2026-10-29, round-3 challenge accepted): dedicated bounded _EXTRACTION_POOL (thread_name_prefix okf-extract) now carries the leg runner + routing probes via a to_thread-semantics helper (asyncio.to_thread has no executor param on py3.11). The fan-out traversal stays on the leg's own per-loop executor (it never touches the process-wide pool; nesting it would crowd the bounded pool and the same call serves the D8 legacy path). Decision-E abandonment unchanged.
+status: open
+
+### DW-425: Crawl-to-OKF import fetches each doc-repo file THREE times sequentially (pre-flight GET + fetchDocMeta GET + stampSources GET) then PATCHes — ~164 serialized round-trips at 41 files
+origin: !597 Jerome AI review (efficiency, thread d405592c, 2026-10-29)
+location: components/okf-server/services/crawl-conversion-service.js (~764, ~497), producer-service.js stampSources
+severity: medium (latency, cheapest win on the crawl-to-OKF path)
+reason: Carry ONE metadata fetch per file through pre-flight, conversion and stamp (threaded through the three stages' signatures, optionally under a small Promise.all pool). Touches three stages' signatures — standalone commit after the review cycle, not a review-cycle drive-by.
+status: open
+
+### DW-426: Batch delete costs ~2N sequential DB round-trips (per-file bundle-guard getMetadataById + deleteFile re-fetch + crawl_job query) — collapse to one IN-list AQL
+origin: !597 Jerome AI review (efficiency, thread e93c497d, 2026-10-29)
+location: components/document-repository/src/controllers/fileController.js deleteMultipleFiles + fileService.deleteFile
+severity: medium
+reason: FIXED in wave 6 (round-3 challenge accepted): bundleProtectedIds now issues ONE IN-list AQL (FILTER f.file_id IN @ids AND f.is_bundle == true) with the swallow-and-fall-through transport semantics preserved; the batch guard test asserts a single query carrying every id. (Handing fetched docs to the delete path remains open as a micro-optimization.)
+status: open
+
+### DW-427: OIDC verifier exists in THREE copies (shared/lib 458-line original, gov-chat-backend fork, doc-repo middleware variant) with observable drift — consolidate onto the shared verifier
+origin: !597 Jerome AI review (simplify, thread e5261db6, 2026-10-29)
+location: components/shared/lib/keycloak-auth-service.js, components/gov-chat-backend/services/keycloak-auth-service.js, components/document-repository/src/middlewares/keycloak-auth-middleware.js
+severity: high (drift already measurable)
+reason: Known drift: shared copy pins algorithms RS256 + KEYCLOAK_JWKS_URL/KEYCLOAK_BROWSER_ISSUER; backend copy pins no algorithms and lacks KEYCLOAK_BROWSER_ISSUER; doc-repo re-implements a third variant (role mapping stays per-component). Consolidation: backend becomes a thin re-export of the shared verifier (~460 lines removed); shared/lib barrel-exports the file; shared/lib package.json declares jose (consumers carry differing versions today). Acceptance spec = the reviewer's drift list. Mirroring comments stay until then.
+status: open
+
+### DW-428: parseOkfScopes backend copy misses the realm-role scope source — role-granted users key the authz cache as @no-scopes (cross-user cache collision in an authz path when OKF scopes go live)
+origin: !597 Jerome AI review (simplify/correctness, thread ff8828ba, 2026-10-29)
+location: components/gov-chat-backend/services/retrieval-config-client.js parseOkfScopes vs components/okf-server/middleware/auth.js
+severity: high (dormant until OKF_ENABLED=1 in a deployment using role grants)
+reason: COLLISION FIXED in wave 6 (round-3 challenge accepted — the consolidation stays deferred, the collision could not): the BFF parseOkfScopes now folds realm_access.roles as a third source, mirroring okf-server auth.js. Tests pin that a scope-shaped realm role lands in the parsed set and that role-granted callers share the claim-scoped cache entry, never @no-scopes. The shared-lib consolidation itself remains the post-train MR (with DW-427).
+status: open
+
+### DW-429: tracing.js x3 / metrics.js x2 forks — okf-server's copy drops ATTR_SERVICE_NAMESPACE ('genie-core'), breaking the documented OBSERVABILITY.md identity contract
+origin: !597 Jerome AI review (altitude, thread 205e7fc5, 2026-10-29)
+location: components/okf-server/shared-lib/{tracing,metrics,metrics-middleware}.js vs components/gov-chat-backend + components/document-repository copies
+severity: medium (contract break, not just duplication)
+reason: Parameterize the backend module (SERVICE_NAME) and re-point okf-server + doc-repo; delete the forks; restore the namespace attribute so all services report the documented identity. Deliberate migration with its own review — post-train MR.
+status: open
+
+### DW-430: Five-branch carrier dispatch exists to appease stale test mocks — flatten to one unconditional encode() call and fix the mock spine
+origin: !597 Jerome AI review (altitude, thread 3a7bdb2b, 2026-10-29)
+location: genie-ai-overlay/chatqna/genieai_chatqna.py (~1983-2027) + genie-ai-overlay/tests/test_chatqna.py mocks
+severity: medium (the elif omits _sticky_graph_names — a sticky-only carrier is silently dropped today; only the sticky-subset-of-authorized invariant saves it)
+reason: DROPPED-CARRIER half FIXED in wave 6 (round-3 challenge accepted): the dispatch condition now includes _sticky_graph_names, so a sticky-only carrier encodes with sticky=[...] instead of being silently dropped; test pins the encode kwargs. The five-branch FLATTEN + mock-spine rewrite remains deferred as its own test-infrastructure commit.
+status: open
+
+### DW-431: KEYCLOAK_JWKS_URL / KEYCLOAK_PUBLIC_URL / KEYCLOAK_BROWSER_ISSUER read inline instead of appConfig.security; ONE expectedIssuer string is overwritten per alias (public+browser set together means public-issuer tokens are rejected despite the 'alongside' comment)
+origin: !597 Jerome AI review (altitude, thread e66c1229, 2026-10-29)
+location: components/document-repository/src/middlewares/keycloak-auth-middleware.js getJWKS (the ONLY copy with the bug — round-3 correction: shared/lib and the backend verifier already validate against an issuer map; the ledger's original shared/lib/backend line references were wrong
+severity: medium (semantic bite with both aliases set)
+reason: FIXED in wave 6 (round-3 challenge accepted) at the real location: the doc-repo middleware now validates against an expectedIssuers ARRAY (base + public + browser, deduped; pin semantics preserved) instead of one overwritten string — both aliases set together no longer reject public-issuer tokens. Round-3 correction: shared/lib and the backend verifier copies already used a map; the named locations in the finding were wrong. appConfig routing of the three vars remains folded into DW-427.
+status: RESOLVED (the appConfig-routing residue rides DW-427)
+
+### DW-432: okf-server specs reach into repo-root scripts/okf-testing-lab/ with a VIRTUAL mock pinned to the container path /app/shared-lib/db-connection-service — move the two specs to scripts/okf-testing-lab/__tests__/ and make the scripts' db require lazy
+origin: !597 Jerome AI review (test-audit structural, thread 270d7562, 2026-10-29)
+location: components/okf-server/__tests__/ragas-testing-lab-rules.test.js, ragas-regenerate-entry.test.js; scripts/okf-testing-lab/
+severity: low (structural; the cross-component require is what forced scripts/ into MR1 via c40e9ea03)
+reason: The tests are the only proof of the operator tools' rules (oos exclusion, metric skipping, topic tokens, corpus gate) — keep them; the clean shape is the lab owning its tests (or the rules moving into okf-server). Standalone structural change.
+status: open
+
+### DW-433: Arango "absent" classifier exists in FOUR variants with divergent no-errorNum fallbacks — one owner in shared/lib + 1202/1203/1204 matrix tests on both consumers; then _isExpectedAbsence goes private again
+origin: !597 Jerome AI review (test-audit, threads 2a4cb43e + e00bd322, 2026-10-29)
+location: components/shared/lib/db-connection-service.js (_isExpectedAbsence), components/okf-server/services/arango-errors.js, components/document-repository/src/workers/crawlWorker.js isDocumentNotFound
+severity: medium (the same driver error classifies differently per layer — a 1203 collection-miss must fail open in crawls but read as "absent" elsewhere)
+reason: STATUS CORRECTION (round-3 review, 2026-10-29): wave 5 moved ~12 okf-server sites onto isArangoNotFound, so the original 14-site scope is overtaken — what REMAINS is only the shared/lib vs okf-server status-404 fallback divergence plus the test-only _isExpectedAbsence seam going private (its observable behaviour is already asserted). Pin the divergence matrix by tests on both consumers, then make the seam private.
+status: open
+
+### DW-434: Audience-binding tests mock jose.jwtVerify entirely — add a locally-built JWKS (generateKeyPair + exportJWK, stubbed fetch) with a real wrong-aud RS256 token, for BOTH the backend verifier and the shared/lib verifier
+origin: !597 Jerome AI review (test-audit, thread e801498f, 2026-10-29)
+location: components/gov-chat-backend/__tests__ (issuer/audience tests), components/shared/lib/keycloak-auth-service.js (no home-component test at all)
+severity: medium (okf-server consumes the shared copy, whose own behaviour is unpinned where it lives)
+reason: Real-crypto tests against verifiers about to be consolidated (DW-427) would double the rework — land with the unification.
+status: open
+
+### DW-435: Issuer-alias tests assert internal map state (_getJwksCache(issuer)) — replace with public-API accept/reject on real-shaped tokens
+origin: !597 Jerome AI review (test-audit, thread 60fd1ea8, 2026-10-29)
+location: components/gov-chat-backend/__tests__ (alias tests)
+severity: low
+reason: A broken alias-for-lookup key normalization passes the current 4 tests; verifyToken throwing 'Unknown issuer' on a token whose iss is not in the map is the observable contract. Same post-train pass as DW-434.
+status: open
+
+### DW-436: 'Bearer scope isolation' is implemented BY THE MOCK (stub retrieval-config-client resolves per-bearer) — add the owner-side contract test on the okf-server authz-resolver's intersection
+origin: !597 Jerome AI review (test-audit, thread ab7d3d5c, 2026-10-29)
+location: components/gov-chat-backend/__tests__/query-service-fanout.test.js + retrieval-config-client.test.js vs components/okf-server/middleware/auth.js
+severity: medium (a property guaranteed by construction, not by prod code)
+reason: Move the isolation assertion to a test of the okf-server authz-resolver (the real owner); keep the mock-echo tests until the owner-side test exists so coverage never dips.
+status: open
+
+### DW-437: FOUR OpenAI-wire chat clients in okf-server — route topic-link-authoring / concept-meta runLlmSummary / frontmatter vllmChatCompletions / ragas-suite callVllm through adaptive-llm-call
+origin: !597 Jerome AI review (simplify, thread b4baaf4d, 2026-10-29)
+location: components/okf-server/services/ (topic-link authoring, concept-meta-service.js runLlmSummary, frontmatter-service.js vllmChatCompletions, ragas-suite-service.js callVllm) vs services/adaptive-llm-call.js
+severity: medium (a reasoning-model deployment starves the raw-axios legs: no 400 param-negotiation, no budget ladder)
+reason: adaptive-llm-call already implements the strict-JSON contract; migration is behaviour-affecting (retry ladder semantics) — post-train consolidation MR with the other client unifications.
+status: open
+
+### DW-438: THREE client-credentials minters (okf-server keycloak-access-service with NO expiry tracking + module-load env; okf-server services/service-token.js hardened; backend keycloak-proxy-service.js) — one shared/lib helper parameterized by client id/secret/endpoint
+origin: !597 Jerome AI review (simplify, thread 912b141a, 2026-10-29)
+location: components/okf-server/services/keycloak-access-service.js, components/okf-server/services/service-token.js, components/gov-chat-backend/services/keycloak-proxy-service.js
+severity: medium
+reason: The keycloak-access-service surface (grant/revoke) needs its own migration test — not a drive-by. Include the 401-retry wrapper.
+status: open
+
+### DW-439: Workbook format vocabulary (_OOS_RE, passage sentinel, E7E6E6 header fill, _ANSWER_PREVIEW_CHARS, COMPARE/CALIBRATE headers) hand-declared in ragas-suite-service from tests/rag-benchmarks/eval/enrich_xlsx_v2.py — share a format module or add a fixture-based parity test
+origin: !597 Jerome AI review (simplify, thread 9c13680e, 2026-10-29)
+location: components/okf-server/services/ragas-suite-service.js vs tests/rag-benchmarks/eval/enrich_xlsx_v2.py
+severity: medium (a header change on the benchmark side silently corrupts round-trips: rows land in wrong columns, OOS detection misses)
+reason: The import direction (service importing from tests/rag-benchmarks) needs the packaging question answered first — tracked with the ragas consolidation MRs. The fanout parity test (tests/rag-benchmarks/eval/test_fanout_parity.py, this MR) is the template for the workbook one.
+status: open
+
+### DW-440: 15 of 43 lab scripts re-implement the Keycloak token + okf-server client spine (ROPC user creation with the live-learned SERVER-TESTING.md rules) — one _sidecar.js lib (req/adminToken/ropcUser); remove-tags/restore-ncd-tags/repair-ncd-dedup (~90% clones) fold into it
+origin: !597 Jerome AI review (simplify, threads 80153bb3 + 8dcd8e36, 2026-10-29)
+location: scripts/okf-testing-lab/
+severity: low (dev-only; the spine encodes live-learned Keycloak rules — a rule change currently means ~15 edits)
+reason: The README's copy-one-file-into-the-container workflow justifies per-file helpers, so the shared spine must be a file copied ALONGSIDE (two-file copy note in the README), not a module import. The reqJson x5 canonical body landed in this MR; the shared-file redesign is the next step if the file count grows.
+status: open
+
+### DW-441: ragas-service Dockerfile build toolchain unpinned (apt-get install -y python3 make g++ ...) — move build-only tooling into a multi-stage builder (repo slimming playbook) rather than pinning rot-prone exact versions
+origin: !597 Jerome AI review (quality/SAST, thread 59bd811d, 2026-10-29)
+location: components/ragas-service/Dockerfile
+severity: low (image drift at fixed SHA; base tag already rolls)
+reason: Pushback accepted as deferred: exact-version pins on moving Debian suites rot within a quarter and turn every security update into a manual edit. The multi-stage treatment is the durable fix and belongs to the post-train slimming pass. The kics Info Healthcheck finding can be dismissed (compose-level healthcheck exists).
+status: open
+
+### DW-442: doc-repo never sends repoId on the ingest POST (fileController._ingestFileById posts only graphName) — the durable fix for the OKF completion-routing ambiguity
+origin: !597 Jerome AI review (bug, thread 50894814, 2026-10-29)
+location: components/document-repository/src/controllers/fileController.js:1177 (dataprep ingest POST)
+severity: medium (after c43b7921d the dataprep side routes OKF completions by the OKF graph HINT without claiming an identity, so files no longer stick Ingesting; the explicit repoId removes the ambiguity entirely and lets the hint fallback retire)
+reason: Protocol rule: identity must never be parsed out of the graph name (genieai_api_protocol.py). doc-repo must send repo_id explicitly; then the dataprep graph-hint becomes a pure belt-and-braces path.
+status: RESOLVED in wave 6 (2026-10-29, round-3 challenge accepted): _ingestFileById now sends repoId alongside graphName; tests pin the OKF path carries it and the legacy free-form path sends null.
+
+### DW-443: The crawl .md split exists TWICE with material drift (crawl-conversion author side vs ingest-service re-split side) — one shared split module so re-splitting yields the same concept identities as the original conversion
+origin: !597 round-2 review (simplify, thread 5b1489e9, 2026-10-29)
+location: components/okf-server/services/crawl-conversion-service.js (conceptPathForUrl/cleanTitle/deriveTitleFromUrl/deriveTitleFromBody, the author side) vs components/okf-server/services/ingest-service.js:1214-1262 (splitBySourceMarkers/urlToConceptPath/deriveTitleFromBody, the reader side)
+severity: medium (functional drift: re-splitting the same crawl file yields DIFFERENT concept identities than the original conversion — dedup misses, duplicate concepts; path fallbacks crawl-page-N vs crawl-<fileId>-N, titles link-unwrapped+unslugified vs raw heading/URL)
+reason: The unification is a DATA-VISIBLE behaviour change on the legacy dataprep re-ingest path (identities and titles change for content re-split through it, converging with the author side — the RAGAS corpus exercises mode B). Acceptance spec = the reviewer's drift list; ship with a before/after identity note for existing re-ingested content and its own reviewed MR. The modern crawl-to-OKF import path never re-splits (it imports concepts directly), which bounds the blast radius.
+status: open
+
+### DW-444: promoteGraph / demoteGraph / renameForRepoNameChange are the same ~40-line skeleton three times — one private transitionGraph(repo, toGraph, {candidates, allowDropTarget, action, description}) with the three exports as thin wrappers
+origin: !597 round-2 review (simplify, thread 928b8c13, 2026-10-29)
+location: components/okf-server/services/lifecycle-service.js (~:430-530)
+severity: low (maintenance; ~105 lines to ~50; the next span-attr/audit-detail change lands once instead of three times)
+reason: The fold touches the publish/retract/rename paths' span attributes, audit payloads and log lines in one sweep — that ordering is load-bearing for the Studio history view and the audit trail, and folding it mid-review would make wave-to-wave diffs unauditable against the version under review. Ship on the next lifecycle touch (with DW-445, same file).
+status: open
+
+### DW-445: Two copy-paste pairs in the lifecycle publish branch — identical buildVectorizedHead try/catch arms (hoistable below the if/else) and a double settle_claimed_at lease release (promoteGraph's catch releases-then-rethrows into the outer catch's release)
+origin: !597 round-2 review (simplify, thread 7679f56f, 2026-10-29)
+location: components/okf-server/services/lifecycle-service.js (~:784-795 + :856-867; ~:306-310 + :339-343)
+severity: low (maintenance; ~12 lines + one releaseLease() local with a single catch path)
+reason: Ship together with DW-444 on the next lifecycle touch — the reviewer's own framing is "cheap to fold into the next lifecycle touch"; recording both pairs here so the next diff carries them together.
+status: open
+
+### DW-446: backing-file-service carries five near-identical per-file HTTP arms (3x patch-status + 2x delete-with-NOT_FOUND-idempotency) — two file-local helpers (markDocRepoStatus/deleteDocRepoFile) collapse them with one idempotency/failure contract
+origin: !597 round-2 review (simplify, thread 30245850, 2026-10-29)
+location: components/okf-server/services/backing-file-service.js
+severity: low (maintenance; the retract arm of the five was already removed in wave 5 — 25ac484a2 deleted the dead markRetracted, re-pointed the wiring at retractBackingFiles and added the retract-split unit coverage; the remaining arms' collapse is this entry)
+reason: The helper extraction is a pure mechanical fold but touches every backing-file error path at once; folding it mid-review would make the wave-5 retract-resilience diff and the arm-collapse diff unauditable against each other. Ship on the next backing-file touch.
+status: open
+
+### DW-447: slugify exists TWICE with divergent identity semantics (tableConcepts.js:103: no diacritic folding, 60-char cap; crawl-conversion: NFKD folds, no cap) — both feed collision-sensitive concept path/key generation, so the same title yields different identities per ingestion path
+origin: !597 round-2 review (simplify, thread 97b7fe74, 2026-10-29)
+location: components/okf-server/services/converters/tableConcepts.js:103 vs components/okf-server/services/crawl-conversion-service.js
+severity: medium (identity drift on collision-sensitive paths — one export with an options arg for the cap, the diacritics-folding behaviour strictly better)
+reason: Unifying changes concept identities for table/csv-sourced content (the non-folding side converges onto the folding side) — a DATA-VISIBLE change in the same class as DW-443. Acceptance spec = the reviewer's divergence list; ship with its own reviewed change and an identity note for existing table-derived concepts.
+status: open
+
+### DW-448: OTel ops-counter boilerplate (createCounter('okf_X_operations_total') + identical recordOp try/catch wrapper) copy-pasted in 7 services + 1 variant — one makeOpCounter(name, description) factory in shared-lib/metrics.js returning the recordOp closure
+origin: !597 round-2 review (simplify, thread 71bf45eb, 2026-10-29)
+location: components/okf-server/services/{pii-service:27, ingest-service:59, repository-service:88, concept-meta-service:41, conformance-service:37, parser-service:25, edge-service:48 (variant), ragas-suite-service}
+severity: low (maintenance; 8 one-line call-site swaps; a meter-API change or name typo becomes a one-place fix)
+reason: Pure mechanical sweep across 8 files — same mid-review auditability argument as DW-444/446; batch it with the next metrics touch so the diff reads as one intent.
+status: open
+
+### DW-449: audit wrapper (actor.sub||'system' fallback + actor_name unpack + catch-and-warn) duplicated verbatim in graph-lifecycle-service.js:127 and hand-rolled at ~20 direct writeAudit call sites across 9 files — move into services/audit-service.js as writeActorAudit
+origin: !597 round-2 review (simplify, thread b7523105, 2026-10-29)
+location: components/okf-server/services/audit-service.js (new export) + graph-lifecycle-service.js:127 + the second duplicating site
+severity: low (maintenance; the 'system' fallback semantics live in 2 copies while ~20 sites don't apply it at all; the bare sites adopt opportunistically)
+reason: The two duplicating sites swap in the same commit as the export; the ~20 bare sites are an opportunistic sweep, not a blocking change. Fold with the next audit-payload touch.
+status: open
+
+### DW-450: writeRepoConceptEdges fetches the repo's WHOLE concept-id set and builds a fresh Set on EVERY concept terminal callback — an N-concept drain pays N x N row reads (~1M rows at 1000 concepts) when the G22 cross-repo check only needs 'does this target exist'
+origin: !597 round-2 review (efficiency, thread af0c7728, 2026-10-29)
+location: components/okf-server/services/edge-service.js (~:111)
+severity: medium (drain-path efficiency; smallest fix = per-target FILTER m.concept_id == @t LIMIT 1 probe on the existing (repo_id, concept_id) unique index, evaluated for the concept's actual links, typically <20)
+reason: Changes the function's data flow (whole-set prefetch to per-target probes) on the drain path that DW-427/Dr sizing work also exercises — defer to the next edge-service touch so its diff stays single-purpose; the unique index makes the probe O(1) per link, no new cache introduced.
+status: open
+
+### DW-451: chatqna's D1 grounding gate discriminates OKF-vs-legacy by string-parsing graph_name.startswith('OKF_') — a naming convention owned by dataprep/okf-server, re-parsed two service hops away as a grounding-policy input
+origin: !597 round-2 review (altitude, thread f36c4886, 2026-10-29)
+location: genie-ai-overlay/chatqna/genieai_chatqna.py (~:3058) vs genie-ai-overlay/retriever/genieai_retriever_arangodb.py _attach_provenance (~:2117)
+severity: low-medium (fragile edge: a legacy graph RENAMED into the OKF_ namespace — or ARANGO_GRAPH_NAME itself OKF_-prefixed — silently flips D1 from refuse-to-fabricate to fabricate-okf-source)
+reason: The fix is a cross-service contract addition (retriever stamps prov['graph_kind'] = 'okf'|'legacy' in _attach_provenance — the one neutral place that knows which graph produced the hit; chatqna's gate reads the field). Contract changes ship outside a review cycle: the wire shape is shared with the OPEA orchestrator envelope (DW-5 documents how dynamic input types drop custom fields — the field must ride an existing passthrough), so it needs its own probed change, not a review-wave patch. DW-442's repoId identity channel (landed, wave 6) already retired the routing half of the prefix-parse; this entry tracks the residual grounding-policy half.
+status: open

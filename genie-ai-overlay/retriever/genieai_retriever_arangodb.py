@@ -1,8 +1,13 @@
 # Copyright (C) 2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
+import contextlib
+import contextvars
+import functools
 import inspect
 import json
+import math
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -21,7 +26,7 @@ from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from core.label_contract import build_filter_labels, decode_filter_labels
+from core.label_contract import build_filter_labels
 from core.model_cache import get_model_id
 from core.model_http_policy import LLM_MAX_RETRIES, SUMMARIZER_TIMEOUT_SECONDS, http_timeout
 from core.span_attrs import ATTRIBUTE_NAMES as A
@@ -45,6 +50,8 @@ from .config import (
     ARANGO_TRAVERSAL_CONCURRENT_BATCHES,
     ARANGO_TRAVERSAL_ENABLED,
     ARANGO_TRAVERSAL_MAX_DEPTH,
+    ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE,
+    ARANGO_TRAVERSAL_MAX_LINKS,
     ARANGO_TRAVERSAL_MAX_RETURNED,
     ARANGO_TRAVERSAL_QUERY,
     ARANGO_TRAVERSAL_SCORE_THRESHOLD,
@@ -52,6 +59,11 @@ from .config import (
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
     EMBEDDING_TIMEOUT,
+    FANOUT_CANDIDATE_CAP_GLOBAL,
+    FANOUT_CANDIDATE_CAP_PER_GRAPH,
+    FANOUT_ENABLED,
+    FANOUT_MAX_GRAPHS,
+    FANOUT_PER_GRAPH_TIMEOUT_MS,
     FILTER_STRATEGIES,
     HF_TOKEN,
     HYBRID_BM25_ANALYZER,
@@ -67,6 +79,16 @@ from .config import (
     OPENAI_CHAT_TEMPERATURE,
     OPENAI_EMBED_ENABLED,
     OPENAI_EMBED_MODEL,
+    ROUTE_ENABLED,
+    ROUTE_FORBIDDEN_TAG_MAX,
+    ROUTE_HEAD_FLOOR,
+    ROUTE_HEAD_MARGIN,
+    ROUTE_HEAD_WEIGHT,
+    ROUTE_HEADS_SUPERSEDE,
+    ROUTE_MIN_CHUNKS,
+    ROUTE_PROBE_TIMEOUT_MS,
+    ROUTE_RETRY,
+    ROUTE_TOP_K,
     SUMMARIZER_ENABLED,
     TEI_EMBED_MODEL,
     TEI_EMBEDDING_ENDPOINT,
@@ -79,6 +101,42 @@ from .config import (
     VLLM_TOP_P,
     get_query_instruction,
 )
+
+# 1-8g-l: the graph traversal's share of the per-graph leg budget keeps this
+# reserve for result assembly + Level-1 fusion (see _extract_for_graph's
+# bounded traversal — an overrun there must never consume the whole leg
+# timeout, which used to discard the leg's already-fused vector documents).
+TRAVERSAL_BUDGET_RESERVE_S = 0.75
+
+# DW-424 (review 2026-10-29 round 3): a timed-out fan-out leg is ABANDONED
+# (Decision E) — the awaiting task returns [] but its worker thread keeps
+# running up to ~90s. On the shared default executor (max_workers =
+# min(32, cpu+4)) a timeout storm starved every other to_thread user in the
+# process. Retrieval-leg work (the leg runner + the routing probes) therefore
+# runs on this dedicated bounded pool: abandonment costs retrieval capacity
+# only, never the process-wide default pool.
+# Sized to the ADMISSION CONTROL, not the core count: legs are gated by
+# asyncio.Semaphore(FANOUT_MAX_GRAPHS), and a leg's 8s deadline starts when
+# _invoke_leg creates its task — BEFORE the queued job gets a thread. A pool
+# smaller than the semaphore let an admitted leg burn its whole budget in the
+# queue (DW-424 abandonment holds a thread ~90s) and return zero-hit without
+# its extraction ever running — silent recall loss. The leg work is I/O-bound
+# (AQL/HTTP); the extra idle threads are cheap.
+_EXTRACTION_POOL = ThreadPoolExecutor(
+    max_workers=max(FANOUT_MAX_GRAPHS, min(8, os.cpu_count() or 4)), thread_name_prefix="okf-extract"
+)
+
+
+async def _to_thread_on_pool(func, /, *args, **kwargs):
+    """`asyncio.to_thread` routed to `_EXTRACTION_POOL` (DW-424).
+
+    asyncio.to_thread takes no executor argument (through py3.12), so this
+    replicates its exact semantics — contextvars copied, kwargs forwarded —
+    over ``loop.run_in_executor(_EXTRACTION_POOL, ...)``.
+    """
+    loop = asyncio.get_running_loop()
+    ctx = contextvars.copy_context()
+    return await loop.run_in_executor(_EXTRACTION_POOL, functools.partial(ctx.run, func, *args, **kwargs))
 
 
 # Defining a custom data subclass
@@ -423,6 +481,22 @@ def _retrieval_score_attributes(
     return attrs
 
 
+def _head_cosine(a, b) -> float | None:
+    """Story 1-8 MR-D — cosine(query_embedding, repo head vector).
+
+    None on degenerate input (wrong shape / zero norm) — the caller skips
+    that head rather than poisoning the routing pool with a bogus score.
+    """
+    if not isinstance(a, (list, tuple)) or not isinstance(b, (list, tuple)) or len(a) != len(b):
+        return None
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(x * x for x in b))
+    if na == 0.0 or nb == 0.0:
+        return None
+    return dot / (na * nb)
+
+
 def rrf_fuse(dense, bm25, k=HYBRID_RRF_K, dense_weight=HYBRID_DENSE_WEIGHT, lexical_weight=HYBRID_LEXICAL_WEIGHT):
     """Fuse dense + BM25 result lists via weighted Reciprocal Rank Fusion.
 
@@ -718,7 +792,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         view_name = f"{graph_name}_BM25_VIEW"
 
         aql = f"""
-            FOR doc IN {view_name}
+            FOR doc IN `{view_name}`
                 SEARCH ANALYZER(doc.{ARANGO_TEXT_FIELD} IN TOKENS(@query, @analyzer), @analyzer)
                 {aql_filter_clause}
                 LET _bm25_score = BM25(doc)
@@ -998,10 +1072,22 @@ class GenieaiArangoRetriever(OpeaComponent):
         if search_start == "chunk":
             bind_vars["query_embedding"] = query_embedding
 
+            # 1-8g-l: bound the worst case. The legacy query scored a
+            # 1024-dim cosine on EVERY depth-1 LINKS_TO edge of every seed
+            # entity (indonesia: 1,046,217 edges → >60s, leg abandoned) and
+            # materialized edge.text for EVERY passing candidate before the
+            # final LIMIT 3. The per-hop LIMIT caps edge visits per seed
+            # entity; the post-FILTER LIMIT caps text materialization.
+            edge_cap_clause = (
+                f"\n                            LIMIT {ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE}"
+                if ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE and ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE > 0
+                else ""
+            )
+
             return f"""
                 LET raw = (
-                    FOR node IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
-                        FOR node2, edge IN 1..{traversal_max_depth} ANY node {graph_name}_LINKS_TO
+                    FOR node IN 1..1 INBOUND doc `{graph_name}_HAS_SOURCE`
+                        FOR node2, edge IN 1..{traversal_max_depth} ANY node `{graph_name}_LINKS_TO`{edge_cap_clause}
                             LET score = {score_func}(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
                             FILTER score >= {traversal_score_threshold}
 
@@ -1022,7 +1108,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         # ----------------------------
         elif search_start == "edge":
             return f"""
-                LET chunk = DOCUMENT({graph_name}_SOURCE, doc.source_id)
+                LET chunk = DOCUMENT(`{graph_name}_SOURCE`, doc.source_id)
 
                 RETURN {{
                     "chunk_text": (chunk ? chunk.{ARANGO_TEXT_FIELD} : null),
@@ -1036,9 +1122,16 @@ class GenieaiArangoRetriever(OpeaComponent):
         elif search_start == "node":
             bind_vars["query_embedding"] = query_embedding
 
+            # 1-8g-l: same per-hop edge cap as the chunk mode above.
+            node_cap_clause = (
+                f"\n                    LIMIT {ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE}"
+                if ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE and ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE > 0
+                else ""
+            )
+
             return f"""
-                FOR node, edge IN 1..{traversal_max_depth} ANY doc {graph_name}_LINKS_TO
-                    OPTIONS {{ bfs: true, uniqueVertices: "global" }}
+                FOR node, edge IN 1..{traversal_max_depth} ANY doc `{graph_name}_LINKS_TO`
+                    OPTIONS {{ bfs: true, uniqueVertices: "global" }}{node_cap_clause}
 
                     LET score = {score_func}(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
 
@@ -1047,7 +1140,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                     SORT score {sort_order}
                     LIMIT {traversal_max_returned}
 
-                    LET chunk = DOCUMENT({graph_name}_SOURCE, edge.source_id)
+                    LET chunk = DOCUMENT(`{graph_name}_SOURCE`, edge.source_id)
 
                     RETURN MERGE(
                         {{}},
@@ -1104,13 +1197,19 @@ class GenieaiArangoRetriever(OpeaComponent):
     async def invoke(
         self, input: ChatCompletionRequest | RetrievalRequest | RetrievalRequestArangoDB | GenieEmbedDoc
     ) -> list:
-        """Process the retrieval request and return relevant documents."""
+        """Process the retrieval request and return relevant documents.
+
+        This is the legacy single-graph entry point. The actual extraction
+        lives in `_extract_for_graph` so the fan-out orchestrator (Story 1.1)
+        can call it once per authorized graph with the per-leg `graph_name`
+        passed explicitly — no Pydantic mutation, no behavioral change to
+        this path (ADR-039 D8: legacy byte-identical).
+        """
         if logflag:
             logger.debug(input)
 
         start = time.time()
 
-        # OpenTelemetry span for retrieval operation
         from tracing import get_tracer
 
         tracer = get_tracer("retriever.arangodb")
@@ -1128,14 +1227,35 @@ class GenieaiArangoRetriever(OpeaComponent):
 
             input_dict = input.model_dump(exclude_none=True)
 
-            # DATA CONTRACT: decode filter labels from search_start BEFORE any
-            # search_start reads. chatqna encodes labels in search_start because
-            # the OPEA framework drops custom fields between mega-service nodes.
+            # DATA CONTRACT: decode filter labels AND authorized graph set
+            # from search_start BEFORE any search_start reads. chatqna encodes
+            # both segments in search_start because the OPEA framework drops
+            # custom fields between mega-service nodes. Story 1.0b
+            # (LG-5 launch gate) proves graph_names survives this boundary.
             # See core/label_contract.py for the format + full documentation.
-            _base_mode, _encoded_labels = decode_filter_labels(str(input_dict.get("search_start", "chunk")))
+            from core.label_contract import decode, decode_no_legacy
+
+            _search_start_raw = str(input_dict.get("search_start", "chunk"))
+            _base_mode, _encoded_labels, _encoded_graphs = decode(_search_start_raw)
+            # Raw carrier stashed BEFORE the restore: invoke_fanout decodes the
+            # ::sticky: segment from THIS key — reading search_start after the
+            # restore below would always see the bare mode and drop the
+            # conversation's continuity set (review 2026-10-29, round 3).
+            input_dict["_search_start_raw"] = _search_start_raw
             input_dict["search_start"] = _base_mode  # restore base mode
             if _encoded_labels:
                 input_dict["_encoded_filter_labels"] = _encoded_labels
+            # graph_names (Story 1.0b/1.1): default [] = single-graph legacy
+            # behavior; when chatqna encodes a non-empty set, the fan-out path
+            # traverses exactly those graphs.
+            input_dict["_encoded_graph_names"] = _encoded_graphs
+            # no_legacy (Story 1.1): the okf_only signal — when True the
+            # legacy ARANGO_GRAPH_NAME fallback is REFUSED (okf_only means OKF
+            # only; the resolved Open Question, 2026-10-06). Default False =
+            # byte-identical legacy behavior.
+            _exclude_legacy = decode_no_legacy(_search_start_raw)
+            input_dict["_exclude_legacy"] = _exclude_legacy
+            span.set_attribute("okf.fanout.exclude_legacy", _exclude_legacy)
 
             # Emitted UNCONDITIONALLY, above the `if _encoded_labels:` branch
             # below. Putting it inside that branch would set nothing at all on
@@ -1153,8 +1273,112 @@ class GenieaiArangoRetriever(OpeaComponent):
                 logger.error("Query is empty. Please provide a valid query.")
                 return []
 
+            # STORY 1.1/1.4/1.5 — additive fan-out branch.
+            #
+            # Two shapes the retriever must handle smoothly (David, 2026-09-21):
+            #   A: legacy single graph only (no carrier) — the carrier-decoded
+            #      list is empty, fan-out does NOT engage, the legacy
+            #      single-graph path runs unchanged against ARANGO_GRAPH_NAME.
+            #   B: legacy graph PLUS one or more OKF graphs (the fan-out shape)
+            #      — the carrier carries the legacy graph as the first element +
+            #      N OKF graph names (Wave R5 chatqna forwards
+            #      GRAPH + OKF_<repo>_v<N>). Fan-out engages with the FULL set,
+            #      including the legacy graph as one leg. Every entry is
+            #      treated equally — the carrier is the single source of truth.
+            #
+            # Empty carrier → legacy single-graph (case A).
+            # ≥1 graph → fan-out engages (case B).
+            if _fanout_should_engage(_encoded_graphs, fanout_enabled=FANOUT_ENABLED):
+                try:
+                    # `invoke_fanout` is a MODULE-level orchestrator taking the
+                    # retriever explicitly (shipped that way in 18b34cd13; the
+                    # internal `_invoke_leg(self, ...)` call is module-style
+                    # too). The former `self.invoke_fanout(...)` raised
+                    # AttributeError on the first-ever live fan-out (2026-10-06
+                    # local build smoke) — no test exercised this branch with a
+                    # carrier, which is why it stayed latent. Fixed at the call
+                    # site; the pinned orchestrator body is untouched.
+                    return await invoke_fanout(
+                        self,
+                        input=input,
+                        input_dict=input_dict,
+                        encoded_graph_names=_encoded_graphs,
+                    )
+                except Exception:
+                    span.end()
+                    raise
+            # No carrier → legacy single-graph default (case A) — or the
+            # okf_only refusal (Story 1.1). The tail is extracted so the
+            # refusal contract is unit-testable without a live DB.
+            # NOTE: `graph_name = ARANGO_GRAPH_NAME` here is the legacy
+            # free-form-only contract; case B always hits the fan-out branch
+            # above because `_encoded_graphs` is non-empty. The chatqna
+            # forwarder MUST send `[ARANGO_GRAPH_NAME, OKF_<repo>_v<N>, ...]`
+            # in its carrier whenever it wants the legacy graph included; the
+            # retriever never falls back to ARANGO_GRAPH_NAME when ≥1 graph is
+            # encoded.
+            return await _legacy_single_graph_or_refuse(
+                self,
+                input_dict=input_dict,
+                input=input,
+                query=query,
+                start_time=start,
+                span=span,
+                exclude_legacy=_exclude_legacy,
+            )
+        except Exception:
+            span.end()
+            raise
+
+    @staticmethod
+    def _traversal_skip_reason(graph_name, vector_db, elapsed_s, budget_s):
+        """1-8g-l — decide whether the graph traversal must sit this leg out.
+
+        Returns None when the traversal may run, else a human-readable reason:
+        the graph-size gate (LINKS_TO edges above ARANGO_TRAVERSAL_MAX_LINKS —
+        live: indonesia 1,046,217 edges could not finish inside the 8s leg
+        budget, ever) or an exhausted leg budget. A count failure is NOT a
+        skip (legacy behavior: traverse and let the budget bound it).
+        """
+        links_cap = ARANGO_TRAVERSAL_MAX_LINKS
+        if links_cap and links_cap > 0:
+            try:
+                links_count = vector_db.db.collection(f"{graph_name}_LINKS_TO").count()
+            except Exception as e:
+                logger.info(
+                    f"Traversal size-gate count failed (continuing with traversal) — graph={graph_name}, error={e}"
+                )
+                links_count = None
+            if links_count is not None and links_count > links_cap:
+                return f"<GRAPH>_LINKS_TO count {links_count} > ARANGO_TRAVERSAL_MAX_LINKS {links_cap}"
+        if budget_s < 0.5:
+            return f"leg budget exhausted (elapsed {elapsed_s:.2f}s, remaining {budget_s:.2f}s)"
+        return None
+
+    async def _extract_for_graph(
+        self,
+        *,
+        graph_name: str,
+        input_dict: dict,
+        input,
+        query: str,
+        start_time: float,
+        span,
+        legacy_unbounded: bool = False,
+    ) -> list:
+        """Run the full extraction body (vector search → BM25 hybrid →
+        traversal → final response assembly) against a SPECIFIC graph.
+
+        Extracted from `invoke()` (Story 1.0/1.1) so the fan-out orchestrator
+        can call it once per authorized graph without mutating Pydantic models.
+        The single-graph legacy path passes `graph_name = input.graph_name or
+        ARANGO_GRAPH_NAME`; the per-leg path passes the leg's resolved name.
+        Behavior is byte-identical between the two call sites (the per-leg
+        site simply substitutes the graph_name argument the legacy path derived
+        from the request).
+        """
+        try:
             embedding = input.embedding if isinstance(input.embedding, list) else None
-            graph_name = input_dict.get("graph_name", ARANGO_GRAPH_NAME)
             search_start = input_dict.get("search_start", ARANGO_SEARCH_START)
             search_mode = input_dict.get("search_mode", ARANGO_SEARCH_MODE)
             enable_traversal = input_dict.get("enable_traversal", ARANGO_TRAVERSAL_ENABLED)
@@ -1263,23 +1487,35 @@ class GenieaiArangoRetriever(OpeaComponent):
             # Retrieve Embedding Dimension #
             ################################
 
-            random_doc = collection.random()
-            random_doc_id = random_doc["_id"]
-            sample_embedding = random_doc.get(ARANGO_EMBEDDING_FIELD)
+            if isinstance(embedding, (list, tuple)) and len(embedding) > 0:
+                # The query embedding is already in scope — derive the dimension
+                # from it and skip the collection.random() probe entirely (the
+                # probe reads an arbitrary document on every request otherwise).
+                dimension = len(embedding)
+                logger.debug(
+                    f"Embedding dimension derived from the query embedding — dimension={dimension}, "
+                    f"collection={collection_name}"
+                )
+            else:
+                # Legacy no-embedding path: probe a stored document to learn the
+                # collection's embedding dimension.
+                random_doc = collection.random()
+                random_doc_id = random_doc["_id"]
+                sample_embedding = random_doc.get(ARANGO_EMBEDDING_FIELD)
 
-            if not sample_embedding:
-                logger.error(f"Document '{random_doc_id}' is missing field '{ARANGO_EMBEDDING_FIELD}'.")
-                return []
+                if not sample_embedding:
+                    logger.error(f"Document '{random_doc_id}' is missing field '{ARANGO_EMBEDDING_FIELD}'.")
+                    return []
 
-            if not isinstance(sample_embedding, list):
-                logger.error(f"Document '{random_doc_id}' has a non-list embedding field, found {type(embedding)}.")
-                return []
+                if not isinstance(sample_embedding, list):
+                    logger.error(f"Document '{random_doc_id}' has a non-list embedding field, found {type(embedding)}.")
+                    return []
 
-            dimension = len(sample_embedding)
+                dimension = len(sample_embedding)
 
-            if dimension == 0:
-                logger.error(f"Document '{random_doc_id}' has an empty embedding field.")
-                return []
+                if dimension == 0:
+                    logger.error(f"Document '{random_doc_id}' has an empty embedding field.")
+                    return []
 
             if OPENAI_API_KEY and OPENAI_EMBED_MODEL and OPENAI_EMBED_ENABLED:
                 # OpenAI embeddings are not contrastive / instruction-tuned —
@@ -1463,6 +1699,8 @@ class GenieaiArangoRetriever(OpeaComponent):
             # the empty-check so a BM25 hit can rescue a dense-empty result (the
             # exact case lexical search excels at). OFF is a true no-op (the
             # whole block is skipped). Only applies to a chunk search start.
+            dense_count = len(search_res) if search_start == "chunk" else None
+            bm25_count = None
             if HYBRID_RETRIEVAL_ENABLED and search_start == "chunk":
                 try:
                     bm25_n = max(int(input.k), HYBRID_BM25_CANDIDATES)
@@ -1480,6 +1718,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                         # chunks — silently empty, not loudly wrong.
                         aql_filter_clause=aql_filter_clause,
                     )
+                    bm25_count = len(bm25_res)
                     if bm25_res:
                         _fused_all = rrf_fuse(search_res, bm25_res)
                         # The fused order drives EVERY array. rrf_fuse returns a
@@ -1504,6 +1743,17 @@ class GenieaiArangoRetriever(OpeaComponent):
                     # Graceful degradation: never let the hybrid channel break the request.
                     logger.error(f"Hybrid BM25+RRF fusion failed, falling back to dense-only: {e}")
 
+            if search_start == "chunk":
+                # 1-8f3 instrumentation (the asthma-query mystery, David
+                # 2026-10-10): a leg returned 0 documents at default log level
+                # with NO signal why — the per-request filter inputs and
+                # per-channel row counts were debug-only. Log both at INFO.
+                logger.info(
+                    f"Extraction summary — graph={graph_name}, dense={dense_count}, "
+                    f"bm25={bm25_count}, fused={len(search_res)}, "
+                    f"labels={labels_to_filter or []}, filter_strategy={filter_strategy}"
+                )
+
             if not search_res:
                 logger.info("No documents found.")
                 return []
@@ -1522,18 +1772,25 @@ class GenieaiArangoRetriever(OpeaComponent):
 
             # Retrieve file_id for each chunk using AQL (search_start == 'chunk')
             if search_start == "chunk":
-                for r in search_res:
-                    chunk_id = r["doc"].id if r["doc"].id else None
-                    if chunk_id:
-                        aql = f"""
-                            FOR doc IN {collection_name}
-                                FILTER doc._key == @chunk_id
-                                RETURN doc.{ARANGO_FILE_ID_FIELD}
-                        """
-                        bind_vars = {"chunk_id": chunk_id}
-                        cursor = self.db.aql.execute(aql, bind_vars=bind_vars)
-                        file_ids = list(doc for doc in cursor)
-                        r["doc"].metadata["file_ids"] = file_ids if file_ids else []
+                # ONE batched AQL for all chunks (was: one round-trip PER chunk
+                # — 20 sequential queries per leg, x9 fan-out legs; measured as
+                # a real share of per-leg latency 2026-10-06).
+                chunk_ids = [r["doc"].id for r in search_res if r["doc"].id]
+                if chunk_ids:
+                    aql = f"""
+                        FOR doc IN `{collection_name}`
+                            FILTER doc._key IN @chunk_ids
+                            RETURN {{key: doc._key, file_id: doc.{ARANGO_FILE_ID_FIELD}}}
+                    """
+                    file_id_by_key = {
+                        row["key"]: row["file_id"]
+                        for row in self.db.aql.execute(aql, bind_vars={"chunk_ids": chunk_ids})
+                    }
+                    for r in search_res:
+                        cid = r["doc"].id
+                        if cid:
+                            fid = file_id_by_key.get(cid)
+                            r["doc"].metadata["file_ids"] = [fid] if fid else []
                 logger.info(f"Adding file id metadata after similarity search: {search_res}")
 
             #######################################################################
@@ -1541,89 +1798,151 @@ class GenieaiArangoRetriever(OpeaComponent):
             #######################################################################
 
             if enable_traversal:
+                # 1-8g-l: the traversal must never starve the leg. Two bounds
+                # replace the old fire-and-pray call (whose overruns let
+                # _invoke_leg abandon the WHOLE leg — discarding its already-
+                # fused vector documents; live 2026-10-11 that starved 9/9
+                # chat answers on the Indonesia graph):
+                #   (a) the SIZE GATE — graphs above ARANGO_TRAVERSAL_MAX_LINKS
+                #       skip the traversal entirely (their fused vector results
+                #       stand alone; healthy graphs keep graph enrichment);
+                #   (b) the SUB-BUDGET — the traversal gets the leg's remaining
+                #       time minus a reserve, runs on its own thread, and an
+                #       overrun CONTINUES without enrichment instead of
+                #       poisoning the leg.
                 keys = [r["doc"].id for r in search_res]
+                if legacy_unbounded:
+                    # D8 byte-identical tail: the LEGACY single-graph path
+                    # predates the fan-out bounds and must not inherit them —
+                    # a dark-mode citizen query against a large legacy corpus
+                    # would silently lose graph enrichment to a per-leg budget
+                    # that was never its contract (review 2026-10-29). The
+                    # size gate + sub-budget are a fan-out PER-LEG contract.
+                    skip_reason = None
+                    budget_s = None
+                else:
+                    elapsed_s = time.time() - start_time
+                    budget_s = FANOUT_PER_GRAPH_TIMEOUT_MS / 1000.0 - elapsed_s - TRAVERSAL_BUDGET_RESERVE_S
+                    skip_reason = self._traversal_skip_reason(
+                        graph_name=graph_name, vector_db=vector_db, elapsed_s=elapsed_s, budget_s=budget_s
+                    )
+                neighborhoods = None
+                if skip_reason:
+                    logger.info(
+                        f"Fan-out traversal skipped — graph={graph_name}: {skip_reason}; "
+                        f"the fused vector results stand alone"
+                    )
+                else:
+                    try:
+                        # DW-424: deliberately NOT _EXTRACTION_POOL. This runs
+                        # on the running loop's default executor — a per-leg
+                        # loop here (the legacy path's main loop runs it to
+                        # completion, no abandonment) — and nesting it on the
+                        # bounded pool would let concurrent leg threads crowd
+                        # traversals out (enrichment lost to the budget).
+                        neighborhoods = await asyncio.wait_for(
+                            asyncio.to_thread(
+                                self.fetch_neighborhoods,
+                                db=vector_db.db,
+                                keys=keys,  # A list of ids
+                                graph_name=graph_name,
+                                search_start=search_start,
+                                query_embedding=embedding,
+                                collection_name=collection_name,
+                                traversal_max_depth=traversal_max_depth,
+                                traversal_max_returned=traversal_max_returned,
+                                traversal_score_threshold=traversal_score_threshold,
+                                traversal_query=traversal_query,
+                                distance_strategy=distance_strategy,
+                            ),
+                            timeout=budget_s,
+                        )
+                    except TimeoutError:  # py3.11: asyncio.TimeoutError IS builtin TimeoutError
+                        neighborhoods = None
+                        logger.warning(
+                            f"Fan-out traversal exceeded its leg budget ({budget_s:.2f}s) — "
+                            f"continuing WITHOUT graph enrichment; graph={graph_name}"
+                        )
+                    except Exception as e:
+                        neighborhoods = None
+                        logger.warning(
+                            f"Fan-out traversal failed — continuing WITHOUT graph "
+                            f"enrichment; graph={graph_name}, error={e}"
+                        )
 
-                neighborhoods = self.fetch_neighborhoods(
-                    db=vector_db.db,
-                    keys=keys,  # A list of ids
-                    graph_name=graph_name,
-                    search_start=search_start,
-                    query_embedding=embedding,
-                    collection_name=collection_name,
-                    traversal_max_depth=traversal_max_depth,
-                    traversal_max_returned=traversal_max_returned,
-                    traversal_score_threshold=traversal_score_threshold,
-                    traversal_query=traversal_query,
-                    distance_strategy=distance_strategy,
-                )
-
-                logger.info(f"Results after fetching neighborhood: {neighborhoods}")
                 _injected_docs = 0
                 _injected_neighbor_items = 0
-                for r in search_res:
-                    neighborhood = neighborhoods.get(r["doc"].id)
+                if neighborhoods:
+                    logger.info(f"Results after fetching neighborhood: {neighborhoods}")
+                    for r in search_res:
+                        neighborhood = neighborhoods.get(r["doc"].id)
 
-                    if not neighborhood:
-                        continue
+                        if not neighborhood:
+                            continue
 
-                    # Counted AFTER the empty-neighborhood guard, so these are
-                    # documents that actually received injected content -- not
-                    # documents the traversal was merely asked about.
-                    _injected_docs += 1
-                    _injected_neighbor_items += len(neighborhood) if isinstance(neighborhood, (list, tuple)) else 1
+                        # Counted AFTER the empty-neighborhood guard, so these are
+                        # documents that actually received injected content -- not
+                        # documents the traversal was merely asked about.
+                        # (merge note: kept at the guarded loop's level from
+                        # 1-8g-l so a failed traversal stays zeros — main's
+                        # tracing contract — without the None.get crash.)
+                        _injected_docs += 1
+                        _injected_neighbor_items += len(neighborhood) if isinstance(neighborhood, (list, tuple)) else 1
 
-                    # Common header for added related info
-                    r["doc"].page_content += "\n------\nRELATED INFORMATION:\n------\n"
+                        # Common header for added related info
+                        r["doc"].page_content += "\n------\nRELATED INFORMATION:\n------\n"
 
-                    if search_start == "chunk":
-                        # neighborhood may be a list or other structure
-                        r["doc"].page_content += str(neighborhood)
+                        if search_start == "chunk":
+                            # neighborhood may be a list or other structure
+                            r["doc"].page_content += str(neighborhood)
 
-                    elif search_start == "edge":
-                        # neighborhood is expected to be a list with one dict: [{ "chunk_text": ..., "file_id": ... }]
-                        first = neighborhood[0] if isinstance(neighborhood, list) and neighborhood else None
-                        if isinstance(first, dict):
-                            # first may contain 'chunk_text' and 'file_id' keys directly
-                            chunk_text = first.get("chunk_text")
-                            file_id = first.get("file_id")
-                        else:
-                            # fallback: if it's nested like { edge_text: { "chunk_text": ..., "file_id": ... } }
-                            chunk_text = None
-                            file_id = None
+                        elif search_start == "edge":
+                            # neighborhood is expected to be a list with one
+                            # dict: [{ "chunk_text": ..., "file_id": ... }]
+
+                            first = neighborhood[0] if isinstance(neighborhood, list) and neighborhood else None
                             if isinstance(first, dict):
-                                inner = next(iter(first.values()), None)
-                                if isinstance(inner, dict):
-                                    chunk_text = inner.get("chunk_text")
-                                    file_id = inner.get("file_id")
+                                # first may contain 'chunk_text' and 'file_id' keys directly
+                                chunk_text = first.get("chunk_text")
+                                file_id = first.get("file_id")
+                            else:
+                                # fallback: if it's nested like { edge_text: { "chunk_text": ..., "file_id": ... } }
+                                chunk_text = None
+                                file_id = None
+                                if isinstance(first, dict):
+                                    inner = next(iter(first.values()), None)
+                                    if isinstance(inner, dict):
+                                        chunk_text = inner.get("chunk_text")
+                                        file_id = inner.get("file_id")
 
-                        if chunk_text:
-                            r["doc"].page_content += str(chunk_text)
-                        if file_id:
-                            r["doc"].metadata["file_ids"] = r["doc"].metadata.get("file_ids", []) + [file_id]
-
-                    else:
-                        # search_start == 'node'
-                        # neighborhood: list of dicts, each with single key mapping to inner dict:
-                        # e.g. [{ edge_text: { "chunk_text": ..., "file_id": ... } }, ...]
-                        first_item = neighborhood[0] if isinstance(neighborhood, list) and neighborhood else None
-                        inner = None
-
-                        if isinstance(first_item, dict):
-                            # normally it's a dict mapping edge_text -> {...}
-                            inner = next(iter(first_item.values()), None)
-                        elif isinstance(first_item, list):
-                            # defensive: if it's a nested list (older bug) take first element
-                            maybe = first_item[0] if first_item else None
-                            if isinstance(maybe, dict):
-                                inner = next(iter(maybe.values()), None)
-
-                        if isinstance(inner, dict):
-                            chunk_text = inner.get("chunk_text")
-                            file_id = inner.get("file_id")
                             if chunk_text:
                                 r["doc"].page_content += str(chunk_text)
                             if file_id:
                                 r["doc"].metadata["file_ids"] = r["doc"].metadata.get("file_ids", []) + [file_id]
+
+                        else:
+                            # search_start == 'node'
+                            # neighborhood: list of dicts, each with single key mapping to inner dict:
+                            # e.g. [{ edge_text: { "chunk_text": ..., "file_id": ... } }, ...]
+                            first_item = neighborhood[0] if isinstance(neighborhood, list) and neighborhood else None
+                            inner = None
+
+                            if isinstance(first_item, dict):
+                                # normally it's a dict mapping edge_text -> {...}
+                                inner = next(iter(first_item.values()), None)
+                            elif isinstance(first_item, list):
+                                # defensive: if it's a nested list (older bug) take first element
+                                maybe = first_item[0] if first_item else None
+                                if isinstance(maybe, dict):
+                                    inner = next(iter(maybe.values()), None)
+
+                            if isinstance(inner, dict):
+                                chunk_text = inner.get("chunk_text")
+                                file_id = inner.get("file_id")
+                                if chunk_text:
+                                    r["doc"].page_content += str(chunk_text)
+                                if file_id:
+                                    r["doc"].metadata["file_ids"] = r["doc"].metadata.get("file_ids", []) + [file_id]
 
                 span.set_attribute(A["traversal_injected_docs"], _injected_docs)
                 span.set_attribute(A["traversal_injected_neighbor_items"], _injected_neighbor_items)
@@ -1725,7 +2044,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                         if chunk_key:
                             try:
                                 aql = (
-                                    f"FOR doc IN {collection_name} FILTER doc._key == @k"
+                                    f"FOR doc IN `{collection_name}` FILTER doc._key == @k"
                                     f" RETURN doc.{ARANGO_EMBEDDING_FIELD}"
                                 )
                                 emb = next(iter(self.db.aql.execute(aql, bind_vars={"k": chunk_key})), [])
@@ -1753,10 +2072,602 @@ class GenieaiArangoRetriever(OpeaComponent):
 
             finish = time.time()
             if logflag:
-                logger.info(f"Retreiver logic completion time: {finish - start:.4f} seconds")
+                logger.info(f"Retreiver logic completion time: {finish - start_time:.4f} seconds")
 
             span.set_attribute("rag.chunk_count", len(search_res))
+            return search_res
         finally:
             span.end()
 
-        return search_res
+
+# ─── Story 1.0/1.1/1.4/1.5 — additive multi-graph fan-out ─────────────────────────
+# EVERY helper below is ADDITIVE — the single-graph legacy path (invoke +
+# _extract_for_graph above) runs byte-identical when _encoded_graph_names is
+# empty or single-element (Decision D: graceful bypass of the zero-OKF-graph
+# case; ADR-039 D8 invariant).
+#
+# The graph name maintains parity AND RELATIONSHIP with the ingested OKF repo
+# (David, 2026-09-20): the retriever's "graph exists" check is the lens through
+# which the chat path knows the repo's current serving reality — workingGraphName
+# on the okf-server side names the graph BORN for the version being built, and
+# versioned serving names (OKF_<slug>_v<N>) are the FKs the fan-out carries.
+
+
+async def _legacy_single_graph_or_refuse(self, *, input_dict, input, query, start_time, span, exclude_legacy):
+    """Tail of `invoke()` (Story 1.1): the fan-out did NOT engage (empty
+    carrier) — either run the legacy single-graph extraction against
+    ARANGO_GRAPH_NAME (case A, byte-identical), or REFUSE it when the carrier
+    carries the `::no_legacy:` signal (okf_only literally means OKF only — the
+    resolved Open Question, 2026-10-06).
+
+    The refusal returns [] (zero hits from any graph) with an INFO log naming
+    the reason — fail-closed, never a silent legacy fallback. The span is
+    ended here on the refusal path (the extraction path ends it in
+    `_extract_for_graph`'s finally block, byte-identical to pre-1.1).
+    """
+    if exclude_legacy:
+        # CustomLogger.log_message(level, msg) — NO extra=/structured kwargs
+        # (live-caught 2026-10-06: extra= raised TypeError out of a handler).
+        # Context goes inline in the message, house f-string style.
+        logger.info(
+            f"retriever.legacy.excluded — okf_only refuses the legacy free-form corpus "
+            f"(exclude_legacy=True, refused_graph_name={ARANGO_GRAPH_NAME})"
+        )
+        span.end()
+        return []
+    results = await self._extract_for_graph(
+        graph_name=ARANGO_GRAPH_NAME,
+        input_dict=input_dict,
+        input=input,
+        query=query,
+        start_time=start_time,
+        span=span,
+        legacy_unbounded=True,  # D8: the legacy tail keeps its pre-fan-out behavior
+    )
+    # Story 1.0 provenance contract — "EVERY retrieval hit must carry
+    # graph_name, repo_id, concept_id". The fan-out path attaches at fusion;
+    # the legacy tail never did (live-probed 2026-10-06: legacy hits came
+    # back with graph_name=None). Additive metadata only — the extraction
+    # itself (search behavior, ordering, shapes) is untouched.
+    return _attach_provenance(results, ARANGO_GRAPH_NAME)
+
+
+def _fanout_should_engage(encoded_graph_names, fanout_enabled: bool = True) -> bool:
+    """Decide whether the additive fan-out path engages (Decision D).
+
+    David, 2026-09-21: the retriever must work smoothly in BOTH shapes —
+    A: legacy single graph only (no carrier, default ARANGO_GRAPH_NAME),
+       → the carrier-decoded list is empty, fan-out does not engage,
+       → legacy single-graph path runs unchanged against ARANGO_GRAPH_NAME.
+    B: legacy graph PLUS one or more OKF graphs (the fan-out shape),
+       → the carrier carries the legacy graph as the first element +
+         N OKF graph names (Wave R5 chatqna forwards GRAPH + OKF_<repo>_v<N>),
+       → fan-out engages with the FULL set (including the legacy graph as
+         one leg). The legacy graph contributes its hits through the same
+         fan-out pipeline — the chatqna doesn't have to think about which
+         graph is "default" vs "OKF"; the carrier is the single source of
+         truth and the retriever treats every entry equally.
+
+    Empty list → legacy single-graph (case A). Anything ≥1 → fan-out
+    engages (case B). The chat-side `fanout_enabled` flag lets Wave R4
+    keep the feature off in places where it hasn't been validated
+    end-to-end yet (matches RETRIEVER_FANOUT_ENABLED default).
+    """
+    if not fanout_enabled:
+        return False
+    if not encoded_graph_names:
+        return False
+    return len(encoded_graph_names) >= 1
+
+
+def _attach_provenance(items, graph_name, repo_id=None):
+    """Attach per-leg provenance to each result item (Story 1.0 — fusion-time).
+
+    Pure function — no I/O. `concept_id` is the chunk's `file_id` (the
+    content-only-chunking invariant — chunk `file_id == concept_id`, see
+    ingest-service.js:1109) and is preserved verbatim from chunk metadata.
+    `repo_id` is optional — only known when the chat-side resolver maps
+    graph→repo at request time (Story 1.2). Missing items are skipped
+    silently (zero-hit per missing graph is the orchestrator's job, not
+    this attacher's).
+    """
+    out = []
+    for item in items or []:
+        doc = item.get("doc") if isinstance(item, dict) else None
+        metadata = getattr(doc, "metadata", None) if doc is not None else None
+        metadata = metadata or {}
+        concept_id = metadata.get("file_id") or metadata.get("concept_id")
+        prov = dict(metadata)
+        prov["graph_name"] = graph_name
+        if repo_id is not None:
+            prov["repo_id"] = repo_id
+        if concept_id is not None and "concept_id" not in prov:
+            prov["concept_id"] = concept_id
+        if doc is not None and hasattr(doc, "metadata"):
+            with contextlib.suppress(Exception):
+                # pydantic models may be frozen; the enriched item still
+                # carries the provenance dict.
+                doc.metadata = prov
+        out.append(item)
+    return out
+
+
+def _merge_per_graph_results(per_graph_results, k: int) -> list:
+    """Cross-graph 2-level RRF (Story 1.5 — Level-2 only; Level-1 is
+    per-graph rrf_fuse inside each leg's _extract_for_graph call).
+
+    Pure function — no I/O, no DB. Re-keys by `(graph_name, chunk_id)`
+    rather than `(chunk_id)` alone: a chunk_id can theoretically exist in
+    two graphs (cloned repos); the (graph_name, chunk_id) pair is the
+    canonical citation handle. Provenance (`graph_name`, `repo_id`,
+    `concept_id`) survives fusion because each fused entry keeps the per-leg
+    doc reference.
+
+    Missing / empty per-graph lists are skipped (zero-hit per missing graph
+    is the orchestrator's job).
+    """
+    fused: dict[tuple[str, str], dict] = {}
+    for graph_name, items in per_graph_results:
+        rank = 0
+        seen: set[str] = set()
+        for item in items or []:
+            doc = item.get("doc") if isinstance(item, dict) else None
+            chunk_id = _normalize_chunk_id(doc) if doc is not None else None
+            if chunk_id is None:
+                chunk_id = f"__unkeyed_{len(fused)}"
+            key = (graph_name, chunk_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            rank += 1
+            entry = fused.setdefault(key, {"doc": item.get("doc"), "score": 0.0})
+            entry["score"] += 1.0 / (HYBRID_RRF_K + rank)
+    return [sorted_items for sorted_items in sorted(fused.values(), key=lambda x: x["score"], reverse=True)][: int(k)]
+
+
+async def _invoke_leg(self, graph_name, input_dict, input, query):
+    """Single fan-out leg — the SAME extraction as the legacy single-graph
+    path, driven by `_extract_for_graph` with the per-leg `graph_name`.
+
+    No Pydantic mutation. The per-leg call passes the resolved graph name
+    explicitly; the helper does not need to read or mutate `input.graph_name`.
+    Per-leg exceptions and timeouts return [] (Decision E: zero-hit per
+    missing graph, ADR-039 D8).
+
+    Each leg gets its OWN span: `_extract_for_graph` unconditionally sets
+    attributes on and ends the span it is given (its contract since the
+    extraction was pulled out of `invoke()`), so passing `span=None` crashed
+    EVERY leg with `'NoneType' object has no attribute 'end'` — after the
+    search had already found hits (live-caught 2026-10-06: legs=9,
+    succeeded=0, fused=0). The legacy single-graph path is untouched — it
+    still passes `invoke()`'s real span.
+    """
+    import asyncio
+
+    from tracing import get_tracer
+
+    span = get_tracer("retriever.fanout").start_span("retriever.fanout.leg")
+    span.set_attribute("okf.fanout.leg.graph_name", graph_name)
+    leg_started = time.time()
+    logger.info(f"Fan-out leg start — graph_name={graph_name}")
+
+    # The extraction is SYNCHRONOUS-blocking work (python-arango calls) inside
+    # an async wrapper. Awaited directly, one big repo stalled the ENTIRE event
+    # loop — every other leg, the timeout, and health checks queued behind it,
+    # and `wait_for(2s)` could never fire (live 2026-10-06: legs ran 46-94s
+    # under a 2000ms timeout). Run the coroutine on its OWN thread/loop so the
+    # main loop stays responsive; on timeout the awaiting task returns at the
+    # deadline and the worker thread is abandoned in the background (its result
+    # is discarded — the leg counts as zero-hit per Decision E). DW-424: the
+    # abandoned thread occupies the dedicated extraction pool, NOT the shared
+    # default executor it starved under a timeout storm.
+    coro = self._extract_for_graph(
+        graph_name=graph_name,
+        input_dict=input_dict,
+        input=input,
+        query=query,
+        start_time=time.time(),
+        span=span,
+    )
+    leg_task = asyncio.create_task(_to_thread_on_pool(asyncio.run, coro))
+    done, pending = await asyncio.wait({leg_task}, timeout=FANOUT_PER_GRAPH_TIMEOUT_MS / 1000.0)
+    if pending:
+        logger.info(
+            f"Fan-out leg TIMED OUT after {time.time() - leg_started:.2f}s "
+            f"(limit {FANOUT_PER_GRAPH_TIMEOUT_MS}ms) — graph_name={graph_name}; "
+            f"worker thread abandoned in background"
+        )
+        return []
+    result = leg_task.result()
+    logger.info(
+        f"Fan-out leg done — graph_name={graph_name}, "
+        f"hits={len(result or [])}, elapsed={time.time() - leg_started:.2f}s"
+    )
+    # Story 1.5 (ADR-039 D4): tiered option-(d) caps — pre-cap this leg's
+    # candidate list per graph BEFORE cross-graph fusion (Level-2). Without
+    # the per-graph tier one large graph floods fusion up to the global cap
+    # and crowds every other graph out (the config knob existed but was wired
+    # nowhere — review 2026-10-29 round 3). The global cap still applies
+    # afterwards, in invoke_fanout's target_k.
+    if result and len(result) > FANOUT_CANDIDATE_CAP_PER_GRAPH:
+        logger.info(
+            f"Fan-out leg candidates pre-capped per graph — graph_name={graph_name}, "
+            f"{len(result)} -> {FANOUT_CANDIDATE_CAP_PER_GRAPH}"
+        )
+        result = result[:FANOUT_CANDIDATE_CAP_PER_GRAPH]
+    return result
+
+
+async def _route_graphs(self, encoded_graph_names, query_embedding):
+    """Story 1.3 — query-affinity graph selection (global chunk competition).
+
+    One k=ROUTE_TOP_K approximate-NN probe per OKF carrier graph (parallel
+    worker threads, per-probe timeout), all rows merged into a single global
+    ranking; a graph qualifies iff it contributes >= ROUTE_MIN_CHUNKS of the
+    global top-K. Floor: the single best graph when nothing qualifies (routing
+    NEVER selects zero). The legacy ``GRAPH`` leg is excluded from routing by
+    the caller (always searched in hybrid — D8).
+
+    Returns ``(routed_graphs_in_carrier_order, degraded)``. Any infra failure
+    after ROUTE_RETRY attempts degrades to ALL carrier graphs with a loud log
+    + span attribute — the only sanctioned all-graph path.
+
+    Calibration (2026-10-06, 8 repos incl. bali 116k / indonesia 144k chunks):
+    ALPHABET-pure → {alphabet 38/40}; "Alphabet in the UK" → {uk 30, alphabet
+    6, bali 4}; KENYA-pure → {kenya 21, uk 18}; INDO-pure → {indonesia 31,
+    bali 9}. Probe wall ~0.4s (parallel, big repos dominate).
+    """
+    import asyncio
+
+    from tracing import get_tracer
+
+    route_span = get_tracer("retriever.route").start_span("retriever.route")
+    t0 = time.time()
+    okf_graphs = [g for g in encoded_graph_names if g != "GRAPH"]
+
+    # Story 1-8 MR-D + 1-8f3 — heads are fetched and gated FIRST. A
+    # gate-passing head (FLOOR/VETO/MARGIN, 1-8b) is an AFFIRMATIVE claim,
+    # and under ROUTE_HEADS_SUPERSEDE claims are DECISIVE (David,
+    # 2026-10-10: "CLEARLY IT SHOULD HAVE HIT THE NCD Information graph
+    # (only)"): when any head claims, ONLY claimed graphs route and the
+    # chunk probe is SKIPPED — headless bulk corpora (untagged, ungatable)
+    # must not pollute the rerank pool, and probing them was the latency
+    # (live: a 4-graph probe across ~100k-chunk graphs cost 78s of a 122s
+    # answer). With no claims the legacy chunk competition runs unchanged.
+    head_pass = []  # gate-passing (graph, score) — claims + pool pseudo-rows
+    heads_gated = 0
+    heads_floored = 0
+    heads_vetoed = 0
+    if ROUTE_HEAD_WEIGHT > 0 and okf_graphs:
+        try:
+            head_rows = list(
+                self.db.aql.execute(
+                    "FOR r IN okf_repositories FILTER r.deleted_at == null "
+                    "FILTER r.ingested_graph_name != null FILTER r.head != null "
+                    "FILTER r.ingested_graph_name IN @okf_graphs "
+                    "RETURN {g: r.ingested_graph_name, v: r.head.vector, "
+                    "fv: (r.head.per_field || {}).forbidden || null, "
+                    "fvs: (r.head.per_field || {}).forbidden_vectors || [], "
+                    "dim: r.head.dim, model: r.head.model}",
+                    bind_vars={"okf_graphs": sorted(okf_graphs)},
+                )
+            )
+            qdim = len(query_embedding)
+            for row in head_rows:
+                g, v = row.get("g"), row.get("v")
+                # The IN @okf_graphs bind above is the transfer-volume fix
+                # (the server only ships authorized repos' heads); this
+                # Python-side check stays as belt-and-braces defence in depth.
+                if g not in okf_graphs or not isinstance(v, (list, tuple)) or len(v) != qdim:
+                    continue
+                hmodel = row.get("model") or ""
+                if hmodel and TEI_EMBED_MODEL and hmodel not in TEI_EMBED_MODEL and TEI_EMBED_MODEL not in hmodel:
+                    logger.info(
+                        f"Routing head skipped (model mismatch) — graph={g}, "
+                        f"head_model={hmodel}, service_model={TEI_EMBED_MODEL}"
+                    )
+                    continue
+                score = _head_cosine(query_embedding, v)
+                if score is None:
+                    continue
+                # Story 1-8b (David 2026-10-09: "forbidden is forbidden — a
+                # hard contract, it should immediately score zero") — the
+                # head CLAIMS the query only when ALL of: FLOOR, VETO, and
+                # the 1-8a MARGIN over the forbidden centroid. Degradation:
+                # heads without per-tag vectors skip the veto; heads without
+                # a forbidden centroid skip margin.
+                if score < ROUTE_HEAD_FLOOR:
+                    heads_floored += 1
+                    continue
+                fvs = row.get("fvs")
+                vetoed = False
+                if isinstance(fvs, list):
+                    for fv in fvs:
+                        if not isinstance(fv, dict):
+                            continue
+                        tv = fv.get("vector")
+                        if not isinstance(tv, (list, tuple)) or len(tv) != qdim:
+                            continue
+                        tscore = _head_cosine(query_embedding, tv)
+                        if tscore is not None and tscore >= ROUTE_FORBIDDEN_TAG_MAX:
+                            heads_vetoed += 1
+                            vetoed = True
+                            break
+                if vetoed:
+                    continue
+                fv = row.get("fv")
+                if isinstance(fv, (list, tuple)) and len(fv) == qdim:
+                    fscore = _head_cosine(query_embedding, fv)
+                    if fscore is not None and score - fscore <= ROUTE_HEAD_MARGIN:
+                        heads_gated += 1
+                        continue
+                head_pass.append((g, score))
+        except Exception as e:
+            logger.info(f"Routing head fetch failed (continuing without head signal) — error={e}")
+
+    if ROUTE_HEADS_SUPERSEDE and head_pass:
+        # 1-8f3: the claim is decisive for the WHOLE search set — including
+        # the legacy GRAPH leg. Live 2026-10-10: an asthma query routed to
+        # NCD, the NCD leg returned 0 documents, and the only content that
+        # reached the reranker was 20 unrelated legacy-Kenya GRAPH chunks —
+        # the reranker rightly rejected them all → grounding verdict 0 →
+        # general-knowledge fallback. Under an active claim the legacy leg
+        # (D8's "always searched") is excluded with the headless OKF graphs;
+        # no-claim paths keep it (recall-maximizing degradation untouched).
+        claimed = sorted(g for g, _s in head_pass)
+        selected = set(claimed)
+        routed = [g for g in encoded_graph_names if g in selected]
+        route_span.set_attribute("rag.route.mode", "heads-supersede")
+        route_span.set_attribute("rag.route.selected", ",".join(claimed))
+        route_span.set_attribute("rag.route.dropped", ",".join(g for g in okf_graphs if g not in selected))
+        route_span.set_attribute("rag.route.probed", 0)
+        route_span.set_attribute("rag.route.head_weight", ROUTE_HEAD_WEIGHT)
+        route_span.set_attribute("rag.route.head_rows", len(head_pass))
+        route_span.set_attribute("rag.route.heads_gated", heads_gated)
+        route_span.set_attribute("rag.route.heads_floored", heads_floored)
+        route_span.set_attribute("rag.route.heads_vetoed", heads_vetoed)
+        route_span.set_attribute("rag.route.wall_ms", int((time.time() - t0) * 1000))
+        logger.info(
+            f"Graph routing (heads supersede — probe skipped) — claimed={claimed}, "
+            f"head_rows={len(head_pass)}, heads_gated={heads_gated}, "
+            f"heads_floored={heads_floored}, heads_vetoed={heads_vetoed}, "
+            f"routed={len(routed)}/{len(encoded_graph_names)}, "
+            f"wall={(time.time() - t0):.2f}s"
+        )
+        route_span.end()
+        return routed, False
+
+    async def _probe(graph_name):
+        aql = (
+            f"FOR doc IN `{graph_name}_SOURCE` "
+            f"LET s = APPROX_NEAR_COSINE(doc.{ARANGO_EMBEDDING_FIELD}, @emb) "
+            "SORT s DESC LIMIT @k RETURN s"
+        )
+        # The AQL client is SYNCHRONOUS — awaiting it inline in an async def
+        # would serialize the whole _probe_batch fan-out on the event loop and
+        # let asyncio.wait's timeout fire only BETWEEN probes, never during
+        # one (the exact defect _invoke_leg documents fixing for the legs).
+        # The query runs on a worker thread so the probes genuinely race.
+        # DW-424: on the dedicated extraction pool, not the shared default
+        # executor (the same pool abandoned legs occupy).
+        rows = await _to_thread_on_pool(self.db.aql.execute, aql, bind_vars={"emb": query_embedding, "k": ROUTE_TOP_K})
+        return graph_name, list(rows)
+
+    async def _probe_batch(graphs):
+        tasks = {asyncio.create_task(_probe(g)): g for g in graphs}
+        graph_to_task = {t: g for t, g in tasks.items()}
+        done, _pending = await asyncio.wait(tasks, timeout=ROUTE_PROBE_TIMEOUT_MS / 1000.0)
+        results, failed = {}, list(graphs)
+        for t in done:
+            try:
+                name, rows = t.result()
+                results[name] = rows
+                failed.remove(graph_to_task[t])
+            except Exception as e:
+                logger.info(f"Routing probe failed — graph_name={graph_to_task[t]}, error={e}")
+        return results, failed
+
+    all_rows = []
+    failed = list(okf_graphs)
+    for _attempt in range(ROUTE_RETRY + 1):
+        results, failed = await _probe_batch(failed)
+        for name, rows in results.items():
+            all_rows.extend((name, s) for s in rows)
+        if not failed:
+            break
+    if failed:
+        logger.error(
+            f"ROUTING DEGRADED — {len(failed)} probe(s) failed after {ROUTE_RETRY + 1} "
+            f"attempt(s): {failed}; searching ALL carrier graphs (infra fallback)"
+        )
+        route_span.set_attribute("rag.route.degraded", True)
+        route_span.set_attribute("rag.route.failed_probes", len(failed))
+        route_span.end()
+        return list(encoded_graph_names), True
+
+    # Global chunk-level competition (size-fair): every probed chunk competes on
+    # cosine regardless of corpus size; qualification is by chunk COUNT.
+    # Story 1-8 MR-D — the heads gated ABOVE (head_pass) contribute their ONE
+    # weighted pseudo-row each to this same pool (RETRIEVER_ROUTE_HEAD_WEIGHT,
+    # default 1.0, 0.0 = rollback — weight 0 skips the whole head pass).
+    for g, score in head_pass:
+        all_rows.append((g, ROUTE_HEAD_WEIGHT * score))
+    head_rows_injected = len(head_pass)
+    all_rows.sort(key=lambda r: r[1], reverse=True)
+    top = all_rows[:ROUTE_TOP_K]
+    counts: dict[str, int] = {}
+    for name, _s in top:
+        counts[name] = counts.get(name, 0) + 1
+    qualified = sorted(g for g, n in counts.items() if n >= ROUTE_MIN_CHUNKS)
+    floor_note = ""
+    if not qualified and top:
+        best = max(counts, key=lambda g: counts[g])
+        qualified = [best]
+        floor_note = f" (floor: top-1 → {best})"
+    selected = set(qualified)
+    routed = [g for g in encoded_graph_names if g == "GRAPH" or g in selected]
+    route_span.set_attribute("rag.route.mode", "chunk-competition")
+    route_span.set_attribute("rag.route.selected", ",".join(qualified))
+    route_span.set_attribute("rag.route.dropped", ",".join(g for g in okf_graphs if g not in selected))
+    route_span.set_attribute("rag.route.probed", len(okf_graphs))
+    route_span.set_attribute("rag.route.head_weight", ROUTE_HEAD_WEIGHT)
+    route_span.set_attribute("rag.route.head_rows", head_rows_injected)
+    route_span.set_attribute("rag.route.heads_gated", heads_gated)
+    route_span.set_attribute("rag.route.heads_floored", heads_floored)
+    route_span.set_attribute("rag.route.heads_vetoed", heads_vetoed)
+    route_span.set_attribute("rag.route.wall_ms", int((time.time() - t0) * 1000))
+    logger.info(
+        f"Graph routing — probed={len(okf_graphs)}, global_top={len(top)}, "
+        f"head_rows={head_rows_injected}, heads_gated={heads_gated}, "
+        f"heads_floored={heads_floored}, heads_vetoed={heads_vetoed}, "
+        f"counts={ {g: counts.get(g, 0) for g in okf_graphs} }, "
+        f"qualified={qualified}{floor_note}, routed={len(routed)}/{len(encoded_graph_names)}, "
+        f"wall={(time.time() - t0):.2f}s"
+    )
+    route_span.end()
+    return routed, False
+
+
+async def invoke_fanout(self, input, input_dict, encoded_graph_names):
+    """Additive multi-graph fan-out orchestrator (Story 1.1/1.4/1.5).
+
+    Called when `_encoded_graph_names` carries ≥1 graph (the engagement
+    predicate, `_fanout_should_engage` — only the EMPTY carrier takes the
+    legacy single-graph path; a single-graph OKF carrier deliberately runs
+    through here too). Runs the legacy
+    extraction ONCE per authorized graph (Decision B: full extraction —
+    vector + BM25 hybrid + traversal + response, per leg) and fuses via
+    2-level cross-graph RRF (Level-2 only; Level-1 is per-leg). Per-leg
+    timeout (Decision E, ADR-039 D8) — a slow/sick graph contributes zero
+    hits, NEVER a 500. Concurrency bounded by FANOUT_MAX_GRAPHS via
+    `asyncio.Semaphore` (Decision F).
+    """
+    import asyncio
+
+    from tracing import get_tracer
+
+    tracer = get_tracer("retriever.fanout")
+    span = tracer.start_span("retriever.fanout")
+    span.set_attribute("okf.fanout.engaged", True)
+    span.set_attribute("okf.fanout.carrier_graph_count", len(encoded_graph_names))
+    span.set_attribute("okf.fanout.timeout_ms", FANOUT_PER_GRAPH_TIMEOUT_MS)
+
+    # Story 1.3 — query-affinity routing: prune OKF legs before extraction.
+    # The legacy GRAPH leg is always searched (hybrid) and never routed (D8)
+    # — EXCEPT under heads-supersede (1-8f3): _route_graphs encodes an active
+    # claim by OMITTING GRAPH from `routed`, and the search set below trusts
+    # `routed` verbatim. Sticky conversation graphs bypass qualification
+    # (continuity contract; GRAPH can never be sticky). Failure modes still
+    # degrade towards MORE recall, never less: no embedding, routing disabled,
+    # single-OKF-graph carriers, or degraded probes all fall back to the full
+    # carrier.
+    from core.label_contract import decode_sticky
+
+    search_set = list(encoded_graph_names)
+    query_embedding = input.embedding if isinstance(input.embedding, list) and input.embedding else None
+    # The sticky segment lives on the RAW carrier — invoke() stashes it as
+    # _search_start_raw before restoring search_start to the base mode; direct
+    # callers (tests, the framework path) may still carry it on search_start.
+    _sticky = decode_sticky(str(input_dict.get("_search_start_raw") or input_dict.get("search_start") or ""))
+    span.set_attribute("rag.route.sticky", ",".join(_sticky))
+    if not ROUTE_ENABLED:
+        logger.info("Graph routing disabled (RETRIEVER_ROUTE_ENABLED=false) — full carrier fan-out")
+    elif not query_embedding:
+        logger.info("Graph routing skipped — no query embedding on the request")
+    elif len([g for g in encoded_graph_names if g != "GRAPH"]) < 2:
+        logger.info("Graph routing skipped — fewer than two OKF graphs on the carrier")
+    else:
+        try:
+            _authorized = set(encoded_graph_names)
+            sticky_valid = [g for g in _sticky if g in _authorized and g != "GRAPH"]
+            if len(sticky_valid) != len(_sticky):
+                logger.info(
+                    f"Sticky graphs dropped (not in authorized set): "
+                    f"{[g for g in _sticky if g not in _authorized or g == 'GRAPH']}"
+                )
+            routed, degraded = await _route_graphs(self, encoded_graph_names, query_embedding)
+            routed_set = set(routed)
+            sticky_set = set(sticky_valid)
+            # `routed` is the single source of truth for the search set: it
+            # carries GRAPH on every path EXCEPT the heads-supersede claim
+            # (1-8f3 — the legacy leg is intentionally dropped there). Sticky
+            # graphs restore OKF legs exactly as before.
+            search_set = [g for g in encoded_graph_names if g in routed_set or g in sticky_set]
+            span.set_attribute("rag.route.applied", True)
+            span.set_attribute("rag.route.degraded", degraded)
+            span.set_attribute("rag.route.search_set", ",".join(search_set))
+        except Exception as e:
+            # Routing must never break retrieval — degrade to the full carrier.
+            logger.error(f"Graph routing crashed — degrading to full carrier fan-out: {e}")
+            span.set_attribute("rag.route.applied", False)
+    span.set_attribute("okf.fanout.graph_count", len(search_set))
+    sem = asyncio.Semaphore(FANOUT_MAX_GRAPHS)
+
+    async def _leg(graph_name, idict=None):
+        async with sem:
+            try:
+                return await _invoke_leg(
+                    self, graph_name, idict or input_dict, input, query=input_dict.get("input", input_dict.get("text"))
+                )
+            except TimeoutError:
+                logger.info(
+                    f"Fan-out leg timed out (skip-on-timeout, ADR-039 D8) — "
+                    f"graph_name={graph_name}, timeout_ms={FANOUT_PER_GRAPH_TIMEOUT_MS}"
+                )
+                return []
+            except Exception as e:
+                logger.info(f"Fan-out leg failed (zero-hit, ADR-039 D8) — graph_name={graph_name}, error={e}")
+                return []
+
+    try:
+        leg_results = await asyncio.gather(*[_leg(g) for g in search_set])
+    except Exception:
+        span.end()
+        raise
+    per_graph = []
+    for graph_name, items in zip(search_set, leg_results, strict=True):
+        enriched = _attach_provenance(items, graph_name)
+        per_graph.append((graph_name, enriched))
+    target_k = min(int(input.k) if input.k else 10, FANOUT_CANDIDATE_CAP_GLOBAL)
+    fused = _merge_per_graph_results(per_graph, k=target_k)
+
+    # 1-8g-l — claimed-leg-empty fallback. Under heads-supersede the claim is
+    # DECISIVE: the chunk competition is skipped AND the legacy GRAPH leg is
+    # dropped, so a claimed graph whose leg died (traversal starvation, a db
+    # hiccup) used to ship fused=0 to the LLM → a guaranteed ungrounded
+    # answer (live 2026-10-11: 9/9 chat answers starved exactly this way —
+    # each leg had already fused 20 on-point documents before its traversal
+    # overran). One vector-only retry (traversal force-disabled; the vector
+    # legs complete in ~0.5s live) rescues the answer; if it ALSO returns
+    # nothing, the abstention is honest. Sets shaped like the legacy
+    # competition (GRAPH present) don't retry: fused=0 there means the
+    # competition itself found nothing, and probing again finds the same.
+    if not fused and search_set and "GRAPH" not in search_set:
+        logger.warning(
+            f"Fan-out fused 0 from {len(search_set)} claimed/sticky leg(s) — "
+            f"retrying vector-only (traversal disabled): {search_set}"
+        )
+        span.set_attribute("okf.fanout.leg_empty_fallback", True)
+        retry_dict = dict(input_dict)
+        retry_dict["enable_traversal"] = False
+        retry_results = await asyncio.gather(*[_leg(g, retry_dict) for g in search_set])
+        retry_per_graph = [
+            (graph_name, _attach_provenance(items, graph_name))
+            for graph_name, items in zip(search_set, retry_results, strict=True)
+        ]
+        fused = _merge_per_graph_results(retry_per_graph, k=target_k)
+        if fused:
+            logger.info(f"Claimed-leg fallback recovered {len(fused)} document(s) (vector-only retry)")
+
+    # Span attributes (Story 1.6 + ADR-039 D5 — for the Studio card).
+    span.set_attribute("okf.fanout.legs_succeeded", sum(1 for r in leg_results if r))
+    span.set_attribute("okf.fanout.legs_failed", sum(1 for r in leg_results if not r))
+    span.set_attribute("okf.fanout.fused_count", len(fused))
+    # 1-8g-l: legs= printed the CARRIER size, not the actual search set —
+    # live "legs=5, failed=1" was ONE claimed leg timing out, not five.
+    logger.info(
+        f"Fan-out complete — legs={len(search_set)}, fused={len(fused)}, "
+        f"succeeded={sum(1 for r in leg_results if r)}, failed={sum(1 for r in leg_results if not r)}"
+    )
+    span.end()
+    return fused

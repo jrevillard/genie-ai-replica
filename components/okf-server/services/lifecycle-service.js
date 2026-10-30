@@ -1,0 +1,1295 @@
+// Copyright (C) 2026 International Telecommunication Union (ITU)
+// SPDX-License-Identifier: Apache-2.0
+// Lifecycle transition service (Story 4.3 pulled forward — David, 2026-08-28).
+// This service is the SINGLE OWNER of FR-9 transitions. THE STATE MACHINE,
+// 100% DEFINED:
+//
+// STATES (registry lifecycle_state; "serving" = ingested_version != null):
+//   draft | register (initial, crawl) | review | approve | publish | retracted
+//   RESERVED (kept for FR-9 enum compatibility, NO transitions):
+//   validate, version, deprecate, retire. Terminal: deleted.
+//
+// EVENTS — the only writes to lifecycle_state / the serving flag:
+//   CREATE (studio dialog)   -> draft
+//   CRAWL-CREATE             -> register
+//   submit   draft|register|validate|retracted -> review  (steward submits;
+//                'retracted' IS the edit state for out-of-service content —
+//                David, 2026-09-04: Retract (edit/validate/correct) -> Edit)
+//   approve  review -> approve                       (reviewer signs off)
+//   publish  approve|publish -> publish             GUARDS: NOT serving (a
+//                serving repo is READ ONLY — retract first, 409
+//                REPO_READ_ONLY), >=1 concept + mint CONTENT gates
+//                (PII-complete, conformance-clean; NOT indexing — nothing is
+//                chunked until ingest).
+//                EFFECTS: version N+1 current; zip <name>-v(N+1).zip stored in
+//                doc-repo supersedes the old zip; serving CLEARED (the new
+//                version is not serving until INGEST).
+//   ingest   publish -> publish+serving             GUARD: bundle artifact
+//                exists. EFFECTS: ingested_at + ingested_version = N AND the
+//                per-repo graph is PROMOTED to the versioned serving name
+//                `OKF_<name-slug>_v<N>` (graph-lifecycle-service) — the
+//                serving graph's NAME carries the repo+version it serves
+//                (David, 2026-08-30); the registry records
+//                ingested_graph_name.
+//   retract  publish+serving -> RETRACTED (own state + lane — a pulled repo
+//                must stay visible, never fold back into Published).
+//                EFFECTS: the graph is DEMOTED back to the working name
+//                `OKF_{repo_id}` — the repo becomes editable again.
+//   delete   any state EXCEPT serving (409 INGESTED_DELETE_BLOCKED otherwise);
+//            EFFECTS: full cascade (graph + meta + bundle + manifests).
+//
+// EDITING (David, 2026-08-30): a SERVING repo (ingested_at set) is READ ONLY
+// — concept mutations (ingest/patch/delete/resplit/autocorrect), registry
+// updates and publish all refuse with 409 REPO_READ_ONLY. Retract demotes the
+// graph and re-opens editing; changes then go live via publish (vN+1) +
+// ingest. Concepts stay editable in every non-serving state.
+
+const dbService = require('../shared-lib/db-connection-service');
+const { logger } = require('../shared-lib/logger');
+const { withSpan } = require('../shared-lib/tracing');
+const { isArangoNotFound } = require('./arango-errors');
+const { DateTime } = require('luxon');
+const auditService = require('./audit-service');
+const versionService = require('./version-service');
+const bundleExportService = require('./bundle-export-service');
+const graphLifecycle = require('./graph-lifecycle-service');
+const graphRetract = require('./graph-retract-service');
+const backingFileService = require('./backing-file-service');
+const conceptMetaService = require('./concept-meta-service');
+
+const REPOS = 'okf_repositories';
+const META = 'okf_concepts_meta';
+
+class LifecycleError extends Error {
+  constructor(code, message, status) {
+    super(message);
+    this.code = code;
+    this.status = status;
+  }
+}
+
+const TRANSITIONS = {
+  // David, 2026-09-04: Import -> Edit (validate/correct) -> Review (edit/
+  // validate/correct) -> Publish -> Ingest -> Retract (edit/validate/correct)
+  // -> Edit ... — a RETRACTED repo is the EDIT state for out-of-service
+  // content: it stays visible in its own lane, is editable (retract demoted
+  // the graph), and re-enters the loop via submit.
+  // David, 2026-09-11: a RETRACTED repo's ONLY exit is submit -> review.
+  // publish-from-retracted and ingest-from-retracted are INVALID — the
+  // pre-2026-09-11 escape hatches let a re-ingest skip review AND reuse the
+  // retired version (Kenya live incident: retract -> PII edits -> Ingest
+  // re-promoted the SAME v11 graph name, mutating retired content under
+  // citations pinned to it). Post-retract changes now always re-enter the
+  // loop: submit -> review -> approve -> publish (mints v{N+1}) -> ingest.
+  // 2026-09-25: Add reverse transition from Published to In Review for unbundling
+  // and rework scenarios. The bundle zip remains published but the repo
+  // reverts to reviewable state for corrections.
+  submit: { from: ['draft', 'register', 'validate', 'retracted'], to: 'review' },
+  approve: { from: ['review'], to: 'approve' },
+  publish: { from: ['approve', 'publish'], to: 'publish' },
+  ingest: { from: ['publish'], to: 'publish' },
+  retract: { from: ['publish'], to: 'retracted' },
+  unpublish: { from: ['publish'], to: 'review' }
+};
+
+// Terminal conversion statuses — SINGLE-SOURCED from the owner service
+// (contract agreed with the crawl-conversion session 2026-09-02: terminal is
+// 'done' | 'failed'; 'completed'/'interrupted' never occur — a hard-coded
+// list here drifted and would have permanently locked successful crawl
+// repos). Lazy require: keeps this module load-order independent of the
+// conversion service.
+function conversionTerminal(conv) {
+  return require('./crawl-conversion-service').isTerminal(conv);
+}
+
+/**
+ * BUILDING GATE (David, 2026-09-02; import/RAG boundary 2026-09-04): a repo
+ * whose source file is still being IMPORTED is not reviewable content yet —
+ * the workflow pins it to "In progress" and refuses transitions until the
+ * import completes. Returns the blocking error or null when the repo may
+ * transition.
+ *   - BUILD_IN_PROGRESS: conversion record present and not terminal
+ *     ('done'|'failed' — via isTerminal; missing conversion = not building).
+ *
+ * IMPORT ≠ RAG INGESTION (David, 2026-09-04, 6-step workflow): NOTHING is
+ * chunked before the Ingest transition. Imported concepts sit as parsed rows
+ * with ZERO dataprep activity through import/edit/review/publish; the mint
+ * gates CONTENT only (conformance + PII — re-scoped same day). The ingest
+ * transition arms the drain; serving starts when it completes.
+ */
+async function buildingBlocker(repo) {
+  const conv = repo.conversion;
+  if (conv && !conversionTerminal(conv)) {
+    const stage = conv.stage || conv.status || 'processing';
+    return new LifecycleError(
+      'BUILD_IN_PROGRESS',
+      'The source file is still being processed (stage: ' +
+        stage +
+        ', ' +
+        (conv.pages_done || 0) +
+        ' pages, ' +
+        (conv.batches_done || 0) +
+        ' batches done). The repository stays In progress until the full file is processed.',
+      409
+    );
+  }
+  // DRAIN FREEZE (David, 2026-09-12): while the RAG drain is in flight the
+  // lifecycle is frozen too — no submit/approve/publish/ingest can touch a
+  // repo whose content is mid-snapshot. Retract is exempt (the transition()
+  // gate skips this blocker for it — the wedge-recovery escape hatch).
+  if (repo && repo.rag_drain_active === true) {
+    return new LifecycleError(
+      'DRAIN_IN_PROGRESS',
+      'repository is being ingested (RAG drain active) — lifecycle transitions are frozen until the drain settles',
+      409
+    );
+  }
+  return null;
+}
+
+/**
+ * SOURCES-BUSY GATE (Story 7.7, David, 2026-09-14): an OKF repository built
+ * from document-repository files cannot be INGESTED while any of its source
+ * documents still serve the free-form RAG corpus — the same content must
+ * never be retrievable through two channels. Documents that are still
+ * ingested were ALLOWED at import time by design; this gate is the
+ * prevention. Fail-closed LIVE re-check of each source doc's dataprep.status
+ * in doc-repo (import-time snapshots go stale). Returns the blocking error
+ * or null.
+ *   - SOURCES_NOT_RETRACTED: ≥1 source doc's status ∈ {Ingesting, Ingested,
+ *     Ingested with Warnings}. Pass states: Retracted / Pending / Ingestion
+ *     Error / doc gone.
+ * GATE SCOPE (the trap): the repo's OWN bundle zip is itself a doc-repo file
+ * reporting 'Ingested' + is_bundle=true — the gate reads the repo's
+ * source_documents[] list EXCLUSIVELY (never okf_repo_id scans), so crawl
+ * repos (no source_documents) are structurally unaffected.
+ */
+async function sourcesBusyBlocker(repo) {
+  const sources = (repo && Array.isArray(repo.source_documents) && repo.source_documents) || [];
+  if (sources.length === 0) return null;
+  const { authedAxios } = require('./service-token');
+  const docRepoConfig = require('../config');
+  // Shared doc-repo envelope unwrap — lazy like every HTTP dep here (a
+  // top-level producer-service require drags the ingest/pii client chain into
+  // partial-mock test contexts that do not carry its config).
+  const { docRepoFileOf } = require('./producer-service');
+  const serving = [];
+  for (const s of sources) {
+    if (!s || !s.file_id) continue;
+    try {
+      const res = await authedAxios.get(
+        `${docRepoConfig.documentRepository.url}/api/files/${encodeURIComponent(s.file_id)}`,
+        { timeout: 5000 }
+      );
+      // doc-repo envelopes vary ({file}, {data: {file}}, {data}) — unwrap all
+      // shapes (producer-service.docRepoFileOf) so the gate sees the REAL
+      // dataprep.status (a misread would silently fail-open the
+      // SOURCES_NOT_RETRACTED gate).
+      const f = docRepoFileOf(res);
+      if (f.is_bundle === true) continue; // defensive: a bundle is never a source doc
+      const status = String((f.dataprep && f.dataprep.status) || '')
+        .toLowerCase()
+        .trim();
+      if (status === 'ingesting' || status === 'ingested' || status === 'ingested with warnings') {
+        serving.push(f.file_name || s.file_name || s.file_id);
+        if (serving.length > 0) break; // one serving source blocks — don't pay N×timeout on the rest
+      }
+    } catch (err) {
+      // FAIL-CLOSED: if doc-repo cannot tell us the status, treat the source
+      // as still serving (a transient outage must not double-serve content).
+      logger.warn('SOURCES-BUSY re-check failed (fail-closed)', { file_id: s.file_id, error: err.message });
+      serving.push(s.file_name || s.file_id);
+      break; // fail-closed already decided the outcome — cap the transition latency
+    }
+  }
+  if (serving.length === 0) return null;
+  return new LifecycleError(
+    'SOURCES_NOT_RETRACTED',
+    'source documents still serve the free-form corpus — retract them to enable ingest: ' + serving.join(', '),
+    409
+  );
+}
+
+const ACTIONS = Object.keys(TRANSITIONS);
+
+function nowIso() {
+  return DateTime.now().toUTC().toISO();
+}
+
+async function getDb() {
+  return dbService.getConnection('default');
+}
+
+async function loadRepo(db, repoId) {
+  let repo = null;
+  try {
+    repo = await db.collection(REPOS).document(repoId);
+  } catch (err) {
+    if (!isArangoNotFound(err)) throw err;
+  }
+  if (!repo || repo.deleted_at) {
+    throw new LifecycleError('REPO_NOT_FOUND', `Repository ${repoId} not found`, 404);
+  }
+  return repo;
+}
+
+function audit(action, repoId, actor, extra = {}) {
+  return auditService
+    .writeAudit({
+      actor: (actor && actor.sub) || 'system',
+      actor_name: (actor && actor.name) || null,
+      action,
+      repo_id: repoId,
+      ...extra
+    })
+    .catch(() => {
+      /* best-effort */
+    });
+}
+
+/**
+ * SETTLE AN INGEST (import ≠ RAG, David, 2026-09-04): promote the published
+ * version's graph to the versioned serving name and flip the serving flags.
+ * Called by the ingest transition (nothing left to drain) and by the worker
+ * when the armed drain completes. Idempotent per version.
+ */
+// Settle-lease window (spec #1020 §5.8): how long a crashed settler's claim
+// blocks a retry. Inert in the single-worker deployment (the lease is
+// acquired and released within one settle).
+function settleLeaseMs() {
+  const v = parseInt(process.env.OKF_SETTLE_LEASE_MS || '', 10);
+  return Number.isFinite(v) && v > 0 ? v : 600000;
+}
+
+async function _settleIngest(db, repo, actor) {
+  // SETTLE CAS (spec #1020 §5.4 race 2): claim the settle with a conditional
+  // single-statement lease. Concurrent settlers (worker reconcile + finishing
+  // job; future multi-worker) previously raced past the read-then-act checks
+  // and converged only by value-idempotency — while the from≠to rename path
+  // (drop + renames) ran unserialized. The lease serializes them: the loser
+  // sees a fresh settle_claimed_at and skips; a crashed settler's lease
+  // expires after OKF_SETTLE_LEASE_MS. Single-worker behavior is identical
+  // (acquire → settle → the flip below releases).
+  // GRAPH GC target (2026-09-26): the repo doc as loaded here still carries
+  // the PREVIOUS version's ingested_graph_name — snapshot it before the flip
+  // overwrites it, so the drop below knows exactly what became superseded.
+  const previousGraph = (repo && repo.ingested_graph_name) || null;
+  const leaseMs = settleLeaseMs();
+  const claim = await (
+    await db.query(
+      'FOR r IN okf_repositories ' +
+        'FILTER r._key == @rid AND r.rag_drain_active == true ' +
+        'AND (r.settle_claimed_at == null OR DATE_TIMESTAMP(r.settle_claimed_at) < DATE_NOW() - @leaseMs) ' +
+        // REVIEW FIX #1 (2026-09-26): an AQL UPDATE without RETURN yields NO
+        // result rows — .all() is always [] and the check below always read
+        // "busy" on real ArangoDB (no drain would ever settle). The jest mock
+        // fabricated a matched row for this exact shape and masked it — the
+        // same stub-masked-production class as the G-2 graphExists bug.
+        // RETURN 1 per matched doc → .all().length IS the matched-row count.
+        'UPDATE r WITH { settle_claimed_at: DATE_ISO8601(DATE_NOW()) } IN okf_repositories RETURN 1',
+      { rid: repo.repo_id, leaseMs }
+    )
+  ).all();
+  if (claim.length !== 1) {
+    logger.warn('Settle: lease not acquired (disarmed, or another settler holds it) — skipping', {
+      repo_id: repo.repo_id,
+      version: repo.version || null
+    });
+    return { ok: false, busy: true };
+  }
+  // VERSIONED GRAPH (David, 2026-08-30): physically rename the working graph
+  // to `OKF_<name-slug>_v<N>` BEFORE the serving flags flip — a failed rename
+  // leaves the repo un-serving and simply retryable.
+  const ts = nowIso();
+  let graphName;
+  try {
+    try {
+      graphName = await graphLifecycle.promoteGraph(repo, actor);
+    } catch (e) {
+      // RELEASE the lease — a failed rename must stay immediately retryable
+      // (the pre-CAS behavior), not blocked for the lease window.
+      await db
+        .collection(REPOS)
+        .update(repo.repo_id, { settle_claimed_at: null })
+        .catch(() => {});
+      throw e;
+    }
+    await db.collection(REPOS).update(repo.repo_id, {
+      lifecycle_state: 'publish', // (re-ingest from 'retracted' returns to publish)
+      ingested_at: ts,
+      ingested_version: repo.version || null,
+      ingested_graph_name: graphName,
+      rag_drain_active: false,
+      settle_claimed_at: null, // THE FLIP RELEASES THE LEASE (its normal exit)
+      updated_at: ts
+    });
+    // The drain is DONE — this is the only honest moment to grant a bundle
+    // its 'Ingested' badge. Export writes 'Pending' unless the repo was
+    // already drained, so without this flip a genuinely ingested repo would
+    // stay 'Pending' forever (David, 2026-10-12). Best-effort, non-fatal: the
+    // flags above are the durable fact, the doc-repo badge is cosmetic.
+    try {
+      await backingFileService.markIngested(repo.repo_id, { actor });
+    } catch (badgeErr) {
+      logger.warn('[OKF-SETTLE] bundle Ingested flip failed (non-fatal)', {
+        repo_id: repo.repo_id,
+        err: badgeErr && badgeErr.message
+      });
+    }
+  } catch (e) {
+    // REVIEW FIX #13: promoteGraph succeeded but the flags flip threw — the
+    // lease must not outlive this attempt (a retry within the window would
+    // read "busy" for the full lease). Release + rethrow; the flip is
+    // retryable and promote is idempotent (born-right from==to no-op).
+    await db
+      .collection(REPOS)
+      .update(repo.repo_id, { settle_claimed_at: null })
+      .catch(() => {});
+    throw e;
+  }
+  // GRAPH GC (David, 2026-09-26 — the v2-orphan decision): the previous
+  // version's serving graph is dead the moment the successor's graph is
+  // promoted — unpublish keeps its graph by design, but once a SUCCESSOR is
+  // live the predecessor is unreachable weight (the manual drop of the
+  // orphaned OKF_www-gov-uk-full-crawl_v2 motivated this). Best-effort and
+  // strictly AFTER the serving flip: a GC failure never fails a settle.
+  // Skipped when null (first serve — nothing to supersede) or equal to the
+  // promoted name (born-right re-settle — the recorded graph IS the live one).
+  if (previousGraph && previousGraph !== graphName) {
+    try {
+      const gc = await graphLifecycle.dropServingGraph(previousGraph);
+      logger.info('OKF graph GC: previous serving graph dropped at settle', {
+        repo_id: repo.repo_id,
+        previous_graph: previousGraph,
+        serving_graph: graphName,
+        dropped: gc.dropped
+      });
+    } catch (gcErr) {
+      logger.warn('OKF graph GC: previous serving graph drop failed (non-fatal)', {
+        repo_id: repo.repo_id,
+        previous_graph: previousGraph,
+        serving_graph: graphName,
+        error: gcErr && gcErr.message
+      });
+    }
+  }
+  // P0 (David's re-test, 2026-09-08): _settleIngest OWNS the final
+  // rag_ingestion record — it is the single authority for "serving now".
+  // The worker's refresh normally completes the record, but a settle that
+  // bypasses it (the immediate-settle branch, or a drain whose per-concept
+  // callbacks died before the refresh — Kenya v5: edge-materialization
+  // errors) left status 'draining' forever, and the dashboard's
+  // isBuilding() then pinned a SERVING repo to the Import lane as
+  // "Building…". Write the terminal record here, always, from live counts.
+  try {
+    const [doneCount, failedCount, parsedCount] = await Promise.all([
+      conceptMetaService.countByIndexStatus(repo.repo_id, 'indexed'),
+      conceptMetaService.countByIndexStatus(repo.repo_id, 'failed'),
+      conceptMetaService.countByIndexStatus(repo.repo_id, 'parsed')
+    ]);
+    // failed_concepts written UNCONDITIONALLY (David's card-lies catch,
+    // 2026-09-09): the live list on failures, [] on success — a completed
+    // record must never carry a previous drain's stale list (ArangoDB's
+    // deep-merge on update() would otherwise preserve it).
+    const failedRows =
+      failedCount > 0
+        ? await (
+            await db.query(
+              "FOR m IN okf_concepts_meta FILTER m.repo_id == @rid AND m.index_status == 'failed' " +
+                "RETURN {concept_id: m.concept_id, error: LEFT(m.last_error || '', 300)}",
+              { rid: repo.repo_id }
+            )
+          ).all()
+        : [];
+    const total = doneCount + failedCount + parsedCount;
+    // WS3 (David, 2026-09-25): classify the settle outcome per version:
+    //   completed      — all concepts indexed (parsed=0, failed=0)
+    //   partial-failed — some indexed, some dead-lettered (parsed=0, failed>0)
+    //   failed         — concepts still pending or partial drain (parsed>0)
+    // The Versions menu surfaces this per row alongside the bundle download
+    // link; failed/partial-failed zips are RETAINED (live-forever policy)
+    // so the operator can re-import or diagnose.
+    const ingestStatus = parsedCount > 0 ? 'failed' : failedCount > 0 ? 'partial-failed' : 'completed';
+    await db.collection(REPOS).update(repo.repo_id, {
+      rag_ingestion: {
+        status: parsedCount > 0 ? 'failed' : failedCount > 0 ? 'failed' : 'completed',
+        requested_at: (repo.rag_ingestion && repo.rag_ingestion.requested_at) || ts,
+        finished_at: ts,
+        concepts_total: total,
+        concepts_done: doneCount,
+        error: failedCount > 0 ? failedCount + ' concept(s) failed to index — re-ingest them' : null,
+        failed_concepts: failedRows,
+        // COMPLETE FRESH RECORD (review fix #12): deep-merge would preserve a
+        // previous drain's queue context — null it like every other key.
+        queue: null
+      }
+    });
+    // Write the per-version ingest outcome to the version manifest so the
+    // Versions menu can show status alongside the bundle download link.
+    try {
+      const versionService = require('./version-service');
+      await versionService.updateVersionIngestStatus(repo.repo_id, repo.version || 0, {
+        ingest_status: ingestStatus,
+        concepts_indexed: doneCount,
+        concepts_failed: failedCount
+      });
+    } catch (verErr) {
+      logger.warn('Settle: version manifest ingest_status update failed (non-fatal)', {
+        repo_id: repo.repo_id,
+        version: repo.version,
+        error: verErr && verErr.message
+      });
+    }
+  } catch (err) {
+    logger.warn('Settle: rag_ingestion finalize failed (non-fatal — serving flags are set)', {
+      repo_id: repo.repo_id,
+      error: err.message
+    });
+  }
+  await audit('repo.ingest', repo.repo_id, actor, {
+    ingested_version: repo.version || null,
+    graph_name: graphName,
+    description: 'Ingested version ' + (repo.version || '?') + ' — graph "' + graphName + '" is now serving'
+  });
+  logger.info('OKF repository ingested (version serving)', {
+    repo_id: repo.repo_id,
+    version: repo.version,
+    graph_name: graphName
+  });
+  return {
+    ok: true,
+    action: 'ingest',
+    lifecycle_state: 'publish',
+    ingested_version: repo.version || null,
+    graph_name: graphName
+  };
+}
+
+/**
+ * ARM THE RAG DRAIN — the single implementation of "let the worker start".
+ *
+ * Extracted 2026-10-14 from the `ingest` transition so that re-ingest can reach
+ * the same state. The reason it must be shared, not reimplemented: on a
+ * PUBLISHED repo `rag_drain_active` is false (publish clears it, and only this
+ * function ever sets it true — verified: the ingest transition is the single
+ * writer). The worker's claim query filters on `rag_drain_active == true`, so
+ * a requeue without an arm leaves the rows invisible FOREVER. Two copies of this
+ * block would drift; one is the point.
+ *
+ * @param {object} db arango handle
+ * @param {string} repoId
+ * @param {object} repo the loaded registry doc
+ * @param {object} [actor]
+ * @param {object} [opts]
+ * @param {string} [opts.reason] 'ingest' | 're-ingest' — audit wording only
+ * @returns {Promise<{pending:number, done:number}>} pending drives the caller's
+ *   immediate-settle decision, so it MUST come back.
+ */
+async function armRagDrain(db, repoId, repo, actor, opts = {}) {
+  const reason = opts.reason || 'ingest';
+  const pending = await conceptMetaService.countByIndexStatus(repoId, 'parsed');
+  const done = await conceptMetaService.countByIndexStatus(repoId, 'indexed');
+  // NAME AUTHORITY (David's v9 wedge, 2026-09-08): the drain must write the name
+  // that WILL serve — stale row stamps made dataprep resurrect the dropped v8
+  // graph (ensure-graph re-created it at 08:18:41). Stamp every row to this
+  // drain's serving name right before arming.
+  const drainGraphName = graphLifecycle.versionedGraphName(repo);
+  await conceptMetaService.stampRepoGraphName(repoId, drainGraphName);
+  const ts = nowIso();
+  await db.collection(REPOS).update(repoId, {
+    rag_drain_active: true,
+    // COMPLETE FRESH RECORD (David's card-lies catch, 2026-09-09): ArangoDB
+    // update() DEEP-MERGES nested objects, so any key this write omits leaks
+    // from the previous record — a stale failed_concepts from a prior failed
+    // drain survived into a healthy completed card. Every key is written, every
+    // time. Re-ingest depends on this too: the dialog reads the LIVE count from
+    // /metrics rather than this snapshot, precisely because this wipes it.
+    rag_ingestion: {
+      status: pending > 0 ? 'draining' : 'completed',
+      requested_at: ts,
+      finished_at: pending > 0 ? null : ts,
+      concepts_total: pending + done,
+      concepts_done: done,
+      error: null,
+      failed_concepts: [],
+      // COMPLETE FRESH RECORD (review fix #12): the previous drain's queue
+      // context must not survive the deep-merge into this arm.
+      queue: null
+    },
+    updated_at: ts
+  });
+  await audit('repo.rag_drain_armed', repoId, actor, {
+    ingested_version: repo.version || null,
+    description:
+      (reason === 're-ingest'
+        ? 'Re-ingest started — retrying failed concept(s) of version '
+        : 'Ingest started — RAG ingestion of version ') +
+      (repo.version || '?') +
+      ' (' +
+      pending +
+      ' concept(s) to prepare)'
+  });
+  logger.info('OKF RAG drain armed', { repo_id: repoId, pending, version: repo.version, reason });
+  return { pending, done };
+}
+
+/**
+ * Apply ONE lifecycle transition.
+ * @param {string} repoId
+ * @param {string} action one of ACTIONS
+ * @param {object} [actor] { sub, source_ip? }
+ * @returns {Promise<{ok:true, action, lifecycle_state, ...transition-specific}>}
+ */
+async function transition(repoId, action, actor, opts = {}) {
+  const spec = TRANSITIONS[action];
+  if (!spec) {
+    throw new LifecycleError('VALIDATION_ERROR', `action must be one of ${ACTIONS.join('|')}`, 400);
+  }
+  // [DIAG 2026-09-15] Lifecycle 502 — verbose entry/exit per branch + try/finally
+  // so the next failed publish leaves a trace in okf-server.log. Without this
+  // we cannot see WHICH step (mint, export, requeue, audit) throws.
+  logger.info('[OKF-LIFECYCLE] entry', { repo_id: repoId, action, actor_sub: actor && actor.sub });
+  return withSpan('okf.lifecycle.transition', async (span) => {
+    span.setAttribute('okf.repo_id', repoId);
+    span.setAttribute('okf.lifecycle.action', action);
+    const db = await getDb();
+    const repo = await loadRepo(db, repoId);
+    logger.info('[OKF-LIFECYCLE] loaded repo', {
+      repo_id: repoId,
+      state: repo.lifecycle_state,
+      version: repo.version,
+      ingested_version: repo.ingested_version
+    });
+
+    // BUILDING GATE — before the transition table so a building repo hears
+    // "still building", never "invalid transition". Retract is exempt (a
+    // serving repo can never be building: publish already required all-indexed).
+    if (action !== 'retract') {
+      const blocker = await buildingBlocker(repo);
+      if (blocker) {
+        span.setAttribute('okf.lifecycle.blocked', blocker.code);
+        throw blocker;
+      }
+    }
+
+    // SOURCES-BUSY GATE (Story 7.7, David 2026-09-14) — ingest-only: a repo
+    // built from document-repository files cannot drain while its source
+    // documents still serve the free-form corpus. Before the transition
+    // table so the caller hears "retract your sources", never "invalid
+    // transition". (Structurally inert for crawl repos: no source_documents[].)
+    if (action === 'ingest') {
+      const sourcesBlocker = await sourcesBusyBlocker(repo);
+      if (sourcesBlocker) {
+        span.setAttribute('okf.lifecycle.blocked', sourcesBlocker.code);
+        throw sourcesBlocker;
+      }
+    }
+
+    if (!spec.from.includes(repo.lifecycle_state)) {
+      const e = new LifecycleError(
+        'INVALID_TRANSITION',
+        `'${action}' is not allowed from lifecycle state '${repo.lifecycle_state}' (allows: ${spec.from.join(', ')})`,
+        409
+      );
+      // STRUCTURED BODY (David's wizard-idempotency directive, 2026-09-04):
+      // the wizard renders only VALID actions — carry the machine in the
+      // machine-readable fields, not just the message text. The error
+      // handler passes client-error `details` through verbatim.
+      e.details = { current_state: repo.lifecycle_state, allowed: spec.from.slice() };
+      throw e;
+    }
+
+    if (action === 'submit' || action === 'approve') {
+      await db.collection(REPOS).update(repoId, { lifecycle_state: spec.to, updated_at: nowIso() });
+      await audit(`repo.${action}`, repoId, actor, {
+        from: repo.lifecycle_state,
+        to: spec.to,
+        description: action === 'submit' ? 'Submitted for review' : 'Approved (review sign-off)'
+      });
+      logger.info('OKF lifecycle transition', { repo_id: repoId, action, to: spec.to });
+      return { ok: true, action, lifecycle_state: spec.to };
+    }
+
+    if (action === 'publish') {
+      // [DIAG 2026-09-15] Mark every step so we can see exactly where the
+      // publish dies (entry / conceptCount / mint / fresh / export / requeue).
+      logger.info('[OKF-PUBLISH] step=entry', { repo_id: repoId, current_state: repo.lifecycle_state });
+      // A SERVING repo is READ ONLY (David, 2026-08-30): publishing a new
+      // version requires retracting first — content cannot change while the
+      // graph serves, so a publish-while-serving would mint an identical
+      // version and desync the versioned graph name.
+      if (repo.ingested_at) {
+        throw new LifecycleError(
+          'REPO_READ_ONLY',
+          'repository is serving (ingested) — retract it before publishing a new version',
+          409
+        );
+      }
+      // PUBLISH IDEMPOTENCY (live 2026-10-12: Bali minted v18/v19/v20 in
+      // eight seconds from three clicks, each requeuing all 1001 meta rows
+      // for a full re-drain, while an ingest was running). Nothing changed
+      // between those clicks, so the extra versions were pure churn: a new
+      // bundle, a new graph name, a whole corpus re-drained.
+      //
+      // Compare the concepts as they stand NOW against the fingerprint the
+      // current version recorded. Equal means "this exact content is already
+      // published as v{N}" — refuse with a 409 naming that version instead of
+      // minting an identical one. Bypassed when the repo has never published
+      // (no fingerprint to compare) so the FIRST publish always proceeds.
+      const [liveFingerprint, currentFingerprint] = await Promise.all([
+        versionService.currentFingerprint(repoId),
+        versionService.fingerprintOfCurrentVersion(repoId)
+      ]);
+      if (currentFingerprint && currentFingerprint === liveFingerprint) {
+        logger.info('[OKF-PUBLISH] step=noop (content unchanged)', {
+          repo_id: repoId,
+          version: repo.version
+        });
+        throw new LifecycleError(
+          'PUBLISH_NO_CHANGES',
+          `nothing has changed since version ${repo.version} — edit or annotate a concept first, ` +
+            'or retract and publish again to force a new version',
+          409
+        );
+      }
+      // An empty repo must not publish — the mint would snapshot zero concepts.
+      logger.info('[OKF-PUBLISH] step=counting concepts', { repo_id: repoId });
+      const conceptCount = (
+        await (
+          await db.query(`FOR m IN ${META} FILTER m.repo_id == @repo_id COLLECT WITH COUNT INTO c RETURN c`, {
+            repo_id: repoId
+          })
+        ).all()
+      )[0];
+      logger.info('[OKF-PUBLISH] step=concepts-counted', { repo_id: repoId, count: conceptCount });
+      if (!conceptCount) {
+        throw new LifecycleError('PUBLISH_EMPTY', 'repository has no concepts — add content before publishing', 409);
+      }
+      // The mint is the REAL publish gate (PII-complete, all-indexed,
+      // conformance-clean; 409 PUBLISH_GATE_BLOCKED / DRAIN_IN_PROGRESS pass
+      // through untouched). It bumps repo.version to N.
+      // A recorded steward acknowledgement (pii_ack) waives the PII 'hit'
+      // gate (reviewed public entities); a scanner 'error' still blocks.
+      logger.info('[OKF-PUBLISH] step=minting', { repo_id: repoId, pii_acknowledged: !!repo.pii_ack });
+      await versionService.mintVersion(repoId, { trigger: 'publish', acknowledgePii: !!repo.pii_ack }, actor);
+      logger.info('[OKF-PUBLISH] step=minted', { repo_id: repoId });
+      // Re-read the registry post-mint (version/okf_tag bumped).
+      const fresh = await loadRepo(db, repoId);
+      // Export the bundle zip — THE repo+version artifact in the doc-repo.
+      // A failure here fails the publish (lifecycle unchanged; retryable).
+      logger.info('[OKF-PUBLISH] step=exporting bundle', { repo_id: repoId, new_version: fresh.version });
+      let bundle;
+      try {
+        bundle = await bundleExportService.exportBundle(fresh, actor);
+      } catch (exportErr) {
+        logger.error('[OKF-PUBLISH] step=export FAILED', {
+          repo_id: repoId,
+          new_version: fresh.version,
+          error_code: exportErr && exportErr.code,
+          error_message: exportErr && exportErr.message,
+          error_status: exportErr && exportErr.status,
+          stack: exportErr && exportErr.stack
+        });
+        throw exportErr;
+      }
+      logger.info('[OKF-PUBLISH] step=exported', { repo_id: repoId, file_id: bundle.file_id });
+      // WS3 (David, 2026-09-25): bundles live forever per the live-forever
+      // policy — replace the single-slot `bundle` with an append-only
+      // `bundles` array. Existing entries are preserved. The worker's
+      // bundle cache (repo_id → file_id) is re-pointed at the most-recent
+      // zip; older zips remain queryable via the Versions menu.
+      // Read existing bundles first (publish is a single-writer path —
+      // route's requireRepoScope + publish gate), then write the merge.
+      // AWAIT-BUGFIX (2026-10-08, live smoke): missing outer await made
+      // existingBundles a Promise → prevBundles was ALWAYS [] and every
+      // publish's bundle merge silently dropped all prior version entries.
+      const existingBundles = await (
+        await db.query('FOR r IN okf_repositories FILTER r._key == @rid RETURN r.bundles', { rid: repoId })
+      ).all();
+      const prevBundles = (existingBundles && existingBundles[0]) || [];
+      // Story 1.7 (2026-10-08, supersedes the Story 1.6 dedicated collection):
+      // frontmatter is REQUIRED at publish time (independent of OKF_SEARCH_STYLE:
+      // tagging+vectorization must run regardless so an operator can flip the
+      // runtime search style without re-ingesting). The canonical store is now
+      // `okf_repositories.frontmatter` (a doc field, additive) — the index.md
+      // YAML is the curator-facing projection that writes through to this
+      // field. Hook fires AFTER mintVersion + bundleExport succeed and BEFORE
+      // the lifecycle_state=publish write. A failure here leaves the repo at
+      // 'approve' with 409 FRONTMATTER_REQUIRED — operator can retry once the
+      // frontmatter is set (via the wizard's Refresh suggestions + save flow
+      // in the index.md YAML, or via direct PATCH on the repo's frontmatter
+      // field).
+      logger.info('[OKF-PUBLISH] step=frontmatter gate', { repo_id: repoId });
+      try {
+        const frontmatterService = require('./frontmatter-service');
+        const db = await getDb();
+        const suppliedFm = (opts && opts.payload && opts.payload.frontmatter) || null;
+        // 1. The repo doc is the source of truth — read what's already there
+        //    (the curator may have authored via the editor's center pane in
+        //    a previous edit) and use it as the publish-time tag set.
+        const repoRow = await // LIFECYCLE-FRONT-BUGFIX (2026-10-08): the previous query was
+        // 'RETURN r.frontmatter, r.name' — AQL doesn't allow returning
+        // multiple comma-separated expressions (the parser barks at
+        // "unexpected ','"). The publish path crashed with 400 on
+        // every publish. Return a single document; we only need
+        // r.frontmatter downstream.
+        // AWAIT-BUGFIX (2026-10-08, live smoke): the outer await was
+        // ALSO missing — repoRow was a Promise, existingFm always null,
+        // and the publish gate silently PASSED (fell to the auto-suggest
+        // branch) while the stored frontmatter was ignored.
+        (
+          await db.query('FOR r IN okf_repositories FILTER r._key == @rid RETURN r.frontmatter', {
+            rid: repoId
+          })
+        ).all();
+        const existingFm = (repoRow && repoRow[0]) || null;
+        const supplied = suppliedFm || existingFm;
+        // 2. Gate: ≥3 topic + ≥1 forbidden. Story 1.7 simplified
+        //    (2026-10-08, per David): every value in the frontmatter
+        //    counts — there is no per-row approved stamp. The curator
+        //    edits the tags either via the chip UI or directly in the
+        //    index.md YAML center pane; both routes persist to
+        //    okf_repositories.frontmatter via the same write-through.
+        if (supplied) {
+          const topicCount = Array.isArray(supplied.topic) ? supplied.topic.length : 0;
+          const forbiddenCount = Array.isArray(supplied.forbidden) ? supplied.forbidden.length : 0;
+          if (topicCount < 3 || forbiddenCount < 1) {
+            throw new LifecycleError(
+              'FRONTMATTER_REQUIRED',
+              'Frontmatter gate failed: need ≥3 topic, ≥1 forbidden ' +
+                `(have topic=${topicCount}, forbidden=${forbiddenCount}). ` +
+                'Open the repo in the editor and add frontmatter to the index.md YAML ' +
+                'before publish.',
+              409
+            );
+          }
+          // 3. Write-through to okf_repositories.frontmatter (canonical
+          //    store) — sets updated_at + updated_by. The retriever reads
+          //    this on the next query; the index.md YAML is the curator's
+          //    view, not the canonical store.
+          await frontmatterService.writeFrontmatterToRepoDoc(repoId, supplied, {
+            actor,
+            version: bundle.bundle_version
+          });
+          logger.info('[OKF-PUBLISH] frontmatter write-through OK', {
+            repo_id: repoId,
+            topic: topicCount,
+            forbidden: forbiddenCount
+          });
+          // 3a. Story 1.7a — build the vectorized head from the
+          //     just-written frontmatter. Embeds each tag via the
+          //     shared TEI service, averages per-field combined
+          //     vectors into a single bundle-level vector, stores
+          //     it on okf_repositories.head. The retriever reads
+          //     this for query routing (additive — doesn't replace
+          //     the existing query-affinity routing from Story 1.3).
+          //     Best-effort: a TEI outage must not block the
+          //     publish — the frontmatter is already on the doc;
+          //     a curator can re-run the head build later.
+          try {
+            await frontmatterService.buildVectorizedHead(repoId, supplied, {
+              actor,
+              version: bundle.bundle_version
+            });
+            logger.info('[OKF-PUBLISH] vectorized head built', { repo_id: repoId });
+          } catch (headErr) {
+            logger.warn('[OKF-PUBLISH] vectorized head build FAILED (continuing)', {
+              repo_id: repoId,
+              error: headErr && headErr.message
+            });
+          }
+        } else {
+          // 4. No frontmatter in the repo doc and none supplied — run the
+          //    LLM auto-suggest path (the same as Story 1.6, but the
+          //    write target is the repo doc, not the old collection).
+          const suggested = await frontmatterService.suggestTags(repoId, {});
+          const validation = await frontmatterService.validateFrontmatter(repoId, suggested);
+          if (!validation.validated) {
+            logger.warn('[OKF-PUBLISH] frontmatter validation flagged inconsistencies', {
+              repo_id: repoId,
+              inconsistencies: validation.inconsistencies.length
+            });
+            throw new LifecycleError(
+              'FRONTMATTER_INCONSISTENT',
+              'Auto-tagged frontmatter failed consistency check (' +
+                validation.inconsistencies.length +
+                ' inconsistencies) — curator must review before publish. ' +
+                'Open the repo in the editor and approve the LLM-suggested ' +
+                'frontmatter in the index.md YAML.',
+              409
+            );
+          }
+          // Pre-approve the LLM output (the operator is opting in to
+          // auto-suggest by going through the publish flow without
+          // supplying frontmatter) and write to the repo doc.
+          const approved = [];
+          const now = new Date().toISOString();
+          for (const field of ['topic', 'entity', 'forbidden', 'keyword']) {
+            const arr = Array.isArray(suggested[field]) ? suggested[field] : [];
+            for (const value of arr) {
+              if (value)
+                approved.push({
+                  field,
+                  value,
+                  approved_at: now,
+                  approved_by: actor && actor.user_id ? actor.user_id : 'auto-publish'
+                });
+            }
+          }
+          for (const field of ['scope', 'summary']) {
+            const v = suggested[field];
+            if (v)
+              approved.push({
+                field,
+                value: v,
+                approved_at: now,
+                approved_by: actor && actor.user_id ? actor.user_id : 'auto-publish'
+              });
+          }
+          await frontmatterService.writeFrontmatterToRepoDoc(
+            repoId,
+            { ...suggested, _approved: approved },
+            { actor, version: bundle.bundle_version }
+          );
+          logger.info('[OKF-PUBLISH] auto-suggested + auto-approved frontmatter', {
+            repo_id: repoId,
+            topic: Array.isArray(suggested.topic) ? suggested.topic.length : 0,
+            forbidden: Array.isArray(suggested.forbidden) ? suggested.forbidden.length : 0
+          });
+          // 4a. Story 1.7a — same head build as the supplied path
+          //     (see comment block above). Best-effort.
+          try {
+            await frontmatterService.buildVectorizedHead(repoId, suggested, {
+              actor,
+              version: bundle.bundle_version
+            });
+            logger.info('[OKF-PUBLISH] vectorized head built (auto-suggest)', { repo_id: repoId });
+          } catch (headErr) {
+            logger.warn('[OKF-PUBLISH] vectorized head build FAILED (continuing, auto-suggest)', {
+              repo_id: repoId,
+              error: headErr && headErr.message
+            });
+          }
+        }
+      } catch (fmErr) {
+        if (fmErr && (fmErr.code === 'FRONTMATTER_INCONSISTENT' || fmErr.code === 'FRONTMATTER_REQUIRED')) {
+          throw fmErr;
+        }
+        logger.error('[OKF-PUBLISH] step=frontmatter gate FAILED', {
+          repo_id: repoId,
+          error_code: fmErr && fmErr.code,
+          error_message: fmErr && fmErr.message,
+          stack: fmErr && fmErr.stack
+        });
+        throw new LifecycleError(
+          'FRONTMATTER_REQUIRED',
+          'Frontmatter publish failed: ' +
+            (fmErr && fmErr.message ? fmErr.message : 'unknown error') +
+            '. Open the repo in the editor and add frontmatter to the index.md YAML before publish.',
+          409
+        );
+      }
+      logger.info('[OKF-PUBLISH] step=frontmatter gate OK', { repo_id: repoId });
+      await db.collection(REPOS).update(repoId, {
+        lifecycle_state: spec.to,
+        // APPEND the new bundle entry; never overwrite.
+        bundles: [
+          ...prevBundles,
+          {
+            file_id: bundle.file_id || null,
+            file_name: bundle.file_name,
+            bundle_version: bundle.bundle_version,
+            stored_at: bundle.stored_at,
+            ingest_status: null,
+            concepts_indexed: 0,
+            concepts_failed: 0,
+            settled_at: null
+          }
+        ],
+        // Keep the legacy single-slot field populated too — the worker's
+        // getBundleFileId + the ingest guard at :532 read repo.bundle.file_id.
+        bundle: {
+          file_id: bundle.file_id || null,
+          file_name: bundle.file_name,
+          bundle_version: bundle.bundle_version,
+          stored_at: bundle.stored_at
+        },
+        ingested_at: null, // the NEW version is not serving until ingested
+        ingested_version: null,
+        rag_drain_active: false, // the drain served its purpose — the mint guaranteed all-indexed
+        updated_at: nowIso()
+      });
+      // P0 hot-fix (David's re-test, 2026-09-08): the mint's all-indexed gate
+      // read the OLD drain's state — requeue every row so the NEXT ingest
+      // actually drains the NEW version's content (fm/label edits included).
+      // Without this, a publish→ingest after edits promoted an empty graph
+      // (population was always a side effect of INDEXING, never of promote).
+      // Fatal on failure: without the requeue the re-drain silently no-ops.
+      const requeuedPublish = await conceptMetaService.requeueRepoForRedrain(repoId, {
+        graphName: graphLifecycle.versionedGraphName({ name: repo.name, version: bundle.bundle_version })
+      });
+      logger.info('OKF publish requeued meta rows for re-drain', {
+        repo_id: repoId,
+        requeued: requeuedPublish,
+        graph_name: bundle.bundle_version
+          ? graphLifecycle.versionedGraphName({ name: repo.name, version: bundle.bundle_version })
+          : undefined
+      });
+      await audit('repo.publish', repoId, actor, {
+        bundle_version: bundle.bundle_version,
+        bundle_file_name: bundle.file_name,
+        pii_acknowledged: !!repo.pii_ack || undefined,
+        description:
+          'Published version ' +
+          bundle.bundle_version +
+          ' — bundle "' +
+          bundle.file_name +
+          '" stored in the document repository'
+      });
+      logger.info('OKF repository published', {
+        repo_id: repoId,
+        bundle_version: bundle.bundle_version,
+        bundle_file_name: bundle.file_name
+      });
+      return {
+        ok: true,
+        action,
+        lifecycle_state: spec.to,
+        bundle_version: bundle.bundle_version,
+        bundle
+      };
+    }
+
+    if (action === 'unpublish') {
+      // 2026-09-25: Reverse transition from Published to In Review for unbundling
+      // and rework scenarios. The bundle zip remains published but the repo
+      // reverts to reviewable state for corrections.
+      logger.info('[OKF-UNPUBLISH] unpublishing repository', { repo_id: repoId, current_state: repo.lifecycle_state });
+
+      // Update repository state to 'review'
+      await db.collection(REPOS).update(repoId, {
+        lifecycle_state: spec.to,
+        ingested_at: null, // Clear serving status
+        ingested_version: null,
+        updated_at: nowIso()
+      });
+
+      // Audit the unpublish action
+      await audit('repo.unpublish', repoId, actor, {
+        from: repo.lifecycle_state,
+        to: spec.to,
+        description: 'Unpublished — reverted to In Review status for unbundling and rework'
+      });
+
+      logger.info('OKF repository unpublished', { repo_id: repoId });
+      return {
+        ok: true,
+        action,
+        lifecycle_state: spec.to
+      };
+    }
+
+    if (action === 'ingest') {
+      if (!repo.bundle || !repo.bundle.file_id) {
+        throw new LifecycleError('NO_BUNDLE', 'no published bundle artifact — publish the repository first', 409);
+      }
+      if (repo.ingested_at && repo.ingested_version === repo.version) {
+        return { ok: true, action, lifecycle_state: repo.lifecycle_state, already: true }; // idempotent
+      }
+      // INGEST = THE RAG BOUNDARY (David, 2026-09-04, 6-step workflow): this
+      // transition starts the RAG ingestion of the published version —
+      // chunking, vectorization, knowledge-graph construction. NOTHING is
+      // chunked before this point: import/edit/review/publish are
+      // dataprep-free. The version starts serving when the drain completes
+      // (the worker settles via _settleIngest; immediate here when there is
+      // nothing left to drain).
+      const { pending, done } = await armRagDrain(db, repoId, repo, actor, { reason: 'ingest' });
+      if (pending === 0) {
+        // Everything already drained (re-ingest) — settle immediately.
+        const fresh = await loadRepo(db, repoId);
+        const settled = await _settleIngest(db, fresh, actor);
+        if (settled && settled.busy) {
+          // REVIEW FIX #10: busy conflates "a concurrent settler holds the
+          // lease" with "the repo was disarmed mid-window" — only the first
+          // is a success being achieved by someone else. Verify: a real
+          // delegated settle leaves ingested_at SET; anything else is an
+          // honest 409 (the steward retries, no fabricated success).
+          const cur = await loadRepo(db, repoId);
+          if (cur && cur.ingested_at) {
+            logger.info('OKF ingest: settle delegated to the concurrent settler holding the lease', {
+              repo_id: repoId,
+              version: repo.version
+            });
+            return { ok: true, action, lifecycle_state: 'publish', settle_delegated: true };
+          }
+          throw new LifecycleError(
+            'SETTLE_BUSY',
+            'the repository is not armed for a settle and no concurrent settler completed it — retry ingest',
+            409
+          );
+        }
+        return settled;
+      }
+      // Async: the worker drains, then settles (promotes the serving graph).
+      return {
+        ok: true,
+        action,
+        lifecycle_state: repo.lifecycle_state, // stays 'publish' until drained
+        ingesting: true,
+        rag_ingestion: {
+          status: 'draining',
+          concepts_total: pending + done,
+          concepts_done: done
+        }
+      };
+    }
+
+    // action === 'retract'
+    // NOT_INGESTED only when there is genuinely nothing to tear down: no
+    // settled ingest AND no drain in flight. A MID-DRAIN repo (rag_drain_active,
+    // the wedge-recovery escape — see the drain-freeze amendment below) MUST be
+    // retractable: the graph drop below is idempotent and the requeue resets
+    // the partial index stamps. Live 2026-09-15 (Bali-wikipedia-LLM): the drain
+    // died at 6/1001 concepts and this guard refused the teardown with
+    // NOT_INGESTED while 6 concepts sat indexed and the drain stayed armed.
+    if (!repo.ingested_at && repo.rag_drain_active !== true) {
+      throw new LifecycleError('NOT_INGESTED', 'repository is not ingested — nothing to retract', 409);
+    }
+    // D-C (#981, David's Stage-1 ruling): retract DROPS the serving graph with
+    // ALL underlying collections — a retracted repository stays visible and
+    // editable (its meta rows are KEPT; this is deliberately NOT the delete
+    // cascade) but nothing serves, and re-ingest rebuilds the graph born-right
+    // from the meta rows. The former rename-demote left the graph in place —
+    // the Stage-1 defect David caught on Kenya. D-C amendment (David,
+    // 2026-09-08: "retract MUST just drop the graph" + "fail and stall
+    // silently is NOT acceptable"): a teardown failure now FAILS the retract
+    // loudly — the state never flips on a half-drop. The drop is idempotent
+    // (404-class = already gone), so a refused retract is safely re-runnable;
+    // the flip happens only after the teardown AND the requeue both succeed.
+    let dropped;
+    try {
+      dropped = await graphRetract.dropRepoGraphsForRepo(repoId);
+    } catch (err) {
+      logger.error('OKF retract graph teardown FAILED — retract refused', {
+        repo_id: repoId,
+        error: err.message
+      });
+      throw new LifecycleError(
+        'GRAPH_TEARDOWN_FAILED',
+        'the serving graph could not be dropped (' +
+          err.message +
+          ') — nothing was retracted; retry once the database is healthy',
+        500
+      );
+    }
+    logger.info('OKF retract graph teardown done', { repo_id: repoId, dropped: dropped.length });
+    // P0 hot-fix (David's re-test, 2026-09-08): the meta rows ARE the drain
+    // queue — with the graph gone, 'indexed' stamps are meaningless and the
+    // re-ingest would promote an EMPTY graph (the exact defect David hit).
+    // Requeue every row so retract→ingest rebuilds, and fail the retract (not
+    // fail-soft) if the reset fails — a half-retracted repo would strand the
+    // empty-graph bug. (The graph drop above is idempotent, so a retry heals.)
+    const requeued = await conceptMetaService.requeueRepoForRedrain(repoId, {
+      graphName: graphLifecycle.draftGraphName(repo)
+    });
+    logger.info('OKF retract requeued meta rows for re-drain', { repo_id: repoId, requeued });
+    await db.collection(REPOS).update(repoId, {
+      lifecycle_state: spec.to, // 'retracted' — a pulled repo must stay VISIBLE
+      ingested_at: null,
+      ingested_version: null,
+      ingested_graph_name: null,
+      // DRAIN FREEZE completion (David, 2026-09-12): retract is the ONE
+      // mutation allowed mid-drain (the wedge-recovery escape) — so it must
+      // also DISARM the freeze, or a retracted repo stays frozen forever.
+      // The drain record is cancelled honestly (the card-lies rule: write
+      // the COMPLETE shape, never a partial merge).
+      rag_drain_active: false,
+      rag_ingestion: {
+        status: 'cancelled',
+        error: 'drain cancelled — the repository was retracted mid-ingest',
+        concepts_total: 0,
+        concepts_done: 0,
+        failed_concepts: []
+      },
+      updated_at: nowIso()
+    });
+    // MARK EVERY BACKING FILE AS RETRACTED (2026-09-25, David's directive —
+    // generalised 2026-10-12): when the repo goes out of service, the files it
+    // owns in doc-repo MUST be marked Retracted too — otherwise they stay at
+    // dataprep.status='Ingested' and remain queryable / downloadable /
+    // re-importable for a repository that serves nothing.
+    //
+    // This used to mark EXACTLY ONE bundle: it fetched `is_bundle=true&limit=1`
+    // and patched items[0]. But supersedeOldBundles was removed by the WS3
+    // directive (bundles live forever — one zip per publish version), so a repo
+    // with N published versions has N zips and retract left N-1 badged
+    // 'Ingested'. Live-caught on Bali-wikipedia-LLM: v17/v18/v19/v20 zips all
+    // existed while ingested_at was null, and only v17 — the zip that existed
+    // at retract time — carried 'Retracted'. The admin list then showed three
+    // INGESTED entries for a repository with nothing ingested.
+    //
+    // Retract marks rather than deletes: a RETRACTED repo is the EDIT state and
+    // its only exit is submit -> review (lifecycle-service.js:75), so the hard
+    // delete belongs to the delete cascade (repository-service.remove ->
+    // backingFileService.hardDelete), not here.
+    //
+    // Best-effort and non-fatal, as before: the retract itself has already
+    // succeeded (graph dropped, state flipped) and a doc-repo hiccup must never
+    // undo that.
+    try {
+      await backingFileService.retractBackingFiles(repoId, { actor, reason: 'repository retracted' });
+    } catch (bundleErr) {
+      logger.warn('[OKF-LIFECYCLE] backing-file mark-Retracted failed (non-fatal)', {
+        repo_id: repoId,
+        err: bundleErr && bundleErr.message
+      });
+    }
+    await audit('repo.retract', repoId, actor, {
+      retracted_version: repo.ingested_version || null,
+      graph_name: repo.ingested_graph_name || null,
+      description:
+        'Retracted version ' +
+        (repo.ingested_version || '?') +
+        ' — taken out of service, serving graph dropped; the repository is editable again'
+    });
+    logger.info('OKF repository retracted (version out of service)', {
+      repo_id: repoId,
+      version: repo.ingested_version,
+      graph_name: repo.ingested_graph_name || null
+    });
+    return { ok: true, action, lifecycle_state: spec.to, retracted_version: repo.ingested_version || null };
+  });
+}
+
+/**
+ * RE-INGEST guard (David, 2026-10-14: "the Re-Ingest menu must only be
+ * available after a repo is ingested"). Deliberately NOT assertWritable — that
+ * one 409s REPO_READ_ONLY on ingested_at, which is precisely the state this
+ * action exists to serve. The two guards are complements, not alternatives.
+ *
+ * Two refusals, both honest:
+ *  - not ingested → nothing has ever been indexed, so nothing can have failed
+ *  - drain in flight → a second arm would race the running drain
+ * @param {object} repo the registry doc
+ */
+function assertReingestable(repo) {
+  if (!repo || !repo.ingested_at) {
+    throw new LifecycleError(
+      'NOT_INGESTED',
+      'the repository has not been ingested yet — there is nothing to re-ingest',
+      409
+    );
+  }
+  if (repo.rag_drain_active === true) {
+    throw new LifecycleError(
+      'DRAIN_IN_PROGRESS',
+      'a RAG drain is already running for this repository — wait for it to settle',
+      409
+    );
+  }
+}
+
+/**
+ * RE-INGEST FAILED CONCEPTS (David, 2026-10-14). The recovery path the product
+ * already promised and never built.
+ *
+ * WHY NOT JUST CALL transition('ingest'): it short-circuits with `already: true`
+ * when ingested_version === version, which is true for every currently-ingested
+ * repo (verified live: Solar System 1/1, NCD 6/6). It would be a silent no-op.
+ *
+ * WHY IT MUST ALSO ARM: on a published repo rag_drain_active is false (publish
+ * clears it and armRagDrain is the only writer). The worker's claim query filters
+ * on it, so requeue-without-arm strands the rows invisibly.
+ *
+ * WHY NOTHING-TO-DO DOES NOT ARM: arming with zero pending would pin
+ * rag_drain_active true against a 'completed' record, and assertWritable's drain
+ * branch then freezes every write on the repo with no drain in flight to settle
+ * it. Refusing to arm on an empty requeue is the difference between a no-op and
+ * a wedge.
+ *
+ * @param {string} repoId
+ * @param {object} [opts]
+ * @param {string} [opts.conceptId] retry ONE concept; omitted = all failed
+ * @param {object} [actor] { sub, name }
+ */
+async function reingestFailed(repoId, opts = {}, actor = {}) {
+  if (!repoId) return { ok: false, code: 'REPO_ID_REQUIRED', requeued: 0 };
+  const db = await getDb();
+  const repo = await loadRepo(db, repoId);
+  if (!repo || repo.deleted_at) {
+    throw new LifecycleError('NOT_FOUND', 'repository not found', 404);
+  }
+  assertReingestable(repo);
+
+  const { requeued, conceptIds } = await conceptMetaService.requeueFailedForReingest(repoId, {
+    conceptId: opts.conceptId || null
+  });
+
+  if (requeued === 0) {
+    logger.info('OKF re-ingest: nothing failed to retry', {
+      repo_id: repoId,
+      concept_id: opts.conceptId || null
+    });
+    await audit('repo.reingest', repoId, actor, {
+      description: 'Re-ingest requested but no failed concept(s) to retry',
+      details: { requeued: 0, concept_id: opts.conceptId || null }
+    });
+    return { ok: true, requeued: 0, conceptIds: [] };
+  }
+
+  const { pending } = await armRagDrain(db, repoId, repo, actor, { reason: 're-ingest' });
+  await audit('repo.reingest', repoId, actor, {
+    description:
+      'Re-ingest — retried ' + requeued + ' failed concept(s)' + (opts.conceptId ? ' (' + opts.conceptId + ')' : ''),
+    details: { requeued, pending, concept_ids: conceptIds, concept_id: opts.conceptId || null }
+  });
+  logger.info('OKF re-ingest armed', {
+    repo_id: repoId,
+    requeued,
+    pending,
+    concept_id: opts.conceptId || null
+  });
+  return { ok: true, requeued, pending, conceptIds };
+}
+
+/**
+ * READ-ONLY guard (David, 2026-08-30): a SERVING repo (ingested_at set) must
+ * refuse every content mutation. Call after the getById pre-gate in every
+ * mutating handler (concepts, repo update, publish). 409 REPO_READ_ONLY.
+ * @param {object} repo the registry doc
+ */
+function assertWritable(repo) {
+  if (repo && repo.ingested_at) {
+    throw new LifecycleError(
+      'REPO_READ_ONLY',
+      'repository is serving (ingested) and is READ ONLY — retract it to make changes',
+      409
+    );
+  }
+  // DRAIN FREEZE (David, 2026-09-12): a published repo whose RAG drain is in
+  // flight is FROZEN — no PII scan, no bulk actions, no concept edits, no
+  // nothing. The drain is indexing a snapshot of this content; a concurrent
+  // mutation would race it and desync the version. Retract stays available
+  // (the transition building gate exempts it — the wedge-recovery escape).
+  if (repo && repo.rag_drain_active === true) {
+    throw new LifecycleError(
+      'DRAIN_IN_PROGRESS',
+      'repository is being ingested (RAG drain active) — content is frozen until the drain settles',
+      409
+    );
+  }
+}
+
+module.exports = {
+  transition,
+  _settleIngest,
+  assertWritable,
+  reingestFailed,
+  assertReingestable,
+  armRagDrain,
+  buildingBlocker, // unit-tested directly (gate contract)
+  sourcesBusyBlocker, // Story 7.7 — unit-tested directly (gate contract)
+  TRANSITIONS,
+  ACTIONS,
+  LifecycleError
+};

@@ -36,6 +36,20 @@ contractual evidence — a fresh clone does not carry them.)
   pipeline invokes moved out of the flat `scripts/` (operator and
   dev-node tools stay); every reference swept and the gates proven
   green from the new depth.
+- **The Playwright E2E suite runs against the k8s cluster** — 13 spec
+  files carried a literal `https://localhost`; every literal now
+  resolves through `BASE_URL` (compose default unchanged) and ~110
+  specs ran against the dev cluster through the Envoy edge: ~102
+  green, 8 red, all eight classified spec-vs-frontend drift with the
+  evidence recorded in the pre-merge gate below. The suite is no
+  longer Compose-only.
+- **The branch was rebased onto `main` again (540 commits, clean)** —
+  main's six new commits had left the branch's app-file copies stale
+  (i18n locales, admin components), which read as a 1139-line
+  regression in the app diff; the replay erased it. The app-code diff
+  vs `main` is empty. Rebase trap noted: the vendored `charts/*.tgz`
+  (untracked) block the replay — move them aside first, regenerate
+  with `helm dependency update` after.
 
 - **All six live checks green at 0.2.130 on the rebuilt node (2026-10-29,
   16:20)** — health through the Envoy edge, genie theme + register link,
@@ -2557,6 +2571,41 @@ and the rows below name each plan and its outcome.
   counts changes, not presence.
 
 ## Remaining phases
+
+0. **Pre-merge gate (2026-10-30 ruling): !520 does not merge while any
+   follow-up it spawned is open.** The gate list, each item an
+   app-side MR off `main` (fresh session/worktree per item; this
+   branch carries no app code by contract):
+   - **A. Qualify the three E2E drift spots against a Compose stack**
+     (2026-10-30, ~110 Playwright specs run green against the k8s
+     dev cluster, 8 red — every red is spec-vs-frontend drift in
+     appearance only; Compose decides spec-drift vs real regression):
+     1. `tests/e2e/documents/upload.spec.js` ×4 —
+        `getByText('Document Management')` resolves to 2 elements
+        (sidebar nav + page heading), strict-mode violation in
+        `navigateToDocumentManagement` (`tests/e2e/helpers/documents.js:16`).
+     2. `tests/e2e/chatbot/conversation-history.spec.js` ×3 —
+        the save flow waits on `[data-testid="save-chat-btn"]`
+        (`helpers/chatbot.js:170`) but `ChatComposer.showSave`
+        defaults `false` and NO parent passes `show-save`, so the
+        button never renders; one more test of the file uses ROPC
+        (`helpers/auth.js:getUserToken`) which the realm correctly
+        refuses — that test needs a login-session posture instead.
+     3. `tests/e2e/chat-conversation.spec.js:515` — the conversation
+        header title should reflect the QuickHelp option ("Apply for
+        ID") but reads "Just Chat" (the no-context fallback). Red on
+        Compose = spec drift; green = a real regression on `main`.
+   - **B. Fix the specs (and any regression A uncovers)** — MR off
+     `main`, re-run the three suites against BOTH stacks before merge.
+   - **C. chatqna event-loop blocking** — the parked app-side fix
+     gets its MR now (see backlog entry below for the named shape).
+   - **D. !520 description rework** — the description still narrates
+     the branch's first week; rewrite it to cover the whole branch
+     (chart tiers, gates, the validation evidence, this ledger), then
+     the merge decision.
+   Items land on `main`; this branch rebases onto `main` after B/C
+   merge, and the gate closes when the tree is green with no open
+   follow-up.
 
 1. **Merge `feat/k8s-migration` → main** (MR !520 open, Draft; the
    description is being reworked to cover the whole branch rather than its

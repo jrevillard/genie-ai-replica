@@ -46,10 +46,10 @@ Map<String, dynamic> parseQuickHelpButton(
 ) {
   // One malformed value degrades ONE card, never the whole load. A
   // non-map icon or action is the config-typo class the bare-string
-  // label rule answers. A NON-MAP ENTRY (a stray string) is not a card
-  // at all and is dropped; a parsed-but-TITLE-LESS entry is kept — the
-  // web renders the same blank card and refuses its press, and the
-  // grid must show the same card count on both platforms.
+  // label rule answers. A NON-MAP ENTRY (a stray string) is not a
+  // card at all and stays dropped — the card-count parity rule below
+  // is about PARSEABLE entries: a parsed-but-TITLE-LESS entry is kept,
+  // because the web renders the same blank card and refuses its press.
   final iconMap = configMapOf(btn['icon']);
   // The served path's BASENAME names the bundled asset. A NON-STRING
   // value, or one with no basename, names nothing — no asset, not a
@@ -150,10 +150,12 @@ int quickHelpGridColumns(
       ? raw.toInt()
       : 2;
   if (!maxWidth.isFinite) return parsed;
-  // No column can be thinner than the grid's 10px spacing between
-  // columns: a count wider than the grid is bounded by width/10 + 1,
-  // or the delegate lays out negative-extent children (a debug
-  // assertion, garbage in release).
+  // The bound delivers ONE guarantee: the delegate never lays out a
+  // NEGATIVE-extent child (a debug assertion, garbage in release) —
+  // count and width must leave room for the 10px spacing between the
+  // columns. An absurd-but-bounded count still yields sub-pixel tiles;
+  // a readable-minimum policy is a layout decision no shipped
+  // configuration needs (none sets a count).
   final int byWidth = (maxWidth ~/ 10) + 1;
   return parsed.clamp(1, byWidth);
 }

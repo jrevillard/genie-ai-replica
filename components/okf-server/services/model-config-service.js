@@ -23,6 +23,7 @@ const { logger } = require('../shared-lib/logger');
 const { isArangoNotFound } = require('./arango-errors');
 const { withSpan } = require('../shared-lib/tracing');
 const auditService = require('./audit-service');
+const modelCache = require('./vllm-model-cache');
 
 const COLLECTION = 'okf_model_configs';
 const PROVIDERS = new Set(['openai', 'anthropic']);
@@ -170,7 +171,7 @@ async function listConfigs(opts = {}) {
     // default control must never be the only statement of what is in use).
     // base_url + model only — the env key never crosses the wire.
     const envJudge = process.env.RAGAS_JUDGE_BASE_URL
-      ? { base_url: process.env.RAGAS_JUDGE_BASE_URL, model: process.env.RAGAS_JUDGE_MODEL || null }
+      ? { base_url: process.env.RAGAS_JUDGE_BASE_URL, model: envJudgeModel() }
       : null;
     // The list is readable by every OKF user (the RAGAS judge picker needs
     // it); `opts.includeKeyHint` is false for a caller without tools-admin,
@@ -374,7 +375,13 @@ async function fetchModelList({ provider, base_url, api_key }) {
     // the auth header it does not accept. Either way the base speaks
     // Anthropic and the provider is wrong.
     if ((resp.status === 404 || resp.status === 401) && provider === 'openai' && /\/anthropic\/?$/.test(base)) {
-      hint = ' — this base URL looks like an Anthropic-compatible endpoint: switch the provider to Anthropic';
+      // 404 = the path shape (the base serves /v1/models, not /models);
+      // 401 = the auth header (it wants x-api-key). Switching the provider
+      // fixes both — but a wrong key must not read like a path problem.
+      hint =
+        resp.status === 401
+          ? ' — this base URL looks like an Anthropic-compatible endpoint: switch the provider to Anthropic (or check the API key)'
+          : ' — this base URL looks like an Anthropic-compatible endpoint: switch the provider to Anthropic';
     }
     throw httpErr('MODEL_LIST_FAILED', 502, `model listing returned ${resp.status}: ${body.slice(0, 200)}${hint}`);
   }
@@ -629,13 +636,23 @@ async function resolveModelOverride(pick = {}) {
   };
 }
 
+/** The model the ENV judge runs on — the same name the ragas sidecar
+ * judges with: its compose block defaults RAGAS_JUDGE_MODEL to
+ * VLLM_LLM_MODEL_ID (the sidecar's judge base IS the deployment). The
+ * OKF server receives no judge-model default (the deployment's model name
+ * must not be sent to another endpoint), so the record falls back to the
+ * deployment pin — the same name. */
+function envJudgeModel() {
+  return (process.env.RAGAS_JUDGE_MODEL || '').trim() || modelCache.envPinLLMSpelling() || null;
+}
+
 /** What the run's fidelity block records — name + model, never the key. */
 function judgeFidelity(override) {
   if (!override) {
     return {
       source: process.env.RAGAS_JUDGE_BASE_URL ? 'env' : 'builtin-default',
       config: null,
-      model: process.env.RAGAS_JUDGE_MODEL || null
+      model: envJudgeModel()
     };
   }
   return { source: override.source, config: override.config_name, model: override.model };

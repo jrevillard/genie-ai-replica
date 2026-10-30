@@ -60,8 +60,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   point `LANGUAGE_REGISTRY_FILEPATH` at the registry file instead — a file
   still in the old flat shape is refused (translation answers in English).
   See `docs/UPGRADE.md`.
-- **The OKF admin model listing follows the chat path's URL rule (#1181,
-  !640).** A base that already carries a version segment lists at
+
+- **Breaking: the OKF admin model listing follows the chat path's URL
+  rule.** A base that already carries a version segment lists at
+>>>>>>> 32d87392a (fix(okf): confirmation round — the judge fidelity, the pin docs, the changelog)
   `{base}/models`, a bare host at `{base}/v1/models` — the one rule the
   chat call uses. A stored configuration whose base serves the list at the
   root (`http://my-proxy:8080/models`) must now carry its version segment
@@ -70,7 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   credentials form next to a working server.
 
 - **Ansible deployments with a remote GPU node now default
-  `RAGAS_JUDGE_BASE_URL` to the GPU's own model server (#1181, !640).** The
+  `RAGAS_JUDGE_BASE_URL` to the GPU's own model server.** The
   default was the local `http://vllm:8000/v1`, and the local vLLM service
   does not run on the app node when the models are remote — the judge base
   pointed at a service that was not there. The default is now
@@ -79,13 +81,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ragas_judge_base_url` explicitly are unaffected.
 
 - **The suite provenance field `generator` names every model that produced
-  the suite (#1181, !640).** It was a constant — the deployment's model name
+  the suite.** It was a constant — the deployment's model name
   from the environment, or `llm:vllm` — so it never reflected any call. It
   now lists the distinct models the generation calls actually ran under
   (`llm:model-a,llm:model-b`).
 
 - **The OKF server no longer inherits the deployment's model NAME for the
-  benchmark judge (#1181, !640).** `RAGAS_JUDGE_MODEL` defaulted to
+  benchmark judge.** `RAGAS_JUDGE_MODEL` defaulted to
   `VLLM_LLM_MODEL_ID`, so a judge pointed at another endpoint was asked
   for the deployment's model and answered 404 (`model not found`) — a
   failure that reads like a credentials problem. The name is now explicit
@@ -93,8 +95,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   benchmark sidecar keeps its own default (its judge base IS the
   deployment).
 
-- **`VLLM_MODEL_ID` no longer pins the OKF server on its own (#1181,
-  !640).** The pin spelling is `VLLM_LLM_MODEL_ID` — the name the vLLM
+- **`VLLM_MODEL_ID` no longer pins the OKF server on its own.** The pin
+  spelling is `VLLM_LLM_MODEL_ID` — the name the vLLM
   container is started with (`--served-model-name`), and the one every
   Python service reads. A raw `VLLM_MODEL_ID` in `.env` named a model the
   endpoint did not serve, and every OKF call 404'd on it while the Python

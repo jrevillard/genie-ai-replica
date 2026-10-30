@@ -458,6 +458,13 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   picks the configured id instead of the
 #                                 #   served one. Raise it on a remote GPU node
 #                                 #   whose models load slowly.
+#                                 #   It is a CEILING on the probe, not the
+#                                 #   probe's budget: the probe takes at most
+#                                 #   half of the caller's own timeout and the
+#                                 #   chat call gets what is left of it — so
+#                                 #   the first call after each cache expiry
+#                                 #   has a shorter chat window than the ones
+#                                 #   that follow.
 # MODEL_DETECT_TTL=60                # TTL of the /v1/models model-id cache
 #                                 #   (seconds). Shared by the Python
 #                                 #   services (retriever/dataprep/chatqna)
@@ -1683,8 +1690,12 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   Default: '' (= engine fail-softs to heuristics). Compose: yes.
 #   Ansible: yes (gpu_node_host block — same host:port as TEI_EMBED_HOST).
 # VLLM_LLM_MODEL_ID=ibm-granite/granite-4.1-8b
-#   Default: '' (must support guided JSON for labeling). Compose: yes
-#   (nested VLLM_MODEL_ID fallback). Ansible: yes (guarded).
+#   Default: '' (must support guided JSON for labeling). Compose: yes.
+#   Ansible: yes (guarded).
+#   THE PIN SPELLING: the name the vLLM container is started with
+#   (--served-model-name) and the one every service reads — VLLM_MODEL_ID is
+#   filled from it. Setting VLLM_MODEL_ID on its own pins nothing (it would
+#   name a model the endpoint does not serve).
 # VLLM_API_KEY=secret
 #   Default: '' (Bearer on vLLM + TEI calls). Compose: yes. Ansible: yes.
 # OKF_CURATION_TIMEOUT_MS=30000

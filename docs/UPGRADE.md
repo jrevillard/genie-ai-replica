@@ -105,6 +105,18 @@ Knowledge Hierarchy tab of the Admin Dashboard (or
 afterwards); read `GET /api/analytics/dashboard` instead of the removed
 route.
 
+#### The OKF model listing follows the chat path's URL rule
+
+The OKF admin panel lists the models of a saved configuration at
+`{base}/models` when the base carries no version segment; it now lists at
+`{base}/v1/models` — the one rule the chat call uses, so the listing and
+the chat can never disagree about where `/v1` goes.
+
+**Migration**: a saved configuration whose base serves the model list at the
+root (`http://my-proxy:8080/models`) must carry its version segment
+(`http://my-proxy:8080/v1`). The chat call already resolved that base with
+the `/v1` prefix, so only the listing path changes.
+
 #### Service-category translation field names
 
 On POST/PUT of categories and services, translations now read

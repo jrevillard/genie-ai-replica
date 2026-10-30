@@ -36,7 +36,8 @@
  *   - the pin accepts TWO spellings here (the Node services' deployment
  *     has both) and is trimmed; Python reads one spelling, untrimmed;
  *   - the failed-probe window applies to the model id here (it is the
- *     Node request-path field); Python windows `max_model_len` instead;
+ *     Node request-path field) and lasts 10 s; Python windows
+ *     `max_model_len` instead, for 60 s;
  *   - the credential is scoped: a probe never carries the deployment
  *     bearer to an endpoint it was not aimed at; Python has one global
  *     credential;

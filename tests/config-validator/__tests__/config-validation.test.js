@@ -521,9 +521,9 @@ describe('Configuration Validation Suite', () => {
       /^(OKF_|TEI_EMBED_HOST|EMBEDDING_MODEL_ID|VLLM_ENDPOINT|VLLM_MODEL_ID|VLLM_API_KEY|DATAPREP_URL)/.test(v)
     );
 
-    // The compose VLLM_MODEL_ID entry interpolates VLLM_LLM_MODEL_ID first
-    // (`${VLLM_LLM_MODEL_ID:-${VLLM_MODEL_ID:-}}`) — an env.j2 emission of
-    // the primary alias satisfies the parity for the container-side name.
+    // The compose VLLM_MODEL_ID entry is filled from VLLM_LLM_MODEL_ID
+    // (`${VLLM_LLM_MODEL_ID:-}`) — an env.j2 emission of the primary alias
+    // satisfies the parity for the container-side name.
     const ANSIBLE_ALIAS = { VLLM_MODEL_ID: 'VLLM_LLM_MODEL_ID' };
 
     test('every OKF compose var is emitted by env.j2', () => {

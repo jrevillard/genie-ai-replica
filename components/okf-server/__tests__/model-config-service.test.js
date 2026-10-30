@@ -90,6 +90,17 @@ describe('model-config lifecycle', () => {
     expect(listed.env_pick).toBe('__env__');
     listed.configs.forEach((c) => expect(c.api_key).toBeUndefined());
     expect(JSON.stringify(listed.env_judge || {})).not.toContain('sk-');
+    // The panel's "System default (environment)" row NAMES the model it
+    // resolves to — a default control must never be the only statement of
+    // what is in use (David 2026-10-24).
+    process.env.VLLM_LLM_MODEL_ID = 'ibm-granite/granite-4.1-8b';
+    delete process.env.VLLM_MODEL_ID;
+    delete process.env.RAGAS_JUDGE_MODEL;
+    process.env.RAGAS_JUDGE_BASE_URL = 'http://vllm:8000/v1';
+    const listed2 = await svc.listConfigs();
+    expect(listed2.env_judge.model).toBe('ibm-granite/granite-4.1-8b');
+    delete process.env.VLLM_LLM_MODEL_ID;
+    delete process.env.RAGAS_JUDGE_BASE_URL;
   });
 
   test('duplicate names are rejected (409 NAME_TAKEN)', async () => {
@@ -477,5 +488,25 @@ describe('resolution chain (picked > active > env) + fidelity', () => {
     expect(viaActive.model).toBe('pd'); // falls back to the config's default
     expect(svc.judgeFidelity(viaActive)).toEqual({ source: 'picked', config: 'picked one', model: 'pd' });
     expect(svc.judgeFidelity(null).source).toMatch(/env|builtin-default/);
+  });
+
+  it('the env judge fidelity names the model the SIDECAR judges with', () => {
+    // The sidecar's judge model is RAGAS_JUDGE_MODEL, else VLLM_LLM_MODEL_ID
+    // (its own compose default). okf-server no longer receives a judge model
+    // default (the deployment's model name must not cross to another
+    // endpoint), so the record falls back to the deployment pin — the same
+    // name the sidecar uses.
+    process.env.RAGAS_JUDGE_BASE_URL = 'http://vllm:8000/v1';
+    delete process.env.RAGAS_JUDGE_MODEL;
+    process.env.VLLM_LLM_MODEL_ID = 'ibm-granite/granite-4.1-8b';
+    delete process.env.VLLM_MODEL_ID;
+    expect(svc.judgeFidelity(null)).toEqual({
+      source: 'env',
+      config: null,
+      model: 'ibm-granite/granite-4.1-8b'
+    });
+    // An explicitly named judge model still wins.
+    process.env.RAGAS_JUDGE_MODEL = 'judge/explicit';
+    expect(svc.judgeFidelity(null).model).toBe('judge/explicit');
   });
 });

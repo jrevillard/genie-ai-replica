@@ -46,10 +46,11 @@ Map<String, dynamic> parseQuickHelpButton(
 ) {
   // One malformed value degrades ONE card, never the whole load. A
   // non-map icon or action is the config-typo class the bare-string
-  // label rule answers. A NON-MAP ENTRY (a stray string) is not a
-  // card at all and stays dropped — the card-count parity rule below
-  // is about PARSEABLE entries: a parsed-but-TITLE-LESS entry is kept,
-  // because the web renders the same blank card and refuses its press.
+  // label rule answers. A NON-MAP ENTRY (a stray string) is not a card
+  // at all and stays dropped — the web keeps it as a blank card that
+  // does nothing, so the two platforms show a different card count for
+  // a malformed file. A parsed-but-TITLE-LESS entry IS kept: the web
+  // renders the same blank card and refuses its press.
   final iconMap = configMapOf(btn['icon']);
   // The served path's BASENAME names the bundled asset. A NON-STRING
   // value, or one with no basename, names nothing — no asset, not a
@@ -124,6 +125,10 @@ List<String> quickHelpServiceLabelsOf(Map<String, dynamic> button) {
     if (labels.isEmpty) return const <String>[];
     return labels.map((label) => label.toString()).toList();
   }
+  // The wire's own bare-string rule: a STRING where the array belongs
+  // is ONE label — the same answer the parse gives, so the two copies
+  // of the rule cannot drift.
+  if (labels is String && labels.isNotEmpty) return [labels];
   return const <String>[];
 }
 
@@ -240,8 +245,9 @@ bool shouldReloadQuickHelpButtons({
 ///
 /// An EMPTY title is no title: a config card with a blank title text
 /// must not blank the context bar — the caller keeps the name it has
-/// (the saved category name on a restore, the caller's fallback on a
-/// press). One rule for every path that shows a Quick Help title.
+/// (the saved category name on a restore). One rule for every path that
+/// shows a Quick Help title. A PRESS never reaches the install with an
+/// empty title: the press gate (quickHelpPressable) refuses it first.
 String? quickHelpTitleOf(Map<String, dynamic>? button) {
   final title = button?['resolvedTitle']?.toString() ?? '';
   return title.isNotEmpty ? title : null;

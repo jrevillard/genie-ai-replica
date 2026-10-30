@@ -1195,7 +1195,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // Installs a pressed Quick Help card as THE scope. ONE copy of the
   // field list for the press paths; the caller owns its own setState.
   void _installQuickHelpScopeFields(Map<String, dynamic> button) {
-    final declaredLabels = quickHelpServiceLabelsOf(button);
+    // A COPY: the conversation's filter labels live as long as the
+    // scope, and the card's own list must not be aliased by them (an
+    // in-place edit would rewrite the card's scope verdict).
+    final declaredLabels = List<String>.of(quickHelpServiceLabelsOf(button));
     _showQuickHelpOverlay = false;
     // The configuration names its category; the hierarchy's own key is
     // what the conversation's edge speaks.

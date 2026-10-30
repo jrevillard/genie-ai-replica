@@ -502,3 +502,54 @@ describe('topic-link-authoring-service — fail-soft end to end', () => {
     expect(res.plan.index).toBeUndefined();
   });
 });
+
+// #1181 — model-id resolution follows the !631 discovery policy: env pin >
+// /v1/models discovery > loud failure. With the pin unset the call names the
+// model the endpoint actually serves (the dead `config?.llm` reads are gone).
+describe('callVllm — model-id discovery (#1181)', () => {
+  beforeEach(() => {
+    jest.resetModules();
+    process.env.VLLM_ENDPOINT = 'http://vllm.test:8000/v1';
+    delete process.env.VLLM_MODEL_ID;
+  });
+
+  afterEach(() => {
+    delete process.env.VLLM_ENDPOINT;
+    delete process.env.VLLM_MODEL_ID;
+  });
+
+  // Same shape the fail-soft describe seeds — two concepts so the LLM pass
+  // actually fires.
+  const rows = [
+    { concept_id: 'a', title: 'Alpha subject', summary: 'alpha', links: [] },
+    { concept_id: 'b', title: 'Beta subject', summary: 'beta', links: [] }
+  ];
+  const loadAll = () => ({ all: async () => rows });
+
+  it('no pin: the chat body carries the model discovered from the endpoint', async () => {
+    const svc2 = require('../services/topic-link-authoring-service');
+    const db2 = require('../shared-lib/db-connection-service');
+    const http2 = require('axios');
+    db2.getConnection.mockResolvedValue({ query: jest.fn(() => loadAll()) });
+    http2.get.mockResolvedValue({ data: { data: [{ id: 'served/linker-8b' }] } });
+    http2.post.mockResolvedValue({
+      data: { choices: [{ message: { content: JSON.stringify({ links: [] }) } }] }
+    });
+    await svc2.authorRepoTopicLinks({ repo_id: 'r1' });
+    expect(http2.get).toHaveBeenCalledWith('http://vllm.test:8000/v1/models', expect.anything());
+    const call = http2.post.mock.calls.find((c) => String(c[0]).includes('/chat/completions'));
+    expect(call[1].model).toBe('served/linker-8b');
+  });
+
+  it('no pin and nothing discoverable: zero links, no call under a fabricated name', async () => {
+    const svc2 = require('../services/topic-link-authoring-service');
+    const db2 = require('../shared-lib/db-connection-service');
+    const http2 = require('axios');
+    db2.getConnection.mockResolvedValue({ query: jest.fn(() => loadAll()) });
+    http2.get.mockRejectedValue(new Error('ECONNREFUSED'));
+    const res = await svc2.authorRepoTopicLinks({ repo_id: 'r1' });
+    expect(res.written).toBe(0);
+    expect(res.failures).toBeGreaterThan(0);
+    expect(http2.post.mock.calls.filter((c) => String(c[0]).includes('/chat/completions'))).toHaveLength(0);
+  });
+});

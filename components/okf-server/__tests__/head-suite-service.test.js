@@ -2219,3 +2219,34 @@ describe('1-8g-x — run progress reporting', () => {
     expect(rows).toHaveLength(1);
   });
 });
+
+// #1181 — the suite provenance label names the model the deployment
+// endpoint serves (discovery, !631 policy) instead of the never-injected
+// VLLM_LLM_MODEL_ID placeholder 'vllm'.
+jest.mock('axios');
+describe('suite generator label — model-id discovery (#1181)', () => {
+  const axios = require('axios');
+  const OLD_ENV = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...OLD_ENV };
+    require('../services/vllm-model-cache').clearModelCache();
+  });
+
+  it('no pin: payload.generator names the discovered model, not a placeholder', async () => {
+    delete process.env.VLLM_MODEL_ID;
+    delete process.env.VLLM_LLM_MODEL_ID;
+    process.env.VLLM_ENDPOINT = 'http://vllm:8000';
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/suite-8b' }] } });
+    __mockDb.query.mockResolvedValue({ all: async () => [] });
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        positive: [{ query: 'What is the licensing fee?', reason: 'topic hit' }],
+        negative: [],
+        keywords: []
+      })
+    );
+    const s = await svc.generateSuite('me', {}, {});
+    expect(s.payload.generator).toBe('llm:served/suite-8b');
+  });
+});

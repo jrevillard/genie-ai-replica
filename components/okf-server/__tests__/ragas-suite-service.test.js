@@ -3820,3 +3820,27 @@ describe('buildEnvAdvice — the configuration adjustment cycle (2026-10-27)', (
     }
   });
 });
+
+// #1181 — with no pin, the serve-mode fidelity label names the model the
+// deployment endpoint actually serves (!631 discovery policy), not null.
+jest.mock('axios');
+describe('answerFidelity — discovery names the served deployment model (#1181)', () => {
+  const OLD_ENV = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...OLD_ENV };
+    jest.restoreAllMocks();
+    require('../services/vllm-model-cache').clearModelCache();
+  });
+
+  it('no pin: serve mode records the model discovered from the endpoint', async () => {
+    const axios = require('axios');
+    delete process.env.VLLM_MODEL_ID;
+    delete process.env.VLLM_LLM_MODEL_ID;
+    process.env.VLLM_ENDPOINT = 'http://vllm:8000';
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/chat-8b' }] } });
+    const serve = await svc.answerFidelity({ serveMode: true });
+    expect(serve.source).toBe('deployment-chat');
+    expect(serve.model).toBe('served/chat-8b');
+  });
+});

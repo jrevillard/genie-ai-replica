@@ -1016,10 +1016,13 @@ async function generateAnswer(query, contexts) {
  * VLLM_MODEL_ID, and VLLM_LLM_MODEL_ID is the deployment's other spelling
  * of the same knob (8-7 found the two names out of step). */
 async function answerFidelity(opts = {}) {
-  const deploymentChat = () => ({
+  const deploymentChat = async () => ({
     source: 'deployment-chat',
     config: null,
-    model: process.env.VLLM_LLM_MODEL_ID || process.env.VLLM_MODEL_ID || null
+    // The deployment chat model under the !631 policy: pin > /v1/models
+    // discovery (services/vllm-model-cache.js) — null only when nothing
+    // answers (#1181).
+    model: (await require('./vllm-model-cache').discoverVllmModelId(process.env.VLLM_ENDPOINT)) || null
   });
   if (opts.serveMode) return deploymentChat();
   try {

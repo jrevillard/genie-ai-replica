@@ -28,7 +28,6 @@
  */
 
 const dbService = require('../shared-lib/db-connection-service');
-const config = require('../config');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 
@@ -79,22 +78,30 @@ async function resolveAreaContext(domain) {
  * JSON 502. */
 async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
   const t0 = Date.now();
-  let rawBase = config?.llm?.endpoint || process.env.VLLM_ENDPOINT;
-  let model = config?.llm?.model || process.env.VLLM_MODEL_ID;
-  let apiKey = process.env.VLLM_API_KEY || config?.llm?.apiKey;
+  let rawBase = process.env.VLLM_ENDPOINT;
+  let model = null; // resolved below — explicit pick > pin > discovery (!631)
+  let apiKey = process.env.VLLM_API_KEY;
   let viaOverride = false;
   try {
     const ovr = await require('./model-config-service').resolveModelOverride({ service: 'okf_curation' });
     if (ovr && ovr.provider === 'openai') {
       rawBase = ovr.base_url;
-      model = ovr.model || model;
+      if (ovr.model) model = ovr.model;
       if (ovr.api_key) apiKey = ovr.api_key;
       viaOverride = true;
     }
   } catch {
     /* env fallback — see docblock */
   }
-  if (!rawBase || !model) throw new Error('llm-not-configured');
+  // No endpoint at all = the deliberate opt-out (compose ships it empty).
+  if (!rawBase) throw new Error('llm-not-configured');
+  // Model-id resolution, !631 policy (services/vllm-model-cache.js): a
+  // named-config base resolves its OWN served model; the deployment path
+  // is pin -> /v1/models discovery -> loud ModelDiscoveryError (#1181).
+  if (!model) {
+    const modelCache = require('./vllm-model-cache');
+    model = viaOverride ? await modelCache.requireServedModelId(rawBase) : await modelCache.resolveVllmModelId(rawBase);
+  }
   const headers = {};
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const body = { model, messages, temperature: 0.0, max_tokens: 300, response_format: { type: 'json_object' } };

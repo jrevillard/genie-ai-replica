@@ -25,7 +25,6 @@ const { createHash } = require('node:crypto');
 const { DateTime } = require('luxon');
 const matter = require('gray-matter');
 const dbService = require('../shared-lib/db-connection-service');
-const config = require('../config');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
@@ -655,8 +654,9 @@ async function buildManifestDoc(repo_id, version, cloned_from) {
  *
  * The LLM is invoked with a compact prompt: the manifest's deterministic
  * metadata (concept titles, labels, root concept, link list) is enough for the
- * model to produce a 2-4 sentence bundle description. The model id matches
- * VLLM_MODEL_ID (configurable). Result is cached on the manifest doc so
+ * model to produce a 2-4 sentence bundle description. The model id follows
+ * the !631 discovery policy (pin > /v1/models discovery — see
+ * runLlmSummary). Result is cached on the manifest doc so
  * only one LLM call per bundle per cache-lifetime.
  *
  * Lazy semantics: if the LLM is unreachable (or times out), the manifest is
@@ -721,12 +721,20 @@ function buildSummaryPrompt(m) {
  * verbatim produced `/v1/v1/...`. Short timeout — best-effort, off the
  * ingestion hot path. */
 async function runLlmSummary(prompt, { timeoutMs = 5000 } = {}) {
-  const rawBase = config?.llm?.endpoint || process.env.VLLM_ENDPOINT;
+  const rawBase = process.env.VLLM_ENDPOINT;
   if (!rawBase) return null;
-  const model = config?.llm?.model || process.env.VLLM_MODEL_ID;
-  if (!model) return null;
+  // Model id under the !631 policy (services/vllm-model-cache.js): pin ->
+  // /v1/models discovery -> loud. The probe budget stays inside the caller's
+  // best-effort timeout. Resolution failure keeps the lazy-summary
+  // semantics: summary stays null, discovery scoring is unaffected (#1181).
+  let model;
+  try {
+    model = await require('./vllm-model-cache').resolveVllmModelId(rawBase, { timeoutMs });
+  } catch {
+    return null;
+  }
   const headers = {};
-  const apiKey = process.env.VLLM_API_KEY || config?.llm?.apiKey;
+  const apiKey = process.env.VLLM_API_KEY;
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const r = await axios.post(
     // Shared URL rule (services/llm-url.js): a versioned base keeps its

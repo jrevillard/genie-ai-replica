@@ -676,7 +676,12 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       created_at: now,
       created_by: (opts.actor && opts.actor.user_id) || 'system',
       payload: {
-        generator: `llm:${process.env.VLLM_LLM_MODEL_ID || 'vllm'}`,
+        // Provenance: the deployment model the suite was generated against,
+        // resolved under the !631 policy (pin > /v1/models discovery; the
+        // 'vllm' placeholder only survives when nothing answers). A named
+        // model-config override routing the generation call is a known
+        // limitation of this label — it names the deployment default.
+        generator: `llm:${(await require('./vllm-model-cache').discoverVllmModelId(process.env.VLLM_ENDPOINT)) || 'vllm'}`,
         sibling_names: siblings.map((s) => s.name),
         off_domain_topics: randomTopics,
         // Story 1-8d — the forbidden list this suite was generated against.

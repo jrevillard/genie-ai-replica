@@ -53,7 +53,6 @@
 
 const axios = require('axios');
 const dbService = require('../shared-lib/db-connection-service');
-const config = require('../config');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 
@@ -223,11 +222,14 @@ function buildNeighborIndex(concepts, k = DEFAULT_NEIGHBORS) {
 /** vLLM chat call — mirrors llm-curation-service.callVllm (endpoint/bearer
  * normalization + strict JSON) so both curation passes behave identically. */
 async function callVllm(messages, { timeoutMs = TIMEOUT_MS } = {}) {
-  const rawBase = config?.llm?.endpoint || process.env.VLLM_ENDPOINT;
-  const model = config?.llm?.model || process.env.VLLM_MODEL_ID;
-  if (!rawBase || !model) throw new Error('llm-not-configured');
+  const rawBase = process.env.VLLM_ENDPOINT;
+  // No endpoint at all = the deliberate opt-out (compose ships it empty).
+  if (!rawBase) throw new Error('llm-not-configured');
+  // Model id under the !631 policy (services/vllm-model-cache.js): pin ->
+  // /v1/models discovery -> loud ModelDiscoveryError (#1181).
+  const model = await require('./vllm-model-cache').resolveVllmModelId(rawBase);
   const headers = {};
-  const apiKey = process.env.VLLM_API_KEY || config?.llm?.apiKey;
+  const apiKey = process.env.VLLM_API_KEY;
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const r = await axios.post(
     // Shared URL rule (services/llm-url.js) — versioned base or bare host.

@@ -541,3 +541,65 @@ describe('taxonomy spelling — services.nameEN vs the bounded list the LLM uses
     expect(failures).toEqual([]);
   });
 });
+
+// #1181 — model-id resolution follows the !631 discovery policy: env pin >
+// /v1/models discovery > loud failure. The dead `config?.llm` reads are gone;
+// with the pin unset the call names the model the endpoint actually serves.
+describe('callVllm — model-id discovery (#1181)', () => {
+  const cache = require('../services/vllm-model-cache');
+
+  afterEach(() => {
+    process.env.VLLM_MODEL_ID = 'test-model'; // restore the beforeAll pin
+    cache.clearModelCache();
+  });
+
+  test('no pin: the call carries the model discovered from the endpoint', async () => {
+    delete process.env.VLLM_MODEL_ID;
+    mockDb = makeDb([metaRow()], []);
+    axios.get.mockReset();
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/curator-8b' }] } });
+    llmReply({ type: 'entity', label: 'Culture', summary: 's' });
+    const stats = await service.curateRepoConcepts(REPO, { classification: 'llm' });
+    expect(stats.method).toBe('llm');
+    expect(axios.get).toHaveBeenCalledWith('http://vllm:8000/v1/models', expect.anything());
+    expect(axios.post).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ model: 'served/curator-8b' }),
+      expect.anything()
+    );
+  });
+
+  test('no pin and nothing discoverable: loud resolution failure degrades to llm-error — no fabricated name is sent', async () => {
+    delete process.env.VLLM_MODEL_ID;
+    mockDb = makeDb([metaRow()], []);
+    axios.get.mockReset();
+    axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
+    const stats = await service.curateRepoConcepts(REPO, { classification: 'llm' });
+    expect(stats.fallbacks).toBe(1);
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  test('a modelless named-config base resolves its OWN served model (the pin never names a foreign endpoint)', async () => {
+    const modelConfig = require('../services/model-config-service');
+    mockDb = makeDb([metaRow()], []);
+    modelConfig.resolveModelOverride.mockResolvedValueOnce({
+      provider: 'openai',
+      base_url: 'https://frontier.example/v1',
+      model: null,
+      api_key: 'fk-9',
+      source: 'active',
+      config_key: 'mc9',
+      config_name: 'Frontier (modelless)'
+    });
+    axios.get.mockReset();
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'frontier/served' }] } });
+    llmReply({ type: 'entity', label: 'Culture', summary: 's' });
+    await service.curateRepoConcepts(REPO, { classification: 'llm' });
+    expect(axios.get).toHaveBeenCalledWith('https://frontier.example/v1/models', expect.anything());
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://frontier.example/v1/chat/completions',
+      expect.objectContaining({ model: 'frontier/served' }),
+      expect.anything()
+    );
+  });
+});

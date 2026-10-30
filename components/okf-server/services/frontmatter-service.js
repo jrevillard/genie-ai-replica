@@ -52,7 +52,12 @@ const { TAG_LIMITS } = require('../validators/repository-validator');
 // env defaults must work for local Docker AND cloud Ansible, not one or
 // the other).
 const VLLM_LLM_HOST = process.env.VLLM_ENDPOINT || 'http://vllm:8000';
-const VLLM_LLM_MODEL_ID = process.env.VLLM_LLM_MODEL_ID || 'ibm-granite/granite-4.1-8b';
+// The chat model id is NOT defaulted here — it is resolved per call under
+// the !631 discovery policy (services/vllm-model-cache.js): explicit pick >
+// env pin (VLLM_LLM_MODEL_ID / VLLM_MODEL_ID) > /v1/models discovery >
+// loud ModelDiscoveryError. The old hardcoded 'ibm-granite/granite-4.1-8b'
+// fallback named a model the endpoint may not serve — vLLM validates the
+// name and 404s every call (#1181).
 const VLLM_LLM_API_KEY = process.env.VLLM_API_KEY || process.env.VLLM_LLM_API_KEY || '';
 
 // David 2026-10-08 (sequence of three): the embed service is also on a
@@ -362,7 +367,7 @@ Output ONLY a JSON object: {"results": [{"index": <int>, "match": "yes"|"no", "r
  * unless they starve, in which case they too get the budget retry. */
 async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   let host = VLLM_LLM_HOST;
-  let model = VLLM_LLM_MODEL_ID;
+  let model = null; // resolved below — explicit pick > pin > discovery (!631)
   let apiKey = VLLM_LLM_API_KEY;
   let viaOverride = false;
   // The ENV JUDGE is the .env RAGAS_JUDGE_* pair — the same variables the
@@ -401,6 +406,15 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
     }
   } catch {
     /* env fallback — see docblock */
+  }
+  // Model-id resolution, !631 policy (services/vllm-model-cache.js): the
+  // explicit picks above (env judge / named config) win; a named-config
+  // base resolves its OWN served model (the deployment pin never names a
+  // foreign endpoint); everything else is pin -> /v1/models discovery ->
+  // loud ModelDiscoveryError. Never a hardcoded fallback name (#1181).
+  if (!model) {
+    const modelCache = require('./vllm-model-cache');
+    model = viaOverride ? await modelCache.requireServedModelId(host) : await modelCache.resolveVllmModelId(host);
   }
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
@@ -900,7 +914,9 @@ async function suggestTags(repoId, _opts = {}) {
       label_count: coverage.label_count,
       labels_represented: coverage.labels_represented,
       vllm_host: VLLM_LLM_HOST,
-      model: VLLM_LLM_MODEL_ID,
+      // The pin only — the id itself is discovered at call time inside
+      // vllmChatCompletions (this log fires before the resolution).
+      model: process.env.VLLM_LLM_MODEL_ID || process.env.VLLM_MODEL_ID || null,
       prompt_chars: prompt.length
     });
     // maxTokens 1000 was NOT headroom, it was a live failure: on a 586-concept

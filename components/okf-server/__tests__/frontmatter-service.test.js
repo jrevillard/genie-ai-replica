@@ -90,6 +90,14 @@ function vllmResponse(content, finishReason = 'stop') {
 beforeEach(() => {
   __mockDb.query.mockReset();
   axios.post.mockReset();
+  // Discovery probe default (see the #1181 describe at the bottom for the
+  // dedicated resolution tests): every legacy test flows through the
+  // /v1/models probe unless it pins or overrides the model.
+  axios.get.mockReset();
+  axios.get.mockResolvedValue({ data: { data: [{ id: 'test/served-model' }] } });
+  delete process.env.VLLM_LLM_MODEL_ID;
+  delete process.env.VLLM_MODEL_ID;
+  require('../services/vllm-model-cache').clearModelCache();
 });
 
 describe('frontmatterService.suggestTags — forbidden suggestion contract', () => {
@@ -677,6 +685,11 @@ describe('vllmChatCompletions — which judge an explicit env request actually n
 
   beforeEach(() => {
     axios.post.mockResolvedValue(vllmResponse('{}'));
+    // The env judge names its model explicitly (RAGAS_JUDGE_MODEL), so no
+    // probe is needed — but the NOT-judge test below falls back to the
+    // deployment path, which discovers.
+    axios.get.mockReset();
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'test/served-model' }] } });
     Object.entries(ENV_JUDGE).forEach(([k, v]) => {
       process.env[k] = v;
     });
@@ -702,5 +715,72 @@ describe('vllmChatCompletions — which judge an explicit env request actually n
     const [url, body] = axios.post.mock.calls[0];
     expect(url).not.toBe('https://judge.example/v1/chat/completions');
     expect(body.model).not.toBe('judge-model-x');
+  });
+});
+
+// #1181 — vLLM model-id discovery (!631 policy ported to the Node side).
+// The chat body must name a model the CALLED endpoint actually serves:
+// explicit pick (env judge / named model config) > env pin > /v1/models
+// discovery > loud failure. The old hardcoded 'ibm-granite/granite-4.1-8b'
+// fallback 404'd every call the day the endpoint served anything else.
+describe('vllmChatCompletions — model-id resolution follows the !631 discovery policy', () => {
+  const modelCache = require('../services/vllm-model-cache');
+  const PIN_KEYS = ['VLLM_LLM_MODEL_ID', 'VLLM_MODEL_ID', 'VLLM_ENDPOINT'];
+
+  beforeEach(() => {
+    PIN_KEYS.forEach((k) => delete process.env[k]);
+    modelCache.clearModelCache();
+    axios.post.mockReset();
+    axios.get.mockReset();
+  });
+
+  afterEach(() => {
+    PIN_KEYS.forEach((k) => delete process.env[k]);
+    modelCache.clearModelCache();
+  });
+
+  test('no pin, no override: the body carries the model discovered from the endpoint', async () => {
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/discovered-8b' }] } });
+    axios.post.mockResolvedValue(vllmResponse('{}'));
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }]);
+    expect(axios.get).toHaveBeenCalledWith('http://vllm:8000/v1/models', expect.anything());
+    const [url, body] = axios.post.mock.calls[0];
+    expect(url).toBe('http://vllm:8000/v1/chat/completions');
+    expect(body.model).toBe('served/discovered-8b');
+  });
+
+  test('a VLLM_MODEL_ID pin wins and skips the probe entirely', async () => {
+    process.env.VLLM_MODEL_ID = 'pinned/chat-model';
+    axios.post.mockResolvedValue(vllmResponse('{}'));
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }]);
+    expect(axios.get).not.toHaveBeenCalled();
+    expect(axios.post.mock.calls[0][1].model).toBe('pinned/chat-model');
+  });
+
+  test('discovery failure with no pin is loud — no call is sent under a fabricated name', async () => {
+    axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
+    await expect(svc.vllmChatCompletions([{ role: 'user', content: 'hi' }])).rejects.toMatchObject({
+      name: 'ModelDiscoveryError'
+    });
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  test('a modelless named-config base resolves its OWN served model (the pin never names a foreign endpoint)', async () => {
+    const modelConfig = require('../services/model-config-service');
+    process.env.VLLM_MODEL_ID = 'pinned/chat-model';
+    modelConfig.resolveModelOverride.mockResolvedValueOnce({
+      provider: 'openai',
+      base_url: 'https://frontier.example/v1',
+      model: null,
+      api_key: 'fk-3',
+      source: 'active',
+      config_key: 'mc3',
+      config_name: 'Frontier (modelless)'
+    });
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'frontier/served' }] } });
+    axios.post.mockResolvedValue(vllmResponse('{}'));
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }]);
+    expect(axios.get).toHaveBeenCalledWith('https://frontier.example/v1/models', expect.anything());
+    expect(axios.post.mock.calls[0][1].model).toBe('frontier/served');
   });
 });

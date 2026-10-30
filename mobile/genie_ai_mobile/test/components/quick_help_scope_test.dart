@@ -1461,6 +1461,18 @@ void main() {
     test('a missing count degrades to 2', () {
       expect(quickHelpGridColumns({}), 2);
     });
+
+    test('a count wider than the grid is bounded by the width', () {
+      // 500 columns on a 328px grid: no column can be thinner than the
+      // 10px spacing between them, so the cap is width/10 + 1 = 33.
+      expect(quickHelpGridColumns({'columns': 500}, maxWidth: 328), 33);
+      expect(quickHelpGridColumns({'columns': 3}, maxWidth: 328), 3);
+      expect(quickHelpGridColumns({'columns': 500}, maxWidth: 25), 3);
+    });
+
+    test('an unbounded width keeps the parsed count', () {
+      expect(quickHelpGridColumns({'columns': 4}), 4);
+    });
   });
 
   /// The section-level pipeline: the descent to `features.chat.quickHelp`,

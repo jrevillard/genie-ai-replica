@@ -17,10 +17,9 @@ String resolveConfigText(dynamic value, String locale) {
     ]) {
       // A falsy value (0, false) is no text — the web's `||` chain
       // skips it and falls through to the next candidate.
-      if (candidate is String && candidate.isNotEmpty) return candidate;
-      if (candidate != null &&
-          candidate is! String &&
-          configTruthy(candidate)) {
+      if (candidate is String) {
+        if (candidate.isNotEmpty) return candidate;
+      } else if (configTruthy(candidate)) {
         return candidate.toString();
       }
     }

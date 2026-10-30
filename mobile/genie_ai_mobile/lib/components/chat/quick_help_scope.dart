@@ -135,15 +135,26 @@ bool quickHelpButtonHidden(dynamic hidden) {
   return configTruthy(hidden);
 }
 
-/// The grid's column count, from the config's `layout` block. A malformed
-/// value — a non-number, a non-positive or non-finite count (a JSON
-/// `1e400` decodes to an infinite double) — degrades to 2 instead of
-/// throwing inside the build or tripping the grid delegate's assertions.
-/// A huge FINITE count still passes (the guard stops crashes, not every
-/// degenerate layout); no shipped configuration sets a count.
-int quickHelpGridColumns(Map<String, dynamic> layout) {
+/// The grid's column count, from the config's `layout` block, bounded
+/// by [maxWidth] (the width the grid is given). A malformed value — a
+/// non-number, a non-positive or non-finite count (a JSON `1e400`
+/// decodes to an infinite double) — degrades to 2, and a count wider
+/// than the grid is bounded by the width, so neither throws inside the
+/// build nor trips the grid delegate's assertions.
+int quickHelpGridColumns(
+  Map<String, dynamic> layout, {
+  double maxWidth = double.infinity,
+}) {
   final raw = layout['columns'];
-  return raw is num && raw.isFinite && raw.toInt() >= 1 ? raw.toInt() : 2;
+  final int parsed =
+      raw is num && raw.isFinite && raw.toInt() >= 1 ? raw.toInt() : 2;
+  if (!maxWidth.isFinite) return parsed;
+  // No column can be thinner than the grid's 10px spacing between
+  // columns: a count wider than the grid is bounded by width/10 + 1,
+  // or the delegate lays out negative-extent children (a debug
+  // assertion, garbage in release).
+  final int byWidth = (maxWidth ~/ 10) + 1;
+  return parsed.clamp(1, byWidth);
 }
 
 /// The grid's card aspect ratio, from the config's `layout` block. A
@@ -732,6 +743,10 @@ bool shouldReResolveRestoredScope({
 /// a broken scope is a visible failure the tap must not send, a scope
 /// the tree cannot EN-name would leave the filter unnamed, and a
 /// title-less card would install a scope under a blank context bar.
+///
+/// The broken verdict needs a RESOLVER: with the hierarchy unavailable,
+/// the grid's own scope state (the unavailable caption and the disabled
+/// tap) covers the outage before this predicate is ever reached.
 bool quickHelpPressable(
   Map<String, dynamic> button,
   QuickHelpScopeResolver? resolver,

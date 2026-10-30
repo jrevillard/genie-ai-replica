@@ -2145,6 +2145,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                         // config rules (see quick_help_scope.dart).
                         final int crossAxisCount = quickHelpGridColumns(
                           _quickHelpLayout,
+                          maxWidth: constraints.maxWidth,
                         );
                         final double aspectRatio = quickHelpGridAspectRatio(
                           _quickHelpLayout,

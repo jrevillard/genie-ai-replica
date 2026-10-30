@@ -74,6 +74,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the card icon the button's top-level `icon`, the same shape the web
   reads. The chips row was never affected. (#1124, !635)
 
+- **The mobile app now shows the chat's configured welcome message on first
+  render.** The message declared in the deployment configuration was computed
+  before the configuration had finished loading, so the first screen showed
+  the generic built-in greeting and the configured text appeared only after
+  the user switched language once. The configured message now lands when the
+  configuration load completes — and only while no conversation is open: the
+  first bubble of a conversation restored in the meantime is history, not the
+  welcome slot. (#1124, !635)
+
 - **A benchmark-suite generation no longer dies on one unparseable chunk (8-6/8-7).** The knowledge-graph phase died when a single chunk's answer came back in a shape the parser did not accept: the format-fix retry failed too, the exception escaped the transform, and the whole generation was lost (live: a Solar System generation died at 137 minutes, at chunk 1599 of 1600, after 5,989 model calls). A node whose answer cannot be parsed now degrades the way a node with a dead call always has — it keeps its other properties, the failure is counted and reported with the suite, and the rest of the corpus keeps its work. A degraded node is also excluded from the relationship pass, which raises on a missing property rather than skipping the node — without that, the tolerance only moved the death one phase later (also found live).
 
 - **The benchmark's progress line counted cache replays as LLM calls (8-6/8-7).** The generation's call counter was incremented before the sidecar's on-disk judge cache was consulted, so a call the cache answered — no request, no GPU — was reported as work the model did. On a corpus that had been generated before, the panel climbed to "673 LLM calls" while the remote GPU sat at 0 % and the remote's own request counters did not move by a single request: the run was never stuck and the model was never wrong, only the number was. The counter now counts the requests that reached the model, and the replays the cache answered are reported beside them, so a replay is never read as an LLM call. Each job also owns its counters, so a concurrent run's calls are never published as this one's.

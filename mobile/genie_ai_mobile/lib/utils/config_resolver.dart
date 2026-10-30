@@ -6,19 +6,23 @@
 /// Falls back to 'en', then the first available value.
 String resolveConfigText(dynamic value, String locale) {
   if (value is Map) {
-    // The first NON-EMPTY text wins — the web's `||` chain for the
-    // values a text field can carry: a null key falls through, and so
-    // does an empty string (an untranslated placeholder), which would
+    // The first NON-EMPTY text wins — the web's `||` chain: a null key
+    // falls through, and so does an empty string (an untranslated
+    // placeholder) or a falsy scalar (a numeric typo), which would
     // otherwise blank the card the web resolves to its English text.
-    // (JS also skips the numbers 0 and false; no text field carries
-    // those, and the mobile keeps their string form.)
     for (final candidate in [
       value[locale],
       value['en'],
       if (value.values.isNotEmpty) value.values.first,
     ]) {
-      final text = candidate?.toString();
-      if (text != null && text.isNotEmpty) return text;
+      // A falsy value (0, false) is no text — the web's `||` chain
+      // skips it and falls through to the next candidate.
+      if (candidate is String && candidate.isNotEmpty) return candidate;
+      if (candidate != null &&
+          candidate is! String &&
+          configTruthy(candidate)) {
+        return candidate.toString();
+      }
     }
     return '';
   }

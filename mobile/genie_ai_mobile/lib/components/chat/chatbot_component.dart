@@ -239,17 +239,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       'features',
       'chat',
     ])['welcomeMessage'];
-    // The web gates the configured message on truthiness
-    // (configTruthy — the ONE falsy set): a scalar false, a 0 or an
-    // empty string is no message, and neither is a locale map that
-    // resolved to nothing — the i18n default shows instead.
-    if (configTruthy(welcomeConfig)) {
-      final resolved = resolveConfigText(welcomeConfig, _currentLocale);
-      if (resolved.isNotEmpty) {
-        return resolved;
-      }
-    }
-    return tr('chatbot.welcomeMessage');
+    // The resolver carries the web's truthiness (a scalar false, a 0,
+    // an empty string — and a locale map that resolves to nothing — is
+    // no message): only a non-empty resolution overrides the i18n
+    // default.
+    final resolved = resolveConfigText(welcomeConfig, _currentLocale);
+    return resolved.isNotEmpty ? resolved : tr('chatbot.welcomeMessage');
   }
 
   /// Recomputes the welcome message under the CURRENT config and locale.
@@ -372,8 +367,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       });
       // The config just cached: the welcome message it declares lands
       // now, not on the next locale switch. OUTSIDE the setState above —
-      // the refresh owns its own setState when the bubble updates.
-      _refreshWelcomeMessage();
+      // the refresh owns its own setState when the bubble updates — and
+      // ONLY while no conversation has been restored or started: the
+      // first bubble of a conversation saved under the i18n default is
+      // history, not the welcome slot.
+      if (_messages.length <= 1) {
+        _refreshWelcomeMessage();
+      }
     } catch (e) {
       debugPrint("[CHATBOT] Failed to load genie-ai-config.json: $e");
       _quickHelpLoadFailed = true;

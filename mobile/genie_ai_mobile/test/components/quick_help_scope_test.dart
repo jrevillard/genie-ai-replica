@@ -1305,6 +1305,15 @@ void main() {
       },
     );
 
+    test('a falsy value in the active locale falls through to English', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'title': {'es': 0, 'en': 'Apply for ID'},
+      }, 'es');
+
+      expect(parsed['resolvedTitle'], 'Apply for ID');
+    });
+
     test('a title missing the active locale falls back to English', () {
       final parsed = parseQuickHelpButton({
         ...shippedButton,

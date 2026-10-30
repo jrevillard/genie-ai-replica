@@ -26,7 +26,6 @@ const mockGetFrontmatter = jest.fn();
 // service with a tagged payload so the test stays meaningful.
 jest.mock('@/services/frontmatterService', () => ({
   getFrontmatter: (...args) => mockGetFrontmatter(...args),
-  getFrontmatterSummary: jest.fn(),
   suggestFrontmatter: jest.fn(),
   patchFrontmatter: jest.fn(),
   isFrontmatterPublishReady: (rows) => {

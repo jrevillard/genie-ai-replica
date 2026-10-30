@@ -2193,33 +2193,28 @@ export default {
       if (res.ok) this.suite = res.result;
       else this.error = res.message;
     },
+    // One dispatch-and-apply for every row mutation (review !622 wave 2,
+    // #78697 — onEditEntry/onFlipEntry/onRemoveEntry were three copies of
+    // this envelope and tail).
+    async patchSuite(payload) {
+      const res = await this.$store.dispatch('okf/ragasUpdateRows', {
+        repoId: this.repo && this.repo.repo_id,
+        suiteKey: this.suite.suite_key,
+        payload
+      });
+      if (res.ok) this.suite = res.result;
+      else this.error = res.message;
+      return res;
+    },
     async onEditEntry(entry, field, value) {
       if (value === entry[field]) return;
-      const res = await this.$store.dispatch('okf/ragasUpdateRows', {
-        repoId: this.repo && this.repo.repo_id,
-        suiteKey: this.suite.suite_key,
-        payload: { modifications: [{ id: entry.id, [field]: value }] }
-      });
-      if (res.ok) this.suite = res.result;
-      else this.error = res.message;
+      await this.patchSuite({ modifications: [{ id: entry.id, [field]: value }] });
     },
     async onFlipEntry(entry) {
-      const res = await this.$store.dispatch('okf/ragasUpdateRows', {
-        repoId: this.repo && this.repo.repo_id,
-        suiteKey: this.suite.suite_key,
-        payload: { modifications: [{ id: entry.id, flip_oos: !entry.oos }] }
-      });
-      if (res.ok) this.suite = res.result;
-      else this.error = res.message;
+      await this.patchSuite({ modifications: [{ id: entry.id, flip_oos: !entry.oos }] });
     },
     async onRemoveEntry(entry) {
-      const res = await this.$store.dispatch('okf/ragasUpdateRows', {
-        repoId: this.repo && this.repo.repo_id,
-        suiteKey: this.suite.suite_key,
-        payload: { remove_ids: [entry.id] }
-      });
-      if (res.ok) this.suite = res.result;
-      else this.error = res.message;
+      await this.patchSuite({ remove_ids: [entry.id] });
     },
     async onAddQuery() {
       const query = window.prompt(this.translate('okf.ragas.suite.addPrompt', 'Question to add:'));

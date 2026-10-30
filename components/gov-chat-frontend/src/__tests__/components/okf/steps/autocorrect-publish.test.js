@@ -28,7 +28,6 @@ const mockGetFrontmatter = jest.fn();
 // the new "no frontmatter" state override the mock to return [].
 jest.mock('@/services/frontmatterService', () => ({
   getFrontmatter: (...args) => mockGetFrontmatter(...args),
-  getFrontmatterSummary: jest.fn(),
   suggestFrontmatter: jest.fn(),
   patchFrontmatter: jest.fn(),
   isFrontmatterPublishReady: (rows) => {

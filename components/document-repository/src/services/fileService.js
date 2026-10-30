@@ -1,8 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const mime = require('mime-types');
-const { logger } = require('../../shared-lib');
-const { dbService } = require('../../shared-lib');
+const { logger, dbService } = require('../../shared-lib');
 const fileUtils = require('../utils/fileUtils');
 const metadataService = require('./metadataService');
 const Crawler = require('../utils/crawler');
@@ -30,7 +29,15 @@ const CRAWL_KILL_POLL_MS = 500;
 // COLLECTION (errorNum 1203, "collection or view not found") and gateway
 // route-not-found — infrastructure faults that must be rethrown, not treated
 // as "job gone" (review 2026-10-29 round 3; mirrors crawlWorker.js).
-const isDocumentNotFound = (e) => !!e && (dbService._isExpectedAbsence(e) || e.statusCode === 404 || e.code === 404);
+const isDocumentNotFound = (e) =>
+  !!e &&
+  (dbService._isExpectedAbsence(e) ||
+    // The HTTP-layer 404 shapes (statusCode on arangojs HTTP errors, code on
+    // driver errors) exist only on errors WITHOUT an Arango errorNum. An
+    // errorNum'd fault like 1203 (missing COLLECTION) is an infra error even
+    // when its HTTP code is 404 — rethrow, never "job gone" (review !622
+    // wave 2 / #78676: the unguarded arms re-admitted exactly that case).
+    (e.errorNum == null && (e.statusCode === 404 || e.code === 404)));
 
 class FileService {
   constructor() {

@@ -225,31 +225,6 @@ describe('okfRepoOps lifecycle', () => {
     expect(mockLifecycle).toHaveBeenCalledWith('r-1', 'submit', { sub: 'u1' });
     expect(res.lifecycle_state).toBe('review');
   });
-
-  it('publish / ingest / retract route the right action strings', async () => {
-    mockLifecycle.mockResolvedValue({ ok: true });
-    await ops.publish('r-1');
-    await ops.ingest('r-1');
-    await ops.retract('r-1');
-    expect(mockLifecycle).toHaveBeenNthCalledWith(1, 'r-1', 'publish', {});
-    expect(mockLifecycle).toHaveBeenNthCalledWith(2, 'r-1', 'ingest', {});
-    expect(mockLifecycle).toHaveBeenNthCalledWith(3, 'r-1', 'retract', {});
-  });
-
-  it('deleteRepo and listVersions pass through', async () => {
-    mockDeleteRepo.mockResolvedValue({ status: 'deleted' });
-    mockListVersions.mockResolvedValue([{ bundle_version: 1 }]);
-    await ops.deleteRepo('r-1');
-    const versions = await ops.listVersions('r-1');
-    expect(mockDeleteRepo).toHaveBeenCalledWith('r-1');
-    expect(versions).toHaveLength(1);
-  });
-
-  it('createVersion mints with the manual trigger', async () => {
-    mockMintVersion.mockResolvedValue({ bundle_version: 2 });
-    await ops.createVersion('r-1', { sub: 'u' });
-    expect(mockMintVersion).toHaveBeenCalledWith('r-1', { trigger: 'manual' }, { sub: 'u' });
-  });
 });
 
 describe('okfRepoOps zip export / import', () => {

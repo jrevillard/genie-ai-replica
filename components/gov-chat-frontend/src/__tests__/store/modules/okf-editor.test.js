@@ -145,6 +145,65 @@ describe('okf store — editor actions (Story #978)', () => {
       expect(store.getters['okf/conceptsByRepo']('r-1')).toHaveLength(2);
       expect(store.getters['okf/editorLoadProgress']).toBeNull();
     });
+
+    // Round 11 (!622): the stale exit used to return WITHOUT clearing
+    // loading/progress, and the finally deliberately skipped the reset for
+    // the stale path — an abandoned load left loading=true + a frozen
+    // {done,total} bar for the dead repo until some later action cleared it.
+    it('a repo switch mid-load (no newer fetch) clears loading + progress on exit', async () => {
+      const rows = Array.from({ length: 350 }, (_, i) => ({
+        concept_id: 'c' + i,
+        title: 'T',
+        index_status: 'indexed'
+      }));
+      const store = buildStore();
+      mockListForRepo.mockImplementation(async (_repoId, opts) => {
+        const off = (opts && opts.offset) || 0;
+        if (off === 0) return { concepts: rows.slice(0, 200), total: 350 };
+        // Page 2 in flight: the editor moved to another repo WITHOUT a new
+        // fetch (raw mutation — openEditor would start one).
+        store.commit('okf/setEditorRepo', 'r-2');
+        return { concepts: rows.slice(200), total: 350 };
+      });
+      const result = await store.dispatch('okf/fetchConcepts', 'r-1');
+      expect(result.stale).toBe(true);
+      expect(store.state.okf.editor.loading).toBe(false);
+      expect(store.getters['okf/editorLoadProgress']).toBeNull();
+    });
+
+    it('a fetch superseded by a NEWER fetch leaves the flags to it (never clobbers mid-flight)', async () => {
+      const rows = Array.from({ length: 350 }, (_, i) => ({
+        concept_id: 'c' + i,
+        title: 'T',
+        index_status: 'indexed'
+      }));
+      let releaseR2;
+      const r2Gate = new Promise((resolve) => {
+        releaseR2 = resolve;
+      });
+      const store = buildStore();
+      mockListForRepo.mockImplementation(async (repoId, opts) => {
+        const off = (opts && opts.offset) || 0;
+        if (repoId === 'r-2') {
+          await r2Gate; // r-2's load stays in flight while r-1 exits
+          return { concepts: [{ concept_id: 'x1', title: 'X', index_status: 'indexed' }], total: 1 };
+        }
+        if (off === 0) return { concepts: rows.slice(0, 200), total: 350 };
+        // Page 2 in flight: a NEWER fetch takes over (generation moves).
+        store.commit('okf/setEditorRepo', 'r-2');
+        store.dispatch('okf/fetchConcepts', 'r-2');
+        await new Promise((r) => setTimeout(r, 10));
+        return { concepts: rows.slice(200), total: 350 };
+      });
+      const result = await store.dispatch('okf/fetchConcepts', 'r-1');
+      expect(result.stale).toBe(true);
+      // The abandoned r-1 exit did NOT clear the in-flight r-2 load's flags.
+      expect(store.state.okf.editor.loading).toBe(true);
+      releaseR2();
+      await new Promise((r) => setTimeout(r, 10));
+      expect(store.state.okf.editor.loading).toBe(false);
+      expect(store.getters['okf/editorLoadProgress']).toBeNull();
+    });
   });
 
   describe('getConcept', () => {

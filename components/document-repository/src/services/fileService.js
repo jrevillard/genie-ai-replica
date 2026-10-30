@@ -1121,3 +1121,7 @@ class FileService {
 }
 
 module.exports = new FileService();
+// Round 11 (!622): crawlWorker imports THE classifier instead of pasting a
+// twin — its private copy had already drifted (statusCode-only, no
+// errorNum guard) and re-admitted the 1203-infra-fault-as-"job gone" case.
+module.exports.isDocumentNotFound = isDocumentNotFound;

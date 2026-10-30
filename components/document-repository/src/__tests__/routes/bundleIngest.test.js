@@ -179,6 +179,37 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
     expect(res.body.error).toBe('VALIDATION_ERROR');
   });
 
+  // Round 11 (!622): the app.js parser exemption matches this path
+  // case-sensitively while the router matches case-insensitively, and a
+  // non-JSON Content-Type skips the route parser too — both leave req.body
+  // undefined, and the unguarded destructure turned that into a generic
+  // 500 instead of a clean 400.
+  it('should return 400 VALIDATION_ERROR (not a 500) when no body parser ran', async () => {
+    const res = await request(app).post('/api/files/ingest-bundle').set('Content-Type', 'text/plain').send('not json');
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  it('the parser exemption must match the ROUTER: a case-different path still bypasses the 10mb global parser', async () => {
+    fileService.uploadBundle.mockResolvedValue({
+      file_id: 'case-bundle-id',
+      file_name: 'big-repo-v1.zip',
+      storage_path: '/uploads/big-repo-v1.zip'
+    });
+
+    const bigBody = {
+      ...validBody,
+      bundle: Buffer.alloc(11 * 1024 * 1024, 65).toString('base64') // ~14.7 MB of base64
+    };
+    // Express routes case-insensitively: this reaches the handler, so the
+    // exemption must bypass the global 10mb JSON cap for it too — otherwise
+    // it 413s before the handler's own parser runs.
+    const res = await request(app).post('/API/files/INGEST-BUNDLE').send(bigBody);
+
+    expect(res.status).toBe(202);
+  });
+
   // Publish-413 regression (2026-09-15): a 1000-concept wikipedia repo ships
   // ~42 MB of base64-in-JSON — far above the app's 10mb global JSON cap. The
   // app-level middleware must EXEMPT this path and the route must parse it

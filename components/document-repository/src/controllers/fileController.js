@@ -1313,6 +1313,15 @@ class FileController {
   // will replace this kick when it lands.
   async bundleIngest(req, res) {
     try {
+      // Round 11 (!622): the app.js parser exemption matches this path
+      // case-sensitively while the Express router matches case-insensitively
+      // (POST /API/files/INGEST-BUNDLE gets NO parser at all), and a
+      // non-JSON Content-Type skips the route's own express.json — both
+      // leave req.body undefined. Destructuring it threw a generic 500
+      // ('Cannot destructure') instead of a clean 400.
+      if (!req.body || typeof req.body !== 'object') {
+        return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'a JSON request body is required' });
+      }
       const { bundle, graph_name, repo_id, originalFileName, labels, defer_kick, bundle_version, is_bundle } = req.body;
 
       // Joi validation

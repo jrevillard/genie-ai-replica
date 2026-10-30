@@ -177,6 +177,59 @@ describe('okfRepoOps.addConcept + appendToIndexToc', () => {
     expect(res2.index_updated).toBe(false); // best-effort, never fails the create
     expect(mockImport).toHaveBeenCalledTimes(2);
   });
+
+  // Round 11 (!622): the line must land AFTER the Contents block, never at
+  // the end of the body — once a curator puts content below the TOC, an
+  // end-append lands detached and the index drifts from the concept set.
+  it('inserts the TOC line after the Contents LIST when body content follows it', async () => {
+    mockConceptGet.mockResolvedValue({
+      concept_id: 'index',
+      frontmatter: { type: 'index', title: 'Idx' },
+      body: '# Idx\n\n## Contents\n\n- [Existing](concepts/existing.md)\n\nReal content follows here.\n\nMore body.'
+    });
+    mockPatchBody.mockResolvedValue({ ok: true });
+
+    await ops.addConcept({
+      repoId: 'r-1',
+      title: 'Wildlife',
+      type: 'topic',
+      body: '# Wildlife',
+      existingIds: [],
+      indexRow: { concept_id: 'index', title: 'Idx' }
+    });
+
+    const patched = mockPatchBody.mock.calls[0][2];
+    // The new line is ADJACENT to the existing list entry (same block)...
+    expect(patched).toContain('- [Existing](concepts/existing.md)\n- [Wildlife](concepts/wildlife.md)');
+    // ...and the body content stays AFTER the list, not before the new line.
+    const lineAt = patched.indexOf('- [Wildlife](concepts/wildlife.md)');
+    const contentAt = patched.indexOf('Real content follows here.');
+    expect(contentAt).toBeGreaterThan(lineAt);
+    expect(patched).toContain('More body.');
+  });
+
+  it('inserts directly under an EMPTY Contents heading', async () => {
+    mockConceptGet.mockResolvedValue({
+      concept_id: 'index',
+      frontmatter: { type: 'index', title: 'Idx' },
+      body: '# Idx\n\n## Contents\n\nBody already below.'
+    });
+    mockPatchBody.mockResolvedValue({ ok: true });
+    await ops.addConcept({
+      repoId: 'r-1',
+      title: 'Wildlife',
+      type: 'topic',
+      body: '',
+      existingIds: [],
+      indexRow: { concept_id: 'index', title: 'Idx' }
+    });
+    const patched = mockPatchBody.mock.calls[0][2];
+    const headAt = patched.indexOf('## Contents');
+    const lineAt = patched.indexOf('- [Wildlife](concepts/wildlife.md)');
+    const bodyAt = patched.indexOf('Body already below.');
+    expect(headAt).toBeLessThan(lineAt);
+    expect(lineAt).toBeLessThan(bodyAt);
+  });
 });
 
 describe('okfRepoOps.applyLabel / deleteConcept', () => {

@@ -669,7 +669,19 @@ const actions = {
       while (acc.length < total) {
         // Pages are SEQUENTIAL by design — each offset needs the previous count.
         const page = await conceptService.listForRepo(repoId, { limit: PAGE, offset: acc.length });
-        if (stale()) return { ok: true, concepts: acc, stale: true };
+        if (stale()) {
+          // Round 11 (!622): the abandoned fetch must clean up after itself
+          // — EXCEPT when a NEWER fetch superseded it (generation moved):
+          // that fetch owns the loading/progress flags now and clearing
+          // them here would flash its bar off. Repo-switched with no newer
+          // fetch: nobody else clears them, so this exit does (it used to
+          // leave loading=true + a frozen {done,total} for the dead repo).
+          if (myGen === fetchGeneration) {
+            commit('setConceptsLoading', false);
+            commit('setConceptsLoadProgress', null);
+          }
+          return { ok: true, concepts: acc, stale: true };
+        }
         const rows = page && Array.isArray(page.concepts) ? page.concepts : Array.isArray(page) ? page : [];
         acc = acc.concat(rows);
         commit('setConcepts', { repoId, concepts: acc });

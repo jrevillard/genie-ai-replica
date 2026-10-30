@@ -204,9 +204,30 @@ export async function appendToIndexToc(repoId, indexRow, conceptTitle, conceptSl
     if (!row) return false;
     const bodyText = row.body || '';
     const line = `- [${conceptTitle}](concepts/${conceptSlug}.md)`;
-    const nextBody = /(^|\n)## Contents\s*\n/.test(bodyText)
-      ? `${bodyText.replace(/\s*$/, '')}\n${line}\n`
-      : `${bodyText.replace(/\s*$/, '')}\n\n## Contents\n\n${line}\n`;
+    // Round 11 (!622): the line goes AFTER the Contents block — the old
+    // form appended it to the END of the whole body, so once a curator
+    // put real content below the TOC every later '+ Add concept' link
+    // landed detached after the body text and the index drifted from the
+    // concept set with each add. Insert after the heading's existing
+    // contiguous list block (or right under the heading when it is empty).
+    const headingRe = /(^|\n)(## Contents)[ \t]*\n/;
+    const match = bodyText.match(headingRe);
+    let nextBody;
+    if (!match) {
+      nextBody = `${bodyText.replace(/\s*$/, '')}\n\n## Contents\n\n${line}\n`;
+    } else {
+      const headEnd = match.index + match[0].length;
+      const rest = bodyText.slice(headEnd);
+      // The list block the heading already owns: the blank line(s) under the
+      // heading, then contiguous list items (and blank lines between them) —
+      // nothing else. Stops at the first non-list line, so the body content
+      // after the TOC is never swallowed.
+      const listBlock = rest.match(/^((?:[ \t]*\n)*(?:[ \t]*(?:[-*+]|\d+\.)[ \t]+[^\n]*\n(?:[ \t]*\n)*)*)/);
+      const insertAt = headEnd + (listBlock ? listBlock[0].length : 0);
+      nextBody = `${bodyText.slice(0, insertAt).replace(/\s*$/, '')}\n${line}\n${bodyText
+        .slice(insertAt)
+        .replace(/^\s+/, '')}`;
+    }
     await repoOkfService.patchConceptBody(repoId, indexRow.concept_id, nextBody);
     return true;
   } catch {

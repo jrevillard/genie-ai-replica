@@ -552,3 +552,33 @@ describe('currentFingerprint — the publish idempotency guard (regression)', ()
     await expect(versionService.currentFingerprint(REPO)).resolves.toMatch(/^[0-9a-f]{64}$/);
   });
 });
+
+describe('fingerprintOfCurrentVersion — keyed manifests (round 11, !622)', () => {
+  // Manifests are keyed `${repo_id}_${bundle_version}` — the old bare
+  // `.document(repoId)` lookup NEVER found one, returned null forever, and
+  // the publish no-op guard was dead on every deployment (the lifecycle
+  // tests mock this function, so only this suite can catch it).
+  test('reads the fingerprint from the KEYED manifest of the named version', async () => {
+    await mockDb.collection('okf_versions').save({
+      _key: 'r-keyed_4',
+      repo_id: 'r-keyed',
+      bundle_version: 4,
+      content_fingerprint: 'fp-of-v4'
+    });
+    await mockDb.collection('okf_versions').save({
+      _key: 'r-keyed_5',
+      repo_id: 'r-keyed',
+      bundle_version: 5,
+      content_fingerprint: 'fp-of-v5'
+    });
+    await expect(versionService.fingerprintOfCurrentVersion('r-keyed', 4)).resolves.toBe('fp-of-v4');
+    await expect(versionService.fingerprintOfCurrentVersion('r-keyed', 5)).resolves.toBe('fp-of-v5');
+    // the bare-id shape the old code used is NOT a manifest key
+    await expect(versionService.fingerprintOfCurrentVersion('r-keyed')).resolves.toBe(null);
+  });
+
+  test('null bundleVersion (never published) and a missing manifest key degrade to null', async () => {
+    await expect(versionService.fingerprintOfCurrentVersion('r-never', null)).resolves.toBe(null);
+    await expect(versionService.fingerprintOfCurrentVersion('r-never', 1)).resolves.toBe(null);
+  });
+});

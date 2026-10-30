@@ -22,9 +22,9 @@ import en from '@/i18n/locales/en.js';
 import fs from 'fs';
 import path from 'path';
 
- // Derived, not hand-copied (review !622 round 9, #78682): a 15th locale file
- // must join these contracts automatically, not be silently excluded by a
- // stale literal.
+// Derived, not hand-copied (review !622 round 9, #78682): a 15th locale file
+// must join these contracts automatically, not be silently excluded by a
+// stale literal.
 const LOCALES = fs
   .readdirSync(path.join(__dirname, '../../../i18n/locales'))
   .filter((f) => f.endsWith('.js'))

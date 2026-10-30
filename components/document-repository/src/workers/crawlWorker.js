@@ -28,13 +28,13 @@ const REQUIRED_LANG = (appConfig.upload?.requiredIngestionLanguage || 'en').toLo
 const UPLOAD_DIR = path.join(__dirname, '..', '..', appConfig.upload.uploadDir || 'uploads');
 const KILL_WATCH_INTERVAL_MS = appConfig.crawler?.killWatchIntervalMs || 2000;
 
-// Definitive document absence, by the CANONICAL classifier (shared/lib's
-// _isExpectedAbsence: ArangoError 1202/1204, or the exact cursor 'no match'
-// message) plus the arangojs HTTP 404 shape. The old /not found/i message
-// test ALSO matched a MISSING COLLECTION (errorNum 1203, "collection or view
-// not found") — an infrastructure fault that must fail open, not abort
-// in-flight crawls (review 2026-10-29).
-const isDocumentNotFound = (e) => !!e && (dbService._isExpectedAbsence(e) || e.statusCode === 404);
+// Definitive document absence — THE canonical classifier, imported from
+// fileService (review !622 round 11): this worker's private twin had
+// drifted (statusCode-only, no errorNum guard), which re-admitted the
+// 1203-missing-collection infra fault as "job gone" and missed the
+// driver-shape HTTP 404 (arangojs carries the status as .code). One
+// classifier, two consumers, no third copy.
+const isDocumentNotFound = fileService.isDocumentNotFound;
 
 // --- THREAD POOL SETUP ---
 const NUM_CPUS = os.cpus().length;

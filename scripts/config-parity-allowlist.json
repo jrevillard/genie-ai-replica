@@ -286,7 +286,6 @@
       "compose": "okf-server",
       "chart": "okf-server",
       "mayDiffer": {
-        "OKF_ENABLED": "the flag follows the tier gate: the parity render switches the tier on (--set okf.enabled=true) so its rows get compared, while the Compose reference ships dark (OKF_ENABLED=0). A production deployment chooses the value on both surfaces; the gate compares them at opposite states by construction",
         "ARANGO_DB": "the chart's ArangoDB instance serves _system, ArangoDB's own database, which always exists; Compose uses a dedicated genie-ai database — the same adaptation the backend, dataprep and retriever entries carry",
         "ARANGO_URL": "the chart's ArangoDB is the kube-arangodb operator's service; Compose points at its own container name",
         "DATAPREP_URL": "the chart's dataprep Service is named dataprep; Compose's container is dataprep-arango-service — same application, either surface's own DNS",
@@ -294,7 +293,10 @@
         "OTEL_EXPORTER_OTLP_ENDPOINT": "the chart's collector is the OpenTelemetry operator's service; Compose points at its own container name",
         "KEYCLOAK_URL": "the chart derives the public edge address from ingress.scheme + ingress.host (the same derivation the convergence Job's KC_PUBLIC_ORIGIN uses); Compose assembles it from the NGINX host/port variables",
         "OKF_RAGAS_SERVE_URL": "the chart's chatqna Service is named chatqna; Compose's container is chatqna-xeon-backend-server — same application, either surface's own DNS",
-        "RAGAS_JUDGE_BASE_URL": "the chart derives the LLM endpoint from the OPEA GPU tier (external nodeHost or the in-cluster service); Compose points at its own vllm container"
+        "RAGAS_JUDGE_BASE_URL": "the chart derives the LLM endpoint from the OPEA GPU tier (external nodeHost or the in-cluster service); Compose points at its own vllm container",
+        "TEI_EMBED_HOST": "the chart derives the embedding endpoint from the OPEA GPU tier (external nodeHost or the in-cluster service); Compose names its own TEI container — a name that exists on neither Kubernetes surface, so the derived address is the only live one here",
+        "RAGAS_JUDGE_MODEL": "the chart flows the deployment's declared model id (opea.models.*); Compose carries an unresolvable nested default that resolves to empty at runtime — with the id empty the judge falls back to the server's served model, with it set the judge names the model explicitly",
+        "EMBEDDING_MODEL_ID": "the chart flows the deployment's declared model id (opea.models.*); Compose carries an unresolvable nested default that resolves to empty at runtime — with the id empty the judge falls back to the server's served model, with it set the judge names the model explicitly"
       },
       "secretProvided": {
         "KC_OKF_ACCESS_CLIENT_SECRET": {
@@ -328,7 +330,9 @@
       "chart": "ragas-service",
       "mayDiffer": {
         "RAGAS_JUDGE_BASE_URL": "the chart derives the LLM endpoint from the OPEA GPU tier (external nodeHost or the in-cluster service); Compose points at its own vllm container",
-        "RAGAS_JUDGE_CONTEXT_TOKENS": "both surfaces carry the same 65536 default; the gate cannot interpolate the reference through the ragas service's env scope, so it compares the literal template"
+        "RAGAS_EMBED_BASE_URL": "the chart derives the embedding endpoint from the OPEA GPU tier (external nodeHost or the in-cluster service); Compose names its own TEI container — a name that exists on neither Kubernetes surface, so the derived address is the only live one here",
+        "RAGAS_JUDGE_MODEL": "the chart flows the deployment's declared model id (opea.models.*); Compose carries an unresolvable nested default that resolves to empty at runtime — with the id empty the judge falls back to the server's served model, with it set the judge names the model explicitly",
+        "RAGAS_EMBED_MODEL": "the chart flows the deployment's declared model id (opea.models.*); Compose carries an unresolvable nested default that resolves to empty at runtime — with the id empty the judge falls back to the server's served model, with it set the judge names the model explicitly"
       },
       "secretProvided": {
         "RAGAS_INTERNAL_SECRET": {

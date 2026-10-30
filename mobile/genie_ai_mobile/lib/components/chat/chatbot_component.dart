@@ -1206,21 +1206,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   }
 
   void _quickHelpPressed(Map<String, dynamic> button) {
-    // A broken scope is a VISIBLE failure: the overlay caption names the
-    // configuration problem. Never a query with a silently reduced scope.
-    if ((_scopeResolver?.stateFor(button)['broken'] as bool?) ?? false) {
-      return;
-    }
-    // The config names the category; the wire needs its ENGLISH label, and
-    // only the live tree can say it. A tree that did not load cannot name
-    // the scope — and a query without it would answer from the whole corpus.
-    if (!quickHelpScopeIsNameable(button, _scopeResolver)) {
-      return;
-    }
-    // A card whose title resolved to nothing is refused, the same press
-    // the web refuses (`!rawOption.service`): the scope would install
-    // with a blank context bar while the web installs nothing at all.
-    if (quickHelpTitleOf(button) == null) {
+    // One predicate for the three press refusals — a broken scope (a
+    // VISIBLE failure: the overlay caption names the problem), a scope
+    // the tree cannot EN-name, a card with no title — the same gates the
+    // web's selectQuickHelpOption applies before any branch.
+    if (!quickHelpPressable(button, _scopeResolver)) {
       return;
     }
     // The parse resolved the action texts under the load's locale (the
@@ -2151,7 +2141,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                             // the failed asset all degrade to it.
                             final neutralIcon = Icon(
                               Icons.help_outline,
-                              size: 20,
+                              size: 18,
                               color: tokens.accent,
                             );
                             final scope = _treeUnavailable

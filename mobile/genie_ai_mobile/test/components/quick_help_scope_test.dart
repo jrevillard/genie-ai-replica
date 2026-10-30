@@ -1182,6 +1182,44 @@ void main() {
     });
   });
 
+  /// The press refusals — the three gates the web's
+  /// selectQuickHelpOption applies before any branch, as ONE predicate:
+  /// a broken scope, a scope the tree cannot EN-name, a card with no
+  /// title. The tap sends nothing and installs nothing.
+  group('quickHelpPressable', () {
+    test('a healthy card with a title is pressable', () {
+      final button = {
+        'id': 'civil',
+        'resolvedTitle': 'Civil Registry',
+        'serviceLabels': ['Births'],
+        'category': '2',
+      };
+
+      expect(quickHelpPressable(button, resolver), isTrue);
+    });
+
+    test('a broken scope refuses the press', () {
+      final button = {
+        'id': 'civil',
+        'resolvedTitle': 'Civil Registry',
+        'serviceLabels': ['Registration'],
+        'category': '2',
+      };
+
+      expect(quickHelpPressable(button, resolver), isFalse);
+    });
+
+    test('a card with no title refuses the press', () {
+      final button = {
+        'id': 'blank',
+        'resolvedTitle': '',
+        'category': null,
+      };
+
+      expect(quickHelpPressable(button, resolver), isFalse);
+    });
+  });
+
   /// The ONE button-identity lookup — the restore and the locale
   /// re-title must resolve the same entity for the same id.
   group('quickHelpButtonById', () {
@@ -1274,6 +1312,18 @@ void main() {
       expect(parsed['resolvedVisibleText'], '');
       expect(parsed['resolvedHiddenPrompt'], '');
     });
+
+    test(
+      'an empty string in the active locale falls through to English',
+      () {
+        final parsed = parseQuickHelpButton({
+          ...shippedButton,
+          'title': {'en': 'Apply for ID', 'es': ''},
+        }, 'es');
+
+        expect(parsed['resolvedTitle'], 'Apply for ID');
+      },
+    );
 
     test('an empty title locale map resolves to no text', () {
       final parsed = parseQuickHelpButton({

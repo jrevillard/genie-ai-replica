@@ -44,9 +44,11 @@ Map<String, dynamic> parseQuickHelpButton(
   Map<String, dynamic> btn,
   String locale,
 ) {
-  // One malformed value degrades ONE card, never the whole load — the
-  // same isolation the web applies to the same file. A non-map icon or
-  // action is the config-typo class the bare-string label rule answers.
+  // One malformed value degrades ONE card, never the whole load. A
+  // non-map icon or action is the config-typo class the bare-string
+  // label rule answers. (The web degrades per VALUE and keeps a
+  // malformed ENTRY as an empty card; the mobile drops the entry —
+  // a blank card is not a card the user can act on.)
   final dynamic rawIcon = btn['icon'];
   final iconMap = rawIcon is Map<String, dynamic> ? rawIcon : null;
   // The served path's BASENAME names the bundled asset. A NON-STRING
@@ -139,6 +141,8 @@ bool quickHelpButtonHidden(dynamic hidden) {
 /// value — a non-number, a non-positive or non-finite count (a JSON
 /// `1e400` decodes to an infinite double) — degrades to 2 instead of
 /// throwing inside the build or tripping the grid delegate's assertions.
+/// A huge FINITE count still passes (the guard stops crashes, not every
+/// degenerate layout); no shipped configuration sets a count.
 int quickHelpGridColumns(Map<String, dynamic> layout) {
   final raw = layout['columns'];
   return raw is num && raw.isFinite && raw.toInt() >= 1 ? raw.toInt() : 2;
@@ -731,6 +735,20 @@ bool shouldReResolveRestoredScope({
 /// only the live tree can say it. A tree that did not load cannot name the
 /// scope — and a query without it would answer from the whole corpus, from
 /// a button the user believes is scoped. No label, no query.
+/// Whether a tap on the card may proceed at all — the three refusals the
+/// web's selectQuickHelpOption applies before any branch, ONE predicate:
+/// a broken scope is a visible failure the tap must not send, a scope
+/// the tree cannot EN-name would leave the filter unnamed, and a
+/// title-less card would install a scope under a blank context bar.
+bool quickHelpPressable(
+  Map<String, dynamic> button,
+  QuickHelpScopeResolver? resolver,
+) {
+  return (resolver?.stateFor(button)['broken'] as bool?) != true &&
+      quickHelpScopeIsNameable(button, resolver) &&
+      quickHelpTitleOf(button) != null;
+}
+
 bool quickHelpScopeIsNameable(
   Map<String, dynamic> button,
   QuickHelpScopeResolver? resolver,

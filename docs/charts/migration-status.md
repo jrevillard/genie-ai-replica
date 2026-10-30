@@ -2483,7 +2483,7 @@ and the rows below name each plan and its outcome.
   foundation merge gave the platform three new dark services plus a wave of
   wiring on the existing ones; the chart carries both. Verified accounting
   for the whole series, measured with SHA-pinned renders: the parity state
-  went from **52 gap lines to 0** (16 service pairs, 312 variables compared
+  went from **52 gap lines to 0** (16 service pairs, 311 variables compared
   with the OPEA and OKF tiers rendered on, `--min-compared` moved to the
   new count) — 25 gaps closed by carrying values identical to Compose, 3
   closed by honest mayDiffer entries, 21 closed by the tier itself being
@@ -2500,6 +2500,32 @@ and the rows below name each plan and its outcome.
   incremental rounds); the final whole-integration review covers
   transcription fidelity, the dark default end to end, the installed
   cluster state and the gate reconfiguration.
+  **Outcome (0.2.135):** the whole-integration review's first verdict
+  was *not ready* — eight verified findings, all closed in one pass:
+  the tier's NetworkPolicy graph blocked its own two central flows
+  (backend → okf-server egress, dataprep ingress from the ingest
+  worker — a missing rule is a 3 s timeout per chat, not an error
+  anywhere), three model-id rows rendered empty where Compose derives
+  them from real knobs (RAGAS_JUDGE_MODEL, EMBEDDING_MODEL_ID,
+  RAGAS_EMBED_MODEL — pinning empty resurrects the model:null judge
+  regression), the RAGAS judge cache lost its volume (Compose's named
+  volume survives recreation; the first cut used an emptyDir), the TEI
+  endpoints now derive from the GPU tier like every sibling, and three
+  retriever booleans were untyped in the schema — `chart:lint` had
+  been red since 0.2.131. The verification pass re-checked all eight
+  against the rendered manifests AND the live cluster: gate floor
+  311/0 gaps, NP graph label-consistent and gate-correct in both
+  directions, dark default confirmed (no okf-server/pii-service/
+  ragas-service pods with the tier off), release READY. The costliest
+  finding was self-inflicted: the 0.2.132 commit added the
+  `KC_OKF_SERVER_CLIENT_SECRET` row to the convergence Job's
+  hand-written `$known` list and its comment, but the commit's file
+  list dropped the env row itself — kcc's `UNDEFINEDISERROR` made the
+  convergence hook fail on every upgrade, the cluster sat blocked
+  across four attempted upgrades until 0.2.135 shipped the row plus
+  the two sealed secrets (deploy overlay), and the first refutation of
+  the reviewer ("two refs to HEAD") was a misreading — `git show -S`
+  counts changes, not presence.
 
 ## Remaining phases
 

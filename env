@@ -464,7 +464,10 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   chat call gets what is left of it — so
 #                                 #   the first call after each cache expiry
 #                                 #   has a shorter chat window than the ones
-#                                 #   that follow.
+#                                 #   that follow. The remainder is per
+#                                 #   ATTEMPT: a retried call re-runs with the
+#                                 #   same window, so a failing call can
+#                                 #   exceed its timeout.
 # MODEL_DETECT_TTL=60                # TTL of the /v1/models model-id cache
 #                                 #   (seconds). Shared by the Python
 #                                 #   services (retriever/dataprep/chatqna)
@@ -1812,7 +1815,9 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   model server: okf-server sends the deployment credential to the judge
 #   only when the judge base IS the deployment endpoint.
 # RAGAS_JUDGE_MODEL=<model id>
-#   Default: VLLM_LLM_MODEL_ID for the ragas sidecar. okf-server does NOT
+#   The ragas sidecar has NO model discovery: without a name here (or a
+#   pinned VLLM_LLM_MODEL_ID) its judge is "not configured" and the
+#   benchmark leg answers 503. okf-server does NOT
 #   default it: the deployment's model name must never be sent to a judge
 #   base that serves another model — unset, the served model is discovered
 #   on the judge base (the deployment pin applies when the judge base IS

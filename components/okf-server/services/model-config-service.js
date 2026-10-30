@@ -646,12 +646,14 @@ function envJudgeModel() {
   const named = (process.env.RAGAS_JUDGE_MODEL || '').trim();
   if (named) return named;
   // The deployment's model name names the judge ONLY when the judge base IS
-  // the deployment endpoint. On another endpoint the served model is
-  // DISCOVERED there — the record must not advertise a model that does not
-  // answer.
+  // the deployment endpoint — an unset judge base IS that endpoint (the
+  // env-judge leg calls the deployment's own one). On another endpoint the
+  // served model is DISCOVERED there — the record must not advertise a
+  // model that does not answer.
   const base = (process.env.RAGAS_JUDGE_BASE_URL || '').trim();
-  if (!base || !modelCache.sameOrigin(base, modelCache.deploymentVllmBase())) return null;
-  return modelCache.envPinLLMSpelling() || null;
+  if (base && !modelCache.sameOrigin(base, modelCache.deploymentVllmBase())) return null;
+  // The same pin the resolution path uses (the LLM spelling first).
+  return modelCache.envPin() || null;
 }
 
 /** What the run's fidelity block records — name + model, never the key. */

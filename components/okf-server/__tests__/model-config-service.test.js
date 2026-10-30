@@ -514,5 +514,15 @@ describe('resolution chain (picked > active > env) + fidelity', () => {
     process.env.RAGAS_JUDGE_BASE_URL = 'https://judge-gpu.example/v1';
     expect(svc.judgeFidelity(null).model).toBeNull();
     delete process.env.RAGAS_JUDGE_BASE_URL;
+    // An UNSET judge base = the deployment endpoint (the env-judge leg calls
+    // the deployment's own endpoint) — the deployment's pin names it.
+    delete process.env.RAGAS_JUDGE_BASE_URL;
+    expect(svc.judgeFidelity(null).model).toBe('ibm-granite/granite-4.1-8b');
+    // The record names the model the RESOLUTION path pins (both spellings,
+    // the LLM one first) — never a different one.
+    delete process.env.VLLM_LLM_MODEL_ID;
+    process.env.VLLM_MODEL_ID = 'plain/spelling-pin';
+    expect(svc.judgeFidelity(null).model).toBe('plain/spelling-pin');
+    delete process.env.VLLM_MODEL_ID;
   });
 });

@@ -88,6 +88,23 @@ function vllmResponse(content, finishReason = 'stop') {
   };
 }
 
+// The pin variables are deleted for every test (the discovery policy is the
+// default path) — and restored afterwards: process.env is shared by every
+// test file a Jest worker runs.
+const PIN_ENV = ['VLLM_LLM_MODEL_ID', 'VLLM_MODEL_ID'];
+const savedPinEnv = {};
+
+beforeAll(() => {
+  for (const k of PIN_ENV) savedPinEnv[k] = process.env[k];
+});
+
+afterAll(() => {
+  for (const k of PIN_ENV) {
+    if (savedPinEnv[k] === undefined) delete process.env[k];
+    else process.env[k] = savedPinEnv[k];
+  }
+});
+
 beforeEach(() => {
   __mockDb.query.mockReset();
   axios.post.mockReset();

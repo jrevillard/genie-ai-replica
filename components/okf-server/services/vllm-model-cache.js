@@ -280,13 +280,14 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
 
   let pending = _inflight.get(probeKey);
   if (!pending) {
-    pruneCache();
     pending = probe(modelsUrl, timeoutMs, apiKey)
       .then((id) => {
         // delete+set: the refreshed entry becomes the newest, so the
         // count-bounded prune drops the OLDEST one first.
         _cache.delete(cacheKey);
         _cache.set(cacheKey, { id, ts: Date.now() });
+        // Prune AFTER the insert: the map never sits above its bound.
+        pruneCache();
         _negative.delete(probeKey);
         _inflight.delete(probeKey);
         return id;
@@ -316,7 +317,9 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
  * Bound by COUNT, never by age: an expired entry still holds the last known
  * model id, and that id is what a failing probe serves (stale > broken —
  * the Python twin keeps it too). Dropping it on age would turn a probe blip
- * into a 503 for every call in the cool-down window. */
+ * into a 503 for every call in the cool-down window. The eviction is the
+ * price of the bound: the OLDEST entry goes, so its stale fallback goes
+ * with it (that base re-probes on its next call). */
 function pruneCache() {
   while (_cache.size > MAX_CACHE_ENTRIES) {
     _cache.delete(_cache.keys().next().value); // the oldest insertion first

@@ -2294,13 +2294,6 @@ describe('suite generator — model-id provenance (!631 policy)', () => {
     delete process.env.VLLM_ENDPOINT; // compose okf default — base falls back to the service name
     require('axios').get.mockResolvedValue({ data: { data: [{ id: 'served/suite-8b' }] } });
     __mockDb.query.mockResolvedValue({ all: async () => [] });
-    frontmatterService.vllmChatCompletions.mockResolvedValue(
-      llmResponse({
-        positive: [{ query: 'What is the licensing fee?', reason: 'topic hit' }],
-        negative: [],
-        keywords: []
-      })
-    );
     frontmatterService.vllmChatCompletions.mockResolvedValue({
       ...llmResponse({
         positive: [{ query: 'What is the licensing fee?', reason: 'topic hit' }],

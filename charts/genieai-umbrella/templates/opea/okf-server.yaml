@@ -23,6 +23,8 @@ literals — they are tuning constants, not deployment facts.
 {{- $dataKeycloak := $data.keycloak | default dict -}}
 {{- $dataArangodb := $data.arangodb | default dict -}}
 {{- $llmEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "llm") -}}
+{{- $embeddingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "embedding") -}}
+{{- $opeaModels := index ($opea | default dict) "models" | default dict -}}
 {{- $keycloakEnv := list
     (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakPublicIssuer" .))
     (dict "name" "KEYCLOAK_REALM" "value" ($dataKeycloak.realm | default "genie" | toString))
@@ -52,7 +54,7 @@ literals — they are tuning constants, not deployment facts.
 -}}
 {{- $tuningEnv := list
     (dict "name" "RAGAS_JUDGE_BASE_URL" "value" (printf "%s/v1" $llmEndpoint))
-    (dict "name" "RAGAS_JUDGE_MODEL" "value" "")
+    (dict "name" "RAGAS_JUDGE_MODEL" "value" (index (index ($opeaModels | default dict) "llm" | default dict) "modelId" | default "" | toString))
     (dict "name" "OKF_DELETE_GRACE_HOURS" "value" "168")
     (dict "name" "OKF_BUNDLE_STORE_TIMEOUT_MS" "value" "300000")
     (dict "name" "OKF_AUDIENCE" "value" "")
@@ -67,8 +69,8 @@ literals — they are tuning constants, not deployment facts.
     (dict "name" "OKF_KICK_429_COOLDOWN_MS" "value" "15000")
     (dict "name" "VLLM_ENDPOINT" "value" "")
     (dict "name" "VLLM_MODEL_ID" "value" "")
-    (dict "name" "TEI_EMBED_HOST" "value" "http://tei:80")
-    (dict "name" "EMBEDDING_MODEL_ID" "value" "")
+    (dict "name" "TEI_EMBED_HOST" "value" $embeddingEndpoint)
+    (dict "name" "EMBEDDING_MODEL_ID" "value" (index (index ($opea | default dict) "embedding" | default dict) "modelId" | default "" | toString))
     (dict "name" "OKF_GUARD_SELF_SUBJECT" "value" "")
     (dict "name" "OKF_GUARD_DUPLICATE_FORBIDDEN" "value" "")
     (dict "name" "OKF_RERANK_ENDPOINT" "value" "")

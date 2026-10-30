@@ -311,7 +311,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // Cache the config for later use
       _cachedConfig = config;
 
-      final dynamic rawQuickHelp = config['features']?['chat']?['quickHelp'];
+      // Every container on the way in is type-checked: a String or a
+      // List where a map belongs is the same config-typo class the
+      // per-card parse isolates — degrade, never throw the load away.
+      final dynamic rawFeatures = config['features'];
+      final dynamic rawChat = rawFeatures is Map<String, dynamic>
+          ? rawFeatures['chat']
+          : null;
+      final dynamic rawQuickHelp = rawChat is Map<String, dynamic>
+          ? rawChat['quickHelp']
+          : null;
       final Map<String, dynamic> quickHelpConfig =
           rawQuickHelp is Map<String, dynamic> ? rawQuickHelp : {};
 
@@ -339,15 +348,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         if (btn is! Map<String, dynamic>) {
           continue;
         }
-        // Skip hidden buttons (no matching corpus content). The web
-        // filters on JS truthiness (`!button.hidden`), where a
-        // string-typed flag is truthy either way — this is the mobile
-        // half of that rule, not a Dart bool equality check.
-        final dynamic hiddenFlag = btn['hidden'];
-        if (hiddenFlag != null &&
-            hiddenFlag != false &&
-            hiddenFlag != 0 &&
-            hiddenFlag != '') {
+        // Skip hidden buttons (no matching corpus content) — the mobile
+        // half of the web's JS-truthiness filter, one copy beside the
+        // other config rules.
+        if (quickHelpButtonHidden(btn['hidden'])) {
           continue;
         }
         loadedButtons.add(parseQuickHelpButton(btn, _currentLocale));
@@ -1252,6 +1256,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     if (!quickHelpScopeIsNameable(button, _scopeResolver)) {
       return;
     }
+    // A card whose title resolved to nothing is refused, the same press
+    // the web refuses (`!rawOption.service`): the scope would install
+    // with a blank context bar while the web installs nothing at all.
+    if (quickHelpTitleOf(button) == null) {
+      return;
+    }
     // The parse resolved the action texts under the load's locale (the
     // same values the web resolves at map time); the gates read the
     // RESOLVED strings — the raw config values are locale maps, whose
@@ -2150,21 +2160,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
-                        // A malformed layout value degrades to the
-                        // default, like the button fields: a hard cast
-                        // throws in the build (a JSON `2.0` is a double,
-                        // a typo is a string) and a non-positive count or
-                        // ratio trips the grid delegate's assertions.
-                        final rawColumns = _quickHelpLayout['columns'];
-                        final int crossAxisCount =
-                            rawColumns is num && rawColumns.toInt() >= 1
-                            ? rawColumns.toInt()
-                            : 2;
-                        final rawRatio = _quickHelpLayout['childAspectRatio'];
-                        final double aspectRatio =
-                            rawRatio is num && rawRatio > 0
-                            ? rawRatio.toDouble()
-                            : 3.5;
+                        // The layout reads degrade to the defaults for
+                        // any malformed value — one copy beside the other
+                        // config rules (see quick_help_scope.dart).
+                        final int crossAxisCount = quickHelpGridColumns(
+                          _quickHelpLayout,
+                        );
+                        final double aspectRatio = quickHelpGridAspectRatio(
+                          _quickHelpLayout,
+                        );
 
                         return GridView.builder(
                           gridDelegate:

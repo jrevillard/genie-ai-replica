@@ -49,10 +49,11 @@ Map<String, dynamic> parseQuickHelpButton(
   // action is the config-typo class the bare-string label rule answers.
   final dynamic rawIcon = btn['icon'];
   final iconMap = rawIcon is Map<String, dynamic> ? rawIcon : null;
-  // The served path's BASENAME names the bundled asset: an empty one (a
-  // value ending in '/', a bare key) names nothing — no asset, not a
-  // directory path the card cannot load.
-  final iconFile = iconMap?['value']?.toString().split('/').last ?? '';
+  // The served path's BASENAME names the bundled asset. A NON-STRING
+  // value, or one with no basename, names nothing — no asset, not a
+  // garbage path the card cannot load.
+  final dynamic rawIconValue = iconMap?['value'];
+  final iconFile = rawIconValue is String ? rawIconValue.split('/').last : '';
   final String iconAsset = iconFile.isNotEmpty
       ? 'assets/config/quickhelp/$iconFile'
       : '';
@@ -91,6 +92,31 @@ List<String> quickHelpServiceLabelsOf(Map<String, dynamic> button) {
     return labels.map((label) => label.toString()).toList();
   }
   return const <String>[];
+}
+
+/// Whether the config's `hidden` flag hides the button — the mobile half
+/// of the web's JS-truthiness filter (`!button.hidden`): a truthy value of
+/// any type hides the card, so a string-typed flag hides it on both
+/// platforms alike, and a missing one hides nothing.
+bool quickHelpButtonHidden(dynamic hidden) {
+  return hidden != null && hidden != false && hidden != 0 && hidden != '';
+}
+
+/// The grid's column count, from the config's `layout` block. A malformed
+/// value — a non-number, a non-positive or non-finite count (a JSON
+/// `1e400` decodes to an infinite double) — degrades to 2 instead of
+/// throwing inside the build or tripping the grid delegate's assertions.
+int quickHelpGridColumns(Map<String, dynamic> layout) {
+  final raw = layout['columns'];
+  return raw is num && raw.isFinite && raw.toInt() >= 1 ? raw.toInt() : 2;
+}
+
+/// The grid's card aspect ratio, from the config's `layout` block. A
+/// malformed value — a non-number, a non-positive or non-finite ratio —
+/// degrades to 3.5, for the same reason the column count does.
+double quickHelpGridAspectRatio(Map<String, dynamic> layout) {
+  final raw = layout['childAspectRatio'];
+  return raw is num && raw.isFinite && raw > 0 ? raw.toDouble() : 3.5;
 }
 
 /// The loaded Quick Help buttons, with a duplicated id keeping only the

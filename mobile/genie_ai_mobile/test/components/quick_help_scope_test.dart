@@ -1216,9 +1216,9 @@ void main() {
   /// card icon are the two reads that drifted to a non-existent
   /// `appearance` block; the parse is where the shipped shape is read.
   ///
-  /// One malformed value degrades ONE card (the default asset, an empty
-  /// text), never the whole load — the same isolation the web applies
-  /// to the same file.
+  /// One malformed value degrades ONE card (no asset, an empty text),
+  /// never the whole load — the same isolation the web applies to the
+  /// same file.
   group('parseQuickHelpButton', () {
     final shippedButton = {
       'id': 'just-chat',
@@ -1313,6 +1313,74 @@ void main() {
 
       expect(parsed['resolvedVisibleText'], 'Demander une CNI');
       expect(parsed['resolvedHiddenPrompt'], 'prompt-en');
+    });
+  });
+
+  /// The `hidden` filter — the mobile half of the web's JS-truthiness
+  /// `!button.hidden`: a truthy value of ANY type hides the card, so a
+  /// string-typed flag hides it on both platforms alike.
+  group('quickHelpButtonHidden', () {
+    test('a true flag hides the card', () {
+      expect(quickHelpButtonHidden(true), isTrue);
+    });
+
+    test('a string-typed flag hides the card, true or false', () {
+      expect(quickHelpButtonHidden('true'), isTrue);
+      expect(quickHelpButtonHidden('false'), isTrue);
+    });
+
+    test('a non-zero number hides the card', () {
+      expect(quickHelpButtonHidden(1), isTrue);
+    });
+
+    test('a missing or falsy flag hides nothing', () {
+      expect(quickHelpButtonHidden(null), isFalse);
+      expect(quickHelpButtonHidden(false), isFalse);
+      expect(quickHelpButtonHidden(0), isFalse);
+      expect(quickHelpButtonHidden(''), isFalse);
+    });
+  });
+
+  /// The grid layout the config's `layout` block declares. A malformed
+  /// value (a string, a non-positive count, a non-finite number) degrades
+  /// to the default instead of throwing inside the build.
+  group('quickHelpGridColumns', () {
+    test('an integer count is used as-is', () {
+      expect(quickHelpGridColumns({'columns': 3}), 3);
+    });
+
+    test('a JSON float count is truncated to an integer', () {
+      expect(quickHelpGridColumns({'columns': 2.0}), 2);
+    });
+
+    test('a string, a non-positive or a non-finite count degrades to 2', () {
+      expect(quickHelpGridColumns({'columns': '2'}), 2);
+      expect(quickHelpGridColumns({'columns': 0}), 2);
+      expect(quickHelpGridColumns({'columns': double.infinity}), 2);
+      expect(quickHelpGridColumns({'columns': double.nan}), 2);
+    });
+
+    test('a missing count degrades to 2', () {
+      expect(quickHelpGridColumns({}), 2);
+    });
+  });
+
+  group('quickHelpGridAspectRatio', () {
+    test('a positive ratio is used as-is', () {
+      expect(quickHelpGridAspectRatio({'childAspectRatio': 3.5}), 3.5);
+    });
+
+    test('a non-positive or non-finite ratio degrades to 3.5', () {
+      expect(quickHelpGridAspectRatio({'childAspectRatio': 0}), 3.5);
+      expect(quickHelpGridAspectRatio({'childAspectRatio': -1}), 3.5);
+      expect(
+        quickHelpGridAspectRatio({'childAspectRatio': double.infinity}),
+        3.5,
+      );
+    });
+
+    test('a missing ratio degrades to 3.5', () {
+      expect(quickHelpGridAspectRatio({}), 3.5);
     });
   });
 }

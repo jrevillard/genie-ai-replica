@@ -1276,6 +1276,14 @@ export default {
     configMismatchWarning:
       'Incompatibilidade de configuração: {warnings}. Verifique a Ajuda Rápida e a configuração da hierarquia de conhecimento.',
     categoryNotFound: 'Categoria "{label}" não encontrada na hierarquia de conhecimento',
+    quickHelpLabelGone:
+      'Problema de configuração: o rótulo «{labels}» já não existe na hierarquia de conhecimento. Este botão não pode ser usado até que a sua configuração seja atualizada.',
+    quickHelpCategoryGone:
+      'Problema de configuração: a categoria deste botão já não existe na hierarquia de conhecimento. Este botão não pode ser usado até que a sua configuração seja atualizada.',
+    quickHelpScopeUnavailable:
+      'Problema de configuração: a hierarquia de conhecimento não pôde ser carregada, portanto o escopo deste botão não pode ser verificado. Este botão não pode ser usado até que a hierarquia esteja disponível.',
+    scopeNotNameable:
+      'Problema de configuração: o escopo selecionado não tem nome em inglês na hierarquia de conhecimento, portanto o escopo da consulta não pode ser determinado. A consulta não foi enviada.',
     serviceLabelMismatch:
       'O serviço "{label}" utiliza um rótulo de UI que pode não corresponder à hierarquia de conhecimento',
     noFilterWarning: 'Nenhum filtro de contexto ativo — a consulta não será filtrada.',

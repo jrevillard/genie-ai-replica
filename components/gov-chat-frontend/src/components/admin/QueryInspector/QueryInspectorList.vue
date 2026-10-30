@@ -40,6 +40,8 @@
         <tr>
           <th>{{ translate('admin.queryInspector.colTime', 'Time') }}</th>
           <th>{{ translate('admin.queryInspector.colQuestion', 'User Question') }}</th>
+          <th>{{ translate('admin.queryInspector.colScope', 'Scope') }}</th>
+          <th>{{ translate('admin.queryInspector.colAbstention', 'Abstention') }}</th>
           <th>{{ translate('admin.queryInspector.colConfidence', 'Confidence') }}</th>
           <th>{{ translate('admin.queryInspector.colResponseTime', 'Response Time') }}</th>
           <th>{{ translate('admin.queryInspector.colSources', 'Sources') }}</th>
@@ -51,6 +53,18 @@
         <tr v-for="query in queries" :key="query._key" class="qi-list__row" @click="$emit('inspect', query._key)">
           <td class="qi-list__cell--time">{{ formatTime(query.timestamp) }}</td>
           <td class="qi-list__cell--question">{{ truncate(query.text, 80) }}</td>
+          <td :data-testid="`qi-scope-${query._key}`">
+            <span v-if="scopeTexts[query._key]" class="qi-list__scope-labels" :title="scopeTexts[query._key]">{{
+              scopeTexts[query._key]
+            }}</span>
+            <span v-else class="qi-list__muted">—</span>
+          </td>
+          <td class="qi-list__cell--center">
+            <DsPill v-if="isAbstained(query)" variant="warning" :data-testid="`qi-abstention-${query._key}`">
+              {{ translate('admin.queryInspector.abstained', 'Abstained') }}
+            </DsPill>
+            <span v-else class="qi-list__muted">—</span>
+          </td>
           <td class="qi-list__cell--center">
             <DsPill
               v-if="query.metadata?.confidence_score != null"
@@ -117,6 +131,7 @@ import DsInput from '../../ds/Input.vue';
 import DsFormGroup from '../../ds/FormGroup.vue';
 import DsPill from '../../ds/Pill.vue';
 import DsStateDisplay from '../../ds/StateDisplay.vue';
+import { isAbstained as queryIsAbstained, scopeDisplayText } from './query-scope';
 
 export default {
   name: 'QueryInspectorList',
@@ -140,7 +155,26 @@ export default {
       }
     };
   },
+  computed: {
+    /**
+     * The stored scope as one string per row — or null when the record does
+     * not say (rendered as the dash). The three-state rule and its rendering
+     * live in query-scope.js, shared with the detail view; the map keys by
+     * row so the cell, its title and its v-if read one computed string.
+     */
+    scopeTexts() {
+      const label = this.translate('admin.queryInspector.unfiltered', 'Unfiltered');
+      const map = {};
+      for (const query of this.queries) {
+        map[query._key] = scopeDisplayText(query, label);
+      }
+      return map;
+    }
+  },
   methods: {
+    isAbstained(query) {
+      return queryIsAbstained(query);
+    },
     translate(key, fallback) {
       return this.$parent?.translate?.(key, fallback) ?? fallback;
     },
@@ -243,6 +277,17 @@ export default {
 
 .qi-list__cell--question {
   max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The cap lives on the span: a max-width on a table cell is not a cap in an
+   auto-layout table, so a long label list would widen the table instead of
+   truncating. */
+.qi-list__scope-labels {
+  display: block;
+  max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

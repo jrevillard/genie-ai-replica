@@ -1040,6 +1040,14 @@ const Map<String, dynamic> ptLocale = {
     "unsavedChanges":
         "Você tem alterações não salvas. Tem certeza de que deseja iniciar um novo chat?",
     "whatCanIHelp": "Como posso ajudar você hoje?",
+    "quickHelpLabelGone":
+        "Problema de configuração: o rótulo «{labels}» já não existe na hierarquia de conhecimento. Este botão não pode ser usado até que a sua configuração seja atualizada.",
+    "quickHelpCategoryGone":
+        "Problema de configuração: a categoria deste botão já não existe na hierarquia de conhecimento. Este botão não pode ser usado até que a sua configuração seja atualizada.",
+    "quickHelpScopeUnavailable":
+        "Problema de configuração: a hierarquia de conhecimento não pôde ser carregada, portanto o escopo deste botão não pode ser verificado. Este botão não pode ser usado até que a hierarquia esteja disponível.",
+    "scopeNotNameable":
+        "Problema de configuração: o escopo selecionado não tem nome em inglês na hierarquia de conhecimento, portanto o escopo da consulta não pode ser determinado. A consulta não foi enviada.",
     "queryContext": "Contexto da Consulta",
     "contextAdded": "Contexto adicionado à sua consulta",
     "contextRemoved": "Contexto removido da sua consulta",

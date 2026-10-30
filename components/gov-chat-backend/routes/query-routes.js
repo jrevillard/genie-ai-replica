@@ -154,7 +154,11 @@ const emptyStreamMetadata = () => ({
   is_grounded: false,
   retrieval_confidence_score: null,
   abstained: null,
-  abstention_reason: null
+  abstention_reason: null,
+  // No metadata event means the turn never reported a scope — null (the
+  // Inspector's "not recorded" dash), not an empty list, which would claim
+  // the query ran unfiltered.
+  filter_labels: null
 });
 
 module.exports = (queryService) => {
@@ -268,16 +272,7 @@ module.exports = (queryService) => {
    *                     content:
    *                       type: string
    *               context:
-   *                 type: object
-   *                 properties:
-   *                   categoryLabel:
-   *                     type: string
-   *                   serviceLabels:
-   *                     type: array
-   *                     items:
-   *                       type: string
-   *                   language:
-   *                     type: string
+   *                 $ref: '#/components/schemas/QueryContext'
    *     responses:
    *       200:
    *         description: SSE stream of response chunks
@@ -805,18 +800,7 @@ module.exports = (queryService) => {
    *                       type: string
    *                 description: Full conversation history (required for conversation mode)
    *               context:
-   *                 type: object
-   *                 properties:
-   *                   categoryLabel:
-   *                     type: string
-   *                   serviceLabels:
-   *                     type: array
-   *                     items:
-   *                       type: string
-   *                   language:
-   *                     type: string
-   *                     default: EN
-   *                 description: Context labels (required for conversation mode)
+   *                 $ref: '#/components/schemas/QueryContext'
    *               contextOption:
    *                 type: string
    *                 enum: [single-message, conversation-with-context-labels]

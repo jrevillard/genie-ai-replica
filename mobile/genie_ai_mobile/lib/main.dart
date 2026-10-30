@@ -413,8 +413,27 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void _onServiceSelected(Map<String, dynamic> service) {
     final String name = service['name'] ?? 'Unknown Service';
     final String id = service['category_id'] ?? service['id'] ?? '';
+    // BOTH spellings travel to the chat: display (name) and the EN wire
+    // labels (the SSOT the retriever filters on).
+    final String categoryNameEn = service['categoryNameEn']?.toString() ?? '';
+    final List<String> serviceLabelsEn =
+        (service['serviceLabelsEn'] as List<dynamic>? ?? const <dynamic>[])
+            .map((e) => e.toString())
+            .where((e) => e.isNotEmpty)
+            .toList();
+    // How many services were picked: a picked service with no EN
+    // translation contributes no label, and the chat must refuse the
+    // send instead of quietly narrowing the query to the category.
+    final int serviceCount =
+        (service['serviceCount'] as num?)?.toInt() ?? serviceLabelsEn.length;
     debugPrint("[MAIN] Service Selected: $name (ID: $id)");
-    _chatBotKey.currentState?.setCategoryContext(id, name);
+    _chatBotKey.currentState?.setCategoryContext(
+      id,
+      name,
+      categoryNameEn: categoryNameEn,
+      serviceLabelsEn: serviceLabelsEn,
+      serviceCount: serviceCount,
+    );
   }
 
   void _onConversationSelected(String conversationId) {

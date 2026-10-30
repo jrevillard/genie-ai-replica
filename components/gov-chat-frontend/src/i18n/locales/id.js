@@ -1275,6 +1275,14 @@ export default {
     serviceLabelMismatch:
       'Layanan "{label}" menggunakan label antarmuka pengguna yang mungkin tidak sesuai dengan hierarki pengetahuan',
     noFilterWarning: 'Tidak ada filter konteks yang aktif — kueri tidak akan difilter.',
+    quickHelpLabelGone:
+      'Masalah konfigurasi: label "{labels}" tidak lagi ada dalam hierarki pengetahuan. Tombol ini tidak dapat digunakan sampai konfigurasinya diperbarui.',
+    quickHelpCategoryGone:
+      'Masalah konfigurasi: kategori tombol ini tidak lagi ada dalam hierarki pengetahuan. Tombol ini tidak dapat digunakan sampai konfigurasinya diperbarui.',
+    quickHelpScopeUnavailable:
+      'Masalah konfigurasi: hierarki pengetahuan tidak dapat dimuat, sehingga cakupan tombol ini tidak dapat diverifikasi. Tombol ini tidak dapat digunakan sampai hierarki tersedia.',
+    scopeNotNameable:
+      'Masalah konfigurasi: cakupan yang dipilih tidak memiliki nama Inggris dalam hierarki pengetahuan, sehingga cakupan kueri tidak dapat ditentukan. Kueri tidak dikirim.',
     placeholder: 'Ketik pertanyaan Anda di sini...',
     composerPlaceholder: 'Ajukan pertanyaan, jelajahi pengetahuan...',
     composerAttachTitle: 'Lampiran belum tersedia',

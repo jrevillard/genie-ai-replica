@@ -1278,6 +1278,14 @@ export default {
     configMismatchWarning:
       'Konfigurationsdiskrepanz: {warnings}. Bitte überprüfen Sie die Schnellhilfe und die Konfiguration der Wissenshierarchie.',
     categoryNotFound: 'Kategorie „{label}“ in der Wissenshierarchie nicht gefunden',
+    quickHelpLabelGone:
+      'Konfigurationsproblem: das Label „{labels}“ existiert nicht mehr in der Wissenshierarchie. Diese Schaltfläche kann nicht verwendet werden, bis ihre Konfiguration aktualisiert wurde.',
+    quickHelpCategoryGone:
+      'Konfigurationsproblem: die Kategorie dieser Schaltfläche existiert nicht mehr in der Wissenshierarchie. Diese Schaltfläche kann nicht verwendet werden, bis ihre Konfiguration aktualisiert wurde.',
+    quickHelpScopeUnavailable:
+      'Konfigurationsproblem: die Wissenshierarchie konnte nicht geladen werden, daher kann der Umfang dieser Schaltfläche nicht überprüft werden. Diese Schaltfläche kann nicht verwendet werden, bis die Hierarchie verfügbar ist.',
+    scopeNotNameable:
+      'Konfigurationsproblem: der ausgewählte Bereich trägt keinen englischen Namen in der Wissenshierarchie, daher kann der Umfang der Abfrage nicht bestimmt werden. Die Abfrage wurde nicht gesendet.',
     serviceLabelMismatch:
       'Dienst „{label}“ verwendet eine UI-Bezeichnung, die möglicherweise nicht mit der Wissenshierarchie übereinstimmt',
     noFilterWarning: 'Kein Kontextfilter aktiv — Anfrage wird ungefiltert ausgeführt.',

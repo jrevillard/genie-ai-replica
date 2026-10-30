@@ -1280,6 +1280,14 @@ export default {
     serviceLabelMismatch:
       'Tšebeletso ea "{label}" e sebelisa leibole ea UI e ka \'nang ea se ke ea lumellana le thulaganyo ea tsebo',
     noFilterWarning: 'Ha ho sefe ea maemo e sebetsang — patlo e ke ke ea sefuoa.',
+    quickHelpLabelGone:
+      'Configuration problem: the label "{labels}" no longer exists in the knowledge hierarchy. This button cannot be used until its configuration is updated.',
+    quickHelpCategoryGone:
+      "Configuration problem: this button's category no longer exists in the knowledge hierarchy. This button cannot be used until its configuration is updated.",
+    quickHelpScopeUnavailable:
+      "Configuration problem: the knowledge hierarchy could not be loaded, so this button's scope cannot be verified. This button cannot be used until the hierarchy is available.",
+    scopeNotNameable:
+      'Configuration problem: the selected scope has no English name in the knowledge hierarchy, so the query cannot be scoped. It was not sent.',
     placeholder: 'Ngola potso ya hao mona...',
     composerPlaceholder: 'Botsa potso, hlahloba tsebo...',
     composerAttachTitle: 'Lihokelo ha li fumanehe hajoale',

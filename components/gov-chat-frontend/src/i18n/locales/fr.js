@@ -1272,6 +1272,14 @@ export default {
       "Le service « {label} » utilise un libellé d'interface utilisateur qui peut ne pas correspondre à la hiérarchie des connaissances",
     noFilterWarning: 'Aucun filtre de contexte actif — la requête ne sera pas filtrée.',
     categoryNotFound: 'Catégorie « {label} » introuvable dans la hiérarchie des connaissances',
+    quickHelpLabelGone:
+      "Problème de configuration : le label « {labels} » n'existe plus dans la hiérarchie de connaissances. Ce bouton est inutilisable tant que sa configuration n'est pas mise à jour.",
+    quickHelpCategoryGone:
+      "Problème de configuration : la catégorie de ce bouton n'existe plus dans la hiérarchie de connaissances. Ce bouton est inutilisable tant que sa configuration n'est pas mise à jour.",
+    quickHelpScopeUnavailable:
+      "Problème de configuration : la hiérarchie de connaissances n'a pas pu être chargée, le périmètre de ce bouton ne peut donc pas être vérifié. Ce bouton est inutilisable tant que la hiérarchie n'est pas disponible.",
+    scopeNotNameable:
+      "Problème de configuration : le périmètre sélectionné ne porte pas de nom anglais dans la hiérarchie de connaissances, le périmètre de la requête ne peut donc pas être déterminé. La requête n'a pas été envoyée.",
     configMismatchWarning:
       "Discordance de configuration : {warnings}. Veuillez vérifier l'Aide rapide et la configuration de la hiérarchie des connaissances.",
     streamingError: 'La réponse a été interrompue. Veuillez réessayer.',

@@ -1253,6 +1253,11 @@ export default {
     categoryNotFound: '在知识层级中未找到分类“{label}”',
     serviceLabelMismatch: '服务“{label}”所使用的 UI 标签可能与知识层级不匹配',
     noFilterWarning: '未激活上下文过滤器 — 查询将不经过滤直接执行。',
+    quickHelpLabelGone: '配置问题：标签“{labels}”已不存在于知识层次结构中。在更新配置之前，此按钮无法使用。',
+    quickHelpCategoryGone: '配置问题：此按钮的类别已不存在于知识层次结构中。在更新配置之前，此按钮无法使用。',
+    quickHelpScopeUnavailable:
+      '配置问题：知识层次结构无法加载，因此无法验证此按钮的范围。在层次结构可用之前，此按钮无法使用。',
+    scopeNotNameable: '配置问题：所选范围在知识层次结构中没有英文名称，因此无法确定查询的范围。该查询未发送。',
     placeholder: '在此输入您的查询...',
     composerPlaceholder: '提问、探索知识...',
     composerAttachTitle: '附件功能尚未开放',

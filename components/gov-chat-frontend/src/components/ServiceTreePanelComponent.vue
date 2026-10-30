@@ -30,14 +30,14 @@
 
           <ul v-if="node.expanded && node.children && node.children.length > 0" class="child-list">
             <li
-              v-for="(childName, cIndex) in node.children"
+              v-for="(child, cIndex) in node.children"
               :key="cIndex"
               :class="{ selected: isChildSelected(node.catKey, cIndex) }"
-              @click.stop="toggleChildSelection(node.catKey, childName, cIndex)"
+              @click.stop="toggleChildSelection(node.catKey, child, cIndex)"
             >
               <div class="node-label child-row">
                 <span class="toggle-icon placeholder"></span>
-                <span class="node-name">{{ childName }}</span>
+                <span class="node-name">{{ child.name }}</span>
               </div>
             </li>
           </ul>
@@ -182,7 +182,9 @@ export default {
         // Process the API response - just add expanded property, filter null children
         this.nodes = categories.map((category) => ({
           ...category,
-          children: (category.children || []).filter(Boolean),
+          // A child carries { name (localized), nameEN (filter wire) }; an
+          // entity without a display name in this locale has nothing to show.
+          children: (category.children || []).filter((child) => child && child.name),
           expanded: false
         }));
       } catch (error) {
@@ -260,7 +262,14 @@ export default {
 
       const catKey = item.category;
       const children = this.nodes.find((n) => n.catKey === catKey)?.children || [];
-      const childIndex = children.findIndex((child) => String(child) === String(item.service));
+      // The identity is the EN label (serviceKey) the chat side now
+      // keys on — matching the DISPLAY name alone desynced the highlight
+      // when two services shared one (the wrong row un-highlighted, the
+      // picked row left highlighted). A row with no EN label falls back
+      // to the display name.
+      const childIndex = children.findIndex(
+        (child) => child && (item.serviceKey ? child.nameEN === item.serviceKey : child.name === item.service)
+      );
 
       if (childIndex !== -1 && this.selectedNodes[catKey]) {
         // Filter out the removed index
@@ -269,7 +278,7 @@ export default {
       }
     },
 
-    toggleChildSelection(catKey, childName, childIndex) {
+    toggleChildSelection(catKey, child, childIndex) {
       // Initialize array if needed
       if (!this.selectedNodes[catKey]) {
         this.selectedNodes[catKey] = [];
@@ -289,10 +298,12 @@ export default {
         isSelected = false;
       }
 
-      // Notify chat component
+      // Notify chat component — BOTH spellings travel: display (service) and
+      // the EN wire label (serviceKey, the SSOT the retriever filters on).
       eventBus.$emit('treeNodeSelected', {
         category: catKey,
-        service: childName,
+        service: child.name,
+        serviceKey: child.nameEN,
         selected: isSelected
       });
     },
@@ -306,9 +317,10 @@ export default {
 
       this.nodes.forEach((node) => {
         const categoryName = (node.name || '').toLowerCase();
-        const childNames = (node.children || [])
-          .filter(Boolean)
-          .map((name) => (typeof name === 'string' ? name.toLowerCase() : ''));
+        // The children were filtered at load time: an entity without a
+        // display name in this locale has nothing to show, and nothing to
+        // search for either.
+        const childNames = (node.children || []).map((child) => child.name.toLowerCase());
 
         if (!query) {
           node.expanded = false;

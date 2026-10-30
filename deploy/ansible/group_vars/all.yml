@@ -143,6 +143,21 @@ opea_ssl_skip_verify: ""
 # Only affects dataprep's Keycloak service account token fetch.
 keycloak_ssl_skip_verify: ""
 
+# The Keycloak theme this deployment serves. ONE declaration feeds every
+# consumer: templates/env.j2 renders it into KEYCLOAK_THEME, the realm
+# (configs/keycloak/genie-realm.yaml) points its four theme settings at it,
+# and the config_bootstrap role refuses to mirror a branch that does not ship
+# it. It lives here — in the vars every host of the inventory gets — because
+# role defaults are scoped to the role's own plays (the same reason config_dir
+# above is promoted here): a role default would be invisible to the .env-
+# rendering play, and the theme the guard checks and the theme the realm
+# serves would be two literals in two files.
+#
+# A flavour overrides it in group_vars/<environment>/vars.yml (e.g.
+# genie-el-salvador); the value must name a theme the deployed branch ships
+# under configs/keycloak/themes/.
+keycloak_theme: genie
+
 # Dataprep LLM labeling tuning (defaults live in code; set in group_vars/<env>/vars.yml to override).
 # LLM labeling is the dominant document-ingestion cost (one vLLM call per chunk).
 #   dataprep_max_concurrent_batches: 20  # concurrent LLM label calls (code default 20; was 5)

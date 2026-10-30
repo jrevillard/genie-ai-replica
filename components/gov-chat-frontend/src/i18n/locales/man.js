@@ -1262,6 +1262,14 @@ export default {
     serviceLabelMismatch:
       'Jikin jerbal "{label}" ej kōjerbal kakōl̦l̦e in UI eo emaron̦ ban errā ibben laajrak in jel̦āl̦o̦kjen̦',
     noFilterWarning: 'Ejjel̦o̦k kajjitōk in kapijuknen em̦ool — kajjitōk enaj alikkar aolepen.',
+    quickHelpLabelGone:
+      'Configuration problem: the label "{labels}" no longer exists in the knowledge hierarchy. This button cannot be used until its configuration is updated.',
+    quickHelpCategoryGone:
+      "Configuration problem: this button's category no longer exists in the knowledge hierarchy. This button cannot be used until its configuration is updated.",
+    quickHelpScopeUnavailable:
+      "Configuration problem: the knowledge hierarchy could not be loaded, so this button's scope cannot be verified. This button cannot be used until the hierarchy is available.",
+    scopeNotNameable:
+      'Configuration problem: the selected scope has no English name in the knowledge hierarchy, so the query cannot be scoped. It was not sent.',
     placeholder: 'I la ñiningo nyining jang...',
     composerPlaceholder: 'Ask a question, explore knowledge...',
     composerAttachTitle: 'Attachments are not available yet',

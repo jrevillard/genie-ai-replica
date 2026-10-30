@@ -408,7 +408,11 @@ class ServiceCategoryService {
   /**
    * Get all categories with their services (for public-facing components)
    * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
-   * @returns {Promise<Array>} Categories with service name strings.
+   * @returns {Promise<Array>} Categories with their services, each carrying
+   *   the display name (`name` — the localized translation, or the ENGLISH
+   *   one when the locale has no translation) and the ENGLISH name
+   *   (`nameEN` — the English translation row, or the entity document's own
+   *   `nameEN` when there is no row) the filter wire speaks.
    */
   async getAllCategoriesWithServices(locale = 'en') {
     await this.init();
@@ -416,33 +420,92 @@ class ServiceCategoryService {
       const upperLocale = locale.toUpperCase();
       logger.info(`Fetching all categories with services for locale ${upperLocale}`);
 
+      // The tree carries BOTH spellings of every entity: the name the UI
+      // displays, and the ENGLISH translation the retrieval corpus filters
+      // on. English is the SSOT of the filter wire — a client that sent a
+      // localized name would scope against labels no chunk carries. The
+      // DISPLAY name is the locale's translation when there is one and the
+      // ENGLISH one otherwise: an entity with no translation in the active
+      // locale is still named and offered, and the label the user reads is
+      // the label that scopes the query. Both spellings come out of ONE
+      // translation pass per entity — the dataprep walks this tree once
+      // per ingest.
+      const localeCode = upperLocale.toLowerCase();
       const query = aql`
       FOR category IN serviceCategories
         SORT category.order ASC
-        LET categoryTranslation = FIRST(
+        LET categoryTranslations = (
           FOR trans IN serviceCategoryTranslations
             FILTER trans.serviceCategoryId == category._key
-            FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
-            RETURN trans.translation
+            FILTER LOWER(trans.languageCode) IN [ ${localeCode}, 'en' ]
+            RETURN { code: LOWER(trans.languageCode), translation: trans.translation }
         )
+        LET categoryTranslation = FIRST(
+          FOR t IN categoryTranslations
+            FILTER t.code == ${localeCode}
+            RETURN t.translation
+        )
+        LET categoryTranslationEN = FIRST(
+          FOR t IN categoryTranslations
+            FILTER t.code == 'en'
+            RETURN t.translation
+        )
+        // The EN translation row is the SSOT; the document's cached nameEN
+        // is the FALLBACK for an entity seeded outside the write path (the
+        // taxonomy seed script writes the document field and no translation
+        // row at all) — the same resolution the admin tree applies, and the
+        // one the corpus's own EN lookup applies. The write path keeps the
+        // two in sync, so the fallback can only fill a missing row with
+        // the very text the row would have carried. A BLANK row counts as
+        // no row: a blank name is the very symptom this tree must not
+        // publish.
+        LET categoryNameEN = LENGTH(TRIM(categoryTranslationEN)) > 0
+            ? categoryTranslationEN
+            : (LENGTH(TRIM(category.nameEN)) > 0 ? category.nameEN : null)
+        // The DISPLAY name: the locale's translation when there is one, the
+        // ENGLISH one otherwise. An entity with neither keeps a null name —
+        // it has nothing to show and nothing to scope on.
+        LET categoryName = LENGTH(TRIM(categoryTranslation)) > 0 ? categoryTranslation : categoryNameEN
         LET services = (
           FOR edge IN categoryServices
             FILTER edge._from == category._id
             FOR service IN services
               FILTER service._id == edge._to
-              LET serviceTranslation = FIRST(
+              LET serviceTranslations = (
                 FOR trans IN serviceTranslations
                   FILTER trans.serviceId == service._key
-                  FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
-                  RETURN trans.translation
+                  FILTER LOWER(trans.languageCode) IN [ ${localeCode}, 'en' ]
+                  RETURN { code: LOWER(trans.languageCode), translation: trans.translation }
               )
+              LET serviceTranslation = FIRST(
+                FOR t IN serviceTranslations
+                  FILTER t.code == ${localeCode}
+                  RETURN t.translation
+              )
+              LET serviceTranslationEN = FIRST(
+                FOR t IN serviceTranslations
+                  FILTER t.code == 'en'
+                  RETURN t.translation
+              )
+              // The same EN resolution the category gets.
+              LET serviceNameEN = LENGTH(TRIM(serviceTranslationEN)) > 0
+                  ? serviceTranslationEN
+                  : (LENGTH(TRIM(service.nameEN)) > 0 ? service.nameEN : null)
+              // And the same DISPLAY name: the locale's translation when
+              // there is one, the ENGLISH one otherwise — a service with
+              // no translation in the active locale stays offered.
+              LET serviceName = LENGTH(TRIM(serviceTranslation)) > 0 ? serviceTranslation : serviceNameEN
               SORT edge.order ASC
-              RETURN serviceTranslation
+              // The KEY travels with the spellings: a client identifies a
+              // service by it, never by a name — neither spelling is
+              // unique inside a category.
+              RETURN { _key: service._key, name: serviceName, nameEN: serviceNameEN }
         )
         RETURN {
           catKey: category._key,
           catCode: category.catCode,
-          name: categoryTranslation,
+          name: categoryName,
+          nameEN: categoryNameEN,
           children: services
         }
     `;
@@ -463,7 +526,11 @@ class ServiceCategoryService {
   /**
    * Get all categories with DETAILED services for the admin panel
    * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
-   * @returns {Promise<Array>} Categories with detailed service objects
+   * @returns {Promise<Array>} Categories with detailed service objects,
+   *   each carrying the localized display name (`name` — the admin panel
+   *   keys its label map by it) and the ENGLISH name (`nameEN` — the
+   *   English translation row, or the entity document's own `nameEN` when
+   *   there is no row) the filter wire speaks
    */
   async getAdminAllCategoriesWithServices(locale = 'en') {
     await this.init();
@@ -471,38 +538,87 @@ class ServiceCategoryService {
       const upperLocale = locale.toUpperCase();
       logger.info(`Fetching all categories with DETAILED services for admin panel, locale ${upperLocale}`);
 
-      // This query is identical to getAllCategoriesWithServices, except for the final RETURN in the services subquery
+      // The admin variant of getAllCategoriesWithServices: the category
+      // level is the same, but the services subquery returns the entity KEY
+      // (the hierarchy editor acts on entities) beside the wire spellings.
+      // Both spellings come out of ONE translation pass per entity, the
+      // same shape as the public tree: the hierarchy editor renames the
+      // EN name, so the tree must publish it.
+      const localeCode = upperLocale.toLowerCase();
       const query = aql`
           FOR category IN serviceCategories
               SORT category.order ASC
-              LET categoryTranslation = FIRST(
+              LET categoryTranslations = (
                   FOR trans IN serviceCategoryTranslations
                       FILTER trans.serviceCategoryId == category._key
-                      FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
-                      RETURN trans.translation
+                      FILTER LOWER(trans.languageCode) IN [ ${localeCode}, 'en' ]
+                      RETURN { code: LOWER(trans.languageCode), translation: trans.translation }
               )
+              LET categoryTranslation = FIRST(
+                  FOR t IN categoryTranslations
+                      FILTER t.code == ${localeCode}
+                      RETURN t.translation
+              )
+              LET categoryTranslationEN = FIRST(
+                  FOR t IN categoryTranslations
+                      FILTER t.code == 'en'
+                      RETURN t.translation
+              )
+              // The EN translation row is the SSOT; the document's cached
+              // nameEN is the FALLBACK for an entity seeded outside the
+              // write path (the taxonomy seed script writes the document
+              // field and no translation row at all) — the same
+              // resolution the corpus's own EN lookup applies. A BLANK
+              // row counts as no row.
+              LET categoryNameEN = LENGTH(TRIM(categoryTranslationEN)) > 0
+                  ? categoryTranslationEN
+                  : (LENGTH(TRIM(category.nameEN)) > 0 ? category.nameEN : null)
+              // The DISPLAY name (name below) is the locale's translation,
+              // and NOTHING else — the public tree falls back to the
+              // ENGLISH name, the admin tree does not. The admin panel
+              // keys its label map by this display name (the file's labels
+              // ARE locale names), so an English fallback here would let
+              // two entities share one key and file a label under the
+              // wrong entity.
               LET services = (
                   FOR edge IN categoryServices
                       FILTER edge._from == category._id
                       FOR service IN services
                           FILTER service._id == edge._to
-                          LET serviceTranslation = FIRST(
+                          LET serviceTranslations = (
                               FOR trans IN serviceTranslations
                                   FILTER trans.serviceId == service._key
-                                  FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
-                                  RETURN trans.translation
+                                  FILTER LOWER(trans.languageCode) IN [ ${localeCode}, 'en' ]
+                                  RETURN { code: LOWER(trans.languageCode), translation: trans.translation }
                           )
+                          LET serviceTranslation = FIRST(
+                              FOR t IN serviceTranslations
+                                  FILTER t.code == ${localeCode}
+                                  RETURN t.translation
+                          )
+                          LET serviceTranslationEN = FIRST(
+                              FOR t IN serviceTranslations
+                                  FILTER t.code == 'en'
+                                  RETURN t.translation
+                          )
+                          LET serviceNameEN = LENGTH(TRIM(serviceTranslationEN)) > 0
+                              ? serviceTranslationEN
+                              : (LENGTH(TRIM(service.nameEN)) > 0 ? service.nameEN : null)
+                          // The display name stays the locale's translation —
+                          // the admin panel keys its label map by it (see
+                          // the category level above).
                           SORT edge.order ASC
-                          // This is the key change: return an object with the key and name
                           RETURN {
                               _key: service._key,
-                              name: serviceTranslation
+                              name: serviceTranslation,
+                              nameEN: serviceNameEN
                           }
               )
               RETURN {
                   catKey: category._key,
                   catCode: category.catCode,
                   name: categoryTranslation,
+                  nameEN: categoryNameEN,
                   children: services
               }
       `;

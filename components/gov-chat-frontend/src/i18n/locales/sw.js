@@ -1268,6 +1268,14 @@ export default {
     categoryNotFound: 'Kategoria ya "{label}" haijapatikana katika muundo wa maarifa',
     serviceLabelMismatch: 'Huduma "{label}" inatumia lebo ya kiolesura ambayo huenda hailingani na muundo wa maarifa',
     noFilterWarning: 'Hakuna kichujio cha muktadha kinachofanya kazi — hoja haitachujwa.',
+    quickHelpLabelGone:
+      'Tatizo la usanidi: lebo "{labels}" haipo tena katika mpangilio wa maarifa. Kitufe hiki hakiwezi kutumika hadi usanidi wake ukoreshwe.',
+    quickHelpCategoryGone:
+      'Tatizo la usanidi: kundi la kitufe hiki haipo tena katika mpangilio wa maarifa. Kitufe hiki hakiwezi kutumika hadi usanidi wake ukoreshwe.',
+    quickHelpScopeUnavailable:
+      'Tatizo la usanidi: mpangilio wa maarifa haukuweza kupakiwa, hivyo kwa hiyo upeo wa kitufe hiki hauwezi kuthibitishwa. Kitufe hiki hakiwezi kutumika hadi mpangilio upo.',
+    scopeNotNameable:
+      'Tatizo la usanidi: kipimo kilichochaguliwa hikija na jina la Kiingereza katika mpangilio wa maarifa, hivyo huwezi kufafanua upeo wa swali. Swali halikutumwa.',
     placeholder: 'Andika swali lako hapa...',
     composerPlaceholder: 'Uliza swali, chunguza maarifa...',
     composerAttachTitle: 'Viambatisho havipatikani bado',

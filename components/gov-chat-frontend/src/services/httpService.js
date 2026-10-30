@@ -368,6 +368,13 @@ class HttpService {
 
   /**
    * Make a GET request
+   *
+   * The SECOND argument is the QUERY: this method reads `params` from it
+   * and sends the whole bag as query parameters. The THIRD argument is
+   * the axios options — a `timeout` among them. A timeout placed in the
+   * second argument is dropped on the floor and axios waits forever, with
+   * no error to show for it.
+   *
    * @param {string} endpoint - API endpoint
    * @param {Object} params - Query parameters
    * @param {Object} options - Additional axios options

@@ -15,6 +15,7 @@ span carrying the right attributes on the wrong trace still hides the turn.
 """
 
 import ast
+import functools
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -99,8 +100,13 @@ class TestStreamOutcomeSpan:
             is_grounded=False,
             sentinel_present=False,
             abstained=True,
+            abstention_reason="no_documents_retrieved",
         )
-        assert captured_spans(STREAM_OUTCOME)[0].attributes[A["answer_abstained"]] is True
+        span = captured_spans(STREAM_OUTCOME)[0]
+        assert span.attributes[A["answer_abstained"]] is True
+        # The boolean alone cannot answer "stale scope or over-rejecting
+        # reranker" — the cause rides beside it.
+        assert span.attributes[A["answer_abstention_reason"]] == "no_documents_retrieved"
 
     def test_joins_the_rag_trace_rather_than_starting_a_new_one(self, captured_spans):
         """The whole point: the outcome must land in the RAG trace."""
@@ -377,6 +383,7 @@ class _FakeParms:
         self.__dict__.update(kwargs)
 
 
+@functools.cache
 def _function_node(name: str) -> ast.AST:
     tree = ast.parse(CHATQNA_SOURCE.read_text(encoding="utf-8"))
     return next(
@@ -418,7 +425,16 @@ class TestEmissionSiteArguments:
         assert rendered["retrieval_confidence"] == "retrieval_confidence"
         assert rendered["self_confidence"] == "self_confidence"
         assert rendered["is_grounded"] == "is_grounded"
-        assert rendered["abstained"] == "False"
+        # `abstained` was the constant False for as long as nothing measured
+        # it. The retrieval decides it now — any expression but a constant is
+        # acceptable, so a rename or a hoist never trips this guard while a
+        # revert to a constant always does. The retrieval-derived semantics
+        # are pinned by the runtime tests in test_chatqna.py.
+        span_arg = next(kw.value for kw in call.keywords if kw.arg == "abstained")
+        assert not isinstance(span_arg, ast.Constant), (
+            "the outcome span's abstained must be measured, not a constant — a "
+            "scope that matched nothing has to show up in the trace"
+        )
 
     def test_handle_request_captures_the_orchestrate_context_inside_the_with_block(self):
         """Captured after the block closes it would hold a stale/None handle."""

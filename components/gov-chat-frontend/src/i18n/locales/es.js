@@ -1275,6 +1275,14 @@ export default {
     configMismatchWarning:
       'Discrepancia de configuración: {warnings}. Por favor, revise la Ayuda Rápida y la configuración de la jerarquía de conocimiento.',
     categoryNotFound: 'Categoría "{label}" no encontrada en la jerarquía de conocimiento',
+    quickHelpLabelGone:
+      'Problema de configuración: la etiqueta «{labels}» ya no existe en la jerarquía de conocimiento. Este botón no se puede usar hasta que su configuración se actualice.',
+    quickHelpCategoryGone:
+      'Problema de configuración: la categoría de este botón ya no existe en la jerarquía de conocimiento. Este botón no se puede usar hasta que su configuración se actualice.',
+    quickHelpScopeUnavailable:
+      'Problema de configuración: no se pudo cargar la jerarquía de conocimiento, por lo que no se puede verificar el alcance de este botón. Este botón no se puede usar hasta que la jerarquía esté disponible.',
+    scopeNotNameable:
+      'Problema de configuración: el alcance seleccionado no tiene nombre en inglés en la jerarquía de conocimiento, por lo que no se puede determinar el alcance de la consulta. No se envió.',
     serviceLabelMismatch:
       'El servicio "{label}" utiliza una etiqueta de interfaz de usuario que podría no coincidir con la jerarquía de conocimiento',
     noFilterWarning: 'No hay filtro de contexto activo — la consulta no se filtrará.',

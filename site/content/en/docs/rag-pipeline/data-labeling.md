@@ -7,7 +7,7 @@ aliases:
 mode: reference
 persona: developer
 owner: "docs-stewards"
-last_reviewed: 2026-09-18
+last_reviewed: 2026-10-26
 ---
 
 Labelling is what keeps a multi-domain knowledge base from bleeding across
@@ -118,6 +118,104 @@ non-taxonomy label and listed as `New (non-taxonomy) labels suggested`. The
 entry is logged at INFO, or at WARN when the chunk also carries non-taxonomy
 labels.
 
+## Query-time labels: English is the SSOT
+
+Chunks carry the **English** taxonomy label, so a filter can only match a
+label spelled the way the taxonomy spells it. English is therefore the SSOT
+of the filter wire: **everything that filters speaks EN; everything that
+displays is a translation.**
+
+The tree endpoints (`GET /api/service-categories/categories`,
+`GET /api/services/categories`) carry BOTH spellings of every entity: the
+`name` the UI displays — the translation in the active locale, or the English
+one when that locale has no translation — and `nameEN` — the English
+translation the retrieval corpus filters on.
+
+An entity nobody translated in the active locale therefore still shows its
+English name instead of disappearing from the tree, and the label the user
+reads is the label that scopes the query. An entity with no name in any
+language is published unnamed, and the clients do not offer it: it cannot be
+scoped on.
+
+> **Two different fields share the name `nameEN`.** The TREE publishes one
+> (the EN translation — or the entity document's own `nameEN` for an entity
+> with no EN translation row — the value clients put on the wire); the STORED
+> ENTITY carries another (the seed the write path copies into that
+> translation — see below). The write path keeps the two in sync, so they
+> carry the same text unless the document was edited outside it (the first
+> bullet below); a client filters on the tree's published value, whichever
+> of the two the tree resolved to — never on the document's own field.
+
+Clients put the ENGLISH value on the wire. A
+client that sent a localized display name would scope the query against
+labels no chunk carries — for every non-English deployment, that meant zero
+documents and an answer without context.
+
+| Situation | What happens |
+|---|---|
+| The wire label is the entity's EN translation | It filters. |
+| The wire label matches no chunk (a stale config string, chunks that predate a rename) | The scope is empty. |
+| The scope matches zero documents | The query is **not** answered outside its scope: chatqna's abstention instructions state that no documented information was found. There is no retry without the filter — a retry would answer a question nobody asked, from a corpus the request never scoped. |
+
+### What a label is, and what it is not
+
+A label is a display name. The database key (`catKey`) is not one: it is the
+storage's own identity, opaque to a deployer, and a re-created hierarchy does
+not keep it. The label the wire carries is the EN translation — and it can
+drift in two directions, each with its own remedy:
+
+- The **configuration** drifts (a static EN string in a Quick Help
+  configuration that the hierarchy no longer carries): the client validates
+  its buttons against the live tree and renders a VISIBLE error state — a
+  danger icon and a caption naming the missing label, in the user's
+  language — and the click sends nothing. A broken button never sends a
+  silently reduced scope.
+- The **corpus** drifts (chunks ingested before a rename still carry the old
+  label): a filter on the new label matches nothing and the query abstains.
+  The remedy is operational: a hierarchy rename implies a re-ingestion.
+
+The category and the service are two dimensions of one scope, and the
+**service is the narrower one**: when the request carries service labels,
+they are the filter, and the category filters on its own. The retriever
+applies its label filter as a union, and a chunk of a sibling service in the
+same category can carry the category label — filtering on both would match
+every chunk of the parent category and leak the service scope into it.
+
+### Which spelling the retriever matches
+
+A chunk label is the **English translation** of the taxonomy entity
+(`serviceCategoryTranslations` / `serviceTranslations`, locale `EN`) — or,
+for an entity with no `EN` translation row, the entity document's own
+`nameEN`, which the tree publishes as its English name (see below). That
+resolution is what the dataprep reads to build the taxonomy it offers to the
+labelling LLM, and what the retriever matches afterwards.
+
+The `nameEN` field of an entity is the *seed* of that translation: the write
+path copies it into the `EN` translation when the entity is created or
+updated through the API. The two therefore coincide in a hierarchy that was
+only ever edited through the API. Where they do not:
+
+- An entity edited in `nameEN` alone (without a translation update) keeps
+  filtering on its previous English translation — the tree publishes the
+  translation row.
+- An entity with **no** `EN` translation row — one seeded outside the write
+  path — is published with the document's own `nameEN` as its English name.
+  The corpus carries that label only once it has been re-ingested; until
+  then a scope on that entity matches nothing and the query abstains.
+
+Match a label on the **tree's** `nameEN` — the value the wire speaks — never
+on the display name.
+
+### When the filter matches nothing anyway
+
+The client validates its labels against the **hierarchy** — not against the
+**corpus**: a service can sit in the hierarchy while no document has been
+ingested for it, or its chunks can carry another spelling (ingested before a
+rename). A filter that matches nothing then returns zero documents, and the
+query is answered by chatqna's abstention instructions: the user hears that
+nothing documented was found, and the remedy is the operational one — update
+the configuration, re-ingest the corpus.
+
 ## Failure modes (labelling)
 
 | Symptom | Likely cause | Fix |
@@ -222,11 +320,14 @@ the Admin Dashboard — this is the recommended path for non-developers.
 > re-label job run) for the new label to start appearing in retrieval. See
 > [Document lifecycle]({{< relref "/docs/knowledge-base/document-lifecycle" >}}).
 
-**`nameEN` is the source of truth** for RAG compatibility. It is the
-required English field on each `serviceCategories` and `services` document
-(see `components/gov-chat-backend/scripts/new-schema-scripts/arango-schema.json`).
-Labelling and retrieval both operate on the English label, regardless of the
-user's UI language. Translation collections (`serviceCategoryTranslations`)
+**`nameEN` is the required English field** on each `serviceCategories` and
+`services` document (see
+`components/gov-chat-backend/scripts/new-schema-scripts/arango-schema.json`),
+and the write path seeds the entity's `EN` translation from it. Labelling and
+retrieval operate on that **English translation**, regardless of the user's UI
+language — see
+[Which spelling the retriever matches](#which-spelling-the-retriever-matches).
+Translation collections (`serviceCategoryTranslations`, `serviceTranslations`)
 are keyed by `languageCode` + `translation`, not `nameEN`.
 
 > **Curate the taxonomy deliberately.** Labels are only as good as the

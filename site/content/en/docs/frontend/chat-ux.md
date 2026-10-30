@@ -5,7 +5,7 @@ weight: 5
 mode: reference
 persona: developer
 owner: "docs-stewards"
-last_reviewed: 2026-09-18
+last_reviewed: 2026-10-26
 ---
 
 > **For frontend developers.** The behaviour of `ChatBotComponent.vue` and its satellite dialogs: the streaming send, the confidence chip, the grounding warning, the feedback dialog, and save / export flows.
@@ -186,14 +186,89 @@ Card config (each entry in config.features.chat.quickHelp.buttons):
     "hiddenPrompt": "Explain the eligibility criteria, required documents, and processing time for the agriculture subsidy programme for smallholder farmers."
   },
   "service": "Agriculture",
-  "serviceKey": "agriculture",
-  "serviceLabels": ["agriculture", "subsidies", "rural-development"],
-  "category": "agriculture",
+  "serviceLabels": ["Farming subsidies"],
+  "category": "Utilities & Environment",
   "icon": "agriculture.svg"
 }
 ```
 
-`service` is the localized display name; `serviceKey` / `serviceLabels` are the English KB labels used as the retriever filter. Display and filter are decoupled so the button always shows its localized title while the filter always uses English KB labels.
+`service` is the localized display name. `serviceLabels` are the **English
+names the knowledge tree carries** (`nameEN`, as `GET
+/api/service-categories/categories` publishes it) — the same spelling the
+retriever filters on, so a slug like `agriculture` or `rural-development`
+names nothing and breaks the card. `category` is the category's **English
+name** (`nameEN`, from the same endpoint — the shipped configs use `Taxes &
+Revenue`, `Identity & Civil Registration`, …): the spelling a deployment can
+write down without reading the database, and the one a re-created hierarchy
+keeps working with as long as it re-creates the categories under the same
+English names. After a re-seed whose labels drifted, re-verify the cards'
+health — a renamed category shows as an error card, never a silently
+unscoped query. The hierarchy's own `catKey` is still accepted, for
+configurations written before that spelling was adopted. A card
+in the grid whose declared labels or category are not in the live hierarchy
+renders with a danger icon and a caption naming the problem, and the click
+sends nothing: the drift is visible, never a silently reduced scope. (The
+composer entry is a send surface, not a grid tile: it refuses at send time,
+with the same message the grid's caption carries.) The `serviceKey` of a card is its **`id`** — never one of its labels. The id is the identity of the card: a saved conversation carries it as the conversation tag, so the card can be restored when the conversation is opened again. The labels a card declares are hierarchy data — they change when the hierarchy is reconfigured — and must not be part of an identity. Display, identity and filter are therefore three separate things: the card always shows its localized title, a saved conversation always carries the card id, and the filter always uses the English KB labels.
+
+### Label drift: English on the wire, visible failure on drift
+
+A card declares its filter in `serviceLabels` (English KB labels). The wire
+speaks ENGLISH — the SSOT the corpus filters on:
+
+- `context.serviceLabels` — the ENGLISH labels the selected items contribute.
+  A Quick Help card contributes only the labels it declares. Its `id` is a
+  configuration key, not a knowledge label; sending it as a filter narrowed
+  the corpus to zero documents, and the LLM then answered with no context at
+  all. A sidebar item contributes the **`nameEN`** the knowledge tree carries
+  for it — the localized name is display-only and never filters.
+- `context.categoryLabel` — the **`nameEN`** of the selected category. It is
+  sent whenever the selection names a category that carries an EN
+  translation, so a card that declares no label is still scoped by its
+  category. It is `null` when the selection names no category (the "Just
+  Chat" card) or when the entity carries no EN translation — a request with
+  no category and no service label is legitimately unfiltered.
+- A card that declares **no** label is allowed. Its `action.hiddenPrompt`
+  already scopes the answer, so the client does not block it with "No context
+  filter active" — blocking it would make the button do nothing.
+
+**A broken card is a visible failure.** The client validates every declared
+label and the card's category against the live tree. A label the hierarchy no
+longer carries — or a category that is gone — renders the card with a danger
+icon and a caption naming the problem, in the user's language, and the click
+sends nothing. The card never sends a silently reduced scope, and the query
+is never answered outside the scope the card promised.
+
+**The cards need the hierarchy to be checked.** They are rendered once the
+hierarchy load has settled: a card carries a scope, and the hierarchy is what
+names it, so a card rendered before the hierarchy is known cannot say whether
+its scope is valid. A hierarchy that **failed** to load breaks every card that
+**declares a scope**, with a caption of its own — no scope can be verified, so
+no such card can be used. A card that declares **no** scope (the "just chat"
+entry) promises nothing the hierarchy could deny, and stays usable. A category
+the hierarchy carries **without an EN translation** is a broken scope too: the
+wire speaks ENGLISH, and a category with no English name has no filterable
+label at all.
+
+When the scope is intact but matches no document anyway (chunks ingested
+before a rename), the query abstains: chatqna's abstention instructions state
+that no documented information was found. The remedy is operational — update
+the configuration, re-ingest the corpus.
+
+## Deployment order: the backend speaks first
+
+The web client reads the hierarchy's ENGLISH spelling (`nameEN`) and has no
+fallback to the localized `name`: the fallback would put a localized label on
+the wire, which matches no chunk. Deploy the **backend first**, then the
+clients.
+
+A client released against a backend that does not yet publish `nameEN` sees
+every scoped card as broken (a visible caption, no query) — a loud, honest
+failure, not a silent mis-scope. The mobile app goes further: it fetches the
+hierarchy with `locale: 'en'`, where the response's `name` IS the English
+translation, so it tolerates a pre-`nameEN` backend (the fallback applies
+only when the `nameEN` key is ABSENT — an entity that carries an empty
+`nameEN` is a real missing translation and stays unnameable).
 
 ## Accessibility
 

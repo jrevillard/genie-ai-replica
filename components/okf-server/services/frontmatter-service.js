@@ -10,7 +10,8 @@
 // that an operator can flip OKF_SEARCH_STYLE at runtime without re-ingesting.
 //
 // GPU services used (per directive 2026-10-07):
-//   - vLLM (VLLM_LLM_HOST, e.g. ${VLLM_LLM_MODEL_ID}-served) for /v1/chat/completions:
+//   - vLLM (the deployment base — VLLM_ENDPOINT, else the compose service
+//     name) for /v1/chat/completions:
 //     suggestTags + validateFrontmatter. Same AsyncOpenAI-like pattern dataprep
 //     uses at genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py:57 — here
 //     via axios since Node has no openai SDK.
@@ -51,9 +52,15 @@ const { TAG_LIMITS } = require('../validators/repository-validator');
 // is the project-wide convention (per feedback_cloud-deploy-defaults:
 // env defaults must work for local Docker AND cloud Ansible, not one or
 // the other).
-const VLLM_LLM_HOST = process.env.VLLM_ENDPOINT || 'http://vllm:8000';
-const VLLM_LLM_MODEL_ID = process.env.VLLM_LLM_MODEL_ID || 'ibm-granite/granite-4.1-8b';
-const VLLM_LLM_API_KEY = process.env.VLLM_API_KEY || process.env.VLLM_LLM_API_KEY || '';
+// The base rule (env endpoint, else the compose service) lives in ONE place
+// with the provenance labels: vllm-model-cache.deploymentVllmBase().
+const modelCache = require('./vllm-model-cache');
+// The chat model id is NOT defaulted here — it is resolved per call under
+// the !631 discovery policy (services/vllm-model-cache.js): explicit pick >
+// env pin (VLLM_LLM_MODEL_ID / VLLM_MODEL_ID) > /v1/models discovery >
+// loud ModelDiscoveryError. The old hardcoded 'ibm-granite/granite-4.1-8b'
+// fallback named a model the endpoint may not serve — vLLM validates the
+// name and 404s every call (#1181).
 
 // David 2026-10-08 (sequence of three): the embed service is also on a
 // foreign host. The previous default 'http://embedding-tei:80' is a
@@ -159,52 +166,17 @@ class FrontmatterError extends Error {
   }
 }
 
-// ---------- Retry helper (exponential backoff with jitter; per reference_remote-llm-endpoint.md) ----------
+// ---------- Retry helpers (exponential backoff with jitter; per reference_remote-llm-endpoint.md) ----------
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Which upstream failures are worth another attempt? TEI_EMBED_HOST and
-// VLLM_ENDPOINT both point at the SHARED remote GPU node
-// (ai.assembly.govstack.global), so a dropped connection is routine
-// rather than exceptional — it is the exact failure this wrapper is for.
-//
-// A prematurely-closed response stream was MISSING from this list until
-// 2026-10-12. axios surfaces a mid-response upstream disconnect as
-// ERR_STREAM_PREMATURE_CLOSE ("stream has been aborted"), which matches
-// neither the status codes nor the socket codes below, so the wrapper
-// fell through to `throw err` on the FIRST abort. Live proof: "Explain
-// failures" on the Alphabet repo died twice in a row with
-// `AxiosError: stream has been aborted` at frontmatter-service.js
-// withTeiRetry — zero retries — while the head-embed endpoint kept
-// resetting under the shared node's load.
-const RETRIABLE_UPSTREAM_CODES = new Set([
-  'ECONNABORTED', // our own axios timeout
-  'ECONNREFUSED',
-  'ECONNRESET', // peer reset the socket
-  'EPIPE',
-  'ETIMEDOUT',
-  'ERR_STREAM_PREMATURE_CLOSE' // axios: upstream closed mid-response
-]);
-// 429 joined 2026-10-23: the shared endpoint's burst limiter answers 429
-// long before the plan's 5-hour/weekly quotas are anywhere near spent (live:
-// 4 of 100 benchmark rows died on a 429 that sailed straight through this
-// set). A rate limit is the definition of "wait and try again" — pausing is
-// the fix, failing is not.
-const RETRIABLE_UPSTREAM_STATUS = new Set([429, 502, 503, 504]);
-
-function isRetriableUpstreamError(err) {
-  if (!err) return false;
-  const status = err.response && err.response.status;
-  if (status && RETRIABLE_UPSTREAM_STATUS.has(status)) return true;
-  if (err.code && RETRIABLE_UPSTREAM_CODES.has(err.code)) return true;
-  // Some aborts reach us as a bare Error carrying neither a code nor a
-  // response — match the message so a known-transient blip is never
-  // mistaken for a permanent failure.
-  const msg = typeof err.message === 'string' ? err.message : '';
-  return /stream has been aborted|socket hang up|premature close|ECONNRESET/i.test(msg);
-}
+// The transient-failure classifier (which upstream errors deserve another
+// attempt) is shared with the model-discovery probe — one home in
+// services/llm-transient-errors.js, so a class learned from a live incident
+// is learned once for every caller of the shared GPU node.
+const { isRetriableUpstreamError } = require('./llm-transient-errors');
 
 async function withUpstreamRetry(label, fn, ctx) {
   // Binary exponential backoff (David, 2026-10-23): 1s, 2s, 4s, 8s — four
@@ -361,10 +333,14 @@ Output ONLY a JSON object: {"results": [{"index": <int>, "match": "yes"|"no", "r
  * services/adaptive-llm-call.js. Env-path calls behave exactly as before
  * unless they starve, in which case they too get the budget retry. */
 async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
-  let host = VLLM_LLM_HOST;
-  let model = VLLM_LLM_MODEL_ID;
-  let apiKey = VLLM_LLM_API_KEY;
+  let host = modelCache.deploymentVllmBase();
+  let model = null; // resolved below — explicit pick > pin > discovery (!631)
   let viaOverride = false;
+  // The endpoint's OWN credential, when the call names one (the judge's
+  // RAGAS_JUDGE_API_KEY, a named config's api_key); undefined = let the
+  // resolver apply the credential rule (deployment key on the deployment
+  // endpoint, nothing elsewhere).
+  let ownKey;
   // The ENV JUDGE is the .env RAGAS_JUDGE_* pair — the same variables the
   // sidecar's default judge and the OKF panel's "system default" label name.
   // An explicit `config: null` asks for exactly that judge, so it must read
@@ -373,9 +349,15 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   // changing RAGAS_JUDGE_* would have left the advisor calling a DIFFERENT
   // model than the one it names.
   if (opts.config === null) {
-    if (process.env.RAGAS_JUDGE_BASE_URL) host = process.env.RAGAS_JUDGE_BASE_URL;
-    if (process.env.RAGAS_JUDGE_MODEL) model = process.env.RAGAS_JUDGE_MODEL;
-    if (process.env.RAGAS_JUDGE_API_KEY) apiKey = process.env.RAGAS_JUDGE_API_KEY;
+    // A judge base is FOREIGN to the deployment pin: with RAGAS_JUDGE_MODEL
+    // unset the served model is discovered from the judge base itself —
+    // the deployment pin never names a model on another endpoint.
+    if (process.env.RAGAS_JUDGE_BASE_URL) {
+      host = process.env.RAGAS_JUDGE_BASE_URL;
+    }
+    const judgeModel = (process.env.RAGAS_JUDGE_MODEL || '').trim();
+    if (judgeModel) model = judgeModel;
+    ownKey = process.env.RAGAS_JUDGE_API_KEY;
   }
   try {
     // opts.config === null → the caller explicitly wants the ENV judge (the
@@ -396,12 +378,31 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
       // …/paas/v4 base 404'd every benchmark answer row).
       host = ovr.base_url.replace(/\/+$/, '');
       if (ovr.model) model = ovr.model;
-      if (ovr.api_key) apiKey = ovr.api_key;
+      ownKey = ovr.api_key;
       viaOverride = true;
     }
   } catch {
     /* env fallback — see docblock */
   }
+  // Model-id + credential resolution, !631 policy (services/vllm-model-cache.js)
+  // — one home for the credential rule, the deployment-vs-foreign
+  // classification and the precedence: the explicit picks above (env judge /
+  // named config) win; a named-config base resolves its OWN served model (the
+  // deployment pin never names a foreign endpoint); everything else is pin ->
+  // /v1/models discovery -> loud ModelDiscoveryError. Never a hardcoded
+  // fallback name (#1181). Resolution inside the call budget (the helper
+  // keeps what is left for the chat call — never less than a usable minimum).
+  const {
+    model: resolvedModel,
+    apiKey,
+    remainingMs: chatTimeoutMs
+  } = await modelCache.resolveCallModel({
+    baseUrl: host,
+    ownKey,
+    model,
+    budgetMs: opts.timeoutMs
+  });
+  model = resolvedModel;
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
   const body = {
@@ -417,10 +418,21 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
       url,
       headers,
       body,
-      timeoutMs: opts.timeoutMs || 60000,
+      timeoutMs: chatTimeoutMs,
       disableThinking: viaOverride
     });
-  return withVllmRetry(fn, { endpoint: url });
+  const resp = await withVllmRetry(fn, { endpoint: url });
+  // The SERVED model rides the response (the server names what it ran — a
+  // gateway may alias the requested id), so callers can log provenance
+  // without a second probe (a minutes-long thinking-model call can outlive
+  // the discovery TTL — re-probing could then name a DIFFERENT model).
+  resp.model = (resp.data && resp.data.model) || model;
+  // The base the request was ADDRESSED to, for the same reason: the start
+  // log names the deployment base, but the call may have gone to a named
+  // config. (A gateway can answer from another upstream — this is the
+  // address, not the upstream that served it.)
+  resp.host = host;
+  return resp;
 }
 
 // When the model runs out of tokens mid-object the content is a valid JSON
@@ -530,7 +542,7 @@ async function teiEmbed(inputs) {
   // future HF_TOKEN-only env (the HUGGINGFACEHUB_API_TOKEN form the
   // reranker uses at line 1432).
   const headers = { 'Content-Type': 'application/json' };
-  const hfKey = process.env.HF_TOKEN || process.env.HUGGINGFACEHUB_API_TOKEN || VLLM_LLM_API_KEY;
+  const hfKey = process.env.HF_TOKEN || process.env.HUGGINGFACEHUB_API_TOKEN || modelCache.deploymentKey();
   if (hfKey) headers.Authorization = 'Bearer ' + hfKey;
   const decode = (resp) => {
     // TEI returns either {data: [[...], ...]} (batched) or [...] depending on shape
@@ -899,8 +911,15 @@ async function suggestTags(repoId, _opts = {}) {
       concepts_total: coverage.concepts_total,
       label_count: coverage.label_count,
       labels_represented: coverage.labels_represented,
-      vllm_host: VLLM_LLM_HOST,
-      model: VLLM_LLM_MODEL_ID,
+      // The DEPLOYMENT base — the call may have gone to a named model
+      // config instead; the base the call was addressed to is logged by
+      // frontmatter.suggest.done.
+      deployment_vllm_host: modelCache.deploymentVllmBase(),
+      // The PIN (null when the model is discovered) — the model that
+      // actually answered is logged by frontmatter.suggest.done. Its own
+      // key: under `model` the start line read "model:null" on the common
+      // (discovered) path, which reads like "no model was configured".
+      model_pin: modelCache.envPin(),
       prompt_chars: prompt.length
     });
     // maxTokens 1000 was NOT headroom, it was a live failure: on a 586-concept
@@ -1071,8 +1090,16 @@ async function suggestTags(repoId, _opts = {}) {
     }));
     span.setAttribute('okf.suggested.topic_count', out.topic.length);
     span.setAttribute('okf.suggested.forbidden_count', out.forbidden.length);
+    // The model this run actually tagged under — stamped on the response by
+    // vllmChatCompletions (no second probe; see the stamp there).
+    const taggedWith = resp.model || null;
     logger.info('frontmatter.suggest.done', {
       repo_id: repoId,
+      model: taggedWith,
+      // The base the call was addressed to (the start line names the
+      // deployment base, which is NOT where the call went when a named
+      // model config is active).
+      vllm_host: resp.host || modelCache.deploymentVllmBase(),
       topic: out.topic.length,
       entity: out.entity.length,
       forbidden: out.forbidden.length,

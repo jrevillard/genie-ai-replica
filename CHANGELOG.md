@@ -61,6 +61,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still in the old flat shape is refused (translation answers in English).
   See `docs/UPGRADE.md`.
 
+- **Breaking: the OKF admin model listing follows the chat path's URL
+  rule.** A base that already carries a version segment lists at
+  `{base}/models`, a bare host at `{base}/v1/models` — the one rule the
+  chat call uses. A stored configuration whose base serves the list at the
+  root (`http://my-proxy:8080/models`) must now carry its version segment
+  (`http://my-proxy:8080/v1`); before, the listing and the chat call
+  disagreed about where `/v1` goes, and the admin panel showed a broken
+  credentials form next to a working server.
+
+- **Ansible deployments with a remote GPU node now default
+  `RAGAS_JUDGE_BASE_URL` to the GPU's own model server.** The
+  default was the local `http://vllm:8000/v1`, and the local vLLM service
+  does not run on the app node when the models are remote — the judge base
+  pointed at a service that was not there. The default is now
+  `https://<gpu>:<port>/llm/v1`, the deployment's own endpoint (only that
+  endpoint may receive the deployment credential). Deployments that set
+  `ragas_judge_base_url` explicitly are unaffected. The GPU endpoint is
+  HTTPS and its certificate is self-signed by default, so the deployment
+  already needs `node_tls_reject_unauthorized: "0"` for the OKF server's
+  other calls to that node — the judge leg joins them.
+
+- **The deployment vLLM bearer stays on the deployment endpoint.** The OKF
+  server used to send `VLLM_API_KEY` to whatever `RAGAS_JUDGE_BASE_URL`
+  names, and to a saved model configuration that carries no key of its own
+  — the GPU bearer traveling to a third-party host. The credential is now
+  scoped to the deployment endpoint (same host, same port, same or
+  version-prefixed path). A judge or a named config on any other endpoint
+  needs its own key: `RAGAS_JUDGE_API_KEY` (no longer defaulted from
+  `VLLM_API_KEY` in compose or the Ansible template) or the config's
+  `api_key` field — an endpoint that accepted the deployment bearer before
+  now answers 401.
+
+- **The suite provenance field `generator` names every model that produced
+  the suite.** It was a constant — the deployment's model name
+  from the environment, or `llm:vllm` — so it never reflected any call. It
+  now lists the distinct models the generation calls actually ran under
+  (`llm:model-a,llm:model-b`), or `none` when no generation call carried a
+  stamp (the whole LLM leg failed and the deterministic fallback rows
+  filled the suite). A consumer that parses it as a single `llm:<model>`
+  token must handle both shapes.
+
+- **The OKF server no longer inherits the deployment's model NAME for the
+  benchmark judge.** `RAGAS_JUDGE_MODEL` defaulted to
+  `VLLM_LLM_MODEL_ID`, so a judge pointed at another endpoint was asked
+  for the deployment's model and answered 404 (`model not found`) — a
+  failure that reads like a credentials problem. The name is now explicit
+  only: unset, the served model is discovered on the judge base. The
+  benchmark sidecar keeps its own default (its judge base IS the
+  deployment).
+
+- **The OKF server's model pin follows the served name, with an explicit
+  escape hatch.** The pin spelling is `VLLM_LLM_MODEL_ID` — the name the vLLM
+  container is started with (`--served-model-name`), and the one every
+  service reads (`VLLM_MODEL_ID` is filled from it). Before, the OKF server
+  carried a hardcoded model name instead, so a `.env` carrying only
+  `VLLM_MODEL_ID` left it naming a model the endpoint did not serve — every
+  call 404'd while the Python services discovered the right one. The pin is
+  now the served name (`envPin()` resolves the two spellings, the LLM one
+  first). `VLLM_MODEL_ID` on its own still pins the OKF legs — the escape
+  hatch for a deployment whose OKF legs talk to another server (a proxy
+  whose `/v1/models` is not readable); it wins only while
+  `VLLM_LLM_MODEL_ID` is unset, and must name a model the CALLED endpoint
+  serves.
+
+- **The OKF server's tagging logs name their fields explicitly.** The
+  `frontmatter.suggest.start` line carried the deployment's pin under the
+  key `model` (so it read `model:null` on the common discovered path) and the
+  deployment base under `vllm_host` (which is not where the call went when a
+  named model config is active). The pin is now `model_pin`, the base
+  `deployment_vllm_host`, and the line that names the model that tagged
+  (`frontmatter.suggest.done`) also names the host that answered.
+
 - **Ansible deployments: `vllm_llm_model_id` is now undefined by default
   (auto-discovery).** Previously it pinned `ibm-granite/granite-4.1-8b` for
   both the vLLM container and the chat/ingest services. With the variable
@@ -83,6 +155,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already is.
 
 ### Fixed
+
+- **OKF LLM calls name the model the endpoint actually serves (#1181, !640).** The OKF server's vLLM calls resolved their model id from a hardcoded fallback (`ibm-granite/granite-4.1-8b`) that — because the compose service never receives `VLLM_LLM_MODEL_ID` — was the *only* value ever used: the day the GPU serves a different model, vLLM's name validation rejects every call with 404. The curation, topic-link and manifest-summary paths had the mirror problem — an empty `VLLM_MODEL_ID` (the default since the discovery policy landed) silently disabled them. All of these now follow the same policy as the Python services: the env pin wins, otherwise the model id is discovered from the endpoint's `/v1/models` (cached 60 s, same `MODEL_DETECT_TTL` / `MODEL_PROBE_TIMEOUT_SECONDS` knobs), and a call that cannot name a served model fails loudly instead of guessing — the one exception is the bundle-manifest summary, which stays best-effort by design (it logs the failure and leaves the summary empty). Suite and benchmark provenance labels (the suite `generator`, the serve-mode answer fidelity) now record the discovered model instead of a placeholder.
 
 - **Document contexts are sized against the window the model actually serves, not a copied env var.** Dataprep derived its Contextual-Retrieval document-context budget from `VLLM_MAX_MODEL_LEN` — the vLLM memory knob (`--max-model-len`), a static copy of what the GPU node was *configured* with, not what it *serves*. When that copy did not reach the container the budget silently fell back to a 2048-token window, so a 65536-token deployment truncated document contexts to T4-sized budgets (the truncation was recorded, but nothing said the window was a guess). The window is now discovered at runtime from `VLLM_ENDPOINT` — the same endpoint labelling and context generation already talk to — and the fallback is loud: one warning per endpoint, naming the value, the consequence and the remedy. **Deployers**: `VLLM_MAX_MODEL_LEN` is no longer read by dataprep; set the new `DATAPREP_MAX_MODEL_LEN` when the endpoint does not expose `max_model_len` (a strict OpenAI-compatible provider never does) or when `DATAPREP_CONTEXTUAL_MODEL` points at a model other than the one the endpoint lists first. The concept-document ceiling (`OKF_MAX_CONCEPT_DOC_CHARS`) stays a static literal and must now be kept in step with the served window by hand. The doc-level context budget (`DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL`) is now a maximum the served window caps, so its default cannot overflow a smaller deployment. (#639)
 
@@ -708,6 +782,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PII redaction enforced at the OTel collector edge.** The 19-key PII list (`configs/otel/pii-key-list.md`, CODEOWNER @jrevillard) is now applied at the export boundary into VictoriaLogs, covering every log path: docker fluentd driver (non-Node services, crashed-process edge cases), Winston envelope, and any ingestion route that bypasses the in-process SDK. Previously only services with a working in-process OTel SDK LoggerProvider had redaction; the collector-edge transform closes the gap and protects services that historically bypassed it. The new `otel-pii-redact-fail` alert rule (see Added) detects silent regressions. (#343)
 
 - **The static-analysis scan surface now excludes two more trees, and one of them ships inside the mobile app.** `.gitlab-ci.yml` adds `.agents/**` (the BMAD agent-skill tree — developer tooling, never copied into an image and never executed by a deployed service) and `mobile/genie_ai_mobile/flutter_appauth/**` (the whole vendored checkout of the `flutter_appauth` plugin, a melos monorepo the app depends on through a `path:` dependency). The second exclusion covers more than the package the app compiles: the platform-interface package and the upstream GitHub Actions workflows inside that checkout are no longer scanned either — those workflows alone produced 9 findings that nobody owns. The tree carries code whose purpose is to skip TLS certificate validation (Android `InsecureConnectionBuilder`, iOS `InsecureURLProtocol`), reachable only when `KeycloakConfig.allowInsecureConnections` is true. Two tests now hold that in place: one asserts the flag is off in the `itu`, `staging` and per-institution flavor configurations and on in `dev` and `e2e`; the other asserts the gates inside the vendored fork itself, which no analyzer checks any more now that the tree is out of the scan — on Android and on both Apple platforms, structurally rather than by pattern, so a re-indented guard still passes and an unguarded one does not. The vendored fork **stays** in the repository: the instruction in the mobile `CLAUDE.md` to revert it to the upstream release before merging is removed, because upstream ignores `allowInsecureConnections` on iOS entirely. **Deployer impact — mobile release builds:** every documented build command now sets both selectors — `--flavor <name> --dart-define=FLAVOR=<name>` — and the release script refuses a build from the two flavors that arm the trust-everything client. The silent `FLAVOR` fallback itself is fixed separately — a release build without the define now fails at startup (see Fixed) — and deriving the define from the build flavor remains open on the same issue (#1099). The earlier 2.1.0 note claiming the scan exclusions covered "only dev/test-only paths" no longer holds: one of them is code that ships in the APK.
+
 
 ## [2.1.0] - 2026-08-31
 

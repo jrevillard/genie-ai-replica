@@ -704,41 +704,19 @@ services:
     replicas: null
     image: { repository: genie-ai-frontend, tag: "main" }
     port: 8090
-    # Image USER is root (uid 0). The entrypoint writes
-    # /app/dist/runtime/config.js at startup (the runtime writer moved
-    # out of /app/dist/config, which is a mount point for
-    # operator-editable theme assets) — /app/dist is owned by root in
-    # the image, so the pod must run as root or the write fails with
-    # EACCES. The theme assets themselves are baked into the image; a
-    # ConfigMap mounted at /app/dist/config overrides them at runtime.
+    # Image USER is nginx (uid 101) since #1227. The Dockerfile pre-chowns
+    # every path the container writes (the runtime-config dir
+    # /app/dist/runtime, the nginx temp dirs under /tmp), the nginx pid and
+    # logs live in /tmp, and the rendered nginx.conf lands in /tmp — nothing
+    # at startup needs root or CAP_CHOWN anymore. The theme assets
+    # themselves are baked into the image; a ConfigMap mounted at
+    # /app/dist/config overrides them at runtime.
     securityContext:
-      runAsNonRoot: false
-      runAsUser: 0
+      runAsNonRoot: true
+      runAsUser: 101
       allowPrivilegeEscalation: false
-      # Drop only the cap that grants raw-socket access. We KEEP
-      # CAP_CHOWN, CAP_FOWNER, CAP_DAC_OVERRIDE, CAP_SETUID,
-      # CAP_SETGID: the entrypoint runs chown at startup, which
-      # needs CAP_CHOWN. Dropping ALL also drops CHOWN and the
-      # chown fails with EPERM even when running as root — every
-      # previous 0.1.x install hit this with the same `Operation
-      # not permitted` chown error in the pod's stderr.
       capabilities:
-        drop: ["NET_RAW"]
-    # The genie-ai-frontend image embeds nginx (it serves the SPA +
-    # the rendered config.js). Same writable paths as the standalone
-    # nginx image: the entrypoint chowns /var/cache/nginx to uid 101
-    # and writes temp files to /tmp + /var/run. Without these emptyDir
-    # mounts the chown fails with 'Operation not permitted'.
-    volumes:
-      - name: nginx-cache
-        emptyDir: {}
-      - name: nginx-run
-        emptyDir: {}
-    volumeMounts:
-      - name: nginx-cache
-        mountPath: /var/cache/nginx
-      - name: nginx-run
-        mountPath: /var/run
+        drop: ["ALL"]
     resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
     # Extra origins for the SPA's Content-Security-Policy connect-src,
     # beyond the derived set ('self', the public origin, and wss:///ws://

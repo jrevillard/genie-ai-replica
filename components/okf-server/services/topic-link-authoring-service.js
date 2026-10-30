@@ -54,10 +54,7 @@
 const axios = require('axios');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
-/** The deployment credential (both spellings) — the chat call and the
- * discovery probe must agree on it. */
-const deploymentKey = () =>
-  (process.env.VLLM_API_KEY || '').trim() || (process.env.VLLM_LLM_API_KEY || '').trim() || '';
+const modelCache = require('./vllm-model-cache');
 
 const { withSpan } = require('../shared-lib/tracing');
 
@@ -233,15 +230,15 @@ async function callVllm(messages, { timeoutMs = TIMEOUT_MS } = {}) {
   // Model id under the !631 policy (services/vllm-model-cache.js): pin ->
   // /v1/models discovery -> loud ModelDiscoveryError (#1181). The probe
   // shares the call budget; the chat call gets what is left of it.
-  const resolvedAt = Date.now();
-  const probeBudgetMs = Math.max(1, Math.floor(timeoutMs / 2));
-  const model = await require('./vllm-model-cache').resolveVllmModelId(rawBase, {
-    timeoutMs: probeBudgetMs,
-    apiKey: deploymentKey()
+  const resolved = await modelCache.resolveDeploymentModel({
+    baseUrl: rawBase,
+    apiKey: modelCache.deploymentKey(),
+    budgetMs: timeoutMs
   });
-  const chatTimeoutMs = Math.max(1000, timeoutMs - (Date.now() - resolvedAt));
+  const model = resolved.model;
+  const chatTimeoutMs = resolved.remainingMs;
   const headers = {};
-  const apiKey = deploymentKey(); // both spellings — same as the probe
+  const apiKey = modelCache.deploymentKey(); // both spellings — same as the probe
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const r = await axios.post(
     // Shared URL rule (services/llm-url.js) — versioned base or bare host.

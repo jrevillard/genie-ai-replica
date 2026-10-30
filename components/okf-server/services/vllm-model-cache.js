@@ -37,6 +37,11 @@
 
 const axios = require('axios');
 const { logger } = require('../shared-lib/logger');
+// Deep import: the shared barrel pulls the security middleware (express
+// rate limiting, geoip) — heavyweight for a leaf helper (see
+// components/CLAUDE.md "When deep imports are unavoidable").
+const { parsePositiveInt } = require('../shared-lib/validation-utils');
+const { openAiModelsUrl } = require('./llm-url');
 
 const MODEL_TTL_DEFAULT_SECONDS = 60;
 const PROBE_TIMEOUT_DEFAULT_MS = 10000;
@@ -44,7 +49,7 @@ const PROBE_TIMEOUT_DEFAULT_MS = 10000;
 // is a cool-down, not a cache — it bounds the probe storm (one probe per
 // window instead of one per call) while keeping a transient blip from
 // turning into a minute of loud failures.
-const NEGATIVE_CACHE_TTL = 5;
+const NEGATIVE_CACHE_TTL = 10;
 
 /** Raised when a model id is required but nothing answers. Mirrors
  * core.model_cache.ModelDiscoveryError. */
@@ -76,6 +81,12 @@ function envPin() {
   return (process.env.VLLM_LLM_MODEL_ID || '').trim() || (process.env.VLLM_MODEL_ID || '').trim() || null;
 }
 
+/** The LLM-spelling pin only — the spelling chatqna receives (its compose
+ * block maps VLLM_MODEL_ID from VLLM_LLM_MODEL_ID alone). */
+function envPinLLMSpelling() {
+  return (process.env.VLLM_LLM_MODEL_ID || '').trim() || null;
+}
+
 /** The deployment credential, both spellings — the chat path accepts the
  * same pair, so the probe must not be stricter (or looser). */
 function deploymentKey() {
@@ -83,8 +94,8 @@ function deploymentKey() {
 }
 
 function ttlSeconds() {
-  const v = parseInt(process.env.MODEL_DETECT_TTL, 10);
-  return Number.isFinite(v) && v >= 0 ? v : MODEL_TTL_DEFAULT_SECONDS;
+  // The repo's ONE env-int policy (components/shared/lib/validation-utils).
+  return parsePositiveInt(process.env.MODEL_DETECT_TTL, MODEL_TTL_DEFAULT_SECONDS, { min: 0 });
 }
 
 function probeTimeoutMs() {
@@ -99,8 +110,7 @@ function probeTimeoutMs() {
  * (deploymentServedModelId / resolveVllmModelId add it for that path); a
  * foreign base (named model-config, judge base) must never receive it
  * uninvited. */
-async function probe(baseUrl, timeoutMs, apiKey) {
-  const url = require('./llm-url').openAiModelsUrl(baseUrl);
+async function probe(url, timeoutMs, apiKey) {
   const headers = {};
   const key = (apiKey || '').trim();
   if (key) headers.Authorization = `Bearer ${key}`;
@@ -143,7 +153,8 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
   // filter /v1/models per key, so two configs on one base must never
   // resolve each other's model — and two spellings of one base
   // (…/vllm vs …/vllm/v1) must not open two independent windows.
-  const cacheKey = `${require('./llm-url').openAiModelsUrl(base)}|${(apiKey || '').trim()}`;
+  const modelsUrl = openAiModelsUrl(base);
+  const cacheKey = `${modelsUrl}|${(apiKey || '').trim()}`;
   const entry = _cache.get(cacheKey);
   if (entry && Date.now() - entry.ts < ttlSeconds() * 1000) return entry.id;
 
@@ -156,7 +167,7 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
   // Concurrent callers share ONE probe.
   let pending = _inflight.get(cacheKey);
   if (!pending) {
-    pending = probe(base, timeoutMs, apiKey).then((id) => {
+    pending = probe(modelsUrl, timeoutMs, apiKey).then((id) => {
       if (id) {
         _cache.set(cacheKey, { id, ts: Date.now() });
         _negative.delete(cacheKey);
@@ -180,9 +191,9 @@ async function discoverVllmModelId(baseUrl, opts) {
 }
 
 /** The loud no-answer error shared by both resolving variants. */
-function discoveryError(baseUrl) {
+function discoveryError(modelsUrl) {
   return new ModelDiscoveryError(
-    `no model id discovered at ${require('./llm-url').openAiModelsUrl(baseUrl)} — the endpoint must answer the model-id probe (or the model must be set where the call is configured)`
+    `no model id discovered at ${modelsUrl} — the endpoint must answer the model-id probe (or the model must be set where the call is configured)`
   );
 }
 
@@ -192,7 +203,7 @@ function discoveryError(baseUrl) {
  * name it for). */
 async function requireServedModelId(baseUrl, opts = {}) {
   const id = await getServedModelId(baseUrl, { timeoutMs: opts.timeoutMs, apiKey: opts.apiKey });
-  if (!id) throw discoveryError(baseUrl);
+  if (!id) throw discoveryError(openAiModelsUrl(baseUrl));
   return id;
 }
 
@@ -210,8 +221,32 @@ async function resolveVllmModelId(baseUrl, opts = {}) {
   }
   const apiKey = (opts.apiKey || '').trim() || deploymentKey();
   const id = await getServedModelId(baseUrl, { timeoutMs: opts.timeoutMs, apiKey });
-  if (!id) throw discoveryError(baseUrl);
+  if (!id) throw discoveryError(openAiModelsUrl(baseUrl));
   return id;
+}
+
+/** Resolve the model id for a DEPLOYMENT call and report what is left of
+ * the call budget: the discovery round trip is part of the budget, and the
+ * chat call must never be handed a useless remainder (a 1 ms timeout fails
+ * non-retriably on a healthy endpoint). */
+async function resolveDeploymentModel({ baseUrl, apiKey, budgetMs }) {
+  const startedAt = Date.now();
+  const model = await resolveVllmModelId(baseUrl, {
+    apiKey,
+    timeoutMs: Math.max(1, Math.floor(budgetMs / 2))
+  });
+  return { model, remainingMs: Math.max(1000, budgetMs - (Date.now() - startedAt)) };
+}
+
+/** Same, for a FOREIGN endpoint (named model-config, judge base): the pin
+ * never applies there — the served model is the only authority. */
+async function resolveForeignModel({ baseUrl, apiKey, budgetMs }) {
+  const startedAt = Date.now();
+  const model = await requireServedModelId(baseUrl, {
+    apiKey,
+    timeoutMs: Math.max(1, Math.floor(budgetMs / 2))
+  });
+  return { model, remainingMs: Math.max(1000, budgetMs - (Date.now() - startedAt)) };
 }
 
 /** The deployment vLLM base, same rule the chat path uses: the env
@@ -268,11 +303,16 @@ function clearModelCache() {
 module.exports = {
   ModelDiscoveryError,
   deploymentDiscoveredModelId,
+  deploymentKey,
+  envPin,
+  envPinLLMSpelling,
   deploymentServedModelId,
   deploymentVllmBase,
   discoverVllmModelId,
   getServedModelId,
   requireServedModelId,
+  resolveDeploymentModel,
+  resolveForeignModel,
   resolveVllmModelId,
   sameOrigin,
   clearModelCache

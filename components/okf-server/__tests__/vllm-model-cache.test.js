@@ -378,7 +378,7 @@ describe('review round 5 fixes (#1181)', () => {
   test('the failed-probe cool-down is short (a blip does not become a minute of failures)', async () => {
     axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
     await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
-    Date.now.mockReturnValue(1_000_000 + 6_000); // past the cool-down
+    Date.now.mockReturnValue(1_000_000 + 11_000); // past the 10 s cool-down
     await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
     expect(axios.get).toHaveBeenCalledTimes(2);
   });

@@ -1023,7 +1023,7 @@ async function answerFidelity(opts = {}) {
     // NOT chatqna), else it discovers the served id. The okf-side fused pin
     // must not name the serve-mode model.
     model:
-      (process.env.VLLM_LLM_MODEL_ID || '').trim() ||
+      require('./vllm-model-cache').envPinLLMSpelling() ||
       (await require('./vllm-model-cache').deploymentServedModelId()) ||
       null
   });

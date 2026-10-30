@@ -29,16 +29,7 @@
 
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
-
-/** The deployment credential (both spellings) — the chat path accepts the
- * same pair, so the probe must not be stricter (or looser). */
-const deploymentKey = () =>
-  (process.env.VLLM_API_KEY || '').trim() || (process.env.VLLM_LLM_API_KEY || '').trim() || '';
-/** The deployment base — the only endpoint the deployment credential may
- * travel to. */
-const deploymentBase = () => require('./vllm-model-cache').deploymentVllmBase();
-/** Same origin (protocol + host + port)? */
-const sameOrigin = (a, b) => require('./vllm-model-cache').sameOrigin(a, b);
+const modelCache = require('./vllm-model-cache');
 const { withSpan } = require('../shared-lib/tracing');
 
 // Shared vocabulary (okf-vocabulary). CONTENT_TYPES only: this is what the
@@ -93,7 +84,7 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
   // Both key spellings — the chat call and the probe must agree on the
   // credential (a probe that authenticates while the chat call does not
   // fails with a bare 401).
-  let apiKey = deploymentKey();
+  let apiKey = modelCache.deploymentKey();
   let probeKey = apiKey; // the key the DISCOVERY probe may use
   let viaOverride = false;
   try {
@@ -105,7 +96,9 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
       // at the deployment endpoint itself, the deployment credential. A
       // third-party base gets neither: the GPU bearer must never leave the
       // deployment endpoint (probe AND chat call).
-      apiKey = ovr.api_key || (sameOrigin(rawBase, deploymentBase()) ? deploymentKey() : '');
+      apiKey =
+        ovr.api_key ||
+        (modelCache.sameOrigin(rawBase, modelCache.deploymentVllmBase()) ? modelCache.deploymentKey() : '');
       probeKey = apiKey;
       viaOverride = true;
     }
@@ -117,17 +110,16 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
   // Model-id resolution, !631 policy (services/vllm-model-cache.js): a
   // named-config base resolves its OWN served model; the deployment path
   // is pin -> /v1/models discovery -> loud ModelDiscoveryError (#1181).
-  const modelCache = require('./vllm-model-cache');
-  const resolvedAt = Date.now();
-  const probeBudgetMs = Math.max(1, Math.floor(timeoutMs / 2));
+  // Resolution inside the call budget (the helper keeps what is left for
+  // the chat call — never less than a usable minimum).
+  let chatTimeoutMs = timeoutMs;
   if (!model) {
-    model = viaOverride
-      ? await modelCache.requireServedModelId(rawBase, { apiKey: probeKey, timeoutMs: probeBudgetMs })
-      : await modelCache.resolveVllmModelId(rawBase, { apiKey: probeKey, timeoutMs: probeBudgetMs });
+    const resolved = viaOverride
+      ? await modelCache.resolveForeignModel({ baseUrl: rawBase, apiKey: probeKey, budgetMs: timeoutMs })
+      : await modelCache.resolveDeploymentModel({ baseUrl: rawBase, apiKey: probeKey, budgetMs: timeoutMs });
+    model = resolved.model;
+    chatTimeoutMs = resolved.remainingMs;
   }
-  // The discovery round trip is part of the call budget: the chat call
-  // gets what is left of it — never less than a usable minimum.
-  const chatTimeoutMs = Math.max(1000, timeoutMs - (Date.now() - resolvedAt));
   const headers = {};
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const body = { model, messages, temperature: 0.0, max_tokens: 300, response_format: { type: 'json_object' } };

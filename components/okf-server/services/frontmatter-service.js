@@ -53,17 +53,8 @@ const { TAG_LIMITS } = require('../validators/repository-validator');
 // the other).
 // The base rule (env endpoint, else the compose service) lives in ONE place
 // with the provenance labels: vllm-model-cache.deploymentVllmBase().
-const VLLM_LLM_HOST = require('./vllm-model-cache').deploymentVllmBase();
-
-/** The deployment credential (both spellings) — the chat path accepts the
- * same pair, so the probe must not be stricter (or looser). */
-const deploymentKey = () =>
-  (process.env.VLLM_API_KEY || '').trim() || (process.env.VLLM_LLM_API_KEY || '').trim() || '';
-/** The deployment base — the only endpoint the deployment credential may
- * travel to. */
-const deploymentBase = () => require('./vllm-model-cache').deploymentVllmBase();
-/** Same origin (protocol + host + port)? */
-const sameOrigin = (a, b) => require('./vllm-model-cache').sameOrigin(a, b);
+const modelCache = require('./vllm-model-cache');
+const VLLM_LLM_HOST = modelCache.deploymentVllmBase();
 // The chat model id is NOT defaulted here — it is resolved per call under
 // the !631 discovery policy (services/vllm-model-cache.js): explicit pick >
 // env pin (VLLM_LLM_MODEL_ID / VLLM_MODEL_ID) > /v1/models discovery >
@@ -385,6 +376,7 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   let probeKey = apiKey; // the key the DISCOVERY probe may use
   let viaOverride = false;
   let viaForeignBase = false; // host switched away from the deployment base
+  let judgeIsDeployment = false; // the judge base IS the deployment endpoint
   const callBudgetMs = opts.timeoutMs || 60000;
   // The ENV JUDGE is the .env RAGAS_JUDGE_* pair — the same variables the
   // sidecar's default judge and the OKF panel's "system default" label name.
@@ -404,7 +396,8 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
       // shipped http://vllm:8000/v1 vs http://vllm:8000) serves the very
       // model the pin names — and the pin exists precisely for endpoints
       // whose /v1/models is unreachable.
-      viaForeignBase = !sameOrigin(host, deploymentBase());
+      judgeIsDeployment = modelCache.sameOrigin(host, modelCache.deploymentVllmBase());
+      viaForeignBase = !judgeIsDeployment;
     }
     if (process.env.RAGAS_JUDGE_MODEL) model = process.env.RAGAS_JUDGE_MODEL;
     // Judge-key parity with the sidecar (compose defaults RAGAS_JUDGE_API_KEY
@@ -412,7 +405,7 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
     // base when that IS the deployment endpoint: a foreign judge base gets
     // its own key or none, never the GPU bearer.
     apiKey = process.env.RAGAS_JUDGE_API_KEY || '';
-    if (!apiKey && sameOrigin(host, deploymentBase())) apiKey = deploymentKey();
+    if (!apiKey && judgeIsDeployment) apiKey = modelCache.deploymentKey();
     probeKey = apiKey;
   }
   try {
@@ -438,7 +431,8 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
       // at the deployment endpoint itself, the deployment credential. A
       // third-party base gets neither: the GPU bearer must never leave the
       // deployment endpoint (probe AND chat call).
-      apiKey = ovr.api_key || (sameOrigin(host, deploymentBase()) ? deploymentKey() : '');
+      apiKey =
+        ovr.api_key || (modelCache.sameOrigin(host, modelCache.deploymentVllmBase()) ? modelCache.deploymentKey() : '');
       probeKey = apiKey;
       viaOverride = true;
     }
@@ -450,19 +444,17 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   // base resolves its OWN served model (the deployment pin never names a
   // foreign endpoint); everything else is pin -> /v1/models discovery ->
   // loud ModelDiscoveryError. Never a hardcoded fallback name (#1181).
-  const modelCache = require('./vllm-model-cache');
-  const resolvedAt = Date.now();
-  const probeBudgetMs = Math.max(1, Math.floor(callBudgetMs / 2));
+  // Resolution inside the call budget (the helper keeps what is left for
+  // the chat call — never less than a usable minimum).
+  let chatTimeoutMs = callBudgetMs;
   if (!model) {
-    model =
+    const resolved =
       viaOverride || viaForeignBase
-        ? await modelCache.requireServedModelId(host, { apiKey: probeKey, timeoutMs: probeBudgetMs })
-        : await modelCache.resolveVllmModelId(host, { apiKey: probeKey, timeoutMs: probeBudgetMs });
+        ? await modelCache.resolveForeignModel({ baseUrl: host, apiKey: probeKey, budgetMs: callBudgetMs })
+        : await modelCache.resolveDeploymentModel({ baseUrl: host, apiKey: probeKey, budgetMs: callBudgetMs });
+    model = resolved.model;
+    chatTimeoutMs = resolved.remainingMs;
   }
-  // The discovery round trip is part of the call budget: the chat call
-  // gets what is left of it — never less than a usable minimum (a 1 ms
-  // timeout would fail non-retriably on a healthy endpoint).
-  const chatTimeoutMs = Math.max(1000, callBudgetMs - (Date.now() - resolvedAt));
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
   const body = {
@@ -973,7 +965,7 @@ async function suggestTags(repoId, _opts = {}) {
       vllm_host: VLLM_LLM_HOST,
       // The pin only — the id itself is discovered at call time inside
       // vllmChatCompletions (this log fires before the resolution).
-      model: process.env.VLLM_LLM_MODEL_ID || process.env.VLLM_MODEL_ID || null,
+      model: modelCache.envPin(),
       prompt_chars: prompt.length
     });
     // maxTokens 1000 was NOT headroom, it was a live failure: on a 586-concept

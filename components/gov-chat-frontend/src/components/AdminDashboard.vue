@@ -2103,13 +2103,19 @@ export default {
         return fallback;
       }
       try {
-        // Force the correct locale. The named dict must be the third argument:
-        // passing it in the { locale } slot leaves vue-i18n no interpolation
-        // params and it renders `{current}`-style placeholders as empty.
-        const translation = this.$i18n.t(key, { locale: this.currentLocale }, named);
+        // vue-i18n's legacy t() takes the locale as a STRING second argument;
+        // an object there is parsed as named params and the locale never
+        // reaches the translator, so `named` must be the third argument.
+        const translation = this.$i18n.t(key, this.currentLocale, named);
         // Return fallback if the key is returned (meaning no translation found)
         if (translation === key) {
           // console.warn(`[AdminDashboard] No translation for key: ${key}. Using fallback.`);
+          // The fallback stands in for the translation, so it goes through
+          // the same interpolation a real message would — otherwise a
+          // missing key renders literal `{current}`-style placeholders.
+          if (Object.keys(named).length) {
+            return fallback.replace(/\{(\w+)\}/g, (m, k) => (named[k] != null ? named[k] : m));
+          }
           return fallback || key;
         }
         return translation;

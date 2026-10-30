@@ -587,6 +587,13 @@ export default {
       rating: 'Avaliação',
       comment: 'Comentário',
       providedAt: 'Enviado em',
+      feedbackPositive: 'Positivo',
+      feedbackNeutral: 'Neutro',
+      feedbackNegative: 'Negativo',
+      none: 'Nenhuma',
+      noResponseRecorded: 'Nenhuma resposta registrada',
+      notAvailable: 'N/D',
+      notAvailableNoSentinel: 'N/D (sem valor sentinela)',
       abstentionNoDocuments:
         'Nenhum documento foi recuperado para esta consulta. A resposta não tem respaldo documental.',
       abstentionRerankerSelectedNothing:

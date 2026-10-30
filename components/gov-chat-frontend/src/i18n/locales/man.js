@@ -574,6 +574,13 @@ export default {
       rating: 'Markoo',
       comment: 'Kumadiyaa',
       providedAt: 'Diyaa waatoo',
+      feedbackPositive: 'A nyaa',
+      feedbackNeutral: 'Neetal',
+      feedbackNegative: 'A mang nyaa',
+      none: 'Mang',
+      noResponseRecorded: 'Jaabi mang seretoo',
+      notAvailable: 'Ma soro',
+      notAvailableNoSentinel: 'Ma soro (sentinel mang)',
       abstentionNoDocuments: 'Kweri naa dokuuma mang soro. Jaabi mang kili dokuuma la.',
       abstentionRerankerSelectedNothing:
         'Batoo soto dokuumalu, koni reranker bɔɔlu mang kili. Skopu wo woote — jaabi mang kili dokuuma la.',

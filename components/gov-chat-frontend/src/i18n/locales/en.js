@@ -582,6 +582,13 @@ export default {
       rating: 'Rating',
       comment: 'Comment',
       providedAt: 'Provided at',
+      feedbackPositive: 'Positive',
+      feedbackNeutral: 'Neutral',
+      feedbackNegative: 'Negative',
+      none: 'None',
+      noResponseRecorded: 'No response recorded',
+      notAvailable: 'N/A',
+      notAvailableNoSentinel: 'N/A (no sentinel)',
       abstentionNoDocuments: 'No document was retrieved for this query. The answer has no document backing.',
       abstentionRerankerSelectedNothing:
         'The retrieval matched documents, but the reranker kept none of them. The scope was fine — the answer has no document backing.',

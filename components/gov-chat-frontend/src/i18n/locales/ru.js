@@ -584,6 +584,13 @@ export default {
       rating: 'Оценка',
       comment: 'Комментарий',
       providedAt: 'Отправлено',
+      feedbackPositive: 'Положительная',
+      feedbackNeutral: 'Нейтральная',
+      feedbackNegative: 'Отрицательная',
+      none: 'Нет',
+      noResponseRecorded: 'Ответ не записан',
+      notAvailable: 'Н/Д',
+      notAvailableNoSentinel: 'Н/Д (нет маркерного значения)',
       abstentionNoDocuments:
         'Для этого запроса не был найден ни один документ. Ответ не имеет документального подтверждения.',
       abstentionRerankerSelectedNothing:

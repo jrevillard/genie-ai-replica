@@ -588,6 +588,13 @@ export default {
       rating: 'Évaluation',
       comment: 'Commentaire',
       providedAt: 'Fourni le',
+      feedbackPositive: 'Positif',
+      feedbackNeutral: 'Neutre',
+      feedbackNegative: 'Négatif',
+      none: 'Aucun',
+      noResponseRecorded: 'Aucune réponse enregistrée',
+      notAvailable: 'S/O',
+      notAvailableNoSentinel: 'S/O (aucune sentinelle)',
       abstentionNoDocuments:
         'Aucun document n’a été récupéré pour cette requête. La réponse n’a aucun document à l’appui.',
       abstentionRerankerSelectedNothing:

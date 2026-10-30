@@ -585,6 +585,13 @@ export default {
       rating: 'Penilaian',
       comment: 'Komentar',
       providedAt: 'Diberikan pada',
+      feedbackPositive: 'Positif',
+      feedbackNeutral: 'Netral',
+      feedbackNegative: 'Negatif',
+      none: 'Tidak ada',
+      noResponseRecorded: 'Tidak ada respons yang tercatat',
+      notAvailable: 'T/A',
+      notAvailableNoSentinel: 'T/A (tanpa nilai penanda)',
       abstentionNoDocuments:
         'Tidak ada dokumen yang ditemukan untuk kueri ini. Jawaban tidak memiliki dukungan dokumen.',
       abstentionRerankerSelectedNothing:

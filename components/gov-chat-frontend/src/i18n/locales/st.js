@@ -578,6 +578,13 @@ export default {
       rating: 'Tekolo',
       comment: 'Tlhaloso',
       providedAt: 'Fanoeng ka',
+      feedbackPositive: 'Positife',
+      feedbackNeutral: 'Neutrale',
+      feedbackNegative: 'Negatife',
+      none: 'Ha ho na',
+      noResponseRecorded: 'Ha ho na karabo e ngotiloeng',
+      notAvailable: 'Ha ho na data',
+      notAvailableNoSentinel: 'Ha ho na data (ha ho na sentinel)',
       abstentionNoDocuments: 'Ha ho na tokomane e fumanoeng bakeng sa potso ena. Karabo ha e na theko ea tokomane.',
       abstentionRerankerSelectedNothing:
         'Ho batloa ho fumane litokomane, empa reranker ha ea boloka e le ewa. Bophara bo ne bo lokile — karabo ha e na theko ea tokomane.',

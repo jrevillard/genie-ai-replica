@@ -391,8 +391,33 @@ describe('QueryInspectorList', () => {
       },
       methods: {
         translate(key, fallback = '', named = {}) {
-          const translation = i18n.global.t(key, { locale: 'en' }, named);
+          const translation = i18n.global.t(key, 'en', named);
           return translation === key ? fallback : translation;
+        }
+      }
+    };
+    const wrapper = mount(Parent, { global: { stubs: dsStubs } });
+    expect(wrapper.find('.qi-list__page-info').text()).toBe('Page 2 of 5 (48 total)');
+  });
+
+  it('should interpolate the fallback when the key is missing from the locale', () => {
+    // The fallback stands in for the translation when the key is absent, so
+    // it must go through the same interpolation — literal `{current}` braces
+    // on screen would be the regression.
+    const Parent = {
+      components: { QueryInspectorList },
+      template: '<query-inspector-list :queries="queries" :pagination="pagination" />',
+      data() {
+        return { queries: [], pagination: { total: 48, limit: 25, offset: 25, pages: 5, currentPage: 2 } };
+      },
+      methods: {
+        // Mimics AdminDashboard.translate's fallback branch: the key resolves
+        // to itself (absent), so the fallback string is interpolated by hand.
+        translate(key, fallback = '', named = {}) {
+          if (key === 'admin.queryInspector.pageInfo') {
+            return fallback.replace(/\{(\w+)\}/g, (m, k) => (named[k] != null ? named[k] : m));
+          }
+          return fallback;
         }
       }
     };

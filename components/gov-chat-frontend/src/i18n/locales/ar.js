@@ -585,6 +585,13 @@ export default {
       rating: 'التقييم',
       comment: 'التعليق',
       providedAt: 'قُدم في',
+      feedbackPositive: 'إيجابي',
+      feedbackNeutral: 'محايد',
+      feedbackNegative: 'سلبي',
+      none: 'لا شيء',
+      noResponseRecorded: 'لم تُسجل أي استجابة',
+      notAvailable: 'غير متوفر',
+      notAvailableNoSentinel: 'غير متوفر (لا توجد قيمة مرجعية)',
       abstentionNoDocuments: 'لم يُسترجع أي مستند لهذا الاستعلام. الإجابة ليس لها سند من مستند.',
       abstentionRerankerSelectedNothing:
         'طابق الاسترجاع مستندات، لكن إعادة الترتيب لم تحتفظ بأي منها. النطاق كان سليمًا — الإجابة ليس لها سند من مستند.',

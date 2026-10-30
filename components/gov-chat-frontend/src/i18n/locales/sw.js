@@ -583,6 +583,13 @@ export default {
       rating: 'Kadirio',
       comment: 'Maoni',
       providedAt: 'Imetolewa',
+      feedbackPositive: 'Chanya',
+      feedbackNeutral: 'Wastani',
+      feedbackNegative: 'Hasi',
+      none: 'Hakuna',
+      noResponseRecorded: 'Hakuna jibu lililorekodiwa',
+      notAvailable: 'Haitumiki',
+      notAvailableNoSentinel: 'Haitumiki (hakuna alama-kiashiria)',
       abstentionNoDocuments: 'Hakuna nyaraka iliyopatikana kwa swali hili. Jibu halina uthibitisho wa nyaraka.',
       abstentionRerankerSelectedNothing:
         'Upataji ulipata nyaraka, lakini kipanga-tena hakihifadhi yoyote. Wigo ulikuwa sawa — jibu halina uthibitisho wa nyaraka.',

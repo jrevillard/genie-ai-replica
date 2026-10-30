@@ -576,6 +576,13 @@ export default {
       rating: 'রেটিং',
       comment: 'মন্তব্য',
       providedAt: 'প্রদানের সময়',
+      feedbackPositive: 'ইতিবাচক',
+      feedbackNeutral: 'নিরপেক্ষ',
+      feedbackNegative: 'নেতিবাচক',
+      none: 'নেই',
+      noResponseRecorded: 'কোনো প্রতিক্রিয়া রেকর্ড করা হয়নি',
+      notAvailable: 'প্রযোজ্য নয়',
+      notAvailableNoSentinel: 'প্রযোজ্য নয় (কোনো সেন্টিনেল নেই)',
       abstentionNoDocuments: 'এই কুয়েরির জন্য কোনো ডকুমেন্ট পাওয়া যায়নি। উত্তরের কোনো ডকুমেন্ট ভিত্তি নেই।',
       abstentionRerankerSelectedNothing:
         'রিট্রিভালে ডকুমেন্ট মেলেছিল, কিন্তু রির‍্যাঙ্কার কোনোটি রাখেনি। স্কোপ ঠিকই ছিল — উত্তরের কোনো ডকুমেন্ট ভিত্তি নেই।',

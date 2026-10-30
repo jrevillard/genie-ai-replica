@@ -587,6 +587,13 @@ export default {
       rating: 'Bewertung',
       comment: 'Kommentar',
       providedAt: 'Übermittelt am',
+      feedbackPositive: 'Positiv',
+      feedbackNeutral: 'Neutral',
+      feedbackNegative: 'Negativ',
+      none: 'Keine',
+      noResponseRecorded: 'Keine Antwort aufgezeichnet',
+      notAvailable: 'N/V',
+      notAvailableNoSentinel: 'N/V (kein Sentinel-Wert)',
       abstentionNoDocuments:
         'Für diese Abfrage wurde kein Dokument abgerufen. Die Antwort hat keine Dokument-Unterstützung.',
       abstentionRerankerSelectedNothing:

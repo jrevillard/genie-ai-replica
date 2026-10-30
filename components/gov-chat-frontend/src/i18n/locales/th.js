@@ -583,6 +583,13 @@ export default {
       rating: 'การให้คะแนน',
       comment: 'ความคิดเห็น',
       providedAt: 'ให้ไว้เมื่อ',
+      feedbackPositive: 'บวก',
+      feedbackNeutral: 'กลาง',
+      feedbackNegative: 'ลบ',
+      none: 'ไม่มี',
+      noResponseRecorded: 'ไม่มีการตอบสนองที่บันทึกไว้',
+      notAvailable: 'ไม่มีข้อมูล',
+      notAvailableNoSentinel: 'ไม่มีข้อมูล (ไม่มีเซนติเนล)',
       abstentionNoDocuments: 'ไม่มีเอกสารใดถูกดึงมาสำหรับคำค้นนี้ คำตอบไม่มีเอกสารรองรับ',
       abstentionRerankerSelectedNothing:
         'การค้นคืนพบเอกสาร แต่ตัวจัดอันดับใหม่ไม่เก็บไว้เลย ขอบเขตถูกต้อง — คำตอบไม่มีเอกสารรองรับ',

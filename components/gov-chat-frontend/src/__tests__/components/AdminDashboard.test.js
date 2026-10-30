@@ -1569,6 +1569,36 @@ describe('AdminDashboard', () => {
       }
     });
 
+    it('interpolates the fallback and passes the locale as a string to t()', () => {
+      // vue-i18n's legacy t() takes the locale as a STRING second argument —
+      // an object there is parsed as named params, so the locale never reaches
+      // the translator and `{n}`-style placeholders render empty. And when the
+      // key is missing, the fallback stands in for the translation and must go
+      // through the same interpolation, not render literal braces.
+      const calls = [];
+      const wrapper = createAdminDashboardWrapper(
+        {},
+        {
+          $i18n: {
+            locale: 'en',
+            t: (key, locale, named) => {
+              calls.push([key, locale, named]);
+              return key;
+            }
+          }
+        }
+      );
+      expect(
+        wrapper.vm.translate('admin.queryInspector.pageInfo', 'Page {current} of {total}', { current: 2, total: 5 })
+      ).toBe('Page 2 of 5');
+      // The template's own renders also pass through; assert OUR call's shape,
+      // not the first one recorded.
+      const mine = calls.find(([key]) => key === 'admin.queryInspector.pageInfo');
+      expect(mine).toEqual(['admin.queryInspector.pageInfo', 'en', { current: 2, total: 5 }]);
+      // No named params: the fallback renders as-is (no interpolation pass).
+      expect(wrapper.vm.translate('admin.queryInspector.search', 'Search')).toBe('Search');
+    });
+
     it('passes an unrecognised dataprep status through unchanged', () => {
       // The translation table is not a gate: a status this build has never
       // heard of must still render, because swallowing it would show "Unknown"

@@ -146,7 +146,7 @@ For the full architecture overview with diagrams (C4 context/container, authenti
 
 ### Layer Stack
 
-0. **Deployment Layer**: Helm chart (`charts/genieai-umbrella` + library `charts/genieai-common`) reconciled by Flux v2 from the `genie-ai-deploy` repo — Kubernetes path on feature branch `feat/k8s-migration`, validated on laptop minikube (`overlays/jrevillard-laptop/dev`).
+0. **Deployment Layer**: Helm chart (`charts/genieai-umbrella` + library `charts/genieai-common`) reconciled by Flux v2 from the `genie-ai-deploy` repo — Kubernetes path on feature branch `feat/k8s-migration`, validated on laptop minikube (`overlays/<dev>-laptop/dev`).
 1. **Client Layer**: Vue 3 web app (`components/gov-chat-frontend`), Flutter mobile (`mobile/genie_ai_mobile`)
 2. **API Gateway**: Kong/NGINX (`api-gateway-solution`)
 3. **Application Layer**: Node.js/Express backend (`components/gov-chat-backend`)

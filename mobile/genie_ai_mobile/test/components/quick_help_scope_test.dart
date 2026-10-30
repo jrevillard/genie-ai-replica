@@ -1215,6 +1215,10 @@ void main() {
   /// `icon` object and an optional `action`. The grid card's label and the
   /// card icon are the two reads that drifted to a non-existent
   /// `appearance` block; the parse is where the shipped shape is read.
+  ///
+  /// One malformed value degrades ONE card (the default asset, an empty
+  /// text), never the whole load — the same isolation the web applies
+  /// to the same file.
   group('parseQuickHelpButton', () {
     final shippedButton = {
       'id': 'just-chat',
@@ -1243,13 +1247,42 @@ void main() {
       expect(parsed['resolvedTitle'], 'Just Chat');
     });
 
-    test('a button with no icon carries the default asset', () {
+    test('a button with no icon carries no asset', () {
       final parsed = parseQuickHelpButton({
         ...shippedButton,
         'icon': null,
       }, 'en');
 
-      expect(parsed['iconAsset'], 'assets/config/quickhelp/default.svg');
+      expect(parsed['iconAsset'], '');
+    });
+
+    test('a malformed icon (a bare string) carries no asset', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'icon': '/config/quickhelp/just-chat.svg',
+      }, 'en');
+
+      expect(parsed['iconAsset'], '');
+    });
+
+    test('a malformed action (a bare string) carries no action texts', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'action': 'ask',
+      }, 'en');
+
+      expect(parsed['action'], {});
+      expect(parsed['resolvedVisibleText'], '');
+      expect(parsed['resolvedHiddenPrompt'], '');
+    });
+
+    test('an empty title locale map resolves to no text', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'title': {},
+      }, 'en');
+
+      expect(parsed['resolvedTitle'], '');
     });
 
     test('a bare-string serviceLabel is wrapped as ONE label', () {

@@ -322,6 +322,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       final List<Map<String, dynamic>> loadedButtons = [];
 
       for (var btn in buttonsJson) {
+        // One malformed entry degrades ONE card, never the load: a
+        // non-map entry (a stray string) is not a card at all.
+        if (btn is! Map<String, dynamic>) {
+          continue;
+        }
         // Skip hidden buttons (no matching corpus content).
         if (btn['hidden'] == true) {
           continue;
@@ -1235,9 +1240,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     if (!quickHelpScopeIsNameable(button, _scopeResolver)) {
       return;
     }
-    final Map<String, dynamic> action = button['action'] ?? {};
-    final String visibleTextKey = action['visibleText']?.toString() ?? '';
-    final String hiddenPromptKey = action['hiddenPrompt']?.toString() ?? '';
+    // The parse resolved the action texts under the load's locale (the
+    // same values the web resolves at map time); an empty text pair is
+    // the just-chat signal, read off the RESOLVED strings — the raw
+    // config values are locale maps, whose string form is never empty.
+    final String visibleText = button['resolvedVisibleText']?.toString() ?? '';
+    final String hiddenPrompt =
+        button['resolvedHiddenPrompt']?.toString() ?? '';
 
     // If both are empty AND the card declares NO scope, just enter Chat
     // Mode: close overlay, clear all label filters so the retriever sees
@@ -1253,7 +1262,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     final declaresScope =
         declaresCategoryScope(button['category']?.toString()) ||
         declaredLabels.isNotEmpty;
-    if (visibleTextKey.isEmpty && hiddenPromptKey.isEmpty) {
+    if (visibleText.isEmpty && hiddenPrompt.isEmpty) {
       if (declaresScope) {
         setState(() {
           _installQuickHelpScopeFields(button, nameFallback: '');
@@ -1278,15 +1287,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _inputFocusNode.requestFocus();
       return;
     }
-
-    // Use pre-resolved values from button map with i18n fallback
-    final String visibleText =
-        button['resolvedVisibleText'] ??
-        (visibleTextKey.isNotEmpty ? tr(visibleTextKey) : '');
-    // If hiddenPromptKey is empty, fallback to visible text
-    final String hiddenPrompt =
-        button['resolvedHiddenPrompt'] ??
-        (hiddenPromptKey.isNotEmpty ? tr(hiddenPromptKey) : visibleText);
 
     // The card's declared English KB labels become the retriever filter —
     // the helper installs them; _sendStreaming reads them off the scope.
@@ -2139,8 +2139,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
+                        // A JSON `2.0` decodes as a double: cast through
+                        // num, not int — a hard int cast throws in the
+                        // build where the ?? default never runs.
                         final int crossAxisCount =
-                            _quickHelpLayout['columns'] as int? ?? 2;
+                            (_quickHelpLayout['columns'] as num?)?.toInt() ?? 2;
                         final double aspectRatio =
                             (_quickHelpLayout['childAspectRatio'] as num?)
                                 ?.toDouble() ??
@@ -2206,6 +2209,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                                   Icons.warning_amber_rounded,
                                                   size: 18,
                                                   color: tokens.danger,
+                                                )
+                                              : iconAsset.isEmpty
+                                              ? Icon(
+                                                  // A button with no icon
+                                                  // carries no asset: the
+                                                  // neutral help icon, the
+                                                  // way the web renders an
+                                                  // empty image.
+                                                  Icons.help_outline,
+                                                  size: 20,
+                                                  color: tokens.accent,
                                                 )
                                               : SvgPicture.asset(
                                                   iconAsset,

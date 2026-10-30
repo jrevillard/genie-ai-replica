@@ -35,20 +35,27 @@ bool declaresCategoryScope(String? id) {
 /// level: `title` is a locale map (resolved here, once, like the
 /// welcome message), `icon` is an object whose `value` is a served
 /// path whose basename names the bundled asset, and `action` carries
-/// the visible and hidden texts. A button with no icon carries the
-/// default asset. A bare STRING where the label array belongs is
-/// wrapped as ONE label — the wire's own bare-string rule.
+/// the visible and hidden texts. A button with no icon — or a
+/// malformed one — carries NO asset: the card renders its neutral
+/// help icon, the way the web renders an empty image. A bare STRING
+/// where the label array belongs is wrapped as ONE label — the
+/// wire's own bare-string rule.
 Map<String, dynamic> parseQuickHelpButton(
   Map<String, dynamic> btn,
   String locale,
 ) {
-  final iconMap = btn['icon'] as Map<String, dynamic>?;
+  // One malformed value degrades ONE card, never the whole load — the
+  // same isolation the web applies to the same file. A non-map icon or
+  // action is the config-typo class the bare-string label rule answers.
+  final dynamic rawIcon = btn['icon'];
+  final iconMap = rawIcon is Map<String, dynamic> ? rawIcon : null;
   final iconPath = iconMap?['value']?.toString() ?? '';
   final String iconAsset = iconPath.isNotEmpty
       ? 'assets/config/quickhelp/${iconPath.split('/').last}'
-      : 'assets/config/quickhelp/default.svg';
+      : '';
 
-  final action = btn['action'] as Map<String, dynamic>?;
+  final dynamic rawAction = btn['action'];
+  final action = rawAction is Map<String, dynamic> ? rawAction : null;
 
   final dynamic rawServiceLabels = btn['serviceLabels'];
   final List<dynamic> serviceLabels;

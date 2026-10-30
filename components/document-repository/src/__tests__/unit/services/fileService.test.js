@@ -428,8 +428,32 @@ describe('fileService', () => {
 
       const result = await fileService.deleteFile('file-123');
       expect(result).toBe(true);
-      expect(metadataService.deleteMetadata).toHaveBeenCalledWith('file-123');
       expect(fs.unlink).toHaveBeenCalledWith('./uploads/file-123.pdf');
+    });
+
+    it('refuses a still-serving document with a mapped 409 (#78744)', async () => {
+      // The serving guard mirrors the frontend blockedSelection list —
+      // 'ingested with warnings' IS serving (round-10 review, !622).
+      metadataService.getMetadataById.mockResolvedValue({
+        file_id: 'file-123',
+        file_name: 'test.pdf',
+        storage_path: './uploads/file-123.pdf',
+        dataprep: { status: 'Ingested with Warnings' }
+      });
+      // _terminateActiveCrawl runs BEFORE the guard — give it the same sane
+      // db stub the happy-path test uses.
+      const guardCursor = { next: jest.fn(), all: jest.fn().mockResolvedValue([]) };
+      fileService.getDb = jest.fn().mockResolvedValue({ query: jest.fn().mockResolvedValue(guardCursor) });
+      let thrown = null;
+      try {
+        await fileService.deleteFile('file-123');
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).toBeTruthy();
+      expect(thrown.statusCode).toBe(409);
+      expect(thrown.message).toContain('still serving');
+      expect(metadataService.deleteMetadata).not.toHaveBeenCalled();
     });
 
     it('should throw when file record not found', async () => {

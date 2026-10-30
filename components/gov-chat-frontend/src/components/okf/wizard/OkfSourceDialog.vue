@@ -285,6 +285,10 @@ export default {
       this.sourceFilter = v;
     },
     async loadPage(p) {
+      // Stale-response guard (#78754 — the ConceptEditor _loadSeq pattern):
+      // a debounced search fires overlapping loads; a slow OLDER response
+      // must never overwrite the fresher page.
+      const seq = (this._loadSeq = (this._loadSeq || 0) + 1);
       this.loading = true;
       this.loadError = '';
       try {
@@ -293,6 +297,7 @@ export default {
         if (term) params.search = term;
         if (this.sourceFilter === 'crawl' || this.sourceFilter === 'upload') params.source = this.sourceFilter;
         const body = await documentFileService.getFiles(params);
+        if (seq !== this._loadSeq) return; // superseded by a newer load
         this.page = p;
         const raw = Array.isArray(body) ? body : (body && (body.data || body.items || body.files)) || [];
         // bundle zips are the OKF artifacts — never sources
@@ -304,9 +309,10 @@ export default {
         const t = body && (body.total != null ? body.total : body.pagination && body.pagination.totalFiles);
         if (typeof t === 'number') this.total = t;
       } catch {
+        if (seq !== this._loadSeq) return;
         this.loadError = this.translate('okf.src.loadFailed', 'Could not load the document list.');
       } finally {
-        this.loading = false;
+        if (seq === this._loadSeq) this.loading = false;
       }
     },
     isSelected(f) {

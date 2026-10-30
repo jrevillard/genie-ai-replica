@@ -598,9 +598,12 @@ export default {
       noResponseRecorded: 'Aucune réponse enregistrée',
       notAvailable: 'S/O',
       notAvailableNoSentinel: 'S/O (aucune sentinelle)',
-      abstentionRerankerInput: 'Le reranker a refusé une entrée trop volumineuse (un problème côté ingestion). La réponse n\'a aucun appui documentaire.',
-      abstentionRerankerSelectedNothing: 'La récupération a trouvé des documents, mais le reranker n\'en a conservé aucun. Le périmètre était correct — la réponse n\'a aucun appui documentaire.',
-      abstentionNoDocuments: 'Aucun document n\'a été récupéré pour cette requête. La réponse n\'a aucun appui documentaire.',
+      abstentionRerankerInput:
+        "Le reranker a refusé une entrée trop volumineuse (un problème côté ingestion). La réponse n'a aucun appui documentaire.",
+      abstentionRerankerSelectedNothing:
+        "La récupération a trouvé des documents, mais le reranker n'en a conservé aucun. Le périmètre était correct — la réponse n'a aucun appui documentaire.",
+      abstentionNoDocuments:
+        "Aucun document n'a été récupéré pour cette requête. La réponse n'a aucun appui documentaire.",
       abstentionUnspecified: 'La réponse n’a aucun document à l’appui.'
     }
   },

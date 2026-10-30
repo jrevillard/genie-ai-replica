@@ -597,9 +597,12 @@ export default {
       noResponseRecorded: 'Nenhuma resposta registrada',
       notAvailable: 'N/D',
       notAvailableNoSentinel: 'N/D (sem valor sentinela)',
-      abstentionRerankerInput: 'O reranker recusou uma entrada grande demais (um problema do lado da ingestão). A resposta não tem respaldo documental.',
-      abstentionRerankerSelectedNothing: 'A recuperação encontrou documentos, mas o reranker não manteve nenhum. O escopo estava correto — a resposta não tem respaldo documental.',
-      abstentionNoDocuments: 'Nenhum documento foi recuperado para esta consulta. A resposta não tem respaldo documental.',
+      abstentionRerankerInput:
+        'O reranker recusou uma entrada grande demais (um problema do lado da ingestão). A resposta não tem respaldo documental.',
+      abstentionRerankerSelectedNothing:
+        'A recuperação encontrou documentos, mas o reranker não manteve nenhum. O escopo estava correto — a resposta não tem respaldo documental.',
+      abstentionNoDocuments:
+        'Nenhum documento foi recuperado para esta consulta. A resposta não tem respaldo documental.',
       abstentionUnspecified: 'A resposta não tem respaldo documental.'
     }
   },

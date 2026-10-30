@@ -915,7 +915,7 @@ describe('modelConfig actions', () => {
     ];
     for (const [action, args, code, fn] of cases) {
       fn.mockRejectedValueOnce(boom);
-       
+
       const res = await store.dispatch(`okf/${action}`, ...args);
       expect(res).toMatchObject({ ok: false, code, message: 'x' });
     }
@@ -936,7 +936,6 @@ describe('validation guards', () => {
       ['okf/getRepoPiiScan', [{ repoId: 'r1' }]]
     ];
     for (const [action, args] of guards) {
-       
       expect(await store.dispatch(action, ...args)).toMatchObject({ ok: false, code: 'VALIDATION_ERROR' });
     }
   });
@@ -1001,7 +1000,7 @@ describe('failure envelopes sweep', () => {
     ];
     for (const [action, args, fn] of catches) {
       fn.mockRejectedValueOnce(new Error('x'));
-       
+
       expect(await store.dispatch(action, ...args)).toMatchObject({ ok: false, error: 'x' });
     }
   });

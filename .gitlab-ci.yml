@@ -913,14 +913,14 @@ contract:chatqna-server:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml" ]
+        paths: [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml" ]
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml" ]
+        paths: [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml" ]
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml" ]
+        paths: [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml" ]
 
 # Pure contract tests — repo-side, no built image needed (run in a plain venv).
 # These validate the harness logic + telemetry assertions against the repo's
@@ -1689,9 +1689,10 @@ promote:kong-config:
 
 # The chatqna image consumes the language registry from the backend tree
 # (COPY in Dockerfile-chatqna_genie-ai), so a registry-only change must
-# rebuild it like a chatqna change.
+# rebuild it like a chatqna change. The same for build-patches/: the image
+# COPYs comps_llm_stream_offloop_patch.py out of it and runs it at build.
 .chatqna_server_source_changes: &chatqna_server_source_changes
-  [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml" ]
+  [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/**/*", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml" ]
 
 # genie-ai-chatqna-server
 build:chatqna-server:

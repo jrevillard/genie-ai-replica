@@ -127,8 +127,11 @@ COPY genie-ai-overlay/core/constants.py /home/user/comps/cores/mega/constants.py
 # comps_llm_stream_offloop_patch.py and OVERRIDES.yaml).
 # FAIL-LOUD BY DESIGN. The patcher aborts the BUILD if it cannot find the
 # lines it expects, rather than silently shipping an image that still blocks.
-COPY genie-ai-overlay/build-patches/comps_llm_stream_offloop_patch.py /tmp/comps_llm_stream_offloop_patch.py
-RUN python /tmp/comps_llm_stream_offloop_patch.py && rm -f /tmp/comps_llm_stream_offloop_patch.py
+# The script stays in the image at a stable path: the in-image contract lane
+# imports it for the patch-shape constants (one source of truth), the same
+# way install_site_startup.sh persists at /app.
+COPY genie-ai-overlay/build-patches/comps_llm_stream_offloop_patch.py /app/build-patches/comps_llm_stream_offloop_patch.py
+RUN python /app/build-patches/comps_llm_stream_offloop_patch.py
 
 # This copies your main script
 COPY genie-ai-overlay/chatqna/genieai_chatqna.py /app/ChatQnA/genieai_chatqna.py

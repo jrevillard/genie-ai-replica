@@ -235,6 +235,47 @@ def test_guard_fails_on_missing_file(tmp_path):
         mod.apply_patch(tmp_path / "nope.py")
 
 
+def test_guard_fails_on_commented_out_requests_import(tmp_path):
+    """The helper dereferences module-level `requests` too, so the import
+    guard is symmetric: a commented-out `import requests` must refuse the
+    patch just like a commented-out `import asyncio`."""
+    p = tmp_path / "orchestrator.py"
+    commented = "# import requests  # moved elsewhere\n"
+    p.write_text(FAKE_ORCHESTRATOR.replace("import requests\n", commented), encoding="utf-8")
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
+def test_guard_fails_on_import_inside_a_string_literal(tmp_path):
+    """A column-0 `import asyncio` inside a module docstring is not a binding
+    and cannot anchor the helper insertion: a line-shaped regex would match
+    it, insert HELPER as string content, compile green, and ship an image
+    with no live helper. Only a real module-level import statement counts."""
+    p = tmp_path / "orchestrator.py"
+    docstring = '"""Module docstring.\n\nimport asyncio\nimport requests\n"""\n'
+    body = FAKE_ORCHESTRATOR.replace("import asyncio\n", "", 1).replace("import requests\n", "", 1)
+    p.write_text(docstring + body, encoding="utf-8")
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
+def test_guard_fails_when_helper_present_but_no_wrapped_sites(tmp_path):
+    """A file carrying the helper def but no wrapped call sites is a mangled
+    half-patch: it must abort, not pass the already-patched shortcut."""
+    p = tmp_path / "orchestrator.py"
+    body = FAKE_ORCHESTRATOR.replace("response = requests.post(", "response = upstream_post(")
+    p.write_text(body + mod.HELPER, encoding="utf-8")
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
+def test_orchestrator_path_uses_argv_override(monkeypatch):
+    """The Dockerfile's test override and this suite rely on argv[1] routing
+    the patcher at an arbitrary copy of the file."""
+    monkeypatch.setattr(sys, "argv", ["comps_llm_stream_offloop_patch.py", "/somewhere/else/orchestrator.py"])
+    assert mod.orchestrator_path() == Path("/somewhere/else/orchestrator.py")
+
+
 def test_patched_output_is_valid_python(unpatched_file):
     mod.apply_patch(unpatched_file)
     compile(unpatched_file.read_text(encoding="utf-8"), str(unpatched_file), "exec")

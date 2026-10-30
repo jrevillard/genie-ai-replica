@@ -13,34 +13,51 @@ the image builds green and serves queries from the UNPATCHED copy, with the
 event loop pinned exactly as before.
 
 This test closes that layer: it imports the real module the way the service
-does and asserts the patch is in the SOURCE PYTHON LOADS. It follows the
-sibling precedent (``test_contract_http_budget.py``: importlib + getsource
-against the real vendored comps). In the dev venv there is no vendored comps,
-so the ``comps`` fixture skips — the assertion is real only in the in-image
-contract lane (``contract:chatqna-server``), which is the venue that matters.
+does and asserts the patch is in the SOURCE PYTHON LOADS — parsed, so even a
+docstring containing the helper's text cannot satisfy it. The patch-shape
+constants come from the patcher module itself (kept in the image at
+``/app/build-patches/``), so there is one definition of the shape. It follows
+the sibling precedent (``test_contract_http_budget.py``: importlib +
+getsource against the real vendored comps). In the dev venv there is no
+vendored comps, so the ``comps`` fixture skips — the assertion is real only in
+the in-image contract lane (``contract:chatqna-server``), which is the venue
+that matters.
 """
 
-import importlib
+import ast
+import importlib.util
 import inspect
-import re
+from pathlib import Path
 
-HELPER_DEF = re.compile(r"^async def _llm_post_offloop\(", re.MULTILINE)
+PATCHER_PATH = Path("/app/build-patches/comps_llm_stream_offloop_patch.py")
+
+
+def _load_patcher():
+    spec = importlib.util.spec_from_file_location("comps_llm_stream_offloop_patch", PATCHER_PATH)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_the_imported_orchestrator_is_the_patched_copy(comps):
     """The patch lives in the source Python loads, not just in the file on disk."""
+    patcher = _load_patcher()
     module = importlib.import_module("comps.cores.mega.orchestrator")
     source = inspect.getsource(module)
+    tree = ast.parse(source)
 
-    assert HELPER_DEF.search(source), (
-        "the orchestrator module Python imports carries no _llm_post_offloop helper — the build-time "
-        "patch either did not run or patched a copy Python does not import; the streaming LLM POST is "
-        "back on the event loop and /health will stop answering during queries"
+    live_helper = any(
+        isinstance(node, ast.AsyncFunctionDef) and node.name == "_llm_post_offloop" for node in ast.walk(tree)
     )
-    assert source.count("response = await _llm_post_offloop(") == 2, (
+    assert live_helper, (
+        "the orchestrator module Python imports carries no live _llm_post_offloop helper — the "
+        "build-time patch either did not run or patched a copy Python does not import; the "
+        "streaming LLM POST is back on the event loop and /health will stop answering during queries"
+    )
+    assert source.count(patcher.WRAPPED_SITE) == 2, (
         "expected exactly 2 wrapped streaming call sites in the imported orchestrator"
     )
-    assert "response = requests.post(" not in source, (
+    assert patcher.UNPATCHED_SITE not in source, (
         "a streaming call site is still calling requests.post directly in the imported module — "
         "the event loop would stay pinned for the duration of the LLM first-headers wait"
     )

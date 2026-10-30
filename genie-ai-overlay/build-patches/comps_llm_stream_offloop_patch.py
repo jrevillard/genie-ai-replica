@@ -52,6 +52,7 @@ asyncio`` dropped) trips the guard: the helper needs ``asyncio``, and a
 one-site wrap would leave the other on the loop.
 """
 
+import ast
 import re
 import sys
 from pathlib import Path
@@ -64,17 +65,15 @@ from pathlib import Path
 UNPATCHED_SITE = "response = requests.post("
 WRAPPED_SITE = "response = await _llm_post_offloop("
 
-# The helper is inserted after the last import of the module's import block,
-# so both names it needs (asyncio, requests) are bound before any call site
-# can reference it — and the function does not split the import block.
-IMPORT_LINE = re.compile(r"^(?:import|from)[ \t]+\S")
+# Names the inserted helper dereferences at call time; both must be bound by
+# real module-level import statements (see _module_imports).
+REQUIRED_IMPORTS = ("asyncio", "requests")
 
-# Structural anchors, not substrings: a mention of the helper's name in a
-# comment (or a commented-out `import asyncio`) must neither suppress the
-# insertion nor pass the import guard — a substring check would ship an image
-# that builds green and dies with NameError on the first streaming query.
+# Structural anchor, not a substring: a mention of the helper's name in a
+# comment must neither suppress the insertion nor pass the post-write check —
+# a substring check would ship an image that builds green and dies with
+# NameError on the first streaming query.
 HELPER_DEF = re.compile(r"^async def _llm_post_offloop\(", re.MULTILINE)
-REQUIRED_IMPORT_RE = re.compile(r"^import asyncio\b", re.MULTILINE)
 
 HELPER = """
 
@@ -119,6 +118,29 @@ def _rewrap_line(line: str) -> str | None:
     return f"{indent}{WRAPPED_SITE}{eol}"
 
 
+def _module_imports(source: str) -> tuple[set[str], int]:
+    """Top-level names bound by real ``import`` statements, and the line index
+    after the module's last import statement of any kind.
+
+    Parsed, not regexed: a column-0 ``import asyncio`` inside a docstring is
+    string content, not a binding, and anchoring the helper insertion there
+    would make it inert. Only statements at ``tree.body`` level count, so an
+    import guarded by ``if TYPE_CHECKING:`` or a commented-out line binds
+    nothing. ``from X import Y`` positions the insertion (it belongs to the
+    import block) but binds only ``Y`` — the helper needs the modules
+    themselves, so bindings come from plain ``import`` statements alone.
+    """
+    tree = ast.parse(source)
+    bindings: set[str] = set()
+    last_import_end = 0
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            bindings.update(alias.name.split(".")[0] for alias in node.names)
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            last_import_end = max(last_import_end, node.end_lineno)
+    return bindings, last_import_end
+
+
 def apply_patch(path: Path) -> str:
     """Patch, verify idempotently, or fail loudly. Returns a short outcome label."""
     if not path.is_file():
@@ -146,22 +168,23 @@ def apply_patch(path: Path) -> str:
             f"found {len(sites)} — wrapping a different number would leave a call on the loop or "
             "touch something the anchor was never meant to match; re-derive the patch."
         )
-    if not REQUIRED_IMPORT_RE.search(original):
+    bindings, last_import_line = _module_imports(original)
+    missing = [name for name in REQUIRED_IMPORTS if name not in bindings]
+    if missing:
         raise SystemExit(
-            f"ASSERT-ON-PATCH GUARD FAILED: {path} has no column-0 'import asyncio' — the off-loop "
-            "helper awaits asyncio.to_thread and the image would die at import time; re-derive the patch."
+            f"ASSERT-ON-PATCH GUARD FAILED: {path} has no module-level import binding "
+            f"{', '.join(missing)} — the off-loop helper dereferences it, and the image would die "
+            "with NameError at the first streaming query; re-derive the patch."
         )
 
     for i in sites:
         lines[i] = _rewrap_line(lines[i])
 
-    # Insert the helper after the module's import block. The import guard
-    # above guarantees a column-0 `import asyncio` line, so import_lines is
-    # never empty here, and both names the helper needs are bound before any
-    # call site can reference it.
-    import_lines = [i for i, line in enumerate(lines) if IMPORT_LINE.match(line)]
+    # Insert the helper after the module's last import statement, so both
+    # names it needs are bound before any call site can reference it — and
+    # the function does not split the import block.
     if not helper_present(original):
-        lines.insert(import_lines[-1] + 1, HELPER)
+        lines.insert(last_import_line, HELPER)
 
     patched = "".join(lines)
 

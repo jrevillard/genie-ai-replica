@@ -191,6 +191,23 @@ spec:
             # release with it. This secret is therefore a required part
             # of the deployment's sealed-secret set (like the admin
             # credentials above), whatever the OKF tier's enabled state.
+            - name: KC_OKF_SERVER_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: okf-server-client-secret
+                  key: KC_OKF_SERVER_CLIENT_SECRET
+                  optional: true
+            # The okf-server client's secret — the realm body carries it
+            # as $(env:KC_OKF_SERVER_CLIENT_SECRET). The `optional` flag
+            # only spares the pod a CreateContainerConfigError: it does
+            # NOT spare the import. kcc runs with
+            # IMPORT_VARSUBSTITUTION_UNDEFINEDISERROR=true (its default),
+            # so a deployment whose Secret is missing converges the realm
+            # with the variable UNDEFINED and the import dies on the
+            # unresolved placeholder — failing this hook, and the whole
+            # release with it. This secret is therefore a required part
+            # of the deployment's sealed-secret set (like the admin
+            # credentials above), whatever the OKF tier's enabled state.
             # Keycloak takes ~70s to report Ready on a cold start. kcc's
             # availability check owns that wait, so backoffLimit above
             # covers real failures rather than startup.

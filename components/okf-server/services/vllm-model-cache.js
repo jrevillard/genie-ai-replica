@@ -295,6 +295,10 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
       .catch((err) => {
         _negative.set(probeKey, { ts: Date.now(), cause: err });
         _inflight.delete(probeKey);
+        // Prune on the failure path too: an endpoint that stays down would
+        // otherwise leave one negative entry per (base, credential, budget)
+        // for the container's lifetime.
+        pruneCache();
         throw err;
       });
     _inflight.set(probeKey, pending);

@@ -790,10 +790,11 @@ services:
       # guided-JSON-capable chat model (VLLM_LLM_MODEL_ID preferred).
       - VLLM_ENDPOINT=${VLLM_ENDPOINT:-}
       # The pin spelling is the one the vLLM container serves
-      # (--served-model-name VLLM_LLM_MODEL_ID) — exactly like the Python
-      # services' mapping. A raw VLLM_MODEL_ID must not pin okf-server: it
-      # would name a model the endpoint does not serve (#1181).
-      - VLLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-}
+      # (--served-model-name VLLM_LLM_MODEL_ID); VLLM_MODEL_ID is the
+      # escape hatch for a deployment whose OKF legs talk to ANOTHER server
+      # (a proxy whose /v1/models is not readable) — it must then name a
+      # model THAT server serves (#1181).
+      - VLLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-${VLLM_MODEL_ID:-}}
       # The LLM spelling reaches okf-server too (#1181): the serve-mode
       # fidelity label mirrors chatqna's pin precedence, and chatqna only
       # ever receives THIS spelling.

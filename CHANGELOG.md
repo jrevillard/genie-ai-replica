@@ -101,14 +101,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   benchmark sidecar keeps its own default (its judge base IS the
   deployment).
 
-- **`VLLM_MODEL_ID` does not pin the OKF server.** The pin spelling is
-  `VLLM_LLM_MODEL_ID` — the name the vLLM container is started with
-  (`--served-model-name`), and the one every service reads (`VLLM_MODEL_ID`
-  is filled from it). Before, the OKF server carried a hardcoded model name
-  instead, so a `.env` carrying only `VLLM_MODEL_ID` left it naming a model
-  the endpoint did not serve — every call 404'd while the Python services
-  discovered the right one. It now maps to the served name, like every other
-  service.
+- **The OKF server's model pin follows the served name, with an explicit
+  escape hatch.** The pin spelling is `VLLM_LLM_MODEL_ID` — the name the vLLM
+  container is started with (`--served-model-name`), and the one every
+  service reads (`VLLM_MODEL_ID` is filled from it). Before, the OKF server
+  carried a hardcoded model name instead, so a `.env` carrying only
+  `VLLM_MODEL_ID` left it naming a model the endpoint did not serve — every
+  call 404'd while the Python services discovered the right one. It now maps
+  to the served name, like every other service. `VLLM_MODEL_ID` on its own
+  still pins the OKF legs: that is the escape hatch for a deployment whose
+  OKF legs talk to another server (a proxy whose `/v1/models` is not
+  readable) — it must then name a model THAT server serves.
 
 - **The OKF server's tagging logs name their fields explicitly.** The
   `frontmatter.suggest.start` line carried the deployment's pin under the

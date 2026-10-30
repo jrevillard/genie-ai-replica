@@ -371,13 +371,13 @@ async function fetchModelList({ provider, base_url, api_key }) {
     let hint = '';
     // The one mismatch users actually hit (live, 2026-10-19: MiniMax's
     // /anthropic base saved under the openai provider): the OpenAI wire
-    // does not match that base — 404 on the path it does not serve, 401 on
-    // the auth header it does not accept. Either way the base speaks
-    // Anthropic and the provider is wrong.
+    // does not match that base — it publishes no OpenAI model list (404),
+    // or it wants x-api-key instead of a bearer (401). Either way the base
+    // speaks Anthropic and the provider is wrong.
     if ((resp.status === 404 || resp.status === 401) && provider === 'openai' && /\/anthropic\/?$/.test(base)) {
-      // 404 = the path shape (the base serves /v1/models, not /models);
-      // 401 = the auth header (it wants x-api-key). Switching the provider
-      // fixes both — but a wrong key must not read like a path problem.
+      // 404 = no OpenAI model list at this base; 401 = the auth header
+      // (it wants x-api-key). Switching the provider fixes both — but a
+      // wrong key must not read like a missing listing.
       hint =
         resp.status === 401
           ? ' — this base URL looks like an Anthropic-compatible endpoint: switch the provider to Anthropic (or check the API key)'

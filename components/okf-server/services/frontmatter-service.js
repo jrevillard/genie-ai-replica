@@ -483,8 +483,10 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   // without a second probe (a minutes-long thinking-model call can outlive
   // the discovery TTL — re-probing could then name a DIFFERENT model).
   resp.model = (resp.data && resp.data.model) || model;
-  // The endpoint that answered, for the same reason: the start log names
-  // the deployment base, but the call may have gone to a named config.
+  // The base the request was ADDRESSED to, for the same reason: the start
+  // log names the deployment base, but the call may have gone to a named
+  // config. (A gateway can answer from another upstream — this is the
+  // address, not the upstream that served it.)
   resp.host = host;
   return resp;
 }
@@ -971,7 +973,7 @@ async function suggestTags(repoId, _opts = {}) {
       label_count: coverage.label_count,
       labels_represented: coverage.labels_represented,
       // The DEPLOYMENT base — the call may have gone to a named model
-      // config instead; the host that answered is logged by
+      // config instead; the base the call was addressed to is logged by
       // frontmatter.suggest.done.
       deployment_vllm_host: modelCache.deploymentVllmBase(),
       // The PIN (null when the model is discovered) — the model that
@@ -1155,9 +1157,9 @@ async function suggestTags(repoId, _opts = {}) {
     logger.info('frontmatter.suggest.done', {
       repo_id: repoId,
       model: taggedWith,
-      // The endpoint that answered (the start line names the deployment
-      // base, which is NOT where the call went when a named model config
-      // is active).
+      // The base the call was addressed to (the start line names the
+      // deployment base, which is NOT where the call went when a named
+      // model config is active).
       vllm_host: resp.host || modelCache.deploymentVllmBase(),
       topic: out.topic.length,
       entity: out.entity.length,

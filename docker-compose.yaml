@@ -768,9 +768,12 @@ services:
       # its deep chunks embedded against a description of its start (the
       # Contextual Retrieval document context is truncated to the same budget),
       # so imports split such a document rather than storing it degraded.
-      # The default is sized for the 65536-token compose window (~250k chars);
-      # it must track VLLM_MAX_MODEL_LEN, which dataprep derives the matching
-      # budget from. AC8 in tests/config-validator keeps the two in step.
+      # The default is sized for the 65536-token compose window (~250k chars).
+      # It is a STATIC literal, while dataprep's document-context budget now
+      # follows the window the endpoint serves at runtime (discovered at
+      # VLLM_ENDPOINT) — so the two must be kept in step BY HAND when the
+      # served window changes. AC8 in tests/config-validator only checks that
+      # compose and env.j2 agree on the literal.
       - OKF_MAX_CONCEPT_DOC_CHARS=${OKF_MAX_CONCEPT_DOC_CHARS:-250000}
       # Lane cool-down after a dataprep 429 (slot busy): without it a saturated
       # queue hot-loops at ~1 claim/sec (incident 2026-09-28 — 434 rows bouncing
@@ -1782,16 +1785,17 @@ services:
       LABEL_SELECTOR_SYSTEM_PROMPT: ${LABEL_SELECTOR_SYSTEM_PROMPT:-}
       CONTEXTUAL_RETRIEVAL_ENABLED: ${CONTEXTUAL_RETRIEVAL_ENABLED:-true}
       DATAPREP_CONTEXTUAL_MODEL: ${DATAPREP_CONTEXTUAL_MODEL:-}
-      # 0 = derive from VLLM_MAX_MODEL_LEN (see genieai_dataprep_arangodb.py).
-      # The old literal default of 6000 was sized for the T4 profile's
-      # 2048-token window and applied to every deployment, including the
-      # default 65536-token one where it used ~4% of the available window.
+      # 0 = derive from the serving model's window, discovered at runtime from
+      # VLLM_ENDPOINT (see genieai_dataprep_arangodb.py). The old literal
+      # default of 6000 was sized for the T4 profile's 2048-token window and
+      # applied to every deployment, including the default 65536-token one
+      # where it used ~4% of the available window.
       DATAPREP_CONTEXTUAL_DOC_BUDGET: ${DATAPREP_CONTEXTUAL_DOC_BUDGET:-0}
+      # 0 = discover the served window at runtime. >0 = the deployer states
+      # the window the endpoint serves — the only lever on a strict
+      # OpenAI-compatible provider (its /v1/models carries no max_model_len).
+      DATAPREP_MAX_MODEL_LEN: ${DATAPREP_MAX_MODEL_LEN:-0}
       DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL: ${DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL:-100000}
-      # Read by dataprep to size the doc-context budget above. Only the vLLM
-      # service's command interpolation used this before, so dataprep could not
-      # derive anything and every profile inherited the fixed literal.
-      VLLM_MAX_MODEL_LEN: ${VLLM_MAX_MODEL_LEN:-65536}
       DATAPREP_CONTEXTUAL_MAX_TOKENS: ${DATAPREP_CONTEXTUAL_MAX_TOKENS:-512}
       CONTEXTUAL_RETRIEVAL_PROMPT: ${CONTEXTUAL_RETRIEVAL_PROMPT:-}
       # Log level threshold for the OTel Python LoggingHandler installed in

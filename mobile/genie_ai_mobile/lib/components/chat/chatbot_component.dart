@@ -247,9 +247,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // The same guarded descent the Quick Help section parses through: a
     // non-map container anywhere on the way degrades to no configured
     // message, never a throw inside the dependency change.
-    final welcomeConfig = configMapOf(
-      configMapOf(configMapOf(_cachedConfig ?? const {})['features'])['chat'],
-    )['welcomeMessage'];
+    final welcomeConfig = configSectionOf(_cachedConfig ?? const {}, [
+      'features',
+      'chat',
+    ])['welcomeMessage'];
     if (welcomeConfig != null) {
       return resolveConfigText(welcomeConfig, _currentLocale);
     }

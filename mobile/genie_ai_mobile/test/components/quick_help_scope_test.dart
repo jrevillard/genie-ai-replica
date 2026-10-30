@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/chat/quick_help_scope.dart';
+import 'package:genie_ai_mobile/utils/config_resolver.dart';
 
 void main() {
   final enTree = <dynamic>[
@@ -1214,6 +1215,18 @@ void main() {
 
       expect(quickHelpPressable(button, resolver), isFalse);
     });
+
+    test(
+      'a scoped card with no hierarchy resolver refuses the press',
+      () {
+        // The one case where the nameable gate is not implied by the
+        // broken gate: no resolver, no stateFor, no broken verdict —
+        // the wire would carry a scope nothing could EN-name.
+        final button = {'id': 'civil', 'resolvedTitle': 'Civil Registry', 'category': '2'};
+
+        expect(quickHelpPressable(button, null), isFalse);
+      },
+    );
   });
 
   /// The ONE button-identity lookup — the restore and the locale
@@ -1493,6 +1506,30 @@ void main() {
         expect(layout, isEmpty);
         expect(buttons, isEmpty);
       }
+    });
+  });
+
+  /// The ONE guarded descent to a config section: every key on the path
+  /// is container-checked, a non-map anywhere degrades to the empty map.
+  group('configSectionOf', () {
+    test('descends the path to the named section', () {
+      final config = {
+        'features': {
+          'chat': {'welcomeMessage': {'en': 'Hello'}},
+        },
+      };
+
+      expect(configSectionOf(config, ['features', 'chat']), {
+        'welcomeMessage': {'en': 'Hello'},
+      });
+    });
+
+    test('a non-map node anywhere on the path degrades to the empty map', () {
+      expect(
+        configSectionOf({'features': 'oops'}, ['features', 'chat']),
+        isEmpty,
+      );
+      expect(configSectionOf({}, ['features', 'chat']), isEmpty);
     });
   });
 

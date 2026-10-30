@@ -32,3 +32,17 @@ String resolveConfigText(dynamic value, String locale) {
 Map<String, dynamic> configMapOf(dynamic value) {
   return value is Map<String, dynamic> ? value : const {};
 }
+
+/// The config section at [path] — a guarded descent, one key at a time.
+/// A non-map node anywhere on the path degrades to the EMPTY map, the
+/// same rule configMapOf applies to a single lookup.
+Map<String, dynamic> configSectionOf(
+  Map<String, dynamic> config,
+  List<String> path,
+) {
+  var node = config;
+  for (final key in path) {
+    node = configMapOf(node[key]);
+  }
+  return node;
+}

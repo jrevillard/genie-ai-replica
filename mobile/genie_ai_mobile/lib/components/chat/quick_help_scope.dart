@@ -93,11 +93,7 @@ Map<String, dynamic> parseQuickHelpButton(
   Map<String, dynamic> config,
   String locale,
 ) {
-  final quickHelp = configMapOf(
-    configMapOf(
-      configMapOf(configMapOf(config)['features'])['chat'],
-    )['quickHelp'],
-  );
+  final quickHelp = configSectionOf(config, ['features', 'chat', 'quickHelp']);
   final layout = configMapOf(quickHelp['layout']);
 
   final buttons = <Map<String, dynamic>>[];

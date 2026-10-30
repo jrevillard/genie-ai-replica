@@ -634,25 +634,20 @@ async function resolveModelOverride(pick = {}) {
 }
 
 /** The model the ENV judge runs on — the same name the ragas sidecar
- * judges with: its compose block defaults RAGAS_JUDGE_MODEL to
- * VLLM_LLM_MODEL_ID (the sidecar's judge base IS the deployment). The
- * OKF server receives no judge-model default (the deployment's model name
- * must not be sent to another endpoint), so the record falls back to the
- * deployment pin — the same name. */
+ * judges with. The sidecar has NO discovery: its compose block defaults
+ * RAGAS_JUDGE_MODEL to VLLM_LLM_MODEL_ID on ANY judge base
+ * (`${RAGAS_JUDGE_MODEL:-${VLLM_LLM_MODEL_ID:-}}`), and an empty result
+ * means its judge is not configured at all (the engine requires a model
+ * name). The record mirrors exactly that — including on a foreign judge
+ * base, where the pin names a model the base may not serve: every judge
+ * row then 404s, and the record naming the pin is what surfaces why. */
 function envJudgeModel() {
   const named = (process.env.RAGAS_JUDGE_MODEL || '').trim();
   if (named) return named;
-  // The deployment's model name names the judge ONLY when the judge base IS
-  // the deployment endpoint — an unset judge base IS that endpoint (the
-  // env-judge leg calls the deployment's own one). On another endpoint the
-  // served model is DISCOVERED there — the record must not advertise a
-  // model that does not answer.
-  const base = (process.env.RAGAS_JUDGE_BASE_URL || '').trim();
-  if (base && !modelCache.sameOrigin(base, modelCache.deploymentVllmBase())) return null;
   // The SIDECAR's spelling only: its compose default fills the judge name
   // from VLLM_LLM_MODEL_ID alone — a raw VLLM_MODEL_ID (okf-server's own
-  // escape hatch) never reaches it, and naming it here would advertise a
-  // model that never judges.
+  // escape hatch) never reaches it, so naming it here would describe a
+  // judge that does not exist.
   return modelCache.envPinLLMSpelling() || null;
 }
 

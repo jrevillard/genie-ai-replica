@@ -135,13 +135,14 @@ function credentialHash(apiKey) {
 }
 
 function ttlSeconds() {
-  // The repo's ONE env-int policy (components/shared/lib/validation-utils).
-  // Divergence from the Python twin: a NEGATIVE TTL falls back to the
-  // default here, while Python would cache-always-expire.
-  // The Python twin: int(os.getenv('MODEL_DETECT_TTL', 60)) — a fractional
-  // or garbage value RAISES there and falls back to the default. parseInt
-  // would truncate '0.5' to 0 and silently disable the cache (a probe per
-  // call) where the twin keeps its 60 s window.
+  // This file's OWN env-int rule, stated here because it diverges from both
+  // neighbours it could be confused with:
+  //   - the shared helper (components/shared/lib/validation-utils) TRUNCATES
+  //     ('0.5' → 0, silently disabling the cache — a probe per call); here a
+  //     fractional value is malformed and falls back to the default;
+  //   - the Python twin raises on fractional/garbage and would cache-
+  //     always-expire on a negative; here any malformed or negative value
+  //     keeps the 60 s window.
   const raw = (process.env.MODEL_DETECT_TTL || '').trim();
   if (!raw) return MODEL_TTL_DEFAULT_SECONDS;
   const value = Number(raw);
@@ -151,7 +152,9 @@ function ttlSeconds() {
 
 function probeTimeoutMs() {
   // Strict float (the Python twin's positive_float_env): '10abc' is NOT 10 —
-  // it is a malformed value and falls back to the default.
+  // it is a malformed value and falls back to the default. A different rule
+  // from ttlSeconds() above on purpose: the timeout accepts fractions of a
+  // second, the TTL counts whole seconds.
   const raw = process.env.MODEL_PROBE_TIMEOUT_SECONDS;
   const v = raw === undefined || raw === '' ? NaN : Number(raw);
   return Number.isFinite(v) && v > 0 ? v * 1000 : PROBE_TIMEOUT_DEFAULT_MS;
@@ -274,7 +277,10 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
   if (failed && Date.now() - failed.ts < NEGATIVE_CACHE_TTL * 1000) {
     const stale = entry ? entry.id : null;
     if (stale) return stale; // stale beats broken
-    throw failed.cause || discoveryError(modelsUrl);
+    // A COPY per caller: the stored stub would otherwise be thrown — and
+    // travel to unrelated requests — as one shared, mutable Error whose
+    // stack names the first failure's frames.
+    throw failed.cause ? new ModelDiscoveryError(failed.cause.message) : discoveryError(modelsUrl);
   } else if (failed) {
     // Expired stub, swept here and now: the age sweep in pruneCache only
     // runs when a probe settles, and this key is about to probe again —
@@ -447,33 +453,33 @@ function credentialForBase(baseUrl, ownKey) {
   return sameOrigin(baseUrl, deploymentVllmBase()) ? deploymentKey() : '';
 }
 
-/** Resolve the model id for a DEPLOYMENT call and report what is left of
- * the call budget: the discovery round trip is part of the budget, and the
- * chat call must never be handed a useless remainder (a 1 ms timeout fails
- * non-retriably on a healthy endpoint). The 1 s floor can exceed a budget
- * smaller than itself — a small-budget caller then gets the budget, not a
- * remainder — so the total wall time can pass the declared budget (the
- * floor is the point: a doomed call is worse than a slightly late one). */
-async function resolveDeploymentModel({ baseUrl, apiKey, budgetMs, probeBudgetMs }) {
+/** The budget rule both resolving twins share: the discovery round trip is
+ * part of the call budget, and the chat call must never be handed a useless
+ * remainder (a 1 ms timeout fails non-retriably on a healthy endpoint). The
+ * 1 s floor can exceed a budget smaller than itself — a small-budget caller
+ * then gets the budget, not a remainder — so the total wall time can pass
+ * the declared budget (the floor is the point: a doomed call is worse than
+ * a slightly late one). */
+async function resolveModelVia(resolver, { baseUrl, apiKey, budgetMs, probeBudgetMs }) {
   const startedAt = Date.now();
   const budget = callBudget(budgetMs);
-  const model = await resolveVllmModelId(baseUrl, {
+  const model = await resolver(baseUrl, {
     apiKey,
     timeoutMs: probeBudgetFor(budget, probeBudgetMs)
   });
   return { model, remainingMs: Math.max(1000, budget - (Date.now() - startedAt)) };
 }
 
+/** Resolve the model id for a DEPLOYMENT call: pin wins, else discovery,
+ * loud on no answer. */
+async function resolveDeploymentModel(opts) {
+  return resolveModelVia(resolveVllmModelId, opts);
+}
+
 /** Same, for a FOREIGN endpoint (named model-config, judge base): the pin
  * never applies there — the served model is the only authority. */
-async function resolveForeignModel({ baseUrl, apiKey, budgetMs, probeBudgetMs }) {
-  const startedAt = Date.now();
-  const budget = callBudget(budgetMs);
-  const model = await requireServedModelId(baseUrl, {
-    apiKey,
-    timeoutMs: probeBudgetFor(budget, probeBudgetMs)
-  });
-  return { model, remainingMs: Math.max(1000, budget - (Date.now() - startedAt)) };
+async function resolveForeignModel(opts) {
+  return resolveModelVia(requireServedModelId, opts);
 }
 
 /** The call budget of a resolving call. A missing or non-numeric budget

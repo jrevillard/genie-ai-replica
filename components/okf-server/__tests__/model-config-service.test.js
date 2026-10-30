@@ -492,10 +492,10 @@ describe('resolution chain (picked > active > env) + fidelity', () => {
 
   it('the env judge fidelity names the model the SIDECAR judges with', () => {
     // The sidecar's judge model is RAGAS_JUDGE_MODEL, else VLLM_LLM_MODEL_ID
-    // (its own compose default). okf-server no longer receives a judge model
-    // default (the deployment's model name must not cross to another
-    // endpoint), so the record falls back to the deployment pin — the same
-    // name the sidecar uses.
+    // (its own compose default, applied on ANY judge base — the sidecar has
+    // no discovery). The record mirrors exactly that, so it names the model
+    // every judge row was sent to — or shows the pin a foreign base does
+    // not serve.
     process.env.RAGAS_JUDGE_BASE_URL = 'http://vllm:8000/v1';
     delete process.env.RAGAS_JUDGE_MODEL;
     process.env.VLLM_LLM_MODEL_ID = 'ibm-granite/granite-4.1-8b';
@@ -508,11 +508,13 @@ describe('resolution chain (picked > active > env) + fidelity', () => {
     // An explicitly named judge model still wins.
     process.env.RAGAS_JUDGE_MODEL = 'judge/explicit';
     expect(svc.judgeFidelity(null).model).toBe('judge/explicit');
-    // On ANOTHER endpoint the deployment's model name is not what answers
-    // (the served model is discovered there) — the record must not claim it.
+    // On ANOTHER endpoint the record still names the pin: the sidecar's
+    // compose default sends it there regardless (it has no discovery), and
+    // a base that does not serve the pin 404s every judge row — the record
+    // naming the pin is what shows why.
     delete process.env.RAGAS_JUDGE_MODEL;
     process.env.RAGAS_JUDGE_BASE_URL = 'https://judge-gpu.example/v1';
-    expect(svc.judgeFidelity(null).model).toBeNull();
+    expect(svc.judgeFidelity(null).model).toBe('ibm-granite/granite-4.1-8b');
     delete process.env.RAGAS_JUDGE_BASE_URL;
     // An UNSET judge base = the deployment endpoint (the env-judge leg calls
     // the deployment's own endpoint) — the deployment's pin names it.

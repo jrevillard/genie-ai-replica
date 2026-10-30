@@ -223,6 +223,24 @@ class TestDedicatedExtractionPool:
         assert result == [{"doc": "hit"}]
         assert seen["thread"].startswith("okf-extract"), seen["thread"]
 
+    def test_pool_sized_to_the_admission_control(self):
+        """Review wave 8: the pool must never size BELOW the fan-out
+        admission control (FANOUT_MAX_GRAPHS). A leg's 8s deadline starts
+        when _invoke_leg creates its task — a pool smaller than the
+        semaphore let an admitted leg burn its whole budget in the queue
+        and return zero-hit without its extraction ever running."""
+        import os
+
+        from retriever import config as rc
+        from retriever.genieai_retriever_arangodb import _EXTRACTION_POOL
+
+        floor = max(rc.FANOUT_MAX_GRAPHS, min(8, os.cpu_count() or 4))
+        assert rc.FANOUT_MAX_GRAPHS >= 1
+        assert _EXTRACTION_POOL._max_workers >= rc.FANOUT_MAX_GRAPHS, (
+            f"pool {_EXTRACTION_POOL._max_workers} < semaphore {rc.FANOUT_MAX_GRAPHS}"
+        )
+        assert _EXTRACTION_POOL._max_workers == floor
+
     async def test_route_probes_run_on_the_dedicated_pool(self):
         import threading
 

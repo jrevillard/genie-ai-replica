@@ -6,22 +6,14 @@ jest.mock(
   '../../../../shared-lib',
   () => ({
     logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
-    // Canonical absence classifier (review 2026-10-29 round 3): fileService's
-    // isDocumentNotFound delegates to dbService._isExpectedAbsence, so the
-    // mock carries the real semantics — a bare jest.fn() would return
-    // undefined and silently shift the not-found boundary.
+    // Canonical absence classifier — required from the shared fixture so the
+    // not-found boundary is single-sourced across test mocks (wave 8). The
+    // real semantics: fileService's isDocumentNotFound delegates to
+    // dbService._isExpectedAbsence; a bare jest.fn() would return undefined
+    // and silently shift that boundary.
     dbService: {
       getConnection: jest.fn(),
-      _isExpectedAbsence: (error) => {
-        if (!error) return false;
-        if (error.errorNum === 1202 || error.errorNum === 1204) return true;
-        if (error.errorNum != null) return false;
-        return (
-          String(error.message || '')
-            .trim()
-            .toLowerCase() === 'no match'
-        );
-      }
+      _isExpectedAbsence: require('../../fixtures/absence-classifier').isExpectedAbsence
     }
   }),
   { virtual: true }

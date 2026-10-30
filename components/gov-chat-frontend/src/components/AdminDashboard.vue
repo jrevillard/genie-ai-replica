@@ -2098,6 +2098,11 @@ export default {
 
     // Translation method - improved to ensure consistent behavior with SettingsComponent
     translate(key, fallback = '', named = EMPTY_NAMED) {
+      // The fallback stands in for the translation, so it goes through the
+      // same interpolation a real message would — otherwise a missing key
+      // renders literal `{current}`-style placeholders.
+      const interpolateFallback = () =>
+        fallback.replace(/\{(\w+)\}/g, (m, k) => (named[k] != null ? named[k] : m)) || fallback || key;
       if (!this.$i18n) {
         // console.warn(`[AdminDashboard] $i18n not available. Using fallback for: ${key}`);
         return fallback;
@@ -2107,21 +2112,15 @@ export default {
         // an object there is parsed as named params and the locale never
         // reaches the translator, so `named` must be the third argument.
         const translation = this.$i18n.t(key, this.currentLocale, named);
-        // Return fallback if the key is returned (meaning no translation found)
+        // Return the interpolated fallback if the key is returned (no translation found)
         if (translation === key) {
           // console.warn(`[AdminDashboard] No translation for key: ${key}. Using fallback.`);
-          // The fallback stands in for the translation, so it goes through
-          // the same interpolation a real message would — otherwise a
-          // missing key renders literal `{current}`-style placeholders.
-          if (Object.keys(named).length) {
-            return fallback.replace(/\{(\w+)\}/g, (m, k) => (named[k] != null ? named[k] : m));
-          }
-          return fallback || key;
+          return Object.keys(named).length ? interpolateFallback() : fallback || key;
         }
         return translation;
       } catch (e) {
         console.error(`[AdminDashboard] Translation error for key ${key}:`, e);
-        return fallback || key;
+        return interpolateFallback();
       }
     },
 

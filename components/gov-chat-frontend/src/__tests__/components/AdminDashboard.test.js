@@ -1599,6 +1599,33 @@ describe('AdminDashboard', () => {
       expect(wrapper.vm.translate('admin.queryInspector.search', 'Search')).toBe('Search');
     });
 
+    it('resolves and interpolates through a real vue-i18n instance and the shipped en catalogue', () => {
+      // The mock above pins the call SHAPE; this one pins the SEMANTICS:
+      // translate() against the vue-i18n build the app actually installs,
+      // with the en.js catalogue it actually ships, must interpolate named
+      // params — not render them empty (the #1130 regression).
+      const { createI18n } = require('vue-i18n');
+      const en = require('../../i18n/locales/en.js').default;
+      const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } });
+      const wrapper = createAdminDashboardWrapper(
+        {},
+        {
+          $i18n: {
+            locale: 'en',
+            t: (...args) => i18n.global.t(...args)
+          }
+        }
+      );
+      expect(
+        wrapper.vm.translate('admin.queryInspector.pageInfo', 'Page {current} of {total} ({count} total)', {
+          current: 2,
+          total: 5,
+          count: 48
+        })
+      ).toBe('Page 2 of 5 (48 total)');
+      expect(wrapper.vm.translate('admin.queryInspector.search', 'Search')).toBe('Search');
+    });
+
     it('passes an unrecognised dataprep status through unchanged', () => {
       // The translation table is not a gate: a status this build has never
       // heard of must still render, because swallowing it would show "Unknown"

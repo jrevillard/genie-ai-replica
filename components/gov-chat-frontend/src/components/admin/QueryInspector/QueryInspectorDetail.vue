@@ -57,7 +57,7 @@
           <p>
             <strong>{{ translate('admin.queryInspector.serviceLabels', 'Requested Service Labels') }}:</strong>
             <span v-if="query.context?.serviceLabels?.length">{{ query.context.serviceLabels.join(', ') }}</span>
-            <span v-else class="qi-detail__muted">None</span>
+            <span v-else class="qi-detail__muted">{{ translate('admin.queryInspector.none', 'None') }}</span>
           </p>
           <p v-if="query.context?.language">
             <strong>{{ translate('admin.queryInspector.language', 'Language') }}:</strong> {{ query.context.language }}

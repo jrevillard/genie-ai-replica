@@ -150,62 +150,6 @@ class QueriesApi {
     return null;
   }
 
-  /// Create a new query
-  ///
-  /// Creates a new query and records it in analytics. Supports single-message or full conversation modes.
-  ///
-  /// Note: This method returns the HTTP [Response].
-  ///
-  /// Parameters:
-  ///
-  /// * [ApiQueriesPostRequest] apiQueriesPostRequest (required):
-  Future<Response> apiQueriesPostWithHttpInfo(ApiQueriesPostRequest apiQueriesPostRequest,) async {
-    // ignore: prefer_const_declarations
-    final path = r'/api/queries';
-
-    // ignore: prefer_final_locals
-    Object? postBody = apiQueriesPostRequest;
-
-    final queryParams = <QueryParam>[];
-    final headerParams = <String, String>{};
-    final formParams = <String, String>{};
-
-    const contentTypes = <String>['application/json'];
-
-
-    return apiClient.invokeAPI(
-      path,
-      'POST',
-      queryParams,
-      postBody,
-      headerParams,
-      formParams,
-      contentTypes.isEmpty ? null : contentTypes.first,
-    );
-  }
-
-  /// Create a new query
-  ///
-  /// Creates a new query and records it in analytics. Supports single-message or full conversation modes.
-  ///
-  /// Parameters:
-  ///
-  /// * [ApiQueriesPostRequest] apiQueriesPostRequest (required):
-  Future<ApiQueriesGet200ResponseQueriesInner?> apiQueriesPost(ApiQueriesPostRequest apiQueriesPostRequest,) async {
-    final response = await apiQueriesPostWithHttpInfo(apiQueriesPostRequest,);
-    if (response.statusCode >= HttpStatus.badRequest) {
-      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
-    }
-    // When a remote server returns no body with a status of 204, we shall not decode it.
-    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
-    // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ApiQueriesGet200ResponseQueriesInner',) as ApiQueriesGet200ResponseQueriesInner;
-    
-    }
-    return null;
-  }
-
   /// Mark query as answered
   ///
   /// Marks a query as answered and updates response time
@@ -501,7 +445,7 @@ class QueriesApi {
   ///
   /// * [String] queryId (required):
   ///   Query ID
-  Future<ApiQueriesGet200ResponseQueriesInner?> apiQueriesQueryIdGet(String queryId,) async {
+  Future<QueriesPost201Response?> apiQueriesQueryIdGet(String queryId,) async {
     final response = await apiQueriesQueryIdGetWithHttpInfo(queryId,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
@@ -510,7 +454,7 @@ class QueriesApi {
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ApiQueriesGet200ResponseQueriesInner',) as ApiQueriesGet200ResponseQueriesInner;
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'QueriesPost201Response',) as QueriesPost201Response;
     
     }
     return null;
@@ -644,6 +588,118 @@ class QueriesApi {
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ApiQueriesQueryIdResponsetimePatch200Response',) as ApiQueriesQueryIdResponsetimePatch200Response;
+    
+    }
+    return null;
+  }
+
+  /// Create a new query
+  ///
+  /// Creates a new query and records it in analytics. Supports single-message or full conversation modes.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [QueriesPostRequest] queriesPostRequest (required):
+  Future<Response> queriesPostWithHttpInfo(QueriesPostRequest queriesPostRequest,) async {
+    // ignore: prefer_const_declarations
+    final path = r'/queries';
+
+    // ignore: prefer_final_locals
+    Object? postBody = queriesPostRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Create a new query
+  ///
+  /// Creates a new query and records it in analytics. Supports single-message or full conversation modes.
+  ///
+  /// Parameters:
+  ///
+  /// * [QueriesPostRequest] queriesPostRequest (required):
+  Future<QueriesPost201Response?> queriesPost(QueriesPostRequest queriesPostRequest,) async {
+    final response = await queriesPostWithHttpInfo(queriesPostRequest,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'QueriesPost201Response',) as QueriesPost201Response;
+    
+    }
+    return null;
+  }
+
+  /// Stream a query response via SSE
+  ///
+  /// Creates a query and streams the LLM response as SSE events. Events: chunk, metadata, translation, done, error. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [QueriesStreamPostRequest] queriesStreamPostRequest (required):
+  Future<Response> queriesStreamPostWithHttpInfo(QueriesStreamPostRequest queriesStreamPostRequest,) async {
+    // ignore: prefer_const_declarations
+    final path = r'/queries/stream';
+
+    // ignore: prefer_final_locals
+    Object? postBody = queriesStreamPostRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Stream a query response via SSE
+  ///
+  /// Creates a query and streams the LLM response as SSE events. Events: chunk, metadata, translation, done, error. 
+  ///
+  /// Parameters:
+  ///
+  /// * [QueriesStreamPostRequest] queriesStreamPostRequest (required):
+  Future<String?> queriesStreamPost(QueriesStreamPostRequest queriesStreamPostRequest,) async {
+    final response = await queriesStreamPostWithHttpInfo(queriesStreamPostRequest,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'String',) as String;
     
     }
     return null;

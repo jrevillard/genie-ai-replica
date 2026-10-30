@@ -21,7 +21,7 @@ void main() {
       // TODO
     });
 
-    // List<Object> translations (default value: const [])
+    // List<ApiServiceCategoriesPostRequestTranslationsInner> translations (default value: const [])
     test('to test the property `translations`', () async {
       // TODO
     });

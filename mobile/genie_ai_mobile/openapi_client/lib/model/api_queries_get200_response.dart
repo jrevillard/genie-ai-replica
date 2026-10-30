@@ -17,7 +17,7 @@ class ApiQueriesGet200Response {
     this.pagination,
   });
 
-  List<ApiQueriesGet200ResponseQueriesInner> queries;
+  List<QueriesPost201Response> queries;
 
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
@@ -67,7 +67,7 @@ class ApiQueriesGet200Response {
       }());
 
       return ApiQueriesGet200Response(
-        queries: ApiQueriesGet200ResponseQueriesInner.listFromJson(json[r'queries']),
+        queries: QueriesPost201Response.listFromJson(json[r'queries']),
         pagination: ApiQueriesGet200ResponsePagination.fromJson(json[r'pagination']),
       );
     }

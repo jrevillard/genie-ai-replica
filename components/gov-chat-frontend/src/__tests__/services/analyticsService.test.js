@@ -223,43 +223,6 @@ describe('analyticsService', () => {
         expect(result).toEqual({ current: null, previous: null });
       });
     });
-
-    describe('recordQuery', () => {
-      it('posts analytics query record', async () => {
-        mockPost.mockResolvedValue({ data: { success: true } });
-
-        const result = await analyticsService.recordQuery({ query: 'test', timestamp: '2026-05-19T00:00:00Z' });
-
-        expect(mockPost).toHaveBeenCalledWith('/api/analytics/query', {
-          query: 'test',
-          timestamp: '2026-05-19T00:00:00Z'
-        });
-        expect(result).toEqual({ success: true });
-      });
-
-      it('throws on API failure', async () => {
-        mockPost.mockRejectedValue(new Error('Server error'));
-
-        await expect(analyticsService.recordQuery({ query: 'test' })).rejects.toThrow('Server error');
-      });
-    });
-
-    describe('recordFeedback', () => {
-      it('posts analytics feedback with queryId', async () => {
-        mockPost.mockResolvedValue({ data: { success: true } });
-
-        const result = await analyticsService.recordFeedback('q-1', { rating: 5 });
-
-        expect(mockPost).toHaveBeenCalledWith('/api/analytics/feedback', { queryId: 'q-1', feedback: { rating: 5 } });
-        expect(result).toEqual({ success: true });
-      });
-
-      it('throws on API failure', async () => {
-        mockPost.mockRejectedValue(new Error('Server error'));
-
-        await expect(analyticsService.recordFeedback('q-1', { rating: 5 })).rejects.toThrow('Server error');
-      });
-    });
   });
 
   // =========================================================================

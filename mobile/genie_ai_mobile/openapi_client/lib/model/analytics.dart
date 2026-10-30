@@ -14,12 +14,16 @@ class Analytics {
   /// Returns a new [Analytics] instance.
   Analytics({
     this.key,
+    this.queryCount,
+    this.feedbackCount,
+    this.avgRating,
+    this.timestamp,
     this.id,
     this.rev,
     this.userId,
-    this.timestamp,
   });
 
+  /// Unique identifier
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -27,6 +31,42 @@ class Analytics {
   /// Consider adding a "default:" property in the specification file to hide this note.
   ///
   String? key;
+
+  /// Number of queries
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  int? queryCount;
+
+  /// Number of feedback submissions
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  int? feedbackCount;
+
+  /// Average rating
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  num? avgRating;
+
+  /// Analytics timestamp
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  DateTime? timestamp;
 
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
@@ -52,33 +92,31 @@ class Analytics {
   ///
   String? userId;
 
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
-  DateTime? timestamp;
-
   @override
   bool operator ==(Object other) => identical(this, other) || other is Analytics &&
     other.key == key &&
+    other.queryCount == queryCount &&
+    other.feedbackCount == feedbackCount &&
+    other.avgRating == avgRating &&
+    other.timestamp == timestamp &&
     other.id == id &&
     other.rev == rev &&
-    other.userId == userId &&
-    other.timestamp == timestamp;
+    other.userId == userId;
 
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
     (key == null ? 0 : key!.hashCode) +
+    (queryCount == null ? 0 : queryCount!.hashCode) +
+    (feedbackCount == null ? 0 : feedbackCount!.hashCode) +
+    (avgRating == null ? 0 : avgRating!.hashCode) +
+    (timestamp == null ? 0 : timestamp!.hashCode) +
     (id == null ? 0 : id!.hashCode) +
     (rev == null ? 0 : rev!.hashCode) +
-    (userId == null ? 0 : userId!.hashCode) +
-    (timestamp == null ? 0 : timestamp!.hashCode);
+    (userId == null ? 0 : userId!.hashCode);
 
   @override
-  String toString() => 'Analytics[key=$key, id=$id, rev=$rev, userId=$userId, timestamp=$timestamp]';
+  String toString() => 'Analytics[key=$key, queryCount=$queryCount, feedbackCount=$feedbackCount, avgRating=$avgRating, timestamp=$timestamp, id=$id, rev=$rev, userId=$userId]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -86,6 +124,26 @@ class Analytics {
       json[r'_key'] = this.key;
     } else {
       json[r'_key'] = null;
+    }
+    if (this.queryCount != null) {
+      json[r'queryCount'] = this.queryCount;
+    } else {
+      json[r'queryCount'] = null;
+    }
+    if (this.feedbackCount != null) {
+      json[r'feedbackCount'] = this.feedbackCount;
+    } else {
+      json[r'feedbackCount'] = null;
+    }
+    if (this.avgRating != null) {
+      json[r'avgRating'] = this.avgRating;
+    } else {
+      json[r'avgRating'] = null;
+    }
+    if (this.timestamp != null) {
+      json[r'timestamp'] = this.timestamp!.toUtc().toIso8601String();
+    } else {
+      json[r'timestamp'] = null;
     }
     if (this.id != null) {
       json[r'_id'] = this.id;
@@ -101,11 +159,6 @@ class Analytics {
       json[r'userId'] = this.userId;
     } else {
       json[r'userId'] = null;
-    }
-    if (this.timestamp != null) {
-      json[r'timestamp'] = this.timestamp!.toUtc().toIso8601String();
-    } else {
-      json[r'timestamp'] = null;
     }
     return json;
   }
@@ -126,10 +179,13 @@ class Analytics {
 
       return Analytics(
         key: mapValueOfType<String>(json, r'_key'),
+        queryCount: mapValueOfType<int>(json, r'queryCount'),
+        feedbackCount: mapValueOfType<int>(json, r'feedbackCount'),
+        avgRating: num.parse('${json[r'avgRating']}'),
+        timestamp: mapDateTime(json, r'timestamp', r''),
         id: mapValueOfType<String>(json, r'_id'),
         rev: mapValueOfType<String>(json, r'_rev'),
         userId: mapValueOfType<String>(json, r'userId'),
-        timestamp: mapDateTime(json, r'timestamp', r''),
       );
     }
     return null;

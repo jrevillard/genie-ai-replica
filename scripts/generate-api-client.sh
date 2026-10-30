@@ -29,7 +29,8 @@ const spec = swaggerJsdoc({
       version: '1.0.0',
       description: 'API documentation for Government Services microservices'
     },
-    servers: [{ url: 'https://localhost', description: 'Default' }]
+    servers: [{ url: 'https://localhost', description: 'Default' }],
+    components: { schemas: require('./swagger-schemas') }
   },
   apis: ['./routes/*.js']
 });
@@ -53,6 +54,32 @@ openapi-generator-cli generate \
   -o "$OUTPUT_DIR" \
   --skip-validate-spec \
   --additional-properties=usePathUri=true,nullableFields=true
+
+# The dart generator emits non-compiling Dart for an array-of-binary property
+# in a multipart requestBody (verified on 7.22.0 and 7.26.0): for
+# `List<MultipartFile> files` it writes
+#   mp.fields[r'files'] = files.field;   # List<MultipartFile> has no .field
+#   mp.files.add(files);                 # adds the LIST, not its elements
+# Patch the pair to what the generator itself emitted for years
+# (mp.files.addAll(files)). No-op once upstream emits the correct form again.
+echo "==> Patching the dart generator's array-file emission (upstream bug)..."
+node -e "
+const fs = require('fs');
+const path = require('path');
+const dir = '$OUTPUT_DIR/lib/api';
+for (const f of fs.readdirSync(dir)) {
+  const p = path.join(dir, f);
+  const src = fs.readFileSync(p, 'utf8');
+  const fixed = src.replace(
+    /mp\.fields\[r'[^']+'\] = (\w+)\.field;\n(\s*)mp\.files\.add\(\1\);/g,
+    (m, variable, indent) => indent + 'mp.files.addAll(' + variable + ');'
+  );
+  if (fixed !== src) {
+    fs.writeFileSync(p, fixed);
+    console.log('    patched ' + f);
+  }
+}
+"
 
 echo "==> Done. Client generated in $OUTPUT_DIR"
 echo "    Endpoints: $(grep -c "^  Future<Response>" "$OUTPUT_DIR"/lib/api/*.dart 2>/dev/null || echo '?')"

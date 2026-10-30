@@ -16,21 +16,13 @@ void main() {
   // final instance = Event();
 
   group('test Event', () {
+    // Unique identifier
     // String key
     test('to test the property `key`', () async {
       // TODO
     });
 
-    // String id
-    test('to test the property `id`', () async {
-      // TODO
-    });
-
-    // String rev
-    test('to test the property `rev`', () async {
-      // TODO
-    });
-
+    // ID of the user
     // String userId
     test('to test the property `userId`', () async {
       // TODO
@@ -42,8 +34,25 @@ void main() {
       // TODO
     });
 
+    // Additional event data
+    // Object eventData
+    test('to test the property `eventData`', () async {
+      // TODO
+    });
+
+    // Event timestamp
     // DateTime timestamp
     test('to test the property `timestamp`', () async {
+      // TODO
+    });
+
+    // String id
+    test('to test the property `id`', () async {
+      // TODO
+    });
+
+    // String rev
+    test('to test the property `rev`', () async {
       // TODO
     });
 

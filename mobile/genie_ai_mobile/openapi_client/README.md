@@ -63,9 +63,10 @@ Class | Method | HTTP request | Description
 *AdminApi* | [**apiAdminDiagnosticsPost**](doc//AdminApi.md#apiadmindiagnosticspost) | **POST** /api/admin/diagnostics | Run system diagnostics
 *AdminApi* | [**apiAdminLogsDebugYesterdayGet**](doc//AdminApi.md#apiadminlogsdebugyesterdayget) | **GET** /api/admin/logs/debug-yesterday | Debug logs for yesterday to diagnose issues
 *AdminApi* | [**apiAdminLogsGet**](doc//AdminApi.md#apiadminlogsget) | **GET** /api/admin/logs | Get system logs
-*AdminApi* | [**apiAdminLogsRolloverPost**](doc//AdminApi.md#apiadminlogsrolloverpost) | **POST** /api/admin/logs/rollover | Trigger log rollover
 *AdminApi* | [**apiAdminLogsSearchGet**](doc//AdminApi.md#apiadminlogssearchget) | **GET** /api/admin/logs/search | Search logs with filtering
 *AdminApi* | [**apiAdminLogsSummaryGet**](doc//AdminApi.md#apiadminlogssummaryget) | **GET** /api/admin/logs/summary | Get logs summary by type and service
+*AdminApi* | [**apiAdminQueriesInspectGet**](doc//AdminApi.md#apiadminqueriesinspectget) | **GET** /api/admin/queries/inspect | Get recent queries for admin inspection (Query Inspector)
+*AdminApi* | [**apiAdminQueriesInspectQueryIdGet**](doc//AdminApi.md#apiadminqueriesinspectqueryidget) | **GET** /api/admin/queries/inspect/{queryId} | Get full query details for admin inspection
 *AdminApi* | [**apiAdminSecurityLastScanGet**](doc//AdminApi.md#apiadminsecuritylastscanget) | **GET** /api/admin/security/last-scan | Retrieve the last security scan details
 *AdminApi* | [**apiAdminSecurityMetricsGet**](doc//AdminApi.md#apiadminsecuritymetricsget) | **GET** /api/admin/security-metrics | Get security metrics
 *AdminApi* | [**apiAdminSecurityScanPost**](doc//AdminApi.md#apiadminsecurityscanpost) | **POST** /api/admin/security-scan | Run security scan
@@ -75,7 +76,6 @@ Class | Method | HTTP request | Description
 *AnalyticsApi* | [**apiAnalyticsDashboardGet**](doc//AnalyticsApi.md#apianalyticsdashboardget) | **GET** /api/analytics/dashboard | Get dashboard analytics
 *AnalyticsApi* | [**apiAnalyticsEventsGet**](doc//AnalyticsApi.md#apianalyticseventsget) | **GET** /api/analytics/events | Get events records
 *AnalyticsApi* | [**apiAnalyticsEventsPost**](doc//AnalyticsApi.md#apianalyticseventspost) | **POST** /api/analytics/events | Track an event
-*AnalyticsApi* | [**apiAnalyticsGet**](doc//AnalyticsApi.md#apianalyticsget) | **GET** /api/analytics | Get general analytics
 *AnalyticsApi* | [**apiAnalyticsMetricMetricGet**](doc//AnalyticsApi.md#apianalyticsmetricmetricget) | **GET** /api/analytics/metric/{metric} | Get specific metric data
 *AnalyticsApi* | [**apiAnalyticsRecordsGet**](doc//AnalyticsApi.md#apianalyticsrecordsget) | **GET** /api/analytics/records | Get analytics records
 *AnalyticsApi* | [**apiAnalyticsSatisfactionGaugeGet**](doc//AnalyticsApi.md#apianalyticssatisfactiongaugeget) | **GET** /api/analytics/satisfaction/gauge | Get satisfaction gauge data
@@ -115,10 +115,7 @@ Class | Method | HTTP request | Description
 *CurrentUserApi* | [**apiMeResetDataPost**](doc//CurrentUserApi.md#apimeresetdatapost) | **POST** /api/me/reset-data | Reset user profile data
 *DatabaseOperationsApi* | [**apiDatabaseBackupPost**](doc//DatabaseOperationsApi.md#apidatabasebackuppost) | **POST** /api/database/backup | Backup Database
 *DatabaseOperationsApi* | [**apiDatabaseOptimizePost**](doc//DatabaseOperationsApi.md#apidatabaseoptimizepost) | **POST** /api/database/optimize | Optimize Database
-*LoggerApi* | [**apiLoggerConfigurePost**](doc//LoggerApi.md#apiloggerconfigurepost) | **POST** /api/logger/configure | Reconfigure logger settings
-*LoggerApi* | [**apiLoggerRolloverPost**](doc//LoggerApi.md#apiloggerrolloverpost) | **POST** /api/logger/rollover | Trigger log rollover
 *QueriesApi* | [**apiQueriesGet**](doc//QueriesApi.md#apiqueriesget) | **GET** /api/queries | Search queries
-*QueriesApi* | [**apiQueriesPost**](doc//QueriesApi.md#apiqueriespost) | **POST** /api/queries | Create a new query
 *QueriesApi* | [**apiQueriesQueryIdAnsweredPatch**](doc//QueriesApi.md#apiqueriesqueryidansweredpatch) | **PATCH** /api/queries/{queryId}/answered | Mark query as answered
 *QueriesApi* | [**apiQueriesQueryIdConversationPost**](doc//QueriesApi.md#apiqueriesqueryidconversationpost) | **POST** /api/queries/{queryId}/conversation | Create conversation from query
 *QueriesApi* | [**apiQueriesQueryIdConversationsGet**](doc//QueriesApi.md#apiqueriesqueryidconversationsget) | **GET** /api/queries/{queryId}/conversations | Get conversations for a query
@@ -126,6 +123,8 @@ Class | Method | HTTP request | Description
 *QueriesApi* | [**apiQueriesQueryIdGet**](doc//QueriesApi.md#apiqueriesqueryidget) | **GET** /api/queries/{queryId} | Get query by ID
 *QueriesApi* | [**apiQueriesQueryIdLinkMessageIdPost**](doc//QueriesApi.md#apiqueriesqueryidlinkmessageidpost) | **POST** /api/queries/{queryId}/link/{messageId} | Link query to message
 *QueriesApi* | [**apiQueriesQueryIdResponsetimePatch**](doc//QueriesApi.md#apiqueriesqueryidresponsetimepatch) | **PATCH** /api/queries/{queryId}/responsetime | Update query response time
+*QueriesApi* | [**queriesPost**](doc//QueriesApi.md#queriespost) | **POST** /queries | Create a new query
+*QueriesApi* | [**queriesStreamPost**](doc//QueriesApi.md#queriesstreampost) | **POST** /queries/stream | Stream a query response via SSE
 *ServiceCategoriesApi* | [**apiServiceCategoriesCategoriesCategoryIdGet**](doc//ServiceCategoriesApi.md#apiservicecategoriescategoriescategoryidget) | **GET** /api/service-categories/categories/{categoryId} | Get category with services
 *ServiceCategoriesApi* | [**apiServiceCategoriesCategoriesDetailedGet**](doc//ServiceCategoriesApi.md#apiservicecategoriescategoriesdetailedget) | **GET** /api/service-categories/categories/detailed | Get all categories with detailed services for admin
 *ServiceCategoriesApi* | [**apiServiceCategoriesCategoriesGet**](doc//ServiceCategoriesApi.md#apiservicecategoriescategoriesget) | **GET** /api/service-categories/categories | Get all categories with services
@@ -133,7 +132,6 @@ Class | Method | HTTP request | Description
 *ServiceCategoriesApi* | [**apiServiceCategoriesCategoryIdPut**](doc//ServiceCategoriesApi.md#apiservicecategoriescategoryidput) | **PUT** /api/service-categories/{categoryId} | Update an existing category
 *ServiceCategoriesApi* | [**apiServiceCategoriesCategoryIdServicesPost**](doc//ServiceCategoriesApi.md#apiservicecategoriescategoryidservicespost) | **POST** /api/service-categories/{categoryId}/services | Create a new service for a category
 *ServiceCategoriesApi* | [**apiServiceCategoriesCategoryIdTranslationsGet**](doc//ServiceCategoriesApi.md#apiservicecategoriescategoryidtranslationsget) | **GET** /api/service-categories/{categoryId}/translations | Get all translations for a category
-*ServiceCategoriesApi* | [**apiServiceCategoriesInitPost**](doc//ServiceCategoriesApi.md#apiservicecategoriesinitpost) | **POST** /api/service-categories/init | Initialize default categories
 *ServiceCategoriesApi* | [**apiServiceCategoriesPost**](doc//ServiceCategoriesApi.md#apiservicecategoriespost) | **POST** /api/service-categories | Create a new category
 *ServiceCategoriesApi* | [**apiServiceCategoriesSearchGet**](doc//ServiceCategoriesApi.md#apiservicecategoriessearchget) | **GET** /api/service-categories/search | Search categories and services
 *ServiceCategoriesApi* | [**apiServiceCategoriesServicesServiceIdDelete**](doc//ServiceCategoriesApi.md#apiservicecategoriesservicesserviceiddelete) | **DELETE** /api/service-categories/services/{serviceId} | Delete a service
@@ -150,6 +148,26 @@ Class | Method | HTTP request | Description
 ## Documentation For Models
 
  - [Analytics](doc//Analytics.md)
+ - [ApiAdminLogsDebugYesterdayGet200Response](doc//ApiAdminLogsDebugYesterdayGet200Response.md)
+ - [ApiAdminLogsDebugYesterdayGet200ResponseLogsInner](doc//ApiAdminLogsDebugYesterdayGet200ResponseLogsInner.md)
+ - [ApiAdminLogsGet200Response](doc//ApiAdminLogsGet200Response.md)
+ - [ApiAdminLogsGet400Response](doc//ApiAdminLogsGet400Response.md)
+ - [ApiAdminLogsGet503Response](doc//ApiAdminLogsGet503Response.md)
+ - [ApiAdminLogsSummaryGet200Response](doc//ApiAdminLogsSummaryGet200Response.md)
+ - [ApiAdminLogsSummaryGet200ResponseServicesInner](doc//ApiAdminLogsSummaryGet200ResponseServicesInner.md)
+ - [ApiAdminQueriesInspectQueryIdGet404Response](doc//ApiAdminQueriesInspectQueryIdGet404Response.md)
+ - [ApiAdminSecurityLastScanGet200Response](doc//ApiAdminSecurityLastScanGet200Response.md)
+ - [ApiAdminSecurityMetricsGet200Response](doc//ApiAdminSecurityMetricsGet200Response.md)
+ - [ApiAdminSecurityMetricsGet200ResponseData](doc//ApiAdminSecurityMetricsGet200ResponseData.md)
+ - [ApiAdminSecurityMetricsGet200ResponseDataVulnerabilities](doc//ApiAdminSecurityMetricsGet200ResponseDataVulnerabilities.md)
+ - [ApiAdminSecurityScanPost200Response](doc//ApiAdminSecurityScanPost200Response.md)
+ - [ApiAdminSecurityScanPost200ResponseData](doc//ApiAdminSecurityScanPost200ResponseData.md)
+ - [ApiAdminSecurityScanPost200ResponseDataVulnerabilities](doc//ApiAdminSecurityScanPost200ResponseDataVulnerabilities.md)
+ - [ApiAdminSystemHealthGet200Response](doc//ApiAdminSystemHealthGet200Response.md)
+ - [ApiAdminSystemHealthGet200ResponseHealthServicesInner](doc//ApiAdminSystemHealthGet200ResponseHealthServicesInner.md)
+ - [ApiAdminSystemHealthGet200ResponseMetrics](doc//ApiAdminSystemHealthGet200ResponseMetrics.md)
+ - [ApiAdminSystemHealthGet200ResponseResourceUsage](doc//ApiAdminSystemHealthGet200ResponseResourceUsage.md)
+ - [ApiAdminSystemHealthGet200ResponseTrends](doc//ApiAdminSystemHealthGet200ResponseTrends.md)
  - [ApiAnalyticsDashboardGet200Response](doc//ApiAnalyticsDashboardGet200Response.md)
  - [ApiAnalyticsDashboardGet200ResponseCategoriesInner](doc//ApiAnalyticsDashboardGet200ResponseCategoriesInner.md)
  - [ApiAnalyticsDashboardGet200ResponseFeedback](doc//ApiAnalyticsDashboardGet200ResponseFeedback.md)
@@ -157,7 +175,6 @@ Class | Method | HTTP request | Description
  - [ApiAnalyticsDashboardGet200ResponseTopQueriesInner](doc//ApiAnalyticsDashboardGet200ResponseTopQueriesInner.md)
  - [ApiAnalyticsDashboardGet200ResponseUsers](doc//ApiAnalyticsDashboardGet200ResponseUsers.md)
  - [ApiAnalyticsEventsPostRequest](doc//ApiAnalyticsEventsPostRequest.md)
- - [ApiAnalyticsGet200Response](doc//ApiAnalyticsGet200Response.md)
  - [ApiAnalyticsMetricMetricGet200Response](doc//ApiAnalyticsMetricMetricGet200Response.md)
  - [ApiAnalyticsSatisfactionGaugeGet200Response](doc//ApiAnalyticsSatisfactionGaugeGet200Response.md)
  - [ApiAnalyticsSatisfactionGaugeGet200ResponseHistoricalDataInner](doc//ApiAnalyticsSatisfactionGaugeGet200ResponseHistoricalDataInner.md)
@@ -177,18 +194,8 @@ Class | Method | HTTP request | Description
  - [ApiDatabaseBackupPost200Response](doc//ApiDatabaseBackupPost200Response.md)
  - [ApiDatabaseOptimizePost200Response](doc//ApiDatabaseOptimizePost200Response.md)
  - [ApiDatabaseOptimizePost200ResponseResultsInner](doc//ApiDatabaseOptimizePost200ResponseResultsInner.md)
- - [ApiLoggerConfigurePost200Response](doc//ApiLoggerConfigurePost200Response.md)
- - [ApiLoggerConfigurePost400Response](doc//ApiLoggerConfigurePost400Response.md)
- - [ApiLoggerConfigurePost500Response](doc//ApiLoggerConfigurePost500Response.md)
- - [ApiLoggerConfigurePostRequest](doc//ApiLoggerConfigurePostRequest.md)
- - [ApiLoggerRolloverPost200Response](doc//ApiLoggerRolloverPost200Response.md)
- - [ApiLoggerRolloverPost500Response](doc//ApiLoggerRolloverPost500Response.md)
  - [ApiQueriesGet200Response](doc//ApiQueriesGet200Response.md)
  - [ApiQueriesGet200ResponsePagination](doc//ApiQueriesGet200ResponsePagination.md)
- - [ApiQueriesGet200ResponseQueriesInner](doc//ApiQueriesGet200ResponseQueriesInner.md)
- - [ApiQueriesPostRequest](doc//ApiQueriesPostRequest.md)
- - [ApiQueriesPostRequestContext](doc//ApiQueriesPostRequestContext.md)
- - [ApiQueriesPostRequestMessagesInner](doc//ApiQueriesPostRequestMessagesInner.md)
  - [ApiQueriesQueryIdAnsweredPatch200Response](doc//ApiQueriesQueryIdAnsweredPatch200Response.md)
  - [ApiQueriesQueryIdConversationPost201Response](doc//ApiQueriesQueryIdConversationPost201Response.md)
  - [ApiQueriesQueryIdFeedbackPost200Response](doc//ApiQueriesQueryIdFeedbackPost200Response.md)
@@ -197,15 +204,15 @@ Class | Method | HTTP request | Description
  - [ApiQueriesQueryIdLinkMessageIdPostRequest](doc//ApiQueriesQueryIdLinkMessageIdPostRequest.md)
  - [ApiQueriesQueryIdResponsetimePatch200Response](doc//ApiQueriesQueryIdResponsetimePatch200Response.md)
  - [ApiQueriesQueryIdResponsetimePatchRequest](doc//ApiQueriesQueryIdResponsetimePatchRequest.md)
- - [ApiServiceCategoriesCategoriesGet200ResponseInner](doc//ApiServiceCategoriesCategoriesGet200ResponseInner.md)
+ - [ApiServiceCategoriesCategoriesCategoryIdGet200Response](doc//ApiServiceCategoriesCategoriesCategoryIdGet200Response.md)
  - [ApiServiceCategoriesCategoryIdTranslationsGet200ResponseInner](doc//ApiServiceCategoriesCategoryIdTranslationsGet200ResponseInner.md)
- - [ApiServiceCategoriesInitPost200Response](doc//ApiServiceCategoriesInitPost200Response.md)
  - [ApiServiceCategoriesPostRequest](doc//ApiServiceCategoriesPostRequest.md)
+ - [ApiServiceCategoriesPostRequestTranslationsInner](doc//ApiServiceCategoriesPostRequestTranslationsInner.md)
  - [ApiServiceCategoriesSearchGet200Response](doc//ApiServiceCategoriesSearchGet200Response.md)
  - [ApiServiceCategoriesSearchGet200ResponseCategoriesInner](doc//ApiServiceCategoriesSearchGet200ResponseCategoriesInner.md)
  - [ApiServiceCategoriesSearchGet200ResponseServicesInner](doc//ApiServiceCategoriesSearchGet200ResponseServicesInner.md)
- - [ApiServicesCategoriesGet200ResponseInner](doc//ApiServicesCategoriesGet200ResponseInner.md)
- - [ApiServicesCategoriesGet200ResponseInnerServicesInner](doc//ApiServicesCategoriesGet200ResponseInnerServicesInner.md)
+ - [ApiServicesCategoriesCategoryIdGet200Response](doc//ApiServicesCategoriesCategoryIdGet200Response.md)
+ - [ApiServicesCategoriesCategoryIdGet200ResponseServicesInner](doc//ApiServicesCategoriesCategoryIdGet200ResponseServicesInner.md)
  - [ApiServicesSearchGet200Response](doc//ApiServicesSearchGet200Response.md)
  - [ApiServicesSearchGet200ResponseCategoriesInner](doc//ApiServicesSearchGet200ResponseCategoriesInner.md)
  - [ApiServicesSearchGet200ResponseServicesInner](doc//ApiServicesSearchGet200ResponseServicesInner.md)
@@ -216,8 +223,33 @@ Class | Method | HTTP request | Description
  - [ApiWeatherPost200Response](doc//ApiWeatherPost200Response.md)
  - [ApiWeatherPost200ResponseCurrent](doc//ApiWeatherPost200ResponseCurrent.md)
  - [ApiWeatherPost200ResponseForecastInner](doc//ApiWeatherPost200ResponseForecastInner.md)
+ - [ApiWeatherPost400Response](doc//ApiWeatherPost400Response.md)
+ - [ApiWeatherPost503Response](doc//ApiWeatherPost503Response.md)
  - [ApiWeatherPostRequest](doc//ApiWeatherPostRequest.md)
+ - [CategoryTree](doc//CategoryTree.md)
+ - [CategoryTreeChildrenInner](doc//CategoryTreeChildrenInner.md)
+ - [Conversation](doc//Conversation.md)
+ - [ConversationListResponse](doc//ConversationListResponse.md)
+ - [ConversationStats](doc//ConversationStats.md)
+ - [ConversationStatsConversationsByCategoryInner](doc//ConversationStatsConversationsByCategoryInner.md)
+ - [ConversationStatsMessagesByType](doc//ConversationStatsMessagesByType.md)
  - [Event](doc//Event.md)
+ - [Folder](doc//Folder.md)
+ - [FolderListResponse](doc//FolderListResponse.md)
+ - [Message](doc//Message.md)
+ - [MessageListResponse](doc//MessageListResponse.md)
+ - [QueriesPost201Response](doc//QueriesPost201Response.md)
+ - [QueriesPostRequest](doc//QueriesPostRequest.md)
+ - [QueriesPostRequestMessagesInner](doc//QueriesPostRequestMessagesInner.md)
+ - [QueriesStreamPost400Response](doc//QueriesStreamPost400Response.md)
+ - [QueriesStreamPostRequest](doc//QueriesStreamPostRequest.md)
+ - [QueriesStreamPostRequestMessagesInner](doc//QueriesStreamPostRequestMessagesInner.md)
+ - [Query](doc//Query.md)
+ - [QueryContext](doc//QueryContext.md)
+ - [SearchResponse](doc//SearchResponse.md)
+ - [SearchResponseResultsInner](doc//SearchResponseResultsInner.md)
+ - [Session](doc//Session.md)
+ - [SessionDeviceInfo](doc//SessionDeviceInfo.md)
  - [User](doc//User.md)
 
 

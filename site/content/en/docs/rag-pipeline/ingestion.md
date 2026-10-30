@@ -256,8 +256,9 @@ same values as commented-out examples.
 | `CONTEXTUAL_RETRIEVAL_ENABLED` | `true` | `true` | Master switch. `false` skips context generation entirely (a no-op — chunks are embedded and labelled raw). |
 | `CONTEXTUAL_STRATEGY` | `doc_level` | `per_chunk` | `per_chunk` = N LLM calls/doc, section-tailored context. `doc_level` = 1 call/doc, same context on every chunk. See the [§ Which is the actual default?](#which-is-the-actual-default) caveat. |
 | `DATAPREP_CONTEXTUAL_MODEL` | _(empty)_ | _(empty)_ | Model for context generation. Empty = reuse `VLLM_LLM_MODEL_ID`. Must support guided JSON. |
-| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | `6000` | `100000` | Max chars of doc text fed to the context LLM under `per_chunk` (it is called N times, so the window is small). |
-| `DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL` | `100000` | `100000` | Max chars of doc text fed to the context LLM under `doc_level` (1 call, larger window). |
+| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | `0` | `0` | Max chars of doc text fed to the context LLM under `per_chunk`. `0` = derived from the context window the endpoint actually serves (discovered at runtime from `VLLM_ENDPOINT`); `>0` sets a maximum the window still caps. |
+| `DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL` | `100000` | `100000` | Max chars of doc text fed to the context LLM under `doc_level` (1 call, larger window). A maximum: the served window caps it. |
+| `DATAPREP_MAX_MODEL_LEN` | `0` | `0` | The context window (tokens) dataprep sizes document contexts against. `0` = discovered at runtime from `VLLM_ENDPOINT`; `>0` states it explicitly (the only lever on a provider whose `/v1/models` carries no `max_model_len`). |
 | `DATAPREP_CONTEXTUAL_MAX_TOKENS` | `512` | `512` | Max OUTPUT tokens of generated context. The model writes ~196 tokens; the legacy cap of 200 truncated the JSON under load — `512` gives comfortable margin. |
 | `CONTEXTUAL_LABEL_RAW` | `true` | `true` | Decoupled labelling. `true` (default) = label the raw chunk, embed the contextualised chunk. |
 | `CONTEXTUAL_RETRIEVAL_PROMPT` | _(empty)_ | _(empty)_ | Per-chunk context-generation system prompt override. Empty = built-in default (uses `{document_context}` placeholder). |
@@ -282,9 +283,11 @@ same values as commented-out examples.
 - Switch `CONTEXTUAL_STRATEGY=doc_level` (1 call/doc instead of N).
 - Keep `CONTEXTUAL_LABEL_RAW=true` (the label cost is unchanged; only the
   context-generation path is cheaper).
-- Raise `DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL` (already `100000`) only
-  if you have docs longer than that limit being truncated — see the WARN
-  in the dataprep log.
+- Raise `DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL` only if you have docs
+  longer than that limit being truncated — see the WARN in the dataprep log.
+  It is a maximum, not a pin: if the served window is the binding
+  constraint, the budget is capped by it and raising the knob alone changes
+  nothing (the log says `window-capped`).
 
 **Tables split across chunks in XLSX / PDF tables.**
 

@@ -223,6 +223,24 @@ class TestCondenseQueryCall:
         assert captured["headers"]["Authorization"] == "Bearer test-key"
 
     @pytest.mark.asyncio
+    async def test_model_discovery_failure_is_classified_503(self):
+        """No discovered model id → the SAME fail-closed 503 envelope as any
+        other condense failure (the payload build lives inside the classified
+        try; a raw ModelDiscoveryError must not escape as an unclassified
+        500 that bypasses the caller's metrics)."""
+        from core.model_cache import ModelDiscoveryError
+
+        svc = create_chatqna_service()
+
+        with (
+            patch.object(chatqna_module, "_get_llm_model", side_effect=ModelDiscoveryError("no id")),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await svc._condense_query("USER: bean?", "maize instead")
+
+        assert exc_info.value.status_code == 503
+
+    @pytest.mark.asyncio
     async def test_system_prompt_env_override_reaches_payload(self):
         """MULTI_TURN_CONDENSE_SYSTEM_PROMPT (two-tier priority, same contract
         as CHATQNA_SYSTEM_PROMPT): a set value drives the rewrite call's

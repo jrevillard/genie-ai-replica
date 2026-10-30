@@ -334,7 +334,7 @@ class TestTranslateChunkLanguageBoundary:
     @pytest.mark.asyncio
     async def test_prompt_carries_the_mapped_language_name(self, monkeypatch):
         """The prompt names the language from the map, never the request."""
-        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda: False)
+        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda *_: False)
         svc = create_service()
         client, context = fake_translation_client()
         with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
@@ -347,7 +347,7 @@ class TestTranslateChunkLanguageBoundary:
     @pytest.mark.asyncio
     async def test_translategemma_prompt_carries_the_mapped_language_name(self, monkeypatch):
         """Same for the TranslateGemma prompt builder, the other prompt path."""
-        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda: True)
+        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda *_: True)
         svc = create_service()
         client, context = fake_translation_client()
         with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
@@ -360,7 +360,7 @@ class TestTranslateChunkLanguageBoundary:
     async def test_the_translategemma_prompt_names_the_source_from_the_map(self, monkeypatch):
         """The source used to be named by its upper-cased code: the model was
         told it was translating from "EN", which is not a language name."""
-        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda: True)
+        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda *_: True)
         svc = create_service()
         client, context = fake_translation_client()
         with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
@@ -373,7 +373,7 @@ class TestTranslateChunkLanguageBoundary:
     async def test_the_translategemma_prompt_keeps_the_latin_clause_for_a_latin_target(self, monkeypatch):
         """A target written in the Latin alphabet still gets the clause that
         keeps the translation out of the source's script."""
-        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda: True)
+        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda *_: True)
         svc = create_service()
         client, context = fake_translation_client()
         with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
@@ -387,7 +387,7 @@ class TestTranslateChunkLanguageBoundary:
         """The prompt used to say every target uses the Latin alphabet — which
         contradicts a target that is written in another script (Hindi in
         Devanagari) and asks the model for the wrong one."""
-        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda: True)
+        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda *_: True)
         svc = create_service()
         client, context = fake_translation_client()
         with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
@@ -560,7 +560,7 @@ class TestHistoryTranslationTarget:
 
     @pytest.mark.asyncio
     async def test_the_string_branch_translates_into_english(self, monkeypatch):
-        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda: False)
+        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda *_: False)
         svc = create_service()
         client, context = fake_translation_client()
         with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
@@ -570,7 +570,7 @@ class TestHistoryTranslationTarget:
 
     @pytest.mark.asyncio
     async def test_the_message_branch_translates_into_english(self, monkeypatch):
-        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda: False)
+        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda *_: False)
         svc = create_service()
         client, context = fake_translation_client()
         with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
@@ -580,7 +580,7 @@ class TestHistoryTranslationTarget:
 
     @pytest.mark.asyncio
     async def test_the_translategemma_prompt_names_english_as_the_target(self, monkeypatch):
-        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda: True)
+        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda *_: True)
         svc = create_service()
         response = MagicMock()
         response.raise_for_status = MagicMock()
@@ -631,7 +631,7 @@ class TestTranslationPromptBoundary:
         the prompt must not name the source with a code the map does not
         know — and without a name it must not claim to know the source at
         all."""
-        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda: True)
+        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda *_: True)
         svc = create_service()
         client, context = fake_translation_client()
         with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
@@ -644,7 +644,7 @@ class TestTranslationPromptBoundary:
 
     @pytest.mark.asyncio
     async def test_a_malformed_source_code_is_not_named_in_the_prompt(self, monkeypatch):
-        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda: True)
+        monkeypatch.setattr(chatqna_module, "_is_translategemma", lambda *_: True)
         svc = create_service()
         client, context = fake_translation_client()
         with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):

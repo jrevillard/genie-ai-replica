@@ -5,7 +5,7 @@ import sys
 
 os.makedirs("reports", exist_ok=True)
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -210,6 +210,22 @@ def set_env_vars(monkeypatch):
     monkeypatch.setenv("RETRIEVER_MODEL_ID", "BAAI/bge-large-en-v1.5")
 
 
+@pytest.fixture
+def count_patch():
+    """Factory: point ``_count_tokens`` at a mock tokenizer's ``.encode``."""
+
+    def _patch(tokenizer):
+        import chatqna.genieai_chatqna as _chatqna_module
+
+        _chatqna_module._count_static_tokens.cache_clear()
+        return patch(
+            "chatqna.genieai_chatqna._count_tokens",
+            side_effect=lambda text: len(tokenizer.encode(text)),
+        )
+
+    return _patch
+
+
 # --- Tracing test support -----------------------------------------------------
 # Assertions read FINISHED spans out of an in-memory exporter, never mock span
 # objects. A mock assertion passes regardless of what the SDK does, and this
@@ -292,6 +308,7 @@ OWNED_SPAN_NAMES = frozenset(
     {
         "llm.invoke",
         "chatqna.orchestrate",
+        "chatqna.count_tokens",
         "chatqna.query_condense",
         "chatqna.reranker_selection",
         "chatqna.stream_outcome",
@@ -459,3 +476,23 @@ def captured_spans():
         return spans
 
     return _get
+
+
+@pytest.fixture(autouse=True)
+def discovered_llm_model():
+    """CI stands in for the vLLM model-id probe: both chatqna seams answer
+    with a stable synthetic id — the loud ``require_model_id`` (payload
+    sites) and the soft ``get_model_id`` (telemetry) — mirroring a reachable
+    vLLM in production (probe failure there fails the request loudly at the
+    payload sites — covered at the core and transport level in
+    test_auto_detect_model.py, which overrides this fixture)."""
+    with (
+        patch("chatqna.genieai_chatqna.resolve_model_id", return_value="ci-discovered/model"),
+        # chatqna binds get_model_id via from-import (telemetry seam), so only
+        # a chatqna-name patch reaches it; dataprep/retriever reach the CORE
+        # global through their own from-imports — both names are live.
+        patch("chatqna.genieai_chatqna.get_model_id", return_value="ci-discovered/model"),
+        patch("chatqna.genieai_chatqna.discover_model_id", return_value="ci-discovered/model"),
+        patch("core.model_cache.get_model_id", return_value="ci-discovered/model"),
+    ):
+        yield

@@ -217,6 +217,8 @@ ATTRIBUTE_NAMES = {
     # than replacing them, so these are destination vocabulary, not backlog.
     "rag_query_length": "rag.query_length",
     "rag_model_id": "rag.model_id",
+    "llm_endpoint": "llm.endpoint",
+    "token_count": "token.count",
     # ------------------------------------------------------------------------
     # DATAPREP — the ingest path, swept on the same terms as the query path.
     #

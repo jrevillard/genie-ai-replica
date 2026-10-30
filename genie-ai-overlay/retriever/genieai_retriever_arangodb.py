@@ -27,7 +27,7 @@ from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from core.label_contract import build_filter_labels
-from core.model_cache import get_model_id
+from core.model_cache import ModelDiscoveryError, resolve_model_id
 from core.model_http_policy import LLM_MAX_RETRIES, SUMMARIZER_TIMEOUT_SECONDS, http_timeout
 from core.span_attrs import ATTRIBUTE_NAMES as A
 from core.span_attrs import QUERY_ID_KEY, label_digest, query_id_from_baggage
@@ -95,7 +95,6 @@ from .config import (
     VLLM_API_KEY,
     VLLM_ENDPOINT,
     VLLM_MAX_NEW_TOKENS,
-    VLLM_MODEL_ID,
     VLLM_TEMPERATURE,
     VLLM_TIMEOUT,
     VLLM_TOP_P,
@@ -594,9 +593,9 @@ class GenieaiArangoRetriever(OpeaComponent):
     def _initialize_llm(self):
         """Initialize the language model for summarization if enabled.
 
-        When GPU_NODE_HOST is set, auto-detects the vLLM model (with TTL cache,
-        see core/model_cache.py) instead of using the config default VLLM_MODEL_ID.
-        Falls back to the config default on any probe failure.
+        The VLLM_MODEL_ID env wins as-is; without it, the model id is
+        discovered at VLLM_ENDPOINT (with TTL cache, see core/model_cache.py)
+        and fails loudly when nothing answers — never a compiled-in default.
         """
         with background_span("retriever.initialize_llm"):
             if OPENAI_API_KEY and OPENAI_CHAT_ENABLED:
@@ -644,33 +643,26 @@ class GenieaiArangoRetriever(OpeaComponent):
                         timeout=http_timeout(SUMMARIZER_TIMEOUT_SECONDS),
                     )
                     self._llm_model_id = OPENAI_CHAT_MODEL
+                    self._llm_backend = "openai"
                 except openai.AuthenticationError:
                     logger.error("OpenAI API Key is invalid.")
                 except Exception as e:
                     logger.error(f"An error occurred while verifying the API Key: {e}")
 
             elif VLLM_ENDPOINT:
-                self._llm_model_id = self._resolve_vllm_model_id()
-                self.llm = self._create_vllm_client(self._llm_model_id)
+                self._init_vllm_summarizer(self._resolve_vllm_model_id())
             else:
                 raise HTTPException(
                     status_code=400, detail="No LLM environment variables are set, cannot generate graphs."
                 )
 
     def _resolve_vllm_model_id(self) -> str:
-        """Return the vLLM model ID for summarization.
-
-        Auto-detects (TTL-cached) from the remote vLLM when GPU_NODE_HOST is set;
-        otherwise returns the VLLM_MODEL_ID env/config default.
+        """Return the vLLM model ID for summarization (env wins, else the
+        discovered id — see core.model_cache.resolve_model_id).
 
         Logging is deferred to _get_llm() which logs only on model change.
         """
-        if os.getenv("GPU_NODE_HOST") and VLLM_ENDPOINT:
-            detected = get_model_id(VLLM_ENDPOINT)
-            if detected:
-                os.environ["VLLM_MODEL_ID"] = detected
-                return detected
-        return os.getenv("VLLM_MODEL_ID", VLLM_MODEL_ID)
+        return resolve_model_id(VLLM_ENDPOINT)
 
     def _create_vllm_client(self, model_id: str) -> ChatOpenAI:
         """Create a ChatOpenAI client targeting the vLLM endpoint."""
@@ -699,13 +691,35 @@ class GenieaiArangoRetriever(OpeaComponent):
         model baked into the current client (e.g. the GPU node changed models), the
         ChatOpenAI client is recreated.
         """
-        if VLLM_ENDPOINT and os.getenv("GPU_NODE_HOST"):
+        # One resolution, one degradation policy: a failed probe DEGRADES the
+        # auxiliary summarizer (None → the caller skips summarization);
+        # retrieval itself must never fail for it. The OpenAI-configured
+        # client (different endpoint, different id) survives untouched.
+        if not VLLM_ENDPOINT:
+            return getattr(self, "llm", None)
+        if getattr(self, "_llm_backend", None) != "vllm" and getattr(self, "llm", None) is not None:
+            # OpenAI-configured client: different endpoint, different id —
+            # untouched, and never probed.
+            return self.llm
+        try:
             current_id = self._resolve_vllm_model_id()
-            if current_id != getattr(self, "_llm_model_id", None):
-                logger.info(f"Summarizer model changed: {self._llm_model_id} -> {current_id}, recreating client")
-                self._llm_model_id = current_id
-                self.llm = self._create_vllm_client(current_id)
-        return self.llm
+        except ModelDiscoveryError:
+            logger.warning("Summarizer model id undiscovered — skipping summarization this call")
+            return None
+        if getattr(self, "_llm_backend", None) == "vllm" and current_id != getattr(self, "_llm_model_id", None):
+            logger.info(f"Summarizer model changed: {self._llm_model_id} -> {current_id}, recreating client")
+            self._init_vllm_summarizer(current_id)
+        elif getattr(self, "llm", None) is None:
+            # OpenAI init failed at boot (transient key/probe error leaves llm
+            # unset): degrade to the vLLM summarizer instead of AttributeError-
+            # ing on every retrieve.
+            self._init_vllm_summarizer(current_id)
+        return getattr(self, "llm", None)
+
+    def _init_vllm_summarizer(self, model_id: str) -> None:
+        self._llm_model_id = model_id
+        self._llm_backend = "vllm"
+        self.llm = self._create_vllm_client(model_id)
 
     def _initialize_client(self):
         """Initialize the ArangoDB connection."""

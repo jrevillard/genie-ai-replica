@@ -419,9 +419,14 @@ class TestReadIndexParams:
         assert n_lists == 8
         assert n_probe == 4
 
-    def test_invalid_n_probe_falls_back(self, monkeypatch):
-        """AC3: RETRIEVER_ARANGO_NPROBE=invalid logs a WARNING and falls back to 1."""
-        monkeypatch.setenv("RETRIEVER_ARANGO_NPROBE", "invalid")
+    @pytest.mark.parametrize("raw_n_probe", ["invalid", ""])
+    def test_invalid_n_probe_falls_back(self, monkeypatch, raw_n_probe):
+        """AC3: RETRIEVER_ARANGO_NPROBE=invalid logs a WARNING and falls back to 1.
+
+        The empty string is an explicitly-set invalid value (e.g. a template
+        rendering an unset var) — it must warn, not fall back silently.
+        """
+        monkeypatch.setenv("RETRIEVER_ARANGO_NPROBE", raw_n_probe)
         monkeypatch.setenv("RETRIEVER_ARANGO_DISTANCE_STRATEGY", "COSINE")
         monkeypatch.setenv("RETRIEVER_ARANGO_NUM_CENTROIDS", "1")
         fake_logger = MagicMock()

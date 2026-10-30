@@ -1206,7 +1206,7 @@ async def ensure_vector_index(
                         "INFO",
                         "VectorIndex",
                         f"Recreated index '{vec_idx['name']}' -> '{desired_name}' "
-                        f"(metric/nLists/nProbe drift: have={existing_metric}/{existing_n_lists}/{existing_n_probe} "
+                        f"(metric/nLists/nProbe drift: have={existing_metric}/{existing_n_lists}/{effective_n_probe} "
                         f"want={metric}/{n_lists}/{n_probe}).",
                     )
                 return desired_name
@@ -1231,7 +1231,7 @@ def _read_positive_int_env(name: str, default: int = 1) -> int:
     and would leave ingest to complete with NO vector index. Never raises —
     a malformed env var must not crash ingest.
     """
-    raw = os.getenv(name) or str(default)
+    raw = os.getenv(name, str(default))
     try:
         value = int(raw)
     except ValueError:

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,7 +24,7 @@ void main() {
   });
 
   group('the shipped Quick Help configuration', () {
-    test('every button parses to a card the grid can show', () {
+    test('every button parses to a card the grid can show', () async {
       final (layout, buttons) = parseQuickHelpConfig(config, 'en');
 
       // The grid's layout block: absent in the shipped file, and the
@@ -62,12 +63,47 @@ void main() {
           'assets/config/quickhelp/$shippedFile',
           reason: 'button ${button['id']} does not show the shipped icon',
         );
-        expect(
-          () => rootBundle.loadString(iconAsset),
-          returnsNormally,
+        // The asset must LOAD: an async call cannot throw
+        // synchronously, so the explicit form is the awaited future.
+        await expectLater(
+          rootBundle.loadString(iconAsset),
+          completes,
           reason: 'button ${button['id']} names a missing asset',
         );
       }
+    });
+  });
+
+  /// The widget's OWN read of the button, not the parse's. The bug of
+  /// issue #1124 lived here - the grid read `button['appearance']`
+  /// while the parse was correct - and a widget test would bind it
+  /// (#1191). Until that harness exists, this is the cheapest guard
+  /// that fails when the contract changes: the shipped key is the one
+  /// the grid must read, and the block that does not exist must not be
+  /// read.
+  group('the chat widget reads the shipped shape', () {
+    test('the grid does not read the appearance block', () {
+      final source = File(
+        'lib/components/chat/chatbot_component.dart',
+      ).readAsStringSync();
+
+      expect(
+        source.contains("['appearance']"),
+        isFalse,
+        reason: 'the widget must not read the appearance block again',
+      );
+    });
+
+    test('the grid reads the title the parse resolved', () {
+      final source = File(
+        'lib/components/chat/chatbot_component.dart',
+      ).readAsStringSync();
+
+      expect(
+        source.contains('quickHelpTitleOf(button)'),
+        isTrue,
+        reason: 'the grid card must show the resolved title',
+      );
     });
   });
 }

@@ -69,6 +69,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+
+
 - **The mobile Quick Help grid rendered every card with no label and the
   default icon.** The grid card read its label from an `appearance.label.text`
   i18n key and its icon from `appearance.icon.value` — an `appearance` block
@@ -81,20 +83,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was an empty string - the shape an untranslated translation takes - rendered
   an empty card label, and an empty welcome message, on the mobile app, where
   the web already fell back to the English text. Both platforms now read the
-  first non-empty translation. (#1124, !635)
+  first non-empty translation. (#1210, !635)
 
 - **A Quick Help card that declares no hidden prompt no longer sends an empty
   question.** The card's visible text was shown in the chat while the question
   sent to the assistant was empty, so the assistant answered a blank prompt.
   The card now opens the chat with its scope in place and leaves the question
   to the user. A card that declares BOTH texts - every card but the plain chat
-  one - is unchanged. (#1124, !635)
+  one - is unchanged. (#1210, !635)
 
 - **A Quick Help card marked as hidden is now hidden on the mobile app whatever
   the shape of the flag.** The flag was read as a boolean, so a configuration
   that writes it as a string (for example `"hidden": "false"`) kept the card on
   the mobile app while the web hid it. Both platforms now hide it the same
-  way. (#1124, !635)
+  way. (#1208, !635)
 
 - **The mobile app now shows the chat's configured welcome message on first
   render.** The message declared in the deployment configuration was computed
@@ -103,7 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the user switched language once. The configured message now lands when the
   configuration load completes — and only while no conversation is open: the
   first bubble of a conversation restored in the meantime is history, not the
-  welcome slot. (#1124, !635)
+  welcome slot. (#1210, !635)
 
 - **A benchmark-suite generation no longer dies on one unparseable chunk (8-6/8-7).** The knowledge-graph phase died when a single chunk's answer came back in a shape the parser did not accept: the format-fix retry failed too, the exception escaped the transform, and the whole generation was lost (live: a Solar System generation died at 137 minutes, at chunk 1599 of 1600, after 5,989 model calls). A node whose answer cannot be parsed now degrades the way a node with a dead call always has — it keeps its other properties, the failure is counted and reported with the suite, and the rest of the corpus keeps its work. A degraded node is also excluded from the relationship pass, which raises on a missing property rather than skipping the node — without that, the tolerance only moved the death one phase later (also found live).
 

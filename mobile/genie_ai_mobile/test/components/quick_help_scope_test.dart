@@ -1465,12 +1465,12 @@ void main() {
     });
 
     test('a count wider than the grid is bounded by the width', () {
-      // 500 columns on a 328px grid: the cap is width/10 + 1 = 33 —
-      // the highest count whose columns still fit beside the 10px
-      // spacing (a non-negative extent).
-      expect(quickHelpGridColumns({'columns': 500}, maxWidth: 328), 33);
+      // 500 columns on a 328px grid: the cap is width/10 = 32 — the
+      // highest count whose columns still have a positive extent beside
+      // the 10px spacing (32 columns leave 18px for the tiles).
+      expect(quickHelpGridColumns({'columns': 500}, maxWidth: 328), 32);
       expect(quickHelpGridColumns({'columns': 3}, maxWidth: 328), 3);
-      expect(quickHelpGridColumns({'columns': 500}, maxWidth: 25), 3);
+      expect(quickHelpGridColumns({'columns': 500}, maxWidth: 25), 2);
     });
 
     test('a width without room for two columns degrades to one', () {

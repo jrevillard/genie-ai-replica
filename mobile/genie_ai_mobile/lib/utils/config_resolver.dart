@@ -4,11 +4,15 @@
 ///   {"en": "Hello", "es": "Hola"}
 ///
 /// The mobile's mirror of the web's `value[locale] || value['en'] ||
-/// Object.values(value)[0] || ''` chain: the first NON-EMPTY value
-/// wins — an absent key, an empty string (an untranslated placeholder)
-/// and a falsy scalar (a numeric typo) all fall through to the next
-/// candidate, and a value that is not a map resolves as the scalar it
-/// is (a falsy scalar to no text at all).
+/// Object.values(value)[0] || ''` chain, for a LOCALE MAP: the first
+/// NON-EMPTY value wins — an absent key, an empty string (an
+/// untranslated placeholder) and a falsy scalar (a numeric typo) all
+/// fall through to the next candidate.
+///
+/// A value that is not a map resolves as the scalar it is (a falsy
+/// scalar to no text at all). A LIST is not a text value and the two
+/// platforms render it differently (the web dumps it as JSON) — see the
+/// branch below.
 String resolveConfigText(dynamic value, String locale) {
   if (value is Map) {
     // The first NON-EMPTY text wins — the web's `||` chain: a null key

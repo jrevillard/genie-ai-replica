@@ -1191,6 +1191,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // Installs a pressed Quick Help card as THE scope. ONE copy of the
   // field list for the press paths; the caller owns its own setState.
   void _installQuickHelpScopeFields(Map<String, dynamic> button) {
+    // A card with no title installs NOTHING: the context bar would go
+    // blank. The press gate refuses such a card before it gets here —
+    // this is the callee's own guarantee, not the caller's.
+    final name = quickHelpTitleOf(button);
+    if (name == null) return;
     // A COPY: the conversation's filter labels live as long as the
     // scope, and the card's own list must not be aliased by them (an
     // in-place edit would rewrite the card's scope verdict).
@@ -1203,10 +1208,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         _scopeResolver?.categoryIdFor(categoryRef) ?? categoryRef;
     _selectedCategoryNameEn = _scopeResolver?.categoryLabelEn(button) ?? '';
     // The context bar carries the card's TITLE — the same name the
-    // web's chip shows. The press gate refuses a title-less card, so a
-    // name is always resolvable here; ?? is the map read's null
-    // boundary.
-    _selectedCategoryName = quickHelpTitleOf(button) ?? '';
+    // web's chip shows.
+    _selectedCategoryName = name;
     _sidebarServiceLabelsEn = [];
     // A mode switch clears the sidebar count: the send guard would read a
     // count that remembers services that are no longer selected.

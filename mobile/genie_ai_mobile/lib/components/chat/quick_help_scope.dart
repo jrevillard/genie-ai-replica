@@ -154,7 +154,7 @@ int quickHelpGridColumns(
   // columns. An absurd-but-bounded count still yields sub-pixel tiles;
   // a readable-minimum policy is a layout decision no shipped
   // configuration needs (none sets a count).
-  int byWidth = (maxWidth ~/ quickHelpGridSpacing) + 1;
+  int byWidth = (maxWidth ~/ quickHelpGridSpacing).toInt();
   if (byWidth < 1) byWidth = 1;
   return parsed.clamp(1, byWidth);
 }
@@ -254,14 +254,6 @@ String? activeQuickHelpTitleFor(
   );
 }
 
-/// Checks Quick Help buttons against the live hierarchy.
-///
-/// The hierarchy is what NAMES a scope: the config carries the category's
-/// name (or its key, for a configuration written before that spelling), the
-/// wire carries its ENGLISH label, and only the hierarchy can say what that
-/// label is. A hierarchy that has not loaded says nothing about any button
-/// ([pending]); one that could not be loaded is the CALLER's fact — the
-/// widget marks it and passes each button through [unavailableScopeFor].
 /// The button's [key] as a string — ONE read of the id and the category,
 /// whatever shape the value carries: the parse normalizes them, a
 /// hand-built map need not, and a numeric id must degrade to its string
@@ -277,6 +269,14 @@ bool quickHelpDeclaresScope(Map<String, dynamic> button) {
       quickHelpServiceLabelsOf(button).isNotEmpty;
 }
 
+/// Checks Quick Help buttons against the live hierarchy.
+///
+/// The hierarchy is what NAMES a scope: the config carries the category's
+/// name (or its key, for a configuration written before that spelling), the
+/// wire carries its ENGLISH label, and only the hierarchy can say what that
+/// label is. A hierarchy that has not loaded says nothing about any button
+/// ([pending]); one that could not be loaded is the CALLER's fact — the
+/// widget marks it and passes each button through [unavailableScopeFor].
 class QuickHelpScopeResolver {
   /// The ENGLISH spelling of [entry]: its `nameEN`, or its `name` when
   /// the tree predates the dual-spelling response. The fallback is

@@ -36,7 +36,8 @@
         "VLLM_TRANSLATION_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own guardrail service",
         "CORS_ALLOWED_ORIGINS": "same allowlist intent, expressed with the deployment's public origin (ingress.host) instead of Compose's localhost list",
         "CSP_CONNECT_SRC": "same policy intent, expressed with the deployment's public origin",
-        "GPU_NODE_HOST": "the chart names the GPU node it was configured with; Compose leaves it empty unless the remote-GPU topology is used"
+        "GPU_NODE_HOST": "the chart names the GPU node it was configured with; Compose leaves it empty unless the remote-GPU topology is used",
+        "OKF_ENABLED": "the flag follows the tier gate: the parity render switches the tier on (--set okf.enabled=true) so its rows get compared, while the Compose reference ships dark (OKF_ENABLED=0). A production deployment chooses the value on both surfaces; the gate compares them at opposite states by construction"
       },
       "notRead": {
         "EMAIL_FROM": "read by no service in the repository — the Keycloak convergence job is the only consumer of the EMAIL_* names, and it takes the password from a Secret",
@@ -210,7 +211,8 @@
         "VUE_APP_STREAM_IDLE_TIMEOUT_MS": "Compose leaves it empty (the env template line is commented) and the frontend entrypoint injects the empty value into the runtime config.js — the code default applies on both surfaces. The chart leaves it unset for the same result; a deployment that tunes it adds the env row to services.frontend.env."
       },
       "mayDiffer": {
-        "VUE_APP_CSP_CONNECT_SRC": "the browser's origin is the deployment's public origin (ingress.scheme + ingress.host); Compose's list names the localhost development origins"
+        "VUE_APP_CSP_CONNECT_SRC": "the browser's origin is the deployment's public origin (ingress.scheme + ingress.host); Compose's list names the localhost development origins",
+        "VUE_APP_OKF_ENABLED": "the flag follows the tier gate: the parity render switches the tier on (--set okf.enabled=true) so its rows get compared, while the Compose reference ships dark (OKF_ENABLED=0). A production deployment chooses the value on both surfaces; the gate compares them at opposite states by construction"
       },
       "notApplicable": {
         "VUE_PROXY_HOST": "the chart's runtime never dials it: the frontend image's CMD runs nginx (Dockerfile:31), whose /api block proxies the backend itself — server.js (the dev-only proxy that reads VUE_PROXY_HOST at line 11) is not executed by the image, and no module under src/ reads the proxyHost key that docker-entrypoint.sh writes into window.APP_CONFIG"
@@ -276,6 +278,67 @@
         "KC_OKF_SERVER_CLIENT_SECRET": {
           "why": "carried by the okf-server-client-secret Secret through an optional secretKeyRef on the convergence Job; the operator provides the key, so there is no value to compare — the OKF tier is dark by default and the job must not fail the install for a workload that does not run",
           "secret": "okf-server-client-secret",
+          "via": "secretKeyRef"
+        }
+      }
+    },
+    "okf-server": {
+      "compose": "okf-server",
+      "chart": "okf-server",
+      "mayDiffer": {
+        "OKF_ENABLED": "the flag follows the tier gate: the parity render switches the tier on (--set okf.enabled=true) so its rows get compared, while the Compose reference ships dark (OKF_ENABLED=0). A production deployment chooses the value on both surfaces; the gate compares them at opposite states by construction",
+        "ARANGO_DB": "the chart's ArangoDB instance serves _system, ArangoDB's own database, which always exists; Compose uses a dedicated genie-ai database — the same adaptation the backend, dataprep and retriever entries carry",
+        "ARANGO_URL": "the chart's ArangoDB is the kube-arangodb operator's service; Compose points at its own container name",
+        "DATAPREP_URL": "the chart's dataprep Service is named dataprep; Compose's container is dataprep-arango-service — same application, either surface's own DNS",
+        "ENABLE_OBSERVABILITY": "the chart derives the flag from the observability tier's values; Compose resolves the root OKF_ENABLED-independent default 0 — the k8s deployment always ships the collector, so the tier follows the observability gate",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "the chart's collector is the OpenTelemetry operator's service; Compose points at its own container name",
+        "KEYCLOAK_URL": "the chart derives the public edge address from ingress.scheme + ingress.host (the same derivation the convergence Job's KC_PUBLIC_ORIGIN uses); Compose assembles it from the NGINX host/port variables",
+        "OKF_RAGAS_SERVE_URL": "the chart's chatqna Service is named chatqna; Compose's container is chatqna-xeon-backend-server — same application, either surface's own DNS",
+        "RAGAS_JUDGE_BASE_URL": "the chart derives the LLM endpoint from the OPEA GPU tier (external nodeHost or the in-cluster service); Compose points at its own vllm container"
+      },
+      "secretProvided": {
+        "KC_OKF_ACCESS_CLIENT_SECRET": {
+          "why": "carried by the keycloak-proxy-client-secret Secret (the same credential the backend's KEYCLOAK_PROXY_CLIENT_SECRET row uses) through an optional secretKeyRef; the operator provides the key, so there is no value to compare — and the tier is dark by default",
+          "secret": "keycloak-proxy-client-secret",
+          "via": "secretKeyRef"
+        },
+        "RAGAS_INTERNAL_SECRET": {
+          "why": "carried by the okf-internal-secret Secret through an optional secretKeyRef; the operator provides the key, so there is no value to compare — the tier is dark by default",
+          "secret": "okf-internal-secret",
+          "via": "secretKeyRef"
+        },
+        "KC_OKF_SERVER_CLIENT_SECRET": {
+          "why": "carried by the okf-server-client-secret Secret through an optional secretKeyRef; the operator provides the key, so there is no value to compare — the tier is dark by default",
+          "secret": "okf-server-client-secret",
+          "via": "secretKeyRef"
+        },
+        "OKF_INTERNAL_SECRET": {
+          "why": "carried by the okf-internal-secret Secret through an optional secretKeyRef; the operator provides the key, so there is no value to compare — the tier is dark by default",
+          "secret": "okf-internal-secret",
+          "via": "secretKeyRef"
+        }
+      }
+    },
+    "pii-service": {
+      "compose": "pii-service",
+      "chart": "pii-service"
+    },
+    "ragas-service": {
+      "compose": "ragas-service",
+      "chart": "ragas-service",
+      "mayDiffer": {
+        "RAGAS_JUDGE_BASE_URL": "the chart derives the LLM endpoint from the OPEA GPU tier (external nodeHost or the in-cluster service); Compose points at its own vllm container",
+        "RAGAS_JUDGE_CONTEXT_TOKENS": "both surfaces carry the same 65536 default; the gate cannot interpolate the reference through the ragas service's env scope, so it compares the literal template"
+      },
+      "secretProvided": {
+        "RAGAS_INTERNAL_SECRET": {
+          "why": "carried by the okf-internal-secret Secret through an optional secretKeyRef; the operator provides the key, so there is no value to compare — the tier is dark by default",
+          "secret": "okf-internal-secret",
+          "via": "secretKeyRef"
+        },
+        "RAGAS_JUDGE_API_KEY": {
+          "why": "the judge's Bearer key is the GPU node key the chart delivers from the vllm-api-key Secret under this row's name; the operator provides the key, so there is no value to compare",
+          "secret": "vllm-api-key",
           "via": "secretKeyRef"
         }
       }

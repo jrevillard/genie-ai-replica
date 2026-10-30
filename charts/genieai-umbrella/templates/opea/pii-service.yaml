@@ -1,0 +1,42 @@
+{{- /* The PII sidecar — scrubs personally identifiable information for
+the OKF pipeline. Gated on okf.enabled like the rest of the tier; the
+Compose service carries two tuning knobs and a readiness endpoint. */ -}}
+{{- if .Values.okf.enabled -}}
+{{- $okfPii := index (.Values.okf | default dict) "pii" | default dict -}}
+{{- $vals  := deepCopy .Values -}}
+{{- $piiTuningEnv := list
+    (dict "name" "PII_WEB_CONCURRENCY" "value" ($okfPii.webConcurrency | default "4" | toString))
+    (dict "name" "PII_REGION_MAX_CHARS" "value" ($okfPii.regionMaxChars | default "50000" | toString))
+-}}
+{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" ($okfPii.env | default dict) | fromJsonArray -}}
+{{- $svcVals := dict
+    "image" (dict "repository" "genie-ai-pii-service" "tag" "main")
+    "port" 8000
+    "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "1" "memory" "2Gi"))
+    "env" (concat $piiTuningEnv $opeaEnvRows)
+    "probes" (dict
+      "readiness" (dict "httpGet" (dict "path" "/ready" "port" 8000) "initialDelaySeconds" 20 "periodSeconds" 30 "failureThreshold" 4)
+      "liveness"  (dict "httpGet" (dict "path" "/ready" "port" 8000) "initialDelaySeconds" 120 "periodSeconds" 30 "failureThreshold" 3)
+    )
+-}}
+{{- $valsServices := $vals.services | default dict -}}
+{{- $_ := set $valsServices "pii-service" $svcVals -}}
+{{- $_ := set $vals "services" $valsServices -}}
+{{- $ctx := dict "name" "pii-service" "component" "pii-service" "Values" $vals "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pii-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "pii-service") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "pii-service") | nindent 4 }}
+{{- end -}}

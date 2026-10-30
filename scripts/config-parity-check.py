@@ -230,23 +230,36 @@ def compose_default(value):
     """
     global _ENV_DEFAULTS
     text = str(value)
-    match = _INTERP.fullmatch(text)
-    if match:
-        fallback = match.group(2)
-        if fallback is None:
-            return "", True
-        return fallback, False
-    if "${" in text:
-        if _ENV_DEFAULTS is None:
-            _ENV_DEFAULTS = env_file_defaults()
+    # Nested defaults bottom out in a bounded number of passes: a value
+    # like `${A:-${B:-}}` carries its own fallback inside the fallback,
+    # and a single fullmatch pass used to return the INNER template as
+    # if it were the resolved value — the gate then compared a literal
+    # '${B:-}' no container ever sees. Resolve until the text stops
+    # changing (or the safety bound trips on genuinely cyclic input).
+    for _ in range(8):
+        match = _INTERP.fullmatch(text)
+        if match:
+            fallback = match.group(2)
+            if fallback is None:
+                return "", True
+            text = fallback
+            continue
+        if "${" in text:
+            if _ENV_DEFAULTS is None:
+                _ENV_DEFAULTS = env_file_defaults()
 
-        def sub(m):
-            name, fallback = m.group(1), m.group(2)
-            if fallback is not None:
-                return fallback
-            return _ENV_DEFAULTS.get(name, "")
+            def sub(m):
+                name, fallback = m.group(1), m.group(2)
+                if fallback is not None:
+                    return fallback
+                return _ENV_DEFAULTS.get(name, "")
 
-        return _INTERP.sub(sub, text), False
+            resolved = _INTERP.sub(sub, text)
+            if resolved == text:
+                break
+            text = resolved
+            continue
+        break
     return text, False
 
 

@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
 // Test D.7a — External IdP Button Visible on Login Page
 // Prerequisite: Phase D Steps 1-5 in epic1-keycloak-foundation.md
@@ -15,7 +16,7 @@ test('external IdP button is visible on Keycloak login page', async ({ browser }
   const page = await context.newPage();
 
   // Navigate to app root — will redirect to Keycloak login
-  await page.goto('https://localhost/', {
+  await page.goto(`${BASE_URL}/`, {
     waitUntil: 'networkidle',
     timeout: 30000,
   });

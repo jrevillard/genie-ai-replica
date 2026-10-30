@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { expectRevalidated } = require('./helpers/cache-headers');
+const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
 // Cache-header contract for the runtime theme configuration.
 //

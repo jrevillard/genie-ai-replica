@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:genie_ai_mobile/utils/config_resolver.dart';
 
 // The Quick Help rules, on both sides of the button: the SCOPE it claims
@@ -285,9 +286,12 @@ String? activeQuickHelpTitleFor(
 /// ([serviceLabelsEn]) can be re-named from the tree. A pick without a
 /// label ([serviceCount] above the label count) has no identity to
 /// re-name — a partial join would silently drop it from the visible
-/// scope. A restored scope keeps the rule it was resolved under (the
-/// category name the conversation's edge names), and an active BUTTON
-/// scope is re-titled from the config by its id — neither is this
+/// scope. The `serviceCount > 0` clause restates the flag's own meaning
+/// ([fromSelection] is count > 0 by its only writer) and is kept
+/// deliberately: this predicate is a standalone contract, not a shadow
+/// of the writer. A restored scope keeps the rule it was resolved under
+/// (the category name the conversation's edge names), and an active
+/// BUTTON scope is re-titled from the config by its id — neither is this
 /// selection's join.
 bool sidebarTitleFollowsLocale({
   required bool fromSelection,
@@ -299,6 +303,27 @@ bool sidebarTitleFollowsLocale({
       activeButtonId == null &&
       serviceCount > 0 &&
       serviceLabelsEn.length == serviceCount;
+}
+
+/// Whether the sidebar-title fetch's captured scope state is STILL the
+/// scope installed: the same ENGLISH labels AND the same count (a pick
+/// without a label changes the count but not the labels — committing
+/// the join over it would show a scope narrower than the one the query
+/// filters on), still a live selection ([fromSelection]), still not a
+/// button scope. A restore or a press mid-flight owns the title then,
+/// and the fetched names are dropped however well the rest matches.
+bool sidebarTitleCaptureMatchesSelection({
+  required List<String> capturedLabels,
+  required int capturedCount,
+  required List<String> labels,
+  required int count,
+  required bool fromSelection,
+  required String? activeButtonId,
+}) {
+  return listEquals(capturedLabels, labels) &&
+      capturedCount == count &&
+      fromSelection &&
+      activeButtonId == null;
 }
 
 /// The localized DISPLAY name of every entity the [tree] carries, by its

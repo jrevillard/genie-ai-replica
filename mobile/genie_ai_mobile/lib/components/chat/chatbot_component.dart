@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -177,20 +176,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // drift marker the same way _quickHelpButtonsLocale is one, scoped to
   // its own fetch. A null marker names the state before any fetch: a
   // title the selection itself installed is current, and the first
-  // dependency change must not start one.
+  // dependency change must not start one. The fetch's completion guard
+  // reads it as its staleness fact: a response whose captured locale no
+  // longer matches the marker is a stale one (a newer drift started a
+  // newer fetch), and its names — of the locale the UI has left — are
+  // dropped. Same-locale responses are interchangeable: each carries the
+  // join the current inputs produce.
   String? _sidebarTitleLocale;
   // Whether the active scope was installed by a LIVE sidebar selection —
   // the only scope whose context-bar title is the joined localized names
   // a localized tree can re-name. A restore or a button press installs a
   // title from another source (the conversation's edge, the button id)
-  // and unsets it.
+  // and unsets it; the scope clears unset it through
+  // _clearQuickHelpScopeFields.
   bool _sidebarTitleIsSelection = false;
-  // The locale of the most recent sidebar-title fetch — the marker above
-  // names it once the fetch is under way. A response whose fetched locale
-  // no longer matches is a stale one (a newer drift started a newer
-  // fetch), and its names — of the locale the UI has left — are dropped.
-  // Same-locale responses are interchangeable: each carries the join the
-  // current inputs produce.
 
   bool get _hasUnsavedChanges {
     if (_currentConversationId == null) {
@@ -607,9 +606,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     final List<String> labels = List<String>.of(_sidebarServiceLabelsEn);
     final int serviceCount = _sidebarServiceCount;
     final String locale = _currentLocale;
-    // This fetch IS the marker's newest attempt: the marker moving off
-    // this locale names a newer one.
-    _sidebarTitleLocale = locale;
     try {
       final categoriesApi = ref.read(serviceCategoriesApiProvider);
       final response = await categoriesApi
@@ -617,19 +613,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           .timeout(_treeFetchTimeout);
       // A newer drift superseded this fetch, or the widget left.
       if (!mounted || locale != _sidebarTitleLocale) return;
+      if (response.statusCode != 200) return;
       // The scope the fetch was started for must still be the scope
-      // installed: the same labels AND the same count (a pick without an
-      // ENGLISH label changes the count but not the labels — committing
-      // the join over it would show a scope narrower than the one the
-      // query filters on), still a live selection, still not a button
-      // scope (a restore or a press mid-flight owns the title now).
-      if (!listEquals(labels, _sidebarServiceLabelsEn) ||
-          serviceCount != _sidebarServiceCount ||
-          !_sidebarTitleIsSelection ||
-          _activeQuickHelpButtonId != null) {
+      // installed — the capture rule lives beside the other sidebar
+      // rules, where it is clause-tested.
+      if (!sidebarTitleCaptureMatchesSelection(
+        capturedLabels: labels,
+        capturedCount: serviceCount,
+        labels: _sidebarServiceLabelsEn,
+        count: _sidebarServiceCount,
+        fromSelection: _sidebarTitleIsSelection,
+        activeButtonId: _activeQuickHelpButtonId,
+      )) {
         return;
       }
-      if (response.statusCode != 200) return;
       final title = sidebarScopeTitleFor(
         labels,
         localizedDisplayNamesOf(jsonDecode(response.body) as List<dynamic>),
@@ -674,21 +671,22 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     int serviceCount = 0,
   }) {
     setState(() {
+      // A sidebar selection REPLACES the Quick Help scope: the two are
+      // alternative ways of scoping the same query.
+      _clearQuickHelpScopeFields();
       _selectedCategoryId = categoryId;
       _selectedCategoryName = categoryName;
       _selectedCategoryNameEn = categoryNameEn;
       // A LIVE selection installs this title (a non-empty serviceCount —
       // the clear's empty payload is not one): it is the one shape a
-      // localized tree can re-name on a locale switch.
+      // localized tree can re-name on a locale switch. The write lands
+      // AFTER the clear, whose own rule unsets the flag.
       _sidebarTitleIsSelection = serviceCount > 0;
       _sidebarServiceLabelsEn = serviceLabelsEn;
       // How many services the selection named, beside the labels that
       // carry an EN translation. The send guard refuses when a picked
       // one contributed no label (its scope cannot be named).
       _sidebarServiceCount = serviceCount;
-      // A sidebar selection REPLACES the Quick Help scope: the two are
-      // alternative ways of scoping the same query.
-      _clearQuickHelpScopeFields();
     });
   }
 
@@ -730,7 +728,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       final chatHistoryApi = ref.read(chatHistoryApiProvider);
       final res = await chatHistoryApi
           .apiChatConversationsConversationIdGetWithHttpInfo(cleanId);
-
       if (res.statusCode != 200) {
         throw Exception("Failed to load conversation: ${res.statusCode}");
       }
@@ -856,9 +853,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _selectedCategoryNameEn = '';
       _sidebarServiceLabelsEn = [];
       _sidebarServiceCount = 0;
-      // No live selection survives a new chat: the title came from one
-      // (or from a restore), and neither shape is re-named by a fetch.
-      _sidebarTitleIsSelection = false;
       _clearQuickHelpScopeFields();
     });
     widget.onRelatedDocumentsUpdate([]);
@@ -1341,12 +1335,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // Clears the Quick Help half of the scope. ONE field list for the three
   // clears (a new chat, a sidebar pick, a scope-less card press): an
   // eleventh scope field must be remembered here once, not three times.
+  // The sidebar-title flag belongs here too — a clear is never a live
+  // selection, whatever shape of clear it is.
   void _clearQuickHelpScopeFields() {
     _scopeEpoch++;
     _restoredTags = null;
     _activeQuickHelpButtonId = null;
     _activeQuickHelpScope = null;
     _activeServiceLabels = const [];
+    _sidebarTitleIsSelection = false;
   }
 
   /// The icon a Quick Help card shows: the warning of a broken scope,
@@ -1427,9 +1424,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         _selectedCategoryNameEn = '';
         _sidebarServiceLabelsEn = [];
         _sidebarServiceCount = 0;
-        // The scope-less card clears the whole prior scope — the title
-        // flag goes with it, the same way a restore unsets it.
-        _sidebarTitleIsSelection = false;
         _clearQuickHelpScopeFields();
       });
       _inputFocusNode.requestFocus();

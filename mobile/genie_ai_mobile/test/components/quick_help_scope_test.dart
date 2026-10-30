@@ -1775,6 +1775,83 @@ void main() {
     });
   });
 
+  group('sidebarTitleCaptureMatchesSelection', () {
+    final labels = ['Births'];
+    test('the identical selection still matches', () {
+      expect(
+        sidebarTitleCaptureMatchesSelection(
+          capturedLabels: labels,
+          capturedCount: 1,
+          labels: ['Births'],
+          count: 1,
+          fromSelection: true,
+          activeButtonId: null,
+        ),
+        isTrue,
+      );
+    });
+
+    test('a changed label list does not match', () {
+      expect(
+        sidebarTitleCaptureMatchesSelection(
+          capturedLabels: labels,
+          capturedCount: 1,
+          labels: ['Marriages'],
+          count: 1,
+          fromSelection: true,
+          activeButtonId: null,
+        ),
+        isFalse,
+      );
+    });
+
+    test('a grown count does not match even when the labels do', () {
+      // The unnamed pick: the labels list is untouched but the scope
+      // grew — the join would show a scope narrower than the query's.
+      expect(
+        sidebarTitleCaptureMatchesSelection(
+          capturedLabels: labels,
+          capturedCount: 1,
+          labels: ['Births'],
+          count: 2,
+          fromSelection: true,
+          activeButtonId: null,
+        ),
+        isFalse,
+      );
+    });
+
+    test('a restored scope does not match', () {
+      // A restore mid-flight carries the SAME labels and count the fetch
+      // captured — only the live-selection flag tells the two apart.
+      expect(
+        sidebarTitleCaptureMatchesSelection(
+          capturedLabels: labels,
+          capturedCount: 1,
+          labels: ['Births'],
+          count: 1,
+          fromSelection: false,
+          activeButtonId: null,
+        ),
+        isFalse,
+      );
+    });
+
+    test('a button scope does not match', () {
+      expect(
+        sidebarTitleCaptureMatchesSelection(
+          capturedLabels: labels,
+          capturedCount: 1,
+          labels: ['Births'],
+          count: 1,
+          fromSelection: true,
+          activeButtonId: 'btn-1',
+        ),
+        isFalse,
+      );
+    });
+  });
+
   group('sidebarTitleFollowsLocale', () {
     test('a live selection whose every pick carries a label follows', () {
       expect(

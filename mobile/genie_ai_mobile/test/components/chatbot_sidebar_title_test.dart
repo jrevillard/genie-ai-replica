@@ -308,6 +308,7 @@ class _LocaleMockClient extends http.BaseClient {
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    debugPrint('[MOCK] ${request.method} ${request.url.path}');
     final locale =
         Uri.parse(request.url.toString()).queryParameters['locale'] ?? 'en';
     requestsByLocale[locale] = (requestsByLocale[locale] ?? 0) + 1;

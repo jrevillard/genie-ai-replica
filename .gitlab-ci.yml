@@ -2731,7 +2731,7 @@ test:backend:
     # --maxWorkers=2 caps concurrent jest workers: the runner cgroup OOMs
     # (SIGKILLs workers) when default workers = cores - peak RSS = workers
     # x heap. Same cap MR1 carries; converges when the train lands.
-    - npm test -- --maxWorkers=2 --coverage --coverageReporters=text-summary --coverageReporters=cobertura --runInBand
+    - npm test -- --maxWorkers=2 --coverage --coverageReporters=text-summary --coverageReporters=cobertura
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
   cache:
     - key:

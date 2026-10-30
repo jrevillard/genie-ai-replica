@@ -239,10 +239,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       'features',
       'chat',
     ])['welcomeMessage'];
-    // The resolver carries the web's truthiness (a scalar false, a 0,
-    // an empty string — and a locale map that resolves to nothing — is
-    // no message): only a non-empty resolution overrides the i18n
-    // default.
+    // The web gates the RAW value's truthiness and can return an EMPTY
+    // resolution (a declared map of empty strings renders a blank
+    // bubble); the mobile treats a config that resolves to nothing as
+    // UNDECLARED — the built-in greeting shows instead. A falsy scalar
+    // or an empty locale falls through on both platforms alike.
     final resolved = resolveConfigText(welcomeConfig, _currentLocale);
     return resolved.isNotEmpty ? resolved : tr('chatbot.welcomeMessage');
   }

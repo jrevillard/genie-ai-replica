@@ -46,9 +46,10 @@ Map<String, dynamic> parseQuickHelpButton(
 ) {
   // One malformed value degrades ONE card, never the whole load. A
   // non-map icon or action is the config-typo class the bare-string
-  // label rule answers. (The web degrades per VALUE and keeps a
-  // malformed ENTRY as an empty card; the mobile drops the entry —
-  // a blank card is not a card the user can act on.)
+  // label rule answers. A NON-MAP ENTRY (a stray string) is not a card
+  // at all and is dropped; a parsed-but-TITLE-LESS entry is kept — the
+  // web renders the same blank card and refuses its press, and the
+  // grid must show the same card count on both platforms.
   final iconMap = configMapOf(btn['icon']);
   // The served path's BASENAME names the bundled asset. A NON-STRING
   // value, or one with no basename, names nothing — no asset, not a

@@ -181,7 +181,7 @@ List<Map<String, dynamic>> dedupeQuickHelpButtons(
   final seen = <String>{};
   final unique = <Map<String, dynamic>>[];
   for (final button in buttons) {
-    final id = button['id'] as String?;
+    final id = quickHelpFieldOf(button, 'id');
     if (id == null || id.isEmpty || seen.add(id)) {
       unique.add(button);
     }
@@ -201,7 +201,7 @@ Map<String, dynamic>? quickHelpButtonById(
 ) {
   if (id == null || id.isEmpty) return null;
   for (final button in buttons) {
-    if ((button['id'] as String?) == id) {
+    if ((quickHelpFieldOf(button, 'id')) == id) {
       return button;
     }
   }
@@ -262,11 +262,18 @@ String? activeQuickHelpTitleFor(
 /// label is. A hierarchy that has not loaded says nothing about any button
 /// ([pending]); one that could not be loaded is the CALLER's fact — the
 /// widget marks it and passes each button through [unavailableScopeFor].
+/// The button's [key] as a string — ONE read of the id and the category,
+/// whatever shape the value carries: the parse normalizes them, a
+/// hand-built map need not, and a numeric id must degrade to its string
+/// form rather than throw.
+String? quickHelpFieldOf(Map<String, dynamic> button, String key) =>
+    button[key]?.toString();
+
 /// Whether the card DECLARES a scope — a category the hierarchy names, or
 /// labels it carries. ONE rule, read by the grid's unavailable verdict and
 /// by the press path.
 bool quickHelpDeclaresScope(Map<String, dynamic> button) {
-  return declaresCategoryScope(button['category'] as String?) ||
+  return declaresCategoryScope(quickHelpFieldOf(button, 'category')) ||
       quickHelpServiceLabelsOf(button).isNotEmpty;
 }
 
@@ -316,13 +323,11 @@ class QuickHelpScopeResolver {
   /// reachable when the hierarchy is down. Every card that DOES declare a
   /// scope cannot be verified, so it says so.
   static Map<String, dynamic> unavailableScopeFor(Map<String, dynamic> button) {
-    final category = button['category'] as String?;
-    final labels = quickHelpServiceLabelsOf(button);
     // 'general' is the placeholder a category-less selection is stored
     // under: it names no category, and every rule treats it as NO scope —
     // this one included, or a category-less card would look healthy in
     // the grid and be refused at send time.
-    final declaresScope = declaresCategoryScope(category) || labels.isNotEmpty;
+    final declaresScope = quickHelpDeclaresScope(button);
     return {
       'broken': declaresScope,
       'unavailable': declaresScope,
@@ -441,7 +446,7 @@ class QuickHelpScopeResolver {
         .where((l) => !_enLabels.contains(l))
         .toList();
 
-    final category = button['category'] as String?;
+    final category = quickHelpFieldOf(button, 'category');
     // The category is usable only when the hierarchy names it in
     // ENGLISH: that spelling is the wire. A category the hierarchy does
     // not carry, and a category it carries without an EN translation,
@@ -463,7 +468,7 @@ class QuickHelpScopeResolver {
   /// carries it, or the entity has no EN translation (it cannot be filtered
   /// on at all).
   String? categoryLabelEn(Map<String, dynamic> button) =>
-      categoryEnLabel(button['category'] as String?);
+      categoryEnLabel(quickHelpFieldOf(button, 'category'));
 
   /// The ENGLISH label of the category the [reference] names. Null when
   /// the hierarchy does not carry it, or carries it without an EN
@@ -571,7 +576,7 @@ class ConversationScopeResolver {
   ) {
     final byId = <String, Map<String, dynamic>>{};
     for (final button in buttons) {
-      final id = button['id'] as String?;
+      final id = quickHelpFieldOf(button, 'id');
       if (id == null || id.isEmpty) continue;
       if (byId.containsKey(id)) continue;
       byId[id] = button;
@@ -621,7 +626,7 @@ class ConversationScopeResolver {
     for (final tag in tagList) {
       final button = _buttons[tag];
       if (button == null) continue;
-      final category = button['category'] as String?;
+      final category = quickHelpFieldOf(button, 'category');
       final buttonLabels = quickHelpServiceLabelsOf(button);
       // A legacy conversation can carry SEVERAL button ids: the web
       // restores every chip and sends the union of their labels. Every
@@ -777,7 +782,7 @@ bool quickHelpScopeIsNameable(
   Map<String, dynamic> button,
   QuickHelpScopeResolver? resolver,
 ) {
-  final category = button['category'] as String?;
+  final category = quickHelpFieldOf(button, 'category');
   // An id that declares NO category scope (empty, or the 'general'
   // placeholder) is how a selection is cleared — the hierarchy has
   // nothing to deny. declaresCategoryScope is the ONE predicate.

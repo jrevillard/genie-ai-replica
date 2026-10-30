@@ -31,21 +31,36 @@ void main() {
       expect(layout, isEmpty);
       expect(buttons, isNotEmpty);
 
-      for (final button in buttons) {
-        // The card's LABEL: the top-level title locale map, resolved.
+      // The shipped entries, read raw: the card the widget shows must
+      // BE the shipped card, not merely a card with some text.
+      final shipped =
+          (config['features']['chat']['quickHelp']['buttons'] as List<dynamic>)
+              .cast<Map<String, dynamic>>();
+
+      for (var i = 0; i < buttons.length; i++) {
+        final button = buttons[i];
+        final raw = shipped.firstWhere(
+          (entry) => entry['id'] == button['id'],
+          orElse: () => <String, dynamic>{},
+        );
+
+        // The card's LABEL: the shipped title, resolved under English.
         expect(
           button['resolvedTitle'],
-          isNotEmpty,
-          reason: 'button ${button['id']} has no title',
+          raw['title']?['en'],
+          reason: 'button ${button['id']} does not show the shipped title',
         );
-        // The card's ICON: the top-level icon, as a bundled asset that
-        // actually loads (the pre-fix fallback named a file the app
-        // never shipped).
+        // The card's ICON: the shipped icon's basename, as a bundled
+        // asset that actually loads (the pre-fix fallback named a file
+        // the app never shipped).
         final iconAsset = button['iconAsset']?.toString() ?? '';
+        final shippedFile = (raw['icon']?['value']?.toString() ?? '')
+            .split('/')
+            .last;
         expect(
           iconAsset,
-          startsWith('assets/config/quickhelp/'),
-          reason: 'button ${button['id']} has no bundled icon',
+          'assets/config/quickhelp/$shippedFile',
+          reason: 'button ${button['id']} does not show the shipped icon',
         );
         expect(
           () => rootBundle.loadString(iconAsset),

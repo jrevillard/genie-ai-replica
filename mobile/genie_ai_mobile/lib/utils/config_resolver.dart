@@ -33,8 +33,10 @@ String resolveConfigText(dynamic value, String locale) {
   // A scalar the web's `value || ''` reads as falsy (0, false) is no
   // text; a truthy number keeps its string form, as the web renders it.
   if (value is String) return value;
-  // JavaScript stringifies an array by joining it with commas - the
-  // web renders a list title that way, and so does the mobile.
+  // A list is not a text value. The web dumps it as JSON and the mobile
+  // renders it as one comma-joined line - neither is the other
+  // platform's rendering, and both only happen for a malformed
+  // configuration; a card label stays a single line here.
   if (value is List) {
     return value.map((element) => element.toString()).join(',');
   }

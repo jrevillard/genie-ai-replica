@@ -40,7 +40,7 @@ void main() {
       expect(resolveConfigText('Ask about IDs', 'en'), 'Ask about IDs');
     });
 
-    test('a list stringifies the way JavaScript does', () {
+    test('a list renders as one comma-joined line', () {
       expect(resolveConfigText(['Apply for ID'], 'en'), 'Apply for ID');
       expect(resolveConfigText(['a', 'b'], 'en'), 'a,b');
     });

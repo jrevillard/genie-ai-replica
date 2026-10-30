@@ -1198,7 +1198,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _showQuickHelpOverlay = false;
     // The configuration names its category; the hierarchy's own key is
     // what the conversation's edge speaks.
-    final categoryRef = button['category'] as String?;
+    final categoryRef = quickHelpFieldOf(button, 'category');
     _selectedCategoryId =
         _scopeResolver?.categoryIdFor(categoryRef) ?? categoryRef;
     _selectedCategoryNameEn = _scopeResolver?.categoryLabelEn(button) ?? '';
@@ -1214,7 +1214,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _scopeEpoch++;
     _restoredTags = null;
     _activeServiceLabels = declaredLabels;
-    _activeQuickHelpButtonId = button['id'] as String?;
+    _activeQuickHelpButtonId = quickHelpFieldOf(button, 'id');
     _activeQuickHelpScope = _scopeResolver?.stateFor(button);
   }
 
@@ -1272,10 +1272,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     final String hiddenPrompt =
         button['resolvedHiddenPrompt']?.toString() ?? '';
 
-    final declaredLabels = quickHelpServiceLabelsOf(button);
-    final declaresScope =
-        declaresCategoryScope(button['category'] as String?) ||
-        declaredLabels.isNotEmpty;
+    // ONE scope rule, shared with the grid's unavailable verdict.
+    final declaresScope = quickHelpDeclaresScope(button);
 
     // The AUTO-SEND is armed only when BOTH texts resolved: a card with
     // a visible text but no hidden prompt would wire an EMPTY question

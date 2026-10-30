@@ -419,7 +419,7 @@ defaults.
 | `RERANKER_SCORE_TEMPERATURE` | number | no | `1.0` | Score temperature for calibration |
 | `LLM_SERVER_HOST_IP` | string | no | `vllm` | vLLM hostname |
 | `LLM_SERVER_PORT` | number | no | `8000` | vLLM port |
-| `VLLM_LLM_MODEL_ID` | string | no | `meta-llama/Meta-Llama-3.1-8B-Instruct` | Main LLM model |
+| `VLLM_LLM_MODEL_ID` | string | no | `meta-llama/Meta-Llama-3.1-8B-Instruct` | Model the vLLM container serves. The chat/ingest services discover it automatically — set only to pin a name. |
 | `VLLM_TRANSLATION_MODEL_ID` | string | no | `google/gemma-3-4b-it` | Translation LLM model |
 | `VLLM_TRANSLATION_SERVICE_PORT` | number | no | `9031` | Translation service port |
 | `GUARDRAIL_SERVICE_HOST_IP` | string | no | `guardrail` | Guardrail hostname |

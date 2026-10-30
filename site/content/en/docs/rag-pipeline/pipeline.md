@@ -101,8 +101,9 @@ The reranker's scores feed the **confidence score** shown to the user. See
 ### 4. Generation
 
 The kept chunks are assembled into a prompt with the **system prompt** and
-sent to the LLM. The default model is **`meta-llama/Meta-Llama-3.1-8B-Instruct`**
-(the docker-compose default, set by `VLLM_LLM_MODEL_ID`).
+sent to the LLM. The model is whatever the LLM endpoint serves
+(`VLLM_LLM_MODEL_ID`, whose compose default is
+**`meta-llama/Meta-Llama-3.1-8B-Instruct`**, discovered at `/v1/models`).
 **`ibm-granite/granite-4.1-8b`** is the **recommended and validated** model
 (must support OpenAI-compatible guided JSON for the dataprep labelling call).
 Chatqna has no in-code fallback model name: it discovers whatever the LLM

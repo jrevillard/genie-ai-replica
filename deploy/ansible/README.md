@@ -243,7 +243,7 @@ Set in `group_vars/<env>/vars.yml`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `vllm_llm_model_id` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | Main LLM model for chat |
+| `vllm_llm_model_id` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | Model the vLLM container serves (the chat/ingest services discover it — set only to pin a name) |
 | `vllm_max_model_len` | `8192` | Maximum context length |
 | `vllm_gpu_utilization` | `0.55` | GPU memory fraction (0.1-1.0) |
 | `vllm_dtype` | `auto` | Data type (auto, half, bfloat16, float32) |

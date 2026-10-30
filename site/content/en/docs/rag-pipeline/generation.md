@@ -35,9 +35,9 @@ validation. The legacy `LLM_MODEL` env var is no longer read.
 
 | Source | Variable | Default | Reachable? |
 |---|---|---|---|
-| Docker compose (production) | `VLLM_LLM_MODEL_ID` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | Yes — set by `docker-compose.yaml`. |
+| vLLM container | `VLLM_LLM_MODEL_ID` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | The model vLLM loads and serves. |
 | Recommended validated | `VLLM_LLM_MODEL_ID` override | `ibm-granite/granite-4.1-8b` | Override in `.env` to switch. |
-| Discovery (chatqna) | the endpoint's `/v1/models` | whatever is served | Always-on; `VLLM_MODEL_ID` (empty by default) pins a name and skips the probe. |
+| Discovery (chatqna, retriever summarizer, dataprep labelling/graph) | the endpoint's `/v1/models` | whatever is served | Always-on; `VLLM_MODEL_ID` (empty by default) pins a name and skips the probe. |
 
 All are served by vLLM (OpenAI-compatible API).
 

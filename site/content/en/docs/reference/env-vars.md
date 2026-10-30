@@ -68,6 +68,7 @@ source first** (the file in the repo), then regenerate.
 | `EMBEDDING_MODEL_ID` | `BAAI/bge-large-en-v1.5` | embedding | Any TEI-supported encoder |
 | `RERANKER_MODEL_ID` | `BAAI/bge-reranker-v2-m3` | reranker | Any TEI-supported cross-encoder |
 | `VLLM_LLM_MODEL_ID` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | vllm | Must support guided JSON (`response_format={"type":"json_object"}`) |
+| `VLLM_MODEL_ID` | _(empty)_ | chatqna, retriever, dataprep | Pin the LLM name and skip discovery. Empty = discover the served model at `/v1/models`; `LLM_MODEL` is no longer read. |
 | `MODEL_LLM_TIMEOUT_SECONDS` | `180` | dataprep, retriever | vLLM chat completions. Read by `core/model_http_policy.py`. On every shipped topology it is parsed but unused: its only consumer is the retriever's OpenAI-key probe, and no service is given `OPENAI_API_KEY`. |
 | `MODEL_LLM_MAX_RETRIES` | `2` | dataprep, retriever | SDK retries on 408/409/429/5xx and connection errors. `0` is honoured as a real value. Values above 10 are rejected. |
 | `MODEL_SUMMARIZER_TIMEOUT_SECONDS` | `600` | retriever | Document summarizer. A NEW ceiling, not the openai default kept. Not lowered: the call has no fallback, so its timeout becomes a 500 on the chat request. |

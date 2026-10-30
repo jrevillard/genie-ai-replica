@@ -19,7 +19,7 @@ from typing import Any
 import aiohttp
 from opentelemetry import propagate
 
-from core.model_cache import resolve_model_id
+from core.model_cache import get_max_model_len, resolve_model_id
 from core.model_http_policy import (
     AIOHTTP_CONNECT_TIMEOUT_SECONDS,
     CONTROL_PLANE_TIMEOUT_SECONDS,
@@ -499,11 +499,11 @@ DEGRADED_REMEDIES = {
         "be reachable and the model must support guided JSON (response_format=json_object)."
     ),
     DEGRADED_WINDOW_TOO_SMALL: (
-        "{phase}: VLLM_MAX_MODEL_LEN leaves no room for a document context once the system prompt, the "
-        "batch chunk text and the per-chunk output reservation are subtracted, so this document was "
-        "ingested without contexts. Raising a budget will not help — raise VLLM_MAX_MODEL_LEN, lower "
-        "DATAPREP_LLM_LABEL_BATCH_SIZE or DATAPREP_CONTEXTUAL_MAX_TOKENS, or pin "
-        "DATAPREP_CONTEXTUAL_DOC_BUDGET to a value you know fits."
+        "{phase}: the serving model's context window leaves no room for a document context once the "
+        "system prompt, the batch chunk text and the per-chunk output reservation are subtracted, so "
+        "this document was ingested without contexts. Raising a budget will not help — raise the "
+        "model window on the GPU (vLLM --max-model-len), lower DATAPREP_LLM_LABEL_BATCH_SIZE or "
+        "DATAPREP_CONTEXTUAL_MAX_TOKENS, or pin DATAPREP_CONTEXTUAL_DOC_BUDGET to a value you know fits."
     ),
 }
 
@@ -612,10 +612,11 @@ DATAPREP_CONTEXTUAL_MODEL = os.getenv("DATAPREP_CONTEXTUAL_MODEL", "")
 # the T4 profile's 2048-token window and then applied to EVERY deployment —
 # including the default, which runs a 65536-token window where it uses ~4% of
 # what is available. Wrong in both directions at once. It is now DERIVED from
-# the serving model's window (see _resolve_doc_budget), and this variable is
-# only an operator override:
+# the serving model's window, discovered at runtime from the LLM endpoint (see
+# _serving_model_window / _resolve_doc_budget), and this variable is only an
+# operator override:
 #
-#   unset / 0 -> derive from VLLM_MAX_MODEL_LEN
+#   unset / 0 -> derive from the discovered serving-model window
 #   > 0       -> explicit operator override
 #   < 0       -> explicitly disable truncation
 #
@@ -629,13 +630,15 @@ CHARS_PER_TOKEN = 4
 # {"index": i, "text": "..."} adds a key, quotes and escaping on top of the raw
 # chunk text. Measured generously; it only ever shrinks the derived budget.
 JSON_ITEM_OVERHEAD_CHARS = 64
-# When the model window is unknown, assume the SMALLEST profile we support.
-# A budget that only fits on hardware nobody runs fails closed; defaulting to
+# When window discovery has no answer (endpoint unreachable, or a strict
+# OpenAI-compatible provider that does not expose max_model_len), assume the
+# SMALLEST profile we support — and say so (see _serving_model_window). A
+# budget that only fits on hardware nobody runs fails closed; defaulting to
 # the largest window would silently produce prompts the GPU cannot accept.
 DERIVE_FALLBACK_WINDOW = 2048
 # Doc-context budget for the doc_level strategy (ONE call, so it can afford a
 # much larger window than per_chunk). ~4 chars/token; keep below the model's
-# VLLM_MAX_MODEL_LEN minus prompt/output overhead. Docs larger than this (or the
+# context window minus prompt/output overhead. Docs larger than this (or the
 # model window) are truncated — Map-Reduce hierarchical summarization is the
 # future fix for that case.
 DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL = int(os.getenv("DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL", "100000"))
@@ -762,6 +765,39 @@ def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
     )
     model = resolve_model_id(_vllm_endpoint)
     return client, model
+
+
+def _serving_model_window() -> int:
+    """The serving model's context window in tokens, discovered at runtime.
+
+    Issue #1182: this window used to be read from the VLLM_MAX_MODEL_LEN env —
+    the vLLM-side memory knob (``--max-model-len`` in compose) — with a silent
+    2048 fallback when it did not reach the container. The env is a static copy
+    of what vLLM was configured with, not what it serves: raise the window on
+    the GPU node and the copy goes stale in every direction at once. The
+    endpoint is the source of truth. Discovery probes VLLM_ENDPOINT (the same
+    endpoint labeling and context generation talk to), TTL-cached and sharing
+    the probe with model-id detection (core/model_cache.py) — the same pattern
+    as chatqna's _get_max_model_len.
+
+    Fails closed to DERIVE_FALLBACK_WINDOW (the smallest supported profile)
+    when discovery has no answer — and loudly: the probe failure itself is
+    already logged by core.model_cache; this adds the consequence and the
+    remedy, so a silently T4-sized budget on a 65536-token deployment cannot
+    go unnoticed again.
+    """
+    endpoint = os.getenv("VLLM_ENDPOINT", "")
+    window = get_max_model_len(endpoint)
+    if window:
+        return window
+    logger.warning(
+        f"Contextual Retrieval: no model window discovered at VLLM_ENDPOINT={endpoint or '<unset>'}; "
+        f"deriving document-context budgets from the fail-closed fallback of {DERIVE_FALLBACK_WINDOW} "
+        f"tokens (the smallest profile we support) — larger documents get their context truncated to "
+        f"that budget. Make the endpoint answer the /v1/models probe (failures logged by "
+        f"core.model_cache) or set DATAPREP_CONTEXTUAL_DOC_BUDGET explicitly."
+    )
+    return DERIVE_FALLBACK_WINDOW
 
 
 async def ensure_vector_index(
@@ -2438,14 +2474,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         back to raw chunks. ``source`` is one of:
 
             "override"        operator set DATAPREP_CONTEXTUAL_DOC_BUDGET
-            "derived"         computed from VLLM_MAX_MODEL_LEN
+            "derived"         computed from the discovered serving-model window
             "disabled"        operator set a negative budget
             "window-exhausted" the model window cannot fit any context
 
         The prompt the context LLM receives is the system prompt + the document
         context + the batch's chunk text, and the response reserves
         DATAPREP_CONTEXTUAL_MAX_TOKENS. Only the middle term is ours to size,
-        so everything else is subtracted from VLLM_MAX_MODEL_LEN.
+        so everything else is subtracted from the serving model's window
+        (runtime discovery — _serving_model_window).
 
         The batch term is measured from the REAL chunks rather than from the
         DATAPREP_CHUNK_SIZE_* vars: those are resolved per file extension
@@ -2458,7 +2495,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         if configured > 0:
             return configured, "override"
 
-        window = int(os.getenv("VLLM_MAX_MODEL_LEN", "") or DERIVE_FALLBACK_WINDOW)
+        window = _serving_model_window()
         prompt_tokens = -(-len(CONTEXTUAL_RETRIEVAL_PROMPT) // CHARS_PER_TOKEN)
         largest = sorted((len(c) for c in chunks), reverse=True)[:LABEL_LLM_BATCH_SIZE]
         # The user turn is json.dumps([{"index": i, "text": t}, ...]) — the raw
@@ -2479,12 +2516,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # not truncate", i.e. send the whole document, which is precisely
             # what would overflow. Skip contextualization for this document.
             logger.error(
-                f"Contextual Retrieval: VLLM_MAX_MODEL_LEN={window} leaves no room for a document "
-                f"context (system prompt {prompt_tokens} + batch text {batch_tokens} + output "
-                f"{output_tokens} tokens). Using raw chunks for this document; lower "
+                f"Contextual Retrieval: the {window}-token serving-model window leaves no room for "
+                f"a document context (system prompt {prompt_tokens} + batch text {batch_tokens} + "
+                f"output {output_tokens} tokens). Using raw chunks for this document; lower "
                 f"DATAPREP_LLM_LABEL_BATCH_SIZE (currently {LABEL_LLM_BATCH_SIZE}) or "
-                f"DATAPREP_CONTEXTUAL_MAX_TOKENS (currently {CONTEXTUAL_MAX_TOKENS}), or raise "
-                f"VLLM_MAX_MODEL_LEN."
+                f"DATAPREP_CONTEXTUAL_MAX_TOKENS (currently {CONTEXTUAL_MAX_TOKENS}), or serve a "
+                f"larger window (vLLM --max-model-len)."
             )
             return None, "window-exhausted"
         return usable * CHARS_PER_TOKEN, "derived"
@@ -2593,8 +2630,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         f"{truncation['total']} chars ({truncation['pct']}%, budget {label}/{source}) "
                         f"across {truncation['chunks']} chunks. Deep chunks get a weaker "
                         f"document context, which degrades their embedding and the "
-                        f"graph extraction. Raise DATAPREP_CONTEXTUAL_DOC_BUDGET (or "
-                        f"VLLM_MAX_MODEL_LEN) if the model window allows, or split the "
+                        f"graph extraction. Raise DATAPREP_CONTEXTUAL_DOC_BUDGET or the model "
+                        f"window on the GPU (vLLM --max-model-len) if it allows, or split the "
                         f"document during curation."
                     ),
                 )

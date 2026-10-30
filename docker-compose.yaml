@@ -769,8 +769,10 @@ services:
       # Contextual Retrieval document context is truncated to the same budget),
       # so imports split such a document rather than storing it degraded.
       # The default is sized for the 65536-token compose window (~250k chars);
-      # it must track VLLM_MAX_MODEL_LEN, which dataprep derives the matching
-      # budget from. AC8 in tests/config-validator keeps the two in step.
+      # it must track the serving model's window (VLLM_MAX_MODEL_LEN below),
+      # which dataprep derives the matching budget from at runtime (discovered
+      # at VLLM_ENDPOINT, see genieai_dataprep_arangodb.py). AC8 in
+      # tests/config-validator keeps the two in step.
       - OKF_MAX_CONCEPT_DOC_CHARS=${OKF_MAX_CONCEPT_DOC_CHARS:-250000}
       # Lane cool-down after a dataprep 429 (slot busy): without it a saturated
       # queue hot-loops at ~1 claim/sec (incident 2026-09-28 — 434 rows bouncing
@@ -1788,10 +1790,6 @@ services:
       # default 65536-token one where it used ~4% of the available window.
       DATAPREP_CONTEXTUAL_DOC_BUDGET: ${DATAPREP_CONTEXTUAL_DOC_BUDGET:-0}
       DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL: ${DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL:-100000}
-      # Read by dataprep to size the doc-context budget above. Only the vLLM
-      # service's command interpolation used this before, so dataprep could not
-      # derive anything and every profile inherited the fixed literal.
-      VLLM_MAX_MODEL_LEN: ${VLLM_MAX_MODEL_LEN:-65536}
       DATAPREP_CONTEXTUAL_MAX_TOKENS: ${DATAPREP_CONTEXTUAL_MAX_TOKENS:-512}
       CONTEXTUAL_RETRIEVAL_PROMPT: ${CONTEXTUAL_RETRIEVAL_PROMPT:-}
       # Log level threshold for the OTel Python LoggingHandler installed in

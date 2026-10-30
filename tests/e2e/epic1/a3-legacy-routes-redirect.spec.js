@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
 // Test A.3 — Legacy Routes Redirect
 // Verifies that legacy auth routes (/login, /register, /forgot-password)
@@ -16,7 +17,7 @@ for (const path of LEGACY_ROUTES) {
     });
     const page = await context.newPage();
 
-    await page.goto(`https://localhost${path}`, {
+    await page.goto(`${BASE_URL}${path}`, {
       waitUntil: 'networkidle',
       timeout: 30000,
     });
@@ -28,8 +29,8 @@ for (const path of LEGACY_ROUTES) {
         return (
           urlStr.includes('/auth/realms/genie/') ||
           urlStr.includes('dashboard') ||
-          urlStr === 'https://localhost/' ||
-          urlStr === 'https://localhost'
+          urlStr === `${BASE_URL}/` ||
+          urlStr === `${BASE_URL}`
         );
       },
       { timeout: 15000 },
@@ -41,7 +42,7 @@ for (const path of LEGACY_ROUTES) {
     // as pages, so the OIDC layer should trigger a redirect to Keycloak.
     // Verify the app does not crash and we end up on a valid page.
     const redirectedToKeycloak = currentUrl.includes('/auth/realms/genie/');
-    const onAppRoot = currentUrl === 'https://localhost/' || currentUrl === 'https://localhost';
+    const onAppRoot = currentUrl === `${BASE_URL}/` || currentUrl === `${BASE_URL}`;
     const onDashboard = currentUrl.includes('dashboard');
 
     // At minimum, the app must not crash. Acceptable outcomes:

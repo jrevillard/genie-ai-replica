@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
 // Test A.1 — Redirect to Keycloak
 // Verifies that navigating to the app root redirects to the Keycloak login page.
@@ -11,7 +12,7 @@ test('redirects to Keycloak login page when accessing app root', async ({ browse
   });
   const page = await context.newPage();
 
-  await page.goto('https://localhost/', {
+  await page.goto(`${BASE_URL}/`, {
     waitUntil: 'networkidle',
     timeout: 30000,
   });

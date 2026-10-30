@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
 // Test A.2 — Full Login Flow
 // Complete login flow: navigate to app, get redirected to Keycloak,
@@ -13,7 +14,7 @@ test('completes full login flow from app to Keycloak and back', async ({ browser
   const page = await context.newPage();
 
   // Step 1: Navigate to app root — should redirect to Keycloak
-  await page.goto('https://localhost/', {
+  await page.goto(`${BASE_URL}/`, {
     waitUntil: 'networkidle',
     timeout: 30000,
   });
@@ -36,7 +37,7 @@ test('completes full login flow from app to Keycloak and back', async ({ browser
   await page.click('#kc-login');
 
   // Step 4: Wait for redirect back to the app
-  await page.waitForURL('https://localhost/**', {
+  await page.waitForURL(`${BASE_URL}/**`, {
     timeout: 30000,
   });
 
@@ -44,7 +45,7 @@ test('completes full login flow from app to Keycloak and back', async ({ browser
   await page.waitForURL(
     (url) => {
       const urlStr = url.toString();
-      return urlStr.includes('dashboard') || urlStr === 'https://localhost/';
+      return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
     },
     { timeout: 30000 },
   );

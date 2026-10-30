@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
 // Test D.7b — Full External IdP Login Flow
 // Prerequisite: Phase D Steps 1-5 in epic1-keycloak-foundation.md
@@ -13,7 +14,7 @@ const { test, expect } = require('@playwright/test');
  * redirect chain to settle.
  */
 async function brokerLogin(page) {
-  await page.goto('https://localhost/', { waitUntil: 'networkidle', timeout: 30000 });
+  await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 30000 });
   await page.waitForURL('**/protocol/openid-connect/auth**', { timeout: 15000 });
   await page.locator('#social-external-idp').click({ timeout: 10000 });
 
@@ -41,7 +42,7 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
 
   // Get admin token for realm configuration changes
   const adminTokenRes = await apiContext.post(
-    'https://localhost/auth/realms/master/protocol/openid-connect/token',
+    `${BASE_URL}/auth/realms/master/protocol/openid-connect/token`,
     {
       data: new URLSearchParams({
         client_id: 'admin-cli',
@@ -63,7 +64,7 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
     // email" page that blocks the broker flow. We disable the required action for the
     // duration of this test. It will be restored by keycloak-config-cli on next deploy.
     await apiContext.put(
-      'https://localhost/auth/admin/realms/genie/authentication/required-actions/VERIFY_EMAIL',
+      `${BASE_URL}/auth/admin/realms/genie/authentication/required-actions/VERIFY_EMAIL`,
       { headers: authHeaders, data: { enabled: false }, ignoreHTTPSErrors: true },
     );
 
@@ -116,7 +117,7 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
       // Note: Keycloak 26 removes (unregisters) the action when disabled.
       // It will be fully restored by keycloak-config-cli on next deploy.
       await apiContext.put(
-        'https://localhost/auth/admin/realms/genie/authentication/required-actions/VERIFY_EMAIL',
+        `${BASE_URL}/auth/admin/realms/genie/authentication/required-actions/VERIFY_EMAIL`,
         { headers: authHeaders, data: { enabled: true }, ignoreHTTPSErrors: true },
       ).catch(() => {});
     }

@@ -20,8 +20,8 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
 const { loginViaUI } = require('./helpers/chatbot');
-
 const BASE_URL = process.env.BASE_URL || 'https://localhost';
+
 const OUT_DIR = path.join(__dirname, '..', '..', 'artifacts', 'living-intelligence');
 // Four viewports: 1775×886 is the reference and 1920×960 is what the user
 // sees in production, so the welcome banner's full-bleed is proven at both;

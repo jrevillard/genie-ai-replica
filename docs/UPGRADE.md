@@ -73,12 +73,17 @@ need no change.
 
 `POST /api/service-categories/init` and `GET /api/analytics` answered 500 on
 every call — they wired to service methods removed in earlier refactors —
-and no first-party client called either.
+and no first-party client called either. (On the analytics route a malformed
+`filters` parameter was the one exception: it was rejected with 400 before
+the service was reached.)
 
 **Migration**: none for first-party clients. Seed the taxonomy from the
 Knowledge Hierarchy tab of the Admin Dashboard (or
-`components/gov-chat-backend/scripts/new-schema-scripts/create-knowledge-hierarchy.js`);
-read `GET /api/analytics/dashboard` instead of the removed route.
+`components/gov-chat-backend/scripts/new-schema-scripts/create-knowledge-hierarchy.js`
+— turn the ArangoDB schema validation off for `serviceCategories`,
+`services` and `categoryServices` before running the script, and back on
+afterwards); read `GET /api/analytics/dashboard` instead of the removed
+route.
 
 #### Service-category translation field names
 
@@ -159,7 +164,9 @@ An operator who relied on `LOG_TO_FILE` file rotation must re-add the
 ### Non-Breaking Changes Worth Noting
 
 - vLLM bumped 0.10 → 0.29 on both GPU images (CUDA crash-loop fix);
-  `--max_num_seqs` default 64 → 16.
+  `--max_num_seqs` default 64 → 16, and the `env.t4` / `env.rtx6000`
+  templates now ship 16 too — if your own vars pin `VLLM_MAX_NUM_SEQS`
+  higher, 16 is the validated value on the shared RTX 6000 Ada.
 - LLM call budgets are unified under the `MODEL_*` env knobs (LLM default
   180 s). Documents whose labelling exceeds the new phase ceiling land as
   `Ingested with Warnings` — raise `MODEL_LLM_TIMEOUT_SECONDS` and

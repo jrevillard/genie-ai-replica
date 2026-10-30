@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
 // Test L.3 — Vuex Auth State Cleared on Logout
 // Login, verify isAuthenticated is true, trigger logout, verify state is cleared.
@@ -13,7 +14,7 @@ test('clears Vuex auth state after logout', async ({ browser }) => {
   const page = await context.newPage();
 
   // Step 1: Navigate to app root — should redirect to Keycloak
-  await page.goto('https://localhost/', {
+  await page.goto(`${BASE_URL}/`, {
     waitUntil: 'networkidle',
     timeout: 30000,
   });
@@ -31,7 +32,7 @@ test('clears Vuex auth state after logout', async ({ browser }) => {
   await page.waitForURL(
     (url) => {
       const urlStr = url.toString();
-      return urlStr.includes('dashboard') || urlStr === 'https://localhost/';
+      return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
     },
     { timeout: 30000 },
   );
@@ -95,7 +96,7 @@ test('clears Vuex auth state after logout', async ({ browser }) => {
   // Step 7: Navigate back to app to verify Vuex state is cleared
   // After Keycloak processes logout, navigate back to check that a fresh
   // Vue instance starts with cleared state.
-  await page.goto('https://localhost/', {
+  await page.goto(`${BASE_URL}/`, {
     waitUntil: 'networkidle',
     timeout: 30000,
   });

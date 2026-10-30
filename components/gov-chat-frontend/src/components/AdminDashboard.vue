@@ -2104,7 +2104,9 @@ export default {
         return { visible: false, reasonKey: 'okf.docs.gate.emptySelection', warnKey: null };
       }
       const selectedKeys = new Set(this.selectedDocuments);
-      const selectedDocObjects = this.documents.filter((doc) => selectedKeys.has(doc._key));
+      // selectedDocuments holds file_id's (the checkbox binds :value="doc.file_id")
+      // — matching on the Arango _key never matches (review !622 wave 2, #78639).
+      const selectedDocObjects = this.documents.filter((doc) => selectedKeys.has(doc.file_id));
       const alreadyOkf = selectedDocObjects.filter((doc) => doc.okf_repo_id);
       if (alreadyOkf.length > 0) {
         return { visible: false, reasonKey: 'okf.docs.gate.alreadyInOkf', warnKey: null };
@@ -3646,10 +3648,13 @@ export default {
      */
     async onCreateOkfRepoFromSelection() {
       if (!this.okfRepoGate.visible) return;
+      // file_id, not the Arango _key — the selection holds file_id's and the
+      // studio's Produce leg routes conversions by file_id (review !622 wave 2,
+      // #78640: matching/mapping _key silently emptied the wizard's draft).
       const keys = new Set(this.selectedDocuments);
-      const docs = this.documents.filter((doc) => keys.has(doc._key));
+      const docs = this.documents.filter((doc) => keys.has(doc.file_id));
       this.$store.commit('okf/setSelection', {
-        documents: docs.map((d) => ({ file_id: d._key, file_name: d.file_name }))
+        documents: docs.map((d) => ({ file_id: d.file_id, file_name: d.file_name }))
       });
       this.selectedDocuments = [];
       this.activeTab = 'studio';
@@ -3664,7 +3669,13 @@ export default {
      * details view used from the documents list. */
     applyRouteQuery(q) {
       if (!q) return;
-      if (q.tab) this.activeTab = q.tab;
+      // Deep links may only land on tabs this deployment actually offers —
+      // adminTabs is the flag-filtered rack, so a parked OKF flag also blocks
+      // ?tab=studio / ?tab=models from reopening the OKF panes (review !622
+      // wave 2, #78641: the raw assignment bypassed the flag entirely).
+      if (q.tab && this.adminTabs.some((t) => t.value === q.tab)) {
+        this.activeTab = q.tab;
+      }
       if (q.tab === 'documents' && q.file) {
         this.selectedFileId = q.file;
         this.showDetailsDialog = true;

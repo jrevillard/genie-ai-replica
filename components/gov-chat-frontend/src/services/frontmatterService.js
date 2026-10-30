@@ -88,29 +88,6 @@ export async function getFrontmatter(repoId) {
   return { repo_id: repoId, frontmatter: rows };
 }
 
-// Retained for migration-window compatibility (the operator
-// republish-with-tags script + the wizard's auto-suggest may still
-// call it). Reads come through the repo doc; the response shape is
-// unchanged for back-compat.
-export async function getFrontmatterSummary(repoId) {
-  const res = await httpService.get(repoUrl(repoId));
-  const repo = (res && res.data && res.data.data) || res.data || res;
-  const fm = repo && repo.frontmatter;
-  if (!fm) return null;
-  return {
-    _key: repoId,
-    topic_count: Array.isArray(fm.topic) ? fm.topic.length : 0,
-    entity_count: Array.isArray(fm.entity) ? fm.entity.length : 0,
-    keyword_count: Array.isArray(fm.keyword) ? fm.keyword.length : 0,
-    forbidden_count: Array.isArray(fm.forbidden) ? fm.forbidden.length : 0,
-    summary: fm.summary || '',
-    scope: fm.scope || '',
-    version: fm.version,
-    updated_at: fm.updated_at,
-    updated_by: fm.updated_by
-  };
-}
-
 /**
  * Trigger LLM auto-suggestion. Returns { repo_id, suggested: {topic, entity, scope,
  * forbidden, summary, keyword}, validation: { validated, inconsistencies } }.

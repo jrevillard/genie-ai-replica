@@ -2146,8 +2146,13 @@ describe('AdminDashboard', () => {
   // selections and documents already sourced by ANOTHER OKF repo refuse.
   // -----------------------------------------------------------------------
   describe('okfRepoGate (Story 7.7 amendment)', () => {
-    const doc = (_key, status, okf_repo_id = null) => ({
-      _key,
+    // Real documents carry a numeric-ish Arango _key DISTINCT from file_id —
+    // the selection holds file_id's (checkbox :value), so the gate must match
+    // on file_id. The distinct _key is deliberate: it turns a regression back
+    // to _key-matching red (review !622 wave 2, #78639).
+    const doc = (fileId, status, okf_repo_id = null) => ({
+      _key: 'arango-' + fileId,
+      file_id: fileId,
       okf_repo_id,
       dataprep: { status }
     });
@@ -2199,6 +2204,43 @@ describe('AdminDashboard', () => {
       // survives to the .replace the computed applies.
       wrapper.vm.translate = (key) => (key === 'okf.docs.gate.servingWarn' ? '{n} docs still serve' : key);
       expect(wrapper.vm.okfGateTitle).toBe('1 docs still serve');
+    });
+
+    it('onCreateOkfRepoFromSelection maps the pick by file_id, never the Arango _key (#78640)', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      await wrapper.setData({
+        documents: [
+          { _key: '101', file_id: 'f-101', file_name: 'a.pdf', dataprep: { status: 'Pending' } },
+          { _key: '102', file_id: 'f-102', file_name: 'b.pdf', dataprep: { status: 'Pending' } }
+        ],
+        selectedDocuments: ['f-101']
+      });
+      // Spy on the REAL store — replacing $store would break the studio tab's
+      // mounted() dispatch when the tab flip mounts it. The slim test store
+      // has no okf module; register a stub so StudioDashboard's mounted()
+      // fetchRepos resolves instead of throwing.
+      wrapper.vm.$store.registerModule('okf', {
+        namespaced: true,
+        actions: { fetchRepos: () => Promise.resolve({ ok: true }) }
+      });
+      const commit = jest.spyOn(wrapper.vm.$store, 'commit');
+      await wrapper.vm.onCreateOkfRepoFromSelection();
+      expect(commit).toHaveBeenCalledWith('okf/setSelection', {
+        documents: [{ file_id: 'f-101', file_name: 'a.pdf' }]
+      });
+    });
+
+    it('?tab=studio cannot bypass a parked OKF flag; legitimate tabs still deep-link (#78641)', async () => {
+      window.APP_CONFIG = { okfEnabled: '0' };
+      try {
+        const wrapper = createAdminDashboardWrapper({}, {}, { QueryInspector: true });
+        await wrapper.vm.applyRouteQuery({ tab: 'studio' });
+        expect(wrapper.vm.activeTab).not.toBe('studio');
+        await wrapper.vm.applyRouteQuery({ tab: 'documents' });
+        expect(wrapper.vm.activeTab).toBe('documents');
+      } finally {
+        delete window.APP_CONFIG;
+      }
     });
   });
 

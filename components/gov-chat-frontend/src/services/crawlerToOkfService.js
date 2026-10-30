@@ -22,10 +22,6 @@
 
 import httpService from './httpService';
 
-/** Max create attempts when the slugified name collides — the server does
- * the authoritative retry; this is only the slug derivation it is fed. */
-export const MAX_NAME_ATTEMPTS = 10;
-
 /**
  * Slugify a URL or filename into a valid repo name (mirrors the okf-server
  * slug rules: lowercase, non-alphanumerics → '-', trim, ≤200 chars).

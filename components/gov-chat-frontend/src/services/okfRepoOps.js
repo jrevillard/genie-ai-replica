@@ -285,40 +285,11 @@ export function isRedraining(repo) {
 }
 
 // ─── Lifecycle (David, 2026-08-28) ───────────────────────────────────────────
-// The full publish lifecycle is shared by BOTH UI approaches (wizard Step 9
-// and the editor shell / dashboard cards) via these thin wrappers — one
-// implementation, equal features.
-
-/** draft/register/validate → review. */
-export function submitForReview(repoId, actor = {}) {
-  return repoOkfService.lifecycle(repoId, 'submit', actor);
-}
-
-/** review → approve. */
-export function approve(repoId, actor = {}) {
-  return repoOkfService.lifecycle(repoId, 'approve', actor);
-}
-
-/**
- * approve|publish → publish: mints the next version (the server's publish
- * gates run: PII-complete, all-indexed, conformance-clean) and exports the
- * bundle zip `<name>-v<N>.zip` to the document repository. The previous
- * version's zip is superseded (deleted); history stays in the version ledger.
- * The new version is NOT serving until ingest() is called.
- */
-export function publish(repoId, actor = {}) {
-  return repoOkfService.lifecycle(repoId, 'publish', actor);
-}
-
-/** publish → serving: declares the current version ingested (the Ingested lane). */
-export function ingest(repoId, actor = {}) {
-  return repoOkfService.lifecycle(repoId, 'ingest', actor);
-}
-
-/** publish → not serving: retract the ingested version (Ingested → Published). */
-export function retract(repoId, actor = {}) {
-  return repoOkfService.lifecycle(repoId, 'retract', actor);
-}
+// Lifecycle transitions go through the store's okfRepoOps.lifecycle()
+// (store/modules/okf.js) — the single transition surface. Six thin wrappers
+// that duplicated it per-action were removed as dead code (review !622
+// wave 2, #78695: zero non-test callers, and the publish wrapper's docstring
+// still described the retired supersede model).
 
 /** Delete the whole repository (refused while an ingested version serves). */
 export function deleteRepo(repoId) {
@@ -411,11 +382,6 @@ export async function importZipIntoRepo({ repoId, file, classification }) {
   });
 }
 
-/** Mint the next version WITHOUT publishing (manual trigger). */
-export function createVersion(repoId, actor = {}) {
-  return repoOkfService.mintVersion(repoId, { trigger: 'manual' }, actor);
-}
-
 /**
  * Human-readable, ACTIONABLE text for lifecycle gate failures (David,
  * 2026-08-30: "retry after the worker drains" is not a user-facing sentence).
@@ -471,14 +437,8 @@ export default {
   applyLabel,
   deleteConcept,
   createRepo,
-  submitForReview,
-  approve,
-  publish,
-  ingest,
-  retract,
   deleteRepo,
   listVersions,
-  createVersion,
   lifecycle,
   exportRepoZip,
   importRepoZip,

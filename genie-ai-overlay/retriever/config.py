@@ -267,7 +267,10 @@ HYBRID_BM25_ANALYZER = os.getenv("RETRIEVER_HYBRID_BM25_ANALYZER", "text_en")
 # ARANGO_GRAPH_NAME) — a single-graph okf_only carrier is deliberately
 # fan-out-managed.
 # The chat-side resolver sets per-request overrides via kwargs (Story 1.2).
-# Defaults preserve legacy behavior — fan-out is opt-in via RETRIEVER_FANOUT_ENABLED.
+# SHIPPED POSTURE (comment corrected — review !622 wave 2, #78690): fan-out
+# and the routing head are ON by default (RETRIEVER_FANOUT_ENABLED defaults
+# "true"). Rollback knobs: RETRIEVER_FANOUT_ENABLED=false disables the
+# multi-graph fan-out; ROUTE_HEAD_WEIGHT=0.0 zeroes the routing head's share.
 FANOUT_ENABLED = os.getenv("RETRIEVER_FANOUT_ENABLED", "true").lower() == "true"
 FANOUT_MAX_GRAPHS = int(os.getenv("RETRIEVER_FANOUT_MAX_GRAPHS", "5"))
 # 8000ms (was 2000): with legs now running on worker threads the timeout is

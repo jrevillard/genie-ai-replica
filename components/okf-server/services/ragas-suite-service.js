@@ -718,10 +718,13 @@ const SERVE_URL = () => process.env.OKF_RAGAS_SERVE_URL || 'http://chatqna-xeon-
 // Decode one Python-repr token chunk (data: b'...') — the same rules the
 // backend's parseChatQnASSELine applies: hex escapes, \n/\t/\r, quote
 // unescaping, control-char strip. Order matters: \\ before \x.
+// The backslash-sentinel regex is hoisted (review !622 wave 2, #78669): it
+// used to be compiled per streamed SSE line — thousands per run row. Safe to
+// share: String.replace with a global regex resets lastIndex per call.
+const BS_RESTORE_RE = new RegExp('\x00BS\x00', 'g');
 function decodePyRepr(content, quote) {
-  const BS = '\x00BS\x00';
   const out = content
-    .replace(/\\\\/g, BS)
+    .replace(/\\\\/g, '\x00BS\x00')
     .replace(/(?:\\x([0-9a-fA-F]{2}))+/g, (m) => {
       const hex = m.replace(/\\x/g, '');
       return Buffer.from(hex, 'hex').toString('utf8');
@@ -735,7 +738,7 @@ function decodePyRepr(content, quote) {
   // eats them and leaves literal 'BS' in the answer (the exact order the
   // backend's parseChatQnASSELine applies; drifted in review 2026-10-23).
   // eslint-disable-next-line no-control-regex -- mirror the backend's strip
-  return out.replace(new RegExp(BS, 'g'), '\\').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+  return out.replace(BS_RESTORE_RE, '\\').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
 }
 
 // Bounded like every sibling leg (rerank 30s abort, teiEmbed 30s, vllm 60s+):

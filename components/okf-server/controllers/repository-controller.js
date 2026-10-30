@@ -46,11 +46,10 @@ class ValidationError extends Error {
   }
 }
 
-/** Extract the acting principal + request IP for audit/metadata. */
-function actorFrom(req) {
-  const u = req.user || {};
-  return { sub: u.sub, name: u.name || u.preferred_username, source_ip: req.ip };
-}
+/** Extract the acting principal + request IP for audit/metadata — the shared
+ * helper (controllers/actor-from.js); the local byte-identical copy was the
+ * exact duplication that file exists to prevent (review !622 wave 2, #78671). */
+const { actorFrom } = require('./actor-from');
 
 /**
  * Default-deny authorization context (Story 6.1 — replaces the no-op

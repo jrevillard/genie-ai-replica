@@ -162,6 +162,8 @@ describe('WS2: Bundle zip delete protection', () => {
   });
 
   describe('DELETE /api/files/:fileId (okf-service caller)', () => {
+    let protectedDb;
+
     beforeEach(() => {
       mockOkfServiceAuth();
       jest.doMock('../../services/fileService', () => ({
@@ -180,6 +182,12 @@ describe('WS2: Bundle zip delete protection', () => {
         addIngestionLog: jest.fn(),
         getIngestionLogs: jest.fn()
       }));
+      // The guard must actually RUN for the bypass to mean anything
+      // (review !622 wave 2 / #78685: with the connection unprogrammed the
+      // old fail-open catch answered [] and the test proved the mock).
+      const { dbService } = require('../../../shared-lib');
+      protectedDb = makeProtectedDb(['bundle2']);
+      dbService.getConnection.mockResolvedValue(protectedDb);
       app = require('../../app');
     });
 
@@ -190,6 +198,50 @@ describe('WS2: Bundle zip delete protection', () => {
     test('okf-service caller deleting a bundle → 200 (protection does NOT block)', async () => {
       const res = await request(app).delete('/api/files/bundle2');
       expect(res.status).toBe(200);
+      // the guard really evaluated and found the id protected
+      expect(protectedDb.query).toHaveBeenCalledWith(expect.stringContaining('is_bundle == true'), {
+        ids: ['bundle2']
+      });
+    });
+  });
+
+  describe('DELETE /api/files/:fileId with a failing guard lookup (Admin caller)', () => {
+    beforeEach(() => {
+      mockAdminAuth();
+      jest.doMock('../../services/fileService', () => ({
+        uploadFile: jest.fn(),
+        uploadLink: jest.fn(),
+        getFiles: jest.fn(),
+        deleteFile: jest.fn().mockResolvedValue(true),
+        searchFiles: jest.fn(),
+        getFileStats: jest.fn(),
+        getDb: jest.fn(),
+        scheduleSiteCrawl: jest.fn(),
+        getCrawlJobByFileId: jest.fn(),
+        getCrawlMetrics: jest.fn(),
+        getCrawlLogs: jest.fn(),
+        killCrawlTask: jest.fn(),
+        addIngestionLog: jest.fn(),
+        getIngestionLogs: jest.fn()
+      }));
+      // The guard CANNOT evaluate (transient Arango outage) — the delete must
+      // be REFUSED, not waved through on the empty-set answer (fail-closed,
+      // review !622 wave 2 / #78677).
+      const { dbService } = require('../../../shared-lib');
+      dbService.getConnection.mockRejectedValue(new Error('arango down'));
+      app = require('../../app');
+    });
+
+    afterEach(() => {
+      jest.resetModules();
+    });
+
+    test('guard lookup failure → 503 BUNDLE_GUARD_UNAVAILABLE, file untouched', async () => {
+      const res = await request(app).delete('/api/files/some-doc');
+      expect(res.status).toBe(503);
+      expect(res.body.code).toBe('BUNDLE_GUARD_UNAVAILABLE');
+      const { fileService } = require('../../services/fileService');
+      expect(fileService.deleteFile).not.toHaveBeenCalled();
     });
   });
 

@@ -641,16 +641,31 @@ async function transition(repoId, action, actor, opts = {}) {
         versionService.fingerprintOfCurrentVersion(repoId)
       ]);
       if (currentFingerprint && currentFingerprint === liveFingerprint) {
-        logger.info('[OKF-PUBLISH] step=noop (content unchanged)', {
+        // Review !622 wave 2 (#78657): a publish that died BETWEEN mint and
+        // export leaves the fingerprint recorded on the minted version with
+        // no bundle artifact in the doc-repo. Treating that state as "no
+        // changes" deadlocked the retry — every re-publish answered 409 and
+        // the version never got its zip. The refusal is only true when the
+        // current version actually HAS its bundle; otherwise this call IS
+        // the retry — fall through and let the export run.
+        const currentHasBundle = (repo.bundles || []).some((b) => b && b.bundle_version === repo.version && b.file_id);
+        if (currentHasBundle) {
+          logger.info('[OKF-PUBLISH] step=noop (content unchanged)', {
+            repo_id: repoId,
+            version: repo.version
+          });
+          throw new LifecycleError(
+            'PUBLISH_NO_CHANGES',
+            `nothing has changed since version ${repo.version} — edit or annotate a concept first, ` +
+              'or retract and publish again to force a new version',
+            409
+          );
+        }
+        logger.warn('[OKF-PUBLISH] step=noop-guard bypassed (interrupted publish)', {
           repo_id: repoId,
-          version: repo.version
+          version: repo.version,
+          reason: 'fingerprint matches but the version has no bundle artifact — completing the interrupted publish'
         });
-        throw new LifecycleError(
-          'PUBLISH_NO_CHANGES',
-          `nothing has changed since version ${repo.version} — edit or annotate a concept first, ` +
-            'or retract and publish again to force a new version',
-          409
-        );
       }
       // An empty repo must not publish — the mint would snapshot zero concepts.
       logger.info('[OKF-PUBLISH] step=counting concepts', { repo_id: repoId });

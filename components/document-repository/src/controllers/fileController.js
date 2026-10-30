@@ -95,19 +95,28 @@ const isOkfServiceCaller = (req) => {
 
 // DW-426 (review 2026-10-29 round 3): ONE IN-list AQL replaces the per-file
 // getMetadataById loop (~N round-trips → 1).
+// Review !622 wave 2 (#78677): this guard now FAILS CLOSED — a failed lookup
+// throws, and the callers refuse the delete with 503 BUNDLE_GUARD_UNAVAILABLE.
+// "Not bundle-protected" is a claim that needs evidence; answering [] on a
+// transient Arango outage silently skipped the WS2 protection during exactly
+// the incident class it was built for.
 const bundleProtectedIds = async (fileIds) => {
-  try {
-    const db = await dbService.getConnection('files');
-    const cursor = await db.query('FOR f IN files FILTER f.file_id IN @ids AND f.is_bundle == true RETURN f.file_id', {
-      ids: fileIds
-    });
-    return await cursor.all();
-  } catch {
-    // metadata lookup failed — degrade to "no protected ids" exactly as the
-    // per-file loop did (the delete path itself surfaces any actual error
-    // from the deletion)
-    return [];
-  }
+  const db = await dbService.getConnection('files');
+  const cursor = await db.query('FOR f IN files FILTER f.file_id IN @ids AND f.is_bundle == true RETURN f.file_id', {
+    ids: fileIds
+  });
+  return await cursor.all();
+};
+
+// Shared refusal for the fail-closed guard: the protection could not be
+// evaluated, so the destructive mutation does not proceed.
+const bundleGuardUnavailable = (res, error) => {
+  logger.error('Bundle-protection lookup failed — refusing delete (fail-closed)', error);
+  return res.status(503).json({
+    success: false,
+    code: 'BUNDLE_GUARD_UNAVAILABLE',
+    error: 'Cannot confirm bundle protection right now — delete refused. Retry when the database is reachable.'
+  });
 };
 
 // Schema for file upload validation
@@ -762,7 +771,13 @@ class FileController {
       // delete them; every other caller gets an explicit 403 with
       // code=BUNDLE_PROTECTED so the UI can hide the action entirely.
       if (!isOkfServiceCaller(req)) {
-        const [protectedId] = await bundleProtectedIds([fileId]);
+        let protectedIds;
+        try {
+          protectedIds = await bundleProtectedIds([fileId]);
+        } catch (guardError) {
+          return bundleGuardUnavailable(res, guardError);
+        }
+        const [protectedId] = protectedIds;
         if (protectedId) {
           return res.status(403).json({
             success: false,
@@ -791,8 +806,11 @@ class FileController {
 
       // Kill-before-delete in progress or unconfirmed within the wait window —
       // the file is untouched; the client should retry shortly. Code per the
-      // kill-first contract ruling (#992).
-      if (error.message.includes('still stopping')) {
+      // kill-first contract ruling (#992). Optional-chained: a non-Error
+      // rejection (driver edge, thrown string) must fall through to the 500
+      // arm, not raise a TypeError inside the catch (review !622 wave 2,
+      // #78678).
+      if (error?.message?.includes('still stopping')) {
         return res.status(409).json({
           success: false,
           code: 'CRAWL_ACTIVE',
@@ -801,7 +819,7 @@ class FileController {
         });
       }
 
-      if (error.message.includes('not found')) {
+      if (error?.message?.includes('not found')) {
         return res.status(404).json({
           success: false,
           error: 'File not found',
@@ -837,7 +855,12 @@ class FileController {
       // the UI can surface the error clearly (partial-deletion is worse
       // than no-deletion for the bundle semantics).
       if (!isOkfServiceCaller(req)) {
-        const protectedIds = await bundleProtectedIds(fileIds);
+        let protectedIds;
+        try {
+          protectedIds = await bundleProtectedIds(fileIds);
+        } catch (guardError) {
+          return bundleGuardUnavailable(res, guardError);
+        }
         if (protectedIds.length > 0) {
           return res.status(403).json({
             success: false,

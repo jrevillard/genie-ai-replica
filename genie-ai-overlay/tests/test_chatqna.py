@@ -4566,6 +4566,11 @@ async def test_tokenize_failure_mid_truncation_loop_fails_the_request_503(monkey
     # bookkeeping, and the request exited through the classified error branch.
     truncation_counter.add.assert_not_called()
     assert recorded[-1]["error"] == "true"
+    # Leave the lru_cache empty on the way out: this is the one test that runs
+    # the REAL ``_count_static_tokens`` against a mocked transport, and a
+    # cached system-prompt count left behind would hand the next real-counter
+    # test a number its own mocks never produced.
+    chatqna_module._count_static_tokens.cache_clear()
 
 
 @pytest.mark.asyncio

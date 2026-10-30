@@ -98,7 +98,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the configuration problem it is — the same treatment a broken scope gets
   (danger border, explanatory caption, tap disabled) instead of a blank-label
   card that looked alive and did nothing. The caption text ships in all 14
-  locales. (#1192, !635, !643)
+  locales. Mobile only — the web keeps the silent refusal for the same shape,
+  tracked as a follow-up. (#1192, !635, !643)
 - **An untranslated placeholder in a configuration's locale map now falls back
   to the translated text.** A locale map whose entry for the active language
   was an empty string - the shape an untranslated translation takes - rendered

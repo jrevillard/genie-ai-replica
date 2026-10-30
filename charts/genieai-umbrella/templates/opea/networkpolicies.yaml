@@ -841,7 +841,9 @@ spec:
           port: 8080
         - protocol: TCP
           port: {{ include "genieai-umbrella.otlpPort" . }}
+    {{- if and (eq $opeaGpu.mode "external") $opeaGpu.nodeHost }}
     {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
+    {{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -923,5 +925,7 @@ spec:
       ports:
         - protocol: TCP
           port: {{ include "genieai-umbrella.otlpPort" . }}
+    {{- if and (eq $opeaGpu.mode "external") $opeaGpu.nodeHost }}
     {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
+    {{- end }}
 {{- end -}}

@@ -11,17 +11,17 @@
 import 'package:openapi/api.dart';
 import 'package:test/test.dart';
 
-// tests for QueriesStreamPostRequest
+// tests for ApiQueriesStreamPostRequest
 void main() {
-  // final instance = QueriesStreamPostRequest();
+  // final instance = ApiQueriesStreamPostRequest();
 
-  group('test QueriesStreamPostRequest', () {
+  group('test ApiQueriesStreamPostRequest', () {
     // String sessionId
     test('to test the property `sessionId`', () async {
       // TODO
     });
 
-    // List<QueriesStreamPostRequestMessagesInner> messages (default value: const [])
+    // List<ApiQueriesStreamPostRequestMessagesInner> messages (default value: const [])
     test('to test the property `messages`', () async {
       // TODO
     });

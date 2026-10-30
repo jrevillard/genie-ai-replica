@@ -170,7 +170,7 @@ class CurrentUserApi {
     }
     if (files != null) {
       hasFields = true;
-            mp.files.addAll(files);
+      mp.files.addAll(files);
     }
     if (hasFields) {
       postBody = mp;

@@ -11,18 +11,18 @@
 import 'package:openapi/api.dart';
 import 'package:test/test.dart';
 
-// tests for QueriesStreamPostRequestMessagesInner
+// tests for ApiQueriesStreamPost400Response
 void main() {
-  // final instance = QueriesStreamPostRequestMessagesInner();
+  // final instance = ApiQueriesStreamPost400Response();
 
-  group('test QueriesStreamPostRequestMessagesInner', () {
-    // String role
-    test('to test the property `role`', () async {
+  group('test ApiQueriesStreamPost400Response', () {
+    // String error
+    test('to test the property `error`', () async {
       // TODO
     });
 
-    // String content
-    test('to test the property `content`', () async {
+    // String message
+    test('to test the property `message`', () async {
       // TODO
     });
 

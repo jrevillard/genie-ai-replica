@@ -10,14 +10,14 @@
 
 part of openapi.api;
 
-class QueriesPostRequestMessagesInner {
-  /// Returns a new [QueriesPostRequestMessagesInner] instance.
-  QueriesPostRequestMessagesInner({
+class ApiQueriesPostRequestMessagesInner {
+  /// Returns a new [ApiQueriesPostRequestMessagesInner] instance.
+  ApiQueriesPostRequestMessagesInner({
     this.role,
     this.content,
   });
 
-  QueriesPostRequestMessagesInnerRoleEnum? role;
+  ApiQueriesPostRequestMessagesInnerRoleEnum? role;
 
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
@@ -28,7 +28,7 @@ class QueriesPostRequestMessagesInner {
   String? content;
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is QueriesPostRequestMessagesInner &&
+  bool operator ==(Object other) => identical(this, other) || other is ApiQueriesPostRequestMessagesInner &&
     other.role == role &&
     other.content == content;
 
@@ -39,7 +39,7 @@ class QueriesPostRequestMessagesInner {
     (content == null ? 0 : content!.hashCode);
 
   @override
-  String toString() => 'QueriesPostRequestMessagesInner[role=$role, content=$content]';
+  String toString() => 'ApiQueriesPostRequestMessagesInner[role=$role, content=$content]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -56,10 +56,10 @@ class QueriesPostRequestMessagesInner {
     return json;
   }
 
-  /// Returns a new [QueriesPostRequestMessagesInner] instance and imports its values from
+  /// Returns a new [ApiQueriesPostRequestMessagesInner] instance and imports its values from
   /// [value] if it's a [Map], null otherwise.
   // ignore: prefer_constructors_over_static_methods
-  static QueriesPostRequestMessagesInner? fromJson(dynamic value) {
+  static ApiQueriesPostRequestMessagesInner? fromJson(dynamic value) {
     if (value is Map) {
       final json = value.cast<String, dynamic>();
 
@@ -70,19 +70,19 @@ class QueriesPostRequestMessagesInner {
         return true;
       }());
 
-      return QueriesPostRequestMessagesInner(
-        role: QueriesPostRequestMessagesInnerRoleEnum.fromJson(json[r'role']),
+      return ApiQueriesPostRequestMessagesInner(
+        role: ApiQueriesPostRequestMessagesInnerRoleEnum.fromJson(json[r'role']),
         content: mapValueOfType<String>(json, r'content'),
       );
     }
     return null;
   }
 
-  static List<QueriesPostRequestMessagesInner> listFromJson(dynamic json, {bool growable = false,}) {
-    final result = <QueriesPostRequestMessagesInner>[];
+  static List<ApiQueriesPostRequestMessagesInner> listFromJson(dynamic json, {bool growable = false,}) {
+    final result = <ApiQueriesPostRequestMessagesInner>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
-        final value = QueriesPostRequestMessagesInner.fromJson(row);
+        final value = ApiQueriesPostRequestMessagesInner.fromJson(row);
         if (value != null) {
           result.add(value);
         }
@@ -91,12 +91,12 @@ class QueriesPostRequestMessagesInner {
     return result.toList(growable: growable);
   }
 
-  static Map<String, QueriesPostRequestMessagesInner> mapFromJson(dynamic json) {
-    final map = <String, QueriesPostRequestMessagesInner>{};
+  static Map<String, ApiQueriesPostRequestMessagesInner> mapFromJson(dynamic json) {
+    final map = <String, ApiQueriesPostRequestMessagesInner>{};
     if (json is Map && json.isNotEmpty) {
       json = json.cast<String, dynamic>(); // ignore: parameter_assignments
       for (final entry in json.entries) {
-        final value = QueriesPostRequestMessagesInner.fromJson(entry.value);
+        final value = ApiQueriesPostRequestMessagesInner.fromJson(entry.value);
         if (value != null) {
           map[entry.key] = value;
         }
@@ -105,14 +105,14 @@ class QueriesPostRequestMessagesInner {
     return map;
   }
 
-  // maps a json object with a list of QueriesPostRequestMessagesInner-objects as value to a dart map
-  static Map<String, List<QueriesPostRequestMessagesInner>> mapListFromJson(dynamic json, {bool growable = false,}) {
-    final map = <String, List<QueriesPostRequestMessagesInner>>{};
+  // maps a json object with a list of ApiQueriesPostRequestMessagesInner-objects as value to a dart map
+  static Map<String, List<ApiQueriesPostRequestMessagesInner>> mapListFromJson(dynamic json, {bool growable = false,}) {
+    final map = <String, List<ApiQueriesPostRequestMessagesInner>>{};
     if (json is Map && json.isNotEmpty) {
       // ignore: parameter_assignments
       json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
-        map[entry.key] = QueriesPostRequestMessagesInner.listFromJson(entry.value, growable: growable,);
+        map[entry.key] = ApiQueriesPostRequestMessagesInner.listFromJson(entry.value, growable: growable,);
       }
     }
     return map;
@@ -124,9 +124,9 @@ class QueriesPostRequestMessagesInner {
 }
 
 
-class QueriesPostRequestMessagesInnerRoleEnum {
+class ApiQueriesPostRequestMessagesInnerRoleEnum {
   /// Instantiate a new enum with the provided [value].
-  const QueriesPostRequestMessagesInnerRoleEnum._(this.value);
+  const ApiQueriesPostRequestMessagesInnerRoleEnum._(this.value);
 
   /// The underlying value of this enum member.
   final String value;
@@ -136,22 +136,22 @@ class QueriesPostRequestMessagesInnerRoleEnum {
 
   String toJson() => value;
 
-  static const user = QueriesPostRequestMessagesInnerRoleEnum._(r'user');
-  static const assistant = QueriesPostRequestMessagesInnerRoleEnum._(r'assistant');
+  static const user = ApiQueriesPostRequestMessagesInnerRoleEnum._(r'user');
+  static const assistant = ApiQueriesPostRequestMessagesInnerRoleEnum._(r'assistant');
 
-  /// List of all possible values in this [enum][QueriesPostRequestMessagesInnerRoleEnum].
-  static const values = <QueriesPostRequestMessagesInnerRoleEnum>[
+  /// List of all possible values in this [enum][ApiQueriesPostRequestMessagesInnerRoleEnum].
+  static const values = <ApiQueriesPostRequestMessagesInnerRoleEnum>[
     user,
     assistant,
   ];
 
-  static QueriesPostRequestMessagesInnerRoleEnum? fromJson(dynamic value) => QueriesPostRequestMessagesInnerRoleEnumTypeTransformer().decode(value);
+  static ApiQueriesPostRequestMessagesInnerRoleEnum? fromJson(dynamic value) => ApiQueriesPostRequestMessagesInnerRoleEnumTypeTransformer().decode(value);
 
-  static List<QueriesPostRequestMessagesInnerRoleEnum> listFromJson(dynamic json, {bool growable = false,}) {
-    final result = <QueriesPostRequestMessagesInnerRoleEnum>[];
+  static List<ApiQueriesPostRequestMessagesInnerRoleEnum> listFromJson(dynamic json, {bool growable = false,}) {
+    final result = <ApiQueriesPostRequestMessagesInnerRoleEnum>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
-        final value = QueriesPostRequestMessagesInnerRoleEnum.fromJson(row);
+        final value = ApiQueriesPostRequestMessagesInnerRoleEnum.fromJson(row);
         if (value != null) {
           result.add(value);
         }
@@ -161,16 +161,16 @@ class QueriesPostRequestMessagesInnerRoleEnum {
   }
 }
 
-/// Transformation class that can [encode] an instance of [QueriesPostRequestMessagesInnerRoleEnum] to String,
-/// and [decode] dynamic data back to [QueriesPostRequestMessagesInnerRoleEnum].
-class QueriesPostRequestMessagesInnerRoleEnumTypeTransformer {
-  factory QueriesPostRequestMessagesInnerRoleEnumTypeTransformer() => _instance ??= const QueriesPostRequestMessagesInnerRoleEnumTypeTransformer._();
+/// Transformation class that can [encode] an instance of [ApiQueriesPostRequestMessagesInnerRoleEnum] to String,
+/// and [decode] dynamic data back to [ApiQueriesPostRequestMessagesInnerRoleEnum].
+class ApiQueriesPostRequestMessagesInnerRoleEnumTypeTransformer {
+  factory ApiQueriesPostRequestMessagesInnerRoleEnumTypeTransformer() => _instance ??= const ApiQueriesPostRequestMessagesInnerRoleEnumTypeTransformer._();
 
-  const QueriesPostRequestMessagesInnerRoleEnumTypeTransformer._();
+  const ApiQueriesPostRequestMessagesInnerRoleEnumTypeTransformer._();
 
-  String encode(QueriesPostRequestMessagesInnerRoleEnum data) => data.value;
+  String encode(ApiQueriesPostRequestMessagesInnerRoleEnum data) => data.value;
 
-  /// Decodes a [dynamic value][data] to a QueriesPostRequestMessagesInnerRoleEnum.
+  /// Decodes a [dynamic value][data] to a ApiQueriesPostRequestMessagesInnerRoleEnum.
   ///
   /// If [allowNull] is true and the [dynamic value][data] cannot be decoded successfully,
   /// then null is returned. However, if [allowNull] is false and the [dynamic value][data]
@@ -178,11 +178,11 @@ class QueriesPostRequestMessagesInnerRoleEnumTypeTransformer {
   ///
   /// The [allowNull] is very handy when an API changes and a new enum value is added or removed,
   /// and users are still using an old app with the old code.
-  QueriesPostRequestMessagesInnerRoleEnum? decode(dynamic data, {bool allowNull = true}) {
+  ApiQueriesPostRequestMessagesInnerRoleEnum? decode(dynamic data, {bool allowNull = true}) {
     if (data != null) {
       switch (data) {
-        case r'user': return QueriesPostRequestMessagesInnerRoleEnum.user;
-        case r'assistant': return QueriesPostRequestMessagesInnerRoleEnum.assistant;
+        case r'user': return ApiQueriesPostRequestMessagesInnerRoleEnum.user;
+        case r'assistant': return ApiQueriesPostRequestMessagesInnerRoleEnum.assistant;
         default:
           if (!allowNull) {
             throw ArgumentError('Unknown enum value to decode: $data');
@@ -192,8 +192,8 @@ class QueriesPostRequestMessagesInnerRoleEnumTypeTransformer {
     return null;
   }
 
-  /// Singleton [QueriesPostRequestMessagesInnerRoleEnumTypeTransformer] instance.
-  static QueriesPostRequestMessagesInnerRoleEnumTypeTransformer? _instance;
+  /// Singleton [ApiQueriesPostRequestMessagesInnerRoleEnumTypeTransformer] instance.
+  static ApiQueriesPostRequestMessagesInnerRoleEnumTypeTransformer? _instance;
 }
 
 

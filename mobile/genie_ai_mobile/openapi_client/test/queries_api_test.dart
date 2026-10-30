@@ -26,6 +26,15 @@ void main() {
       // TODO
     });
 
+    // Create a new query
+    //
+    // Creates a new query and records it in analytics. Supports single-message or full conversation modes.
+    //
+    //Future<ApiQueriesGet200ResponseQueriesInner> apiQueriesPost(ApiQueriesPostRequest apiQueriesPostRequest) async
+    test('test apiQueriesPost', () async {
+      // TODO
+    });
+
     // Mark query as answered
     //
     // Marks a query as answered and updates response time
@@ -66,7 +75,7 @@ void main() {
     //
     // Retrieves a query by its unique identifier
     //
-    //Future<QueriesPost201Response> apiQueriesQueryIdGet(String queryId) async
+    //Future<ApiQueriesGet200ResponseQueriesInner> apiQueriesQueryIdGet(String queryId) async
     test('test apiQueriesQueryIdGet', () async {
       // TODO
     });
@@ -89,21 +98,12 @@ void main() {
       // TODO
     });
 
-    // Create a new query
-    //
-    // Creates a new query and records it in analytics. Supports single-message or full conversation modes.
-    //
-    //Future<QueriesPost201Response> queriesPost(QueriesPostRequest queriesPostRequest) async
-    test('test queriesPost', () async {
-      // TODO
-    });
-
     // Stream a query response via SSE
     //
     // Creates a query and streams the LLM response as SSE events. Events: chunk, metadata, translation, done, error. 
     //
-    //Future<String> queriesStreamPost(QueriesStreamPostRequest queriesStreamPostRequest) async
-    test('test queriesStreamPost', () async {
+    //Future<String> apiQueriesStreamPost(ApiQueriesStreamPostRequest apiQueriesStreamPostRequest) async
+    test('test apiQueriesStreamPost', () async {
       // TODO
     });
 

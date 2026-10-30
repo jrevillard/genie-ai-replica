@@ -10,9 +10,9 @@
 
 part of openapi.api;
 
-class QueriesStreamPost400Response {
-  /// Returns a new [QueriesStreamPost400Response] instance.
-  QueriesStreamPost400Response({
+class ApiQueriesStreamPost400Response {
+  /// Returns a new [ApiQueriesStreamPost400Response] instance.
+  ApiQueriesStreamPost400Response({
     this.error,
     this.message,
   });
@@ -34,7 +34,7 @@ class QueriesStreamPost400Response {
   String? message;
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is QueriesStreamPost400Response &&
+  bool operator ==(Object other) => identical(this, other) || other is ApiQueriesStreamPost400Response &&
     other.error == error &&
     other.message == message;
 
@@ -45,7 +45,7 @@ class QueriesStreamPost400Response {
     (message == null ? 0 : message!.hashCode);
 
   @override
-  String toString() => 'QueriesStreamPost400Response[error=$error, message=$message]';
+  String toString() => 'ApiQueriesStreamPost400Response[error=$error, message=$message]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -62,10 +62,10 @@ class QueriesStreamPost400Response {
     return json;
   }
 
-  /// Returns a new [QueriesStreamPost400Response] instance and imports its values from
+  /// Returns a new [ApiQueriesStreamPost400Response] instance and imports its values from
   /// [value] if it's a [Map], null otherwise.
   // ignore: prefer_constructors_over_static_methods
-  static QueriesStreamPost400Response? fromJson(dynamic value) {
+  static ApiQueriesStreamPost400Response? fromJson(dynamic value) {
     if (value is Map) {
       final json = value.cast<String, dynamic>();
 
@@ -76,7 +76,7 @@ class QueriesStreamPost400Response {
         return true;
       }());
 
-      return QueriesStreamPost400Response(
+      return ApiQueriesStreamPost400Response(
         error: mapValueOfType<String>(json, r'error'),
         message: mapValueOfType<String>(json, r'message'),
       );
@@ -84,11 +84,11 @@ class QueriesStreamPost400Response {
     return null;
   }
 
-  static List<QueriesStreamPost400Response> listFromJson(dynamic json, {bool growable = false,}) {
-    final result = <QueriesStreamPost400Response>[];
+  static List<ApiQueriesStreamPost400Response> listFromJson(dynamic json, {bool growable = false,}) {
+    final result = <ApiQueriesStreamPost400Response>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
-        final value = QueriesStreamPost400Response.fromJson(row);
+        final value = ApiQueriesStreamPost400Response.fromJson(row);
         if (value != null) {
           result.add(value);
         }
@@ -97,12 +97,12 @@ class QueriesStreamPost400Response {
     return result.toList(growable: growable);
   }
 
-  static Map<String, QueriesStreamPost400Response> mapFromJson(dynamic json) {
-    final map = <String, QueriesStreamPost400Response>{};
+  static Map<String, ApiQueriesStreamPost400Response> mapFromJson(dynamic json) {
+    final map = <String, ApiQueriesStreamPost400Response>{};
     if (json is Map && json.isNotEmpty) {
       json = json.cast<String, dynamic>(); // ignore: parameter_assignments
       for (final entry in json.entries) {
-        final value = QueriesStreamPost400Response.fromJson(entry.value);
+        final value = ApiQueriesStreamPost400Response.fromJson(entry.value);
         if (value != null) {
           map[entry.key] = value;
         }
@@ -111,14 +111,14 @@ class QueriesStreamPost400Response {
     return map;
   }
 
-  // maps a json object with a list of QueriesStreamPost400Response-objects as value to a dart map
-  static Map<String, List<QueriesStreamPost400Response>> mapListFromJson(dynamic json, {bool growable = false,}) {
-    final map = <String, List<QueriesStreamPost400Response>>{};
+  // maps a json object with a list of ApiQueriesStreamPost400Response-objects as value to a dart map
+  static Map<String, List<ApiQueriesStreamPost400Response>> mapListFromJson(dynamic json, {bool growable = false,}) {
+    final map = <String, List<ApiQueriesStreamPost400Response>>{};
     if (json is Map && json.isNotEmpty) {
       // ignore: parameter_assignments
       json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
-        map[entry.key] = QueriesStreamPost400Response.listFromJson(entry.value, growable: growable,);
+        map[entry.key] = ApiQueriesStreamPost400Response.listFromJson(entry.value, growable: growable,);
       }
     }
     return map;

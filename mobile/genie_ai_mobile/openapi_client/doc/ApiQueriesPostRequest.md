@@ -1,4 +1,4 @@
-# openapi.model.QueriesPostRequest
+# openapi.model.ApiQueriesPostRequest
 
 ## Load the model package
 ```dart
@@ -10,7 +10,7 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **sessionId** | **String** | ID of the current session | 
 **text** | **String** | The query text (required for single-message mode) | [optional] 
-**messages** | [**List<QueriesPostRequestMessagesInner>**](QueriesPostRequestMessagesInner.md) | Full conversation history (required for conversation mode) | [optional] [default to const []]
+**messages** | [**List<ApiQueriesPostRequestMessagesInner>**](ApiQueriesPostRequestMessagesInner.md) | Full conversation history (required for conversation mode) | [optional] [default to const []]
 **context** | [**QueryContext**](QueryContext.md) |  | [optional] 
 **contextOption** | **String** | Query mode (defaults to env or single-message) | [optional] [default to 'single-message']
 **categoryId** | **String** | Category ID for the query | [optional] 

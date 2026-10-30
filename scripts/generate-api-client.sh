@@ -40,12 +40,31 @@ console.log('Generated ' + count + ' endpoints');
 ") || { echo "ERROR: Failed to generate spec. Run 'npm install' in $BACKEND_DIR"; exit 1; }
 
 if [ "${1:-}" = "--check" ]; then
-  echo "==> Spec generated at $SPEC_FILE"
-  exit 0
+  CHECK_DIR="$(mktemp -d)"
+  openapi-generator-cli generate \
+    -i "$SPEC_FILE" \
+    -g dart \
+    -o "$CHECK_DIR" \
+    --skip-validate-spec \
+    --additional-properties=usePathUri=true,nullableFields=true >/dev/null
+  if diff -r --exclude=.dart_tool --exclude=pubspec.lock "$CHECK_DIR" "$OUTPUT_DIR" > /dev/null; then
+    echo "==> Client is up to date with the backend spec"
+    rm -rf "$CHECK_DIR"
+    exit 0
+  fi
+  echo "ERROR: the committed client is stale against the backend spec."
+  echo "       Run ./scripts/generate-api-client.sh and commit the result."
+  diff -rq --exclude=.dart_tool --exclude=pubspec.lock "$CHECK_DIR" "$OUTPUT_DIR" | head -20 || true
+  rm -rf "$CHECK_DIR"
+  exit 1
 fi
 
 echo "==> Generating Dart client..."
-# Clean previous output (preserving .openapi-generator-ignore if it exists)
+# The generator wipes the output directory; .openapi-generator-ignore is
+# tracked in git and must survive the regeneration.
+IGNORE_FILE="$OUTPUT_DIR/.openapi-generator-ignore"
+IGNORE_BACKUP="$(mktemp)"
+cp "$IGNORE_FILE" "$IGNORE_BACKUP"
 rm -rf "$OUTPUT_DIR"
 
 openapi-generator-cli generate \
@@ -54,6 +73,9 @@ openapi-generator-cli generate \
   -o "$OUTPUT_DIR" \
   --skip-validate-spec \
   --additional-properties=usePathUri=true,nullableFields=true
+
+cp "$IGNORE_BACKUP" "$IGNORE_FILE"
+rm -f "$IGNORE_BACKUP"
 
 # The dart generator emits non-compiling Dart for an array-of-binary property
 # in a multipart requestBody (verified on 7.22.0 and 7.26.0): for
@@ -71,8 +93,8 @@ for (const f of fs.readdirSync(dir)) {
   const p = path.join(dir, f);
   const src = fs.readFileSync(p, 'utf8');
   const fixed = src.replace(
-    /mp\.fields\[r'[^']+'\] = (\w+)\.field;\n(\s*)mp\.files\.add\(\1\);/g,
-    (m, variable, indent) => indent + 'mp.files.addAll(' + variable + ');'
+    /(\s*)mp\.fields\[r'[^']+'\] = (\w+)\.field;\n\s*mp\.files\.add\(\2\);/g,
+    (m, indent, variable) => indent + 'mp.files.addAll(' + variable + ');'
   );
   if (fixed !== src) {
     fs.writeFileSync(p, fixed);
@@ -80,6 +102,16 @@ for (const f of fs.readdirSync(dir)) {
   }
 }
 "
+
+# The patch above matches an exact emission shape; if a future generator
+# version changes it, regeneration would silently produce a client that does
+# not compile again. Fail loudly instead.
+if grep -rn '\.field;' "$OUTPUT_DIR/lib/api" > /dev/null 2>&1; then
+  echo "ERROR: the generated client still contains an unpatched array-file"
+  echo "       emission ('.field' on a List) — the generator's output shape"
+  echo "       changed; update the patch block above."
+  exit 1
+fi
 
 echo "==> Done. Client generated in $OUTPUT_DIR"
 echo "    Endpoints: $(grep -c "^  Future<Response>" "$OUTPUT_DIR"/lib/api/*.dart 2>/dev/null || echo '?')"

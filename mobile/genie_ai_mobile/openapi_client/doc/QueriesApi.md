@@ -10,6 +10,7 @@ All URIs are relative to *https://localhost*
 Method | HTTP request | Description
 ------------- | ------------- | -------------
 [**apiQueriesGet**](QueriesApi.md#apiqueriesget) | **GET** /api/queries | Search queries
+[**apiQueriesPost**](QueriesApi.md#apiqueriespost) | **POST** /api/queries | Create a new query
 [**apiQueriesQueryIdAnsweredPatch**](QueriesApi.md#apiqueriesqueryidansweredpatch) | **PATCH** /api/queries/{queryId}/answered | Mark query as answered
 [**apiQueriesQueryIdConversationPost**](QueriesApi.md#apiqueriesqueryidconversationpost) | **POST** /api/queries/{queryId}/conversation | Create conversation from query
 [**apiQueriesQueryIdConversationsGet**](QueriesApi.md#apiqueriesqueryidconversationsget) | **GET** /api/queries/{queryId}/conversations | Get conversations for a query
@@ -17,8 +18,7 @@ Method | HTTP request | Description
 [**apiQueriesQueryIdGet**](QueriesApi.md#apiqueriesqueryidget) | **GET** /api/queries/{queryId} | Get query by ID
 [**apiQueriesQueryIdLinkMessageIdPost**](QueriesApi.md#apiqueriesqueryidlinkmessageidpost) | **POST** /api/queries/{queryId}/link/{messageId} | Link query to message
 [**apiQueriesQueryIdResponsetimePatch**](QueriesApi.md#apiqueriesqueryidresponsetimepatch) | **PATCH** /api/queries/{queryId}/responsetime | Update query response time
-[**queriesPost**](QueriesApi.md#queriespost) | **POST** /queries | Create a new query
-[**queriesStreamPost**](QueriesApi.md#queriesstreampost) | **POST** /queries/stream | Stream a query response via SSE
+[**apiQueriesStreamPost**](QueriesApi.md#apiqueriesstreampost) | **POST** /api/queries/stream | Stream a query response via SSE
 
 
 # **apiQueriesGet**
@@ -76,6 +76,49 @@ No authorization required
 ### HTTP request headers
 
  - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **apiQueriesPost**
+> ApiQueriesGet200ResponseQueriesInner apiQueriesPost(apiQueriesPostRequest)
+
+Create a new query
+
+Creates a new query and records it in analytics. Supports single-message or full conversation modes.
+
+### Example
+```dart
+import 'package:openapi/api.dart';
+
+final api_instance = QueriesApi();
+final apiQueriesPostRequest = ApiQueriesPostRequest(); // ApiQueriesPostRequest | 
+
+try {
+    final result = api_instance.apiQueriesPost(apiQueriesPostRequest);
+    print(result);
+} catch (e) {
+    print('Exception when calling QueriesApi->apiQueriesPost: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **apiQueriesPostRequest** | [**ApiQueriesPostRequest**](ApiQueriesPostRequest.md)|  | 
+
+### Return type
+
+[**ApiQueriesGet200ResponseQueriesInner**](ApiQueriesGet200ResponseQueriesInner.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
  - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
@@ -259,7 +302,7 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **apiQueriesQueryIdGet**
-> QueriesPost201Response apiQueriesQueryIdGet(queryId)
+> ApiQueriesGet200ResponseQueriesInner apiQueriesQueryIdGet(queryId)
 
 Get query by ID
 
@@ -288,7 +331,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**QueriesPost201Response**](QueriesPost201Response.md)
+[**ApiQueriesGet200ResponseQueriesInner**](ApiQueriesGet200ResponseQueriesInner.md)
 
 ### Authorization
 
@@ -393,51 +436,8 @@ No authorization required
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
-# **queriesPost**
-> QueriesPost201Response queriesPost(queriesPostRequest)
-
-Create a new query
-
-Creates a new query and records it in analytics. Supports single-message or full conversation modes.
-
-### Example
-```dart
-import 'package:openapi/api.dart';
-
-final api_instance = QueriesApi();
-final queriesPostRequest = QueriesPostRequest(); // QueriesPostRequest | 
-
-try {
-    final result = api_instance.queriesPost(queriesPostRequest);
-    print(result);
-} catch (e) {
-    print('Exception when calling QueriesApi->queriesPost: $e\n');
-}
-```
-
-### Parameters
-
-Name | Type | Description  | Notes
-------------- | ------------- | ------------- | -------------
- **queriesPostRequest** | [**QueriesPostRequest**](QueriesPostRequest.md)|  | 
-
-### Return type
-
-[**QueriesPost201Response**](QueriesPost201Response.md)
-
-### Authorization
-
-No authorization required
-
-### HTTP request headers
-
- - **Content-Type**: application/json
- - **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-# **queriesStreamPost**
-> String queriesStreamPost(queriesStreamPostRequest)
+# **apiQueriesStreamPost**
+> String apiQueriesStreamPost(apiQueriesStreamPostRequest)
 
 Stream a query response via SSE
 
@@ -448,13 +448,13 @@ Creates a query and streams the LLM response as SSE events. Events: chunk, metad
 import 'package:openapi/api.dart';
 
 final api_instance = QueriesApi();
-final queriesStreamPostRequest = QueriesStreamPostRequest(); // QueriesStreamPostRequest | 
+final apiQueriesStreamPostRequest = ApiQueriesStreamPostRequest(); // ApiQueriesStreamPostRequest | 
 
 try {
-    final result = api_instance.queriesStreamPost(queriesStreamPostRequest);
+    final result = api_instance.apiQueriesStreamPost(apiQueriesStreamPostRequest);
     print(result);
 } catch (e) {
-    print('Exception when calling QueriesApi->queriesStreamPost: $e\n');
+    print('Exception when calling QueriesApi->apiQueriesStreamPost: $e\n');
 }
 ```
 
@@ -462,7 +462,7 @@ try {
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **queriesStreamPostRequest** | [**QueriesStreamPostRequest**](QueriesStreamPostRequest.md)|  | 
+ **apiQueriesStreamPostRequest** | [**ApiQueriesStreamPostRequest**](ApiQueriesStreamPostRequest.md)|  | 
 
 ### Return type
 

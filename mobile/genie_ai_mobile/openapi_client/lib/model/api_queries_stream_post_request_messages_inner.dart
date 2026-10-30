@@ -10,9 +10,9 @@
 
 part of openapi.api;
 
-class QueriesStreamPostRequestMessagesInner {
-  /// Returns a new [QueriesStreamPostRequestMessagesInner] instance.
-  QueriesStreamPostRequestMessagesInner({
+class ApiQueriesStreamPostRequestMessagesInner {
+  /// Returns a new [ApiQueriesStreamPostRequestMessagesInner] instance.
+  ApiQueriesStreamPostRequestMessagesInner({
     this.role,
     this.content,
   });
@@ -34,7 +34,7 @@ class QueriesStreamPostRequestMessagesInner {
   String? content;
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is QueriesStreamPostRequestMessagesInner &&
+  bool operator ==(Object other) => identical(this, other) || other is ApiQueriesStreamPostRequestMessagesInner &&
     other.role == role &&
     other.content == content;
 
@@ -45,7 +45,7 @@ class QueriesStreamPostRequestMessagesInner {
     (content == null ? 0 : content!.hashCode);
 
   @override
-  String toString() => 'QueriesStreamPostRequestMessagesInner[role=$role, content=$content]';
+  String toString() => 'ApiQueriesStreamPostRequestMessagesInner[role=$role, content=$content]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -62,10 +62,10 @@ class QueriesStreamPostRequestMessagesInner {
     return json;
   }
 
-  /// Returns a new [QueriesStreamPostRequestMessagesInner] instance and imports its values from
+  /// Returns a new [ApiQueriesStreamPostRequestMessagesInner] instance and imports its values from
   /// [value] if it's a [Map], null otherwise.
   // ignore: prefer_constructors_over_static_methods
-  static QueriesStreamPostRequestMessagesInner? fromJson(dynamic value) {
+  static ApiQueriesStreamPostRequestMessagesInner? fromJson(dynamic value) {
     if (value is Map) {
       final json = value.cast<String, dynamic>();
 
@@ -76,7 +76,7 @@ class QueriesStreamPostRequestMessagesInner {
         return true;
       }());
 
-      return QueriesStreamPostRequestMessagesInner(
+      return ApiQueriesStreamPostRequestMessagesInner(
         role: mapValueOfType<String>(json, r'role'),
         content: mapValueOfType<String>(json, r'content'),
       );
@@ -84,11 +84,11 @@ class QueriesStreamPostRequestMessagesInner {
     return null;
   }
 
-  static List<QueriesStreamPostRequestMessagesInner> listFromJson(dynamic json, {bool growable = false,}) {
-    final result = <QueriesStreamPostRequestMessagesInner>[];
+  static List<ApiQueriesStreamPostRequestMessagesInner> listFromJson(dynamic json, {bool growable = false,}) {
+    final result = <ApiQueriesStreamPostRequestMessagesInner>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
-        final value = QueriesStreamPostRequestMessagesInner.fromJson(row);
+        final value = ApiQueriesStreamPostRequestMessagesInner.fromJson(row);
         if (value != null) {
           result.add(value);
         }
@@ -97,12 +97,12 @@ class QueriesStreamPostRequestMessagesInner {
     return result.toList(growable: growable);
   }
 
-  static Map<String, QueriesStreamPostRequestMessagesInner> mapFromJson(dynamic json) {
-    final map = <String, QueriesStreamPostRequestMessagesInner>{};
+  static Map<String, ApiQueriesStreamPostRequestMessagesInner> mapFromJson(dynamic json) {
+    final map = <String, ApiQueriesStreamPostRequestMessagesInner>{};
     if (json is Map && json.isNotEmpty) {
       json = json.cast<String, dynamic>(); // ignore: parameter_assignments
       for (final entry in json.entries) {
-        final value = QueriesStreamPostRequestMessagesInner.fromJson(entry.value);
+        final value = ApiQueriesStreamPostRequestMessagesInner.fromJson(entry.value);
         if (value != null) {
           map[entry.key] = value;
         }
@@ -111,14 +111,14 @@ class QueriesStreamPostRequestMessagesInner {
     return map;
   }
 
-  // maps a json object with a list of QueriesStreamPostRequestMessagesInner-objects as value to a dart map
-  static Map<String, List<QueriesStreamPostRequestMessagesInner>> mapListFromJson(dynamic json, {bool growable = false,}) {
-    final map = <String, List<QueriesStreamPostRequestMessagesInner>>{};
+  // maps a json object with a list of ApiQueriesStreamPostRequestMessagesInner-objects as value to a dart map
+  static Map<String, List<ApiQueriesStreamPostRequestMessagesInner>> mapListFromJson(dynamic json, {bool growable = false,}) {
+    final map = <String, List<ApiQueriesStreamPostRequestMessagesInner>>{};
     if (json is Map && json.isNotEmpty) {
       // ignore: parameter_assignments
       json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
-        map[entry.key] = QueriesStreamPostRequestMessagesInner.listFromJson(entry.value, growable: growable,);
+        map[entry.key] = ApiQueriesStreamPostRequestMessagesInner.listFromJson(entry.value, growable: growable,);
       }
     }
     return map;

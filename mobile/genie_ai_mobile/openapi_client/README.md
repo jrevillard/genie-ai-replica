@@ -116,6 +116,7 @@ Class | Method | HTTP request | Description
 *DatabaseOperationsApi* | [**apiDatabaseBackupPost**](doc//DatabaseOperationsApi.md#apidatabasebackuppost) | **POST** /api/database/backup | Backup Database
 *DatabaseOperationsApi* | [**apiDatabaseOptimizePost**](doc//DatabaseOperationsApi.md#apidatabaseoptimizepost) | **POST** /api/database/optimize | Optimize Database
 *QueriesApi* | [**apiQueriesGet**](doc//QueriesApi.md#apiqueriesget) | **GET** /api/queries | Search queries
+*QueriesApi* | [**apiQueriesPost**](doc//QueriesApi.md#apiqueriespost) | **POST** /api/queries | Create a new query
 *QueriesApi* | [**apiQueriesQueryIdAnsweredPatch**](doc//QueriesApi.md#apiqueriesqueryidansweredpatch) | **PATCH** /api/queries/{queryId}/answered | Mark query as answered
 *QueriesApi* | [**apiQueriesQueryIdConversationPost**](doc//QueriesApi.md#apiqueriesqueryidconversationpost) | **POST** /api/queries/{queryId}/conversation | Create conversation from query
 *QueriesApi* | [**apiQueriesQueryIdConversationsGet**](doc//QueriesApi.md#apiqueriesqueryidconversationsget) | **GET** /api/queries/{queryId}/conversations | Get conversations for a query
@@ -123,8 +124,7 @@ Class | Method | HTTP request | Description
 *QueriesApi* | [**apiQueriesQueryIdGet**](doc//QueriesApi.md#apiqueriesqueryidget) | **GET** /api/queries/{queryId} | Get query by ID
 *QueriesApi* | [**apiQueriesQueryIdLinkMessageIdPost**](doc//QueriesApi.md#apiqueriesqueryidlinkmessageidpost) | **POST** /api/queries/{queryId}/link/{messageId} | Link query to message
 *QueriesApi* | [**apiQueriesQueryIdResponsetimePatch**](doc//QueriesApi.md#apiqueriesqueryidresponsetimepatch) | **PATCH** /api/queries/{queryId}/responsetime | Update query response time
-*QueriesApi* | [**queriesPost**](doc//QueriesApi.md#queriespost) | **POST** /queries | Create a new query
-*QueriesApi* | [**queriesStreamPost**](doc//QueriesApi.md#queriesstreampost) | **POST** /queries/stream | Stream a query response via SSE
+*QueriesApi* | [**apiQueriesStreamPost**](doc//QueriesApi.md#apiqueriesstreampost) | **POST** /api/queries/stream | Stream a query response via SSE
 *ServiceCategoriesApi* | [**apiServiceCategoriesCategoriesCategoryIdGet**](doc//ServiceCategoriesApi.md#apiservicecategoriescategoriescategoryidget) | **GET** /api/service-categories/categories/{categoryId} | Get category with services
 *ServiceCategoriesApi* | [**apiServiceCategoriesCategoriesDetailedGet**](doc//ServiceCategoriesApi.md#apiservicecategoriescategoriesdetailedget) | **GET** /api/service-categories/categories/detailed | Get all categories with detailed services for admin
 *ServiceCategoriesApi* | [**apiServiceCategoriesCategoriesGet**](doc//ServiceCategoriesApi.md#apiservicecategoriescategoriesget) | **GET** /api/service-categories/categories | Get all categories with services
@@ -196,6 +196,9 @@ Class | Method | HTTP request | Description
  - [ApiDatabaseOptimizePost200ResponseResultsInner](doc//ApiDatabaseOptimizePost200ResponseResultsInner.md)
  - [ApiQueriesGet200Response](doc//ApiQueriesGet200Response.md)
  - [ApiQueriesGet200ResponsePagination](doc//ApiQueriesGet200ResponsePagination.md)
+ - [ApiQueriesGet200ResponseQueriesInner](doc//ApiQueriesGet200ResponseQueriesInner.md)
+ - [ApiQueriesPostRequest](doc//ApiQueriesPostRequest.md)
+ - [ApiQueriesPostRequestMessagesInner](doc//ApiQueriesPostRequestMessagesInner.md)
  - [ApiQueriesQueryIdAnsweredPatch200Response](doc//ApiQueriesQueryIdAnsweredPatch200Response.md)
  - [ApiQueriesQueryIdConversationPost201Response](doc//ApiQueriesQueryIdConversationPost201Response.md)
  - [ApiQueriesQueryIdFeedbackPost200Response](doc//ApiQueriesQueryIdFeedbackPost200Response.md)
@@ -204,6 +207,9 @@ Class | Method | HTTP request | Description
  - [ApiQueriesQueryIdLinkMessageIdPostRequest](doc//ApiQueriesQueryIdLinkMessageIdPostRequest.md)
  - [ApiQueriesQueryIdResponsetimePatch200Response](doc//ApiQueriesQueryIdResponsetimePatch200Response.md)
  - [ApiQueriesQueryIdResponsetimePatchRequest](doc//ApiQueriesQueryIdResponsetimePatchRequest.md)
+ - [ApiQueriesStreamPost400Response](doc//ApiQueriesStreamPost400Response.md)
+ - [ApiQueriesStreamPostRequest](doc//ApiQueriesStreamPostRequest.md)
+ - [ApiQueriesStreamPostRequestMessagesInner](doc//ApiQueriesStreamPostRequestMessagesInner.md)
  - [ApiServiceCategoriesCategoriesCategoryIdGet200Response](doc//ApiServiceCategoriesCategoriesCategoryIdGet200Response.md)
  - [ApiServiceCategoriesCategoryIdTranslationsGet200ResponseInner](doc//ApiServiceCategoriesCategoryIdTranslationsGet200ResponseInner.md)
  - [ApiServiceCategoriesPostRequest](doc//ApiServiceCategoriesPostRequest.md)
@@ -238,12 +244,6 @@ Class | Method | HTTP request | Description
  - [FolderListResponse](doc//FolderListResponse.md)
  - [Message](doc//Message.md)
  - [MessageListResponse](doc//MessageListResponse.md)
- - [QueriesPost201Response](doc//QueriesPost201Response.md)
- - [QueriesPostRequest](doc//QueriesPostRequest.md)
- - [QueriesPostRequestMessagesInner](doc//QueriesPostRequestMessagesInner.md)
- - [QueriesStreamPost400Response](doc//QueriesStreamPost400Response.md)
- - [QueriesStreamPostRequest](doc//QueriesStreamPostRequest.md)
- - [QueriesStreamPostRequestMessagesInner](doc//QueriesStreamPostRequestMessagesInner.md)
  - [Query](doc//Query.md)
  - [QueryContext](doc//QueryContext.md)
  - [SearchResponse](doc//SearchResponse.md)

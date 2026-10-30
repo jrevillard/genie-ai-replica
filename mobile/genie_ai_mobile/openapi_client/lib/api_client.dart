@@ -280,6 +280,12 @@ class ApiClient {
           return ApiQueriesGet200Response.fromJson(value);
         case 'ApiQueriesGet200ResponsePagination':
           return ApiQueriesGet200ResponsePagination.fromJson(value);
+        case 'ApiQueriesGet200ResponseQueriesInner':
+          return ApiQueriesGet200ResponseQueriesInner.fromJson(value);
+        case 'ApiQueriesPostRequest':
+          return ApiQueriesPostRequest.fromJson(value);
+        case 'ApiQueriesPostRequestMessagesInner':
+          return ApiQueriesPostRequestMessagesInner.fromJson(value);
         case 'ApiQueriesQueryIdAnsweredPatch200Response':
           return ApiQueriesQueryIdAnsweredPatch200Response.fromJson(value);
         case 'ApiQueriesQueryIdConversationPost201Response':
@@ -296,6 +302,12 @@ class ApiClient {
           return ApiQueriesQueryIdResponsetimePatch200Response.fromJson(value);
         case 'ApiQueriesQueryIdResponsetimePatchRequest':
           return ApiQueriesQueryIdResponsetimePatchRequest.fromJson(value);
+        case 'ApiQueriesStreamPost400Response':
+          return ApiQueriesStreamPost400Response.fromJson(value);
+        case 'ApiQueriesStreamPostRequest':
+          return ApiQueriesStreamPostRequest.fromJson(value);
+        case 'ApiQueriesStreamPostRequestMessagesInner':
+          return ApiQueriesStreamPostRequestMessagesInner.fromJson(value);
         case 'ApiServiceCategoriesCategoriesCategoryIdGet200Response':
           return ApiServiceCategoriesCategoriesCategoryIdGet200Response.fromJson(value);
         case 'ApiServiceCategoriesCategoryIdTranslationsGet200ResponseInner':
@@ -364,18 +376,6 @@ class ApiClient {
           return Message.fromJson(value);
         case 'MessageListResponse':
           return MessageListResponse.fromJson(value);
-        case 'QueriesPost201Response':
-          return QueriesPost201Response.fromJson(value);
-        case 'QueriesPostRequest':
-          return QueriesPostRequest.fromJson(value);
-        case 'QueriesPostRequestMessagesInner':
-          return QueriesPostRequestMessagesInner.fromJson(value);
-        case 'QueriesStreamPost400Response':
-          return QueriesStreamPost400Response.fromJson(value);
-        case 'QueriesStreamPostRequest':
-          return QueriesStreamPostRequest.fromJson(value);
-        case 'QueriesStreamPostRequestMessagesInner':
-          return QueriesStreamPostRequestMessagesInner.fromJson(value);
         case 'Query':
           return Query.fromJson(value);
         case 'QueryContext':

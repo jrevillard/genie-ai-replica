@@ -10,9 +10,9 @@
 
 part of openapi.api;
 
-class QueriesStreamPostRequest {
-  /// Returns a new [QueriesStreamPostRequest] instance.
-  QueriesStreamPostRequest({
+class ApiQueriesStreamPostRequest {
+  /// Returns a new [ApiQueriesStreamPostRequest] instance.
+  ApiQueriesStreamPostRequest({
     required this.sessionId,
     this.messages = const [],
     this.context,
@@ -20,7 +20,7 @@ class QueriesStreamPostRequest {
 
   String sessionId;
 
-  List<QueriesStreamPostRequestMessagesInner> messages;
+  List<ApiQueriesStreamPostRequestMessagesInner> messages;
 
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
@@ -31,7 +31,7 @@ class QueriesStreamPostRequest {
   QueryContext? context;
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is QueriesStreamPostRequest &&
+  bool operator ==(Object other) => identical(this, other) || other is ApiQueriesStreamPostRequest &&
     other.sessionId == sessionId &&
     _deepEquality.equals(other.messages, messages) &&
     other.context == context;
@@ -44,7 +44,7 @@ class QueriesStreamPostRequest {
     (context == null ? 0 : context!.hashCode);
 
   @override
-  String toString() => 'QueriesStreamPostRequest[sessionId=$sessionId, messages=$messages, context=$context]';
+  String toString() => 'ApiQueriesStreamPostRequest[sessionId=$sessionId, messages=$messages, context=$context]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -58,10 +58,10 @@ class QueriesStreamPostRequest {
     return json;
   }
 
-  /// Returns a new [QueriesStreamPostRequest] instance and imports its values from
+  /// Returns a new [ApiQueriesStreamPostRequest] instance and imports its values from
   /// [value] if it's a [Map], null otherwise.
   // ignore: prefer_constructors_over_static_methods
-  static QueriesStreamPostRequest? fromJson(dynamic value) {
+  static ApiQueriesStreamPostRequest? fromJson(dynamic value) {
     if (value is Map) {
       final json = value.cast<String, dynamic>();
 
@@ -69,25 +69,25 @@ class QueriesStreamPostRequest {
       // Note 1: the values aren't checked for validity beyond being non-null.
       // Note 2: this code is stripped in release mode!
       assert(() {
-        assert(json.containsKey(r'sessionId'), 'Required key "QueriesStreamPostRequest[sessionId]" is missing from JSON.');
-        assert(json[r'sessionId'] != null, 'Required key "QueriesStreamPostRequest[sessionId]" has a null value in JSON.');
+        assert(json.containsKey(r'sessionId'), 'Required key "ApiQueriesStreamPostRequest[sessionId]" is missing from JSON.');
+        assert(json[r'sessionId'] != null, 'Required key "ApiQueriesStreamPostRequest[sessionId]" has a null value in JSON.');
         return true;
       }());
 
-      return QueriesStreamPostRequest(
+      return ApiQueriesStreamPostRequest(
         sessionId: mapValueOfType<String>(json, r'sessionId')!,
-        messages: QueriesStreamPostRequestMessagesInner.listFromJson(json[r'messages']),
+        messages: ApiQueriesStreamPostRequestMessagesInner.listFromJson(json[r'messages']),
         context: QueryContext.fromJson(json[r'context']),
       );
     }
     return null;
   }
 
-  static List<QueriesStreamPostRequest> listFromJson(dynamic json, {bool growable = false,}) {
-    final result = <QueriesStreamPostRequest>[];
+  static List<ApiQueriesStreamPostRequest> listFromJson(dynamic json, {bool growable = false,}) {
+    final result = <ApiQueriesStreamPostRequest>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
-        final value = QueriesStreamPostRequest.fromJson(row);
+        final value = ApiQueriesStreamPostRequest.fromJson(row);
         if (value != null) {
           result.add(value);
         }
@@ -96,12 +96,12 @@ class QueriesStreamPostRequest {
     return result.toList(growable: growable);
   }
 
-  static Map<String, QueriesStreamPostRequest> mapFromJson(dynamic json) {
-    final map = <String, QueriesStreamPostRequest>{};
+  static Map<String, ApiQueriesStreamPostRequest> mapFromJson(dynamic json) {
+    final map = <String, ApiQueriesStreamPostRequest>{};
     if (json is Map && json.isNotEmpty) {
       json = json.cast<String, dynamic>(); // ignore: parameter_assignments
       for (final entry in json.entries) {
-        final value = QueriesStreamPostRequest.fromJson(entry.value);
+        final value = ApiQueriesStreamPostRequest.fromJson(entry.value);
         if (value != null) {
           map[entry.key] = value;
         }
@@ -110,14 +110,14 @@ class QueriesStreamPostRequest {
     return map;
   }
 
-  // maps a json object with a list of QueriesStreamPostRequest-objects as value to a dart map
-  static Map<String, List<QueriesStreamPostRequest>> mapListFromJson(dynamic json, {bool growable = false,}) {
-    final map = <String, List<QueriesStreamPostRequest>>{};
+  // maps a json object with a list of ApiQueriesStreamPostRequest-objects as value to a dart map
+  static Map<String, List<ApiQueriesStreamPostRequest>> mapListFromJson(dynamic json, {bool growable = false,}) {
+    final map = <String, List<ApiQueriesStreamPostRequest>>{};
     if (json is Map && json.isNotEmpty) {
       // ignore: parameter_assignments
       json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
-        map[entry.key] = QueriesStreamPostRequest.listFromJson(entry.value, growable: growable,);
+        map[entry.key] = ApiQueriesStreamPostRequest.listFromJson(entry.value, growable: growable,);
       }
     }
     return map;

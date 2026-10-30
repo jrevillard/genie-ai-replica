@@ -333,14 +333,14 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 | GET | `/categories` | Get all categories with services |
 | GET | `/categories/:categoryId` | Get a specific category with services |
 | GET | `/search` | Search categories and services |
-| POST | `/` | Create or update categories |
+| POST | `/` | Create a category |
 | DELETE | `/:categoryId` | Delete a category |
 
 #### Key Parameters
 - `locale`: Language code (e.g., en, fr, sw) for localized content.
 - `categoryId`: Unique identifier for a category.
 - `query`: Search string for categories and services.
-- `categories`: Array of category data for creation/update.
+- `nameEN`: English name of the category to create.
 
 #### Services Called
 - **Service Category Service**: Manages category and service data, including CRUD operations and search.

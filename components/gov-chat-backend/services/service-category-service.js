@@ -36,56 +36,6 @@ class ServiceCategoryService {
   }
 
   /**
-   * Helper method to get translated name for a document
-   * @param {String} collectionType - 'category' or 'service'
-   * @param {String} documentId - Document ID/key
-   * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
-   * @returns {Promise<String|null>} Translated name or null if not found
-   */
-  async _getTranslatedName(collectionType, documentId, locale) {
-    try {
-      const upperLocale = locale.toUpperCase();
-      logger.debug(`Getting ${collectionType} translation for ${documentId} in ${upperLocale}`);
-
-      let query;
-      if (collectionType === 'category') {
-        query = aql`
-          FOR trans IN serviceCategoryTranslations
-            FILTER trans.serviceCategoryId == ${documentId}
-            FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
-            RETURN trans.translation
-        `;
-      } else if (collectionType === 'service') {
-        query = aql`
-          FOR trans IN serviceTranslations
-            FILTER trans.serviceId == ${documentId}
-            FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
-            RETURN trans.translation
-        `;
-      } else {
-        logger.error(`Invalid collection type: ${collectionType}`);
-        return null;
-      }
-
-      const cursor = await this.db.query(query);
-      const result = await cursor.next();
-
-      if (!result) {
-        logger.warn(`No translation found for ${collectionType} ${documentId} in ${upperLocale}`);
-        return null;
-      }
-
-      logger.debug(`Translation found for ${collectionType} ${documentId}: ${result}`);
-      return result;
-    } catch (error) {
-      logger.error(`Error getting translated name for ${collectionType} ${documentId}: ${error.message}`, {
-        stack: error.stack
-      });
-      return null;
-    }
-  }
-
-  /**
    * Creates a single service under a category with its translations.
    * @param {String} categoryKey - The _key of the parent category.
    * @param {Object} payload - The service data { nameEN, translations }.

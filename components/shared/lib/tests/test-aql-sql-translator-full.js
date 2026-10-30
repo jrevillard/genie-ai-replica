@@ -542,17 +542,7 @@ const testSuite = [
     expectedSql: `SELECT msg._key AS _key, msg.conversationId AS conversationId FROM messages LET msg = @this WHERE msg._key == :messageId`
   },
 
-  // --- from service-category-service.js (8 tests) ---
-  {
-    description: '[SCS-1] getTranslatedName for category',
-    aql: `FOR trans IN serviceCategoryTranslations FILTER trans.serviceCategoryId == @documentId AND trans.languageCode == @upperLocale RETURN trans.translation`,
-    expectedSql: `SELECT trans.translation FROM serviceCategoryTranslations LET trans = @this WHERE trans.serviceCategoryId == :documentId AND trans.languageCode == :upperLocale`
-  },
-  {
-    description: '[SCS-2] getTranslatedName for service',
-    aql: `FOR trans IN serviceTranslations FILTER trans.serviceId == @documentId AND trans.languageCode == @upperLocale RETURN trans.translation`,
-    expectedSql: `SELECT trans.translation FROM serviceTranslations LET trans = @this WHERE trans.serviceId == :documentId AND trans.languageCode == :upperLocale`
-  },
+  // --- from service-category-service.js (6 tests) ---
   {
     description: '[SCS-3] getAllCategoriesWithServices - REFINED',
     aql: `FOR category IN serviceCategories SORT category.order ASC LET categoryTranslation = FIRST( FOR trans IN serviceCategoryTranslations FILTER trans.serviceCategoryId == category._key AND trans.languageCode == @upperLocale RETURN trans.translation ) LET services = ( FOR edge IN categoryServices FILTER edge._from == category._id FOR service IN services FILTER service._id == edge._to LET serviceTranslation = FIRST( FOR trans IN serviceTranslations FILTER trans.serviceId == service._key AND trans.languageCode == @upperLocale RETURN trans.translation ) SORT edge.order ASC RETURN serviceTranslation ) RETURN { catKey: category._key, name: categoryTranslation, children: services }`,

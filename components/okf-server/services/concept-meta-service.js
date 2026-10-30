@@ -716,7 +716,7 @@ function buildSummaryPrompt(m) {
  * (live-flagged): vLLM's OpenAI-compatible server has NO token endpoint and
  * takes the STATIC VLLM_API_KEY bearer directly — the old client_credentials
  * dance against an invented `/v1/auth/token` 404'd silently on every call
- * (summaries永远 null). Also normalizes the base: VLLM_ENDPOINT in this
+ * (summaries stayed null forever). Also normalizes the base: VLLM_ENDPOINT in this
  * stack conventionally ends in `/v1`, so appending `/v1/chat/completions`
  * verbatim produced `/v1/v1/...`. Short timeout — best-effort, off the
  * ingestion hot path. */

@@ -1024,7 +1024,7 @@ async function answerFidelity(opts = {}) {
     // must not name the serve-mode model.
     model:
       (process.env.VLLM_LLM_MODEL_ID || '').trim() ||
-      (await require('./vllm-model-cache').getServedModelId(require('./vllm-model-cache').deploymentVllmBase())) ||
+      (await require('./vllm-model-cache').deploymentServedModelId()) ||
       null
   });
   if (opts.serveMode) return deploymentChat();

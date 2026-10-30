@@ -19,6 +19,7 @@ const ENV_KEYS = [
   'VLLM_LLM_MODEL_ID',
   'VLLM_MODEL_ID',
   'VLLM_API_KEY',
+  'VLLM_ENDPOINT',
   'MODEL_DETECT_TTL',
   'MODEL_PROBE_TIMEOUT_SECONDS'
 ];
@@ -248,5 +249,36 @@ describe('review round 2 fixes (#1181)', () => {
       'vllm_model_cache.multi_model_endpoint',
       expect.objectContaining({ n: 2, chosen: 'gateway/first' })
     );
+  });
+});
+
+describe('review round 3 fixes (#1181)', () => {
+  test('cache entries are keyed by base AND key — different credentials never share a resolution', async () => {
+    axios.get
+      .mockResolvedValueOnce({ data: { data: [{ id: 'gateway/gpt-x' }] } })
+      .mockResolvedValueOnce({ data: { data: [{ id: 'gateway/claude-y' }] } });
+    await expect(cache.requireServedModelId('https://gw.example/v1', { apiKey: 'fk-A' })).resolves.toBe(
+      'gateway/gpt-x'
+    );
+    // Same base, different key: the fk-A entry must NOT be served.
+    await expect(cache.requireServedModelId('https://gw.example/v1', { apiKey: 'fk-B' })).resolves.toBe(
+      'gateway/claude-y'
+    );
+    expect(axios.get).toHaveBeenCalledTimes(2);
+  });
+
+  test('deploymentServedModelId probes the deployment base WITH the deployment key', async () => {
+    process.env.VLLM_API_KEY = 'deployment-secret';
+    axios.get.mockResolvedValue(modelsPayload('served/deployed-8b'));
+    await expect(cache.deploymentServedModelId()).resolves.toBe('served/deployed-8b');
+    expect(axios.get).toHaveBeenCalledWith(
+      'http://vllm:8000/v1/models',
+      expect.objectContaining({ headers: { Authorization: 'Bearer deployment-secret' } })
+    );
+  });
+
+  test('deploymentServedModelId is soft: null when nothing answers, never throws', async () => {
+    axios.get.mockRejectedValue(new Error('401'));
+    await expect(cache.deploymentServedModelId()).resolves.toBeNull();
   });
 });

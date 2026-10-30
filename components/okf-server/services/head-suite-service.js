@@ -491,6 +491,9 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     const siblings = await loadSiblingContext(db, repoId);
 
     const llm = { positive: [], negative: [], off_domain: [], meta: [], near_miss: [], keywords: [] };
+    // Provenance: the model the generation calls actually used (stamped
+    // on each response by vllmChatCompletions) — kept for the suite doc.
+    let lastGenModel = null;
     try {
       // temperature 0.7 (not the extraction default 0.0) — adversarial
       // negatives must VARY generation to generation. Story 1-8f: the ask
@@ -549,6 +552,7 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
           maxTokens: Math.min(6000, 500 + 34 * rowsInCall),
           temperature: 0.7
         });
+        if (resp.model) lastGenModel = resp.model;
         const content = resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message;
         const parsed = parseJsonObject(content && content.content);
         const before =
@@ -681,11 +685,12 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         // 'vllm' placeholder only survives when nothing answers). A named
         // model-config override routing the generation call is a known
         // limitation of this label — it names the deployment default.
-        generator: `llm:${
-          (await require('./vllm-model-cache').discoverVllmModelId(
-            require('./vllm-model-cache').deploymentVllmBase()
-          )) || 'vllm'
-        }`,
+        // Provenance: the model that generated this suite — the stamp from
+        // the generation calls when they ran (covers named-config routing
+        // too), else a soft discovery of the deployment endpoint (base +
+        // key travel together in deploymentServedModelId). 'vllm' survives
+        // only when nothing answered at all.
+        generator: `llm:${lastGenModel || (await require('./vllm-model-cache').deploymentServedModelId()) || 'vllm'}`,
         sibling_names: siblings.map((s) => s.name),
         off_domain_topics: randomTopics,
         // Story 1-8d — the forbidden list this suite was generated against.

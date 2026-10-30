@@ -2268,3 +2268,21 @@ it('F3: with VLLM_ENDPOINT unset the label still names the model the default hos
   expect(require('axios').get).toHaveBeenCalledWith('http://vllm:8000/v1/models', expect.anything());
   expect(s.payload.generator).toBe('llm:served/suite-8b');
 });
+
+it('r3: the generator label reads the stamped resp.model of the generation calls — no probe at all', async () => {
+  delete process.env.VLLM_MODEL_ID;
+  delete process.env.VLLM_LLM_MODEL_ID;
+  require('axios').get.mockReset(); // must NEVER be called in this path
+  __mockDb.query.mockResolvedValue({ all: async () => [] });
+  frontmatterService.vllmChatCompletions.mockResolvedValue({
+    ...llmResponse({
+      positive: [{ query: 'What is the licensing fee?', reason: 'topic hit' }],
+      negative: [],
+      keywords: []
+    }),
+    model: 'frontier/tagger-stamped'
+  });
+  const s = await svc.generateSuite('me', {}, {});
+  expect(require('axios').get).not.toHaveBeenCalled();
+  expect(s.payload.generator).toBe('llm:frontier/tagger-stamped');
+});

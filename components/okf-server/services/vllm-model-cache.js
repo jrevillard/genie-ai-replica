@@ -105,11 +105,15 @@ async function probe(baseUrl, timeoutMs, apiKey) {
 async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
   const base = String(baseUrl || '').replace(/\/+$/, '');
   if (!base) return null;
-  const entry = _cache.get(base);
+  // Cache key carries the CREDENTIAL as well as the base: gateways can
+  // filter /v1/models per key, so two configs on one base must never
+  // resolve each other's model.
+  const cacheKey = `${base}|${(apiKey || '').trim()}`;
+  const entry = _cache.get(cacheKey);
   if (entry && Date.now() - entry.ts < ttlSeconds() * 1000) return entry.id;
   const id = await probe(base, timeoutMs, apiKey);
   if (id) {
-    _cache.set(base, { id, ts: Date.now() });
+    _cache.set(cacheKey, { id, ts: Date.now() });
     return id;
   }
   return entry ? entry.id : null; // stale is better than broken
@@ -164,6 +168,14 @@ function deploymentVllmBase() {
   return process.env.VLLM_ENDPOINT || 'http://vllm:8000';
 }
 
+/** The deployment endpoint's served model, soft: base AND deployment key
+ * resolved in one place (the base rule and the credential must never
+ * drift apart — an unauthenticated probe 401s on secured endpoints and
+ * silently defeats the label). Null when nothing answers. */
+async function deploymentServedModelId() {
+  return getServedModelId(deploymentVllmBase(), { apiKey: (process.env.VLLM_API_KEY || '').trim() });
+}
+
 /** Test hook: drop every cached entry. */
 function clearModelCache() {
   _cache.clear();
@@ -171,6 +183,7 @@ function clearModelCache() {
 
 module.exports = {
   ModelDiscoveryError,
+  deploymentServedModelId,
   deploymentVllmBase,
   getServedModelId,
   discoverVllmModelId,

@@ -24,7 +24,9 @@ const registry = require('./language-registry.json');
  */
 function modelCodes(modelKey) {
   const table = registry.modelCodes && registry.modelCodes[modelKey];
-  if (!table) {
+  // An emptied table is as good as a missing one: the spread would hand the
+  // map an empty languageMap and every language would be refused.
+  if (!table || Object.keys(table).length === 0) {
     throw new Error(
       `The language registry has no "${modelKey}" model-code table — the shipped registry and the language maps disagree`
     );
@@ -42,6 +44,9 @@ function modelCodes(modelKey) {
  * @throws {Error} When a registry entry carries no name.
  */
 function languageNames() {
+  if (!registry.languages) {
+    throw new Error('The language registry has no languages table — the shipped registry and the language maps disagree');
+  }
   const names = {};
   for (const [code, language] of Object.entries(registry.languages)) {
     if (!language || typeof language.name !== 'string' || language.name.length === 0) {

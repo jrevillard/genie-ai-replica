@@ -345,6 +345,24 @@ class TestLanguageMapShape:
             code: language["script"] for code, language in languages.items()
         }
 
+    def test_the_shipped_registry_is_the_backend_registry_itself(self):
+        """The single-source claim rests on the chatqna-side file being the
+        backend's file, not a copy of it: a materialized symlink (a stale
+        snapshot under an old revision) would pass every derivation test on
+        both sides while the two runtimes serve different lists."""
+        backend_registry = os.path.join(
+            os.path.dirname(chatqna_module.__file__),
+            "..",
+            "..",
+            "components",
+            "gov-chat-backend",
+            "services",
+            "translation",
+            "language-maps",
+            "language-registry.json",
+        )
+        assert os.path.samefile(LANGUAGE_REGISTRY_PATH, backend_registry)
+
 
 def fake_translation_client():
     """An httpx client that records the request instead of calling the model."""

@@ -884,10 +884,13 @@ def _load_language_registry() -> None:
         # The last read failed and the retry window has not elapsed yet.
         return
     loaded = _read_language_registry(LANGUAGE_REGISTRY_FILEPATH)
-    _LANGUAGE_REGISTRY_CACHE = loaded
-    _LANGUAGE_REGISTRY_CACHE_AT = now
+    # The projections are published before the guard and the timestamp that
+    # send readers away: a reader that takes the early return must never
+    # still see them unset.
     _LANGUAGE_CODES_CACHE = {code: language["name"] for code, language in loaded.items()}
     _LANGUAGE_SCRIPTS_CACHE = {code: language["script"] for code, language in loaded.items()}
+    _LANGUAGE_REGISTRY_CACHE_AT = now
+    _LANGUAGE_REGISTRY_CACHE = loaded
 
 
 def language_codes_map() -> dict:

@@ -90,6 +90,17 @@ describe('model-config lifecycle', () => {
     expect(listed.env_pick).toBe('__env__');
     listed.configs.forEach((c) => expect(c.api_key).toBeUndefined());
     expect(JSON.stringify(listed.env_judge || {})).not.toContain('sk-');
+    // The panel's "System default (environment)" row NAMES the model it
+    // resolves to — a default control must never be the only statement of
+    // what is in use (David 2026-10-24).
+    process.env.VLLM_LLM_MODEL_ID = 'ibm-granite/granite-4.1-8b';
+    delete process.env.VLLM_MODEL_ID;
+    delete process.env.RAGAS_JUDGE_MODEL;
+    process.env.RAGAS_JUDGE_BASE_URL = 'http://vllm:8000/v1';
+    const listed2 = await svc.listConfigs();
+    expect(listed2.env_judge.model).toBe('ibm-granite/granite-4.1-8b');
+    delete process.env.VLLM_LLM_MODEL_ID;
+    delete process.env.RAGAS_JUDGE_BASE_URL;
   });
 
   test('duplicate names are rejected (409 NAME_TAKEN)', async () => {
@@ -273,6 +284,21 @@ describe('model listing (the config-form dropdown)', () => {
     expect(models).toEqual(['claude-x']);
   });
 
+  test("a base WITHOUT a version segment lists at {base}/v1/models (the chat path's rule)", async () => {
+    // One URL rule for the whole component: the chat call and the listing
+    // must not disagree about where /v1 goes.
+    global.fetch = jest.fn(async (url) => {
+      expect(url).toBe('https://gw:4000/v1/models');
+      return { ok: true, json: async () => ({ data: [{ id: 'm1' }] }) };
+    });
+    const { models } = await svc.listModelsPreview({
+      provider: 'openai',
+      base_url: 'https://gw:4000',
+      api_key: 'sk-typed'
+    });
+    expect(models).toEqual(['m1']);
+  });
+
   test('listing failures are honest 502s (the UI offers free-text fallback)', async () => {
     const c = await svc.createConfig({ name: 'bad', provider: 'openai', base_url: 'https://x/v1', api_key: 'k' }, {});
     global.fetch = jest.fn(async () => ({ ok: false, status: 401, text: async () => 'unauthorized' }));
@@ -421,11 +447,18 @@ describe('connection test (before enabling)', () => {
 
   test('the MiniMax mismatch names itself: openai provider + /anthropic base → hint to switch provider', async () => {
     // The live incident (2026-10-19): base https://api.minimax.io/anthropic
-    // saved under provider 'openai' lists at /anthropic/models → 404.
+    // saved under provider 'openai' — the OpenAI wire does not match it
+    // (404 on the path, 401 on the auth header).
     global.fetch = jest.fn(async (url) => {
-      expect(url).toBe('https://api.minimax.io/anthropic/models');
+      expect(url).toBe('https://api.minimax.io/anthropic/v1/models');
       return { ok: false, status: 404, text: async () => '404 page not found' };
     });
+    await expect(
+      svc.listModelsPreview({ provider: 'openai', base_url: 'https://api.minimax.io/anthropic', api_key: 'k' })
+    ).rejects.toThrow(/switch the provider to Anthropic/);
+    // The same base answering 401 (it serves the path, rejects the Bearer
+    // header) names itself too — the operator must not be left guessing.
+    global.fetch = jest.fn(async () => ({ ok: false, status: 401, text: async () => 'unauthorized' }));
     await expect(
       svc.listModelsPreview({ provider: 'openai', base_url: 'https://api.minimax.io/anthropic', api_key: 'k' })
     ).rejects.toThrow(/switch the provider to Anthropic/);
@@ -455,5 +488,45 @@ describe('resolution chain (picked > active > env) + fidelity', () => {
     expect(viaActive.model).toBe('pd'); // falls back to the config's default
     expect(svc.judgeFidelity(viaActive)).toEqual({ source: 'picked', config: 'picked one', model: 'pd' });
     expect(svc.judgeFidelity(null).source).toMatch(/env|builtin-default/);
+  });
+
+  it('the env judge fidelity names the model the SIDECAR judges with', () => {
+    // The sidecar's judge model is RAGAS_JUDGE_MODEL, else VLLM_LLM_MODEL_ID
+    // (its own compose default, applied on ANY judge base — the sidecar has
+    // no discovery). The record mirrors exactly that, so it names the model
+    // every judge row was sent to — or shows the pin a foreign base does
+    // not serve.
+    process.env.RAGAS_JUDGE_BASE_URL = 'http://vllm:8000/v1';
+    delete process.env.RAGAS_JUDGE_MODEL;
+    process.env.VLLM_LLM_MODEL_ID = 'ibm-granite/granite-4.1-8b';
+    delete process.env.VLLM_MODEL_ID;
+    expect(svc.judgeFidelity(null)).toEqual({
+      source: 'env',
+      config: null,
+      model: 'ibm-granite/granite-4.1-8b'
+    });
+    // An explicitly named judge model still wins.
+    process.env.RAGAS_JUDGE_MODEL = 'judge/explicit';
+    expect(svc.judgeFidelity(null).model).toBe('judge/explicit');
+    // On ANOTHER endpoint the record still names the pin: the sidecar's
+    // compose default sends it there regardless (it has no discovery), and
+    // a base that does not serve the pin 404s every judge row — the record
+    // naming the pin is what shows why.
+    delete process.env.RAGAS_JUDGE_MODEL;
+    process.env.RAGAS_JUDGE_BASE_URL = 'https://judge-gpu.example/v1';
+    expect(svc.judgeFidelity(null).model).toBe('ibm-granite/granite-4.1-8b');
+    delete process.env.RAGAS_JUDGE_BASE_URL;
+    // An UNSET judge base = the deployment endpoint (the env-judge leg calls
+    // the deployment's own endpoint) — the deployment's pin names it.
+    delete process.env.RAGAS_JUDGE_BASE_URL;
+    expect(svc.judgeFidelity(null).model).toBe('ibm-granite/granite-4.1-8b');
+    // A raw VLLM_MODEL_ID (the okf-server escape hatch) never names the
+    // judge: the SIDECAR receives the LLM spelling only — with it unset
+    // its judge is "not configured", and the record must not advertise a
+    // model that never judges.
+    delete process.env.VLLM_LLM_MODEL_ID;
+    process.env.VLLM_MODEL_ID = 'plain/spelling-pin';
+    expect(svc.judgeFidelity(null).model).toBeNull();
+    delete process.env.VLLM_MODEL_ID;
   });
 });

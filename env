@@ -458,6 +458,22 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   picks the configured id instead of the
 #                                 #   served one. Raise it on a remote GPU node
 #                                 #   whose models load slowly.
+#                                 #   It is a CEILING on the probe, not the
+#                                 #   probe's budget: the probe takes at most
+#                                 #   half of the caller's own timeout and the
+#                                 #   chat call gets what is left of it — so
+#                                 #   the first call after each cache expiry
+#                                 #   has a shorter chat window than the ones
+#                                 #   that follow. The remainder is per
+#                                 #   ATTEMPT: a retried call re-runs with the
+#                                 #   same window, so a failing call can
+#                                 #   exceed its timeout.
+# MODEL_DETECT_TTL=60                # TTL of the /v1/models model-id cache
+#                                 #   (seconds). Shared by the Python
+#                                 #   services (retriever/dataprep/chatqna)
+#                                 #   and the OKF Node services — one value
+#                                 #   tunes both worlds. Lower = fresher
+#                                 #   model ids, more probes.
 # MODEL_RERANK_TIMEOUT_SECONDS=300 # TEI rerank. Deliberately NOT tighter than the
 #                                 #   300 s an unconfigured aiohttp session would
 #                                 #   have used: the rerank path has no fallback, so
@@ -1408,6 +1424,14 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # EMBEDDING_SERVICE_URL=https://${GPU_NODE_HOST}/embed
 # RERANKER_SERVICE_URL=https://${GPU_NODE_HOST}/rerank
 #
+# RAGAS_JUDGE_BASE_URL=https://${GPU_NODE_HOST}/llm/v1
+#   The benchmark judge/generator endpoint. With a REMOTE GPU the local
+#   `vllm` service does not run (the gpu-models profile is skipped), so the
+#   default (http://vllm:8000/v1) points at a service that is not there —
+#   set it to the GPU node. Point it at the DEPLOYMENT's own model server:
+#   okf-server sends the deployment credential to the judge only when the
+#   judge base IS the deployment endpoint.
+#
 # TEI_EMBED_HOST=https://${GPU_NODE_HOST}
 #   TEI embed endpoint BASE for okf-server (frontmatter tag embedding,
 #   vectorized-head build, Story 1-8 head tests). The service appends
@@ -1669,8 +1693,14 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   Default: '' (= engine fail-softs to heuristics). Compose: yes.
 #   Ansible: yes (gpu_node_host block — same host:port as TEI_EMBED_HOST).
 # VLLM_LLM_MODEL_ID=ibm-granite/granite-4.1-8b
-#   Default: '' (must support guided JSON for labeling). Compose: yes
-#   (nested VLLM_MODEL_ID fallback). Ansible: yes (guarded).
+#   Default: '' (must support guided JSON for labeling). Compose: yes.
+#   Ansible: yes (guarded).
+#   THE PIN SPELLING: the name the vLLM container is started with
+#   (--served-model-name) and the one every service reads — VLLM_MODEL_ID is
+#   filled from it for the Python services. okf-server reads BOTH spellings
+#   raw (VLLM_LLM_MODEL_ID first — envPin() in vllm-model-cache.js decides);
+#   a raw VLLM_MODEL_ID is its escape hatch and wins only while this
+#   variable is unset. A pin must name a model the CALLED endpoint serves.
 # VLLM_API_KEY=secret
 #   Default: '' (Bearer on vLLM + TEI calls). Compose: yes. Ansible: yes.
 # OKF_CURATION_TIMEOUT_MS=30000
@@ -1780,14 +1810,26 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   deployment-wide internal secret). Fail-closed: unset rejects everything.
 #   Used by: okf-server -> ragas-service auth. Compose: yes. Ansible: yes.
 # RAGAS_JUDGE_BASE_URL=http://vllm:8000/v1
-#   Default: the deployment's vLLM endpoint. OpenAI-compatible judge/generator
-#   endpoint — any local server qualifies (vLLM, LiteLLM, ollama).
+#   Default: the deployment's vLLM endpoint (the local vllm service — with
+#   a remote GPU, set it to the GPU node: see the remote-GPU section
+#   above). OpenAI-compatible judge/generator endpoint — any local server
+#   qualifies (vLLM, LiteLLM, ollama). Point it at the DEPLOYMENT's own
+#   model server: okf-server sends the deployment credential to the judge
+#   only when the judge base IS the deployment endpoint.
 # RAGAS_JUDGE_MODEL=<model id>
-#   Default: VLLM_LLM_MODEL_ID. The judge+generator model. Must meet the
-#   model-requirements minimums (strict JSON output; window sized for
-#   question+answer+contexts; no reasoning tokens in completions).
+#   The ragas sidecar has NO model discovery: without a name here (or a
+#   pinned VLLM_LLM_MODEL_ID) its judge is "not configured" and the
+#   benchmark leg answers 503. okf-server does NOT
+#   default it: the deployment's model name must never be sent to a judge
+#   base that serves another model — unset, the served model is discovered
+#   on the judge base (the deployment pin applies when the judge base IS
+#   the deployment endpoint). Must meet the model-requirements minimums
+#   (strict JSON output; window sized for question+answer+contexts; no
+#   reasoning tokens in completions).
 # RAGAS_JUDGE_API_KEY=<bearer for the judge endpoint>
-#   Default: VLLM_API_KEY.
+#   Default: VLLM_API_KEY for the ragas sidecar. okf-server sends the
+#   deployment credential to the judge only when the judge base IS the
+#   deployment endpoint; for any other judge, name the key here.
 # RAGAS_JUDGE_CONTEXT_TOKENS=<the judge model's context window>
 #   Default: VLLM_MAX_MODEL_LEN (65536 if unset). The benchmark KG-input cap
 #   derives from it (RAGAS_DOC_CHAR_CAP=auto): (window - 3072) / 2 pair-safe

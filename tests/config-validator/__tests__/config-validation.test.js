@@ -521,14 +521,12 @@ describe('Configuration Validation Suite', () => {
       /^(OKF_|TEI_EMBED_HOST|EMBEDDING_MODEL_ID|VLLM_ENDPOINT|VLLM_MODEL_ID|VLLM_API_KEY|DATAPREP_URL)/.test(v)
     );
 
-    // The compose VLLM_MODEL_ID entry interpolates VLLM_LLM_MODEL_ID first
-    // (`${VLLM_LLM_MODEL_ID:-${VLLM_MODEL_ID:-}}`) — an env.j2 emission of
-    // the primary alias satisfies the parity for the container-side name.
-    const ANSIBLE_ALIAS = { VLLM_MODEL_ID: 'VLLM_LLM_MODEL_ID' };
-
     test('every OKF compose var is emitted by env.j2', () => {
       expect(PARITY_VARS.length).toBeGreaterThanOrEqual(15); // guard: block actually parsed
-      const missing = PARITY_VARS.filter((v) => !ansibleVars[v] && !ansibleVars[ANSIBLE_ALIAS[v]]);
+      // VLLM_MODEL_ID passes through RAW in the okf-server block (envPin()
+      // in the service owns the precedence) — env.j2 emits it guarded
+      // (vllm_model_id), so the parity holds on both paths.
+      const missing = PARITY_VARS.filter((v) => !ansibleVars[v]);
       expect(missing).toEqual([]);
     });
 

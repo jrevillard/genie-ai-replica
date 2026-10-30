@@ -724,7 +724,11 @@ services:
       # it every default-judged run recorded judge {model: null} while the
       # sidecar judged with the env model (2026-10-21 review F10).
       - RAGAS_JUDGE_BASE_URL=${RAGAS_JUDGE_BASE_URL:-http://vllm:8000/v1}
-      - RAGAS_JUDGE_MODEL=${RAGAS_JUDGE_MODEL:-${VLLM_LLM_MODEL_ID:-}}
+      # NO model default here: the deployment's model name must never be
+      # sent to a judge base that serves another model. Unset = the served
+      # model is DISCOVERED on the judge base (the !631 policy); the pin
+      # applies only when the judge base IS the deployment endpoint (#1181).
+      - RAGAS_JUDGE_MODEL=${RAGAS_JUDGE_MODEL:-}
       # ArangoDB — same database as the graphs (ADR-okf-018); direct arangojs, no ORM.
       - ARANGO_URL=${ARANGO_URL:-http://arango-vector-db:8529}
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
@@ -785,8 +789,29 @@ services:
       # a deployment opts IN by setting VLLM_ENDPOINT + VLLM_API_KEY and a
       # guided-JSON-capable chat model (VLLM_LLM_MODEL_ID preferred).
       - VLLM_ENDPOINT=${VLLM_ENDPOINT:-}
-      - VLLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-${VLLM_MODEL_ID:-}}
+      # The pin spellings pass through RAW — envPin() (vllm-model-cache.js)
+      # owns the precedence (VLLM_LLM_MODEL_ID first). A raw VLLM_MODEL_ID
+      # is the escape hatch for a deployment whose OKF legs talk to ANOTHER
+      # server (a proxy whose /v1/models is not readable): it wins only
+      # while VLLM_LLM_MODEL_ID is unset and must name a model the CALLED
+      # endpoint serves (#1181).
+      - VLLM_MODEL_ID=${VLLM_MODEL_ID:-}
+      # The LLM spelling reaches okf-server too (#1181): the serve-mode
+      # fidelity label mirrors chatqna's pin precedence, and chatqna only
+      # ever receives THIS spelling.
+      - VLLM_LLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-}
       - VLLM_API_KEY=${VLLM_API_KEY:-}
+      # Discovery knobs (#1181) — the same names and defaults as the OPEA
+      # blocks, so one .env line tunes both worlds. The TTL is the model-id
+      # cache window; the probe timeout bounds the /v1/models probe (raise
+      # it when vLLM is still loading weights — see the dataprep block).
+      - MODEL_DETECT_TTL=${MODEL_DETECT_TTL:-60}
+      - MODEL_PROBE_TIMEOUT_SECONDS=${MODEL_PROBE_TIMEOUT_SECONDS:-10}
+      # Judge key: EXPLICIT only (no VLLM_API_KEY default here — the
+      # deployment bearer must not be manufactured for a judge base the
+      # operator may point anywhere; the service only sends it when the
+      # judge base IS the deployment endpoint).
+      - RAGAS_JUDGE_API_KEY=${RAGAS_JUDGE_API_KEY:-}
       # Model-endpoint externalization (David 2026-10-08: all OKF env vars
       # live in .env with documented defaults — compose is only the pipe).
       # TEI embed base for tag embedding + vectorized-head build + the
@@ -1709,6 +1734,7 @@ services:
       # that window fail their LLM step loudly (labeling falls back to
       # file-level labels; there is no configured-id fallback anymore).
       MODEL_PROBE_TIMEOUT_SECONDS: ${MODEL_PROBE_TIMEOUT_SECONDS:-10}
+      MODEL_DETECT_TTL: ${MODEL_DETECT_TTL:-60}
       #
       # VLLM_TIMEOUT is deliberately NOT injected here, even though the vendored
       # comps reads it: OpeaArangoDataprep builds its LLMGraphTransformer with
@@ -1960,6 +1986,7 @@ services:
       # image.
       MODEL_LLM_TIMEOUT_SECONDS: ${MODEL_LLM_TIMEOUT_SECONDS:-180}
       MODEL_PROBE_TIMEOUT_SECONDS: ${MODEL_PROBE_TIMEOUT_SECONDS:-10}
+      MODEL_DETECT_TTL: ${MODEL_DETECT_TTL:-60}
       MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
       MODEL_EMBEDDING_TIMEOUT_SECONDS: ${MODEL_EMBEDDING_TIMEOUT_SECONDS:-600}
       # 600 is a NEW ceiling, not the openai default kept — langchain-openai
@@ -2022,6 +2049,7 @@ services:
       # their blocks). Here, with no pinned name, a probe failure propagates:
       # the request fails closed (503) until the endpoint answers.
       MODEL_PROBE_TIMEOUT_SECONDS: ${MODEL_PROBE_TIMEOUT_SECONDS:-10}
+      MODEL_DETECT_TTL: ${MODEL_DETECT_TTL:-60}
       MEGA_SERVICE_HOST_IP: chatqna-xeon-backend-server
       LOG_LEVEL: ${LOG_LEVEL:-info}
       EMBEDDING_SERVER_HOST_IP: embedding

@@ -53,8 +53,9 @@
 
 const axios = require('axios');
 const dbService = require('../shared-lib/db-connection-service');
-const config = require('../config');
 const { logger } = require('../shared-lib/logger');
+const modelCache = require('./vllm-model-cache');
+
 const { withSpan } = require('../shared-lib/tracing');
 
 /**
@@ -223,11 +224,23 @@ function buildNeighborIndex(concepts, k = DEFAULT_NEIGHBORS) {
 /** vLLM chat call — mirrors llm-curation-service.callVllm (endpoint/bearer
  * normalization + strict JSON) so both curation passes behave identically. */
 async function callVllm(messages, { timeoutMs = TIMEOUT_MS } = {}) {
-  const rawBase = config?.llm?.endpoint || process.env.VLLM_ENDPOINT;
-  const model = config?.llm?.model || process.env.VLLM_MODEL_ID;
-  if (!rawBase || !model) throw new Error('llm-not-configured');
+  // The opt-in gate: compose ships VLLM_ENDPOINT empty (the OKF LLM legs
+  // stay off until a deployment names the endpoint).
+  const rawBase = modelCache.optedInVllmBase();
+  // No endpoint at all = the deliberate opt-out (compose ships it empty).
+  if (!rawBase) throw new Error('llm-not-configured');
+  // Model id under the !631 policy (services/vllm-model-cache.js): pin ->
+  // /v1/models discovery -> loud ModelDiscoveryError (#1181). The probe
+  // shares the call budget; the chat call gets what is left of it.
+  const resolved = await modelCache.resolveDeploymentModel({
+    baseUrl: rawBase,
+    apiKey: modelCache.deploymentKey(),
+    budgetMs: timeoutMs
+  });
+  const model = resolved.model;
+  const chatTimeoutMs = resolved.remainingMs;
   const headers = {};
-  const apiKey = process.env.VLLM_API_KEY || config?.llm?.apiKey;
+  const apiKey = modelCache.deploymentKey(); // the same read the probe uses
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const r = await axios.post(
     // Shared URL rule (services/llm-url.js) — versioned base or bare host.
@@ -239,7 +252,7 @@ async function callVllm(messages, { timeoutMs = TIMEOUT_MS } = {}) {
       max_tokens: MAX_TOKENS,
       response_format: { type: 'json_object' }
     },
-    { timeout: timeoutMs, headers }
+    { timeout: chatTimeoutMs, headers }
   );
   return (r.data?.choices?.[0]?.message?.content || '').trim();
 }

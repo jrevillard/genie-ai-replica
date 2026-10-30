@@ -105,6 +105,53 @@ Knowledge Hierarchy tab of the Admin Dashboard (or
 afterwards); read `GET /api/analytics/dashboard` instead of the removed
 route.
 
+#### The OKF model listing follows the chat path's URL rule
+
+The OKF admin panel lists the models of a saved configuration at
+`{base}/models` when the base carries no version segment; it now lists at
+`{base}/v1/models` — the one rule the chat call uses, so the listing and
+the chat can never disagree about where `/v1` goes.
+
+**Migration**: a saved configuration whose base serves the model list at the
+root (`http://my-proxy:8080/models`) must carry its version segment
+(`http://my-proxy:8080/v1`). The chat call already resolved that base with
+the `/v1` prefix, so only the listing path changes.
+
+#### The deployment vLLM bearer no longer reaches foreign endpoints
+
+The OKF server scoped its deployment credential (`VLLM_API_KEY`) to the
+deployment endpoint. A judge at `RAGAS_JUDGE_BASE_URL`, or a saved model
+configuration without a key of its own, no longer receives it — before,
+the bearer was sent to whatever endpoint those settings named.
+
+**Migration**: an endpoint on another host that accepted the deployment
+bearer now answers 401. Give it its own credential — `RAGAS_JUDGE_API_KEY`
+for the judge (explicit only in compose and Ansible since this change), or
+the `api_key` field on the saved model configuration.
+
+#### The OKF judge no longer inherits the deployment's model name
+
+`RAGAS_JUDGE_MODEL` no longer defaults to `VLLM_LLM_MODEL_ID` for the OKF
+server (compose and Ansible): unset, it discovers the served model on the
+judge base.
+
+**Migration**: a judge endpoint whose `/v1/models` is unreadable (an
+ACL'd proxy) must be pinned explicitly — set `RAGAS_JUDGE_MODEL` (or
+`ragas_judge_model` in Ansible) to a name that endpoint serves. The ragas
+sidecar keeps its own default (its judge base is the deployment vLLM) and
+has no discovery: with neither `RAGAS_JUDGE_MODEL` nor `VLLM_LLM_MODEL_ID`
+set, its judge is "not configured" and the benchmark leg answers 503.
+
+#### The suite `generator` field is a list
+
+The benchmark suite's `generator` field was a single `llm:<model>` token
+(or a placeholder that named nothing). It now lists every model that
+produced the suite, comma-separated (`llm:model-a,llm:model-b`), or
+`none` when no LLM call generated it.
+
+**Migration**: a consumer that parses it as one token must handle both
+shapes (split on `,`; expect the literal `none`).
+
 #### Service-category translation field names
 
 On POST/PUT of categories and services, translations now read

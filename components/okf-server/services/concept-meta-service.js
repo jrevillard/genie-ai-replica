@@ -25,8 +25,9 @@ const { createHash } = require('node:crypto');
 const { DateTime } = require('luxon');
 const matter = require('gray-matter');
 const dbService = require('../shared-lib/db-connection-service');
-const config = require('../config');
 const { logger } = require('../shared-lib/logger');
+const modelCache = require('./vllm-model-cache');
+
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
 const { isArangoNotFound, isArangoUniqueViolation } = require('./arango-errors');
@@ -655,8 +656,9 @@ async function buildManifestDoc(repo_id, version, cloned_from) {
  *
  * The LLM is invoked with a compact prompt: the manifest's deterministic
  * metadata (concept titles, labels, root concept, link list) is enough for the
- * model to produce a 2-4 sentence bundle description. The model id matches
- * VLLM_MODEL_ID (configurable). Result is cached on the manifest doc so
+ * model to produce a 2-4 sentence bundle description. The model id follows
+ * the !631 discovery policy (pin > /v1/models discovery — see
+ * runLlmSummary). Result is cached on the manifest doc so
  * only one LLM call per bundle per cache-lifetime.
  *
  * Lazy semantics: if the LLM is unreachable (or times out), the manifest is
@@ -716,17 +718,41 @@ function buildSummaryPrompt(m) {
  * (live-flagged): vLLM's OpenAI-compatible server has NO token endpoint and
  * takes the STATIC VLLM_API_KEY bearer directly — the old client_credentials
  * dance against an invented `/v1/auth/token` 404'd silently on every call
- * (summaries永远 null). Also normalizes the base: VLLM_ENDPOINT in this
+ * (summaries stayed null forever). Also normalizes the base: VLLM_ENDPOINT in this
  * stack conventionally ends in `/v1`, so appending `/v1/chat/completions`
  * verbatim produced `/v1/v1/...`. Short timeout — best-effort, off the
  * ingestion hot path. */
 async function runLlmSummary(prompt, { timeoutMs = 5000 } = {}) {
-  const rawBase = config?.llm?.endpoint || process.env.VLLM_ENDPOINT;
+  // The opt-in gate: compose ships VLLM_ENDPOINT empty (the OKF LLM legs
+  // stay off until a deployment names the endpoint).
+  const rawBase = modelCache.optedInVllmBase();
   if (!rawBase) return null;
-  const model = config?.llm?.model || process.env.VLLM_MODEL_ID;
-  if (!model) return null;
+  // Model id under the !631 policy (services/vllm-model-cache.js): pin ->
+  // /v1/models discovery -> loud. The probe budget stays inside the caller's
+  // best-effort timeout. Resolution failure keeps the lazy-summary
+  // semantics: summary stays null, discovery scoring is unaffected (#1181).
+  let model;
+  let chatTimeoutMs;
+  try {
+    const resolved = await modelCache.resolveDeploymentModel({
+      baseUrl: rawBase,
+      apiKey: modelCache.deploymentKey(),
+      budgetMs: timeoutMs,
+      // A best-effort summary: a slow probe must not eat half of its
+      // answer window — the probe gets 1 s, the answer the rest.
+      probeBudgetMs: Math.min(1000, timeoutMs)
+    });
+    model = resolved.model;
+    chatTimeoutMs = resolved.remainingMs;
+  } catch (err) {
+    // Loud in the LOG even though the summary stays null (best-effort
+    // surface): the operator must be able to tell "no model configured"
+    // from "the endpoint is down" from "the model could not be discovered".
+    logger.warn('concept_meta.summary_model_unresolved', { endpoint: rawBase, error: err.message });
+    return null;
+  }
   const headers = {};
-  const apiKey = process.env.VLLM_API_KEY || config?.llm?.apiKey;
+  const apiKey = modelCache.deploymentKey(); // the same read the probe uses
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const r = await axios.post(
     // Shared URL rule (services/llm-url.js): a versioned base keeps its
@@ -738,7 +764,7 @@ async function runLlmSummary(prompt, { timeoutMs = 5000 } = {}) {
       max_tokens: 200,
       temperature: 0.0
     },
-    { timeout: timeoutMs, headers }
+    { timeout: chatTimeoutMs, headers }
   );
   return (r.data?.choices?.[0]?.message?.content || '').trim() || null;
 }

@@ -11,6 +11,7 @@
 jest.mock('../shared-lib/logger', () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() }
 }));
+jest.mock('axios');
 jest.mock('../shared-lib/tracing', () => ({
   withSpan: jest.fn(async (name, fn) => fn({ setAttribute: jest.fn() }))
 }));
@@ -2910,8 +2911,11 @@ describe('answerFidelity — the record must name the model that ACTUALLY answer
       config_name: 'Answers Config',
       source: 'active'
     });
-    process.env.VLLM_MODEL_ID = 'ibm-granite/granite-4.1-8b';
-    delete process.env.VLLM_LLM_MODEL_ID;
+    // Chatqna's compose pin maps ONLY the VLLM_LLM_MODEL_ID spelling —
+    // set that spelling (r2 #1181): a VLLM_MODEL_ID-only .env pins okf but
+    // NOT chatqna, and the serve-mode label must name what CHATQNA uses.
+    process.env.VLLM_LLM_MODEL_ID = 'ibm-granite/granite-4.1-8b';
+    delete process.env.VLLM_MODEL_ID;
 
     // The SERVE leg answers through chatqna, which serves the deployment
     // chat model. The served call carries no model at all, so the
@@ -2933,6 +2937,24 @@ describe('answerFidelity — the record must name the model that ACTUALLY answer
     expect(whatif.config).toBe('Answers Config');
     expect(whatif.model).toBe('glm-5.3-flash');
     expect(spy).toHaveBeenCalledWith({ service: 'ragas_answers' });
+  });
+
+  it('a config that names NO model records the model that answered (discovery on its base)', async () => {
+    const axios = require('axios');
+    jest.spyOn(modelConfigService, 'resolveModelOverride').mockResolvedValue({
+      provider: 'openai',
+      base_url: 'https://answers/v1',
+      model: null, // no default_model on the config
+      api_key: 'answers-key',
+      config_name: 'Answers Config',
+      source: 'active'
+    });
+    require('../services/vllm-model-cache').clearModelCache();
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/answers-8b' }] } });
+    const whatif = await svc.answerFidelity({});
+    expect(whatif.source).toBe('config');
+    // The record must say what answered — the served model, not null.
+    expect(whatif.model).toBe('served/answers-8b');
   });
 
   it('falls back to the deployment chat when the answers config cannot be resolved', async () => {
@@ -3818,5 +3840,51 @@ describe('buildEnvAdvice — the configuration adjustment cycle (2026-10-27)', (
       for (const t of e.targets || []) expect(KNOWN_METRICS.has(t)).toBe(true);
       for (const c of e.changes || []) expect(KNOWN_ENV.has(c.env)).toBe(true);
     }
+  });
+});
+
+// #1181 — the serve-mode fidelity label (!631): it mirrors chatqna's
+// pin precedence — the LLM spelling the chatqna container receives —
+// else the served model of the deployment endpoint, never null.
+describe('answerFidelity — the serve-mode model (!631 policy)', () => {
+  const cache = require('../services/vllm-model-cache');
+  const { isolateVllmEnv } = require('./vllm-env-helper');
+  const ENV_KEYS = ['VLLM_MODEL_ID', 'VLLM_LLM_MODEL_ID', 'VLLM_ENDPOINT'];
+
+  isolateVllmEnv(ENV_KEYS);
+
+  beforeEach(() => {
+    cache.clearModelCache();
+  });
+
+  afterEach(() => {
+    cache.clearModelCache();
+  });
+
+  it('no pin: serve mode records the model discovered from the endpoint', async () => {
+    const axios = require('axios');
+    delete process.env.VLLM_MODEL_ID;
+    delete process.env.VLLM_LLM_MODEL_ID;
+    process.env.VLLM_ENDPOINT = 'http://vllm:8000';
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/chat-8b' }] } });
+    const serve = await svc.answerFidelity({ serveMode: true });
+    expect(serve.source).toBe('deployment-chat');
+    expect(serve.model).toBe('served/chat-8b');
+  });
+
+  it('VLLM_MODEL_ID alone must NOT name the serve-mode model — the served id does', async () => {
+    const axios = require('axios');
+    process.env.VLLM_MODEL_ID = 'plain-spelling-pin';
+    delete process.env.VLLM_LLM_MODEL_ID;
+    process.env.VLLM_ENDPOINT = 'http://vllm:8000';
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/chat-9b' }] } });
+    const serve = await svc.answerFidelity({ serveMode: true });
+    expect(serve.model).toBe('served/chat-9b');
+  });
+
+  it('VLLM_LLM_MODEL_ID (chatqna’s spelling) still wins when set', async () => {
+    process.env.VLLM_LLM_MODEL_ID = 'llm-spelling-pin';
+    const serve = await svc.answerFidelity({ serveMode: true });
+    expect(serve.model).toBe('llm-spelling-pin');
   });
 });

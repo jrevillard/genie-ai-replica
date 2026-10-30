@@ -362,7 +362,7 @@ Every variable below is emitted by `env.j2` with the value in the "Default" colu
 | `contextual_retrieval_enabled` | `true` | Prepend an LLM document-context prefix to each chunk so it carries the document's subject. `false` is a true no-op |
 | `contextual_strategy` | `per_chunk` | `per_chunk` (one call per batch, section-tailored) or `doc_level` (one call per document, same context on every chunk — N× cheaper) |
 | `contextual_label_raw` | `true` | Decoupled mode: label the RAW chunk, use the context ONLY for the embedding (keeps label precision while propagating the subject via the vector) |
-| `dataprep_contextual_model` | (empty) | Model for context generation; empty = auto-detect the served model; must support guided JSON |
+| `dataprep_contextual_model` | (empty) | Model for context generation; empty = discover the served model; must support guided JSON |
 | `dataprep_contextual_doc_budget` | `0` | `0` = **derived** from `vllm_max_model_len`. The context call carries system prompt + document context + batch chunk text and reserves `dataprep_contextual_max_tokens` **per chunk in the batch**; all of that is subtracted from the window and the remainder is the budget. Set `>0` only deliberately — a budget copied from a larger-window deployment overflows this one and the rejected calls fall back to raw chunks silently |
 | `dataprep_contextual_doc_budget_doc_level` | `100000` | Max chars of doc text fed to the doc_level context LLM (one call — can afford a larger window) |
 | `dataprep_contextual_max_tokens` | `512` | Max OUTPUT tokens **per chunk in the batch** for the context-generation LLM. The legacy cap of 200 truncated the JSON under load; 512 = safe margin (model stops early at ~196). A batch of 4 reserves 4× this |

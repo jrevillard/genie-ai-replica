@@ -49,16 +49,23 @@
 # Required directories on each target node (create before deploy):
 #
 # All nodes:
-#   ./data/logs/kong            (Kong gateway logs)
-#   ./data/database_backups     (Backend DB dumps)
+#   ./data/database_backups     (Backend DB dumps; MUST pre-exist: the bind is
+#                               create_host_path:false, so a missing directory
+#                               fails the backend loudly instead of docker
+#                               silently creating it root-owned — #1227)
 #   ./data/huggingface          (TEI model cache, GPU nodes only)
 #   ./secrets/ssl/              (server.crt, server.key)
+#
+# Kong gateway logs are NOT on this list anymore (#1227): Kong logs to
+# stdout/stderr (fluentd driver) and the former /var/log/kong host bind made
+# docker create a root-owned data/logs/kong on first run.
 
 volumes:
   postgres_data:
   redis_data:
   doc_repo_uploads:
   arango_data: {}
+  arango_apps: {}
   hf_cache:
   backend_uploads:
   backend_data:
@@ -144,6 +151,9 @@ services:
 
   # Kong database migrations (one-shot init, runs automatically on first start)
   kong-migrations:
+    # Run as the image's own kong user (uid 1001): migrations only touch the
+    # database - no privileged port, no host path (#1227 no-root contract).
+    user: "1001:1001"
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
     cap_drop:
       - ALL
@@ -193,6 +203,8 @@ services:
       kong:
         condition: service_healthy
     build: api-gateway-solution/new-config/
+    # Pin the image's own USER (uid 1000) at compose level (#1227).
+    user: "1000:1000"
     image: ${GENIE_AI_KONG_CONFIG_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-kong-config}:${GENIE_AI_KONG_CONFIG_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     networks:
       - genieai_network
@@ -229,6 +241,12 @@ services:
       kong-migrations:
         condition: service_completed_successfully
     restart: unless-stopped
+    # Run as the image's own kong user (uid 1001). All Kong logs are wired to
+    # stdout/stderr (KONG_*_ACCESS_LOG / ERROR_LOG below) and the fluentd
+    # driver ships them, so the legacy /var/log/kong host bind is gone: docker
+    # silently creates a missing bind source as root-owned, which is exactly
+    # what produced the root-owned data/logs/kong directory of #1227.
+    user: "1001:1001"
     image: kong:3.9.3
     environment:
       - KONG_DATABASE=${KONG_DATABASE:-postgres}
@@ -267,8 +285,6 @@ services:
     # Kong admin API - internal only (accessible via docker exec for post-deploy config)
     # ports:
     #   - "8001:8001"
-    volumes:
-      - "${DATA_DIR:-./data}/logs/kong:/var/log/kong"
     deploy:
       replicas: 1
       placement:
@@ -280,14 +296,13 @@ services:
         max_attempts: 10
 
   nginx:
-    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    # Non-root (#1227): the edge runs as the image's nginx user (uid 101) and
+    # listens on unprivileged in-container ports (8080/8443). 80/443 exist only
+    # at host publication. The entrypoint renders config into /tmp and keeps
+    # its writable state (certs, pid, temp dirs) in nginx-owned paths.
+    user: "101:101"
     cap_drop:
       - ALL
-    cap_add:
-      - CHOWN
-      - SETGID
-      - SETUID
-      - NET_BIND_SERVICE
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
@@ -300,11 +315,11 @@ services:
     build: api-gateway-solution/nginx/
     image: ${GENIE_AI_NGINX_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-nginx}:${GENIE_AI_NGINX_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     ports:
-      - target: 80
+      - target: 8080
         published: ${NGINX_HTTP_PORT:-80}
         protocol: tcp
         mode: host
-      - target: 443
+      - target: 8443
         published: ${NGINX_HTTPS_PORT:-443}
         protocol: tcp
         mode: host
@@ -317,7 +332,7 @@ services:
       - NGINX_FRONTEND_PORT=${NGINX_FRONTEND_PORT:-8090}
       - NGINX_PERMISSIONS_POLICY=${NGINX_PERMISSIONS_POLICY:-camera=(), microphone=(), geolocation=()}
     healthcheck:
-      test: ["CMD-SHELL", "curl -sk -o /dev/null -w '%{http_code}' https://localhost/ | grep -qE '^[23]' || exit 1"]
+      test: ["CMD-SHELL", "curl -sk -o /dev/null -w '%{http_code}' https://localhost:8443/ | grep -qE '^[23]' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -395,6 +410,9 @@ services:
     logging: *fluent-logging
     restart: unless-stopped
     build: components/gov-chat-frontend/
+    # Non-root (#1227): the image's runtime user is nginx (uid 101) - its
+    # Dockerfile chowns the runtime-config dir and renders nginx.conf to /tmp.
+    user: "101:101"
     image: ${GENIE_AI_FRONTEND_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-frontend}:${GENIE_AI_FRONTEND_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     environment:
       - PORT=8090
@@ -487,6 +505,8 @@ services:
     build:
       context: .
       dockerfile: components/gov-chat-backend/Dockerfile.migrations
+    # Pin the image's node user (#1227) - Dockerfile.migrations sets USER node.
+    user: "1000:1000"
     image: ${GENIE_AI_DB_MIGRATIONS_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-db-migrations}:${GENIE_AI_DB_MIGRATIONS_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     networks:
       - genieai_network
@@ -525,12 +545,24 @@ services:
     build:
       context: components/
       dockerfile: gov-chat-backend/Dockerfile
+    # Pin the image's node user, uid 1000 (Dockerfile sets USER node) (#1227).
+    user: "1000:1000"
     image: ${GENIE_AI_BACKEND_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-backend}:${GENIE_AI_BACKEND_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     # Swarm: internal only - access via Kong proxy
     # ports:
     #   - "${BACKEND_PORT:-3000}:3000"
     volumes:
-      - "${DATA_DIR:-./data}/database_backups:/app/database_backups"
+      # Long syntax + create_host_path:false (#1227): docker silently creates
+      # a missing bind source as ROOT-owned, which would lock the node user
+      # (1000) out of its backup dir. The Ansible deploy pre-creates the
+      # directory (deploy/ansible/deploy.yml); a bare `docker compose up` from
+      # a clean checkout must `mkdir -p data/database_backups` first - the
+      # failure is then loud instead of silently root-owned.
+      - type: bind
+        source: ${DATA_DIR:-./data}/database_backups
+        target: /app/database_backups
+        bind:
+          create_host_path: false
       - backend_data:/app/data
       - backend_uploads:/app/Uploads
     # Allow backend to resolve NGINX_PUBLIC_DOMAIN (e.g. localhost) to the Docker host,
@@ -1149,6 +1181,9 @@ services:
     build:
       context: components/
       dockerfile: document-repository/Dockerfile
+    # Non-root (#1227): the Dockerfile sets USER node and chowns the upload,
+    # ClamAV signature and socket dirs its entrypoint writes.
+    user: "1000:1000"
     image: ${GENIE_AI_DOCUMENT_REPOSITORY_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-document-repository}:${GENIE_AI_DOCUMENT_REPOSITORY_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     environment:
       # Secrets (required, no defaults in code)
@@ -1235,6 +1270,14 @@ services:
       - no-new-privileges:true
     logging: *fluent-logging
     restart: unless-stopped
+    # Run as the image's own clamav user (uid 1000) - the image chowns its
+    # signature database to that user, so the entrypoint works unprivileged
+    # (#1227).
+    user: "1000:1000"
+    # The image's default /init (s6) prepares /run/clamav with a chown and
+    # therefore assumes root; /init-unprivileged is the image's own non-root
+    # path (freshclam-on-missing-db + clamd in the foreground) (#1227).
+    entrypoint: ["/init-unprivileged"]
     image: clamav/clamav:stable-debian
     # Internal only
     # ports:
@@ -1257,6 +1300,33 @@ services:
         delay: 5s
         max_attempts: 10
 
+  # Chowns the arango_data volume to the unprivileged uid arango runs as
+  # (#1227). One-shot, runs as root ON PURPOSE (the chown IS the job) and
+  # writes nothing outside the named volume — see the no-root contract test.
+  arango-vector-db-init:
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+    security_opt:
+      - no-new-privileges:true
+    logging: *fluent-logging
+    image: busybox:1.38.0
+    command: ["sh", "-c", "chown -R 999:999 /var/lib/arangodb3 /var/lib/arangodb3-apps"]
+    volumes:
+      - arango_data:/var/lib/arangodb3
+      - arango_apps:/var/lib/arangodb3-apps
+    networks:
+      - genieai_network
+    restart: "no"
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: "none"
+
   arango-vector-db:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
     cap_drop:
@@ -1271,14 +1341,22 @@ services:
       - no-new-privileges:true
     logging: *fluent-logging
     restart: unless-stopped
+    # Run as an unprivileged dedicated uid (#1227). The image ships no
+    # arangodb user and a root-owned data dir, so arango-vector-db-init chowns
+    # the named volume to 999 before this service starts.
+    user: "999:999"
     image: arangodb/arangodb:3.12.4
     ports:
       - target: 8529
         published: ${ARANGO_PORT:-8529}
         protocol: tcp
         mode: host
+    depends_on:
+      arango-vector-db-init:
+        condition: service_completed_successfully
     volumes:
       - arango_data:/var/lib/arangodb3
+      - arango_apps:/var/lib/arangodb3-apps
     environment:
       ARANGO_ROOT_PASSWORD: ${ARANGO_PASSWORD}
     command: ["--experimental-vector-index=true"]
@@ -2260,6 +2338,9 @@ services:
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
+    # postgres package user (uid 999): the init only runs the psql client
+    # against the database over the network and writes nothing (#1227).
+    user: "999:999"
     build: configs/postgres/
     image: ${GENIE_AI_POSTGRES_INIT_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-postgres-init}:${GENIE_AI_POSTGRES_INIT_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     environment:
@@ -2292,6 +2373,9 @@ services:
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
+    # The upstream image runs as uid 1000 (keycloak) with group 0 — mirrored
+    # here so compose and chart state the same identity (#1227).
+    user: "1000:0"
     image: quay.io/keycloak/keycloak:26.7.0
     # The upstream image ships an empty CMD (kc.sh prints its usage and exits
     # without a subcommand). The dropped custom image baked `start` via its
@@ -2371,6 +2455,8 @@ services:
     build:
       context: configs/keycloak/
       dockerfile: Dockerfile.config-cli
+    # Pin the image's own USER (uid 65534) at compose level (#1227).
+    user: "65534:65534"
     image: ${GENIE_AI_KEYCLOAK_CONFIG_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-keycloak-config}:${GENIE_AI_KEYCLOAK_CONFIG_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     environment:
       - KEYCLOAK_URL=http://keycloak:8080
@@ -2488,6 +2574,10 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
+    # The upstream image runs as uid 10001 (otel); otel-collector-init chowns
+    # the queue volume to that uid. State it here so compose carries the
+    # identity explicitly (#1227).
+    user: "10001:10001"
     image: otel/opentelemetry-collector-contrib:0.152.0
     # Expose fluentforward receiver on localhost so the Docker daemon can
     # send container logs via the fluentd logging driver. Binding to
@@ -2573,6 +2663,32 @@ services:
         delay: 5s
         max_attempts: 5
 
+  # Chowns the vlogs-data volume to the unprivileged uid victoria-logs runs
+  # as (#1227). One-shot, runs as root ON PURPOSE (the chown IS the job) and
+  # writes nothing outside the named volume - see the no-root contract test.
+  victorialogs-init:
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+    security_opt:
+      - no-new-privileges:true
+    logging: *fluent-logging
+    image: busybox:1.38.0
+    command: ["sh", "-c", "chown -R 65534:65534 /var/lib/victoria-logs"]
+    volumes:
+      - vlogs-data:/var/lib/victoria-logs
+    networks:
+      - genieai_network
+    restart: "no"
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: "none"
+
   victorialogs:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
     cap_drop:
@@ -2581,11 +2697,17 @@ services:
       - no-new-privileges:true
     logging: *fluent-logging
     restart: unless-stopped
+    # Non-root (#1227): run as uid 65534; victorialogs-init chowns the data
+    # volume before this service starts (depends_on below).
+    user: "65534:65534"
     image: victoriametrics/victoria-logs:v1.50.0
     command:
       - "--storageDataPath=/var/lib/victoria-logs"
       - "--retentionPeriod=${VICTORIALOGS_RETENTION:-30d}"
       - "--httpListenAddr=:9428"
+    depends_on:
+      victorialogs-init:
+        condition: service_completed_successfully
     volumes:
       - vlogs-data:/var/lib/victoria-logs
     healthcheck:

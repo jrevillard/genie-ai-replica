@@ -421,7 +421,13 @@
 
         <div class="dialog-footer">
           <div
-            v-if="activeTab === 'dashboard' && crawlJob && crawlJob.status === 'Succeeded' && !file?.okf_repo_id"
+            v-if="
+              okfEnabled &&
+              activeTab === 'dashboard' &&
+              crawlJob &&
+              crawlJob.status === 'Succeeded' &&
+              !file?.okf_repo_id
+            "
             class="okf-split-footer"
           >
             <div
@@ -601,6 +607,7 @@ import DsInput from './ds/Input.vue';
 import DsSelect from './ds/Select.vue';
 import DsInfoTip from './ds/InfoTip.vue';
 import okfRepoOps from '../services/okfRepoOps';
+import { isOkfEnabled } from '../utils/okfFlag';
 import { formatFileSize } from '../utils/fileUtils.js';
 
 export default {
@@ -842,6 +849,13 @@ export default {
       );
     },
     // URL for the internal file endpoint
+    /** The OKF feature flag (shared helper — same source as the store
+     * registration and the AdminDashboard tabs). Gates this dialog's whole
+     * crawl→OKF panel: with the flag parked the panel does not render, so
+     * its dispatches cannot fire into the unregistered `okf` module. */
+    okfEnabled() {
+      return isOkfEnabled();
+    },
     /** Server-side crawl→OKF conversions for THIS file (plus any still
      * in-flight — the user may have navigated between files). */
     fileConversions() {
@@ -905,8 +919,12 @@ export default {
   mounted() {
     // SUBJECT AREA options from the Knowledge Hierarchy (same shared loader
     // as the wizard/dashboard/create-dialog pickers). A new crawl-born repo
-    // has no legacy domains — the tree alone drives the list.
-    this.loadDomainOptions();
+    // has no legacy domains — the tree alone drives the list. Skipped when
+    // the OKF flag is parked: the panel is hidden and the loader's endpoint
+    // is not reachable in a dark deployment (!622 wave 1).
+    if (this.okfEnabled) {
+      this.loadDomainOptions();
+    }
   },
   beforeUnmount() {
     this.stopDashboardTimer();

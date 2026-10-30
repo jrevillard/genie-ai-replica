@@ -1825,7 +1825,8 @@ const actions = {
 
   /** Quiet fetch of the PERSISTED explain for a run — the advisor auto-load.
    * A 404 (the run was never explained) is a normal state, not an error —
-   * silent: true keeps the shared httpService from logging [OKF-ERR] for it. */
+   * silent: true keeps the shared httpService from toasting/console-logging
+   * it; the caller owns the outcome. */
   async ragasGetExplainQuiet(_ctx, { repoId, suiteKey, runKey } = {}) {
     try {
       ensureServices();

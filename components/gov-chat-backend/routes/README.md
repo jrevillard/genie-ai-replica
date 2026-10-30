@@ -175,8 +175,8 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 - **Logs Service**: Retrieves log summaries and performs searches.
 
 #### Security
-- All routes require JWT authentication (`authMiddleware.authenticate`).
-- All routes require admin privileges (`authMiddleware.isAdmin`).
+- All routes require JWT authentication (`keycloakAuthMiddleware.authenticate`).
+- All routes require admin privileges (`keycloakAuthMiddleware.requireAdmin`).
 - Security scan endpoints interact with `securityScanService` to monitor failed login attempts and suspicious activities.
 
 ### Analytics Routes
@@ -205,7 +205,7 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 - **Analytics Service**: Handles all analytics data retrieval and event tracking, interacting with the database to store and query analytics and event records.
 
 #### Security
-- All routes require JWT authentication (`authMiddleware.authenticate`).
+- All routes require JWT authentication (`keycloakAuthMiddleware.authenticate`).
 - No admin privileges required, allowing authenticated users to access analytics.
 
 ### Authentication Routes
@@ -270,7 +270,7 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 - **Chat History Service**: Manages conversations, messages, folders, and their relationships, including CRUD operations and linking queries to conversations.
 
 #### Security
-- All routes require JWT authentication (`authMiddleware.authenticate`).
+- All routes require JWT authentication (`keycloakAuthMiddleware.authenticate`).
 - User ID extraction ensures operations are restricted to the authenticated user’s data.
 - Conversation and folder operations validate ownership and permissions.
 
@@ -290,7 +290,7 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 - **Database Service**: Performs database maintenance tasks like backups and optimization.
 
 #### Security
-- All routes require JWT authentication (`authMiddleware.authenticate`).
+- All routes require JWT authentication (`keycloakAuthMiddleware.authenticate`).
 - Typically restricted to admin users (assumed to be enforced in the route or service layer).
 
 ### Query Routes
@@ -321,7 +321,7 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 - **Query Service**: Manages query creation, retrieval, feedback, and linking to conversations and messages.
 
 #### Security
-- All routes require JWT authentication (`authMiddleware.authenticate`).
+- All routes require JWT authentication (`keycloakAuthMiddleware.authenticate`).
 - User-specific operations validate `userId` to ensure data access restrictions.
 
 ### Service Category Routes
@@ -355,7 +355,7 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 - **Service Category Service**: Manages category and service data, including CRUD operations and search.
 
 #### Security
-- All routes require JWT authentication (`authMiddleware.authenticate`).
+- All routes require JWT authentication (`keycloakAuthMiddleware.authenticate`).
 
 ### Service Routes
 
@@ -376,7 +376,7 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 - **Service Category Service**: Shared with service category routes for managing category and service data.
 
 #### Security
-- All routes require JWT authentication (`authMiddleware.authenticate`).
+- All routes require JWT authentication (`keycloakAuthMiddleware.authenticate`).
 
 ### User Routes
 
@@ -418,7 +418,7 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 - **Weather Service**: Retrieves current weather and forecast data, storing user-specific weather requests in the database.
 
 #### Security
-- Requires JWT authentication (`authMiddleware.authenticate`).
+- Requires JWT authentication (`keycloakAuthMiddleware.authenticate`).
 - Validates latitude (-90 to 90) and longitude (-180 to 180) to ensure valid coordinates.
 
 ## Error Handling

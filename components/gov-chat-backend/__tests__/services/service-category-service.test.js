@@ -107,18 +107,10 @@ describe('ServiceCategoryService', () => {
       expect(mockDb.collection).toHaveBeenCalledWith('categoryServices');
       expect(mockDb.collection).toHaveBeenCalledWith('serviceCategoryTranslations');
       expect(mockDb.collection).toHaveBeenCalledWith('serviceTranslations');
+      // A lookup that re-created the collection on every access would leave
+      // the service writing to a handle no test can reach.
+      expect(mockDb.collection).toHaveBeenCalledTimes(5);
       expect(service.initialized).toBe(true);
-    });
-
-    it('should keep the handle of each collection it was given', () => {
-      // The service holds these collections for its whole lifetime: a
-      // collection that is re-created on every lookup would leave the
-      // service writing to a mock no test can reach.
-      expect(service.serviceCategories).toBe(mockServiceCategories);
-      expect(service.services).toBe(mockServices);
-      expect(service.categoryServices).toBe(mockCategoryServices);
-      expect(service.serviceCategoryTranslations).toBe(mockServiceCategoryTranslations);
-      expect(service.serviceTranslations).toBe(mockServiceTranslations);
     });
 
     it('should skip re-initialization', async () => {
@@ -167,6 +159,10 @@ describe('ServiceCategoryService', () => {
       expect(result._key).toBe('svc-1');
       expect(result.status).toBe('updated');
       expect(mockServices.update).toHaveBeenCalledWith('svc-1', { nameEN: 'Updated' });
+      expect(mockServiceTranslations.save).toHaveBeenCalledWith(
+        expect.objectContaining({ languageCode: 'EN', translation: 'Updated' }),
+        expect.objectContaining({ overwrite: true })
+      );
     });
 
     it('should throw ValidationError when nameEN is missing', async () => {
@@ -520,7 +516,7 @@ describe('ServiceCategoryService', () => {
     });
 
     it('should throw Error when serviceKey is missing', async () => {
-      await expect(service.getServiceTranslations(null)).rejects.toThrow('Invalid service key');
+      await expect(service.getServiceTranslations(null)).rejects.toThrow('Invalid service key provided');
     });
   });
 

@@ -2573,9 +2573,10 @@ and the rows below name each plan and its outcome.
 ## Remaining phases
 
 0. **Pre-merge gate (2026-10-30 ruling): !520 does not merge while any
-   follow-up it spawned is open.** The gate list, each item an
-   app-side MR off `main` (fresh session/worktree per item; this
-   branch carries no app code by contract):
+   follow-up it spawned is open.** Tracked as issues #1213 (A), #1214
+   (B, blocked by #1213) and #1215 (C); D lives in the MR itself. Each
+   item an app-side MR off `main` (fresh session/worktree per item;
+   this branch carries no app code by contract):
    - **A. Qualify the three E2E drift spots against a Compose stack**
      (2026-10-30, ~110 Playwright specs run green against the k8s
      dev cluster, 8 red — every red is spec-vs-frontend drift in

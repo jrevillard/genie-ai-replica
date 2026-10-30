@@ -146,8 +146,9 @@ int quickHelpGridColumns(
   double maxWidth = double.infinity,
 }) {
   final raw = layout['columns'];
-  final int parsed =
-      raw is num && raw.isFinite && raw.toInt() >= 1 ? raw.toInt() : 2;
+  final int parsed = raw is num && raw.isFinite && raw.toInt() >= 1
+      ? raw.toInt()
+      : 2;
   if (!maxWidth.isFinite) return parsed;
   // No column can be thinner than the grid's 10px spacing between
   // columns: a count wider than the grid is bounded by width/10 + 1,

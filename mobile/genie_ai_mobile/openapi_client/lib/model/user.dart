@@ -13,10 +13,20 @@ part of openapi.api;
 class User {
   /// Returns a new [User] instance.
   User({
+    this.key,
     this.email,
     this.createdAt,
     this.updatedAt,
   });
+
+  /// Unique identifier
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  String? key;
 
   /// User's email address
   ///
@@ -47,6 +57,7 @@ class User {
 
   @override
   bool operator ==(Object other) => identical(this, other) || other is User &&
+    other.key == key &&
     other.email == email &&
     other.createdAt == createdAt &&
     other.updatedAt == updatedAt;
@@ -54,15 +65,21 @@ class User {
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
+    (key == null ? 0 : key!.hashCode) +
     (email == null ? 0 : email!.hashCode) +
     (createdAt == null ? 0 : createdAt!.hashCode) +
     (updatedAt == null ? 0 : updatedAt!.hashCode);
 
   @override
-  String toString() => 'User[email=$email, createdAt=$createdAt, updatedAt=$updatedAt]';
+  String toString() => 'User[key=$key, email=$email, createdAt=$createdAt, updatedAt=$updatedAt]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
+    if (this.key != null) {
+      json[r'_key'] = this.key;
+    } else {
+      json[r'_key'] = null;
+    }
     if (this.email != null) {
       json[r'email'] = this.email;
     } else {
@@ -96,6 +113,7 @@ class User {
       }());
 
       return User(
+        key: mapValueOfType<String>(json, r'_key'),
         email: mapValueOfType<String>(json, r'email'),
         createdAt: mapDateTime(json, r'createdAt', r''),
         updatedAt: mapDateTime(json, r'updatedAt', r''),

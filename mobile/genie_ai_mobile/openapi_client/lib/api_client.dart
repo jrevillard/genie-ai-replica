@@ -184,6 +184,46 @@ class ApiClient {
           return value is DateTime ? value : DateTime.tryParse(value);
         case 'Analytics':
           return Analytics.fromJson(value);
+        case 'ApiAdminLogsDebugYesterdayGet200Response':
+          return ApiAdminLogsDebugYesterdayGet200Response.fromJson(value);
+        case 'ApiAdminLogsDebugYesterdayGet200ResponseLogsInner':
+          return ApiAdminLogsDebugYesterdayGet200ResponseLogsInner.fromJson(value);
+        case 'ApiAdminLogsGet200Response':
+          return ApiAdminLogsGet200Response.fromJson(value);
+        case 'ApiAdminLogsGet400Response':
+          return ApiAdminLogsGet400Response.fromJson(value);
+        case 'ApiAdminLogsGet503Response':
+          return ApiAdminLogsGet503Response.fromJson(value);
+        case 'ApiAdminLogsSummaryGet200Response':
+          return ApiAdminLogsSummaryGet200Response.fromJson(value);
+        case 'ApiAdminLogsSummaryGet200ResponseServicesInner':
+          return ApiAdminLogsSummaryGet200ResponseServicesInner.fromJson(value);
+        case 'ApiAdminQueriesInspectQueryIdGet404Response':
+          return ApiAdminQueriesInspectQueryIdGet404Response.fromJson(value);
+        case 'ApiAdminSecurityLastScanGet200Response':
+          return ApiAdminSecurityLastScanGet200Response.fromJson(value);
+        case 'ApiAdminSecurityMetricsGet200Response':
+          return ApiAdminSecurityMetricsGet200Response.fromJson(value);
+        case 'ApiAdminSecurityMetricsGet200ResponseData':
+          return ApiAdminSecurityMetricsGet200ResponseData.fromJson(value);
+        case 'ApiAdminSecurityMetricsGet200ResponseDataVulnerabilities':
+          return ApiAdminSecurityMetricsGet200ResponseDataVulnerabilities.fromJson(value);
+        case 'ApiAdminSecurityScanPost200Response':
+          return ApiAdminSecurityScanPost200Response.fromJson(value);
+        case 'ApiAdminSecurityScanPost200ResponseData':
+          return ApiAdminSecurityScanPost200ResponseData.fromJson(value);
+        case 'ApiAdminSecurityScanPost200ResponseDataVulnerabilities':
+          return ApiAdminSecurityScanPost200ResponseDataVulnerabilities.fromJson(value);
+        case 'ApiAdminSystemHealthGet200Response':
+          return ApiAdminSystemHealthGet200Response.fromJson(value);
+        case 'ApiAdminSystemHealthGet200ResponseHealthServicesInner':
+          return ApiAdminSystemHealthGet200ResponseHealthServicesInner.fromJson(value);
+        case 'ApiAdminSystemHealthGet200ResponseMetrics':
+          return ApiAdminSystemHealthGet200ResponseMetrics.fromJson(value);
+        case 'ApiAdminSystemHealthGet200ResponseResourceUsage':
+          return ApiAdminSystemHealthGet200ResponseResourceUsage.fromJson(value);
+        case 'ApiAdminSystemHealthGet200ResponseTrends':
+          return ApiAdminSystemHealthGet200ResponseTrends.fromJson(value);
         case 'ApiAnalyticsDashboardGet200Response':
           return ApiAnalyticsDashboardGet200Response.fromJson(value);
         case 'ApiAnalyticsDashboardGet200ResponseCategoriesInner':
@@ -198,8 +238,6 @@ class ApiClient {
           return ApiAnalyticsDashboardGet200ResponseUsers.fromJson(value);
         case 'ApiAnalyticsEventsPostRequest':
           return ApiAnalyticsEventsPostRequest.fromJson(value);
-        case 'ApiAnalyticsGet200Response':
-          return ApiAnalyticsGet200Response.fromJson(value);
         case 'ApiAnalyticsMetricMetricGet200Response':
           return ApiAnalyticsMetricMetricGet200Response.fromJson(value);
         case 'ApiAnalyticsSatisfactionGaugeGet200Response':
@@ -238,18 +276,6 @@ class ApiClient {
           return ApiDatabaseOptimizePost200Response.fromJson(value);
         case 'ApiDatabaseOptimizePost200ResponseResultsInner':
           return ApiDatabaseOptimizePost200ResponseResultsInner.fromJson(value);
-        case 'ApiLoggerConfigurePost200Response':
-          return ApiLoggerConfigurePost200Response.fromJson(value);
-        case 'ApiLoggerConfigurePost400Response':
-          return ApiLoggerConfigurePost400Response.fromJson(value);
-        case 'ApiLoggerConfigurePost500Response':
-          return ApiLoggerConfigurePost500Response.fromJson(value);
-        case 'ApiLoggerConfigurePostRequest':
-          return ApiLoggerConfigurePostRequest.fromJson(value);
-        case 'ApiLoggerRolloverPost200Response':
-          return ApiLoggerRolloverPost200Response.fromJson(value);
-        case 'ApiLoggerRolloverPost500Response':
-          return ApiLoggerRolloverPost500Response.fromJson(value);
         case 'ApiQueriesGet200Response':
           return ApiQueriesGet200Response.fromJson(value);
         case 'ApiQueriesGet200ResponsePagination':
@@ -258,8 +284,6 @@ class ApiClient {
           return ApiQueriesGet200ResponseQueriesInner.fromJson(value);
         case 'ApiQueriesPostRequest':
           return ApiQueriesPostRequest.fromJson(value);
-        case 'ApiQueriesPostRequestContext':
-          return ApiQueriesPostRequestContext.fromJson(value);
         case 'ApiQueriesPostRequestMessagesInner':
           return ApiQueriesPostRequestMessagesInner.fromJson(value);
         case 'ApiQueriesQueryIdAnsweredPatch200Response':
@@ -278,24 +302,30 @@ class ApiClient {
           return ApiQueriesQueryIdResponsetimePatch200Response.fromJson(value);
         case 'ApiQueriesQueryIdResponsetimePatchRequest':
           return ApiQueriesQueryIdResponsetimePatchRequest.fromJson(value);
-        case 'ApiServiceCategoriesCategoriesGet200ResponseInner':
-          return ApiServiceCategoriesCategoriesGet200ResponseInner.fromJson(value);
+        case 'ApiQueriesStreamPost400Response':
+          return ApiQueriesStreamPost400Response.fromJson(value);
+        case 'ApiQueriesStreamPostRequest':
+          return ApiQueriesStreamPostRequest.fromJson(value);
+        case 'ApiQueriesStreamPostRequestMessagesInner':
+          return ApiQueriesStreamPostRequestMessagesInner.fromJson(value);
+        case 'ApiServiceCategoriesCategoriesCategoryIdGet200Response':
+          return ApiServiceCategoriesCategoriesCategoryIdGet200Response.fromJson(value);
         case 'ApiServiceCategoriesCategoryIdTranslationsGet200ResponseInner':
           return ApiServiceCategoriesCategoryIdTranslationsGet200ResponseInner.fromJson(value);
-        case 'ApiServiceCategoriesInitPost200Response':
-          return ApiServiceCategoriesInitPost200Response.fromJson(value);
         case 'ApiServiceCategoriesPostRequest':
           return ApiServiceCategoriesPostRequest.fromJson(value);
+        case 'ApiServiceCategoriesPostRequestTranslationsInner':
+          return ApiServiceCategoriesPostRequestTranslationsInner.fromJson(value);
         case 'ApiServiceCategoriesSearchGet200Response':
           return ApiServiceCategoriesSearchGet200Response.fromJson(value);
         case 'ApiServiceCategoriesSearchGet200ResponseCategoriesInner':
           return ApiServiceCategoriesSearchGet200ResponseCategoriesInner.fromJson(value);
         case 'ApiServiceCategoriesSearchGet200ResponseServicesInner':
           return ApiServiceCategoriesSearchGet200ResponseServicesInner.fromJson(value);
-        case 'ApiServicesCategoriesGet200ResponseInner':
-          return ApiServicesCategoriesGet200ResponseInner.fromJson(value);
-        case 'ApiServicesCategoriesGet200ResponseInnerServicesInner':
-          return ApiServicesCategoriesGet200ResponseInnerServicesInner.fromJson(value);
+        case 'ApiServicesCategoriesCategoryIdGet200Response':
+          return ApiServicesCategoriesCategoryIdGet200Response.fromJson(value);
+        case 'ApiServicesCategoriesCategoryIdGet200ResponseServicesInner':
+          return ApiServicesCategoriesCategoryIdGet200ResponseServicesInner.fromJson(value);
         case 'ApiServicesSearchGet200Response':
           return ApiServicesSearchGet200Response.fromJson(value);
         case 'ApiServicesSearchGet200ResponseCategoriesInner':
@@ -316,10 +346,48 @@ class ApiClient {
           return ApiWeatherPost200ResponseCurrent.fromJson(value);
         case 'ApiWeatherPost200ResponseForecastInner':
           return ApiWeatherPost200ResponseForecastInner.fromJson(value);
+        case 'ApiWeatherPost400Response':
+          return ApiWeatherPost400Response.fromJson(value);
+        case 'ApiWeatherPost503Response':
+          return ApiWeatherPost503Response.fromJson(value);
         case 'ApiWeatherPostRequest':
           return ApiWeatherPostRequest.fromJson(value);
+        case 'CategoryTree':
+          return CategoryTree.fromJson(value);
+        case 'CategoryTreeChildrenInner':
+          return CategoryTreeChildrenInner.fromJson(value);
+        case 'Conversation':
+          return Conversation.fromJson(value);
+        case 'ConversationListResponse':
+          return ConversationListResponse.fromJson(value);
+        case 'ConversationStats':
+          return ConversationStats.fromJson(value);
+        case 'ConversationStatsConversationsByCategoryInner':
+          return ConversationStatsConversationsByCategoryInner.fromJson(value);
+        case 'ConversationStatsMessagesByType':
+          return ConversationStatsMessagesByType.fromJson(value);
         case 'Event':
           return Event.fromJson(value);
+        case 'Folder':
+          return Folder.fromJson(value);
+        case 'FolderListResponse':
+          return FolderListResponse.fromJson(value);
+        case 'Message':
+          return Message.fromJson(value);
+        case 'MessageListResponse':
+          return MessageListResponse.fromJson(value);
+        case 'Query':
+          return Query.fromJson(value);
+        case 'QueryContext':
+          return QueryContext.fromJson(value);
+        case 'SearchResponse':
+          return SearchResponse.fromJson(value);
+        case 'SearchResponseResultsInner':
+          return SearchResponseResultsInner.fromJson(value);
+        case 'Session':
+          return Session.fromJson(value);
+        case 'SessionDeviceInfo':
+          return SessionDeviceInfo.fromJson(value);
         case 'User':
           return User.fromJson(value);
         default:

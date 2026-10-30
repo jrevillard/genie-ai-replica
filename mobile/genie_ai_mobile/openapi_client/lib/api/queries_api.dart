@@ -648,4 +648,60 @@ class QueriesApi {
     }
     return null;
   }
+
+  /// Stream a query response via SSE
+  ///
+  /// Creates a query and streams the LLM response as SSE events. Events: chunk, metadata, translation, done, error. 
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [ApiQueriesStreamPostRequest] apiQueriesStreamPostRequest (required):
+  Future<Response> apiQueriesStreamPostWithHttpInfo(ApiQueriesStreamPostRequest apiQueriesStreamPostRequest,) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/queries/stream';
+
+    // ignore: prefer_final_locals
+    Object? postBody = apiQueriesStreamPostRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Stream a query response via SSE
+  ///
+  /// Creates a query and streams the LLM response as SSE events. Events: chunk, metadata, translation, done, error. 
+  ///
+  /// Parameters:
+  ///
+  /// * [ApiQueriesStreamPostRequest] apiQueriesStreamPostRequest (required):
+  Future<String?> apiQueriesStreamPost(ApiQueriesStreamPostRequest apiQueriesStreamPostRequest,) async {
+    final response = await apiQueriesStreamPostWithHttpInfo(apiQueriesStreamPostRequest,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'String',) as String;
+    
+    }
+    return null;
+  }
 }

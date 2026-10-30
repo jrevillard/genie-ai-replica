@@ -70,7 +70,7 @@ class ServiceCategoriesApi {
   ///
   /// * [String] locale:
   ///   Language locale for category and service names
-  Future<ApiServiceCategoriesCategoriesGet200ResponseInner?> apiServiceCategoriesCategoriesCategoryIdGet(String categoryId, { String? locale, }) async {
+  Future<ApiServiceCategoriesCategoriesCategoryIdGet200Response?> apiServiceCategoriesCategoriesCategoryIdGet(String categoryId, { String? locale, }) async {
     final response = await apiServiceCategoriesCategoriesCategoryIdGetWithHttpInfo(categoryId,  locale: locale, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
@@ -79,7 +79,7 @@ class ServiceCategoriesApi {
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ApiServiceCategoriesCategoriesGet200ResponseInner',) as ApiServiceCategoriesCategoriesGet200ResponseInner;
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ApiServiceCategoriesCategoriesCategoryIdGet200Response',) as ApiServiceCategoriesCategoriesCategoryIdGet200Response;
     
     }
     return null;
@@ -132,11 +132,22 @@ class ServiceCategoriesApi {
   ///
   /// * [String] locale:
   ///   Language locale for category and service names
-  Future<void> apiServiceCategoriesCategoriesDetailedGet({ String? locale, }) async {
+  Future<List<CategoryTree>?> apiServiceCategoriesCategoriesDetailedGet({ String? locale, }) async {
     final response = await apiServiceCategoriesCategoriesDetailedGetWithHttpInfo( locale: locale, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      final responseBody = await _decodeBodyBytes(response);
+      return (await apiClient.deserializeAsync(responseBody, 'List<CategoryTree>') as List)
+        .cast<CategoryTree>()
+        .toList(growable: false);
+
+    }
+    return null;
   }
 
   /// Get all categories with services
@@ -186,7 +197,7 @@ class ServiceCategoriesApi {
   ///
   /// * [String] locale:
   ///   Language locale for category and service names
-  Future<List<ApiServiceCategoriesCategoriesGet200ResponseInner>?> apiServiceCategoriesCategoriesGet({ String? locale, }) async {
+  Future<List<CategoryTree>?> apiServiceCategoriesCategoriesGet({ String? locale, }) async {
     final response = await apiServiceCategoriesCategoriesGetWithHttpInfo( locale: locale, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
@@ -196,8 +207,8 @@ class ServiceCategoriesApi {
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
       final responseBody = await _decodeBodyBytes(response);
-      return (await apiClient.deserializeAsync(responseBody, 'List<ApiServiceCategoriesCategoriesGet200ResponseInner>') as List)
-        .cast<ApiServiceCategoriesCategoriesGet200ResponseInner>()
+      return (await apiClient.deserializeAsync(responseBody, 'List<CategoryTree>') as List)
+        .cast<CategoryTree>()
         .toList(growable: false);
 
     }
@@ -423,54 +434,6 @@ class ServiceCategoriesApi {
         .cast<ApiServiceCategoriesCategoryIdTranslationsGet200ResponseInner>()
         .toList(growable: false);
 
-    }
-    return null;
-  }
-
-  /// Initialize default categories
-  ///
-  /// Initializes the system with default categories and services
-  ///
-  /// Note: This method returns the HTTP [Response].
-  Future<Response> apiServiceCategoriesInitPostWithHttpInfo() async {
-    // ignore: prefer_const_declarations
-    final path = r'/api/service-categories/init';
-
-    // ignore: prefer_final_locals
-    Object? postBody;
-
-    final queryParams = <QueryParam>[];
-    final headerParams = <String, String>{};
-    final formParams = <String, String>{};
-
-    const contentTypes = <String>[];
-
-
-    return apiClient.invokeAPI(
-      path,
-      'POST',
-      queryParams,
-      postBody,
-      headerParams,
-      formParams,
-      contentTypes.isEmpty ? null : contentTypes.first,
-    );
-  }
-
-  /// Initialize default categories
-  ///
-  /// Initializes the system with default categories and services
-  Future<ApiServiceCategoriesInitPost200Response?> apiServiceCategoriesInitPost() async {
-    final response = await apiServiceCategoriesInitPostWithHttpInfo();
-    if (response.statusCode >= HttpStatus.badRequest) {
-      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
-    }
-    // When a remote server returns no body with a status of 204, we shall not decode it.
-    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
-    // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ApiServiceCategoriesInitPost200Response',) as ApiServiceCategoriesInitPost200Response;
-    
     }
     return null;
   }

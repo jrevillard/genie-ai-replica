@@ -16,6 +16,12 @@ void main() {
   // final instance = User();
 
   group('test User', () {
+    // Unique identifier
+    // String key
+    test('to test the property `key`', () async {
+      // TODO
+    });
+
     // User's email address
     // String email
     test('to test the property `email`', () async {

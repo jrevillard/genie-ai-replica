@@ -596,11 +596,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   /// vocabulary; this one only names what the user reads.
   Future<void> _fetchSidebarTitleTree() async {
     final int seq = ++_sidebarTitleFetchSeq;
-    // The labels the title will be rebuilt from, captured now: a
+    // The scope the title will be rebuilt for, captured now: a fetch is
+    // only allowed to re-title THE SELECTION it was started for. A
     // selection that changes while the fetch is in flight installs its
     // OWN localized names, and this response — of the locale the UI may
-    // have left — must not re-title them.
+    // have left — must not overwrite them.
     final List<String> labels = List<String>.of(_sidebarServiceLabelsEn);
+    final int serviceCount = _sidebarServiceCount;
     try {
       final categoriesApi = ref.read(serviceCategoriesApiProvider);
       final response = await categoriesApi
@@ -608,12 +610,23 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           .timeout(const Duration(seconds: 15));
       // A newer fetch superseded this one, or the widget left.
       if (!mounted || seq != _sidebarTitleFetchSeq) return;
+      // The scope the fetch was started for must still be the scope
+      // installed: the same labels AND the same count (a pick without an
+      // ENGLISH label changes the count but not the labels — committing
+      // the join over it would show a scope narrower than the one the
+      // query filters on), still a live selection, still not a button
+      // scope (a restore or a press mid-flight owns the title now).
+      if (!listEquals(labels, _sidebarServiceLabelsEn) ||
+          serviceCount != _sidebarServiceCount ||
+          !_sidebarTitleIsSelection ||
+          _activeQuickHelpButtonId != null) {
+        return;
+      }
       if (response.statusCode != 200) return;
       final title = sidebarScopeTitleFor(
         labels,
         localizedDisplayNamesOf(jsonDecode(response.body) as List<dynamic>),
       );
-      if (!listEquals(labels, _sidebarServiceLabelsEn)) return;
       // The tree names every stored label, or the title stays as it is —
       // a partial join would show a scope narrower than the one the
       // query filters on.
@@ -657,10 +670,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _selectedCategoryId = categoryId;
       _selectedCategoryName = categoryName;
       _selectedCategoryNameEn = categoryNameEn;
-      // A LIVE selection: its title is the joined localized names this
-      // payload carries, and it is the one shape a localized tree can
-      // re-name on a locale switch.
-      _sidebarTitleIsSelection = true;
+      // A LIVE selection installs this title (a non-empty serviceCount —
+      // the clear's empty payload is not one): it is the one shape a
+      // localized tree can re-name on a locale switch.
+      _sidebarTitleIsSelection = serviceCount > 0;
       _sidebarServiceLabelsEn = serviceLabelsEn;
       // How many services the selection named, beside the labels that
       // carry an EN translation. The send guard refuses when a picked

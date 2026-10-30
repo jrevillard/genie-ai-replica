@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -28,6 +29,9 @@ void main() {
       'nameEN': 'Civil Registry',
       'children': [
         {'_key': 'svc-1', 'name': 'Births', 'nameEN': 'Births'},
+        // A row whose entity carries no ENGLISH translation: pickable,
+        // but it contributes no label to the selection's wire scope.
+        {'_key': 'svc-2', 'name': 'Mystery'},
       ],
     },
   ];
@@ -38,6 +42,7 @@ void main() {
       'nameEN': 'Civil Registry',
       'children': [
         {'_key': 'svc-1', 'name': 'Nacimientos', 'nameEN': 'Births'},
+        {'_key': 'svc-2', 'name': 'Misterio'},
       ],
     },
   ];
@@ -52,74 +57,81 @@ void main() {
     I18nService().changeLanguage('en');
   });
 
-  testWidgets(
-    'a sidebar scope re-titles its context bar when the locale switches',
-    (tester) async {
-      final mock = _LocaleMockClient({'en': enTree, 'es': esTree});
-      final api = ServiceCategoriesApi(ApiClient()..client = mock);
-      final chatKey = GlobalKey<ChatBotComponentState>();
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [serviceCategoriesApiProvider.overrideWithValue(api)],
-          child: AnimatedBuilder(
-            animation: I18nService(),
-            builder: (context, _) => MaterialApp(
-              locale: I18nService().currentLocale,
-              supportedLocales: const [Locale('en'), Locale('es')],
-              localizationsDelegates: const [
-                FallbackMaterialLocalizationsDelegate(),
-                FallbackWidgetsLocalizationsDelegate(),
-                GlobalCupertinoLocalizations.delegate,
-              ],
-              home: Scaffold(
-                body: Column(
-                  children: [
-                    SizedBox(
-                      height: 300,
-                      child: ServiceTreePanel(
-                        onSelectionChange: (selection) {
-                          // The page's own mapping (main.dart's
-                          // _onServiceSelected): display name and EN
-                          // wire labels travel to the chat together.
-                          chatKey.currentState?.setCategoryContext(
-                            selection['category_id'] ?? selection['id'] ?? '',
-                            selection['name'] ?? '',
-                            categoryNameEn:
-                                selection['categoryNameEn']?.toString() ?? '',
-                            serviceLabelsEn:
-                                (selection['serviceLabelsEn']
-                                            as List<dynamic>? ??
-                                        const <dynamic>[])
-                                    .map((e) => e.toString())
-                                    .where((e) => e.isNotEmpty)
-                                    .toList(),
-                            serviceCount:
-                                (selection['serviceCount'] as num?)?.toInt() ??
-                                0,
-                          );
-                        },
-                      ),
+  Future<void> pumpChatWithTree(
+    WidgetTester tester,
+    _LocaleMockClient mock, {
+    GlobalKey<ChatBotComponentState>? chatKey,
+  }) async {
+    final api = ServiceCategoriesApi(ApiClient()..client = mock);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [serviceCategoriesApiProvider.overrideWithValue(api)],
+        child: AnimatedBuilder(
+          animation: I18nService(),
+          builder: (context, _) => MaterialApp(
+            locale: I18nService().currentLocale,
+            supportedLocales: const [Locale('en'), Locale('es')],
+            localizationsDelegates: const [
+              FallbackMaterialLocalizationsDelegate(),
+              FallbackWidgetsLocalizationsDelegate(),
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            home: Scaffold(
+              body: Column(
+                children: [
+                  SizedBox(
+                    height: 300,
+                    child: ServiceTreePanel(
+                      onSelectionChange: (selection) {
+                        // The page's own mapping (main.dart's
+                        // _onServiceSelected): display name and EN
+                        // wire labels travel to the chat together.
+                        chatKey?.currentState?.setCategoryContext(
+                          selection['category_id'] ?? selection['id'] ?? '',
+                          selection['name'] ?? '',
+                          categoryNameEn:
+                              selection['categoryNameEn']?.toString() ?? '',
+                          serviceLabelsEn:
+                              (selection['serviceLabelsEn'] as List<dynamic>? ??
+                                      const <dynamic>[])
+                                  .map((e) => e.toString())
+                                  .where((e) => e.isNotEmpty)
+                                  .toList(),
+                          serviceCount:
+                              (selection['serviceCount'] as num?)?.toInt() ?? 0,
+                        );
+                      },
                     ),
-                    Expanded(
-                      child: ChatBotComponent(
-                        key: chatKey,
-                        userId: 'user-1',
-                        onRefreshSidebar: () {},
-                        onRelatedDocumentsUpdate: (_) {},
-                      ),
+                  ),
+                  Expanded(
+                    child: ChatBotComponent(
+                      key: chatKey,
+                      userId: 'user-1',
+                      onRefreshSidebar: () {},
+                      onRelatedDocumentsUpdate: (_) {},
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
 
-      // Pick the one service: the context bar installs the selection's
-      // localized name.
+  testWidgets(
+    'a sidebar scope re-titles its context bar when the locale switches',
+    (tester) async {
+      final mock = _LocaleMockClient(
+        treesByLocale: {'en': enTree, 'es': esTree},
+      );
+      final chatKey = GlobalKey<ChatBotComponentState>();
+      await pumpChatWithTree(tester, mock, chatKey: chatKey);
+
+      // Pick the one labelled service: the context bar installs the
+      // selection's localized name.
       await tester.tap(find.text('Civil Registry'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Births'));
@@ -145,44 +157,8 @@ void main() {
   testWidgets('a locale switch with no sidebar scope fetches no chatbot tree', (
     tester,
   ) async {
-    final mock = _LocaleMockClient({'en': enTree, 'es': esTree});
-    final api = ServiceCategoriesApi(ApiClient()..client = mock);
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [serviceCategoriesApiProvider.overrideWithValue(api)],
-        child: AnimatedBuilder(
-          animation: I18nService(),
-          builder: (context, _) => MaterialApp(
-            locale: I18nService().currentLocale,
-            supportedLocales: const [Locale('en'), Locale('es')],
-            localizationsDelegates: const [
-              FallbackMaterialLocalizationsDelegate(),
-              FallbackWidgetsLocalizationsDelegate(),
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            home: Scaffold(
-              body: Column(
-                children: [
-                  SizedBox(
-                    height: 300,
-                    child: ServiceTreePanel(onSelectionChange: (_) {}),
-                  ),
-                  Expanded(
-                    child: ChatBotComponent(
-                      userId: 'user-1',
-                      onRefreshSidebar: () {},
-                      onRelatedDocumentsUpdate: (_) {},
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
+    final mock = _LocaleMockClient(treesByLocale: {'en': enTree, 'es': esTree});
+    await pumpChatWithTree(tester, mock);
 
     // At mount the panel and the chatbot each fetch the 'en' tree.
     expect(mock.requestsByLocale['en'], 2);
@@ -194,22 +170,163 @@ void main() {
     // and the localized tree names nothing for it.
     expect(mock.requestsByLocale['es'], 1);
   });
+
+  testWidgets('a failed localized fetch keeps the installed title', (
+    tester,
+  ) async {
+    // The response body is a VALID tree: a fetch that skips the status
+    // check would re-title the bar from it — the check is what turns a
+    // server error into "keep the title", not the JSON decode.
+    final mock = _LocaleMockClient(
+      treesByLocale: {'en': enTree, 'es': esTree},
+      statusByLocale: {'es': 503},
+    );
+    final chatKey = GlobalKey<ChatBotComponentState>();
+    await pumpChatWithTree(tester, mock, chatKey: chatKey);
+
+    await tester.tap(find.text('Civil Registry'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Births'));
+    await tester.pumpAndSettle();
+
+    I18nService().changeLanguage('es');
+    await tester.pumpAndSettle();
+
+    // The title stays the one the selection installed; the retry is
+    // scoped to the next locale change. The bar's own Text is the
+    // context prefix joined to the scope — asserted exactly, so a row
+    // of the panel's tree cannot satisfy it.
+    expect(find.text('Contexto: Births'), findsOneWidget);
+    expect(find.textContaining('Nacimientos'), findsNothing);
+  });
+
+  testWidgets(
+    'a slower superseded fetch never re-titles over the newer locale',
+    (tester) async {
+      final mock = _LocaleMockClient(
+        treesByLocale: {'en': enTree, 'es': esTree},
+        delayByLocale: {'es': const Duration(milliseconds: 500)},
+      );
+      final chatKey = GlobalKey<ChatBotComponentState>();
+      await pumpChatWithTree(tester, mock, chatKey: chatKey);
+
+      await tester.tap(find.text('Civil Registry'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Births'));
+      await tester.pumpAndSettle();
+
+      // Two switches inside one fetch's window: the 'es' fetch is still
+      // in flight when the app is back to 'en'.
+      I18nService().changeLanguage('es');
+      await tester.pump();
+      I18nService().changeLanguage('en');
+      await tester.pumpAndSettle();
+      // Flush the still-pending 'es' timer: pumpAndSettle stops at the
+      // last scheduled frame, not at the delay the fetch is sitting on.
+      await tester.pump(const Duration(milliseconds: 600));
+
+      // The late 'es' response is superseded: the bar reads the locale
+      // the UI is in, not the one a stale fetch answered for. The bar's
+      // own Text is asserted exactly — the panel's own late 'es' rows
+      // (its reload has no supersession guard) must not satisfy it.
+      expect(find.text('Context: Births'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a selection that grows mid-flight is not re-titled by the stale fetch',
+    (tester) async {
+      // Hold from the SECOND 'es' request on: the panel's re-fetch is
+      // served normally (its rows re-render in 'es'), the CHATBOT's
+      // re-title fetch is held in flight.
+      final mock = _LocaleMockClient(
+        treesByLocale: {'en': enTree, 'es': esTree},
+        holdFromCounts: {'es': 2},
+      );
+      final chatKey = GlobalKey<ChatBotComponentState>();
+      await pumpChatWithTree(tester, mock, chatKey: chatKey);
+
+      await tester.tap(find.text('Civil Registry'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Births'));
+      await tester.pumpAndSettle();
+
+      I18nService().changeLanguage('es');
+      for (var i = 0; i < 10 && (mock.requestsByLocale['es'] ?? 0) < 2; i++) {
+        await tester.pump();
+      }
+      expect(mock.requestsByLocale['es'], 2);
+      await tester.pump();
+
+      // While the chatbot's localized fetch is held in flight: a second,
+      // UNTRANSLATED pick. The labels stay ['Births'] but the scope grew
+      // — the held response must not commit its join over it.
+      await tester.tap(find.text('Misterio'));
+      await tester.pump();
+      expect(find.text('Contexto: Births, Misterio'), findsOneWidget);
+
+      // Release the held response: the count re-check drops the join.
+      mock.releaseHeld();
+      await tester.pump();
+      await tester.pump();
+
+      // The grown selection's own names stand; the bar's own Text is
+      // asserted exactly — the panel's tree rows must not satisfy it.
+      expect(find.text('Contexto: Births, Misterio'), findsOneWidget);
+    },
+  );
 }
 
 class _LocaleMockClient extends http.BaseClient {
-  _LocaleMockClient(this.treesByLocale);
+  _LocaleMockClient({
+    required this.treesByLocale,
+    this.statusByLocale = const {},
+    this.delayByLocale = const {},
+    this.holdFromCounts = const {},
+  });
+
   final Map<String, List<dynamic>> treesByLocale;
+  final Map<String, int> statusByLocale;
+  final Map<String, Duration> delayByLocale;
+
+  /// Per locale: the response of the Nth request (and every later one)
+  /// is HELD until [releaseHeld] — a fetch is genuinely in flight while
+  /// the test moves the app underneath it.
+  final Map<String, int> holdFromCounts;
   final Map<String, int> requestsByLocale = {};
+  final List<({String locale, Completer<http.StreamedResponse> completer})>
+  _held = [];
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final locale =
         Uri.parse(request.url.toString()).queryParameters['locale'] ?? 'en';
     requestsByLocale[locale] = (requestsByLocale[locale] ?? 0) + 1;
+    final holdFrom = holdFromCounts[locale];
+    if (holdFrom != null && (requestsByLocale[locale] ?? 0) >= holdFrom) {
+      final completer = Completer<http.StreamedResponse>();
+      _held.add((locale: locale, completer: completer));
+      return completer.future;
+    }
+    final delay = delayByLocale[locale];
+    if (delay != null) await Future<void>.delayed(delay);
+    return _respond(locale);
+  }
+
+  /// Releases every held response, in arrival order.
+  void releaseHeld() {
+    final held = List.of(_held);
+    _held.clear();
+    for (final entry in held) {
+      entry.completer.complete(_respond(entry.locale));
+    }
+  }
+
+  http.StreamedResponse _respond(String locale) {
     final bytes = utf8.encode(jsonEncode(treesByLocale[locale] ?? []));
     return http.StreamedResponse(
       http.ByteStream.fromBytes(bytes),
-      200,
+      statusByLocale[locale] ?? 200,
       headers: {'content-type': 'application/json'},
     );
   }

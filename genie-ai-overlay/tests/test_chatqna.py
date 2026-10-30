@@ -1905,14 +1905,11 @@ class TestTranslationHelpers:
         assert "Hello" in prompt
         assert "French" in prompt
 
-    def test_read_language_codes_success(self, tmp_path):
-        lang_file = tmp_path / "codes.json"
-        lang_file.write_text('{"en": "English", "fr": "French"}')
-        result = chatqna_module._read_language_codes(str(lang_file))
-        assert result == {"en": "English", "fr": "French"}
-
-    def test_read_language_codes_file_error(self):
-        result = chatqna_module._read_language_codes("/nonexistent/path.json")
+    def test_read_language_registry_file_error(self):
+        # The well-formed/ malformed parse cases live with the language
+        # boundary suite (TestLanguageMapShape); this pins the missing-file
+        # path it does not cover.
+        result = chatqna_module._read_language_registry("/nonexistent/path.json")
         assert result == {}
 
     def test_split_text_into_chunks_short_text(self):

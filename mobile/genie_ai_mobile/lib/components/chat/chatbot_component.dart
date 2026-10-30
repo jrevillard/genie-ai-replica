@@ -2200,11 +2200,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                 : (_scopeResolver?.stateFor(button) ??
                                       QuickHelpScopeResolver.pending);
                             // The caption below names WHICH failure the
-                            // card carries: it reads the same two facts
-                            // the verdict composes (both spellings go
-                            // through quickHelpTitleOf and the scope's
-                            // own 'broken' verdict), hoisted once per
-                            // tile.
+                            // card carries. Its conditions read these two
+                            // hoisted facts; the verdict derives its own
+                            // copy through the same predicates
+                            // (quickHelpTitleOf, the scope's 'broken')
+                            // — keep the three in step.
                             final bool scopeBroken =
                                 scope['broken'] as bool? ?? false;
                             final bool titleMissing = translatedTitle.isEmpty;
@@ -2277,9 +2277,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                           // caption can never grow it —
                                           // so a long caption (the
                                           // outage text, two joined
-                                          // defects, a raised font
-                                          // scale) must clamp instead
-                                          // of overflowing the tile.
+                                          // defects) must clamp instead
+                                          // of overflowing the tile. The
+                                          // clamp covers the caption
+                                          // only: at an extreme
+                                          // accessibility font scale the
+                                          // icon row alone can outgrow
+                                          // the tile, the grid's own
+                                          // fixed-aspect property long
+                                          // before this caption.
                                           child: Text(
                                             // The missing-title text
                                             // first: the clamp below

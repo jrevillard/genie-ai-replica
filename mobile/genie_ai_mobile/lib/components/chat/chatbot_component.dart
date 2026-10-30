@@ -2182,7 +2182,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                           itemBuilder: (context, index) {
                             final button = _quickHelpButtons[index];
                             final String translatedTitle =
-                                button['resolvedTitle']?.toString() ?? '';
+                                quickHelpTitleOf(button) ?? '';
                             final String iconAsset =
                                 button['iconAsset']?.toString() ?? '';
                             final scope = _treeUnavailable
@@ -2247,6 +2247,18 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                                   width: 18,
                                                   height: 18,
                                                   placeholderBuilder: (_) =>
+                                                      Icon(
+                                                        Icons.help_outline,
+                                                        size: 20,
+                                                        color: tokens.accent,
+                                                      ),
+                                                  // A well-formed path that
+                                                  // names an asset the
+                                                  // flavour did not bundle
+                                                  // degrades to the same
+                                                  // neutral icon, instead of
+                                                  // an empty slot.
+                                                  errorBuilder: (_, _, _) =>
                                                       Icon(
                                                         Icons.help_outline,
                                                         size: 20,

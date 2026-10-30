@@ -25,16 +25,7 @@
  * }
  */
 
-const registry = require('./language-registry.json');
-
-// A registry without this model's table would spread into an empty map: the
-// module would load, and every language would be refused at request time
-// with nothing but a warning. Fail here instead, where the defect names
-// itself.
-const modelCodes = registry.modelCodes && registry.modelCodes['translategemma'];
-if (!modelCodes) {
-  throw new Error('The language registry has no "translategemma" model-code table — the shipped registry and this map disagree');
-}
+const { modelCodes } = require('./language-registry');
 
 module.exports = {
   modelName: 'translategemma-4b-it',
@@ -43,7 +34,7 @@ module.exports = {
 
   // Language code mappings from ISO 639-1 to ISO 639-1 (identity mapping for this model)
   // TranslateGemma supports 55 languages, we map our supported languages here
-  languageMap: { ...modelCodes },
+  languageMap: { ...modelCodes('translategemma') },
 
   // TranslateGemma uses structured chat format, not prompt templates
   promptTemplate: null

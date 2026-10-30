@@ -1906,7 +1906,7 @@ class TestTranslationHelpers:
         assert "French" in prompt
 
     def test_read_language_registry_success(self, tmp_path):
-        lang_file = tmp_path / "language_registry.json"
+        lang_file = tmp_path / "language-registry.json"
         lang_file.write_text(
             json.dumps(
                 {

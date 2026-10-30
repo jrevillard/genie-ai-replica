@@ -676,7 +676,7 @@ BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000")  #
 # silently end up with an empty map (which would refuse every language).
 LANGUAGE_REGISTRY_FILEPATH = os.getenv(
     "LANGUAGE_REGISTRY_FILEPATH",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "language_registry.json"),
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "language-registry.json"),
 )
 # How long an unreadable language map is remembered as unreadable. The map is
 # consulted on every request and on every translated chunk: re-reading (and
@@ -809,13 +809,16 @@ def _language_display(raw_language) -> str:
     return printable or "<empty>"
 
 
-# The language registry (code -> name + script), and the moment it was read.
-# Module level because the prompt-building hooks have no access to the
-# service instance. One read and one cache feed both derived maps, so the
-# name and the script of a language can never come from two different
-# generations of the file.
+# The language registry (code -> name + script), the moment it was read, and
+# the two projections the prompts consume. Module level because the
+# prompt-building hooks have no access to the service instance. One read
+# fills all three, so the name and the script of a language can never come
+# from two different generations of the file, and the projections are never
+# rebuilt per call.
 _LANGUAGE_REGISTRY_CACHE: dict | None = None
 _LANGUAGE_REGISTRY_CACHE_AT: float | None = None
+_LANGUAGE_CODES_CACHE: dict | None = None
+_LANGUAGE_SCRIPTS_CACHE: dict | None = None
 
 
 def _read_language_registry(filepath: str) -> dict:
@@ -854,61 +857,66 @@ def _read_language_registry(filepath: str) -> dict:
     return languages
 
 
-def language_registry() -> dict:
-    """The registry (code -> {name, script}), read once and cached.
+def _load_language_registry() -> None:
+    """Fill the registry cache and its two projections, at most once per
+    retry window.
 
-    It is consulted on every request and again for every translated chunk,
-    both through the name map and through the script table, so reading and
-    parsing the file each time is pure overhead. A registry that could not
-    be read is remembered only for LANGUAGE_MAP_RETRY_SECONDS: a transient
-    read failure must not disable translation for the lifetime of the
-    process, but it must not re-read (and re-log) the file on every chunk
-    either.
-
-    The registry is never None: an unreadable registry is an empty registry,
-    and an empty registry means every language is unknown.
-
-    The returned registry is a copy of the cache's top level; the per-language
-    entries are shared and treated as immutable — the service only reads
-    their name and script, never writes them. (The projections are called on
-    every request and every translated chunk, so they copy one flat dict,
-    not one dict per language.)
+    The maps are consulted on every request and again for every translated
+    chunk, so reading and parsing the file each time is pure overhead. A
+    registry that could not be read is remembered only for
+    LANGUAGE_MAP_RETRY_SECONDS: a transient read failure must not disable
+    translation for the lifetime of the process, but it must not re-read
+    (and re-log) the file on every chunk either. An unreadable registry
+    fills every cache as empty — an empty map means every language is
+    unknown, and an empty script table means the prompt carries no script
+    clause rather than a wrong one.
 
     The retry read is a blocking read of a small file, at most once a minute,
     and only for as long as the file stays unreadable.
     """
     global _LANGUAGE_REGISTRY_CACHE, _LANGUAGE_REGISTRY_CACHE_AT
+    global _LANGUAGE_CODES_CACHE, _LANGUAGE_SCRIPTS_CACHE
 
-    cached = _LANGUAGE_REGISTRY_CACHE
-    if cached:
-        return dict(cached)
+    if _LANGUAGE_REGISTRY_CACHE:
+        return
     now = time.monotonic()
     if _LANGUAGE_REGISTRY_CACHE_AT is not None and now - _LANGUAGE_REGISTRY_CACHE_AT < LANGUAGE_MAP_RETRY_SECONDS:
         # The last read failed and the retry window has not elapsed yet.
-        return {}
+        return
     loaded = _read_language_registry(LANGUAGE_REGISTRY_FILEPATH)
     _LANGUAGE_REGISTRY_CACHE = loaded
     _LANGUAGE_REGISTRY_CACHE_AT = now
-    return dict(loaded)
+    _LANGUAGE_CODES_CACHE = {code: language["name"] for code, language in loaded.items()}
+    _LANGUAGE_SCRIPTS_CACHE = {code: language["script"] for code, language in loaded.items()}
 
 
 def language_codes_map() -> dict:
-    """The language map (code → name), projected from the registry cache.
+    """The language map (code → name), read once and cached.
 
     The map is never None: an unreadable registry is an empty map, and an
     empty map means every language is unknown.
+
+    The returned map is a copy. The cache is the whitelist every request is
+    checked against, and a caller that mutated the map it got back would
+    rewrite that whitelist for the whole process.
     """
-    return {code: language["name"] for code, language in language_registry().items()}
+    _load_language_registry()
+    return dict(_LANGUAGE_CODES_CACHE)
 
 
 def language_scripts_map() -> dict:
-    """The language -> script table, projected from the registry cache.
+    """The language -> script table, read once and cached.
 
-    The table is never None: an unreadable registry is an empty table, and
-    an empty table means the prompt carries no script clause rather than a
-    wrong one.
+    The table decides whether the translation prompt asks for the right
+    ALPHABET. It is never None: an unreadable registry is an empty table,
+    and an empty table means the prompt carries no script clause rather than
+    a wrong one.
+
+    The returned table is a copy, like the language map: a caller that
+    mutated it would change the script every later prompt asks for.
     """
-    return {code: language["script"] for code, language in language_registry().items()}
+    _load_language_registry()
+    return dict(_LANGUAGE_SCRIPTS_CACHE)
 
 
 # Fallback context window for the LLM, used when runtime discovery from the

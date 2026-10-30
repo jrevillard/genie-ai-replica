@@ -278,7 +278,7 @@ The following services must be running (depending on deployment mode):
 ### Language Configuration
 
 The service reads the supported languages from the language registry
-(`language_registry.json` — in the source tree a symlink to
+(`language-registry.json` — in the source tree a symlink to
 `components/gov-chat-backend/services/translation/language-maps/language-registry.json`,
 the single source shared with the backend's per-model language maps). Each
 registry entry carries the canonical code, the display name and the script:
@@ -404,7 +404,7 @@ the process.)
 chatqna/
 ├── genieai_chatqna.py              # Main service implementation
 ├── entrypoint.sh                    # Service entry point
-├── language_registry.json           # Language registry (symlink to the backend's single source)
+├── language-registry.json           # Language registry (symlink to the backend's single source)
 ├── Dockerfile-chatqna_genie-ai      # Docker build configuration
 ├── requirements.txt                 # Python dependencies
 └── README.md                        # This file

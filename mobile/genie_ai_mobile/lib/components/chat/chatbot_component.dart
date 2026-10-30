@@ -60,6 +60,12 @@ class ChatBotComponent extends ConsumerStatefulWidget {
 }
 
 class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
+  // The bound every hierarchy fetch (the EN tree, the localized title
+  // tree) rides under: the generated client carries no timeout of its
+  // own, and a request that never answers must land in the FAILED state
+  // the captions describe, not wedge the scope.
+  static const Duration _treeFetchTimeout = Duration(seconds: 15);
+
   // Conversation State
   String? _currentConversationId;
   String _conversationTitle = "New Chat";
@@ -179,10 +185,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // title from another source (the conversation's edge, the button id)
   // and unsets it.
   bool _sidebarTitleIsSelection = false;
-  // The sequence of sidebar-title fetches. A locale switch while one is
-  // in flight starts the next; the stale response's sequence no longer
-  // matches, and its names — of the locale the UI has left — are dropped.
-  int _sidebarTitleFetchSeq = 0;
+  // The locale of the most recent sidebar-title fetch — the marker above
+  // names it once the fetch is under way. A response whose fetched locale
+  // no longer matches is a stale one (a newer drift started a newer
+  // fetch), and its names — of the locale the UI has left — are dropped.
+  // Same-locale responses are interchangeable: each carries the join the
+  // current inputs produce.
 
   bool get _hasUnsavedChanges {
     if (_currentConversationId == null) {
@@ -252,28 +260,24 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // re-maps its chips from the per-locale tree it re-fetches. A drift
     // re-fetches the hierarchy in the CURRENT locale — display only, the
     // wire keeps the stored ENGLISH labels — and re-titles the bar from
-    // it. The marker is consumed by every dependency change once: the
-    // fetch runs at most once per locale change, and a failed one is
-    // retried at the NEXT one.
-    if (_sidebarTitleLocale != _currentLocale) {
-      // The marker is consumed by every locale change, whether or not a
-      // title is re-fetched: the FIRST marking is not a drift (the title
-      // the selection installed is current), and a marker left behind
-      // would hide the NEXT switch.
-      final bool drift = shouldReloadSidebarScopeTitle(
-        loadedLocale: _sidebarTitleLocale,
-        currentLocale: _currentLocale,
-      );
-      _sidebarTitleLocale = _currentLocale;
-      if (drift &&
-          sidebarTitleFollowsLocale(
-            fromSelection: _sidebarTitleIsSelection,
-            activeButtonId: _activeQuickHelpButtonId,
-            serviceCount: _sidebarServiceCount,
-            serviceLabelsEn: _sidebarServiceLabelsEn,
-          )) {
-        _fetchSidebarTitleTree();
-      }
+    // it. The marker is consumed by every dependency change, whether or
+    // not a title is re-fetched: the FIRST marking is not a drift (the
+    // title the selection installed is current), and a marker left behind
+    // would hide the NEXT switch. A failed fetch marked its locale — the
+    // retry is scoped to the next one.
+    final bool titleDrift = isLocaleDrift(
+      loadedLocale: _sidebarTitleLocale,
+      currentLocale: _currentLocale,
+    );
+    _sidebarTitleLocale = _currentLocale;
+    if (titleDrift &&
+        sidebarTitleFollowsLocale(
+          fromSelection: _sidebarTitleIsSelection,
+          activeButtonId: _activeQuickHelpButtonId,
+          serviceCount: _sidebarServiceCount,
+          serviceLabelsEn: _sidebarServiceLabelsEn,
+        )) {
+      _fetchSidebarTitleTree();
     }
 
     // Check for language changes and update welcome message
@@ -558,7 +562,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // the captions describe.
       final response = await categoriesApi
           .apiServiceCategoriesCategoriesGetWithHttpInfo(locale: 'en')
-          .timeout(const Duration(seconds: 15));
+          .timeout(_treeFetchTimeout);
       if (!mounted) return;
       if (response.statusCode == 200) {
         final tree = jsonDecode(response.body) as List<dynamic>;
@@ -595,7 +599,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   /// scope's locale re-title. The EN tree above stays the wire's
   /// vocabulary; this one only names what the user reads.
   Future<void> _fetchSidebarTitleTree() async {
-    final int seq = ++_sidebarTitleFetchSeq;
     // The scope the title will be rebuilt for, captured now: a fetch is
     // only allowed to re-title THE SELECTION it was started for. A
     // selection that changes while the fetch is in flight installs its
@@ -603,13 +606,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // have left — must not overwrite them.
     final List<String> labels = List<String>.of(_sidebarServiceLabelsEn);
     final int serviceCount = _sidebarServiceCount;
+    final String locale = _currentLocale;
+    // This fetch IS the marker's newest attempt: the marker moving off
+    // this locale names a newer one.
+    _sidebarTitleLocale = locale;
     try {
       final categoriesApi = ref.read(serviceCategoriesApiProvider);
       final response = await categoriesApi
-          .apiServiceCategoriesCategoriesGetWithHttpInfo(locale: _currentLocale)
-          .timeout(const Duration(seconds: 15));
-      // A newer fetch superseded this one, or the widget left.
-      if (!mounted || seq != _sidebarTitleFetchSeq) return;
+          .apiServiceCategoriesCategoriesGetWithHttpInfo(locale: locale)
+          .timeout(_treeFetchTimeout);
+      // A newer drift superseded this fetch, or the widget left.
+      if (!mounted || locale != _sidebarTitleLocale) return;
       // The scope the fetch was started for must still be the scope
       // installed: the same labels AND the same count (a pick without an
       // ENGLISH label changes the count but not the labels — committing

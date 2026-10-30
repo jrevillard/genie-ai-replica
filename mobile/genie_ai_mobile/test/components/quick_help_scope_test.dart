@@ -1775,29 +1775,6 @@ void main() {
     });
   });
 
-  group('shouldReloadSidebarScopeTitle', () {
-    test('the first, still-unmarked state is not a drift', () {
-      expect(
-        shouldReloadSidebarScopeTitle(loadedLocale: null, currentLocale: 'es'),
-        isFalse,
-      );
-    });
-
-    test('the same locale is not a drift', () {
-      expect(
-        shouldReloadSidebarScopeTitle(loadedLocale: 'es', currentLocale: 'es'),
-        isFalse,
-      );
-    });
-
-    test('a locale change is a drift', () {
-      expect(
-        shouldReloadSidebarScopeTitle(loadedLocale: 'en', currentLocale: 'es'),
-        isTrue,
-      );
-    });
-  });
-
   group('sidebarTitleFollowsLocale', () {
     test('a live selection whose every pick carries a label follows', () {
       expect(

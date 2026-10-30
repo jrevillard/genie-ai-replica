@@ -203,9 +203,11 @@ void main() {
   testWidgets(
     'a slower superseded fetch never re-titles over the newer locale',
     (tester) async {
+      // Every 'es' response is held: after the round trip to 'en', the
+      // chatbot's 'es' fetch is still genuinely in flight.
       final mock = _LocaleMockClient(
         treesByLocale: {'en': enTree, 'es': esTree},
-        delayByLocale: {'es': const Duration(milliseconds: 500)},
+        holdFromCounts: {'es': 1},
       );
       final chatKey = GlobalKey<ChatBotComponentState>();
       await pumpChatWithTree(tester, mock, chatKey: chatKey);
@@ -216,19 +218,28 @@ void main() {
       await tester.pumpAndSettle();
 
       // Two switches inside one fetch's window: the 'es' fetch is still
-      // in flight when the app is back to 'en'.
+      // in flight when the app is back to 'en'. Plain pumps while the
+      // held responses keep the panel's spinner spinning.
       I18nService().changeLanguage('es');
       await tester.pump();
       I18nService().changeLanguage('en');
+      // The two 'en' fetches of the switch-back (panel + chatbot) are
+      // served normally: the count reaches the mount pair's 2 plus these
+      // 2, and the panel's spinner stops with them.
+      for (var i = 0; i < 10 && (mock.requestsByLocale['en'] ?? 0) < 4; i++) {
+        await tester.pump();
+      }
       await tester.pumpAndSettle();
-      // Flush the still-pending 'es' timer: pumpAndSettle stops at the
-      // last scheduled frame, not at the delay the fetch is sitting on.
-      await tester.pump(const Duration(milliseconds: 600));
+      // Release the held 'es' responses: the chatbot's late one must be
+      // superseded, the panel's late tree is display-only.
+      mock.releaseHeld();
+      await tester.pump();
+      await tester.pump();
 
-      // The late 'es' response is superseded: the bar reads the locale
-      // the UI is in, not the one a stale fetch answered for. The bar's
-      // own Text is asserted exactly — the panel's own late 'es' rows
-      // (its reload has no supersession guard) must not satisfy it.
+      // The bar reads the locale the UI is in, not the one a stale fetch
+      // answered for. The bar's own Text is asserted exactly — the
+      // panel's own late 'es' rows (its reload has no supersession
+      // guard) must not satisfy it.
       expect(find.text('Context: Births'), findsOneWidget);
     },
   );
@@ -281,13 +292,11 @@ class _LocaleMockClient extends http.BaseClient {
   _LocaleMockClient({
     required this.treesByLocale,
     this.statusByLocale = const {},
-    this.delayByLocale = const {},
     this.holdFromCounts = const {},
   });
 
   final Map<String, List<dynamic>> treesByLocale;
   final Map<String, int> statusByLocale;
-  final Map<String, Duration> delayByLocale;
 
   /// Per locale: the response of the Nth request (and every later one)
   /// is HELD until [releaseHeld] — a fetch is genuinely in flight while
@@ -308,8 +317,6 @@ class _LocaleMockClient extends http.BaseClient {
       _held.add((locale: locale, completer: completer));
       return completer.future;
     }
-    final delay = delayByLocale[locale];
-    if (delay != null) await Future<void>.delayed(delay);
     return _respond(locale);
   }
 

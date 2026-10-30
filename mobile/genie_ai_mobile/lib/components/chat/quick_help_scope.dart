@@ -208,6 +208,26 @@ Map<String, dynamic>? quickHelpButtonById(
   return null;
 }
 
+/// Whether a locale-marker state is a DRIFT: the consumer's per-locale
+/// data (the Quick Help buttons, the sidebar scope's title) was last
+/// resolved under [loadedLocale] and the app has moved to
+/// [currentLocale].
+///
+/// One rule for every locale-marked reload in the chatbot — the buttons'
+/// and the title's markers must not disagree about what a drift is. A
+/// null [loadedLocale] names the consumer's own before-the-first-mark
+/// state, and whether that counts as a drift is the CALLER's fact — the
+/// buttons' first load is still in flight then (a re-entry must not
+/// start a second parse), while the title has nothing installed yet (the
+/// marker is consumed all the same, or the next locale change would go
+/// unseen). The wrappers below attach those stories.
+bool isLocaleDrift({
+  required String? loadedLocale,
+  required String currentLocale,
+}) {
+  return loadedLocale != null && loadedLocale != currentLocale;
+}
+
 /// Whether the Quick Help buttons must re-resolve for [currentLocale].
 ///
 /// The buttons are per-locale text resolved by a load; [loadedLocale] is
@@ -221,7 +241,10 @@ bool shouldReloadQuickHelpButtons({
   required String? loadedLocale,
   required String currentLocale,
 }) {
-  return loadedLocale != null && loadedLocale != currentLocale;
+  return isLocaleDrift(
+    loadedLocale: loadedLocale,
+    currentLocale: currentLocale,
+  );
 }
 
 /// The title [button] carries, or null when it carries no title.
@@ -252,22 +275,6 @@ String? activeQuickHelpTitleFor(
   return quickHelpTitleOf(
     quickHelpButtonById(buttons, activeQuickHelpButtonId),
   );
-}
-
-/// Whether the sidebar scope's context-bar title must be re-fetched for
-/// [currentLocale]. The title is per-locale text a fetch installs;
-/// [loadedLocale] is the locale the last re-title attempt ran under —
-/// whether it succeeded or failed. A failure marks the locale it failed
-/// under, so the retry is scoped to a locale change. A null loadedLocale
-/// names the first, still-unmarked state: nothing was installed by a
-/// fetch yet, and a title the selection itself installed is current —
-/// not a drift, though the caller consumes the marker all the same, or
-/// the next locale change would go unseen.
-bool shouldReloadSidebarScopeTitle({
-  required String? loadedLocale,
-  required String currentLocale,
-}) {
-  return loadedLocale != null && loadedLocale != currentLocale;
 }
 
 /// Whether a sidebar scope's context-bar title can be re-titled from a

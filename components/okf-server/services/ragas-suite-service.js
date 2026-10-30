@@ -1012,9 +1012,8 @@ async function generateAnswer(query, contexts) {
  * "glm-5.3-flash" while the answers came from the deployment chat model.
  * The record must say what answered.
  *
- * The deployment model is read from the env: the containers carry
- * VLLM_MODEL_ID, and VLLM_LLM_MODEL_ID is the deployment's other spelling
- * of the same knob (8-7 found the two names out of step). */
+ * The deployment model resolves under the !631 policy (see the inline
+ * note at deploymentChat below): pin > /v1/models discovery. */
 async function answerFidelity(opts = {}) {
   const deploymentChat = async () => ({
     source: 'deployment-chat',
@@ -1022,7 +1021,9 @@ async function answerFidelity(opts = {}) {
     // The deployment chat model under the !631 policy: pin > /v1/models
     // discovery (services/vllm-model-cache.js) — null only when nothing
     // answers (#1181).
-    model: (await require('./vllm-model-cache').discoverVllmModelId(process.env.VLLM_ENDPOINT)) || null
+    model:
+      (await require('./vllm-model-cache').discoverVllmModelId(require('./vllm-model-cache').deploymentVllmBase())) ||
+      null
   });
   if (opts.serveMode) return deploymentChat();
   try {

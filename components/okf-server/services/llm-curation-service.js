@@ -100,7 +100,9 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
   // is pin -> /v1/models discovery -> loud ModelDiscoveryError (#1181).
   if (!model) {
     const modelCache = require('./vllm-model-cache');
-    model = viaOverride ? await modelCache.requireServedModelId(rawBase) : await modelCache.resolveVllmModelId(rawBase);
+    model = viaOverride
+      ? await modelCache.requireServedModelId(rawBase, { apiKey })
+      : await modelCache.resolveVllmModelId(rawBase);
   }
   const headers = {};
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;

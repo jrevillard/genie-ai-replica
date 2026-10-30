@@ -51,7 +51,9 @@ const { TAG_LIMITS } = require('../validators/repository-validator');
 // is the project-wide convention (per feedback_cloud-deploy-defaults:
 // env defaults must work for local Docker AND cloud Ansible, not one or
 // the other).
-const VLLM_LLM_HOST = process.env.VLLM_ENDPOINT || 'http://vllm:8000';
+// The base rule (env endpoint, else the compose service) lives in ONE place
+// with the provenance labels: vllm-model-cache.deploymentVllmBase().
+const VLLM_LLM_HOST = require('./vllm-model-cache').deploymentVllmBase();
 // The chat model id is NOT defaulted here — it is resolved per call under
 // the !631 discovery policy (services/vllm-model-cache.js): explicit pick >
 // env pin (VLLM_LLM_MODEL_ID / VLLM_MODEL_ID) > /v1/models discovery >
@@ -370,6 +372,7 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   let model = null; // resolved below — explicit pick > pin > discovery (!631)
   let apiKey = VLLM_LLM_API_KEY;
   let viaOverride = false;
+  let viaForeignBase = false; // host switched away from the deployment base
   // The ENV JUDGE is the .env RAGAS_JUDGE_* pair — the same variables the
   // sidecar's default judge and the OKF panel's "system default" label name.
   // An explicit `config: null` asks for exactly that judge, so it must read
@@ -378,7 +381,13 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   // changing RAGAS_JUDGE_* would have left the advisor calling a DIFFERENT
   // model than the one it names.
   if (opts.config === null) {
-    if (process.env.RAGAS_JUDGE_BASE_URL) host = process.env.RAGAS_JUDGE_BASE_URL;
+    // A judge base is FOREIGN to the deployment pin: with RAGAS_JUDGE_MODEL
+    // unset the served model is discovered from the judge base itself —
+    // the deployment pin never names a model on another endpoint.
+    if (process.env.RAGAS_JUDGE_BASE_URL) {
+      host = process.env.RAGAS_JUDGE_BASE_URL;
+      viaForeignBase = true;
+    }
     if (process.env.RAGAS_JUDGE_MODEL) model = process.env.RAGAS_JUDGE_MODEL;
     if (process.env.RAGAS_JUDGE_API_KEY) apiKey = process.env.RAGAS_JUDGE_API_KEY;
   }
@@ -414,7 +423,10 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   // loud ModelDiscoveryError. Never a hardcoded fallback name (#1181).
   if (!model) {
     const modelCache = require('./vllm-model-cache');
-    model = viaOverride ? await modelCache.requireServedModelId(host) : await modelCache.resolveVllmModelId(host);
+    model =
+      viaOverride || viaForeignBase
+        ? await modelCache.requireServedModelId(host, { apiKey })
+        : await modelCache.resolveVllmModelId(host);
   }
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
@@ -1087,8 +1099,13 @@ async function suggestTags(repoId, _opts = {}) {
     }));
     span.setAttribute('okf.suggested.topic_count', out.topic.length);
     span.setAttribute('okf.suggested.forbidden_count', out.forbidden.length);
+    // Cache read (the call above just filled it) — names the served model
+    // the run actually tagged under. Known limitation, same as the suite
+    // generator label: a named-config override routes the call, not this.
+    const taggedWith = await require('./vllm-model-cache').discoverVllmModelId(VLLM_LLM_HOST);
     logger.info('frontmatter.suggest.done', {
       repo_id: repoId,
+      model: taggedWith,
       topic: out.topic.length,
       entity: out.entity.length,
       forbidden: out.forbidden.length,

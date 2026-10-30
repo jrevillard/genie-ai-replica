@@ -23,4 +23,12 @@ function openAiChatUrl(base) {
   return /\/v\d+$/.test(b) ? `${b}/chat/completions` : `${b}/v1/chat/completions`;
 }
 
-module.exports = { openAiChatUrl };
+/** The models-listing sibling of the same rule: GET {base}/v1/models for
+ * the discovery probe (services/vllm-model-cache.js). Same base-completion
+ * semantics so the probe and the chat path can never disagree on a base. */
+function openAiModelsUrl(base) {
+  const b = String(base || '').replace(/\/+$/, '');
+  return /\/v\d+$/.test(b) ? `${b}/models` : `${b}/v1/models`;
+}
+
+module.exports = { openAiChatUrl, openAiModelsUrl };

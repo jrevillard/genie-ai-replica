@@ -2250,3 +2250,21 @@ describe('suite generator label — model-id discovery (#1181)', () => {
     expect(s.payload.generator).toBe('llm:served/suite-8b');
   });
 });
+
+it('F3: with VLLM_ENDPOINT unset the label still names the model the default host serves', async () => {
+  delete process.env.VLLM_MODEL_ID;
+  delete process.env.VLLM_LLM_MODEL_ID;
+  delete process.env.VLLM_ENDPOINT; // compose okf default — base falls back to the service name
+  require('axios').get.mockResolvedValue({ data: { data: [{ id: 'served/suite-8b' }] } });
+  __mockDb.query.mockResolvedValue({ all: async () => [] });
+  frontmatterService.vllmChatCompletions.mockResolvedValue(
+    llmResponse({
+      positive: [{ query: 'What is the licensing fee?', reason: 'topic hit' }],
+      negative: [],
+      keywords: []
+    })
+  );
+  const s = await svc.generateSuite('me', {}, {});
+  expect(require('axios').get).toHaveBeenCalledWith('http://vllm:8000/v1/models', expect.anything());
+  expect(s.payload.generator).toBe('llm:served/suite-8b');
+});

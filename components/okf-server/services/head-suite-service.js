@@ -681,7 +681,11 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         // 'vllm' placeholder only survives when nothing answers). A named
         // model-config override routing the generation call is a known
         // limitation of this label — it names the deployment default.
-        generator: `llm:${(await require('./vllm-model-cache').discoverVllmModelId(process.env.VLLM_ENDPOINT)) || 'vllm'}`,
+        generator: `llm:${
+          (await require('./vllm-model-cache').discoverVllmModelId(
+            require('./vllm-model-cache').deploymentVllmBase()
+          )) || 'vllm'
+        }`,
         sibling_names: siblings.map((s) => s.name),
         off_domain_topics: randomTopics,
         // Story 1-8d — the forbidden list this suite was generated against.

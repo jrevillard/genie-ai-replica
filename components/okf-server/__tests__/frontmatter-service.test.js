@@ -784,3 +784,91 @@ describe('vllmChatCompletions — model-id resolution follows the !631 discovery
     expect(axios.post.mock.calls[0][1].model).toBe('frontier/served');
   });
 });
+
+// Review round 1 (#1181): the env-judge path must not let the DEPLOYMENT
+// pin name a model on the JUDGE endpoint, and a modelless named-config
+// probe must carry that config's own api key.
+describe('vllmChatCompletions — review r1 fixes (#1181)', () => {
+  const modelCache2 = require('../services/vllm-model-cache');
+  const KEYS = [
+    'VLLM_LLM_MODEL_ID',
+    'VLLM_MODEL_ID',
+    'RAGAS_JUDGE_BASE_URL',
+    'RAGAS_JUDGE_MODEL',
+    'RAGAS_JUDGE_API_KEY'
+  ];
+  const saved = {};
+
+  beforeEach(() => {
+    KEYS.forEach((k) => {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    });
+    modelCache2.clearModelCache();
+    axios.post.mockReset();
+    axios.get.mockReset();
+  });
+
+  afterEach(() => {
+    KEYS.forEach((k) => {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    });
+    modelCache2.clearModelCache();
+  });
+
+  test('env judge with no RAGAS_JUDGE_MODEL: discovery on the JUDGE base — the deployment pin never crosses over', async () => {
+    process.env.VLLM_MODEL_ID = 'pinned/chat-model';
+    process.env.RAGAS_JUDGE_BASE_URL = 'https://judge-gpu.example/v1';
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'judge/served-8b' }] } });
+    axios.post.mockResolvedValue(vllmResponse('{}'));
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }], { config: null });
+    expect(axios.get).toHaveBeenCalledWith('https://judge-gpu.example/v1/models', expect.anything());
+    expect(axios.post.mock.calls[0][1].model).toBe('judge/served-8b');
+  });
+
+  test('env judge without a base switch stays on the deployment path (pin applies)', async () => {
+    process.env.VLLM_MODEL_ID = 'pinned/chat-model';
+    axios.post.mockResolvedValue(vllmResponse('{}'));
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }], { config: null });
+    expect(axios.get).not.toHaveBeenCalled();
+    expect(axios.post.mock.calls[0][1].model).toBe('pinned/chat-model');
+  });
+
+  test('a modelless named-config base probes with ITS OWN api key', async () => {
+    const modelConfig = require('../services/model-config-service');
+    modelConfig.resolveModelOverride.mockResolvedValueOnce({
+      provider: 'openai',
+      base_url: 'https://frontier.example/v1',
+      model: null,
+      api_key: 'fk-3',
+      source: 'active',
+      config_key: 'mc4',
+      config_name: 'Frontier (modelless)'
+    });
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'frontier/served' }] } });
+    axios.post.mockResolvedValue(vllmResponse('{}'));
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }]);
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://frontier.example/v1/models',
+      expect.objectContaining({ headers: { Authorization: 'Bearer fk-3' } })
+    );
+    expect(axios.post.mock.calls[0][1].model).toBe('frontier/served');
+  });
+
+  test('suggest.done names the model that actually tagged (cache read, no second probe)', async () => {
+    seedDb();
+    delete process.env.VLLM_LLM_MODEL_ID;
+    delete process.env.VLLM_MODEL_ID;
+    modelCache2.clearModelCache();
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/tagger-8b' }] } });
+    axios.post.mockResolvedValue(vllmResponse(JSON.stringify({ topic: ['x'], forbidden: [], summary: '' })));
+    await svc.suggestTags(REPO_ID);
+    expect(axios.get).toHaveBeenCalledTimes(1); // the chat resolution, not a second probe
+    const logger = require('../shared-lib/logger').logger;
+    // mock.calls accumulates across the file's tests — read THIS test's log.
+    const done = [...logger.info.mock.calls].reverse().find((c) => c[0] === 'frontmatter.suggest.done');
+    expect(done).toBeTruthy();
+    expect(done[1].model).toBe('served/tagger-8b');
+  });
+});

@@ -46,9 +46,11 @@ class ModelDiscoveryError extends Error {
 // "never answered".
 const _cache = new Map();
 
-/** The deployer pin, both spellings, whitespace-only treated as unset. */
+/** The deployer pin, both spellings. Each spelling is trimmed BEFORE the
+ * fallback so a whitespace-only VLLM_LLM_MODEL_ID cannot shadow a valid
+ * VLLM_MODEL_ID. */
 function envPin() {
-  return (process.env.VLLM_LLM_MODEL_ID || process.env.VLLM_MODEL_ID || '').trim() || null;
+  return (process.env.VLLM_LLM_MODEL_ID || '').trim() || (process.env.VLLM_MODEL_ID || '').trim() || null;
 }
 
 function ttlSeconds() {
@@ -61,20 +63,15 @@ function probeTimeoutMs() {
   return Number.isFinite(v) && v > 0 ? v * 1000 : PROBE_TIMEOUT_DEFAULT_MS;
 }
 
-/** The ONE models-URL rule, sibling of llm-url.openAiChatUrl: a versioned
- * base (…/v1) keeps its segment and takes /models; a bare host gets /v1
- * appended. The probe must never disagree with the chat path on the base. */
-function openAiModelsUrl(base) {
-  const b = String(base || '').replace(/\/+$/, '');
-  return /\/v\d+$/.test(b) ? `${b}/models` : `${b}/v1/models`;
-}
-
-/** Probe once; on success cache and return the first served id, else null. */
-async function probe(baseUrl, timeoutMs) {
-  const url = openAiModelsUrl(baseUrl);
+/** Probe once; on success cache and return the first served id, else null.
+ * A per-call apiKey (a named model-config's own key) wins over the
+ * deployment VLLM_API_KEY — the modelless-config path must authenticate
+ * with the credentials of the endpoint it probes. */
+async function probe(baseUrl, timeoutMs, apiKey) {
+  const url = require('./llm-url').openAiModelsUrl(baseUrl);
   const headers = {};
-  const apiKey = (process.env.VLLM_API_KEY || '').trim();
-  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  const key = (apiKey || '').trim() || (process.env.VLLM_API_KEY || '').trim();
+  if (key) headers.Authorization = `Bearer ${key}`;
   try {
     const r = await axios.get(url, { headers, timeout: timeoutMs || probeTimeoutMs() });
     const entry = r.data && Array.isArray(r.data.data) ? r.data.data[0] : null;
@@ -89,14 +86,14 @@ async function probe(baseUrl, timeoutMs) {
 
 /** get_model_id twin: served id for baseUrl, TTL-cached, stale-served on
  * probe failure, null when the endpoint never answered. */
-async function getServedModelId(baseUrl, { timeoutMs } = {}) {
-  const key = String(baseUrl || '').replace(/\/+$/, '');
-  if (!key) return null;
-  const entry = _cache.get(key);
+async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
+  const base = String(baseUrl || '').replace(/\/+$/, '');
+  if (!base) return null;
+  const entry = _cache.get(base);
   if (entry && Date.now() - entry.ts < ttlSeconds() * 1000) return entry.id;
-  const id = await probe(key, timeoutMs);
+  const id = await probe(base, timeoutMs, apiKey);
   if (id) {
-    _cache.set(key, { id, ts: Date.now() });
+    _cache.set(base, { id, ts: Date.now() });
     return id;
   }
   return entry ? entry.id : null; // stale is better than broken
@@ -114,8 +111,11 @@ async function discoverVllmModelId(baseUrl, opts) {
 async function requireServedModelId(baseUrl, opts) {
   const id = await getServedModelId(baseUrl, opts);
   if (!id) {
+    // No pin hint on purpose: this variant deliberately ignores the pin
+    // (foreign endpoint), so suggesting it would send the operator in
+    // circles.
     throw new ModelDiscoveryError(
-      `no model id discovered at ${openAiModelsUrl(baseUrl)} — the endpoint must answer the model-id probe, or pin VLLM_MODEL_ID`
+      `no model id discovered at ${require('./llm-url').openAiModelsUrl(baseUrl)} — the endpoint must answer the model-id probe`
     );
   }
   return id;
@@ -134,6 +134,14 @@ async function resolveVllmModelId(baseUrl, opts) {
   return requireServedModelId(baseUrl, opts);
 }
 
+/** The deployment vLLM base, same rule the chat path uses: the env
+ * endpoint, else the compose service name. Single home so the call path
+ * (frontmatter's VLLM_LLM_HOST) and the provenance labels can never
+ * disagree on which base is "the deployment endpoint". */
+function deploymentVllmBase() {
+  return process.env.VLLM_ENDPOINT || 'http://vllm:8000';
+}
+
 /** Test hook: drop every cached entry. */
 function clearModelCache() {
   _cache.clear();
@@ -141,6 +149,7 @@ function clearModelCache() {
 
 module.exports = {
   ModelDiscoveryError,
+  deploymentVllmBase,
   discoverVllmModelId,
   requireServedModelId,
   resolveVllmModelId,

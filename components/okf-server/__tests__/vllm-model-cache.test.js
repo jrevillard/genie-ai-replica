@@ -180,3 +180,40 @@ describe('failure semantics', () => {
     expect(axios.get).toHaveBeenCalled();
   });
 });
+
+describe('review round 1 fixes (#1181)', () => {
+  test('whitespace-only VLLM_LLM_MODEL_ID does not shadow a valid VLLM_MODEL_ID', async () => {
+    process.env.VLLM_LLM_MODEL_ID = '   ';
+    process.env.VLLM_MODEL_ID = 'real/model';
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).resolves.toBe('real/model');
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  test('a per-call apiKey overrides the env key on the probe', async () => {
+    process.env.VLLM_API_KEY = 'env-key';
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    await cache.requireServedModelId('https://frontier.example/v1', { apiKey: 'fk-3' });
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://frontier.example/v1/models',
+      expect.objectContaining({ headers: { Authorization: 'Bearer fk-3' } })
+    );
+  });
+
+  test('requireServedModelId without a per-call key falls back to the env key', async () => {
+    process.env.VLLM_API_KEY = 'env-key';
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    await cache.requireServedModelId('http://vllm:8000');
+    expect(axios.get.mock.calls[0][1].headers).toEqual({ Authorization: 'Bearer env-key' });
+  });
+
+  test('requireServedModelId error does not suggest the pin (the pin is ignored by design)', async () => {
+    axios.get.mockRejectedValue(new Error('401'));
+    await expect(cache.requireServedModelId('http://vllm:8000')).rejects.toThrow(/must answer the model-id probe/);
+  });
+
+  test('deploymentVllmBase mirrors the chat-path host rule: env endpoint, else the compose service', () => {
+    expect(cache.deploymentVllmBase()).toBe('http://vllm:8000');
+    process.env.VLLM_ENDPOINT = 'https://gpu.example.com/llm';
+    expect(cache.deploymentVllmBase()).toBe('https://gpu.example.com/llm');
+  });
+});

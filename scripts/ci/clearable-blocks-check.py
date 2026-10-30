@@ -125,8 +125,15 @@ def surfaces(chart_path):
     full_flags = fixture_flags(chart_path, "render-full-flags")
     full = base + full_flags
     full.append(f"--set=opea.gpu.nodeHost={GPU_NODE_HOST}")
+    full.append("--set=okf.enabled=true")
     incluster = base + full_flags
     incluster.append("--set=opea.gpu.mode=in-cluster")
+    # The OKF tier rides BOTH GPU surfaces: its NetworkPolicies include
+    # the GPU egress rule, which is derived from opea.gpu.nodeHost —
+    # a value that does not EXIST in-cluster. The tier shipped an
+    # unguarded include that crashed exactly this combination; no CI
+    # render paired in-cluster with okf before this surface did.
+    incluster.append("--set=okf.enabled=true")
     return [
         ("baseline", base),
         ("full surface", full),

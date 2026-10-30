@@ -2199,15 +2199,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                   )
                                 : (_scopeResolver?.stateFor(button) ??
                                       QuickHelpScopeResolver.pending);
-                            final broken = scope['broken'] as bool;
+                            final broken = quickHelpCardBroken(button, scope);
 
                             return Material(
                               color: Colors.transparent,
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(DsRadii.lg),
-                                // A broken scope is a VISIBLE failure: the
-                                // caption below names the configuration
-                                // problem, and the tap sends nothing.
+                                // A card the tap would silently refuse —
+                                // a broken scope, or one with no title —
+                                // is a VISIBLE failure: the caption below
+                                // names the configuration problem, and
+                                // the tap sends nothing.
                                 onTap: broken
                                     ? null
                                     : () => _quickHelpPressed(button),
@@ -2261,7 +2263,21 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                       ),
                                       if (broken)
                                         Text(
-                                          _quickHelpErrorCaption(scope),
+                                          // The scope's caption when the
+                                          // scope is the failure; the
+                                          // missing-title text when the
+                                          // config gave the card no
+                                          // title. Both defects, one
+                                          // caption line.
+                                          [
+                                            if (scope['broken'] as bool? ??
+                                                false)
+                                              _quickHelpErrorCaption(scope),
+                                            if (translatedTitle.isEmpty)
+                                              tr(
+                                                'chatbot.quickHelpTitleMissing',
+                                              ),
+                                          ].join(' '),
                                           style: theme.textTheme.bodySmall
                                               ?.copyWith(
                                                 fontSize: tokens.textXs,

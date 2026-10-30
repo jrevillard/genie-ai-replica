@@ -133,6 +133,64 @@ class TestEnsureVectorIndex:
         write_log.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_legacy_index_without_nprobe_param_is_noop_at_default(self):
+        """An index created without a defaultNProbe param is judged nProbe 1.
+
+        Deploying with the var unset must not force-rebuild every existing
+        index on the first ingest (delete+recreate of a production index is
+        a full IVF rebuild, with a no-index query window).
+        """
+        existing = [
+            {
+                "name": "vector_index",
+                "type": "vector",
+                "fields": ["embedding"],
+                "params": {"dimension": 1024, "metric": "cosine", "nLists": 1},
+            }
+        ]
+        coll = _make_collection(sample_embedding=[0.1] * 1024, existing_indexes=existing)
+        write_log = AsyncMock()
+
+        name = await ensure_vector_index(
+            coll,
+            metric="cosine",
+            n_lists=1,
+            file_id="file-1",
+            write_ingestion_log=write_log,
+        )
+
+        assert name == "vector_index"
+        coll.add_index.assert_not_called()
+        coll.delete_index.assert_not_called()
+        write_log.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_legacy_index_recreates_when_nprobe_override_requested(self):
+        """Legacy index (no defaultNProbe param) + explicit override -> recreate."""
+        existing = [
+            {
+                "name": "vector_index",
+                "type": "vector",
+                "fields": ["embedding"],
+                "params": {"dimension": 1024, "metric": "cosine", "nLists": 1},
+            }
+        ]
+        coll = _make_collection(sample_embedding=[0.1] * 1024, existing_indexes=existing)
+        write_log = AsyncMock()
+
+        await ensure_vector_index(
+            coll,
+            metric="cosine",
+            n_lists=1,
+            n_probe=4,
+            file_id="file-1",
+            write_ingestion_log=write_log,
+        )
+
+        coll.delete_index.assert_called_once_with("vector_index")
+        assert coll.add_index.call_args.args[0]["params"]["defaultNProbe"] == 4
+
+    @pytest.mark.asyncio
     async def test_n_probe_drift_recreates(self):
         existing = [
             {
@@ -364,6 +422,8 @@ class TestReadIndexParams:
     def test_invalid_n_probe_falls_back(self, monkeypatch):
         """AC3: RETRIEVER_ARANGO_NPROBE=invalid logs a WARNING and falls back to 1."""
         monkeypatch.setenv("RETRIEVER_ARANGO_NPROBE", "invalid")
+        monkeypatch.setenv("RETRIEVER_ARANGO_DISTANCE_STRATEGY", "COSINE")
+        monkeypatch.setenv("RETRIEVER_ARANGO_NUM_CENTROIDS", "1")
         fake_logger = MagicMock()
         monkeypatch.setattr(dp_module, "logger", fake_logger)
         metric, n_lists, n_probe = dp_module._read_index_params()
@@ -372,6 +432,17 @@ class TestReadIndexParams:
         assert n_probe == 1  # fallback, no crash
         fake_logger.warning.assert_called_once()
         assert "RETRIEVER_ARANGO_NPROBE" in fake_logger.warning.call_args.args[0]
+
+    @pytest.mark.parametrize("raw_n_probe", ["0", "-2"])
+    def test_out_of_range_n_probe_falls_back(self, monkeypatch, raw_n_probe):
+        """0 / negative parse as int but ArangoDB rejects them at add_index — reject here."""
+        monkeypatch.setenv("RETRIEVER_ARANGO_NPROBE", raw_n_probe)
+        fake_logger = MagicMock()
+        monkeypatch.setattr(dp_module, "logger", fake_logger)
+        _, _, n_probe = dp_module._read_index_params()
+        assert n_probe == 1  # fallback, no crash
+        fake_logger.warning.assert_called_once()
+        assert "must be >= 1" in fake_logger.warning.call_args.args[0]
 
 
 class TestSafeLog:

@@ -1186,7 +1186,14 @@ async def ensure_vector_index(
             )
             existing_n_lists = params.get("nLists")
             existing_n_probe = params.get("defaultNProbe")
-            if existing_metric != metric or existing_n_lists != n_lists or existing_n_probe != n_probe:
+            # A legacy index created WITHOUT a defaultNProbe param (langchain
+            # lazy-create, or deployments predating this knob) carries the
+            # server default: judge it as nProbe 1 so deploying with the var
+            # unset does not force-rebuild every existing index. An explicit
+            # RETRIEVER_ARANGO_NPROBE override (or any other drift) still
+            # recreates, and once recreated the param is stored explicitly.
+            effective_n_probe = 1 if existing_n_probe is None else existing_n_probe
+            if existing_metric != metric or existing_n_lists != n_lists or effective_n_probe != n_probe:
                 # Metric/nLists/nProbe are structural — ArangoDB cannot patch
                 # them in place on an existing vector index; drop + recreate.
                 collection.delete_index(vec_idx["name"])
@@ -1220,8 +1227,9 @@ async def ensure_vector_index(
 def _read_index_params():
     """Read RETRIEVER_ARANGO_{DISTANCE_STRATEGY,NUM_CENTROIDS,NPROBE} defensively.
 
-    Returns (metric, n_lists, n_probe). On invalid NUM_CENTROIDS or NPROBE,
-    logs a WARNING and falls back to 1 (the legacy default). Never raises —
+    Returns (metric, n_lists, n_probe). On invalid NUM_CENTROIDS or NPROBE
+    (non-integer, or an out-of-range value ArangoDB would reject), logs a
+    WARNING and falls back to 1 (the legacy default). Never raises —
     a malformed env var must not crash ingest.
     """
     metric = os.getenv("RETRIEVER_ARANGO_DISTANCE_STRATEGY", "COSINE").lower()
@@ -1234,6 +1242,12 @@ def _read_index_params():
     raw = os.getenv("RETRIEVER_ARANGO_NPROBE", "1")
     try:
         n_probe = int(raw)
+        # 0 / negative parse cleanly but ArangoDB rejects the index
+        # definition at add_index — which the helper would swallow, leaving
+        # ingest to complete with NO vector index. Reject here instead.
+        if n_probe < 1:
+            logger.warning(f"Invalid RETRIEVER_ARANGO_NPROBE={raw!r}; must be >= 1; falling back to 1.")
+            n_probe = 1
     except ValueError:
         logger.warning(f"Invalid RETRIEVER_ARANGO_NPROBE={raw!r}; falling back to 1.")
         n_probe = 1

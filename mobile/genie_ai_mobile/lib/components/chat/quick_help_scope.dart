@@ -1,3 +1,5 @@
+import 'package:genie_ai_mobile/utils/config_resolver.dart';
+
 // The scope of a Quick Help button, checked against the live EN hierarchy.
 //
 // English is the SSOT of the filter wire: the corpus's chunk_labels carry the
@@ -24,6 +26,50 @@
 /// scope rule drift apart.
 bool declaresCategoryScope(String? id) {
   return id != null && id.isNotEmpty && id != 'general';
+}
+
+/// The loaded shape of one Quick Help button, parsed from its config
+/// entry [btn] under [locale].
+///
+/// The shipped configurations declare the button's texts at the TOP
+/// level: `title` is a locale map (resolved here, once, like the
+/// welcome message), `icon` is an object whose `value` is a served
+/// path whose basename names the bundled asset, and `action` carries
+/// the visible and hidden texts. A button with no icon carries the
+/// default asset. A bare STRING where the label array belongs is
+/// wrapped as ONE label — the wire's own bare-string rule.
+Map<String, dynamic> parseQuickHelpButton(
+  Map<String, dynamic> btn,
+  String locale,
+) {
+  final iconMap = btn['icon'] as Map<String, dynamic>?;
+  final iconPath = iconMap?['value']?.toString() ?? '';
+  final String iconAsset = iconPath.isNotEmpty
+      ? 'assets/config/quickhelp/${iconPath.split('/').last}'
+      : 'assets/config/quickhelp/default.svg';
+
+  final action = btn['action'] as Map<String, dynamic>?;
+
+  final dynamic rawServiceLabels = btn['serviceLabels'];
+  final List<dynamic> serviceLabels;
+  if (rawServiceLabels is List<dynamic>) {
+    serviceLabels = rawServiceLabels;
+  } else if (rawServiceLabels is String && rawServiceLabels.isNotEmpty) {
+    serviceLabels = [rawServiceLabels];
+  } else {
+    serviceLabels = const <dynamic>[];
+  }
+
+  return {
+    'id': btn['id'],
+    'category': btn['category'],
+    'serviceLabels': serviceLabels,
+    'action': action ?? {},
+    'iconAsset': iconAsset,
+    'resolvedTitle': resolveConfigText(btn['title'], locale),
+    'resolvedVisibleText': resolveConfigText(action?['visibleText'], locale),
+    'resolvedHiddenPrompt': resolveConfigText(action?['hiddenPrompt'], locale),
+  };
 }
 
 /// The loaded Quick Help buttons, with a duplicated id keeping only the

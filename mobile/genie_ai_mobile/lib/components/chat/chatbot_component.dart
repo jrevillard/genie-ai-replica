@@ -326,54 +326,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         if (btn['hidden'] == true) {
           continue;
         }
-        // Safe parsing: use map access with defaults to prevent null crashes
-        final appearance = btn['appearance'] as Map<String, dynamic>?;
-        final iconMap = appearance?['icon'] as Map<String, dynamic>?;
-        final iconPath = iconMap?['value']?.toString() ?? '';
-
-        final String localIconAsset = iconPath.isNotEmpty
-            ? 'assets/config/quickhelp/${iconPath.split('/').last}'
-            : 'assets/config/quickhelp/default.svg';
-
-        // Resolve text with locale maps
-        final resolvedTitle = resolveConfigText(btn['title'], _currentLocale);
-        final action = btn['action'] as Map<String, dynamic>?;
-        final resolvedVisibleText = resolveConfigText(
-          action?['visibleText'],
-          _currentLocale,
-        );
-        final resolvedHiddenPrompt = resolveConfigText(
-          action?['hiddenPrompt'],
-          _currentLocale,
-        );
-
-        // Explicit English KB labels for the retriever filter. A bare
-        // STRING where the array belongs is the config typo the web half
-        // wraps as ONE label — the wire's own bare-string rule — and the
-        // parse must agree: the hard cast made the WHOLE config load
-        // throw (Quick Help dead for the session) while the web filtered
-        // correctly on the same file.
-        final dynamic rawServiceLabels = btn['serviceLabels'];
-        final List<dynamic> serviceLabels;
-        if (rawServiceLabels is List<dynamic>) {
-          serviceLabels = rawServiceLabels;
-        } else if (rawServiceLabels is String && rawServiceLabels.isNotEmpty) {
-          serviceLabels = [rawServiceLabels];
-        } else {
-          serviceLabels = const <dynamic>[];
-        }
-
-        loadedButtons.add({
-          'id': btn['id'],
-          'category': btn['category'],
-          'serviceLabels': serviceLabels,
-          'action': action ?? {},
-          'appearance': appearance ?? {},
-          'iconAsset': localIconAsset,
-          'resolvedTitle': resolvedTitle,
-          'resolvedVisibleText': resolvedVisibleText,
-          'resolvedHiddenPrompt': resolvedHiddenPrompt,
-        });
+        loadedButtons.add(parseQuickHelpButton(btn, _currentLocale));
       }
 
       setState(() {
@@ -2204,13 +2157,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                           itemCount: _quickHelpButtons.length,
                           itemBuilder: (context, index) {
                             final button = _quickHelpButtons[index];
-                            final labelMap =
-                                button['appearance']?['label']
-                                    as Map<String, dynamic>? ??
-                                {};
-                            final String titleKey =
-                                labelMap['text']?.toString() ?? '';
-                            final String translatedTitle = tr(titleKey);
+                            final String translatedTitle =
+                                button['resolvedTitle']?.toString() ?? '';
                             final String iconAsset =
                                 button['iconAsset']?.toString() ?? '';
                             final scope = _treeUnavailable

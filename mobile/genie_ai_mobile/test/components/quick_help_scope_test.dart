@@ -1209,4 +1209,69 @@ void main() {
       expect(quickHelpButtonById(buttons, 'crops'), isNull);
     });
   });
+
+  /// The config-side parse of a Quick Help button — the shape the shipped
+  /// configurations declare: a top-level `title` locale map, a top-level
+  /// `icon` object and an optional `action`. The grid card's label and the
+  /// card icon are the two reads that drifted to a non-existent
+  /// `appearance` block; the parse is where the shipped shape is read.
+  group('parseQuickHelpButton', () {
+    final shippedButton = {
+      'id': 'just-chat',
+      'title': {'en': 'Just Chat', 'fr': 'Discuter'},
+      'icon': {'type': 'file', 'value': '/config/quickhelp/just-chat.svg'},
+      'category': null,
+    };
+
+    test(
+      'a shipped button resolves its title locale map and its icon basename',
+      () {
+        final parsed = parseQuickHelpButton(shippedButton, 'en');
+
+        expect(parsed['id'], 'just-chat');
+        expect(parsed['resolvedTitle'], 'Just Chat');
+        expect(parsed['iconAsset'], 'assets/config/quickhelp/just-chat.svg');
+      },
+    );
+
+    test('a title missing the active locale falls back to English', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'title': {'en': 'Just Chat'},
+      }, 'fr');
+
+      expect(parsed['resolvedTitle'], 'Just Chat');
+    });
+
+    test('a button with no icon carries the default asset', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'icon': null,
+      }, 'en');
+
+      expect(parsed['iconAsset'], 'assets/config/quickhelp/default.svg');
+    });
+
+    test('a bare-string serviceLabel is wrapped as ONE label', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'serviceLabels': 'Births',
+      }, 'en');
+
+      expect(parsed['serviceLabels'], ['Births']);
+    });
+
+    test('the action texts resolve their locale maps', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'action': {
+          'visibleText': {'en': 'Ask about IDs', 'fr': 'Demander une CNI'},
+          'hiddenPrompt': {'en': 'prompt-en'},
+        },
+      }, 'fr');
+
+      expect(parsed['resolvedVisibleText'], 'Demander une CNI');
+      expect(parsed['resolvedHiddenPrompt'], 'prompt-en');
+    });
+  });
 }

@@ -1210,11 +1210,7 @@ void main() {
     });
 
     test('a card with no title refuses the press', () {
-      final button = {
-        'id': 'blank',
-        'resolvedTitle': '',
-        'category': null,
-      };
+      final button = {'id': 'blank', 'resolvedTitle': '', 'category': null};
 
       expect(quickHelpPressable(button, resolver), isFalse);
     });
@@ -1313,17 +1309,14 @@ void main() {
       expect(parsed['resolvedHiddenPrompt'], '');
     });
 
-    test(
-      'an empty string in the active locale falls through to English',
-      () {
-        final parsed = parseQuickHelpButton({
-          ...shippedButton,
-          'title': {'en': 'Apply for ID', 'es': ''},
-        }, 'es');
+    test('an empty string in the active locale falls through to English', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'title': {'en': 'Apply for ID', 'es': ''},
+      }, 'es');
 
-        expect(parsed['resolvedTitle'], 'Apply for ID');
-      },
-    );
+      expect(parsed['resolvedTitle'], 'Apply for ID');
+    });
 
     test('an empty title locale map resolves to no text', () {
       final parsed = parseQuickHelpButton({

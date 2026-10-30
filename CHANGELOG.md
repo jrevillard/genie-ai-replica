@@ -63,7 +63,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Breaking: the OKF admin model listing follows the chat path's URL
   rule.** A base that already carries a version segment lists at
->>>>>>> 32d87392a (fix(okf): confirmation round — the judge fidelity, the pin docs, the changelog)
   `{base}/models`, a bare host at `{base}/v1/models` — the one rule the
   chat call uses. A stored configuration whose base serves the list at the
   root (`http://my-proxy:8080/models`) must now carry its version segment

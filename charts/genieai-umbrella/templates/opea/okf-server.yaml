@@ -1,0 +1,167 @@
+{{- /* The OKF server — the knowledge-frame tier's core service.
+
+Gated on okf.enabled, the same dark default the Compose file ships
+(OKF_ENABLED=0, replicas 0): the wiring the EXISTING services export
+about this tier is unconditional (it lives in their own templates),
+but this workload renders only when the tier is switched on.
+
+Environment: transcribed from the Compose service block, in the same
+order, with the same effective defaults — the parity gate pairs this
+service and compares every row, so a default that drifted would be a
+red pipeline, not a note in a file. Rows the chart derives (Keycloak
+URLs, ArangoDB, the GPU key) use the same helpers their siblings use;
+the long tail of OKF_* tuning knobs carries Compose's defaults as
+literals — they are tuning constants, not deployment facts.
+*/ -}}
+{{- if .Values.okf.enabled -}}
+{{- $okf := .Values.okf | default dict -}}
+{{- $okfServer := $okf.server | default dict -}}
+{{- $vals  := deepCopy .Values -}}
+{{- $ns    := .Values.namespace -}}
+{{- $opea := .Values.opea | default dict -}}
+{{- $data := .Values.data | default dict -}}
+{{- $dataKeycloak := $data.keycloak | default dict -}}
+{{- $dataArangodb := $data.arangodb | default dict -}}
+{{- $llmEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "llm") -}}
+{{- $keycloakEnv := list
+    (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakPublicIssuer" .))
+    (dict "name" "KEYCLOAK_REALM" "value" ($dataKeycloak.realm | default "genie" | toString))
+    (dict "name" "SERVICE_NAME" "value" "genie-okf-server")
+    (dict "name" "NODE_ENV" "value" "production")
+    (dict "name" "KEYCLOAK_PUBLIC_URL" "value" (index $dataKeycloak "publicUrl" | default "" | toString))
+    (dict "name" "KEYCLOAK_JWKS_URL" "value" (index $dataKeycloak "jwksUrl" | default "" | toString))
+    (dict "name" "KEYCLOAK_BROWSER_ISSUER" "value" (index $dataKeycloak "browserIssuer" | default "" | toString))
+    (dict "name" "KEYCLOAK_INTERNAL_URL" "value" (index $dataKeycloak "internalUrl" | default "" | toString))
+    (dict "name" "NODE_TLS_REJECT_UNAUTHORIZED" "value" "1")
+    (dict "name" "CORS_ALLOWED_ORIGINS" "value" "")
+-}}
+{{- $arangoEnv := list
+    (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
+    (dict "name" "ARANGO_DB" "value" ($dataArangodb.database | default "_system" | toString))
+    (dict "name" "ARANGO_USER" "value" "root")
+-}}
+{{- $arangoSecretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "ARANGO_PASSWORD" "secret" "arango-root-secret" "key" "password" "optional" true) | fromJson) -}}
+{{- $kcSecretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "KC_OKF_SERVER_CLIENT_SECRET" "secret" "okf-server-client-secret" "key" "KC_OKF_SERVER_CLIENT_SECRET" "optional" true) | fromJson)
+    (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "KC_OKF_ACCESS_CLIENT_SECRET" "secret" "keycloak-proxy-client-secret" "key" "KEYCLOAK_PROXY_CLIENT_SECRET" "optional" true) | fromJson) -}}
+{{- $ragasSecretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "RAGAS_INTERNAL_SECRET" "secret" "okf-internal-secret" "key" "OKF_INTERNAL_SECRET" "optional" true) | fromJson)
+    (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "OKF_INTERNAL_SECRET" "secret" "okf-internal-secret" "key" "OKF_INTERNAL_SECRET" "optional" true) | fromJson) -}}
+{{- $gpuSecretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "VLLM_API_KEY")) | fromJsonArray -}}
+{{- $obsEnv := list
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
+    (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
+-}}
+{{- $tuningEnv := list
+    (dict "name" "RAGAS_JUDGE_BASE_URL" "value" (printf "%s/v1" $llmEndpoint))
+    (dict "name" "RAGAS_JUDGE_MODEL" "value" "")
+    (dict "name" "OKF_DELETE_GRACE_HOURS" "value" "168")
+    (dict "name" "OKF_BUNDLE_STORE_TIMEOUT_MS" "value" "300000")
+    (dict "name" "OKF_AUDIENCE" "value" "")
+    (dict "name" "OKF_SCOPE_MODE" "value" "open")
+    (dict "name" "KC_OKF_SERVER_CLIENT_ID" "value" "okf-server")
+    (dict "name" "KC_OKF_ACCESS_CLIENT_ID" "value" "genie-proxy-client")
+    (dict "name" "OKF_INGEST_WORKER_ENABLED" "value" "true")
+    (dict "name" "OKF_INGEST_WORKER_INTERVAL_MS" "value" "15000")
+    (dict "name" "OKF_INGEST_WORKER_SWEEP_INTERVAL_MS" "value" "3600000")
+    (dict "name" "OKF_INGEST_CONCURRENCY" "value" "1")
+    (dict "name" "OKF_MAX_CONCEPT_DOC_CHARS" "value" "250000")
+    (dict "name" "OKF_KICK_429_COOLDOWN_MS" "value" "15000")
+    (dict "name" "VLLM_ENDPOINT" "value" "")
+    (dict "name" "VLLM_MODEL_ID" "value" "")
+    (dict "name" "TEI_EMBED_HOST" "value" "http://tei:80")
+    (dict "name" "EMBEDDING_MODEL_ID" "value" "")
+    (dict "name" "OKF_GUARD_SELF_SUBJECT" "value" "")
+    (dict "name" "OKF_GUARD_DUPLICATE_FORBIDDEN" "value" "")
+    (dict "name" "OKF_RERANK_ENDPOINT" "value" "")
+    (dict "name" "OKF_RERANK_TOKEN" "value" "")
+    (dict "name" "OKF_RAGAS_URL" "value" "http://ragas-service:8090")
+    (dict "name" "OKF_RAGAS_TESTSET_SIZE_DEFAULT" "value" "20")
+    (dict "name" "OKF_RAGAS_MAX_ENTRIES" "value" "200")
+    (dict "name" "OKF_RAGAS_RUN_CONCURRENCY" "value" "2")
+    (dict "name" "OKF_RAGAS_RERANK_CONCURRENCY" "value" "3")
+    (dict "name" "OKF_RAGAS_SERVE_URL" "value" "http://chatqna:8888/v1/chatqna")
+    (dict "name" "RETRIEVER_ARANGO_K" "value" "20")
+    (dict "name" "RETRIEVER_ARANGO_FETCH_K" "value" "30")
+    (dict "name" "RETRIEVER_ARANGO_SCORE_THRESHOLD" "value" "0.2")
+    (dict "name" "RETRIEVER_ARANGO_DISTANCE_THRESHOLD" "value" "1")
+    (dict "name" "RETRIEVER_ARANGO_LAMBDA_MULT" "value" "0.5")
+    (dict "name" "RERANKING_STRATEGY" "value" "slice")
+    (dict "name" "RERANKER_TOP_N" "value" "3")
+    (dict "name" "RERANKING_THRESHOLD" "value" "0.75")
+    (dict "name" "CHATQNA_ENFORCE_ABSTENTION" "value" "true")
+    (dict "name" "OKF_RAGAS_ANSWER_MAX_TOKENS" "value" "5000")
+    (dict "name" "OKF_RAGAS_LONG_TIMEOUT_MS" "value" "3600000")
+    (dict "name" "OKF_RAGAS_JOB_POLL_MS" "value" "3000")
+    (dict "name" "CHATQNA_SYSTEM_PROMPT" "value" "")
+    (dict "name" "OKF_CURATION_TIMEOUT_MS" "value" "")
+    (dict "name" "OKF_CURATION_LANES" "value" "")
+    (dict "name" "OKF_TOPIC_LINK_ENABLED" "value" "true")
+    (dict "name" "OKF_TOPIC_LINK_TIMEOUT_MS" "value" "")
+    (dict "name" "OKF_TOPIC_LINK_LANES" "value" "")
+    (dict "name" "OKF_TOPIC_LINK_BATCH" "value" "")
+    (dict "name" "OKF_TOPIC_LINK_MAX_PER_CONCEPT" "value" "")
+    (dict "name" "OKF_INGEST_WORKER_REAP_GRACE_MS" "value" "3600000")
+    (dict "name" "OKF_INGEST_WORKER_MAX_CLAIMS" "value" "8")
+    (dict "name" "DATAPREP_URL" "value" "http://dataprep:5000")
+    (dict "name" "OKF_MAX_CRAWL_SOURCE_MB" "value" "")
+    (dict "name" "OKF_CONVERSION_DEBUG" "value" "")
+    (dict "name" "OKF_IMPORT_CONCURRENCY" "value" "4")
+    (dict "name" "OKF_INGEST_WORKER_JOB_POLL_MS" "value" "5000")
+    (dict "name" "OKF_INGEST_WORKER_JOB_TIMEOUT_MS" "value" "1800000")
+    (dict "name" "OKF_INGEST_WORKER_CYCLE_TIMEOUT_MS" "value" "1800000")
+    (dict "name" "OKF_INGEST_WORKER_SWEEP_GRACE_MS" "value" "3600000")
+    (dict "name" "OKF_JOB_WINDOW_ADAPTIVE" "value" "false")
+    (dict "name" "OKF_JOB_WINDOW_FLOOR_MS" "value" "1800000")
+    (dict "name" "OKF_JOB_WINDOW_MAX_MS" "value" "21600000")
+    (dict "name" "OKF_JOB_WINDOW_SEC_PER_CHUNK_MS" "value" "5000")
+    (dict "name" "OKF_CLAIM_STRATEGY" "value" "fifo")
+    (dict "name" "OKF_REPO_INGEST_CAP" "value" "0")
+    (dict "name" "OKF_KICK_BACKOFF_BASE_MS" "value" "0")
+    (dict "name" "OKF_KICK_BACKOFF_MAX_MS" "value" "900000")
+    (dict "name" "OKF_INGEST_MAX_CONCEPTS" "value" "1000")
+    (dict "name" "OKF_INGEST_MAX_ZIP_BYTES" "value" "268435456")
+    (dict "name" "OKF_MAX_CONCURRENT_CONVERSIONS" "value" "2")
+    (dict "name" "OKF_XLSX_ROWS_PER_CONCEPT" "value" "200")
+    (dict "name" "OKF_CSV_ROWS_PER_CONCEPT" "value" "200")
+    (dict "name" "OKF_RETRIEVAL_MODE" "value" "legacy")
+    (dict "name" "OKF_RETRIEVAL_MAX_FANOUT_GRAPHS" "value" "5")
+    (dict "name" "OKF_RETRIEVAL_SPINE_MAX_HOPS" "value" "2")
+    (dict "name" "OKF_RETRIEVAL_EXTRACTED_HOP_CAP" "value" "1")
+    (dict "name" "OKF_RETRIEVAL_CANDIDATE_CAP_PER_GRAPH" "value" "50")
+    (dict "name" "OKF_RETRIEVAL_CANDIDATE_CAP_GLOBAL" "value" "200")
+    (dict "name" "OKF_FRONTMATTER_VALIDATE_BATCH_SIZE" "value" "4")
+    (dict "name" "OKF_SETTLE_LEASE_MS" "value" "600000")
+-}}
+{{- /* opea-style env override map, applied last so an operator's value
+wins over a derived row of the same name. */ -}}
+{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" ($okfServer.env | default dict) | fromJsonArray -}}
+{{- $svcVals := dict
+    "image" (dict "repository" "genie-ai-okf-server" "tag" "main")
+    "port" 3002
+    "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "2" "memory" "4Gi"))
+    "env" (concat $keycloakEnv $obsEnv $arangoEnv $arangoSecretEnv $kcSecretEnv $ragasSecretEnv $gpuSecretEnv $tuningEnv $opeaEnvRows)
+    "probes" (dict
+      "readiness" (dict "httpGet" (dict "path" "/health" "port" 3002) "initialDelaySeconds" 10 "periodSeconds" 10 "failureThreshold" 5)
+      "liveness"  (dict "httpGet" (dict "path" "/health" "port" 3002) "initialDelaySeconds" 30 "periodSeconds" 10 "failureThreshold" 5)
+    )
+-}}
+{{- $valsServices := $vals.services | default dict -}}
+{{- $_ := set $valsServices "okf-server" $svcVals -}}
+{{- $_ := set $vals "services" $valsServices -}}
+{{- $ctx := dict "name" "okf-server" "component" "okf-server" "Values" $vals "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: okf-server
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "okf-server") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 3002
+      targetPort: 3002
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "okf-server") | nindent 4 }}
+{{- end -}}

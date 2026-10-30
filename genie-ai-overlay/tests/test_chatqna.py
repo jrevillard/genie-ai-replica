@@ -4517,8 +4517,11 @@ async def test_tokenize_failure_mid_truncation_loop_fails_the_request_503(monkey
     async def fake_schedule(initial_inputs=None, llm_parameters=None, genie_params=None, **_kw):
         # comps calls align_inputs for every node inside schedule() and returns
         # (result_dict, runtime_graph); this stub replays that call shape for
-        # the LLM node so the exception surfaces to handle_request's
-        # classifier the way it does in production.
+        # the LLM node. The propagation it models is UNWRAPPED: the vendored
+        # comps orchestrator is known to wrap some node exceptions (the
+        # reranker's HTTPException — see handle_request's chain walk), and if
+        # it wraps align_inputs errors the same way, production would classify
+        # differently from this pin — unobservable from this suite.
         return (
             align_inputs(
                 svc,
@@ -4539,38 +4542,41 @@ async def test_tokenize_failure_mid_truncation_loop_fails_the_request_503(monkey
         data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
         headers={"Authorization": "Bearer dummy.jwt.token"},
     )
-    with (
-        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
-        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
-        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
-        _patched_chat_request(stream=False, max_tokens=256),
-        patch.object(chatqna_module, "detect", return_value="fr"),
-        patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-        patch("httpx.post", side_effect=fake_post),
-        patch("httpx.get", return_value=models_resp),
-        pytest.raises(HTTPException) as exc_info,
-    ):
-        await svc.handle_request(req)
+    # The lru_cache cleanup runs in a teardown, not a trailing line: this is
+    # the one test that runs the REAL ``_count_static_tokens`` against a
+    # mocked transport, and a cached system-prompt count left behind by an
+    # assertion failure would hand the next real-counter test a number its
+    # own mocks never produced — two failures where there is one.
+    try:
+        with (
+            patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+            patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+            patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+            _patched_chat_request(stream=False, max_tokens=256),
+            patch.object(chatqna_module, "detect", return_value="fr"),
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+            patch("httpx.post", side_effect=fake_post),
+            patch("httpx.get", return_value=models_resp),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await svc.handle_request(req)
 
-    assert exc_info.value.status_code == 503
-    assert exc_info.value.detail == "llm_unavailable"
-    # The classified 503 wraps the transport error that killed the loop.
-    assert isinstance(exc_info.value.__cause__, httpx.HTTPError)
-    # Died INSIDE the truncation loop: system prompt, user content and
-    # skeleton were counted first; HISTTOK-4 was accepted; HISTTOK-3's call
-    # is the one that failed.
-    assert len(tokenize_calls) == 5
-    assert "HISTTOK-4" in tokenize_calls[3]
-    assert "HISTTOK-3" in tokenize_calls[4]
-    # No partial-history response escaped: the loop never reached its
-    # bookkeeping, and the request exited through the classified error branch.
-    truncation_counter.add.assert_not_called()
-    assert recorded[-1]["error"] == "true"
-    # Leave the lru_cache empty on the way out: this is the one test that runs
-    # the REAL ``_count_static_tokens`` against a mocked transport, and a
-    # cached system-prompt count left behind would hand the next real-counter
-    # test a number its own mocks never produced.
-    chatqna_module._count_static_tokens.cache_clear()
+        assert exc_info.value.status_code == 503
+        assert exc_info.value.detail == "llm_unavailable"
+        # The classified 503 wraps the transport error that killed the loop.
+        assert isinstance(exc_info.value.__cause__, httpx.HTTPError)
+        # Died INSIDE the truncation loop: system prompt, user content and
+        # skeleton were counted first; HISTTOK-4 was accepted; HISTTOK-3's call
+        # is the one that failed.
+        assert len(tokenize_calls) == 5
+        assert "HISTTOK-4" in tokenize_calls[3]
+        assert "HISTTOK-3" in tokenize_calls[4]
+        # No partial-history response escaped: the loop never reached its
+        # bookkeeping, and the request exited through the classified error branch.
+        truncation_counter.add.assert_not_called()
+        assert recorded[-1]["error"] == "true"
+    finally:
+        chatqna_module._count_static_tokens.cache_clear()
 
 
 @pytest.mark.asyncio

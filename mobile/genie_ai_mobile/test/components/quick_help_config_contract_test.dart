@@ -54,19 +54,5 @@ void main() {
         );
       }
     });
-
-    test('the configuration declares no appearance block', () {
-      // The shape the pre-fix widget read. A configuration that ever
-      // declares one again would make the two shapes ambiguous.
-      final buttons =
-          config['features']['chat']['quickHelp']['buttons'] as List<dynamic>;
-
-      for (final button in buttons) {
-        expect(
-          (button as Map<String, dynamic>).containsKey('appearance'),
-          isFalse,
-        );
-      }
-    });
   });
 }

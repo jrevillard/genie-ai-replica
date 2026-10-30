@@ -1240,6 +1240,45 @@ void main() {
     });
   });
 
+  /// Whether a card DECLARES a scope — a category the hierarchy names,
+  /// or labels it carries. ONE rule, read by the grid's unavailable
+  /// verdict and by the press path.
+  group('quickHelpDeclaresScope', () {
+    test('a card with a category declares a scope', () {
+      expect(quickHelpDeclaresScope({'id': 'civil', 'category': '2'}), isTrue);
+    });
+
+    test('a card with labels declares a scope', () {
+      expect(
+        quickHelpDeclaresScope({
+          'id': 'civil',
+          'category': null,
+          'serviceLabels': <String>['Births'],
+        }),
+        isTrue,
+      );
+    });
+
+    test('a card with neither declares no scope', () {
+      expect(quickHelpDeclaresScope({'id': 'chat'}), isFalse);
+      expect(
+        quickHelpDeclaresScope({
+          'id': 'chat',
+          'category': null,
+          'serviceLabels': <String>[],
+        }),
+        isFalse,
+      );
+    });
+
+    test("the 'general' placeholder declares no scope", () {
+      expect(
+        quickHelpDeclaresScope({'id': 'chat', 'category': 'general'}),
+        isFalse,
+      );
+    });
+  });
+
   /// The ONE button-identity lookup — the restore and the locale
   /// re-title must resolve the same entity for the same id.
   group('quickHelpButtonById', () {

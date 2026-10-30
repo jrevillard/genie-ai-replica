@@ -262,6 +262,14 @@ String? activeQuickHelpTitleFor(
 /// label is. A hierarchy that has not loaded says nothing about any button
 /// ([pending]); one that could not be loaded is the CALLER's fact — the
 /// widget marks it and passes each button through [unavailableScopeFor].
+/// Whether the card DECLARES a scope — a category the hierarchy names, or
+/// labels it carries. ONE rule, read by the grid's unavailable verdict and
+/// by the press path.
+bool quickHelpDeclaresScope(Map<String, dynamic> button) {
+  return declaresCategoryScope(button['category'] as String?) ||
+      quickHelpServiceLabelsOf(button).isNotEmpty;
+}
+
 class QuickHelpScopeResolver {
   /// The ENGLISH spelling of [entry]: its `nameEN`, or its `name` when
   /// the tree predates the dual-spelling response. The fallback is
@@ -424,14 +432,6 @@ class QuickHelpScopeResolver {
       }
     }
     return labels;
-  }
-
-  /// Whether the card DECLARES a scope — a category the hierarchy names, or
-  /// labels it carries. ONE rule, read by the grid's unavailable verdict and
-  /// by the press path.
-  bool quickHelpDeclaresScope(Map<String, dynamic> button) {
-    return declaresCategoryScope(button['category'] as String?) ||
-        quickHelpServiceLabelsOf(button).isNotEmpty;
   }
 
   /// The scope state of [button] against the live tree.

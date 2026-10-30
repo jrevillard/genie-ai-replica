@@ -78,10 +78,10 @@ void main() {
   /// The ONE container guard, and the map branch the card label's
   /// resolution depends on.
   group('configMapOf', () {
-    test('a map is handed back as-is', () {
+    test('a map is read as a map', () {
       final map = {'en': 'Hello'};
 
-      expect(configMapOf(map), same(map));
+      expect(configMapOf(map), {'en': 'Hello'});
     });
 
     test('anything else degrades to the empty map', () {

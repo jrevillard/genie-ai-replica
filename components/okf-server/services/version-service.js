@@ -86,15 +86,25 @@ async function currentFingerprint(repoId) {
   return fingerprintOf(concepts);
 }
 
-/** The fingerprint recorded on the repo's CURRENT version, or null. */
-async function fingerprintOfCurrentVersion(repoId) {
+/** The fingerprint recorded on the repo's CURRENT version, or null.
+ *
+ * Review !622 round 11: manifests are keyed `${repo_id}_${bundle_version}`
+ * (see mintVersion), so a bare `.document(repoId)` never finds one — the
+ * lookup 404'd into the catch, returned null FOREVER, and the publish
+ * no-op guard built to stop the 2026-10-12 triple-publish incident was
+ * dead on every deployment (the lifecycle tests mock this function, so
+ * no suite saw it). The caller passes the repo's CURRENT version; a null
+ * bundleVersion (never published) or a missing manifest key degrades to
+ * null — the guard bypasses and the publish proceeds. */
+async function fingerprintOfCurrentVersion(repoId, bundleVersion = null) {
+  if (bundleVersion == null) return null; // never versioned yet
   const db = await dbService.getConnection();
   try {
-    const v = await db.collection(VERSIONS).document(repoId);
+    const v = await db.collection(VERSIONS).document(`${repoId}_${bundleVersion}`);
     return (v && v.content_fingerprint) || null;
   } catch (err) {
     if (!isArangoNotFound(err)) throw err;
-    return null; // never versioned yet — nothing to compare against
+    return null; // manifest gone (or never minted) — nothing to compare against
   }
 }
 

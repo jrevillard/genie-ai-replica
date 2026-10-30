@@ -638,7 +638,9 @@ async function transition(repoId, action, actor, opts = {}) {
       // (no fingerprint to compare) so the FIRST publish always proceeds.
       const [liveFingerprint, currentFingerprint] = await Promise.all([
         versionService.currentFingerprint(repoId),
-        versionService.fingerprintOfCurrentVersion(repoId)
+        // Round 11: the repo's CURRENT version keys the manifest lookup —
+        // see fingerprintOfCurrentVersion (the bare-id lookup was dead).
+        versionService.fingerprintOfCurrentVersion(repoId, repo.version)
       ]);
       if (currentFingerprint && currentFingerprint === liveFingerprint) {
         // Review !622 wave 2 (#78657): a publish that died BETWEEN mint and

@@ -200,15 +200,14 @@ describe('Locale consistency', () => {
   }
   const derivedReplace = deriveReplaceConsumed();
 
-
-    test('the consumer scan actually finds call sites (a silently empty scan guards nothing)', () => {
+  test('the consumer scan actually finds call sites (a silently empty scan guards nothing)', () => {
     // round-9 ground truth: ~45 curated entries existed; the scan must see
     // at least that many, and the compiled path must yield its 5 admin keys.
     expect(derivedReplace.plain.size).toBeGreaterThan(40);
     expect(derivedReplace.escaped.length).toBeGreaterThanOrEqual(5);
   });
 
-test('replace()-consumed keys carry every consumed placeholder verbatim in every locale (mixin raw lookup)', () => {
+  test('replace()-consumed keys carry every consumed placeholder verbatim in every locale (mixin raw lookup)', () => {
     const get = (o, d) => d.split('.').reduce((a, k) => (a && a[k] != null ? a[k] : undefined), o);
     const offenders = [];
     const en = getLocaleData('en');
@@ -232,7 +231,7 @@ test('replace()-consumed keys carry every consumed placeholder verbatim in every
       }
     }
     expect(offenders).toEqual([]);
-    });
+  });
 
   test('admin.documents replace()-consumed keys keep the escaped form (AdminDashboard compiled path)', () => {
     const get = (o, d) => d.split('.').reduce((a, k) => (a && a[k] != null ? a[k] : undefined), o);
@@ -251,5 +250,5 @@ test('replace()-consumed keys carry every consumed placeholder verbatim in every
       }
     }
     expect(offenders).toEqual([]);
-    });
+  });
 });

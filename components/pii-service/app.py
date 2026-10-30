@@ -65,9 +65,52 @@ _DEFAULT_NATIONAL_ID_PATTERNS: dict[str, list[dict]] = {
     "GM_NATIONAL_ID": [{"name": "gm-nid", "regex": r"\b\d{9}\b", "score": 0.4}],
 }
 
+
+def _load_national_id_overrides() -> dict[str, list[dict]]:
+    """OKF_PII_NATIONAL_ID_PATTERNS, parsed defensively (round 11, !622).
+
+    Malformed JSON must not take the scan path down: log loudly and fall
+    back to no overrides — the registry keeps its built-in defaults and the
+    service keeps serving, instead of crash-looping the worker (which, with
+    the fail-closed okf-server client, 502'd every scan and blocked every
+    publish gate until the env was fixed by hand).
+    """
+    raw = os.getenv("OKF_PII_NATIONAL_ID_PATTERNS")
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        # basicConfig runs after this — print to stderr so the alarm is
+        # visible in the container log from the very first line.
+        print(
+            "CRITICAL: OKF_PII_NATIONAL_ID_PATTERNS is malformed JSON "
+            f"({exc}) — ignoring the override and using the built-in "
+            "national-ID registry. Fix the env value to restore the "
+            "deployment's overrides.",
+            flush=True,
+        )
+        return {}
+    if not isinstance(parsed, dict):
+        print(
+            "CRITICAL: OKF_PII_NATIONAL_ID_PATTERNS must be a JSON object "
+            f"(got {type(parsed).__name__}) — ignoring the override and "
+            "using the built-in national-ID registry.",
+            flush=True,
+        )
+        return {}
+    return parsed
+
+
 NATIONAL_ID_PATTERNS: dict[str, list[dict]] = {
     **_DEFAULT_NATIONAL_ID_PATTERNS,
-    **json.loads(os.getenv("OKF_PII_NATIONAL_ID_PATTERNS", "{}")),
+    # Round 11 (!622): the env override used to json.loads() bare at module
+    # import — one malformed value crash-looped the uvicorn worker, and the
+    # okf-server PII client is fail-closed, so every repo-wide scan 502'd and
+    # the publish gate blocked every repo until an operator fixed the env. A
+    # config typo now degrades to the built-in defaults with a loud alarm
+    # (fail-open-with-alarm — the overrides are gone, never silently wrong).
+    **_load_national_id_overrides(),
 }
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")

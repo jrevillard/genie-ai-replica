@@ -77,7 +77,7 @@ source first** (the file in the repo), then regenerate.
 | `MODEL_AUTH_TIMEOUT_SECONDS` | `300` | dataprep | Keycloak service-account token fetch. Separate from the control-plane budget because every ingestion-log write and status update waits on it, one attempt, no retry, re-raises on failure. |
 | `MODEL_CONTROL_PLANE_TIMEOUT_SECONDS` | `30` | dataprep, chatqna | Ingestion-log writes, doc-status updates, doc-repo callbacks. Not the Keycloak token fetch. |
 | `MODEL_CONNECT_TIMEOUT_SECONDS` | `30` | dataprep, reranker | The CONNECT phase ceiling for every aiohttp session this policy budgeted. `aiohttp`'s default session already carried 30 s; passing an explicit `ClientTimeout(total=...)` drops it, and `None` means no limit rather than "inherit". Raise for slow DNS or a routed mesh. |
-| `MODEL_PROBE_TIMEOUT_SECONDS` | `10` | dataprep, retriever, chatqna | The `/v1/models` probe behind the TTL-cached model-id lookup. Degrades to the configured model id. Raise it on a remote GPU node whose models load slowly — the fallback otherwise picks the configured id instead of the served one. |
+| `MODEL_PROBE_TIMEOUT_SECONDS` | `10` | dataprep, retriever, chatqna | The `/v1/models` probe behind the TTL-cached model-id lookup. With no pinned name a probe failure fails the request loudly (503). Raise it on a remote GPU node whose models load slowly. |
 | `RERANKING_STRATEGY` | `slice` | chatqna | `slice` / `threshold` / `slice_threshold` / `knee_threshold` / `adaptive` |
 | `RERANKER_TOP_N` | `3` | chatqna | Top chunks kept by `slice`/`slice_threshold` |
 | `CONTEXTUAL_RETRIEVAL_ENABLED` | `true` | dataprep | On by default; prepends doc-context prefix |

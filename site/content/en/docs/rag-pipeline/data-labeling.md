@@ -68,7 +68,7 @@ Stages 4-6 run inside the dataprep service
 | `CONTEXTUAL_LABEL_RAW` | `true` | Decouple labelling from context: label the raw chunk, embed the contextualised text. |
 | `CONTEXTUAL_RETRIEVAL_ENABLED` | `true` | Generate the per-chunk (or per-doc) context prefix. |
 | `CONTEXTUAL_STRATEGY` | `doc_level` (docker-compose) / `per_chunk` (env template & code default) | `per_chunk` (Anthropic recipe) or `doc_level` (N× cheaper). docker-compose runtime default is `doc_level`; the env template and the in-code default are `per_chunk`. |
-| `VLLM_LLM_MODEL_ID` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | The labelling LLM — recommended `ibm-granite/granite-4.1-8b` for guided JSON. The labelling service discovers whatever model the endpoint serves; set this (or `VLLM_MODEL_ID`) only to pin a name. |
+| `VLLM_LLM_MODEL_ID` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | The labelling LLM — recommended `ibm-granite/granite-4.1-8b` for guided JSON. The labelling service discovers whatever model the endpoint serves; set `VLLM_LLM_MODEL_ID` to pin a name (it reaches the services as their `VLLM_MODEL_ID`). |
 
 ## Document-scope labels (`file_labels`)
 

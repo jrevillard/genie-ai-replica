@@ -382,9 +382,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   could diverge from the deployed model). The compose services no longer pin
   a default model name: discovery is the default for every chat/ingest
   Python service (chatqna, retriever, dataprep), and services start
-  immediately — **jobs run while vLLM is still loading fall back to
-  degraded labels that are not re-computed later**; wait for vLLM health
-  before bulk ingesting. **Config note:** chatqna no longer reads
+  immediately — an ingest job started before vLLM answers `/v1/models`
+  **fails loudly and is rolled back**; only with a pinned name does it
+  survive the load window on degraded file-level labels, which are not
+  re-computed later. Either way, wait for vLLM health before bulk
+  ingesting. **Config note:** chatqna no longer reads
   `LLM_MODEL`; `VLLM_MODEL_ID` is the override those services honor (set it
   only to pin a name — without it the served model is discovered
   automatically).

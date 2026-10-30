@@ -21,8 +21,9 @@ the response stream.
 
 ## LLM defaults
 
-The default model in docker-compose is **`meta-llama/Meta-Llama-3.1-8B-Instruct`**
-(set via `VLLM_LLM_MODEL_ID`, `docker-compose.yaml:1179`). The
+The model the vLLM container serves defaults to
+**`meta-llama/Meta-Llama-3.1-8B-Instruct`**
+(`--served-model-name ${VLLM_LLM_MODEL_ID:-…}`, `docker-compose.yaml:820`). The
 **recommended and validated** model is **`ibm-granite/granite-4.1-8b`**
 because it supports the OpenAI-compatible guided JSON
 (`response_format={"type":"json_object"}`) that dataprep needs for

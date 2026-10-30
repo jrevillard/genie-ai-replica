@@ -486,7 +486,7 @@ DEGRADED_REMEDIES = {
     ),
     DEGRADED_CLIENT_UNAVAILABLE: (
         "{phase}: the vLLM client could not be built. Raising a budget will not help — check "
-        "VLLM_ENDPOINT and the configured model id."
+        "VLLM_ENDPOINT and that the served model is discoverable (VLLM_MODEL_ID unset)."
     ),
     DEGRADED_NO_CONTEXTS: (
         "{phase}: every chunk came back without a generated context. Raising a budget will not help — "

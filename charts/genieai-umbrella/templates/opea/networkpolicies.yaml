@@ -293,6 +293,19 @@ spec:
       ports:
         - protocol: TCP
           port: 5000
+    {{- if eq true (index (.Values.okf | default dict) "enabled") }}
+    # The OKF server's ingest worker POSTs extraction jobs straight to
+    # this service (OKF_SERVER_URL wiring on the okf-server side points
+    # here); under default-deny the drops would surface as ingest jobs
+    # that never start.
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: okf-server
+      ports:
+        - protocol: TCP
+          port: 5000
+    {{- end }}
   {{- if $obsMetrics.enabled }}
   # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
   # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
@@ -741,4 +754,174 @@ spec:
         - protocol: TCP
           port: 9031
 {{- end }}
+{{- end -}}{{- /*
+
+The OKF tier's own policies — rendered only when the tier is on, in the
+same default-deny-with-allowlists shape the orchestrators carry. The
+peers' rules that point INTO the tier (backend egress to okf-server,
+dataprep ingress from the ingest worker) live in their own policies,
+gated the same way: a tier policy without the peer half (or the other
+way round) passes every render gate and silently drops the traffic it
+was written to allow.
+
+*/ -}}
+{{- if eq true (index (.Values.okf | default dict) "enabled") }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: okf-server
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "okf-server") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: okf-server
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # The BFF's retrieval-posture client and the document repository's
+    # crawl hooks.
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+      ports:
+        - protocol: TCP
+          port: 3002
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # ArangoDB (concept store), the dataprep ingest endpoint, the RAGAS
+    # sidecar, the chatqna serve path, the Keycloak token call (the
+    # operator-managed pod labels are outside the genieai.io/component
+    # convention — same port-scoped ipBlock the orchestrators carry),
+    # and the OTLP exporter.
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: dataprep
+      ports:
+        - protocol: TCP
+          port: 5000
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: ragas-service
+      ports:
+        - protocol: TCP
+          port: 8090
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+      ports:
+        - protocol: TCP
+          port: 8888
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8529
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: {{ include "genieai-umbrella.otlpPort" . }}
+    {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pii-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "pii-service") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: pii-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: okf-server
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: {{ include "genieai-umbrella.otlpPort" . }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ragas-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "ragas-service") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: ragas-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: okf-server
+      ports:
+        - protocol: TCP
+          port: 8090
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # The judge LLM and the embedding endpoint — both derived from the
+    # GPU tier, so the named-destination GPU rule carries them whatever
+    # the mode — and the OTLP exporter.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: {{ include "genieai-umbrella.otlpPort" . }}
+    {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
 {{- end -}}

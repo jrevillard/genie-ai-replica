@@ -18,17 +18,25 @@
  * next path segment. One rule, shared by every call site, so the
  * test-connection (which already built it right), the benchmark legs and
  * the curation legs can never disagree again. */
-function openAiChatUrl(base) {
+/** The ONE base-completion rule: strip the trailing slashes and tell
+ * whether the base already carries a version segment. Both URL builders
+ * below read it — the rule must never exist twice. */
+function normalizedBase(base) {
   const b = String(base || '').replace(/\/+$/, '');
-  return /\/v\d+$/.test(b) ? `${b}/chat/completions` : `${b}/v1/chat/completions`;
+  return { base: b, versioned: /\/v\d+$/.test(b) };
+}
+
+function openAiChatUrl(base) {
+  const { base: b, versioned } = normalizedBase(base);
+  return versioned ? `${b}/chat/completions` : `${b}/v1/chat/completions`;
 }
 
 /** The models-listing sibling of the same rule: GET {base}/v1/models for
  * the discovery probe (services/vllm-model-cache.js). Same base-completion
  * semantics so the probe and the chat path can never disagree on a base. */
 function openAiModelsUrl(base) {
-  const b = String(base || '').replace(/\/+$/, '');
-  return /\/v\d+$/.test(b) ? `${b}/models` : `${b}/v1/models`;
+  const { base: b, versioned } = normalizedBase(base);
+  return versioned ? `${b}/models` : `${b}/v1/models`;
 }
 
 module.exports = { openAiChatUrl, openAiModelsUrl };

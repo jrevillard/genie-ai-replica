@@ -44,6 +44,7 @@ const { createHash } = require('node:crypto');
 const dbService = require('../shared-lib/db-connection-service');
 
 const frontmatterService = require('./frontmatter-service');
+const modelCache = require('./vllm-model-cache');
 const repositoryService = require('./repository-service');
 const headTestService = require('./head-test-service');
 const modelConfigService = require('./model-config-service');
@@ -1022,10 +1023,7 @@ async function answerFidelity(opts = {}) {
     // VLLM_LLM_MODEL_ID spelling (VLLM_MODEL_ID alone in .env pins okf but
     // NOT chatqna), else it discovers the served id. The okf-side fused pin
     // must not name the serve-mode model.
-    model:
-      require('./vllm-model-cache').envPinLLMSpelling() ||
-      (await require('./vllm-model-cache').deploymentServedModelId()) ||
-      null
+    model: modelCache.envPinLLMSpelling() || (await modelCache.deploymentServedModelId()) || null
   });
   if (opts.serveMode) return deploymentChat();
   try {

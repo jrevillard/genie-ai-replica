@@ -11,6 +11,7 @@
 jest.mock('../shared-lib/logger', () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() }
 }));
+jest.mock('axios');
 jest.mock('../shared-lib/tracing', () => ({
   withSpan: jest.fn(async (name, fn) => fn({ setAttribute: jest.fn() }))
 }));
@@ -2223,7 +2224,6 @@ describe('1-8g-x — run progress reporting', () => {
 // #1181 — the suite provenance label names the model the deployment
 // endpoint serves (discovery, !631 policy) instead of the never-injected
 // VLLM_LLM_MODEL_ID placeholder 'vllm'.
-jest.mock('axios');
 describe('suite generator label — model-id discovery (#1181)', () => {
   const axios = require('axios');
   const OLD_ENV = { ...process.env };
@@ -2258,9 +2258,9 @@ describe('suite generator label — model-id discovery (#1181)', () => {
   });
 });
 
-const F3_ENV = { ...process.env };
+const FILE_ENV = { ...process.env };
 afterEach(() => {
-  process.env = { ...F3_ENV };
+  process.env = { ...FILE_ENV };
 });
 it('F3: with VLLM_ENDPOINT unset the label still names the model the default host serves', async () => {
   delete process.env.VLLM_MODEL_ID;

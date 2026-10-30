@@ -5,6 +5,7 @@
 // a filter-and-UPDATE silent no-op) and PASS after T1+T2.
 
 jest.mock('../shared-lib/db-connection-service', () => {
+  jest.mock('axios');
   const mockDb = require('./mocks/arango-mock').createMockDb();
   return { getConnection: jest.fn(() => Promise.resolve(mockDb)), __mockDb: mockDb };
 });
@@ -23,6 +24,20 @@ const conceptMeta = require('../services/concept-meta-service');
 const { persistConformanceIssues, getRepoMetrics } = require('../services/conformance-service');
 
 // A parseConcept-shaped input (parser-service.js:182+).
+// One manifest fixture for the ensureSummary tests (file scope).
+function manifestFixture() {
+  return {
+    _key: 'r1',
+    name: 'Demo bundle',
+    domain: 'demo',
+    version: 1,
+    concepts: [],
+    summary_stats: { concept_count: 0 },
+    summary_text: null,
+    summary_stale: false
+  };
+}
+
 function parsedInput(overrides = {}) {
   return {
     concept_id: 'concepts/health-policy',
@@ -807,19 +822,8 @@ describe('patchConceptMeta — stale park cleared on content change', () => {
 // policy: pin > /v1/models discovery; never a silent undefined (the dead
 // `config?.llm` reads are gone). Best-effort semantics are preserved — a
 // resolution failure returns the manifest with summary_text null.
-jest.mock('axios');
 describe('ensureSummary — model-id discovery (#1181)', () => {
   const axios = require('axios');
-  const manifest = () => ({
-    _key: 'r1',
-    name: 'Demo bundle',
-    domain: 'demo',
-    version: 1,
-    concepts: [],
-    summary_stats: { concept_count: 0 },
-    summary_text: null,
-    summary_stale: false
-  });
 
   beforeEach(() => {
     mockDb._reset();
@@ -838,8 +842,8 @@ describe('ensureSummary — model-id discovery (#1181)', () => {
 
   it('no pin: the summary call names the model discovered from the endpoint', async () => {
     // Seed the store so the summary WRITE (collection update) lands.
-    await mockDb.collection('okf_bundle_manifest').save(manifest());
-    mockDb.query.mockResolvedValueOnce({ all: async () => [manifest()] });
+    await mockDb.collection('okf_bundle_manifest').save(manifestFixture());
+    mockDb.query.mockResolvedValueOnce({ all: async () => [manifestFixture()] });
     axios.get.mockResolvedValue({ data: { data: [{ id: 'served/summarizer-8b' }] } });
     axios.post.mockResolvedValue({ data: { choices: [{ message: { content: 'A demo bundle about demos.' } }] } });
     await conceptMeta.ensureSummary('r1');
@@ -852,7 +856,7 @@ describe('ensureSummary — model-id discovery (#1181)', () => {
   });
 
   it('nothing discoverable: the manifest comes back summary-less, no call sent', async () => {
-    const m = manifest();
+    const m = manifestFixture();
     mockDb.query.mockResolvedValueOnce({ all: async () => [m] });
     axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
     const out = await conceptMeta.ensureSummary('r1');
@@ -862,8 +866,8 @@ describe('ensureSummary — model-id discovery (#1181)', () => {
 
   it('a VLLM_MODEL_ID pin skips the probe and names the pinned model', async () => {
     process.env.VLLM_MODEL_ID = 'pinned/summarizer';
-    await mockDb.collection('okf_bundle_manifest').save(manifest());
-    mockDb.query.mockResolvedValueOnce({ all: async () => [manifest()] });
+    await mockDb.collection('okf_bundle_manifest').save(manifestFixture());
+    mockDb.query.mockResolvedValueOnce({ all: async () => [manifestFixture()] });
     axios.post.mockResolvedValue({ data: { choices: [{ message: { content: 'Sum.' } }] } });
     await conceptMeta.ensureSummary('r1');
     expect(axios.get).not.toHaveBeenCalled();
@@ -871,23 +875,13 @@ describe('ensureSummary — model-id discovery (#1181)', () => {
   });
 });
 
-const R4_ENV = { ...process.env };
+const FILE_ENV = { ...process.env };
 afterEach(() => {
-  process.env = { ...R4_ENV };
+  process.env = { ...FILE_ENV };
 });
 it('r4: the chat call gets the budget left after the discovery probe', async () => {
-  const manifest = () => ({
-    _key: 'r1',
-    name: 'Demo bundle',
-    domain: 'demo',
-    version: 1,
-    concepts: [],
-    summary_stats: { concept_count: 0 },
-    summary_text: null,
-    summary_stale: false
-  });
-  await mockDb.collection('okf_bundle_manifest').save(manifest());
-  mockDb.query.mockResolvedValueOnce({ all: async () => [manifest()] });
+  await mockDb.collection('okf_bundle_manifest').save(manifestFixture());
+  mockDb.query.mockResolvedValueOnce({ all: async () => [manifestFixture()] });
   // The probe burns part of the 5 s budget; the chat call must not be
   // granted a fresh one (the caller's contract is one budget).
   delete process.env.VLLM_MODEL_ID;

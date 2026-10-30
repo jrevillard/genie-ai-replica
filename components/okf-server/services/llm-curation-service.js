@@ -85,7 +85,6 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
   // credential (a probe that authenticates while the chat call does not
   // fails with a bare 401).
   let apiKey = modelCache.deploymentKey();
-  let probeKey = apiKey; // the key the DISCOVERY probe may use
   let viaOverride = false;
   try {
     const ovr = await require('./model-config-service').resolveModelOverride({ service: 'okf_curation' });
@@ -96,10 +95,7 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
       // at the deployment endpoint itself, the deployment credential. A
       // third-party base gets neither: the GPU bearer must never leave the
       // deployment endpoint (probe AND chat call).
-      apiKey =
-        ovr.api_key ||
-        (modelCache.sameOrigin(rawBase, modelCache.deploymentVllmBase()) ? modelCache.deploymentKey() : '');
-      probeKey = apiKey;
+      apiKey = modelCache.credentialForBase(rawBase, ovr.api_key);
       viaOverride = true;
     }
   } catch {
@@ -115,8 +111,8 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
   let chatTimeoutMs = timeoutMs;
   if (!model) {
     const resolved = viaOverride
-      ? await modelCache.resolveForeignModel({ baseUrl: rawBase, apiKey: probeKey, budgetMs: timeoutMs })
-      : await modelCache.resolveDeploymentModel({ baseUrl: rawBase, apiKey: probeKey, budgetMs: timeoutMs });
+      ? await modelCache.resolveForeignModel({ baseUrl: rawBase, apiKey, budgetMs: timeoutMs })
+      : await modelCache.resolveDeploymentModel({ baseUrl: rawBase, apiKey, budgetMs: timeoutMs });
     model = resolved.model;
     chatTimeoutMs = resolved.remainingMs;
   }

@@ -27,6 +27,7 @@ jest.mock('../services/model-config-service', () => ({
 
 const svc = require('../services/frontmatter-service');
 const axios = require('axios');
+const modelCache = require('../services/vllm-model-cache');
 const { __mockDb } = require('../shared-lib/db-connection-service');
 const { updateSchema, TAG_LIMITS } = require('../validators/repository-validator');
 
@@ -724,7 +725,6 @@ describe('vllmChatCompletions — which judge an explicit env request actually n
 // discovery > loud failure. The old hardcoded 'ibm-granite/granite-4.1-8b'
 // fallback 404'd every call the day the endpoint served anything else.
 describe('vllmChatCompletions — model-id resolution follows the !631 discovery policy', () => {
-  const modelCache = require('../services/vllm-model-cache');
   const PIN_KEYS = ['VLLM_LLM_MODEL_ID', 'VLLM_MODEL_ID', 'VLLM_ENDPOINT'];
 
   beforeEach(() => {
@@ -789,7 +789,6 @@ describe('vllmChatCompletions — model-id resolution follows the !631 discovery
 // pin name a model on the JUDGE endpoint, and a modelless named-config
 // probe must carry that config's own api key.
 describe('vllmChatCompletions — review r1 fixes (#1181)', () => {
-  const modelCache2 = require('../services/vllm-model-cache');
   const KEYS = [
     'VLLM_LLM_MODEL_ID',
     'VLLM_MODEL_ID',
@@ -804,7 +803,7 @@ describe('vllmChatCompletions — review r1 fixes (#1181)', () => {
       saved[k] = process.env[k];
       delete process.env[k];
     });
-    modelCache2.clearModelCache();
+    modelCache.clearModelCache();
     axios.post.mockReset();
     axios.get.mockReset();
   });
@@ -814,7 +813,7 @@ describe('vllmChatCompletions — review r1 fixes (#1181)', () => {
       if (saved[k] === undefined) delete process.env[k];
       else process.env[k] = saved[k];
     });
-    modelCache2.clearModelCache();
+    modelCache.clearModelCache();
   });
 
   test('env judge with no RAGAS_JUDGE_MODEL: discovery on the JUDGE base — the deployment pin never crosses over', async () => {
@@ -860,7 +859,7 @@ describe('vllmChatCompletions — review r1 fixes (#1181)', () => {
     seedDb();
     delete process.env.VLLM_LLM_MODEL_ID;
     delete process.env.VLLM_MODEL_ID;
-    modelCache2.clearModelCache();
+    modelCache.clearModelCache();
     axios.get.mockResolvedValue({ data: { data: [{ id: 'served/tagger-8b' }] } });
     axios.post.mockResolvedValue(vllmResponse(JSON.stringify({ topic: ['x'], forbidden: [], summary: '' })));
     await svc.suggestTags(REPO_ID);
@@ -877,7 +876,6 @@ describe('vllmChatCompletions — review r1 fixes (#1181)', () => {
 // base, the probe honors the chat path's VLLM_LLM_API_KEY spelling, and
 // the model that answered rides the response object (no post-call probe).
 describe('vllmChatCompletions — review r2 fixes (#1181)', () => {
-  const modelCache3 = require('../services/vllm-model-cache');
   const KEYS = ['VLLM_LLM_MODEL_ID', 'VLLM_MODEL_ID', 'VLLM_API_KEY', 'VLLM_LLM_API_KEY'];
   const saved = {};
 
@@ -886,7 +884,7 @@ describe('vllmChatCompletions — review r2 fixes (#1181)', () => {
       saved[k] = process.env[k];
       delete process.env[k];
     });
-    modelCache3.clearModelCache();
+    modelCache.clearModelCache();
     axios.post.mockReset();
     axios.get.mockReset();
   });
@@ -896,7 +894,7 @@ describe('vllmChatCompletions — review r2 fixes (#1181)', () => {
       if (saved[k] === undefined) delete process.env[k];
       else process.env[k] = saved[k];
     });
-    modelCache3.clearModelCache();
+    modelCache.clearModelCache();
   });
 
   test('a modelless named config WITHOUT its own key probes with NO Authorization — the deployment key never leaks', async () => {
@@ -938,7 +936,6 @@ describe('vllmChatCompletions — review r2 fixes (#1181)', () => {
 // all (probe AND chat call); a config pointing at the deployment endpoint
 // itself keeps the deployment key.
 describe('vllmChatCompletions — deployment-credential scope (r4 #1181)', () => {
-  const modelCache4 = require('../services/vllm-model-cache');
   const KEYS = ['VLLM_LLM_MODEL_ID', 'VLLM_MODEL_ID', 'VLLM_API_KEY', 'VLLM_LLM_API_KEY', 'VLLM_ENDPOINT'];
   const saved = {};
 
@@ -947,7 +944,7 @@ describe('vllmChatCompletions — deployment-credential scope (r4 #1181)', () =>
       saved[k] = process.env[k];
       delete process.env[k];
     });
-    modelCache4.clearModelCache();
+    modelCache.clearModelCache();
     axios.post.mockReset();
     axios.get.mockReset();
   });
@@ -957,7 +954,7 @@ describe('vllmChatCompletions — deployment-credential scope (r4 #1181)', () =>
       if (saved[k] === undefined) delete process.env[k];
       else process.env[k] = saved[k];
     });
-    modelCache4.clearModelCache();
+    modelCache.clearModelCache();
   });
 
   test('a keyless named config on a FOREIGN base: neither probe nor chat carries the deployment key', async () => {
@@ -1007,7 +1004,6 @@ describe('vllmChatCompletions — deployment-credential scope (r4 #1181)', () =>
 // deployment PIN: the pin exists for endpoints whose /v1/models is
 // unreachable.
 describe('vllmChatCompletions — env judge on the deployment endpoint (r5 #1181)', () => {
-  const modelCache5 = require('../services/vllm-model-cache');
   const KEYS = ['VLLM_LLM_MODEL_ID', 'VLLM_MODEL_ID', 'RAGAS_JUDGE_BASE_URL', 'RAGAS_JUDGE_MODEL'];
   const saved = {};
 
@@ -1016,7 +1012,7 @@ describe('vllmChatCompletions — env judge on the deployment endpoint (r5 #1181
       saved[k] = process.env[k];
       delete process.env[k];
     });
-    modelCache5.clearModelCache();
+    modelCache.clearModelCache();
     axios.post.mockReset();
     axios.get.mockReset();
   });
@@ -1026,7 +1022,7 @@ describe('vllmChatCompletions — env judge on the deployment endpoint (r5 #1181
       if (saved[k] === undefined) delete process.env[k];
       else process.env[k] = saved[k];
     });
-    modelCache5.clearModelCache();
+    modelCache.clearModelCache();
   });
 
   test('same deployment server (another path): the pin applies, no probe', async () => {

@@ -10,7 +10,8 @@
 // that an operator can flip OKF_SEARCH_STYLE at runtime without re-ingesting.
 //
 // GPU services used (per directive 2026-10-07):
-//   - vLLM (VLLM_LLM_HOST, e.g. ${VLLM_LLM_MODEL_ID}-served) for /v1/chat/completions:
+//   - vLLM (the deployment base — VLLM_ENDPOINT, else the compose service
+//     name) for /v1/chat/completions:
 //     suggestTags + validateFrontmatter. Same AsyncOpenAI-like pattern dataprep
 //     uses at genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py:57 — here
 //     via axios since Node has no openai SDK.
@@ -54,7 +55,6 @@ const { TAG_LIMITS } = require('../validators/repository-validator');
 // The base rule (env endpoint, else the compose service) lives in ONE place
 // with the provenance labels: vllm-model-cache.deploymentVllmBase().
 const modelCache = require('./vllm-model-cache');
-const VLLM_LLM_HOST = modelCache.deploymentVllmBase();
 // The chat model id is NOT defaulted here — it is resolved per call under
 // the !631 discovery policy (services/vllm-model-cache.js): explicit pick >
 // env pin (VLLM_LLM_MODEL_ID / VLLM_MODEL_ID) > /v1/models discovery >
@@ -368,12 +368,11 @@ Output ONLY a JSON object: {"results": [{"index": <int>, "match": "yes"|"no", "r
  * services/adaptive-llm-call.js. Env-path calls behave exactly as before
  * unless they starve, in which case they too get the budget retry. */
 async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
-  let host = VLLM_LLM_HOST;
+  let host = modelCache.deploymentVllmBase();
   let model = null; // resolved below — explicit pick > pin > discovery (!631)
   // Per-call read (both spellings) so the probe and the chat call can never
   // disagree on credentials.
-  let apiKey = process.env.VLLM_API_KEY || process.env.VLLM_LLM_API_KEY || '';
-  let probeKey = apiKey; // the key the DISCOVERY probe may use
+  let apiKey = modelCache.deploymentKey();
   let viaOverride = false;
   let viaForeignBase = false; // host switched away from the deployment base
   let judgeIsDeployment = false; // the judge base IS the deployment endpoint
@@ -406,7 +405,6 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
     // its own key or none, never the GPU bearer.
     apiKey = process.env.RAGAS_JUDGE_API_KEY || '';
     if (!apiKey && judgeIsDeployment) apiKey = modelCache.deploymentKey();
-    probeKey = apiKey;
   }
   try {
     // opts.config === null → the caller explicitly wants the ENV judge (the
@@ -431,9 +429,7 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
       // at the deployment endpoint itself, the deployment credential. A
       // third-party base gets neither: the GPU bearer must never leave the
       // deployment endpoint (probe AND chat call).
-      apiKey =
-        ovr.api_key || (modelCache.sameOrigin(host, modelCache.deploymentVllmBase()) ? modelCache.deploymentKey() : '');
-      probeKey = apiKey;
+      apiKey = modelCache.credentialForBase(host, ovr.api_key);
       viaOverride = true;
     }
   } catch {
@@ -450,8 +446,8 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   if (!model) {
     const resolved =
       viaOverride || viaForeignBase
-        ? await modelCache.resolveForeignModel({ baseUrl: host, apiKey: probeKey, budgetMs: callBudgetMs })
-        : await modelCache.resolveDeploymentModel({ baseUrl: host, apiKey: probeKey, budgetMs: callBudgetMs });
+        ? await modelCache.resolveForeignModel({ baseUrl: host, apiKey, budgetMs: callBudgetMs })
+        : await modelCache.resolveDeploymentModel({ baseUrl: host, apiKey, budgetMs: callBudgetMs });
     model = resolved.model;
     chatTimeoutMs = resolved.remainingMs;
   }
@@ -962,7 +958,7 @@ async function suggestTags(repoId, _opts = {}) {
       concepts_total: coverage.concepts_total,
       label_count: coverage.label_count,
       labels_represented: coverage.labels_represented,
-      vllm_host: VLLM_LLM_HOST,
+      vllm_host: modelCache.deploymentVllmBase(),
       // The pin only — the id itself is discovered at call time inside
       // vllmChatCompletions (this log fires before the resolution).
       model: modelCache.envPin(),

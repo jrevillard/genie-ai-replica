@@ -11,6 +11,7 @@
 jest.mock('../shared-lib/logger', () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() }
 }));
+jest.mock('axios');
 jest.mock('../shared-lib/tracing', () => ({
   withSpan: jest.fn(async (name, fn) => fn({ setAttribute: jest.fn() }))
 }));
@@ -3826,7 +3827,6 @@ describe('buildEnvAdvice — the configuration adjustment cycle (2026-10-27)', (
 
 // #1181 — with no pin, the serve-mode fidelity label names the model the
 // deployment endpoint actually serves (!631 discovery policy), not null.
-jest.mock('axios');
 describe('answerFidelity — discovery names the served deployment model (#1181)', () => {
   const OLD_ENV = { ...process.env };
 

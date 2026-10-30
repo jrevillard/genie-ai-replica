@@ -5,11 +5,12 @@
 /** TTL-cached vLLM model-id discovery for the OKF Node services — the
  * semantic mirror of genie-ai-overlay/core/model_cache.py (!631 policy).
  *
- * Precedence, identical to the Python side:
+ * Precedence — the SAME ORDER as the Python twin, with the divergences
+ * listed explicitly below (the Node surface resolves per request and
+ * points at operator-configured endpoints, which the Python one does not):
  *   1. env pin (deployer override) — `VLLM_LLM_MODEL_ID`, else
- *      `VLLM_MODEL_ID` (the compose `okf-server` service only receives the
- *      fused `VLLM_MODEL_ID`; the other spelling is read for parity with
- *      the rest of the stack and local runs);
+ *      `VLLM_MODEL_ID` (the compose `okf-server` service receives both
+ *      spellings; the Python side reads `VLLM_MODEL_ID` only);
  *   2. discovery — `GET {base}/v1/models`, cached for MODEL_DETECT_TTL
  *      seconds (default 60, same env knob as Python);
  *   3. loud ModelDiscoveryError (resolveVllmModelId) — a payload that must
@@ -30,6 +31,16 @@
  *   - cache keys carry the CREDENTIAL as well as the base: gateways can
  *     filter /v1/models per key, so two configs on one base must never
  *     resolve each other's model.
+ *
+ * Divergences from the Python twin (core/model_cache.py), all deliberate:
+ *   - the pin accepts TWO spellings here (the Node services' deployment
+ *     has both) and is trimmed; Python reads one spelling, untrimmed;
+ *   - the failed-probe window applies to the model id here (it is the
+ *     Node request-path field); Python windows `max_model_len` instead;
+ *   - the credential is scoped: a probe never carries the deployment
+ *     bearer to an endpoint it was not aimed at; Python has one global
+ *     credential;
+ *   - the cache key carries the credential and the NORMALIZED probe URL.
  *
  * Knobs (same names and defaults as the Python side, so one .env line tunes
  * both worlds): MODEL_DETECT_TTL (seconds, default 60),
@@ -225,6 +236,16 @@ async function resolveVllmModelId(baseUrl, opts = {}) {
   return id;
 }
 
+/** The credential a call to `baseUrl` may use: the endpoint's own key
+ * when it has one, else the deployment credential ONLY when the base IS
+ * the deployment endpoint (a third-party base gets none — the GPU bearer
+ * must never leave the deployment endpoint). */
+function credentialForBase(baseUrl, ownKey) {
+  const own = (ownKey || '').trim();
+  if (own) return own;
+  return sameOrigin(baseUrl, deploymentVllmBase()) ? deploymentKey() : '';
+}
+
 /** Resolve the model id for a DEPLOYMENT call and report what is left of
  * the call budget: the discovery round trip is part of the budget, and the
  * chat call must never be handed a useless remainder (a 1 ms timeout fails
@@ -302,6 +323,7 @@ function clearModelCache() {
 
 module.exports = {
   ModelDiscoveryError,
+  credentialForBase,
   deploymentDiscoveredModelId,
   deploymentKey,
   envPin,

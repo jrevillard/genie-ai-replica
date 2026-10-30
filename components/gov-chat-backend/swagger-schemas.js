@@ -10,9 +10,12 @@ module.exports = {
     properties: {
       _key: { type: 'string', description: 'Unique identifier' },
       userId: { type: 'string', description: 'ID of the user' },
-      eventType: { type: 'string', description: 'Type of event' },
+      eventType: { type: 'string', description: 'Type of event (e.g., pageView, buttonClick)' },
       eventData: { type: 'object', description: 'Additional event data' },
-      timestamp: { type: 'string', format: 'date-time', description: 'Event timestamp' }
+      timestamp: { type: 'string', format: 'date-time', description: 'Event timestamp' },
+      _id: { type: 'string' },
+      _rev: { type: 'string' },
+      data: { type: 'object', description: 'Additional event data' }
     }
   },
   Analytics: {
@@ -22,7 +25,10 @@ module.exports = {
       queryCount: { type: 'integer', description: 'Number of queries' },
       feedbackCount: { type: 'integer', description: 'Number of feedback submissions' },
       avgRating: { type: 'number', description: 'Average rating' },
-      timestamp: { type: 'string', format: 'date-time', description: 'Analytics timestamp' }
+      timestamp: { type: 'string', format: 'date-time', description: 'Analytics timestamp' },
+      _id: { type: 'string' },
+      _rev: { type: 'string' },
+      userId: { type: 'string' }
     }
   },
   Query: {
@@ -146,9 +152,9 @@ module.exports = {
     type: 'object',
     properties: {
       _key: { type: 'string', description: 'Unique identifier' },
-      email: { type: 'string', format: 'email', description: 'User email address' },
-      createdAt: { type: 'string', format: 'date-time' },
-      updatedAt: { type: 'string', format: 'date-time' }
+      email: { type: 'string', format: 'email', description: "User's email address" },
+      createdAt: { type: 'string', format: 'date-time', description: 'Account creation timestamp' },
+      updatedAt: { type: 'string', format: 'date-time', description: 'Last update timestamp' }
     }
   },
   Conversation: {

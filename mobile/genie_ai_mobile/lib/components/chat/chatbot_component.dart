@@ -1090,7 +1090,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             .toList(),
         // The language the user reads. Without it the backend answers in
         // English, whatever the interface language is.
-        context: ApiQueriesPostRequestContext(
+        context: QueryContext(
           language: I18nService().currentLocale.languageCode.toUpperCase(),
         ),
         categoryId: _selectedCategoryId,

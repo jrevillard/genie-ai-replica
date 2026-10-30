@@ -1905,7 +1905,7 @@ class TestTranslationHelpers:
         assert "Hello" in prompt
         assert "French" in prompt
 
-    def test_read_language_codes_success(self, tmp_path):
+    def test_read_language_registry_success(self, tmp_path):
         lang_file = tmp_path / "language_registry.json"
         lang_file.write_text(
             json.dumps(
@@ -1917,11 +1917,14 @@ class TestTranslationHelpers:
                 }
             )
         )
-        result = chatqna_module._read_language_codes(str(lang_file))
-        assert result == {"en": "English", "fr": "French"}
+        result = chatqna_module._read_language_registry(str(lang_file))
+        assert result == {
+            "en": {"name": "English", "script": "Latn"},
+            "fr": {"name": "French", "script": "Latn"},
+        }
 
-    def test_read_language_codes_file_error(self):
-        result = chatqna_module._read_language_codes("/nonexistent/path.json")
+    def test_read_language_registry_file_error(self):
+        result = chatqna_module._read_language_registry("/nonexistent/path.json")
         assert result == {}
 
     def test_split_text_into_chunks_short_text(self):

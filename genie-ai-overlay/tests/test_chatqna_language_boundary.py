@@ -44,18 +44,14 @@ def create_service():
 
 @pytest.fixture(autouse=True)
 def reset_language_codes_cache():
-    """The language map is cached at module level: every test starts from an
-    empty cache, so a test that fakes an unreadable map cannot leak into the
-    next one."""
-    chatqna_module._LANGUAGE_CODES_CACHE = None
-    chatqna_module._LANGUAGE_CODES_CACHE_AT = None
-    chatqna_module._LANGUAGE_SCRIPTS_CACHE = None
-    chatqna_module._LANGUAGE_SCRIPTS_CACHE_AT = None
+    """The language registry is cached at module level: every test starts
+    from an empty cache, so a test that fakes an unreadable registry cannot
+    leak into the next one."""
+    chatqna_module._LANGUAGE_REGISTRY_CACHE = None
+    chatqna_module._LANGUAGE_REGISTRY_CACHE_AT = None
     yield
-    chatqna_module._LANGUAGE_CODES_CACHE = None
-    chatqna_module._LANGUAGE_CODES_CACHE_AT = None
-    chatqna_module._LANGUAGE_SCRIPTS_CACHE = None
-    chatqna_module._LANGUAGE_SCRIPTS_CACHE_AT = None
+    chatqna_module._LANGUAGE_REGISTRY_CACHE = None
+    chatqna_module._LANGUAGE_REGISTRY_CACHE_AT = None
 
 
 class TestRequestLanguageBoundary:
@@ -198,7 +194,7 @@ class TestFinalizeLanguageBoundary:
 
         svc._translate_with_chunking = fake_translate
         with (
-            patch.object(chatqna_module, "_read_language_codes", return_value={}),
+            patch.object(chatqna_module, "_read_language_registry", return_value={}),
             patch.object(chatqna_module, "logger") as mock_logger,
         ):
             result, _confidence, status = await svc._finalize_llm_response("English answer", "fr")
@@ -228,55 +224,65 @@ class TestFinalizeLanguageBoundary:
 
 
 class TestLanguageMapLoading:
-    def test_language_map_is_read_once(self):
-        """The map is consulted on every request and on every translated
-        chunk: reading it from disk each time is pure overhead."""
-        loader = MagicMock(return_value={"fr": "French"})
-        with patch.object(chatqna_module, "_read_language_codes", loader):
+    """The registry is read once and cached; the name map and the script
+    table are projections of that one cache."""
+
+    # The registry-shaped payload the mocked reader returns.
+    FIXTURE_REGISTRY = {"fr": {"name": "French", "script": "Latn"}}
+
+    def test_the_registry_is_read_once_for_both_derived_maps(self):
+        """The name map and the script table are consulted on every request
+        and on every translated chunk: reading the file from disk for each
+        of them is pure overhead, and two reads could even disagree."""
+        loader = MagicMock(return_value=self.FIXTURE_REGISTRY)
+        with patch.object(chatqna_module, "_read_language_registry", loader):
             assert chatqna_module.language_codes_map() == {"fr": "French"}
+            assert chatqna_module.language_scripts_map() == {"fr": "Latn"}
             assert chatqna_module.language_codes_map() == {"fr": "French"}
         loader.assert_called_once()
 
-    def test_unavailable_map_is_not_read_again_within_the_retry_window(self):
-        """A map that could not be read is remembered as unreadable for a
-        short while: re-reading (and re-logging) it on every chunk of every
+    def test_an_unavailable_registry_is_not_read_again_within_the_retry_window(self):
+        """A registry that could not be read is remembered as unreadable for
+        a short while: re-reading (and re-logging) it on every chunk of every
         request is noise, but the failure must not outlive the process."""
         loader = MagicMock(return_value={})
-        with patch.object(chatqna_module, "_read_language_codes", loader):
+        with patch.object(chatqna_module, "_read_language_registry", loader):
             assert chatqna_module.language_codes_map() == {}
-            assert chatqna_module.language_codes_map() == {}
+            assert chatqna_module.language_scripts_map() == {}
         loader.assert_called_once()
 
-    def test_unavailable_map_is_retried_after_the_retry_window(self):
+    def test_an_unavailable_registry_is_retried_after_the_retry_window(self):
         """A transient read failure must not disable translation for the
         lifetime of the process."""
-        loader = MagicMock(side_effect=[{}, {"fr": "French"}])
-        with patch.object(chatqna_module, "_read_language_codes", loader):
+        loader = MagicMock(side_effect=[{}, self.FIXTURE_REGISTRY])
+        with patch.object(chatqna_module, "_read_language_registry", loader):
             assert chatqna_module.language_codes_map() == {}
-            chatqna_module._LANGUAGE_CODES_CACHE_AT -= chatqna_module.LANGUAGE_MAP_RETRY_SECONDS + 1
+            chatqna_module._LANGUAGE_REGISTRY_CACHE_AT -= chatqna_module.LANGUAGE_MAP_RETRY_SECONDS + 1
             assert chatqna_module.language_codes_map() == {"fr": "French"}
         assert loader.call_count == 2
 
-    def test_the_map_is_read_even_when_the_host_just_booted(self, monkeypatch):
+    def test_the_registry_is_read_even_when_the_host_just_booted(self, monkeypatch):
         """``time.monotonic()`` counts from the host boot, not from the start
         of this process: on a host that booted less than a minute ago the
-        first read must still happen, or every request would see no map at
-        all and every language would be unknown."""
+        first read must still happen, or every request would see no registry
+        at all and every language would be unknown."""
         monkeypatch.setattr(chatqna_module.time, "monotonic", lambda: 30.0)
-        loader = MagicMock(return_value={"fr": "French"})
-        with patch.object(chatqna_module, "_read_language_codes", loader):
-            assert chatqna_module.language_codes_map() == {"fr": "French"}
+        loader = MagicMock(return_value=self.FIXTURE_REGISTRY)
+        with patch.object(chatqna_module, "_read_language_registry", loader):
+            assert chatqna_module.language_scripts_map() == {"fr": "Latn"}
         loader.assert_called_once()
 
-    def test_an_unreadable_map_reads_as_empty_never_as_none(self, monkeypatch):
-        """The map is consulted with ``in`` and ``.get`` everywhere: a None
+    def test_an_unreadable_registry_reads_as_empty_never_as_none(self, monkeypatch):
+        """The maps are consulted with ``in`` and ``.get`` everywhere: a None
         would raise a TypeError on the first request instead of refusing the
         language."""
         loader = MagicMock(return_value={})
-        with patch.object(chatqna_module, "_read_language_codes", loader):
+        with patch.object(chatqna_module, "_read_language_registry", loader):
             language_codes = chatqna_module.language_codes_map()
+            language_scripts = chatqna_module.language_scripts_map()
         assert language_codes == {}
         assert language_codes is not None
+        assert language_scripts == {}
         assert "fr" not in language_codes
 
 
@@ -295,7 +301,7 @@ class TestLanguageMapShape:
     def test_a_json_array_reads_as_empty(self, tmp_path):
         path = tmp_path / "language_registry.json"
         path.write_text(json.dumps(["en", "fr"]))
-        assert chatqna_module._read_language_codes(str(path)) == {}
+        assert chatqna_module._read_language_registry(str(path)) == {}
 
     def test_the_old_flat_code_to_name_shape_reads_as_empty(self, tmp_path):
         """The registry replaced a flat map of code to name: a file still in
@@ -303,37 +309,47 @@ class TestLanguageMapShape:
         scripts."""
         path = tmp_path / "language_registry.json"
         path.write_text(json.dumps({"fr": "French"}))
-        assert chatqna_module._read_language_codes(str(path)) == {}
-        assert chatqna_module._read_language_scripts(str(path)) == {}
+        assert chatqna_module._read_language_registry(str(path)) == {}
 
     def test_an_entry_without_a_script_reads_as_empty(self, tmp_path):
         path = tmp_path / "language_registry.json"
         path.write_text(json.dumps({"languages": {"fr": {"name": "French"}}}))
-        assert chatqna_module._read_language_codes(str(path)) == {}
-        assert chatqna_module._read_language_scripts(str(path)) == {}
+        assert chatqna_module._read_language_registry(str(path)) == {}
 
     def test_an_entry_with_an_empty_name_reads_as_empty(self, tmp_path):
         path = tmp_path / "language_registry.json"
         path.write_text(json.dumps({"languages": {"fr": {"name": "", "script": "Latn"}}}))
-        assert chatqna_module._read_language_codes(str(path)) == {}
+        assert chatqna_module._read_language_registry(str(path)) == {}
 
     def test_a_non_string_value_reads_as_empty(self, tmp_path):
         path = tmp_path / "language_registry.json"
         path.write_text(json.dumps({"languages": {"fr": 42}}))
-        assert chatqna_module._read_language_codes(str(path)) == {}
+        assert chatqna_module._read_language_registry(str(path)) == {}
 
-    def test_the_derived_maps_agree_with_the_shipped_registry(self):
-        """The names and the scripts the service serves come from the one
-        registry file it shares with the backend's language maps: the file
-        must be present next to this module (in the source tree a symlink
-        into the backend tree; in the image a COPY of the same file)."""
-        codes = chatqna_module.language_codes_map()
-        scripts = chatqna_module.language_scripts_map()
-        assert codes
-        assert set(codes) == set(scripts)
-        for code, name in codes.items():
-            assert isinstance(name, str) and name
-            assert isinstance(scripts[code], str) and scripts[code]
+    def test_a_well_formed_registry_reads_as_its_languages(self, tmp_path):
+        path = tmp_path / "language_registry.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "languages": {"fr": {"name": "French", "script": "Latn"}},
+                    "modelCodes": {"nllb-200": {"fr": "fra_Latn"}},
+                }
+            )
+        )
+        assert chatqna_module._read_language_registry(str(path)) == {"fr": {"name": "French", "script": "Latn"}}
+
+    def test_the_derived_maps_come_from_the_shipped_registry(self):
+        """The names and the scripts the service serves are exactly the ones
+        the registry file next to this module holds — in the source tree a
+        symlink into the backend tree, in the image a COPY of the same file.
+        Asserting the full derivation (not just non-emptiness) is what keeps
+        the maps honest if a hardcoded fallback table ever appears."""
+        with open(LANGUAGE_REGISTRY_PATH) as handle:
+            languages = json.load(handle)["languages"]
+        assert chatqna_module.language_codes_map() == {code: language["name"] for code, language in languages.items()}
+        assert chatqna_module.language_scripts_map() == {
+            code: language["script"] for code, language in languages.items()
+        }
 
 
 def fake_translation_client():
@@ -701,10 +717,11 @@ class TestTranslationPromptBoundary:
 class TestLanguageScriptsMap:
     """The script table decides the alphabet the prompt asks for.
 
-    It is read from disk like the language map, so it fails the same way: a
-    file that is not there yet reads as an empty table. The empty table must
-    not be the answer for the life of the process — every later prompt would
-    ask for a translation in the wrong alphabet.
+    It is a projection of the same cached registry read the name map uses,
+    so it fails the same way: a file that is not there yet reads as an empty
+    table. The empty table must not be the answer for the life of the
+    process — every later prompt would ask for a translation in the wrong
+    alphabet.
     """
 
     def test_an_unreadable_table_reads_as_empty(self):
@@ -714,17 +731,21 @@ class TestLanguageScriptsMap:
     def test_the_table_is_not_read_again_inside_the_retry_window(self):
         with patch.object(chatqna_module, "LANGUAGE_REGISTRY_FILEPATH", "/nonexistent/registry.json"):
             assert chatqna_module.language_scripts_map() == {}
-            with patch.object(chatqna_module, "_read_language_scripts") as reader:
+            with patch.object(chatqna_module, "_read_language_registry") as reader:
                 assert chatqna_module.language_scripts_map() == {}
                 assert not reader.called
 
     def test_the_table_is_read_again_after_the_retry_window(self):
         with patch.object(chatqna_module, "LANGUAGE_REGISTRY_FILEPATH", "/nonexistent/registry.json"):
             assert chatqna_module.language_scripts_map() == {}
-        chatqna_module._LANGUAGE_SCRIPTS_CACHE_AT = (
+        chatqna_module._LANGUAGE_REGISTRY_CACHE_AT = (
             chatqna_module.time.monotonic() - chatqna_module.LANGUAGE_MAP_RETRY_SECONDS - 1
         )
-        with patch.object(chatqna_module, "_read_language_scripts", return_value={"en": "Latn"}) as reader:
+        with patch.object(
+            chatqna_module,
+            "_read_language_registry",
+            return_value={"en": {"name": "English", "script": "Latn"}},
+        ) as reader:
             assert chatqna_module.language_scripts_map() == {"en": "Latn"}
             assert reader.called
 

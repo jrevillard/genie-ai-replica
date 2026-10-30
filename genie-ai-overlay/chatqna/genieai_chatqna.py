@@ -809,15 +809,13 @@ def _language_display(raw_language) -> str:
     return printable or "<empty>"
 
 
-# The language map (code → name), and the moment it was read. Module level
-# because the prompt-building hooks have no access to the service instance.
-_LANGUAGE_CODES_CACHE: dict | None = None
-_LANGUAGE_CODES_CACHE_AT: float | None = None
-
-# The language -> script table, and the moment it was read. Module level for
-# the same reason as the language map above.
-_LANGUAGE_SCRIPTS_CACHE: dict | None = None
-_LANGUAGE_SCRIPTS_CACHE_AT: float | None = None
+# The language registry (code -> name + script), and the moment it was read.
+# Module level because the prompt-building hooks have no access to the
+# service instance. One read and one cache feed both derived maps, so the
+# name and the script of a language can never come from two different
+# generations of the file.
+_LANGUAGE_REGISTRY_CACHE: dict | None = None
+_LANGUAGE_REGISTRY_CACHE_AT: float | None = None
 
 
 def _read_language_registry(filepath: str) -> dict:
@@ -856,86 +854,59 @@ def _read_language_registry(filepath: str) -> dict:
     return languages
 
 
-def _read_language_codes(filepath: str) -> dict:
-    """The language map (code → name), derived from the registry. An
-    unreadable registry reads as empty."""
-    languages = _read_language_registry(filepath)
-    return {code: language["name"] for code, language in languages.items()}
+def language_registry() -> dict:
+    """The registry (code -> {name, script}), read once and cached.
 
+    It is consulted on every request and again for every translated chunk,
+    both through the name map and through the script table, so reading and
+    parsing the file each time is pure overhead. A registry that could not
+    be read is remembered only for LANGUAGE_MAP_RETRY_SECONDS: a transient
+    read failure must not disable translation for the lifetime of the
+    process, but it must not re-read (and re-log) the file on every chunk
+    either.
 
-def _read_language_scripts(filepath: str) -> dict:
-    """The language -> script table, derived from the registry. An unreadable
-    registry reads as empty, which leaves the translation prompt without a
-    script clause."""
-    languages = _read_language_registry(filepath)
-    return {code: language["script"] for code, language in languages.items()}
+    The registry is never None: an unreadable registry is an empty registry,
+    and an empty registry means every language is unknown.
 
-
-def language_scripts_map() -> dict:
-    """The language -> script table, read once and cached.
-
-    The table decides whether the translation prompt asks for the right
-    ALPHABET, so it is read on first use and kept. A table that could not be
-    read is remembered only for LANGUAGE_MAP_RETRY_SECONDS, exactly like the
-    language map: a transient read failure must not leave every prompt
-    without its script clause for the lifetime of the process, but it must
-    not re-read (and re-log) the file on every chunk either.
-
-    The table is never None: an unreadable table is an empty table, and an
-    empty table means the prompt carries no script clause rather than a wrong
-    one.
-
-    The returned table is a copy, like the language map: a caller that
-    mutated it would change the script every later prompt asks for.
-    """
-    global _LANGUAGE_SCRIPTS_CACHE, _LANGUAGE_SCRIPTS_CACHE_AT
-
-    cached = _LANGUAGE_SCRIPTS_CACHE
-    if cached:
-        return dict(cached)
-    now = time.monotonic()
-    if _LANGUAGE_SCRIPTS_CACHE_AT is not None and now - _LANGUAGE_SCRIPTS_CACHE_AT < LANGUAGE_MAP_RETRY_SECONDS:
-        # The last read failed and the retry window has not elapsed yet.
-        return {}
-    loaded = _read_language_scripts(LANGUAGE_REGISTRY_FILEPATH)
-    _LANGUAGE_SCRIPTS_CACHE = loaded
-    _LANGUAGE_SCRIPTS_CACHE_AT = now
-    return dict(loaded)
-
-
-def language_codes_map() -> dict:
-    """The language map (code → name), read once and cached.
-
-    The map is consulted on every request and again for every translated
-    chunk, so reading and parsing the file each time is pure overhead. A map
-    that could not be read is remembered only for
-    LANGUAGE_MAP_RETRY_SECONDS: a transient read failure must not disable
-    translation for the lifetime of the process, but it must not re-read
-    (and re-log) the file on every chunk either.
-
-    The map is never None: an unreadable map is an empty map, and an empty
-    map means every language is unknown.
-
-    The returned map is a copy. The cache is the whitelist every request is
-    checked against, and a caller that mutated the map it got back would
+    The returned registry is a copy. The cache is the whitelist every request
+    is checked against, and a caller that mutated what it got back would
     rewrite that whitelist for the whole process.
 
     The retry read is a blocking read of a small file, at most once a minute,
     and only for as long as the file stays unreadable.
     """
-    global _LANGUAGE_CODES_CACHE, _LANGUAGE_CODES_CACHE_AT
+    global _LANGUAGE_REGISTRY_CACHE, _LANGUAGE_REGISTRY_CACHE_AT
 
-    cached = _LANGUAGE_CODES_CACHE
+    cached = _LANGUAGE_REGISTRY_CACHE
     if cached:
-        return dict(cached)
+        return {code: dict(language) for code, language in cached.items()}
     now = time.monotonic()
-    if _LANGUAGE_CODES_CACHE_AT is not None and now - _LANGUAGE_CODES_CACHE_AT < LANGUAGE_MAP_RETRY_SECONDS:
+    if _LANGUAGE_REGISTRY_CACHE_AT is not None and now - _LANGUAGE_REGISTRY_CACHE_AT < LANGUAGE_MAP_RETRY_SECONDS:
         # The last read failed and the retry window has not elapsed yet.
         return {}
-    loaded = _read_language_codes(LANGUAGE_REGISTRY_FILEPATH)
-    _LANGUAGE_CODES_CACHE = loaded
-    _LANGUAGE_CODES_CACHE_AT = now
-    return dict(loaded)
+    loaded = _read_language_registry(LANGUAGE_REGISTRY_FILEPATH)
+    _LANGUAGE_REGISTRY_CACHE = loaded
+    _LANGUAGE_REGISTRY_CACHE_AT = now
+    return {code: dict(language) for code, language in loaded.items()}
+
+
+def language_codes_map() -> dict:
+    """The language map (code → name), projected from the registry cache.
+
+    The map is never None: an unreadable registry is an empty map, and an
+    empty map means every language is unknown.
+    """
+    return {code: language["name"] for code, language in language_registry().items()}
+
+
+def language_scripts_map() -> dict:
+    """The language -> script table, projected from the registry cache.
+
+    The table is never None: an unreadable registry is an empty table, and
+    an empty table means the prompt carries no script clause rather than a
+    wrong one.
+    """
+    return {code: language["script"] for code, language in language_registry().items()}
 
 
 # Fallback context window for the LLM, used when runtime discovery from the

@@ -41,17 +41,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **One canonical language registry for the translation languages.** The
-  supported-language list was written down five times (three per-model maps
-  in the backend, a code-to-name map and a script map in the chatqna
-  service); adding a language meant five edits in three runtimes, guarded
-  only by a parity test. All five copies are now derived from a single
-  `language-registry.json` (canonical code, display name, script, and the
-  code each model is asked for), read by the backend's language maps and by
-  the chatqna service. **Deployers who override `LANGUAGE_CODES_FILEPATH`
-  or `LANGUAGE_SCRIPTS_FILEPATH` must switch to `LANGUAGE_REGISTRY_FILEPATH`
-  — it points at the registry file, and a file still in the old flat shape
-  is refused (translation would answer in English).
+- **Breaking:** the translation languages now come from one canonical
+  `language-registry.json`, and the env overrides
+  `LANGUAGE_CODES_FILEPATH` / `LANGUAGE_SCRIPTS_FILEPATH` are replaced by
+  `LANGUAGE_REGISTRY_FILEPATH`. The supported-language list was written down
+  five times (three per-model maps in the backend, a code-to-name map and a
+  script map in the chatqna service); adding a language meant five edits in
+  two runtimes, guarded only by a parity test. All five copies are now
+  derived from the single registry (canonical code, display name, script,
+  and the code each model is asked for), read by the backend's language maps
+  and by the chatqna service. A deployment that set the old overrides must
+  point `LANGUAGE_REGISTRY_FILEPATH` at the registry file instead — a file
+  still in the old flat shape is refused (translation answers in English).
+  See `docs/UPGRADE.md`.
 
 - **Ansible deployments: `vllm_llm_model_id` is now undefined by default
   (auto-discovery).** Previously it pinned `ibm-granite/granite-4.1-8b` for

@@ -120,10 +120,12 @@ Map<String, dynamic> parseQuickHelpButton(
 List<String> quickHelpServiceLabelsOf(Map<String, dynamic> button) {
   final labels = button['serviceLabels'];
   // The parse normalizes the labels ONCE - a bare string is wrapped as
-  // ONE label there - so this reader has no rule of its own: it reads
-  // the stored strings, handed back as-is (the grid reads this per
-  // frame) and empty for a card that declares none.
+  // ONE label THERE - so this reader carries no rule of its own: it
+  // reads what the card carries. A stored string list is handed back
+  // as-is (the grid reads this per frame); a list of anything else is
+  // stringified, so a card never silently loses its scope.
   if (labels is List<String>) return labels;
+  if (labels is List) return labels.map((label) => label.toString()).toList();
   return const <String>[];
 }
 

@@ -69,5 +69,6 @@ Map<String, dynamic> configSectionOf(
 /// shares this one read, so a numeric-typed typo degrades the same way
 /// on both platforms.
 bool configTruthy(dynamic value) {
+  if (value is double && value.isNaN) return false;
   return value != null && value != false && value != 0 && value != '';
 }

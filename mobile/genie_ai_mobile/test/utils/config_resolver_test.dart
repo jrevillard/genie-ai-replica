@@ -62,6 +62,10 @@ void main() {
       expect(configTruthy([]), isTrue);
     });
 
+    test('NaN reads as false, like JavaScript', () {
+      expect(configTruthy(double.nan), isFalse);
+    });
+
     test('null, false, 0 and the empty string read as false', () {
       expect(configTruthy(null), isFalse);
       expect(configTruthy(false), isFalse);

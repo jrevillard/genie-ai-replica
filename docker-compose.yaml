@@ -787,6 +787,16 @@ services:
       - VLLM_ENDPOINT=${VLLM_ENDPOINT:-}
       - VLLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-${VLLM_MODEL_ID:-}}
       - VLLM_API_KEY=${VLLM_API_KEY:-}
+      # Discovery knobs (#1181) — same names/defaults as the OPEA services
+      # (one .env line tunes both worlds). The TTL needs no default here
+      # (code default 60 s); the probe timeout matters when vLLM is still
+      # loading weights (see the OPEA note at the dataprep block).
+      - MODEL_DETECT_TTL=${MODEL_DETECT_TTL:-}
+      - MODEL_PROBE_TIMEOUT_SECONDS=${MODEL_PROBE_TIMEOUT_SECONDS:-}
+      # Env-judge key parity with the ragas sidecar (its block defaults
+      # RAGAS_JUDGE_API_KEY to VLLM_API_KEY): the advisor's judge leg and
+      # the sidecar must authenticate identically against the judge base.
+      - RAGAS_JUDGE_API_KEY=${RAGAS_JUDGE_API_KEY:-${VLLM_API_KEY:-}}
       # Model-endpoint externalization (David 2026-10-08: all OKF env vars
       # live in .env with documented defaults — compose is only the pipe).
       # TEI embed base for tag embedding + vectorized-head build + the

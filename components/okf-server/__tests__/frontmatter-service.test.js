@@ -872,3 +872,63 @@ describe('vllmChatCompletions — review r1 fixes (#1181)', () => {
     expect(done[1].model).toBe('served/tagger-8b');
   });
 });
+
+// Review round 2 (#1181): the deployment key never leaks to a foreign
+// base, the probe honors the chat path's VLLM_LLM_API_KEY spelling, and
+// the model that answered rides the response object (no post-call probe).
+describe('vllmChatCompletions — review r2 fixes (#1181)', () => {
+  const modelCache3 = require('../services/vllm-model-cache');
+  const KEYS = ['VLLM_LLM_MODEL_ID', 'VLLM_MODEL_ID', 'VLLM_API_KEY', 'VLLM_LLM_API_KEY'];
+  const saved = {};
+
+  beforeEach(() => {
+    KEYS.forEach((k) => {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    });
+    modelCache3.clearModelCache();
+    axios.post.mockReset();
+    axios.get.mockReset();
+  });
+
+  afterEach(() => {
+    KEYS.forEach((k) => {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    });
+    modelCache3.clearModelCache();
+  });
+
+  test('a modelless named config WITHOUT its own key probes with NO Authorization — the deployment key never leaks', async () => {
+    const modelConfig = require('../services/model-config-service');
+    process.env.VLLM_API_KEY = 'deployment-secret';
+    modelConfig.resolveModelOverride.mockResolvedValueOnce({
+      provider: 'openai',
+      base_url: 'https://foreign.example/v1',
+      model: null,
+      api_key: '',
+      source: 'active',
+      config_key: 'mc5',
+      config_name: 'Foreign (modelless, keyless)'
+    });
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'foreign/served' }] } });
+    axios.post.mockResolvedValue(vllmResponse('{}'));
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }]);
+    expect(axios.get.mock.calls[0][1].headers).toEqual({});
+  });
+
+  test('the deployment probe authenticates with the VLLM_LLM_API_KEY spelling like the chat path', async () => {
+    process.env.VLLM_LLM_API_KEY = 'llm-spelled-key';
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/model' }] } });
+    axios.post.mockResolvedValue(vllmResponse('{}'));
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }]);
+    expect(axios.get.mock.calls[0][1].headers).toEqual({ Authorization: 'Bearer llm-spelled-key' });
+  });
+
+  test('the resolved model rides the response object (resp.model) for provenance without a second probe', async () => {
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/stamped-8b' }] } });
+    axios.post.mockResolvedValue(vllmResponse('{}'));
+    const resp = await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }]);
+    expect(resp.model).toBe('served/stamped-8b');
+  });
+});

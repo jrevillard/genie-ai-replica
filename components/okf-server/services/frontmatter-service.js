@@ -60,7 +60,6 @@ const VLLM_LLM_HOST = require('./vllm-model-cache').deploymentVllmBase();
 // loud ModelDiscoveryError. The old hardcoded 'ibm-granite/granite-4.1-8b'
 // fallback named a model the endpoint may not serve — vLLM validates the
 // name and 404s every call (#1181).
-const VLLM_LLM_API_KEY = process.env.VLLM_API_KEY || process.env.VLLM_LLM_API_KEY || '';
 
 // David 2026-10-08 (sequence of three): the embed service is also on a
 // foreign host. The previous default 'http://embedding-tei:80' is a
@@ -370,7 +369,10 @@ Output ONLY a JSON object: {"results": [{"index": <int>, "match": "yes"|"no", "r
 async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
   let host = VLLM_LLM_HOST;
   let model = null; // resolved below — explicit pick > pin > discovery (!631)
-  let apiKey = VLLM_LLM_API_KEY;
+  // Per-call read (both spellings) so the probe and the chat call can never
+  // disagree on credentials.
+  let apiKey = process.env.VLLM_API_KEY || process.env.VLLM_LLM_API_KEY || '';
+  let probeKey = apiKey; // the key the DISCOVERY probe may use
   let viaOverride = false;
   let viaForeignBase = false; // host switched away from the deployment base
   // The ENV JUDGE is the .env RAGAS_JUDGE_* pair — the same variables the
@@ -389,7 +391,13 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
       viaForeignBase = true;
     }
     if (process.env.RAGAS_JUDGE_MODEL) model = process.env.RAGAS_JUDGE_MODEL;
-    if (process.env.RAGAS_JUDGE_API_KEY) apiKey = process.env.RAGAS_JUDGE_API_KEY;
+    // Judge-key parity with the sidecar (compose defaults RAGAS_JUDGE_API_KEY
+    // to VLLM_API_KEY): the judge base may legitimately use the deployment
+    // key when its operator did not name one.
+    if (process.env.RAGAS_JUDGE_API_KEY) {
+      apiKey = process.env.RAGAS_JUDGE_API_KEY;
+      probeKey = process.env.RAGAS_JUDGE_API_KEY;
+    }
   }
   try {
     // opts.config === null → the caller explicitly wants the ENV judge (the
@@ -411,6 +419,10 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
       host = ovr.base_url.replace(/\/+$/, '');
       if (ovr.model) model = ovr.model;
       if (ovr.api_key) apiKey = ovr.api_key;
+      // The probe on a named-config base uses ITS key only — a modelless,
+      // keyless config must 401 honestly, never borrow (and leak) the
+      // deployment key to a third-party endpoint.
+      probeKey = ovr.api_key || '';
       viaOverride = true;
     }
   } catch {
@@ -425,8 +437,8 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
     const modelCache = require('./vllm-model-cache');
     model =
       viaOverride || viaForeignBase
-        ? await modelCache.requireServedModelId(host, { apiKey })
-        : await modelCache.resolveVllmModelId(host);
+        ? await modelCache.requireServedModelId(host, { apiKey: probeKey })
+        : await modelCache.resolveVllmModelId(host, { apiKey: probeKey });
   }
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
@@ -446,7 +458,12 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
       timeoutMs: opts.timeoutMs || 60000,
       disableThinking: viaOverride
     });
-  return withVllmRetry(fn, { endpoint: url });
+  const resp = await withVllmRetry(fn, { endpoint: url });
+  // The resolved model rides the response so callers can log provenance
+  // without a second probe (a minutes-long thinking-model call can outlive
+  // the discovery TTL — re-probing could then name a DIFFERENT model).
+  resp.model = model;
+  return resp;
 }
 
 // When the model runs out of tokens mid-object the content is a valid JSON
@@ -556,7 +573,12 @@ async function teiEmbed(inputs) {
   // future HF_TOKEN-only env (the HUGGINGFACEHUB_API_TOKEN form the
   // reranker uses at line 1432).
   const headers = { 'Content-Type': 'application/json' };
-  const hfKey = process.env.HF_TOKEN || process.env.HUGGINGFACEHUB_API_TOKEN || VLLM_LLM_API_KEY;
+  const hfKey =
+    process.env.HF_TOKEN ||
+    process.env.HUGGINGFACEHUB_API_TOKEN ||
+    process.env.VLLM_API_KEY ||
+    process.env.VLLM_LLM_API_KEY ||
+    '';
   if (hfKey) headers.Authorization = 'Bearer ' + hfKey;
   const decode = (resp) => {
     // TEI returns either {data: [[...], ...]} (batched) or [...] depending on shape
@@ -1099,10 +1121,9 @@ async function suggestTags(repoId, _opts = {}) {
     }));
     span.setAttribute('okf.suggested.topic_count', out.topic.length);
     span.setAttribute('okf.suggested.forbidden_count', out.forbidden.length);
-    // Cache read (the call above just filled it) — names the served model
-    // the run actually tagged under. Known limitation, same as the suite
-    // generator label: a named-config override routes the call, not this.
-    const taggedWith = await require('./vllm-model-cache').discoverVllmModelId(VLLM_LLM_HOST);
+    // The model this run actually tagged under — stamped on the response by
+    // vllmChatCompletions (no second probe; see the stamp there).
+    const taggedWith = resp.model || null;
     logger.info('frontmatter.suggest.done', {
       repo_id: repoId,
       model: taggedWith,

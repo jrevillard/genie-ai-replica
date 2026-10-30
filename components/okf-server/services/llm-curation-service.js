@@ -81,6 +81,7 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
   let rawBase = process.env.VLLM_ENDPOINT;
   let model = null; // resolved below — explicit pick > pin > discovery (!631)
   let apiKey = process.env.VLLM_API_KEY;
+  let probeKey = apiKey; // the key the DISCOVERY probe may use
   let viaOverride = false;
   try {
     const ovr = await require('./model-config-service').resolveModelOverride({ service: 'okf_curation' });
@@ -88,6 +89,10 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
       rawBase = ovr.base_url;
       if (ovr.model) model = ovr.model;
       if (ovr.api_key) apiKey = ovr.api_key;
+      // Named-config base probes with ITS key only — a modelless, keyless
+      // config 401s honestly; the deployment key is never aimed at (leaked
+      // to) a third-party endpoint.
+      probeKey = ovr.api_key || '';
       viaOverride = true;
     }
   } catch {
@@ -101,8 +106,8 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
   if (!model) {
     const modelCache = require('./vllm-model-cache');
     model = viaOverride
-      ? await modelCache.requireServedModelId(rawBase, { apiKey })
-      : await modelCache.resolveVllmModelId(rawBase);
+      ? await modelCache.requireServedModelId(rawBase, { apiKey: probeKey })
+      : await modelCache.resolveVllmModelId(rawBase, { apiKey: probeKey });
   }
   const headers = {};
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;

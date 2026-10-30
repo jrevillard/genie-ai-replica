@@ -7,8 +7,12 @@
 // (URL rule, auth header, timeout, cache windows) is asserted directly.
 
 jest.mock('axios');
+jest.mock('../shared-lib/logger', () => ({
+  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
+}));
 
 const axios = require('axios');
+const { logger } = require('../shared-lib/logger');
 const cache = require('../services/vllm-model-cache');
 
 const ENV_KEYS = [
@@ -199,13 +203,6 @@ describe('review round 1 fixes (#1181)', () => {
     );
   });
 
-  test('requireServedModelId without a per-call key falls back to the env key', async () => {
-    process.env.VLLM_API_KEY = 'env-key';
-    axios.get.mockResolvedValue(modelsPayload('served/model'));
-    await cache.requireServedModelId('http://vllm:8000');
-    expect(axios.get.mock.calls[0][1].headers).toEqual({ Authorization: 'Bearer env-key' });
-  });
-
   test('requireServedModelId error does not suggest the pin (the pin is ignored by design)', async () => {
     axios.get.mockRejectedValue(new Error('401'));
     await expect(cache.requireServedModelId('http://vllm:8000')).rejects.toThrow(/must answer the model-id probe/);
@@ -215,5 +212,41 @@ describe('review round 1 fixes (#1181)', () => {
     expect(cache.deploymentVllmBase()).toBe('http://vllm:8000');
     process.env.VLLM_ENDPOINT = 'https://gpu.example.com/llm';
     expect(cache.deploymentVllmBase()).toBe('https://gpu.example.com/llm');
+  });
+});
+
+describe('review round 2 fixes (#1181)', () => {
+  beforeEach(() => {
+    logger.warn.mockClear();
+  });
+
+  test('requireServedModelId NEVER falls back to the env key (foreign base — no deployment-key leak)', async () => {
+    process.env.VLLM_API_KEY = 'deployment-secret';
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    await cache.requireServedModelId('https://foreign.example/v1');
+    expect(axios.get.mock.calls[0][1].headers).toEqual({}); // no Authorization, ever
+  });
+
+  test('requireServedModelId authenticates when an explicit key is given', async () => {
+    process.env.VLLM_API_KEY = 'deployment-secret';
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    await cache.requireServedModelId('https://foreign.example/v1', { apiKey: 'fk-own' });
+    expect(axios.get.mock.calls[0][1].headers).toEqual({ Authorization: 'Bearer fk-own' });
+  });
+
+  test('resolveVllmModelId (deployment base) still falls back to the env key', async () => {
+    process.env.VLLM_API_KEY = 'deployment-secret';
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    await cache.resolveVllmModelId('http://vllm:8000');
+    expect(axios.get.mock.calls[0][1].headers).toEqual({ Authorization: 'Bearer deployment-secret' });
+  });
+
+  test('a multi-model endpoint keeps the first entry but WARNS (gateway ambiguity is operator-visible)', async () => {
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'gateway/first' }, { id: 'gateway/embed' }] } });
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).resolves.toBe('gateway/first');
+    expect(logger.warn).toHaveBeenCalledWith(
+      'vllm_model_cache.multi_model_endpoint',
+      expect.objectContaining({ n: 2, chosen: 'gateway/first' })
+    );
   });
 });

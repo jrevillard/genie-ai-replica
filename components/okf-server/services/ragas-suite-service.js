@@ -1018,11 +1018,13 @@ async function answerFidelity(opts = {}) {
   const deploymentChat = async () => ({
     source: 'deployment-chat',
     config: null,
-    // The deployment chat model under the !631 policy: pin > /v1/models
-    // discovery (services/vllm-model-cache.js) — null only when nothing
-    // answers (#1181).
+    // The model CHATQNA would answer with — its compose pin maps ONLY the
+    // VLLM_LLM_MODEL_ID spelling (VLLM_MODEL_ID alone in .env pins okf but
+    // NOT chatqna), else it discovers the served id. The okf-side fused pin
+    // must not name the serve-mode model.
     model:
-      (await require('./vllm-model-cache').discoverVllmModelId(require('./vllm-model-cache').deploymentVllmBase())) ||
+      (process.env.VLLM_LLM_MODEL_ID || '').trim() ||
+      (await require('./vllm-model-cache').getServedModelId(require('./vllm-model-cache').deploymentVllmBase())) ||
       null
   });
   if (opts.serveMode) return deploymentChat();

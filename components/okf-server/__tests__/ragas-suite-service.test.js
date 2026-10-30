@@ -2910,8 +2910,11 @@ describe('answerFidelity — the record must name the model that ACTUALLY answer
       config_name: 'Answers Config',
       source: 'active'
     });
-    process.env.VLLM_MODEL_ID = 'ibm-granite/granite-4.1-8b';
-    delete process.env.VLLM_LLM_MODEL_ID;
+    // Chatqna's compose pin maps ONLY the VLLM_LLM_MODEL_ID spelling —
+    // set that spelling (r2 #1181): a VLLM_MODEL_ID-only .env pins okf but
+    // NOT chatqna, and the serve-mode label must name what CHATQNA uses.
+    process.env.VLLM_LLM_MODEL_ID = 'ibm-granite/granite-4.1-8b';
+    delete process.env.VLLM_MODEL_ID;
 
     // The SERVE leg answers through chatqna, which serves the deployment
     // chat model. The served call carries no model at all, so the
@@ -3842,5 +3845,34 @@ describe('answerFidelity — discovery names the served deployment model (#1181)
     const serve = await svc.answerFidelity({ serveMode: true });
     expect(serve.source).toBe('deployment-chat');
     expect(serve.model).toBe('served/chat-8b');
+  });
+});
+
+// Review r2 (#1181): serve-mode answers come from chatqna, whose compose
+// pin maps ONLY the VLLM_LLM_MODEL_ID spelling — the label must mirror
+// that precedence (LLM-spelling pin > served), never the fused okf pin.
+describe('answerFidelity — chatqna pin-spelling parity (r2 #1181)', () => {
+  const OLD_ENV = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...OLD_ENV };
+    jest.restoreAllMocks();
+    require('../services/vllm-model-cache').clearModelCache();
+  });
+
+  it('VLLM_MODEL_ID alone must NOT name the serve-mode model — the served id does', async () => {
+    const axios = require('axios');
+    process.env.VLLM_MODEL_ID = 'plain-spelling-pin';
+    delete process.env.VLLM_LLM_MODEL_ID;
+    process.env.VLLM_ENDPOINT = 'http://vllm:8000';
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/chat-9b' }] } });
+    const serve = await svc.answerFidelity({ serveMode: true });
+    expect(serve.model).toBe('served/chat-9b');
+  });
+
+  it('VLLM_LLM_MODEL_ID (chatqna’s spelling) still wins when set', async () => {
+    process.env.VLLM_LLM_MODEL_ID = 'llm-spelling-pin';
+    const serve = await svc.answerFidelity({ serveMode: true });
+    expect(serve.model).toBe('llm-spelling-pin');
   });
 });

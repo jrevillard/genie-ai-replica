@@ -64,19 +64,35 @@ function probeTimeoutMs() {
 }
 
 /** Probe once; on success cache and return the first served id, else null.
- * A per-call apiKey (a named model-config's own key) wins over the
- * deployment VLLM_API_KEY — the modelless-config path must authenticate
- * with the credentials of the endpoint it probes. */
+ *
+ * Auth is EXACTLY the apiKey given by the caller — no env fallback here:
+ * the deployment VLLM_API_KEY may only be aimed at the deployment
+ * endpoint (resolveVllmModelId adds it for that path); a foreign base
+ * (named model-config, judge base) must never receive it uninvited. */
 async function probe(baseUrl, timeoutMs, apiKey) {
   const url = require('./llm-url').openAiModelsUrl(baseUrl);
   const headers = {};
-  const key = (apiKey || '').trim() || (process.env.VLLM_API_KEY || '').trim();
+  const key = (apiKey || '').trim();
   if (key) headers.Authorization = `Bearer ${key}`;
   try {
     const r = await axios.get(url, { headers, timeout: timeoutMs || probeTimeoutMs() });
-    const entry = r.data && Array.isArray(r.data.data) ? r.data.data[0] : null;
+    const list = r.data && Array.isArray(r.data.data) ? r.data.data : [];
+    const entry = list[0] || null;
     const id = typeof entry === 'string' ? entry : entry && typeof entry.id === 'string' ? entry.id : null;
-    if (id) return id;
+    if (id) {
+      // First entry is the rule (single-model vLLM — Python parity), but a
+      // multi-model gateway makes it an arbitrary pick: make the ambiguity
+      // visible instead of silently chatting with, say, an embedder.
+      if (list.length > 1) {
+        logger.warn('vllm_model_cache.multi_model_endpoint', {
+          url,
+          n: list.length,
+          chosen: id,
+          note: 'first listed model used — pin the model if that is not the chat model'
+        });
+      }
+      return id;
+    }
     logger.warn('vllm_model_cache.no_models', { url });
   } catch (e) {
     logger.warn('vllm_model_cache.probe_failed', { url, error: e.message });
@@ -105,25 +121,28 @@ async function discoverVllmModelId(baseUrl, opts) {
   return envPin() || (await getServedModelId(baseUrl, opts));
 }
 
+/** The loud no-answer error shared by both resolving variants. */
+function discoveryError(baseUrl) {
+  return new ModelDiscoveryError(
+    `no model id discovered at ${require('./llm-url').openAiModelsUrl(baseUrl)} — the endpoint must answer the model-id probe (or the model must be set where the call is configured)`
+  );
+}
+
 /** require_model_id twin: the served id, loudly — the pin is deliberately
- * NOT consulted (this is for endpoints whose served model is the only
- * authority, e.g. a named model-config base). */
-async function requireServedModelId(baseUrl, opts) {
-  const id = await getServedModelId(baseUrl, opts);
-  if (!id) {
-    // No pin hint on purpose: this variant deliberately ignores the pin
-    // (foreign endpoint), so suggesting it would send the operator in
-    // circles.
-    throw new ModelDiscoveryError(
-      `no model id discovered at ${require('./llm-url').openAiModelsUrl(baseUrl)} — the endpoint must answer the model-id probe`
-    );
-  }
+ * NOT consulted, and the probe uses ONLY the given apiKey (foreign base:
+ * the deployment key is never aimed at an endpoint the caller did not
+ * name it for). */
+async function requireServedModelId(baseUrl, opts = {}) {
+  const id = await getServedModelId(baseUrl, { timeoutMs: opts.timeoutMs, apiKey: opts.apiKey });
+  if (!id) throw discoveryError(baseUrl);
   return id;
 }
 
 /** resolve_model_id twin: the single home of the precedence — pin wins,
- * else discovery, loud on no answer. */
-async function resolveVllmModelId(baseUrl, opts) {
+ * else discovery, loud on no answer. This is the DEPLOYMENT path: when
+ * the caller gives no key, the deployment VLLM_API_KEY is the default
+ * credential for the deployment endpoint. */
+async function resolveVllmModelId(baseUrl, opts = {}) {
   const pin = envPin();
   if (pin) return pin;
   if (!baseUrl) {
@@ -131,7 +150,10 @@ async function resolveVllmModelId(baseUrl, opts) {
       'no vLLM endpoint configured and no model pinned — set VLLM_ENDPOINT or VLLM_MODEL_ID'
     );
   }
-  return requireServedModelId(baseUrl, opts);
+  const apiKey = (opts.apiKey || '').trim() || (process.env.VLLM_API_KEY || '').trim();
+  const id = await getServedModelId(baseUrl, { timeoutMs: opts.timeoutMs, apiKey });
+  if (!id) throw discoveryError(baseUrl);
+  return id;
 }
 
 /** The deployment vLLM base, same rule the chat path uses: the env
@@ -150,6 +172,7 @@ function clearModelCache() {
 module.exports = {
   ModelDiscoveryError,
   deploymentVllmBase,
+  getServedModelId,
   discoverVllmModelId,
   requireServedModelId,
   resolveVllmModelId,

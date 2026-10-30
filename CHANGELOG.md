@@ -73,19 +73,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   top-level `title` locale map (the text the web's chips row already showed)
   and the card icon the button's top-level `icon`, the same shape the web
   reads. The chips row was never affected. (#1124, !635)
+- **An untranslated placeholder in a configuration's locale map now falls back
+  to the translated text.** A locale map whose entry for the active language
+  was an empty string - the shape an untranslated translation takes - rendered
+  an empty card label, and an empty welcome message, on the mobile app, where
+  the web already fell back to the English text. Both platforms now read the
+  first non-empty translation. (#1124, !635)
 
 - **A Quick Help card that declares no hidden prompt no longer sends an empty
   question.** The card's visible text was shown in the chat while the question
   sent to the assistant was empty, so the assistant answered a blank prompt.
   The card now opens the chat with its scope in place and leaves the question
-  to the user. A card whose configuration declares a hidden prompt - every
-  shipped one does - is unchanged.
+  to the user. A card that declares a hidden prompt - every card but the plain
+  chat one - is unchanged. (#1124, !635)
 
 - **A Quick Help card marked as hidden is now hidden on the mobile app whatever
   the shape of the flag.** The flag was read as a boolean, so a configuration
   that writes it as a string (for example `"hidden": "false"`) kept the card on
   the mobile app while the web hid it. Both platforms now hide it the same
-  way.
+  way. (#1124, !635)
 
 - **The mobile app now shows the chat's configured welcome message on first
   render.** The message declared in the deployment configuration was computed

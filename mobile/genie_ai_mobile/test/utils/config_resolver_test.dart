@@ -40,6 +40,11 @@ void main() {
       expect(resolveConfigText('Ask about IDs', 'en'), 'Ask about IDs');
     });
 
+    test('a list stringifies the way JavaScript does', () {
+      expect(resolveConfigText(['Apply for ID'], 'en'), 'Apply for ID');
+      expect(resolveConfigText(['a', 'b'], 'en'), 'a,b');
+    });
+
     test('0 and false resolve to no text; a truthy number keeps its form', () {
       expect(resolveConfigText(0, 'en'), '');
       expect(resolveConfigText(false, 'en'), '');

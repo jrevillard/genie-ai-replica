@@ -20,7 +20,7 @@ void main() {
       () {
         final button = {
           'id': 'civil',
-          'serviceLabels': ['Registration', 'Births'],
+          'serviceLabels': <String>['Registration', 'Births'],
           'category': '2',
         };
 
@@ -36,7 +36,7 @@ void main() {
       () {
         final button = {
           'id': 'tax',
-          'serviceLabels': ['Births'],
+          'serviceLabels': <String>['Births'],
           'category': '404',
         };
 
@@ -50,7 +50,7 @@ void main() {
     test('a button whose labels and category both exist is not broken', () {
       final button = {
         'id': 'civil',
-        'serviceLabels': ['Births'],
+        'serviceLabels': <String>['Births'],
         'category': '2',
       };
 
@@ -63,7 +63,7 @@ void main() {
       // from it, and the button cannot keep the scope it promised.
       final button = {
         'id': 'civil',
-        'serviceLabels': ['Registration'],
+        'serviceLabels': <String>['Registration'],
         'category': '404',
       };
 
@@ -186,7 +186,7 @@ void main() {
     test('a category named by its ENGLISH name resolves', () {
       final button = {
         'id': 'civil',
-        'serviceLabels': ['Births'],
+        'serviceLabels': <String>['Births'],
         'category': 'Civil Registry',
       };
 
@@ -197,7 +197,7 @@ void main() {
     test('a category named by its database key still resolves', () {
       final button = {
         'id': 'civil',
-        'serviceLabels': ['Births'],
+        'serviceLabels': <String>['Births'],
         'category': '2',
       };
 
@@ -299,7 +299,7 @@ void main() {
       {
         'id': 'civil',
         'category': '2',
-        'serviceLabels': ['Births'],
+        'serviceLabels': <String>['Births'],
       },
     ];
 
@@ -328,7 +328,7 @@ void main() {
         {
           'id': 'civil',
           'category': 'Civil Registry',
-          'serviceLabels': ['Births'],
+          'serviceLabels': <String>['Births'],
         },
       ]).resolve(tags: ['civil']);
 
@@ -398,12 +398,12 @@ void main() {
           {
             'id': 'civil',
             'category': '2',
-            'serviceLabels': ['Births'],
+            'serviceLabels': <String>['Births'],
           },
           {
             'id': 'civil',
             'category': '2',
-            'serviceLabels': ['No Such Service'],
+            'serviceLabels': <String>['No Such Service'],
           },
         ];
 
@@ -444,7 +444,7 @@ void main() {
           resolver.stateFor({
             'id': 'civil',
             'category': '2',
-            'serviceLabels': const <dynamic>['Births'],
+            'serviceLabels': const <String>['Births'],
           })['broken'],
           isFalse,
         );
@@ -487,12 +487,12 @@ void main() {
         {
           'id': 'btn-a',
           'category': '2',
-          'serviceLabels': const <dynamic>['Births'],
+          'serviceLabels': const <String>['Births'],
         },
         {
           'id': 'btn-b',
           'category': '2',
-          'serviceLabels': const <dynamic>['Marriages'],
+          'serviceLabels': const <String>['Marriages'],
         },
       ];
       final scope = ConversationScopeResolver(
@@ -526,12 +526,12 @@ void main() {
         {
           'id': 'btn-a',
           'category': '2',
-          'serviceLabels': const <dynamic>['Births'],
+          'serviceLabels': const <String>['Births'],
         },
         {
           'id': 'btn-b',
           'category': '2',
-          'serviceLabels': const <dynamic>['Renamed Away'],
+          'serviceLabels': const <String>['Renamed Away'],
         },
       ];
       final scope = ConversationScopeResolver(
@@ -561,11 +561,7 @@ void main() {
         // button declares none. Dropping the edge sent the follow-up
         // UNscoped — a silent widening — while the web kept the edge.
         final convButtons6 = <Map<String, dynamic>>[
-          {
-            'id': 'no-cat',
-            'category': null,
-            'serviceLabels': const <dynamic>[],
-          },
+          {'id': 'no-cat', 'category': null, 'serviceLabels': const <String>[]},
         ];
         final scope = ConversationScopeResolver(
           hierarchy: QuickHelpScopeResolver(convTree),
@@ -599,7 +595,7 @@ void main() {
           {
             'id': 'civil',
             'category': '2',
-            'serviceLabels': const <dynamic>['Births'],
+            'serviceLabels': const <String>['Births'],
           },
         ];
         final scope = ConversationScopeResolver(
@@ -655,7 +651,7 @@ void main() {
           {
             'id': 'civil',
             'category': '2',
-            'serviceLabels': const <dynamic>['Registration'],
+            'serviceLabels': const <String>['Registration'],
           },
         ];
         final scope = ConversationScopeResolver(
@@ -690,7 +686,7 @@ void main() {
           {
             'id': 'gone-cat',
             'category': '404',
-            'serviceLabels': const <dynamic>[],
+            'serviceLabels': const <String>[],
           },
         ];
         final scope = ConversationScopeResolver(
@@ -719,7 +715,7 @@ void main() {
       // label that was renamed away. The guard must refuse the follow-up
       // in this branch too — not only when there is no Quick Help tag.
       final convButtons2 = <Map<String, dynamic>>[
-        {'id': 'btn-x', 'category': '2', 'serviceLabels': const <dynamic>[]},
+        {'id': 'btn-x', 'category': '2', 'serviceLabels': const <String>[]},
       ];
       final scope = ConversationScopeResolver(
         hierarchy: QuickHelpScopeResolver(convTree),
@@ -803,7 +799,7 @@ void main() {
     test('no restore ever committed — nothing is re-resolved', () {
       expect(
         shouldReResolveRestoredScope(
-          restoredTags: const <dynamic>['births'],
+          restoredTags: const <String>['births'],
           restoredCategoryKey: '2',
           restoredScopeEpoch: null,
           scopeEpoch: 0,
@@ -818,7 +814,7 @@ void main() {
       () {
         expect(
           shouldReResolveRestoredScope(
-            restoredTags: const <dynamic>['births'],
+            restoredTags: const <String>['births'],
             restoredCategoryKey: '2',
             restoredScopeEpoch: 3,
             scopeEpoch: 4,
@@ -834,7 +830,7 @@ void main() {
       () {
         expect(
           shouldReResolveRestoredScope(
-            restoredTags: const <dynamic>['births'],
+            restoredTags: const <String>['births'],
             restoredCategoryKey: '2',
             restoredScopeEpoch: 3,
             scopeEpoch: 3,
@@ -850,7 +846,7 @@ void main() {
       () {
         expect(
           shouldReResolveRestoredScope(
-            restoredTags: const <dynamic>[],
+            restoredTags: const <String>[],
             restoredCategoryKey: null,
             restoredScopeEpoch: 3,
             scopeEpoch: 3,
@@ -961,7 +957,7 @@ void main() {
         final scope = QuickHelpScopeResolver.unavailableScopeFor({
           'id': 'free',
           'category': 'general',
-          'serviceLabels': const <dynamic>[],
+          'serviceLabels': const <String>[],
         });
 
         expect(scope['broken'], isFalse);
@@ -990,7 +986,7 @@ void main() {
       final labelled = QuickHelpScopeResolver.unavailableScopeFor({
         'id': 'civil',
         'category': null,
-        'serviceLabels': ['Births'],
+        'serviceLabels': <String>['Births'],
       });
 
       expect(scoped['broken'], isTrue);
@@ -1031,11 +1027,11 @@ void main() {
     test('a duplicated id keeps only the FIRST entry', () {
       final first = {
         'id': 'civil',
-        'serviceLabels': ['Births'],
+        'serviceLabels': <String>['Births'],
       };
       final second = {
         'id': 'civil',
-        'serviceLabels': ['No Such Service'],
+        'serviceLabels': <String>['No Such Service'],
       };
 
       final unique = dedupeQuickHelpButtons([first, second]);
@@ -1048,7 +1044,7 @@ void main() {
 
     test('a button with no id is kept as-is', () {
       final idless = {
-        'serviceLabels': ['Births'],
+        'serviceLabels': <String>['Births'],
       };
 
       expect(dedupeQuickHelpButtons([idless]), [idless]);
@@ -1183,7 +1179,7 @@ void main() {
       final button = {
         'id': 'civil',
         'resolvedTitle': 'Civil Registry',
-        'serviceLabels': ['Births'],
+        'serviceLabels': <String>['Births'],
         'category': '2',
       };
 
@@ -1194,7 +1190,7 @@ void main() {
       final button = {
         'id': 'civil',
         'resolvedTitle': 'Civil Registry',
-        'serviceLabels': ['Registration'],
+        'serviceLabels': <String>['Registration'],
         'category': '2',
       };
 
@@ -1221,34 +1217,20 @@ void main() {
     });
   });
 
-  /// The stored label list is handed back as-is — the grid reads it per
-  /// frame, and a copy per read would allocate on every rebuild.
+  /// The declared labels of a LOADED button - the parse normalizes them
+  /// (a bare string is wrapped as ONE label there), so this reader
+  /// returns what the card carries.
   group('quickHelpServiceLabelsOf', () {
-    test('a stored string list is handed back without a copy', () {
-      // The property this guards: the grid reads the labels on EVERY
-      // frame, so the helper must not allocate. The scope's OWN copy is
-      // taken where the list is kept (the press), not here.
-      final labels = <String>['Births'];
-      final button = {'serviceLabels': labels};
-
-      expect(quickHelpServiceLabelsOf(button), same(labels));
-    });
-
-    test('a dynamic list is mapped to strings', () {
+    test('a card carries its declared labels', () {
       final button = {
-        'serviceLabels': <dynamic>['Births', 3],
+        'serviceLabels': <String>['Births', 'Weddings'],
       };
 
-      expect(quickHelpServiceLabelsOf(button), ['Births', '3']);
+      expect(quickHelpServiceLabelsOf(button), ['Births', 'Weddings']);
     });
 
-    test('a bare string is ONE label, like the parse wraps it', () {
-      // The wire's own bare-string rule: a STRING where the array
-      // belongs is ONE label. The shared reader answers it the same way
-      // the parse does - the two copies of the rule cannot drift.
-      final button = {'serviceLabels': 'Births'};
-
-      expect(quickHelpServiceLabelsOf(button), ['Births']);
+    test('a card that declares none carries none', () {
+      expect(quickHelpServiceLabelsOf({'id': 'chat'}), isEmpty);
     });
   });
 
@@ -1393,7 +1375,7 @@ void main() {
     test('the label list is stored as strings, ready for the wire', () {
       final parsed = parseQuickHelpButton({
         ...shippedButton,
-        'serviceLabels': ['Births', 'Weddings'],
+        'serviceLabels': <String>['Births', 'Weddings'],
       }, 'en');
 
       final labels = parsed['serviceLabels'];

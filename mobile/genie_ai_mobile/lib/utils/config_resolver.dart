@@ -33,6 +33,11 @@ String resolveConfigText(dynamic value, String locale) {
   // A scalar the web's `value || ''` reads as falsy (0, false) is no
   // text; a truthy number keeps its string form, as the web renders it.
   if (value is String) return value;
+  // JavaScript stringifies an array by joining it with commas - the
+  // web renders a list title that way, and so does the mobile.
+  if (value is List) {
+    return value.map((element) => element.toString()).join(',');
+  }
   return configTruthy(value) ? value.toString() : '';
 }
 

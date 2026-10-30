@@ -119,19 +119,11 @@ Map<String, dynamic> parseQuickHelpButton(
 /// a change to the rule cannot drift between the copies.
 List<String> quickHelpServiceLabelsOf(Map<String, dynamic> button) {
   final labels = button['serviceLabels'];
-  // The parsed button stores strings: handed back as-is, no copy — the
-  // grid reads this per frame.
+  // The parse normalizes the labels ONCE - a bare string is wrapped as
+  // ONE label there - so this reader has no rule of its own: it reads
+  // the stored strings, handed back as-is (the grid reads this per
+  // frame) and empty for a card that declares none.
   if (labels is List<String>) return labels;
-  if (labels is List) {
-    // The scope-less card (the common one on the grid's per-frame path)
-    // allocates nothing.
-    if (labels.isEmpty) return const <String>[];
-    return labels.map((label) => label.toString()).toList();
-  }
-  // The wire's own bare-string rule: a STRING where the array belongs
-  // is ONE label — the same answer the parse gives, so the two copies
-  // of the rule cannot drift.
-  if (labels is String && labels.isNotEmpty) return [labels];
   return const <String>[];
 }
 

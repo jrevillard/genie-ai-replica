@@ -508,5 +508,11 @@ describe('resolution chain (picked > active > env) + fidelity', () => {
     // An explicitly named judge model still wins.
     process.env.RAGAS_JUDGE_MODEL = 'judge/explicit';
     expect(svc.judgeFidelity(null).model).toBe('judge/explicit');
+    // On ANOTHER endpoint the deployment's model name is not what answers
+    // (the served model is discovered there) — the record must not claim it.
+    delete process.env.RAGAS_JUDGE_MODEL;
+    process.env.RAGAS_JUDGE_BASE_URL = 'https://judge-gpu.example/v1';
+    expect(svc.judgeFidelity(null).model).toBeNull();
+    delete process.env.RAGAS_JUDGE_BASE_URL;
   });
 });

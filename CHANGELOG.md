@@ -78,13 +78,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pointed at a service that was not there. The default is now
   `https://<gpu>:<port>/llm/v1`, the deployment's own endpoint (only that
   endpoint may receive the deployment credential). Deployments that set
-  `ragas_judge_base_url` explicitly are unaffected.
+  `ragas_judge_base_url` explicitly are unaffected. The GPU endpoint is
+  HTTPS and its certificate is self-signed by default, so the deployment
+  already needs `node_tls_reject_unauthorized: "0"` for the OKF server's
+  other calls to that node — the judge leg joins them.
 
 - **The suite provenance field `generator` names every model that produced
   the suite.** It was a constant — the deployment's model name
   from the environment, or `llm:vllm` — so it never reflected any call. It
   now lists the distinct models the generation calls actually ran under
-  (`llm:model-a,llm:model-b`).
+  (`llm:model-a,llm:model-b`), or `none` when no generation call carried a
+  stamp (the whole LLM leg failed and the deterministic fallback rows
+  filled the suite). A consumer that parses it as a single `llm:<model>`
+  token must handle both shapes.
 
 - **The OKF server no longer inherits the deployment's model NAME for the
   benchmark judge.** `RAGAS_JUDGE_MODEL` defaulted to
@@ -95,13 +101,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   benchmark sidecar keeps its own default (its judge base IS the
   deployment).
 
-- **`VLLM_MODEL_ID` no longer pins the OKF server on its own.** The pin
-  spelling is `VLLM_LLM_MODEL_ID` — the name the vLLM
-  container is started with (`--served-model-name`), and the one every
-  Python service reads. A raw `VLLM_MODEL_ID` in `.env` named a model the
-  endpoint did not serve, and every OKF call 404'd on it while the Python
-  services discovered the right one. It now maps to the served name, like
-  every other service.
+- **`VLLM_MODEL_ID` does not pin the OKF server.** The pin spelling is
+  `VLLM_LLM_MODEL_ID` — the name the vLLM container is started with
+  (`--served-model-name`), and the one every service reads (`VLLM_MODEL_ID`
+  is filled from it). Before, the OKF server carried a hardcoded model name
+  instead, so a `.env` carrying only `VLLM_MODEL_ID` left it naming a model
+  the endpoint did not serve — every call 404'd while the Python services
+  discovered the right one. It now maps to the served name, like every other
+  service.
+
+- **The OKF server's tagging logs name their fields explicitly.** The
+  `frontmatter.suggest.start` line carried the deployment's pin under the
+  key `model` (so it read `model:null` on the common discovered path) and the
+  deployment base under `vllm_host` (which is not where the call went when a
+  named model config is active). The pin is now `model_pin`, the base
+  `deployment_vllm_host`, and the line that names the model that tagged
+  (`frontmatter.suggest.done`) also names the host that answered.
 
 - **Ansible deployments: `vllm_llm_model_id` is now undefined by default
   (auto-discovery).** Previously it pinned `ibm-granite/granite-4.1-8b` for

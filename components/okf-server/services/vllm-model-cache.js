@@ -27,7 +27,10 @@
  *     concept), where the Python side resolves per file/job. Python applies
  *     the same mechanism to its own request-path field (max_model_len); the
  *     exact model-id negative-cache semantics stay open in #1127;
- *   - concurrent callers share ONE in-flight probe;
+ *   - concurrent callers share ONE in-flight probe — per probe BUDGET
+ *     (the window and the in-flight map are keyed by the budget bucket, so
+ *     a tight-budget caller never narrows an ample-budget one, and an
+ *     endpoint that is down costs one probe per budget class per window);
  *   - cache keys carry the CREDENTIAL as well as the base: gateways can
  *     filter /v1/models per key, so two configs on one base must never
  *     resolve each other's model.
@@ -102,8 +105,10 @@ function envPin() {
   return (process.env.VLLM_LLM_MODEL_ID || '').trim() || (process.env.VLLM_MODEL_ID || '').trim() || null;
 }
 
-/** The LLM-spelling pin only — the spelling chatqna receives (its compose
- * block maps VLLM_MODEL_ID from VLLM_LLM_MODEL_ID alone). */
+/** The LLM-spelling pin only — the spelling the model server is started
+ * with (`--served-model-name`) and the one every service reads (the
+ * compose blocks map VLLM_MODEL_ID from VLLM_LLM_MODEL_ID alone, so a raw
+ * VLLM_MODEL_ID in .env pins nothing). */
 function envPinLLMSpelling() {
   return (process.env.VLLM_LLM_MODEL_ID || '').trim() || null;
 }
@@ -387,7 +392,10 @@ function credentialForBase(baseUrl, ownKey) {
 /** Resolve the model id for a DEPLOYMENT call and report what is left of
  * the call budget: the discovery round trip is part of the budget, and the
  * chat call must never be handed a useless remainder (a 1 ms timeout fails
- * non-retriably on a healthy endpoint). */
+ * non-retriably on a healthy endpoint). The 1 s floor can exceed a budget
+ * smaller than itself — a small-budget caller then gets the budget, not a
+ * remainder — so the total wall time can pass the declared budget (the
+ * floor is the point: a doomed call is worse than a slightly late one). */
 async function resolveDeploymentModel({ baseUrl, apiKey, budgetMs, probeBudgetMs }) {
   const startedAt = Date.now();
   const budget = callBudget(budgetMs);
@@ -505,7 +513,12 @@ function sameOrigin(a, b) {
     // (…/tenant-b) is a DIFFERENT endpoint and must not receive the
     // deployment credential.
     if (short === '') return /^\/v\d+$/.test(long);
-    return long.startsWith(`${short}/`);
+    if (!long.startsWith(`${short}/`)) return false;
+    // The child must be the OpenAI-compatible VERSION segment (/v1) — the
+    // same server under its versioned prefix. Any other child path
+    // (…/llm/tenant-b) is a DIFFERENT endpoint: it must never receive the
+    // deployment credential or the deployment's model name.
+    return /^\/v\d+$/.test(long.slice(short.length));
   } catch {
     return false;
   }

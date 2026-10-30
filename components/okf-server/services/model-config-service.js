@@ -643,7 +643,15 @@ async function resolveModelOverride(pick = {}) {
  * must not be sent to another endpoint), so the record falls back to the
  * deployment pin — the same name. */
 function envJudgeModel() {
-  return (process.env.RAGAS_JUDGE_MODEL || '').trim() || modelCache.envPinLLMSpelling() || null;
+  const named = (process.env.RAGAS_JUDGE_MODEL || '').trim();
+  if (named) return named;
+  // The deployment's model name names the judge ONLY when the judge base IS
+  // the deployment endpoint. On another endpoint the served model is
+  // DISCOVERED there — the record must not advertise a model that does not
+  // answer.
+  const base = (process.env.RAGAS_JUDGE_BASE_URL || '').trim();
+  if (!base || !modelCache.sameOrigin(base, modelCache.deploymentVllmBase())) return null;
+  return modelCache.envPinLLMSpelling() || null;
 }
 
 /** What the run's fidelity block records — name + model, never the key. */

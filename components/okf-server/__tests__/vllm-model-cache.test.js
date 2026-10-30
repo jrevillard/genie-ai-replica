@@ -456,6 +456,15 @@ describe('final review fixes (#1181)', () => {
     expect(axios.get).toHaveBeenCalledTimes(1);
   });
 
+  test('sameOrigin: a CHILD path of the deployment path is a DIFFERENT endpoint', () => {
+    // …/llm/tenant-b is a tenant UNDER the deployment path, not the
+    // deployment's own endpoint: it must never receive the deployment
+    // bearer or the deployment's model name.
+    expect(cache.sameOrigin('https://gpu:443/llm/tenant-b', 'https://gpu:443/llm')).toBe(false);
+    // The OpenAI-compatible version prefix IS the same server.
+    expect(cache.sameOrigin('https://gpu:443/llm/v1', 'https://gpu:443/llm')).toBe(true);
+  });
+
   test('sameOrigin: a path-less base matches a version prefix, never an arbitrary path', () => {
     expect(cache.sameOrigin('http://vllm:8000', 'http://vllm:8000/v1')).toBe(true);
     expect(cache.sameOrigin('http://vllm:8000', 'http://vllm:8000/tenant-b')).toBe(false);

@@ -55,10 +55,28 @@ class TestEnsureVectorIndex:
         assert kwargs["name"] == "vector_index"
         assert kwargs["type"] == "vector"
         assert kwargs["fields"] == ["embedding"]
-        assert kwargs["params"] == {"dimension": 1024, "metric": "cosine", "nLists": 1}
+        assert kwargs["params"] == {"dimension": 1024, "metric": "cosine", "nLists": 1, "defaultNProbe": 1}
         coll.delete_index.assert_not_called()
         write_log.assert_called_once()
         assert "Created" in write_log.call_args.args[3]
+
+    @pytest.mark.asyncio
+    async def test_n_probe_override_flows_into_params(self):
+        coll = _make_collection(sample_embedding=[0.1] * 1024)
+        write_log = AsyncMock()
+
+        name = await ensure_vector_index(
+            coll,
+            metric="cosine",
+            n_lists=1,
+            n_probe=4,
+            file_id="file-1",
+            write_ingestion_log=write_log,
+        )
+
+        assert name == "vector_index"
+        assert coll.add_index.call_args.args[0]["params"]["defaultNProbe"] == 4
+        assert "nProbe=4" in write_log.call_args.args[3]
 
     @pytest.mark.asyncio
     async def test_idempotent_no_op(self):
@@ -67,7 +85,7 @@ class TestEnsureVectorIndex:
                 "name": "vector_index",
                 "type": "vector",
                 "fields": ["embedding"],
-                "params": {"dimension": 1024, "metric": "cosine", "nLists": 1},
+                "params": {"dimension": 1024, "metric": "cosine", "nLists": 1, "defaultNProbe": 1},
             }
         ]
         coll = _make_collection(sample_embedding=[0.1] * 1024, existing_indexes=existing)
@@ -85,6 +103,62 @@ class TestEnsureVectorIndex:
         coll.add_index.assert_not_called()
         coll.delete_index.assert_not_called()
         write_log.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_n_probe_match_is_no_op(self):
+        """Index whose defaultNProbe matches the requested n_probe is idempotent."""
+        existing = [
+            {
+                "name": "vector_index",
+                "type": "vector",
+                "fields": ["embedding"],
+                "params": {"dimension": 1024, "metric": "cosine", "nLists": 1, "defaultNProbe": 4},
+            }
+        ]
+        coll = _make_collection(sample_embedding=[0.1] * 1024, existing_indexes=existing)
+        write_log = AsyncMock()
+
+        name = await ensure_vector_index(
+            coll,
+            metric="cosine",
+            n_lists=1,
+            n_probe=4,
+            file_id="file-1",
+            write_ingestion_log=write_log,
+        )
+
+        assert name == "vector_index"
+        coll.add_index.assert_not_called()
+        coll.delete_index.assert_not_called()
+        write_log.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_n_probe_drift_recreates(self):
+        existing = [
+            {
+                "name": "vector_index",
+                "type": "vector",
+                "fields": ["embedding"],
+                "params": {"dimension": 1024, "metric": "cosine", "nLists": 1, "defaultNProbe": 1},
+            }
+        ]
+        coll = _make_collection(sample_embedding=[0.1] * 1024, existing_indexes=existing)
+        write_log = AsyncMock()
+
+        await ensure_vector_index(
+            coll,
+            metric="cosine",
+            n_lists=1,
+            n_probe=4,
+            file_id="file-1",
+            write_ingestion_log=write_log,
+        )
+
+        coll.delete_index.assert_called_once_with("vector_index")
+        assert coll.add_index.call_args.args[0]["params"]["defaultNProbe"] == 4
+        log_msg = write_log.call_args.args[3]
+        assert "nProbe drift" in log_msg
+        assert "have=" in log_msg and "/1/1" in log_msg and "/1/4" in log_msg
 
     @pytest.mark.asyncio
     async def test_dim_staleness_recreates(self):
@@ -139,7 +213,7 @@ class TestEnsureVectorIndex:
         coll.delete_index.assert_called_once_with("vector_index")
         coll.add_index.assert_called_once()
         assert coll.add_index.call_args.args[0]["params"]["metric"] == "cosine"
-        assert "metric/nLists drift" in write_log.call_args.args[3]
+        assert "metric/nLists/nProbe drift" in write_log.call_args.args[3]
 
     @pytest.mark.asyncio
     async def test_n_lists_drift_recreates(self):
@@ -238,7 +312,7 @@ class TestEnsureVectorIndex:
                     "name": "vector_index",
                     "type": "vector",
                     "fields": ["embedding"],
-                    "params": {"dimension": 1024, "metric": "cosine", "nLists": 1},
+                    "params": {"dimension": 1024, "metric": "cosine", "nLists": 1, "defaultNProbe": 1},
                 }
             ],
         )
@@ -263,23 +337,41 @@ class TestReadIndexParams:
     def test_defaults_when_env_unset(self, monkeypatch):
         monkeypatch.delenv("RETRIEVER_ARANGO_DISTANCE_STRATEGY", raising=False)
         monkeypatch.delenv("RETRIEVER_ARANGO_NUM_CENTROIDS", raising=False)
-        metric, n_lists = dp_module._read_index_params()
+        monkeypatch.delenv("RETRIEVER_ARANGO_NPROBE", raising=False)
+        metric, n_lists, n_probe = dp_module._read_index_params()
         assert metric == "cosine"
         assert n_lists == 1
+        assert n_probe == 1
 
     def test_invalid_n_lists_falls_back(self, monkeypatch):
         monkeypatch.setenv("RETRIEVER_ARANGO_NUM_CENTROIDS", "abc")
         monkeypatch.setenv("RETRIEVER_ARANGO_DISTANCE_STRATEGY", "COSINE")
-        metric, n_lists = dp_module._read_index_params()
+        monkeypatch.delenv("RETRIEVER_ARANGO_NPROBE", raising=False)
+        metric, n_lists, n_probe = dp_module._read_index_params()
         assert metric == "cosine"
         assert n_lists == 1  # fallback
+        assert n_probe == 1
 
     def test_valid_overrides(self, monkeypatch):
         monkeypatch.setenv("RETRIEVER_ARANGO_DISTANCE_STRATEGY", "L2")
         monkeypatch.setenv("RETRIEVER_ARANGO_NUM_CENTROIDS", "8")
-        metric, n_lists = dp_module._read_index_params()
+        monkeypatch.setenv("RETRIEVER_ARANGO_NPROBE", "4")
+        metric, n_lists, n_probe = dp_module._read_index_params()
         assert metric == "l2"
         assert n_lists == 8
+        assert n_probe == 4
+
+    def test_invalid_n_probe_falls_back(self, monkeypatch):
+        """AC3: RETRIEVER_ARANGO_NPROBE=invalid logs a WARNING and falls back to 1."""
+        monkeypatch.setenv("RETRIEVER_ARANGO_NPROBE", "invalid")
+        fake_logger = MagicMock()
+        monkeypatch.setattr(dp_module, "logger", fake_logger)
+        metric, n_lists, n_probe = dp_module._read_index_params()
+        assert metric == "cosine"
+        assert n_lists == 1
+        assert n_probe == 1  # fallback, no crash
+        fake_logger.warning.assert_called_once()
+        assert "RETRIEVER_ARANGO_NPROBE" in fake_logger.warning.call_args.args[0]
 
 
 class TestSafeLog:

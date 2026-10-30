@@ -1757,6 +1757,10 @@ services:
       ARANGO_GRAPH_NAME: ${ARANGO_GRAPH_NAME:-GRAPH}
       ARANGO_USERNAME: ${ARANGO_USERNAME:-root}
       ARANGO_PASSWORD: ${ARANGO_PASSWORD}
+      # IVF lists probed per vector query — sets `defaultNProbe` on the
+      # `vector_index` this service maintains (recreated on drift at the next
+      # ingest). Default 1 = the legacy langchain-arangodb behavior.
+      RETRIEVER_ARANGO_NPROBE: ${RETRIEVER_ARANGO_NPROBE:-1}
       DOCUMENT_REPOSITORY_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
       # Story 4.8-amend: content-only chunking — OKF concept completion callbacks

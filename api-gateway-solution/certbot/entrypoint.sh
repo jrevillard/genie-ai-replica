@@ -67,13 +67,15 @@ check_existing_certs() {
 copy_certs() {
     if [ -f "${CERT_DIR}/fullchain.pem" ] && [ -f "${CERT_DIR}/privkey.pem" ]; then
         # Remove-then-copy: a plain cp over an existing file writes into its
-        # inode and inherits the previous (possibly non-root) ownership, which
-        # the cap-dropped nginx container cannot read.
+        # inode and inherits the previous ownership. The edge nginx runs as
+        # uid 101 (#1227) and reads these through the read-only bind, so the
+        # key must stay group-101-readable (0640), not root-only 0600.
         rm -f "${SECRETS_DIR}/server.crt" "${SECRETS_DIR}/server.key"
         cp "${CERT_DIR}/fullchain.pem" "${SECRETS_DIR}/server.crt"
         cp "${CERT_DIR}/privkey.pem" "${SECRETS_DIR}/server.key"
         chmod 644 "${SECRETS_DIR}/server.crt"
-        chmod 600 "${SECRETS_DIR}/server.key"
+        chmod 640 "${SECRETS_DIR}/server.key"
+        chgrp 101 "${SECRETS_DIR}/server.crt" "${SECRETS_DIR}/server.key"
         echo "Certificates copied to ${SECRETS_DIR}/"
         return 0
     else

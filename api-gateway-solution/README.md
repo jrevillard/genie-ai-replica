@@ -47,7 +47,7 @@ docker compose up -d
   - Environment: Connects to Postgres as dedicated `kong` user via `KONG_DB_PASSWORD`; logs to stdout/stderr; `KONG_DNS_STALE_TTL=5` for DNS cache mitigation.
   - Healthcheck: `kong health` (built-in CLI, checks DB and internal services).
   - Ports: Internal only (not exposed to host). Proxy listens on `8000` (HTTP) / `8443` (HTTPS) within Docker network. Admin API on `0.0.0.0:8001` (internal only, used by kong-config service).
-  - Volume: `./data/logs/kong` for logs.
+  - Logs go to stdout/stderr (fluentd driver) — no host log directory since #1227.
   - Config applied automatically by the `kong-config` init service on startup.
 
 - **kong-config**: Init container that applies Kong configuration.
@@ -68,7 +68,7 @@ docker compose up -d
 ### Networks and Volumes
 
 - **Network**: All services connected to `genieai_network` (overlay driver, attachable).
-- **Volumes**: `postgres_data` (shared Postgres), `./data/logs/kong` (Kong logs).
+- **Volumes**: `postgres_data` (shared Postgres). Kong logs to stdout — no host volume (#1227).
 
 ### Usage
 

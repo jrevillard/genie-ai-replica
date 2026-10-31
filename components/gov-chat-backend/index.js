@@ -68,7 +68,11 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: process.env.API_URL || `http://localhost:${process.env.PORT || 3000}/api`,
+        // Base URL WITHOUT the /api prefix — the annotated paths below
+        // already start with /api, and swagger-ui resolves each request as
+        // servers[0].url + path. A suffixed URL makes Try-it-out build
+        // doubled /api/api/... request URLs.
+        url: process.env.API_URL || `http://localhost:${process.env.PORT || 3000}`,
         description: 'Development server'
       }
     ],

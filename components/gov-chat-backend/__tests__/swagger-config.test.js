@@ -233,4 +233,70 @@ describe('Swagger Configuration', () => {
       expect(dangling).toEqual([]);
     });
   });
+
+  describe('Server URL vs annotated paths', () => {
+    // The exported swaggerOptions capture process.env.API_URL at module
+    // load. These tests re-require index.js with API_URL pinned (unset or
+    // custom) so the assertions hold no matter what the invoking shell has
+    // exported.
+    const withApiUrl = (apiUrl, fn) => {
+      const previous = process.env.API_URL;
+      if (apiUrl === undefined) {
+        delete process.env.API_URL;
+      } else {
+        process.env.API_URL = apiUrl;
+      }
+      try {
+        jest.resetModules();
+        return fn(require('../index'));
+      } finally {
+        jest.resetModules();
+        if (previous === undefined) {
+          delete process.env.API_URL;
+        } else {
+          process.env.API_URL = previous;
+        }
+      }
+    };
+
+    it('default server URL carries no /api suffix (annotated paths already start with /api)', () => {
+      withApiUrl(undefined, ({ swaggerOptions }) => {
+        const url = swaggerOptions.definition.servers[0].url;
+        expect(url).not.toMatch(/\/api\/?$/);
+      });
+    });
+
+    it('a custom API_URL is used verbatim as the suffix-free server base', () => {
+      withApiUrl('https://gov.example.com', ({ swaggerOptions }) => {
+        expect(swaggerOptions.definition.servers[0].url).toBe('https://gov.example.com');
+      });
+    });
+
+    it('server URL joined with an annotated path resolves to a single /api segment', () => {
+      withApiUrl(undefined, ({ swaggerOptions }) => {
+        // This suite mocks fs and path (index.js's uploads-dir probe); the
+        // spec build needs the real ones. Same restore dance as the $ref
+        // test above.
+        const fs = require('fs');
+        const path = require('path');
+        const swaggerJsdoc = require('swagger-jsdoc');
+        Object.assign(fs, jest.requireActual('fs'));
+        Object.assign(path, jest.requireActual('path'));
+        const spec = swaggerJsdoc({
+          ...swaggerOptions,
+          apis: [path.join(__dirname, '..', 'routes', '*.js')]
+        });
+
+        // A route the app actually serves, as declared in query-routes.js.
+        const annotatedPath = '/api/queries/{queryId}/responsetime';
+        expect(spec.paths).toHaveProperty(annotatedPath);
+
+        // swagger-ui's Try-it-out executes servers[0].url + path.
+        const url = swaggerOptions.definition.servers[0].url;
+        const joined = `${url.replace(/\/+$/, '')}${annotatedPath}`;
+        expect(joined).not.toContain('/api/api');
+        expect(joined).toMatch(/^https?:\/\/[^/]+\/api\//);
+      });
+    });
+  });
 });

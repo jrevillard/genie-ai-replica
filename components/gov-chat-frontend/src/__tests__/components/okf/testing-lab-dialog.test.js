@@ -1966,4 +1966,30 @@ describe('#80805 — poll-envelope messages render translated, server detail ver
     await w.vm.onRunSuite();
     expect(w.vm.error).toBe('reranker down');
   });
+
+  // Round 21 (#80880): the RECOMMEND_FAILED arm keeps the SERVER's reason
+  // ('vLLM 503: model not ready', 'no head tags yet', …) — the generic
+  // sentence is only the fallback when the message is absent.
+  it('a failed advisor whose envelope carries the server reason keeps it verbatim (#80880)', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    dispatch.mockResolvedValueOnce({
+      ok: false,
+      code: 'RECOMMEND_FAILED',
+      message: 'vLLM 503: model not ready'
+    });
+    await w.vm.onRecommend();
+    expect(w.vm.error).toBe('vLLM 503: model not ready');
+  });
+
+  it('a failed advisor with NO message falls back to the generic sentence', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    dispatch.mockResolvedValueOnce({ ok: false, code: 'RECOMMEND_FAILED', message: '' });
+    await w.vm.onRecommend();
+    // No $i18n: the fallback IS the translated default (the key passthrough
+    // is covered by the onRecommend ADVISOR_TIMEOUT test).
+    expect(typeof w.vm.error).toBe('string');
+    expect(w.vm.error.length).toBeGreaterThan(0);
+  });
 });

@@ -194,15 +194,20 @@ test.describe('Conversation history persistence', () => {
     const messages = fullConv.messages || fullConv.data?.messages || [];
     expect(messages.length).toBeGreaterThanOrEqual(1);
 
-    // Verify order: user message comes before bot message (when both exist)
+    // Verify order: the turn was complete on screen before the save (the
+    // mocked answer text was asserted), so both sides must have persisted —
+    // a one-sided save is exactly the defect this spec exists to catch.
+    expect(messages.length, 'both turns persisted').toBeGreaterThanOrEqual(2);
     const firstUserIdx = messages.findIndex(
       (m) => m.role === 'user' || m.sender === 'user',
     );
     const firstBotIdx = messages.findIndex(
-      (m) => m.role === 'assistant' || m.sender === 'bot',
+      (m) => m.role === 'assistant' || m.sender === 'assistant' || m.sender === 'bot',
     );
-    if (firstUserIdx !== -1 && firstBotIdx !== -1) {
-      expect(firstUserIdx).toBeLessThan(firstBotIdx);
-    }
+    expect(firstUserIdx, 'the user turn persisted').toBeGreaterThanOrEqual(0);
+    // The API persists the assistant turn with sender 'assistant'; the UI
+    // spells the same side 'bot' — match both.
+    expect(firstBotIdx, 'the bot turn persisted').toBeGreaterThanOrEqual(0);
+    expect(firstUserIdx).toBeLessThan(firstBotIdx);
   });
 });

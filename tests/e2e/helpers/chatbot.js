@@ -237,6 +237,12 @@ async function mockChatStream(page, chunks, metadata) {
   // every call site, so build the wire bytes once, not per interception.
   const body = sseBody(chunks, metadata);
   await page.route('**/queries/stream**', async (route) => {
+    // Only the app's POST carries a stream; a preflight (cross-origin dev
+    // posture) or stray GET must reach the network, not a CORS-less 200.
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
     try {
       await route.fulfill({ status: 200, contentType: 'text/event-stream', body });
     } catch {

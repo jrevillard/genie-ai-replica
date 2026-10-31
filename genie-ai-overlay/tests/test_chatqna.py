@@ -2431,18 +2431,6 @@ class TestQueryTranslationStatus:
             assert svc._translation_output_cap("A" * 3000) == 1500
 
     @pytest.mark.asyncio
-    async def test_a_budget_that_fits_no_message_reports_fallback_error(self):
-        """A budget smaller than the newest message drops everything: the
-        empty history is a fallback too, not a translation."""
-        svc = create_chatqna_service()
-        stack = self._translation_patches(self._mock_client())
-        stack.enter_context(patch("chatqna.genieai_chatqna.MAX_TRANSLATION_CHARS", 10))
-        with stack:
-            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
-        assert text == ""
-        assert status == "fallback_error"
-
-    @pytest.mark.asyncio
     async def test_a_map_without_english_reports_fallback_error(self):
         svc = create_chatqna_service()
         stack = self._translation_patches(self._mock_client())

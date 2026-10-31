@@ -322,8 +322,10 @@ function parseGitlabCiJobChanges(filePath, jobNames) {
     if (trimmed === '' || trimmed.startsWith('#')) continue;
     const indent = line.length - line.trimStart().length;
 
-    // Top-level key (indent 0) — starts a job (or ends the previous one)
-    if (indent === 0) {
+    // Top-level key (indent 0) — starts a job (or ends the previous one).
+    // Exception: an entry of a hidden anchor whose sequence sits at indent 0
+    // (valid YAML) would otherwise be mistaken for a top-level key line.
+    if (indent === 0 && !(listIndent === 0 && /^-\s+/.test(trimmed))) {
       const jobMatch = trimmed.match(/^([\w:.-]+):\s*(?:&[\w-]+)?\s*$/);
       currentJob = jobMatch ? jobMatch[1] : null;
       listIndent = jobMatch && currentJob.startsWith('.') ? 0 : null;

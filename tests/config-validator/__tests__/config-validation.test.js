@@ -2248,8 +2248,8 @@ describe('e2e merge-train changes filters (#1264)', () => {
 
   // Section of the file from a top-level key to the next one. The boundary
   // matches a top-level KEY line only — a column-0 comment inside the job
-  // body is valid YAML there and must not truncate the section. Column-0
-  // comment lines are stripped entirely: they are layout between jobs and
+  // body is valid YAML there and must not truncate the section. Comment
+  // lines are stripped entirely: they are layout, not configuration, and
   // must not leak literals (a path, a condition) into the assertions below.
   const sectionOf = (job) => {
     const start = content.indexOf(`\n${job}:`);
@@ -2259,7 +2259,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
     const section = end === -1 ? rest : rest.slice(0, end + 1);
     return section
       .split('\n')
-      .filter((line) => !line.startsWith('#'))
+      .filter((line) => !line.trimStart().startsWith('#'))
       .join('\n');
   };
 
@@ -2296,11 +2296,15 @@ describe('e2e merge-train changes filters (#1264)', () => {
   });
 
   test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {
+    // The invariant exists because of this hard needs — pin it too.
+    expect(sectionOf('e2e:playwright')).toContain('needs: [e2e:integration]');
     for (const job of E2E_JOBS) {
       expect(sectionOf(job)).toContain('paths: *e2e_merge_train_changes');
     }
     // The line parser cannot see through the alias; an empty parse proves
-    // e2e:playwright carries no inline changes: entries beside it.
+    // e2e:playwright carries no block-form changes: entries beside it. Any
+    // rewrite that drops the alias text fails the toContain above, so flow
+    // or list-item rewrites are caught either way.
     expect(filters.get('e2e:playwright')).toEqual([]);
   });
 
@@ -2369,10 +2373,10 @@ describe('parseGitlabCiJobChanges', () => {
       '  rules:',
       "    - if: '$X'",
       '      changes:',
-      '        - tests/e2e/okf/**/*  # not executed yet (MR2 wires the specs)'
+      '        - tests/x/**/*  # not executed yet (wired by a later MR)'
     ]);
     const parsed = parseGitlabCiJobChanges(file, ['job-a']);
-    expect(parsed.get('job-a')).toEqual(['tests/e2e/okf/**/*']);
+    expect(parsed.get('job-a')).toEqual(['tests/x/**/*']);
   });
 
   test('a changes: key carrying a trailing comment still starts a block', () => {
@@ -2407,6 +2411,23 @@ describe('parseGitlabCiJobChanges', () => {
       '.shared_changes: &shared_changes',
       '  - tests/a/**/*',
       '  - tests/b/**/*  # trailing comment',
+      '',
+      'job-a:',
+      '  rules:',
+      "    - if: '$X'",
+      '      changes:',
+      '        paths: *shared_changes'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['.shared_changes', 'job-a']);
+    expect(parsed.get('.shared_changes')).toEqual(['tests/a/**/*', 'tests/b/**/*']);
+    expect(parsed.get('job-a')).toEqual([]);
+  });
+
+  test('a hidden anchor whose sequence sits at indent 0 still parses', () => {
+    const file = writeTempCi([
+      '.shared_changes: &shared_changes',
+      '- tests/a/**/*',
+      '- tests/b/**/*',
       '',
       'job-a:',
       '  rules:',

@@ -3071,17 +3071,20 @@ test:flutter:
 #     package.json, package-lock.json and playwright.config.js (see
 #     .e2e_web_base before_script + cache keys).
 #   - e2e:integration deploys the stack from docker-compose.yaml seeded by
-#     the env template (cp env .env).
-# tests/e2e/okf/ is not executed yet (MR2 wires the OKF specs into the
-# script — see .e2e_web_base script comment) but stays listed so those MRs
-# still get train coverage. Enforced by tests/config-validator.
+#     the env template (cp env .env); the stack also bind-mounts
+#     configs/keycloak/themes/ and configs/otel/otel-collector-config.yaml
+#     straight from this checkout.
+# tests/e2e/okf/ is deliberately NOT listed: the OKF specs are not executed
+# until MR2 wires them into the script (see .e2e_web_base script comment),
+# and listing unexecuted paths only buys 30-minute train jobs that test
+# nothing about the change — re-add the entry in MR2. Enforced by
+# tests/config-validator.
 .e2e_merge_train_changes: &e2e_merge_train_changes
   - components/gov-chat-frontend/**/*
   - components/gov-chat-backend/**/*
   - components/document-repository/**/*
   - tests/e2e/chatbot/**/*
   - tests/e2e/documents/**/*
-  - tests/e2e/okf/**/*
   - tests/e2e/helpers/**/*
   - tests/e2e/fixtures/**/*
   - tests/e2e/theme-runtime-config.spec.js
@@ -3090,6 +3093,8 @@ test:flutter:
   - package-lock.json
   - docker-compose.yaml
   - env
+  - configs/keycloak/themes/**/*
+  - configs/otel/otel-collector-config.yaml
   - .gitlab-ci.yml
 
 # Patrol E2E tests — DinD emulator (shared with scheduled:e2e-mobile)

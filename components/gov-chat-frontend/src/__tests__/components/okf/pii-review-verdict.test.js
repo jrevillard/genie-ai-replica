@@ -127,6 +127,36 @@ describe('isAckCurrent — a stale ack must not render as a completed review', (
     ).toBe(PII_UNREVIEWED);
   });
 
+  // Round 16, #80121: the two stamps come from different writers (an ISO
+  // string vs a numeric epoch). Their RAW STRING comparison is meaningless
+  // ('2026…' vs '1729…' lexicographic order is noise) and the old code let
+  // that noise decide the PII gate — comparing PARSED instants, and failing
+  // CLOSED on anything unparseable, is the whole point of the fix.
+  it('compares PARSED instants: a numeric-epoch ack newer than an ISO scan is CURRENT', () => {
+    const scanAt = '2026-10-13T09:00:00.000Z'; // Date.parse → 1791910800000
+    const newerEpochMs = Date.parse(scanAt) + 60_000;
+    const ack = { by: 'steward@itu', at: newerEpochMs, flagged_concepts: 3 };
+    expect(isAckCurrent(ack, 3, scanAt)).toBe(true);
+    const olderEpochMs = Date.parse(scanAt) - 60_000;
+    expect(isAckCurrent({ ...ack, at: olderEpochMs }, 3, scanAt)).toBe(false);
+  });
+
+  it('a numeric-epoch SCAN stamp is parsed too, not string-compared', () => {
+    const scanEpochMs = Date.parse('2026-10-13T09:00:00.000Z');
+    const ack = { by: 'steward@itu', at: '2026-10-13T10:00:00.000Z', flagged_concepts: 2 };
+    expect(isAckCurrent(ack, 2, scanEpochMs)).toBe(true);
+    // Lexicographically '2026-…' vs the epoch digits is noise — the string
+    // comparison could not be trusted in either direction.
+    expect(isAckCurrent({ ...ack, at: '2026-10-13T08:00:00.000Z' }, 2, scanEpochMs)).toBe(false);
+  });
+
+  it('an unparseable stamp on either side fails CLOSED (not current)', () => {
+    const ack = { by: 'steward@itu', at: 'not-a-date', flagged_concepts: 2 };
+    expect(isAckCurrent(ack, 2, '2026-10-13T09:00:00.000Z')).toBe(false);
+    const goodAck = { by: 'steward@itu', at: '2026-10-13T10:00:00.000Z', flagged_concepts: 2 };
+    expect(isAckCurrent(goodAck, 2, 'garbage')).toBe(false);
+  });
+
   it('rejects a malformed / missing ack rather than defaulting to current', () => {
     expect(isAckCurrent(null, 2, null)).toBe(false);
     expect(isAckCurrent({}, 2, null)).toBe(false);

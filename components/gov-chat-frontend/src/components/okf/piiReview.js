@@ -95,7 +95,22 @@ export function isAckCurrent(ack, hitCount, scannedAt) {
   // the scan found now describes a different set of pages.
   if (flagged !== Number(hitCount)) return false;
   // An acknowledgement older than the scan is a review of a previous scan.
-  if (scannedAt && ack.at && String(ack.at) < String(scannedAt)) return false;
+  // Compare PARSED instants, never the raw strings (round 16, #80121): the
+  // two sides come from different writers (an ISO stamp vs a numeric epoch
+  // serializes to '2026…' vs '1729…', whose lexicographic order is
+  // meaningless) — and a meaningless comparison here fails OPEN on the PII
+  // gate. Anything unparseable also fails CLOSED (not current).
+  if (scannedAt && ack.at) {
+    const toMs = (v) => {
+      if (typeof v === 'number' && Number.isFinite(v)) return v; // raw epoch millis
+      const t = Date.parse(v);
+      return Number.isFinite(t) ? t : null;
+    };
+    const ackMs = toMs(ack.at);
+    const scanMs = toMs(scannedAt);
+    if (ackMs === null || scanMs === null) return false;
+    if (ackMs < scanMs) return false;
+  }
   return true;
 }
 

@@ -507,11 +507,32 @@ describe('updateLabels / fetchRepoMetrics / reingestFailed / requestRetract', ()
 // ─── PII actions ───────────────────────────────────────────────────────────
 describe('PII actions', () => {
   it('rescanConceptPii forces {rescan:true}; start arms; poll reads', async () => {
+    // Round 16, #80119: the action now FETCHES the concept first and scans
+    // what it loaded — no content means NO scan (fail closed), never a
+    // meaningless 'clean' verdict on the meta row.
+    conceptService.get.mockResolvedValueOnce({ body: 'concept body text', frontmatter: { title: 'T' } });
     repoOkfService.scanConceptPii.mockResolvedValueOnce({ scanned: 1 });
     const store = buildStore();
     const res = await store.dispatch('okf/rescanConceptPii', { repoId: 'r1', conceptId: 'c1' });
     expect(res.ok).toBe(true);
-    expect(repoOkfService.scanConceptPii).toHaveBeenCalledWith('r1', 'c1', { rescan: true });
+    expect(repoOkfService.scanConceptPii).toHaveBeenCalledWith('r1', 'c1', {
+      rescan: true,
+      frontmatter: { title: 'T' },
+      body: 'concept body text'
+    });
+    // Fail closed: unreadable content refuses to scan at all.
+    conceptService.get.mockResolvedValueOnce(null);
+    expect(await store.dispatch('okf/rescanConceptPii', { repoId: 'r1', conceptId: 'c1' })).toMatchObject({
+      ok: false,
+      code: 'CONCEPT_UNAVAILABLE'
+    });
+    expect(repoOkfService.scanConceptPii).toHaveBeenCalledTimes(1);
+    // A concept row without a string body is equally unscannable.
+    conceptService.get.mockResolvedValueOnce({ concept_id: 'c1' });
+    expect(await store.dispatch('okf/rescanConceptPii', { repoId: 'r1', conceptId: 'c1' })).toMatchObject({
+      ok: false,
+      code: 'CONCEPT_UNAVAILABLE'
+    });
     expect(await store.dispatch('okf/rescanConceptPii', { repoId: 'r1' })).toMatchObject({
       ok: false,
       code: 'VALIDATION_ERROR'
@@ -522,6 +543,7 @@ describe('PII actions', () => {
     expect(await store.dispatch('okf/getRepoPiiScan', { repoId: 'r1', scanKey: 's1' })).toMatchObject({ ok: true });
     const err = new Error('scan down');
     err.code = 'PII_SCAN_FAILED';
+    conceptService.get.mockResolvedValueOnce({ body: 'body text' });
     repoOkfService.scanConceptPii.mockRejectedValueOnce(err);
     expect(await store.dispatch('okf/rescanConceptPii', { repoId: 'r1', conceptId: 'c1' })).toMatchObject({
       ok: false,

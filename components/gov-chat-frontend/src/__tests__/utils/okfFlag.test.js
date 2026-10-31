@@ -2,11 +2,16 @@
 
 const { isOkfEnabled } = require('@/utils/okfFlag');
 
-// The OKF feature flag semantics, pinned (!622 review wave 1): the deployed
-// kill-switch is explicit '0' and the IMAGE defaults to it (fail-closed
-// entrypoint); absent config means a dev server with no runtime config and
-// stays enabled. The store registration and every gated surface read THIS
-// helper — these tests pin the exact truth table they all share.
+// The OKF feature flag semantics, pinned (!622 wave 1, revised round 16
+// #80120): the ONLY enabling value is the exact string '1' (what
+// compose/ansible write for OKF_ENABLED=1); the exact string '0' and ANY
+// OTHER recognized-but-unintended value disable (fail-closed — an operator
+// writing OKF_ENABLED=false must never silently get the Studio ON). No
+// APP_CONFIG at all is the one enabling arm beyond '1': a dev server
+// (`npm run serve`) ships no runtime config, and production ALWAYS has one
+// (the entrypoint writes it, defaulting okfEnabled to '0'). The store
+// registration and every gated surface read THIS helper — these tests pin
+// the exact truth table they all share.
 describe('okfFlag.isOkfEnabled', () => {
   afterEach(() => {
     delete window.APP_CONFIG;
@@ -22,14 +27,9 @@ describe('okfFlag.isOkfEnabled', () => {
     expect(isOkfEnabled()).toBe(false);
   });
 
-  it('absent key enables (a runtime config without the key)', () => {
+  it('a runtime config WITHOUT the key disables — the entrypoint always writes it, so absence means a foreign config writer (fail closed)', () => {
     window.APP_CONFIG = {};
-    expect(isOkfEnabled()).toBe(true);
-  });
-
-  it('null key enables', () => {
-    window.APP_CONFIG = { okfEnabled: null };
-    expect(isOkfEnabled()).toBe(true);
+    expect(isOkfEnabled()).toBe(false);
   });
 
   it('no APP_CONFIG at all enables (npm run serve has no runtime config)', () => {
@@ -37,11 +37,28 @@ describe('okfFlag.isOkfEnabled', () => {
     expect(isOkfEnabled()).toBe(true);
   });
 
-  it('any other value enables (boolean/number forms)', () => {
-    window.APP_CONFIG = { okfEnabled: 1 };
-    expect(isOkfEnabled()).toBe(true);
-    window.APP_CONFIG = { okfEnabled: true };
-    expect(isOkfEnabled()).toBe(true);
+  it('near-miss values fail CLOSED — an operator writing them must not get the Studio silently on (round 16, #80120)', () => {
+    for (const v of [
+      'false',
+      'FALSE',
+      'no',
+      'off',
+      ' 0',
+      '0 ',
+      'true',
+      'yes',
+      '',
+      '01',
+      1,
+      0,
+      true,
+      false,
+      null,
+      undefined
+    ]) {
+      window.APP_CONFIG = { okfEnabled: v };
+      expect(isOkfEnabled()).toBe(false);
+    }
   });
 
   it('re-reads on every call (no import-time capture)', () => {

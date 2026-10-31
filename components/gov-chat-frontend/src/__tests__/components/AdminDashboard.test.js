@@ -2188,17 +2188,19 @@ describe('AdminDashboard', () => {
 
     it('delete: 403 BUNDLE_PROTECTED surfaces the verbatim backend message', async () => {
       const documentFileService = require('../../services/documentFileService');
-      // Simulate the 403 shape doc-repo returns for bundles
+      // httpService rejects with the PARSED envelope {status, statusText,
+      // data, message} — there is no `.response` on it (round 16, #80118).
+      // The old mock used the axios shape and so exercised a dead branch.
       documentFileService.deleteMultipleFiles.mockRejectedValueOnce({
-        response: {
-          status: 403,
-          data: {
-            success: false,
-            code: 'BUNDLE_PROTECTED',
-            error: 'Bundle zips are managed by the OKF lifecycle and cannot be deleted from document management',
-            message: 'Bundle zip "x-1" is owned by the OKF repository lifecycle.'
-          }
-        }
+        status: 403,
+        statusText: 'Forbidden',
+        data: {
+          success: false,
+          code: 'BUNDLE_PROTECTED',
+          error: 'Bundle zips are managed by the OKF lifecycle and cannot be deleted from document management',
+          message: 'Bundle zip "x-1" is owned by the OKF repository lifecycle.'
+        },
+        message: 'Bundle zip "x-1" is owned by the OKF repository lifecycle.'
       });
       const wrapper = createAdminDashboardWrapper();
       wrapper.vm.documents = [{ _key: 'x', file_id: 'x-1', dataprep: { status: 'pending' } }];
@@ -2212,6 +2214,28 @@ describe('AdminDashboard', () => {
       expect(err).toBeTruthy();
       // Verbatim backend message — not the generic deleteQueuedError
       expect(err[1].message).toMatch(/OKF repository lifecycle/);
+    });
+
+    it('delete: a non-bundle envelope rejection falls back to the generic error', async () => {
+      const documentFileService = require('../../services/documentFileService');
+      documentFileService.deleteMultipleFiles.mockRejectedValueOnce({
+        status: 500,
+        statusText: 'Internal Server Error',
+        data: { success: false, code: 'INTERNAL', message: 'boom' },
+        message: 'boom'
+      });
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [{ _key: 'y', file_id: 'y-1', dataprep: { status: 'pending' } }];
+      wrapper.vm.selectedDocuments = ['y-1'];
+
+      await wrapper.vm.handleBatchAction('delete');
+      await wrapper.vm.confirmDialogState.onConfirm();
+      await new Promise((r) => setTimeout(r, 0));
+
+      const err = mockEventBusEmit.mock.calls.find((c) => c[0] === 'notification:show' && c[1].type === 'error');
+      expect(err).toBeTruthy();
+      // code !== BUNDLE_PROTECTED → the generic branch, never the raw 'boom'
+      expect(err[1].message).toMatch(/error occurred during the batch deletion/i);
     });
 
     it('ingest all-failure: keeps failed selections, error toast, real failureCount', async () => {

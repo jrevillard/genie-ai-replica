@@ -965,6 +965,12 @@ export default {
   },
   data() {
     return {
+      // Cancel token for every Testing-Lab poll this panel starts (round 16,
+      // #80124): the store's pollJob checks it each tick, so unmounting the
+      // panel stops the client loop within one cadence. The SERVER job is
+      // untouched — reopening the Lab re-adopts it (ragasAdoptRun /
+      // ragasAdoptGeneration).
+      pollSignal: { aborted: false },
       showHelp: false,
       showGuide: false,
       repoChoices: [],
@@ -1604,6 +1610,12 @@ export default {
     if (this.initialSuiteKey) this.loadSuite(this.initialSuiteKey);
     else this.loadLatest();
   },
+  beforeUnmount() {
+    // Stop every poll this panel owns (round 16, #80124) — without this, a
+    // closed Lab kept polling the gateway every 2s for up to the 24h UI
+    // horizon. The jobs keep running server-side; the Lab re-adopts them.
+    this.pollSignal.aborted = true;
+  },
   methods: {
     /** Coarse human duration for ETAs and elapsed clocks. Type-safe: the
      * progress payload is server JSON that evolves — a malformed eta must
@@ -2034,6 +2046,7 @@ export default {
           repoId: this.repo && this.repo.repo_id,
           suiteKey,
           runKey: running._key,
+          signal: this.pollSignal,
           onProgress: (p) => {
             this.runProgress = p;
           }
@@ -2043,7 +2056,8 @@ export default {
             this.runDoc = res.result;
             this.refreshHistory();
             this.$emit('changed');
-          } else {
+          } else if (res.code !== 'POLL_ABORTED') {
+            // POLL_ABORTED means this panel went away — nothing to show.
             this.error = res.message;
           }
         })
@@ -2064,6 +2078,7 @@ export default {
         .dispatch('okf/ragasAdoptGeneration', {
           repoId: this.repo && this.repo.repo_id,
           suiteKey,
+          signal: this.pollSignal,
           onProgress: (p) => {
             this.genProgress = p;
           }
@@ -2072,7 +2087,7 @@ export default {
           if (res.ok) {
             this.suite = res.result;
             this.$emit('changed');
-          } else {
+          } else if (res.code !== 'POLL_ABORTED') {
             this.error = res.message;
           }
         })
@@ -2109,6 +2124,7 @@ export default {
             judge_config_key: this.genConfigKey || undefined,
             judge_model: this.genConfigKey ? this.genModel || undefined : undefined
           },
+          signal: this.pollSignal,
           onStarted: (suiteKey) => {
             this.generatingKey = suiteKey;
           },
@@ -2121,7 +2137,7 @@ export default {
           this.$emit('changed');
         } else if (res.code === 'GENERATION_IN_FLIGHT') {
           adopted = await this.adoptRunningGeneration();
-        } else {
+        } else if (res.code !== 'POLL_ABORTED') {
           this.error = res.message;
         }
       } finally {
@@ -2260,6 +2276,7 @@ export default {
           // 8-7: explicit judge pick ('' fields simply omit the override)
           judge_config_key: this.judgeConfigKey || undefined,
           judge_model: this.judgeConfigKey ? this.judgeModel || undefined : undefined,
+          signal: this.pollSignal,
           onStarted: (runKey) => {
             this.runningRunKey = runKey;
           },
@@ -2278,7 +2295,7 @@ export default {
           // The user stopped it — not a failure, and it must not read as one.
           // The finally block refreshes the history, so the row turns
           // 'cancelled' on its own.
-        } else {
+        } else if (res.code !== 'POLL_ABORTED') {
           this.error = res.message;
         }
       } finally {
@@ -2429,6 +2446,7 @@ export default {
             judge_config_key: this.rescoreConfigKey || undefined,
             judge_model: this.rescoreConfigKey && this.rescoreModel ? this.rescoreModel : undefined
           },
+          signal: this.pollSignal,
           onStarted: (newKey) => {
             this.runningRunKey = newKey;
             // The new row shows up in the history as a running re-score, so
@@ -2444,6 +2462,9 @@ export default {
             // The user stopped it — that is not a failure and must not read
             // as one. The history refresh in the finally block shows the row
             // as cancelled.
+          } else if (res.code === 'POLL_ABORTED') {
+            // The panel went away mid-poll — nothing to show, nothing to retry.
+            return;
           } else {
             this.error = res.message || this.translate('okf.ragas.rescore.failed', 'Re-scoring the run failed.');
             this.rescoreAsk = source; // back for a retry, with the same pick
@@ -2510,12 +2531,13 @@ export default {
           repoId: this.repo && this.repo.repo_id,
           suiteKey: this.suite.suite_key,
           runKey: this.runDoc && this.runDoc._key,
+          signal: this.pollSignal,
           onProgress: (p) => {
             this.explainProgress = p || null;
           }
         });
         if (res.ok) this.explainDoc = res.result;
-        else this.error = res.message;
+        else if (res.code !== 'POLL_ABORTED') this.error = res.message;
       } finally {
         this.explainBusy = false;
         this.explainProgress = null;

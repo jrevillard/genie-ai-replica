@@ -856,13 +856,18 @@ export default {
     okfEnabled() {
       return isOkfEnabled();
     },
-    /** Server-side crawl→OKF conversions for THIS file (plus any still
-     * in-flight — the user may have navigated between files). */
+    /** Server-side crawl→OKF conversions for THIS file ONLY (round 16,
+     * #80126): the old `|| !['done','failed'].includes(...)` arm admitted
+     * OTHER files' still-running conversions — the panel listed a different
+     * crawl's repo name and progress bar. Entries missing their conversion
+     * doc are skipped (the old filter dereferenced it and threw inside the
+     * computed, breaking the dialog's render), and the comparator is a
+     * proper three-way compare. */
     fileConversions() {
       const all = (this.$store.state && this.$store.state.okf && this.$store.state.okf.crawlConversions) || {};
       return Object.values(all)
-        .filter((c) => c.file_id === this.fileId || !['done', 'failed'].includes(c.conversion.status))
-        .sort((a, b) => (a.repo_id < b.repo_id ? -1 : 1));
+        .filter((c) => c && c.file_id === this.fileId && c.conversion && typeof c.conversion.status === 'string')
+        .sort((a, b) => (a.repo_id < b.repo_id ? -1 : a.repo_id > b.repo_id ? 1 : 0));
     },
     fileViewUrl() {
       if (!this.file) return null;
@@ -958,15 +963,18 @@ export default {
       const url = this.crawlJob && this.crawlJob.config && this.crawlJob.config.url;
       const crawlJobId = this.crawlJob && (this.crawlJob._key || this.crawlJob.crawl_job_id);
       if (!fileId) {
-        // No file to ingest from — land in the Studio with the seed URL as
-        // PREFILL ONLY (audit A6: the seed must never enter crawlSeeds, or it
-        // reaches draft.input.document_ids and Produce kicks a conversion
-        // against a filename string as a bogus file_id).
-        const seed = filename || url || '';
+        // No file to ingest from — land in the Studio empty-handed (round
+        // 16, #80132: the `seed` this branch used to dispatch was dead code
+        // — StudioTab.onCreateFromCrawl() takes no argument and builds the
+        // draft exclusively from okf/selection.crawlSeeds, which this branch
+        // sets to []. Audit A6 still stands: the seed must NEVER enter
+        // crawlSeeds, or it reaches draft.input.document_ids and Produce
+        // kicks a conversion against a filename string as a bogus file_id.
+        // So the honest behavior is: no prefill, no bogus seed on the wire.
         await this.$store.dispatch('okf/setSelection', { crawlSeeds: [] });
         window.dispatchEvent(
           new CustomEvent('okf:create-from-crawl', {
-            detail: { file_id: null, crawl_job_id: crawlJobId, seed }
+            detail: { file_id: null, crawl_job_id: crawlJobId }
           })
         );
         this.$emit('close');
@@ -2044,11 +2052,14 @@ export default {
 .okf-file-bundle-badge {
   font-size: var(--text-xs);
   font-weight: 500;
-  padding: 4px 10px;
+  padding: var(--space-xs) var(--space-sm); /* DS spacing scale (round 16, #80130) */
   border-radius: var(--radius-sm);
-  background: var(--accent-soft, rgba(59, 130, 246, 0.12));
-  color: var(--accent, #3b82f6);
-  border: 1px solid var(--accent, #3b82f6);
+  /* DS tokens only (round 16, #80130): --accent is theme-defined, and the
+     soft wash derives from it via color-mix (the established pattern) —
+     no hardcoded hex/rgba fallbacks. */
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  border: 1px solid var(--accent);
   letter-spacing: 0.02em;
 }
 .dialog-close-btn {
@@ -2199,7 +2210,7 @@ export default {
   transition: width 0.4s ease;
 }
 .conversion-error {
-  margin-top: 4px;
+  margin-top: var(--space-xs); /* DS spacing scale (round 16, #80130) */
   font-size: var(--text-xs);
   color: var(--danger);
   word-break: break-word;

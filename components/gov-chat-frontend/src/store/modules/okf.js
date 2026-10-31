@@ -112,6 +112,83 @@ function writeExpertModeToStorage(value) {
 /** NON-BLOCKING LOAD generation counter (see fetchConcepts). */
 let fetchGeneration = 0;
 
+/**
+ * THE bounded poll loop behind every Testing-Lab async action (round 16,
+ * #80124 — this replaces seven near-identical for(;;)+setTimeout copies).
+ *
+ * Contract, distilled from those seven loops (do not "simplify" any arm away):
+ *  - deadline: a UI horizon only. The server NEVER kills a healthy long job;
+ *    the timeout envelope says so and the job keeps running server-side.
+ *  - transient tolerance: a gateway blip (kong restart = 502) must not end
+ *    tracking — the server-side job completes regardless (live 2026-10-18
+ *    incident). Solid failure for 60 consecutive polls rethrows.
+ *  - signal: the component's cancel token ({aborted}). Checked before every
+ *    tick AND after every sleep, so an unmount stops the loop within one
+ *    cadence — the loop the old copies never had: a closed Lab kept polling
+ *    the API every 2s for up to the 24h horizon.
+ *
+ * @param {object} p
+ * @param {() => Promise<object>} p.fetchDoc     one poll attempt → job doc
+ * @param {number} [p.pollMs]                    cadence (default 2000)
+ * @param {number} [p.deadlineMs]                UI horizon (default 24h)
+ * @param {(doc: object) => boolean} [p.isRunning] keep-polling predicate
+ * @param {(progress: object) => void} [p.onProgress] live progress tap
+ * @param {{code: string, message: string}} p.timeout  horizon-exceeded envelope
+ * @param {{code: string, message: string}} p.failed   failed-status envelope
+ * @param {(doc: object) => object} p.done       terminal mapping (cancelled
+ *        branches and result-vs-payload differences live HERE, per action)
+ * @param {{aborted?: boolean}} [p.signal]       component cancel token
+ * @returns {Promise<{ok: boolean, code?: string, message?: string, result?: *}>}
+ */
+async function pollJob({
+  fetchDoc,
+  pollMs = 2000,
+  deadlineMs = 24 * 60 * 60 * 1000,
+  isRunning = (doc) => !doc || doc.status === 'running',
+  onProgress = null,
+  timeout,
+  failed,
+  done,
+  signal = null
+}) {
+  const deadline = Date.now() + deadlineMs;
+  let misses = 0;
+  for (;;) {
+    if (signal && signal.aborted) {
+      // The component went away — stop hammering the gateway. The job itself
+      // is untouched server-side; reopening the Lab re-adopts it.
+      return {
+        ok: false,
+        code: 'POLL_ABORTED',
+        message: 'Tracking stopped — the job keeps running server-side.'
+      };
+    }
+    if (Date.now() > deadline) return { ok: false, code: timeout.code, message: timeout.message };
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+    if (signal && signal.aborted) return { ok: false, code: 'POLL_ABORTED', message: 'Tracking stopped.' };
+    let doc;
+    try {
+      doc = await fetchDoc();
+      misses = 0;
+    } catch (err) {
+      if (++misses >= 60) throw err;
+      continue;
+    }
+    if (isRunning(doc)) {
+      if (onProgress && doc && doc.progress) onProgress(doc.progress);
+      continue;
+    }
+    if (doc && doc.status === 'failed') {
+      return {
+        ok: false,
+        code: (doc.error && doc.error.code) || failed.code,
+        message: (doc.error && doc.error.message) || failed.message
+      };
+    }
+    return done(doc);
+  }
+}
+
 const getters = {
   activeDraft: (state) => (repoId) => state.drafts[repoId] || null,
   repoById: (state) => (repoId) => state.reposById[repoId] || null,
@@ -1010,7 +1087,20 @@ const actions = {
   async rescanConceptPii(_ctx, { repoId, conceptId } = {}) {
     if (!repoId || !conceptId) return { ok: false, code: 'VALIDATION_ERROR', error: 'repoId + conceptId required' };
     try {
-      const result = await repoOkfService.scanConceptPii(repoId, conceptId, { rescan: true });
+      // FETCH THE CONTENT FIRST (round 16, #80119): scanConceptPii's own
+      // contract requires frontmatter+body — the server scans what it is
+      // given, so an empty body would write a meaningless verdict onto the
+      // meta row, and a 'clean' from an empty scan is a FALSE all-clear the
+      // publish gate then trusts. No content → no scan (fail closed).
+      const concept = await conceptService.get(repoId, conceptId);
+      if (!concept || typeof concept.body !== 'string') {
+        return { ok: false, code: 'CONCEPT_UNAVAILABLE', error: 'concept content could not be loaded — scan refused' };
+      }
+      const result = await repoOkfService.scanConceptPii(repoId, conceptId, {
+        rescan: true,
+        frontmatter: concept.frontmatter || {},
+        body: concept.body
+      });
       return { ok: true, result };
     } catch (err) {
       return {
@@ -1250,52 +1340,27 @@ const actions = {
    * Polling lives here rather than in the component so the dialog's existing
    * spinner and error handling stay untouched.
    */
-  async headSuiteExplainFailures(_ctx, { repoId, suiteKey } = {}) {
+  async headSuiteExplainFailures(_ctx, { repoId, suiteKey, signal } = {}) {
     try {
       const started = await headTestService.explainSuiteFailures(repoId, suiteKey);
       // Tolerate a synchronous server that answers 200 with the advice inline
       // (no run_key), so the frontend is not coupled to deploy order.
       if (!started || !started.run_key) return { ok: true, result: started };
-      const POLL_MS = 2000;
-      // A ceiling, so a wedged job surfaces as a readable error instead of an
-      // endless spinner. The doc keeps its state server-side regardless — this
-      // only stops the client waiting forever.
-      const DEADLINE_MS = 15 * 60 * 1000;
-      const deadline = Date.now() + DEADLINE_MS;
-      // A transient gateway failure must not end the explain — the server-side
-      // job completes regardless (#78747).
-      let explainMisses = 0;
-      for (;;) {
-        if (Date.now() > deadline) {
-          return {
-            ok: false,
-            code: 'EXPLAIN_TIMEOUT',
-            message:
-              'The explain is still running on the model host. Reopen the Lab later to see its result — nothing was lost.'
-          };
-        }
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        // Same transient tolerance as the generate/run polls (kong restart =
-        // 502 must not kill the tracking loop — the server-side job keeps
-        // running; review !622 round 10, #78747).
-        let doc = null;
-        try {
-          doc = await headTestService.getExplainFailures(repoId, suiteKey, started.run_key);
-          explainMisses = 0;
-        } catch (err) {
-          if (++explainMisses >= 60) throw err;
-          continue;
-        }
-        if (!doc || doc.status === 'running') continue;
-        if (doc.status === 'failed') {
-          return {
-            ok: false,
-            code: (doc.error && doc.error.code) || 'EXPLAIN_FAILED',
-            message: (doc.error && doc.error.message) || 'Explain failed'
-          };
-        }
-        return { ok: true, result: doc.payload };
-      }
+      // 15-min ceiling: a wedged job surfaces as a readable error instead of
+      // an endless spinner; the doc keeps its state server-side regardless.
+      return await pollJob({
+        fetchDoc: () => headTestService.getExplainFailures(repoId, suiteKey, started.run_key),
+        pollMs: 2000,
+        deadlineMs: 15 * 60 * 1000,
+        signal,
+        timeout: {
+          code: 'EXPLAIN_TIMEOUT',
+          message:
+            'The explain is still running on the model host. Reopen the Lab later to see its result — nothing was lost.'
+        },
+        failed: { code: 'EXPLAIN_FAILED', message: 'Explain failed' },
+        done: (doc) => ({ ok: true, result: doc.payload })
+      });
     } catch (err) {
       return {
         ok: false,
@@ -1375,54 +1440,28 @@ const actions = {
   /** Generate a benchmark suite (202 + store-side poll until the doc lands).
    * onStarted(suite_key) fires when the 202 returns so the UI can offer
    * Cancel mid-generation (David 2026-10-18 requirement). */
-  async ragasGenerate(_ctx, { repoId, options, onStarted, onProgress } = {}) {
+  async ragasGenerate(_ctx, { repoId, options, onStarted, onProgress, signal } = {}) {
     try {
       ensureServices();
       const started = await ragasService.generateSuite(repoId, options || {});
       if (!started || !started.suite_key) return { ok: true, result: started };
       if (typeof onStarted === 'function') onStarted(started.suite_key);
-      const POLL_MS = 2500;
       // The server NEVER kills a healthy long job (David 2026-10-18: never
-      // trash running work) — OKF_RAGAS_LONG_TIMEOUT_MS is only the
-      // unreachable-sidecar horizon. This UI horizon (24h) just bounds a
-      // left-open dialog; the job keeps running server-side and the
-      // timeout message says so.
-      const DEADLINE_MS = 24 * 60 * 60 * 1000;
-      const deadline = Date.now() + DEADLINE_MS;
-      // A transient gateway failure (kong restart = 502) must not kill the
-      // tracking loop — the server-side job keeps running regardless (live
-      // incident 2026-10-18). Give up only after ~2.5 min of solid failure.
-      let misses = 0;
-      for (;;) {
-        if (Date.now() > deadline) {
-          return {
-            ok: false,
-            code: 'GENERATION_TIMEOUT',
-            message: 'The generation is still running — reopen the Lab later; nothing was lost.'
-          };
-        }
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        let doc = null;
-        try {
-          doc = await ragasService.getSuite(repoId, started.suite_key);
-          misses = 0;
-        } catch (err) {
-          if (++misses >= 60) throw err;
-          continue;
-        }
-        if (!doc || doc.status === 'generating') {
-          if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
-          continue;
-        }
-        if (doc.status === 'failed') {
-          return {
-            ok: false,
-            code: (doc.error && doc.error.code) || 'GENERATION_FAILED',
-            message: (doc.error && doc.error.message) || 'Generation failed'
-          };
-        }
-        return { ok: true, result: doc };
-      }
+      // trash running work) — the 24h UI horizon only bounds a left-open
+      // dialog; the job keeps running server-side and the timeout says so.
+      return await pollJob({
+        fetchDoc: () => ragasService.getSuite(repoId, started.suite_key),
+        pollMs: 2500,
+        signal,
+        isRunning: (doc) => !doc || doc.status === 'generating',
+        onProgress: typeof onProgress === 'function' ? onProgress : null,
+        timeout: {
+          code: 'GENERATION_TIMEOUT',
+          message: 'The generation is still running — reopen the Lab later; nothing was lost.'
+        },
+        failed: { code: 'GENERATION_FAILED', message: 'Generation failed' },
+        done: (doc) => ({ ok: true, result: doc })
+      });
     } catch (err) {
       return {
         ok: false,
@@ -1489,7 +1528,7 @@ const actions = {
    * tracked and does not connect to the UI with a progress bar… I cannot stop
    * the re-scoring"). opts.onStarted receives the NEW run key — that is the
    * cancel target, not the source run's key. */
-  async ragasRescoreRun(_ctx, { repoId, suiteKey, runKey, payload, onProgress, onStarted } = {}) {
+  async ragasRescoreRun(_ctx, { repoId, suiteKey, runKey, payload, onProgress, onStarted, signal } = {}) {
     try {
       ensureServices();
       const started = await ragasService.rescoreRun(repoId, suiteKey, runKey, payload || {});
@@ -1504,44 +1543,21 @@ const actions = {
         };
       }
       if (typeof onStarted === 'function') onStarted(started.run_key);
-      const POLL_MS = 2000;
-      const DEADLINE_MS = 24 * 60 * 60 * 1000;
-      const deadline = Date.now() + DEADLINE_MS;
-      // Same gateway-blip tolerance as the run poll (~2 min at this cadence).
-      let misses = 0;
-      for (;;) {
-        if (Date.now() > deadline) {
-          return {
-            ok: false,
-            code: 'RUN_TIMEOUT',
-            message: 'The re-score is still executing on the server — reopen the Lab later to see its result.'
-          };
-        }
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        let doc = null;
-        try {
-          doc = await ragasService.getRun(repoId, suiteKey, started.run_key);
-          misses = 0;
-        } catch (err) {
-          if (++misses >= 60) throw err;
-          continue;
-        }
-        if (!doc || doc.status === 'running') {
-          if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
-          continue;
-        }
-        if (doc.status === 'failed') {
-          return {
-            ok: false,
-            code: (doc.error && doc.error.code) || 'RESCORE_FAILED',
-            message: (doc.error && doc.error.message) || 'Re-score failed'
-          };
-        }
-        if (doc.status === 'cancelled') {
-          return { ok: false, code: 'RUN_CANCELLED', message: 'Re-score cancelled by user', result: doc };
-        }
-        return { ok: true, result: doc };
-      }
+      return await pollJob({
+        fetchDoc: () => ragasService.getRun(repoId, suiteKey, started.run_key),
+        pollMs: 2000,
+        signal,
+        onProgress: typeof onProgress === 'function' ? onProgress : null,
+        timeout: {
+          code: 'RUN_TIMEOUT',
+          message: 'The re-score is still executing on the server — reopen the Lab later to see its result.'
+        },
+        failed: { code: 'RESCORE_FAILED', message: 'Re-score failed' },
+        done: (doc) =>
+          doc.status === 'cancelled'
+            ? { ok: false, code: 'RUN_CANCELLED', message: 'Re-score cancelled by user', result: doc }
+            : { ok: true, result: doc }
+      });
     } catch (err) {
       return {
         ok: false,
@@ -1623,7 +1639,10 @@ const actions = {
 
   /** Run the suite (202 + store-side poll with live progress). opts.onProgress
    * (a plain function, not serialized) receives each poll's {phase, done, total}. */
-  async ragasRun(_ctx, { repoId, suiteKey, metrics, judge_config_key, judge_model, onProgress, onStarted } = {}) {
+  async ragasRun(
+    _ctx,
+    { repoId, suiteKey, metrics, judge_config_key, judge_model, onProgress, onStarted, signal } = {}
+  ) {
     try {
       ensureServices();
       const body = { ...(metrics ? { metrics } : {}) };
@@ -1643,49 +1662,24 @@ const actions = {
         };
       }
       if (typeof onStarted === 'function') onStarted(started.run_key);
-      const POLL_MS = 2000;
-      // Judge-bound run — the server never times out a live job (see
-      // generateRagasSuite above); 24h bounds only this open dialog.
-      const DEADLINE_MS = 24 * 60 * 60 * 1000;
-      const deadline = Date.now() + DEADLINE_MS;
-      // Same gateway-blip tolerance as ragasGenerate (~2 min at this cadence).
-      let misses = 0;
-      for (;;) {
-        if (Date.now() > deadline) {
-          return {
-            ok: false,
-            code: 'RUN_TIMEOUT',
-            message: 'The run is still executing on the server — reopen the Lab later to see its result.'
-          };
-        }
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        let doc = null;
-        try {
-          doc = await ragasService.getRun(repoId, suiteKey, started.run_key);
-          misses = 0;
-        } catch (err) {
-          if (++misses >= 60) throw err;
-          continue;
-        }
-        if (!doc || doc.status === 'running') {
-          if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
-          continue;
-        }
-        if (doc.status === 'failed') {
-          return {
-            ok: false,
-            code: (doc.error && doc.error.code) || 'RUN_FAILED',
-            message: (doc.error && doc.error.message) || 'Run failed'
-          };
-        }
-        // A cancelled run is NOT a result (2026-10-21 review F4): the poll's
-        // own twin ragasAdoptRun handles this — without the branch a cancelled
-        // run resolved ok:true and rendered an empty results section.
-        if (doc.status === 'cancelled') {
-          return { ok: false, code: 'RUN_CANCELLED', message: 'Run cancelled by user', result: doc };
-        }
-        return { ok: true, result: doc };
-      }
+      return await pollJob({
+        fetchDoc: () => ragasService.getRun(repoId, suiteKey, started.run_key),
+        pollMs: 2000,
+        signal,
+        onProgress: typeof onProgress === 'function' ? onProgress : null,
+        timeout: {
+          code: 'RUN_TIMEOUT',
+          message: 'The run is still executing on the server — reopen the Lab later to see its result.'
+        },
+        failed: { code: 'RUN_FAILED', message: 'Run failed' },
+        // A cancelled run is NOT a result (2026-10-21 review F4) — without
+        // this branch a cancelled run resolved ok:true and rendered an empty
+        // results section.
+        done: (doc) =>
+          doc.status === 'cancelled'
+            ? { ok: false, code: 'RUN_CANCELLED', message: 'Run cancelled by user', result: doc }
+            : { ok: true, result: doc }
+      });
     } catch (err) {
       return {
         ok: false,
@@ -1699,40 +1693,27 @@ const actions = {
    * reopen (David 2026-10-18: refreshing must never orphan the UI from an
    * in-flight run — the run doc is the source of truth). Same poll loop and
    * envelope as ragasRun, minus the start call. */
-  async ragasAdoptRun(_ctx, { repoId, suiteKey, runKey, onProgress } = {}) {
+  async ragasAdoptRun(_ctx, { repoId, suiteKey, runKey, onProgress, signal } = {}) {
     try {
       ensureServices();
-      const POLL_MS = 2000;
-      const DEADLINE_MS = 24 * 60 * 60 * 1000;
-      const deadline = Date.now() + DEADLINE_MS;
-      // Same gateway-blip tolerance as ragasGenerate (~2 min at this cadence).
-      let misses = 0;
-      for (;;) {
-        if (Date.now() > deadline) {
-          return { ok: false, code: 'RUN_TIMEOUT', message: 'The run is still executing on the server.' };
-        }
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        let doc = null;
-        try {
-          doc = await ragasService.getRun(repoId, suiteKey, runKey);
-          misses = 0;
-        } catch (err) {
-          if (++misses >= 60) throw err;
-          continue;
-        }
-        if (!doc || doc.status === 'running') {
-          if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
-          continue;
-        }
-        if (doc.status === 'failed' || doc.status === 'cancelled') {
-          return {
-            ok: false,
-            code: (doc.error && doc.error.code) || 'RUN_FAILED',
-            message: (doc.error && doc.error.message) || 'Run failed'
-          };
-        }
-        return { ok: true, result: doc };
-      }
+      return await pollJob({
+        fetchDoc: () => ragasService.getRun(repoId, suiteKey, runKey),
+        pollMs: 2000,
+        signal,
+        onProgress: typeof onProgress === 'function' ? onProgress : null,
+        timeout: { code: 'RUN_TIMEOUT', message: 'The run is still executing on the server.' },
+        failed: { code: 'RUN_FAILED', message: 'Run failed' },
+        // Cancelled folds into failed here (adopt has no user-stop context —
+        // the run was started by an earlier session).
+        done: (doc) =>
+          doc.status === 'cancelled'
+            ? {
+                ok: false,
+                code: (doc.error && doc.error.code) || 'RUN_FAILED',
+                message: (doc.error && doc.error.message) || 'Run failed'
+              }
+            : { ok: true, result: doc }
+      });
     } catch (err) {
       return {
         ok: false,
@@ -1744,40 +1725,19 @@ const actions = {
 
   /** Adopt an ALREADY-GENERATING suite after a refresh/reopen — same poll
    * as ragasGenerate's tail; the generating envelope carries live progress. */
-  async ragasAdoptGeneration(_ctx, { repoId, suiteKey, onProgress } = {}) {
+  async ragasAdoptGeneration(_ctx, { repoId, suiteKey, onProgress, signal } = {}) {
     try {
       ensureServices();
-      const POLL_MS = 2500;
-      const DEADLINE_MS = 24 * 60 * 60 * 1000;
-      const deadline = Date.now() + DEADLINE_MS;
-      // Same gateway-blip tolerance as ragasGenerate (~2.5 min at this cadence).
-      let misses = 0;
-      for (;;) {
-        if (Date.now() > deadline) {
-          return { ok: false, code: 'GENERATION_TIMEOUT', message: 'The generation is still running server-side.' };
-        }
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        let doc = null;
-        try {
-          doc = await ragasService.getSuite(repoId, suiteKey);
-          misses = 0;
-        } catch (err) {
-          if (++misses >= 60) throw err;
-          continue;
-        }
-        if (!doc || doc.status === 'generating') {
-          if (typeof onProgress === 'function' && doc && doc.progress) onProgress(doc.progress);
-          continue;
-        }
-        if (doc.status === 'failed') {
-          return {
-            ok: false,
-            code: (doc.error && doc.error.code) || 'GENERATION_FAILED',
-            message: (doc.error && doc.error.message) || 'Generation failed'
-          };
-        }
-        return { ok: true, result: doc };
-      }
+      return await pollJob({
+        fetchDoc: () => ragasService.getSuite(repoId, suiteKey),
+        pollMs: 2500,
+        signal,
+        isRunning: (doc) => !doc || doc.status === 'generating',
+        onProgress: typeof onProgress === 'function' ? onProgress : null,
+        timeout: { code: 'GENERATION_TIMEOUT', message: 'The generation is still running server-side.' },
+        failed: { code: 'GENERATION_FAILED', message: 'Generation failed' },
+        done: (doc) => ({ ok: true, result: doc })
+      });
     } catch (err) {
       return {
         ok: false,
@@ -1946,51 +1906,24 @@ const actions = {
   },
 
   /** Explain failures (202 + store-side poll). */
-  async ragasExplain(_ctx, { repoId, suiteKey, runKey, onProgress } = {}) {
+  async ragasExplain(_ctx, { repoId, suiteKey, runKey, onProgress, signal } = {}) {
     try {
       ensureServices();
       const started = await ragasService.explainFailures(repoId, suiteKey, runKey ? { run_key: runKey } : {});
       if (!started || !started.run_key) return { ok: true, result: started };
-      const POLL_MS = 2000;
-      const DEADLINE_MS = 15 * 60 * 1000;
-      const deadline = Date.now() + DEADLINE_MS;
-      // A transient gateway failure must not end the explain — the
-      // server-side job completes regardless (#78747).
-      let explainMisses = 0;
-      for (;;) {
-        if (Date.now() > deadline) {
-          return {
-            ok: false,
-            code: 'EXPLAIN_TIMEOUT',
-            message: 'The explain is still running — reopen the Lab later; nothing was lost.'
-          };
-        }
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        // Same transient tolerance as the generate/run polls (#78747).
-        let doc = null;
-        try {
-          doc = await ragasService.getExplain(repoId, suiteKey, started.run_key);
-          explainMisses = 0;
-        } catch (err) {
-          if (++explainMisses >= 60) throw err;
-          continue;
-        }
-        if (!doc || doc.status === 'running') {
-          // Phase + elapsed from the server's explain-progress map — the
-          // advisor is ONE reasoning-judge call that can legitimately think
-          // for minutes; a dead button reads as broken (2026-10-21).
-          if (doc && doc.progress && typeof onProgress === 'function') onProgress(doc.progress);
-          continue;
-        }
-        if (doc.status === 'failed') {
-          return {
-            ok: false,
-            code: (doc.error && doc.error.code) || 'EXPLAIN_FAILED',
-            message: (doc.error && doc.error.message) || 'Explain failed'
-          };
-        }
-        return { ok: true, result: doc.payload };
-      }
+      return await pollJob({
+        fetchDoc: () => ragasService.getExplain(repoId, suiteKey, started.run_key),
+        pollMs: 2000,
+        deadlineMs: 15 * 60 * 1000,
+        signal,
+        onProgress: typeof onProgress === 'function' ? onProgress : null,
+        timeout: {
+          code: 'EXPLAIN_TIMEOUT',
+          message: 'The explain is still running — reopen the Lab later; nothing was lost.'
+        },
+        failed: { code: 'EXPLAIN_FAILED', message: 'Explain failed' },
+        done: (doc) => ({ ok: true, result: doc.payload })
+      });
     } catch (err) {
       return {
         ok: false,

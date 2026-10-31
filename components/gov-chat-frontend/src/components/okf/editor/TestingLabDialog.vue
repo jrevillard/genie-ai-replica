@@ -1408,6 +1408,10 @@ export default {
     return {
       tab: this.initialTab,
       busy: null,
+      // Cancel token for the explain-failures poll (round 16, #80124): the
+      // store's pollJob checks it each tick, so closing the Lab stops the
+      // client loop within one cadence. The server job is untouched.
+      pollSignal: { aborted: false },
       // 1-8g-x: live {phase, done, total} for the run progress bar.
       runProgress: null,
       error: '',
@@ -2074,6 +2078,12 @@ export default {
         }
       }
     }
+  },
+  beforeUnmount() {
+    // Stop the explain-failures poll when the Lab goes away (round 16,
+    // #80124) — the old loop kept polling every 2s for up to 15 min after
+    // the dialog closed. The server job is untouched.
+    this.pollSignal.aborted = true;
   },
   methods: {
     /** 1-8b: translated label for a head_claim token (floor | veto |
@@ -2796,7 +2806,8 @@ export default {
       const suiteKey = this.suite.suite_key;
       const res = await this.$store.dispatch('okf/headSuiteExplainFailures', {
         repoId: this.repo.repo_id,
-        suiteKey
+        suiteKey,
+        signal: this.pollSignal
       });
       this.explainFailuresLoading = false;
       if (epoch !== this.suiteEpoch || !this.suite || this.suite.suite_key !== suiteKey) {
@@ -2807,6 +2818,7 @@ export default {
         return;
       }
       if (!res.ok) {
+        if (res.code === 'POLL_ABORTED') return; // the Lab closed — nothing to show
         this.error = res.message || this.translate('okf.testingLab.error.explain', 'Explain failed');
         return;
       }

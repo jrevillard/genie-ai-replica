@@ -597,7 +597,11 @@ it('1-8c: batch advice — Explain failures renders add-all chips and saves them
   });
   await w.vm.onExplainFailures();
   await w.vm.$nextTick();
-  expect(dispatch).toHaveBeenCalledWith('okf/headSuiteExplainFailures', { repoId: 'r-1', suiteKey: 's1' });
+  // objectContaining: the payload also carries the poll cancel token (#80124).
+  expect(dispatch).toHaveBeenCalledWith(
+    'okf/headSuiteExplainFailures',
+    expect.objectContaining({ repoId: 'r-1', suiteKey: 's1' })
+  );
   expect(w.vm.batchTags).toEqual(['communicable-disease', 'hiv']);
   expect(w.element.textContent).toContain('both failures share the communicable-disease subject');
   expect(w.element.textContent).toContain('hiv prevention guideline');
@@ -1389,6 +1393,15 @@ it('1-8g-t: suite deletion requires the confirm dialog — cancel keeps, confirm
  * then rendered a confident empty state for a request that never ran.
  * ---------------------------------------------------------------------- */
 
+describe('poll cancel token (round 16, #80124)', () => {
+  it('unmounting the Lab aborts the signal the explain poll carries', async () => {
+    const w = await mountDialog(); // the suite's own factory
+    expect(w.vm.pollSignal.aborted).toBe(false);
+    w.unmount();
+    expect(w.vm.pollSignal.aborted).toBe(true);
+  });
+});
+
 describe('contended shared-busy slot: reads still dispatch', () => {
   // An UNRELATED token, deliberately not the read's own. The bug was that a
   // tag save ('save-tag') could swallow a history fetch; any token reproduces
@@ -1437,10 +1450,11 @@ describe('contended shared-busy slot: reads still dispatch', () => {
     w.vm.busy = CONTEND;
     dispatch.mockResolvedValueOnce({ ok: true, result: { suggested_tags: ['x'], failing_count: 1 } });
     await w.vm.onExplainFailures();
-    expect(dispatch).toHaveBeenCalledWith('okf/headSuiteExplainFailures', {
-      repoId: 'r-1',
-      suiteKey: 's1'
-    });
+    // objectContaining: the payload also carries the poll cancel token (#80124).
+    expect(dispatch).toHaveBeenCalledWith(
+      'okf/headSuiteExplainFailures',
+      expect.objectContaining({ repoId: 'r-1', suiteKey: 's1' })
+    );
     expect(w.vm.batchAdvice.suggested_tags).toEqual(['x']);
     expect(w.vm.busy).toBe(CONTEND);
     expect(w.vm.explainFailuresLoading).toBe(false);

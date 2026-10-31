@@ -424,10 +424,13 @@
                       {{ translate('admin.documents.title', 'Document Management') }}
                     </div>
                     <div class="card-actions">
-                      <!-- OKF-gated (!622 wave 1): Add-from-Link IS the
-                        crawl→OKF conversion entry — with the flag parked the
-                        button must not exist, not merely fail. -->
-                      <DsButton v-if="okfEnabled" variant="secondary" @click="addFromLink">
+                      <!-- NOT OKF-gated (round 16, #80117): scheduling a
+                        website crawl is a pre-existing main capability —
+                        the button rendered unconditionally on main. Only
+                        the crawl→OKF CONVERSION the dialog then offers is
+                        flag-gated (inside AddFromLinkDialog), so a parked
+                        deployment keeps its crawl entry. -->
+                      <DsButton variant="secondary" @click="addFromLink">
                         {{ translate('admin.documents.addLink', 'Add from Link') }}
                       </DsButton>
                       <DsButton variant="primary" @click="uploadFiles">
@@ -3644,12 +3647,13 @@ export default {
             } catch (error) {
               // BUNDLE_PROTECTED surfaces server-side as 403 — surface the
               // verbatim backend message so the steward knows the cause.
-              const code = error && error.response && error.response.data && error.response.data.code;
+              // httpService rejects with the PARSED envelope {status,
+              // statusText, data, message} — there is no `.response` on it
+              // (round 16, #80118: the axios-shape read left this branch
+              // dead and the steward got the generic error).
+              const code = error && error.data && (error.data.code || error.data.error);
               const msg =
-                (error &&
-                  error.response &&
-                  error.response.data &&
-                  (error.response.data.message || error.response.data.error)) ||
+                (error && error.data && (error.data.message || error.data.error)) ||
                 (error && error.message) ||
                 'unknown error';
               this.showNotification(
@@ -3688,6 +3692,12 @@ export default {
      * the event flagged so this relay never re-catches its own send. */
     async relayCreateFromCrawl(event) {
       if (event && event.__okfRelayed) return;
+      // Flag guard (round 16, #80125): the relay is registered
+      // unconditionally, but with the flag parked the Studio pane's target
+      // module is not registered — switching the tab there renders a dead
+      // pane. Today every SENDER happens to be gated, but the relay must
+      // carry its own guard; the protection must not depend on the callers.
+      if (!isOkfEnabled()) return;
       const detail = (event && event.detail) || {};
       this.activeTab = 'studio';
       await this.$nextTick();

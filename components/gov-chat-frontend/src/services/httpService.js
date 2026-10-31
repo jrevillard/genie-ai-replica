@@ -208,13 +208,21 @@ class HttpService {
         }
 
         // The refresh yielded no usable token, or the retry came back 401 —
-        // the only two cases where the session may genuinely be gone. Check the
-        // STORED user before discarding it.
-        const user = await keycloakAuthService.getUser();
-        if (!user || user.expired) {
-          if (typeof window !== 'undefined') {
-            await keycloakAuthService.login();
+        // the only two cases where the session may genuinely be gone. Check
+        // the STORED user before discarding it. The WHOLE escalation is
+        // guarded (round 16, #80131): a storage/session failure inside
+        // getUser()/login() must not replace the intended 401 rejection
+        // with an unrelated error shape — the caller always gets the
+        // {status, statusText, data, message} envelope below.
+        try {
+          const user = await keycloakAuthService.getUser();
+          if (!user || user.expired) {
+            if (typeof window !== 'undefined') {
+              await keycloakAuthService.login();
+            }
           }
+        } catch (escalationError) {
+          console.error('[HttpService] Session escalation failed:', escalationError.message);
         }
 
         return Promise.reject({

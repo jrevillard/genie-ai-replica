@@ -178,6 +178,27 @@ describe('okf store — ragas poll loops survive transient gateway failures', ()
     expect(mockGetRun).toHaveBeenCalledTimes(2);
   });
 
+  // Round 20 (#79900): adopt used to fold `cancelled` into the failure arm —
+  // adopting a run someone deliberately stopped rendered "Run failed", the
+  // operator retried a run that intentionally never happened, and telemetry
+  // counted a phantom RUN_FAILED. With no doc.error on the mock, the OLD
+  // branch answered RUN_FAILED here — this is the red/green proof.
+  it('ragasAdoptRun answers RUN_CANCELLED for a deliberately stopped run (#79900)', async () => {
+    mockGetRun
+      .mockResolvedValueOnce({ run_key: 'rr-1', status: 'running' })
+      .mockResolvedValue({ run_key: 'rr-1', status: 'cancelled' });
+
+    const p = buildStore().dispatch('okf/ragasAdoptRun', {
+      repoId: 'r-1',
+      suiteKey: 'rs-1',
+      runKey: 'rr-1'
+    });
+    await jest.advanceTimersByTimeAsync(2000 * 2);
+    const res = await p;
+
+    expect(res).toMatchObject({ ok: false, code: 'RUN_CANCELLED' });
+  });
+
   it('a server-side failure still surfaces (tolerance must not mask real failures)', async () => {
     mockGenerateSuite.mockResolvedValue({ suite_key: 'rs-1' });
     mockGetSuite.mockResolvedValue({

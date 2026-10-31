@@ -548,15 +548,19 @@ describe('publish — mint + bundle export + serving cleared', () => {
     fingerprintOfCurrentVersion.mockResolvedValueOnce('same-fp');
     mockDb.query.mockResolvedValueOnce({ all: async () => [3] });
     exportBundle.mockResolvedValueOnce({
-      file_id: 'file-bundle-19',
+      file_id: 'file-bundle-18',
       file_name: 'demo.zip',
-      bundle_version: 19
+      bundle_version: 18
     });
-    // The guard falls through: the publish COMPLETES (mint v19 + export)
-    // instead of deadlocking on PUBLISH_NO_CHANGES.
+    // The guard falls through: the publish COMPLETES instead of deadlocking on
+    // PUBLISH_NO_CHANGES. Round 20, #80801: it completes THE SAME version —
+    // v18's manifest already exists (it recorded the matched fingerprint), so
+    // the retry re-exports v18's bundle; minting v19 would strand v18 as a
+    // manifest with no bundle and burn two version numbers on one publish.
     await lifecycleService.transition(REPO, 'publish', {});
-    expect(mintVersion).toHaveBeenCalled();
-    expect(exportBundle).toHaveBeenCalled();
+    expect(mintVersion).not.toHaveBeenCalled();
+    expect(exportBundle).toHaveBeenCalledWith(expect.objectContaining({ version: 18 }), expect.anything());
+    expect(mockDb._stores.okf_repositories[REPO].lifecycle_state).toBe('publish');
   });
 
   test('changed content republishes normally', async () => {

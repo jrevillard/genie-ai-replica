@@ -220,9 +220,15 @@ const headTestService = {
     let misses = 0;
     for (;;) {
       if (Date.now() > deadline) {
-        throw new Error(
+        // ADVISOR_TIMEOUT (#80805): the code lets the Lab's error path pick
+        // the translated sentence; the English message stays as the fallback
+        // for callers that render it verbatim. Same shape as the failed-doc
+        // throw below (RECOMMEND_FAILED).
+        const e = new Error(
           'The advisor is still running on the model host. Reopen the Lab later to see its result — nothing was lost.'
         );
+        e.code = 'ADVISOR_TIMEOUT';
+        throw e;
       }
       await new Promise((resolve) => setTimeout(resolve, POLL_MS));
       let doc;

@@ -898,6 +898,7 @@ import DsInfoTip from '../../ds/InfoTip.vue';
 import DsDialog from '../../ds/Dialog.vue';
 import RagasGuideDialog from './RagasGuideDialog.vue';
 import translateMixin from '../../../mixins/translateMixin';
+import { translateLabError } from '../../../services/okfRepoOps';
 import { useChartTheme } from '@/composables/useChartTheme';
 
 const DEFAULT_METRICS = ['faithfulness', 'context_precision', 'context_recall', 'answer_relevancy'];
@@ -2058,7 +2059,8 @@ export default {
             this.$emit('changed');
           } else if (res.code !== 'POLL_ABORTED') {
             // POLL_ABORTED means this panel went away — nothing to show.
-            this.error = res.message;
+            // #80805: the store's poll envelopes carry okf.labErrors.* keys.
+            this.error = translateLabError(res.message, this.translate);
           }
         })
         .finally(() => {
@@ -2088,7 +2090,8 @@ export default {
             this.suite = res.result;
             this.$emit('changed');
           } else if (res.code !== 'POLL_ABORTED') {
-            this.error = res.message;
+            // #80805: the store's poll envelopes carry okf.labErrors.* keys.
+            this.error = translateLabError(res.message, this.translate);
           }
         })
         .finally(() => {
@@ -2138,7 +2141,8 @@ export default {
         } else if (res.code === 'GENERATION_IN_FLIGHT') {
           adopted = await this.adoptRunningGeneration();
         } else if (res.code !== 'POLL_ABORTED') {
-          this.error = res.message;
+          // #80805: the store's poll envelopes carry okf.labErrors.* keys.
+          this.error = translateLabError(res.message, this.translate);
         }
       } finally {
         if (!adopted) {
@@ -2296,7 +2300,8 @@ export default {
           // The finally block refreshes the history, so the row turns
           // 'cancelled' on its own.
         } else if (res.code !== 'POLL_ABORTED') {
-          this.error = res.message;
+          // #80805: the store's poll envelopes carry okf.labErrors.* keys.
+          this.error = translateLabError(res.message, this.translate);
         }
       } finally {
         this.runBusy = false;
@@ -2466,7 +2471,11 @@ export default {
             // The panel went away mid-poll — nothing to show, nothing to retry.
             return;
           } else {
-            this.error = res.message || this.translate('okf.ragas.rescore.failed', 'Re-scoring the run failed.');
+            // #80805: RESCORE_NOT_STARTED/RUN_TIMEOUT/RESCORE_FAILED messages
+            // are okf.labErrors.* keys; a server message passes through.
+            this.error =
+              translateLabError(res.message, this.translate) ||
+              this.translate('okf.ragas.rescore.failed', 'Re-scoring the run failed.');
             this.rescoreAsk = source; // back for a retry, with the same pick
           }
           return;
@@ -2537,7 +2546,8 @@ export default {
           }
         });
         if (res.ok) this.explainDoc = res.result;
-        else if (res.code !== 'POLL_ABORTED') this.error = res.message;
+        // #80805: EXPLAIN_TIMEOUT/EXPLAIN_FAILED messages are okf.labErrors.* keys.
+        else if (res.code !== 'POLL_ABORTED') this.error = translateLabError(res.message, this.translate);
       } finally {
         this.explainBusy = false;
         this.explainProgress = null;

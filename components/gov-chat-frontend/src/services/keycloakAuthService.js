@@ -17,6 +17,57 @@ let unsubscribeSilentRenewError = null;
 /** The ONE in-flight silent renew, shared by every caller (see signinSilent). */
 let renewInFlight = null;
 
+// ── CROSS-TAB RENEW LEASE (round 20, #80800) ─────────────────────────────────
+// The in-tab `renewInFlight` promise is one per JavaScript realm — one per
+// TAB — so the two-tab race the root-cause comment names stayed
+// unserialised: with refresh_token_max_reuse=0 the second tab's concurrent
+// renew reuses a rotated token, is rejected, and after 3 such failures the
+// escalation path forces the very logout this fix exists to remove. The
+// lease makes ONE tab renew while the others wait for the shared oidc user
+// store to carry the fresh tokens. TTL-bounded: a holder that dies without
+// releasing is taken over after RENEW_LEASE_TTL_MS; a waiter that waits
+// longer than that runs its own renew (the dead holder's attempt went
+// nowhere). Storage failures degrade to the in-tab serialisation alone.
+const RENEW_LEASE_KEY = 'genie.renew.lease';
+const RENEW_DONE_KEY = 'genie.renew.done';
+const RENEW_LEASE_TTL_MS = 20000;
+const RENEW_WAIT_POLL_MS = 250;
+const RENEW_TAB_ID = String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8);
+
+function leaseHeldByOther() {
+  try {
+    const raw = window.localStorage.getItem(RENEW_LEASE_KEY);
+    if (!raw) return false;
+    const lease = JSON.parse(raw);
+    return !!(lease && lease.tab !== RENEW_TAB_ID && Date.now() - lease.at < RENEW_LEASE_TTL_MS);
+  } catch {
+    return false;
+  }
+}
+
+function acquireRenewLease() {
+  if (leaseHeldByOther()) return false;
+  try {
+    window.localStorage.setItem(RENEW_LEASE_KEY, JSON.stringify({ tab: RENEW_TAB_ID, at: Date.now() }));
+    // Re-read: another tab may have written between our check and our set —
+    // only the LAST writer keeps the lease (read-back fences the race).
+    const raw = window.localStorage.getItem(RENEW_LEASE_KEY);
+    const lease = raw ? JSON.parse(raw) : null;
+    return !lease || lease.tab === RENEW_TAB_ID;
+  } catch {
+    return true; // storage unavailable → the in-tab promise is all we have
+  }
+}
+
+function releaseRenewLease() {
+  try {
+    const raw = window.localStorage.getItem(RENEW_LEASE_KEY);
+    if (!raw || (JSON.parse(raw) || {}).tab === RENEW_TAB_ID) window.localStorage.removeItem(RENEW_LEASE_KEY);
+  } catch {
+    /* best-effort */
+  }
+}
+
 /**
  * Initialize the OIDC service — creates UserManager, checks for existing session,
  * and registers silent renew event listeners.
@@ -202,18 +253,60 @@ async function signinSilent() {
   // concurrent renews therefore race and kill the session they share. Measured
   // live: 280 token POSTs in 59 seconds from two tabs, 5 rejected with
   // "Session not active", then a forced logout. One shared in-flight promise
-  // means concurrent callers wait for ONE refresh instead of racing.
+  // means concurrent callers wait for ONE refresh instead of racing — WITHIN
+  // this tab; across tabs the localStorage lease above serialises it further
+  // (round 20, #80800: the module-scoped promise alone left the two-tab
+  // race — the measured one — unserialised).
   if (renewInFlight) return renewInFlight;
   renewInFlight = (async () => {
     const manager = getUserManager();
+    // EVERY exit path — adopt, own-renew, rejection — must clear renewInFlight
+    // and release the lease: an adopt-path return that skips the finally
+    // would pin renewInFlight to a resolved promise forever, making every
+    // later renew in this tab return the stale one (caught by the lease
+    // tests).
     try {
+      const startedAt = Date.now();
+      let held = acquireRenewLease();
+      while (!held) {
+        if (Date.now() - startedAt > RENEW_LEASE_TTL_MS + RENEW_WAIT_POLL_MS) {
+          // The holder's lease is stale/dead — its renew went nowhere. Run
+          // our own (acquireRenewLease takes over an expired lease).
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, RENEW_WAIT_POLL_MS));
+        // After each wake: FIRST look for the holder's completion (the shared
+        // oidc user store already carries the fresh tokens), and only then
+        // try to take the lease — checking the lease first would grab it the
+        // moment the holder releases, without ever reading the done marker.
+        let doneAt = 0;
+        try {
+          doneAt = Number(window.localStorage.getItem(RENEW_DONE_KEY) || 0);
+        } catch {
+          /* storage unavailable — fall through and try to acquire */
+        }
+        if (doneAt >= startedAt) {
+          const shared = await manager.getUser();
+          if (shared && !shared.expired) {
+            currentUser = shared;
+            return shared;
+          }
+        }
+        held = acquireRenewLease();
+      }
       const user = await manager.signinSilent();
       if (user) currentUser = user;
+      try {
+        window.localStorage.setItem(RENEW_DONE_KEY, String(Date.now()));
+      } catch {
+        /* best-effort — waiters fall back to their own renew */
+      }
       return user;
     } catch (error) {
       console.error('[KeycloakAuth] Error during silent renew:', error.message);
       throw error;
     } finally {
+      releaseRenewLease();
       renewInFlight = null;
     }
   })();

@@ -217,7 +217,13 @@ export default {
       // repo_id stays as the fallback when the source was deleted.
       const src = this.repoById(cf.repo_id);
       const name = (src && src.name) || cf.name || cf.repo_id;
-      return cf.version != null ? `Cloned from ${name} · v${cf.version}` : `Cloned from ${name}`;
+      // i18n (#80805): RAW-lookup keys — the locale leaves carry the PLAIN
+      // {name}/{version} tokens and the .replace() chain fills them.
+      return cf.version != null
+        ? this.translate('okf.wizard.clonedFrom', 'Cloned from {name} · v{version}')
+            .replace('{name}', name)
+            .replace('{version}', String(cf.version))
+        : this.translate('okf.wizard.clonedFromNoVersion', 'Cloned from {name}').replace('{name}', name);
     },
     // REAL lifecycle state, not the step counter. Missing locale keys fall
     // back to the raw state string (honest over pretty — i18n pass later).

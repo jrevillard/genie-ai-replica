@@ -239,9 +239,16 @@ export async function appendToIndexToc(repoId, indexRow, conceptTitle, conceptSl
       // after the TOC is never swallowed.
       const listBlock = rest.match(/^((?:[ \t]*\n)*(?:[ \t]*(?:[-*+]|\d+\.)[ \t]+[^\n]*\n(?:[ \t]*\n)*)*)/);
       const insertAt = headEnd + (listBlock ? listBlock[0].length : 0);
-      nextBody = `${bodyText.slice(0, insertAt).replace(/\s*$/, '')}\n${line}\n${bodyText
+      // BLANK LINE AFTER THE BULLET (round 20, #80799): CommonMark reads a
+      // paragraph on the line right after a list item as a LAZY CONTINUATION
+      // of that item — the round-11 insert joined the following text
+      // directly, so content below the TOC was absorbed INTO the last bullet
+      // and vanished from the rendered body, on every '+ Add concept'.
+      // The rest never starts with a newline (the list-block regex consumes
+      // the trailing blanks); strip only indentation, never blank lines.
+      nextBody = `${bodyText.slice(0, insertAt).replace(/\s*$/, '')}\n${line}\n\n${bodyText
         .slice(insertAt)
-        .replace(/^\s+/, '')}`;
+        .replace(/^[ \t]+/, '')}`;
     }
     await repoOkfService.patchConceptBody(repoId, indexRow.concept_id, nextBody);
     return true;
@@ -485,6 +492,25 @@ export function translateLifecycleError(text, translate) {
   return text;
 }
 
+/**
+ * Render the Testing-Lab/RAGAS POLL-ENVELOPE messages for the USER (#80805).
+ * The store's poll actions author their abort/timeout/failed-fallback
+ * messages as okf.labErrors.* KEYS (same producer-returns-key shape as
+ * translateLifecycleError above — the store has no translate context), while
+ * anything the SERVER said (doc.error.message, err.message) passes through
+ * verbatim: actionable server detail must not be swapped for a generic
+ * translated sentence. `translate` is the component's translate mixin
+ * method: translate(key, fallback). Keys exist in every locale
+ * (localeConsistency deep-key parity), so the key-as-fallback only shows
+ * against a locale that lacks it — which that guard already prevents.
+ */
+export function translateLabError(text, translate) {
+  if (typeof text === 'string' && text.startsWith('okf.labErrors.')) {
+    return typeof translate === 'function' ? translate(text, text) : text;
+  }
+  return text;
+}
+
 /** Steward PII acknowledgement (audited server-side; waives the PII hit gate). */
 export function acknowledgePii(repoId, acknowledge = true, actor = {}) {
   return repoOkfService.acknowledgePii(repoId, acknowledge, actor);
@@ -518,5 +544,6 @@ export default {
   importZipIntoRepo,
   friendlyLifecycleError,
   translateLifecycleError,
+  translateLabError,
   acknowledgePii
 };

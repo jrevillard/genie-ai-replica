@@ -140,6 +140,39 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     expect(stampCall.query).toContain('ingest_attempts');
   });
 
+  test('a FAILED claim stamp refuses the claim — no kick, no 429 un-count (#80804)', async () => {
+    // Round 20, #80804: the stamp IS the claim. When the stamp write fails
+    // (1200 write-conflict — another lane won the row — or a transient DB
+    // error) the row was never this lane's, so claimNextJob returns null and
+    // the cycle is idle. Before the fix the row was processed anyway and a
+    // later 429 decremented ingest_attempts that had never been incremented,
+    // drifting the counter below the truth so the poison-pill reaper fired
+    // late.
+    mockDb.query.mockImplementation(async (q) => {
+      const t = queryText(q);
+      if (t.includes('UPDATE m WITH') && t.includes('worker_claimed_at')) {
+        throw Object.assign(new Error('conflict'), { errorNum: 1200 });
+      }
+      return {
+        all: async () => [
+          { repo_id: REPO, concept_id: 'unstamped', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# u' }
+        ]
+      };
+    });
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'idle' });
+    // No dataprep kick for a row this lane does not own...
+    expect(authedAxios.post).not.toHaveBeenCalled();
+    // ...and no un-claim decrement: nothing was ever counted.
+    const unclaimCall = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .find((q) => {
+        const s = String((q && q.query) || '');
+        return s.includes('worker_claimed_at: null') && s.includes('ingest_attempts');
+      });
+    expect(unclaimCall).toBeUndefined();
+  });
+
   test('parsed concept → POSTs its markdown DIRECTLY to dataprep, waits for indexed', async () => {
     programQueries(
       [

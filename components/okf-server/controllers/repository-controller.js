@@ -156,8 +156,16 @@ async function createRepo(req, res, next) {
  * fetch (F15: a domain-A caller cannot target a domain-B repo by id) plus
  * writability (serving/drain-frozen content 409s); absent repo_id mints a
  * uniquely-named repo (Wizard B1, Amendment A, 2026-09-27). Returns
- * { repo, baseName } or { failure: { status, payload } } — the caller
- * renders the envelope since this helper owns no res.
+ * { repo, baseName, name_adjusted } or { failure: { status, payload } } —
+ * the caller renders the envelope since this helper owns no res.
+ *
+ * name_adjusted (round 20, #80807) is computed ONLY on the CREATE path,
+ * where the suffix loop can genuinely rename (baseName → baseName-N). On the
+ * repo_id path NOTHING is renamed — body.name is ignored for targeting — so
+ * the flag is always false there; the old `repo.name !== baseName` comparison
+ * reported true whenever the caller passed a name different from the existing
+ * repo's, lying about a rename that never happened. The response field stays
+ * (asserted by tests; the frontend reads only repo.name).
  */
 async function resolveTargetRepo(body, authz, actor, defaultName) {
   const repoDomain = body.domain || 'general';
@@ -171,13 +179,13 @@ async function resolveTargetRepo(body, authz, actor, defaultName) {
       };
     }
     assertWritable(existing);
-    return { repo: existing, baseName };
+    return { repo: existing, baseName, name_adjusted: false };
   }
   for (let attempt = 1; attempt <= 10; attempt++) {
     const candidate = attempt === 1 ? baseName : `${baseName}-${attempt}`;
     try {
       const repo = await repoService.create({ name: candidate, domain: repoDomain, acl }, actor, {});
-      return { repo, baseName };
+      return { repo, baseName, name_adjusted: repo.name !== baseName };
     } catch (err) {
       if (!(err && err.code === 'DUPLICATE_REPO')) throw err;
     }
@@ -236,7 +244,9 @@ async function convertFromCrawl(req, res, next) {
       classification, // TYPE INFERENCE (David, 2026-09-05): rides the job → flushes
       actor
     });
-    res.status(202).json({ ...repo, name_adjusted: repo.name !== target.baseName });
+    // name_adjusted comes from resolveTargetRepo (#80807): true only when the
+    // create-path suffix loop renamed; false on the repo_id path.
+    res.status(202).json({ ...repo, name_adjusted: target.name_adjusted });
   } catch (err) {
     next(err);
   }
@@ -272,7 +282,9 @@ async function convertFromDocuments(req, res, next) {
       classification,
       actor
     });
-    res.status(202).json({ ...repo, name_adjusted: repo.name !== target.baseName });
+    // name_adjusted comes from resolveTargetRepo (#80807): true only when the
+    // create-path suffix loop renamed; false on the repo_id path.
+    res.status(202).json({ ...repo, name_adjusted: target.name_adjusted });
   } catch (err) {
     next(err);
   }

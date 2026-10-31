@@ -26,9 +26,11 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Non-root runtime (#1227): the entrypoint writes the runtime config into
 # /app/dist/runtime and the CMD renders nginx.conf into /tmp (the stock
-# /etc/nginx location is root-owned) — hand both to the nginx user (101).
-RUN mkdir -p /app/dist/runtime /tmp/client_body /tmp/proxy_temp \
-    && chown -R 101:101 /app/dist/runtime /tmp/client_body /tmp/proxy_temp
+# /etc/nginx location is root-owned) — hand the runtime dir to the nginx
+# user (101); the nginx temp paths live under /tmp, which the runtime
+# creates itself.
+RUN mkdir -p /app/dist/runtime \
+    && chown -R 101:101 /app/dist/runtime
 
 # In-container port is unprivileged (8090); nothing below 1024 is needed.
 EXPOSE 8090

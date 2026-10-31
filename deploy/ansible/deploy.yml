@@ -383,10 +383,22 @@
         state: directory
         mode: '0755'
       loop:
-        - "{{ data_dir }}/logs/kong"
+        # data/logs/kong was removed with #1227: Kong logs to stdout (the
+        # fluentd driver ships them) and the directory's only effect was a
+        # root-owned leftover under the data dir.
         - "{{ data_dir }}/database_backups"
         - "{{ data_dir }}/huggingface"
         - secrets/ssl
+
+    - name: Give the backend backup directory to the backend uid
+      # #1227: the backend container runs as uid 1000 and writes its DB
+      # dumps here; mode alone leaves the directory root-owned.
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}/{{ data_dir }}/database_backups"
+        state: directory
+        mode: '0755'
+        owner: "1000"
+        group: "1000"
 
 - name: GENIE.AI - Copy SSL certificates
   hosts: swarm_managers

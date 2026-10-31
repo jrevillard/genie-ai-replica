@@ -22,7 +22,9 @@
 
 /**
  * Services whose upstream image entrypoint drops privileges itself.
- * Keyed by service name, valued with the reason (kept in the message).
+ * Keyed by service name; the values are enforced documentation — pinned by
+ * compose-non-root.test.js so an entry can neither vanish silently nor
+ * lose its justification.
  */
 const SELF_DROPPING = {
   postgres: 'postgres:16 entrypoint gosu-execs as the postgres package user (uid 999)',
@@ -88,12 +90,11 @@ function validateComposeNonRoot(composeText) {
           }
         }
       }
-      serviceBinds[currentService] = serviceBinds[currentService] || [];
       // Profile-gated services are out of the contract's scope entirely —
       // same boundary as the user: check above (they never run in the
       // default deployment the contract governs).
       if (!gated) {
-        const binds = serviceBinds[currentService];
+        const binds = serviceBinds[currentService] || [];
         for (const b of binds) {
           // A host path under the data dir that docker would silently create
           // (root-owned) is a violation unless the config opts out. Sources
@@ -117,13 +118,20 @@ function validateComposeNonRoot(composeText) {
           // Documented invariants, enforced: a root init exists to chown a
           // named volume (needs CAP_CHOWN) and must stay a one-shot (a
           // restart-always policy would make it a permanent root container).
-          if (!currentCapAdds.includes('CHOWN')) {
+          // A service merged with the x-chown-init anchor inherits the
+          // invariants from the anchor unless it overrides them locally.
+          const capAdds = currentCapAdds.length ? currentCapAdds : anchorMerged ? anchorDefaults.capAdds : [];
+          const restart = currentRestart !== null ? currentRestart : anchorMerged ? anchorDefaults.restart : null;
+          const condition =
+            currentRestartPolicyCondition !== null
+              ? currentRestartPolicyCondition
+              : anchorMerged
+                ? anchorDefaults.condition
+                : null;
+          if (!capAdds.includes('CHOWN')) {
             violations.push(`${currentService}: ONE_SHOT_ROOT_INIT member must keep cap_add: [CHOWN]`);
           }
-          const oneShot =
-            currentRestart === 'no' ||
-            currentRestartPolicyCondition === 'none' ||
-            currentRestartPolicyCondition === 'on-failure';
+          const oneShot = restart === 'no' || condition === 'none' || condition === 'on-failure';
           if (!oneShot) {
             violations.push(
               `${currentService}: ONE_SHOT_ROOT_INIT member must be a one-shot ` +
@@ -146,17 +154,48 @@ function validateComposeNonRoot(composeText) {
     inRestartPolicy = false;
   };
 
+  // Pre-scan the x-chown-init extension anchor: services merge it via
+  // `<<: *chown-init`, and a line-level parser must resolve that merge to
+  // see the invariants it carries (cap_add, restart, restart_policy).
+  const anchorDefaults = { capAdds: [], restart: null, condition: null };
+  {
+    let inAnchor = false;
+    let inAnchorPolicy = false;
+    for (const line of lines) {
+      if (/^x-chown-init:/.test(line)) {
+        inAnchor = true;
+        continue;
+      }
+      if (!inAnchor) continue;
+      if (/^[a-z][\w-]*:\s*$/.test(line) && !line.startsWith(' ')) {
+        inAnchor = false;
+        continue;
+      }
+      const cap = line.match(/^ {4}-\s*([A-Z_]+)\s*$/);
+      if (cap) {
+        anchorDefaults.capAdds.push(cap[1]);
+        continue;
+      }
+      const restart = line.match(/^ {2}restart:\s*['"]?([\w-]+)['"]?\s*$/);
+      if (restart) anchorDefaults.restart = restart[1];
+      if (/^ {4}restart_policy:\s*$/.test(line)) inAnchorPolicy = true;
+      if (inAnchorPolicy) {
+        if (!/^ {6}/.test(line)) {
+          inAnchorPolicy = false;
+        } else {
+          const cond = line.match(/^ {6}condition:\s*['"]?([\w-]+)['"]?\s*$/);
+          if (cond) anchorDefaults.condition = cond[1];
+        }
+      }
+    }
+  }
+  let anchorMerged = false;
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
     if (trimmed.startsWith('#') || trimmed === '') continue;
 
-    if (line.match(/^services:\s*$/)) {
-      flush();
-      inServices = true;
-      currentService = null;
-      continue;
-    }
     if (line.match(/^[a-z][\w-]*:\s*$/) && !line.startsWith(' ')) {
       flush();
       inServices = trimmed === 'services:';
@@ -168,9 +207,18 @@ function validateComposeNonRoot(composeText) {
     if (serviceMatch) {
       flush();
       currentService = serviceMatch[1];
+      serviceBinds[currentService] = [];
+      anchorMerged = false;
       continue;
     }
     if (!currentService) continue;
+
+    // `<<: *chown-init` — the service inherits the anchor's invariants as
+    // its baseline (service-local keys still override).
+    if (/^ {4}<<:\s*\*chown-init\s*$/.test(line)) {
+      anchorMerged = true;
+      continue;
+    }
 
     // `user:` — mapping form only (the form every service in this file uses)
     const userMatch = line.match(/^ {4}user:\s*['"]?([^'"\s]+)['"]?\s*$/);
@@ -261,7 +309,7 @@ function validateComposeNonRoot(composeText) {
       const srcMatch = line.match(/^ {8}source:\s*(\S+)\s*$/);
       if (srcMatch) {
         const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
-        binds.push({ path: srcMatch[1], createHostPathFalse: false, shortSyntax: false, sourceLine: i + 1 });
+        binds.push({ path: srcMatch[1], createHostPathFalse: false, shortSyntax: false });
         continue;
       }
       const createFalse = line.match(/^ {10}create_host_path:\s*false\s*$/);
@@ -278,7 +326,7 @@ function validateComposeNonRoot(composeText) {
         const hostPart = shortBind[1].replace(/^['"]|['"]$/g, '');
         if (/[/${]|^\.?\.?\//.test(hostPart)) {
           const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
-          binds.push({ path: hostPart, createHostPathFalse: false, shortSyntax: true, sourceLine: i + 1 });
+          binds.push({ path: hostPart, createHostPathFalse: false, shortSyntax: true });
         }
         continue;
       }

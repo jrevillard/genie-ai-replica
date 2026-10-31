@@ -15,23 +15,24 @@ const COMPOSE_PATH = path.join(__dirname, '..', '..', '..', 'docker-compose.yaml
 
 describe('compose non-root contract (#1227)', () => {
   let composeText;
+  let real;
 
   beforeAll(() => {
     composeText = fs.readFileSync(COMPOSE_PATH, 'utf-8');
+    // One parse of the pristine file shared by the pristine-file tests.
+    real = validateComposeNonRoot(composeText);
   });
 
   test('every always-on service pins a non-root user (or is a documented self-dropping image)', () => {
-    const { violations } = validateComposeNonRoot(composeText);
-    expect(violations).toEqual([]);
+    expect(real.violations).toEqual([]);
   });
 
   test('the always-on set actually covers the services the contract measured as root', () => {
     // Guards the contract itself against silent scope loss: if one of these
     // services disappears from the always-on set (renamed, profile-gated,
     // removed), the contract must be revisited, not silently narrowed.
-    const { alwaysOn } = validateComposeNonRoot(composeText);
     for (const svc of ['nginx', 'frontend', 'kong', 'document-repository', 'arango-vector-db', 'clamav', 'backend']) {
-      expect(alwaysOn).toContain(svc);
+      expect(real.alwaysOn).toContain(svc);
     }
   });
 
@@ -114,9 +115,10 @@ describe('compose non-root contract (#1227)', () => {
 
   test('mutation: a one-shot init without CHOWN or with restart-always trips the gate', () => {
     // Enforcement only applies to allowlisted members, so mutate the REAL
-    // file's init services: strip their CHOWN cap, then flip their one-shot
-    // restart policy — each mutation must surface as a violation.
-    const noChown = composeText.replaceAll('    cap_add:\n      - CHOWN\n', '');
+    // file: strip CHOWN from the x-chown-init anchor (the three merged
+    // inits inherit their caps from it), then flip the one-shot restart
+    // policy — each mutation must surface as a violation.
+    const noChown = composeText.replaceAll('  cap_add:\n    - CHOWN\n', '');
     expect(noChown).not.toBe(composeText);
     const { violations: v1 } = validateComposeNonRoot(noChown);
     expect(v1.some((v) => v.includes('arango-vector-db-init') && v.includes('CHOWN'))).toBe(true);

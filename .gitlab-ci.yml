@@ -417,7 +417,7 @@ workflow:
       fi
       # Create test user for E2E tests (required by loginViaUI)
       EXISTING=$(curl -sk "${KC_URL}/admin/realms/genie/users?username=testuser" \
-        -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null)
+        -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d) if isinstance(d, list) else 0)" 2>/dev/null || true)
       if [ "${EXISTING:-0}" -eq 0 ]; then
         CREATE_STATUS=$(curl -sk -o /dev/null -w "%{http_code}" -X POST "${KC_URL}/admin/realms/genie/users" \
           -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \

@@ -3281,10 +3281,11 @@ class ChatQnAService:
 
         ``query_translation_status`` carries what the history translator fed
         the embedder (``translated`` / ``passthrough_english`` /
-        ``fallback_timeout`` / ``fallback_error``): a streamed answer must be
-        as observable as a JSON one about the language its retrieval query
-        was really in. It is stamped on ``chatqna.orchestrate`` as well, so
-        the trace and the payload cannot disagree.
+        ``passthrough_unknown_language`` / ``fallback_timeout`` /
+        ``fallback_error``): a streamed answer must be as observable as a
+        JSON one about the language its retrieval query was really in. It is
+        stamped on ``chatqna.orchestrate`` as well, so the trace and the
+        payload cannot disagree.
 
         ``abstained`` / ``abstention_reason`` carry the outcome handle_request
         already derived for the request metric, so the counter and this
@@ -3696,8 +3697,8 @@ class ChatQnAService:
             visible where the retrieval quality it degrades is diagnosed.
             The passthrough cases never reach this method: the caller
             classifies them itself (``"passthrough_english"`` when the
-            history is already English, ``"passthrough_unknown_language"``
-            when detection could not name a language).
+            history is established English, ``"passthrough_unknown_language"``
+            when no language could be established for it).
         """
         # Single-message mode sends history as a plain string
         if isinstance(history, str):
@@ -4120,9 +4121,12 @@ class ChatQnAService:
 
         for outcome in translated_chunks:
             if isinstance(outcome, BaseException):
-                if isinstance(outcome, TranslationInputTooLongError):
+                if isinstance(outcome, (TranslationInputTooLongError, TranslationTimeoutError)):
                     # A permanent contract issue (the chunk exceeds the model
-                    # window): the route layer maps it to a 422.
+                    # window: the route layer maps it to a 422) or a typed
+                    # timeout: re-raised as-is so a caller that splits
+                    # timeouts from other failures still can after the
+                    # gather.
                     raise outcome
                 raise TranslationFailedError(
                     f"translation chunk failed: {type(outcome).__name__}: {outcome}"
@@ -4213,10 +4217,6 @@ class ChatQnAService:
         # for a language that was refused: the answer stays in English, but the
         # history is still normalized to English for the retriever.
         detected_language = None
-        # Whether language detection crashed: the answer side then falls back
-        # to English as before, but the query status must not claim the query
-        # WAS English — nobody ever determined what it was.
-        detection_failed = False
 
         # Re-enabled language detection as fallback ---
         try:
@@ -4293,7 +4293,6 @@ class ChatQnAService:
                         original_language = "EN"
         except Exception as e:
             logger.warning(f"Language detection failed: {e}")
-            detection_failed = True
             # Fallback to English if detection fails
             if not original_language:
                 original_language = "EN"
@@ -4332,13 +4331,17 @@ class ChatQnAService:
                 full_chat_history, source_lang_code=history_language.lower()
             )
         else:
-            # A passthrough is only "English" when a language was actually
-            # named EN: no language at all, or a detection that crashed, is
-            # reported as unknown so the runbook filter cannot mistake an
-            # arbitrary-language query for an English one.
-            query_translation_status = (
-                "passthrough_unknown_language" if (detection_failed or not history_language) else "passthrough_english"
+            # A passthrough is only "English" when something actually
+            # established English: the request named it (and the code was
+            # not refused), or detection concluded it. A fabricated fallback
+            # — no language given and none detected, a crashed detection, a
+            # refused request code — is reported as unknown, so the runbook
+            # filter cannot mistake an arbitrary-language query for an
+            # English one.
+            english_established = detected_language == "EN" or (
+                original_language == "EN" and not language_refused and bool(raw_language)
             )
+            query_translation_status = "passthrough_english" if english_established else "passthrough_unknown_language"
             # Already English, or no source language to translate from:
             # flatten without translation. Same recipe as the translator's
             # flatten, so the two differ only in the words.

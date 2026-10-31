@@ -4078,6 +4078,16 @@ async def test_an_undetectable_query_reports_passthrough_unknown_language():
 
 
 @pytest.mark.asyncio
+async def test_a_refused_language_with_nothing_to_detect_reports_unknown_not_english():
+    """A refused request code falls back to 'EN' for the ANSWER side; the
+    query status must not inherit that fabrication: nobody ever established
+    the query was English."""
+    svc = create_chatqna_service()
+    payload = await _full_flow_payload(svc, stream=False, language="xx", messages=[{"role": "user", "content": ""}])
+    assert payload["metadata"]["query_translation_status"] == "passthrough_unknown_language"
+
+
+@pytest.mark.asyncio
 async def test_the_query_translation_status_reaches_the_orchestrate_span(captured_spans):
     """The span attribute is the operator's answer to 'why is retrieval bad
     on this Spanish query' — it must carry what the embedder actually got."""

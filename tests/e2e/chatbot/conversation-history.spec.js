@@ -11,13 +11,15 @@ const { getSessionToken } = require('../helpers/auth');
 
 const API_TIMEOUT_MS = 30000;
 
+const MOCKED_ANSWER = 'Mocked answer for the history test.';
+
 // The save path only persists conversations carrying a completed turn
 // (isStorableTurn refuses an all-error chat), so every test drives a
 // mocked answer stream — the same posture the conversation invariants
 // suite uses. Deterministic on any stack: no LLM dependency.
 async function mockAnswerStream(page) {
   const frames = [
-    `data: ${JSON.stringify({ type: 'chunk', content: 'Mocked answer for the history test.' })}`,
+    `data: ${JSON.stringify({ type: 'chunk', content: MOCKED_ANSWER })}`,
     '',
     `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`,
     '',
@@ -31,10 +33,14 @@ async function mockAnswerStream(page) {
   });
 }
 
-// The turn's arrival signal is the rendered bot bubble — the persisted
-// conversation is only asserted after it exists.
+// The turn's arrival signal is the rendered bot bubble — but that bubble
+// mounts as a streaming placeholder the moment the send handler runs, and a
+// mid-stream turn carries no queryId, so the save path would silently drop
+// it. The turn is complete only when the mocked answer text is on screen.
 async function waitForBotTurn(page) {
-  await page.waitForSelector('.chat-message.bot .message-bubble', { timeout: 30000 });
+  await expect(page.locator('.chat-message.bot .message-bubble').last()).toContainText(MOCKED_ANSWER, {
+    timeout: 30000,
+  });
 }
 
 test.describe('Conversation history persistence', () => {

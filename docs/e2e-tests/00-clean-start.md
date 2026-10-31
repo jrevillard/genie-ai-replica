@@ -288,6 +288,12 @@ surfaces, which the document-repository restricts to the `admin` realm role
 second test user carrying that role:
 
 ```bash
+# Re-mint the master admin token: the $TOKEN left over from 0.8 is
+# testuser's plain realm token and cannot call the Admin API.
+TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/master/protocol/openid-connect/token" \
+  -d "client_id=admin-cli" -d "username=admin" -d "password=${KEYCLOAK_ADMIN_PASSWORD}" \
+  -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
 # Create test admin (201 = created, 409 = already exists — OK)
 curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
   -H "Authorization: Bearer $TOKEN" \
@@ -301,11 +307,34 @@ curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
     "credentials": [{"type": "password", "value": "TestAdmin123!", "temporary": false}]
   }' -w "\nHTTP: %{http_code}\n"
 
-# Grant the admin realm role
-ADMIN_ROLE_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/roles/admin" \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
-TESTADMIN_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=testadmin&exact=true" \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+# Grant the admin realm role. Both lookups fail loudly (non-200 or empty
+# id) instead of crashing on a bare KeyError downstream.
+ADMIN_ROLE_ID=$(curl -sk -w "\nHTTP_STATUS:%{http_code}" "https://localhost/auth/admin/realms/genie/roles/admin" \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "
+import sys, json
+lines = sys.stdin.read().rsplit('HTTP_STATUS:', 1)
+body, status = lines[0].strip(), lines[1].strip()
+if status != '200':
+    sys.exit(f'GET /roles/admin returned HTTP {status}: {body[:200]}')
+rid = json.loads(body).get('id')
+if not rid:
+    sys.exit(f'GET /roles/admin returned no id: {body[:200]}')
+print(rid)
+") || { echo "testadmin provisioning aborted"; exit 1; }
+
+TESTADMIN_ID=$(curl -sk -w "\nHTTP_STATUS:%{http_code}" "https://localhost/auth/admin/realms/genie/users?username=testadmin&exact=true" \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "
+import sys, json
+lines = sys.stdin.read().rsplit('HTTP_STATUS:', 1)
+body, status = lines[0].strip(), lines[1].strip()
+if status != '200':
+    sys.exit(f'GET users?username=testadmin returned HTTP {status}: {body[:200]}')
+users = json.loads(body)
+if not users:
+    sys.exit('user testadmin not found — the create call above failed')
+print(users[0]['id'])
+") || { echo "testadmin provisioning aborted"; exit 1; }
+
 curl -sk -X POST "https://localhost/auth/admin/realms/genie/users/${TESTADMIN_ID}/role-mappings/realm" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d "[{\"id\": \"${ADMIN_ROLE_ID}\", \"name\": \"admin\"}]" -w "\nHTTP: %{http_code}\n"

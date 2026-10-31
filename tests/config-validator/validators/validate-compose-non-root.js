@@ -107,13 +107,22 @@ function validateComposeNonRoot(composeText) {
           // carry variable forms — resolve them: `${VAR:-default}` to its
           // default; a bare `${VAR}` (unknown location) to the data dir
           // CONSERVATIVELY, so renaming the variable cannot defeat the gate.
-          const resolved = b.path
-            .replace(/^['"]|['"]$/g, '')
-            .replace(/^\$\{[\w-]+:-([^}]*)\}/, '$1')
-            .replace(/^\$\{[\w-]+\}/, './data')
-            // braceless $VAR is legal compose interpolation too — same
-            // conservative treatment (unknown location = under the data dir)
-            .replace(/^\$(?!\{)[\w-]+/, './data');
+          let resolved = b.path.replace(/^['"]|['"]$/g, '');
+          // ${VAR:-default} strips to its default; defaults can NEST
+          // (${DATA_DIR:-${MOUNT_DIR:-./data}} — legal compose), so
+          // iterate until stable (bounded) instead of stopping at the
+          // first inner brace
+          for (let depth = 0; depth < 5; depth += 1) {
+            const next = resolved.replace(/^\$\{[\w-]+:-((?:[^{}]|\$\{[^{}]*\})*)\}/, '$1');
+            if (next === resolved) break;
+            resolved = next;
+          }
+          resolved = resolved
+            // a default-less ${VAR} (or a braceless $VAR) names an unknown
+            // location — resolve CONSERVATIVELY to the data dir so
+            // renaming cannot defeat the gate
+            .replace(/\$\{[\w-]+\}/g, './data')
+            .replace(/\$(?!\{)[\w-]+/g, './data');
           // An ABSOLUTE resolved source is under the data-dir rule too:
           // re-pointing a variable default at /srv/genie or hand-writing
           // /var/genie/data must not escape the create_host_path contract.
@@ -245,7 +254,7 @@ function validateComposeNonRoot(composeText) {
       }
       const restart = line.match(/^ {2}restart:\s*['"]?([\w:-]+)['"]?\s*$/);
       if (restart) anchorDefaults.restart = restart[1];
-      const anchorAttempts = line.match(/^ {4}max_attempts:\s*(\d+)\s*$/);
+      const anchorAttempts = line.match(/^ {6}max_attempts:\s*(\d+)\s*$/);
       if (anchorAttempts) anchorDefaults.maxAttempts = anchorAttempts[1];
       if (/^ {4}restart_policy:\s*$/.test(line)) {
         inAnchorPolicy = true;

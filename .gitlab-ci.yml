@@ -236,6 +236,12 @@ workflow:
         docker compose -p "$p" down -v --remove-orphans 2>/dev/null || true
       done
     - docker network prune -f 2>/dev/null || true
+    # data/database_backups must pre-exist (#1227): the backend bind is
+    # create_host_path:false, so a clean checkout (no data/ tree tracked
+    # in git) fails the backend create. The CI user is not uid 1000 —
+    # hand the directory to the backend uid via a throwaway container.
+    - mkdir -p data/database_backups
+    - docker run --rm -v "$PWD/data:/host:rw" busybox:1.38.0 chown -R 1000:1000 /host/database_backups
   script:
     - cp env .env
     - sed -i '/^GENIE_AI_[A-Z0-9_]*_IMAGE=/ s|^|# |' .env

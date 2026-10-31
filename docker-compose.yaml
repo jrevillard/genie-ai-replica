@@ -134,7 +134,14 @@ x-chown-init: &chown-init
     # once.
     mode: global
     restart_policy:
-      condition: "none"
+      # bounded self-heal (the one-shot rule's blessed form): a transient
+      # init failure (registry hiccup, EIO mid-sweep) retries instead of
+      # stranding the dependent services on a failed one-shot — condition
+      # "none" left a failed chown never-retried while the follow-up
+      # service burned its whole restart budget.
+      condition: on-failure
+      delay: 10s
+      max_attempts: 3
 
 services:
 
@@ -1237,7 +1244,14 @@ services:
     # failure exited 0, passed service_completed_successfully, and left
     # the backend starting against a partially root-owned volume with no
     # marker and nothing to ever retry the chown.
-    command: ["sh", "-c", "{ [ -f /app/data/.chowned-1000 ] || { chown -R 1000:1000 /app/data && touch /app/data/.chowned-1000; }; } && { [ -f /app/Uploads/.chowned-1000 ] || { chown -R 1000:1000 /app/Uploads && touch /app/Uploads/.chowned-1000; }; }"]
+    # PROBE form (no marker): "a marker strands files written after the
+    # sweep under a permanent skip" — on a live root-era upgrade the old
+    # container keeps writing while the init chowns, and such a file would
+    # never be healed. Same doctrine as the Ansible migration tasks: find
+    # -uid 0, targeted -h chown, verify, exit nonzero if anything
+    # survived (a failed init is VISIBLE and retried by the bounded
+    # policy; the next deploy heals the rest).
+    command: ["sh", "-c", "{ [ -z \"$$(find /app/data -uid 0 -print -quit)\" ] || find /app/data -uid 0 -exec chown -h 1000:1000 {} +; } && { [ -z \"$$(find /app/Uploads -uid 0 -print -quit)\" ] || find /app/Uploads -uid 0 -exec chown -h 1000:1000 {} +; } && [ -z \"$$(find /app/data /app/Uploads -uid 0 -print -quit)\" ]"]
     volumes:
       - backend_data:/app/data
       - backend_uploads:/app/Uploads
@@ -1247,7 +1261,8 @@ services:
   # non-root document-repository would get EACCES on every upload.
   document-repository-init:
     <<: *chown-init
-    command: ["sh", "-c", "[ -f /app/uploads/.chowned-1000 ] || { chown -R 1000:1000 /app/uploads && touch /app/uploads/.chowned-1000; }"]
+    # PROBE form (no marker — see backend-init).
+    command: ["sh", "-c", "{ [ -z \"$$(find /app/uploads -uid 0 -print -quit)\" ] || find /app/uploads -uid 0 -exec chown -h 1000:1000 {} +; } && [ -z \"$$(find /app/uploads -uid 0 -print -quit)\" ]"]
     volumes:
       - doc_repo_uploads:/app/uploads
 
@@ -1397,16 +1412,19 @@ services:
   # Chowns the arango_data and arango_apps volumes to the unprivileged uid
   # arango runs as (#1227). One-shot, runs as root ON PURPOSE (the chown IS
   # the job) and writes nothing outside the named volumes — see the no-root
-  # contract test. The marker lands in BOTH volumes: docker re-populates an
-  # empty named volume from the image's root-owned directory at every
-  # container create, so only a volume that already contains an entry keeps
-  # the chowned ownership.
+  # contract test. Each run PROBES for root-owned paths (find -uid 0) and
+  # hands exactly those to the service uid — no marker file, so nothing
+  # written after the sweep is stranded under a permanent skip, and the
+  # empty-volume repopulation docker does at every container create is
+  # re-healed on the next deploy.
   arango-vector-db-init:
     <<: *chown-init
     # PER-VOLUME guard (same doctrine as backend-init): a missing marker
     # re-chowns only ITS volume, never both. && - grouped: a failed first
     # chown fails the init (see backend-init) instead of being masked.
-    command: ["sh", "-c", "{ [ -f /var/lib/arangodb3/.chowned-999 ] || { chown -R 999:999 /var/lib/arangodb3 && touch /var/lib/arangodb3/.chowned-999; }; } && { [ -f /var/lib/arangodb3-apps/.chowned-999 ] || { chown -R 999:999 /var/lib/arangodb3-apps && touch /var/lib/arangodb3-apps/.chowned-999; }; }"]
+    # PROBE form (no marker — see backend-init): targeted -h chown of
+    # whatever is root-owned, then verify.
+    command: ["sh", "-c", "{ [ -z \"$$(find /var/lib/arangodb3 -uid 0 -print -quit)\" ] || find /var/lib/arangodb3 -uid 0 -exec chown -h 999:999 {} +; } && { [ -z \"$$(find /var/lib/arangodb3-apps -uid 0 -print -quit)\" ] || find /var/lib/arangodb3-apps -uid 0 -exec chown -h 999:999 {} +; } && [ -z \"$$(find /var/lib/arangodb3 /var/lib/arangodb3-apps -uid 0 -print -quit)\" ]"]
     volumes:
       - arango_data:/var/lib/arangodb3
       - arango_apps:/var/lib/arangodb3-apps
@@ -2647,7 +2665,8 @@ services:
     # (CHOWN + DAC_OVERRIDE caps, one-shot on both front-ends, global mode
     # so the chown has run on every node the collector can land on).
     <<: *chown-init
-    command: ["sh", "-c", "[ -f /var/lib/otelcol/.chowned-10001 ] || { mkdir -p /var/lib/otelcol/file_storage/victoriatraces && chown -R 10001:10001 /var/lib/otelcol && touch /var/lib/otelcol/.chowned-10001; }"]
+    # PROBE form (no marker — see backend-init).
+    command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && { [ -z \"$$(find /var/lib/otelcol -uid 0 -print -quit)\" ] || find /var/lib/otelcol -uid 0 -exec chown -h 10001:10001 {} +; } && [ -z \"$$(find /var/lib/otelcol -uid 0 -print -quit)\" ]"]
     volumes:
       - otel-queue:/var/lib/otelcol
 
@@ -2752,7 +2771,8 @@ services:
   # writes nothing outside the named volume - see the no-root contract test.
   victorialogs-init:
     <<: *chown-init
-    command: ["sh", "-c", "[ -f /var/lib/victoria-logs/.chowned-65534 ] || { chown -R 65534:65534 /var/lib/victoria-logs && touch /var/lib/victoria-logs/.chowned-65534; }"]
+    # PROBE form (no marker — see backend-init).
+    command: ["sh", "-c", "{ [ -z \"$$(find /var/lib/victoria-logs -uid 0 -print -quit)\" ] || find /var/lib/victoria-logs -uid 0 -exec chown -h 65534:65534 {} +; } && [ -z \"$$(find /var/lib/victoria-logs -uid 0 -print -quit)\" ]"]
     volumes:
       - vlogs-data:/var/lib/victoria-logs
 

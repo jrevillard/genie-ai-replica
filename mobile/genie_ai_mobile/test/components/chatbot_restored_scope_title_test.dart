@@ -81,6 +81,12 @@ void main() {
   // the same bytes for every request.
   late Uint8List configBytes;
 
+  /// Holds the config re-read of a forced reload until released — the
+  /// ordering the re-apply's title rule is about: the localized fetch
+  /// lands FIRST, the reload's re-resolve runs SECOND.
+  Completer<ByteData>? heldConfig;
+  bool failConfigLoads = false;
+
   setUpAll(() async {
     final raw = await rootBundle.loadString(
       'assets/config/genie-ai-config.json',
@@ -98,17 +104,43 @@ void main() {
   /// messenger. The restore awaits the Quick Help config before it
   /// commits its scope, and an asset load awaited inside testWidgets
   /// never completes — the mock is what lets the restore finish.
-  void mockConfigAsset(WidgetTester tester) {
+  ///
+  /// With [failLoads] every config read FAILS (a transient load error)
+  /// until [stopFailingConfigLoads]: the load is not cached, so the
+  /// locale switch's forced reload re-reads the asset — and
+  /// [holdConfigAsset] can hold THAT read, ordering the reload after the
+  /// drift fetch has landed.
+  void mockConfigAsset(WidgetTester tester, {bool failLoads = false}) {
+    failConfigLoads = failLoads;
     tester.binding.defaultBinaryMessenger.setMockMessageHandler(
       'flutter/assets',
       (ByteData? message) async {
         if (message == null) return null;
         final key = utf8.decode(message.buffer.asUint8List());
         if (key != 'assets/config/genie-ai-config.json') return null;
+        if (heldConfig != null) return heldConfig!.future;
+        if (failConfigLoads) return null;
         return ByteData.sublistView(configBytes);
       },
     );
     rootBundle.evict('assets/config/genie-ai-config.json');
+  }
+
+  void stopFailingConfigLoads() {
+    failConfigLoads = false;
+  }
+
+  void holdConfigAsset(WidgetTester tester) {
+    // The bundle caches the FAILED reads too: without the eviction the
+    // reload's re-read throws from the cache and never reaches the
+    // handler — no hold, no ordering.
+    rootBundle.evict('assets/config/genie-ai-config.json');
+    heldConfig = Completer<ByteData>();
+  }
+
+  void releaseConfigAsset() {
+    heldConfig?.complete(ByteData.sublistView(configBytes));
+    heldConfig = null;
   }
 
   Future<void> pumpChat(
@@ -199,12 +231,12 @@ void main() {
 
     expect(find.text('Contexto: Registro Civil'), findsOneWidget);
     expect(find.textContaining('Civil Registry'), findsNothing);
-    // Two fetches, both correct: the drift's own one, and the repair
-    // the config reload's re-resolve needs — that re-resolve re-applies
-    // the restored scope (re-installing the ENGLISH title the resolver
-    // names), and the re-apply re-titles it from the localized tree
-    // again.
-    expect(mock.requestsByLocale['es'], 2);
+    // ONE fetch: the drift's own. The config reload's re-resolve
+    // re-applies the SAME restored scope, and a re-apply of an unchanged
+    // title source must not re-install the resolver's ENGLISH spelling
+    // over the localized name the drift fetch commits — that clobber
+    // used to force a repair fetch on every switch.
+    expect(mock.requestsByLocale['es'], 1);
   });
 
   testWidgets('a category the localized tree does not carry keeps its title', (
@@ -225,6 +257,122 @@ void main() {
     // the restore installed stands — never blanked, never renamed.
     expect(find.text('Contexto: Civil Registry'), findsOneWidget);
   });
+
+  testWidgets(
+    'a re-apply of an unchanged scope never downgrades a localized title',
+    (tester) async {
+      // The first config load FAILS (a transient startup error), so the
+      // locale switch's forced reload re-reads the asset — held until the
+      // drift fetch has landed. The reload's re-resolve then re-applies
+      // the SAME restored scope while the bar already carries the
+      // localized name.
+      final mock = _RestoredScopeMockClient(
+        treesByLocale: {'en': enTree, 'es': esTree},
+      );
+      final chatKey = GlobalKey<ChatBotComponentState>();
+      mockConfigAsset(tester, failLoads: true);
+      await pumpChat(tester, mock, chatKey: chatKey);
+
+      await chatKey.currentState!.loadConversation('conv-1');
+      await tester.pumpAndSettle();
+      expect(find.text('Context: Civil Registry'), findsOneWidget);
+
+      // The hold is armed BEFORE the switch: the forced reload's asset
+      // re-read is what must be held, or the reload beats the fetch and
+      // the ordering under test never happens.
+      holdConfigAsset(tester);
+      I18nService().changeLanguage('es');
+      // The drift fetch is independent of the config: it lands while the
+      // reload waits on the held asset.
+      for (
+        var i = 0;
+        i < 20 && find.text('Contexto: Registro Civil').evaluate().isEmpty;
+        i++
+      ) {
+        await tester.pump();
+      }
+      expect(find.text('Contexto: Registro Civil'), findsOneWidget);
+
+      // NOW the reload lands and re-applies the unchanged scope: the bar
+      // must keep the localized name — re-installing the resolver's
+      // ENGLISH spelling here would downgrade it for the rest of the
+      // session (the fetch that named it already succeeded).
+      stopFailingConfigLoads();
+      releaseConfigAsset();
+      await tester.pumpAndSettle();
+      expect(find.text('Contexto: Registro Civil'), findsOneWidget);
+      expect(find.text('Context: Civil Registry'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a scope-less conversation fetches no localized tree on restore',
+    (tester) async {
+      // 'general' is the no-scope placeholder the cleared selections
+      // were saved under: it names no category, and the localized tree
+      // has nothing to re-title.
+      I18nService().changeLanguage('es');
+      final mock = _RestoredScopeMockClient(
+        treesByLocale: {'en': enTree, 'es': esTree},
+        conversationTags: <String>[],
+        conversationCategoryId: 'general',
+      );
+      final chatKey = GlobalKey<ChatBotComponentState>();
+      mockConfigAsset(tester);
+      await pumpChat(tester, mock, chatKey: chatKey);
+
+      await chatKey.currentState!.loadConversation('conv-1');
+      await tester.pumpAndSettle();
+
+      // No context bar (no scope) and no localized fetch: recording the
+      // placeholder key would schedule a lookup that can never name
+      // anything, at restore and on every locale switch.
+      expect(find.text('Contexto: Registro Civil'), findsNothing);
+      expect(mock.requestsByLocale['es'] ?? 0, 0);
+    },
+  );
+
+  testWidgets(
+    'a live selection mid-fetch is not re-titled by the stale response',
+    (tester) async {
+      // The 'es' response is HELD: the restore's localized fetch is
+      // genuinely in flight while the user picks a live scope.
+      I18nService().changeLanguage('es');
+      final mock = _RestoredScopeMockClient(
+        treesByLocale: {'en': enTree, 'es': esTree},
+        holdFromCounts: {'es': 1},
+      );
+      final chatKey = GlobalKey<ChatBotComponentState>();
+      mockConfigAsset(tester);
+      await pumpChat(tester, mock, chatKey: chatKey);
+
+      await chatKey.currentState!.loadConversation('conv-1');
+      for (var i = 0; i < 10 && (mock.requestsByLocale['es'] ?? 0) < 1; i++) {
+        await tester.pump();
+      }
+      expect(mock.requestsByLocale['es'], 1);
+
+      // The page's own mapping (main.dart's _onServiceSelected): a live
+      // pick replaces the restored scope and installs its own localized
+      // title.
+      chatKey.currentState!.setCategoryContext(
+        '2',
+        'Nacimientos',
+        categoryNameEn: 'Civil Registry',
+        serviceLabelsEn: const ['Births'],
+        serviceCount: 1,
+      );
+      await tester.pump();
+      expect(find.text('Contexto: Nacimientos'), findsOneWidget);
+
+      // Release the held response: the restored scope is gone — a commit
+      // would overwrite the live join with the restored category's name.
+      mock.releaseHeld();
+      await tester.pumpAndSettle();
+      expect(find.text('Contexto: Nacimientos'), findsOneWidget);
+      expect(find.text('Contexto: Registro Civil'), findsNothing);
+    },
+  );
 
   testWidgets(
     'a scope replaced mid-fetch is not re-titled by the stale response',
@@ -294,11 +442,13 @@ class _RestoredScopeMockClient extends http.BaseClient {
   _RestoredScopeMockClient({
     required this.treesByLocale,
     this.conversationTags = const ['Births'],
+    this.conversationCategoryId = '2',
     this.holdFromCounts = const {},
   });
 
   final Map<String, List<dynamic>> treesByLocale;
   final List<String> conversationTags;
+  final String conversationCategoryId;
 
   /// Per locale: the response of the Nth request (and every later one)
   /// is HELD until [releaseHeld] — a fetch is genuinely in flight while
@@ -328,7 +478,7 @@ class _RestoredScopeMockClient extends http.BaseClient {
       return _json(<String, dynamic>{
         '_key': 'conv-1',
         'title': 'Saved conversation',
-        'categoryId': '2',
+        'categoryId': conversationCategoryId,
         'tags': conversationTags,
         'messages': <dynamic>[],
       }, 200);

@@ -12,7 +12,10 @@ COPY . .
 # root, outside the mount point.
 RUN npm run build && cp dist/config/theme-variables.css dist/theme-fallback.css
 
-FROM nginx:alpine
+# Pinned tag, not nginx:alpine: the Dockerfile chowns /app/dist/runtime to
+# the NUMERIC uid 101, so a floating tag whose nginx uid could shift would
+# freeze wrong ownership into the image. Same tag the edge nginx uses.
+FROM nginx:1.28-alpine
 
 WORKDIR /app
 

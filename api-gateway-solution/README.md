@@ -63,7 +63,10 @@ docker compose up -d
     published on the host as `80`/`443` (#1227 non-root: unprivileged
     listeners in-container, privileged ports only at host publication).
   - Environment: `NGINX_PUBLIC_DOMAIN`, `CSP_CONNECT_SRC`, `KONG_PROXY_HOST`, `NGINX_FRONTEND_HOST`, `NGINX_FRONTEND_PORT`.
-  - Volumes: `./nginx/conf` for templates, `./nginx/entrypoint.sh` for container startup.
+  - Mounts: `./secrets/ssl` (read-only certificates) and the
+    `certbot-webroot` volume; the templates and entrypoint are baked into
+    the image at build time (edit them in the repo and rebuild, not on the
+    host).
   - SSL: Volume-mounted from `./secrets/ssl/server.crt` and `server.key` (auto-generated self-signed in dev if not provided).
   - Depends on: `kong`.
 

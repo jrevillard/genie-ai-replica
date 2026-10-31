@@ -185,6 +185,13 @@ mkdir -p data/database_backups data/huggingface secrets/ssl
 | `data/huggingface` | TEI model cache | `gpu=true` |
 | `secrets/ssl` | SSL certificates (read by NGINX) | `gateway=true` |
 
+On a multi-node deployment, list every worker under a `[swarm_workers]`
+group in the inventory: the Ansible pre-create play that keeps the
+backend's bind source from being created root-owned **only runs on nodes
+in that group** (the manager play covers the managers). A worker left out
+of the group gets no warning beyond a "no hosts matched" line, and
+swarmkit will silently create the missing bind source root-owned on it.
+
 There is no `data/logs/` since #1227: every service logs to stdout
 (shipped by the fluentd logging driver), and a missing bind source would
 be created root-owned on the node it lands on.

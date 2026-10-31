@@ -41,7 +41,7 @@ const SELF_DROPPING = {
  */
 const ONE_SHOT_ROOT_INIT = {
   'otel-collector-init': 'chowns the otel-queue volume for the collector (uid 10001) before it starts',
-  'arango-vector-db-init': 'chowns the arango_data volume for arangodb (uid 999) before it starts',
+  'arango-vector-db-init': 'chowns the arango_data AND arango_apps volumes for arangodb (uid 999) before it starts',
   'victorialogs-init': 'chowns the vlogs-data volume for victoria-logs (uid 65534) before it starts',
   'document-repository-init': 'chowns the doc_repo_uploads volume for document-repository (uid 1000) before it starts',
   'backend-init':

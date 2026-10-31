@@ -422,19 +422,11 @@ String? sidebarScopeTitleFor(
 /// `nameEN` is null and the label-keyed map skips it) while its key still
 /// addresses it, and the restored scope's title is re-named through the
 /// key, never through a name.
-Map<String, String> localizedCategoryDisplayNamesOf(List<dynamic> tree) {
-  final byKey = <String, String>{};
-  for (final entry in tree) {
-    if (entry is! Map) continue;
-    final key = entry['catKey']?.toString();
-    final display = entry['label'] ?? entry['name'];
-    if (key == null || key.isEmpty) continue;
-    if (display is String && display.isNotEmpty) {
-      byKey.putIfAbsent(key, () => display);
-    }
-  }
-  return byKey;
-}
+Map<String, String> localizedCategoryDisplayNamesOf(List<dynamic> tree) =>
+    QuickHelpScopeResolver._indexByCatKey(tree, (entry) {
+      final display = entry['label'] ?? entry['name'];
+      return (display is String && display.isNotEmpty) ? display : null;
+    });
 
 /// Whether a RESTORED scope's context-bar title follows the locale.
 ///
@@ -505,7 +497,7 @@ class QuickHelpScopeResolver {
       _categoryLabelsEn = _indexByCatKey(enTree, _enOf),
       _categoryNames = _indexByCatKey(enTree, (entry) {
         final name = entry['name'];
-        return (name is String && name.isNotEmpty) ? name : '';
+        return (name is String && name.isNotEmpty) ? name : null;
       });
 
   /// The scope state of a button whose hierarchy has not loaded yet: it
@@ -550,12 +542,14 @@ class QuickHelpScopeResolver {
     _categoryLabelsEn,
   );
 
-  /// Categories by key, FIRST-wins, each mapped by [valueOf]. The one
-  /// walk behind the two key indexes (the EN-label index and the
-  /// display-name index) — a skip rule added to one belongs to both.
+  /// Categories by key, FIRST-wins, each mapped by [valueOf]; a null
+  /// [valueOf] result skips the entry instead of claiming the key. The
+  /// one walk behind the three key indexes (the EN-label index, the
+  /// display-name index, and the localized-display read) — a skip rule
+  /// added to one belongs to all.
   static Map<String, String> _indexByCatKey(
     List<dynamic> enTree,
-    String Function(Map entry) valueOf,
+    String? Function(Map entry) valueOf,
   ) {
     final byKey = <String, String>{};
     for (final entry in enTree) {
@@ -563,7 +557,9 @@ class QuickHelpScopeResolver {
       final key = entry['catKey']?.toString();
       if (key == null || key.isEmpty) continue;
       if (byKey.containsKey(key)) continue;
-      byKey[key] = valueOf(entry);
+      final value = valueOf(entry);
+      if (value == null) continue;
+      byKey[key] = value;
     }
     return byKey;
   }

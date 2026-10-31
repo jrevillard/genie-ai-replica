@@ -364,17 +364,37 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
     logger.warn.mockClear();
   });
 
+  const warnsOf = (event) => logger.warn.mock.calls.filter((c) => c[0] === event);
+
+  const http401 = () => Object.assign(new Error('401'), { response: { status: 401 } });
+
+  // Hold a quiet probe in flight against a failure it will release later —
+  // the race choreography several tests share (never-settling axios call,
+  // one microtask flush to let the probe start, manual release).
+  async function holdQuietProbeFailing() {
+    let release;
+    axios.get.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          release = () => reject(http401());
+        })
+    );
+    const soft = cache.servedModelId('http://vllm:8000'); // quiet probe, held in flight
+    await Promise.resolve();
+    return { soft, release: () => release() };
+  }
+
   test('servedModelId emits no probe_failed warn — the label stays null, quietly', async () => {
     axios.get.mockRejectedValue(new Error('connect ECONNREFUSED'));
     await expect(cache.servedModelId('http://gpu.example/v1', { apiKey: 'fk' })).resolves.toBeNull();
-    expect(logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed')).toHaveLength(0);
+    expect(warnsOf('vllm_model_cache.probe_failed')).toHaveLength(0);
   });
 
   test('deploymentServedModelId is quiet the same way', async () => {
     process.env.VLLM_API_KEY = 'deployment-secret';
     axios.get.mockRejectedValue(new Error('connect ECONNREFUSED'));
     await expect(cache.deploymentServedModelId()).resolves.toBeNull();
-    expect(logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed')).toHaveLength(0);
+    expect(warnsOf('vllm_model_cache.probe_failed')).toHaveLength(0);
   });
 
   test('a HARD probe failure keeps the loud probe_failed warn', async () => {
@@ -382,7 +402,7 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
     await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({
       name: 'ModelDiscoveryError'
     });
-    const warns = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed');
+    const warns = warnsOf('vllm_model_cache.probe_failed');
     expect(warns).toHaveLength(1);
     expect(warns[0][1]).toMatchObject({ url: 'http://vllm:8000/v1/models', error: 'connect ECONNREFUSED' });
   });
@@ -395,12 +415,9 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
     // Stale beats broken on the soft path too — the label names the last
     // known id, and the degradation stays visible via serving_stale alone.
     await expect(cache.servedModelId('http://vllm:8000')).resolves.toBe('served/model');
-    const stale = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.serving_stale');
-    expect(stale).toHaveLength(1);
-    expect(logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed')).toHaveLength(0);
+    expect(warnsOf('vllm_model_cache.serving_stale')).toHaveLength(1);
+    expect(warnsOf('vllm_model_cache.probe_failed')).toHaveLength(0);
   });
-
-  const http401 = () => Object.assign(new Error('401'), { response: { status: 401 } });
 
   test('a soft failure does not silence the hard path — the loud caller probes and warns on its own', async () => {
     // The quiet probe's cool-down stub must not mute the hard path: the
@@ -410,8 +427,7 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
     await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({
       name: 'ModelDiscoveryError'
     });
-    const warns = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed');
-    expect(warns).toHaveLength(1);
+    expect(warnsOf('vllm_model_cache.probe_failed')).toHaveLength(1);
     expect(axios.get).toHaveBeenCalledTimes(2); // the hard path probed FOR ITSELF
   });
 
@@ -421,8 +437,7 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
       name: 'ModelDiscoveryError'
     });
     await expect(cache.servedModelId('http://vllm:8000')).resolves.toBeNull();
-    const warns = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed');
-    expect(warns).toHaveLength(1); // the hard failure only
+    expect(warnsOf('vllm_model_cache.probe_failed')).toHaveLength(1); // the hard failure only
     expect(axios.get).toHaveBeenCalledTimes(2);
   });
 
@@ -434,8 +449,7 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
     await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({
       name: 'ModelDiscoveryError'
     });
-    const warns = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed');
-    expect(warns).toHaveLength(1);
+    expect(warnsOf('vllm_model_cache.probe_failed')).toHaveLength(1);
     expect(axios.get).toHaveBeenCalledTimes(2); // the hard caller owned its probe
   });
 
@@ -443,15 +457,7 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
     mockProbeSuccess('stale/model');
     await cache.servedModelId('http://vllm:8000');
     Date.now.mockReturnValue(1_000_000 + 61_000); // the entry expires
-    let release;
-    axios.get.mockImplementationOnce(
-      () =>
-        new Promise((_, reject) => {
-          release = () => reject(http401());
-        })
-    );
-    const soft = cache.servedModelId('http://vllm:8000'); // quiet probe, held in flight
-    await Promise.resolve();
+    const { soft, release } = await holdQuietProbeFailing();
     // A loud probe (its own window) succeeds while the quiet one is still
     // failing — the fresh id is what the cache holds when the quiet probe
     // settles, so THAT is what this caller is served too.
@@ -459,8 +465,8 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
     await expect(cache.resolveVllmModelId('http://vllm:8000', { timeoutMs: 30000 })).resolves.toBe('fresh/model');
     release();
     await expect(soft).resolves.toBe('fresh/model');
-    expect(logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed')).toHaveLength(0);
-    expect(logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.serving_stale')).toHaveLength(0);
+    expect(warnsOf('vllm_model_cache.probe_failed')).toHaveLength(0);
+    expect(warnsOf('vllm_model_cache.serving_stale')).toHaveLength(0);
   });
 
   test('serving_stale and the served id never disagree (short-TTL refresh race)', async () => {
@@ -468,15 +474,7 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
     mockProbeSuccess('stale/model');
     await cache.servedModelId('http://vllm:8000'); // entry ts = t0
     Date.now.mockReturnValue(1_000_000 + 61_000); // expired (TTL 1 s)
-    let release;
-    axios.get.mockImplementationOnce(
-      () =>
-        new Promise((_, reject) => {
-          release = () => reject(http401());
-        })
-    );
-    const soft = cache.servedModelId('http://vllm:8000'); // quiet probe, held in flight
-    await Promise.resolve();
+    const { soft, release } = await holdQuietProbeFailing();
     axios.get.mockResolvedValue(modelsPayload('model-v2'));
     await expect(cache.resolveVllmModelId('http://vllm:8000', { timeoutMs: 30000 })).resolves.toBe('model-v2');
     // The refreshed id expires too before the quiet probe settles: an
@@ -484,7 +482,7 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
     Date.now.mockReturnValue(1_000_000 + 62_500);
     release();
     await expect(soft).resolves.toBe('model-v2');
-    const stale = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.serving_stale');
+    const stale = warnsOf('vllm_model_cache.serving_stale');
     expect(stale).toHaveLength(1);
     expect(stale[0][1]).toMatchObject({ stale_id: 'model-v2' });
   });
@@ -500,8 +498,7 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
     // served call's (per-concept curation loops must not flood VL).
     await expect(cache.servedModelId('http://vllm:8000')).resolves.toBe('served/model');
     await expect(cache.servedModelId('http://vllm:8000')).resolves.toBe('served/model');
-    const stale = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.serving_stale');
-    expect(stale).toHaveLength(1);
+    expect(warnsOf('vllm_model_cache.serving_stale')).toHaveLength(1);
     expect(axios.get).toHaveBeenCalledTimes(2); // warmup + the one failing probe
   });
 
@@ -509,15 +506,7 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
     mockProbeSuccess('stale/model');
     await cache.servedModelId('http://vllm:8000');
     Date.now.mockReturnValue(1_000_000 + 61_000); // the entry expires
-    let release;
-    axios.get.mockImplementationOnce(
-      () =>
-        new Promise((_, reject) => {
-          release = () => reject(http401());
-        })
-    );
-    const soft = cache.servedModelId('http://vllm:8000'); // quiet probe, held in flight
-    await Promise.resolve();
+    const { soft, release } = await holdQuietProbeFailing();
     // 64 other bases fill the count-bounded map — the held entry (oldest)
     // is evicted while the quiet probe is still failing. This caller is
     // STILL served the captured stale id, so the degradation is real and
@@ -527,9 +516,23 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
     }
     release();
     await expect(soft).resolves.toBe('stale/model'); // stale > broken, unchanged
-    const stale = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.serving_stale');
+    const stale = warnsOf('vllm_model_cache.serving_stale');
     expect(stale).toHaveLength(1);
     expect(stale[0][1]).toMatchObject({ stale_id: 'stale/model' });
+  });
+
+  test('a same-class caller joining a failing shared probe is served the stale id too', async () => {
+    mockProbeSuccess('served/model');
+    await cache.servedModelId('http://vllm:8000');
+    Date.now.mockReturnValue(1_000_000 + 61_000); // the entry expires
+    const { release } = await holdQuietProbeFailing();
+    // A second soft caller joins the SAME in-flight probe while it is
+    // failing: one settlement, one answer — the joiner is served the stale
+    // id exactly like the creator, and ONE warn covers the window.
+    const joiner = cache.servedModelId('http://vllm:8000');
+    release();
+    await expect(joiner).resolves.toBe('served/model');
+    expect(warnsOf('vllm_model_cache.serving_stale')).toHaveLength(1);
   });
 });
 

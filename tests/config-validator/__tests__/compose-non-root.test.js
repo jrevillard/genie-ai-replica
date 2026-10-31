@@ -590,6 +590,67 @@ describe('compose non-root contract (#1227)', () => {
     expect(validateComposeNonRoot(flowOpted).violations).toEqual([]);
   });
 
+  test('mutations: service-local commented restart, templated user pin, triple nesting, flow bind opts', () => {
+    // A SERVICE-LOCAL commented restart hides behind the anchor's bounded
+    // values (the r19 mutation covered the anchor line only).
+    const localCommented = composeText.replace(
+      '  backend-init:\n    <<: *chown-init\n',
+      '  backend-init:\n    <<: *chown-init\n    restart: always # self-heal\n'
+    );
+    expect(localCommented).not.toBe(composeText);
+    const { violations: v1 } = validateComposeNonRoot(localCommented);
+    expect(v1.some((v) => v.includes('backend-init') && v.includes('one-shot'))).toBe(true);
+
+    // A templated user pin could resolve to root — resolved conservatively
+    // to root (the identity pin must be literal).
+    const templated = ['services:', '  backend:', '    user: "${BACKEND_UID:-0}"', ''].join('\n');
+    const { violations: v2 } = validateComposeNonRoot(templated);
+    expect(v2.some((v) => v.includes('backend') && v.includes('is root'))).toBe(true);
+
+    // Triple-nested variable defaults strip from the innermost outward.
+    const triple = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes:',
+      '      - type: bind',
+      '        source: ${A:-${B:-${C:-./data}}}/logs/kong',
+      '        target: /var/log/kong',
+      ''
+    ].join('\n');
+    const { violations: v3 } = validateComposeNonRoot(triple);
+    expect(v3.some((v) => v.includes('kong') && v.includes('create_host_path: false'))).toBe(true);
+
+    // Flow-form bind opts and re-indented create_host_path are legal
+    // spellings of an opted-out bind — no false violation.
+    const flowBind = [
+      'services:',
+      '  backend:',
+      '    user: "1000:1000"',
+      '    volumes:',
+      '      - type: bind',
+      '        source: ./data/database_backups',
+      '        target: /app/database_backups',
+      '        bind: {create_host_path: false}',
+      ''
+    ].join('\n');
+    expect(validateComposeNonRoot(flowBind).violations).toEqual([]);
+
+    const reindented = [
+      'services:',
+      '  backend:',
+      '    user: "1000:1000"',
+      '    volumes:',
+      '      - type: bind',
+      '        source: ./data/database_backups',
+      '        target: /app/database_backups',
+      '        bind:',
+      '            create_host_path: false',
+      ''
+    ].join('\n');
+    expect(validateComposeNonRoot(reindented).violations).toEqual([]);
+  });
+
   test('allowlist entries reference services that exist in the compose file', () => {
     // A renamed or removed service would leave a stale allowlist entry that
     // enforces nothing — dead enforcement data. Uses the validator's OWN

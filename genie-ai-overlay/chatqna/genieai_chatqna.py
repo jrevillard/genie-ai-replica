@@ -595,20 +595,54 @@ def _build_user_content(user_context_string: str, history_string: str, rag_augme
     )
 
 
-# Fixed completion ceiling a translation request falls back to when no
-# window is known, and the default for the callers that translate
-# chunk-bounded inputs (the chunk path). The history path replaces it with
-# the window-derived allowance.
-TRANSLATION_BASE_CEILING = 4096
+# Translation completion budget. The cap is MEASURED, not guessed: the
+# prompt's tokens come from the translation server's own tokenizer, because
+# a char/token ratio is wrong for dense scripts (CJK runs ~1 token/char,
+# Latin ~4) — and a wrong estimate either overflows the window (the server
+# rejects the request) or truncates the translation.
+# TRANSLATION_COMPLETION_SAFETY_TOKENS covers what the count cannot see:
+# the chat template the server wraps the prompt in.
+TRANSLATION_COMPLETION_SAFETY_TOKENS = 64
+# What a translation needs: the backend translation path sizes the same
+# request at 4x the input tokens plus a margin (the target script can cost
+# more tokens than the source), and that bound keeps a big window from
+# inviting an unbounded completion.
+TRANSLATION_COMPLETION_NEEDED_MULTIPLIER = 4
+TRANSLATION_COMPLETION_NEEDED_MARGIN = 256
 
 
-def _translation_base_cap(text: str, ceiling: int = TRANSLATION_BASE_CEILING) -> int:
-    """Base completion cap for a translation request: roughly half the input
-    size, with a 512 floor that keeps short inputs translatable and a
-    ceiling that keeps long ones bounded (a ceiling below the floor wins —
-    the window caller may clamp that far). Shared by every translation path;
-    the history caller passes the window-derived ceiling it discovered."""
-    return min(max(len(text) // 2, 512), ceiling)
+def _translation_completion_cap(prompt: str, window: int | None, model: str | None = None) -> int | None:
+    """Completion cap for a translation request, or None to send no cap.
+
+    The cap is the room the window leaves beside the measured prompt,
+    bounded by what the translation needs (4x the prompt tokens plus a
+    margin — the rule the backend translation path uses). The room is what
+    the server would grant anyway; stating it explicitly bounds the
+    completion instead of leaving it to the server's default.
+
+    None means the request goes out uncapped: the window is unknown, the
+    prompt could not be counted, or the count is not trustworthy. The
+    server's own default budget governs then — it is the room the real
+    prompt leaves — and a completion it cuts off is refused by the
+    truncation guard.
+
+    Raises:
+        TranslationInputTooLongError: the prompt alone does not fit the
+        window. The server would reject the request; the callers refuse
+        the translation instead, with the reason named.
+    """
+    if not window:
+        return None
+    prompt_tokens = _count_translation_tokens(prompt, model)
+    if prompt_tokens is None:
+        return None
+    room = window - prompt_tokens - TRANSLATION_COMPLETION_SAFETY_TOKENS
+    if room <= 0:
+        raise TranslationInputTooLongError(
+            f"translation prompt ({prompt_tokens} tokens) does not fit the translation window ({window} tokens)"
+        )
+    needed = TRANSLATION_COMPLETION_NEEDED_MULTIPLIER * prompt_tokens + TRANSLATION_COMPLETION_NEEDED_MARGIN
+    return min(room, needed)
 
 
 def _completion_truncated(choice: dict) -> bool:
@@ -619,8 +653,26 @@ def _completion_truncated(choice: dict) -> bool:
     differently — the history path falls back to the source history, the
     chunk path raises so the answer is not spliced half-translated — but
     they must agree on what counts as truncated.
+
+    ``length`` is the OpenAI name for the condition; some
+    OpenAI-compatible proxies report it as ``max_tokens``.
     """
-    return choice.get("finish_reason") == "length"
+    return choice.get("finish_reason") in ("length", "max_tokens")
+
+
+def _choice_content(choice: dict, completions: bool) -> str:
+    """The text of a completion, whatever payload shape carries it.
+
+    The chat shape nests it under ``message.content``, the completions
+    shape under ``text``; a server that cut the completion off before any
+    token can leave the content null. The read never raises: a missing or
+    null content is an empty completion, which the callers already refuse.
+    """
+    if completions:
+        raw = choice.get("text")
+    else:
+        raw = (choice.get("message") or {}).get("content")
+    return (raw or "").strip()
 
 
 def _get_max_model_len() -> int:
@@ -2045,6 +2097,71 @@ def _count_tokens(text: str) -> int:
                 raise TokenCountError(f"/tokenize count is absurdly large: {payload!r}")
         span.set_attribute(ATTRIBUTE_NAMES["token_count"], count)
         return count
+
+
+def _count_translation_tokens(prompt: str, model: str | None = None) -> int | None:
+    """Count a translation prompt's tokens with the TRANSLATION server's own
+    tokenizer (vLLM ``/tokenize``).
+
+    The count is measured because a client's own char/token ratio is a
+    guess: dense scripts (CJK) run ~1 token/char, Latin ~4, so a budget
+    computed from a ratio either overflows the window (the server rejects
+    the request) or truncates the translation. The translation server
+    tokenizes with the model that will translate — so the count is the
+    model's own.
+
+    ``model`` is the name the request will carry, so the count matches the
+    request exactly: the TranslateGemma payload names its model, the
+    generic one does not (the server then answers with its default model,
+    exactly as the translation request does).
+
+    Best-effort by contract: this count sizes the completion budget, and a
+    budget must never decide whether the translation happens. When the
+    server cannot count, None comes back and the caller sends no cap — the
+    server's own default budget governs, and the truncation guard still
+    refuses a cut-off completion.
+    """
+    url = f"{_TRANSLATION_DISCOVERY_ENDPOINT}/tokenize"
+    headers = endpoint_auth_headers()
+    verify = endpoint_verify()
+    body = {"prompt": prompt}
+    if model:
+        body["model"] = model
+    try:
+        with with_span(
+            "chatqna.count_tokens",
+            attributes={ATTRIBUTE_NAMES["llm_endpoint"]: url},
+        ) as span:
+            resp = httpx.post(
+                url,
+                headers=headers,
+                json=body,
+                timeout=PROBE_TIMEOUT_SECONDS,
+                verify=verify,
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+            if not isinstance(payload, dict):
+                raise TokenCountError(f"/tokenize returned a non-object payload: {payload!r}")
+            count = coerce_int(payload.get("count"))
+            if count is None:
+                tokens = payload.get("tokens")
+                if not isinstance(tokens, list):
+                    raise TokenCountError(f"/tokenize payload has neither a count nor a token list: {payload!r}")
+                count = len(tokens)
+            if count < 0:
+                raise TokenCountError(f"/tokenize count is negative: {count}")
+            if count > MAX_SANE_MODEL_WINDOW_TOKENS:
+                raise TokenCountError(f"/tokenize count is absurdly large: {count}")
+            span.set_attribute(ATTRIBUTE_NAMES["token_count"], count)
+            return count
+    except Exception as e:
+        logger.warning(
+            "Translation prompt could not be counted (%s: %s); the server's own budget will govern the completion.",
+            type(e).__name__,
+            e,
+        )
+        return None
 
 
 ##################################################################################################################################
@@ -3675,32 +3792,6 @@ class ChatQnAService:
             f"<end_of_turn>\n<start_of_turn>model\n"
         )
 
-    def _translation_output_cap(self, flattened_history_string: str, window: int | None) -> int | None:
-        """Completion cap for a history-translation payload, either shape
-        (TranslateGemma completions or generic chat completions).
-
-        Roughly half the input (512 floor). When the translation window is
-        known, the ceiling is the room the window leaves beside the prompt
-        estimate (chars / chars-per-token ratio), so prompt and completion
-        stay inside the window together. A history whose estimate exceeds
-        that allowance yields None — the completion would be shorter than
-        what there is to translate — and the caller skips the translation,
-        sending the history as-is.
-
-        Without a window there is no window-safe cap to send: the fixed
-        ceiling applies, and the caller decides whether to send it at all
-        (the TranslateGemma payload has always carried one; the generic
-        payload sends one only when the window is known).
-        """
-        if not window:
-            return _translation_base_cap(flattened_history_string, ceiling=TRANSLATION_BASE_CEILING)
-        prompt_token_estimate = len(flattened_history_string) // TRANSLATION_CHARS_PER_TOKEN
-        ceiling = max(1, window - TRANSLATION_PROMPT_OVERHEAD_TOKENS - prompt_token_estimate)
-        cap = _translation_base_cap(flattened_history_string, ceiling=ceiling)
-        if cap < prompt_token_estimate:
-            return None
-        return cap
-
     async def _get_translated_history_string(
         self, history: list | str, source_lang_code: str = "en"
     ) -> tuple[str, str]:
@@ -3839,17 +3930,6 @@ class ChatQnAService:
         # parse must branch on the SAME decision (and the same id).
         translation_model_id = _get_translation_model_id()
         translategemma = _is_translategemma(translation_model_id)
-        # The completion budget is decided for BOTH payload shapes: the same
-        # window-derived cap, so the completion length is never the server's
-        # default sampling budget. The window is read once, here, so the cap
-        # and the decision to send it cannot disagree.
-        window = _get_translation_window()
-        output_cap = self._translation_output_cap(flattened_history_string, window)
-        if output_cap is None:
-            logger.warning(
-                "Translation window too tight to translate the history meaningfully; returning it untranslated"
-            )
-            return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
         # Build payload based on model type
         if translategemma:
             # Use completions API with pre-formatted prompt (vLLM v0.10.0 cannot
@@ -3863,7 +3943,6 @@ class ChatQnAService:
                 "model": translation_model_id,
                 "prompt": prompt,
                 "temperature": 0.0,
-                "max_tokens": output_cap,
                 "repetition_penalty": 1.2,
             }
             url = TRANSLATION_COMPLETIONS_URL
@@ -3878,14 +3957,22 @@ class ChatQnAService:
                 "temperature": 0,
                 "stream": False,
             }
-            if window:
-                # Without a discovered window there is no window-safe budget
-                # to send: an explicit cap could exceed the model's window
-                # and the server would reject the whole request. The
-                # server's default — the room left in the window — is the
-                # only safe choice then.
-                payload["max_tokens"] = output_cap
             url = TRANSLATION_LLM_URL
+
+        # The completion budget: measured against the window the model
+        # serves, for BOTH payload shapes. The count asks the translation
+        # server itself, so a dense script costs what it really costs.
+        try:
+            completion_cap = _translation_completion_cap(
+                prompt, _get_translation_window(), model=translation_model_id if translategemma else None
+            )
+        except TranslationInputTooLongError:
+            logger.warning(
+                "Translation window too tight to translate the history meaningfully; returning it untranslated"
+            )
+            return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
+        if completion_cap is not None:
+            payload["max_tokens"] = completion_cap
 
         if logflag:
             svc = "TranslateGemma" if translategemma else "generic"
@@ -3910,8 +3997,7 @@ class ChatQnAService:
                     # rejects it the same way.
                     logger.error("Translation model hit max_tokens; treating the history translation as failed.")
                     return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
-                content = choice.get("text") if translategemma else (choice.get("message") or {}).get("content")
-                translated_blob = (content or "").strip()
+                translated_blob = _choice_content(choice, translategemma)
                 if not translated_blob:
                     # A 200 with an empty completion is a failure, not a
                     # translation: the chunk translator refuses it for the
@@ -4105,7 +4191,6 @@ class ChatQnAService:
                 "model": translation_model_id,
                 "prompt": prompt,
                 "temperature": 0.0,
-                "max_tokens": _translation_base_cap(text),
                 "repetition_penalty": 1.2,
             }
             url = TRANSLATION_COMPLETIONS_URL
@@ -4127,13 +4212,18 @@ class ChatQnAService:
                 "temperature": 0,
                 "stream": False,
             }
-            # No explicit completion budget on this path: it knows no window,
-            # and a cap sized on the source is either too tight for a
-            # script-expansive target (the translation gets cut off) or too
-            # large for the model's window (the server rejects the request).
-            # The server's default — the room left in the window — fits
-            # both; a cut-off completion is refused below.
             url = TRANSLATION_LLM_URL
+
+        # The completion budget, measured against the window the translation
+        # model serves: the room its real prompt leaves, bounded by what the
+        # translation needs. A prompt that does not fit the window raises
+        # here — the same refusal the server's own 400 would earn, named
+        # before the request goes out.
+        completion_cap = _translation_completion_cap(
+            prompt, _get_translation_window(), model=translation_model_id if translategemma else None
+        )
+        if completion_cap is not None:
+            payload["max_tokens"] = completion_cap
 
         if logflag:
             logger.debug(f"Translation payload ({'TranslateGemma' if translategemma else 'generic'}): {payload}")
@@ -4148,8 +4238,7 @@ class ChatQnAService:
                 response.raise_for_status()
                 response_data = response.json()
                 choice = response_data["choices"][0]
-                content = choice.get("text") if translategemma else (choice.get("message") or {}).get("content")
-                translated = (content or "").strip()
+                translated = _choice_content(choice, translategemma)
         except Exception as e:
             # Fail-loud on vLLM context overflow: silently returning the
             # original English text breaks the multilingual UX (#829). Classify

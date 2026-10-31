@@ -2740,6 +2740,8 @@ export default {
       saveBlocked: 'Ho boloka ho thibiloe: lokisa litaba tsa boikamahanyo pele.'
     },
     validation: {
+      piiRescanTimeout:
+        'Re-skan e ntse e ea ka morao ho metsotso e 15 — e tsoela pele serveñ. Ha ho lahloehe; hlahloba hape ka motsotso o le mong.',
       healthAria: 'Bophelo: {pct} lekholo, bothata {n}',
       frozen:
         'Litaba li emisitsoe ho {v} — pono ea ho bala feela. Etsa retract mofuteng o sebetsang ho serving ho etsa liphetoho.',

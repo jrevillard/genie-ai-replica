@@ -3542,6 +3542,8 @@ export default {
       saveBlocked: 'Save blocked: fix conformance issues first.'
     },
     validation: {
+      piiRescanTimeout:
+        'The re-scan is still running after 15 minutes — it keeps going server-side. Nothing was lost; check back in a minute.',
       healthAria: 'Health: {pct} percent, {n} issue(s)',
       frozen: 'Content frozen at {v} — read-only preview. Retract the serving version to make changes.',
       none: 'None',

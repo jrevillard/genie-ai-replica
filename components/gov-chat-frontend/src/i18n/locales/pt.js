@@ -2738,6 +2738,8 @@ export default {
       saveBlocked: 'Salvamento bloqueado: corrija os problemas de conformidade primeiro.'
     },
     validation: {
+      piiRescanTimeout:
+        'A reexaminação ainda decorre passados 15 minutos — continua no servidor. Nada se perdeu; verifique de novo dentro de um minuto.',
       healthAria: 'Saúde: {pct} por cento, {n} problema(s)',
       frozen:
         'Conteúdo congelado em {v} — visualização somente leitura. Execute retract na versão em serving para fazer alterações.',

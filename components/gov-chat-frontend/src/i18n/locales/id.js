@@ -2727,6 +2727,8 @@ export default {
       saveBlocked: 'Penyimpanan diblokir: perbaiki masalah kesesuaian terlebih dahulu.'
     },
     validation: {
+      piiRescanTimeout:
+        'Pemindaian ulang masih berjalan setelah 15 menit — prosesnya berlanjut di sisi server. Tidak ada yang hilang; periksa lagi dalam satu menit.',
       healthAria: 'Kesehatan: {pct} persen, {n} masalah',
       frozen:
         'Konten dibekukan pada {v} — pratinjau hanya-baca. Lakukan retract pada versi yang sedang serving untuk membuat perubahan.',

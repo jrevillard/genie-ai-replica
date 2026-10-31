@@ -2740,6 +2740,8 @@ export default {
       saveBlocked: 'Guardado bloqueado: resuelva los problemas de conformidad primero.'
     },
     validation: {
+      piiRescanTimeout:
+        'El reescaneo sigue en marcha tras 15 minutos — continúa en el servidor. No se perdió nada; vuelve a comprobarlo en un minuto.',
       healthAria: 'Salud: {pct} por ciento, {n} problema(s)',
       frozen:
         'Contenido fijado en {v} — vista previa de solo lectura. Aplique retract en la versión en serving para hacer cambios.',

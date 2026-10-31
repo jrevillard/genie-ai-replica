@@ -2752,6 +2752,8 @@ export default {
       saveBlocked: 'Speichern blockiert: Beheben Sie zuerst Konformitätsprobleme.'
     },
     validation: {
+      piiRescanTimeout:
+        'Der erneute Scan läuft nach 15 Minuten noch — er arbeitet serverseitig weiter. Nichts ging verloren; prüfen Sie in einer Minute erneut.',
       healthAria: 'Zustand: {pct} Prozent, {n} Problem(e)',
       frozen:
         'Inhalt bei {v} eingefroren — schreibgeschützte Vorschau. Retract für die serving-Version ausführen, um Änderungen vorzunehmen.',

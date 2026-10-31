@@ -384,6 +384,25 @@ describe('Input workbench — bulk PII actions (#1040)', () => {
     expect(mockListConcepts).toHaveBeenCalledTimes(1); // no refresh on failure
   });
 
+  // Round 19, #80773: httpService REJECTS on HTTP errors (409 drain freeze,
+  // 5xx) — pre-fix, try/finally without a catch let the rejection escape:
+  // busy reset, dialog closed, no inputError, flags kept as if the action
+  // had run. The rejection must surface exactly like the {ok:false} shape.
+  it('a REJECTED bulk action (409/5xx) surfaces the error, not an unhandled rejection', async () => {
+    mockListConcepts.mockResolvedValue(FLAGGED.map((c) => ({ ...c })));
+    mockBulkPiiAction.mockRejectedValue(Object.assign(new Error('drain freeze'), { code: 'PUBLISH_DRAIN_ACTIVE' }));
+    const wrapper = mountInput({ repo_id: 'r1', source: 'documents' });
+    await settled(wrapper);
+    await wrapper.vm.onPiiBulkAsk('accept');
+    await settled(wrapper);
+    await wrapper.vm.onPiiBulkAction('confirm');
+    await settled(wrapper);
+    expect(wrapper.vm.inputError).toBeTruthy(); // surfaced
+    expect(wrapper.vm.piiBulkBusy).toBe(false); // released by finally
+    expect(wrapper.vm.piiBulkAsk).toBeNull(); // dialog closed
+    expect(mockListConcepts).toHaveBeenCalledTimes(1); // no refresh on failure
+  });
+
   it('cancel closes the dialog without touching the server', async () => {
     mockListConcepts.mockResolvedValue(FLAGGED.map((c) => ({ ...c })));
     const wrapper = mountInput({ repo_id: 'r1', source: 'documents' });

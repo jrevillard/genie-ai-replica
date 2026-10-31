@@ -2690,6 +2690,8 @@ export default {
       saveBlocked: 'Bōjrak kōjparok: kōm̦m̦an bwe en jim̦we wāween ko m̦oktata.'
     },
     validation: {
+      piiRescanTimeout:
+        'Re-scan eo jen kabun jen 15 minute — e tatae Pacific server-ewaam. Ejjab men in loss; ejjamȯk ikijen ijen minit in juōn.',
       healthAria: 'Menin: {pct} percent, {n} issue',
       frozen: 'Kobban em̦ōj kabōjrak ilo {v} — riiti wōt. Retract wāween eo ej serving bwe kwōn kōm̦m̦an oktak.',
       none: 'Ejjel̦o̦k',

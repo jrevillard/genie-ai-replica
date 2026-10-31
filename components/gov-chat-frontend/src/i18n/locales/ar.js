@@ -1935,7 +1935,7 @@ export default {
         deleting: 'يحذف'
       },
       addSources: {
-        working: 'Converting sources…',
+        working: 'تحويل المصادر…',
         done: '{n} مصدرًا في قائمة الانتظار — تصل الموضوعات إلى الشجرة مع اكتمال التحويلات ({t} موضوعًا الآن).',
         failed: 'فشل أحد التحويلات — راجع السجلات؛ قد يكون الباقي أُدرج في قائمة الانتظار.',
         landed: 'اكتملت التحويلات — {t} موضوعًا الآن في الشجرة.'
@@ -2376,7 +2376,7 @@ export default {
       }
     },
     wizard: {
-      working: 'Working…',
+      working: 'جارٍ العمل…',
       state: {
         draft: 'قيد التقدم',
         register: 'قيد التقدم',
@@ -2453,7 +2453,7 @@ export default {
         chooseDocs: 'اختيار المستندات المصدر',
         writeOne: '+ كتابة مفهوم',
         fsPick: '+ استيراد markdown من هذا الكمبيوتر',
-        fsBusy: 'Importing your files…',
+        fsBusy: 'استيراد ملفاتك…',
         fsFailed: 'فشل الاستيراد — تحقق من الملفات وأعد المحاولة.',
         skippedEmpty: 'تم تخطي {n} ملفًا فارغًا.',
         noneSelected: 'لم تُحدد أي مصادر بعد.',
@@ -2516,7 +2516,7 @@ export default {
       label: {
         title: 'التسميات — تلقائي',
         hint: 'تُحدَّد التسميات تلقائيًا من تسلسل المعرفة، وتقتصر على المجال الموضوعي لهذا المستودع.',
-        loading: 'Reading labels…',
+        loading: 'قراءة التصنيفات…',
         preview: '{labeled} من {n} موضوعًا تحمل تسميات هرمية المعرفة.',
         unlabeled: 'لا تسميات بعد',
         adjust: 'اضبط تسميات أي موضوع في Curate — تبقى التسميات مقيدة بمجال الموضوع لهذا المستودع.',
@@ -2693,6 +2693,8 @@ export default {
       saveBlocked: 'تم حظر الحفظ: أصلح مشكلات المطابقة أولاً.'
     },
     validation: {
+      piiRescanTimeout:
+        'ما زالت إعادة الفحص تعمل بعد 15 دقيقة — وهي مستمرة على الخادم. لم يُفقد شيء؛ عاود التحقق بعد دقيقة.',
       healthAria: 'الصحة: {pct} بالمئة، {n} مشكلة',
       frozen: 'المحتوى مجمد عند {v} — معاينة للقراءة فقط. اسحب الإصدار المتاح للخدمة لإجراء تغييرات.',
       none: 'لا يوجد',
@@ -2710,7 +2712,7 @@ export default {
         notReady: 'سيتم ربط التحقق في مهمة لاحقة.'
       },
       piiTitle: 'البيانات الشخصية — راجع كل مفهوم مُعلَّم',
-      loading: 'Checking the repository…',
+      loading: 'جارٍ فحص المستودع…',
       loadFailed: 'تعذر تحميل تقرير التحقق.',
       retry: 'إعادة المحاولة',
       issuesTitle: 'مشكلات للمراجعة',
@@ -2742,7 +2744,7 @@ export default {
         accept: 'قبول',
         dismiss: 'تجاهل',
         delete: 'حذف',
-        working: 'Working…',
+        working: 'جارٍ العمل…',
         wireCreate: 'أنشئ صفحة المصادر واربط {n} صفحة',
         wireExisting: 'اربط {n} صفحة بـ «{hub}»',
         preview: 'معاينة التكرارات',
@@ -2762,7 +2764,7 @@ export default {
       wireCreated: 'تم إنشاء صفحة المصادر وربط {n} صفحة.',
       mergedPages: '{n} صفحة',
       preview: {
-        loading: 'Loading page contents…',
+        loading: 'جارٍ تحميل محتوى الصفحات…',
         truncated: 'أول {n} حرفًا — افتح المحرر للصفحة الكاملة.'
       },
       tip: {
@@ -2778,7 +2780,7 @@ export default {
           'استُوردت الصفحة لكن فشل بناء فهرس البحث الخاص بها — لا يمكن استرجاعها حتى تُعاد الفهرسة. حفظ الصفحة في المحرر يعيد محاولة البناء.'
       },
       piiRescan: 'إعادة فحص كل الصفحات',
-      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanWorking: 'إعادة فحص كل صفحة…',
       piiRescanDone: 'تمت إعادة فحص {n} صفحة.',
       piiRescanPartial:
         'تمت إعادة فحص {n} صفحة. ما زالت {e} فاشلة — لم يتغير حكم الفحص الخاص بها، لذا يظل النشر محظورًا لها.',
@@ -2793,8 +2795,8 @@ export default {
       piiStateError: 'خطأ في الفحص',
       piiTally: {
         scanned: 'تمت إعادة فحص {n} صفحة',
-        clean: 'clear',
-        hit: 'flagged',
+        clean: 'خالٍ',
+        hit: 'مُعلَّم',
         error: 'خطأ في الفحص',
         stillBlocking: 'ما زالت تحظر'
       }
@@ -2881,7 +2883,7 @@ export default {
       title: 'اختر المستندات المصدر',
       hint: 'اختر المصادر من مستودع المستندات، أو ارفع مستندات جديدة من هذا الكمبيوتر، أو كلاهما.',
       repoSec: 'من مستودع المستندات',
-      searchPh: 'Search by name or site…',
+      searchPh: 'ابحث بالاسم أو بالموقع…',
       chipsLabel: 'تصفية حسب الأصل',
       chipAll: 'الكل',
       chipCrawl: 'عمليات الزحف',
@@ -2891,13 +2893,13 @@ export default {
       crawlTip: 'تم الزحف من: {url}',
       total: '{n} مستند',
       titleSingle: 'اختر المستند المزحوف',
-      loading: 'Loading documents…',
+      loading: 'تحميل المستندات…',
       retry: 'إعادة المحاولة',
       empty: 'لا توجد مستندات في المستودع بعد — ارفع بعضها أدناه.',
       more: 'تحميل المزيد',
       fsSec: 'من هذا الكمبيوتر',
       fsPick: '+ رفع الملفات',
-      uploading: 'Uploading…',
+      uploading: 'جارٍ الرفع…',
       uploaded: 'تم رفع {n} ملف.',
       uploadFailed: 'فشل أحد عمليات الرفع — تحقق من الملفات وأعد المحاولة.',
       fsNote: 'تنضم الملفات المرفوعة إلى مستودع المستندات وتُحدد هنا تلقائيًا.',
@@ -2915,7 +2917,7 @@ export default {
       title: 'وسوم Frontmatter — ما يتناوله هذا المستودع',
       help: 'تصف الوسوم ما يحتويه هذا المستودع وما — بالأهمية نفسها — لا يحتويه (قائمة المحظورات). إنها تحدد أي الاستعلامات تُوجَّه إلى هذا المستودع. انقر «تحديث» لصياغة مسودة من المتن، أو حرّر الرقائق أدناه. يتطلب النشر ≥3 مواضيع + ≥1 محظور.',
       refresh: 'تحديث الاقتراحات',
-      suggesting: 'Curating…',
+      suggesting: 'جارٍ التنسيق…',
       suggestEmpty: 'لم يُرجع LLM أي وسوم. حاول مجددًا بعد أن يكبر المتن.',
       suggestCoverage: 'مشتق من {sampled} من أصل {total} مفهومًا، عبر {labels} تسميات من هرمية المعرفة.',
       suggestFailed: 'فشل الاقتراح.',
@@ -2924,7 +2926,7 @@ export default {
       fieldEmpty: '—',
       addPlaceholder: 'إضافة {field}',
       add: 'إضافة',
-      saving: 'Saving…',
+      saving: 'جارٍ الحفظ…',
       save: 'حفظ الوسوم',
       saved: 'تم الحفظ',
       error: 'فشل الحفظ.',
@@ -2988,8 +2990,8 @@ export default {
         passSuppressed: 'نجاح — مكبوت بواسطة بوابة المنع/الضوضاء: الرأس لا يطالب بهذا الاستعلام',
         notSelectedSuppressed:
           'غير محدد — مكبوت بواسطة بوابة المنع/الضوضاء: الاستعلام أقرب إلى ما يستبعده هذا المستودع، أو هو ضوضاء خارج المجال',
-        claimed: 'claims',
-        suppressed: 'suppressed'
+        claimed: 'استعلامات مُطالَب بها',
+        suppressed: 'مُكمَّم'
       },
       gate: {
         title: 'البوابة',
@@ -3035,7 +3037,7 @@ export default {
       },
       run: {
         progress: '{done} من {total} استعلام ({pct}%)',
-        progressStarting: 'Starting the run…',
+        progressStarting: 'بدء التشغيل…',
         phase: {
           routing: 'حساب نقاط التوجيه',
           corpus: 'فحص المتن'
@@ -3063,15 +3065,15 @@ export default {
           corpus: 'المتن'
         },
         notEvaluatable: 'غير قابل للتقييم (لا منافسين)',
-        pass: 'pass',
-        fail: 'fail',
+        pass: 'ناجح',
+        fail: 'فاشل',
         passRate: 'نسبة النجاح',
         positives: 'الإيجابيات',
         negatives: 'السالبات',
         noCompetitors: 'غير متاح — لا توجد رؤوس منافسة بعد',
         avgMargin: 'متوسط الهامش',
         steal: 'سرق {repo} {n} استعلامًا',
-        addPlaceholder: 'Your own probe query…',
+        addPlaceholder: 'استعلام فحص من عندك…',
         add: 'إضافة إلى المجموعة',
         kindPositive: 'يجب اختياره',
         kindNegative: 'يجب عدم اختياره',

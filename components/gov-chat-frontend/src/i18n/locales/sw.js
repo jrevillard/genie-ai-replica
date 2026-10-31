@@ -2725,6 +2725,8 @@ export default {
       saveBlocked: 'Uhifadhi umezuiwa: rekebisha masuala ya ulinganifu kwanza.'
     },
     validation: {
+      piiRescanTimeout:
+        'Ukchanganuzi upya bado unaendelea baada ya dakika 15 — unaendelea upande wa seva. Hakuna kilichopotea; angalia tena baada ya dakika moja.',
       healthAria: 'Afya: asilimia {pct}, matatizo {n}',
       frozen:
         'Maudhui yamesitishwa kwenye toleo la {v} — hakikisho la kusoma tu. Lifanyie toleo la serving hatua ya retract ili kufanya mabadiliko.',

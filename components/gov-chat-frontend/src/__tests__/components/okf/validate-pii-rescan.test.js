@@ -143,6 +143,33 @@ describe('OkfStepValidate — repo-wide PII re-scan (2026-10-12)', () => {
     expect(dispatched.filter((d) => d.type === 'okf/getRepoPiiScan').length).toBe(2);
   });
 
+  // Round 19, #80774: a run wedged at 'running' (worker crash without
+  // reaping) used to re-arm the 3s timer FOREVER. Past the 15-minute horizon
+  // the poll stops with a readable timeout; the button releases.
+  it('gives up with a readable timeout after 15 minutes of a wedged running run', async () => {
+    const { w, dispatched } = mountStep([{ concept_id: 'c3', title: 'Three', pii_state: 'error' }], {
+      'okf/startRepoPiiScan': () => ({ ok: true, result: { repo_id: 'r1', scan_key: 'sk1', status: 'running' } }),
+      'okf/getRepoPiiScan': () => ({
+        ok: true,
+        result: { status: 'running', progress: { phase: 'concepts', done: 2, total: 10 } }
+      })
+    });
+    await settle(w);
+    await w.vm.onRescanAllPii();
+    await settle(w);
+
+    // Past the ceiling: the timeout surfaces and polling STOPS.
+    await jest.advanceTimersByTimeAsync(15 * 60 * 1000 + 3100);
+    await settle(w);
+    expect(w.vm.piiRescanBusy).toBe(false);
+    expect(w.vm.piiRescanError).toBeTruthy();
+    expect(w.text()).toContain('still running after 15 minutes');
+    const polls = dispatched.filter((d) => d.type === 'okf/getRepoPiiScan').length;
+    await jest.advanceTimersByTimeAsync(9000);
+    await settle(w);
+    expect(dispatched.filter((d) => d.type === 'okf/getRepoPiiScan').length).toBe(polls);
+  });
+
   it('stops at a terminal state and renders the per-concept tally', async () => {
     let poll = 0;
     const { w, dispatched } = mountStep([{ concept_id: 'c3', title: 'Three', pii_state: 'error' }], {

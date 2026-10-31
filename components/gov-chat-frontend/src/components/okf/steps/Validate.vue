@@ -383,6 +383,11 @@ const PREVIEW_CHARS = 1500;
 // round-trip per concept), so the panel polls. Same cadence as the topic-link
 // run: fast enough that the bar moves, slow enough not to hammer the API.
 const PII_RESCAN_POLL_MS = 3000;
+// CEILING (round 19, #80774): a run wedged at status 'running' (worker
+// crash without reaping) re-arms the 3s timer forever otherwise — the same
+// dead-end class the store's pollJob ceilings exist to remove. Same 15-min
+// horizon as the editor's rescan control and pollJob's PII actions.
+const PII_RESCAN_MAX_MS = 15 * 60 * 1000;
 
 // Per-type explanation tips (#1039): what the check looks at and why it
 // matters for RAG accuracy — one sentence a steward can act on.
@@ -803,6 +808,7 @@ export default {
         return;
       }
       this.piiRescanKey = scanKey;
+      this._piiRescanDeadline = Date.now() + PII_RESCAN_MAX_MS;
       this._pollPiiRescan(epoch, repoId, scanKey);
     },
     _stopPiiRescanPolling() {
@@ -821,6 +827,17 @@ export default {
       }
       const run = res.result || {};
       if (run.status === 'running') {
+        // Horizon (#80774 — see PII_RESCAN_MAX_MS): stop following a wedged
+        // run with a readable timeout; the server-side run is untouched.
+        if (this._piiRescanDeadline && Date.now() > this._piiRescanDeadline) {
+          this.piiRescanBusy = false;
+          this._piiRescanTimer = null;
+          this.piiRescanError = this.translate(
+            'okf.validation.piiRescanTimeout',
+            'The re-scan is still running after 15 minutes — it keeps going server-side. Nothing was lost; check back in a minute.'
+          );
+          return;
+        }
         const p = run.progress || {};
         const done = Number(p.done || 0);
         const total = Number(p.total || 0);

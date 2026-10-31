@@ -1908,7 +1908,7 @@ export default {
         deleting: '删除中'
       },
       addSources: {
-        working: 'Converting sources…',
+        working: '正在转换来源…',
         done: '{n} 个来源已排队——主题会随着转换完成逐一进入树中（当前 {t} 个主题）。',
         failed: '一个转换失败——请检查日志；其余来源可能仍在排队。',
         landed: '转换完成——树中现有 {t} 个主题。'
@@ -2341,7 +2341,7 @@ export default {
       }
     },
     wizard: {
-      working: 'Working…',
+      working: '处理中…',
       state: {
         draft: '进行中',
         register: '进行中',
@@ -2418,7 +2418,7 @@ export default {
         chooseDocs: '选择来源文档',
         writeOne: '+ 撰写概念',
         fsPick: '+ 从此计算机导入 markdown',
-        fsBusy: 'Importing your files…',
+        fsBusy: '正在导入您的文件…',
         fsFailed: '导入失败——请检查文件后重试。',
         skippedEmpty: '已跳过 {n} 个空文件。',
         noneSelected: '尚未选择任何来源。',
@@ -2480,7 +2480,7 @@ export default {
       label: {
         title: '标签 — 自动生成',
         hint: '标签自动从知识层级分配——并限定在本仓库的主题领域内。',
-        loading: 'Reading labels…',
+        loading: '正在读取标签…',
         preview: '{labeled}/{n} 个主题带有知识层级标签。',
         unlabeled: '尚无标签',
         adjust: '在策展步骤中调整任意主题的标签——标签限定在此仓库的主题领域内。',
@@ -2654,6 +2654,7 @@ export default {
       saveBlocked: '保存已被阻止：请先修复规范符合性问题。'
     },
     validation: {
+      piiRescanTimeout: '重新扫描运行已超过 15 分钟 — 仍在服务器端继续执行。没有任何内容丢失；请稍后再来查看。',
       healthAria: '健康度：{pct}%，{n} 个问题',
       frozen: '内容已冻结于 {v} — 仅供只读预览。如需更改，请先对 serving 版本执行 retract。',
       none: '无',
@@ -2671,7 +2672,7 @@ export default {
         notReady: '校验逻辑将在后续故事中接入。'
       },
       piiTitle: '个人数据——请逐一复核每个被标记的概念',
-      loading: 'Checking the repository…',
+      loading: '正在检查知识库…',
       loadFailed: '无法加载校验报告。',
       retry: '重试',
       issuesTitle: '待复核问题',
@@ -2703,7 +2704,7 @@ export default {
         accept: '接受',
         dismiss: '忽略',
         delete: '删除',
-        working: 'Working…',
+        working: '处理中…',
         wireCreate: '创建 Sources 页面并链接 {n} 个页面',
         wireExisting: '将 {n} 个页面链接到“{hub}”',
         preview: '预览重复项',
@@ -2723,7 +2724,7 @@ export default {
       wireCreated: '已创建 Sources 页面并链接 {n} 个页面。',
       mergedPages: '{n} 个页面',
       preview: {
-        loading: 'Loading page contents…',
+        loading: '正在加载页面内容…',
         truncated: '前 {n} 个字符——请打开编辑器查看完整页面。'
       },
       tip: {
@@ -2738,7 +2739,7 @@ export default {
         index_failed: '页面已导入，但其搜索索引构建失败——在重新建立索引之前无法被检索。在编辑器中保存该页面会重试构建。'
       },
       piiRescan: '重新扫描所有页面',
-      piiRescanWorking: 'Re-scanning every page…',
+      piiRescanWorking: '正在重新扫描每一页…',
       piiRescanDone: '已重新扫描 {n} 个页面。',
       piiRescanPartial: '已重新扫描 {n} 个页面。仍有 {e} 个失败——它们的扫描结论没有变化，因此这些页面仍会阻止发布。',
       piiRescanMissing: '此服务器不支持重新扫描（404）。没有任何更改——扫描失败的页面仍在阻止发布。',
@@ -2750,8 +2751,8 @@ export default {
       piiStateError: '扫描错误',
       piiTally: {
         scanned: '已重新扫描 {n} 个页面',
-        clean: 'clear',
-        hit: 'flagged',
+        clean: '未发现',
+        hit: '已标记',
         error: '扫描错误',
         stillBlocking: '仍在阻止'
       }
@@ -2837,7 +2838,7 @@ export default {
       title: '选择来源文档',
       hint: '从文档库中选择来源、从此计算机上传新文件，或两者兼用。',
       repoSec: '来自文档库',
-      searchPh: 'Search by name or site…',
+      searchPh: '按名称或网站搜索…',
       chipsLabel: '按来源筛选',
       chipAll: '全部',
       chipCrawl: '抓取',
@@ -2847,13 +2848,13 @@ export default {
       crawlTip: '抓取自：{url}',
       total: '{n} 份文档',
       titleSingle: '选择抓取的文档',
-      loading: 'Loading documents…',
+      loading: '正在加载文档…',
       retry: '重试',
       empty: '文档库中还没有文档——请在下方上传。',
       more: '加载更多',
       fsSec: '来自此计算机',
       fsPick: '+ 上传文件',
-      uploading: 'Uploading…',
+      uploading: '正在上传…',
       uploaded: '{n} 个文件已上传。',
       uploadFailed: '一个上传失败——请检查文件后重试。',
       fsNote: '上传的文件会加入文档库，并在此处自动选中。',
@@ -2871,7 +2872,7 @@ export default {
       title: 'Frontmatter 标签——此仓库是关于什么的',
       help: '标签描述此仓库包含什么——以及同样重要的是——不包含什么（禁用列表）。它们决定哪些查询路由到此仓库。点击“刷新”从语料库起草，或在下方编辑标签。发布要求 ≥3 个主题标签 + ≥1 个禁用标签。',
       refresh: '刷新建议',
-      suggesting: 'Curating…',
+      suggesting: '正在整理…',
       suggestEmpty: 'LLM 未返回任何标签。请待语料库扩充后再试。',
       suggestCoverage: '基于 {total} 个概念中的 {sampled} 个生成，覆盖 {labels} 个知识层级标签。',
       suggestFailed: '建议失败。',
@@ -2880,7 +2881,7 @@ export default {
       fieldEmpty: '—',
       addPlaceholder: '添加{field}',
       add: '添加',
-      saving: 'Saving…',
+      saving: '正在保存…',
       save: '保存标签',
       saved: '已保存',
       error: '保存失败。',
@@ -2941,8 +2942,8 @@ export default {
         failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
         passSuppressed: '通过 — 被禁用/噪声闸门抑制：头向量不认领此查询',
         notSelectedSuppressed: '未选中 — 被禁用/噪声闸门抑制：此查询更接近该仓库排除的内容，或属于跨域噪声',
-        claimed: 'claims',
-        suppressed: 'suppressed'
+        claimed: '认领查询',
+        suppressed: '已抑制'
       },
       gate: {
         title: '门控',
@@ -2987,7 +2988,7 @@ export default {
       },
       run: {
         progress: '{done}/{total} 条查询（{pct}%）',
-        progressStarting: 'Starting the run…',
+        progressStarting: '正在启动运行…',
         phase: {
           routing: '正在为路由评分',
           corpus: '正在检查语料'
@@ -3014,15 +3015,15 @@ export default {
           corpus: '语料'
         },
         notEvaluatable: '不可评估（暂无竞争头向量）',
-        pass: 'pass',
-        fail: 'fail',
+        pass: '通过',
+        fail: '未通过',
         passRate: '通过率',
         positives: '正例',
         negatives: '负例',
         noCompetitors: '不适用 — 尚无竞争头向量',
         avgMargin: '平均余量',
         steal: '{repo} 抢走了 {n} 条查询',
-        addPlaceholder: 'Your own probe query…',
+        addPlaceholder: '您自己的探查问题…',
         add: '添加到测试集',
         kindPositive: '应选择',
         kindNegative: '不应选择',

@@ -2750,6 +2750,8 @@ export default {
       saveBlocked: "Enregistrement bloqué : corrigez d'abord les problèmes de conformité."
     },
     validation: {
+      piiRescanTimeout:
+        'La réanalyse tourne toujours après 15 minutes — elle continue côté serveur. Rien n’a été perdu ; revérifiez dans une minute.',
       healthAria: 'Santé : {pct} pour cent, {n} problème(s)',
       frozen:
         'Contenu figé à la version {v} — aperçu en lecture seule. Exécutez retract sur la version serving pour apporter des modifications.',

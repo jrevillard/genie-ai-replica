@@ -3708,7 +3708,7 @@ class ChatQnAService:
             ``"fallback_timeout"`` when the translation service timed out,
             and ``"fallback_error"`` when it failed or refused for any other
             reason (window too tight, unreadable language map, nothing fit
-            the budget, empty completion). The history is normalized for the
+            the budget, blank input, empty completion). The history is normalized for the
             retriever and never shown to the user, so the turn is not failed
             on a fallback — but the fallback is never silent: the caller
             stamps the status on the ``chatqna.orchestrate`` span and into
@@ -3758,6 +3758,14 @@ class ChatQnAService:
                 return "", QUERY_TRANSLATION_FALLBACK_ERROR
 
             flattened_history_string = _flatten_history_string(messages_to_process)
+            if not any(message.get("content", "").strip() for message in messages_to_process):
+                # A history of blank messages would only harvest the model's
+                # junk reply as the embedded query, and there is no content
+                # to translate. The flattened string alone cannot be checked:
+                # the role prefixes make it non-blank even when every message
+                # is blank.
+                logger.warning("History translation asked for blank messages; reporting it as a fallback.")
+                return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
 
         # The target steers the prompt, so it is resolved against the language
         # map — ONCE, for both shapes of the history. The target is English:
@@ -3782,8 +3790,7 @@ class ChatQnAService:
         if isinstance(history, str):
             if not history.strip():
                 # An empty prompt would only harvest the model's junk reply
-                # as the embedded query — the list branch refuses the same
-                # shape, and there is nothing to translate anyway.
+                # as the embedded query, and there is nothing to translate.
                 logger.warning("History translation asked for an empty message; reporting it as a fallback.")
                 return history, QUERY_TRANSLATION_FALLBACK_ERROR
             try:

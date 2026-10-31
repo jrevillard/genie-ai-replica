@@ -2447,6 +2447,23 @@ class TestQueryTranslationStatus:
         assert status == "fallback_error"
         mock_client.post.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_blank_list_messages_are_refused_not_translated(self):
+        """The same refusal on the list shape: whitespace-only messages fit
+        the budget (blank content still counts chars) and would otherwise
+        come back as the model's junk reply reported as a translation."""
+        svc = create_chatqna_service()
+        history = [
+            {"role": "user", "content": "   "},
+            {"role": "assistant", "content": "\n"},
+        ]
+        mock_client = self._mock_client(content="JUNK-FROM-EMPTY-PROMPT")
+        with self._translation_patches(mock_client):
+            text, status = await svc._get_translated_history_string(history)
+        assert text == "USER:     |<-MSG->| ASSISTANT: \n"  # the flattened blanks
+        assert status == "fallback_error"
+        mock_client.post.assert_not_called()
+
     def test_a_window_too_tight_refuses_the_output_cap(self):
         """The TranslateGemma output-cap guard refuses a window too tight to
         translate into (cap below the input estimate): the helper returns

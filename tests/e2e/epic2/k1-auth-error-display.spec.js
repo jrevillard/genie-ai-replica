@@ -34,8 +34,10 @@ test.describe.serial('Phase K: Auth Error Display', () => {
       try {
         const token = await getAdminToken();
         await updateRealmSettings(token, 'genie', { accessTokenLifespan: originalLifespan });
-      } catch {
-        // Best-effort restore
+      } catch (e) {
+        // Best-effort, never silent: a failed restore leaves the realm
+        // at K.2's 10s lifespan, poisoning every suite that runs after.
+        console.warn(`k1 afterAll: lifespan restore failed — realm may still be at 10s: ${e.message}`);
       }
     }
 
@@ -98,14 +100,17 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   });
 
   test('K.3 — FORBIDDEN (user without roles)', async ({ browser }) => {
-    // Fresh admin token, same reason as K.2.
+    // K.2 left the lifespan at 10s, so a token minted right now would
+    // itself carry a 10-second expiry. Restore first with a throwaway
+    // mint (one call, inside its window), then mint the real admin
+    // token — it inherits the restored lifespan.
+    const restoreToken = await getAdminToken();
+    await updateRealmSettings(restoreToken, 'genie', { accessTokenLifespan: originalLifespan });
     adminToken = await getAdminToken();
 
-    // Restore the deployment's lifespan first: K.2 left it at 10s, and
-    // the browser-session mint below adds SPA-bootstrap latency after
-    // the token is issued — on a loaded stack the admin request could
-    // hit TOKEN_EXPIRED instead of the FORBIDDEN this test verifies.
-    await updateRealmSettings(adminToken, 'genie', { accessTokenLifespan: originalLifespan });
+    // The browser-session mint below adds SPA-bootstrap latency after
+    // the no-roles token is issued — with the lifespan restored, a
+    // loaded stack still sees FORBIDDEN, not TOKEN_EXPIRED.
 
     // Create no-roles user
     noRolesUserId = await createUser(adminToken, 'genie', {

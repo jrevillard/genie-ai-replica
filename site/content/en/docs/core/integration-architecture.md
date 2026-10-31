@@ -605,7 +605,7 @@ dispatches to a pluggable backend chosen by `TRANSLATION_BACKEND`:
 | Backend | Use case | Source |
 |---|---|---|
 | `cpu` | Offline, sovereign — NLLB-200 (`Xenova/nllb-200-distilled-600M`) in-process | `services/translation/cpu-translate-backend.js` |
-| `gpu` | vLLM with translateGemma (`google/translategemma-4b-it`) | `services/translation/gpu-translate-backend.js` |
+| `gpu` | vLLM with the translation model (`VLLM_TRANSLATION_MODEL_ID`, default `google/gemma-3-4b-it`) | `services/translation/gpu-translate-backend.js` |
 | `auto` (default) | Try GPU, fall back to CPU on error | dispatcher |
 
 The actual translation model is `VLLM_TRANSLATION_MODEL_ID` (e.g.

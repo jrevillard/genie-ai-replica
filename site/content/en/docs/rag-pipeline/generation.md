@@ -127,7 +127,7 @@ falls back to the reranker-aggregated score otherwise.
 For multilingual deployments, the streamed English answer can be
 translated into the user's UI language by a dedicated translation model
 served by `vllm-translation-guardrail`. The default model is
-**`google/gemma-3-4b-it`** (`docker-compose.yaml:557`, configured via
+**`google/gemma-3-4b-it`** (`docker-compose.yaml:580`, configured via
 `VLLM_TRANSLATION_MODEL_ID`). Two optional alternatives commented in
 the `env` template are `google/translategemma-4b-it` and
 `google/translategemma-12b-it`.

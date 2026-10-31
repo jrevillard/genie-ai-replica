@@ -117,10 +117,15 @@ hardcoded (`HISTORY_TRANSLATION_TARGET = "en"`), whatever language the
 caller asked for — in **one translation call per request** for the whole
 flattened history. Two boundary cases to know:
 
-- An **English-language request** skips translation entirely: whatever text
-  the user typed is embedded as-is. An English UI with a Spanish question
-  therefore sends Spanish text to the English embedding space — the UI
-  locale, not the message content, decides the path.
+- Translation runs when the *effective* language is not English — which is
+  not only when a non-English request arrives. If the request carries no
+  language (API-direct callers; the web and mobile frontends always send
+  one) or its language was refused, ChatQnA auto-detects the message
+  language and normalizes the history from whatever it detected — even a
+  code the translation registry does not cover for *answers* still drives
+  the history translation. An English-UI user typing Spanish therefore does
+  send Spanish text to the English embedding space: the UI locale, not the
+  message content, decides the path.
 - If the translation **fails**, the source text is used by design: an
   untranslated history is considered a better answer than a wrong one.
 

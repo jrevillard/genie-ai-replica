@@ -465,6 +465,117 @@ void main() {
       expect(find.textContaining('Registro Civil'), findsNothing);
     },
   );
+
+  testWidgets(
+    'a live selection is replaced by a restore the hierarchy cannot key',
+    (tester) async {
+      // The EN tree carries the category's display name but an EMPTY
+      // nameEN: the scope is not wire-healthy (the send guard refuses
+      // it), and no key is recorded — but the restore still OWNS the
+      // bar: the live pick's join must be replaced by the restored
+      // category's name, whatever language it is in.
+      I18nService().changeLanguage('es');
+      final mock = _RestoredScopeMockClient(
+        treesByLocale: {
+          'en': <dynamic>[
+            {'catKey': '2', 'name': 'Civil Registry', 'nameEN': ''},
+          ],
+          'es': esTree,
+        },
+      );
+      final chatKey = GlobalKey<ChatBotComponentState>();
+      mockConfigAsset(tester);
+      await pumpChat(tester, mock, chatKey: chatKey);
+
+      // The page's own live pick: a localized join names the bar.
+      chatKey.currentState!.setCategoryContext(
+        '2',
+        'Nacimientos',
+        categoryNameEn: 'Civil Registry',
+        serviceLabelsEn: const ['Births'],
+        serviceCount: 1,
+      );
+      await tester.pump();
+      expect(find.text('Contexto: Nacimientos'), findsOneWidget);
+
+      await chatKey.currentState!.loadConversation('conv-1');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Contexto: Civil Registry'), findsOneWidget);
+      expect(find.text('Contexto: Nacimientos'), findsNothing);
+    },
+  );
+
+  testWidgets('two unkeyable restores replace each other’s titles', (
+    tester,
+  ) async {
+    // Two conversations in two DIFFERENT categories the EN tree cannot
+    // address on the wire: the second restore must install its own
+    // category's name — a guard that compares derived keys alone
+    // collapses both to "no key" and leaves the first title up.
+    I18nService().changeLanguage('es');
+    final mock = _RestoredScopeMockClient(
+      treesByLocale: {
+        'en': <dynamic>[
+          {'catKey': '7', 'name': 'Alpha', 'nameEN': ''},
+          {'catKey': '9', 'name': 'Beta', 'nameEN': ''},
+        ],
+        'es': <dynamic>[
+          {'catKey': '7', 'name': 'Alfa', 'nameEN': ''},
+          {'catKey': '9', 'name': 'Beta', 'nameEN': ''},
+        ],
+      },
+      conversationsById: {
+        'conv-1': (tags: const <String>[], categoryId: '7'),
+        'conv-2': (tags: const <String>[], categoryId: '9'),
+      },
+    );
+    final chatKey = GlobalKey<ChatBotComponentState>();
+    mockConfigAsset(tester);
+    await pumpChat(tester, mock, chatKey: chatKey);
+
+    await chatKey.currentState!.loadConversation('conv-1');
+    await tester.pumpAndSettle();
+    expect(find.text('Contexto: Alpha'), findsOneWidget);
+
+    await chatKey.currentState!.loadConversation('conv-2');
+    await tester.pumpAndSettle();
+    expect(find.text('Contexto: Beta'), findsOneWidget);
+    expect(find.text('Contexto: Alpha'), findsNothing);
+  });
+
+  testWidgets(
+    'a tree that arrives late re-resolves the restore and names the bar',
+    (tester) async {
+      // The FIRST EN fetch fails (a transient error): the restore
+      // resolves against an empty hierarchy — no key, no name — and can
+      // only install an empty title. The next need for the hierarchy
+      // retries it; when the tree lands, the scope gains its key and
+      // the bar its name — the localized fetch follows. A guard that
+      // compares the scope's identity without the key sees the same
+      // category on both loads and never installs. TWO failures: the
+      // mount's own fetch consumes the first, the restore's the second.
+      I18nService().changeLanguage('es');
+      final mock = _RestoredScopeMockClient(
+        treesByLocale: {'en': enTree, 'es': esTree},
+        failFirstCounts: const {'en': 2},
+      );
+      final chatKey = GlobalKey<ChatBotComponentState>();
+      mockConfigAsset(tester);
+      await pumpChat(tester, mock, chatKey: chatKey);
+
+      await chatKey.currentState!.loadConversation('conv-1');
+      await tester.pumpAndSettle();
+      expect(find.text('Contexto: Registro Civil'), findsNothing);
+
+      // The retry: the same conversation reloaded now finds the tree.
+      await chatKey.currentState!.loadConversation('conv-1');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Contexto: Registro Civil'), findsOneWidget);
+      expect(mock.requestsByLocale['es'], 1);
+    },
+  );
 }
 
 class _RestoredScopeMockClient extends http.BaseClient {
@@ -472,12 +583,33 @@ class _RestoredScopeMockClient extends http.BaseClient {
     required this.treesByLocale,
     this.conversationTags = const ['Births'],
     this.conversationCategoryId = '2',
+    Map<String, ({List<String> tags, String categoryId})>? conversationsById,
+    this.failFirstCounts = const {},
     this.holdFromCounts = const {},
-  });
+  }) : conversationsById =
+           conversationsById ??
+           {
+             'conv-1': (
+               tags: conversationTags,
+               categoryId: conversationCategoryId,
+             ),
+           };
 
   final Map<String, List<dynamic>> treesByLocale;
   final List<String> conversationTags;
   final String conversationCategoryId;
+
+  /// Per locale: the FIRST N tree requests fail with a 500 (a transient
+  /// hierarchy outage) and every later one serves the tree. The failure
+  /// is what arms `_treeUnavailable` and clears the cached EN fetch, so
+  /// the next need for the hierarchy retries it.
+  final Map<String, int> failFirstCounts;
+
+  /// Saved conversations by id — a test that loads TWO conversations
+  /// (a restore followed by another restore, or by a scope-less one)
+  /// serves each edge here; the single-conversation fields above feed
+  /// the default 'conv-1' entry.
+  final Map<String, ({List<String> tags, String categoryId})> conversationsById;
 
   /// Per locale: the response of the Nth request (and every later one)
   /// is HELD until [releaseHeld] — a fetch is genuinely in flight while
@@ -494,6 +626,10 @@ class _RestoredScopeMockClient extends http.BaseClient {
         Uri.parse(request.url.toString()).queryParameters['locale'] ?? 'en';
     if (path.contains('/api/service-categories/categories')) {
       requestsByLocale[locale] = (requestsByLocale[locale] ?? 0) + 1;
+      final failFirst = failFirstCounts[locale];
+      if (failFirst != null && (requestsByLocale[locale] ?? 0) <= failFirst) {
+        return _json(<String, dynamic>{}, 500);
+      }
       final holdFrom = holdFromCounts[locale];
       if (holdFrom != null && (requestsByLocale[locale] ?? 0) >= holdFrom) {
         final completer = Completer<http.StreamedResponse>();
@@ -502,13 +638,15 @@ class _RestoredScopeMockClient extends http.BaseClient {
       }
       return _json(treesByLocale[locale] ?? [], 200);
     }
-    if (request.method == 'GET' &&
-        path.contains('/api/chat/conversations/conv-1')) {
+    if (request.method == 'GET' && path.contains('/api/chat/conversations/')) {
+      final id = path.split('/api/chat/conversations/').last;
+      final conversation = conversationsById[id];
+      if (conversation == null) return _json(<String, dynamic>{}, 404);
       return _json(<String, dynamic>{
-        '_key': 'conv-1',
+        '_key': id,
         'title': 'Saved conversation',
-        'categoryId': conversationCategoryId,
-        'tags': conversationTags,
+        'categoryId': conversation.categoryId,
+        'tags': conversation.tags,
         'messages': <dynamic>[],
       }, 200);
     }

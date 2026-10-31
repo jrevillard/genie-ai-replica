@@ -481,6 +481,24 @@ void main() {
       },
     );
 
+    test(
+      'two categories sharing a key: the FIRST claims it even with an empty nameEN',
+      () {
+        // The EN-label index is FIRST-wins, full stop: a first entry
+        // whose nameEN is present-but-empty (a real missing translation)
+        // claims the key and leaves it unnameable — a later duplicate
+        // with a real nameEN does not take the key back. The display-name
+        // index shares the walk and the rule.
+        final duplicated = <dynamic>[
+          {'catKey': '2', 'nameEN': ''},
+          {'catKey': '2', 'nameEN': 'Second'},
+        ];
+        final resolver = QuickHelpScopeResolver(duplicated);
+
+        expect(resolver.categoryEnLabel('2'), isNull);
+      },
+    );
+
     test('a LEGACY category.<id> tag restores the category, not a refusal', () {
       // Conversations saved before the redesign carry 'category.<id>' —
       // the old restore's spelling for a category-only scope. The web

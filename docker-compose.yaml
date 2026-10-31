@@ -116,10 +116,15 @@ x-chown-init: &chown-init
   cap_drop:
     - ALL
   cap_add:
-    # CHOWN only: the probe hands root-owned paths to the service uid, and
-    # CAP_CHOWN is the one capability that needs (DAC_OVERRIDE existed for
-    # the marker-file write, which the probe form no longer does).
+    # CHOWN (the chown itself) + DAC_OVERRIDE (traversal): once the sweep
+    # has chowned a 0700 directory to the target uid, root with CHOWN only
+    # can no longer descend into it — find would fail mid-traversal with
+    # 'Permission denied' and its rc is discarded by the $() probe shape,
+    # silently truncating the sweep. DAC_OVERRIDE keeps root reading every
+    # directory until the verify passes (both capabilities verified live
+    # against nested 0700 fixtures).
     - CHOWN
+    - DAC_OVERRIDE
   security_opt:
     - no-new-privileges:true
   logging: *fluent-logging
@@ -1423,7 +1428,9 @@ services:
   # hands exactly those to the service uid — no marker file, so nothing
   # written after the sweep is stranded under a permanent skip, and the
   # empty-volume repopulation docker does at every container create is
-  # re-healed on the next deploy.
+  # re-healed on the next COMPOSE deploy (swarm re-runs an init only when
+  # its service spec changes — a fresh root-era volume on an unchanged
+  # spec needs `docker service update --force <stack>_<init>`).
   arango-vector-db-init:
     <<: *chown-init
     # PER-VOLUME guard (same doctrine as backend-init): a missing marker
@@ -2542,7 +2549,9 @@ services:
       # Same long-syntax + create_host_path:false contract as the frontend
       # config bind (#1227): a missing override path fails loudly instead
       # of being root-created (a bind mount never falls back to image
-      # contents, so the failure is the honest signal).
+      # contents, so the failure is the honest signal). Swarm caveat, same
+      # as the frontend bind: swarmkit ignores bind options — there the
+      # guarantee is pre-seeding every node's directory (config_bootstrap).
       - type: bind
         source: ${CONFIG_DIR_KEYCLOAK:-./configs/keycloak/themes}
         target: /opt/keycloak/themes
@@ -2669,7 +2678,7 @@ services:
   otel-collector-init:
     # One-shot chown of the collector's queue volume for uid 10001, shared
     # with the other volume-chown inits through the x-chown-init anchor
-    # (CHOWN + DAC_OVERRIDE caps, one-shot on both front-ends, global mode
+    # (CHOWN + traversal DAC_OVERRIDE caps, one-shot on both front-ends, global mode
     # so the chown has run on every node the collector can land on).
     <<: *chown-init
     # PROBE form (no marker — see backend-init).

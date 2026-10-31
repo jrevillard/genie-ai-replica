@@ -70,6 +70,7 @@ function validateComposeNonRoot(composeText) {
   let currentRestart = null;
   let currentRestartPolicyCondition = null;
   let currentCapAdds = [];
+  let capAddsSeen = false; // an explicit cap_add key REPLACES the anchor's list
   let inCapAdds = false;
   let inDeploy = false;
   let localDeploySeen = false;
@@ -160,7 +161,11 @@ function validateComposeNonRoot(composeText) {
           // restart-always policy would make it a permanent root container).
           // A service merged with the x-chown-init anchor inherits the
           // invariants from the anchor unless it overrides them locally.
-          const capAdds = currentCapAdds.length ? currentCapAdds : anchorMerged ? anchorDefaults.capAdds : [];
+          // capAddsSeen: an explicit cap_add key (even cap_add: []) REPLACES
+          // the anchor's list per YAML merge semantics — crediting the
+          // anchor through an explicit empty list would let a runtime
+          // EPERM-chown init pass the gate
+          const capAdds = capAddsSeen ? currentCapAdds : anchorMerged ? anchorDefaults.capAdds : [];
           const restart = currentRestart !== null ? currentRestart : anchorMerged ? anchorDefaults.restart : null;
           // A service-local deploy: SHALLOW-REPLACES the anchor's whole
           // deploy map (compose merge semantics): mode: global and the
@@ -220,6 +225,7 @@ function validateComposeNonRoot(composeText) {
     currentRestartPolicyCondition = null;
     currentMaxAttempts = null;
     currentCapAdds = [];
+    capAddsSeen = false;
     inCapAdds = false;
     inDeploy = false;
     localDeploySeen = false;
@@ -285,7 +291,9 @@ function validateComposeNonRoot(composeText) {
   let pendingCreateFalse = false;
   let sourceSeenThisEntry = false;
   let bindOptsTarget = null;
-  let entryType = null; // long-syntax entry type: 'bind' | 'volume' | null (compose default: bind)
+  let entryType = null; // long-syntax entry type: 'bind' | 'volume'
+  let entryTypeExplicit = false; // type: seen in this entry (vs the untyped volume default)
+  let deferredSource = null; // source: seen while entryType is still the untyped default
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -310,6 +318,8 @@ function validateComposeNonRoot(composeText) {
       sourceSeenThisEntry = false;
       bindOptsTarget = null;
       entryType = null;
+      entryTypeExplicit = false;
+      deferredSource = null;
       continue;
     }
     if (!currentService) continue;
@@ -339,11 +349,13 @@ function validateComposeNonRoot(composeText) {
     }
     if (/^ {4}cap_add:\s*$/.test(line)) {
       inCapAdds = true;
+      capAddsSeen = true;
       continue;
     }
     // flow style: cap_add: [CHOWN, DAC_OVERRIDE] — same invariant surface
     const capFlow = line.match(/^ {4}cap_add:\s*\[([^\]]*)\]\s*(?:#.*)?$/);
     if (capFlow) {
+      capAddsSeen = true;
       for (const cap of capFlow[1].split(',')) {
         const c = cap.trim();
         if (c) currentCapAdds.push(c);
@@ -418,15 +430,33 @@ function validateComposeNonRoot(composeText) {
         sourceSeenThisEntry = false;
         bindOptsTarget = null;
         entryType = null;
+        entryTypeExplicit = false;
+        deferredSource = null;
         continue;
       }
       if (/^ {6}-\s/.test(line)) {
         // a new entry begins — its opts may only attach to a source: seen
-        // from here on; type: decides host-bind vs named volume (compose-go
+        // from here on, and a pending opt-out armed by a bind: block with
+        // no source: of its own dies here (it must never leak into the
+        // next entry); type: decides host-bind vs named volume (compose-go
         // defaults an UNtyped long-syntax entry to volume)
         sourceSeenThisEntry = false;
+        entryTypeExplicit = false;
+        deferredSource = null;
+        pendingCreateFalse = false;
+        inBindOpts = false;
         const t = line.match(/^ {6}-\s*type:\s*['"]?(\w+)/);
-        entryType = t ? t[1] : 'volume';
+        if (t) {
+          entryType = t[1];
+          entryTypeExplicit = true;
+        } else {
+          entryType = 'volume';
+        }
+        // source: can also be the entry's FIRST key (- source: X ...) —
+        // same deferral as the 8-space spelling below
+        const dashSrc = line.match(/^ {6}-\s*source:\s*['"]?(\S+)/);
+        if (dashSrc && !entryTypeExplicit) deferredSource = dashSrc[1];
+        // no continue: the same line may be a short-syntax bind
       }
       // long syntax:
       //   - type: bind
@@ -435,24 +465,41 @@ function validateComposeNonRoot(composeText) {
       //     bind:
       //       create_host_path: false
       // type: can also follow its own source: (mapping order is free) —
-      // reclassify a just-pushed host bind as the named volume it is
+      // a late `type: volume` reclassifies a just-pushed host bind into
+      // the named volume it is; a late `type: bind` claims a deferred
+      // source: as the host bind it is
       const typeMatch = line.match(/^ {8}type:\s*['"]?(\w+)/);
       if (typeMatch) {
         entryType = typeMatch[1];
-        if (
-          entryType === 'volume' &&
-          sourceSeenThisEntry &&
-          serviceBinds[currentService] &&
-          serviceBinds[currentService].length
-        ) {
-          serviceBinds[currentService].pop();
+        entryTypeExplicit = true;
+        if (entryType === 'volume') {
+          deferredSource = null;
+          if (sourceSeenThisEntry && serviceBinds[currentService] && serviceBinds[currentService].length) {
+            serviceBinds[currentService].pop();
+          }
+        } else if (entryType === 'bind' && deferredSource !== null) {
+          const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
+          binds.push({ path: deferredSource, createHostPathFalse: pendingCreateFalse, shortSyntax: false });
+          deferredSource = null;
+          pendingCreateFalse = false;
+          sourceSeenThisEntry = true;
+          inBindOpts = false;
         }
         continue;
       }
       const srcMatch = line.match(/^ {8}source:\s*(\S+)\s*(?:#.*)?$/);
-      if (srcMatch && entryType !== 'volume') {
-        // entryType 'volume' = a NAMED volume (e.g. source: data) — not a
-        // host path, create_host_path is meaningless on it
+      if (srcMatch) {
+        if (entryTypeExplicit && entryType === 'volume') {
+          // an EXPLICIT type: volume names a NAMED volume — not a host
+          // path, create_host_path is meaningless on it
+          continue;
+        }
+        if (!entryTypeExplicit) {
+          // untyped default = volume until proven otherwise: defer until
+          // the entry's type: (or end) decides
+          deferredSource = srcMatch[1];
+          continue;
+        }
         const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
         // YAML mapping order is free: a `bind:` opts block may follow its
         // own source: (the common spelling) or precede it. Retro-attach to

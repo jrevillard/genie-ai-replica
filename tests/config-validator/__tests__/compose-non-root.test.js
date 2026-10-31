@@ -480,6 +480,55 @@ describe('compose non-root contract (#1227)', () => {
     expect(shellList).toEqual(Object.keys(SELF_DROPPING).sort());
   });
 
+  test('mutations: source-first bind, cross-entry opt-out leak, explicit empty cap_add', () => {
+    // A source:-first entry whose type: bind arrives LATE is a host bind —
+    // the untyped default must not swallow it.
+    const sourceFirst = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes:',
+      '      - source: ${DATA_DIR:-./data}/logs/kong',
+      '        target: /var/log/kong',
+      '        type: bind',
+      ''
+    ].join('\n');
+    const { violations: v1 } = validateComposeNonRoot(sourceFirst);
+    expect(
+      v1.some(
+        (v) => v.includes('kong') && v.includes('short syntax') === false && v.includes('create_host_path: false')
+      )
+    ).toBe(true);
+
+    // An orphan bind: opts block in an entry with NO source: must die at
+    // the entry boundary — it must not opt out the NEXT entry's bind.
+    const leak = [
+      'services:',
+      '  backend:',
+      '    user: "1000:1000"',
+      '    volumes:',
+      '      - type: bind',
+      '        bind:',
+      '          create_host_path: false',
+      '      - type: bind',
+      '        source: ./data/database_backups',
+      '        target: /app/database_backups',
+      ''
+    ].join('\n');
+    const { violations: v2 } = validateComposeNonRoot(leak);
+    expect(v2.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
+
+    // An EXPLICIT cap_add: [] replaces the anchor's list (YAML merge
+    // semantics) — the CHOWN invariant must trip, not inherit.
+    const emptyCaps = composeText.replace(
+      '  backend-init:\n    <<: *chown-init\n',
+      '  backend-init:\n    <<: *chown-init\n    cap_add: []\n'
+    );
+    expect(emptyCaps).not.toBe(composeText);
+    const { violations: v3 } = validateComposeNonRoot(emptyCaps);
+    expect(v3.some((v) => v.includes('backend-init') && v.includes('CHOWN'))).toBe(true);
+  });
+
   test('allowlist entries reference services that exist in the compose file', () => {
     // A renamed or removed service would leave a stale allowlist entry that
     // enforces nothing — dead enforcement data. Uses the validator's OWN

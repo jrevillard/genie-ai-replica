@@ -16,7 +16,8 @@ import 'package:genie_ai_mobile/utils/config_resolver.dart';
 // Config. The CONFIG-side rules live here too, because the widget that
 // shows a button must not be the only place they are read: the section
 // parse (the guarded descent, the hidden filter, the per-entry skip, the
-// button parse, the first-wins dedupe), the button's identity (its id), the
+// button parse, the first-wins dedupe), the button's identity (its id
+// when it declares one, its title when it does not), the
 // title it displays, when the loaded buttons must re-resolve for a new
 // locale, and the grid's layout values. They are the same kind of rule —
 // one copy, read by every path — and they belong to the button, not to the
@@ -171,11 +172,13 @@ double quickHelpGridAspectRatio(Map<String, dynamic> layout) {
 /// The loaded Quick Help buttons, with a duplicated id keeping only the
 /// FIRST entry.
 ///
-/// The id is the button's IDENTITY: the conversation tag carries it, the
-/// restore resolves it, the grid's verdict keys on it. Two cards with one
-/// id cannot both be honoured — the web keeps the first and drops the
-/// duplicate at load, so the mobile must too, or the same saved
-/// conversation would carry a different scope on the two platforms.
+/// The id is the button's identity WHEN IT DECLARES ONE: the conversation
+/// tag carries `id || title`, and the restore and the grid's verdict key
+/// on the id. Two cards with one id cannot both be honoured — the web
+/// keeps the first and drops the duplicate at load, so the mobile must
+/// too, or the same saved conversation would carry a different scope on
+/// the two platforms. A card with NO id is kept: its identity is its
+/// title, and two title-less-of-id cards are two cards.
 List<Map<String, dynamic>> dedupeQuickHelpButtons(
   List<Map<String, dynamic>> buttons,
 ) {
@@ -221,8 +224,11 @@ Map<String, dynamic>? quickHelpButtonById(
 /// every follow-up from the whole corpus while the user believed the
 /// scope survived. Carrying the title — what the web saves — tags the
 /// conversation; the restore resolves buttons by id only, on both
-/// platforms, so the title tag is refused visibly there instead of
-/// silently widening.
+/// platforms, so the title tag falls to the SIDEBAR branch there: the
+/// hierarchy refuses to name it (a visible refusal, the module's rule)
+/// unless the title happens to be one of its ENGLISH labels, in which case
+/// it replays as that sidebar label — the web's own behaviour for the
+/// same tag.
 String? quickHelpButtonIdentity(Map<String, dynamic>? button) {
   if (button == null) return null;
   final id = quickHelpFieldOf(button, 'id');
@@ -1006,12 +1012,12 @@ List<String> mergeServiceLabels(List<String> active, List<String> sidebar) => [
   ...sidebar,
 ];
 
-/// The tags a conversation carries: the Quick Help button's id — its
-/// identity — and, BESIDE it, the ENGLISH labels of the sidebar scope
-/// that was selected with it. The web writes one tag per context item; a
-/// conversation carrying both scopes must carry both tags, or the sidebar
-/// one is lost on the next restore. A conversation that carries no scope
-/// carries no tags.
+/// The tags a conversation carries: the Quick Help button's identity —
+/// `id || title` (quickHelpButtonIdentity) — and, BESIDE it, the ENGLISH
+/// labels of the sidebar scope that was selected with it. The web writes
+/// one tag per context item; a conversation carrying both scopes must
+/// carry both tags, or the sidebar one is lost on the next restore. A
+/// conversation that carries no scope carries no tags.
 List<String> conversationScopeTags({
   String? quickHelpButtonId,
   List<String> sidebarServiceLabels = const <String>[],

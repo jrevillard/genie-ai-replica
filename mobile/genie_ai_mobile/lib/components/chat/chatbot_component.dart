@@ -123,7 +123,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // never a LABEL: a sidebar selection and a button can carry the same
   // label). The restore resolves buttons by id, so only an id-tagged
   // conversation reinstalls the button's scope; a title tag falls to the
-  // sidebar branch and refuses the follow-up visibly instead.
+  // sidebar branch, where the hierarchy either names it (it replays as
+  // that label) or refuses it (a visible refusal) — the web's own
+  // behaviour for the same tag.
   String? _activeQuickHelpButtonId;
   // The scope state of the ACTIVE Quick Help button against the live
   // hierarchy (stateFor's map): a restored button whose declared labels

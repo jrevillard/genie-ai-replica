@@ -1059,12 +1059,13 @@ async def ensure_vector_index(
     *,
     metric: str = "cosine",
     n_lists: int = 1,
+    n_probe: int = 1,
     field: str = "embedding",
     graph_name: str | None = None,
     file_id: str | None = None,
     write_ingestion_log=None,
 ) -> str | None:
-    """Idempotent, dim/metric/nLists-aware vector-index creation. Never raises.
+    """Idempotent, dim/metric/nLists/nProbe-aware vector-index creation. Never raises.
 
     Closes the gap where langchain-arangodb would lazy-create an index with
     nLists=1 (defeats ANN) and silently skip dim-staleness when the embedder
@@ -1073,8 +1074,8 @@ async def ensure_vector_index(
     Decision matrix:
       - no vector index on `field`                     -> create at current dim
       - index exists, dim differs                      -> delete + recreate
-      - index exists, dim matches, metric/nLists drift -> delete + recreate
-      - index exists, dim + metric + nLists match      -> no-op (idempotent)
+      - index exists, dim matches, metric/nLists/nProbe drift -> delete + recreate
+      - index exists, dim + metric + nLists + nProbe match    -> no-op (idempotent)
       - collection is empty                            -> INFO log, return None
       - sample document lacks valid embedding          -> ERROR log, return None
       - any add_index / delete_index exception         -> ERROR log, return None
@@ -1148,7 +1149,7 @@ async def ensure_vector_index(
                     "name": desired_name,
                     "type": "vector",
                     "fields": [field],
-                    "params": {"dimension": dim, "metric": metric, "nLists": n_lists},
+                    "params": {"dimension": dim, "metric": metric, "nLists": n_lists, "defaultNProbe": n_probe},
                 }
 
             if vec_idx is None:
@@ -1160,7 +1161,7 @@ async def ensure_vector_index(
                         file_id,
                         "INFO",
                         "VectorIndex",
-                        f"Created {desired_name} (dim={dim}, metric={metric}, nLists={n_lists}).",
+                        f"Created {desired_name} (dim={dim}, metric={metric}, nLists={n_lists}, nProbe={n_probe}).",
                     )
                 return desired_name
 
@@ -1183,9 +1184,18 @@ async def ensure_vector_index(
             existing_metric = (
                 (params.get("metric") or "").lower() if isinstance(params.get("metric"), str) else params.get("metric")
             )
-            if existing_metric != metric or params.get("nLists") != n_lists:
-                # Metric/nLists are structural — ArangoDB cannot patch them in
-                # place on an existing vector index; drop + recreate.
+            existing_n_lists = params.get("nLists")
+            existing_n_probe = params.get("defaultNProbe")
+            # A legacy index created WITHOUT a defaultNProbe param (langchain
+            # lazy-create, or deployments predating this knob) carries the
+            # server default: judge it as nProbe 1 so deploying with the var
+            # unset does not force-rebuild every existing index. An explicit
+            # RETRIEVER_ARANGO_NPROBE override (or any other drift) still
+            # recreates, and once recreated the param is stored explicitly.
+            effective_n_probe = 1 if existing_n_probe is None else existing_n_probe
+            if existing_metric != metric or existing_n_lists != n_lists or effective_n_probe != n_probe:
+                # Metric/nLists/nProbe are structural — ArangoDB cannot patch
+                # them in place on an existing vector index; drop + recreate.
                 collection.delete_index(vec_idx["name"])
                 collection.add_index(_build_index())
                 span.set_attribute("dataprep.index_action", "recreate")
@@ -1196,8 +1206,8 @@ async def ensure_vector_index(
                         "INFO",
                         "VectorIndex",
                         f"Recreated index '{vec_idx['name']}' -> '{desired_name}' "
-                        f"(metric/nLists drift: have={existing_metric}/{params.get('nLists')} "
-                        f"want={metric}/{n_lists}).",
+                        f"(metric/nLists/nProbe drift: have={existing_metric}/{existing_n_lists}/{effective_n_probe} "
+                        f"want={metric}/{n_lists}/{n_probe}).",
                     )
                 return desired_name
             # Idempotent no-op.
@@ -1214,21 +1224,35 @@ async def ensure_vector_index(
             return None
 
 
-def _read_index_params():
-    """Read RETRIEVER_ARANGO_{DISTANCE_STRATEGY,NUM_CENTROIDS} defensively.
+def _read_positive_int_env(name: str, default: int = 1) -> int:
+    """Read an int index knob defensively: non-integer, or a value ArangoDB
+    would reject at add_index (0 / negative), logs a WARNING and falls back
+    to the default. A rejected definition is swallowed by ensure_vector_index
+    and would leave ingest to complete with NO vector index. Never raises —
+    a malformed env var must not crash ingest.
+    """
+    raw = os.getenv(name, str(default))
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(f"Invalid {name}={raw!r}; falling back to {default}.")
+        return default
+    if value < 1:
+        logger.warning(f"Invalid {name}={value}; must be >= 1; falling back to {default}.")
+        return default
+    return value
 
-    Returns (metric, n_lists). On invalid NUM_CENTROIDS, logs a WARNING and
-    falls back to 1 (the legacy default). Never raises — a malformed env var
-    must not crash ingest.
+
+def _read_index_params():
+    """Read RETRIEVER_ARANGO_{DISTANCE_STRATEGY,NUM_CENTROIDS,NPROBE} defensively.
+
+    Returns (metric, n_lists, n_probe). Invalid int knobs log a WARNING and
+    fall back to 1 (the legacy default) — see `_read_positive_int_env`.
     """
     metric = os.getenv("RETRIEVER_ARANGO_DISTANCE_STRATEGY", "COSINE").lower()
-    raw = os.getenv("RETRIEVER_ARANGO_NUM_CENTROIDS", "1")
-    try:
-        n_lists = int(raw)
-    except ValueError:
-        logger.warning(f"Invalid RETRIEVER_ARANGO_NUM_CENTROIDS={raw!r}; falling back to 1.")
-        n_lists = 1
-    return metric, n_lists
+    n_lists = _read_positive_int_env("RETRIEVER_ARANGO_NUM_CENTROIDS")
+    n_probe = _read_positive_int_env("RETRIEVER_ARANGO_NPROBE")
+    return metric, n_lists, n_probe
 
 
 def _canonical_taxonomy_order(groups: list[tuple[str, list[str]]]) -> list[str]:
@@ -4508,11 +4532,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # creation, and
                     # BEFORE Ingested status flip so the retriever never
                     # queries a missing/stale index.
-                    _metric, _n_lists = _read_index_params()
+                    _metric, _n_lists, _n_probe = _read_index_params()
                     await ensure_vector_index(
                         self.db.collection(f"{graph_name}_SOURCE"),
                         metric=_metric,
                         n_lists=_n_lists,
+                        n_probe=_n_probe,
                         graph_name=graph_name,
                         file_id=input.file_id,
                         write_ingestion_log=self._write_ingestion_log,

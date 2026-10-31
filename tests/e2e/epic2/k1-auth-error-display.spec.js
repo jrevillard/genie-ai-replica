@@ -3,6 +3,12 @@ const { getAdminToken, getSessionTokenViaUI, request: authRequest } = require('.
 const { createUser, deleteUser, updateRealmSettings } = require('../helpers/keycloak-admin');
 
 test.describe.serial('Phase K: Auth Error Display', () => {
+  // The session mints run two login attempts when the stack stalls
+  // (30s navigation + 15s redirect wait + retry budget each), and K.2
+  // stacks a 30s expiry poll on top of its own mint — past the 60s
+  // default. Hooks inherit the test timeout.
+  test.setTimeout(180000);
+
   let adminToken;
   let userToken;
   let noRolesUserId;
@@ -48,12 +54,6 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   });
 
   test('K.2 — TOKEN_EXPIRED (short-lived token)', async ({ browser }) => {
-    // The browser session mint (worst-case 45s of login retry budget)
-    // stacks on the 30s expiry poll — past the default 60s on a slow
-    // identity provider, so this test carries the same extended budget
-    // the conversation-history suite uses.
-    test.setTimeout(120000);
-
     // Reduce lifespan to 10s
     await updateRealmSettings(adminToken, 'genie', { accessTokenLifespan: '10' });
 
@@ -81,6 +81,12 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   });
 
   test('K.3 — FORBIDDEN (user without roles)', async ({ browser }) => {
+    // Restore the normal lifespan first: K.2 left it at 10s, and the
+    // browser-session mint below adds SPA-bootstrap latency after the
+    // token is issued — on a loaded stack the admin request could hit
+    // TOKEN_EXPIRED instead of the FORBIDDEN this test verifies.
+    await updateRealmSettings(adminToken, 'genie', { accessTokenLifespan: '300' });
+
     // Create no-roles user
     noRolesUserId = await createUser(adminToken, 'genie', {
       username: NOROLES_USERNAME,

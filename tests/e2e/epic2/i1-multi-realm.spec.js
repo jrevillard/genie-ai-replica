@@ -17,6 +17,11 @@ const { createUser, deleteUser, enableDirectAccessGrants } = require('../helpers
  *   - Backend has been restarted to load genie2 JWKS
  */
 test.describe.serial('Phase I: Multi-Realm Configuration', () => {
+  // The session mints run two login attempts when the stack stalls
+  // (30s navigation + 15s redirect wait + retry budget each) — past the
+  // 60s default before any test starts. Hooks inherit the test timeout.
+  test.setTimeout(180000);
+
   let adminToken;
   let genie1Token;
   const TEST_REALM = 'genie2';
@@ -85,7 +90,8 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
     const claims2 = parseJwtClaims(genie2Token);
 
     // Assert: issuers are different
-    expect(claims1.iss, 'genie1 issuer must contain "realms/genie"').toContain('realms/genie');
+    // endsWith, not contains: 'realms/genie2' contains 'realms/genie'.
+    expect(claims1.iss, 'genie1 issuer must end with "realms/genie"').toMatch(/realms\/genie$/);
     expect(claims2.iss, 'genie2 issuer must contain "realms/genie2"').toContain('realms/genie2');
     expect(claims1.iss, 'Issuers must be different').not.toBe(claims2.iss);
   });

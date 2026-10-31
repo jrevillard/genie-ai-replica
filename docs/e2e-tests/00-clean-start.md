@@ -207,7 +207,7 @@ curl -sk https://localhost/api/health -o /dev/null -w "Backend: HTTP %{http_code
 
 The `genie-app` client uses authorization code flow for the frontend. ROPC (Direct Access Grants) is only needed for API testing via curl and should **not** be enabled in production.
 
-**Note:** The Playwright suites do **not** need this step — they log in through the browser and reuse the session token (the committed realm refuses ROPC by design). Only the manual curl procedures in the phase docs below still mint tokens via ROPC.
+**Note:** The Playwright suites do **not** need this step — they log in through the browser and reuse the session token (the committed realm refuses ROPC by design). Only the manual curl procedures in the phase docs below still mint tokens via ROPC, plus the multi-realm suite (`tests/e2e/epic2/i1-multi-realm.spec.js`) for its test-only `genie2` realm, where the spec provisions the grant itself.
 
 **Note:** On a fresh deploy, `directAccessGrantsEnabled` is always `False` (keycloak-config-cli does not enable it). The PUT command below is **required on every fresh stack** that will run the manual curl phases.
 

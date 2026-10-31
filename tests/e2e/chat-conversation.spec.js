@@ -4,34 +4,9 @@
 // and each one carries a mutation check recorded beside it.
 const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen, contrastRatio } = require('./helpers/welcome');
+const { mockChatStream, sseBody, ackFeedback } = require('./helpers/chatbot');
 
 const BASE_URL = process.env.BASE_URL || 'https://localhost';
-
-async function mockStream(page, chunks, metadata) {
-  const frames = chunks.map((c) => `data: ${JSON.stringify({ type: 'chunk', content: c })}`);
-  if (metadata) frames.push(`data: ${JSON.stringify({ type: 'metadata', ...metadata })}`);
-  const sse = [...frames, '', `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`, ''].join('\n');
-  // The inline thumbs post their rating to the same backend — answer it so
-  // the rated state does not depend on the network.
-  await page.route('**/feedback**', async (route) => {
-    if (route.request().method() === 'POST') {
-      try {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
-      } catch {
-        /* the context closed before the fulfillment */
-      }
-      return;
-    }
-    await route.continue();
-  });
-  await page.route('**/queries/stream', async (route) => {
-    try {
-      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: sse });
-    } catch {
-      /* the context closed before the fulfillment */
-    }
-  });
-}
 
 async function askAndAnswer(page, question) {
   await page.locator('[data-testid="welcome-composer"] textarea').fill(question);
@@ -184,28 +159,17 @@ test.describe('Conversation — sources', () => {
   // grounded metadata frame renders, not the retriever.
   test('the answer card carries its own collapsible sources', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
-    await page.route('**/queries/stream', async (route) => {
-      const sse = [
-        `data: ${JSON.stringify({ type: 'chunk', content: 'GENIE.AI answers from the library documents.' })}`,
-        '',
-        `data: ${JSON.stringify({
-          type: 'metadata',
-          confidence_score: 0.82,
-          is_grounded: true,
-          source_documents: [
-            {
-              document_id: 'doc-1',
-              document_name: 'National ID Application Guide',
-              file_name: 'guide.pdf',
-              score: 0.91
-            }
-          ]
-        })}`,
-        '',
-        `data: ${JSON.stringify({ type: 'done' })}`,
-        ''
-      ].join('\n');
-      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: sse });
+    await mockChatStream(page, ['GENIE.AI answers from the library documents.'], {
+      confidence_score: 0.82,
+      is_grounded: true,
+      source_documents: [
+        {
+          document_id: 'doc-1',
+          document_name: 'National ID Application Guide',
+          file_name: 'guide.pdf',
+          score: 0.91
+        }
+      ]
     });
     await page.locator('[data-testid="welcome-composer"] textarea').fill('How do I apply for a national ID?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
@@ -243,7 +207,10 @@ test.describe('Conversation — actions', () => {
   test('the answer carries thumbs that record a rating and a copy that fills the clipboard', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
-    await mockStream(page, ['GENIE.AI is a sovereign generative AI framework for the public sector.']);
+    // The inline thumbs post their rating to the same backend — answer it so
+    // the rated state does not depend on the network.
+    await ackFeedback(page);
+    await mockChatStream(page, ['GENIE.AI is a sovereign generative AI framework for the public sector.']);
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     await page.waitForSelector('[data-testid="answer-actions"]', { timeout: 45000 });
@@ -284,7 +251,7 @@ test.describe('Conversation — warning and error', () => {
     // Deterministic: the ungrounded state comes from the metadata frame, so
     // the test scripts a stream whose metadata declares is_grounded=false —
     // never a live RAG answer, which may ground either way.
-    await mockStream(page, ['GENIE.AI answers from its own knowledge when no document supports the point.'], {
+    await mockChatStream(page, ['GENIE.AI answers from its own knowledge when no document supports the point.'], {
       is_grounded: false,
       confidence_score: 0.78
     });
@@ -394,7 +361,7 @@ test.describe('Conversation — contrast', () => {
   // warning on its ground, the initials on their accent circle.
   test('the amber warning and the initials clear a 4.5:1 contrast floor', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
-    await mockStream(page, ['GENIE.AI answers from its own knowledge when no document supports the point.'], {
+    await mockChatStream(page, ['GENIE.AI answers from its own knowledge when no document supports the point.'], {
       is_grounded: false,
       confidence_score: 0.78
     });
@@ -533,17 +500,7 @@ test.describe('Conversation — surface invariants', () => {
     const streamReleased = new Promise((resolve) => {
       releaseStream = resolve;
     });
-    await page.route('**/feedback**', async (route) => {
-      if (route.request().method() === 'POST') {
-        try {
-          await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
-        } catch {
-          /* the context closed before the fulfillment */
-        }
-        return;
-      }
-      await route.continue();
-    });
+    await ackFeedback(page);
     await page.route('**/queries/stream', async (route) => {
       if (route.request().method() !== 'POST') {
         await route.continue();
@@ -554,11 +511,7 @@ test.describe('Conversation — surface invariants', () => {
         await route.fulfill({
           status: 200,
           contentType: 'text/event-stream',
-          body: [
-            `data: ${JSON.stringify({ type: 'chunk', content: 'The answer completes in the background.' })}`,
-            `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`,
-            ''
-          ].join('\n')
+          body: sseBody(['The answer completes in the background.'])
         });
       } catch {
         /* the context closed before the fulfillment */

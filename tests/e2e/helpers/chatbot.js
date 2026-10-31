@@ -2,7 +2,7 @@ const { expect } = require('@playwright/test');
 
 const TEST_USER = {
   username: 'testuser',
-  password: 'TestPass123!',
+  password: 'TestPass123!'
 };
 
 // The documents admin surface (upload, delete, lifecycle) is ADMIN_ONLY on
@@ -11,7 +11,7 @@ const TEST_USER = {
 // Phase 0 of docs/e2e-tests/00-clean-start.md.
 const TEST_ADMIN_USER = {
   username: 'testadmin',
-  password: 'TestAdmin123!',
+  password: 'TestAdmin123!'
 };
 
 // Normalized once: page.url() never produces a trailing double slash,
@@ -71,7 +71,7 @@ async function loginViaUI(page, user = TEST_USER) {
 async function loginAttempt(page, user, budgetMs) {
   await page.goto(`${BASE_URL}/`, {
     waitUntil: 'networkidle',
-    timeout: 30000,
+    timeout: 30000
   });
 
   // A previous attempt's token exchange can complete just after its wait
@@ -80,7 +80,7 @@ async function loginAttempt(page, user, budgetMs) {
   if (page.url().includes('dashboard')) return;
 
   await page.waitForURL('**/protocol/openid-connect/auth**', {
-    timeout: 15000,
+    timeout: 15000
   });
 
   await page.fill('#username', user.username);
@@ -92,7 +92,7 @@ async function loginAttempt(page, user, budgetMs) {
       const urlStr = url.toString();
       return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
     },
-    { timeout: budgetMs },
+    { timeout: budgetMs }
   );
 
   const finalUrl = page.url();
@@ -101,10 +101,7 @@ async function loginAttempt(page, user, budgetMs) {
   // exchange fails (router.replace('/')), so accepting it here would
   // report a failed exchange as success and skip the retry that recovers
   // a transient one by re-entering Keycloak with the session cookie.
-  expect(
-    finalUrl.includes('dashboard'),
-    `Expected URL to contain 'dashboard', got: ${finalUrl}`,
-  ).toBeTruthy();
+  expect(finalUrl.includes('dashboard'), `Expected URL to contain 'dashboard', got: ${finalUrl}`).toBeTruthy();
 }
 
 /**
@@ -113,7 +110,7 @@ async function loginAttempt(page, user, budgetMs) {
 async function navigateToChatbot(page) {
   await page.goto(`${BASE_URL}/chat`, {
     waitUntil: 'networkidle',
-    timeout: 30000,
+    timeout: 30000
   });
 }
 
@@ -135,15 +132,17 @@ async function waitForBotResponse(page, options = {}) {
   const timeout = options.timeout || 60000;
 
   // Wait for loading spinner to appear (indicates processing started)
-  await page.waitForSelector('.loading-spinner', {
-    timeout: 5000,
-  }).catch(() => {
-    // Spinner may be very fast — OK if missed
-  });
+  await page
+    .waitForSelector('.loading-spinner', {
+      timeout: 5000
+    })
+    .catch(() => {
+      // Spinner may be very fast — OK if missed
+    });
 
   // Wait for loading spinner to disappear (indicates response complete)
   await expect(page.locator('.loading-spinner')).toBeHidden({
-    timeout,
+    timeout
   });
 }
 
@@ -155,12 +154,10 @@ async function getMessages(page) {
   const elements = await page.locator('.chat-message').all();
 
   for (const el of elements) {
-    const classAttr = await el.getAttribute('class') || '';
+    const classAttr = (await el.getAttribute('class')) || '';
     const sender = classAttr.includes('user') ? 'user' : 'bot';
     const bubble = el.locator('.message-bubble');
-    const text = (await bubble.isVisible())
-      ? (await bubble.innerText()).trim()
-      : '';
+    const text = (await bubble.isVisible()) ? (await bubble.innerText()).trim() : '';
     messages.push({ sender, text });
   }
 
@@ -211,7 +208,58 @@ async function saveChat(page, title) {
  */
 async function waitForBotMessage(page, text, { timeout = 30000 } = {}) {
   await expect(page.locator('.chat-message.bot .message-bubble').last()).toContainText(text, {
-    timeout,
+    timeout
+  });
+}
+
+// The queryId the mocked done frame carries. The store records it on the
+// finished message when present; the value itself is never asserted.
+const MOCK_QUERY_ID = 'mock-query-1';
+
+/**
+ * Build the SSE body the specs mock the answer stream with: `data: ` frames,
+ * one JSON payload per line, ending with a done frame — the app's wire
+ * contract, in one place. `metadata`, when given, travels as its own frame
+ * before the done frame (an is_grounded flag, source_documents, ...).
+ */
+function sseBody(chunks, metadata) {
+  const frames = chunks.map((c) => `data: ${JSON.stringify({ type: 'chunk', content: c })}`);
+  if (metadata) frames.push(`data: ${JSON.stringify({ type: 'metadata', ...metadata })}`);
+  return [...frames, '', `data: ${JSON.stringify({ type: 'done', queryId: MOCK_QUERY_ID })}`, ''].join('\n');
+}
+
+/**
+ * Mock the chat answer stream. `chunks` arrive as chunk frames; `metadata`,
+ * when given, rides a metadata frame before the done frame. The interception
+ * sits at the network layer (page.route), so the app's own fetch + SSE
+ * parsing path runs — only the bytes on the wire are scripted.
+ */
+async function mockChatStream(page, chunks, metadata) {
+  await page.route('**/queries/stream**', async (route) => {
+    try {
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: sseBody(chunks, metadata) });
+    } catch {
+      /* the context closed before the fulfillment */
+    }
+  });
+}
+
+/**
+ * Answer the feedback POST with an empty success, so a test that rates an
+ * answer does not depend on the network for the rated state. Tests that
+ * never rate need not install it.
+ */
+async function ackFeedback(page) {
+  await page.route('**/feedback**', async (route) => {
+    if (route.request().method() === 'POST') {
+      try {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      } catch {
+        /* the context closed before the fulfillment */
+      }
+      return;
+    }
+    await route.continue();
   });
 }
 
@@ -221,10 +269,13 @@ module.exports = {
   sendMessage,
   waitForBotResponse,
   waitForBotMessage,
+  sseBody,
+  mockChatStream,
+  ackFeedback,
   getMessages,
   getLastBotMessage,
   saveChat,
   TEST_USER,
   TEST_ADMIN_USER,
-  BASE_URL,
+  BASE_URL
 };

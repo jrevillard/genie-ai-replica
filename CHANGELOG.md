@@ -20,9 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the discovered translation window (the room the window leaves beside
   the prompt estimate), so such a history is translated instead of refused.
   A window too tight to hold the prompt plus a full-length translation is
-  still refused locally and still reported as `fallback_error`, and a
-  completion cut off at `max_tokens` is now refused too instead of being
-  embedded half-translated under a `translated` status.
+  still refused locally and still reported as `fallback_error`, and on the
+  TranslateGemma branch a completion cut off at `max_tokens` is now refused
+  too instead of being embedded half-translated under a `translated` status.
   **Scope:** the ceiling applies to the TranslateGemma completion branch
   only; the generic translation model (the Compose default,
   `google/gemma-3-4b-it`) sends no completion cap and is unchanged. The

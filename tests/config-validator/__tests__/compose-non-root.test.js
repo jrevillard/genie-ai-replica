@@ -651,6 +651,54 @@ describe('compose non-root contract (#1227)', () => {
     expect(validateComposeNonRoot(reindented).violations).toEqual([]);
   });
 
+  test('mutations: short-syntax comment, flow deploy, mode drop, explicit root init', () => {
+    // A trailing comment must not defeat the short-syntax data bind.
+    const shortCommented = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes:',
+      '      - "${DATA_DIR:-./data}/logs/kong:/var/log/kong" # kong logs',
+      ''
+    ].join('\n');
+    const { violations: v1 } = validateComposeNonRoot(shortCommented);
+    expect(v1.some((v) => v.includes('kong') && v.includes('short syntax'))).toBe(true);
+
+    // A flow-form deploy: replaces the anchor's map — the mode/one-shot
+    // invariants must be judged on the local shape (absent → default).
+    const flowDeploy = composeText.replace(
+      '  backend-init:\n    <<: *chown-init\n',
+      '  backend-init:\n    <<: *chown-init\n    deploy: {mode: replicated}\n'
+    );
+    expect(flowDeploy).not.toBe(composeText);
+    const { violations: v2 } = validateComposeNonRoot(flowDeploy);
+    expect(v2.some((v) => v.includes('backend-init') && v.includes('one-shot'))).toBe(true);
+    expect(v2.some((v) => v.includes('backend-init') && v.includes('mode: global'))).toBe(true);
+
+    // A local deploy restating the bounded policy but DROPPING
+    // mode: global strands the per-node chown guarantee — must trip.
+    const modeDrop = composeText.replace(
+      '  backend-init:\n    <<: *chown-init\n',
+      '  backend-init:\n    <<: *chown-init\n    deploy:\n      restart_policy:\n        condition: on-failure\n        max_attempts: 3\n'
+    );
+    const { violations: v3 } = validateComposeNonRoot(modeDrop);
+    expect(v3.some((v) => v.includes('backend-init') && v.includes('mode: global'))).toBe(true);
+
+    // An allowlisted one-shot may pin user: root EXPLICITLY — the doctrine
+    // is "root ON PURPOSE"; the blanket root check must not fire on it.
+    const explicitRootInit = composeText.replace(
+      '  backend-init:\n    <<: *chown-init\n',
+      '  backend-init:\n    <<: *chown-init\n    user: root\n'
+    );
+    const { violations: v4 } = validateComposeNonRoot(explicitRootInit);
+    expect(v4.filter((v) => v.includes('backend-init') && v.includes('is root'))).toEqual([]);
+
+    // ...while the same pin on a REGULAR service still trips.
+    const explicitRootSvc = ['services:', '  backend:', '    user: root', ''].join('\n');
+    const { violations: v5 } = validateComposeNonRoot(explicitRootSvc);
+    expect(v5.some((v) => v.includes('backend') && v.includes('is root'))).toBe(true);
+  });
+
   test('allowlist entries reference services that exist in the compose file', () => {
     // A renamed or removed service would leave a stale allowlist entry that
     // enforces nothing — dead enforcement data. Uses the validator's OWN

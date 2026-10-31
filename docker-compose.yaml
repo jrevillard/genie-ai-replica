@@ -108,10 +108,11 @@ x-logging: &fluent-logging
 # Shared shape for the one-shot volume-chown init containers (#1227): they
 # exist to chown a named volume for the unprivileged service that follows,
 # so they run as root ON PURPOSE with exactly CHOWN (the chown) +
-# DAC_OVERRIDE (the marker write into a directory the target uid already
-# owns), stay one-shot, and never touch a host path. Each instance adds only
-# its command, volume and placement. The no-root contract test enforces
-# these invariants on every member of ONE_SHOT_ROOT_INIT.
+# DAC_OVERRIDE (mid-sweep traversal of directories already chowned to the
+# target uid), stay one-shot (bounded retries), and never touch a host
+# path. Each instance adds only its command, volume and placement. The
+# no-root contract test enforces these invariants on every member of
+# ONE_SHOT_ROOT_INIT.
 x-chown-init: &chown-init
   cap_drop:
     - ALL

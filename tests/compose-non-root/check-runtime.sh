@@ -103,11 +103,34 @@ while IFS= read -r container; do
       *) svc="${service%-$tail}" ;;
     esac
   fi
+  self_dropping=0
   case "$SELF_DROPPING" in
-    *" $svc "*)
-      echo "  (self-dropping service $svc: server runs as its package user; transient root healthcheck execs skipped)"
-      continue;;
+    *" $svc "*) self_dropping=1 ;;
   esac
+  if [ "$self_dropping" -eq 1 ]; then
+    # The server drops to its package user; the transient healthcheck execs
+    # (pg_isready / redis-cli, sub-second, run as the container's root
+    # user) are filtered — but the container IS still inspected, so a gosu
+    # regression keeping the SERVER at uid 0 remains a violation.
+    top=$(docker top "$container" -o uid,pid,args 2>/dev/null)
+    if [ $? -ne 0 ]; then
+      echo "UNINSPECTABLE container $container (docker top failed) — treating as a violation:"
+      violations=$((violations + 1))
+      continue
+    fi
+    offenders=$(
+      echo "$top" |
+        awk 'NR>1 && $1==0' |
+        grep -vE '(pg_isready|redis-cli)' |
+        awk '{print "  pid " $2 ": " substr($0, index($0, $3))}'
+    )
+    if [ -n "$offenders" ]; then
+      echo "ROOT PROCESS in $container (self-dropping service — outside healthcheck execs):"
+      echo "$offenders"
+      violations=$((violations + 1))
+    fi
+    continue
+  fi
   # `uid` (effective, NUMERIC): matching the username string would pass
   # a uid-0 process whose container passwd aliases 0 to another name
   # (useradd -o -u 0 admin) — the alias makes docker top print "admin"

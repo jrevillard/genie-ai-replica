@@ -245,7 +245,7 @@
       # chowned recursively.
       become_user: root
       ansible.builtin.command: >-
-        find {{ deploy_dir }} -mindepth 1 -maxdepth 1 ! -name data
+        find {{ deploy_dir }} -mindepth 1 -maxdepth 1 ! -name {{ data_dir | basename }}
         -exec chown -R -h {{ ansible_user }}:{{ ansible_user }} {} +
       changed_when: true
 
@@ -295,7 +295,7 @@
       # migration tasks own everything under data/.
       become_user: root
       ansible.builtin.command: >-
-        find {{ deploy_dir }} -mindepth 1 -maxdepth 1 ! -name data
+        find {{ deploy_dir }} -mindepth 1 -maxdepth 1 ! -name {{ data_dir | basename }}
         -exec chown -R -h {{ ansible_user }}:{{ ansible_user }} {} +
       changed_when: true
 

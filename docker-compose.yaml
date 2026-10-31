@@ -2755,8 +2755,12 @@ services:
       mode: global
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 5
+        # 60 attempts at 30s delay (30-minute budget): same init-race as
+        # arango/document-repository/backend/victoria-logs — the otel-queue
+        # file_storage (admin logs) can be the largest root-era volume, and
+        # the budget must outlast otel-collector-init's chown.
+        delay: 30s
+        max_attempts: 60
 
   victoriametrics:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed

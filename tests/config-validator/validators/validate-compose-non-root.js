@@ -145,7 +145,11 @@ function validateComposeNonRoot(composeText) {
           // segment counts (a DATA_DIR repointed absolute), while the
           // docker socket and /dev nodes do not.
           const underDataDir = /^(\.\/|\.\.\/)*data(\/|$)/.test(resolved);
-          const dataShaped = underDataDir || /\/[\w.-]*data(\/|$)/.test(resolved);
+          // 'data' counts only as a WHOLE path segment — a suffix like
+          // /mnt/genie-data is a pre-existing host path for which the
+          // short syntax offers no compliant spelling, and flagging it
+          // would prescribe an impossible fix
+          const dataShaped = underDataDir || /\/data(\/|$)/.test(resolved);
           // An absolute LITERAL path (/etc/localtime, the docker socket)
           // pre-exists on every host — create_host_path is irrelevant on
           // it. A TEMPLATED absolute (${VAR:-/srv/genie}/...) is a

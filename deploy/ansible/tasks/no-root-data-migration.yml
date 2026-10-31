@@ -41,6 +41,13 @@
   # recursions exclude data/ entirely, so on converged deployments this
   # probe is empty and the handover skips — the tasks converge instead of
   # churning every deploy.)
+  # Escalated (root): an unprivileged probe exits nonzero on a 0700
+  # subdirectory the backend legitimately owns — EACCES the chown cannot
+  # fix — which would churn the handover 'changed' on every deploy with
+  # nothing to heal. Under root the only rc != 0 is a vanished path,
+  # guarded by the create task above.
+  become: true
+  become_user: root
   ansible.builtin.command: >-
     find {{ deploy_dir }}/{{ data_dir }}/database_backups ! -uid 1000 -print -quit
   register: _backup_misowned

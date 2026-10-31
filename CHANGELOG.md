@@ -10,6 +10,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Tuning `RETRIEVER_ARANGO_DISTANCE_STRATEGY` / `RETRIEVER_ARANGO_NUM_CENTROIDS` now takes effect on the maintained vector index.** docker-compose.yaml delivered both only to the retriever, while the dataprep service — the component that actually creates `vector_index` — kept seeing the defaults (COSINE / 1): an operator-set value shaped the retriever's lazy-created index and was then dropped and recreated at defaults by the drift check on the next ingest, silently reverting the tuning every ingest. Both vars now reach the dataprep container too, mirroring `RETRIEVER_ARANGO_NPROBE`. Deployments that set them get a one-time index rebuild on upgrade; unset deployments see no change. (#1230, !656)
+- **A long non-English conversation is no longer refused by a fixed
+  4096-token completion ceiling (TranslateGemma deployments).** The
+  TranslateGemma history translation capped its completion at 4096 tokens
+  while the prompt grew with the conversation, so a history whose prompt
+  estimate crossed 4096 tokens was refused locally (no call to the
+  translation service) and embedded untranslated into the English retrieval
+  space — the char budget had admitted it. The completion ceiling now scales
+  with the discovered translation window (the room the window leaves beside
+  the prompt estimate), so such a history is translated instead of refused.
+  A window too tight to hold the prompt plus a full-length translation is
+  still refused locally and still reported as `fallback_error`, and on the
+  TranslateGemma branch a completion cut off at `max_tokens` is now refused
+  too instead of being embedded half-translated under a `translated` status.
+  **Scope:** the ceiling applies to the TranslateGemma completion branch
+  only; the generic translation model (the Compose default,
+  `google/gemma-3-4b-it`) sends no completion cap and is unchanged. The
+  refused band also needs a translation window above ~8.7k tokens
+  (`VLLM_TRANSLATION_MAX_MODEL_LEN`) to exist at all — the shipped windows
+  are 2048 (Compose, T4) and 8192 (RTX 6000), whose char budgets stay far
+  below it, so no shipped configuration saw the refusal. (#1241, !657)
 
 - **A mobile release build of the `dev` or `e2e` flavor now fails at startup
   instead of shipping with the trust-all TLS client armed.** Both flavors set

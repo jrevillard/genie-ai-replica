@@ -359,6 +359,48 @@ describe('credential-scoped cache keys and the soft deployment label', () => {
   });
 });
 
+describe('soft probe failures stay quiet (provenance labels are best-effort)', () => {
+  beforeEach(() => {
+    logger.warn.mockClear();
+  });
+
+  test('servedModelId emits no probe_failed warn — the label stays null, quietly', async () => {
+    axios.get.mockRejectedValue(new Error('connect ECONNREFUSED'));
+    await expect(cache.servedModelId('http://gpu.example/v1', { apiKey: 'fk' })).resolves.toBeNull();
+    expect(logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed')).toHaveLength(0);
+  });
+
+  test('deploymentServedModelId is quiet the same way', async () => {
+    process.env.VLLM_API_KEY = 'deployment-secret';
+    axios.get.mockRejectedValue(new Error('connect ECONNREFUSED'));
+    await expect(cache.deploymentServedModelId()).resolves.toBeNull();
+    expect(logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed')).toHaveLength(0);
+  });
+
+  test('a HARD probe failure keeps the loud probe_failed warn', async () => {
+    axios.get.mockRejectedValue(new Error('connect ECONNREFUSED'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({
+      name: 'ModelDiscoveryError'
+    });
+    const warns = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed');
+    expect(warns).toHaveLength(1);
+    expect(warns[0][1]).toMatchObject({ url: 'http://vllm:8000/v1/models', error: 'connect ECONNREFUSED' });
+  });
+
+  test('serving_stale still fires on the soft path when a warm cache degrades', async () => {
+    mockProbeSuccess('served/model');
+    await cache.servedModelId('http://vllm:8000');
+    Date.now.mockReturnValue(1_000_000 + 61_000);
+    axios.get.mockRejectedValue(new Error('connect ECONNREFUSED'));
+    // Stale beats broken on the soft path too — the label names the last
+    // known id, and the degradation stays visible via serving_stale alone.
+    await expect(cache.servedModelId('http://vllm:8000')).resolves.toBe('served/model');
+    const stale = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.serving_stale');
+    expect(stale).toHaveLength(1);
+    expect(logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed')).toHaveLength(0);
+  });
+});
+
 describe('negative window, shared probes, sameOrigin', () => {
   test('a FAILED probe is remembered for the negative window — no re-probe per call', async () => {
     axios.get.mockRejectedValue(new Error('ECONNREFUSED'));

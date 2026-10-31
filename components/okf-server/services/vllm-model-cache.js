@@ -177,8 +177,14 @@ const PROBE_ATTEMPTS = 3;
  * the deployment key may only be aimed at the deployment endpoint
  * (deploymentServedModelId / resolveVllmModelId add it for that path); a
  * foreign base (named model-config, judge base) must never receive it
- * uninvited. */
-async function probe(url, timeoutMs, apiKey) {
+ * uninvited.
+ *
+ * quiet marks the BEST-EFFORT callers (the provenance labels, whose
+ * contract is "null is a fine answer"): their probe failure is not an
+ * incident, so it must not emit the warn that is the PRIMARY failure
+ * signal of the paths that DO fail (tagging, curation). The thrown error
+ * is unchanged either way — quiet shapes the logging, never the result. */
+async function probe(url, timeoutMs, apiKey, { quiet = false } = {}) {
   const headers = {};
   const key = (apiKey || '').trim();
   if (key) headers.Authorization = `Bearer ${key}`;
@@ -225,7 +231,7 @@ async function probe(url, timeoutMs, apiKey) {
     // exact message — one incident must be one line in VL, not two.
     throw new Error('the endpoint listed no model');
   } catch (e) {
-    logger.warn('vllm_model_cache.probe_failed', { url, error: e.message });
+    if (!quiet) logger.warn('vllm_model_cache.probe_failed', { url, error: e.message });
     throw probeFailure(url, e);
   }
 }
@@ -245,8 +251,12 @@ function probeBudgetBucket(timeoutMs) {
 
 /** get_model_id twin: served id for baseUrl, TTL-cached, stale-served on
  * probe failure. When nothing ever answered, it THROWS the probe's cause
- * (a null id would hide the reason from the caller). */
-async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
+ * (a null id would hide the reason from the caller). `quiet` marks the
+ * best-effort caller (see probe): the probe_failed warn is skipped, the
+ * cache semantics are identical. The probe is shared per (base,
+ * credential, budget) — the FIRST caller decides the level; a hard caller
+ * joining a quiet probe still gets the thrown error. */
+async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = {}) {
   const base = String(baseUrl || '').replace(/\/+$/, '');
   if (!base) return null;
   // Cache key = the NORMALIZED probe URL + a HASH of the credential:
@@ -290,7 +300,7 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
 
   let pending = _inflight.get(probeKey);
   if (!pending) {
-    pending = probe(modelsUrl, timeoutMs, apiKey)
+    pending = probe(modelsUrl, timeoutMs, apiKey, { quiet })
       .then((id) => {
         // delete+set: the refreshed entry becomes the newest, so the
         // count-bounded prune drops the OLDEST one first.
@@ -537,10 +547,12 @@ async function deploymentServedModelId({ timeoutMs } = {}) {
 }
 
 /** The served model of ANY base, soft: null when nothing answers. The
- * provenance callers record what answered — they must not fail on it. */
+ * provenance callers record what answered — they must not fail on it, and
+ * their probe failure must not emit the probe_failed warn (that warn is
+ * the failure signal of the paths that DO fail: tagging, curation). */
 async function servedModelId(baseUrl, { apiKey, timeoutMs } = {}) {
   try {
-    return await getServedModelId(baseUrl, { timeoutMs, apiKey });
+    return await getServedModelId(baseUrl, { timeoutMs, apiKey, quiet: true });
   } catch {
     return null;
   }

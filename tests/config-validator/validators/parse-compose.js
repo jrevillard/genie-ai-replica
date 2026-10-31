@@ -1,4 +1,4 @@
-const fs = require('fs');
+const { readFileOrThrow } = require('./parse-env-template');
 
 /**
  * Extract environment variable references from docker-compose.yaml using regex.
@@ -271,24 +271,6 @@ function parseGitlabCiImages(filePath) {
 }
 
 /**
- * Read a file, rethrowing IO errors with the file path in the message.
- *
- * Shared by the parsers in this module so each failure says which config
- * file could not be read.
- *
- * @param {string} filePath - Path to the file to read
- * @param {string} label - Human-readable file kind for the error message
- * @returns {string} file content
- */
-function readFileOrThrow(filePath, label) {
-  try {
-    return fs.readFileSync(filePath, 'utf-8');
-  } catch (err) {
-    throw new Error(`Failed to read ${label}: ${filePath}`, { cause: err });
-  }
-}
-
-/**
  * Extract the `rules[].changes` path filters of named jobs from a
  * .gitlab-ci.yml file.
  *
@@ -326,7 +308,7 @@ function parseGitlabCiJobChanges(filePath, jobNames) {
     // Exception: an entry of a hidden anchor whose sequence sits at indent 0
     // (valid YAML) would otherwise be mistaken for a top-level key line.
     if (indent === 0 && !(listIndent === 0 && /^-\s+/.test(trimmed))) {
-      const jobMatch = trimmed.match(/^([\w:.-]+):\s*(?:&[\w-]+)?\s*$/);
+      const jobMatch = trimmed.match(/^([\w:.-]+):\s*(?:&[\w-]+)?\s*(?:#.*)?$/);
       currentJob = jobMatch ? jobMatch[1] : null;
       listIndent = jobMatch && currentJob.startsWith('.') ? 0 : null;
       continue;

@@ -2313,9 +2313,14 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // would dangle its hard needs on every ordinary MR pipeline and fail
     // pipeline creation repo-wide; e2e:integration's two rules must stay
     // scoped the same way. The FULL condition is pinned — dropping either
-    // half re-scopes the rule.
+    // half re-scopes the rule — and the RULE COUNTS are pinned, so an extra
+    // broadened rule cannot be appended beside the alias (every rule starts
+    // with a `- if:` list item).
     const trainCondition =
       '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"';
+    const ruleCount = (section) => section.split('\n').filter((line) => line.trimStart().startsWith('- if:')).length;
+    expect(ruleCount(sectionOf('e2e:playwright'))).toBe(1);
+    expect(ruleCount(sectionOf('e2e:integration'))).toBe(2);
     expect(sectionOf('e2e:playwright').split(trainCondition).length - 1).toBe(1);
     expect(sectionOf('e2e:integration').split(trainCondition).length - 1).toBe(2);
   });
@@ -2438,5 +2443,17 @@ describe('parseGitlabCiJobChanges', () => {
     const parsed = parseGitlabCiJobChanges(file, ['.shared_changes', 'job-a']);
     expect(parsed.get('.shared_changes')).toEqual(['tests/a/**/*', 'tests/b/**/*']);
     expect(parsed.get('job-a')).toEqual([]);
+  });
+
+  test('a job key carrying a trailing comment is still recognized', () => {
+    const file = writeTempCi([
+      'job-a:  # annotated key',
+      '  rules:',
+      "    - if: '$X'",
+      '      changes:',
+      '        - tests/a/**/*'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['job-a']);
+    expect(parsed.get('job-a')).toEqual(['tests/a/**/*']);
   });
 });

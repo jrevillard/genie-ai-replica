@@ -3073,7 +3073,8 @@ test:flutter:
 #   - e2e:integration deploys the stack from docker-compose.yaml seeded by
 #     the env template (cp env .env); the stack also bind-mounts
 #     configs/keycloak/themes/ and configs/otel/otel-collector-config.yaml
-#     straight from this checkout.
+#     straight from this checkout (the frontend's public/config checkout
+#     mount is already covered by the components/gov-chat-frontend glob).
 # tests/e2e/okf/ is deliberately NOT listed: the OKF specs are not executed
 # until MR2 wires them into the script (see .e2e_web_base script comment),
 # and listing unexecuted paths only buys 30-minute train jobs that test

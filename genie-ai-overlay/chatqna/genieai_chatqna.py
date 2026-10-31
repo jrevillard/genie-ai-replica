@@ -600,46 +600,78 @@ def _build_user_content(user_context_string: str, history_string: str, rag_augme
 # a char/token ratio is wrong for dense scripts (CJK runs ~1 token/char,
 # Latin ~4) — and a wrong estimate either overflows the window (the server
 # rejects the request) or truncates the translation.
-# TRANSLATION_COMPLETION_SAFETY_TOKENS covers what the count cannot see:
-# the chat template the server wraps the prompt in.
-TRANSLATION_COMPLETION_SAFETY_TOKENS = 64
+# The constants mirror the backend translation path's rule
+# (components/gov-chat-backend/services/translation/gpu-translate-backend.js):
+# the same safety margin, the same refusal floor, the same need bound.
+TRANSLATION_COMPLETION_SAFETY_TOKENS = 128
+# A prompt that leaves less room than this cannot produce a translation:
+# the completion would be cut off, and the guard would refuse it. Refused
+# up front, with the reason named.
+TRANSLATION_COMPLETION_MIN_ROOM = 256
 # What a translation needs: the backend translation path sizes the same
 # request at 4x the input tokens plus a margin (the target script can cost
 # more tokens than the source), and that bound keeps a big window from
 # inviting an unbounded completion.
 TRANSLATION_COMPLETION_NEEDED_MULTIPLIER = 4
 TRANSLATION_COMPLETION_NEEDED_MARGIN = 256
+# Endpoints whose prompt could not be counted: warned once, not per request.
+_TRANSLATION_COUNT_WARNED: set[str] = set()
+# The ceiling a translation request falls back to when the completion
+# cannot be MEASURED (no window, or a server that cannot count): roughly
+# half the input, bounded. It is an estimate — the degraded path only — but
+# it is a bound: without it the server's default would let the completion
+# run to the whole window.
+TRANSLATION_BASE_CEILING = 4096
 
 
-def _translation_completion_cap(prompt: str, window: int | None, model: str | None = None) -> int | None:
-    """Completion cap for a translation request, or None to send no cap.
+def _translation_base_cap(text: str, ceiling: int = TRANSLATION_BASE_CEILING) -> int:
+    """Base completion cap for a translation request: roughly half the input
+    size, with a 512 floor that keeps short inputs translatable and a
+    ceiling that keeps long ones bounded. The DEGRADED bound — used when
+    the completion cannot be measured."""
+    return min(max(len(text) // 2, 512), ceiling)
 
-    The cap is the room the window leaves beside the measured prompt,
-    bounded by what the translation needs (4x the prompt tokens plus a
-    margin — the rule the backend translation path uses). The room is what
-    the server would grant anyway; stating it explicitly bounds the
+
+async def _translation_completion_cap(prompt: str, count_body: dict, window: int | None) -> int:
+    """Completion cap for a translation request.
+
+    The cap is the room the window leaves beside the MEASURED prompt (the
+    translation server's own token count of the payload as it will be
+    sent), bounded by what the translation needs (4x the prompt tokens plus
+    a margin — the rule the backend translation path uses). The room is
+    what the server would grant anyway; stating it explicitly bounds the
     completion instead of leaving it to the server's default.
 
-    None means the request goes out uncapped: the window is unknown, the
-    prompt could not be counted, or the count is not trustworthy. The
-    server's own default budget governs then — it is the room the real
-    prompt leaves — and a completion it cuts off is refused by the
-    truncation guard.
+    When the completion cannot be measured — no window, or a server that
+    cannot count — the degraded estimate bounds it instead (see
+    ``_translation_base_cap``): a bound is better than the server's
+    default, which would let the completion run to the whole window.
+
+    Args:
+        prompt: the request's prompt text (the estimate's input).
+        count_body: the payload's prompt half, as it will be sent
+            (``{"messages": [...]}`` or ``{"prompt": "..."}``), so the count
+            covers the chat template the server applies.
+        window: the translation model's window, or None when unknown.
 
     Raises:
-        TranslationInputTooLongError: the prompt alone does not fit the
-        window. The server would reject the request; the callers refuse
-        the translation instead, with the reason named.
+        TranslationInputTooLongError: the prompt leaves too little room in
+        the window for a translation. The server would reject the request
+        (or cut the completion off); the callers refuse the translation
+        instead, with the reason named.
     """
     if not window:
-        return None
-    prompt_tokens = _count_translation_tokens(prompt, model)
+        return _translation_base_cap(prompt)
+    prompt_tokens = await _count_translation_tokens(count_body)
     if prompt_tokens is None:
-        return None
+        # Degraded: the estimate bounds the completion, clamped by the
+        # window so the request cannot overflow it.
+        return min(_translation_base_cap(prompt), max(1, window - TRANSLATION_COMPLETION_SAFETY_TOKENS))
     room = window - prompt_tokens - TRANSLATION_COMPLETION_SAFETY_TOKENS
-    if room <= 0:
+    if room < TRANSLATION_COMPLETION_MIN_ROOM:
         raise TranslationInputTooLongError(
-            f"translation prompt ({prompt_tokens} tokens) does not fit the translation window ({window} tokens)"
+            f"translation prompt ({prompt_tokens} tokens) leaves {room} of {window} tokens, "
+            "too little for a translation"
         )
     needed = TRANSLATION_COMPLETION_NEEDED_MULTIPLIER * prompt_tokens + TRANSLATION_COMPLETION_NEEDED_MARGIN
     return min(room, needed)
@@ -654,10 +686,9 @@ def _completion_truncated(choice: dict) -> bool:
     chunk path raises so the answer is not spliced half-translated — but
     they must agree on what counts as truncated.
 
-    ``length`` is the OpenAI name for the condition; some
-    OpenAI-compatible proxies report it as ``max_tokens``.
+    ``length`` is the OpenAI name for the condition.
     """
-    return choice.get("finish_reason") in ("length", "max_tokens")
+    return choice.get("finish_reason") == "length"
 
 
 def _choice_content(choice: dict, completions: bool) -> str:
@@ -725,10 +756,12 @@ def _get_max_translation_chars() -> int:
     return max(budget, 1)
 
 
-# Translation budget derivation from the discovered window. The completion
-# reserve assumes the translated output is roughly the size of the input (the
-# history payload caps max_tokens at half the input, clamped to the room the
-# window leaves beside the prompt estimate — both payload shapes).
+# Translation INPUT budget derivation from the discovered window: how many
+# characters of history may be forwarded to the translation model. The
+# char/token ratio is an estimate (dense scripts run ~1 token/char, Latin
+# ~4), so a deployment serving a dense script lowers the ratio with
+# MAX_TRANSLATION_CHARS. The completion budget is measured separately (see
+# TRANSLATION_COMPLETION_SAFETY_TOKENS).
 TRANSLATION_PROMPT_OVERHEAD_TOKENS = 512
 
 
@@ -2096,9 +2129,9 @@ def _count_tokens(text: str) -> int:
         return count
 
 
-def _count_translation_tokens(prompt: str, model: str | None = None) -> int | None:
-    """Count a translation prompt's tokens with the TRANSLATION server's own
-    tokenizer (vLLM ``/tokenize``).
+async def _count_translation_tokens(count_body: dict) -> int | None:
+    """Count a translation request's prompt tokens with the TRANSLATION
+    server's own tokenizer (vLLM ``/tokenize``).
 
     The count is measured because a client's own char/token ratio is a
     guess: dense scripts (CJK) run ~1 token/char, Latin ~4, so a budget
@@ -2107,35 +2140,32 @@ def _count_translation_tokens(prompt: str, model: str | None = None) -> int | No
     tokenizes with the model that will translate — so the count is the
     model's own.
 
-    ``model`` is the name the request will carry, so the count matches the
+    ``count_body`` is the payload's prompt half, AS IT WILL BE SENT:
+    ``{"messages": [...]}`` for the chat-completions shape (the server
+    applies the chat template, so the count covers it) or
+    ``{"prompt": "...", "model": ...}`` for the completions shape. The
+    model name is the one the request carries, so the count matches the
     request exactly: the TranslateGemma payload names its model, the
     generic one does not (the server then answers with its default model,
     exactly as the translation request does).
 
     Best-effort by contract: this count sizes the completion budget, and a
     budget must never decide whether the translation happens. When the
-    server cannot count, None comes back and the caller sends no cap — the
-    server's own default budget governs, and the truncation guard still
-    refuses a cut-off completion.
+    server cannot count, None comes back and the caller falls back to the
+    degraded estimate — and the truncation guard still refuses a cut-off
+    completion.
     """
     url = f"{_TRANSLATION_DISCOVERY_ENDPOINT}/tokenize"
     headers = endpoint_auth_headers()
     verify = endpoint_verify()
-    body = {"prompt": prompt}
-    if model:
-        body["model"] = model
+    body = dict(count_body)
     try:
         with with_span(
             "chatqna.count_tokens",
             attributes={ATTRIBUTE_NAMES["llm_endpoint"]: url},
         ) as span:
-            resp = httpx.post(
-                url,
-                headers=headers,
-                json=body,
-                timeout=PROBE_TIMEOUT_SECONDS,
-                verify=verify,
-            )
+            async with httpx.AsyncClient(timeout=PROBE_TIMEOUT_SECONDS, verify=verify) as client:
+                resp = await client.post(url, headers=headers, json=body)
             resp.raise_for_status()
             payload = resp.json()
             if not isinstance(payload, dict):
@@ -2153,11 +2183,17 @@ def _count_translation_tokens(prompt: str, model: str | None = None) -> int | No
             span.set_attribute(ATTRIBUTE_NAMES["token_count"], count)
             return count
     except Exception as e:
-        logger.warning(
-            "Translation prompt could not be counted (%s: %s); the server's own budget will govern the completion.",
-            type(e).__name__,
-            e,
-        )
+        # A server that cannot count is a permanent capability gap: warn
+        # once per endpoint, not on every translation request.
+        if url not in _TRANSLATION_COUNT_WARNED:
+            _TRANSLATION_COUNT_WARNED.add(url)
+            logger.warning(
+                "Translation prompt could not be counted (%s: %s); the completion falls back to the degraded estimate.",
+                type(e).__name__,
+                e,
+            )
+        else:
+            logger.debug("Translation prompt could not be counted (%s: %s)", type(e).__name__, e)
         return None
 
 
@@ -3959,9 +3995,14 @@ class ChatQnAService:
         # The completion budget: measured against the window the model
         # serves, for BOTH payload shapes. The count asks the translation
         # server itself, so a dense script costs what it really costs.
+        count_body = (
+            {"prompt": prompt, "model": translation_model_id} if translategemma else {"messages": payload["messages"]}
+        )
         try:
-            completion_cap = _translation_completion_cap(
-                prompt, _get_translation_window(), model=translation_model_id if translategemma else None
+            completion_cap = await _translation_completion_cap(
+                prompt,
+                count_body,
+                _get_translation_window(),
             )
         except TranslationInputTooLongError:
             logger.warning(
@@ -4216,8 +4257,13 @@ class ChatQnAService:
         # translation needs. A prompt that does not fit the window raises
         # here — the same refusal the server's own 400 would earn, named
         # before the request goes out.
-        completion_cap = _translation_completion_cap(
-            prompt, _get_translation_window(), model=translation_model_id if translategemma else None
+        count_body = (
+            {"prompt": prompt, "model": translation_model_id} if translategemma else {"messages": payload["messages"]}
+        )
+        completion_cap = await _translation_completion_cap(
+            prompt,
+            count_body,
+            _get_translation_window(),
         )
         if completion_cap is not None:
             payload["max_tokens"] = completion_cap

@@ -19,16 +19,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   service now runs as a non-root user (postgres and redis-cache rely on
   their upstream entrypoints, which drop to their package users; every
   other service declares an explicit `user:`); five short-lived one-shot init
+- **The main Compose stack no longer runs any container as root.**
+  Every always-on service now runs as a non-root user (postgres and
+  redis-cache rely on their upstream entrypoints, which drop to their
+  package users; every other service declares an explicit `user:`); five short-lived one-shot init
   containers (`arango-vector-db-init`, `victorialogs-init`,
   `document-repository-init`, `backend-init`, `otel-collector-init`)
   chown the existing root-era named volumes to their service's uid on
   first deploy. A new `arango_apps` named volume appears (the arangodb
   app directory was previously root-owned inside the container).
   Kong and the edge nginx log to stdout — the `data/logs` host
-  directory is no longer used. Stale root-era `data/logs` trees are
-  handed to the deployment user by the Ansible deploy (chown, never
-  deleted — old log files stay on disk for forensics); on a bare-docker
-  deployment, clean them yourself (see the compose setup guide).
+  directory is no longer used or mounted by anything. Stale root-era
+  `data/logs` trees are handed to the backend uid (1000) by the Ansible
+  deploy (chown, never deleted — old log files stay on disk for
+  forensics); the runtime gate no longer sweeps this vestigial tree, and
+  on a bare-docker deployment you can remove it at will.
 - **The edge nginx serves 8080/8443 inside the container** (published
   host ports stay 80/443). Deployers of the Ansible path need no
   action; the playbook normalizes certificate ownership

@@ -238,13 +238,16 @@
         mode: '0755'
       loop: "{{ _deploy_files }}"
 
-    - name: Fix ownership before download
+    - name: Fix ownership before download (deploy payload only — data/ excluded)
+      # The #1227 data/ tree is NOT deploy payload: re-labeling it here
+      # fought the no-root migration (pre-empting its probe, then churning
+      # its handover on every deploy). Each depth-1 child except data/ is
+      # chowned recursively.
       become_user: root
-      ansible.builtin.file:
-        path: "{{ deploy_dir }}"
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        recurse: true
+      ansible.builtin.command: >-
+        find {{ deploy_dir }} -mindepth 1 -maxdepth 1 ! -name data
+        -exec chown -R -h {{ ansible_user }}:{{ ansible_user }} {} +
+      changed_when: true
 
     - name: Download deploy files from GitLab
       ansible.builtin.get_url:
@@ -287,13 +290,14 @@
             extra_opts:
               - "--strip-components=1"
 
-    - name: Fix ownership to ansible_user
+    - name: Fix ownership to ansible_user (deploy payload only — data/ excluded)
+      # Same data/ exclusion as "Fix ownership before download": the
+      # migration tasks own everything under data/.
       become_user: root
-      ansible.builtin.file:
-        path: "{{ deploy_dir }}"
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        recurse: true
+      ansible.builtin.command: >-
+        find {{ deploy_dir }} -mindepth 1 -maxdepth 1 ! -name data
+        -exec chown -R -h {{ ansible_user }}:{{ ansible_user }} {} +
+      changed_when: true
 
     - name: Ensure deploy directories exist with correct ownership
       become_user: root

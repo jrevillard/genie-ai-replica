@@ -723,6 +723,23 @@ describe('compose non-root contract (#1227)', () => {
     expect(v2.some((v) => v.includes('kong') && v.includes('create_host_path: false'))).toBe(true);
   });
 
+  test('mutation: a YAML-aliased source resolves conservatively to the data dir', () => {
+    // source: *data_dir (a YAML alias) is unresolvable by a line parser —
+    // resolved CONSERVATIVELY like every unknown-location spelling.
+    const aliased = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes:',
+      '      - type: bind',
+      '        source: *data_dir',
+      '        target: /var/log/kong',
+      ''
+    ].join('\n');
+    const { violations } = validateComposeNonRoot(aliased);
+    expect(violations.some((v) => v.includes('kong') && v.includes('create_host_path: false'))).toBe(true);
+  });
+
   test('allowlist entries reference services that exist in the compose file', () => {
     // A renamed or removed service would leave a stale allowlist entry that
     // enforces nothing — dead enforcement data. Uses the validator's OWN

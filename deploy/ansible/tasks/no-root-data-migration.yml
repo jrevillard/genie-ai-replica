@@ -2,85 +2,26 @@
 # no-root-data-migration (#1227) — shared by the manager play and the
 # swarm_workers play in deploy.yml via import_tasks. One doctrine, two
 # placements: the tasks below create the backend backup directory as the
-# backend uid (1000), hand the mis-owned backup files to it, and hand
-# the root-era log-directory leftovers to the SAME backend uid —
-# TARGETED, never wholesale, and never destructive (operator files under
-# other uids are never touched).
+# backend uid (1000) and hand every mis-owned file inside it to that uid
+# — TARGETED, never wholesale, and never destructive.
+#
+# Scope note: the legacy data/logs tree is deliberately NOT handled here
+# — nothing has mounted it since #1227 (every service logs to stdout),
+# the runtime gate prunes it from its sweep (not a bind source), and it
+# can be removed at will.
 # data_dir / deploy_dir come from group_vars; both plays run these with
 # the same variable surface. NOTE on privilege surfaces: the probes run
 # with the PLAY's identity (manager play: the unprivileged ansible_user;
 # worker play: root) — only the escalated tasks below carry their own
-# become_user. The probes' rc != 0 handling covers the unprivileged
-# case (find exit 1 on an untraversable root-owned 0700 subdir); under
-# the root surface rc != 0 can only mean a vanished path, which the
-# stat guards already exclude.
-
-- name: Stat the log directory
-  # A MISSING data/logs is the NORMAL case on fresh nodes (the pre-create
-  # loop no longer creates it) — it must be a no-op, never "leftovers
-  # present" (find's ENOENT would fail the chown task and abort the
-  # play). The directory is never deleted by this file; only its
-  # root-era OWNERSHIP is handed over below.
-  ansible.builtin.stat:
-    path: "{{ deploy_dir }}/{{ data_dir }}/logs"
-  register: _logs_dir
-
-- name: Detect mis-owned leftovers under the log directory
-  # Runs only when the directory exists. The probe matches EVERY uid
-  # != 1000 — not just root: the manager play's earlier "Fix ownership to
-  # ansible_user" recursion re-labels the whole deploy_dir tree BEFORE
-  # this migration imports, so a uid-0-only probe would never fire where
-  # the tasks actually run (dead code by pre-emption — the exact trap the
-  # backup pair below already documents). failed_when:false + rc: an
-  # untraversable 0700 subdir makes find (running as the unprivileged
-  # ansible_user) exit 1 — treat that as "leftovers present" (the root
-  # chown below heals it).
-  ansible.builtin.command: >-
-    find {{ deploy_dir }}/{{ data_dir }}/logs ! -uid 1000 -print -quit
-  register: _logs_root_owned
-  when: _logs_dir.stat.exists
-  failed_when: false
-  changed_when: false
-
-- name: Hand the mis-owned log-directory leftovers to the backend uid (#1227)
-  # CHOWN, never delete: the mis-owned paths are exactly what the no-root
-  # runtime gate forbids, but deleting them would also destroy
-  # operator-owned files nested inside (a bare-docker root-era
-  # auto-created the whole data/logs/kong chain). The target is the
-  # backend uid 1000 CONVENTION, never the play identity — under the
-  # swarm_workers play the identity IS root, and chowning to 0:0 would
-  # leave the tree root-owned forever (a no-op reporting changed).
-  # become_user: root — the paths may be root-owned. Best-effort: a batch
-  # flush mid-traversal on a large tree can make find exit 1 — whatever
-  # survived is flagged by the runtime gate on the next run.
-  become: true
-  become_user: root
-  ansible.builtin.command: >-
-    find {{ deploy_dir }}/{{ data_dir }}/logs ! -uid 1000
-    -exec chown -h -f 1000:1000 {} +
-  when: _logs_dir.stat.exists and (_logs_root_owned.stdout | length > 0 or _logs_root_owned.rc != 0)
-  register: _logs_heal
-  changed_when: _logs_heal.rc | default(0) == 0
-  failed_when: false
-
-- name: Warn if the log handover did not complete
-  # failed_when:false keeps the deploy non-fatal, but the failure must be
-  # VISIBLE in the summary — a silent green 'changed' would leave the
-  # surviving root-owned tree to be discovered only by the runtime gate.
-  ansible.builtin.debug:
-    msg: >-
-      WARNING (#1227): the root-era log handover failed (rc={{ _logs_heal.rc | default('n/a') }});
-      root-owned paths remain under {{ deploy_dir }}/{{ data_dir }}/logs —
-      the runtime gate will flag them.
-  when: _logs_heal.rc | default(0) != 0
+# become_user.
 
 - name: Create the backend backup directory as the backend uid (#1227)
   # Pinned to the backend uid AT CREATION: a fresh dir left
-  # ansible_user-owned would never pass the root-only migration probe
-  # below, and the uid-1000 backend would get EACCES on its own dumps.
-  # Escalate to root — a foreign-uid chown (or a dir pre-existing
-  # root-owned from a bare-docker root-era install) is EPERM for the
-  # play's unprivileged ansible_user.
+  # ansible_user-owned would never pass the migration probe below, and
+  # the uid-1000 backend would get EACCES on its own dumps. Escalate to
+  # root — a foreign-uid chown (or a dir pre-existing root-owned from a
+  # bare-docker root-era install) is EPERM for the play's unprivileged
+  # ansible_user.
   become: true
   become_user: root
   ansible.builtin.file:
@@ -92,11 +33,14 @@
 
 - name: Detect non-backend-owned files in the backup directory
   # The probe matches EVERY uid != 1000, not just root: the manager play's
-  # earlier "Fix ownership to ansible_user" recursion re-labels root-era
-  # dumps BEFORE this migration runs, so a uid-0-only probe would never
-  # fire on the manager path (dead code by pre-emption). This directory is
-  # the backend's dump target — the backend (uid 1000) must own every file
-  # in it, and anything else is either root-era or mis-owned.
+  # "Fix ownership to ansible_user" recursions re-label the deploy payload
+  # around this import, so a uid-0-only probe would never fire on the
+  # manager path (dead code by pre-emption). This directory is the
+  # backend's dump target — the backend (uid 1000) must own every file in
+  # it, and anything else is either root-era or mis-owned. (The deploy
+  # recursions exclude data/ entirely, so on converged deployments this
+  # probe is empty and the handover skips — the tasks converge instead of
+  # churning every deploy.)
   ansible.builtin.command: >-
     find {{ deploy_dir }}/{{ data_dir }}/database_backups ! -uid 1000 -print -quit
   register: _backup_misowned
@@ -104,17 +48,17 @@
   changed_when: false
 
 - name: Hand the backup directory to the backend uid (#1227)
-  # Targeted -exec chown touches exactly the mis-owned paths. Best-effort
-  # like its logs sibling: a transient find/chown error (EIO mid-traversal,
-  # vanished path between probe and exec) must not abort the deploy play —
-  # whatever survived is flagged by the runtime gate on the next run.
+  # Targeted -exec chown touches exactly the mis-owned paths. Best-effort:
+  # a transient find/chown error (EIO mid-traversal, vanished path between
+  # probe and exec) must not abort the deploy play — whatever survived is
+  # flagged by the runtime gate on the next run.
   become: true
   become_user: root
   ansible.builtin.command: >-
     find {{ deploy_dir }}/{{ data_dir }}/database_backups ! -uid 1000
     -exec chown -h 1000:1000 {} +
-  when: _backup_misowned.stdout | length > 0 or _backup_misowned.rc != 0
   register: _backup_heal
+  when: _backup_misowned.stdout | length > 0 or _backup_misowned.rc != 0
   changed_when: _backup_heal.rc | default(0) == 0
   failed_when: false
 

@@ -44,7 +44,11 @@ nvidia_hold_packages:
 # =============================================================================
 stack_name: genieai
 compose_file: docker-compose.yaml
-deploy_stabilization_timeout: 900
+# 2100s (35 min): must outlast the swarm restart budgets the compose file
+# gives the chown-chasing services (60 attempts x 30s = 30 min) on a
+# root-era upgrade — a 900s budget failed deploys whose stack was still
+# converging inside the budget the compose file sized for it.
+deploy_stabilization_timeout: 2100
 deploy_opea: "1"
 enable_observability: "0"
 # OKF feature flag (2026-10-21): 0 parks the OKF stack (containers, Kong

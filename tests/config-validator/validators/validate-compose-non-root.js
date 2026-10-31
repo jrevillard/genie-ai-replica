@@ -129,12 +129,14 @@ function validateComposeNonRoot(composeText) {
           }
           resolved = resolved
             // a default-less ${VAR}, an error-form ${VAR:?err}/${VAR?err},
-            // an alt-form ${VAR:+alt}, or a braceless $VAR names an
-            // unknown location — resolve CONSERVATIVELY to the data dir so
+            // an alt-form ${VAR:+alt}, a braceless $VAR, or a YAML ALIAS
+            // (*anchor — unresolvable by a line parser) names an unknown
+            // location — resolve CONSERVATIVELY to the data dir so
             // renaming cannot defeat the gate
             .replace(/\$\{[\w-]+[:?+][^}]*\}/g, './data')
             .replace(/\$\{[\w-]+\}/g, './data')
-            .replace(/\$(?!\{)[\w-]+/g, './data');
+            .replace(/\$(?!\{)[\w-]+/g, './data')
+            .replace(/^\*[\w-]+(?![\w./-])/, './data');
           // An ABSOLUTE resolved source is under the data-dir rule too:
           // re-pointing a variable default at /srv/genie or hand-writing
           // /var/genie/data must not escape the create_host_path contract.

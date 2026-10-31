@@ -178,14 +178,17 @@ EOF
 # Scope mirrors the static half: the always-on contract. The starting
 # directory itself is root-owned by design (the Ansible loop creates the
 # parent), and data/huggingface belongs to the profile-gated GPU TEI
-# services, which the contract excludes.
+# services, which the contract excludes. data/logs is pruned too: nothing
+# has mounted it since #1227 (every service logs to stdout), so it is not
+# a bind source — rule 2 exists to catch root-created bind sources, and a
+# legacy root-era tree there is inert (remove it at will).
 if [ ! -d "$DATA_DIR" ]; then
   echo "DATA DIR MISSING: '$DATA_DIR' does not exist — the root-owned sweep"
   echo "would be vacuous. Fix the path (or create the dir) and rerun."
   violations=$((violations + 1))
 else
   find_err=$(mktemp)
-  rootowned=$(find "$DATA_DIR" -mindepth 1 -path "$DATA_DIR/huggingface" -prune -o -uid 0 -print 2>"$find_err")
+  rootowned=$(find "$DATA_DIR" -mindepth 1 \( -path "$DATA_DIR/huggingface" -o -path "$DATA_DIR/logs" \) -prune -o -uid 0 -print 2>"$find_err")
   if [ -s "$find_err" ]; then
     echo "FIND ERRORS while sweeping $DATA_DIR (untraversable paths are NOT checked):"
     sed 's/^/  /' "$find_err"

@@ -1428,9 +1428,15 @@ async function probeSuiteQuery(repoId, suiteKey, payload = {}, opts = {}) {
       throw err;
     }
 
-    // 1. Embed the query (same TEI + BGE query-prefix contract as routing).
-    const embeddings = await frontmatterService.teiEmbed([query]);
-    const emb = Array.isArray(embeddings) && embeddings[0];
+    // 1. Embed the query — through the GATE's embedding contract (round 21c,
+    // #80955: the bare teiEmbed here put the per-query Probe in a DIFFERENT
+    // vector space than the run sweep's probeQueryLight (embedQueryBatch),
+    // so the same query could read 'answerable' from Run All and
+    // 'unanswerable' from the Probe button with no corpus change — and both
+    // wrote row.lastProbe, overwriting each other with contradictory
+    // measurements. One contract: embedQueryBatch, like every simulator).
+    const embeddings = await headTestService.embedQueryBatch([query]);
+    const emb = embeddings && embeddings.vectors && embeddings.vectors[0];
     if (!emb) {
       const err = new Error('query embedding failed');
       err.code = 'PROBE_EMBED_FAILED';

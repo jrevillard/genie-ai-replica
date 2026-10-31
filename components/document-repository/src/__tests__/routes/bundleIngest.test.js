@@ -53,6 +53,7 @@ jest.mock('../../config/appConfig', () => ({
 jest.mock('../../services/fileService', () => ({
   uploadFile: jest.fn(),
   uploadBundle: jest.fn(),
+  findBundleByRepoVersion: jest.fn(),
   getFiles: jest.fn(),
   deleteFile: jest.fn(),
   searchFiles: jest.fn(),
@@ -151,6 +152,38 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
     expect(res.status).toBe(202);
     const callArgs = fileService.uploadBundle.mock.calls[0][1];
     expect(callArgs.bundle_version).toBe(3);
+  });
+
+  // Round 21c (#80943): an interrupted publish leaves a zip no registry
+  // entry references; the retry re-exported version N and minted a SECOND
+  // (undeletable — bundleProtectedIds) file. The handler must reuse the
+  // already-stored zip for the same (repo_id, bundle_version).
+  it('reuses the stored zip for a known (repo_id, bundle_version) — no duplicate mint (#80943)', async () => {
+    fileService.findBundleByRepoVersion.mockResolvedValue({
+      file_id: 'existing-zip-id',
+      file_name: 'repo-v3.zip',
+      bundle_version: 3,
+      repo_id: repoId
+    });
+
+    const res = await request(app)
+      .post('/api/files/ingest-bundle')
+      .send({ ...validBody, bundle_version: 3, is_bundle: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.reused).toBe(true);
+    expect(res.body.file_id).toBe('existing-zip-id');
+    // The lookup ran with the EXACT version; nothing new was stored.
+    expect(fileService.findBundleByRepoVersion).toHaveBeenCalledWith(repoId, 3);
+    expect(fileService.uploadBundle).not.toHaveBeenCalled();
+  });
+
+  it('a null bundle_version (unminted) skips the reuse lookup — always stores', async () => {
+    fileService.uploadBundle.mockResolvedValue({ file_id: 'new-id', file_name: 'x.zip' });
+    const res = await request(app).post('/api/files/ingest-bundle').send(validBody);
+    expect(res.status).toBe(202);
+    expect(fileService.findBundleByRepoVersion).not.toHaveBeenCalled();
+    expect(fileService.uploadBundle).toHaveBeenCalledTimes(1);
   });
 
   it('should reject a non-integer bundle_version with 400', async () => {

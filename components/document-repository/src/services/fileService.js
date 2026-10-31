@@ -1050,6 +1050,31 @@ class FileService {
   // langdetect/allowlist/text-extraction (the bundle pipeline bypass).
   // The files doc carries graph_name + repo_id (metadataService.extractMetadata
   // persists them via the T5 fix).
+
+  /** Idempotency lookup for ingest-bundle (#80943): the stored zip for one
+   * (repo_id, bundle_version) — newest wins. null when none stored yet. */
+  async findBundleByRepoVersion(repoId, bundleVersion) {
+    const db = await dbService.getConnection();
+    const rows = await (
+      await db.query(
+        'FOR f IN files FILTER f.repo_id == @repoId && f.bundle_version == @v && f.is_bundle == true ' +
+          'SORT f.uploaded_at DESC LIMIT 1 RETURN f',
+        { repoId, v: bundleVersion }
+      )
+    ).all();
+    const doc = rows[0];
+    return doc
+      ? {
+          file_id: doc.file_id || doc._key,
+          file_name: doc.file_name,
+          bundle_version: doc.bundle_version,
+          stored_at: doc.uploaded_at || doc._key,
+          graph_name: doc.graph_name,
+          repo_id: doc.repo_id
+        }
+      : null;
+  }
+
   async uploadBundle(buffer, bundleInfo = {}) {
     // Story 2.9.5-amend (2026-08-18): a ZIP bundle is ALSO stored as a file doc —
     // the bundle file is associated with the OKF repo (repo_id + graph_name +

@@ -563,6 +563,39 @@ describe('publish — mint + bundle export + serving cleared', () => {
     expect(mockDb._stores.okf_repositories[REPO].lifecycle_state).toBe('publish');
   });
 
+  // Round 21c (#80943): the interrupted publish left a zip in the doc-repo
+  // but NO bundles entry (death between store and merge). The retry re-uses
+  // the existing artifact (the doc-repo answers with the stored file for the
+  // same (repo_id, version)) and the merge lists it ONCE — no orphan, no
+  // duplicate Versions row. (A listing that ALREADY has the version + file
+  // hits the PUBLISH_NO_CHANGES guard instead — correct, so the only
+  // reachable merge carries a not-yet-listed version.)
+  test('an interrupted publish whose zip survived reuses it and lists the version once (#80943)', async () => {
+    seedRepo({ lifecycle_state: 'approve', version: 18, bundles: [{ bundle_version: 17, file_id: 'file-v17' }] });
+    currentFingerprint.mockResolvedValueOnce('same-fp');
+    fingerprintOfCurrentVersion.mockResolvedValueOnce('same-fp');
+    mockDb.query.mockResolvedValueOnce({ all: async () => [3] });
+    // The bundles read (post-export) returns the v17 listing.
+    mockDb.query.mockResolvedValueOnce({
+      all: async () => [[{ bundle_version: 17, file_id: 'file-v17' }]]
+    });
+    // The doc-repo reuse: exportBundle comes back with the ALREADY-STORED
+    // file (post-#80943 the ingest-bundle handler returns the existing zip
+    // for the same (repo_id, bundle_version) instead of minting a duplicate).
+    exportBundle.mockResolvedValueOnce({
+      file_id: 'file-bundle-18',
+      file_name: 'demo.zip',
+      bundle_version: 18,
+      reused: true
+    });
+    await lifecycleService.transition(REPO, 'publish', {});
+    const stored = mockDb._stores.okf_repositories[REPO].bundles;
+    expect(stored).toHaveLength(2); // v17 + v18 listed once
+    expect(stored.filter((b) => b.bundle_version === 18)).toHaveLength(1);
+    expect(mockDb._stores.okf_repositories[REPO].bundle.file_id).toBe('file-bundle-18');
+    expect(mockDb._stores.okf_repositories[REPO].lifecycle_state).toBe('publish');
+  });
+
   test('changed content republishes normally', async () => {
     seedRepo({ lifecycle_state: 'approve', version: 18 });
     currentFingerprint.mockResolvedValueOnce('new-fp');

@@ -219,6 +219,40 @@ describe('OkfConceptEditor', () => {
     expect(patch.payload.markdown).toBeUndefined(); // no fm snapshot round-trip
   });
 
+  // Round 21c (#80942): the flush used to resolve IMMEDIATELY when a save
+  // was already in flight — the FrontmatterPanel's two-write save then GETs
+  // /index.md pre-PATCH and reverts the curator's typed body. The flush
+  // must mean "the autosave has COMMITTED".
+  it('flushPendingSave awaits an IN-FLIGHT save, not just a pending one (#80942)', async () => {
+    let releasePatch;
+    const gate = new Promise((resolve) => {
+      releasePatch = resolve;
+    });
+    const store = fakeStore();
+    const origDispatch = store.dispatch.bind(store);
+    store.dispatch = (type, payload) => {
+      if (type === 'okf/patchConcept') return gate.then(() => ({ ok: true, content_hash: 'H2' }));
+      return origDispatch(type, payload);
+    };
+    const wrapper = mountEditor(store);
+    await jest.advanceTimersByTimeAsync(0);
+    await wrapper.vm.$nextTick();
+    wrapper.vm.onEdit('---\ntype: topic\n---\n# in-flight body');
+    await jest.advanceTimersByTimeAsync(1500); // debounce fires — save NOW in flight
+    expect(wrapper.vm.saving).toBe(true);
+    let flushed = false;
+    const f = wrapper.vm.flushPendingSave().then(() => {
+      flushed = true;
+    });
+    await jest.advanceTimersByTimeAsync(1);
+    await Promise.resolve();
+    expect(flushed).toBe(false); // NOT resolved while the PATCH is in flight
+    releasePatch(); // the PATCH commits
+    await f;
+    expect(flushed).toBe(true); // the flush waited for the commit
+    expect(wrapper.vm.saving).toBe(false);
+  });
+
   it('flushes a pending save when switching concepts', async () => {
     const store = fakeStore();
     const wrapper = mountEditor(store);

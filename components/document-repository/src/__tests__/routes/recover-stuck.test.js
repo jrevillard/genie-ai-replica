@@ -105,12 +105,14 @@ describe('POST /api/files/ingest/recover-stuck', () => {
       'file-1',
       expect.objectContaining({ level: 'WARN', stage: 'dataprep' })
     );
-    // The AQL contract: only non-bundle rows with a file_id, exclusion-aware.
+    // The AQL contract: only non-bundle rows with a file_id, exclusion-aware,
+    // tolerant of a row deleted mid-scan.
     const aql = query.mock.calls[0][0];
     expect(aql).toContain("LOWER(file.dataprep.status) == 'ingesting'");
     expect(aql).toContain('file.file_id != null');
     expect(aql).toContain('file.is_bundle != true');
     expect(aql).toContain('file.file_id NOT IN @excludeFileIds');
+    expect(aql).toContain('OPTIONS { ignoreErrors: true }');
     expect(query.mock.calls[0][1]).toEqual({ excludeFileIds: [] });
   });
 

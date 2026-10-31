@@ -208,7 +208,9 @@ class MetadataService {
   // machine); docs without a file_id cannot be re-ingested or logged, so
   // they are skipped rather than returned as null entries. One statement
   // finds AND flips them; UPDATE deep-merges the dataprep sub-object, so
-  // ingest_date/retract_date survive. OKF concepts have no files doc here at
+  // ingest_date/retract_date survive. ignoreErrors: a document deleted
+  // between the scan and its UPDATE must not abort the whole release — the
+  // remaining rows still flip. OKF concepts have no files doc here at
   // all — the okf-server worker reclaims those itself.
   async recoverStuckIngests(excludeFileIds = []) {
     try {
@@ -220,6 +222,7 @@ class MetadataService {
          FILTER file.is_bundle != true
          FILTER file.file_id NOT IN @excludeFileIds
          UPDATE file WITH { dataprep: { status: 'Pending' } } IN files
+           OPTIONS { ignoreErrors: true }
          RETURN NEW.file_id`,
         { excludeFileIds }
       );

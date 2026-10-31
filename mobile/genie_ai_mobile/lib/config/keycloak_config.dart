@@ -123,5 +123,19 @@ KeycloakConfig getConfig() {
       'Unknown FLAVOR: "$flavor". Expected: $_knownFlavors.',
     );
   }
+  // A release artifact must never ship a configuration that arms the
+  // trust-all TLS client. dev and e2e keep it on for local development; a
+  // release build of them is either broken (localhost endpoints) or — with
+  // DEV_SERVER repointed — a working app that accepts any certificate.
+  // Profile builds are excluded: they never leave the developer's machine,
+  // and profiling a dev build against a self-signed server is legitimate.
+  // build-release.ps1 refuses these flavors too; this is the in-app gate.
+  if (kReleaseMode && config.allowInsecureConnections) {
+    throw FlavorConfigError(
+      'The "$flavor" configuration enables allowInsecureConnections and '
+      'cannot be built into a release artifact. Build a deployment flavor '
+      'instead: --flavor <name> --dart-define=FLAVOR=<name> ($_knownFlavors).',
+    );
+  }
   return config;
 }

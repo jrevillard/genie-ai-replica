@@ -194,6 +194,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // _clearQuickHelpScopeFields.
   bool _sidebarTitleIsSelection = false;
 
+  // The category key whose name the context bar shows for a RESTORED
+  // scope — the conversation's edge names the category, and the ENGLISH
+  // hierarchy the scope was resolved against can only name it in English.
+  // The localized tree re-names it in the UI's language, by this key.
+  // Null when the title is something else: a live selection's join of
+  // service names, a Quick Help button's title (the config reload
+  // re-resolves that one by id), or no scope at all.
+  String? _restoredTitleCategoryKey;
+
   bool get _hasUnsavedChanges {
     if (_currentConversationId == null) {
       return _messages.length > 1;
@@ -259,26 +268,34 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // A sidebar scope's context-bar title is the JOIN of the localized
     // service names the panel installed it with — a locale switch leaves
     // those names in the language they were picked under, while the web
-    // re-maps its chips from the per-locale tree it re-fetches. A drift
-    // re-fetches the hierarchy in the CURRENT locale — display only, the
-    // wire keeps the stored ENGLISH labels — and re-titles the bar from
-    // it. The marker is consumed by every dependency change, whether or
-    // not a title is re-fetched: the FIRST marking is not a drift (the
-    // title the selection installed is current), and a marker left behind
-    // would hide the NEXT switch. A failed fetch marked its locale — the
-    // retry is scoped to the next one.
+    // re-maps its chips from the per-locale tree it re-fetches. A RESTORED
+    // scope's title is the category its conversation's edge names, which
+    // the ENGLISH hierarchy the restore resolved against can only name in
+    // English. A drift re-fetches the hierarchy in the CURRENT locale —
+    // display only, the wire keeps the stored ENGLISH labels — and
+    // re-titles the bar from it, whichever of the two sources the active
+    // title has. The marker is consumed by every dependency change,
+    // whether or not a title is re-fetched: the FIRST marking is not a
+    // drift (the title the selection installed is current), and a marker
+    // left behind would hide the NEXT switch. A failed fetch marked its
+    // locale — the retry is scoped to the next one.
     final bool titleDrift = isLocaleDrift(
       loadedLocale: _sidebarTitleLocale,
       currentLocale: _currentLocale,
     );
     _sidebarTitleLocale = _currentLocale;
     if (titleDrift &&
-        sidebarTitleFollowsLocale(
-          fromSelection: _sidebarTitleIsSelection,
-          activeIdentity: _activeQuickHelpIdentity,
-          serviceCount: _sidebarServiceCount,
-          serviceLabelsEn: _sidebarServiceLabelsEn,
-        )) {
+        (sidebarTitleFollowsLocale(
+              fromSelection: _sidebarTitleIsSelection,
+              activeIdentity: _activeQuickHelpIdentity,
+              serviceCount: _sidebarServiceCount,
+              serviceLabelsEn: _sidebarServiceLabelsEn,
+            ) ||
+            restoredScopeTitleFollowsLocale(
+              fromSelection: _sidebarTitleIsSelection,
+              activeIdentity: _activeQuickHelpIdentity,
+              categoryKey: _restoredTitleCategoryKey,
+            ))) {
       _fetchSidebarTitleTree();
     }
 
@@ -479,14 +496,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _selectedCategoryId = scope.categoryId;
     _selectedCategoryNameEn = scope.categoryNameEn ?? '';
     // A restored scope's title comes from the conversation's edge and the
-    // button list, not from a live selection's join — no localized tree
-    // re-names it.
+    // button list, not from a live selection's join.
     _sidebarTitleIsSelection = false;
-    // The resolver's tree is the ENGLISH one (the wire's
-    // vocabulary): its display name is English too. A Quick Help
-    // scope shows the button's own localized title — the same thing
-    // the press and the web show. (A sidebar scope still shows the
-    // EN name: the localized tree lives in the panel, not here.)
+    // A SIDEBAR scope's title is the CATEGORY the conversation's edge
+    // names, and the ENGLISH tree the resolver reads can only name it in
+    // English. The category KEY is what the localized tree re-names it by
+    // — on the restore below and on every locale switch — resolved
+    // through the same hierarchy that named the scope, so the re-title
+    // names the entity the installed title names. A Quick Help scope's
+    // title is its BUTTON's own localized title — the same thing the
+    // press and the web show — and the config reload re-resolves it by
+    // id, never through the category.
+    _restoredTitleCategoryKey = scope.quickHelpButtonId == null
+        ? _scopeResolver?.categoryIdFor(scope.categoryId)
+        : null;
     // The button the conversation's tag names — ONE lookup (the same
     // shared one the locale re-title reads), and both reads below
     // (the title, the outage state) resolve the same entity.
@@ -527,6 +550,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // the hierarchy no longer carries is dropped from the labels, and
     // the send guard refuses it instead of letting it vanish.
     _sidebarServiceCount = scope.sidebarTagCount;
+    // The title just installed names the category in ENGLISH (the
+    // resolver's tree is the wire's vocabulary). The localized tree
+    // re-names it in the UI's language — the same re-title a locale
+    // switch performs. For an English UI the ENGLISH tree IS the
+    // localized one: the fetch would answer with the name the bar
+    // already shows.
+    if (_restoredTitleCategoryKey != null && _currentLocale != 'en') {
+      _fetchSidebarTitleTree();
+    }
   }
 
   /// Re-resolves the RESTORE's scope against whichever source just
@@ -605,9 +637,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // only allowed to re-title THE SELECTION it was started for. A
     // selection that changes while the fetch is in flight installs its
     // OWN localized names, and this response — of the locale the UI may
-    // have left — must not overwrite them.
+    // have left — must not overwrite them. A RESTORED scope's title is
+    // captured the same way, as the category key its conversation's edge
+    // carries.
     final List<String> labels = List<String>.of(_sidebarServiceLabelsEn);
     final int serviceCount = _sidebarServiceCount;
+    final String? categoryKey = _restoredTitleCategoryKey;
     final String locale = _currentLocale;
     try {
       final categoriesApi = ref.read(serviceCategoriesApiProvider);
@@ -617,6 +652,25 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // A newer drift superseded this fetch, or the widget left.
       if (!mounted || locale != _sidebarTitleLocale) return;
       if (response.statusCode != 200) return;
+      final tree = jsonDecode(response.body) as List<dynamic>;
+      // A restored scope's title is its CATEGORY's display name, read by
+      // the key the conversation's edge carries. The scope must still be
+      // the one the fetch was started for: a live selection, a button
+      // press or another restore since the fetch started cleared or
+      // replaced the key, and the comparison alone drops the response.
+      // All-or-nothing, the live join's own rule: the tree must name the
+      // category, or the title the restore installed stands.
+      if (categoryKey != null) {
+        if (_restoredTitleCategoryKey != categoryKey) return;
+        final String? categoryTitle = localizedCategoryDisplayNamesOf(
+          tree,
+        )[categoryKey];
+        if (categoryTitle == null) return;
+        setState(() {
+          _selectedCategoryName = categoryTitle;
+        });
+        return;
+      }
       // The scope the fetch was started for must still be the scope
       // installed — the capture rule lives beside the other sidebar
       // rules, where it is clause-tested.
@@ -630,10 +684,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       )) {
         return;
       }
-      final title = sidebarScopeTitleFor(
-        labels,
-        localizedDisplayNamesOf(jsonDecode(response.body) as List<dynamic>),
-      );
+      final title = sidebarScopeTitleFor(labels, localizedDisplayNamesOf(tree));
       // The tree names every stored label, or the title stays as it is —
       // a partial join would show a scope narrower than the one the
       // query filters on.
@@ -1331,8 +1382,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // web's chip shows.
     _selectedCategoryName = name;
     // A button press is not a live selection: the title is the button's,
-    // re-titled by the config reload on a locale switch.
+    // re-titled by the config reload on a locale switch. The restored
+    // category title left with the scope it belonged to.
     _sidebarTitleIsSelection = false;
+    _restoredTitleCategoryKey = null;
     _sidebarServiceLabelsEn = [];
     // A mode switch clears the sidebar count: the send guard would read a
     // count that remembers services that are no longer selected.
@@ -1358,6 +1411,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _activeQuickHelpScope = null;
     _activeServiceLabels = const [];
     _sidebarTitleIsSelection = false;
+    // The restored scope's category title left with the scope: whatever
+    // replaces it names itself.
+    _restoredTitleCategoryKey = null;
   }
 
   /// The icon a Quick Help card shows: the warning of a broken scope,

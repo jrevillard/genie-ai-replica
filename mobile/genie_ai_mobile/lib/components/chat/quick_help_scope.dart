@@ -409,6 +409,52 @@ String? sidebarScopeTitleFor(
   return names.join(', ');
 }
 
+/// The localized DISPLAY name of every CATEGORY the [tree] carries, by its
+/// category key — the identity a saved conversation's edge names the
+/// category by. The tree is the locale-localized hierarchy fetch (the same
+/// endpoint the sidebar panel renders): `label` is the localized display
+/// text, `name` its fallback. The first category wins when two share a
+/// key. The map feeds DISPLAY only — it never reaches the filter wire,
+/// which speaks the stored ENGLISH labels.
+///
+/// This is the catKey-keyed read beside [localizedDisplayNamesOf]'s
+/// ENGLISH-label one: a category can lack an ENGLISH translation (its
+/// `nameEN` is null and the label-keyed map skips it) while its key still
+/// addresses it, and the restored scope's title is re-named through the
+/// key, never through a name.
+Map<String, String> localizedCategoryDisplayNamesOf(List<dynamic> tree) {
+  final byKey = <String, String>{};
+  for (final entry in tree) {
+    if (entry is! Map) continue;
+    final key = entry['catKey']?.toString();
+    final display = entry['label'] ?? entry['name'];
+    if (key == null || key.isEmpty) continue;
+    if (display is String && display.isNotEmpty) {
+      byKey.putIfAbsent(key, () => display);
+    }
+  }
+  return byKey;
+}
+
+/// Whether a RESTORED scope's context-bar title follows the locale.
+///
+/// A restored scope's title is the CATEGORY its conversation's edge names,
+/// and the ENGLISH hierarchy the scope was resolved against can only name
+/// it in English — the localized tree re-names it, by the category key the
+/// edge carries. A live selection names its join of service labels instead
+/// ([sidebarTitleFollowsLocale]), and an active BUTTON scope is re-titled
+/// from the configuration by its id — neither is this category read.
+bool restoredScopeTitleFollowsLocale({
+  required bool fromSelection,
+  required String? activeIdentity,
+  required String? categoryKey,
+}) {
+  return !fromSelection &&
+      activeIdentity == null &&
+      categoryKey != null &&
+      categoryKey.isNotEmpty;
+}
+
 /// The button's [key] as a string — ONE read of the id and the category,
 /// whatever shape the value carries: the parse normalizes them, a
 /// hand-built map need not, and a numeric id must degrade to its string

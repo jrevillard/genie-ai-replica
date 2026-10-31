@@ -2,7 +2,8 @@ const https = require('https');
 const { chromium } = require('@playwright/test');
 const { loginViaUI, TEST_USER } = require('./chatbot');
 
-const BASE_URL = process.env.BASE_URL || 'https://localhost';
+// Normalized once — see the same constant in helpers/chatbot.js.
+const BASE_URL = (process.env.BASE_URL || 'https://localhost').replace(/\/+$/, '');
 
 /**
  * Make an HTTPS request ignoring self-signed certificate errors.
@@ -152,6 +153,15 @@ async function getSessionToken(page) {
   return token;
 }
 
+// Ceiling for suites that mint session tokens through a browser login:
+// on a stalled stack one login cycle costs ≈135s (two attempts of 30s
+// navigation + 15s redirect wait + retry budget), and a beforeAll can
+// stack admin-API requests (each at the 30s request cap) on top of it.
+// Apply with test.describe.configure({ timeout: ... }) for the tests
+// and test.setTimeout(...) inside beforeAll — hooks read the project
+// timeout, not the suite timeout.
+const SESSION_MINT_TIMEOUT_MS = 360000;
+
 /**
  * Log in through the UI in a throwaway session and return that session's
  * access token — the cleanup paths' replacement for minting a token with
@@ -206,4 +216,5 @@ module.exports = {
   getSessionTokenViaUI,
   parseJwtClaims,
   request,
+  SESSION_MINT_TIMEOUT_MS,
 };

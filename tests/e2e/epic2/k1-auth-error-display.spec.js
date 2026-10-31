@@ -1,13 +1,17 @@
 const { test, expect } = require('@playwright/test');
-const { getAdminToken, getSessionTokenViaUI, request: authRequest } = require('../helpers/auth');
+const {
+  getAdminToken,
+  getSessionTokenViaUI,
+  request: authRequest,
+  SESSION_MINT_TIMEOUT_MS,
+} = require('../helpers/auth');
 const { createUser, deleteUser, getRealmSettings, updateRealmSettings } = require('../helpers/keycloak-admin');
 
 test.describe.serial('Phase K: Auth Error Display', () => {
-  // The session mints log in through the browser — a stalled cycle costs
-  // ≈135s, and K.2 stacks a 30s expiry poll on top of its own mint.
-  // test.describe.configure covers the tests; the in-hook test.setTimeout
-  // covers beforeAll, which reads the project timeout otherwise.
-  test.describe.configure({ timeout: 360000 });
+  // See SESSION_MINT_TIMEOUT_MS: describe.configure covers the tests,
+  // the in-hook test.setTimeout covers beforeAll (hooks read the
+  // project timeout, not the suite timeout).
+  test.describe.configure({ timeout: SESSION_MINT_TIMEOUT_MS });
 
   let adminToken;
   let noRolesUserId;
@@ -16,7 +20,7 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   const NOROLES_PASSWORD = 'TestPass123!';
 
   test.beforeAll(async () => {
-    test.setTimeout(360000);
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
     adminToken = await getAdminToken();
 
     // K.2 mutates the realm's token lifespan; restore whatever the
@@ -57,12 +61,15 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     }
   });
 
-  test('K.1 — TOKEN_INVALID (modified token)', async () => {
-    // Mangling the first payload character corrupts the base64/JSON —
-    // the token dies at payload decode, before signature verification
-    // is attempted. The admin token (already in hand) keeps this a
-    // pure-API test with no browser login.
-    const tokenParts = adminToken.split('.');
+  test('K.1 — TOKEN_INVALID (modified token)', async ({ browser }) => {
+    // A GENIE session token, not the admin token: the backend accepts a
+    // genie token unmodified, so only the mangling below can produce the
+    // rejection — with an admin token the assertion could never fail
+    // (unknown issuer is already TOKEN_INVALID). Mangling the first
+    // payload character corrupts the base64/JSON: the token dies at
+    // payload decode, before signature verification is attempted.
+    const genieToken = await getSessionTokenViaUI({ browser });
+    const tokenParts = genieToken.split('.');
     tokenParts[1] = 'X' + tokenParts[1].slice(1); // Change first char of payload
     const modifiedToken = tokenParts.join('.');
 

@@ -14,7 +14,10 @@ const TEST_ADMIN_USER = {
   password: 'TestAdmin123!',
 };
 
-const BASE_URL = process.env.BASE_URL || 'https://localhost';
+// Normalized once: page.url() never produces a trailing double slash,
+// so every `${BASE_URL}/...` interpolation stays well-formed even when
+// the environment configures BASE_URL with a trailing '/'.
+const BASE_URL = (process.env.BASE_URL || 'https://localhost').replace(/\/+$/, '');
 
 // The wait from the submit click to the dashboard: the identity provider
 // deciding to issue a code, then the app exchanging it. On an idle stack the
@@ -87,10 +90,7 @@ async function loginAttempt(page, user, budgetMs) {
   await page.waitForURL(
     (url) => {
       const urlStr = url.toString();
-      // Strip a trailing slash from BASE_URL first: page.url() never
-      // produces a double slash, so a configured BASE_URL ending in '/'
-      // would make the bare-origin exit unreachable.
-      return urlStr.includes('dashboard') || urlStr === `${BASE_URL.replace(/\/+$/, '')}/`;
+      return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
     },
     { timeout: budgetMs },
   );
@@ -100,7 +100,7 @@ async function loginAttempt(page, user, budgetMs) {
   // on the bare origin (the SPA's interim landing) succeeded and must
   // not be reported as a failure.
   expect(
-    finalUrl.includes('dashboard') || finalUrl === `${BASE_URL.replace(/\/+$/, '')}/`,
+    finalUrl.includes('dashboard') || finalUrl === `${BASE_URL}/`,
     `Expected the login to land on the dashboard or the bare origin, got: ${finalUrl}`,
   ).toBeTruthy();
 }

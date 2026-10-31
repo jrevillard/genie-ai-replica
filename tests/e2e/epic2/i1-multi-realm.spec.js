@@ -5,6 +5,7 @@ const {
   getSessionTokenViaUI,
   request: authRequest,
   parseJwtClaims,
+  SESSION_MINT_TIMEOUT_MS,
 } = require('../helpers/auth');
 const { createUser, deleteUser, enableDirectAccessGrants } = require('../helpers/keycloak-admin');
 
@@ -17,11 +18,10 @@ const { createUser, deleteUser, enableDirectAccessGrants } = require('../helpers
  *   - Backend has been restarted to load genie2 JWKS
  */
 test.describe.serial('Phase I: Multi-Realm Configuration', () => {
-  // The session mints log in through the browser — a stalled cycle costs
-  // ≈135s. test.describe.configure covers the tests; the in-hook
-  // test.setTimeout covers beforeAll, which reads the project timeout
-  // otherwise.
-  test.describe.configure({ timeout: 360000 });
+  // See SESSION_MINT_TIMEOUT_MS: describe.configure covers the tests,
+  // the in-hook test.setTimeout covers beforeAll (hooks read the
+  // project timeout, not the suite timeout).
+  test.describe.configure({ timeout: SESSION_MINT_TIMEOUT_MS });
 
   let adminToken;
   let genie1Token;
@@ -29,7 +29,7 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
   const TEST_USER = { username: 'testuser2', password: 'TestPass123!', email: 'testuser2@genie2.local' };
 
   test.beforeAll(async ({ browser }) => {
-    test.setTimeout(360000);
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
     adminToken = await getAdminToken();
 
     // genie2 is test-only: enable ROPC for its direct token mints

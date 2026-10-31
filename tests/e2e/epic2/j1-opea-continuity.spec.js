@@ -1,17 +1,16 @@
 const { test, expect } = require('@playwright/test');
-const { getSessionTokenViaUI, request: authRequest } = require('../helpers/auth');
+const { getSessionTokenViaUI, request: authRequest, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 
 test.describe('Phase J: OPEA Continuity', () => {
-  // The session mints log in through the browser — a stalled cycle costs
-  // ≈135s. test.describe.configure covers the tests; the in-hook
-  // test.setTimeout covers beforeAll, which reads the project timeout
-  // otherwise.
-  test.describe.configure({ timeout: 360000 });
+  // See SESSION_MINT_TIMEOUT_MS: describe.configure covers the tests,
+  // the in-hook test.setTimeout covers beforeAll (hooks read the
+  // project timeout, not the suite timeout).
+  test.describe.configure({ timeout: SESSION_MINT_TIMEOUT_MS });
 
   let userToken;
 
   test.beforeAll(async ({ browser }) => {
-    test.setTimeout(360000);
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
     userToken = await getSessionTokenViaUI({ browser });
   });
 

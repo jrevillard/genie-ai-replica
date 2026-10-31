@@ -511,15 +511,14 @@ export default {
       retractQueuedSuccess: "{'{'}count{'}'} 个文件已加入撤回队列。",
       retractQueuedError: '批量撤回过程中发生错误。',
       retractPartialFailure: "已撤回 {'{'}successCount{'}'}/{'{'}count{'}'} 个文件。失败：{'{'}detail{'}'}",
-      deleteSelected: 'Delete Selected',
-      confirmDeleteTitle: 'Confirm Batch Deletion',
-      confirmDeleteSelected:
-        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
-      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
-      deleteQueuedError: 'An error occurred during the batch deletion process.',
-      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
-      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
-      deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
+      deleteSelected: '删除所选',
+      confirmDeleteTitle: '确认批量删除',
+      confirmDeleteSelected: "确定要永久删除 {'{'}count{'}'} 个文件吗？",
+      deleteQueuedSuccess: "已删除 {'{'}count{'}'} 个文件。",
+      deleteQueuedError: '批量删除过程中发生错误。',
+      deletePartialFailure: "已删除 {'{'}successCount{'}'}/{'{'}count{'}'} 个。失败：{'{'}detail{'}'}",
+      deleteAllFailed: "全部 {'{'}count{'}'} 个文件删除失败：{'{'}detail{'}'}",
+      deleteRefuseReason: '{count} 个文件仍在摄取中 — 请先撤回它们。',
       retractAllFailed: "全部 {'{'}count{'}'} 个文件撤回失败：{'{'}detail{'}'}",
       uploadSuccessMultiple: "{'{'}count{'}'} 个文件上传成功。",
       linkSubmitSuccess: "成功爬取并保存 \"{'{'}fileName{'}'}\"。",
@@ -530,6 +529,7 @@ export default {
       confirmDeleteSkipped: "{'{'{'}'}count{'}'} 个已摄取/摄取中的文件将被跳过——请先撤回它们才能删除。"
     },
     queryInspector: {
+      title: '查询检查器',
       search: '搜索',
       searchPlaceholder: '搜索查询文本...',
       minConfidence: '最低置信度',
@@ -575,7 +575,6 @@ export default {
       comment: '评论',
       providedAt: '提供于',
       loadError: '加载查询失败。',
-      title: '查询检查器',
       colScope: '范围',
       colAbstention: '拒答',
       abstained: '拒答',
@@ -1493,8 +1492,7 @@ export default {
       uploadSuccess: "成功上传 {'{'}fileName{'}'}",
       uploadFailed: "上传 {'{'}fileName{'}'} 失败。"
     },
-    ragTip:
-      '上传为何对 RAG 很重要：您上传的每份文档都可以成为经过策展、带标签的知识——聚焦、结构良好的文档比一份冗长的文件检索准确得多。OKF Studio 向导会将上传内容转化为经复核的主题。',
+    ragTip: '从抓取到答案：抓取的网页成为 OKF 知识库主题，供 AI 助手回答。',
     ragTipNoOkf:
       '上传为何对 RAG 很重要：您上传的每份文档都可以成为经过策展、带标签的知识——聚焦、结构良好的文档比一份冗长的文件检索准确得多。'
   },
@@ -2394,6 +2392,18 @@ export default {
       back: '返回',
       continue: '继续',
       finish: '打开编辑器'
+    },
+    stepNames: {
+      entry: '开始',
+      choose: '选择工作流',
+      input: '输入',
+      produce: '生成',
+      labelOnboard: '标签配置',
+      curate: '整理',
+      validate: '验证',
+      autocorrect: '自动纠正',
+      review: '审查',
+      secureFinish: '保护并完成'
     },
     steps: {
       entry: {

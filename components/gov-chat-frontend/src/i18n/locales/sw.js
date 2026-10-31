@@ -538,6 +538,7 @@ export default {
       confirmDeleteSkipped: "{'{'{'}'}count{'}'} faili zilizoingizwa/zinaingizwa ZITARUKWA — rejesha kwanza kuzifuta."
     },
     queryInspector: {
+      title: 'Mkaguzi wa Maswali',
       search: 'Tafuta',
       searchPlaceholder: 'Tafuta maandishi ya hoja...',
       minConfidence: 'Uhakika wa Chini',
@@ -583,7 +584,6 @@ export default {
       comment: 'Maoni',
       providedAt: 'Imetolewa mnamo',
       loadError: 'Imeshindwa kupakia hoja.',
-      title: 'Kikaguzi cha Maswali',
       colScope: 'Wigo',
       colAbstention: 'Kujiepusha',
       abstained: 'Kujiepusha',
@@ -2458,6 +2458,18 @@ export default {
       back: 'Nyuma',
       continue: 'Endelea',
       finish: 'Open the Editor'
+    },
+    stepNames: {
+      entry: 'Mwanzo',
+      choose: 'Chagua mtiririko',
+      input: 'Ingizo',
+      produce: 'Tengeneza',
+      labelOnboard: 'Andaa lebo',
+      curate: 'Kurasini',
+      validate: 'Thibitisha',
+      autocorrect: 'Marekebisho ya kiotomatiki',
+      review: 'Kagua',
+      secureFinish: 'Dhamini na maliza'
     },
     steps: {
       entry: {

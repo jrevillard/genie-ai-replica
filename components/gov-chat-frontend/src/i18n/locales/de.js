@@ -541,6 +541,7 @@ export default {
         "{'{'{'}'}count{'}'} inginierte/in Arbeit befindliche Datei(en) werden ÜBERSPRUNGEN — erst zurückziehen, dann löschen."
     },
     queryInspector: {
+      title: 'Abfrage-Inspektor',
       search: 'Suchen',
       searchPlaceholder: 'Abfragetext suchen...',
       minConfidence: 'Min. Konfidenz',
@@ -586,7 +587,6 @@ export default {
       comment: 'Kommentar',
       providedAt: 'Bereitgestellt am',
       loadError: 'Abfragen konnten nicht geladen werden.',
-      title: 'Abfrage-Inspektor',
       colScope: 'Bereich',
       colAbstention: 'Verzicht',
       abstained: 'Verzichtet',
@@ -2485,6 +2485,18 @@ export default {
       back: 'Zurück',
       continue: 'Weiter',
       finish: 'Open the Editor'
+    },
+    stepNames: {
+      entry: 'Start',
+      choose: 'Arbeitsablauf wählen',
+      input: 'Eingabe',
+      produce: 'Erzeugen',
+      labelOnboard: 'Labels einrichten',
+      curate: 'Kuratieren',
+      validate: 'Validieren',
+      autocorrect: 'Auto-Korrektur',
+      review: 'Prüfung',
+      secureFinish: 'Sichern und Abschließen'
     },
     steps: {
       entry: {

@@ -515,15 +515,14 @@ export default {
       retractQueuedSuccess: "تم وضع {'{'}count{'}'} ملفات في قائمة الانتظار للسحب.",
       retractQueuedError: 'حدث خطأ أثناء عملية السحب الجماعي.',
       retractPartialFailure: "تم سحب {'{'}successCount{'}'} من {'{'}count{'}'} ملفات. فشل: {'{'}detail{'}'}",
-      deleteSelected: 'Delete Selected',
-      confirmDeleteTitle: 'Confirm Batch Deletion',
-      confirmDeleteSelected:
-        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
-      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
-      deleteQueuedError: 'An error occurred during the batch deletion process.',
-      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
-      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
-      deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
+      deleteSelected: 'حذف المحدد',
+      confirmDeleteTitle: 'تأكيد الحذف الجماعي',
+      confirmDeleteSelected: "هل أنت متأكد من أنك تريد حذف {'{'}count{'}'} ملفًا نهائيًا؟",
+      deleteQueuedSuccess: "تم حذف {'{'}count{'}'} ملفًا.",
+      deleteQueuedError: 'حدث خطأ أثناء عملية الحذف الجماعي.',
+      deletePartialFailure: "تم حذف {'{'}successCount{'}'} من {'{'}count{'}'}. فشل: {'{'}detail{'}'}",
+      deleteAllFailed: "فشل جميع الملفات {'{'}count{'}'}: {'{'}detail{'}'}",
+      deleteRefuseReason: '{count} ملفات لا تزال مستوعبة — اسحبها أولاً.',
       retractAllFailed: "فشل جميع الملفات {'{'}count{'}'}: {'{'}detail{'}'}",
       uploadSuccessMultiple: "تم تحميل {'{'}count{'}'} ملف(ات) بنجاح.",
       linkSubmitSuccess: "تم الزحف وحفظ \"{'{'}fileName{'}'}\" بنجاح.",
@@ -535,6 +534,7 @@ export default {
       confirmDeleteSkipped: "{'{'{'}'}count{'}'} من الملفات المستوعبة/قيد الاستيعاب ستُتخطى — اسحبها أولًا لحذفها."
     },
     queryInspector: {
+      title: 'مفتش الاستعلام',
       search: 'بحث',
       searchPlaceholder: 'البحث في نص الاستعلام...',
       minConfidence: 'الحد الأدنى للثقة',
@@ -580,7 +580,6 @@ export default {
       comment: 'تعليق',
       providedAt: 'مقدم في',
       loadError: 'فشل تحميل الاستعلامات.',
-      title: 'مفتش الاستعلامات',
       colScope: 'النطاق',
       colAbstention: 'الامتناع عن الإجابة',
       abstained: 'امتنع',
@@ -1516,7 +1515,7 @@ export default {
       uploadFailed: "فشل تحميل {'{'}fileName{'}'}."
     },
     ragTip:
-      'لماذا تهم عمليات الرفع لـ RAG: كل مستند ترفعه يمكن أن يصبح معرفة منقّحة وموسومة — المستندات المركّزة جيّدة البنية تُسترجع بدقة أكبر بكثير من ملف طويل واحد. يحوّل معالج OKF Studio الملفات المرفوعة إلى موضوعات مراجَعة.',
+      'من الزحف إلى الإجابات: تصبح الصفحات التي تم الزحف لها مواضيع في مستودع OKF ليجيب عليها مساعد الذكاء الاصطناعي.',
     ragTipNoOkf:
       'لماذا تهم عمليات الرفع لـ RAG: كل مستند ترفعه يمكن أن يصبح معرفة منقّحة وموسومة — المستندات المركّزة جيّدة البنية تُسترجع بدقة أكبر بكثير من ملف طويل واحد.'
   },
@@ -2432,6 +2431,18 @@ export default {
       back: 'رجوع',
       continue: 'متابعة',
       finish: 'فتح المحرر'
+    },
+    stepNames: {
+      entry: 'البداية',
+      choose: 'اختيار سير العمل',
+      input: 'الإدخال',
+      produce: 'الإنتاج',
+      labelOnboard: 'تهيئة الوسوم',
+      curate: 'التنقيح',
+      validate: 'التحقق',
+      autocorrect: 'التصحيح التلقائي',
+      review: 'المراجعة',
+      secureFinish: 'التأمين والإنهاء'
     },
     steps: {
       entry: {

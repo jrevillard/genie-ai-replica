@@ -540,6 +540,7 @@ export default {
         "{'{'{'}'}count{'}'} file yang di-ingest/sedang di-ingest akan DILEWATI — retract dulu untuk menghapusnya."
     },
     queryInspector: {
+      title: 'Inspektur Kueri',
       search: 'Cari',
       searchPlaceholder: 'Cari teks kueri...',
       minConfidence: 'Keyakinan Minimal',
@@ -585,7 +586,6 @@ export default {
       comment: 'Komentar',
       providedAt: 'Disediakan pada',
       loadError: 'Gagal memuat kueri.',
-      title: 'Inspektor Kueri',
       colScope: 'Cakupan',
       colAbstention: 'Penolakan menjawab',
       abstained: 'Menolak',
@@ -2464,6 +2464,18 @@ export default {
       back: 'Kembali',
       continue: 'Lanjutkan',
       finish: 'Open the Editor'
+    },
+    stepNames: {
+      entry: 'Mulai',
+      choose: 'Pilih alur kerja',
+      input: 'Input',
+      produce: 'Produksi',
+      labelOnboard: 'Siapkan label',
+      curate: 'Kurasi',
+      validate: 'Validasi',
+      autocorrect: 'Koreksi otomatis',
+      review: 'Tinjau',
+      secureFinish: 'Amankan dan selesaikan'
     },
     steps: {
       entry: {

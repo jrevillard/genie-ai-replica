@@ -145,6 +145,21 @@ const STEP_LABELS = [
   'Review',
   'Secure and Finish'
 ];
+// Round 22 (David, live screenshot — the stepper rendered English in every
+// locale): the names are i18n leaves now (okf.stepNames.*); the array above
+// stays as the English fallback path.
+const STEP_SLUGS = [
+  'entry',
+  'choose',
+  'input',
+  'produce',
+  'labelOnboard',
+  'curate',
+  'validate',
+  'autocorrect',
+  'review',
+  'secureFinish'
+];
 
 export default {
   name: 'OkfStudioWizard',
@@ -176,15 +191,20 @@ export default {
       // A2 gate contract: the ACTIVE step owns the Continue. A step that
       // emits no gate event (the not-yet-wired panels) defaults to open.
       gateOpen: true,
-      advancing: false,
-      stepConfig: STEP_LABELS.map((label, idx) => ({
-        value: String(idx),
-        label: `${idx + 1}. ${label}`
-      }))
+      advancing: false
     };
   },
   computed: {
     ...mapGetters('okf', ['isExpert', 'repoById']),
+    // Round 22: translated step names — this was data built from the
+    // hardcoded English STEP_LABELS, so the stepper rendered English in
+    // every locale (the live screenshot).
+    stepConfig() {
+      return STEP_LABELS.map((label, idx) => ({
+        value: String(idx),
+        label: `${idx + 1}. ${this.translate(`okf.stepNames.${STEP_SLUGS[idx]}`, label)}`
+      }));
+    },
     // A5 context rail: the REAL repo doc is the source of truth — never a
     // phantom draft shape. Falls back to the draft while the repo is not yet
     // created (Entry's create-on-advance).
@@ -284,7 +304,7 @@ export default {
   },
   methods: {
     stepLabel(i) {
-      return `${i + 1}. ${STEP_LABELS[i]}`;
+      return `${i + 1}. ${this.translate(`okf.stepNames.${STEP_SLUGS[i]}`, STEP_LABELS[i])}`;
     },
     onStepClick(idx) {
       if (idx === this.activeStep) return;

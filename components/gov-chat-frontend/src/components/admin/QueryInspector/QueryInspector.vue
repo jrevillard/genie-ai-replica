@@ -24,12 +24,14 @@
 import adminDashboardService from '../../../services/adminDashboardService';
 import DsSpinner from '../../ds/Spinner.vue';
 import DsStateDisplay from '../../ds/StateDisplay.vue';
+import translateMixin from '../../../mixins/translateMixin';
 import QueryInspectorList from './QueryInspectorList.vue';
 import QueryInspectorDetail from './QueryInspectorDetail.vue';
 
 export default {
   name: 'QueryInspector',
   components: { DsSpinner, DsStateDisplay, QueryInspectorList, QueryInspectorDetail },
+  mixins: [translateMixin],
   data() {
     return {
       queries: [],
@@ -50,9 +52,10 @@ export default {
     this.loadQueries();
   },
   methods: {
-    translate(key, fallback, named) {
-      return this.$parent?.translate?.(key, fallback, named) ?? fallback;
-    },
+    // translate comes from translateMixin (round 22): the $parent?.translate
+    // delegation broke whenever a wrapper (transition/keep-alive) sat between
+    // this component and AdminDashboard — the ?? fallback then rendered the
+    // ENGLISH string in every locale.
     async loadQueries() {
       this.loading = true;
       this.loadError = false;

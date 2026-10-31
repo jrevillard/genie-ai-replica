@@ -519,15 +519,15 @@ export default {
       retractQueuedError: 'ব্যাচ প্রত্যাহার প্রক্রিয়া চলাকালীন একটি ত্রুটি ঘটেছে।',
       retractPartialFailure:
         "{'{'}count{'}'}টির মধ্যে {'{'}successCount{'}'}টি প্রত্যাহার করা হয়েছে। ব্যর্থ: {'{'}detail{'}'}",
-      deleteSelected: 'Delete Selected',
-      confirmDeleteTitle: 'Confirm Batch Deletion',
-      confirmDeleteSelected:
-        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
-      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
-      deleteQueuedError: 'An error occurred during the batch deletion process.',
-      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
-      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
-      deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
+      deleteSelected: 'নির্বাচিত মুছুন',
+      confirmDeleteTitle: 'গুচ্ছ মুছে ফেলার নিশ্চিতকরণ',
+      confirmDeleteSelected: "আপনি কি নিশ্চিতভাবে {'{'}count{'}'}টি ফাইল স্থায়ীভাবে মুছে ফেলতে চান?",
+      deleteQueuedSuccess: "{'{'}count{'}'}টি ফাইল মুছে ফেলা হয়েছে।",
+      deleteQueuedError: 'গুচ্ছ মুছে ফেলার প্রক্রিয়ায় একটি ত্রুটি ঘটেছে।',
+      deletePartialFailure:
+        "{'{'}count{'}'}টির মধ্যে {'{'}successCount{'}'}টি মুছে ফেলা হয়েছে। ব্যর্থ: {'{'}detail{'}'}",
+      deleteAllFailed: "সমস্ত {'{'}count{'}'}টি ফাইল ব্যর্থ হয়েছে: {'{'}detail{'}'}",
+      deleteRefuseReason: '{count}টি ফাইল এখনও ইনজেস্ট করা আছে — প্রথমে সেগুলি প্রত্যাহার করুন।',
       retractAllFailed: "সমস্ত {'{'}count{'}'}টি ফাইল ব্যর্থ হয়েছে: {'{'}detail{'}'}",
       uploadSuccessMultiple: "{'{'}count{'}'} টি ফাইল সফলভাবে আপলোড হয়েছে।",
       linkSubmitSuccess: "\"{'{'}fileName{'}'}\" সফলভাবে ক্রল এবং সেভ করা হয়েছে।",
@@ -540,6 +540,7 @@ export default {
         "{'{'{'}'}count{'}'}টি ইনজেস্ট করা/হচ্ছে ফাইল বাদ যাবে — মুছতে প্রথমে সেগুলি রিট্র্যাক্ট করুন।"
     },
     queryInspector: {
+      title: 'কোয়েরি ইন্সপেক্টর',
       search: 'অনুসন্ধান',
       searchPlaceholder: 'কোয়েরি টেক্সট অনুসন্ধান করুন...',
       minConfidence: 'সর্বনিম্ন আত্মবিশ্বাস',
@@ -585,7 +586,6 @@ export default {
       comment: 'মন্তব্য',
       providedAt: 'প্রদান করা হয়েছে',
       loadError: 'কোয়েরি লোড করতে ব্যর্থ হয়েছে।',
-      title: 'কুয়েরি ইনস্পেক্টর',
       colScope: 'স্কোপ',
       colAbstention: 'উত্তর প্রত্যাখ্যান',
       abstained: 'প্রত্যাখ্যান',
@@ -1524,8 +1524,7 @@ export default {
       uploadSuccess: "সফলভাবে আপলোড হয়েছে {'{'}fileName{'}'}",
       uploadFailed: "{'{'}fileName{'}'} আপলোড করতে ব্যর্থ।"
     },
-    ragTip:
-      'RAG-এর জন্য আপলোড কেন গুরুত্বপূর্ণ: আপনি যে প্রতিটি নথি আপলোড করেন তা কিউরেট করা, লেবেলযুক্ত জ্ঞানে পরিণত হতে পারে — মনোযোগ দিয়ে সাজানো নথি একটি বিশাল ফাইলের চেয়ে অনেক বেশি নির্ভুলভাবে পুনরুদ্ধার করা যায়। OKF Studio উইজার্ড আপলোডকে পর্যালোচিত বিষয়ে রূপান্তরিত করে।',
+    ragTip: 'ক্রল থেকে উত্তর পর্যন্ত: ক্রল করা পৃষ্ঠাগুলি OKF রিপোজিটরি বিষয় হয়ে ওঠে যা AI সহকারী উত্তর দিতে পারে।',
     ragTipNoOkf:
       'RAG-এর জন্য আপলোড কেন গুরুত্বপূর্ণ: আপনি যে প্রতিটি নথি আপলোড করেন তা কিউরেট করা, লেবেলযুক্ত জ্ঞানে পরিণত হতে পারে — মনোযোগ দিয়ে সাজানো নথি একটি বিশাল ফাইলের চেয়ে অনেক বেশি নির্ভুলভাবে পুনরুদ্ধার করা যায়।'
   },
@@ -2457,6 +2456,18 @@ export default {
       back: 'পেছনে যান',
       continue: 'চালিয়ে যান',
       finish: 'এডিটর খুলুন'
+    },
+    stepNames: {
+      entry: 'শুরু',
+      choose: 'ওয়ার্কফ্লো নির্বাচন',
+      input: 'ইনপুট',
+      produce: 'উৎপাদন',
+      labelOnboard: 'লেবেল সেটআপ',
+      curate: 'কিউরেশন',
+      validate: 'যাচাই',
+      autocorrect: 'স্বয়ংক্রিয় সংশোধন',
+      review: 'পর্যালোচনা',
+      secureFinish: 'সুরক্ষা ও সমাপ্তি'
     },
     steps: {
       entry: {

@@ -540,6 +540,7 @@ export default {
         "{'{'{'}'}count{'}'} lifaele tse kennyeng/tsa kennyang li TLA TLOHESOA — di khutlisa pele ho li tlosa."
     },
     queryInspector: {
+      title: 'Molekomi wa lipotso',
       search: 'Batla',
       searchPlaceholder: 'Batla mongolo oa potso...',
       minConfidence: 'Tšepo e Tlaase',
@@ -585,7 +586,6 @@ export default {
       comment: 'Maikutlo',
       providedAt: 'E fanoe ka',
       loadError: 'Ho hlolehile ho kenya lipotso.',
-      title: 'Molekoki wa Lipotso',
       colScope: 'Bophara',
       colAbstention: 'Ho ikhetha',
       abstained: 'Ikhethile',
@@ -2473,6 +2473,18 @@ export default {
       back: 'Morao',
       continue: 'Tsoela pele',
       finish: 'Open the Editor'
+    },
+    stepNames: {
+      entry: 'Qalong',
+      choose: 'Kgetha mokgwa',
+      input: 'Kenyelletso',
+      produce: 'Tlhahiso',
+      labelOnboard: 'Hlakela matsosa',
+      curate: 'Curate',
+      validate: 'Netefatsa',
+      autocorrect: 'Lokisa ka boitsamaisi',
+      review: 'Lekola',
+      secureFinish: 'Sireletsa ebe o qetela'
     },
     steps: {
       entry: {

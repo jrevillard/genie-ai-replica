@@ -542,6 +542,7 @@ export default {
         "{'{'{'}'}count{'}'} fichier(s) ingéré(s)/en cours seront IGNORÉS — rétractez-les d’abord pour les supprimer."
     },
     queryInspector: {
+      title: 'Inspecteur de requêtes',
       search: 'Rechercher',
       searchPlaceholder: 'Rechercher un texte de requête...',
       minConfidence: 'Confiance min',
@@ -587,7 +588,6 @@ export default {
       comment: 'Commentaire',
       providedAt: 'Fourni à',
       loadError: 'Échec du chargement des requêtes.',
-      title: 'Inspecteur de requêtes',
       colScope: 'Portée',
       colAbstention: 'Abstention',
       abstained: 'Abstention',
@@ -2483,6 +2483,18 @@ export default {
       back: 'Retour',
       continue: 'Continuer',
       finish: 'Open the Editor'
+    },
+    stepNames: {
+      entry: 'Début',
+      choose: 'Choisir le flux',
+      input: 'Entrée',
+      produce: 'Produire',
+      labelOnboard: 'Configurer les tags',
+      curate: 'Curation',
+      validate: 'Validation',
+      autocorrect: 'Correction auto',
+      review: 'Révision',
+      secureFinish: 'Sécuriser et terminer'
     },
     steps: {
       entry: {

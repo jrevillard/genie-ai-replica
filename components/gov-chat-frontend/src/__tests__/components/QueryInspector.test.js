@@ -370,10 +370,12 @@ describe('QueryInspectorList', () => {
 
   it('should interpolate the pagination placeholders through the real translate chain', () => {
     // vue-i18n renders `{current}`-style placeholders empty unless the
-    // named-params dict reaches t() as its third argument — the shape
-    // AdminDashboard.translate uses. Mount the list under a parent whose
-    // translate mimics that call so the delegation chain List → parent →
-    // vue-i18n is exercised for real, not through a string passthrough.
+    // named-params dict reaches t() as its third argument. Round 22: the
+    // list no longer DELEGATES to $parent (that chain broke whenever a
+    // wrapper sat between it and AdminDashboard — the English-fallback
+    // leak) — it uses translateMixin, whose translate calls this.$i18n.t
+    // exactly like AdminDashboard's. So the honest wiring test installs the
+    // real i18n plugin and asserts the INTERPOLATED sentence.
     const { createI18n } = require('vue-i18n');
     const i18n = createI18n({
       legacy: true,
@@ -388,15 +390,9 @@ describe('QueryInspectorList', () => {
       template: '<query-inspector-list :queries="queries" :pagination="pagination" />',
       data() {
         return { queries: [], pagination: { total: 48, limit: 25, offset: 25, pages: 5, currentPage: 2 } };
-      },
-      methods: {
-        translate(key, fallback = '', named = {}) {
-          const translation = i18n.global.t(key, 'en', named);
-          return translation === key ? fallback : translation;
-        }
       }
     };
-    const wrapper = mount(Parent, { global: { stubs: dsStubs } });
+    const wrapper = mount(Parent, { global: { stubs: dsStubs, plugins: [i18n] } });
     expect(wrapper.find('.qi-list__page-info').text()).toBe('Page 2 of 5 (48 total)');
   });
 

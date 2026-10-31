@@ -516,15 +516,14 @@ export default {
       retractQueuedSuccess: "{'{'}count{'}'} файл(ов) добавлен(ы) в очередь на изъятие.",
       retractQueuedError: 'Произошла ошибка во время процесса пакетного изъятия.',
       retractPartialFailure: "Изъято {'{'}successCount{'}'} из {'{'}count{'}'} файл(ов). Ошибки: {'{'}detail{'}'}",
-      deleteSelected: 'Delete Selected',
-      confirmDeleteTitle: 'Confirm Batch Deletion',
-      confirmDeleteSelected:
-        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
-      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
-      deleteQueuedError: 'An error occurred during the batch deletion process.',
-      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
-      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
-      deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
+      deleteSelected: 'Удалить выбранные',
+      confirmDeleteTitle: 'Подтверждение группового удаления',
+      confirmDeleteSelected: "Вы уверены, что хотите безвозвратно удалить файлы ({'{'}count{'}'})?",
+      deleteQueuedSuccess: "Удалено файлов: {'{'}count{'}'}.",
+      deleteQueuedError: 'Произошла ошибка при групповом удалении.',
+      deletePartialFailure: "Удалено {'{'}successCount{'}'} из {'{'}count{'}'}. Ошибки: {'{'}detail{'}'}",
+      deleteAllFailed: "Все файлы ({'{'}count{'}'}) не удалены: {'{'}detail{'}'}",
+      deleteRefuseReason: 'Файлов ещё в ingest: {count} — сначала отзовите их.',
       retractAllFailed: "Обработка всех {'{'}count{'}'} файл(ов) завершилась ошибкой: {'{'}detail{'}'}",
       uploadSuccessMultiple: "{'{'}count{'}'} файл(ов) успешно загружен(ы).",
       linkSubmitSuccess: "Успешно просканировано и сохранено \"{'{'}fileName{'}'}\".",
@@ -537,6 +536,7 @@ export default {
         "{'{'{'}'}count{'}'} загруженный(х) файл(ов) будут ПРОПУЩЕНЫ — сначала отозвите их, чтобы удалить."
     },
     queryInspector: {
+      title: 'Инспектор запросов',
       search: 'Поиск',
       searchPlaceholder: 'Поиск текста запроса...',
       minConfidence: 'Мин. достоверность',
@@ -582,7 +582,6 @@ export default {
       comment: 'Комментарий',
       providedAt: 'Предоставлено',
       loadError: 'Не удалось загрузить запросы.',
-      title: 'Инспектор запросов',
       colScope: 'Область',
       colAbstention: 'Отказ от ответа',
       abstained: 'Отказ',
@@ -1527,7 +1526,7 @@ export default {
       uploadFailed: "Не удалось загрузить файл {'{'}fileName{'}'}."
     },
     ragTip:
-      'Зачем нужны загрузки для RAG: каждый загруженный документ может стать курируемыми размеченными знаниями — сфокусированные, хорошо структурированные документы находятся гораздо точнее, чем один длинный файл. Мастер OKF Studio превращает загрузки в проверенные темы.',
+      'От обхода к ответам: обойдённые страницы становятся темами репозитория OKF, на которые отвечает ИИ-ассистент.',
     ragTipNoOkf:
       'Зачем нужны загрузки для RAG: каждый загруженный документ может стать курируемыми размеченными знаниями — сфокусированные, хорошо структурированные документы находятся гораздо точнее, чем один длинный файл.'
   },
@@ -2468,6 +2467,18 @@ export default {
       back: 'Назад',
       continue: 'Продолжить',
       finish: 'Открыть редактор'
+    },
+    stepNames: {
+      entry: 'Начало',
+      choose: 'Выбор процесса',
+      input: 'Ввод',
+      produce: 'Создание',
+      labelOnboard: 'Настройка меток',
+      curate: 'Курация',
+      validate: 'Проверка',
+      autocorrect: 'Автокоррекция',
+      review: 'Ревью',
+      secureFinish: 'Защита и завершение'
     },
     steps: {
       entry: {

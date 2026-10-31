@@ -534,6 +534,7 @@ export default {
         "{'{'{'}'}count{'}'} ingested/ingesting file(s) will be SKIPPED — retract them first to delete them."
     },
     queryInspector: {
+      title: 'Inspektur Kauri',
       search: 'A nyining',
       searchPlaceholder: 'Nyiningo safuo nyining...',
       minConfidence: 'Laana dooyaa',
@@ -579,7 +580,6 @@ export default {
       comment: 'Kuma',
       providedAt: 'A dita',
       loadError: 'Nyiningo bota.',
-      title: 'Kweri Inspektoo',
       colScope: 'Skopu (Scope)',
       colAbstention: 'Jaabi Bulaa',
       abstained: 'Bulata',
@@ -2426,6 +2426,18 @@ export default {
       back: 'Jeblak',
       continue: 'Wōnm̦aanl̦o̦k',
       finish: 'Open the Editor'
+    },
+    stepNames: {
+      entry: 'Entry',
+      choose: 'Choose workflow',
+      input: 'Input',
+      produce: 'Produce',
+      labelOnboard: 'Label onboard',
+      curate: 'Curate',
+      validate: 'Validate',
+      autocorrect: 'Auto-correct',
+      review: 'Review',
+      secureFinish: 'Secure and Finish'
     },
     steps: {
       entry: {

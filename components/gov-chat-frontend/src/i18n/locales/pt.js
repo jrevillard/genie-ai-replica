@@ -541,6 +541,7 @@ export default {
         "{'{'{'}'}count{'}'} arquivo(s) ingerido(s)/em andamento serão PULADOS — retrate-os primeiro para excluí-los."
     },
     queryInspector: {
+      title: 'Inspetor de consultas',
       search: 'Buscar',
       searchPlaceholder: 'Buscar texto da consulta...',
       minConfidence: 'Confiança Mínima',
@@ -586,7 +587,6 @@ export default {
       comment: 'Comentário',
       providedAt: 'Fornecido em',
       loadError: 'Falha ao carregar consultas.',
-      title: 'Inspetor de Consultas',
       colScope: 'Escopo',
       colAbstention: 'Abstenção',
       abstained: 'Abstenção',
@@ -2474,6 +2474,18 @@ export default {
       back: 'Voltar',
       continue: 'Continuar',
       finish: 'Open the Editor'
+    },
+    stepNames: {
+      entry: 'Início',
+      choose: 'Escolher fluxo',
+      input: 'Entrada',
+      produce: 'Produzir',
+      labelOnboard: 'Configurar etiquetas',
+      curate: 'Curadoria',
+      validate: 'Validar',
+      autocorrect: 'Correção automática',
+      review: 'Revisão',
+      secureFinish: 'Proteger e concluir'
     },
     steps: {
       entry: {

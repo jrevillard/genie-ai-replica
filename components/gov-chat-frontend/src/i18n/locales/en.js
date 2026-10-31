@@ -536,6 +536,7 @@ export default {
         "{'{'{'}'}count{'}'} ingested/ingesting file(s) will be SKIPPED — retract them first to delete them."
     },
     queryInspector: {
+      title: 'Query Inspector',
       search: 'Search',
       searchPlaceholder: 'Search query text...',
       minConfidence: 'Min Confidence',
@@ -581,7 +582,6 @@ export default {
       comment: 'Comment',
       providedAt: 'Provided at',
       loadError: 'Failed to load queries.',
-      title: 'Query Inspector',
       colScope: 'Scope',
       colAbstention: 'Abstention',
       abstained: 'Abstained',
@@ -3282,6 +3282,18 @@ export default {
       back: 'Back',
       continue: 'Continue',
       finish: 'Open the Editor'
+    },
+    stepNames: {
+      entry: 'Entry',
+      choose: 'Choose workflow',
+      input: 'Input',
+      produce: 'Produce',
+      labelOnboard: 'Label onboard',
+      curate: 'Curate',
+      validate: 'Validate',
+      autocorrect: 'Auto-correct',
+      review: 'Review',
+      secureFinish: 'Secure and Finish'
     },
     steps: {
       entry: {

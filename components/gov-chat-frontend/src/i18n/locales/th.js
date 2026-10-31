@@ -516,15 +516,14 @@ export default {
       retractQueuedSuccess: "ไฟล์ {'{'}count{'}'} ไฟล์ถูกจัดคิวเพื่อดึงกลับแล้ว",
       retractQueuedError: 'เกิดข้อผิดพลาดระหว่างกระบวนการดึงกลับเป็นชุด',
       retractPartialFailure: "ดึงกลับสำเร็จ {'{'}successCount{'}'} จาก {'{'}count{'}'} ไฟล์ ล้มเหลว: {'{'}detail{'}'}",
-      deleteSelected: 'Delete Selected',
-      confirmDeleteTitle: 'Confirm Batch Deletion',
-      confirmDeleteSelected:
-        "Are you sure you want to permanently delete {'{'}count{'}'} file(s)? This cannot be undone.",
-      deleteQueuedSuccess: "{'{'}count{'}'} file(s) deleted.",
-      deleteQueuedError: 'An error occurred during the batch deletion process.',
-      deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
-      deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
-      deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
+      deleteSelected: 'ลบที่เลือก',
+      confirmDeleteTitle: 'ยืนยันการลบเป็นชุด',
+      confirmDeleteSelected: "คุณแน่ใจหรือไม่ว่าต้องการลบไฟล์ {'{'}count{'}'} ไฟล์อย่างถาวร?",
+      deleteQueuedSuccess: "ลบแล้ว {'{'}count{'}'} ไฟล์",
+      deleteQueuedError: 'เกิดข้อผิดพลาดระหว่างกระบวนการลบเป็นชุด',
+      deletePartialFailure: "ลบสำเร็จ {'{'}successCount{'}'} จาก {'{'}count{'}'} ไฟล์ ล้มเหลว: {'{'}detail{'}'}",
+      deleteAllFailed: "ไฟล์ทั้งหมด {'{'}count{'}'} ไฟล์ล้มเหลว: {'{'}detail{'}'}",
+      deleteRefuseReason: 'มี {count} ไฟล์ที่ยัง ingest อยู่ — ถอนคืนก่อน',
       retractAllFailed: "ไฟล์ทั้งหมด {'{'}count{'}'} ไฟล์ล้มเหลว: {'{'}detail{'}'}",
       uploadSuccessMultiple: "อัปโหลดไฟล์ {'{'}count{'}'} ไฟล์สำเร็จ",
       linkSubmitSuccess: "รวบรวมข้อมูลและบันทึก \"{'{'}fileName{'}'}\" สำเร็จ",
@@ -536,6 +535,7 @@ export default {
       confirmDeleteSkipped: "ไฟล์ที่ ingest แล้ว/กำลัง ingest {'{'{'}'}count{'}'} ไฟล์จะถูกข้าม — ถอนคืนก่อนจึงจะลบได้"
     },
     queryInspector: {
+      title: 'ตัวตรวจสอบคิวรี',
       search: 'ค้นหา',
       searchPlaceholder: 'ค้นหาข้อความคำค้นหา...',
       minConfidence: 'ความมั่นใจต่ำสุด',
@@ -581,7 +581,6 @@ export default {
       comment: 'ความคิดเห็น',
       providedAt: 'ให้ไว้เมื่อ',
       loadError: 'ไม่สามารถโหลดคำค้นหาได้',
-      title: 'เครื่องมือตรวจสอบคำค้น',
       colScope: 'ขอบเขต',
       colAbstention: 'การไม่ตอบ',
       abstained: 'ไม่ตอบ',
@@ -1515,8 +1514,7 @@ export default {
       uploadSuccess: "อัปโหลด {'{'}fileName{'}'} สำเร็จ",
       uploadFailed: "ล้มเหลวในการอัปโหลด {'{'}fileName{'}'}"
     },
-    ragTip:
-      'ทำไมการอัปโหลดจึงสำคัญต่อ RAG: ทุกเอกสารที่คุณอัปโหลดสามารถกลายเป็นความรู้ที่ผ่านการดูแลจัดการและติดป้ายกำกับได้ — เอกสารที่กระชับและมีโครงสร้างดีจะดึงข้อมูลได้แม่นยำกว่าไฟล์ยาวไฟล์เดียวมาก วิซาร์ด OKF Studio เปลี่ยนไฟล์ที่อัปโหลดให้เป็นหัวข้อที่ผ่านการตรวจทาน',
+    ragTip: 'จากการรวบรวมข้อมูลสู่คำตอบ: หน้าเว็บที่รวบรวมแล้วกลายเป็นหัวข้อในที่เก็บ OKF ที่ผู้ช่วย AI ตอบได้',
     ragTipNoOkf:
       'ทำไมการอัปโหลดจึงสำคัญต่อ RAG: ทุกเอกสารที่คุณอัปโหลดสามารถกลายเป็นความรู้ที่ผ่านการดูแลจัดการและติดป้ายกำกับได้ — เอกสารที่กระชับและมีโครงสร้างดีจะดึงข้อมูลได้แม่นยำกว่าไฟล์ยาวไฟล์เดียวมาก'
   },
@@ -2438,6 +2436,18 @@ export default {
       back: 'ย้อนกลับ',
       continue: 'ดำเนินการต่อ',
       finish: 'เปิดตัวแก้ไข'
+    },
+    stepNames: {
+      entry: 'เริ่มต้น',
+      choose: 'เลือกขั้นตอนการทำงาน',
+      input: 'นำเข้า',
+      produce: 'สร้าง',
+      labelOnboard: 'ตั้งค่าป้ายกำกับ',
+      curate: 'คัดสรร',
+      validate: 'ตรวจสอบ',
+      autocorrect: 'แก้ไขอัตโนมัติ',
+      review: 'ทบทวน',
+      secureFinish: 'รักษาความปลอดภัยและเสร็จสิ้น'
     },
     steps: {
       entry: {

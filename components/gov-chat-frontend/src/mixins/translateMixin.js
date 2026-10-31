@@ -33,14 +33,20 @@ export default {
      *
      * @param {string} key      i18n message key (e.g. 'okf.studio.title')
      * @param {string} [fallback]  Default text returned when the key is missing
+     * @param {Object} [named]  Optional named params — when supplied, {x}
+     *   tokens are interpolated from it (AdminDashboard.translate's t(key,
+     *   locale, named) shape, which the QueryInspector pagination rides).
+     *   Absent/undefined keeps the RAW output for the .replace('{x}') callers.
      * @returns {string}
      */
-    translate(key, fallback = '') {
+    translate(key, fallback = '', named) {
       if (!this.$i18n) {
         // Match AdminDashboard.translate — when i18n is unavailable we still
         // fall back to the key itself if no explicit fallback was supplied,
         // so missing strings are obvious in the UI rather than silently empty.
-        return fallback || key;
+        let out = fallback || key;
+        if (named && typeof named === 'object') out = interpolateNamed(out, named);
+        return out;
       }
       try {
         // RAW message lookup — deliberately NOT $t(). vue-i18n's message
@@ -57,10 +63,12 @@ export default {
         const messages = this.$i18n.messages;
         const locale = this.$i18n.locale || 'en';
         const hit = resolve(messages && messages[locale], key);
-        if (typeof hit === 'string') return hit;
+        if (typeof hit === 'string') return interpolateNamed(hit, named);
         const en = resolve(messages && messages.en, key);
-        if (typeof en === 'string') return en;
-        return fallback || key;
+        if (typeof en === 'string') return interpolateNamed(en, named);
+        let out = fallback || key;
+        if (named && typeof named === 'object') out = interpolateNamed(out, named);
+        return out;
       } catch (e) {
         console.error(`[translateMixin] Translation error for key ${key}:`, e);
         return fallback || key;
@@ -68,3 +76,12 @@ export default {
     }
   }
 };
+
+/** Replace only the {x} tokens the caller NAMED — a token with no entry is
+ * left for the caller's .replace() chain (the two regimes can mix). */
+function interpolateNamed(text, named) {
+  if (!named || typeof named !== 'object') return text;
+  return text.replace(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g, (m, k) =>
+    named[k] !== undefined && named[k] !== null ? String(named[k]) : m
+  );
+}

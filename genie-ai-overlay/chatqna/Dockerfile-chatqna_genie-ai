@@ -120,6 +120,19 @@ RUN cp /home/user/comps/cores/proto/api_protocol.py /app/api_protocol.py && \
 COPY genie-ai-overlay/core/genieai_api_protocol.py /home/user/comps/cores/proto/genieai_api_protocol.py
 COPY genie-ai-overlay/core/constants.py /home/user/comps/cores/mega/constants.py
 
+# Patch the vendored comps orchestrator: the streaming LLM POST must run off
+# the event loop (asyncio.to_thread), or the loop stays pinned until vLLM
+# returns first headers and /health cannot answer during a query — the HTTP
+# liveness probe killed the pod mid-stream (see build-patches/
+# comps_llm_stream_offloop_patch.py and OVERRIDES.yaml).
+# FAIL-LOUD BY DESIGN. The patcher aborts the BUILD if it cannot find the
+# lines it expects, rather than silently shipping an image that still blocks.
+# The script stays in the image at a stable path: the in-image contract lane
+# imports it for the patch-shape constants (one source of truth), the same
+# way install_site_startup.sh persists at /app.
+COPY genie-ai-overlay/build-patches/comps_llm_stream_offloop_patch.py /app/build-patches/comps_llm_stream_offloop_patch.py
+RUN python /app/build-patches/comps_llm_stream_offloop_patch.py
+
 # This copies your main script
 COPY genie-ai-overlay/chatqna/genieai_chatqna.py /app/ChatQnA/genieai_chatqna.py
 COPY genie-ai-overlay/chatqna/keycloak_token_validator.py /app/ChatQnA/keycloak_token_validator.py

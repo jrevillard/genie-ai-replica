@@ -22,6 +22,10 @@ set -u
 
 PROJECT="${1:?usage: check-runtime.sh <compose-project> [data_dir]}"
 DATA_DIR="${2:-${DATA_DIR:-./data}}"
+# Trailing-slash callers ("./data/") would break the -path prune pattern
+# below (./data//huggingface never matches) and silently sweep the
+# excluded GPU cache.
+DATA_DIR="${DATA_DIR%/}"
 
 violations=0
 

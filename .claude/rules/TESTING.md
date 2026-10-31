@@ -107,6 +107,11 @@ Two failure modes it catches that nothing else does:
 2. **Redaction that silently stopped matching** → PII reaches
    VictoriaLogs unredacted while the collector reports healthy.
 
+Why it is a shell script and not Jest: it must start containers, inject a
+curl sidecar into the collector's netns (the collector image is
+distroless — no shell inside), `docker exec` into VictoriaLogs, and
+discover the compose project at runtime.
+
 ### Compose no-root runtime gate
 
 ```bash
@@ -128,10 +133,9 @@ volumes or images.
 - any Dockerfile `USER`/chown wiring
 - `tests/compose-non-root/check-runtime.sh` itself
 
-Why it is a shell script and not Jest: it must start containers, inject a
-curl sidecar into the collector's netns (the collector image is
-distroless — no shell inside), `docker exec` into VictoriaLogs, and
-discover the compose project at runtime.
+Why it is a shell script and not Jest: it inspects the host's docker
+daemon (container process tables) and the host filesystem of a running
+stack — neither exists inside Jest.
 
 > History: this test sat unwired and its assertions queried
 > `_msg:REDACTED`, which excludes exactly the unredacted rows it was

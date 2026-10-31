@@ -28,6 +28,8 @@ directory fails the backend loudly instead of being created root-owned.
 
 ```bash
 mkdir -p data/database_backups
+# Upgrading a root-era install (backend ran as root before #1227):
+chown 1000:1000 data/database_backups
 ```
 
 - **Docker Engine 23+** with Compose v2 (`docker compose` subcommand)

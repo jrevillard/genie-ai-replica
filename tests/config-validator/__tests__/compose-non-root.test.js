@@ -129,20 +129,83 @@ describe('compose non-root contract (#1227)', () => {
   });
 
   test('mutation: on-failure without max_attempts trips the gate', () => {
-    // Swarm restarts a failing on-failure container forever without a bound
-    // — a permanent root init. Strip the anchor's max_attempts and flip the
-    // condition: the unbounded form must trip.
-    // Flip the shared condition to on-failure, then strip the arango
-    // service's OWN max_attempts bound (8-space, under its deploy block):
-    // the unbounded form must trip the gate by name.
-    const unbounded = composeText
-      .replaceAll('condition: "none"', 'condition: on-failure')
-      .replace('\n        delay: 5s\n        max_attempts: 60\n', '\n        delay: 5s\n');
+    // The anchor carries restart_policy.condition "none" and NO max_attempts:
+    // flipping the condition to on-failure makes every anchor-merged init an
+    // UNBOUNDED restart loop of a failing root container (swarm restarts
+    // forever without a bound). Each must trip by name — arango-vector-db-init
+    // asserted as the canary.
+    const unbounded = composeText.replaceAll('condition: "none"', 'condition: on-failure');
     expect(unbounded).not.toBe(composeText);
     const { violations } = validateComposeNonRoot(unbounded);
     expect(
       violations.some((v) => v.includes('arango-vector-db-init') && v.includes('on-failure without max_attempts'))
     ).toBe(true);
+
+    // Negative control: an EXPLICIT bound satisfies the rule — the gate
+    // reads the max_attempts key, not just the condition.
+    const bounded = [
+      'services:',
+      '  arango-vector-db-init:',
+      '    <<: *chown-init',
+      '    deploy:',
+      '      restart_policy:',
+      '        condition: on-failure',
+      '        max_attempts: 5',
+      ''
+    ].join('\n');
+    const { violations: vBounded } = validateComposeNonRoot(bounded);
+    expect(
+      vBounded.filter((v) => v.includes('arango-vector-db-init') && v.includes('on-failure without max_attempts'))
+    ).toEqual([]);
+  });
+
+  test('data-dir detection survives variable spellings (renaming cannot defeat the gate)', () => {
+    // The resolver must see through every spelling a source can carry:
+    // the shipped default form, a renamed variable with default, a bare
+    // variable (unknown location — resolved CONSERVATIVELY to the data
+    // dir), and quoted sources. Each must land under the data-dir rule.
+    const cases = [
+      '${DATA_DIR:-./data}/logs/kong',
+      '${MOUNT_DIR:-./data}/logs/kong',
+      '${DATA_DIR}/logs/kong',
+      '"${DATA_DIR:-./data}/logs/kong"'
+    ];
+    for (const src of cases) {
+      const text = [
+        'services:',
+        '  kong:',
+        '    user: "1001:1001"',
+        '    volumes:',
+        `      - ${src}:/var/log/kong`,
+        ''
+      ].join('\n');
+      const { violations } = validateComposeNonRoot(text);
+      expect(violations.some((v) => v.includes('kong') && v.includes('short syntax'))).toBe(true);
+    }
+  });
+
+  test('mutation: a create_host_path:false without its bind: key opts nothing out', () => {
+    // The opt-out attaches to the bind entry its `bind:` key opens — a
+    // stray create_host_path line with no bind: block must NOT silence the
+    // last-pushed source.
+    const withBind = [
+      'services:',
+      '  backend:',
+      '    user: "1000:1000"',
+      '    volumes:',
+      '      - type: bind',
+      '        source: ./data/database_backups',
+      '        target: /app/database_backups',
+      '        bind:',
+      '          create_host_path: false',
+      ''
+    ].join('\n');
+    expect(validateComposeNonRoot(withBind).violations).toEqual([]);
+
+    const stray = withBind.replace('        bind:\n', '');
+    expect(stray).not.toBe(withBind);
+    const { violations } = validateComposeNonRoot(stray);
+    expect(violations.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
   });
 
   test('allowlist entries reference services that exist in the compose file', () => {

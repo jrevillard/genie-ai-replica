@@ -172,13 +172,13 @@ double quickHelpGridAspectRatio(Map<String, dynamic> layout) {
 /// The loaded Quick Help buttons, with a duplicated id keeping only the
 /// FIRST entry.
 ///
-/// The id is the button's identity WHEN IT DECLARES ONE: the conversation
-/// tag carries `id || title`, and the restore and the grid's verdict key
-/// on the id. Two cards with one id cannot both be honoured — the web
-/// keeps the first and drops the duplicate at load, so the mobile must
-/// too, or the same saved conversation would carry a different scope on
-/// the two platforms. A card with NO id is kept: its identity is its
-/// title, and two title-less-of-id cards are two cards.
+/// The dedupe keys on the ID — as the web's own load filter does — not on
+/// the identity (quickHelpButtonIdentity): two cards with one id cannot
+/// both be honoured, and the web keeps the first and drops the duplicate
+/// at load, so the mobile must too, or the same saved conversation would
+/// carry a different scope on the two platforms. A card with NO id is
+/// kept, and two id-less cards sharing a title stay two cards — they then
+/// write the SAME conversation tag, exactly as the web does.
 List<Map<String, dynamic>> dedupeQuickHelpButtons(
   List<Map<String, dynamic>> buttons,
 ) {
@@ -232,7 +232,7 @@ Map<String, dynamic>? quickHelpButtonById(
 String? quickHelpButtonIdentity(Map<String, dynamic>? button) {
   if (button == null) return null;
   final id = quickHelpFieldOf(button, 'id');
-  if (id != null && id.isNotEmpty) return id;
+  if (configTruthy(id)) return id;
   return quickHelpTitleOf(button);
 }
 
@@ -288,23 +288,24 @@ String? quickHelpTitleOf(Map<String, dynamic>? button) {
 }
 
 /// The title of the ACTIVE Quick Help scope, re-resolved from the button
-/// list by its identity — the mobile twin of the web's quickHelpTitleFor.
+/// list — the mobile twin of the web's quickHelpTitleFor.
 ///
-/// A locale switch re-resolves the buttons (a load in the new locale) and
-/// the context bar's title must follow: the scope's identity is the
-/// button's (`id || title`), never the title it was pressed under — for an
-/// id'd button. A lookup that names no button (the config no longer
-/// declares the id, the active scope carries a TITLE tag the id-keyed
-/// lookup cannot match, or the id is null or EMPTY — empty declares
-/// nothing, the file's own scope rule, and a sidebar scope has no id at
-/// all) resolves to null so the caller keeps the title it already has —
-/// the same fallback the web's own re-title takes.
+/// The lookup is ID-keyed (quickHelpButtonById), like the web's own
+/// re-title (`b.id === item.id`): only an id'd button's scope follows a
+/// locale switch, because a locale switch re-resolves the buttons and the
+/// bar must read the new language's title for the SAME button. An active
+/// identity the lookup cannot match — a TITLE (an id-less card's
+/// identity, see quickHelpButtonIdentity), an id the config no longer
+/// declares, or null/EMPTY (empty declares nothing, the file's own scope
+/// rule, and a sidebar scope has no id at all) — resolves to null so the
+/// caller keeps the title it already has: for a title identity that is
+/// the title it was pressed under, the same fallback the web takes.
 String? activeQuickHelpTitleFor(
   List<Map<String, dynamic>> buttons,
-  String? activeQuickHelpButtonId,
+  String? activeQuickHelpIdentity,
 ) {
   return quickHelpTitleOf(
-    quickHelpButtonById(buttons, activeQuickHelpButtonId),
+    quickHelpButtonById(buttons, activeQuickHelpIdentity),
   );
 }
 
@@ -325,12 +326,12 @@ String? activeQuickHelpTitleFor(
 /// selection's join.
 bool sidebarTitleFollowsLocale({
   required bool fromSelection,
-  required String? activeButtonId,
+  required String? activeIdentity,
   required int serviceCount,
   required List<String> serviceLabelsEn,
 }) {
   return fromSelection &&
-      activeButtonId == null &&
+      activeIdentity == null &&
       serviceCount > 0 &&
       serviceLabelsEn.length == serviceCount;
 }
@@ -348,12 +349,12 @@ bool sidebarTitleCaptureMatchesSelection({
   required List<String> labels,
   required int count,
   required bool fromSelection,
-  required String? activeButtonId,
+  required String? activeIdentity,
 }) {
   return listEquals(capturedLabels, labels) &&
       capturedCount == count &&
       fromSelection &&
-      activeButtonId == null;
+      activeIdentity == null;
 }
 
 /// The localized DISPLAY name of every entity the [tree] carries, by its
@@ -1019,6 +1020,6 @@ List<String> mergeServiceLabels(List<String> active, List<String> sidebar) => [
 /// carry both tags, or the sidebar one is lost on the next restore. A
 /// conversation that carries no scope carries no tags.
 List<String> conversationScopeTags({
-  String? quickHelpButtonId,
+  String? quickHelpIdentity,
   List<String> sidebarServiceLabels = const <String>[],
-}) => [?quickHelpButtonId, ...sidebarServiceLabels];
+}) => [?quickHelpIdentity, ...sidebarServiceLabels];

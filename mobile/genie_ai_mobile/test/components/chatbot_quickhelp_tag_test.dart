@@ -20,7 +20,7 @@ import '../helpers/theme_helper.dart';
 // hand-edited deployment configuration; no shipped configuration
 // carries one) tags its title — never nothing, which is what the
 // id-only identity saved before the fix. The tag is asserted at the
-// HTTP boundary (the conversation-create request the save sends), so
+// HTTP boundary (the conversation-write requests the saves send), so
 // the test covers the whole user path: tap, install, save.
 void main() {
   final tree = <dynamic>[
@@ -34,19 +34,25 @@ void main() {
     },
   ];
 
+  // The two cards the test taps: an id-less scoped one and an id'd one,
+  // neither carrying an action, so a press installs the scope without
+  // sending a question.
+  final twoCards = <Map<String, dynamic>>[
+    {
+      'title': {'en': 'Registry Card'},
+      'category': '2',
+      'serviceLabels': ['Births'],
+    },
+    {
+      'id': 'births-id',
+      'title': {'en': 'Births Card'},
+      'category': '2',
+      'serviceLabels': ['Births'],
+    },
+  ];
+
   setUp(() {
     resetThemeManager();
-  });
-
-  // The REAL bundled configuration, read OUTSIDE the widget test's fake
-  // async (an asset load awaited inside testWidgets never completes).
-  late Map<String, dynamic> baseConfig;
-
-  setUpAll(() async {
-    final raw = await rootBundle.loadString(
-      'assets/config/genie-ai-config.json',
-    );
-    baseConfig = jsonDecode(raw) as Map<String, dynamic>;
   });
 
   tearDown(() {
@@ -55,37 +61,40 @@ void main() {
     I18nService().changeLanguage('en');
   });
 
-  /// Serves a MODIFIED copy of the real bundled configuration — the
-  /// shipped file's own shape, with the buttons replaced by the two
-  /// cards the test taps (an id-less one and an id'd one, neither
-  /// carrying an action, so a tap installs the scope without sending).
-  /// The mock intercepts the asset channel: every other key returns
-  /// null, which degrades a card icon to its neutral fallback instead
-  /// of failing the test.
-  Future<void> mockConfigButtons(
-    WidgetTester tester,
-    List<Map<String, dynamic>> buttons,
-  ) async {
-    final config = jsonDecode(jsonEncode(baseConfig)) as Map<String, dynamic>;
-    (config['features']['chat']['quickHelp']['buttons'] as List<dynamic>)
-        .clear();
-    (config['features']['chat']['quickHelp']['buttons'] as List<dynamic>)
-        .addAll(buttons);
-    // The asset bundle reads its keys over the RAW 'flutter/assets'
-    // messenger (a ByteData key in, a ByteData asset out) — a
-    // MethodChannel mock never sees it.
+  // The REAL bundled configuration (read OUTSIDE the widget test's fake
+  // async — an asset load awaited inside testWidgets never completes),
+  // with the buttons replaced by the cards the test taps. Encoded ONCE:
+  // the mock serves the same bytes for every request.
+  late Uint8List configBytes;
+
+  setUpAll(() async {
+    final raw = await rootBundle.loadString(
+      'assets/config/genie-ai-config.json',
+    );
+    final config = jsonDecode(raw) as Map<String, dynamic>;
+    final buttons =
+        config['features']['chat']['quickHelp']['buttons'] as List<dynamic>;
+    buttons
+      ..clear()
+      ..addAll(twoCards);
+    configBytes = Uint8List.fromList(utf8.encode(jsonEncode(config)));
+  });
+
+  /// Serves the prepared configuration over the asset bundle's RAW
+  /// messenger (a ByteData key in, a ByteData asset out — a
+  /// MethodChannel mock never sees it). Every other key returns null,
+  /// which degrades a card icon to its neutral fallback instead of
+  /// failing the test. The bundle CACHES asset reads (the setUpAll read
+  /// primed it), so the eviction is what makes the mock visible.
+  void mockConfigAsset(WidgetTester tester) {
     tester.binding.defaultBinaryMessenger.setMockMessageHandler(
       'flutter/assets',
       (ByteData? message) async {
         final key = utf8.decode(message!.buffer.asUint8List());
         if (key != 'assets/config/genie-ai-config.json') return null;
-        final bytes = utf8.encode(jsonEncode(config));
-        return ByteData.sublistView(Uint8List.fromList(bytes));
+        return ByteData.sublistView(configBytes);
       },
     );
-    // The bundle CACHES the real asset (the setUpAll read primed it):
-    // without the eviction the widget's load is served from the cache
-    // and the mock never sees it.
     rootBundle.evict('assets/config/genie-ai-config.json');
   }
 
@@ -108,7 +117,7 @@ void main() {
           animation: I18nService(),
           builder: (context, _) => MaterialApp(
             locale: I18nService().currentLocale,
-            supportedLocales: const [Locale('en'), Locale('es')],
+            supportedLocales: const [Locale('en')],
             localizationsDelegates: const [
               FallbackMaterialLocalizationsDelegate(),
               FallbackWidgetsLocalizationsDelegate(),
@@ -129,71 +138,37 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets(
-    'an id-less Quick Help card tags the saved conversation with its title',
-    (tester) async {
-      final mock = _ConversationMockClient(tree);
-      final chatKey = GlobalKey<ChatBotComponentState>();
-      await mockConfigButtons(tester, [
-        // No id, no action: the press installs the scope and asks for
-        // the question instead of sending one.
-        {
-          'title': {'en': 'Registry Card'},
-          'category': '2',
-          'serviceLabels': ['Births'],
-        },
-        {
-          'id': 'births-id',
-          'title': {'en': 'Births Card'},
-          'category': '2',
-          'serviceLabels': ['Births'],
-        },
-      ]);
-      await pumpChat(tester, mock, chatKey: chatKey);
-
-      await tester.tap(find.text('Registry Card'));
-      await tester.pumpAndSettle();
-      // The press installed the scope: the context bar carries the
-      // card's title (the same name the tag must carry).
-      expect(find.textContaining('Registry Card'), findsWidgets);
-
-      await chatKey.currentState!.saveConversation();
-      await tester.pumpAndSettle();
-
-      expect(mock.conversationBody, isNotNull);
-      expect(mock.conversationBody!['tags'], ['Registry Card']);
-      expect(mock.conversationBody!['categoryId'], '2');
-    },
-  );
-
-  testWidgets('an id-carrying card still tags the conversation with its id', (
+  testWidgets('a card press tags the saved conversation with its identity', (
     tester,
   ) async {
     final mock = _ConversationMockClient(tree);
     final chatKey = GlobalKey<ChatBotComponentState>();
-    await mockConfigButtons(tester, [
-      {
-        'title': {'en': 'Registry Card'},
-        'category': '2',
-        'serviceLabels': ['Births'],
-      },
-      {
-        'id': 'births-id',
-        'title': {'en': 'Births Card'},
-        'category': '2',
-        'serviceLabels': ['Births'],
-      },
-    ]);
+    mockConfigAsset(tester);
     await pumpChat(tester, mock, chatKey: chatKey);
 
-    await tester.tap(find.text('Births Card'));
+    // The id-less card: the tag is its TITLE — what the fix exists for.
+    await tester.tap(find.text('Registry Card'));
     await tester.pumpAndSettle();
-
+    // The press installed the scope: the context bar carries the card's
+    // title (the same name the tag must carry).
+    expect(find.textContaining('Registry Card'), findsWidgets);
     await chatKey.currentState!.saveConversation();
     await tester.pumpAndSettle();
 
-    expect(mock.conversationBody, isNotNull);
-    expect(mock.conversationBody!['tags'], ['births-id']);
+    // The id'd card: the tag is its ID. A press closes the Quick Help
+    // grid, so the second case runs on a fresh chat (startNewChat
+    // re-shows it once the saved conversation has no pending turn).
+    chatKey.currentState!.startNewChat();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Births Card'));
+    await tester.pumpAndSettle();
+    await chatKey.currentState!.saveConversation();
+    await tester.pumpAndSettle();
+
+    expect(mock.conversationTags, hasLength(2));
+    expect(mock.conversationTags.first, ['Registry Card']);
+    expect(mock.conversationTags.last, ['births-id']);
+    expect(mock.categoryIds.every((id) => id == '2'), isTrue);
   });
 }
 
@@ -201,7 +176,11 @@ class _ConversationMockClient extends http.BaseClient {
   _ConversationMockClient(this.tree);
 
   final List<dynamic> tree;
-  Map<String, dynamic>? conversationBody;
+
+  /// The `tags` of every conversation-create request, in arrival order
+  /// (each case saves its own conversation).
+  final List<List<dynamic>> conversationTags = [];
+  final List<dynamic> categoryIds = [];
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
@@ -210,14 +189,20 @@ class _ConversationMockClient extends http.BaseClient {
       return _json(tree, 200);
     }
     if (request.method == 'POST' && path.endsWith('/api/chat/conversations')) {
-      conversationBody =
-          jsonDecode((request as http.Request).body) as Map<String, dynamic>;
-      return _json(<String, dynamic>{'_key': 'conv-1', 'title': 't'}, 201);
+      _capture(request);
+      return _json(<String, dynamic>{'_key': 'conv-1'}, 201);
     }
     if (request.method == 'POST' && path.contains('/messages')) {
       return _json(<String, dynamic>{}, 201);
     }
     return _json(<String, dynamic>{}, 404);
+  }
+
+  void _capture(http.BaseRequest request) {
+    final body =
+        jsonDecode((request as http.Request).body) as Map<String, dynamic>;
+    conversationTags.add(body['tags'] as List<dynamic>? ?? <dynamic>[]);
+    categoryIds.add(body['categoryId']);
   }
 
   http.StreamedResponse _json(Object? body, int status) {

@@ -1035,7 +1035,7 @@ void main() {
       // next restore.
       expect(
         conversationScopeTags(
-          quickHelpButtonId: 'civil',
+          quickHelpIdentity: 'civil',
           sidebarServiceLabels: ['Births'],
         ),
         ['civil', 'Births'],
@@ -1852,7 +1852,7 @@ void main() {
           labels: ['Births'],
           count: 1,
           fromSelection: true,
-          activeButtonId: null,
+          activeIdentity: null,
         ),
         isTrue,
       );
@@ -1866,7 +1866,7 @@ void main() {
           labels: ['Marriages'],
           count: 1,
           fromSelection: true,
-          activeButtonId: null,
+          activeIdentity: null,
         ),
         isFalse,
       );
@@ -1882,7 +1882,7 @@ void main() {
           labels: ['Births'],
           count: 2,
           fromSelection: true,
-          activeButtonId: null,
+          activeIdentity: null,
         ),
         isFalse,
       );
@@ -1898,7 +1898,7 @@ void main() {
           labels: ['Births'],
           count: 1,
           fromSelection: false,
-          activeButtonId: null,
+          activeIdentity: null,
         ),
         isFalse,
       );
@@ -1912,7 +1912,7 @@ void main() {
           labels: ['Births'],
           count: 1,
           fromSelection: true,
-          activeButtonId: 'btn-1',
+          activeIdentity: 'btn-1',
         ),
         isFalse,
       );
@@ -1924,7 +1924,7 @@ void main() {
       expect(
         sidebarTitleFollowsLocale(
           fromSelection: true,
-          activeButtonId: null,
+          activeIdentity: null,
           serviceCount: 2,
           serviceLabelsEn: const ['Births', 'Marriages'],
         ),
@@ -1936,7 +1936,7 @@ void main() {
       expect(
         sidebarTitleFollowsLocale(
           fromSelection: false,
-          activeButtonId: null,
+          activeIdentity: null,
           serviceCount: 1,
           serviceLabelsEn: const ['Births'],
         ),
@@ -1948,7 +1948,7 @@ void main() {
       expect(
         sidebarTitleFollowsLocale(
           fromSelection: true,
-          activeButtonId: 'btn-1',
+          activeIdentity: 'btn-1',
           serviceCount: 1,
           serviceLabelsEn: const ['Births'],
         ),
@@ -1960,7 +1960,7 @@ void main() {
       expect(
         sidebarTitleFollowsLocale(
           fromSelection: true,
-          activeButtonId: null,
+          activeIdentity: null,
           serviceCount: 2,
           serviceLabelsEn: const ['Births'],
         ),
@@ -1972,7 +1972,7 @@ void main() {
       expect(
         sidebarTitleFollowsLocale(
           fromSelection: true,
-          activeButtonId: null,
+          activeIdentity: null,
           serviceCount: 0,
           serviceLabelsEn: const <String>[],
         ),

@@ -25,36 +25,38 @@
     path: "{{ deploy_dir }}/{{ data_dir }}/logs"
   register: _logs_dir
 
-- name: Detect root-era leftovers under the log directory
-  # Runs only when the directory exists. The task below CHOWNS only what
-  # this probe finds: ROOT-owned paths (what the docker daemon created
-  # for the removed log binds). Logs an operator copied back for
-  # forensics under their own uid leave the probe empty and are never
-  # touched. failed_when:false + rc: an untraversable root-owned 0700
-  # subdir makes find (running as the unprivileged ansible_user) exit 1 —
-  # treat that as "leftovers present" (the root chown below heals it).
+- name: Detect mis-owned leftovers under the log directory
+  # Runs only when the directory exists. The probe matches EVERY uid
+  # != 1000 — not just root: the manager play's earlier "Fix ownership to
+  # ansible_user" recursion re-labels the whole deploy_dir tree BEFORE
+  # this migration imports, so a uid-0-only probe would never fire where
+  # the tasks actually run (dead code by pre-emption — the exact trap the
+  # backup pair below already documents). failed_when:false + rc: an
+  # untraversable 0700 subdir makes find (running as the unprivileged
+  # ansible_user) exit 1 — treat that as "leftovers present" (the root
+  # chown below heals it).
   ansible.builtin.command: >-
-    find {{ deploy_dir }}/{{ data_dir }}/logs -uid 0 -print -quit
+    find {{ deploy_dir }}/{{ data_dir }}/logs ! -uid 1000 -print -quit
   register: _logs_root_owned
   when: _logs_dir.stat.exists
   failed_when: false
   changed_when: false
 
-- name: Hand the root-era log-directory leftovers to the backend uid (#1227)
-  # CHOWN, never delete: the root-era paths are exactly what the no-root
+- name: Hand the mis-owned log-directory leftovers to the backend uid (#1227)
+  # CHOWN, never delete: the mis-owned paths are exactly what the no-root
   # runtime gate forbids, but deleting them would also destroy
-  # operator-owned files nested inside a root-owned parent (a bare-docker
-  # root-era auto-created the whole data/logs/kong chain). The target is
-  # the backend uid 1000 CONVENTION, never the play identity — under the
+  # operator-owned files nested inside (a bare-docker root-era
+  # auto-created the whole data/logs/kong chain). The target is the
+  # backend uid 1000 CONVENTION, never the play identity — under the
   # swarm_workers play the identity IS root, and chowning to 0:0 would
   # leave the tree root-owned forever (a no-op reporting changed).
-  # become_user: root — the paths ARE root-owned. Best-effort: a batch
+  # become_user: root — the paths may be root-owned. Best-effort: a batch
   # flush mid-traversal on a large tree can make find exit 1 — whatever
   # survived is flagged by the runtime gate on the next run.
   become: true
   become_user: root
   ansible.builtin.command: >-
-    find {{ deploy_dir }}/{{ data_dir }}/logs -uid 0
+    find {{ deploy_dir }}/{{ data_dir }}/logs ! -uid 1000
     -exec chown -h -f 1000:1000 {} +
   when: _logs_dir.stat.exists and (_logs_root_owned.stdout | length > 0 or _logs_root_owned.rc != 0)
   register: _logs_heal

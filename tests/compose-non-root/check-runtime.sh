@@ -32,6 +32,14 @@ if [ $# -lt 1 ]; then
 fi
 PROJECT="$1"
 DATA_DIR="${2:-${DATA_DIR:-./data}}"
+# A symlinked data dir (ln -s /srv/genie-data data — common when /opt is
+# small) makes GNU find inspect only the symlink inode: a silently
+# vacuous sweep. Resolve to the real directory and say so.
+if [ -L "$DATA_DIR" ]; then
+  echo "NOTE: data dir $DATA_DIR is a symlink — resolving to $(readlink -f "$DATA_DIR")"
+  DATA_DIR="$(readlink -f "$DATA_DIR")"
+fi
+
 # Trailing-slash callers ("./data/", "./data//") would break the -path
 # prune pattern below (./data//huggingface never matches) and silently
 # sweep the excluded GPU cache — strip ALL trailing slashes (the root "/"
@@ -39,6 +47,11 @@ DATA_DIR="${2:-${DATA_DIR:-./data}}"
 while [ "$DATA_DIR" != "${DATA_DIR%/}" ] && [ "$DATA_DIR" != "/" ]; do
   DATA_DIR="${DATA_DIR%/}"
 done
+if [ -z "$DATA_DIR" ] || [ "$DATA_DIR" = "/" ]; then
+  echo "usage: DATA_DIR must be the stack's data directory — '/' would sweep"
+  echo "the whole host filesystem (and would never be the data dir)."
+  exit 4
+fi
 
 violations=0
 
@@ -113,12 +126,14 @@ while IFS= read -r container; do
   if [ "$self_dropping" -eq 1 ]; then
     # The server drops to its package user; the transient healthcheck execs
     # (pg_isready / redis-cli, sub-second, run as the container's root
-    # user) are filtered — and the filter is ANCHORED to the two exact
-    # healthcheck shapes (postgres: args start with pg_isready; redis:
-    # `sh -c test "$(redis-cli ping)" = PONG`), so an unrelated root
+    # user) are filtered — and the filter is ANCHORED to the exact
+    # sanctioned shapes (postgres: args start with pg_isready; redis: the
+    # `sh -c test ... redis-cli ping` wrapper AND its command-substitution
+    # child, whose args are bare `redis-cli ping`), so an unrelated root
     # process that merely MENTIONS the token is still a violation — and
     # the container IS still inspected, so a gosu regression keeping the
-    # SERVER at uid 0 remains a violation.
+    # SERVER at uid 0 remains a violation. The line prefix is '0' (docker
+    # top -o uid prints NUMERIC uids).
     top=$(docker top "$container" -o uid,pid,args 2>/dev/null)
     if [ $? -ne 0 ]; then
       echo "UNINSPECTABLE container $container (docker top failed) — treating as a violation:"
@@ -128,7 +143,7 @@ while IFS= read -r container; do
     offenders=$(
       echo "$top" |
         awk 'NR>1 && $1==0' |
-        grep -vE '^root[[:space:]]+[0-9]+[[:space:]]+(pg_isready([[:space:]]|$)|sh[[:space:]]+-c[[:space:]]+test[[:space:]]+.*redis-cli[[:space:]]+ping)' |
+        grep -vE '^0[[:space:]]+[0-9]+[[:space:]]+(pg_isready([[:space:]]|$)|sh[[:space:]]+-c[[:space:]]+test[[:space:]]+.*redis-cli[[:space:]]+ping|redis-cli[[:space:]]+ping([[:space:]]|$))' |
         awk '{print "  pid " $2 ": " substr($0, index($0, $3))}'
     )
     if [ -n "$offenders" ]; then

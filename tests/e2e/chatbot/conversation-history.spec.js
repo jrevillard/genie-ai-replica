@@ -8,7 +8,7 @@ const {
   saveChat,
   BASE_URL
 } = require('../helpers/chatbot');
-const { getSessionToken, getSessionTokenViaUI, request } = require('../helpers/auth');
+const { getSessionToken, getSessionTokenViaUI, request, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 
 const API_TIMEOUT_MS = 30000;
 
@@ -52,6 +52,11 @@ test.describe('Conversation history persistence', () => {
   // that failed between its save and its bookkeeping must not leak the
   // conversation it already persisted.
   test.afterAll(async ({ browser }) => {
+    // Cleanup chains a browser session mint plus a list and a delete sweep
+    // on a stalled stack — past the 60s project timeout the hook otherwise
+    // runs under.
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
+
     const token = await getSessionTokenViaUI({ browser }).catch((e) => {
       console.warn('cleanup: cleanup login failed — skipping conversation cleanup:', e.message);
       return null;

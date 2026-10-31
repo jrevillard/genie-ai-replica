@@ -7,6 +7,7 @@ const {
   waitForDocumentInTable,
   deleteAllTestDocuments,
 } = require('../helpers/documents');
+const { SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 
 const FIXTURES_DIR = path.join(__dirname, '..', 'fixtures');
 
@@ -20,6 +21,10 @@ test.describe('Document Upload', () => {
   });
 
   test.afterAll(async ({ browser }) => {
+    // deleteAllTestDocuments chains a browser session mint plus a list and
+    // a delete sweep on a stalled stack — past the 60s project timeout the
+    // hook otherwise runs under.
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
     await deleteAllTestDocuments('test-document', { browser });
   });
 

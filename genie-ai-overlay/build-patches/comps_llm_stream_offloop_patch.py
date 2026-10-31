@@ -181,10 +181,22 @@ def apply_patch(path: Path) -> str:
     # line while preserving its indent and line ending. A detected site whose
     # line no longer carries the expected opening shape means upstream
     # reformatted the call — the count falls below 2 and the guard fires.
+    # The import bindings are verified on BOTH paths: an already-patched
+    # file whose import block was refactored away dies at the first
+    # streaming query exactly like an unpatched one would.
+    bindings, last_import_line = _module_imports(original)
+    missing = [name for name in REQUIRED_IMPORTS if name not in bindings]
+    if missing:
+        raise SystemExit(
+            f"ASSERT-ON-PATCH GUARD FAILED: {path} has no module-level import binding "
+            f"{', '.join(missing)} — the off-loop helper dereferences it, and the image would die "
+            "with NameError at the first streaming query; re-derive the patch."
+        )
+
     ast_sites = _streaming_site_lines(original)
     sites = [lineno - 1 for lineno in ast_sites if _rewrap_line(lines[lineno - 1]) is not None]
     if not sites:
-        if original.count(WRAPPED_SITE) == 2 and helper_present(original):
+        if len(_wrapped_site_lines(original)) == 2 and helper_present(original):
             return "already-patched"
         raise SystemExit(
             f"ASSERT-ON-PATCH GUARD FAILED: {path} carries neither the expected unpatched streaming "
@@ -196,14 +208,6 @@ def apply_patch(path: Path) -> str:
             f"ASSERT-ON-PATCH GUARD FAILED: expected exactly 2 streaming call sites in {path}, "
             f"found {len(sites)} — wrapping a different number would leave a call on the loop or "
             "touch something the anchor was never meant to match; re-derive the patch."
-        )
-    bindings, last_import_line = _module_imports(original)
-    missing = [name for name in REQUIRED_IMPORTS if name not in bindings]
-    if missing:
-        raise SystemExit(
-            f"ASSERT-ON-PATCH GUARD FAILED: {path} has no module-level import binding "
-            f"{', '.join(missing)} — the off-loop helper dereferences it, and the image would die "
-            "with NameError at the first streaming query; re-derive the patch."
         )
 
     for i in sites:
@@ -227,20 +231,41 @@ def apply_patch(path: Path) -> str:
     # Re-read: the file on disk is the artefact that ships, so verify THAT —
     # exactly 2 wrapped sites, no live requests.post site left, one helper.
     post = _read(path)
-    if post.count(WRAPPED_SITE) != 2 or _streaming_site_lines(post) or not helper_present(post):
+    if len(_wrapped_site_lines(post)) != 2 or _streaming_site_lines(post) or not helper_present(post):
         raise SystemExit(f"ASSERT-ON-PATCH GUARD FAILED: post-write verification failed for {path}")
     return "patched"
 
 
-def helper_present(source: str) -> bool:
-    """Whether the file defines the helper — a live async def, AST-parsed.
+def _wrapped_site_lines(source: str) -> list[int]:
+    """1-based line numbers of the wrapped call sites — the AST mirror of
+    ``_streaming_site_lines``: prose cannot impersonate an assignment, in
+    either direction (a comment naming the wrapped call is not a site, and a
+    real wrapped site in a reshaped file still counts)."""
+    tree = ast.parse(source)
+    out = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        value = node.value.value if isinstance(node.value, ast.Await) else node.value
+        if (
+            isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+            and value.func.id == "_llm_post_offloop"
+            and any(isinstance(t, ast.Name) and t.id == "response" for t in node.targets)
+        ):
+            out.append(node.lineno)
+    return sorted(out)
 
-    A regex is line-shaped: a docstring line at column 0 shaped like the def
-    would match it, suppress the insertion, and satisfy this very check on
-    the patched output — prose is not a function.
+
+def helper_present(source: str) -> bool:
+    """Whether the file defines the helper — a live MODULE-LEVEL async def.
+
+    ast.walk would also accept a nested same-named def, but the call sites
+    resolve the name in module scope: only a statement in ``tree.body``
+    binds it there.
     """
     tree = ast.parse(source)
-    return any(isinstance(node, ast.AsyncFunctionDef) and node.name == "_llm_post_offloop" for node in ast.walk(tree))
+    return any(isinstance(node, ast.AsyncFunctionDef) and node.name == "_llm_post_offloop" for node in tree.body)
 
 
 def main() -> int:

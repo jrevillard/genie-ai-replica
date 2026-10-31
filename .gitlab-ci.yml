@@ -602,12 +602,14 @@ container_scanning:
 
 # The chatqna image consumes the language registry from the backend tree
 # (COPY in Dockerfile-chatqna_genie-ai), so a registry-only change must
-# rebuild it like a chatqna change. The same for build-patches/: the image
-# COPYs comps_llm_stream_offloop_patch.py out of it and runs it at build.
-# tracing.py is COPYed into the image too and carries the entrypoint-wired
-# access-log middleware, so it is a chatqna source like core/**.
+# rebuild it like a chatqna change. build-patches/ is named by FILE, not by
+# directory: the image runs exactly two scripts from there (the off-loop
+# patcher and install_site_startup.sh), and a directory glob would also
+# rebuild this image for dataprep-only patcher edits. tracing.py is COPYed
+# into the image too and carries the entrypoint-wired access-log
+# middleware, so it is a chatqna source like core/**.
 .chatqna_server_source_changes: &chatqna_server_source_changes
-  [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/tracing.py", "genie-ai-overlay/build-patches/**/*", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml" ]
+  [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/tracing.py", "genie-ai-overlay/build-patches/comps_llm_stream_offloop_patch.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml" ]
 
 .build_template: &build_template
   stage: build

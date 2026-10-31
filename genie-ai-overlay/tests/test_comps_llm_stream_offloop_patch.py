@@ -249,6 +249,53 @@ def test_guard_fails_on_commented_out_call_site(tmp_path):
         mod.apply_patch(p)
 
 
+def test_guard_fails_when_wrapped_sites_are_prose_not_code(tmp_path):
+    """Two textual occurrences of the wrapped call in comments are not two
+    wrapped SITES: with the real calls reshaped away, the already-patched
+    shortcut must not mistake prose for a patch."""
+    p = tmp_path / "orchestrator.py"
+    doc = '"""History:\n\nresponse = await _llm_post_offloop(\nresponse = await _llm_post_offloop(\n"""\n'
+    body = doc + FAKE_ORCHESTRATOR.replace("response = requests.post(", "response = upstream_post(")
+    p.write_text(body + mod.HELPER, encoding="utf-8")
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
+def test_guard_fails_when_already_patched_but_imports_are_gone(tmp_path):
+    """An already-patched file whose import block was refactored away must
+    abort like an unpatched one: the shortcut re-verifies the bindings."""
+    p = tmp_path / "orchestrator.py"
+    body = FAKE_ORCHESTRATOR.replace("response = requests.post(", "response = await _llm_post_offloop(")
+    body = body.replace("import asyncio\n", "").replace("import requests\n", "")
+    p.write_text(body + mod.HELPER, encoding="utf-8")
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
+def test_nested_same_named_def_does_not_count_as_helper(tmp_path):
+    """A nested `async def _llm_post_offloop` inside a function is not the
+    module-level helper the call sites resolve: the patch must still insert
+    the real one."""
+    p = tmp_path / "orchestrator.py"
+    nested = "def unrelated():\n\n    async def _llm_post_offloop(*args, **kwargs):\n        return None\n"
+    body = FAKE_ORCHESTRATOR.replace("import requests\n", "import requests\n\n" + nested, 1)
+    p.write_text(body, encoding="utf-8")
+    assert mod.apply_patch(p) == "patched"
+    tree = ast.parse(p.read_text(encoding="utf-8"))
+    top_level = [n for n in tree.body if isinstance(n, ast.AsyncFunctionDef) and n.name == "_llm_post_offloop"]
+    assert top_level, "the module-level helper must be inserted despite the nested same-named def"
+
+
+def test_guard_fails_when_both_sites_wrapped_but_helper_absent(tmp_path):
+    """The mirror half-state: both sites wrapped, no helper def anywhere.
+    The already-patched shortcut demands the helper too."""
+    p = tmp_path / "orchestrator.py"
+    body = FAKE_ORCHESTRATOR.replace("response = requests.post(", "response = await _llm_post_offloop(")
+    p.write_text(body, encoding="utf-8")
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
 def test_guard_fails_on_missing_file(tmp_path):
     with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
         mod.apply_patch(tmp_path / "nope.py")

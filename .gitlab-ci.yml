@@ -604,8 +604,10 @@ container_scanning:
 # (COPY in Dockerfile-chatqna_genie-ai), so a registry-only change must
 # rebuild it like a chatqna change. The same for build-patches/: the image
 # COPYs comps_llm_stream_offloop_patch.py out of it and runs it at build.
+# tracing.py is COPYed into the image too and carries the entrypoint-wired
+# access-log middleware, so it is a chatqna source like core/**.
 .chatqna_server_source_changes: &chatqna_server_source_changes
-  [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/**/*", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml" ]
+  [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/tracing.py", "genie-ai-overlay/build-patches/**/*", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml" ]
 
 .build_template: &build_template
   stage: build

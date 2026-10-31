@@ -53,7 +53,6 @@ one-site wrap would leave the other on the loop.
 """
 
 import ast
-import re
 import sys
 from pathlib import Path
 
@@ -68,12 +67,6 @@ WRAPPED_SITE = "response = await _llm_post_offloop("
 # Names the inserted helper dereferences at call time; both must be bound by
 # real module-level import statements (see _module_imports).
 REQUIRED_IMPORTS = ("asyncio", "requests")
-
-# Structural anchor, not a substring: a mention of the helper's name in a
-# comment must neither suppress the insertion nor pass the post-write check —
-# a substring check would ship an image that builds green and dies with
-# NameError on the first streaming query.
-HELPER_DEF = re.compile(r"^async def _llm_post_offloop\(", re.MULTILINE)
 
 HELPER = """
 
@@ -152,6 +145,30 @@ def _module_imports(source: str) -> tuple[set[str], int]:
     return bindings, last_import_end
 
 
+def _streaming_site_lines(source: str) -> list[int]:
+    """1-based line numbers of the streaming call sites, parsed not regexed.
+
+    A site is an assignment of ``requests.post(...)`` to the name
+    ``response`` — the vendored v1.5 shape. A line that merely LOOKS like
+    the call (string content, a comment) is not an assignment and never
+    counts; prose cannot inflate the site count past the exactly-2 guard.
+    """
+    tree = ast.parse(source)
+    out = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Assign)
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Attribute)
+            and node.value.func.attr == "post"
+            and isinstance(node.value.func.value, ast.Name)
+            and node.value.func.value.id == "requests"
+            and any(isinstance(t, ast.Name) and t.id == "response" for t in node.targets)
+        ):
+            out.append(node.lineno)
+    return sorted(out)
+
+
 def apply_patch(path: Path) -> str:
     """Patch, verify idempotently, or fail loudly. Returns a short outcome label."""
     if not path.is_file():
@@ -160,11 +177,12 @@ def apply_patch(path: Path) -> str:
     original = _read(path)
     lines = _split_source_lines(original)
 
-    # _rewrap_line is the single predicate for a call site: only a plain
-    # `response = requests.post(` line can be rewrapped, so the exactly-2
-    # count below covers plain sites and nothing else (a commented-out copy
-    # of the line simply is not a site).
-    sites = [i for i, line in enumerate(lines) if _rewrap_line(line) is not None]
+    # The AST is the site detector; _rewrap_line only rewraps the detected
+    # line while preserving its indent and line ending. A detected site whose
+    # line no longer carries the expected opening shape means upstream
+    # reformatted the call — the count falls below 2 and the guard fires.
+    ast_sites = _streaming_site_lines(original)
+    sites = [lineno - 1 for lineno in ast_sites if _rewrap_line(lines[lineno - 1]) is not None]
     if not sites:
         if original.count(WRAPPED_SITE) == 2 and helper_present(original):
             return "already-patched"
@@ -193,9 +211,11 @@ def apply_patch(path: Path) -> str:
 
     # Insert the helper after the module's last import statement, so both
     # names it needs are bound before any call site can reference it — and
-    # the function does not split the import block.
+    # the function does not split the import block. The helper's own line
+    # endings follow the file's, so a CRLF file stays uniformly CRLF.
     if not helper_present(original):
-        lines.insert(last_import_line, HELPER)
+        helper = HELPER.replace("\n", "\r\n") if "\r\n" in original else HELPER
+        lines.insert(last_import_line, helper)
 
     patched = "".join(lines)
 
@@ -204,17 +224,23 @@ def apply_patch(path: Path) -> str:
     compile(patched, str(path), "exec")
     _write(path, patched)
 
-    # Re-read: the file on disk is the artefact that ships, so verify THAT.
+    # Re-read: the file on disk is the artefact that ships, so verify THAT —
+    # exactly 2 wrapped sites, no live requests.post site left, one helper.
     post = _read(path)
-    unpatched_site_left = any(_rewrap_line(line) is not None for line in _split_source_lines(post))
-    if WRAPPED_SITE not in post or unpatched_site_left or not helper_present(post):
+    if post.count(WRAPPED_SITE) != 2 or _streaming_site_lines(post) or not helper_present(post):
         raise SystemExit(f"ASSERT-ON-PATCH GUARD FAILED: post-write verification failed for {path}")
     return "patched"
 
 
-def helper_present(body: str) -> bool:
-    """Whether the file defines the helper — structurally (see HELPER_DEF)."""
-    return bool(HELPER_DEF.search(body))
+def helper_present(source: str) -> bool:
+    """Whether the file defines the helper — a live async def, AST-parsed.
+
+    A regex is line-shaped: a docstring line at column 0 shaped like the def
+    would match it, suppress the insertion, and satisfy this very check on
+    the patched output — prose is not a function.
+    """
+    tree = ast.parse(source)
+    return any(isinstance(node, ast.AsyncFunctionDef) and node.name == "_llm_post_offloop" for node in ast.walk(tree))
 
 
 def main() -> int:

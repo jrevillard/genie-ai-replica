@@ -20,6 +20,7 @@ with the loop still pinned. A patcher that silently no-ops is worse than no
 patcher, because the image builds and the bug ships.
 """
 
+import ast
 import importlib.util
 import sys
 from pathlib import Path
@@ -30,10 +31,14 @@ PATCHER = Path(__file__).resolve().parents[1] / "build-patches" / "comps_llm_str
 
 
 def _load_module():
-    """Load the patcher by path — it lives outside the package tree."""
+    """Load the patcher by path — it lives outside the package tree.
+
+    Deliberately NOT registered in sys.modules (same hygiene as the contract
+    loader): the module is executed standalone and nothing in the suite
+    imports it by name, so a stale session copy must never shadow a re-exec.
+    """
     spec = importlib.util.spec_from_file_location("comps_llm_stream_offloop_patch", PATCHER)
     module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -101,11 +106,13 @@ def _undo(raw: bytes) -> bytes:
     """Byte-exact inverse of the patch: remove the helper, rewind the rewrap.
 
     Any other change — a re-indent, a dropped line, a rewritten ending —
-    breaks the equality with the original.
+    breaks the equality with the original. The helper's endings follow the
+    file's (the insertion adapts), so the LF template is converted for CRLF.
     """
-    return raw.replace(mod.HELPER.encode("utf-8"), b"").replace(
-        mod.WRAPPED_SITE.encode("utf-8"), b"response = requests.post("
-    )
+    helper = mod.HELPER.encode("utf-8")
+    if b"\r\n" in raw:
+        helper = mod.HELPER.replace("\n", "\r\n").encode("utf-8")
+    return raw.replace(helper, b"").replace(mod.WRAPPED_SITE.encode("utf-8"), b"response = requests.post(")
 
 
 def test_patches_both_on_loop_calls(unpatched_file):
@@ -217,14 +224,26 @@ def test_name_mention_alone_does_not_count_as_helper(tmp_path):
 
 
 def test_guard_fails_on_commented_out_call_site(tmp_path):
-    """A commented-out call line matches the substring anchor but cannot be
-    rewrapped: the guard must refuse with its diagnostic instead of crashing
-    with an unhandled TypeError."""
+    """A commented-out call site (upstream disabled one branch) leaves only
+    ONE live streaming site: the exactly-2 guard must refuse with its
+    diagnostic — the patch never wraps a different number of sites."""
     p = tmp_path / "orchestrator.py"
-    body = FAKE_ORCHESTRATOR.replace(
-        "        else:\n                    response = requests.post(",
-        "        else:\n                    # response = requests.post(  # disabled upstream",
+    live_call = (
+        "                    response = requests.post(\n"
+        "                        url=endpoint,\n"
+        "                        data=json.dumps(inputs),\n"
+        "                        headers={'Content-type': 'application/json'},\n"
+        "                        proxies={'http': None},\n"
+        "                        stream=True,\n"
+        "                        timeout=2000,\n"
+        "                    )\n"
     )
+    commented_call = "                    pass\n" + "".join(
+        "                    # " + line.strip() + "\n" for line in live_call.splitlines()
+    )
+    block = "        else:\n" + live_call
+    assert block in FAKE_ORCHESTRATOR
+    body = FAKE_ORCHESTRATOR.replace(block, "        else:\n" + commented_call)
     p.write_text(body, encoding="utf-8")
     with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
         mod.apply_patch(p)
@@ -242,6 +261,33 @@ def test_guard_fails_on_commented_out_requests_import(tmp_path):
     p = tmp_path / "orchestrator.py"
     commented = "# import requests  # moved elsewhere\n"
     p.write_text(FAKE_ORCHESTRATOR.replace("import requests\n", commented), encoding="utf-8")
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
+def test_docstring_mention_of_the_helper_does_not_count_as_helper(tmp_path):
+    """A docstring line shaped like the helper's def suppresses nothing: the
+    helper-detection must be AST-parsed like the import guard, or a string
+    literal at column 0 ships an image whose helper exists only in prose."""
+    p = tmp_path / "orchestrator.py"
+    doc = '"""Usage example:\n\nasync def _llm_post_offloop(*args, **kwargs):\n"""\n'
+    body = FAKE_ORCHESTRATOR.replace("import requests\n", "import requests\n" + doc, 1)
+    p.write_text(body, encoding="utf-8")
+    assert mod.apply_patch(p) == "patched"
+    tree = ast.parse(p.read_text(encoding="utf-8"))
+    assert any(isinstance(n, ast.AsyncFunctionDef) and n.name == "_llm_post_offloop" for n in ast.walk(tree)), (
+        "a live helper def must exist after patching, not just the docstring mention"
+    )
+
+
+def test_string_literal_call_shaped_lines_are_not_call_sites(tmp_path):
+    """Two `response = requests.post(` lines inside a docstring, with the real
+    calls renamed away, must abort the patch: string content is not a call
+    site, and wrapping prose would ship the loop still pinned."""
+    p = tmp_path / "orchestrator.py"
+    doc = '"""History:\n\nresponse = requests.post(\nresponse = requests.post(\n"""\n'
+    body = doc + FAKE_ORCHESTRATOR.replace("response = requests.post(", "response = upstream_post(")
+    p.write_text(body, encoding="utf-8")
     with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
         mod.apply_patch(p)
 
@@ -355,4 +401,7 @@ def test_patch_preserves_line_endings(tmp_path):
     raw = p.read_bytes()
     assert b"\r\n" in raw, "fixture should be CRLF"
     assert raw.count(mod.WRAPPED_SITE.encode("utf-8") + b"\r\n") == 2, "wrapped lines keep their CRLF terminator"
+    assert raw.count(b"\n") == raw.count(b"\r\n"), (
+        "no bare LF may appear in a CRLF file — the helper adapts its endings"
+    )
     assert _undo(raw) == original, "modulo the helper insertion and the two rewraps, byte-identical (CRLF intact)"

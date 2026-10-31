@@ -65,8 +65,14 @@ test.describe('Document Search', () => {
     // DsSelect renders the passed class on the native select itself
     const statusFilter = page.locator('select.filter-select');
     await expect(statusFilter).toBeVisible({ timeout: 5000 });
+    // The filter watcher fires loadDocuments immediately (no debounce) —
+    // wait for that request, then one render tick, before reading rows.
+    const filesResponse = page
+      .waitForResponse((r) => r.url().includes('/api/files'), { timeout: 5000 })
+      .catch(() => null);
     await statusFilter.selectOption('pending');
-    await page.waitForTimeout(500);
+    await filesResponse;
+    await page.waitForTimeout(250);
 
     const rows = await getDocumentTableRows(page);
     // Earlier tests in this suite uploaded pending test documents, so a

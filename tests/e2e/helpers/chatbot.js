@@ -191,11 +191,13 @@ async function saveChat(page, title) {
 }
 
 /**
- * Wait until the last bot bubble carries the given text — the signal that
- * a turn is COMPLETE. The bubble mounts as a streaming placeholder the
- * moment the send handler runs, and a mid-stream turn carries no queryId,
- * so the save path would silently drop it: waiting for the bubble alone
- * is not waiting for the turn.
+ * Wait until the last bot bubble carries the given text. The bubble mounts
+ * as a streaming placeholder the moment the send handler runs, so bubble
+ * presence alone says nothing — this waits for CONTENT. Under the specs'
+ * SSE mock (chunk + done delivered in one body) content-on-screen means
+ * the turn is complete and storable; against a real streamed answer it
+ * would not, so a spec driving a live stream needs its own completion
+ * signal.
  */
 async function waitForBotMessage(page, text, { timeout = 30000 } = {}) {
   await expect(page.locator('.chat-message.bot .message-bubble').last()).toContainText(text, {

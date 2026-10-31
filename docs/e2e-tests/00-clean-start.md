@@ -293,7 +293,9 @@ role lookup and the assignment):
 # From the repository root. Needs KEYCLOAK_ADMIN_PASSWORD in the
 # environment (set -a && source .env && set +a) and BASE_URL pointing at
 # the stack's edge (defaults to https://localhost; the k8s dev cluster is
-# https://genieai.local:4443).
+# https://genieai.local:4443). The helper scripts resolve @playwright/test
+# from the root node_modules — run `npm install` at the repository root
+# first (see Prerequisites).
 node -e "
 const { getAdminToken } = require('./tests/e2e/helpers/auth');
 const { createUser } = require('./tests/e2e/helpers/keycloak-admin');

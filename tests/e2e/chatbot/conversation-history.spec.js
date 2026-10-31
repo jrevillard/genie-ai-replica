@@ -61,7 +61,12 @@ test.describe('Conversation history persistence', () => {
   test.afterAll(async ({ browser }) => {
     if (createdConversationIds.length === 0) return;
 
-    const token = await getSessionTokenViaUI({ browser });
+    const token = await getSessionTokenViaUI({ browser }).catch((e) => {
+      console.warn('cleanup: cleanup login failed — skipping conversation cleanup:', e.message);
+      return null;
+    });
+    if (!token) return;
+
     let failed = 0;
     for (const convId of createdConversationIds) {
       try {
@@ -159,9 +164,8 @@ test.describe('Conversation history persistence', () => {
     await sendMessage(page, userText);
     await waitForBotMessage(page, MOCKED_ANSWER);
 
-    // Capture message order before save
+    // Capture messages before save
     const messagesBefore = await getMessages(page);
-    const sendersBefore = messagesBefore.map((m) => m.sender);
 
     // Save the conversation
     await saveChat(page, chatTitle);

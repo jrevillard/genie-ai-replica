@@ -141,10 +141,18 @@ async function getDocumentTableRows(page) {
  *        browser for the cleanup login
  */
 async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}) {
-  const token = await getSessionTokenViaUI({ user: TEST_ADMIN_USER, browser });
+  let token;
+  try {
+    token = await getSessionTokenViaUI({ user: TEST_ADMIN_USER, browser });
+  } catch (e) {
+    console.warn('cleanup: cleanup login failed — skipping document cleanup:', e.message);
+    return;
+  }
 
-  // The list endpoint validates limit <= 50 — a bigger page is a 400.
-  const listRes = await request('GET', '/api/files?limit=50', {
+  // The search param narrows the list to the prefix itself, so one page
+  // (the endpoint validates limit <= 50) covers the test documents however
+  // many unrelated files the stack holds.
+  const listRes = await request('GET', `/api/files?limit=50&search=${encodeURIComponent(prefix)}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (listRes.status !== 200) {

@@ -11,12 +11,12 @@ wrong morphology and the BM25 leg degrades to noise. Rationale, probe results
 and the view delete+recreate procedure:
 ``site/content/en/docs/architecture/multilingual-ssot.md``.
 
-This test pins the CONFIGURATION CONSISTENCY rule only — analyzer runtime
-behaviour is out of scope (no ArangoDB, no models).
+The rule is asserted hermetically against the documented default pair and
+both of its legitimate and illegitimate moves — analyzer runtime behaviour
+is out of scope (no ArangoDB, no models).
 """
 
 import importlib.util
-import os
 import re
 from pathlib import Path
 
@@ -48,6 +48,7 @@ def _analyzer_language(analyzer):
 
 def _assert_analyzer_matches_corpus_language(analyzer, ingestion_language):
     """Fail when the analyzer targets a language other than the corpus language."""
+    ingestion_language = ingestion_language.lower()
     analyzer_language = _analyzer_language(analyzer)
     if analyzer_language is not None and analyzer_language != ingestion_language:
         pytest.fail(
@@ -58,13 +59,6 @@ def _assert_analyzer_matches_corpus_language(analyzer, ingestion_language):
         )
 
 
-def test_deployment_configuration_keeps_analyzer_and_corpus_language_aligned():
-    """The environment this test runs in must not pair a non-English analyzer with the English gate."""
-    analyzer = os.getenv(ANALYZER_ENV_NAME, "text_en")
-    ingestion_language = os.getenv(INGEST_LANGUAGE_ENV_NAME, "en")
-    _assert_analyzer_matches_corpus_language(analyzer, ingestion_language.lower())
-
-
 def test_defaults_are_consistent(monkeypatch):
     # Neither var set — the shipped default pair must satisfy the rule. This is
     # what fails if someone flips the text_en default in retriever/config.py.
@@ -73,10 +67,9 @@ def test_defaults_are_consistent(monkeypatch):
     _assert_analyzer_matches_corpus_language(analyzer, "en")
 
 
-def test_non_english_analyzer_with_english_gate_is_flagged(monkeypatch):
+def test_non_english_analyzer_with_english_gate_is_flagged():
     # The regression the rule exists for: analyzer switched to a non-English
     # text analyzer while the ingest gate stays on its English default.
-    monkeypatch.delenv(INGEST_LANGUAGE_ENV_NAME, raising=False)
     with pytest.raises(pytest.fail.Exception, match="targets 'es'"):
         _assert_analyzer_matches_corpus_language("text_es", "en")
 

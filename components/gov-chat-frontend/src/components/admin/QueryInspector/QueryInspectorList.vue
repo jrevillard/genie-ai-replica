@@ -132,11 +132,13 @@ import DsInput from '../../ds/Input.vue';
 import DsFormGroup from '../../ds/FormGroup.vue';
 import DsPill from '../../ds/Pill.vue';
 import DsStateDisplay from '../../ds/StateDisplay.vue';
+import translateMixin from '../../../mixins/translateMixin';
 import { isAbstained as queryIsAbstained, scopeDisplayText } from './query-scope';
 
 export default {
   name: 'QueryInspectorList',
   components: { DsButton, DsInput, DsFormGroup, DsPill, DsStateDisplay },
+  mixins: [translateMixin],
   props: {
     queries: { type: Array, default: () => [] },
     pagination: {
@@ -176,9 +178,8 @@ export default {
     isAbstained(query) {
       return queryIsAbstained(query);
     },
-    translate(key, fallback, named) {
-      return this.$parent?.translate?.(key, fallback, named) ?? fallback;
-    },
+    // translate comes from translateMixin (round 22) — the $parent delegation
+    // rendered the English fallback whenever $parent lacked translate.
     resetFilters() {
       this.filters = { searchText: '', minConfidence: '', maxConfidence: '', startDate: '', endDate: '' };
       this.$emit('search', this.filters);

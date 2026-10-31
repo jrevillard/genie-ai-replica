@@ -160,6 +160,21 @@ describe('headTestService — the Testing Lab client', () => {
       await jest.advanceTimersByTimeAsync(2000); // poll 3: done
       await expect(p).resolves.toEqual({ note: 'recovered' });
     });
+
+    // Round 21 (#80916): the SERVICE hop of the ADVISOR_TIMEOUT chain — the
+    // code is what the Lab's error arm keys off, and until now nothing owned
+    // it (dropping the e.code assignment left the whole suite green).
+    it('a job still running past the 15-minute deadline throws ADVISOR_TIMEOUT', async () => {
+      jest.useFakeTimers();
+      httpService.post.mockResolvedValueOnce(ok({ job_key: 'j1' }));
+      httpService.get.mockResolvedValue(ok({ status: 'running' }));
+      const p = headTestService.recommendTags('r1');
+      const assertion = expect(p).rejects.toMatchObject({ code: 'ADVISOR_TIMEOUT' });
+      await jest.advanceTimersByTimeAsync(2000); // poll 1: running
+      jest.setSystemTime(jest.now() + 15 * 60 * 1000 + 2000); // past the deadline
+      await jest.advanceTimersByTimeAsync(2000);
+      await assertion;
+    });
   });
 });
 

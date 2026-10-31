@@ -547,8 +547,8 @@ const actions = {
       const repo = await crawlerToOkfService.convertCrawlToOkf(payload);
       if (repo && repo.repo_id) {
         commit('upsertRepo', repo);
-        // Full 5-lane fallback (round 20, #79901) — see createRepo.
-        const byStage = this.state?.okf?.reposByStage || laneFor();
+        // No fallback (#80913) — see createRepo: the 5-lane state always exists.
+        const byStage = this.state.okf.reposByStage;
         const draftLane = Array.isArray(byStage.draft) ? byStage.draft.slice() : [];
         if (!draftLane.includes(repo.repo_id)) draftLane.push(repo.repo_id);
         commit('setReposByStage', { ...byStage, draft: draftLane });
@@ -635,12 +635,10 @@ const actions = {
     try {
       const repo = await okfRepoOps.createRepo({ name, domain });
       commit('upsertRepo', repo);
-      // Full 5-lane fallback (round 20, #79901): a first create before any
-      // fetchRepos (fresh session deep-linking into the studio) used to
-      // commit a 3-lane shape, leaving `ingested`/`retracted` undefined —
-      // every consumer iterating those lanes dropped cards until the next
-      // full fetch repaired the shape. laneFor() is the one true shape.
-      const byStage = this.state?.okf?.reposByStage || laneFor();
+      // Round 21 audit (#80913): no fallback — initialState() declares the
+      // full 5-lane reposByStage, so it is never nullish here; the round-20
+      // `|| laneFor()` arm (and the 3-lane literal before it) was dead code.
+      const byStage = this.state.okf.reposByStage;
       const draftLane = Array.isArray(byStage.draft) ? byStage.draft.slice() : [];
       if (!draftLane.includes(repo.repo_id)) draftLane.push(repo.repo_id);
       commit('setReposByStage', { ...byStage, draft: draftLane });

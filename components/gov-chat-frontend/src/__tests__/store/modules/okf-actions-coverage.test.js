@@ -248,6 +248,21 @@ describe('repo/lifecycle/version/validation pass-throughs', () => {
     expect(await store.dispatch('okf/headRecommend', { repoId: 'r1' })).toMatchObject({ ok: true });
     expect(headTestService.recommendTags).toHaveBeenCalledWith('r1', expect.anything());
   });
+
+  // Round 21 (#80916): the STORE hop of the ADVISOR_TIMEOUT chain — the
+  // envelope must carry the service's code through, or the Lab's translated
+  // arm is keyed on a literal nothing produced. Middle hop of three (service
+  // throws it, this forwards it, the dialog renders it).
+  it('headRecommend forwards the service error CODE on the envelope (ADVISOR_TIMEOUT chain)', async () => {
+    const timeout = new Error('still running');
+    timeout.code = 'ADVISOR_TIMEOUT';
+    headTestService.recommendTags = jest.fn().mockRejectedValueOnce(timeout);
+    const store = buildStore();
+    expect(await store.dispatch('okf/headRecommend', { repoId: 'r1' })).toMatchObject({
+      ok: false,
+      code: 'ADVISOR_TIMEOUT'
+    });
+  });
 });
 
 describe('draft lifecycle (Story 10.5)', () => {
@@ -994,23 +1009,6 @@ describe('failure envelopes sweep', () => {
       ok: false,
       code: 'CREATE_FAILED',
       repo: { repo_id: 'r-half' }
-    });
-  });
-
-  // Round 20 (#79901): the first create in a FRESH store (no fetchRepos yet)
-  // used to commit a 3-lane reposByStage — every consumer iterating the
-  // Ingested/Retracted lanes then dropped cards until a full fetch repaired
-  // the shape. The fallback must be the full 5-lane laneFor() shape.
-  it('createRepo: a first create in a fresh store lands the FULL 5-lane shape (#79901)', async () => {
-    okfRepoOps.createRepo.mockResolvedValueOnce({ repo_id: 'r-new', name: 'n', lifecycle_state: 'draft' });
-    const store = buildStore();
-    expect(await store.dispatch('okf/createRepo', { name: 'n' })).toMatchObject({ ok: true });
-    expect(store.state.okf.reposByStage).toEqual({
-      draft: ['r-new'],
-      in_review: [],
-      published: [],
-      ingested: [],
-      retracted: []
     });
   });
 

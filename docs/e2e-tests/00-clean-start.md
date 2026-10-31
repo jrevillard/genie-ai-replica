@@ -280,6 +280,110 @@ print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
 - Username: `testuser`
 - Password: `TestPass123!`
 
+#### 0.8b Create Test Admin (documents suites prerequisite)
+
+The documents suites (`tests/e2e/documents/`) drive the upload/delete
+surfaces, which the document-repository restricts to the `admin` realm role
+(`rolePolicy.ADMIN_ONLY`) — a plain user's upload is 403 by design. Create a
+second test user carrying that role, via the same helper the specs use
+(`tests/e2e/helpers/keycloak-admin.js` — handles the 201/409 tolerance, the
+role lookup and the assignment):
+
+```bash
+# From the repository root. Needs KEYCLOAK_ADMIN_PASSWORD in the
+# environment (set -a && source .env && set +a) and BASE_URL pointing at
+# the stack's edge (defaults to https://localhost; the k8s dev cluster is
+# https://genieai.local:4443). The helper scripts resolve @playwright/test
+# from the root node_modules — run `npm install` at the repository root
+# first (see Prerequisites).
+node -e "
+const { getAdminToken } = require('./tests/e2e/helpers/auth');
+const { createUser } = require('./tests/e2e/helpers/keycloak-admin');
+(async () => {
+  const token = await getAdminToken();
+  await createUser(token, 'genie', {
+    username: 'testadmin',
+    email: 'testadmin@genie.local',
+    firstName: 'Test',
+    lastName: 'Admin',
+    password: 'TestAdmin123!',
+    realmRoles: ['admin'],
+  });
+  console.log('testadmin ready');
+})().catch((e) => { console.error(e.message); process.exit(1); });
+"
+# Expected: testadmin ready (the second run is a no-op — 409 tolerated)
+```
+
+**Test admin credentials** (documents suites only):
+- Username: `testadmin`
+- Password: `TestAdmin123!`
+
+### 0.9 Seed the Knowledge Hierarchy (Quick Help Prerequisite)
+
+A fresh stack has **empty** `serviceCategories`/`services` collections. The
+Quick Help specs (e.g. `tests/e2e/chat-conversation.spec.js` — *"the header
+title reflects the QuickHelp option that opened the chat"*) fail on an empty
+hierarchy: a Quick Help option that names a category is silently refused
+when the live hierarchy cannot resolve it, and the conversation header keeps
+its fallback `Just Chat`.
+
+Seed both collections from the committed export. (The canonical importer is
+`components/gov-chat-backend/scripts/new-schema-scripts/import-service-categories.js`,
+which adds validation and an interactive confirm — use it when you can
+reach ArangoDB directly from the host. The pipeline below runs **inside**
+the backend container, so it also works where ArangoDB has no routed host
+port, e.g. the k8s dev cluster.)
+
+```bash
+EXPORT=components/gov-chat-backend/scripts/new-schema-scripts/exports/serviceCategoriesAndServices_export_2025-06-18T11-38-02.json
+BCK=$(docker ps --filter name=backend --format '{{.ID}}' | head -1)
+
+# The backend image ships node, not curl — push the export in and seed
+# from inside the container, with the container's own ARANGO_* env.
+docker cp "$EXPORT" "$BCK:/tmp/hierarchy-seed.json"
+docker exec $BCK node -e "
+const fs = require('fs');
+const auth = 'Basic ' + Buffer.from('root:' + process.env.ARANGO_PASSWORD).toString('base64');
+const base = (process.env.ARANGO_URL || 'http://arango-vector-db:8529') + '/_db/' + process.env.ARANGO_DB + '/_api';
+async function api(path, method, body) {
+  const res = await fetch(base + path, { method, headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const data = await res.json();
+  if (!res.ok || data.error) {
+    throw new Error(path + ' -> HTTP ' + res.status + ': ' + JSON.stringify(data).slice(0, 200));
+  }
+  return data;
+}
+(async () => {
+  const data = JSON.parse(fs.readFileSync('/tmp/hierarchy-seed.json', 'utf8')).data;
+  for (const coll of ['serviceCategories', 'services']) {
+    const c = await api('/collection/' + coll + '/count');
+    if ((c.count || 0) >= data[coll].length) { console.log(coll, 'already complete (' + c.count + ' docs), skipping'); continue; }
+    if ((c.count || 0) > 0) console.log(coll, 'partial (' + c.count + '/' + data[coll].length + '), re-seeding');
+    // A partial collection re-inserts every doc: the already-present _keys
+    // come back as per-document conflicts, the missing ones insert — the
+    // re-run converges.
+    const created = await api('/document/' + coll + '?type=array', 'POST', data[coll]);
+    const conflicts = Array.isArray(created) ? created.filter((d) => d.error).length : 0;
+    console.log(coll, 'seeded:', Array.isArray(created) ? created.length - conflicts : JSON.stringify(created), conflicts ? '(' + conflicts + ' already present)' : '');
+  }
+})().catch((e) => { console.error('SEED FAIL:', e.message); process.exit(1); });
+"
+```
+
+The script prints what it seeded (`serviceCategories seeded: 13`,
+`services seeded: 53`) or `already complete` — that output is the
+verification, and a partially-seeded collection (a crash mid-insert)
+converges on the next run instead of being skipped as done.
+
+**On the k8s dev cluster** the same script runs inside the backend pod —
+the differences are the file transfer (`kubectl -n genieai cp` or
+`kubectl -n genieai exec -i ... -- sh -c 'cat > /tmp/hierarchy-seed.json'`
+instead of `docker cp`), `kubectl -n genieai exec deploy/<backend-deployment> -- node -e`
+instead of `docker exec`, and the env the pod already carries
+(`ARANGO_URL=http://arangodb-single...:8529`, `ARANGO_DB` as configured by
+the chart).
+
 ---
 
 ## Get Admin Token

@@ -5485,7 +5485,7 @@ describe('Quick Help category reference', () => {
 // no service, no selection), so the tap did nothing at all: no caption, no
 // toast, no state change. A card that LOOKS alive and swallows the press.
 //
-// The mobile twin (#1192) fixed the same shape with quickHelpCardBroken —
+// The mobile twin fixed the same shape with quickHelpCardBroken —
 // the DISPLAY twin of the press gate: every press refusal has a face. The web
 // renders the card as the broken card it is, with the caption naming the
 // missing title.

@@ -276,7 +276,7 @@ test.describe('Quick Help scope states', () => {
 
     const broken = page.locator('.quick-help-item.config-error');
     const brokenCount = await broken.count();
-    expect(brokenCount, 'the spec serves two broken cards').toBeGreaterThan(0);
+    expect(brokenCount, 'the spec serves three broken cards').toBeGreaterThan(0);
 
     // The broken card says so: the icon and the caption naming the problem.
     await expect(broken.first().locator('.config-error-icon')).toBeVisible();

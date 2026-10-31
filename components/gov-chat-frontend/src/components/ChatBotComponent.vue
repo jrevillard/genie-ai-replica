@@ -1443,8 +1443,7 @@ export default {
     // 'resolvedTitle'; the web's mapped button carries the resolved
     // title in `service`.
     quickHelpCardTitle(button) {
-      const title = (button && button.service) || '';
-      return title ? title : null;
+      return (button && button.service) || null;
     },
 
     // The card's DISPLAY verdict — the twin of the press gate. The

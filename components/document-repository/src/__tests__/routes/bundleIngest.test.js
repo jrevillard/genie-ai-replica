@@ -386,6 +386,33 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
     ingestSpy.mockRestore();
   });
 
+  it('logs a duplicate kick (dataprep 409) at info, not as a failed ingestion', async () => {
+    // The bundle is already being ingested by the running task — that is not
+    // a failure, and the container log must not carry the same false ERROR
+    // the ingestion log no longer carries.
+    const { logger } = require('../../../shared-lib');
+    logger.info.mockClear();
+    logger.error.mockClear();
+
+    fileService.uploadBundle.mockResolvedValue({
+      file_id: 'duplicate-file-id',
+      file_name: 'concept.md',
+      storage_path: '/uploads/duplicate-file-id.md'
+    });
+    const duplicate = new Error('Request failed with status code 409');
+    duplicate.ingestAlreadyRunning = true;
+    const ingestSpy = jest.spyOn(fileController, '_ingestFileById').mockRejectedValue(duplicate);
+
+    const res = await request(app).post('/api/files/ingest-bundle').send(validBody);
+
+    expect(res.status).toBe(202);
+    await new Promise((resolve) => setImmediate(resolve));
+    ingestSpy.mockRestore();
+
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('duplicate-file-id'));
+  });
+
   it('is_bundle=true stores the ZIP as a file doc at 201, NO dataprep kick (Story 2.9.5-amend)', async () => {
     fileService.uploadBundle.mockResolvedValue({
       file_id: 'bundle-zip-id',

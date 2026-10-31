@@ -719,6 +719,8 @@ router.patch('/:fileId', authorizeRole(DOCUMENT_LIFECYCLE), fileController.updat
  *         description: Forbidden - Admin role required
  *       '404':
  *         description: File not found
+ *       '409':
+ *         description: Conflict - an ingest for this file is already running
  */
 // okf-service allowed (Story 2.9.6/2.9.4): the OKF orchestrator's worker owns
 // draining per-concept Pending files — it authenticates as the okf-server
@@ -793,6 +795,8 @@ router.post('/:fileId/retract', authorizeRole(DOCUMENT_LIFECYCLE), fileControlle
  *                     properties:
  *                       fileId: { type: string }
  *                       success: { type: boolean }
+ *                       duplicate: { type: boolean, description: 'true when an ingest for this file was already running — the file IS being ingested by that task; success=true means queued, not queued by this request' }
+ *                       message: { type: string, description: 'duplicate entries carry the conflict reason instead of error' }
  *                       error: { type: string, description: 'present only when success=false' }
  *       '400':
  *         description: Validation error (e.g. fileIds missing, empty, or &gt; 50)

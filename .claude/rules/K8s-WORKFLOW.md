@@ -265,7 +265,22 @@ kubectl -n genieai exec deploy/genieai-genieai-umbrella-backend -- env | grep -E
 
 # Port-forward the Envoy data-plane Service for browser validation
 # (nginx is gone from the data path; the laptop browses https://genieai.local:4443)
-kubectl -n genieai port-forward svc/envoy-genieai-genieai-<hash> 4443:443
+kubectl -n genieai port-forward svc/envoy-genieai-genieai-<hash> 4443:4443
+
+# FOR AN E2E SUITE RUN, do not use the port-forward: every forwarded
+# connection negotiates a SPDY stream THROUGH THE API SERVER, and under
+# the suite's own connection churn that negotiation times out mid-run —
+# the listener stays alive but the tunnel is dead, and every later
+# goto against networkidle fails in a cascade that looks like a test
+# defect. Relay the nodePort instead (data plane, no apiserver):
+#   relay:  python3 -c '<asyncio pump> 127.0.0.1:4443 ->
+#           $(minikube ip):<nodePort 31736>'   (see /tmp/relay-4443.py)
+#   run:    BASE_URL=https://genieai.local:4443 npx playwright test tests/e2e/
+# The origin MUST stay https://genieai.local:4443 — the realm's
+# redirectUris and the frontend's baked issuer are pinned to it; any
+# other port breaks the OIDC redirect, not the tests. Tests that need
+# a different hostname resolution take HOST_RESOLVER_RULES (a chromium
+# --host-resolver-rules knob on playwright.config.js).
 
 # Arango port-forward + cluster-secret password (NOT the repo .env value)
 kubectl -n genieai port-forward svc/arangodb-single-single 8529:8529

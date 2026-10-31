@@ -499,6 +499,24 @@ void main() {
       },
     );
 
+    test(
+      'the display index: a later duplicate claims the key the empty first skipped',
+      () {
+        // The display indexes SKIP an entry with no display name, so a
+        // later duplicate CAN claim the key the first one left — the
+        // mirror image of the EN-label index's first-claim rule above.
+        // The wire stays positional; the display shows whatever name the
+        // tree can produce for the key.
+        final duplicated = <dynamic>[
+          {'catKey': '2', 'name': ''},
+          {'catKey': '2', 'name': 'Segundo'},
+        ];
+        final resolver = QuickHelpScopeResolver(duplicated);
+
+        expect(resolver.categoryDisplayName('2'), 'Segundo');
+      },
+    );
+
     test('a LEGACY category.<id> tag restores the category, not a refusal', () {
       // Conversations saved before the redesign carry 'category.<id>' —
       // the old restore's spelling for a category-only scope. The web

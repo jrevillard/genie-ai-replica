@@ -537,8 +537,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // and the localized fetch may name it where the ENGLISH tree could
     // not. The SOURCE is recorded for every scope that DECLARES one —
     // an unkeyable category still owns the bar until another scope
-    // replaces it — while 'general' (the no-scope placeholder) records
-    // nothing: it names no category whose title could move.
+    // replaces it, and a BUTTON scope always records its source (the
+    // moved guard must see the button appear or vanish), whatever its
+    // effective category. A BUTTON-LESS restore of 'general' (the
+    // no-scope placeholder) records nothing: it names no category whose
+    // title could move.
     final String? restoredKey =
         scope.quickHelpButtonId == null && scope.categoryNameEn != null
         ? _scopeResolver?.categoryIdFor(scope.categoryId)

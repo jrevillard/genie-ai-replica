@@ -57,7 +57,8 @@ def test_the_imported_orchestrator_is_the_patched_copy(comps):
     assert source.count(patcher.WRAPPED_SITE) == 2, (
         "expected exactly 2 wrapped streaming call sites in the imported orchestrator"
     )
-    assert patcher.UNPATCHED_SITE not in source, (
+    line_shaped_unpatched = any(line.lstrip(" \t").startswith(patcher.UNPATCHED_SITE) for line in source.split("\n"))
+    assert not line_shaped_unpatched, (
         "a streaming call site is still calling requests.post directly in the imported module — "
         "the event loop would stay pinned for the duration of the LLM first-headers wait"
     )

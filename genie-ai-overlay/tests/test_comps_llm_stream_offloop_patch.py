@@ -246,6 +246,19 @@ def test_guard_fails_on_commented_out_requests_import(tmp_path):
         mod.apply_patch(p)
 
 
+def test_guard_fails_on_aliased_imports(tmp_path):
+    """`import asyncio as aio` binds `aio`, not `asyncio` — the helper
+    dereferences the module names themselves, so an aliased import must not
+    satisfy the guard."""
+    p = tmp_path / "orchestrator.py"
+    body = FAKE_ORCHESTRATOR.replace("import asyncio\n", "import asyncio as aio\n").replace(
+        "import requests\n", "import requests as req\n"
+    )
+    p.write_text(body, encoding="utf-8")
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
 def test_guard_fails_on_import_inside_a_string_literal(tmp_path):
     """A column-0 `import asyncio` inside a module docstring is not a binding
     and cannot anchor the helper insertion: a line-shaped regex would match
@@ -267,6 +280,52 @@ def test_guard_fails_when_helper_present_but_no_wrapped_sites(tmp_path):
     p.write_text(body + mod.HELPER, encoding="utf-8")
     with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
         mod.apply_patch(p)
+
+
+def test_guard_fails_on_half_patched_file(tmp_path):
+    """One wrapped site + one site in a renamed shape + the helper is a
+    half-patch: the already-patched shortcut demands BOTH sites wrapped,
+    mirroring the exactly-2 rule on the unpatched path."""
+    p = tmp_path / "orchestrator.py"
+    body = FAKE_ORCHESTRATOR.replace(
+        "        else:\n                    response = requests.post(",
+        "        else:\n                    response = upstream_post(",
+    )
+    body = body.replace("response = requests.post(", "response = await _llm_post_offloop(", 1)
+    p.write_text(body + mod.HELPER, encoding="utf-8")
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
+def test_a_mention_of_the_call_in_a_comment_does_not_fail_the_patch(tmp_path):
+    """The post-write verification is line-shaped like site detection: prose
+    merely CONTAINING the call text (a comment, a docstring) must not fail a
+    correct patch — only a real unpatched call site may."""
+    p = tmp_path / "orchestrator.py"
+    mention = "# the old code did response = requests.post( here\n"
+    body = FAKE_ORCHESTRATOR.replace("import requests\n", "import requests\n" + mention, 1)
+    p.write_text(body, encoding="utf-8")
+    assert mod.apply_patch(p) == "patched"
+    text = p.read_text(encoding="utf-8")
+    assert text.count(mod.WRAPPED_SITE) == 2
+    assert mention in text, "the comment must survive untouched"
+
+
+def test_helper_lands_after_imports_despite_form_feed(tmp_path):
+    """Line-index math splits on \\n only: splitlines() also breaks on form
+    feeds and Unicode line separators, which ast line numbers do not count,
+    and a file carrying one before the imports would shift the insertion.
+    The patched form-feed file must equal the patched plain file modulo the
+    form-feed line — nothing else may move."""
+    with_ff = tmp_path / "with_ff.py"
+    plain = tmp_path / "plain.py"
+    with_ff.write_text(FAKE_ORCHESTRATOR.replace("import asyncio\n", "import asyncio\n\x0c\n", 1), encoding="utf-8")
+    plain.write_text(FAKE_ORCHESTRATOR, encoding="utf-8")
+    assert mod.apply_patch(with_ff) == "patched"
+    assert mod.apply_patch(plain) == "patched"
+    assert with_ff.read_text(encoding="utf-8").replace("\x0c\n", "", 1) == plain.read_text(encoding="utf-8"), (
+        "the form feed must not shift the helper insertion"
+    )
 
 
 def test_orchestrator_path_uses_argv_override(monkeypatch):

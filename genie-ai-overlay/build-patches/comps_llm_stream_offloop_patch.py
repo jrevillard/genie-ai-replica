@@ -118,6 +118,15 @@ def _rewrap_line(line: str) -> str | None:
     return f"{indent}{WRAPPED_SITE}{eol}"
 
 
+def _split_source_lines(source: str) -> list[str]:
+    """Split for line-index math that agrees with ast line numbers: \\n
+    boundaries only (str.splitlines also breaks on form feeds, \\x85 and
+    Unicode line separators, which ast does not count as lines). Joining the
+    result reproduces the source byte for byte."""
+    parts = source.split("\n")
+    return [part + "\n" for part in parts[:-1]] + ([parts[-1]] if parts[-1] else [])
+
+
 def _module_imports(source: str) -> tuple[set[str], int]:
     """Top-level names bound by real ``import`` statements, and the line index
     after the module's last import statement of any kind.
@@ -135,7 +144,9 @@ def _module_imports(source: str) -> tuple[set[str], int]:
     last_import_end = 0
     for node in tree.body:
         if isinstance(node, ast.Import):
-            bindings.update(alias.name.split(".")[0] for alias in node.names)
+            # The helper dereferences the module names themselves, so only
+            # the BOUND name counts: `import asyncio as aio` binds `aio`.
+            bindings.update(alias.asname or alias.name.split(".")[0] for alias in node.names)
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             last_import_end = max(last_import_end, node.end_lineno)
     return bindings, last_import_end
@@ -147,7 +158,7 @@ def apply_patch(path: Path) -> str:
         raise SystemExit(f"ASSERT-ON-PATCH GUARD FAILED: {path} does not exist")
 
     original = _read(path)
-    lines = original.splitlines(keepends=True)
+    lines = _split_source_lines(original)
 
     # _rewrap_line is the single predicate for a call site: only a plain
     # `response = requests.post(` line can be rewrapped, so the exactly-2
@@ -155,7 +166,7 @@ def apply_patch(path: Path) -> str:
     # of the line simply is not a site).
     sites = [i for i, line in enumerate(lines) if _rewrap_line(line) is not None]
     if not sites:
-        if WRAPPED_SITE in original and helper_present(original):
+        if original.count(WRAPPED_SITE) == 2 and helper_present(original):
             return "already-patched"
         raise SystemExit(
             f"ASSERT-ON-PATCH GUARD FAILED: {path} carries neither the expected unpatched streaming "
@@ -195,7 +206,8 @@ def apply_patch(path: Path) -> str:
 
     # Re-read: the file on disk is the artefact that ships, so verify THAT.
     post = _read(path)
-    if WRAPPED_SITE not in post or UNPATCHED_SITE in post or not helper_present(post):
+    unpatched_site_left = any(_rewrap_line(line) is not None for line in _split_source_lines(post))
+    if WRAPPED_SITE not in post or unpatched_site_left or not helper_present(post):
         raise SystemExit(f"ASSERT-ON-PATCH GUARD FAILED: post-write verification failed for {path}")
     return "patched"
 

@@ -513,12 +513,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // names the entity the installed title names. A Quick Help scope's
     // title is its BUTTON's own localized title — the same thing the
     // press and the web show — and the config reload re-resolves it by
-    // id, never through the category. A category the hierarchy cannot
-    // NAME installs an empty title (the bar hides): there is nothing to
-    // localize, and recording the key of 'general' or of a dropped
-    // category would schedule lookups that can never succeed.
+    // id, never through the category. The key is recorded exactly when
+    // the hierarchy NAMES the category on the wire — the same predicate
+    // (the nameEN lookup) the scope's own health check applies. That is
+    // one nameability test, not two: an entry the EN tree can filter on
+    // but not display still records its key, and the localized fetch may
+    // name it where the ENGLISH tree could not; 'general' and a dropped
+    // category the hierarchy cannot name either — recording their keys
+    // would schedule lookups that can never succeed.
     _restoredTitleCategoryKey =
-        scope.quickHelpButtonId == null && scope.categoryName != null
+        scope.quickHelpButtonId == null && scope.categoryNameEn != null
         ? _scopeResolver?.categoryIdFor(scope.categoryId)
         : null;
     // The button the conversation's tag names — ONE lookup (the same

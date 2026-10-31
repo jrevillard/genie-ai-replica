@@ -12,7 +12,7 @@
 # Usage: tests/compose-non-root/check-runtime.sh <compose-project> [data_dir]
 # Env:   DATA_DIR overrides ./data default when data_dir arg is omitted.
 #
-# Exit 0 = contract holds; exit 1 = violations listed. One-shot init
+# Exit 0 = contract holds; 1 = violations listed; 4 = usage error. One-shot init
 # containers (arango-vector-db-init, victorialogs-init,
 # document-repository-init, backend-init, otel-collector-init,
 # postgres-init, kong-config, kong-migrations, db-migrations) have
@@ -23,7 +23,12 @@
 
 set -u
 
-PROJECT="${1:?usage: check-runtime.sh <compose-project> [data_dir]}"
+if [ $# -lt 1 ]; then
+  echo "usage: check-runtime.sh <compose-project> [data_dir]" >&2
+  # usage errors get their own exit — 1 means CONTRACT VIOLATIONS
+  exit 4
+fi
+PROJECT="$1"
 DATA_DIR="${2:-${DATA_DIR:-./data}}"
 # Trailing-slash callers ("./data/") would break the -path prune pattern
 # below (./data//huggingface never matches) and silently sweep the

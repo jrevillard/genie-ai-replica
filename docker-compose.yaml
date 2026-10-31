@@ -54,7 +54,7 @@
 #                               fails the backend loudly instead of docker
 #                               silently creating it root-owned — #1227.
 #                               The backend runs as uid 1000 and must OWN it:
-#                               chown 1000:1000 data/database_backups)
+#                               sudo chown 1000:1000 data/database_backups)
 #   ./data/huggingface          (TEI model cache, GPU nodes only)
 #   ./secrets/ssl/              (server.crt, server.key)
 #
@@ -463,7 +463,18 @@ services:
       - VUE_APP_OKF_ENABLED=${OKF_ENABLED:-0}
       - VUE_APP_STREAM_IDLE_TIMEOUT_MS=${VUE_APP_STREAM_IDLE_TIMEOUT_MS:-}
     volumes:
-      - ${CONFIG_DIR_FRONTEND:-./components/gov-chat-frontend/public/config}:/app/dist/config:ro
+      # Long syntax + create_host_path:false (#1227): the default lives in
+      # the repo; an operator override pointing at a not-yet-existing host
+      # path must fail the frontend loudly, not let docker create the
+      # source root-owned (which would break the uid-101 runtime config
+      # write). Swarm ignores bind options — there the config_bootstrap
+      # role seeds the directory.
+      - type: bind
+        source: ${CONFIG_DIR_FRONTEND:-./components/gov-chat-frontend/public/config}
+        target: /app/dist/config
+        read_only: true
+        bind:
+          create_host_path: false
     # Port 8090 is internal only - outer nginx on 80/443 is the public entry point
     # ports:
     #   - "${FRONTEND_PORT:-8090}:8090"
@@ -2491,7 +2502,16 @@ services:
       # ...) live inside jars, not in this directory, so the mount cannot
       # shadow them. The active theme is selected by KEYCLOAK_THEME (realm
       # import) or the realm's loginTheme/accountTheme/... settings.
-      - ${CONFIG_DIR_KEYCLOAK:-./configs/keycloak/themes}:/opt/keycloak/themes:ro
+      # Same long-syntax + create_host_path:false contract as the frontend
+      # config bind (#1227): a missing override path fails loudly instead
+      # of being root-created (a bind mount never falls back to image
+      # contents, so the failure is the honest signal).
+      - type: bind
+        source: ${CONFIG_DIR_KEYCLOAK:-./configs/keycloak/themes}
+        target: /opt/keycloak/themes
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/8080' || exit 1"]
       interval: 15s

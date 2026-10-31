@@ -123,7 +123,14 @@ function validateComposeNonRoot(composeText) {
           // docker socket and /dev nodes do not.
           const underDataDir = /^(\.\/)?data(\/|$)/.test(resolved);
           const dataShaped = underDataDir || /\/[\w.-]*data(\/|$)/.test(resolved);
-          if (b.shortSyntax ? !dataShaped : !underDataDir && !resolved.startsWith('/')) {
+          // An absolute LITERAL path (/etc/localtime, the docker socket)
+          // pre-exists on every host — create_host_path is irrelevant on
+          // it. A TEMPLATED absolute (${VAR:-/srv/genie}/...) is a
+          // deployment-authored location whose default can point anywhere:
+          // that one stays under the rule.
+          const templated = /\$\{?\w/.test(b.path);
+          const absoluteDataPath = resolved.startsWith('/') && (dataShaped || templated);
+          if (b.shortSyntax ? !dataShaped : !underDataDir && !absoluteDataPath) {
             continue;
           }
           if (b.shortSyntax) {
@@ -320,6 +327,15 @@ function validateComposeNonRoot(composeText) {
       inCapAdds = true;
       continue;
     }
+    // flow style: cap_add: [CHOWN, DAC_OVERRIDE] — same invariant surface
+    const capFlow = line.match(/^ {4}cap_add:\s*\[([^\]]*)\]\s*(?:#.*)?$/);
+    if (capFlow) {
+      for (const cap of capFlow[1].split(',')) {
+        const c = cap.trim();
+        if (c) currentCapAdds.push(c);
+      }
+      continue;
+    }
     if (inCapAdds) {
       if (!/^ {6}/.test(line)) {
         inCapAdds = false;
@@ -404,6 +420,21 @@ function validateComposeNonRoot(composeText) {
       //     target: /app/database_backups
       //     bind:
       //       create_host_path: false
+      // type: can also follow its own source: (mapping order is free) —
+      // reclassify a just-pushed host bind as the named volume it is
+      const typeMatch = line.match(/^ {8}type:\s*['"]?(\w+)/);
+      if (typeMatch) {
+        entryType = typeMatch[1];
+        if (
+          entryType === 'volume' &&
+          sourceSeenThisEntry &&
+          serviceBinds[currentService] &&
+          serviceBinds[currentService].length
+        ) {
+          serviceBinds[currentService].pop();
+        }
+        continue;
+      }
       const srcMatch = line.match(/^ {8}source:\s*(\S+)\s*(?:#.*)?$/);
       if (srcMatch && entryType !== 'volume') {
         // entryType 'volume' = a NAMED volume (e.g. source: data) — not a
@@ -428,7 +459,7 @@ function validateComposeNonRoot(composeText) {
         bindOptsTarget = sourceSeenThisEntry ? (serviceBinds[currentService] || []).length - 1 : null;
         continue;
       }
-      const createFalse = line.match(/^ {10}create_host_path:\s*false\s*$/);
+      const createFalse = line.match(/^ {10}create_host_path:\s*false\s*(?:#.*)?$/);
       if (createFalse && inBindOpts) {
         if (bindOptsTarget !== null) {
           serviceBinds[currentService][bindOptsTarget].createHostPathFalse = true;

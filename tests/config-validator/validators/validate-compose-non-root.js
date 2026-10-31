@@ -116,14 +116,14 @@ function validateComposeNonRoot(composeText) {
             .replace(/^\$(?!\{)[\w-]+/, './data');
           // An ABSOLUTE resolved source is under the data-dir rule too:
           // re-pointing a variable default at /srv/genie or hand-writing
-          // /var/genie/data must not escape the create_host_path contract
-          // (long syntax only — a short-syntax absolute bind like the
-          // docker socket cannot carry opts and is not a data path).
-          if (
-            b.shortSyntax
-              ? !/^(\.\/)?data(\/|$)/.test(resolved)
-              : !/^(\.\/)?data(\/|$)/.test(resolved) && !resolved.startsWith('/')
-          ) {
+          // /var/genie/data must not escape the create_host_path contract.
+          // Short syntax cannot carry the opt-out, so only data-shaped
+          // paths are flagged there — an absolute host path with a /data/
+          // segment counts (a DATA_DIR repointed absolute), while the
+          // docker socket and /dev nodes do not.
+          const underDataDir = /^(\.\/)?data(\/|$)/.test(resolved);
+          const dataShaped = underDataDir || /\/[\w.-]*data(\/|$)/.test(resolved);
+          if (b.shortSyntax ? !dataShaped : !underDataDir && !resolved.startsWith('/')) {
             continue;
           }
           if (b.shortSyntax) {
@@ -265,6 +265,7 @@ function validateComposeNonRoot(composeText) {
   let pendingCreateFalse = false;
   let sourceSeenThisEntry = false;
   let bindOptsTarget = null;
+  let entryType = null; // long-syntax entry type: 'bind' | 'volume' | null (compose default: bind)
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -278,7 +279,7 @@ function validateComposeNonRoot(composeText) {
     }
     if (!inServices) continue;
 
-    const serviceMatch = line.match(/^ {2}([\w-]+):\s*$/);
+    const serviceMatch = line.match(/^ {2}([\w.-]+):\s*$/);
     if (serviceMatch) {
       flush();
       currentService = serviceMatch[1];
@@ -386,12 +387,16 @@ function validateComposeNonRoot(composeText) {
         pendingCreateFalse = false;
         sourceSeenThisEntry = false;
         bindOptsTarget = null;
+        entryType = null;
         continue;
       }
       if (/^ {6}-\s/.test(line)) {
-        // a new long-syntax entry begins — its opts may only attach to a
-        // source: seen from here on
+        // a new entry begins — its opts may only attach to a source: seen
+        // from here on; type: decides host-bind vs named volume (compose
+        // default when omitted: bind)
         sourceSeenThisEntry = false;
+        const t = line.match(/^ {6}-\s*type:\s*['"]?(\w+)/);
+        entryType = t ? t[1] : null;
       }
       // long syntax:
       //   - type: bind
@@ -400,7 +405,9 @@ function validateComposeNonRoot(composeText) {
       //     bind:
       //       create_host_path: false
       const srcMatch = line.match(/^ {8}source:\s*(\S+)\s*(?:#.*)?$/);
-      if (srcMatch) {
+      if (srcMatch && entryType !== 'volume') {
+        // entryType 'volume' = a NAMED volume (e.g. source: data) — not a
+        // host path, create_host_path is meaningless on it
         const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
         // YAML mapping order is free: a `bind:` opts block may follow its
         // own source: (the common spelling) or precede it. Retro-attach to
@@ -462,10 +469,10 @@ function collectServiceNames(composeText) {
   const names = new Set();
   let inServices = false;
   for (const line of composeText.split('\n')) {
-    if (/^[a-z][\w-]*:\s*$/.test(line)) {
+    if (/^[a-z][\w.-]*:\s*$/.test(line)) {
       inServices = line.trim() === 'services:';
     } else if (inServices) {
-      const m = line.match(/^ {2}([\w-]+):\s*$/);
+      const m = line.match(/^ {2}([\w.-]+):\s*$/);
       if (m) names.add(m[1]);
     }
   }

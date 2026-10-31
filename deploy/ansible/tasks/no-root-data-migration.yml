@@ -8,16 +8,27 @@
 # data_dir / deploy_dir come from group_vars; both plays run these with
 # the same variable surface.
 
+- name: Stat the log directory
+  # A MISSING data/logs is the NORMAL case on fresh nodes (the pre-create
+  # loop no longer creates it) and after a successful cleanup (the rm
+  # below removes the tree) — it must be a no-op, never "leftovers
+  # present" (find's ENOENT would fail the rm task and abort the play).
+  ansible.builtin.stat:
+    path: "{{ deploy_dir }}/{{ data_dir }}/logs"
+  register: _logs_dir
+
 - name: Detect root-era leftovers under the log directory
-  # The cleanup below deletes only what this probe finds: ROOT-owned
-  # paths (what the docker daemon created for the removed log binds).
-  # Logs an operator copied back for forensics under their own uid leave
-  # the probe empty and are never touched. failed_when:false + rc: an
-  # untraversable root-owned 0700 subdir makes find exit 1 — treat that
-  # as "leftovers present" (the rm below heals it).
+  # Runs only when the directory exists. The cleanup below deletes only
+  # what this probe finds: ROOT-owned paths (what the docker daemon
+  # created for the removed log binds). Logs an operator copied back for
+  # forensics under their own uid leave the probe empty and are never
+  # touched. failed_when:false + rc: an untraversable root-owned 0700
+  # subdir makes find (running as the unprivileged ansible_user) exit 1 —
+  # treat that as "leftovers present" (the root rm below heals it).
   ansible.builtin.command: >-
     find {{ deploy_dir }}/{{ data_dir }}/logs -uid 0 -print -quit
   register: _logs_root_owned
+  when: _logs_dir.stat.exists
   failed_when: false
   changed_when: false
 
@@ -26,13 +37,17 @@
   # (state: absent on the tree) would destroy co-located operator files
   # the probe was written to protect. Kong no longer bind-mounts a log
   # directory; the root-era dirs trip the no-root runtime gate on every
-  # run. become_user: root — the paths ARE root-owned.
+  # run. become_user: root — the paths ARE root-owned. Best-effort: a
+  # batch flush mid-traversal on a large tree can make find exit 1 after
+  # the deletions — whatever survived is flagged by the runtime gate on
+  # the next run.
   become: true
   become_user: root
   ansible.builtin.command: >-
     find {{ deploy_dir }}/{{ data_dir }}/logs -uid 0 -exec rm -rf {} +
-  when: _logs_root_owned.stdout | length > 0 or _logs_root_owned.rc != 0
+  when: _logs_dir.stat.exists and (_logs_root_owned.stdout | length > 0 or _logs_root_owned.rc != 0)
   changed_when: true
+  failed_when: false
 
 - name: Create the backend backup directory as the backend uid (#1227)
   # Pinned to the backend uid AT CREATION: a fresh dir left

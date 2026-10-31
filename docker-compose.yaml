@@ -749,11 +749,12 @@ services:
           - node.labels.genieai == true
       restart_policy:
         condition: on-failure
-        delay: 5s
-        # 60 attempts (~5 min): same init-race as document-repository/arango
-        # — on a root-era upgrade the backend starts while backend-init is
-        # still chowning (backend_uploads can be the largest root-era
-        # volume), and each EACCES crash burns one attempt.
+        # 60 attempts at 30s delay (30-minute budget): same init-race as
+        # document-repository/arango — on a root-era upgrade the backend
+        # starts while backend-init is still chowning (backend_uploads can
+        # be the largest root-era volume), and each EACCES crash burns one
+        # attempt. The budget must outlast the chown.
+        delay: 30s
         max_attempts: 60
 
   okf-server:
@@ -1338,11 +1339,13 @@ services:
           - node.labels.genieai == true
       restart_policy:
         condition: on-failure
-        delay: 5s
-        # 60 attempts (~5 min): the first start after the #1227 migration can
-        # race a minutes-long initial chown -R of a large root-era volume
-        # (swarm has no depends_on, so the service starts while its init
-        # still runs); each EACCES crash burns one attempt.
+        # 60 attempts at 30s delay = a 30-minute budget: the first start
+        # after the #1227 migration can race a minutes-long initial chown
+        # -R of a large root-era volume (swarm has no depends_on, so the
+        # service starts while its init still runs); each EACCES crash
+        # burns one attempt, and the budget must outlast the chown, not
+        # convert a transient race into an unrecoverable outage.
+        delay: 30s
         max_attempts: 60
 
   clamav:
@@ -1446,11 +1449,13 @@ services:
           - node.labels.genieai == true
       restart_policy:
         condition: on-failure
-        delay: 5s
-        # 60 attempts (~5 min): the first start after the #1227 migration can
-        # race a minutes-long initial chown -R of a large root-era volume
-        # (swarm has no depends_on, so the service starts while its init
-        # still runs); each EACCES crash burns one attempt.
+        # 60 attempts at 30s delay = a 30-minute budget: the first start
+        # after the #1227 migration can race a minutes-long initial chown
+        # -R of a large root-era volume (swarm has no depends_on, so the
+        # service starts while its init still runs); each EACCES crash
+        # burns one attempt, and the budget must outlast the chown, not
+        # convert a transient race into an unrecoverable outage.
+        delay: 30s
         max_attempts: 60
 
 
@@ -2781,11 +2786,12 @@ services:
           - node.labels.genieai == true
       restart_policy:
         condition: on-failure
-        delay: 5s
-        # 60 attempts (~5 min): same init-race as arango/document-repository/
-        # backend — on a root-era upgrade victoria-logs (uid 65534) starts
-        # while victorialogs-init is still chowning (the admin-logs volume
-        # can be the largest); each EACCES crash burns one attempt.
+        # 60 attempts at 30s delay (30-minute budget): same init-race as
+        # arango/document-repository/backend — on a root-era upgrade
+        # victoria-logs (uid 65534) starts while victorialogs-init is
+        # still chowning (the admin-logs volume can be the largest); each
+        # EACCES crash burns one attempt. The budget must outlast the chown.
+        delay: 30s
         max_attempts: 60
 
   victoriatraces:

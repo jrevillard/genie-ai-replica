@@ -29,6 +29,7 @@ from core.model_http_policy import (
     http_timeout,
     positive_float_env,
 )
+from core.service_endpoints import DOCUMENT_REPOSITORY_URL
 from core.span_attrs import ATTRIBUTE_NAMES
 from tracing import (
     background_span,
@@ -323,8 +324,9 @@ install_uvicorn_access_logging()
 logflag = os.getenv("LOGFLAG", "false").lower() == "true"
 
 # --- GENIE-Specific Configuration ---
-# 1. Document Repository: Handles Logs and Status Updates
-DOCUMENT_REPOSITORY_URL = os.getenv("DOCUMENT_REPOSITORY_URL", "http://document-repository:3001")
+# 1. Document Repository: Handles Logs and Status Updates. The constant lives
+#    in core/service_endpoints (single env read per process — the microservice
+#    recovery targets the same base URL and must never drift from this one).
 # 2. Backend Service: Source of Truth for Label Hierarchy
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000")
 # 3. OKF Server: the control plane that owns per-concept index status (Story

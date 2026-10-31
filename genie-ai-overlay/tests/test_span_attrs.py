@@ -67,6 +67,7 @@ OWNED_SPAN_NAMES = {
     "dataprep.llm.phase",
     "dataprep.llm.label_chunk",
     "dataprep.log_environment_variables",
+    "dataprep.recovery",
     "dataprep.retract",
 }
 

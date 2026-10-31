@@ -194,7 +194,48 @@ class MetadataService {
     }
   }
 
-  // 5. update metadata after ingestion or retraction
+  // 5. Release files stuck in 'Ingesting' back to 'Pending' (#610).
+  // dataprep calls this ONCE AT BOOT: its in-memory task registry dies with
+  // the process, so a row still 'Ingesting' after a restart belongs to a task
+  // that no longer exists. That boot-time trigger is what makes the release
+  // safe — NOT exclusive writers: doc-repo itself and okf-server also write
+  // 'Ingesting' into this collection while ingests are live.
+  // `excludeFileIds` carries the caller's still-live task ids so a recovery
+  // retry that lands after the service started serving cannot release an
+  // ingest that is actually running.
+  // Guards: bundle-zip docs are excluded (okf-server owns their Ingesting →
+  // Ingested transition — releasing one to Pending would fight that state
+  // machine); docs without a file_id cannot be re-ingested or logged, so
+  // they are skipped rather than returned as null entries. One statement
+  // finds AND flips them; UPDATE deep-merges the dataprep sub-object, so
+  // ingest_date/retract_date survive. ignoreErrors: a document deleted
+  // between the scan and its UPDATE must not abort the whole release — the
+  // remaining rows still flip. OKF concepts have no files doc here at
+  // all — the okf-server worker reclaims those itself.
+  async recoverStuckIngests(excludeFileIds = []) {
+    try {
+      const db = await this.getDb();
+      const cursor = await db.query(
+        `FOR file IN files
+         FILTER LOWER(file.dataprep.status) == 'ingesting'
+         FILTER file.file_id != null
+         FILTER file.is_bundle != true
+         FILTER file.file_id NOT IN @excludeFileIds
+         UPDATE file WITH { dataprep: { status: 'Pending' } } IN files
+           OPTIONS { ignoreErrors: true }
+         RETURN NEW.file_id`,
+        { excludeFileIds }
+      );
+      const recovered = await cursor.all();
+      logger.info(`[RECOVER-STUCK] Released ${recovered.length} stuck ingest(s) back to Pending`);
+      return recovered;
+    } catch (error) {
+      logger.error(`Failed to recover stuck ingests: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // 6. update metadata after ingestion or retraction
   // This method can also be used to update metadata manually by the user.
   async updateMetadata(file_id, updates = {}) {
     try {

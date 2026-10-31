@@ -323,13 +323,17 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
         // (HTTP status, error code); only the raw cause object is dropped.
         const stored = err instanceof ModelDiscoveryError && err.cause ? new ModelDiscoveryError(err.message) : err;
         _negative.set(probeKey, { ts: Date.now(), cause: stored });
-        // The degradation must be VISIBLE: every call this negative window
-        // serves resolves the STALE id while provenance fields keep naming
-        // it — one line here (not per served call) says so without flooding.
-        if (entry) {
+        // The degradation must be VISIBLE: while the negative window lasts,
+        // callers resolve the STALE id and provenance fields keep naming it
+        // — one line per probe class (not per served call) says so without
+        // flooding. Re-read the cache first: a concurrent probe of the other
+        // class may have refreshed the id while this one was failing — then
+        // a fresh id serves, nothing is degraded, and the line would lie.
+        const servingNow = _cache.get(cacheKey);
+        if (servingNow && Date.now() - servingNow.ts >= ttlSeconds() * 1000) {
           logger.warn('vllm_model_cache.serving_stale', {
             url: modelsUrl,
-            stale_id: entry.id,
+            stale_id: servingNow.id,
             note: 'probe failed — the stale cached id serves until the endpoint answers'
           });
         }

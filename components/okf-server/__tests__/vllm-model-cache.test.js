@@ -438,6 +438,31 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
     expect(warns).toHaveLength(1);
     expect(axios.get).toHaveBeenCalledTimes(2); // the hard caller owned its probe
   });
+
+  test('serving_stale does not lie when a concurrent probe refreshed the id mid-failure', async () => {
+    mockProbeSuccess('stale/model');
+    await cache.servedModelId('http://vllm:8000');
+    Date.now.mockReturnValue(1_000_000 + 61_000); // the entry expires
+    let release;
+    axios.get.mockImplementationOnce(
+      () => new Promise((_, reject) => { release = () => reject(http401()); })
+    );
+    const soft = cache.servedModelId('http://vllm:8000'); // quiet probe, held in flight
+    await Promise.resolve();
+    // A loud probe (its own window) succeeds while the quiet one is still
+    // failing — the FRESH id is what callers get from here on.
+    axios.get.mockResolvedValue(modelsPayload('fresh/model'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000', { timeoutMs: 30000 })).resolves.toBe(
+      'fresh/model'
+    );
+    release();
+    // Serving semantics unchanged (stale beats broken for THIS caller), the
+    // soft path stays quiet, and serving_stale must not announce a
+    // staleness that is already over.
+    await expect(soft).resolves.toBe('stale/model');
+    expect(logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed')).toHaveLength(0);
+    expect(logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.serving_stale')).toHaveLength(0);
+  });
 });
 
 describe('negative window, shared probes, sameOrigin', () => {

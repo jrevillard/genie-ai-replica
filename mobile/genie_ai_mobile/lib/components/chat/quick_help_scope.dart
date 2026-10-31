@@ -542,11 +542,22 @@ class QuickHelpScopeResolver {
     _categoryLabelsEn,
   );
 
-  /// Categories by key, FIRST-wins, each mapped by [valueOf]; a null
+  /// Categories by key, first-claim, each mapped by [valueOf]; a null
   /// [valueOf] result skips the entry instead of claiming the key. The
   /// one walk behind the three key indexes (the EN-label index, the
-  /// display-name index, and the localized-display read) — a skip rule
-  /// added to one belongs to all.
+  /// display-name index, and the localized-display read). The walk owns
+  /// the KEY mechanics — extraction, the non-Map skip, first-claim — but
+  /// the VALUE rule is each index's own, and the two differ on purpose:
+  /// the EN-label index never skips a claimed entry ([_enOf] returns ''
+  /// for a present-but-empty nameEN, never null — wire ownership is
+  /// positional: the FIRST entry is the category, and its missing
+  /// translation leaves it unnameable; a later duplicate does not take
+  /// the key back), while the display indexes skip empty values — a
+  /// display the tree cannot produce must not claim the key and must
+  /// not blank a title that is already right. Both rules are pinned by
+  /// unit tests; a duplicate catKey can therefore name and address
+  /// different entries, which is the data error speaking, not the
+  /// indexes disagreeing.
   static Map<String, String> _indexByCatKey(
     List<dynamic> enTree,
     String? Function(Map entry) valueOf,

@@ -15,13 +15,17 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     userToken = await getSessionTokenViaUI({ browser });
 
     // K.2 mutates the realm's token lifespan; restore whatever the
-    // deployment actually runs, not an assumed default.
+    // deployment actually runs, not an assumed default. Failing the
+    // capture fails the suite BEFORE K.2 can mutate anything — a
+    // best-guess restore would write 300 onto a stack running
+    // something else.
     const realmRes = await authRequest('GET', '/auth/admin/realms/genie', {
       headers: { Authorization: `Bearer ${adminToken}` },
     });
-    if (realmRes.status === 200 && realmRes.data.accessTokenLifespan) {
-      originalLifespan = String(realmRes.data.accessTokenLifespan);
+    if (realmRes.status !== 200 || !realmRes.data.accessTokenLifespan) {
+      throw new Error(`Cannot capture accessTokenLifespan (HTTP ${realmRes.status}) — refusing to run the lifespan-mutating tests`);
     }
+    originalLifespan = String(realmRes.data.accessTokenLifespan);
   });
 
   test.afterAll(async () => {
@@ -58,6 +62,10 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   });
 
   test('K.2 — TOKEN_EXPIRED (short-lived token)', async ({ browser }) => {
+    // Fresh admin token: the beforeAll mint can be minutes old once K.2's
+    // own session mint and expiry poll have run.
+    adminToken = await getAdminToken();
+
     // Reduce lifespan to 10s
     await updateRealmSettings(adminToken, 'genie', { accessTokenLifespan: '10' });
 
@@ -85,11 +93,14 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   });
 
   test('K.3 — FORBIDDEN (user without roles)', async ({ browser }) => {
+    // Fresh admin token, same reason as K.2.
+    adminToken = await getAdminToken();
+
     // Restore the deployment's lifespan first: K.2 left it at 10s, and
     // the browser-session mint below adds SPA-bootstrap latency after
     // the token is issued — on a loaded stack the admin request could
     // hit TOKEN_EXPIRED instead of the FORBIDDEN this test verifies.
-    await updateRealmSettings(adminToken, 'genie', { accessTokenLifespan: originalLifespan || '300' });
+    await updateRealmSettings(adminToken, 'genie', { accessTokenLifespan: originalLifespan });
 
     // Create no-roles user
     noRolesUserId = await createUser(adminToken, 'genie', {

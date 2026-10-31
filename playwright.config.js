@@ -3,11 +3,13 @@ require('dotenv').config();
 
 module.exports = defineConfig({
   testDir: './tests/e2e',
-  // Session-token mints log in through the browser (two attempts on a
-  // stalled stack: 30s navigation + 15s redirect wait + retry budget
-  // each ≈ 135s). beforeAll hooks are bounded by this project timeout —
-  // test.setTimeout cannot raise them — so the ceiling lives here.
-  timeout: 180000,
+  // Session-token mints log in through the browser — on a stalled stack
+  // one login cycle costs ≈135s (two attempts of 30s navigation + 15s
+  // redirect wait + retry budget). The ceiling is sized for the worst
+  // beforeAll stacking such a login on top of its admin-API requests
+  // (i1: ~5 requests at the 30s cap). It also bounds hooks: this project
+  // timeout is what beforeAll/afterAll run under.
+  timeout: 360000,
   expect: {
     timeout: 15000,
   },

@@ -2454,7 +2454,7 @@ export default {
         noRepoYet: '请先创建仓库（返回入口步骤）。',
         benchTitle: '此仓库中的主题',
         benchCount: '{n}',
-        benchLoading: 'Reading topics…',
+        benchLoading: '正在读取主题…',
         benchEmpty: '此处暂无内容——在下方选择来源、导入 markdown，或撰写您的第一个主题。',
         benchFailed: '暂时无法读取主题。',
         editTitle: '编辑概念',

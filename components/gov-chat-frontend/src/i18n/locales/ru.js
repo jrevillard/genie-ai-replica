@@ -2528,7 +2528,7 @@ export default {
         noRepoYet: 'Сначала создайте репозиторий (вернитесь на шаг входа).',
         benchTitle: 'Темы в этом репозитории',
         benchCount: '{n}',
-        benchLoading: 'Reading topics…',
+        benchLoading: 'Чтение тем…',
         benchEmpty:
           'Здесь пока ничего нет — выберите источники ниже, импортируйте markdown или напишите свою первую тему.',
         benchFailed: 'Не удалось прочитать темы прямо сейчас.',

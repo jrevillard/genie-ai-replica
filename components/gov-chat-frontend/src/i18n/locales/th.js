@@ -2497,7 +2497,7 @@ export default {
         noRepoYet: 'สร้างรีโพก่อน (ย้อนกลับไปที่ขั้นตอนเริ่มต้น)',
         benchTitle: 'หัวข้อในรีโพนี้',
         benchCount: '{n}',
-        benchLoading: 'Reading topics…',
+        benchLoading: 'กำลังอ่านหัวข้อ…',
         benchEmpty: 'ยังไม่มีอะไรที่นี่ — เลือกแหล่งที่มาด้านล่าง นำเข้า markdown หรือเขียนหัวข้อแรกของคุณ',
         benchFailed: 'ไม่สามารถอ่านหัวข้อได้ในขณะนี้',
         editTitle: 'แก้ไขแนวคิด',

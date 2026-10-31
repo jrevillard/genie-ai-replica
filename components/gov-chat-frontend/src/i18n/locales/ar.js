@@ -2491,7 +2491,7 @@ export default {
         noRepoYet: 'أنشئ المستودع أولاً (ارجع إلى خطوة الدخول).',
         benchTitle: 'الموضوعات في هذا المستودع',
         benchCount: '{n}',
-        benchLoading: 'Reading topics…',
+        benchLoading: 'جارٍ قراءة المواضيع…',
         benchEmpty: 'لا يوجد شيء هنا بعد — اختر المصادر أدناه، أو استورد markdown، أو اكتب موضوعك الأول.',
         benchFailed: 'تعذّرت قراءة الموضوعات الآن.',
         editTitle: 'تعديل المفهوم',

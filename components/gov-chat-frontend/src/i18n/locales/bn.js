@@ -2516,7 +2516,7 @@ export default {
         noRepoYet: 'প্রথমে রিপোজিটরি তৈরি করুন (Entry-তে ফিরে যান)।',
         benchTitle: 'এই রিপোজিটরির বিষয়গুলি',
         benchCount: '{n}',
-        benchLoading: 'Reading topics…',
+        benchLoading: 'বিষয়গুলো পড়া হচ্ছে…',
         benchEmpty: 'এখানে এখনো কিছু নেই — নিচে উৎস বেছে নিন, markdown আমদানি করুন, বা আপনার প্রথম বিষয়টি লিখুন।',
         benchFailed: 'এই মুহূর্তে বিষয়গুলি পড়া যায়নি।',
         editTitle: 'ধারণা সম্পাদনা করুন',

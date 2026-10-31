@@ -407,6 +407,20 @@
         owner: "1000"
         group: "1000"
 
+    - name: Detect root-era leftovers under the log directory (#1227)
+      # The cleanup below deletes the whole data/logs tree — but ONLY when
+      # it still holds ROOT-era content (root-owned paths, i.e. what the
+      # docker daemon created for the removed log binds). Logs an operator
+      # copied back for forensics under their own uid leave the probe
+      # empty and are never touched. failed_when:false + rc: an
+      # untraversable root-owned 0700 subdir makes find exit 1 — treat
+      # that as "leftovers present" (the chown path heals it).
+      ansible.builtin.command: >-
+        find {{ deploy_dir }}/{{ data_dir }}/logs -uid 0 -print -quit
+      register: _logs_root_owned
+      failed_when: false
+      changed_when: false
+
     - name: Remove the stale root-owned log directories (#1227)
       # Kong no longer bind-mounts a log directory; deployments from before
       # #1227 keep a root-owned data/logs/kong AND its root-owned data/logs
@@ -422,6 +436,7 @@
       loop:
         - "{{ data_dir }}/logs/kong"
         - "{{ data_dir }}/logs"
+      when: _logs_root_owned.stdout | length > 0 or _logs_root_owned.rc != 0
 
     - name: Detect root-era files in the backend backup directory
       # The migration chowns ONLY the root-owned leftovers (the root-era
@@ -431,6 +446,7 @@
       ansible.builtin.command: >-
         find {{ deploy_dir }}/{{ data_dir }}/database_backups -uid 0 -print -quit
       register: _backup_root_owned
+      failed_when: false
       changed_when: false
 
     - name: Hand the root-era backup files to the backend uid (#1227)
@@ -445,7 +461,7 @@
       ansible.builtin.command: >-
         find {{ deploy_dir }}/{{ data_dir }}/database_backups -uid 0
         -exec chown 1000:1000 {} +
-      when: _backup_root_owned.stdout | length > 0
+      when: _backup_root_owned.stdout | length > 0 or _backup_root_owned.rc != 0
       changed_when: true
 
 - name: GENIE.AI - Pre-create data directories on worker nodes (#1227)
@@ -460,6 +476,9 @@
   become: true
   tasks:
     - name: Create the backend backup directory (its bind source materializes here)
+      # Keep this play IN STEP with the manager play's backup-dir block
+      # (same file, above): both must exist and change together or workers
+      # silently regress to root-created bind sources.
       ansible.builtin.file:
         path: "{{ deploy_dir }}/{{ data_dir }}/database_backups"
         state: directory
@@ -467,13 +486,24 @@
         owner: "1000"
         group: "1000"
 
+    - name: Detect root-era leftovers under the log directory (#1227)
+      ansible.builtin.command: >-
+        find {{ deploy_dir }}/{{ data_dir }}/logs -uid 0 -print -quit
+      register: _logs_root_owned
+      failed_when: false
+      changed_when: false
+
     - name: Remove stale root-owned log directories (#1227)
+      # Root-era content only — operator-copied forensics under their own
+      # uid are never touched (see the manager play's probe comment).
+      become: true
       ansible.builtin.file:
         path: "{{ deploy_dir }}/{{ item }}"
         state: absent
       loop:
         - "{{ data_dir }}/logs/kong"
         - "{{ data_dir }}/logs"
+      when: _logs_root_owned.stdout | length > 0 or _logs_root_owned.rc != 0
 
 - name: GENIE.AI - Copy SSL certificates
   hosts: swarm_managers

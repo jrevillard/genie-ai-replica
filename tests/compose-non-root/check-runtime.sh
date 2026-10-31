@@ -15,9 +15,11 @@
 # Exit 0 = contract holds; exit 1 = violations listed. One-shot init
 # containers (arango-vector-db-init, victorialogs-init,
 # document-repository-init, backend-init, otel-collector-init,
-# postgres-init, kong-config, keycloak-config, kong-migrations,
-# db-migrations) have exited by the time this runs and are not
-# inspected; their contract is enforced by the static test + this sweep.
+# postgres-init, kong-config, kong-migrations, db-migrations) have
+# exited by the time this runs and are not inspected; their contract is
+# enforced by the static test + this sweep. keycloak-config is NOT in
+# that list: it ends in `exec sleep infinity` and runs permanently
+# (uid 65534) — the gate inspects it like any long-lived container.
 
 set -u
 

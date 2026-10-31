@@ -277,6 +277,26 @@ describe('compose non-root contract (#1227)', () => {
     expect(v2.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
   });
 
+  test('mutations: numeric-zero uid and local-deploy shallow-replace cannot slip past the gate', () => {
+    // user: "00:1000" runs as uid 0 — the exact-spelling check missed it.
+    const zero = composeText.replace('user: "999:999"', 'user: "00:999"');
+    expect(zero).not.toBe(composeText);
+    const { violations: v1 } = validateComposeNonRoot(zero);
+    expect(v1.some((v) => v.includes('arango-vector-db') && v.includes('is root'))).toBe(true);
+
+    // A service-local deploy: shallow-replaces the anchor's deploy map:
+    // mode: global and the anchor restart_policy vanish at runtime while
+    // the old gate still credited them — now the local-only view applies
+    // and the absent condition reads as swarm's default "any".
+    const localDeploy = composeText.replace(
+      '  backend-init:\n    <<: *chown-init\n',
+      '  backend-init:\n    <<: *chown-init\n    deploy:\n      placement:\n        constraints:\n          - node.labels.genieai == true\n'
+    );
+    expect(localDeploy).not.toBe(composeText);
+    const { violations: v2 } = validateComposeNonRoot(localDeploy);
+    expect(v2.some((v) => v.includes('backend-init') && v.includes('one-shot'))).toBe(true);
+  });
+
   test('allowlist entries reference services that exist in the compose file', () => {
     // A renamed or removed service would leave a stale allowlist entry that
     // enforces nothing — dead enforcement data. Uses the validator's OWN

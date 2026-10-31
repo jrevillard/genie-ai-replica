@@ -33,6 +33,16 @@ mkdir -p data/database_backups
 chown 1000:1000 data/database_backups
 ```
 
+Upgrading an existing deployment with a pre-#1227 certificate pair?
+The edge nginx now runs as uid 101 and must READ the private key:
+
+```bash
+chgrp 101 secrets/ssl/server.key && chmod 0640 secrets/ssl/server.key
+```
+
+(A root-owned 0600 key crash-loops nginx with a misleading openssl
+error; the Ansible path normalizes this itself.)
+
 - **Docker Engine 23+** with Compose v2 (`docker compose` subcommand)
 - **NVIDIA Container Toolkit** (only if using `--profile opea` with GPU)
 - **Hugging Face API token** (only if using `--profile opea` — set

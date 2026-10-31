@@ -107,7 +107,6 @@ This service handles document uploads, validation, and ingestion.
 * **Build**: The image is built using the Dockerfile located in the ./document-repository/ directory.
 * **Ports**: The service is accessible on the host machine at port **3001**.
 * **Volumes**:
-  * ./data/logs/doc-repo:/app/logs: Persists application logs.
   * doc_repo_uploads:/app/uploads: Uses a named volume to persist file uploads.
 * **Environment File**: Loads configuration from the root `.env`.
 

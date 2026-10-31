@@ -58,8 +58,10 @@ docker compose up -d
   - Logs: `docker compose logs kong-config`.
 
 - **nginx**: NGINX reverse proxy.
-  - Image: `nginx:latest`.
-  - Ports: `80` (HTTP redirect), `443` (HTTPS).
+  - Image: built from `./nginx/Dockerfile` (`nginx:1.28-alpine` base).
+  - Ports: `8080` (HTTP redirect), `8443` (HTTPS) inside the container —
+    published on the host as `80`/`443` (#1227 non-root: unprivileged
+    listeners in-container, privileged ports only at host publication).
   - Environment: `NGINX_PUBLIC_DOMAIN`, `CSP_CONNECT_SRC`, `KONG_PROXY_HOST`, `NGINX_FRONTEND_HOST`, `NGINX_FRONTEND_PORT`.
   - Volumes: `./nginx/conf` for templates, `./nginx/entrypoint.sh` for container startup.
   - SSL: Volume-mounted from `./secrets/ssl/server.crt` and `server.key` (auto-generated self-signed in dev if not provided).
@@ -224,7 +226,7 @@ The nginx entrypoint loads these files from `/etc/nginx/ssl/` inside the contain
 
 ```nginx
 server {
-    listen 443 ssl;
+    listen 8443 ssl;
     server_name _;
 
     ssl_certificate /etc/nginx/certs/server.crt;

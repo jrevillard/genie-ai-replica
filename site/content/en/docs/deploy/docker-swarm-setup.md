@@ -176,18 +176,18 @@ them. Swarm resolves bind mounts relative to where `docker stack deploy` runs
 relevant node:
 
 ```bash
-mkdir -p data/logs/kong data/logs/backend data/logs/doc-repo \
-         data/database_backups data/huggingface secrets/ssl
+mkdir -p data/database_backups data/huggingface secrets/ssl
 ```
 
 | Directory | Purpose | Which node |
 |---|---|---|
-| `data/logs/kong` | Kong gateway logs | `gateway=true` |
-| `data/logs/backend` | Backend API logs | `genieai=true` |
-| `data/logs/doc-repo` | Document Repository logs | `genieai=true` |
 | `data/database_backups` | Backend DB dumps | `genieai=true` |
 | `data/huggingface` | TEI model cache | `gpu=true` |
 | `secrets/ssl` | SSL certificates (read by NGINX) | `gateway=true` |
+
+There is no `data/logs/` since #1227: every service logs to stdout
+(shipped by the fluentd logging driver), and a missing bind source would
+be created root-owned on the node it lands on.
 
 Copy SSL certificates to the gateway node:
 

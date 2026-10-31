@@ -320,7 +320,7 @@ function validateComposeNonRoot(composeText) {
     }
 
     // `profiles:` — inline list or block list
-    const profilesInline = line.match(/^ {4}profiles:\s*\[(.*)\]\s*$/);
+    const profilesInline = line.match(/^ {4}profiles:\s*\[([^\]]*)\]\s*(?:#.*)?$/);
     if (profilesInline) {
       currentProfiles = profilesInline[1]
         .split(',')
@@ -359,7 +359,7 @@ function validateComposeNonRoot(composeText) {
       //     target: /app/database_backups
       //     bind:
       //       create_host_path: false
-      const srcMatch = line.match(/^ {8}source:\s*(\S+)\s*$/);
+      const srcMatch = line.match(/^ {8}source:\s*(\S+)\s*(?:#.*)?$/);
       if (srcMatch) {
         const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
         binds.push({ path: srcMatch[1], createHostPathFalse: false, shortSyntax: false });

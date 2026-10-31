@@ -320,13 +320,13 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
   if (!pending) {
     // The shared chain settles to ONE outcome object that every awaiter —
     // the creator and every same-class joiner — unwraps identically:
-    // success carries the id; a failure carries the id the failure serves,
-    // decided ONCE at settle time (the freshest known one — a concurrent
-    // probe of the other class may have refreshed the cache mid-failure —
-    // else the captured entry when eviction removed it; expired by
-    // construction, a fresh one returned early). The serving_stale warn
-    // and every caller's served id derive from this one value, so they can
-    // never disagree.
+    // success carries the probed id; a failure carries the id the failure
+    // serves, decided ONCE at settle time (the freshest known one — a
+    // concurrent probe of the other class may have refreshed the cache
+    // mid-failure — else the captured entry when eviction removed it;
+    // expired by construction, a fresh one returned early) or null when
+    // nothing was ever known. The serving_stale warn and every caller's
+    // served id derive from this one value, so they can never disagree.
     pending = probe(modelsUrl, timeoutMs, apiKey, { quiet })
       .then((id) => {
         // delete+set: the refreshed entry becomes the newest, so the
@@ -335,7 +335,7 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
         _cache.set(cacheKey, { id, ts: Date.now() });
         _negative.delete(probeKey);
         _inflight.delete(probeKey);
-        return { id, servingId: null, err: null };
+        return { id, err: null };
       })
       .catch((err) => {
         // Stored SANITIZED: the axios error retains the request config —
@@ -359,7 +359,7 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
           });
         }
         _inflight.delete(probeKey);
-        return { id: null, servingId: serving ? serving.id : null, err };
+        return { id: serving ? serving.id : null, err };
       })
       // Prune on BOTH settle paths, after the insert: the maps never sit
       // above their bounds — an endpoint that stays down would otherwise
@@ -370,7 +370,10 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
   }
   const outcome = await pending;
   if (outcome.id !== null) return outcome.id;
-  if (outcome.servingId !== null) return outcome.servingId;
+  // The err instance is shared by every awaiter of this one settlement —
+  // transient and request-scoped, unlike the STORED stub whose per-caller
+  // copy rationale sits above (the stub outlives the incident; this error
+  // dies with it).
   throw outcome.err;
 }
 

@@ -370,7 +370,10 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
 
   // Hold a quiet probe in flight against a failure it will release later —
   // the race choreography several tests share (never-settling axios call,
-  // one microtask flush to let the probe start, manual release).
+  // microtask flushes to let the probe start, manual release). The flush
+  // loop is bounded: the probe starts within a few ticks today; if a future
+  // edit adds awaits before the axios call, the loop fails fast instead of
+  // leaking an undefined release into the test.
   async function holdQuietProbeFailing() {
     let release;
     axios.get.mockImplementationOnce(
@@ -380,7 +383,10 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
         })
     );
     const soft = cache.servedModelId('http://vllm:8000'); // quiet probe, held in flight
-    await Promise.resolve();
+    for (let i = 0; i < 10 && !release; i += 1) {
+      await Promise.resolve();
+    }
+    if (!release) throw new Error('the quiet probe never reached axios.get');
     return { soft, release: () => release() };
   }
 

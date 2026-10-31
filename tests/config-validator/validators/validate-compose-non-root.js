@@ -76,6 +76,7 @@ function validateComposeNonRoot(composeText) {
   let localDeploySeen = false;
   let inRestartPolicy = false;
   let currentMaxAttempts = null;
+  let currentMode = null;
   const serviceBinds = {}; // service -> [{path, createHostPath}]
 
   const flush = () => {
@@ -95,7 +96,10 @@ function validateComposeNonRoot(composeText) {
           // resolves conservatively to root: the identity pin is the
           // contract's primary rule and must be a literal — a
           // compose-legal default-to-root variable would ship as root.
-          if (uid === 'root' || Number(uid) === 0 || /[\x24]/.test(currentUser)) {
+          if (
+            !ONE_SHOT_ROOT_INIT[currentService] &&
+            (uid === 'root' || Number(uid) === 0 || /[\x24]/.test(currentUser))
+          ) {
             violations.push(
               `${currentService}: \`user: ${currentUser}\` is root (or a templated pin that could resolve to root) — the contract forbids it`
             );
@@ -181,6 +185,16 @@ function validateComposeNonRoot(composeText) {
           // restart_policy condition under a local deploy: means swarm's
           // default "any", which is not one-shot.
           const anchorDeployApplies = anchorMerged && !localDeploySeen;
+          // mode: global is the anchor's own doctrine (named volumes are
+          // node-local; the init must run on WHATEVER node the follow-up
+          // service lands on). A local deploy: that restates the bounded
+          // policy but drops the mode strands that guarantee.
+          const mode = currentMode !== null ? currentMode : anchorDeployApplies ? anchorDefaults.mode : null;
+          if (mode !== 'global') {
+            violations.push(
+              `${currentService}: ONE_SHOT_ROOT_INIT member must keep deploy.mode: global (got ${mode ?? 'absent'})`
+            );
+          }
           const condition =
             currentRestartPolicyCondition !== null
               ? currentRestartPolicyCondition
@@ -231,6 +245,7 @@ function validateComposeNonRoot(composeText) {
     currentRestart = null;
     currentRestartPolicyCondition = null;
     currentMaxAttempts = null;
+    currentMode = null;
     currentCapAdds = [];
     capAddsSeen = false;
     inCapAdds = false;
@@ -242,7 +257,7 @@ function validateComposeNonRoot(composeText) {
   // Pre-scan the x-chown-init extension anchor: services merge it via
   // `<<: *chown-init`, and a line-level parser must resolve that merge to
   // see the invariants it carries (cap_add, restart, restart_policy).
-  const anchorDefaults = { capAdds: [], restart: null, condition: null, maxAttempts: null };
+  const anchorDefaults = { capAdds: [], restart: null, condition: null, maxAttempts: null, mode: 'global' };
   {
     let inAnchor = false;
     let inAnchorPolicy = false;
@@ -383,9 +398,19 @@ function validateComposeNonRoot(composeText) {
       localDeploySeen = true;
       continue;
     }
+    // flow form: deploy: {mode: replicated} — same shallow-replace
+    // semantics as the block form
+    if (/^ {4}deploy:\s*\{/.test(line)) {
+      localDeploySeen = true;
+      continue;
+    }
     if (inDeploy) {
       if (/^ {6}restart_policy:\s*(?:#.*)?$/.test(line)) {
         inRestartPolicy = true;
+        continue;
+      }
+      if (/^ {6}mode:\s*['"]?(\w+)['"]?\s*(?:#.*)?$/.test(line)) {
+        currentMode = line.match(/^ {6}mode:\s*['"]?(\w+)['"]?\s*(?:#.*)?$/)[1];
         continue;
       }
       if (inRestartPolicy) {
@@ -572,7 +597,7 @@ function validateComposeNonRoot(composeText) {
       // kong logs bind used. The container side always starts with `/` and
       // the greedy host group absorbs `${VAR:-default}` spans (which contain
       // colons); a named volume is a bare name with no `/`-rooted target.
-      const shortBind = line.match(/^ {6}-\s*(.+):(\/[^:\s]+)(?::\S+)?\s*$/);
+      const shortBind = line.match(/^ {6}-\s*(.+):(\/[^:\s]+)(?::\S+)?\s*(?:#.*)?$/);
       if (shortBind) {
         const hostPart = shortBind[1].replace(/^['"]|['"]$/g, '');
         if (/[/${]|^\.?\.?\//.test(hostPart)) {

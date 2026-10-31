@@ -57,8 +57,20 @@
     find {{ deploy_dir }}/{{ data_dir }}/logs -uid 0
     -exec chown -h -f 1000:1000 {} +
   when: _logs_dir.stat.exists and (_logs_root_owned.stdout | length > 0 or _logs_root_owned.rc != 0)
-  changed_when: true
+  register: _logs_heal
+  changed_when: _logs_heal.rc | default(0) == 0
   failed_when: false
+
+- name: Warn if the log handover did not complete
+  # failed_when:false keeps the deploy non-fatal, but the failure must be
+  # VISIBLE in the summary — a silent green 'changed' would leave the
+  # surviving root-owned tree to be discovered only by the runtime gate.
+  ansible.builtin.debug:
+    msg: >-
+      WARNING (#1227): the root-era log handover failed (rc={{ _logs_heal.rc | default('n/a') }});
+      root-owned paths remain under {{ deploy_dir }}/{{ data_dir }}/logs —
+      the runtime gate will flag them.
+  when: _logs_heal.rc | default(0) != 0
 
 - name: Create the backend backup directory as the backend uid (#1227)
   # Pinned to the backend uid AT CREATION: a fresh dir left
@@ -100,5 +112,14 @@
     find {{ deploy_dir }}/{{ data_dir }}/database_backups ! -uid 1000
     -exec chown -h 1000:1000 {} +
   when: _backup_misowned.stdout | length > 0 or _backup_misowned.rc != 0
-  changed_when: true
+  register: _backup_heal
+  changed_when: _backup_heal.rc | default(0) == 0
   failed_when: false
+
+- name: Warn if the backup handover did not complete
+  ansible.builtin.debug:
+    msg: >-
+      WARNING (#1227): the backup-dir handover failed (rc={{ _backup_heal.rc | default('n/a') }});
+      mis-owned paths remain under {{ deploy_dir }}/{{ data_dir }}/database_backups —
+      the runtime gate will flag them.
+  when: _backup_heal.rc | default(0) != 0

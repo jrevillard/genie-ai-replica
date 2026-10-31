@@ -243,6 +243,17 @@ describe('okf store — editor actions (Story #978)', () => {
       expect(store.state.okf.editor.loading).toBe(false);
       expect(store.getters['okf/editorLoadProgress']).toBeNull();
     });
+
+    // Round 20b (#80862): the natural-completion tail now carries the same
+    // stale predicate as the in-loop guard. NOTE ON TESTABILITY: with the
+    // round-11 guard RETURNING at every page boundary and no await between
+    // the last boundary and the tail, no interleaving JS can schedule puts
+    // the tail in a stale state today — the sibling tests above (superseded
+    // mid-loop, repo-switch mid-loop) pin the reachable arms, and the tail
+    // predicate is defense-in-depth for a future await inserted before it.
+    // The construction that would prove it (supersede lands between the
+    // last in-loop check and the tail) is synchronous code — verified
+    // unreachable while writing this.
   });
 
   describe('getConcept', () => {

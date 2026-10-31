@@ -801,6 +801,21 @@ const actions = {
         commit('setConcepts', { repoId, concepts: acc });
         if (multiPage) commit('setConceptsLoadProgress', { repoId, done: acc.length, total });
       }
+      // TAIL GUARD (round 20b, #80862): the natural-completion arm needs the
+      // same predicate as the in-loop guard — a fetch superseded while its
+      // LAST page was in flight must not clear the NEWER fetch's live
+      // progress bar on its way out. Repo-switched with no newer fetch:
+      // nobody else owns the flags, so this exit clears them. (Defense-in-
+      // depth: the round-11 guard RETURNS at every page boundary and there
+      // is no await between the last boundary and here, so this arm is not
+      // reachable stale today — it holds the line if one is ever added.)
+      if (stale()) {
+        if (myGen === fetchGeneration) {
+          commit('setConceptsLoading', false);
+          commit('setConceptsLoadProgress', null);
+        }
+        return { ok: true, concepts: acc, stale: true };
+      }
       commit('setConceptsLoadProgress', null);
       return { ok: true, concepts: acc };
     } catch (err) {

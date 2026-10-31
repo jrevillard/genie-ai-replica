@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The stack no longer runs any container as root.** Every always-on
+  service now declares a non-root user; five short-lived one-shot init
+  containers (`arango-vector-db-init`, `victorialogs-init`,
+  `document-repository-init`, `backend-init`, `otel-collector-init`)
+  chown the existing root-era named volumes to their service's uid on
+  first deploy. A new `arango_apps` named volume appears (the arangodb
+  app directory was previously root-owned inside the container).
+  Kong and the edge nginx log to stdout — the `data/logs` host
+  directory is no longer used, and stale root-era `data/logs` trees are
+  removed by the Ansible deploy.
+- **The edge nginx serves 8080/8443 inside the container** (published
+  host ports stay 80/443). Deployers of the Ansible path need no
+  action; the playbook normalizes certificate ownership
+  (`server.key` → group `101`, mode 0640) so the unprivileged nginx
+  can read the private key.
+
+### Added
+
+- A static compose contract test (`tests/config-validator`) and a
+  runtime gate (`tests/compose-non-root/check-runtime.sh`) enforce the
+  no-root rules: every always-on service pins a non-root user, and host
+  binds under the data directory must pre-exist (`create_host_path:
+  false`) so docker never silently creates a root-owned source.
+
 ### Fixed
 
 - **A duplicate ingest no longer marks the file as failed while an ingest is genuinely running.** When the document repository asked the data-prep service to ingest a file that was already being ingested, the data-prep service refused the duplicate with `409 Conflict` — that file's own ingest was still in flight and running normally. The document repository treated that refusal like any other failure: the file's status flipped to `Ingestion Error` and an `ERROR` row was written to the ingestion log, so operators reading the log saw a permanent failure for a healthy ingest (the status recovered on its own once the running ingest finished; the log row did not). The duplicate request is now ignored the way a busy service already was: the file's status is left alone, an `INFO` row records the ignored duplicate, and the request is answered `409 Conflict` instead of `500`. Only that specific refusal is treated this way — any other conflict still marks the file as failed. (#1251, !658)

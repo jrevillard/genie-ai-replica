@@ -29,8 +29,8 @@ directory fails the backend loudly instead of being created root-owned.
 ```bash
 mkdir -p data/database_backups
 # The backend runs as uid 1000 and must own the directory — your own
-# uid is rarely 1000:
-chown 1000:1000 data/database_backups
+# uid is rarely 1000 (chown needs root):
+sudo chown 1000:1000 data/database_backups
 ```
 
 Upgrading an existing deployment with a pre-#1227 certificate pair?

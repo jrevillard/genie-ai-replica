@@ -114,7 +114,18 @@ function validateComposeNonRoot(composeText) {
             // braceless $VAR is legal compose interpolation too — same
             // conservative treatment (unknown location = under the data dir)
             .replace(/^\$(?!\{)[\w-]+/, './data');
-          if (!/^(\.\/)?data(\/|$)/.test(resolved)) continue;
+          // An ABSOLUTE resolved source is under the data-dir rule too:
+          // re-pointing a variable default at /srv/genie or hand-writing
+          // /var/genie/data must not escape the create_host_path contract
+          // (long syntax only — a short-syntax absolute bind like the
+          // docker socket cannot carry opts and is not a data path).
+          if (
+            b.shortSyntax
+              ? !/^(\.\/)?data(\/|$)/.test(resolved)
+              : !/^(\.\/)?data(\/|$)/.test(resolved) && !resolved.startsWith('/')
+          ) {
+            continue;
+          }
           if (b.shortSyntax) {
             violations.push(
               `${currentService}: host bind "${b.path}" sits under the data directory in short syntax, ` +

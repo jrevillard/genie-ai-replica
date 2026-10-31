@@ -65,8 +65,8 @@ DEPLOY_OPEA=0
 # silently creating it root-owned.
 mkdir -p data/database_backups
 # The backend runs as uid 1000 and must own the directory — your own
-# uid is rarely 1000:
-chown 1000:1000 data/database_backups
+# uid is rarely 1000 (chown needs root):
+sudo chown 1000:1000 data/database_backups
 
 docker compose up -d
 ```

@@ -76,7 +76,9 @@ describe('compose non-root contract (#1227)', () => {
     // The gate exists for the REAL file's ${DATA_DIR:-./data} form — proving
     // it on a synthetic literal path proves nothing. Mutate the actual
     // committed content and watch the violation appear.
-    const mutated = composeText.replace('create_host_path: false', 'create_host_path: true');
+    // replaceAll: the config binds share the spelling — flipping only the
+    // first occurrence would mute the wrong bind after their addition
+    const mutated = composeText.replaceAll('create_host_path: false', 'create_host_path: true');
     expect(mutated).not.toBe(composeText);
     const { violations } = validateComposeNonRoot(mutated);
     expect(violations.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
@@ -295,6 +297,28 @@ describe('compose non-root contract (#1227)', () => {
     expect(localDeploy).not.toBe(composeText);
     const { violations: v2 } = validateComposeNonRoot(localDeploy);
     expect(v2.some((v) => v.includes('backend-init') && v.includes('one-shot'))).toBe(true);
+  });
+
+  test('mutations: absolute resolved sources cannot escape the data-dir rule', () => {
+    // Re-pointing a variable default at an absolute path must not defeat
+    // the gate (long syntax carries the opt-out; short syntax absolute
+    // binds like the docker socket are not data paths and stay out).
+    const repointed = [
+      'services:',
+      '  backend:',
+      '    user: "1000:1000"',
+      '    volumes:',
+      '      - type: bind',
+      '        source: ${DATA_DIR:-/srv/genie}/database_backups',
+      '        target: /app/database_backups',
+      ''
+    ].join('\n');
+    const { violations: v1 } = validateComposeNonRoot(repointed);
+    expect(v1.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
+
+    const handWritten = repointed.replace('${DATA_DIR:-/srv/genie}/database_backups', '/var/genie/data/logs');
+    const { violations: v2 } = validateComposeNonRoot(handWritten);
+    expect(v2.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
   });
 
   test('allowlist entries reference services that exist in the compose file', () => {

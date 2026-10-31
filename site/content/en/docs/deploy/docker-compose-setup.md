@@ -112,17 +112,17 @@ If your organization runs a fork or mirror, replace the URL accordingly.
 ## Step 2: Prepare directories
 
 ```bash
-mkdir -p data/logs/kong data/logs/backend data/logs/doc-repo \
-         data/database_backups secrets/ssl
+mkdir -p data/database_backups secrets/ssl
 ```
 
 | Directory | Purpose |
 |---|---|
-| `data/logs/kong` | Kong gateway logs (bind mount) |
-| `data/logs/backend` | Backend API logs (bind mount) |
-| `data/logs/doc-repo` | Document Repository logs (bind mount) |
 | `data/database_backups` | Backend DB dump output (bind mount) |
 | `secrets/ssl` | SSL certificates — auto-generated self-signed cert if missing |
+
+There is no `data/logs/` since #1227: every service logs to stdout and
+the fluentd logging driver ships the logs — a `data/logs` bind would
+have docker create the directory root-owned.
 
 ## Step 3: Configure `.env`
 

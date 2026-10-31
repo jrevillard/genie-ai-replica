@@ -739,7 +739,11 @@ services:
       restart_policy:
         condition: on-failure
         delay: 5s
-        max_attempts: 10
+        # 60 attempts (~5 min): same init-race as document-repository/arango
+        # — on a root-era upgrade the backend starts while backend-init is
+        # still chowning (backend_uploads can be the largest root-era
+        # volume), and each EACCES crash burns one attempt.
+        max_attempts: 60
 
   okf-server:
     # OKF feature flag (merge prep 2026-10-21): OKF_ENABLED=1 activates the OKF
@@ -766,8 +770,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    volumes:
-      - "${DATA_DIR:-./data}/logs/okf-server:/app/logs"
+    # No host log bind (#1227): the logger's stdout is captured by the
+    # fluentd logging driver like every other service, and a data/logs
+    # bind would have docker recreate the directory root-owned (the same
+    # defect the kong logs bind had). File transports land in the
+    # container's own /app/logs.
     # Allow okf-server to resolve NGINX_PUBLIC_DOMAIN to the Docker host so OIDC
     # discovery/JWKS fetches (KEYCLOAK_URL → public NGINX) reach the host-published 80/443.
     extra_hosts:
@@ -1223,15 +1230,12 @@ services:
       - doc_repo_uploads:/app/uploads
 
   document-repository:
-    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    # least-privilege hardening (SAST wave-4): no capabilities at all.
+    # No cap_add (#1227): the service runs as the image's node user (1000)
+    # and cannot exercise any capability — the image's root-only setup
+    # paths are pre-chowned by document-repository-init.
     cap_drop:
       - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-      - FOWNER
-      - SETUID
-      - SETGID
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
@@ -2423,8 +2427,8 @@ services:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
     cap_drop:
       - ALL
-    cap_add:
-      - CHOWN
+    # No cap_add (#1227): the pinned identity is uid 1000, which cannot
+    # exercise CHOWN — the entries were dead hardening-data.
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging

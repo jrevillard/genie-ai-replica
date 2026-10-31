@@ -208,6 +208,24 @@ describe('compose non-root contract (#1227)', () => {
     expect(violations.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
   });
 
+  test('a commented long-syntax source is still enforced', () => {
+    // A trailing YAML comment is a legal spelling (the user: regex already
+    // tolerates it) — the source: match must not silently drop the bind
+    // out of enforcement.
+    const text = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes:',
+      '      - type: bind',
+      '        source: ${DATA_DIR:-./data}/logs/kong # kong logs',
+      '        target: /var/log/kong',
+      ''
+    ].join('\n');
+    const { violations } = validateComposeNonRoot(text);
+    expect(violations.some((v) => v.includes('kong') && v.includes('create_host_path: false'))).toBe(true);
+  });
+
   test('allowlist entries reference services that exist in the compose file', () => {
     // A renamed or removed service would leave a stale allowlist entry that
     // enforces nothing — dead enforcement data.

@@ -158,6 +158,12 @@ function cacheEntryIsFresh(ts) {
   return Date.now() - ts < ttlSeconds() * 1000;
 }
 
+/** Live vs expired for a negative stub — one home for the cool-down
+ * boundary (the stub check and the age sweep must agree on it). */
+function negativeEntryIsLive(ts) {
+  return Date.now() - ts < NEGATIVE_CACHE_TTL * 1000;
+}
+
 function probeTimeoutMs() {
   // Strict float (the Python twin's positive_float_env): '10abc' is NOT 10 —
   // it is a malformed value and falls back to the default. A different rule
@@ -295,9 +301,9 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
 
   // A recent failure is remembered: answer without touching the network.
   const failed = _negative.get(probeKey);
-  if (failed && Date.now() - failed.ts < NEGATIVE_CACHE_TTL * 1000) {
-    const stale = entry ? entry.id : null;
-    if (stale) return stale; // stale beats broken
+  if (failed && negativeEntryIsLive(failed.ts)) {
+    const stale = _cache.get(cacheKey) || entry;
+    if (stale) return stale.id; // stale beats broken
     // A COPY per caller: the stored stub would otherwise be thrown — and
     // travel to unrelated requests — as one shared, mutable Error whose
     // stack names the first failure's frames.
@@ -329,21 +335,22 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
         // (HTTP status, error code); only the raw cause object is dropped.
         const stored = err instanceof ModelDiscoveryError && err.cause ? new ModelDiscoveryError(err.message) : err;
         _negative.set(probeKey, { ts: Date.now(), cause: stored });
-        // The degradation must be VISIBLE: while the negative window lasts,
-        // callers resolve the STALE id and provenance fields keep naming it
-        // — one line per probe class (not per served call) says so without
-        // flooding. Re-read the cache first: a concurrent probe of the other
-        // class may have refreshed the id while this one was failing — then
-        // a fresh id serves, nothing is degraded, and the line would lie.
-        // And when the entry was EVICTED mid-flight, the captured one is
-        // what this caller was served — expired by construction (a fresh
-        // entry returned early), so the warn still fires.
+        // The degradation must be VISIBLE: when the failing probe leaves
+        // only an EXPIRED id in the cache, callers resolve that stale id —
+        // one line per probe class (not per served call) says so without
+        // flooding. The read below is the same one the awaiting caller's
+        // serve path makes (nothing asynchronous sits between the two), so
+        // the warn and the served id can never disagree. A concurrent probe
+        // of the other class that refreshed the id mid-failure makes this a
+        // no-op — a fresh id serves, nothing is degraded. Eviction falls
+        // back to the captured entry: expired by construction (a fresh one
+        // returned early), and it is what this caller was served.
         const servingNow = _cache.get(cacheKey) || entry;
         if (servingNow && !cacheEntryIsFresh(servingNow.ts)) {
           logger.warn('vllm_model_cache.serving_stale', {
             url: modelsUrl,
             stale_id: servingNow.id,
-            note: 'probe failed — the stale cached id serves until the endpoint answers'
+            note: 'probe failed — the call was served the stale last-known id (stale beats broken)'
           });
         }
         _inflight.delete(probeKey);
@@ -359,10 +366,14 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
   try {
     return await pending;
   } catch (err) {
-    // The probe failed: serve the last known id when there is one (stale >
-    // broken — the Python twin keeps it too), else let the cause through.
-    const stale = entry ? entry.id : null;
-    if (stale) return stale;
+    // The probe failed: serve the id the cache holds NOW — the freshest
+    // known one (a concurrent probe of the other class may have refreshed
+    // it mid-failure), else the captured entry when eviction removed it.
+    // The same read the serving_stale warn above is based on, so the warn
+    // and the served id can never disagree. No id at all: let the cause
+    // through.
+    const serving = _cache.get(cacheKey) || entry;
+    if (serving) return serving.id;
     throw err;
   }
 }
@@ -381,9 +392,8 @@ function pruneCache() {
   while (_cache.size > MAX_CACHE_ENTRIES) {
     _cache.delete(_cache.keys().next().value); // the oldest insertion first
   }
-  const now = Date.now();
   for (const [key, value] of _negative) {
-    if (now - value.ts >= NEGATIVE_CACHE_TTL * 1000) _negative.delete(key);
+    if (!negativeEntryIsLive(value.ts)) _negative.delete(key);
   }
   // The age sweep above only runs when a probe settles — a credential that
   // probes once and is never used again would otherwise leave its stub for

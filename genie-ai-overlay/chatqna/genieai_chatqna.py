@@ -596,8 +596,9 @@ def _build_user_content(user_context_string: str, history_string: str, rag_augme
 
 
 # Fixed completion ceiling a translation request falls back to when no
-# window is known — and the default bound for the callers whose inputs are
-# bounded upstream (the chunk path).
+# window is known, and the default for the callers that translate
+# chunk-bounded inputs (the chunk path). The history path replaces it with
+# the window-derived allowance.
 TRANSLATION_BASE_CEILING = 4096
 
 
@@ -665,7 +666,8 @@ def _get_max_translation_chars() -> int:
 
 # Translation budget derivation from the discovered window. The completion
 # reserve assumes the translated output is roughly the size of the input (the
-# TranslateGemma payload also caps max_tokens near half the window).
+# TranslateGemma history payload caps max_tokens at half the input, clamped
+# to the room the window leaves beside the prompt estimate).
 TRANSLATION_PROMPT_OVERHEAD_TOKENS = 512
 
 
@@ -3664,15 +3666,13 @@ class ChatQnAService:
     def _translation_output_cap(self, flattened_history_string: str) -> int | None:
         """Completion cap for the TranslateGemma payload.
 
-        Base shape is len//2 with a 512 floor, clamped down to the room the
-        window leaves when the translation window is discovered — the
-        ceiling is the allowance beside the prompt estimate (chars /
-        chars-per-token ratio), not the fixed 4096, which would cap the
-        completion below the input past ~12k chars and refuse histories the
-        char budget passes. The cap is None when even the scaled ceiling
-        drops below the estimated input size (the
-        completion would be shorter than what there is to translate); the
-        caller should skip the translation and send the history as-is.
+        Roughly half the input (512 floor). When the translation window is
+        discovered, the ceiling is the room the window leaves beside the
+        prompt estimate (chars / chars-per-token ratio), so prompt and
+        completion stay inside the window together. A history whose estimate
+        exceeds that allowance yields None — the completion would be shorter
+        than what there is to translate — and the caller skips the
+        translation, sending the history as-is.
         """
         window = _get_translation_window()
         prompt_token_estimate = len(flattened_history_string) // TRANSLATION_CHARS_PER_TOKEN

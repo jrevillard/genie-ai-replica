@@ -2322,19 +2322,17 @@ class TestQueryTranslationStatus:
 
     def _translation_patches(self, mock_client, translategemma=False):
         # ExitStack: `with` takes no star-unpacking, and the patches live in a
-        # helper so each test states only what it varies. The TranslateGemma
-        # payload branch posts to the completions endpoint; the generic branch
-        # to the chat-completions one. Window derivation stays per-test (the
-        # live discovery probe and a patched window are different mechanisms).
+        # helper so each test states only what it varies. Both endpoint
+        # constants are patched, to distinct sentinels, so a test asserting
+        # the posted URL also pins which branch built the payload. Window
+        # derivation stays per-test (the live discovery probe and a patched
+        # window are different mechanisms).
         stack = contextlib.ExitStack()
         for p in (
             patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
             patch("chatqna.genieai_chatqna._is_translategemma", return_value=translategemma),
-            patch(
-                "chatqna.genieai_chatqna."
-                + ("TRANSLATION_COMPLETIONS_URL" if translategemma else "TRANSLATION_LLM_URL"),
-                "http://localhost/v1/completions" if translategemma else "http://localhost/v1/chat/completions",
-            ),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://chat-llm.test/v1/chat/completions"),
+            patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://completions.test/v1/completions"),
         ):
             stack.enter_context(p)
         return stack
@@ -2505,6 +2503,9 @@ class TestQueryTranslationStatus:
         with stack:
             text, status = await svc._get_translated_history_string(history)
         assert status == "translated"
+        # The completions payload goes to the completions endpoint: vLLM
+        # cannot route the TranslateGemma template through chat completions.
+        assert mock_client.post.call_args.args[0] == "http://completions.test/v1/completions"
         # Flattened "USER: " + 13000 chars → cap len//2 = 6503, inside the
         # 65536-window allowance (65536 − 512 − 4335 = 60689).
         assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 6503

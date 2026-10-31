@@ -2172,6 +2172,46 @@ class TestTranslationHelpers:
         ):
             result = await svc._translate_chunk_in_language("Hello", "es", "Spanish")
         assert result == "Hola"
+        # The generic chunk payload sizes its completion too (the same base
+        # cap the TranslateGemma chunk payload sends): 5 chars → 512 floor.
+        assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 512
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "completions",
+        [
+            pytest.param(True, id="translategemma"),
+            pytest.param(False, id="generic"),
+        ],
+    )
+    async def test_translate_chunk_in_language_refuses_a_truncated_completion(self, completions):
+        """A chunk completion cut off at max_tokens is not a translation:
+        spliced into the answer it would read as a translation missing its
+        tail. Both payload shapes refuse it (the answer path fails loudly,
+        the single-message history path maps the raise to fallback_error)."""
+        from chatqna.genieai_chatqna import TranslationFailedError
+
+        svc = create_chatqna_service()
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        if completions:
+            mock_response.json.return_value = {"choices": [{"text": "Bonjo", "finish_reason": "length"}]}
+        else:
+            mock_response.json.return_value = {"choices": [{"message": {"content": "Hola"}, "finish_reason": "length"}]}
+        mock_response.raise_for_status = MagicMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=completions),
+            patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://localhost/v1/completions"),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+            patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
+            pytest.raises(TranslationFailedError),
+        ):
+            await svc._translate_chunk_in_language("Hello", "es", "Spanish")
 
     @pytest.mark.asyncio
     async def test_translate_chunk_in_language_context_overflow_raises_typed(self):
@@ -2573,13 +2613,17 @@ class TestQueryTranslationStatus:
         mock_client = self._mock_client(content="USER: AAAA")
         stack = self._translation_patches(mock_client, translategemma=False)
         stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=65536))
+        # The char budget is patched wide so the history reaches the cap
+        # guard instead of being dropped by the budget loop (an exported
+        # MAX_TRANSLATION_CHARS would otherwise shrink the budget).
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=20000))
         with stack:
             text, status = await svc._get_translated_history_string(history)
         assert status == "translated"
         # The chat payload goes to the chat-completions endpoint.
         assert mock_client.post.call_args.args[0] == "http://chat-llm.test/v1/chat/completions"
-        # Flattened "USER: " + 13000 chars → cap len//2 = 6503, inside the
-        # 65536-window allowance (65536 − 512 − 4335 = 60689).
+        # Same derivation as the TranslateGemma payload test above: the
+        # 13006-char flattened history → cap len//2 = 6503.
         assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 6503
         assert text == "USER: AAAA"
 
@@ -2598,6 +2642,22 @@ class TestQueryTranslationStatus:
         with stack:
             text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
         assert text == "USER: qué es X?"  # untranslated
+        assert status == "fallback_error"
+
+    @pytest.mark.asyncio
+    async def test_a_single_message_truncated_completion_reports_fallback_error(self):
+        """Single-message mode goes through the chunk translator, whose
+        truncation refusal raises: the history path keeps its own contract
+        and reports the source text under fallback_error — never the
+        cut-off completion under `translated`."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="what is")
+        mock_client.post.return_value.json.return_value = {
+            "choices": [{"message": {"content": "what is"}, "finish_reason": "length"}]
+        }
+        with self._translation_patches(mock_client, translategemma=False):
+            text, status = await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
+        assert text == "¿qué es X?"  # the source, not the cut-off completion
         assert status == "fallback_error"
 
     @pytest.mark.asyncio

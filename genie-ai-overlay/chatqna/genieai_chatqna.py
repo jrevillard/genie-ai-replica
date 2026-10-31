@@ -4100,7 +4100,12 @@ class ChatQnAService:
                 f"Only output the translated text, nothing else."
                 f"\n\nText: {text}\n\nTranslation:"
             )
-            payload = {"messages": [{"role": "user", "content": prompt}], "temperature": 0, "stream": False}
+            payload = {
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0,
+                "stream": False,
+                "max_tokens": _translation_base_cap(text),
+            }
             url = TRANSLATION_LLM_URL
 
         if logflag:
@@ -4115,10 +4120,8 @@ class ChatQnAService:
                 )
                 response.raise_for_status()
                 response_data = response.json()
-                if translategemma:
-                    translated = response_data["choices"][0]["text"].strip()
-                else:
-                    translated = response_data["choices"][0]["message"]["content"].strip()
+                choice = response_data["choices"][0]
+                translated = choice["text"].strip() if translategemma else choice["message"]["content"].strip()
         except Exception as e:
             # Fail-loud on vLLM context overflow: silently returning the
             # original English text breaks the multilingual UX (#829). Classify
@@ -4139,6 +4142,15 @@ class ChatQnAService:
                 raise TranslationTimeoutError(f"translation chunk timed out: {type(e).__name__}: {str(e)[:200]}") from e
             logger.warning(f"Failed to translate chunk: {type(e).__name__}: {e}")
             raise TranslationFailedError(f"translation chunk failed: {type(e).__name__}: {str(e)[:200]}") from e
+
+        if choice.get("finish_reason") == "length":
+            # The completion hit max_tokens: the translation is cut off, not
+            # finished. Spliced into the answer it would read as a section
+            # that just stops — the same defect the history path refuses —
+            # so the chunk fails loudly (the single-message history path
+            # maps this raise to its fallback_error status).
+            logger.warning("Translation model hit max_tokens; treating the chunk translation as failed.")
+            raise TranslationFailedError("translation model hit max_tokens: the chunk translation is cut off")
 
         if not translated and text.strip():
             # The model answered with nothing. The chunk would join the answer

@@ -1083,6 +1083,9 @@ test.describe('Welcome banner invariants', () => {
   // six tests were killed mid-loop by the harness with the viewport list's
   // last cell unmeasured. This raises the budget only — every floor,
   // threshold and expectation below is unchanged.
+  // Looser than the project default (60000 per playwright.config.js):
+  // this describe sizes its own ceiling because its steps — the
+  // viewport × theme loops above — can legitimately run long.
   test.describe.configure({ timeout: 180000 });
 
   test('1. the scrim alpha is at or above its theme floor and is the alpha it paints with', async ({ browser }) => {

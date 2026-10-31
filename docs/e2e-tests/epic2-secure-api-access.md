@@ -1133,7 +1133,7 @@ curl -sk "https://localhost/api/me" \
 
 **Expected**: `HTTP: 401` with `{"error": "TOKEN_EXPIRED", "message": "Token has expired"}`
 
-**Note**: Do NOT restore `accessTokenLifespan` yet — K.5 handles that. In the Playwright spec (`k1-auth-error-display.spec.js`), the restore is in `afterAll` to guarantee cleanup even if tests fail.
+**Note**: Do NOT restore `accessTokenLifespan` yet — K.5 handles that. In the Playwright spec (`k1-auth-error-display.spec.js`), the deployment's lifespan is captured before any mutation; the K.3 test restores it before minting its own tokens, and `afterAll` restores it again on failure paths (skipped when the capture itself failed).
 
 ### Test K.3 — FORBIDDEN (User Without Roles)
 

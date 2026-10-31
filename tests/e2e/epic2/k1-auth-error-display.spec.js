@@ -1,26 +1,57 @@
 const { test, expect } = require('@playwright/test');
-const { getAdminToken, getUserToken, request: authRequest } = require('../helpers/auth');
-const { createUser, deleteUser, updateRealmSettings } = require('../helpers/keycloak-admin');
+const {
+  getAdminToken,
+  getSessionTokenViaUI,
+  request: authRequest,
+  SESSION_MINT_TIMEOUT_MS,
+} = require('../helpers/auth');
+const { createUser, deleteUser, getRealmSettings, updateRealmSettings } = require('../helpers/keycloak-admin');
 
 test.describe.serial('Phase K: Auth Error Display', () => {
+  // See SESSION_MINT_TIMEOUT_MS: describe.configure covers the tests,
+  // the in-hook test.setTimeout covers beforeAll (hooks read the
+  // project timeout, not the suite timeout).
+  test.describe.configure({ timeout: SESSION_MINT_TIMEOUT_MS });
+
   let adminToken;
-  let userToken;
   let noRolesUserId;
+  let originalLifespan;
   const NOROLES_USERNAME = 'noroles-user-e2e';
   const NOROLES_PASSWORD = 'TestPass123!';
 
   test.beforeAll(async () => {
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
     adminToken = await getAdminToken();
-    userToken = await getUserToken('testuser', 'TestPass123!');
+
+    // K.2 mutates the realm's token lifespan; restore whatever the
+    // deployment actually runs, not an assumed default. Failing the
+    // capture fails the suite BEFORE K.2 can mutate anything — a
+    // best-guess restore would write 300 onto a stack running
+    // something else.
+    const realm = await getRealmSettings(adminToken, 'genie');
+    if (!realm.accessTokenLifespan) {
+      throw new Error('Cannot capture accessTokenLifespan — refusing to run the lifespan-mutating tests');
+    }
+    originalLifespan = String(realm.accessTokenLifespan);
   });
 
   test.afterAll(async () => {
-    // Always restore realm settings (even if K.2 or K.3 failed)
-    try {
-      const token = await getAdminToken();
-      await updateRealmSettings(token, 'genie', { accessTokenLifespan: '300' });
-    } catch {
-      // Best-effort restore
+    // Cleanup chains up to four 30s-capped admin requests on a stalled
+    // stack — past the 60s project timeout the hook otherwise runs under.
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
+
+    // Restore the lifespan only when it was actually captured AND K.2
+    // could have mutated it — afterAll runs even when beforeAll threw,
+    // and guessing 300 would rewrite a deployment running something else.
+    if (originalLifespan) {
+      try {
+        const token = await getAdminToken();
+        await updateRealmSettings(token, 'genie', { accessTokenLifespan: originalLifespan });
+      } catch (e) {
+        // Best-effort, never silent: if K.2 ran, a failed restore leaves
+        // the realm at its 10s lifespan, poisoning every suite after.
+        console.warn(`k1 afterAll: lifespan restore failed — verify the realm's accessTokenLifespan manually: ${e.message}`);
+      }
     }
 
     // Cleanup: delete no-roles user if created
@@ -34,9 +65,15 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     }
   });
 
-  test('K.1 — TOKEN_INVALID (modified token)', async () => {
-    // Modify one character in the token
-    const tokenParts = userToken.split('.');
+  test('K.1 — TOKEN_INVALID (modified token)', async ({ browser }) => {
+    // A GENIE session token, not the admin token: the backend accepts a
+    // genie token unmodified, so only the mangling below can produce the
+    // rejection — with an admin token the assertion could never fail
+    // (unknown issuer is already TOKEN_INVALID). Mangling the first
+    // payload character corrupts the base64/JSON: the token dies at
+    // payload decode, before signature verification is attempted.
+    const genieToken = await getSessionTokenViaUI({ browser });
+    const tokenParts = genieToken.split('.');
     tokenParts[1] = 'X' + tokenParts[1].slice(1); // Change first char of payload
     const modifiedToken = tokenParts.join('.');
 
@@ -47,12 +84,17 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     expect(res.data.error).toBe('TOKEN_INVALID');
   });
 
-  test('K.2 — TOKEN_EXPIRED (short-lived token)', async () => {
+  test('K.2 — TOKEN_EXPIRED (short-lived token)', async ({ browser }) => {
+    // Fresh admin token: the beforeAll mint can be minutes old once K.2's
+    // own session mint and expiry poll have run.
+    adminToken = await getAdminToken();
+
     // Reduce lifespan to 10s
     await updateRealmSettings(adminToken, 'genie', { accessTokenLifespan: '10' });
 
-    // Get fresh token (expires in 10s)
-    const shortToken = await getUserToken('testuser', 'TestPass123!');
+    // Get fresh session token (issued after the lifespan change above,
+    // so it carries the 10s expiry)
+    const shortToken = await getSessionTokenViaUI({ browser });
 
     // Wait for expiry (polling up to 30s)
     const startTime = Date.now();
@@ -70,10 +112,22 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     expect(res.status).toBe(401);
     expect(res.data.error).toBe('TOKEN_EXPIRED');
 
-    // Note: lifespan restore happens in afterAll
+    // Note: K.3 restores the captured lifespan before its own mint;
+    // afterAll restores it again for the failure paths.
   });
 
-  test('K.3 — FORBIDDEN (user without roles)', async () => {
+  test('K.3 — FORBIDDEN (user without roles)', async ({ browser }) => {
+    // Fresh admin token — the beforeAll mint can be minutes old by now.
+    adminToken = await getAdminToken();
+
+    // Restore the genie lifespan before the browser mint below: K.2
+    // left it at 10s, and the no-roles token is issued by genie — with
+    // the lifespan still at 10s, a loaded stack could see that token
+    // expire between its mint and the admin request, where FORBIDDEN
+    // is what this test verifies. Admin tokens are issued by the
+    // master realm and are not affected by the genie setting.
+    await updateRealmSettings(adminToken, 'genie', { accessTokenLifespan: originalLifespan });
+
     // Create no-roles user
     noRolesUserId = await createUser(adminToken, 'genie', {
       username: NOROLES_USERNAME,
@@ -82,8 +136,13 @@ test.describe.serial('Phase K: Auth Error Display', () => {
       realmRoles: [], // No roles
     });
 
-    // Get token for no-roles user
-    const noRolesToken = await getUserToken(NOROLES_USERNAME, NOROLES_PASSWORD);
+    // Get token for no-roles user via a browser login session — the realm
+    // refuses ROPC by design, and login itself is not role-gated (only
+    // the admin endpoint below is).
+    const noRolesToken = await getSessionTokenViaUI({
+      browser,
+      user: { username: NOROLES_USERNAME, password: NOROLES_PASSWORD },
+    });
 
     // Attempt admin endpoint
     const res = await authRequest('GET', '/api/admin/users', {

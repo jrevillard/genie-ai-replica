@@ -1,35 +1,55 @@
 const { test, expect } = require('@playwright/test');
-const { getAdminToken, getUserToken, request: authRequest, parseJwtClaims } = require('../helpers/auth');
-const { createUser, deleteUser } = require('../helpers/keycloak-admin');
+const {
+  getAdminToken,
+  getUserToken,
+  getSessionTokenViaUI,
+  request: authRequest,
+  parseJwtClaims,
+  SESSION_MINT_TIMEOUT_MS,
+} = require('../helpers/auth');
+const { createUser, deleteUser, enableDirectAccessGrants } = require('../helpers/keycloak-admin');
 
 /**
  * Phase I: Multi-Realm Configuration (Story 2-9)
  *
- * Prerequisites (set up in Phase 0, Step 0.7b):
+ * Prerequisites (set up in Phase 0, Step 0.6):
  *   - KEYCLOAK_ADDITIONAL_REALMS includes "genie2" in .env
  *   - genie2 realm exists in Keycloak (created before backend started)
  *   - Backend has been restarted to load genie2 JWKS
  */
 test.describe.serial('Phase I: Multi-Realm Configuration', () => {
+  // See SESSION_MINT_TIMEOUT_MS: describe.configure covers the tests,
+  // the in-hook test.setTimeout covers beforeAll (hooks read the
+  // project timeout, not the suite timeout).
+  test.describe.configure({ timeout: SESSION_MINT_TIMEOUT_MS });
+
   let adminToken;
+  let genie1Token;
   const TEST_REALM = 'genie2';
   const TEST_USER = { username: 'testuser2', password: 'TestPass123!', email: 'testuser2@genie2.local' };
 
-  test.beforeAll(async () => {
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
     adminToken = await getAdminToken();
 
-    // Create test user in genie2 (realm should already exist from Phase 0.7b)
-    try {
-      await createUser(adminToken, TEST_REALM, TEST_USER);
-    } catch (err) {
-      // User may already exist from a previous test run — that's OK
-      if (!err.message.includes('409')) {
-        throw err; // Re-throw real errors (e.g. realm doesn't exist)
-      }
-    }
+    // genie2 is test-only: enable ROPC for its direct token mints
+    // (see enableDirectAccessGrants — never on the primary realm).
+    await enableDirectAccessGrants(adminToken, TEST_REALM, 'genie-app');
+
+    // Primary-realm token from a browser login session — minted once,
+    // like the sibling suites.
+    genie1Token = await getSessionTokenViaUI({ browser });
+
+    // Create test user in genie2 (realm should already exist from Phase
+    // 0.6; createUser tolerates a 409 from a previous run)
+    await createUser(adminToken, TEST_REALM, TEST_USER);
   });
 
   test.afterAll(async () => {
+    // Cleanup chains up to three 30s-capped admin requests on a stalled
+    // stack — past the 60s project timeout the hook otherwise runs under.
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
+
     // Cleanup: delete test user only (realm lifecycle is managed by Phase 0)
     try {
       const token = await getAdminToken();
@@ -62,20 +82,21 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
   });
 
   test('I.2 — tokens from different realms have different issuers', async () => {
-    const genie1Token = await getUserToken('testuser', 'TestPass123!');
+    // genie1 from the beforeAll browser session; genie2 keeps ROPC as
+    // provisioned above.
     const genie2Token = await getUserToken(TEST_USER.username, TEST_USER.password, { realm: TEST_REALM });
 
     const claims1 = parseJwtClaims(genie1Token);
     const claims2 = parseJwtClaims(genie2Token);
 
     // Assert: issuers are different
-    expect(claims1.iss, 'genie1 issuer must contain "realms/genie"').toContain('realms/genie');
+    // endsWith, not contains: 'realms/genie2' contains 'realms/genie'.
+    expect(claims1.iss, 'genie1 issuer must end with "realms/genie"').toMatch(/realms\/genie$/);
     expect(claims2.iss, 'genie2 issuer must contain "realms/genie2"').toContain('realms/genie2');
     expect(claims1.iss, 'Issuers must be different').not.toBe(claims2.iss);
   });
 
   test('I.3 — backend validates tokens from both realms simultaneously', async () => {
-    const genie1Token = await getUserToken('testuser', 'TestPass123!');
     const genie2Token = await getUserToken(TEST_USER.username, TEST_USER.password, { realm: TEST_REALM });
 
     const res1 = await authRequest('GET', '/api/me', {

@@ -347,6 +347,23 @@ def test_guard_fails_with_diagnostic_on_undecodable_file(tmp_path):
         mod.apply_patch(p)
 
 
+def test_guard_fails_with_diagnostic_on_cr_only_file(tmp_path):
+    """The tokenizer counts lone \\r as line separators but the patcher's
+    index math splits on \\n: a CR-only file would index out of range. The
+    guard must name the ending convention, not leak an IndexError."""
+    p = tmp_path / "orchestrator.py"
+    p.write_bytes(FAKE_ORCHESTRATOR.replace("\n", "\r").encode("utf-8"))
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
+def test_orchestrator_path_defaults_to_the_image_layout(monkeypatch):
+    """The Dockerfile RUN invokes the patcher with no argv: the default must
+    stay pinned to the vendored path Python actually imports."""
+    monkeypatch.setattr(sys, "argv", ["comps_llm_stream_offloop_patch.py"])
+    assert mod.orchestrator_path() == Path("/home/user/comps/cores/mega/orchestrator.py")
+
+
 def test_unawaited_helper_calls_are_not_wrapped_sites(tmp_path):
     """`response = _llm_post_offloop(...)` without `await` is not a wrapped
     site — it is the broken shape the patch exists to prevent. With two such

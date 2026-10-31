@@ -145,13 +145,15 @@ def _module_imports(source: str) -> tuple[set[str], int]:
     return bindings, last_import_end
 
 
-def _streaming_site_lines(source: str) -> list[int]:
-    """1-based line numbers of the streaming call sites, parsed not regexed.
+def _requests_post_assignments(source: str, target_name: str) -> list[int]:
+    """1-based line numbers of ``<target_name> = requests.post(...)``
+    assignments, parsed not regexed.
 
-    A site is an assignment of ``requests.post(...)`` to the name
-    ``response`` — the vendored v1.5 shape. A line that merely LOOKS like
-    the call (string content, a comment) is not an assignment and never
-    counts; prose cannot inflate the site count past the exactly-2 guard.
+    One definition of the vendored call-site shape for both consumers: the
+    streaming sites assign to ``response`` (the exactly-2 guard), the
+    generator sites to ``res`` (the stay-untouched contract). A line that
+    merely LOOKS like the call (string content, a comment) is not an
+    assignment and never counts; prose cannot inflate any count.
     """
     tree = ast.parse(source)
     out = []
@@ -163,10 +165,15 @@ def _streaming_site_lines(source: str) -> list[int]:
             and node.value.func.attr == "post"
             and isinstance(node.value.func.value, ast.Name)
             and node.value.func.value.id == "requests"
-            and any(isinstance(t, ast.Name) and t.id == "response" for t in node.targets)
+            and any(isinstance(t, ast.Name) and t.id == target_name for t in node.targets)
         ):
             out.append(node.lineno)
     return sorted(out)
+
+
+def _streaming_site_lines(source: str) -> list[int]:
+    """The streaming call sites: requests.post assigned to ``response``."""
+    return _requests_post_assignments(source, "response")
 
 
 def apply_patch(path: Path) -> str:
@@ -214,6 +221,12 @@ def apply_patch(path: Path) -> str:
         )
     sites = []
     for lineno in ast_sites:
+        if lineno - 1 >= len(lines):
+            raise SystemExit(
+                f"ASSERT-ON-PATCH GUARD FAILED: {path} uses lone-\r (classic-Mac) line endings — "
+                "the tokenizer counts them as lines but the patcher's index math cannot; re-derive "
+                "the patch."
+            )
         rewrapped = _rewrap_line(lines[lineno - 1])
         if rewrapped is None:
             raise SystemExit(

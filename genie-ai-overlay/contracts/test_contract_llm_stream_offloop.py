@@ -24,7 +24,6 @@ the in-image contract lane (``contract:chatqna-server``), which is the venue
 that matters.
 """
 
-import ast
 import importlib.util
 import inspect
 from pathlib import Path
@@ -54,7 +53,6 @@ def test_the_imported_orchestrator_is_the_patched_copy(comps):
     patcher = _load_patcher()
     module = importlib.import_module("comps.cores.mega.orchestrator")
     source = inspect.getsource(module)
-    tree = ast.parse(source)
 
     # The patcher's own detector, not a weaker local copy: module-level def
     # AND the to_thread(requests.post) dispatch in its body.
@@ -72,20 +70,8 @@ def test_the_imported_orchestrator_is_the_patched_copy(comps):
         "a streaming call site is still calling requests.post directly in the imported module — "
         "the event loop would stay pinned for the duration of the LLM first-headers wait"
     )
-    # The generator sites are assignments of requests.post(...) to `res` —
-    # counted through the AST like everything else, so prose quoting the
-    # shape cannot inflate the count.
-    res_assignments = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Assign)
-        and isinstance(node.value, ast.Call)
-        and isinstance(node.value.func, ast.Attribute)
-        and node.value.func.attr == "post"
-        and isinstance(node.value.func.value, ast.Name)
-        and node.value.func.value.id == "requests"
-        and any(isinstance(target, ast.Name) and target.id == "res" for target in node.targets)
-    ]
+    # The generator sites, through the patcher's one detector definition.
+    res_assignments = patcher._requests_post_assignments(source, "res")
     assert len(res_assignments) == 2, (
         "the two sync generator call sites must stay untouched — they already run off-loop in "
         "StreamingResponse's threadpool and cannot await"

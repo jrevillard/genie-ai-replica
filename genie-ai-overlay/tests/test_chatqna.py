@@ -2436,6 +2436,17 @@ class TestQueryTranslationStatus:
         assert text == "USER: qué es X?"
         assert status == "fallback_error"
 
+    @pytest.mark.asyncio
+    async def test_a_message_without_content_does_not_crash_the_budget_loop(self):
+        """Request validation permits a message with no content key; the
+        budget loop must read it as empty, not raise."""
+        svc = create_chatqna_service()
+        history = [{"role": "user", "content": "qué es X?"}, {"role": "assistant"}]
+        with self._translation_patches(self._mock_client(content="USER: what is X?")):
+            text, status = await svc._get_translated_history_string(history)
+        assert text == "USER: what is X?"
+        assert status == "translated"
+
 
 # ===========================================================================
 # Task 11: Test fetch_file_metadata()

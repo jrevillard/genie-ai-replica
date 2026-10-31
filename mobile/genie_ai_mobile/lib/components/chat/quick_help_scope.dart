@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:genie_ai_mobile/utils/config_resolver.dart';
 
 // The Quick Help rules, on both sides of the button: the SCOPE it claims
@@ -208,6 +209,26 @@ Map<String, dynamic>? quickHelpButtonById(
   return null;
 }
 
+/// Whether a locale-marker state is a DRIFT: the consumer's per-locale
+/// data (the Quick Help buttons, the sidebar scope's title) was last
+/// resolved under [loadedLocale] and the app has moved to
+/// [currentLocale].
+///
+/// One rule for every locale-marked reload in the chatbot — the buttons'
+/// and the title's markers must not disagree about what a drift is. A
+/// null [loadedLocale] names the consumer's own before-the-first-mark
+/// state, and whether that counts as a drift is the CALLER's fact — the
+/// buttons' first load is still in flight then (a re-entry must not
+/// start a second parse), while the title has nothing installed yet (the
+/// marker is consumed all the same, or the next locale change would go
+/// unseen). The wrappers below attach those stories.
+bool isLocaleDrift({
+  required String? loadedLocale,
+  required String currentLocale,
+}) {
+  return loadedLocale != null && loadedLocale != currentLocale;
+}
+
 /// Whether the Quick Help buttons must re-resolve for [currentLocale].
 ///
 /// The buttons are per-locale text resolved by a load; [loadedLocale] is
@@ -221,7 +242,10 @@ bool shouldReloadQuickHelpButtons({
   required String? loadedLocale,
   required String currentLocale,
 }) {
-  return loadedLocale != null && loadedLocale != currentLocale;
+  return isLocaleDrift(
+    loadedLocale: loadedLocale,
+    currentLocale: currentLocale,
+  );
 }
 
 /// The title [button] carries, or null when it carries no title.
@@ -252,6 +276,103 @@ String? activeQuickHelpTitleFor(
   return quickHelpTitleOf(
     quickHelpButtonById(buttons, activeQuickHelpButtonId),
   );
+}
+
+/// Whether a sidebar scope's context-bar title can be re-titled from a
+/// localized tree at all.
+///
+/// The title of a LIVE selection is the joined localized names of the
+/// picked services, and every pick that carries an ENGLISH label
+/// ([serviceLabelsEn]) can be re-named from the tree. A pick without a
+/// label ([serviceCount] above the label count) has no identity to
+/// re-name — a partial join would silently drop it from the visible
+/// scope. The `serviceCount > 0` clause restates the flag's own meaning
+/// ([fromSelection] is count > 0 by its only writer) and is kept
+/// deliberately: this predicate is a standalone contract, not a shadow
+/// of the writer. A restored scope keeps the rule it was resolved under
+/// (the category name the conversation's edge names), and an active
+/// BUTTON scope is re-titled from the config by its id — neither is this
+/// selection's join.
+bool sidebarTitleFollowsLocale({
+  required bool fromSelection,
+  required String? activeButtonId,
+  required int serviceCount,
+  required List<String> serviceLabelsEn,
+}) {
+  return fromSelection &&
+      activeButtonId == null &&
+      serviceCount > 0 &&
+      serviceLabelsEn.length == serviceCount;
+}
+
+/// Whether the sidebar-title fetch's captured scope state is STILL the
+/// scope installed: the same ENGLISH labels AND the same count (a pick
+/// without a label changes the count but not the labels — committing
+/// the join over it would show a scope narrower than the one the query
+/// filters on), still a live selection ([fromSelection]), still not a
+/// button scope. A restore or a press mid-flight owns the title then,
+/// and the fetched names are dropped however well the rest matches.
+bool sidebarTitleCaptureMatchesSelection({
+  required List<String> capturedLabels,
+  required int capturedCount,
+  required List<String> labels,
+  required int count,
+  required bool fromSelection,
+  required String? activeButtonId,
+}) {
+  return listEquals(capturedLabels, labels) &&
+      capturedCount == count &&
+      fromSelection &&
+      activeButtonId == null;
+}
+
+/// The localized DISPLAY name of every entity the [tree] carries, by its
+/// ENGLISH label — the identity a sidebar selection stores. The tree is
+/// the locale-localized hierarchy fetch (the same endpoint the sidebar
+/// panel renders): `label` is the localized display text, `name` its
+/// fallback, and `nameEN` the identity. The first entity wins when two
+/// share an ENGLISH label. The map feeds DISPLAY only — it never reaches
+/// the filter wire, which speaks the stored ENGLISH labels themselves.
+Map<String, String> localizedDisplayNamesOf(List<dynamic> tree) {
+  final byEn = <String, String>{};
+  void visit(List<dynamic> entries) {
+    for (final entry in entries) {
+      if (entry is! Map) continue;
+      final en = entry['nameEN'];
+      final display = entry['label'] ?? entry['name'];
+      if (en is String &&
+          en.isNotEmpty &&
+          display is String &&
+          display.isNotEmpty) {
+        byEn.putIfAbsent(en, () => display);
+      }
+      final children = entry['children'];
+      if (children is List) visit(children);
+    }
+  }
+
+  visit(tree);
+  return byEn;
+}
+
+/// The re-titled context-bar text for a sidebar selection whose ENGLISH
+/// labels are [labelsEn], named from [displayNames] — the same joined
+/// shape the panel installed the title with. Null when the title must
+/// stay as it is: a label the localized tree does not carry, or names
+/// with an empty display, cannot be re-titled, and a PARTIAL join would
+/// show a scope narrower than the one the query filters on.
+String? sidebarScopeTitleFor(
+  List<String> labelsEn,
+  Map<String, String> displayNames,
+) {
+  if (labelsEn.isEmpty) return null;
+  final names = <String>[];
+  for (final label in labelsEn) {
+    final name = displayNames[label];
+    if (name == null || name.isEmpty) return null;
+    names.add(name);
+  }
+  return names.join(', ');
 }
 
 /// The button's [key] as a string — ONE read of the id and the category,

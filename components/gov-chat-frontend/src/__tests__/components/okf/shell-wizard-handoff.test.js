@@ -61,11 +61,12 @@ function mountShell() {
     }
   });
   store.dispatch = dispatch;
+  store.commit = jest.fn();
   const w = mount(OkfRepoEditorShell, {
     props: { repoId: 'r1', draft: { repo_id: 'r1', name: 'R1', studio_step: 9 }, sourceFileId: null },
     global: { plugins: [store] }
   });
-  return { w, dispatch };
+  return { w, dispatch, commit: store.commit };
 }
 
 describe('RepoEditorShell — embedded wizard hand-off wiring', () => {
@@ -75,6 +76,19 @@ describe('RepoEditorShell — embedded wizard hand-off wiring', () => {
     expect(wiz.exists()).toBe(true);
     wiz.vm.$emit('finish', { repo_id: 'r1' });
     await w.vm.$nextTick();
+    expect(dispatch).toHaveBeenCalledWith('okf/setEditorSubTab', 'editor');
+  });
+
+  // Round 18, #80474: the flagged-file click (#80356) must switch the sub-tab
+  // too — with the WIZARD tab active the editor pane is v-show-hidden, so a
+  // bare setSelectedConcept commit lands somewhere invisible.
+  it('openFlaggedConcept selects the concept AND switches to the editor sub-tab', async () => {
+    const { w, dispatch, commit } = mountShell();
+    w.vm.publishOpen = true;
+    w.vm.openFlaggedConcept('c-1');
+    await w.vm.$nextTick();
+    expect(w.vm.publishOpen).toBe(false);
+    expect(commit).toHaveBeenCalledWith('okf/setSelectedConcept', 'c-1');
     expect(dispatch).toHaveBeenCalledWith('okf/setEditorSubTab', 'editor');
   });
 

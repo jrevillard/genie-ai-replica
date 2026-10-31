@@ -669,7 +669,7 @@
                 </div>
 
                 <div v-if="activeTab === 'studio'" class="dashboard-card" style="grid-column: span 2">
-                  <OkfStudioTab />
+                  <OkfStudioTab ref="okfStudioTab" @studio-ready="flushPendingStudioEvents" />
                 </div>
                 <div v-if="activeTab === 'database'" class="dashboard-card" style="grid-column: span 2">
                   <div class="card-header">
@@ -1772,6 +1772,9 @@ export default {
 
       // Tab navigation
       activeTab: 'overview',
+      // Studio hand-off dispatches queued while the async StudioTab chunk is
+      // still loading — drained on its 'studio-ready' emit (round 18, #80478).
+      pendingStudioEvents: [],
       tabs: [
         { id: 'overview', label: 'System Health' },
         { id: 'hierarchy', label: 'Knowledge Hierarchy' },
@@ -2125,7 +2128,15 @@ export default {
     deletableSelection() {
       if (this.selectedDocuments.length === 0) return [];
       const blockedIds = new Set(this.blockedSelection.map((d) => d.file_id));
-      return this.selectedDocuments.filter((id) => !blockedIds.has(id));
+      // Round 18 (#80486): blockedSelection only sees rows in the LOADED
+      // documents list — a blocked row hidden by the active search filter
+      // (or a stale selection) was counted deletable, the confirm dialog
+      // over-promised "N file(s) will be deleted" including it, and the
+      // server then refused it per-file (STILL_SERVING) as a "partial
+      // failure" the dialog said could not happen. Only ids the loaded
+      // list can vouch for count as deletable.
+      const loadedIds = new Set(this.documents.map((d) => d.file_id));
+      return this.selectedDocuments.filter((id) => loadedIds.has(id) && !blockedIds.has(id));
     },
 
     // Gate for the "Create OKF repository" button. AMENDED (Story 7.7,
@@ -2379,12 +2390,14 @@ export default {
 
     // Apply theme
     applyTheme(theme) {
-      // ECHO GUARD (stack-overflow fix, 2026-09-09): themeManager.setTheme
-      // dispatches 'themeChange', which re-enters this handler — an
-      // unguarded applyTheme re-calls setTheme and recurses until
-      // "Maximum call stack size exceeded". A theme already applied is a
-      // no-op, which breaks the cycle after exactly one echo.
-      if (this.currentTheme === theme) return;
+      // PERSIST ALWAYS (round 18, #80483): localStorage 'theme' — the only
+      // copy ThemeManager reads at boot — has exactly one writer: this
+      // method. The old same-theme early return (an echo-recursion guard)
+      // also skipped the MOUNT-time call, so a boot where the DOM indicator
+      // was set but storage was empty/cleared never persisted, and the next
+      // boot reverted to light even though the user had chosen dark. Echo
+      // protection now lives in handleThemeChange (the actual re-entry
+      // point); setTheme itself is idempotent.
 
       // Update local state
       this.currentTheme = theme;
@@ -2399,6 +2412,12 @@ export default {
     // Handle theme change event from other components
     handleThemeChange(event) {
       if (event.detail && event.detail.theme) {
+        // ECHO GUARD (stack-overflow fix 2026-09-09, moved here round 18
+        // #80483): themeManager.setTheme dispatches 'themeChange', which
+        // re-enters here. Dropping the echo — the same theme we just
+        // applied — breaks the cycle after exactly one bounce, while
+        // applyTheme stays free to persist at mount.
+        if (event.detail.theme === this.currentTheme) return;
         this.applyTheme(event.detail.theme);
       }
     },
@@ -3705,13 +3724,31 @@ export default {
      * wizard on every multi-page crawl, the opposite of harmless. Only
      * events that carry the relay marker (or an explicit __wantsStudio
      * flag) switch tabs; the legacy event stays a no-op. */
+    // ── STUDIO HAND-OFF DISPATCH (round 18, #80478) ────────────────────────
+    // OkfStudioTab is a defineAsyncComponent, and its pane mounts under
+    // v-if — on the FIRST activation of a session the chunk is not cached,
+    // so one $nextTick resolves before the component mounts and a dispatch
+    // fired there reaches zero listeners (selection lands in the store, the
+    // wizard never opens). StudioTab emits 'studio-ready' from mounted()
+    // once its listeners are registered; until then dispatches queue here
+    // and drain on that signal. A queued event is deferred, never lost.
+    dispatchWhenStudioReady(fire) {
+      // Ref present = the async component resolved AND mounted = listeners live.
+      if (this.$refs.okfStudioTab) fire();
+      else this.pendingStudioEvents.push(fire);
+    },
+    flushPendingStudioEvents() {
+      const queued = this.pendingStudioEvents;
+      this.pendingStudioEvents = [];
+      queued.forEach((fire) => fire());
+    },
     async relayCreateFromCrawl(event) {
       if (event && event.__okfRelayed) return;
-      // RELAY INTENT ONLY: a sender that wants the tab switch flags it.
-      // The wizard's own re-dispatch carries __okfRelayed; FileDetailsDialog's
-      // hand-off sets __wantsStudio. Anything else is the legacy pre-fill
+      // RELAY INTENT ONLY (#80466): a sender that wants the tab switch flags
+      // it (__wantsStudio). FileDetailsDialog's
+      // hand-off sets it; anything else is the legacy pre-fill
       // event — StudioTab's already-open listener handles it or nobody does.
-      if (!(event && (event.__okfRelayed || event.__wantsStudio))) return;
+      if (!event || !event.__wantsStudio) return;
       // Flag guard (round 16, #80125): the relay is registered
       // unconditionally, but with the flag parked the Studio pane's target
       // module is not registered — switching the tab there renders a dead
@@ -3720,10 +3757,11 @@ export default {
       if (!isOkfEnabled()) return;
       const detail = (event && event.detail) || {};
       this.activeTab = 'studio';
-      await this.$nextTick();
-      const relayed = new CustomEvent('okf:create-from-crawl', { detail });
-      relayed.__okfRelayed = true;
-      window.dispatchEvent(relayed);
+      this.dispatchWhenStudioReady(() => {
+        const relayed = new CustomEvent('okf:create-from-crawl', { detail });
+        relayed.__okfRelayed = true;
+        window.dispatchEvent(relayed);
+      });
     },
     async onCreateOkfRepoFromSelection() {
       if (!this.okfRepoGate.visible) return;
@@ -3737,11 +3775,10 @@ export default {
       });
       this.selectedDocuments = [];
       this.activeTab = 'studio';
-      // The Studio tab mounts under v-if="activeTab === 'studio'" and
-      // registers this listener in mounted() — dispatching in the same tick
-      // fired with zero receivers (max-review F2). One tick for the mount.
-      await this.$nextTick();
-      window.dispatchEvent(new CustomEvent('okf:create-from-documents'));
+      // Deferred via the ready handshake — see dispatchWhenStudioReady.
+      this.dispatchWhenStudioReady(() => {
+        window.dispatchEvent(new CustomEvent('okf:create-from-documents'));
+      });
     },
     /** Deep link (Story 7.7 provenance popup cards): ?tab=documents&file=<id>
      * opens the Document Management tab with the FileDetailsDialog — the SAME

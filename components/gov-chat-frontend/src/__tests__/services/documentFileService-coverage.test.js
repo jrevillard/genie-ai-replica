@@ -31,13 +31,10 @@ describe('documentFileService — files', () => {
     expect(httpService.get).toHaveBeenCalledWith('/files/f1');
   });
 
-  it('downloadFile asks for TEXT and returns the string (or empty)', async () => {
-    httpService.get.mockResolvedValueOnce({ data: '# crawled markdown' });
-    expect(await documentFileService.downloadFile('f1')).toBe('# crawled markdown');
-    expect(httpService.get).toHaveBeenCalledWith('/files/f1/download', {}, { responseType: 'text' });
-    httpService.get.mockResolvedValueOnce({ data: { unexpected: true } });
-    expect(await documentFileService.downloadFile('f1')).toBe('');
-  });
+  // downloadFile was deleted (round 18, #80485): its only consumer — the
+  // browser-side crawler→OKF markdown read — moved server-side
+  // (crawlerToOkfService posts convert-from-crawl), and the retired
+  // browser-memory failure mode is documented on the server path.
 
   it('uploadFile posts multipart; uploadLink posts the url', async () => {
     httpService.post.mockResolvedValue(ok({ file_id: 'f2' }));
@@ -114,7 +111,6 @@ describe('documentFileService — crawler surface', () => {
     httpService.delete.mockRejectedValue(boom);
     await expect(documentFileService.getFiles({})).rejects.toThrow('net');
     await expect(documentFileService.getFileMetadata('f1')).rejects.toThrow('net');
-    await expect(documentFileService.downloadFile('f1')).rejects.toThrow('net');
     await expect(documentFileService.uploadLink('u')).rejects.toThrow('net');
     await expect(documentFileService.updateFile('f1', {})).rejects.toThrow('net');
     await expect(documentFileService.deleteFile('f1')).rejects.toThrow('net');

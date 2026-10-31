@@ -84,17 +84,22 @@ describe('TestingLabDialog — 1-8g-x run progress bar', () => {
     await w.vm.$nextTick();
     w.vm.suite = { suite_key: 's1', payload: { positive: [{ query: 'q1', kind: 'positive' }], negative: [] } };
 
-    const polls = [
-      { status: 'running', progress: { phase: 'routing', done: 12, total: 200 } },
-      { status: 'running', progress: { phase: 'corpus', done: 180, total: 200 } },
-      { _key: 'r9', suite_key: 's1', payload: { summary, results: [] } }
-    ];
-    let i = 0;
-    dispatch.mockImplementation((action) => {
+    // Round 18 (#80465): the wait is the store's okf/pollHeadSuiteRun now —
+    // the live bar is fed through the onProgress tap the dialog passes in
+    // the dispatch payload, and the terminal doc resolves the action.
+    dispatch.mockImplementation((action, payload) => {
       if (action === 'okf/headSuiteRun')
         return Promise.resolve({ ok: true, result: { run_key: 'r9', status: 'running' } });
-      if (action === 'okf/headSuiteGetRun')
-        return Promise.resolve({ ok: true, result: polls[Math.min(i++, polls.length - 1)] });
+      if (action === 'okf/pollHeadSuiteRun') {
+        payload.onProgress({ phase: 'routing', done: 12, total: 200 });
+        return new Promise((resolve) => {
+          setTimeout(() => payload.onProgress({ phase: 'corpus', done: 180, total: 200 }), 1500);
+          setTimeout(
+            () => resolve({ ok: true, result: { _key: 'r9', suite_key: 's1', payload: { summary, results: [] } } }),
+            2000
+          );
+        });
+      }
       return Promise.resolve({ ok: true, result: null });
     });
 
@@ -114,6 +119,9 @@ describe('TestingLabDialog — 1-8g-x run progress bar', () => {
     await w.vm.$nextTick();
     expect(w.vm.runProgressLabel).toContain('180 of 200');
     expect(w.vm.runProgressLabel).toContain('Checking the corpus');
+    // The terminal doc landed through the same action — adopted, not lost.
+    expect(w.vm.lastRunSummary).toMatchObject({ pass_rate: 1 });
+    expect(w.vm.busy).toBeNull();
   });
 
   it('starts indeterminate and never shows the previous run counts', async () => {
@@ -125,6 +133,10 @@ describe('TestingLabDialog — 1-8g-x run progress bar', () => {
     dispatch.mockImplementation((action) => {
       if (action === 'okf/headSuiteRun')
         return Promise.resolve({ ok: true, result: { run_key: 'r9', status: 'running' } });
+      if (action === 'okf/pollHeadSuiteRun') {
+        // In flight, reporting nothing yet.
+        return new Promise(() => {});
+      }
       return Promise.resolve({ ok: true, result: null });
     });
     w.vm.onRunSuite();

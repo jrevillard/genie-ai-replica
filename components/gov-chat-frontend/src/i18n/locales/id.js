@@ -225,7 +225,8 @@ export default {
       logs: 'Log',
       security: 'Keamanan',
       users: 'Pengguna',
-      models: 'Model'
+      models: 'Model',
+      studio: "OKF Studio"
     },
     contentManagement: 'MANAJEMEN KONTEN',
     knowledgeHierarchy: 'Hierarki Pengetahuan',
@@ -1912,6 +1913,7 @@ export default {
       paneLabel: 'Panel tampilan',
       saveFailed: 'Penyimpanan gagal — coba lagi',
       piiRescan: {
+      timeout: 'Pemindaian ulang masih berjalan setelah 15 menit — prosesnya berlanjut di sisi server. Tidak ada yang hilang; periksa lagi dalam satu menit.',
         label: 'Data pribadi',
         button: 'Pindai ulang semua halaman',
         working: 'Memindai ulang semua halaman…',
@@ -1967,6 +1969,10 @@ export default {
       }
     },
     dashboard: {
+      health: {
+        ariaNone: "Tidak ada metrik",
+        aria: "Kesehatan: {pct} persen, {n} konsep"
+      },
       bulk: {
         body: 'Setiap repositori dipublikasikan dengan pemeriksaan gerbang penuh (peninjauan PII, pengindeksan, kesesuaian). Hasil per repositori:',
         pending: 'Konfirmasikan untuk melakukan publish pada repositori yang dipilih.',
@@ -2115,6 +2121,7 @@ export default {
       openExisting: 'Buka repositori yang ada',
       name: 'Nama repositori',
       importing: 'Mengimpor bundel…',
+      bundleLabel: 'Paket (.zip)',
       importHint: 'Atau impor bundel zip yang ada sebagai repositori baru.',
       importDefaultName: 'Repositori yang diimpor',
       failed: 'Pembuatan repositori gagal',
@@ -2721,6 +2728,7 @@ export default {
       saveBlocked: 'Penyimpanan diblokir: perbaiki masalah kesesuaian terlebih dahulu.'
     },
     validation: {
+      healthAria: 'Kesehatan: {pct} persen, {n} masalah',
       frozen:
         'Konten dibekukan pada {v} — pratinjau hanya-baca. Lakukan retract pada versi yang sedang serving untuk membuat perubahan.',
       none: 'Tidak ada',

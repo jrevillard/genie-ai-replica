@@ -1355,6 +1355,7 @@
 
 <script>
 import translateMixin from '../../../mixins/translateMixin';
+import { toEpochMs } from '../piiReview.js';
 import DsDialog from '../../ds/Dialog.vue';
 import DsTabs from '../../ds/Tabs.vue';
 import OkfRagasPanel from './RagasPanel.vue';
@@ -1540,19 +1541,11 @@ export default {
       if (!this.head) return 'missing';
       const fm = this.repo.frontmatter;
       if (fm && fm.updated_at && this.head.computed_at) {
-        // Compare PARSED instants, never the raw values (round 17, #80358 —
-        // the same ISO-vs-epoch class as isAckCurrent #80121): the two
-        // fields come from different writers, whose lexicographic order is
-        // noise, and the badge gates the pre-publish rebuild decision.
-        // Seconds-scale epochs (< 1e11) are normalized to millis.
-        const toMs = (v) => {
-          const n = Number(v);
-          if (Number.isFinite(n)) return n < 1e11 ? n * 1000 : n;
-          const t = Date.parse(v);
-          return Number.isFinite(t) ? t : null;
-        };
-        const fmMs = toMs(fm.updated_at);
-        const headMs = toMs(this.head.computed_at);
+        // Compare PARSED instants via the SHARED normalizer (round 18,
+        // #80464 — toEpochMs in piiReview.js; the hand-rolled copy here was
+        // the second of three, and the third stayed broken).
+        const fmMs = toEpochMs(fm.updated_at);
+        const headMs = toEpochMs(this.head.computed_at);
         if (fmMs !== null && headMs !== null && fmMs > headMs) return 'stale';
       }
       return 'present';
@@ -2068,6 +2061,9 @@ export default {
       immediate: true,
       async handler(open) {
         if (open && this.repo) {
+          // Fresh cancel signal for this session — the close branch (below)
+          // aborted the previous one. New polls capture this object.
+          this.pollSignal = { aborted: false };
           this.tab = this.initialTab;
           this.error = '';
           // 1-8c: teach state is per-open — isTaught still cross-checks the
@@ -2090,6 +2086,14 @@ export default {
           this.refreshRuns();
           this.refreshRagasSuites();
           if (!this.readOnly) this.loadFrontmatterHistory();
+        } else if (!open) {
+          // DIALOG CLOSE = stop the polls (round 18, #2101): every host
+          // mounts this dialog with :visible, so it NEVER unmounts while the
+          // parent lives and beforeUnmount never fires on close — the
+          // run/suite/explain polls would keep ticking against the closed
+          // dialog. Abort the CURRENT signal object (the loops read
+          // this.pollSignal each tick); the open branch re-arms a fresh one.
+          this.pollSignal.aborted = true;
         }
       }
     }
@@ -2661,25 +2665,19 @@ export default {
       // the columns honest either way (no-op when none exist).
       await this.loadLatestRunForSuite(this.suite.suite_key);
     },
-    /** 1-8f2: poll GET /:suite_key until the async generation lands the
-     * doc (2.5s interval, ~4min budget), or give up with null. */
+    /** 1-8f2: wait for the async generation to land the suite doc, via the
+     * store's pollJob-backed action (round 18, #80465 — same cancel semantics
+     * as the round-17 hand-rolled loop, PLUS 60-miss tolerance for transient
+     * gateway failures and a first-fetch fast path so a fast generation
+     * lands on attempt 0). Returns the suite or null (aborted/timed out). */
     async pollForSuite(suiteKey) {
-      const attempts = 96; // 96 × 2.5s ≈ 4 min
-      for (let i = 0; i < attempts; i += 1) {
-        // CANCEL GUARD (round 17, #80355): the component's pollSignal is
-        // aborted on unmount — a closed Lab must stop GETting. Without this
-        // the loop kept going for its full 4-minute budget.
-        if (this.pollSignal.aborted) return null;
-        // GET first, sleep after — a fast generation lands on attempt 0.
-        // The server answers 200 {suite_key, status:'generating'} while the
-        // async worker runs (never a 404) — keep waiting on that envelope;
-        // only a real suite doc (no status) is adopted.
-        const res = await this.$store.dispatch('okf/headSuiteGet', { repoId: this.repo.repo_id, suiteKey });
-        const suite = res && res.ok ? res.result : null;
-        if (suite && suite.suite_key && suite.status !== 'generating') return suite;
-        await new Promise((resolve) => setTimeout(resolve, 2500));
-      }
-      return null;
+      const res = await this.$store.dispatch('okf/pollHeadSuite', {
+        repoId: this.repo.repo_id,
+        suiteKey,
+        signal: this.pollSignal
+      });
+      if (!res || !res.ok) return null;
+      return res.result;
     },
     async onRunSuite() {
       if (!this.suite) return;
@@ -2743,22 +2741,31 @@ export default {
       this.checkTripwire(baseline, this.lastRunSummary);
       this.refreshRuns();
     },
-    /** 1-8g-v: poll the run doc (2.5s interval, ~6min budget) until it
-     * leaves 'running'; returns the envelope (running/failed/full doc). */
+    /** 1-8g-v: wait for the async run to leave 'running', via the store's
+     * pollJob-backed action (round 18, #80465 — cancel token, 60-miss
+     * transient tolerance, live progress tap). Returns the terminal doc, a
+     * {status:'failed'} envelope, or null (aborted/timed out). */
     async pollForRun(suiteKey, runKey) {
-      const attempts = 144; // 144 × 2.5s ≈ 6 min
-      for (let i = 0; i < attempts; i += 1) {
-        // CANCEL GUARD (round 17, #80355) — same as pollForSuite.
-        if (this.pollSignal.aborted) return null;
-        const res = await this.$store.dispatch('okf/headSuiteGetRun', { repoId: this.repo.repo_id, suiteKey, runKey });
-        const doc = res && res.ok ? res.result : null;
+      const res = await this.$store.dispatch('okf/pollHeadSuiteRun', {
+        repoId: this.repo.repo_id,
+        suiteKey,
+        runKey,
+        signal: this.pollSignal,
         // 1-8g-x: keep the LIVE progress while waiting — the run envelope
-        // carries {phase, done, total} (server half of this story), so the bar
-        // reflects queries actually scored rather than a spinner that tells the
-        // user nothing about a 100+100 run that takes minutes.
-        if (doc && doc.progress && doc.progress.total) this.runProgress = doc.progress;
-        if (doc && (!doc.status || doc.status === 'failed')) return doc;
-        await new Promise((resolve) => setTimeout(resolve, 2500));
+        // carries {phase, done, total}, so the bar reflects queries actually
+        // scored rather than a spinner that tells the user nothing about a
+        // 100+100 run that takes minutes.
+        onProgress: (p) => {
+          if (p && p.total) this.runProgress = p;
+        }
+      });
+      if (res && res.ok) return res.result;
+      // A failed run keeps onRunSuite's contract: a doc with status 'failed'
+      // whose error message is surfaced — not the generic timeout branch.
+      // POLL_ABORTED / RUN_TIMEOUT fall through to null → the dialog's
+      // friendly "still running server-side" timeout branch.
+      if (res && res.code && res.code !== 'POLL_ABORTED' && res.code !== 'RUN_TIMEOUT') {
+        return { status: 'failed', error: { message: res.message } };
       }
       return null;
     },
@@ -2948,7 +2955,10 @@ export default {
     },
     async refreshRuns() {
       const res = await this.$store.dispatch('okf/headSuiteListRuns', { repoId: this.repo.repo_id, kind: 'run' });
-      if (res.ok) this.runs = res.runs;
+      // Guard (round 18): an ok envelope without a runs array (a mocked or
+      // partial response) must not blank the table — the template reads
+      // runs.length unguarded.
+      if (res.ok) this.runs = Array.isArray(res.runs) ? res.runs : [];
       // 1-8f: the SAVED SUITES list (kind 'suite') — the load targets for
       // "saved, modified and rerun". Cheap read; kept beside the runs
       // refresh so both stay current after generate/run/edit.

@@ -153,8 +153,8 @@
         :read-only="false"
         :show-title="true"
         :compact="true"
+        :flusher="flushConceptEditorSave"
         @saved="onFrontmatterPanelSaved"
-        @flush-before-save="flushConceptEditorSave"
       />
       <!-- Story 1-8 (2026-10-08): compact head status under the tag panel —
            the vectorized head is what the tags become at publish; the CTA
@@ -382,6 +382,7 @@
 <script>
 import { mapGetters } from 'vuex';
 import translateMixin from '../../../mixins/translateMixin';
+import { toEpochMs } from '../piiReview.js';
 import serviceTreeService from '../../../services/serviceTreeService';
 import conceptService from '../../../services/conceptService';
 import repoOkfService from '../../../services/repoOkfService';
@@ -536,8 +537,15 @@ export default {
     headStatus() {
       if (!this.repo.head || !this.repo.head.vector) return 'missing';
       const fm = this.repo.frontmatter;
-      if (fm && fm.updated_at && this.repo.head.computed_at && fm.updated_at > this.repo.head.computed_at)
-        return 'stale';
+      if (fm && fm.updated_at && this.repo.head.computed_at) {
+        // PARSED instants via the shared normalizer (round 18, #80464 — this
+        // was the THIRD raw string-compare of the mixed-writer class: the
+        // editor badge is the curator's cue to rebuild before publish, and a
+        // wrong verdict here sends a stale head to the Testing Lab as fresh.
+        const fmMs = toEpochMs(fm.updated_at);
+        const headMs = toEpochMs(this.repo.head.computed_at);
+        if (fmMs !== null && headMs !== null && fmMs > headMs) return 'stale';
+      }
       return 'present';
     },
     headBadgeText() {
@@ -687,9 +695,13 @@ export default {
     // autosave; without this drain, the panel's two-write save would race
     // the autosave (the autosave would fire with stale uncommitted draft
     // text, overwriting the panel's just-saved YAML).
+    // Returns the embedded editor's flush promise (round 18, #80479): the
+    // FrontmatterPanel awaits this before its two-write save, so the flushed
+    // autosave PATCH commits BEFORE the panel's GET /index.md reads the body.
     flushConceptEditorSave() {
       const ed = this.$refs.conceptEditor;
-      if (ed && typeof ed.flushPendingSave === 'function') ed.flushPendingSave();
+      if (ed && typeof ed.flushPendingSave === 'function') return ed.flushPendingSave();
+      return Promise.resolve();
     },
     // Story 1.7: when the chip panel saves, the index.md YAML has
     // changed; refetch the concept list so the right-rail's per-concept
@@ -730,7 +742,7 @@ export default {
     // fallback if the wizard ever switches to a non-embedded
     // mount.)
     flushPendingSave() {
-      this.flushConceptEditorSave();
+      return this.flushConceptEditorSave();
     },
     // ── LONG-ACTION STRIP (David, 2026-09-12) ─────────────────────────────
     // Wrap any editor action that can outlive a browser/gateway response
@@ -1027,10 +1039,13 @@ export default {
       } catch (err) {
         // REPO_READ_ONLY must surface "retract to edit" — actionable, never raw.
         const code = (err && (err.code || (err.data && err.data.error))) || '';
-        this.metaError = okfRepoOps.friendlyLifecycleError(
-          code,
-          err && err.message,
-          this.translate('okf.editor.meta.saveFailed', 'Metadata save failed')
+        this.metaError = okfRepoOps.translateLifecycleError(
+          okfRepoOps.friendlyLifecycleError(
+            code,
+            err && err.message,
+            this.translate('okf.editor.meta.saveFailed', 'Metadata save failed')
+          ),
+          this.translate
         );
       }
     },
@@ -1041,10 +1056,13 @@ export default {
         await this.$store.dispatch('okf/fetchConcepts', this.repoId);
       } catch (err) {
         const code = (err && (err.code || (err.data && err.data.error))) || '';
-        this.metaError = okfRepoOps.friendlyLifecycleError(
-          code,
-          err && err.message,
-          this.translate('okf.editor.meta.saveFailed', 'Metadata save failed')
+        this.metaError = okfRepoOps.translateLifecycleError(
+          okfRepoOps.friendlyLifecycleError(
+            code,
+            err && err.message,
+            this.translate('okf.editor.meta.saveFailed', 'Metadata save failed')
+          ),
+          this.translate
         );
       }
     },
@@ -1110,6 +1128,19 @@ export default {
         // resolutions persist: suppressed items stay un-flagged across the
         // save-triggered rescans until an explicit re-scan.
         await this.$store.dispatch('okf/fetchConcepts', this.repoId);
+      } catch (err) {
+        // A rejected bulkPiiAction (409 drain-freeze, 5xx, network) must
+        // surface — without this the dialog closed, the strip reset and the
+        // user got zero feedback while the flags stayed (round 18, #80480).
+        const code = (err && (err.code || (err.data && err.data.error))) || '';
+        this.metaError = okfRepoOps.translateLifecycleError(
+          okfRepoOps.friendlyLifecycleError(
+            code,
+            err && err.message,
+            this.translate('okf.editor.piiBulk.failed', 'The bulk PII action failed — try again.')
+          ),
+          this.translate
+        );
       } finally {
         this.piiBulkBusy = false;
         this.piiBulkAsk = null;

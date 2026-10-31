@@ -465,6 +465,26 @@ export function friendlyLifecycleError(code, message, fallback) {
   return message || fallback || 'okf.lifecycleErrors.generic';
 }
 
+/**
+ * Render friendlyLifecycleError's output for the USER (round 18, #80462/#80463).
+ * The producer returns either an i18n KEY (okf.lifecycleErrors.*) or an
+ * already-human string (the server's own message). Keys pass through
+ * `translate(key, key)` — the fallback is the key itself only against a
+ * locale that lacks it, which localeConsistency's deep-key parity already
+ * prevents; anything else returns verbatim.
+ *
+ * THE ONE translate decision lives HERE, next to the key producer — the
+ * round-17 shape (a local helper per component) is how three call sites
+ * shipped rendering the raw key. `translate` is the component's translate
+ * (mixin method or component-local): translate(key, fallback).
+ */
+export function translateLifecycleError(text, translate) {
+  if (typeof text === 'string' && text.startsWith('okf.lifecycleErrors.')) {
+    return typeof translate === 'function' ? translate(text, text) : text;
+  }
+  return text;
+}
+
 /** Steward PII acknowledgement (audited server-side; waives the PII hit gate). */
 export function acknowledgePii(repoId, acknowledge = true, actor = {}) {
   return repoOkfService.acknowledgePii(repoId, acknowledge, actor);
@@ -497,5 +517,6 @@ export default {
   importRepoZip,
   importZipIntoRepo,
   friendlyLifecycleError,
+  translateLifecycleError,
   acknowledgePii
 };

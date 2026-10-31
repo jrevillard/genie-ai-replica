@@ -25,9 +25,19 @@ let renewInFlight = null;
 async function initialize() {
   userManager = new UserManager(oidcConfig);
 
+  // Bounded-renew state (round 17, #80353; reset widened round 18, #80469)
+  let consecutiveRenewFailures = 0;
+  const MAX_RENEW_FAILURES = 3;
+
   // Register silent renew event listeners
   unsubscribeUserLoaded = userManager.events.addUserLoaded((user) => {
     currentUser = user;
+    // A TIMER-driven successful renew also resets the failure counter (round
+    // 18, #80469): the documented invariant is "reset on any success", but
+    // only the error-handler's own retry reset it — three transient failures
+    // spread across days (sleep/wake, network switch) still escalated to the
+    // login check even though the last renewal succeeded.
+    consecutiveRenewFailures = 0;
     accessTokenCallbacks.forEach((cb) => cb(user));
   });
 
@@ -43,8 +53,6 @@ async function initialize() {
   // few seconds forever with no backoff. The counter below caps consecutive
   // failures (reset on any success) and escalates through the same
   // stored-user/login check as the 401 path.
-  let consecutiveRenewFailures = 0;
-  const MAX_RENEW_FAILURES = 3;
   unsubscribeSilentRenewError = userManager.events.addSilentRenewError(async () => {
     try {
       const user = await signinSilent();

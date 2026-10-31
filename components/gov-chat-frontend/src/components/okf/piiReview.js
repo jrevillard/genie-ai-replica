@@ -74,6 +74,25 @@ export function tallyPiiStates(concepts) {
 }
 
 /**
+ * Parse a timestamp into epoch MILLISECONDS — the ONE normalizer for the
+ * mixed-writer stamp class (ISO strings vs numeric epochs; round 17 #80357,
+ * consolidated round 18 #80464 — hand-rolled copies in three files were how
+ * the third stale-compare stayed broken).
+ *
+ * - numeric epochs: seconds-scale values (< 1e11 ms ≈ 1973-5138) are
+ *   normalized ×1000; millis stamps pass through
+ * - anything else: Date.parse; unparseable → null (callers fail CLOSED)
+ *
+ * @param {string|number} v
+ * @returns {number|null}
+ */
+export function toEpochMs(v) {
+  if (typeof v === 'number' && Number.isFinite(v)) return v < 1e11 ? v * 1000 : v;
+  const t = Date.parse(v);
+  return Number.isFinite(t) ? t : null;
+}
+
+/**
  * Does `ack` (the repository's pii_ack) cover the findings on screen NOW?
  *
  * A stewardship acknowledgement is a claim about a specific scan: "I reviewed
@@ -101,20 +120,8 @@ export function isAckCurrent(ack, hitCount, scannedAt) {
   // meaningless) — and a meaningless comparison here fails OPEN on the PII
   // gate. Anything unparseable also fails CLOSED (not current).
   if (scannedAt && ack.at) {
-    const toMs = (v) => {
-      // Numeric epochs are normalized to MILLISECONDS (round 17, #80357): a
-      // seconds-scale epoch (1729…) compared against an ISO-derived millis
-      // instant (1791…) is always "smaller", `ackMs < scanMs` never fires,
-      // and every acknowledgement reads current — the PII gate failing open
-      // on exactly the mixed-writer input this comparison exists for.
-      // < 1e11 ms ≈ 1973-5138 → any sane modern stamp in SECONDS; millis
-      // stamps are ≥ 1e11 until the year 5138.
-      if (typeof v === 'number' && Number.isFinite(v)) return v < 1e11 ? v * 1000 : v;
-      const t = Date.parse(v);
-      return Number.isFinite(t) ? t : null;
-    };
-    const ackMs = toMs(ack.at);
-    const scanMs = toMs(scannedAt);
+    const ackMs = toEpochMs(ack.at);
+    const scanMs = toEpochMs(scannedAt);
     if (ackMs === null || scanMs === null) return false;
     if (ackMs < scanMs) return false;
   }

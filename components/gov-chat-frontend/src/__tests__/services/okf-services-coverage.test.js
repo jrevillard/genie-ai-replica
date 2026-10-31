@@ -141,6 +141,25 @@ describe('headTestService — the Testing Lab client', () => {
       );
       await assertion;
     });
+
+    // Round 18, #80482: ONE failed GET mid-wait (a 502 during a 12-minute
+    // advisor run — the 2026-10-18 gateway-restart class) must not reject
+    // the whole wait while the server-side job completes fine. The poll
+    // tolerates transient misses (same 60-miss cap as the store's pollJob)
+    // instead of surfacing a bogus 'advisor failed'.
+    it('a single transient GET failure is tolerated and the poll continues', async () => {
+      jest.useFakeTimers();
+      httpService.post.mockResolvedValueOnce(ok({ job_key: 'j1' }));
+      httpService.get
+        .mockRejectedValueOnce(new Error('502 Bad Gateway'))
+        .mockResolvedValueOnce(ok({ status: 'running' }))
+        .mockResolvedValueOnce(ok({ status: 'done', payload: { note: 'recovered' } }));
+      const p = headTestService.recommendTags('r1');
+      await jest.advanceTimersByTimeAsync(2000); // poll 1: 502 — tolerated
+      await jest.advanceTimersByTimeAsync(2000); // poll 2: running
+      await jest.advanceTimersByTimeAsync(2000); // poll 3: done
+      await expect(p).resolves.toEqual({ note: 'recovered' });
+    });
   });
 });
 

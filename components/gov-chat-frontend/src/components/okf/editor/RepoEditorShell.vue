@@ -456,18 +456,6 @@ export default {
     }
   },
   methods: {
-    /**
-     * friendlyLifecycleError returns either an i18n KEY (okf.lifecycle.*) or
-     * an already-human string (the server's own message). Keys pass through
-     * translate() with the English default; anything else is returned
-     * verbatim (round 17, #80361).
-     */
-    translateLifecycleError(text) {
-      if (typeof text === 'string' && text.startsWith('okf.lifecycleErrors.')) {
-        return this.translate(text, text);
-      }
-      return text;
-    },
     async pollBuilding() {
       if (this.pollBusy) return;
       if (!okfRepoOps.isBuilding(this.repo)) return;
@@ -520,7 +508,7 @@ export default {
         // #80361: the helper returns an i18n KEY (or the server's own
         // message) — translate keys so a ru/ar/fr steward reads their
         // language, not an English paragraph.
-        this.actionError = this.translateLifecycleError(okfRepoOps.friendlyLifecycleError(res.code, res.message));
+        this.actionError = okfRepoOps.translateLifecycleError(okfRepoOps.friendlyLifecycleError(res.code, res.message), this.translate);
         return;
       }
       // P0-UI (David, 2026-09-08, verbatim): "when the Ingest button is
@@ -547,7 +535,7 @@ export default {
       const res = await this.$store.dispatch('okf/lifecycleTransition', { repoId: this.repoId, action: 'publish' });
       this.actionBusy = false;
       if (!res.ok) {
-        this.publishError = this.translateLifecycleError(okfRepoOps.friendlyLifecycleError(res.code, res.message));
+        this.publishError = okfRepoOps.translateLifecycleError(okfRepoOps.friendlyLifecycleError(res.code, res.message), this.translate);
         if (res.code === 'PII_GATE_BLOCKED') this.piiBlocked = true;
         return; // keep the dialog open — the steward decides on the ack
       }

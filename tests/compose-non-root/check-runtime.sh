@@ -32,10 +32,13 @@ if [ $# -lt 1 ]; then
 fi
 PROJECT="$1"
 DATA_DIR="${2:-${DATA_DIR:-./data}}"
-# Trailing-slash callers ("./data/") would break the -path prune pattern
-# below (./data//huggingface never matches) and silently sweep the
-# excluded GPU cache.
-DATA_DIR="${DATA_DIR%/}"
+# Trailing-slash callers ("./data/", "./data//") would break the -path
+# prune pattern below (./data//huggingface never matches) and silently
+# sweep the excluded GPU cache — strip ALL trailing slashes (the root "/"
+# itself is not a data dir spelling this gate accepts).
+while [ "$DATA_DIR" != "${DATA_DIR%/}" ] && [ "$DATA_DIR" != "/" ]; do
+  DATA_DIR="${DATA_DIR%/}"
+done
 
 violations=0
 
@@ -110,8 +113,12 @@ while IFS= read -r container; do
   if [ "$self_dropping" -eq 1 ]; then
     # The server drops to its package user; the transient healthcheck execs
     # (pg_isready / redis-cli, sub-second, run as the container's root
-    # user) are filtered — but the container IS still inspected, so a gosu
-    # regression keeping the SERVER at uid 0 remains a violation.
+    # user) are filtered — and the filter is ANCHORED to the two exact
+    # healthcheck shapes (postgres: args start with pg_isready; redis:
+    # `sh -c test "$(redis-cli ping)" = PONG`), so an unrelated root
+    # process that merely MENTIONS the token is still a violation — and
+    # the container IS still inspected, so a gosu regression keeping the
+    # SERVER at uid 0 remains a violation.
     top=$(docker top "$container" -o uid,pid,args 2>/dev/null)
     if [ $? -ne 0 ]; then
       echo "UNINSPECTABLE container $container (docker top failed) — treating as a violation:"
@@ -121,7 +128,7 @@ while IFS= read -r container; do
     offenders=$(
       echo "$top" |
         awk 'NR>1 && $1==0' |
-        grep -vE '(pg_isready|redis-cli)' |
+        grep -vE '^root[[:space:]]+[0-9]+[[:space:]]+(pg_isready([[:space:]]|$)|sh[[:space:]]+-c[[:space:]]+test[[:space:]]+.*redis-cli[[:space:]]+ping)' |
         awk '{print "  pid " $2 ": " substr($0, index($0, $3))}'
     )
     if [ -n "$offenders" ]; then

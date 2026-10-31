@@ -699,6 +699,30 @@ describe('compose non-root contract (#1227)', () => {
     expect(v5.some((v) => v.includes('backend') && v.includes('is root'))).toBe(true);
   });
 
+  test('mutations: anchor mode flip and re-indented bind cannot slip past the gate', () => {
+    // The anchor's OWN mode: global is parsed, not hardcoded — flipping it
+    // trips every merged init (the per-node chown guarantee is doctrine).
+    const modeFlip = composeText.replace('    mode: global', '    mode: replicated');
+    expect(modeFlip).not.toBe(composeText);
+    const { violations: v1 } = validateComposeNonRoot(modeFlip);
+    expect(v1.filter((v) => v.includes('mode: global')).length).toBeGreaterThanOrEqual(5);
+
+    // A deeper-indented long-syntax bind is still collected (same class
+    // the create_host_path matcher was made flexible for).
+    const reindented = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes:',
+      '      - type: bind',
+      '          source: ${DATA_DIR:-./data}/logs/kong',
+      '          target: /var/log/kong',
+      ''
+    ].join('\n');
+    const { violations: v2 } = validateComposeNonRoot(reindented);
+    expect(v2.some((v) => v.includes('kong') && v.includes('create_host_path: false'))).toBe(true);
+  });
+
   test('allowlist entries reference services that exist in the compose file', () => {
     // A renamed or removed service would leave a stale allowlist entry that
     // enforces nothing — dead enforcement data. Uses the validator's OWN

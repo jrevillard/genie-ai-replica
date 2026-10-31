@@ -46,9 +46,7 @@ def test_the_imported_orchestrator_is_the_patched_copy(comps):
     source = inspect.getsource(module)
     tree = ast.parse(source)
 
-    live_helper = any(
-        isinstance(node, ast.AsyncFunctionDef) and node.name == "_llm_post_offloop" for node in ast.walk(tree)
-    )
+    live_helper = any(isinstance(node, ast.AsyncFunctionDef) and node.name == "_llm_post_offloop" for node in tree.body)
     assert live_helper, (
         "the orchestrator module Python imports carries no live _llm_post_offloop helper — the "
         "build-time patch either did not run or patched a copy Python does not import; the "

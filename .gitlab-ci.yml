@@ -917,6 +917,10 @@ contract:chatqna-server:
     # the test fails for a reason that has nothing to do with the image.
     CONTRACT_TEST_PATTERN: "test_contract_orchestrator_wire.py test_contract_llm_stream_offloop.py test_contract_nfrp_budgets.py::test_wire_latency_within_budget"
   rules:
+    # The monthly forced rebuild is the event most likely to shift the base
+    # image or the comps layout the /home/user/comps import path rests on —
+    # the contract lane must run then, not only on path-matching MRs.
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"

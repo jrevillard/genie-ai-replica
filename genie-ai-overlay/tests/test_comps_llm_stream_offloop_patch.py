@@ -301,6 +301,61 @@ def test_guard_fails_on_missing_file(tmp_path):
         mod.apply_patch(tmp_path / "nope.py")
 
 
+def test_unawaited_helper_calls_are_not_wrapped_sites(tmp_path):
+    """`response = _llm_post_offloop(...)` without `await` is not a wrapped
+    site — it is the broken shape the patch exists to prevent. With two such
+    calls and a real helper, the already-patched shortcut must not bless the
+    file: every streaming query would raise on the un-awaited coroutine."""
+    p = tmp_path / "orchestrator.py"
+    body = FAKE_ORCHESTRATOR.replace("response = requests.post(", "response = _llm_post_offloop(")
+    p.write_text(body + mod.HELPER, encoding="utf-8")
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
+def test_guard_fails_with_diagnostic_when_two_sites_share_a_line(tmp_path):
+    """Two assignments on one physical line give two AST sites with the same
+    lineno: the guard must refuse with its diagnostic, not crash on a None
+    rewrap from re-processing the already-rewrapped line."""
+    p = tmp_path / "orchestrator.py"
+    live_call = (
+        "                    response = requests.post(\n"
+        "                        url=endpoint,\n"
+        "                        data=json.dumps(inputs),\n"
+        "                        headers={'Content-type': 'application/json'},\n"
+        "                        proxies={'http': None},\n"
+        "                        stream=True,\n"
+        "                        timeout=2000,\n"
+        "                    )\n"
+    )
+    commented_call = "                    pass\n" + "".join(
+        "                    # " + line.strip() + "\n" for line in live_call.splitlines()
+    )
+    block = "        else:\n" + live_call
+    assert block in FAKE_ORCHESTRATOR
+    body = FAKE_ORCHESTRATOR.replace(block, "        else:\n" + commented_call)
+    body = body.replace(
+        "        if True:\n                    response = requests.post(",
+        "        if True:\n                    response = requests.post(); response = requests.post(",
+    )
+    p.write_text(body, encoding="utf-8")
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
+def test_helper_endings_follow_the_dominant_convention(tmp_path):
+    """One stray CRLF line in an otherwise-LF file must not flip the inserted
+    helper to CRLF: the file's dominant convention wins."""
+    p = tmp_path / "orchestrator.py"
+    body = FAKE_ORCHESTRATOR.replace("import asyncio\n", "import asyncio\r\n", 1)
+    p.write_text(body, encoding="utf-8")
+    assert mod.apply_patch(p) == "patched"
+    raw = p.read_bytes()
+    assert raw.count(b"async def _llm_post_offloop") == 1
+    helper_line = next(line for line in raw.split(b"\n") if b"async def _llm_post_offloop" in line)
+    assert not helper_line.endswith(b"\r"), "a dominant-LF file gets an LF helper"
+
+
 def test_guard_fails_on_commented_out_requests_import(tmp_path):
     """The helper dereferences module-level `requests` too, so the import
     guard is symmetric: a commented-out `import requests` must refuse the

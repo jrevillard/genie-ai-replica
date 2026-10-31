@@ -193,8 +193,17 @@ def apply_patch(path: Path) -> str:
             "with NameError at the first streaming query; re-derive the patch."
         )
 
-    ast_sites = _streaming_site_lines(original)
-    sites = [lineno - 1 for lineno in ast_sites if _rewrap_line(lines[lineno - 1]) is not None]
+    ast_sites = sorted(set(_streaming_site_lines(original)))
+    sites = []
+    for lineno in ast_sites:
+        rewrapped = _rewrap_line(lines[lineno - 1])
+        if rewrapped is None:
+            raise SystemExit(
+                f"ASSERT-ON-PATCH GUARD FAILED: line {lineno} of {path} carries a streaming call "
+                "the patcher cannot rewrap (unexpected shape at the detected site) — re-derive the "
+                "patch."
+            )
+        sites.append((lineno - 1, rewrapped))
     if not sites:
         if len(_wrapped_site_lines(original)) == 2 and helper_present(original):
             return "already-patched"
@@ -209,16 +218,19 @@ def apply_patch(path: Path) -> str:
             f"found {len(sites)} — wrapping a different number would leave a call on the loop or "
             "touch something the anchor was never meant to match; re-derive the patch."
         )
+    sites = [(i, rewrapped) for i, rewrapped in sites]
 
-    for i in sites:
-        lines[i] = _rewrap_line(lines[i])
+    for i, rewrapped in sites:
+        lines[i] = rewrapped
 
     # Insert the helper after the module's last import statement, so both
     # names it needs are bound before any call site can reference it — and
     # the function does not split the import block. The helper's own line
     # endings follow the file's, so a CRLF file stays uniformly CRLF.
     if not helper_present(original):
-        helper = HELPER.replace("\n", "\r\n") if "\r\n" in original else HELPER
+        crlf = original.count("\r\n")
+        lf = original.count("\n") - crlf
+        helper = HELPER.replace("\n", "\r\n") if crlf > lf else HELPER
         lines.insert(last_import_line, helper)
 
     patched = "".join(lines)
@@ -246,11 +258,13 @@ def _wrapped_site_lines(source: str) -> list[int]:
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign):
             continue
-        value = node.value.value if isinstance(node.value, ast.Await) else node.value
+        # The wrapped site IS awaited: a bare call assigns a coroutine object,
+        # which is the broken shape the patch exists to prevent, not a patch.
         if (
-            isinstance(value, ast.Call)
-            and isinstance(value.func, ast.Name)
-            and value.func.id == "_llm_post_offloop"
+            isinstance(node.value, ast.Await)
+            and isinstance(node.value.value, ast.Call)
+            and isinstance(node.value.value.func, ast.Name)
+            and node.value.value.func.id == "_llm_post_offloop"
             and any(isinstance(t, ast.Name) and t.id == "response" for t in node.targets)
         ):
             out.append(node.lineno)

@@ -15,6 +15,8 @@ import importlib
 import os
 import time
 
+import aiohttp
+
 try:
     import fcntl  # POSIX file locking — the service runs in a Linux container
 except ModuleNotFoundError:  # Windows dev checkout: locking degrades to a no-op
@@ -66,11 +68,13 @@ from comps import (
     statistics_dict,
 )
 from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDocRepo
+from core.model_http_policy import AIOHTTP_CONNECT_TIMEOUT_SECONDS, CONTROL_PLANE_TIMEOUT_SECONDS
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from genieai_dataprep_loader import GenieDataprepLoader
+from keycloak_service_account import get_service_account_token
 
 logger = CustomLogger("genie_dataprep_microservice")
 setup_trace_logging("genie_dataprep_microservice")
@@ -149,6 +153,95 @@ loader = GenieDataprepLoader(
 
 # Global registry for running ingestion tasks to support specific "Kill" functionality
 active_ingestion_tasks = {}
+
+# ------------------------------------------------------------------------------
+# Stuck-ingest startup recovery (#610)
+# ------------------------------------------------------------------------------
+# Same value the arangodb component reads (single deployment, same env var).
+DOCUMENT_REPOSITORY_URL = os.getenv("DOCUMENT_REPOSITORY_URL", "http://document-repository:3001")
+# Bounded startup retry: compose/Swarm does not guarantee the doc-repo is
+# listening when dataprep boots, so the recovery call is retried on a fixed
+# cadence for ~5 minutes before giving up with a loud warning.
+_RECOVERY_MAX_ATTEMPTS = 30
+_RECOVERY_RETRY_SECONDS = 10
+
+
+async def recover_stuck_ingest_statuses():
+    """Release files the doc-repo still marks 'Ingesting' after a restart.
+
+    ``active_ingestion_tasks`` dies with the process, so a dataprep restart
+    orphans every in-flight ingest: the row stays 'Ingesting' forever, the UI
+    disables the Ingest button and ``kill_ingest`` 404s. At boot the registry
+    is empty BY CONSTRUCTION — every 'Ingesting' row belongs to a task that no
+    longer exists (the service runs a single replica), so one call to the
+    doc-repo recovery endpoint releases them all back to 'Pending' for manual
+    re-ingestion.
+
+    Exhaustion is a loud warning, never an exception — the service must boot
+    regardless. OKF concepts are NOT covered: they have no doc-repo files doc,
+    and the okf-server worker already reclaims timed-out concepts through the
+    task_status probe window (spec #1020 §5.9).
+
+    Returns the list of released file ids ([] when nothing was recovered).
+    """
+    url = f"{DOCUMENT_REPOSITORY_URL}/api/files/ingest/recover-stuck"
+    headers = {"Content-Type": "application/json"}
+    for attempt in range(1, _RECOVERY_MAX_ATTEMPTS + 1):
+        try:
+            headers["Authorization"] = f"Bearer {await get_service_account_token()}"
+            async with (
+                aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(
+                        total=CONTROL_PLANE_TIMEOUT_SECONDS, sock_connect=AIOHTTP_CONNECT_TIMEOUT_SECONDS
+                    )
+                ) as session,
+                session.post(url, headers=headers) as response,
+            ):
+                if response.status == 200:
+                    payload = await response.json()
+                    recovered = payload.get("recovered") or []
+                    if recovered:
+                        logger.info(
+                            f"[ recovery ] Released {len(recovered)} stuck ingest(s) back to Pending: {recovered}"
+                        )
+                    else:
+                        logger.info("[ recovery ] No stuck ingests found at startup.")
+                    return recovered
+                logger.error(
+                    f"[ recovery ] attempt {attempt}/{_RECOVERY_MAX_ATTEMPTS}: "
+                    f"HTTP {response.status}: {await response.text()}"
+                )
+        except asyncio.CancelledError:
+            # A cancellation is the event loop shutting down — not a transient
+            # failure. Retrying through it would fight the loop teardown.
+            raise
+        except Exception as e:  # noqa: BLE001 — recovery must never kill the boot
+            logger.error(f"[ recovery ] attempt {attempt}/{_RECOVERY_MAX_ATTEMPTS} failed: {e}")
+        if attempt < _RECOVERY_MAX_ATTEMPTS:
+            await asyncio.sleep(_RECOVERY_RETRY_SECONDS)
+    logger.warning(
+        f"[ recovery ] Giving up after {_RECOVERY_MAX_ATTEMPTS} attempts — files stuck in 'Ingesting' "
+        "stay stuck until the next dataprep restart."
+    )
+    return []
+
+
+def schedule_stuck_ingest_recovery(app):
+    """Schedule the stuck-ingest recovery on the serving event loop.
+
+    The comps-wrapped FastAPI app does not proxy add_startup_event (see
+    ``tracing.install_uvicorn_access_log_middleware``), so the hook is
+    scheduled directly on the loop ``HTTPService`` created in ``_async_setup``
+    — the same loop that serves the request handlers. Runs once the loop
+    spins up in ``app.start()``; no-op (with a warning) when the loop is
+    missing, so an upstream comps restructure degrades instead of crashing
+    the boot.
+    """
+    loop = getattr(app, "event_loop", None)
+    if loop is None or loop.is_closed():
+        logger.warning("[ recovery ] No serving event loop found — skipping stuck-ingest recovery.")
+        return None
+    return loop.create_task(recover_stuck_ingest_statuses())
 
 
 # ------------------------------------------------------------------------------
@@ -601,5 +694,7 @@ if __name__ == "__main__":
     # FastAPI auto-instrumentation is handled globally by tracing.py
     # setup_tracing() → FastAPIInstrumentor().instrument() runs before
     # OPEA comps creates the FastAPI app, so traceparent extraction works.
+
+    schedule_stuck_ingest_recovery(app)
 
     app.start()

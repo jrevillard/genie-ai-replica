@@ -194,7 +194,33 @@ class MetadataService {
     }
   }
 
-  // 5. update metadata after ingestion or retraction
+  // 5. Release files stuck in 'Ingesting' back to 'Pending' (#610).
+  // dataprep calls this once at startup: its in-memory task registry dies with
+  // the process, so any row still 'Ingesting' after a restart belongs to a
+  // task that no longer exists (single replica — nothing else can be writing
+  // that state). One statement finds AND flips them; UPDATE deep-merges the
+  // dataprep sub-object, so ingest_date/retract_date survive. OKF concepts are
+  // not in this collection, so they are untouched by construction (the
+  // okf-server worker reclaims those itself).
+  async recoverStuckIngests() {
+    try {
+      const db = await this.getDb();
+      const cursor = await db.query(
+        `FOR file IN files
+         FILTER LOWER(file.dataprep.status) == 'ingesting'
+         UPDATE file WITH { dataprep: { status: 'Pending' } } IN files
+         RETURN NEW.file_id`
+      );
+      const recovered = await cursor.all();
+      logger.info(`[RECOVER-STUCK] Released ${recovered.length} stuck ingest(s) back to Pending`);
+      return recovered;
+    } catch (error) {
+      logger.error(`Failed to recover stuck ingests: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // 6. update metadata after ingestion or retraction
   // This method can also be used to update metadata manually by the user.
   async updateMetadata(file_id, updates = {}) {
     try {

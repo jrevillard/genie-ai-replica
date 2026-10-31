@@ -233,6 +233,7 @@ class FileController {
     this.bundleIngest = this.bundleIngest.bind(this);
     this._markIngestFailure = this._markIngestFailure.bind(this);
     this.killIngestion = this.killIngestion.bind(this);
+    this.recoverStuckIngests = this.recoverStuckIngests.bind(this);
 
     // --- CRAWLER BINDS ---
     this.scheduleSiteCrawl = this.scheduleSiteCrawl.bind(this);
@@ -1668,6 +1669,37 @@ class FileController {
     } catch (error) {
       logger.error('Kill ingestion error:', error);
       res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Release files stuck in 'Ingesting' back to 'Pending' (#610).
+   * Called by dataprep once at startup: its in-memory task registry dies with
+   * the process, so rows still 'Ingesting' after a restart are orphaned — the
+   * UI keeps the Ingest button disabled and kill-ingest 404s forever.
+   */
+  async recoverStuckIngests(req, res) {
+    try {
+      const recovered = await metadataService.recoverStuckIngests();
+      for (const fileId of recovered) {
+        try {
+          await fileService.addIngestionLog(fileId, {
+            level: 'WARN',
+            stage: 'dataprep',
+            message:
+              'Ingestion interrupted: the ingestion service restarted while this file was being processed. ' +
+              'Status released to Pending so it can be ingested again.'
+          });
+        } catch (logErr) {
+          // The status flip already happened; a lost log line must not fail
+          // the recovery — dataprep would only retry the whole call.
+          logger.error(`Failed to log recovery for ${fileId}: ${logErr.message}`);
+        }
+      }
+      return res.json({ success: true, recovered, count: recovered.length });
+    } catch (error) {
+      logger.error('Recover stuck ingests error:', error);
+      return res.status(500).json({ success: false, error: error.message });
     }
   }
 

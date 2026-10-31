@@ -18,10 +18,11 @@ const { createUser, deleteUser, enableDirectAccessGrants } = require('../helpers
  */
 test.describe.serial('Phase I: Multi-Realm Configuration', () => {
   let adminToken;
+  let genie1Token;
   const TEST_REALM = 'genie2';
   const TEST_USER = { username: 'testuser2', password: 'TestPass123!', email: 'testuser2@genie2.local' };
 
-  test.beforeAll(async () => {
+  test.beforeAll(async ({ browser }) => {
     adminToken = await getAdminToken();
 
     // The genie2 token minted below arrives via ROPC. The UI login only
@@ -33,7 +34,11 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
     // NEVER do this on the primary realm.
     await enableDirectAccessGrants(adminToken, TEST_REALM, 'genie-app');
 
-    // Create test user in genie2 (realm should already exist from Phase 0.7b)
+    // Primary-realm token from a browser login session (the realm refuses
+    // ROPC by design) — minted once, like the sibling suites.
+    genie1Token = await getSessionTokenViaUI({ browser });
+
+    // Create test user in genie2 (realm should already exist from Phase 0.6)
     try {
       await createUser(adminToken, TEST_REALM, TEST_USER);
     } catch (err) {
@@ -76,10 +81,9 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
     expect(res.status, 'Backend must accept genie2 tokens').toBe(200);
   });
 
-  test('I.2 — tokens from different realms have different issuers', async ({ browser }) => {
-    // Primary-realm token comes from a browser login session (the realm
-    // refuses ROPC by design); genie2 keeps ROPC as provisioned above.
-    const genie1Token = await getSessionTokenViaUI({ browser });
+  test('I.2 — tokens from different realms have different issuers', async () => {
+    // genie1 from the beforeAll browser session; genie2 keeps ROPC as
+    // provisioned above.
     const genie2Token = await getUserToken(TEST_USER.username, TEST_USER.password, { realm: TEST_REALM });
 
     const claims1 = parseJwtClaims(genie1Token);
@@ -91,8 +95,7 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
     expect(claims1.iss, 'Issuers must be different').not.toBe(claims2.iss);
   });
 
-  test('I.3 — backend validates tokens from both realms simultaneously', async ({ browser }) => {
-    const genie1Token = await getSessionTokenViaUI({ browser });
+  test('I.3 — backend validates tokens from both realms simultaneously', async () => {
     const genie2Token = await getUserToken(TEST_USER.username, TEST_USER.password, { realm: TEST_REALM });
 
     const res1 = await authRequest('GET', '/api/me', {

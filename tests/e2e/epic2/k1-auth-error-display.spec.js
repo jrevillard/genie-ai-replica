@@ -50,6 +50,12 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   });
 
   test('K.2 — TOKEN_EXPIRED (short-lived token)', async ({ browser }) => {
+    // The browser session mint (worst-case 45s of login retry budget)
+    // stacks on the 30s expiry poll — past the default 60s on a slow
+    // identity provider, so this test carries the same extended budget
+    // the conversation-history suite uses.
+    test.setTimeout(120000);
+
     // Reduce lifespan to 10s
     await updateRealmSettings(adminToken, 'genie', { accessTokenLifespan: '10' });
 

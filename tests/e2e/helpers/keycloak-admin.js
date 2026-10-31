@@ -179,8 +179,8 @@ async function enableDirectAccessGrants(adminToken, realm, clientId) {
     headers: { Authorization: `Bearer ${adminToken}` },
   });
 
-  if (!searchRes.data || searchRes.data.length === 0) {
-    throw new Error(`Client ${clientId} not found in realm ${realm}`);
+  if (searchRes.status !== 200 || !Array.isArray(searchRes.data) || searchRes.data.length === 0) {
+    throw new Error(`Client ${clientId} not found in realm ${realm} (HTTP ${searchRes.status})`);
   }
 
   const client = searchRes.data[0];

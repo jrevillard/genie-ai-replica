@@ -170,6 +170,16 @@ class TranslationFailedError(RuntimeError):
     """
 
 
+class TranslationTimeoutError(TranslationFailedError):
+    """A translation chunk timed out waiting for the model.
+
+    A subtype, not a separate family: every ``except TranslationFailedError``
+    keeps working, while the history path — which reports whether the
+    translation service was slow or broken — can classify the timeout by
+    ``isinstance`` instead of unwrapping ``__cause__``.
+    """
+
+
 # Token-budget markers in vLLM/OpenAI error bodies. Shared with the dataprep
 # fail-loud pattern (dataprep/genieai_dataprep_arangodb.py).
 # Protocol marker carried in the reranker microservice's 422 body
@@ -3741,10 +3751,9 @@ class ChatQnAService:
         # chunk into the source text, and this caller has to know the
         # translation did not happen (it reports the status, unlike the
         # answer path where the swallowed fallback is the contract). The
-        # chunk translator folds every failure into a TranslationFailedError
-        # with the original as __cause__, so the timeout is recovered from
-        # the cause. Overflow still propagates fail-loud, as on every other
-        # path.
+        # chunk translator classifies its failures into typed exceptions, so
+        # the split here is isinstance-only. Overflow still propagates
+        # fail-loud, as on every other path.
         if isinstance(history, str):
             try:
                 return (
@@ -3753,12 +3762,10 @@ class ChatQnAService:
                     ),
                     "translated",
                 )
-            except TranslationInputTooLongError:
-                raise
+            except TranslationTimeoutError:
+                logger.error(f"History translation timed out after {TRANSLATION_SERVICE_TIMEOUT} seconds.")
+                return history, "fallback_timeout"
             except TranslationFailedError as e:
-                if isinstance(e.__cause__, httpx.TimeoutException):
-                    logger.error(f"History translation timed out after {TRANSLATION_SERVICE_TIMEOUT} seconds.")
-                    return history, "fallback_timeout"
                 logger.error(f"History translation failed: {e}")
                 return history, "fallback_error"
 
@@ -3815,15 +3822,16 @@ class ChatQnAService:
                     translated_blob = response_data["choices"][0]["text"]
                 else:
                     translated_blob = response_data["choices"][0]["message"]["content"]
-                if not translated_blob.strip():
+                translated_blob = translated_blob.strip()
+                if not translated_blob:
                     # A 200 with an empty completion is a failure, not a
                     # translation: the chunk translator refuses it for the
                     # same reason (an empty history would silently blank the
                     # retrieval query), and the fallback status says so.
                     raise TranslationFailedError("translation model returned an empty history translation")
                 if logflag:
-                    logger.debug(f"Translated chat history: {translated_blob.strip()}")
-                return translated_blob.strip(), "translated"
+                    logger.debug(f"Translated chat history: {translated_blob}")
+                return translated_blob, "translated"
 
         except httpx.TimeoutException as e:
             logger.error(
@@ -4055,6 +4063,12 @@ class ChatQnAService:
                 raise TranslationInputTooLongError(
                     f"translation chunk exceeds VLLM_TRANSLATION_MAX_MODEL_LEN: {type(e).__name__}: {str(e)[:200]}"
                 ) from e
+            if isinstance(e, httpx.TimeoutException):
+                # One typed subtype: the answer path still sees a
+                # TranslationFailedError, while the history path reports
+                # "the service was slow" without unwrapping __cause__.
+                logger.warning(f"Translation chunk timed out after {TRANSLATION_SERVICE_TIMEOUT} seconds.")
+                raise TranslationTimeoutError(f"translation chunk timed out: {type(e).__name__}: {str(e)[:200]}") from e
             logger.warning(f"Failed to translate chunk: {type(e).__name__}: {e}")
             raise TranslationFailedError(f"translation chunk failed: {type(e).__name__}: {str(e)[:200]}") from e
 

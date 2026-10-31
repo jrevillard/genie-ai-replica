@@ -2304,8 +2304,7 @@ class TestQueryTranslationStatus:
     @staticmethod
     def _mock_client(side_effect=None, content="Translated history"):
         mock_response = MagicMock()
-        if content is not None:
-            mock_response.json.return_value = {"choices": [{"message": {"content": content}}]}
+        mock_response.json.return_value = {"choices": [{"message": {"content": content}}]}
         mock_response.raise_for_status = MagicMock()
         mock_client = AsyncMock()
         if side_effect is not None:
@@ -2381,22 +2380,17 @@ class TestQueryTranslationStatus:
 
     @pytest.mark.asyncio
     async def test_a_single_message_timeout_reports_fallback_timeout(self):
-        """The chunk translator folds every failure into a
-        TranslationFailedError with the original as __cause__: a timeout
-        keeps its own status, on the list path as on this one."""
-        import httpx as _httpx
-
-        from chatqna.genieai_chatqna import TranslationFailedError
+        """The real chain: the chunk translator raises the typed
+        TranslationTimeoutError on a timeout, and the history path keeps its
+        own status. Drives the real translator under a mocked transport, so
+        a drift at the wrap site fails this test."""
+        import httpx
 
         svc = create_chatqna_service()
-
-        async def fail(text, canonical_code, target_lang, **_kwargs):
-            raise TranslationFailedError("translation chunk failed: TimeoutException: t") from _httpx.TimeoutException(
-                "timed out"
-            )
-
-        svc._translate_chunk_in_language = fail
-        _text, status = await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
+        mock_client = self._mock_client(side_effect=httpx.TimeoutException("timed out"))
+        with self._translation_patches(mock_client):
+            text, status = await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
+        assert text == "¿qué es X?"
         assert status == "fallback_timeout"
 
     @pytest.mark.asyncio
@@ -2441,11 +2435,9 @@ class TestQueryTranslationStatus:
         """A budget smaller than the newest message drops everything: the
         empty history is a fallback too, not a translation."""
         svc = create_chatqna_service()
-        with (
-            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=self._mock_client(content=None)),
-            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
-            patch("chatqna.genieai_chatqna.MAX_TRANSLATION_CHARS", 10),
-        ):
+        stack = self._translation_patches(self._mock_client())
+        stack.enter_context(patch("chatqna.genieai_chatqna.MAX_TRANSLATION_CHARS", 10))
+        with stack:
             text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
         assert text == ""
         assert status == "fallback_error"
@@ -2453,11 +2445,9 @@ class TestQueryTranslationStatus:
     @pytest.mark.asyncio
     async def test_a_map_without_english_reports_fallback_error(self):
         svc = create_chatqna_service()
-        with (
-            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=self._mock_client()),
-            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
-            patch("chatqna.genieai_chatqna.language_codes_map", return_value={}),
-        ):
+        stack = self._translation_patches(self._mock_client())
+        stack.enter_context(patch("chatqna.genieai_chatqna.language_codes_map", return_value={}))
+        with stack:
             text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
         assert text == "USER: qué es X?"
         assert status == "fallback_error"

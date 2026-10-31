@@ -493,6 +493,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   /// the restore and by the hierarchy-retry re-resolve — the SAME
   /// mapping, never two copies of it.
   void _applyRestoredScope(ConversationScope scope) {
+    // The title source the scope carried BEFORE this apply: the
+    // hierarchy-retry re-resolve re-applies the SAME scope, and
+    // re-installing its title would clobber the localized name a drift
+    // fetch committed. The install below happens only when the source
+    // moved.
+    final String? previousCategoryKey = _restoredTitleCategoryKey;
+    final String? previousIdentity = _activeQuickHelpIdentity;
     _selectedCategoryId = scope.categoryId;
     _selectedCategoryNameEn = scope.categoryNameEn ?? '';
     // A restored scope's title comes from the conversation's edge and the
@@ -506,8 +513,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // names the entity the installed title names. A Quick Help scope's
     // title is its BUTTON's own localized title — the same thing the
     // press and the web show — and the config reload re-resolves it by
-    // id, never through the category.
-    _restoredTitleCategoryKey = scope.quickHelpButtonId == null
+    // id, never through the category. A category the hierarchy cannot
+    // NAME installs an empty title (the bar hides): there is nothing to
+    // localize, and recording the key of 'general' or of a dropped
+    // category would schedule lookups that can never succeed.
+    _restoredTitleCategoryKey =
+        scope.quickHelpButtonId == null && scope.categoryName != null
         ? _scopeResolver?.categoryIdFor(scope.categoryId)
         : null;
     // The button the conversation's tag names — ONE lookup (the same
@@ -519,9 +530,21 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     );
     // An EMPTY title is no title (the same rule the locale re-title
     // applies): the saved category name is the fallback, never a blank
-    // context bar.
-    _selectedCategoryName =
-        quickHelpTitleOf(button) ?? scope.categoryName ?? '';
+    // context bar. The install happens only when the title source MOVED —
+    // the first apply, a category the recovering tree now names, a button
+    // the configuration swapped. An unchanged source's title is whatever
+    // is installed — possibly the localized name a drift fetch just
+    // committed — and re-installing the resolver's ENGLISH spelling over
+    // it would clobber the bar and force a repair fetch on every switch.
+    // A button whose TEXT the config changed is re-titled by the reload's
+    // own id lookup right after this re-apply.
+    final bool titleSourceMoved =
+        previousCategoryKey != _restoredTitleCategoryKey ||
+        previousIdentity != scope.quickHelpButtonId;
+    if (titleSourceMoved) {
+      _selectedCategoryName =
+          quickHelpTitleOf(button) ?? scope.categoryName ?? '';
+    }
     _activeQuickHelpIdentity = scope.quickHelpButtonId;
     // During a hierarchy OUTAGE the resolver was built over an
     // empty tree: every declared label reads as missing, and the
@@ -550,13 +573,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // the hierarchy no longer carries is dropped from the labels, and
     // the send guard refuses it instead of letting it vanish.
     _sidebarServiceCount = scope.sidebarTagCount;
-    // The title just installed names the category in ENGLISH (the
+    // The title just (re-)installed names the category in ENGLISH (the
     // resolver's tree is the wire's vocabulary). The localized tree
     // re-names it in the UI's language — the same re-title a locale
     // switch performs. For an English UI the ENGLISH tree IS the
     // localized one: the fetch would answer with the name the bar
-    // already shows.
-    if (_restoredTitleCategoryKey != null && _currentLocale != 'en') {
+    // already shows. An unchanged source re-applied by the re-resolve
+    // keeps its installed title and starts no fetch of its own.
+    if (titleSourceMoved &&
+        _restoredTitleCategoryKey != null &&
+        _currentLocale != 'en') {
       _fetchSidebarTitleTree();
     }
   }

@@ -188,7 +188,7 @@ HUGGING_FACE_HUB_TOKEN=
 # RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE=2000      # 1-8g-l: per-hop edge-visit cap in the traversal
 #                                                         # AQL (0 = unbounded) — bounds hub-entity cost.
 
-# Retriever tuning (used by retriever and chatqna)
+# Retriever tuning (used by retriever and chatqna; DISTANCE_STRATEGY / NUM_CENTROIDS / NPROBE also by dataprep index maintenance)
 # RETRIEVER_ARANGO_K=4
 # RETRIEVER_ARANGO_FETCH_K=20
 # RETRIEVER_ARANGO_SCORE_THRESHOLD=0.1
@@ -197,7 +197,7 @@ HUGGING_FACE_HUB_TOKEN=
 # RETRIEVER_ARANGO_SEARCH_START=chunk
 # RETRIEVER_ARANGO_SEARCH_MODE=vector
 # RETRIEVER_ARANGO_USE_APPROX_SEARCH=false
-# RETRIEVER_ARANGO_DISTANCE_STRATEGY=COSINE
+# RETRIEVER_ARANGO_DISTANCE_STRATEGY=COSINE    # index metric — the retriever's other strategy (EUCLIDEAN_DISTANCE) is query-time only; dataprep cannot build an index from it
 # RETRIEVER_ARANGO_NUM_CENTROIDS=1
 # RETRIEVER_ARANGO_NPROBE=1                      # IVF lists probed per vector query (index defaultNProbe; raised value trades latency for recall; only read when RETRIEVER_ARANGO_USE_APPROX_SEARCH=true)
 # RETRIEVER_ARANGO_FILTER_STRATEGY=OR

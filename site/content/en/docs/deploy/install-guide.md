@@ -482,8 +482,8 @@ defaults.
 | `RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED` | number | no | `5` (compose) / `3` (Python code) | Max items returned by traversal — compose wins at runtime |
 | `RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD` | number | no | `0.7` (compose) / `0.5` (Python code) | Min score to keep traversal results — compose wins at runtime |
 | `RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES` | number | no | `10` (compose) / `1` (Python code) | Concurrent traversal batches — compose wins at runtime |
-| `RETRIEVER_ARANGO_DISTANCE_STRATEGY` | string | no | `COSINE` | Distance metric for vector search |
-| `RETRIEVER_ARANGO_NUM_CENTROIDS` | number | no | `1` | Vector-search centroids |
+| `RETRIEVER_ARANGO_DISTANCE_STRATEGY` | string | no | `COSINE` | Distance metric for vector search (`metric` of the `vector_index` dataprep maintains — the index is recreated on drift at the next ingest) |
+| `RETRIEVER_ARANGO_NUM_CENTROIDS` | number | no | `1` | Vector-search centroids (`nLists` of the `vector_index` dataprep maintains — the index is recreated on drift at the next ingest) |
 | `RETRIEVER_ARANGO_NPROBE` | number | no | `1` | IVF lists probed per vector query (`defaultNProbe` on the vector index; raised values trade latency for recall — the index is recreated on drift at the next ingest). Only read by the ANN query path: with the default `RETRIEVER_ARANGO_USE_APPROX_SEARCH=false`, exact search ignores it |
 | `RETRIEVER_ARANGO_USE_APPROX_SEARCH` | bool | no | `false` | Use ANN search |
 | `RETRIEVER_ARANGO_K` | number | no | `20` | Top chunks returned to reranker |

@@ -384,7 +384,10 @@ workflow:
         fi
       done
     - |
-      # ROPC setup (required by conversation-history tests via getUserToken)
+      # Keycloak readiness wait + test-user provisioning. The Playwright suites
+      # log in through the browser (loginViaUI) and reuse the session token —
+      # no suite run by this job mints ROPC tokens, and the committed realm
+      # refuses direct access grants by design.
       # All requests go through nginx/Kong — same path as production traffic.
       KC_URL="${E2E_BASE_URL}/auth"
       KC_PWD="${KEYCLOAK_ADMIN_PASSWORD}"
@@ -412,11 +415,7 @@ workflow:
         echo "ERROR: genie-app client not found via nginx/Kong after 180s"
         exit 1
       fi
-      curl -sk -X PUT "${KC_URL}/admin/realms/genie/clients/${CLIENT_UUID}" \
-        -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-        -d '{"directAccessGrantsEnabled": true}'
-      echo "ROPC enabled for genie-app client"
-      # Create test user for E2E tests (required by loginViaUI and getUserToken)
+      # Create test user for E2E tests (required by loginViaUI)
       EXISTING=$(curl -sk "${KC_URL}/admin/realms/genie/users?username=testuser" \
         -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null)
       if [ "${EXISTING:-0}" -eq 0 ]; then
@@ -446,10 +445,6 @@ workflow:
       else
         echo "WARNING: Could not assign admin role (role or user not found). Document tests may fail."
       fi
-      # Save vars for cleanup in after_script
-      echo "E2E_BASE_URL=${E2E_BASE_URL}" > .e2e-ropc-env
-      echo "ADMIN_TOKEN=${ADMIN_TOKEN}" >> .e2e-ropc-env
-      echo "CLIENT_UUID=${CLIENT_UUID}" >> .e2e-ropc-env
     # tests/e2e/okf/ stays OUT until MR2 lands: the OKF Studio UI those specs
     # drive ships in MR 2 (this train is MR1, dark), they hardcode
     # https://localhost while CI serves E2E_BASE_URL=https://nginx, and they
@@ -457,17 +452,6 @@ workflow:
     # guaranteed three red specs on every merge train.
     - BASE_URL="${E2E_BASE_URL}" npx playwright test tests/e2e/chatbot/ tests/e2e/documents/ tests/e2e/theme-runtime-config.spec.js --project=chromium
   after_script:
-    - |
-      # ROPC cleanup - CRITICAL: always revert, even on test failure
-      if [ -f .e2e-ropc-env ]; then
-        . ./.e2e-ropc-env
-        KC_URL="${E2E_BASE_URL}/auth"
-        curl -sk -X PUT "${KC_URL}/admin/realms/genie/clients/${CLIENT_UUID}" \
-          -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-          -d '{"directAccessGrantsEnabled": false}' 2>/dev/null && echo "ROPC disabled" || echo "WARNING: ROPC cleanup failed"
-        rm -f .e2e-ropc-env
-      fi
-
     - mkdir -p e2e-logs
     - docker compose -p "ci-${CI_PIPELINE_ID}" logs > e2e-logs/docker-compose.log 2>&1 || true
   artifacts:

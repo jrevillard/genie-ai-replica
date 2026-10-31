@@ -2562,6 +2562,45 @@ class TestQueryTranslationStatus:
         assert status == "fallback_error"
 
     @pytest.mark.asyncio
+    async def test_a_generic_payload_carries_the_window_derived_budget(self):
+        """The generic (chat-completions) branch — the shape the shipped
+        default model takes — sizes its completion too: an explicit
+        max_tokens derived the same way as the TranslateGemma payload, so
+        the completion length is a decision instead of the server's
+        default sampling budget."""
+        svc = create_chatqna_service()
+        history = [{"role": "user", "content": "A" * 13000}]
+        mock_client = self._mock_client(content="USER: AAAA")
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=65536))
+        with stack:
+            text, status = await svc._get_translated_history_string(history)
+        assert status == "translated"
+        # The chat payload goes to the chat-completions endpoint.
+        assert mock_client.post.call_args.args[0] == "http://chat-llm.test/v1/chat/completions"
+        # Flattened "USER: " + 13000 chars → cap len//2 = 6503, inside the
+        # 65536-window allowance (65536 − 512 − 4335 = 60689).
+        assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 6503
+        assert text == "USER: AAAA"
+
+    @pytest.mark.asyncio
+    async def test_a_generic_truncated_completion_is_refused_not_translated(self):
+        """The generic branch reads finish_reason too: a completion cut off
+        by the server (finish_reason "length") is not a translation — the
+        same refusal the TranslateGemma branch makes."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="USER: what is")
+        mock_client.post.return_value.json.return_value = {
+            "choices": [{"message": {"content": "USER: what is"}, "finish_reason": "length"}]
+        }
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=None))
+        with stack:
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: qué es X?"  # untranslated
+        assert status == "fallback_error"
+
+    @pytest.mark.asyncio
     async def test_a_map_without_english_reports_fallback_error(self):
         svc = create_chatqna_service()
         stack = self._translation_patches(self._mock_client())

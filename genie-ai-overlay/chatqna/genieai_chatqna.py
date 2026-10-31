@@ -666,8 +666,8 @@ def _get_max_translation_chars() -> int:
 
 # Translation budget derivation from the discovered window. The completion
 # reserve assumes the translated output is roughly the size of the input (the
-# TranslateGemma history payload caps max_tokens at half the input, clamped
-# to the room the window leaves beside the prompt estimate).
+# history payload caps max_tokens at half the input, clamped to the room the
+# window leaves beside the prompt estimate — both payload shapes).
 TRANSLATION_PROMPT_OVERHEAD_TOKENS = 512
 
 
@@ -3664,7 +3664,8 @@ class ChatQnAService:
         )
 
     def _translation_output_cap(self, flattened_history_string: str) -> int | None:
-        """Completion cap for the TranslateGemma payload.
+        """Completion cap for a history-translation payload, either shape
+        (TranslateGemma completions or generic chat completions).
 
         Roughly half the input (512 floor). When the translation window is
         discovered, the ceiling is the room the window leaves beside the
@@ -3824,6 +3825,15 @@ class ChatQnAService:
         # parse must branch on the SAME decision (and the same id).
         translation_model_id = _get_translation_model_id()
         translategemma = _is_translategemma(translation_model_id)
+        # The completion budget is decided for BOTH payload shapes: the same
+        # window-derived cap, so the completion length is never the server's
+        # default sampling budget.
+        output_cap = self._translation_output_cap(flattened_history_string)
+        if output_cap is None:
+            logger.warning(
+                "Translation window too tight to translate the history meaningfully; returning it untranslated"
+            )
+            return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
         # Build payload based on model type
         if translategemma:
             # Use completions API with pre-formatted prompt (vLLM v0.10.0 cannot
@@ -3833,12 +3843,6 @@ class ChatQnAService:
                 source_lang_code=source_lang_code,
                 target_lang_code=canonical_target,
             )
-            output_cap = self._translation_output_cap(flattened_history_string)
-            if output_cap is None:
-                logger.warning(
-                    "Translation window too tight to translate the history meaningfully; returning it untranslated"
-                )
-                return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
             payload = {
                 "model": translation_model_id,
                 "prompt": prompt,
@@ -3853,7 +3857,12 @@ class ChatQnAService:
                 f"Preserve the role markers (e.g., 'USER:', 'ASSISTANT:')."
                 f"\n\nHISTORY:\n{flattened_history_string}"
             )
-            payload = {"messages": [{"role": "user", "content": prompt}], "temperature": 0, "stream": False}
+            payload = {
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0,
+                "stream": False,
+                "max_tokens": output_cap,
+            }
             url = TRANSLATION_LLM_URL
 
         if logflag:
@@ -3869,20 +3878,17 @@ class ChatQnAService:
                 )
                 response.raise_for_status()
                 response_data = response.json()
-                if translategemma:
-                    choice = response_data["choices"][0]
-                    if choice.get("finish_reason") == "length":
-                        # The completion hit max_tokens: the translation is cut
-                        # off, not finished. Embedding the cut-off text would
-                        # put a half-translated history into the retrieval
-                        # space under a success status — the same defect as an
-                        # empty completion, and the backend translation path
-                        # rejects it the same way.
-                        logger.error("Translation model hit max_tokens; treating the history translation as failed.")
-                        return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
-                    translated_blob = choice["text"]
-                else:
-                    translated_blob = response_data["choices"][0]["message"]["content"]
+                choice = response_data["choices"][0]
+                if choice.get("finish_reason") == "length":
+                    # The completion hit max_tokens: the translation is cut
+                    # off, not finished. Embedding the cut-off text would
+                    # put a half-translated history into the retrieval
+                    # space under a success status — the same defect as an
+                    # empty completion, and the backend translation path
+                    # rejects it the same way.
+                    logger.error("Translation model hit max_tokens; treating the history translation as failed.")
+                    return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
+                translated_blob = choice["text"] if translategemma else choice["message"]["content"]
                 translated_blob = translated_blob.strip()
                 if not translated_blob:
                     # A 200 with an empty completion is a failure, not a

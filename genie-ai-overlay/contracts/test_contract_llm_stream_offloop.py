@@ -33,6 +33,16 @@ PATCHER_PATH = Path("/app/build-patches/comps_llm_stream_offloop_patch.py")
 
 
 def _load_patcher():
+    """The patcher module from the image's stable /app path, or skip.
+
+    Only the chatqna image ships it — the contracts/ README's other in-image
+    venues (retriever, dataprep) carry real comps but not this file, and the
+    suite must skip there, not die on FileNotFoundError.
+    """
+    import pytest
+
+    if not PATCHER_PATH.is_file():
+        pytest.skip("the off-loop patcher is not in this image (chatqna-only)")
     spec = importlib.util.spec_from_file_location("comps_llm_stream_offloop_patch", PATCHER_PATH)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

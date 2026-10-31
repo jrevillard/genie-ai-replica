@@ -175,6 +175,13 @@ def apply_patch(path: Path) -> str:
         raise SystemExit(f"ASSERT-ON-PATCH GUARD FAILED: {path} does not exist")
 
     original = _read(path)
+    try:
+        ast.parse(original)
+    except SyntaxError as exc:
+        raise SystemExit(
+            f"ASSERT-ON-PATCH GUARD FAILED: {path} is not valid Python ({exc.lineno}: {exc.msg}) — "
+            "the image layout resolved the orchestrator path to something else; re-derive the patch."
+        ) from exc
     lines = _split_source_lines(original)
 
     # The AST is the site detector; _rewrap_line only rewraps the detected
@@ -193,7 +200,13 @@ def apply_patch(path: Path) -> str:
             "with NameError at the first streaming query; re-derive the patch."
         )
 
-    ast_sites = sorted(set(_streaming_site_lines(original)))
+    ast_sites = _streaming_site_lines(original)
+    if len(set(ast_sites)) != len(ast_sites):
+        raise SystemExit(
+            f"ASSERT-ON-PATCH GUARD FAILED: {path} has multiple streaming call sites sharing one "
+            "physical line — a one-line rewrap would silently drop the second site; re-derive the "
+            "patch."
+        )
     sites = []
     for lineno in ast_sites:
         rewrapped = _rewrap_line(lines[lineno - 1])
@@ -218,7 +231,6 @@ def apply_patch(path: Path) -> str:
             f"found {len(sites)} — wrapping a different number would leave a call on the loop or "
             "touch something the anchor was never meant to match; re-derive the patch."
         )
-    sites = [(i, rewrapped) for i, rewrapped in sites]
 
     for i, rewrapped in sites:
         lines[i] = rewrapped
@@ -235,15 +247,17 @@ def apply_patch(path: Path) -> str:
 
     patched = "".join(lines)
 
-    # Compile the edited source BEFORE writing it, so a botched edit can
-    # never reach disk.
+    # Verify the EDITED SOURCE before anything reaches disk: valid Python,
+    # exactly 2 wrapped sites, no live requests.post site left, one helper.
+    # A guard failure therefore leaves the original file untouched.
     compile(patched, str(path), "exec")
+    if len(_wrapped_site_lines(patched)) != 2 or _streaming_site_lines(patched) or not helper_present(patched):
+        raise SystemExit(f"ASSERT-ON-PATCH GUARD FAILED: post-patch verification failed for {path}")
     _write(path, patched)
 
-    # Re-read: the file on disk is the artefact that ships, so verify THAT —
-    # exactly 2 wrapped sites, no live requests.post site left, one helper.
-    post = _read(path)
-    if len(_wrapped_site_lines(post)) != 2 or _streaming_site_lines(post) or not helper_present(post):
+    # Re-read: the file on disk is the artefact that ships, so confirm the
+    # write landed byte for byte what was verified.
+    if _read(path) != patched:
         raise SystemExit(f"ASSERT-ON-PATCH GUARD FAILED: post-write verification failed for {path}")
     return "patched"
 

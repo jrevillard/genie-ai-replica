@@ -315,8 +315,8 @@ def test_unawaited_helper_calls_are_not_wrapped_sites(tmp_path):
 
 def test_guard_fails_with_diagnostic_when_two_sites_share_a_line(tmp_path):
     """Two assignments on one physical line give two AST sites with the same
-    lineno: the guard must refuse with its diagnostic, not crash on a None
-    rewrap from re-processing the already-rewrapped line."""
+    lineno: the guard must name the collision (not report a missing site),
+    and the file on disk must be untouched when it refuses."""
     p = tmp_path / "orchestrator.py"
     live_call = (
         "                    response = requests.post(\n"
@@ -339,6 +339,17 @@ def test_guard_fails_with_diagnostic_when_two_sites_share_a_line(tmp_path):
         "        if True:\n                    response = requests.post(); response = requests.post(",
     )
     p.write_text(body, encoding="utf-8")
+    with pytest.raises(SystemExit, match="sharing one physical line"):
+        mod.apply_patch(p)
+    assert p.read_text(encoding="utf-8") == body, "a refused patch leaves the file untouched"
+
+
+def test_guard_fails_with_diagnostic_on_non_python_file(tmp_path):
+    """If the orchestrator path resolves to a non-Python file (a layout shift
+    leaving a README placeholder), the guard reports the re-derive remedy
+    instead of leaking a raw SyntaxError traceback."""
+    p = tmp_path / "orchestrator.py"
+    p.write_text("# GENIE.AI\n<html><body>moved</body></html>\n", encoding="utf-8")
     with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
         mod.apply_patch(p)
 

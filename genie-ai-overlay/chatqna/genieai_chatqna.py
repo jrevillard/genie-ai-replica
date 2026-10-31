@@ -668,10 +668,7 @@ def _choice_content(choice: dict, completions: bool) -> str:
     token can leave the content null. The read never raises: a missing or
     null content is an empty completion, which the callers already refuse.
     """
-    if completions:
-        raw = choice.get("text")
-    else:
-        raw = (choice.get("message") or {}).get("content")
+    raw = choice.get("text") if completions else (choice.get("message") or {}).get("content")
     return (raw or "").strip()
 
 

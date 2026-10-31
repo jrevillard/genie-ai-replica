@@ -290,12 +290,70 @@ function parseGitlabCiImages(filePath) {
   return results;
 }
 
+/**
+ * Extract the `rules[].changes` path filters of named jobs from a
+ * .gitlab-ci.yml file.
+ *
+ * Line-based, like parseGitlabCiImages: a top-level key at indent 0 starts a
+ * job; inside a wanted job, a `changes:` key starts the filter and ` - <path>`
+ * lines are its entries. Assumes the plain-list form of `changes:` (no
+ * `paths:`/`compare_to:` mapping) and reads every `changes:` block of the
+ * wanted jobs — the e2e merge-train jobs each declare exactly one, inside
+ * their single rule.
+ *
+ * @param {string} filePath - Path to a .gitlab-ci.yml file
+ * @param {string[]} jobNames - Top-level job keys to extract (e.g. ['e2e:integration'])
+ * @returns {Map<string, string[]>} job name → changes paths (missing job → empty list)
+ */
+function parseGitlabCiJobChanges(filePath, jobNames) {
+  let content;
+  try {
+    content = fs.readFileSync(filePath, 'utf-8');
+  } catch (err) {
+    throw new Error(`Failed to read GitLab CI file: ${filePath}`, { cause: err });
+  }
+
+  const wanted = new Set(jobNames);
+  const result = new Map(jobNames.map((name) => [name, []]));
+  let currentJob = null;
+  let inChanges = false;
+
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed === '' || trimmed.startsWith('#')) continue;
+    const indent = line.length - line.trimStart().length;
+
+    // Top-level key (indent 0) — starts a job (or ends the previous one)
+    if (indent === 0) {
+      const jobMatch = trimmed.match(/^([\w:-]+):\s*$/);
+      currentJob = jobMatch ? jobMatch[1] : null;
+      inChanges = false;
+      continue;
+    }
+
+    if (!wanted.has(currentJob)) continue;
+
+    if (inChanges) {
+      const entryMatch = trimmed.match(/^-\s+(.+)$/);
+      if (entryMatch) {
+        result.get(currentJob).push(entryMatch[1].replace(/^['"]|['"]$/g, '').trim());
+      } else {
+        inChanges = false;
+      }
+    } else if (trimmed === 'changes:') {
+      inChanges = true;
+    }
+  }
+  return result;
+}
+
 module.exports = {
   parseComposeEnvVars,
   crossReference,
   parseComposeImages,
   parseAnsibleImages,
   parseGitlabCiImages,
+  parseGitlabCiJobChanges,
   parseComposeServiceContracts
 };
 

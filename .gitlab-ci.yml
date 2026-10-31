@@ -3054,6 +3054,23 @@ test:flutter:
       when: on_success
 
 # Patrol E2E tests — DinD emulator (shared with scheduled:e2e-mobile)
+# Merge-train rules (#1264): e2e:playwright hard-needs e2e:integration, so the
+# two changes: filters must obey a subset invariant:
+#
+#   e2e:playwright.changes ⊆ e2e:integration.changes
+#
+# An MR whose paths match only e2e:playwright's filter instantiates
+# e2e:playwright while its needs-partner is filtered out → GitLab fails
+# pipeline creation → the whole merge train goes red. Conversely, every path
+# the job executes or imports must be listed, or e2e silently skips on the
+# train: e2e:playwright runs tests/e2e/chatbot/, tests/e2e/documents/ and
+# tests/e2e/theme-runtime-config.spec.js, and imports tests/e2e/helpers/.
+# tests/e2e/okf/ is not executed yet (MR2 wires the OKF specs into the
+# script — see .e2e_web_base script comment) but stays listed so those MRs
+# still get train coverage. YAML cannot concatenate lists, so the two filters
+# cannot share one list, and mobile/genie_ai_mobile is deliberately
+# integration-only (the web suite does not test the mobile app). The subset
+# invariant is enforced by tests/config-validator.
 e2e:integration:
   extends: .e2e_integration_base
   stage: e2e
@@ -3065,11 +3082,17 @@ e2e:integration:
       changes:
         - mobile/genie_ai_mobile/**/*
         - tests/e2e/chatbot/**/*
+        - tests/e2e/documents/**/*
+        - tests/e2e/okf/**/*
+        - tests/e2e/helpers/**/*
+        - tests/e2e/theme-runtime-config.spec.js
         - components/gov-chat-frontend/**/*
         - components/gov-chat-backend/**/*
+        - components/document-repository/**/*
         - .gitlab-ci.yml
 
-# Playwright E2E — runs on merge trains
+# Playwright E2E — runs on merge trains. Its changes: filter must stay a
+# subset of e2e:integration's (see the comment above).
 e2e:playwright:
   extends: .e2e_web_base
   stage: e2e
@@ -3081,6 +3104,8 @@ e2e:playwright:
         - tests/e2e/chatbot/**/*
         - tests/e2e/documents/**/*
         - tests/e2e/okf/**/*
+        - tests/e2e/helpers/**/*
+        - tests/e2e/theme-runtime-config.spec.js
         - components/gov-chat-frontend/**/*
         - components/gov-chat-backend/**/*
         - components/document-repository/**/*

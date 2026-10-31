@@ -11,6 +11,19 @@ VOLUME_CERT_PATH="/etc/nginx/ssl"
 use_volume_certs() {
     echo "Using SSL certificates from volume mount..."
 
+    # Validate readability first: this container runs as uid 101 (#1227), so
+    # a root-owned 0600 key fails the openssl check below with a misleading
+    # "Invalid private key format" — name the real problem instead.
+    if [ ! -r "${VOLUME_CERT_PATH}/server.key" ]; then
+        echo "ERROR: ${VOLUME_CERT_PATH}/server.key is not readable by uid $(id -u)."
+        echo "Make it group-readable by the nginx group: chgrp 101 server.key && chmod 0640 server.key"
+        exit 1
+    fi
+    if [ ! -r "${VOLUME_CERT_PATH}/server.crt" ]; then
+        echo "ERROR: ${VOLUME_CERT_PATH}/server.crt is not readable by uid $(id -u)."
+        exit 1
+    fi
+
     # Validate certificate format
     if ! openssl x509 -in "${VOLUME_CERT_PATH}/server.crt" -noout -text >/dev/null 2>&1; then
         echo "ERROR: Invalid certificate format in ${VOLUME_CERT_PATH}/server.crt"

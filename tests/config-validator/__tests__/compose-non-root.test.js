@@ -9,7 +9,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const { validateComposeNonRoot, SELF_DROPPING } = require('../validators/validate-compose-non-root');
+const {
+  validateComposeNonRoot,
+  SELF_DROPPING,
+  ONE_SHOT_ROOT_INIT
+} = require('../validators/validate-compose-non-root');
 
 const COMPOSE_PATH = path.join(__dirname, '..', '..', '..', 'docker-compose.yaml');
 
@@ -128,15 +132,26 @@ describe('compose non-root contract (#1227)', () => {
     // Swarm restarts a failing on-failure container forever without a bound
     // — a permanent root init. Strip the anchor's max_attempts and flip the
     // condition: the unbounded form must trip.
+    // Flip the shared condition to on-failure, then strip the arango
+    // service's OWN max_attempts bound (8-space, under its deploy block):
+    // the unbounded form must trip the gate by name.
     const unbounded = composeText
       .replaceAll('condition: "none"', 'condition: on-failure')
-      .replace(
-        '    restart_policy:\n      condition: on-failure\n      max_attempts: 60\n',
-        '    restart_policy:\n      condition: on-failure\n'
-      );
+      .replace('\n        delay: 5s\n        max_attempts: 60\n', '\n        delay: 5s\n');
     expect(unbounded).not.toBe(composeText);
     const { violations } = validateComposeNonRoot(unbounded);
-    expect(violations.some((v) => v.includes('on-failure without max_attempts'))).toBe(true);
+    expect(
+      violations.some((v) => v.includes('arango-vector-db-init') && v.includes('on-failure without max_attempts'))
+    ).toBe(true);
+  });
+
+  test('allowlist entries reference services that exist in the compose file', () => {
+    // A renamed or removed service would leave a stale allowlist entry that
+    // enforces nothing — dead enforcement data.
+    const serviceNames = new Set([...composeText.matchAll(/^ {2}([\w-]+):\s*$/gm)].map((m) => m[1]));
+    for (const name of [...Object.keys(SELF_DROPPING), ...Object.keys(ONE_SHOT_ROOT_INIT)]) {
+      expect(serviceNames.has(name)).toBe(true);
+    }
   });
 
   test('self-dropping allowlist documents its two members with a reason', () => {

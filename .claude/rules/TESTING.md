@@ -115,7 +115,9 @@ Two failure modes it catches that nothing else does:
 
 Asserts the #1227 no-root contract against a RUNNING stack: no uid-0
 process in any container (compose or swarm labels), no root-owned file
-under the data directory. The static half runs in CI
+under the data directory. Exit codes: 0 = contract holds, 1 = violation,
+2 = vacuous run (no container matched the project name — fix the name,
+never read a vacuous pass as OK). The static half runs in CI
 (`tests/config-validator` jest suite); this runtime half has no CI job —
 run it after any change to `docker-compose.yaml` service identities,
 volumes or images.

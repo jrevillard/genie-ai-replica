@@ -576,6 +576,8 @@ services:
         condition: service_healthy
       db-migrations:
         condition: service_completed_successfully
+      backend-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     build:
       context: components/
@@ -1202,6 +1204,17 @@ services:
   # ran the root-era image hold a root-owned volume, and the now non-root
   # document-repository would get EACCES on every upload. Same one-shot
   # pattern as arango-vector-db-init / victorialogs-init.
+  # Chowns the backend's root-era named volumes to uid 1000 (#1227) — same
+  # upgrade migration as document-repository-init: deployments that ran the
+  # root-era backend hold root-owned files in backend_data and
+  # backend_uploads, which the now non-root backend could no longer write.
+  backend-init:
+    <<: *chown-init
+    command: ["sh", "-c", "[ -f /app/data/.chowned-1000 ] && [ -f /app/Uploads/.chowned-1000 ] || { chown -R 1000:1000 /app/data /app/Uploads && touch /app/data/.chowned-1000 /app/Uploads/.chowned-1000; }"]
+    volumes:
+      - backend_data:/app/data
+      - backend_uploads:/app/Uploads
+
   document-repository-init:
     <<: *chown-init
     command: ["sh", "-c", "[ -f /app/uploads/.chowned-1000 ] || { chown -R 1000:1000 /app/uploads && touch /app/uploads/.chowned-1000; }"]
@@ -1361,7 +1374,7 @@ services:
   # the chowned ownership.
   arango-vector-db-init:
     <<: *chown-init
-    command: ["sh", "-c", "[ -f /var/lib/arangodb3/.chowned-999 ] || { chown -R 999:999 /var/lib/arangodb3 /var/lib/arangodb3-apps && touch /var/lib/arangodb3/.chowned-999 /var/lib/arangodb3-apps/.chowned-999; }"]
+    command: ["sh", "-c", "[ -f /var/lib/arangodb3/.chowned-999 ] && [ -f /var/lib/arangodb3-apps/.chowned-999 ] || { chown -R 999:999 /var/lib/arangodb3 /var/lib/arangodb3-apps && touch /var/lib/arangodb3/.chowned-999 /var/lib/arangodb3-apps/.chowned-999; }"]
     volumes:
       - arango_data:/var/lib/arangodb3
       - arango_apps:/var/lib/arangodb3-apps
@@ -2594,7 +2607,7 @@ services:
     # (CHOWN + DAC_OVERRIDE caps, one-shot on both front-ends, global mode
     # so the chown has run on every node the collector can land on).
     <<: *chown-init
-    command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && chown -R 10001:10001 /var/lib/otelcol && touch /var/lib/otelcol/.chowned-10001"]
+    command: ["sh", "-c", "[ -f /var/lib/otelcol/.chowned-10001 ] || { mkdir -p /var/lib/otelcol/file_storage/victoriatraces && chown -R 10001:10001 /var/lib/otelcol && touch /var/lib/otelcol/.chowned-10001; }"]
     volumes:
       - otel-queue:/var/lib/otelcol
 

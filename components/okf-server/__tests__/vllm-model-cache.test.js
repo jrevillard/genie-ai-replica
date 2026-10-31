@@ -399,6 +399,45 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
     expect(stale).toHaveLength(1);
     expect(logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed')).toHaveLength(0);
   });
+
+  const http401 = () => Object.assign(new Error('401'), { response: { status: 401 } });
+
+  test('a soft failure does not silence the hard path — the loud caller probes and warns on its own', async () => {
+    // The quiet probe's cool-down stub must not mute the hard path: the
+    // probe_failed warn is the hard paths' PRIMARY failure signal.
+    axios.get.mockRejectedValue(http401());
+    await expect(cache.servedModelId('http://vllm:8000')).resolves.toBeNull();
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({
+      name: 'ModelDiscoveryError'
+    });
+    const warns = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed');
+    expect(warns).toHaveLength(1);
+    expect(axios.get).toHaveBeenCalledTimes(2); // the hard path probed FOR ITSELF
+  });
+
+  test('a hard failure does not make the soft path noisier — the quiet caller probes in silence', async () => {
+    axios.get.mockRejectedValue(http401());
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({
+      name: 'ModelDiscoveryError'
+    });
+    await expect(cache.servedModelId('http://vllm:8000')).resolves.toBeNull();
+    const warns = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed');
+    expect(warns).toHaveLength(1); // the hard failure only
+    expect(axios.get).toHaveBeenCalledTimes(2);
+  });
+
+  test('a hard caller never joins a quiet probe — its failure path stays loud', async () => {
+    axios.get.mockImplementationOnce(() => new Promise(() => {})); // quiet probe, never settles
+    cache.servedModelId('http://vllm:8000'); // starts the shared-class probe, stays in flight
+    await Promise.resolve(); // let the quiet probe start
+    axios.get.mockRejectedValueOnce(http401());
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({
+      name: 'ModelDiscoveryError'
+    });
+    const warns = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed');
+    expect(warns).toHaveLength(1);
+    expect(axios.get).toHaveBeenCalledTimes(2); // the hard caller owned its probe
+  });
 });
 
 describe('negative window, shared probes, sameOrigin', () => {

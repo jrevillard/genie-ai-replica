@@ -27,10 +27,12 @@
  *     concept), where the Python side resolves per file/job. Python applies
  *     the same mechanism to its own request-path field (max_model_len); the
  *     exact model-id negative-cache semantics stay open in #1127;
- *   - concurrent callers share ONE in-flight probe — per probe BUDGET
- *     (the window and the in-flight map are keyed by the budget bucket, so
- *     a tight-budget caller never narrows an ample-budget one, and an
- *     endpoint that is down costs one probe per budget class per window);
+ *   - concurrent callers share ONE in-flight probe — per probe BUDGET and
+ *     probe CLASS (the window and the in-flight map are keyed by the
+ *     budget bucket and by quiet/loud, so a tight-budget caller never
+ *     narrows an ample-budget one, a quiet caller never silences a loud
+ *     one, and an endpoint that is down costs one probe per class per
+ *     window);
  *   - cache keys carry the CREDENTIAL as well as the base: gateways can
  *     filter /v1/models per key, so two configs on one base must never
  *     resolve each other's model.
@@ -252,10 +254,10 @@ function probeBudgetBucket(timeoutMs) {
 /** get_model_id twin: served id for baseUrl, TTL-cached, stale-served on
  * probe failure. When nothing ever answered, it THROWS the probe's cause
  * (a null id would hide the reason from the caller). `quiet` marks the
- * best-effort caller (see probe): the probe_failed warn is skipped, the
- * cache semantics are identical. The probe is shared per (base,
- * credential, budget) — the FIRST caller decides the level; a hard caller
- * joining a quiet probe still gets the thrown error. */
+ * best-effort caller (see probe) — and it is part of the PROBE identity:
+ * quiet and loud callers share the id cache but never a probe window, so
+ * a quiet failure can neither silence a later hard caller's warn nor
+ * inherit its level from a racing loud probe. */
 async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = {}) {
   const base = String(baseUrl || '').replace(/\/+$/, '');
   if (!base) return null;
@@ -270,17 +272,20 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
   const entry = _cache.get(cacheKey);
   if (entry && Date.now() - entry.ts < ttlSeconds() * 1000) return entry.id;
 
-  // Concurrent callers share ONE probe — per probe BUDGET: the first
-  // caller's budget must not narrow a concurrent caller's probe (the
-  // best-effort summary leg probes for 1 s while a tagging call may wait 30 s).
-  // The failure marker is keyed the same way: a 1 s probe that gave up must
-  // not lock out a caller that had 10 s and would have answered. The bucket
-  // quantizes to one SECOND: two callers inside the same bucket share the
-  // first one's raw budget, so the narrowing is bounded by the bucket's
-  // remainder (never more than 1 s) — exact per-caller budgets would mean
-  // one probe per distinct timeout, which is the storm the shared probe
-  // exists to prevent.
-  const probeKey = `${cacheKey}|${probeBudgetBucket(timeoutMs)}`;
+  // Concurrent callers share ONE probe — per probe BUDGET and probe CLASS:
+  // the first caller's budget must not narrow a concurrent caller's probe
+  // (the best-effort summary leg probes for 1 s while a tagging call may
+  // wait 30 s), and a quiet caller must not silence a loud one (the class
+  // in the key gives each its own probe and its own cool-down stub — the
+  // worst case is two probes per window for one (base, credential), one
+  // per class). The failure marker is keyed the same way: a 1 s probe that
+  // gave up must not lock out a caller that had 10 s and would have
+  // answered. The bucket quantizes to one SECOND: two callers inside the
+  // same bucket share the first one's raw budget, so the narrowing is
+  // bounded by the bucket's remainder (never more than 1 s) — exact
+  // per-caller budgets would mean one probe per distinct timeout, which is
+  // the storm the shared probe exists to prevent.
+  const probeKey = `${cacheKey}|${probeBudgetBucket(timeoutMs)}|${quiet ? 'quiet' : 'loud'}`;
 
   // A recent failure is remembered: answer without touching the network.
   const failed = _negative.get(probeKey);
@@ -547,9 +552,8 @@ async function deploymentServedModelId({ timeoutMs } = {}) {
 }
 
 /** The served model of ANY base, soft: null when nothing answers. The
- * provenance callers record what answered — they must not fail on it, and
- * their probe failure must not emit the probe_failed warn (that warn is
- * the failure signal of the paths that DO fail: tagging, curation). */
+ * provenance callers record what answered — they must not fail on it,
+ * and their probes are quiet (see probe). */
 async function servedModelId(baseUrl, { apiKey, timeoutMs } = {}) {
   try {
     return await getServedModelId(baseUrl, { timeoutMs, apiKey, quiet: true });

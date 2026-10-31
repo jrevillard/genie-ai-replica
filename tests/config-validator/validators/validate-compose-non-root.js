@@ -72,6 +72,7 @@ function validateComposeNonRoot(composeText) {
   let currentCapAdds = [];
   let inCapAdds = false;
   let inDeploy = false;
+  let localDeploySeen = false;
   let inRestartPolicy = false;
   let currentMaxAttempts = null;
   const serviceBinds = {}; // service -> [{path, createHostPath}]
@@ -88,7 +89,9 @@ function validateComposeNonRoot(composeText) {
           );
         } else if (currentUser !== null) {
           const uid = String(currentUser).split(':')[0];
-          if (uid === '0' || uid === 'root') {
+          // Number() closes the numeric-zero spellings ("00", "000") that
+          // docker treats exactly as uid 0
+          if (uid === 'root' || Number(uid) === 0) {
             violations.push(`${currentService}: \`user: ${currentUser}\` is root — the contract forbids it`);
           }
         }
@@ -132,14 +135,21 @@ function validateComposeNonRoot(composeText) {
           // invariants from the anchor unless it overrides them locally.
           const capAdds = currentCapAdds.length ? currentCapAdds : anchorMerged ? anchorDefaults.capAdds : [];
           const restart = currentRestart !== null ? currentRestart : anchorMerged ? anchorDefaults.restart : null;
+          // A service-local deploy: SHALLOW-REPLACES the anchor's whole
+          // deploy map (compose merge semantics): mode: global and the
+          // anchor's restart_policy silently vanish at runtime. The gate
+          // must then judge the LOCAL values only — and an absent
+          // restart_policy condition under a local deploy: means swarm's
+          // default "any", which is not one-shot.
+          const anchorDeployApplies = anchorMerged && !localDeploySeen;
           const condition =
             currentRestartPolicyCondition !== null
               ? currentRestartPolicyCondition
-              : anchorMerged
+              : anchorDeployApplies
                 ? anchorDefaults.condition
-                : null;
+                : 'any';
           const maxAttempts =
-            currentMaxAttempts !== null ? currentMaxAttempts : anchorMerged ? anchorDefaults.maxAttempts : null;
+            currentMaxAttempts !== null ? currentMaxAttempts : anchorDeployApplies ? anchorDefaults.maxAttempts : null;
           if (!capAdds.includes('CHOWN')) {
             violations.push(`${currentService}: ONE_SHOT_ROOT_INIT member must keep cap_add: [CHOWN]`);
           }
@@ -181,6 +191,7 @@ function validateComposeNonRoot(composeText) {
     currentCapAdds = [];
     inCapAdds = false;
     inDeploy = false;
+    localDeploySeen = false;
     inRestartPolicy = false;
   };
 
@@ -308,6 +319,7 @@ function validateComposeNonRoot(composeText) {
     }
     if (/^ {4}deploy:\s*$/.test(line)) {
       inDeploy = true;
+      localDeploySeen = true;
       continue;
     }
     if (inDeploy) {

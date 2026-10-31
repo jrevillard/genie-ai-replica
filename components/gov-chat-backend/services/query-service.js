@@ -496,9 +496,8 @@ class QueryService {
           // "fallback_timeout" or "fallback_error"): the response-side
           // counterpart of the rag.translation.query_status span attribute.
           // Dropping it here would make a degraded translation invisible on
-          // the streamed path — the same loss retrieval_confidence_score and
-          // self_confidence suffered before. Keyed by presence so an older
-          // chatqna without the field stays mock/test-friendly.
+          // the streamed path. Keyed by presence so an older chatqna without
+          // the field stays mock/test-friendly.
           if (Object.prototype.hasOwnProperty.call(obj, 'query_translation_status')) {
             parsed.query_translation_status = obj.query_translation_status;
           }

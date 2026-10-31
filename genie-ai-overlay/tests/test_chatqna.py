@@ -2339,14 +2339,22 @@ class TestQueryTranslationStatus:
         assert status == "translated"
 
     @pytest.mark.asyncio
-    async def test_a_timeout_reports_fallback_timeout_and_returns_the_source(self):
+    @pytest.mark.parametrize(
+        "timeout",
+        [
+            pytest.param("httpx", id="httpx_timeout"),
+            pytest.param("builtin", id="builtin_timeout"),
+        ],
+    )
+    async def test_a_timeout_reports_fallback_timeout_and_returns_the_source(self, timeout):
         """The issue's headline path: the translation service times out, the
         flattened Spanish history goes to the embedder, and the caller can
-        tell it from a translation."""
+        tell it from a translation. Both timeout flavours count."""
         import httpx
 
         svc = create_chatqna_service()
-        mock_client = self._mock_client(side_effect=httpx.TimeoutException("timed out"))
+        error = httpx.TimeoutException("timed out") if timeout == "httpx" else TimeoutError("timed out")
+        mock_client = self._mock_client(side_effect=error)
         with self._translation_patches(mock_client):
             text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
         assert text == "USER: qué es X?"  # the flattened, UNTRANSLATED source
@@ -2387,6 +2395,18 @@ class TestQueryTranslationStatus:
         with self._translation_patches(mock_client):
             text, status = await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
         assert text == "¿qué es X?"
+        assert status == "fallback_timeout"
+
+    @pytest.mark.asyncio
+    async def test_a_builtin_timeout_reports_fallback_timeout(self):
+        """A timeout that is not httpx's own class (a socket-level or
+        wait_for timeout) is still a timeout: the vocabulary separates 'the
+        service was slow' from 'the service broke'."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(side_effect=TimeoutError("timed out"))
+        with self._translation_patches(mock_client):
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: qué es X?"
         assert status == "fallback_timeout"
 
     @pytest.mark.asyncio
@@ -4091,6 +4111,31 @@ async def test_a_refused_language_with_nothing_to_detect_reports_unknown_not_eng
     the query was English."""
     svc = create_chatqna_service()
     payload = await _full_flow_payload(svc, stream=False, language="xx", messages=[{"role": "user", "content": ""}])
+    assert payload["metadata"]["query_translation_status"] == "passthrough_unknown_language"
+
+
+@pytest.mark.asyncio
+async def test_a_detected_english_query_reports_passthrough_english():
+    """No language declared, detection concludes English: the query IS
+    English, so the status must say so — not 'unknown', which would flag
+    every ordinary English turn."""
+    svc = create_chatqna_service()
+    with patch("chatqna.genieai_chatqna.detect", return_value="en"):
+        payload = await _full_flow_payload(
+            svc, stream=False, language=None, messages=[{"role": "user", "content": "what is X?"}]
+        )
+    assert payload["metadata"]["query_translation_status"] == "passthrough_english"
+
+
+@pytest.mark.asyncio
+async def test_a_crashed_detection_reports_unknown_not_english():
+    """A detection that crashes leaves the answer side on its English
+    fallback; the query status must not inherit that fabrication."""
+    svc = create_chatqna_service()
+    with patch("chatqna.genieai_chatqna.detect", side_effect=RuntimeError("detector exploded")):
+        payload = await _full_flow_payload(
+            svc, stream=False, language=None, messages=[{"role": "user", "content": "what is X?"}]
+        )
     assert payload["metadata"]["query_translation_status"] == "passthrough_unknown_language"
 
 

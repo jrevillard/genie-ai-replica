@@ -70,8 +70,9 @@ QUERY_ID_KEY = "genie.query_id"
 MAX_STRING_LEN = 96
 
 # The closed vocabulary of ``rag.translation.query_status`` — what the history
-# translator handed the embedder on a chat turn. One home, so the span value,
-# the response metadata field and the operator runbook cannot drift apart.
+# translator handed the embedder on a chat turn. The one home the emitting code
+# unpacks its values from; the operator runbook and the API reference document
+# the same values in prose.
 QUERY_TRANSLATION_STATUSES = (
     "translated",
     "passthrough_english",

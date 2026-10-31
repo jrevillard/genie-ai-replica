@@ -656,9 +656,8 @@ def _flatten_history_string(history: list) -> str:
     passthrough flatten when the history is already in English. One recipe,
     so a translated and a passthrough history for the same messages differ
     only in the words, never in the format. A message with no role key
-    flattens as ``UNKNOWN:`` — the translation path's long-standing default,
-    which the passthrough flatten adopted when it moved here (it previously
-    wrote an empty role)."""
+    flattens as ``UNKNOWN:`` and a message with no content key flattens as
+    an empty content."""
     parts = []
     for message in history:
         role = message.get("role", "unknown").upper()
@@ -3850,12 +3849,13 @@ class ChatQnAService:
                     # translation: the chunk translator refuses it for the
                     # same reason (an empty history would silently blank the
                     # retrieval query), and the fallback status says so.
-                    raise TranslationFailedError("translation model returned an empty history translation")
+                    logger.error("Translation model returned an empty history translation; using the source.")
+                    return flattened_history_string, _QUERY_FALLBACK_ERROR
                 if logflag:
                     logger.debug(f"Translated chat history: {translated_blob}")
                 return translated_blob, _QUERY_TRANSLATED
 
-        except httpx.TimeoutException as e:
+        except (httpx.TimeoutException, TimeoutError) as e:
             logger.error(
                 f"History translation timeout after "
                 f"{TRANSLATION_SERVICE_TIMEOUT} seconds. Returning history "
@@ -4085,7 +4085,7 @@ class ChatQnAService:
                 raise TranslationInputTooLongError(
                     f"translation chunk exceeds VLLM_TRANSLATION_MAX_MODEL_LEN: {type(e).__name__}: {str(e)[:200]}"
                 ) from e
-            if isinstance(e, httpx.TimeoutException):
+            if isinstance(e, (httpx.TimeoutException, TimeoutError)):
                 # One typed subtype: the answer path still sees a
                 # TranslationFailedError, while the history path reports
                 # "the service was slow" without unwrapping __cause__.
@@ -4142,12 +4142,9 @@ class ChatQnAService:
 
         for outcome in translated_chunks:
             if isinstance(outcome, BaseException):
-                if isinstance(outcome, (TranslationInputTooLongError, TranslationTimeoutError)):
+                if isinstance(outcome, TranslationInputTooLongError):
                     # A permanent contract issue (the chunk exceeds the model
-                    # window: the route layer maps it to a 422) or a typed
-                    # timeout: re-raised as-is so a caller that splits
-                    # timeouts from other failures still can after the
-                    # gather.
+                    # window): the route layer maps it to a 422.
                     raise outcome
                 raise TranslationFailedError(
                     f"translation chunk failed: {type(outcome).__name__}: {outcome}"

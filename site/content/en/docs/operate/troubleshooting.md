@@ -173,9 +173,9 @@ The fallback is observable in two places:
     content — a Spanish query submitted with `language: "en"` is embedded
     as Spanish and still shows this value) or detection concluded it;
   - `passthrough_unknown_language` — no language was established for the
-    query: detection failed or produced nothing, or the client sent a
-    language code the map refuses; the query was embedded as-is, language
-    unknown;
+    query: detection failed, or it produced nothing to work with (which
+    includes a client language code the map refuses, when there is no
+    text to detect from); the query was embedded as-is, language unknown;
   - `fallback_timeout` — the translation service timed out; the
     **untranslated** query was embedded;
   - `fallback_error` — the translation failed or was refused for any other

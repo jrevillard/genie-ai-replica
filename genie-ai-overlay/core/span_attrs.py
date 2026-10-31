@@ -198,6 +198,11 @@ ATTRIBUTE_NAMES = {
     "rag_blend_enabled": "rag.blend.enabled",
     "rag_blend_alpha": "rag.blend.alpha",
     "rag_blend_history_turns": "rag.blend.history_turns",
+    # What the history translator handed the embedder: "translated",
+    # "passthrough_english", "fallback_timeout" or "fallback_error" — the
+    # fallback values name the request where the English corpus was queried
+    # with the untranslated source language (issue #1026).
+    "rag_translation_query_status": "rag.translation.query_status",
     "rag_history_segments_in": "rag.history.segments_in",
     "rag_history_segments_sent": "rag.history.segments_sent",
     "rag_prompt_window_tokens": "rag.prompt.window_tokens",

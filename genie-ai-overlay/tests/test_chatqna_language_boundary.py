@@ -654,7 +654,7 @@ class TestHistoryTranslationTarget:
                 [{"role": "user", "content": "hello"}], source_lang_code="fr"
             )
         prompt = client.post.await_args.kwargs["json"]["prompt"]
-        assert result == "hello"
+        assert result == ("hello", "translated")
         assert "English (en)" in prompt
 
     @pytest.mark.asyncio
@@ -663,14 +663,14 @@ class TestHistoryTranslationTarget:
         included — so the history goes on untranslated instead of into a
         prompt with a target nobody configured."""
         svc = create_service()
-        svc._translate_text_chunk = AsyncMock(return_value="translated")
+        svc._translate_chunk_in_language = AsyncMock(return_value="translated")
         with (
             patch.object(chatqna_module, "language_codes_map", return_value={}),
             patch.object(chatqna_module, "logger") as mock_logger,
         ):
             result = await svc._get_translated_history_string("hello")
-        assert result == "hello"
-        assert svc._translate_text_chunk.await_count == 0
+        assert result == ("hello", "fallback_error")
+        assert svc._translate_chunk_in_language.await_count == 0
         assert mock_logger.warning.called
 
 

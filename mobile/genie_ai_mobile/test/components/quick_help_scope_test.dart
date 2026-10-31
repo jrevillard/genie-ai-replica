@@ -1093,7 +1093,8 @@ void main() {
 
   /// A locale switch reloads the buttons with the new locale's titles: the
   /// context bar's title of an ACTIVE Quick Help scope must follow, and it
-  /// follows by IDENTITY (the button id), never by the pressed title.
+  /// follows by the button ID for an id'd button; a TITLE identity (an
+  /// id-less card's) matches nothing and keeps the pressed title.
   group('activeQuickHelpTitleFor', () {
     test('returns the reloaded button title for the active id', () {
       // The button was pressed under 'en' ('Births'); the reload carried
@@ -1105,6 +1106,24 @@ void main() {
 
       expect(activeQuickHelpTitleFor(buttons, 'births'), 'Naissances');
     });
+
+    test(
+      'a TITLE identity (an id-less card) matches no button and keeps the pressed title',
+      () {
+        // The re-title lookup is ID-keyed (quickHelpButtonById): an
+        // id-less card's identity is its title, and no button's ID equals
+        // it — the caller keeps the title the card was pressed under, the
+        // same fallback the web's own re-title takes (b.id === item.id
+        // misses the same way). A lookup that matched on IDENTITY instead
+        // would re-title the bar from another card on every locale switch.
+        final buttons = [
+          {'id': 'births', 'resolvedTitle': 'Naissances'},
+          {'resolvedTitle': 'Registry Card'},
+        ];
+
+        expect(activeQuickHelpTitleFor(buttons, 'Registry Card'), isNull);
+      },
+    );
 
     test('a null active id (sidebar scope or none) resolves nothing', () {
       final buttons = [

@@ -215,7 +215,8 @@ Map<String, dynamic>? quickHelpButtonById(
 /// The identity a conversation tag carries for [button] — the web's
 /// `serviceKey` rule (`button.id || title`): the id when the
 /// configuration declares one, the button's own title when it does not.
-/// Null when neither exists.
+/// Null when neither exists. Like every rule here, it reads the PARSED
+/// button (the [quickHelpTitleOf] shape the load produces).
 ///
 /// The identity must never be the id ALONE: a scoped card can be declared
 /// without an id (a hand-edited deployment configuration — no shipped
@@ -704,11 +705,12 @@ class ConversationScope {
 /// and the Quick Help buttons.
 ///
 /// A conversation carries the scope it was asked in: the Quick Help button
-/// that produced it — by its id, the button's identity — or the ENGLISH
-/// labels of the sidebar scope it was narrowed by. The scope is only
-/// usable when the live hierarchy can still NAME it: a scope that cannot
-/// be named leaves the query unscoped, and an unscoped query answers from
-/// the whole corpus.
+/// that produced it — a Quick Help tag is the button ID (quickHelpButtonIdentity
+/// may carry a title for an id-less card, and the resolver matches IDS only,
+/// exactly as the web's own restore does) — or the ENGLISH labels of the
+/// sidebar scope it was narrowed by. The scope is only usable when the live
+/// hierarchy can still NAME it: a scope that cannot be named leaves the
+/// query unscoped, and an unscoped query answers from the whole corpus.
 class ConversationScopeResolver {
   ConversationScopeResolver({
     required QuickHelpScopeResolver hierarchy,

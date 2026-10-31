@@ -15,6 +15,8 @@ import importlib
 import os
 import time
 
+import aiohttp
+
 try:
     import fcntl  # POSIX file locking — the service runs in a Linux container
 except ModuleNotFoundError:  # Windows dev checkout: locking degrades to a no-op
@@ -23,6 +25,7 @@ except ModuleNotFoundError:  # Windows dev checkout: locking degrades to a no-op
 from opentelemetry.trace import Status, StatusCode
 
 from tracing import (
+    background_span,
     get_meter,
     get_tracer,
     install_uvicorn_access_logging,
@@ -66,11 +69,19 @@ from comps import (
     statistics_dict,
 )
 from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDocRepo
+from core.model_http_policy import (
+    AIOHTTP_CONNECT_TIMEOUT_SECONDS,
+    CONTROL_PLANE_TIMEOUT_SECONDS,
+    non_negative_int_env,
+    positive_float_env,
+)
+from core.service_endpoints import DOCUMENT_REPOSITORY_URL
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from genieai_dataprep_loader import GenieDataprepLoader
+from keycloak_service_account import get_service_account_token
 
 logger = CustomLogger("genie_dataprep_microservice")
 setup_trace_logging("genie_dataprep_microservice")
@@ -149,6 +160,180 @@ loader = GenieDataprepLoader(
 
 # Global registry for running ingestion tasks to support specific "Kill" functionality
 active_ingestion_tasks = {}
+
+# ------------------------------------------------------------------------------
+# Stuck-ingest startup recovery (#610)
+# ------------------------------------------------------------------------------
+# Bounded startup retry: compose/Swarm does not guarantee the doc-repo is
+# listening when dataprep boots, so the recovery call is retried on a fixed
+# cadence (~5 minutes by default) before giving up with a loud warning.
+# Env-tunable per the model_http_policy convention — THROUGH its parsers: a
+# typo must degrade to the default at import time, never take the service
+# down. A doc-repo unreachable longer than the window skips the recovery
+# until the NEXT dataprep restart.
+_RECOVERY_MAX_ATTEMPTS = non_negative_int_env("DATAPREP_RECOVERY_MAX_ATTEMPTS", default=30)
+_RECOVERY_RETRY_SECONDS = positive_float_env("DATAPREP_RECOVERY_RETRY_SECONDS", default=10.0)
+
+
+async def recover_stuck_ingest_statuses():
+    """Release files the doc-repo still marks 'Ingesting' after a restart.
+
+    ``active_ingestion_tasks`` dies with the process, so a dataprep restart
+    orphans every in-flight ingest: the row stays 'Ingesting' forever, the UI
+    disables the Ingest button and ``kill_ingest`` 404s. The recovery asks
+    the doc-repo to release those rows back to 'Pending' for manual
+    re-ingestion.
+
+    What makes the release safe is the BOOT-TIME trigger plus the dead
+    in-memory registry — not exclusive writers (doc-repo itself and the
+    okf-server also write 'Ingesting'). The retry window can outlive the
+    boot, so every attempt carries the ids whose task is STILL alive in
+    this process at that moment as ``excludeFileIds``: a kick accepted
+    while the recovery was retrying must not be released by a later
+    attempt. Residual window: ids registered between an attempt's
+    snapshot and the doc-repo's UPDATE — bounded by the ingest 409
+    idempotency guard, and the live task writes its terminal status when
+    it finishes regardless.
+
+    Exhaustion is a loud warning, never an exception — the service must boot
+    regardless. OKF surfaces are NOT covered: bundle-zip docs are excluded
+    on the doc-repo side (okf-server owns their transition) and concepts
+    have no doc-repo files doc at all — the okf-server worker reclaims
+    timed-out concepts through the task_status probe window (spec #1020
+    §5.9).
+
+    Returns the list of released file ids ([] when nothing was recovered).
+    """
+    # Hold a strong reference to THIS task: the event loop only keeps weak
+    # references to tasks, so an unreferenced one can be garbage-collected
+    # during the 10 s retry sleeps (CPython asyncio docs) with no error
+    # anywhere. Self-registering — whichever scheduler ran it (the comps
+    # startup hook drops its own reference).
+    task = asyncio.current_task()
+    if task is not None:
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
+    # Post-request background work: the span keeps the [ recovery ] log lines
+    # correlated in the trace store (overlay CLAUDE.md § Public tracing API).
+    with background_span("dataprep.recovery"):
+        url = f"{DOCUMENT_REPOSITORY_URL}/api/files/ingest/recover-stuck"
+        headers = {}
+        # One session across every retry attempt: a fresh ClientSession per
+        # attempt builds and tears down a connector pool each time for nothing.
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(
+                total=CONTROL_PLANE_TIMEOUT_SECONDS, sock_connect=AIOHTTP_CONNECT_TIMEOUT_SECONDS
+            )
+        ) as session:
+            for attempt in range(1, _RECOVERY_MAX_ATTEMPTS + 1):
+                try:
+                    headers["Authorization"] = f"Bearer {await get_service_account_token()}"
+                    # Snapshot the live set PER ATTEMPT: a task registered
+                    # since the previous attempt is alive now, not orphaned.
+                    exclude_file_ids = sorted(fid for fid, t in active_ingestion_tasks.items() if not t.done())
+                    async with session.post(
+                        url, json={"excludeFileIds": exclude_file_ids}, headers=headers
+                    ) as response:
+                        if response.status == 200:
+                            payload = await response.json()
+                            if not payload.get("success"):
+                                # A 200 with a non-success JSON body (a
+                                # misrouted base URL, an interposing proxy's
+                                # JSON error envelope) must NOT read as
+                                # "nothing stuck" — that silently defeats the
+                                # self-healing. Treat it like any failure.
+                                logger.warning(
+                                    f"[ recovery ] attempt {attempt}/{_RECOVERY_MAX_ATTEMPTS}: "
+                                    f"unexpected 200 body: {str(payload)[:500]}"
+                                )
+                            else:
+                                recovered = payload.get("recovered") or []
+                                if recovered:
+                                    # Same 500-char bound as the error branch: a
+                                    # long batch would otherwise flood the signal.
+                                    logger.info(
+                                        f"[ recovery ] Released {len(recovered)} stuck ingest(s) back to "
+                                        f"Pending: {str(recovered)[:500]}"
+                                    )
+                                else:
+                                    logger.info("[ recovery ] No stuck ingests found at startup.")
+                                return recovered
+                        elif response.status in (400, 401, 403):
+                            # Permanent rejection (rotated secret, lost role,
+                            # malformed request): retrying burns 30 identical
+                            # attempts before the same misconfig is reported.
+                            # A 401 from a STALE cached token (revoked inside
+                            # the renewal buffer) is accepted as permanent —
+                            # telling the cache apart from real rejection
+                            # would need an invalidation API the token module
+                            # does not expose, and the next restart refetches.
+                            # 404 is deliberately NOT here — a dataprep that
+                            # boots against a still-running OLD doc-repo
+                            # (rolling update, version skew) gets 404 from
+                            # the missing route, and that is exactly the
+                            # boot-order race the retry loop exists for.
+                            logger.error(
+                                f"[ recovery ] giving up: doc-repo rejected the call permanently "
+                                f"(HTTP {response.status}): {(await response.text())[:500]}"
+                            )
+                            return []
+                        else:
+                            # Expected during the boot-order race (connection
+                            # refused, 404 version skew, 5xx): retryable —
+                            # WARNING, not ERROR, so a normal rolling deploy
+                            # does not train operators to dismiss the channel.
+                            logger.warning(
+                                f"[ recovery ] attempt {attempt}/{_RECOVERY_MAX_ATTEMPTS}: "
+                                # Truncated: an nginx/HTML error page dumped 30× per
+                                # restart would drown the [ recovery ] signal in
+                                # the log stream (same 500-char bound the status
+                                # callback uses for its error payloads).
+                                f"HTTP {response.status}: {(await response.text())[:500]}"
+                            )
+                except asyncio.CancelledError:
+                    # A cancellation is the event loop shutting down — not a
+                    # transient failure. Retrying through it would fight the
+                    # loop teardown.
+                    raise
+                except Exception as e:  # noqa: BLE001 — recovery must never kill the boot
+                    # Connection-class failures are the normal boot-order race.
+                    logger.warning(f"[ recovery ] attempt {attempt}/{_RECOVERY_MAX_ATTEMPTS} failed: {e}")
+                if attempt < _RECOVERY_MAX_ATTEMPTS:
+                    await asyncio.sleep(_RECOVERY_RETRY_SECONDS)
+        logger.warning(
+            f"[ recovery ] Giving up after {_RECOVERY_MAX_ATTEMPTS} attempts — files stuck in 'Ingesting' "
+            "stay stuck until the next dataprep restart."
+        )
+        return []
+
+
+# Strong references to the running recovery task (see the comment inside
+# ``recover_stuck_ingest_statuses``).
+_background_tasks: set = set()
+
+
+def schedule_stuck_ingest_recovery(app):
+    """Register the stuck-ingest recovery via the comps startup hook.
+
+    ``HTTPService.add_startup_event`` is the framework-native hook — comps
+    uses it itself for its dynamic-batch loop. It fires on the uvicorn
+    lifespan startup, on the same loop that serves the request handlers.
+    comps schedules the passed coroutine with ``asyncio.create_task`` and
+    drops the reference; the recovery self-registers into
+    ``_background_tasks`` on entry to survive GC (see the comment inside).
+    No-op (with a warning) when the method is missing or fails, so an
+    upstream comps restructure degrades instead of crashing the boot.
+    """
+    add_startup_event = getattr(app, "add_startup_event", None)
+    if add_startup_event is None:
+        logger.warning("[ recovery ] No add_startup_event on the microservice — skipping stuck-ingest recovery.")
+        return None
+    try:
+        # comps' add_startup_event hands its argument straight to
+        # asyncio.create_task, so pass the INVOKED coroutine.
+        add_startup_event(recover_stuck_ingest_statuses())
+    except Exception as e:  # noqa: BLE001 — the recovery must never kill the boot
+        logger.warning(f"[ recovery ] Could not register the startup recovery: {e}")
 
 
 # ------------------------------------------------------------------------------
@@ -601,5 +786,7 @@ if __name__ == "__main__":
     # FastAPI auto-instrumentation is handled globally by tracing.py
     # setup_tracing() → FastAPIInstrumentor().instrument() runs before
     # OPEA comps creates the FastAPI app, so traceparent extraction works.
+
+    schedule_stuck_ingest_recovery(app)
 
     app.start()

@@ -78,6 +78,17 @@ const singleIngestSchema = Joi.object({
   chunkOverlap: Joi.number().integer().min(0).max(1000).allow(null).optional()
 });
 
+// Body of the dataprep startup recovery (#610): the caller's still-live task
+// ids, excluded from the release so a retry landing after the service started
+// serving cannot flip an ingest that is actually running. Optional/empty by
+// default (nothing to exclude at a cold boot). Unknown keys are ALLOWED: a
+// 400 here would fail fast as a permanent rejection on the dataprep side and
+// silently disable the self-healing until the next restart — a future caller
+// adding a field must degrade, not die.
+const recoverStuckSchema = Joi.object({
+  excludeFileIds: Joi.array().items(Joi.string().min(1)).max(10000).default([])
+}).unknown(true);
+
 // WS2 (David, 2026-09-25): bundle zips (is_bundle=true) are OKF per-version
 // ingestion artifacts — they live forever, governed by the OKF lifecycle
 // (supersede/superseded by minting a new version), not by doc-repo's
@@ -233,6 +244,7 @@ class FileController {
     this.bundleIngest = this.bundleIngest.bind(this);
     this._markIngestFailure = this._markIngestFailure.bind(this);
     this.killIngestion = this.killIngestion.bind(this);
+    this.recoverStuckIngests = this.recoverStuckIngests.bind(this);
 
     // --- CRAWLER BINDS ---
     this.scheduleSiteCrawl = this.scheduleSiteCrawl.bind(this);
@@ -1668,6 +1680,62 @@ class FileController {
     } catch (error) {
       logger.error('Kill ingestion error:', error);
       res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Release files stuck in 'Ingesting' back to 'Pending' (#610).
+   * Called by dataprep once at startup: its in-memory task registry dies with
+   * the process, so rows still 'Ingesting' after a restart are orphaned — the
+   * UI keeps the Ingest button disabled and kill-ingest 404s forever.
+   */
+  async recoverStuckIngests(req, res) {
+    try {
+      // The caller's still-live task ids: an ingest accepted while the
+      // recovery was retrying is not an orphan and must not be released.
+      // Joi returns the ORIGINAL input on error, so the error must be
+      // checked — an unchecked malformed body reaches the AQL bind and
+      // surfaces as a 500 (retried 30× by dataprep) instead of a 400.
+      const { error, value } = recoverStuckSchema.validate(req.body || {});
+      if (error) {
+        return res.status(400).json({ success: false, error: 'Validation error', message: error.details[0].message });
+      }
+      const recovered = await metadataService.recoverStuckIngests(value.excludeFileIds);
+      // Latency + pressure bounds: a long batch can leave hundreds of rows
+      // stuck. A serial loop could outrun the dataprep caller's 30 s
+      // control-plane timeout (retrying the call, duplicating every log
+      // line); an unbounded fan-out would fire hundreds of simultaneous
+      // ArangoDB inserts at the just-booted stack. Chunks of 50 keep both
+      // bounded.
+      const LOG_CHUNK = 50;
+      for (let i = 0; i < recovered.length; i += LOG_CHUNK) {
+        const chunk = recovered.slice(i, i + LOG_CHUNK);
+        const logResults = await Promise.allSettled(
+          chunk.map((fileId) =>
+            fileService.addIngestionLog(fileId, {
+              level: 'WARN',
+              stage: 'dataprep',
+              message:
+                'Ingestion interrupted: the ingestion service restarted while this file was being processed. ' +
+                'Status released to Pending so it can be ingested again.'
+            })
+          )
+        );
+        logResults.forEach((result, j) => {
+          if (result.status === 'rejected') {
+            // The status flip already happened; a lost log line must not fail
+            // the recovery — dataprep would only retry the whole call. The
+            // reason is not guaranteed to be an Error, so stringify defensively
+            // (a throw here would become a 500 and a 30× dataprep retry).
+            const reason = result.reason && result.reason.message ? result.reason.message : String(result.reason);
+            logger.error(`Failed to log recovery for ${chunk[j]}: ${reason}`);
+          }
+        });
+      }
+      return res.json({ success: true, recovered, count: recovered.length });
+    } catch (error) {
+      logger.error('Recover stuck ingests error:', error);
+      return res.status(500).json({ success: false, error: error.message });
     }
   }
 

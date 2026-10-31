@@ -355,6 +355,7 @@ OWNED_SPAN_NAMES = frozenset(
         "dataprep.llm.phase",
         "dataprep.llm.label_chunk",
         "dataprep.log_environment_variables",
+        "dataprep.recovery",
         "dataprep.retract",
     }
 )

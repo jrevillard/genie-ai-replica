@@ -1794,6 +1794,14 @@ services:
       # 1 = the historical single-flight. Pair with okf-server's
       # OKF_INGEST_CONCURRENCY drain lanes.
       DATAPREP_INGEST_CONCURRENCY: ${DATAPREP_INGEST_CONCURRENCY:-1}
+      # STUCK-INGEST RECOVERY: the boot-time release of rows left 'Ingesting'
+      # by a previous crash. A doc-repo unreachable longer than
+      # attempts × seconds skips the recovery until the NEXT dataprep
+      # restart — raise the window when doc-repo boots slower than that.
+      # 0 attempts = recovery DISABLED (rows stay stuck until the next
+      # restart with a fresh setting).
+      DATAPREP_RECOVERY_MAX_ATTEMPTS: ${DATAPREP_RECOVERY_MAX_ATTEMPTS:-30}
+      DATAPREP_RECOVERY_RETRY_SECONDS: ${DATAPREP_RECOVERY_RETRY_SECONDS:-10}
       # REMOTE-LLM RESILIENCE (David, 2026-09-09): the remote vLLM gateway
       # throws transient 502/503/504 storms — dataprep absorbs them with a
       # per-call retry ladder + shared storm cool-down + one failed-batch

@@ -37,6 +37,7 @@ SERVICE_IMAGES: dict[str, tuple[Path, ...]] = {
     "retriever/config.py": (OVERLAY_ROOT / "retriever" / "Dockerfile-retriever_genie-ai",),
     "reranker/genieai_tei_reranker.py": (OVERLAY_ROOT / "reranker" / "Dockerfile-reranker_genie-ai",),
     "dataprep/genieai_dataprep_arangodb.py": (OVERLAY_ROOT / "dataprep" / "Dockerfile-dataprep_genie-ai",),
+    "dataprep/genieai_dataprep_microservice.py": (OVERLAY_ROOT / "dataprep" / "Dockerfile-dataprep_genie-ai",),
     "dataprep/keycloak_service_account.py": (OVERLAY_ROOT / "dataprep" / "Dockerfile-dataprep_genie-ai",),
     # core/ is not one image. model_cache ships in all three services that talk
     # to a model endpoint, and it now imports core.model_http_policy, so a

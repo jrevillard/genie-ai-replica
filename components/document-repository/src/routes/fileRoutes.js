@@ -805,6 +805,43 @@ router.post('/ingest', authorizeRole(ADMIN_ONLY), fileController.ingestMultipleF
 
 /**
  * @swagger
+ * /api/files/ingest/recover-stuck:
+ *   post:
+ *     summary: Release files stuck in 'Ingesting' back to 'Pending' (dataprep startup recovery)
+ *     description: >
+ *       Called by the dataprep service once at startup. Its in-memory task
+ *       registry dies with the process, so any file still marked 'Ingesting'
+ *       after a restart is orphaned; this flips those rows to 'Pending' and
+ *       logs a WARN entry per file. Same role as the dataprep status callback.
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       '200':
+ *         description: Files released (possibly none)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 recovered:
+ *                   type: array
+ *                   items: { type: string }
+ *                 count: { type: integer }
+ *       '400':
+ *         description: Validation error (e.g. excludeFileIds not an array of strings)
+ *       '401':
+ *         description: Unauthorized
+ *       '403':
+ *         description: Forbidden - service callback role required
+ *       '500':
+ *         description: Recovery query failed
+ */
+router.post('/ingest/recover-stuck', authorizeRole(SERVICE_CALLBACK), fileController.recoverStuckIngests);
+
+/**
+ * @swagger
  * /api/files/ingest-bundle:
  *   post:
  *     summary: Ingest an OKF bundle (bypasses upload allowlist; ClamAV scanned; threads graph_name)

@@ -570,6 +570,24 @@ describe('repository-controller — pii / lifecycle / export / autocorrect surfa
     expect(repoService.create).not.toHaveBeenCalled();
   });
 
+  // Round 21 (#80915): the CRAWL endpoint's repo_id path had no test — the
+  // documents one covered convertFromDocuments only. Same lie the old code
+  // told: a differing body.name on an existing repo must NOT read as a
+  // rename (name_adjusted true). This fails on the pre-#80807 code.
+  it('convertFromCrawl: repo_id path NEVER reports name_adjusted — nothing is renamed (#80915)', async () => {
+    repoService.getById.mockReset();
+    repoService.getById.mockResolvedValue({ repo_id: 'r1', name: 'Existing Name' });
+    const { res } = await drive(controller.convertFromCrawl, {
+      body: { repo_id: 'r1', name: 'A Totally Different Name', file_id: 'f1', split_mode: 'B' }
+    });
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toMatchObject({ repo_id: 'r1', name: 'Existing Name', name_adjusted: false });
+    expect(repoService.create).not.toHaveBeenCalled();
+    expect(require('../services/crawl-conversion-service').startConversion).toHaveBeenCalledWith(
+      expect.objectContaining({ repo_id: 'r1', file_id: 'f1', split_mode: 'B' })
+    );
+  });
+
   it('acceptConceptLink: self-links, missing targets and missing sources are refused', async () => {
     const first = await drive(controller.acceptConceptLink, { body: { to_concept_id: 'c1' } });
     expect(first.next).toHaveBeenCalledWith(expect.any(ValidationError)); // self-link

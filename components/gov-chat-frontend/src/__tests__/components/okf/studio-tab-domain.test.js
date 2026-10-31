@@ -104,6 +104,36 @@ it('the create action is disabled until a Subject Area is explicitly picked', as
   wrapper.unmount();
 });
 
+// Round 21 audit (#80912): the dashboard's "+ New repository" dialog is the
+// TESTED twin of Entry.vue's index-import-failure branch — deleting the
+// result.repo block left this suite green while stewards got a blind
+// "failed" for a repo that WAS created (a retry then mints a second one).
+it('a created repo whose index import failed says open-it, not retry (#80123 consumer)', async () => {
+  const { store, dispatch } = buildStore();
+  const wrapper = mountTab(store);
+  await wrapper.vm.$nextTick();
+  wrapper.vm.createOpen = true;
+  wrapper.vm.createName = 'Permits';
+  wrapper.vm.createDomain = 'Water Supply';
+  dispatch.mockImplementation((action) =>
+    action === 'okf/createRepo'
+      ? Promise.resolve({
+          ok: false,
+          code: 'CREATE_FAILED',
+          message: 'import failed',
+          repo: { repo_id: 'r-half', name: 'Permits', domain: 'Water Supply' }
+        })
+      : Promise.resolve({})
+  );
+  await wrapper.vm.onCreateAction('create');
+  expect(wrapper.vm.createError).toMatch(/created, but its starter index could not be imported/i);
+  expect(wrapper.vm.createOpen).toBe(true); // the dialog stays with the message
+  // Exactly ONE create dispatch ran — the envelope must not invite a retry.
+  const createCalls = dispatch.mock.calls.filter(([action]) => action === 'okf/createRepo');
+  expect(createCalls).toHaveLength(1);
+  wrapper.unmount();
+});
+
 it('a zip import without a Subject Area is refused and never dispatched', async () => {
   const { store, dispatch } = buildStore();
   const wrapper = mountTab(store);

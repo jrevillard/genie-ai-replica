@@ -636,6 +636,49 @@ describe('cross-tab renew lease (#80800)', () => {
     expect(window.localStorage.getItem(LEASE_KEY)).toBeNull();
   });
 
+  // ── Round 21 (#80914): the three protocol guards (settle fence, identity
+  // check, release ownership) each survive single-tab deletion — the suite
+  // proved the SCENARIOS, not the CONTENTION. Two module isolates over ONE
+  // shared localStorage ARE two tabs: each copy gets its own RENEW_TAB_ID,
+  // and exactly ONE signinSilent may run across both.
+  it('two tabs contending: exactly ONE renew runs, the other adopts (#80914)', async () => {
+    jest.useFakeTimers();
+    // Each isolate is a fresh service module — its own RENEW_TAB_ID, its own
+    // renewInFlight — over the ONE shared jsdom localStorage. (The isolates
+    // inherit this file's top-level oidc mock, so the shared backend mocks
+    // are mockSigninSilent / mockStoreUser.)
+    const loadCopy = () => {
+      let svc;
+      jest.isolateModules(() => {
+        svc = require('@/services/keycloakAuthService').default;
+      });
+      return svc;
+    };
+    try {
+      const tabA = loadCopy();
+      const tabB = loadCopy();
+      const fresh = createMockUser({ access_token: 'holder-token-2tab' });
+      mockGetUser.mockResolvedValue(createMockUser());
+      mockSigninSilent.mockResolvedValue(fresh);
+      await tabA.initialize();
+      await tabB.initialize();
+      // Both tabs' renew timers fire together:
+      const pa = tabA.signinSilent();
+      const pb = tabB.signinSilent();
+      // A wins the lease, settles, renews ONCE, publishes, releases; B waits,
+      // reads the publication, adopts — never its own renew.
+      await jest.advanceTimersByTimeAsync(1200);
+      const [ra, rb] = await Promise.all([pa, pb]);
+      expect(mockSigninSilent).toHaveBeenCalledTimes(1); // THE contention contract
+      expect(ra && ra.access_token).toBe('holder-token-2tab');
+      expect(rb && rb.access_token).toBe('holder-token-2tab'); // adopted the publication
+      expect(mockStoreUser).toHaveBeenCalledWith(expect.objectContaining({ access_token: 'holder-token-2tab' }));
+    } finally {
+      jest.useRealTimers();
+      window.localStorage.clear();
+    }
+  });
+
   // ── Round 21, #80864: the settle window fences the simultaneous-claim race
   // the round-20 read-back missed (jsdom has no Web Locks → lease path).
   it('settle window: a rival claim DURING the window makes this tab back off', async () => {

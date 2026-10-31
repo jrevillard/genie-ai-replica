@@ -497,6 +497,25 @@ describe('ingestWorker fair claim strategy (spec #1020 §5.2 — OKF_CLAIM_STRAT
     expect(res.concept_id).toBe('fc');
   });
 
+  // Round 21 (#80918): the FAIR failure arm's OTHER exit — a non-1200 DB
+  // error means NOTHING was claimed (the fused statement aborted), so the
+  // lane must proceed with NO job and fire NO kick. Mutating the catch to
+  // fabricate a job on non-1200 would have passed before this existed.
+  test('non-1200 DB error on the fair claim → no job, no kick', async () => {
+    process.env.OKF_CLAIM_STRATEGY = 'fair';
+    programQueries(FAIR_ROW, [{ index_status: 'indexed', chunk_count: 1 }]);
+    const boom = new Error('collection not readable');
+    boom.errorNum = 403;
+    mockDb.query.mockRejectedValueOnce(boom);
+    // The error propagates (the poll loop's catch owns it) — the contract is
+    // that NO job is fabricated and NO kick fires.
+    await expect(worker._processOneJob()).rejects.toThrow('collection not readable');
+    // The kick (dataprep POST) never fired — nothing was claimed, so there
+    // is nothing to send.
+    const kickTexts = authedAxios.post.mock.calls.map((c) => String(c[0] || ''));
+    expect(kickTexts.some((u) => u.includes('/jobs'))).toBe(false);
+  });
+
   test('fair-claim indexes exist in the ensured schema (db/collections.js)', () => {
     const { INDEXES } = require('../db/collections');
     const fields = (INDEXES.okf_concepts_meta || []).map((i) => i.fields.join(','));

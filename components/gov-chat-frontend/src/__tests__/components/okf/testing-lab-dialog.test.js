@@ -1921,17 +1921,40 @@ describe('#80805 — poll-envelope messages render translated, server detail ver
   });
 
   it('a failed run whose envelope carries the labErrors key routes it through the translator', async () => {
-    const w = mountDialog({ initialTab: 'suites' });
+    // Round 21 (#80911): this test used to mount with NO $i18n and assert the
+    // RAW KEY — translateLabError was a no-op under that mock (the key passed
+    // through untranslated and satisfied the assertion), so unwiring ALL TEN
+    // call sites left the suite green while users saw 'okf.labErrors.…'. The
+    // honest wiring test installs the REAL i18n plugin and asserts the
+    // TRANSLATED sentence: it dies on every unwired mutation.
+    const { createI18n } = require('vue-i18n');
+    const i18n = createI18n({
+      legacy: true,
+      locale: 'en',
+      fallbackLocale: 'en',
+      messages: { en: { okf: { labErrors: { suiteRunFailed: 'The suite run blew up (translated).' } } } }
+    });
+    const w = mount(OkfTestingLabDialog, {
+      global: {
+        plugins: [i18n],
+        mocks: { $store: fakeStore() },
+        stubs: {
+          DsDialog: { template: '<div><slot /></div>' },
+          DsTabs: { template: '<div><slot /></div>' },
+          DsInfoTip: true,
+          DsSpinner: true
+        }
+      },
+      props: { visible: true, repo: REPO, initialTab: 'suites' }
+    });
     await w.vm.$nextTick();
     w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
     // headSuiteRun starts the async run; pollHeadSuiteRun answers the
-    // store’s failed envelope whose message is now an okf.labErrors.* KEY.
+    // store's failed envelope whose message is an okf.labErrors.* KEY.
     dispatch.mockResolvedValueOnce({ ok: true, result: { status: 'running', run_key: 'rk-1' } });
     dispatch.mockResolvedValueOnce({ ok: false, code: 'RUN_FAILED', message: 'okf.labErrors.suiteRunFailed' });
     await w.vm.onRunSuite();
-    // No $i18n in tests: translate(key, key) returns the key — pinning
-    // that the KEY reached the translator (never rendered raw to a user).
-    expect(w.vm.error).toBe('okf.labErrors.suiteRunFailed');
+    expect(w.vm.error).toBe('The suite run blew up (translated).');
   });
 
   it('a failed run with a SERVER message keeps it verbatim', async () => {

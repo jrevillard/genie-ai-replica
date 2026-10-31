@@ -15,7 +15,7 @@ Method | HTTP request | Description
 
 
 # **apiServicesCategoriesCategoryIdGet**
-> ApiServicesCategoriesGet200ResponseInner apiServicesCategoriesCategoryIdGet(categoryId, locale)
+> ApiServicesCategoriesCategoryIdGet200Response apiServicesCategoriesCategoryIdGet(categoryId, locale)
 
 Get category with services
 
@@ -46,7 +46,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**ApiServicesCategoriesGet200ResponseInner**](ApiServicesCategoriesGet200ResponseInner.md)
+[**ApiServicesCategoriesCategoryIdGet200Response**](ApiServicesCategoriesCategoryIdGet200Response.md)
 
 ### Authorization
 
@@ -60,7 +60,7 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **apiServicesCategoriesGet**
-> List<ApiServicesCategoriesGet200ResponseInner> apiServicesCategoriesGet(locale)
+> List<CategoryTree> apiServicesCategoriesGet(locale)
 
 Get all categories with services
 
@@ -89,7 +89,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**List<ApiServicesCategoriesGet200ResponseInner>**](ApiServicesCategoriesGet200ResponseInner.md)
+[**List<CategoryTree>**](CategoryTree.md)
 
 ### Authorization
 

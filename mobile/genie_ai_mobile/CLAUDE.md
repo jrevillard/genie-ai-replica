@@ -14,8 +14,11 @@ The mobile app uses an auto-generated OpenAPI client from the backend spec. **Ne
 **Prerequisites:** `openapi-generator-cli` (`npm install -g @openapitools/openapi-generator-cli`), Node.js, backend `node_modules`.
 
 The script:
-1. Extracts the OpenAPI spec from backend JSDoc annotations (`components/gov-chat-backend/routes/*.js`) — no running server needed
+1. Extracts the OpenAPI spec from backend JSDoc annotations (`components/gov-chat-backend/routes/*.js`) plus the shared component schemas in `components/gov-chat-backend/swagger-schemas.js` (required by both the backend's `index.js` and the script — moving them back into `index.js` silently breaks generation: every `$ref` to them dangles and the generator drops the models) — no running server needed
 2. Generates the Dart client into `openapi_client/` using `openapi-generator-cli`
+3. Patches one dart-generator emission bug (non-compiling Dart for an array-of-binary multipart property) — so always regenerate through the script; a bare `openapi-generator-cli generate` produces a client that does not compile
+
+`./scripts/generate-api-client.sh --check` regenerates into a temp directory and exits non-zero when the committed client is stale against the backend spec.
 
 ### Architecture
 
@@ -50,11 +53,11 @@ final profile = jsonDecode(response.body);
 | Class | Endpoints |
 |-------|-----------|
 | `CurrentUserApi` | `/api/me`, `/api/me/context`, `/api/me/delete` |
-| `ChatHistoryApi` | `/chat/conversations`, `/chat/messages`, `/chat/folders` |
-| `ServiceCategoriesApi` | `/service-categories/*` |
-| `AuthenticationApi` | `/auth/logout` |
-| `AnalyticsApi` | `/analytics/*` |
-| `TranslationApi` | `/translate`, `/translate/markdown` |
+| `ChatHistoryApi` | `/api/chat/conversations`, `/api/chat/messages`, `/api/chat/folders` |
+| `ServiceCategoriesApi` | `/api/service-categories/*` |
+| `AuthenticationApi` | `/api/auth/logout` |
+| `AnalyticsApi` | `/api/analytics/*` |
+| `TranslationApi` | `/api/translate`, `/api/translate/markdown` |
 
 ## Design System
 

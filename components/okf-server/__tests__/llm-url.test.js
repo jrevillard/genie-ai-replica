@@ -26,3 +26,18 @@ describe('openAiChatUrl', () => {
     expect(openAiChatUrl(base)).toBe(expected);
   });
 });
+
+// The models-listing sibling of the same ONE rule — the discovery probe
+// (services/vllm-model-cache.js) must never disagree with the chat path on
+// how a base is completed (#1181).
+describe('openAiModelsUrl', () => {
+  test.each([
+    ['http://vllm:8000', 'http://vllm:8000/v1/models'],
+    ['https://ai.assembly.govstack.global/llm', 'https://ai.assembly.govstack.global/llm/v1/models'],
+    ['https://api.openai.com/v1', 'https://api.openai.com/v1/models'],
+    ['https://api.z.ai/api/coding/paas/v4', 'https://api.z.ai/api/coding/paas/v4/models'],
+    ['https://frontier.example/v1/', 'https://frontier.example/v1/models']
+  ])('%s → %s', (base, expected) => {
+    expect(require('../services/llm-url').openAiModelsUrl(base)).toBe(expected);
+  });
+});

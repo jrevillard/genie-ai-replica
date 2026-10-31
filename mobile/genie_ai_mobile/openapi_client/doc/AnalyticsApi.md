@@ -12,7 +12,6 @@ Method | HTTP request | Description
 [**apiAnalyticsDashboardGet**](AnalyticsApi.md#apianalyticsdashboardget) | **GET** /api/analytics/dashboard | Get dashboard analytics
 [**apiAnalyticsEventsGet**](AnalyticsApi.md#apianalyticseventsget) | **GET** /api/analytics/events | Get events records
 [**apiAnalyticsEventsPost**](AnalyticsApi.md#apianalyticseventspost) | **POST** /api/analytics/events | Track an event
-[**apiAnalyticsGet**](AnalyticsApi.md#apianalyticsget) | **GET** /api/analytics | Get general analytics
 [**apiAnalyticsMetricMetricGet**](AnalyticsApi.md#apianalyticsmetricmetricget) | **GET** /api/analytics/metric/{metric} | Get specific metric data
 [**apiAnalyticsRecordsGet**](AnalyticsApi.md#apianalyticsrecordsget) | **GET** /api/analytics/records | Get analytics records
 [**apiAnalyticsSatisfactionGaugeGet**](AnalyticsApi.md#apianalyticssatisfactiongaugeget) | **GET** /api/analytics/satisfaction/gauge | Get satisfaction gauge data
@@ -151,55 +150,6 @@ No authorization required
 ### HTTP request headers
 
  - **Content-Type**: application/json
- - **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-# **apiAnalyticsGet**
-> ApiAnalyticsGet200Response apiAnalyticsGet(startDate, endDate, filters, locale)
-
-Get general analytics
-
-Retrieves general analytics data with optional filters and date range
-
-### Example
-```dart
-import 'package:openapi/api.dart';
-
-final api_instance = AnalyticsApi();
-final startDate = 2013-10-20T19:20:30+01:00; // DateTime | Start date (ISO format)
-final endDate = 2013-10-20T19:20:30+01:00; // DateTime | End date (ISO format)
-final filters = filters_example; // String | JSON string of filter criteria
-final locale = locale_example; // String | Language locale for category names (e.g. en, fr, sw, ar, id, es, etc.)
-
-try {
-    final result = api_instance.apiAnalyticsGet(startDate, endDate, filters, locale);
-    print(result);
-} catch (e) {
-    print('Exception when calling AnalyticsApi->apiAnalyticsGet: $e\n');
-}
-```
-
-### Parameters
-
-Name | Type | Description  | Notes
-------------- | ------------- | ------------- | -------------
- **startDate** | **DateTime**| Start date (ISO format) | [optional] 
- **endDate** | **DateTime**| End date (ISO format) | [optional] 
- **filters** | **String**| JSON string of filter criteria | [optional] 
- **locale** | **String**| Language locale for category names (e.g. en, fr, sw, ar, id, es, etc.) | [optional] [default to 'en']
-
-### Return type
-
-[**ApiAnalyticsGet200Response**](ApiAnalyticsGet200Response.md)
-
-### Authorization
-
-No authorization required
-
-### HTTP request headers
-
- - **Content-Type**: Not defined
  - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

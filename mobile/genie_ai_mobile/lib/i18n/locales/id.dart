@@ -1036,6 +1036,8 @@ const Map<String, dynamic> idLocale = {
         "Masalah konfigurasi: label \"{labels}\" tidak lagi ada dalam hierarki pengetahuan. Tombol ini tidak dapat digunakan sampai konfigurasinya diperbarui.",
     "quickHelpCategoryGone":
         "Masalah konfigurasi: kategori tombol ini tidak lagi ada dalam hierarki pengetahuan. Tombol ini tidak dapat digunakan sampai konfigurasinya diperbarui.",
+    "quickHelpTitleMissing":
+        "Masalah konfigurasi: tombol ini tidak memiliki judul dalam bahasa ini. Tombol ini tidak dapat digunakan sampai konfigurasinya diperbarui.",
     "quickHelpScopeUnavailable":
         "Masalah konfigurasi: hierarki pengetahuan tidak dapat dimuat, sehingga cakupan tombol ini tidak dapat diverifikasi. Tombol ini tidak dapat digunakan sampai hierarki tersedia.",
     "scopeNotNameable":

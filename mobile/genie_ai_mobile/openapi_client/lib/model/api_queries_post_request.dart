@@ -44,7 +44,7 @@ class ApiQueriesPostRequest {
   /// source code must fall back to having a nullable type.
   /// Consider adding a "default:" property in the specification file to hide this note.
   ///
-  ApiQueriesPostRequestContext? context;
+  QueryContext? context;
 
   /// Query mode (defaults to env or single-message)
   ApiQueriesPostRequestContextOptionEnum contextOption;
@@ -155,7 +155,7 @@ class ApiQueriesPostRequest {
         sessionId: mapValueOfType<String>(json, r'sessionId')!,
         text: mapValueOfType<String>(json, r'text'),
         messages: ApiQueriesPostRequestMessagesInner.listFromJson(json[r'messages']),
-        context: ApiQueriesPostRequestContext.fromJson(json[r'context']),
+        context: QueryContext.fromJson(json[r'context']),
         contextOption: ApiQueriesPostRequestContextOptionEnum.fromJson(json[r'contextOption']) ?? const ApiQueriesPostRequestContextOptionEnum._('single-message'),
         categoryId: mapValueOfType<String>(json, r'categoryId'),
         serviceId: mapValueOfType<String>(json, r'serviceId'),

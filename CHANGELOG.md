@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The generated mobile OpenAPI client matches the backend API again.** The Dart client under `mobile/genie_ai_mobile/openapi_client/` had not been regenerated since the `/api/service-categories/categories` response changed (children are now `{ name, nameEN }` objects and the category carries `nameEN`), so the committed artifact described a contract the backend no longer serves. Regenerated from the current spec: the category-tree endpoints are typed (`CategoryTree`) and the chat/analytics/query endpoints gained the models the spec already documented. Two generator-path defects fixed along the way — the generation script now builds the same spec the backend serves (the shared component schemas moved to `components/gov-chat-backend/swagger-schemas.js`, consumed by both the runtime and the script; previously the schemas only existed in `index.js`, so every `$ref` to them dangled and the generator silently dropped those models), and the script patches a dart-generator emission bug that produced non-compiling Dart for an array-of-binary multipart property (verified on generator 7.22.0 and 7.26.0). The regeneration also corrected two backend swagger annotations that had lost their `/api` prefix (`/queries`, `/queries/stream`) — the old artifact had hardcoded the correct `/api/queries` paths, so the fresh one would have pointed those two chat endpoints at 404s. At runtime nothing changed: the category tree is consumed through a raw `jsonDecode`, never through the generated models, and the app's generated-model call sites keep their names except one — the query-submission context is now the shared `QueryContext` model (the inline `ApiQueriesPostRequestContext` the old artifact invented is gone), a one-line migration in `chatbot_component.dart`. (#1122, !642)
+
+- **The web analytics service no longer offers two endpoints the backend never served.** `recordQuery` (`POST /api/analytics/query`) and `recordFeedback` (`POST /api/analytics/feedback`) in `components/gov-chat-frontend/src/services/analyticsService.js` called routes that do not exist; nothing in the app used them apart from their own unit tests, and both are removed. (#1122, !642)
+
 ### Added
 
 - **Benchmark rerank batches run in parallel — `OKF_RAGAS_RERANK_CONCURRENCY` (8-7).** The benchmark retrieval leg sends its candidate pool to the reranker in batches of 32, sequentially — at a raised candidate pool (192) that is 6 sequential round trips per question, and the retrieval leg of a 100-question suite measured ~1h50m, ~90 minutes of it rerank transport. The batch calls are independent (the reranker scores query–text pairs; results reassemble by index), so they now run up to `OKF_RAGAS_RERANK_CONCURRENCY` at a time (default **3**, clamp 1–8, read per call) — same scores at any value, purely transport. Measured effect at 192/100 questions: the rerank leg drops from ~90 min to ~30 min. The global in-flight ceiling is `OKF_RAGAS_RUN_CONCURRENCY` × this value (6 at the defaults) — raise on an idle GPU, set `1` when a benchmark shares the GPU with live chat traffic. Landed in all four sites (compose, `env`, Ansible `env.j2`, config-validator).
@@ -41,6 +47,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** the translation languages now come from one canonical
+  `language-registry.json`, and the env overrides
+  `LANGUAGE_CODES_FILEPATH` / `LANGUAGE_SCRIPTS_FILEPATH` are replaced by
+  `LANGUAGE_REGISTRY_FILEPATH`. The supported-language list was written down
+  five times (three per-model maps in the backend, a code-to-name map and a
+  script map in the chatqna service); adding a language meant five edits in
+  two runtimes, guarded only by a parity test. All five copies are now
+  derived from the single registry (canonical code, display name, script,
+  and the code each model is asked for), read by the backend's language maps
+  and by the chatqna service. A deployment that set the old overrides must
+  point `LANGUAGE_REGISTRY_FILEPATH` at the registry file instead — a file
+  still in the old flat shape is refused (translation answers in English).
+  See `docs/UPGRADE.md`.
+
+- **Breaking: the OKF admin model listing follows the chat path's URL
+  rule.** A base that already carries a version segment lists at
+  `{base}/models`, a bare host at `{base}/v1/models` — the one rule the
+  chat call uses. A stored configuration whose base serves the list at the
+  root (`http://my-proxy:8080/models`) must now carry its version segment
+  (`http://my-proxy:8080/v1`); before, the listing and the chat call
+  disagreed about where `/v1` goes, and the admin panel showed a broken
+  credentials form next to a working server.
+
+- **Ansible deployments with a remote GPU node now default
+  `RAGAS_JUDGE_BASE_URL` to the GPU's own model server.** The
+  default was the local `http://vllm:8000/v1`, and the local vLLM service
+  does not run on the app node when the models are remote — the judge base
+  pointed at a service that was not there. The default is now
+  `https://<gpu>:<port>/llm/v1`, the deployment's own endpoint (only that
+  endpoint may receive the deployment credential). Deployments that set
+  `ragas_judge_base_url` explicitly are unaffected. The GPU endpoint is
+  HTTPS and its certificate is self-signed by default, so the deployment
+  already needs `node_tls_reject_unauthorized: "0"` for the OKF server's
+  other calls to that node — the judge leg joins them.
+
+- **The deployment vLLM bearer stays on the deployment endpoint.** The OKF
+  server used to send `VLLM_API_KEY` to whatever `RAGAS_JUDGE_BASE_URL`
+  names, and to a saved model configuration that carries no key of its own
+  — the GPU bearer traveling to a third-party host. The credential is now
+  scoped to the deployment endpoint (same host, same port, same or
+  version-prefixed path). A judge or a named config on any other endpoint
+  needs its own key: `RAGAS_JUDGE_API_KEY` (no longer defaulted from
+  `VLLM_API_KEY` in compose or the Ansible template) or the config's
+  `api_key` field — an endpoint that accepted the deployment bearer before
+  now answers 401.
+
+- **The suite provenance field `generator` names every model that produced
+  the suite.** It was a constant — the deployment's model name
+  from the environment, or `llm:vllm` — so it never reflected any call. It
+  now lists the distinct models the generation calls actually ran under
+  (`llm:model-a,llm:model-b`), or `none` when no generation call carried a
+  stamp (the whole LLM leg failed and the deterministic fallback rows
+  filled the suite). A consumer that parses it as a single `llm:<model>`
+  token must handle both shapes.
+
+- **The OKF server no longer inherits the deployment's model NAME for the
+  benchmark judge.** `RAGAS_JUDGE_MODEL` defaulted to
+  `VLLM_LLM_MODEL_ID`, so a judge pointed at another endpoint was asked
+  for the deployment's model and answered 404 (`model not found`) — a
+  failure that reads like a credentials problem. The name is now explicit
+  only: unset, the served model is discovered on the judge base. The
+  benchmark sidecar keeps its own default (its judge base IS the
+  deployment).
+
+- **The OKF server's model pin follows the served name, with an explicit
+  escape hatch.** The pin spelling is `VLLM_LLM_MODEL_ID` — the name the vLLM
+  container is started with (`--served-model-name`), and the one every
+  service reads (`VLLM_MODEL_ID` is filled from it). Before, the OKF server
+  carried a hardcoded model name instead, so a `.env` carrying only
+  `VLLM_MODEL_ID` left it naming a model the endpoint did not serve — every
+  call 404'd while the Python services discovered the right one. The pin is
+  now the served name (`envPin()` resolves the two spellings, the LLM one
+  first). `VLLM_MODEL_ID` on its own still pins the OKF legs — the escape
+  hatch for a deployment whose OKF legs talk to another server (a proxy
+  whose `/v1/models` is not readable); it wins only while
+  `VLLM_LLM_MODEL_ID` is unset, and must name a model the CALLED endpoint
+  serves.
+
+- **The OKF server's tagging logs name their fields explicitly.** The
+  `frontmatter.suggest.start` line carried the deployment's pin under the
+  key `model` (so it read `model:null` on the common discovered path) and the
+  deployment base under `vllm_host` (which is not where the call went when a
+  named model config is active). The pin is now `model_pin`, the base
+  `deployment_vllm_host`, and the line that names the model that tagged
+  (`frontmatter.suggest.done`) also names the host that answered.
+
 - **Ansible deployments: `vllm_llm_model_id` is now undefined by default
   (auto-discovery).** Previously it pinned `ibm-granite/granite-4.1-8b` for
   both the vLLM container and the chat/ingest services. With the variable
@@ -64,8 +156,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **OKF LLM calls name the model the endpoint actually serves (#1181, !640).** The OKF server's vLLM calls resolved their model id from a hardcoded fallback (`ibm-granite/granite-4.1-8b`) that — because the compose service never receives `VLLM_LLM_MODEL_ID` — was the *only* value ever used: the day the GPU serves a different model, vLLM's name validation rejects every call with 404. The curation, topic-link and manifest-summary paths had the mirror problem — an empty `VLLM_MODEL_ID` (the default since the discovery policy landed) silently disabled them. All of these now follow the same policy as the Python services: the env pin wins, otherwise the model id is discovered from the endpoint's `/v1/models` (cached 60 s, same `MODEL_DETECT_TTL` / `MODEL_PROBE_TIMEOUT_SECONDS` knobs), and a call that cannot name a served model fails loudly instead of guessing — the one exception is the bundle-manifest summary, which stays best-effort by design (it logs the failure and leaves the summary empty). Suite and benchmark provenance labels (the suite `generator`, the serve-mode answer fidelity) now record the discovered model instead of a placeholder.
+
 - **Document contexts are sized against the window the model actually serves, not a copied env var.** Dataprep derived its Contextual-Retrieval document-context budget from `VLLM_MAX_MODEL_LEN` — the vLLM memory knob (`--max-model-len`), a static copy of what the GPU node was *configured* with, not what it *serves*. When that copy did not reach the container the budget silently fell back to a 2048-token window, so a 65536-token deployment truncated document contexts to T4-sized budgets (the truncation was recorded, but nothing said the window was a guess). The window is now discovered at runtime from `VLLM_ENDPOINT` — the same endpoint labelling and context generation already talk to — and the fallback is loud: one warning per endpoint, naming the value, the consequence and the remedy. **Deployers**: `VLLM_MAX_MODEL_LEN` is no longer read by dataprep; set the new `DATAPREP_MAX_MODEL_LEN` when the endpoint does not expose `max_model_len` (a strict OpenAI-compatible provider never does) or when `DATAPREP_CONTEXTUAL_MODEL` points at a model other than the one the endpoint lists first. The concept-document ceiling (`OKF_MAX_CONCEPT_DOC_CHARS`) stays a static literal and must now be kept in step with the served window by hand. The doc-level context budget (`DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL`) is now a maximum the served window caps, so its default cannot overflow a smaller deployment. (#639)
 
+- **The mobile Quick Help grid rendered every card with no label and the same
+  neutral icon.** The grid card read its label from an `appearance.label.text`
+  i18n key and its icon from `appearance.icon.value` — an `appearance` block no
+  shipped configuration declares — so every card showed a blank label and the
+  neutral help icon instead of its own. The card label is now the button's
+  top-level `title` locale map (the text the context bar already showed) and
+  the card icon the button's top-level `icon`, the same shape the web reads; a
+  card with no icon still shows the neutral help icon. The context bar was
+  never affected. (#1124, !635)
+- **A Quick Help card with no title is a visible failure, not a silent dead
+  tap.** A card whose title resolves to nothing — the `title` is absent, an
+  empty map, a falsy scalar, or a map whose every entry is empty (the locale,
+  English and first-value fallbacks leave nothing to show) — used to be
+  pressed and install its scope under a name the card did not carry; the press
+  is now refused outright. How the card looks is decided too: it renders as
+  the configuration problem it is — the same treatment a broken scope gets
+  (danger border, explanatory caption, tap disabled) instead of a blank-label
+  card that looked alive and did nothing. The caption text ships in all 14
+  locales. Mobile only — the web keeps the silent refusal for the same shape,
+  tracked as a follow-up. (#1192, !635, !643)
+- **An untranslated placeholder in a configuration's locale map now falls back
+  to the translated text.** A locale map whose entry for the active language
+  was an empty string - the shape an untranslated translation takes - rendered
+  an empty card label, and an empty welcome message, on the mobile app, where
+  the web already fell back to the English text. Both platforms now read the
+  first non-empty translation. (#1210, !635)
+- **A Quick Help card that declares no hidden prompt no longer sends an empty
+  question.** The card's visible text was shown in the chat while the question
+  sent to the assistant was empty, so the assistant answered a blank prompt.
+  The card now opens the chat with its scope in place and leaves the question
+  to the user. A card that declares BOTH texts - every card but the plain chat
+  one - is unchanged. (#1210, !635)
+- **A Quick Help card marked as hidden is now hidden on the mobile app whatever
+  the shape of the flag.** The flag was read as a boolean, so a configuration
+  that writes it as a string (for example `"hidden": "false"`) kept the card on
+  the mobile app while the web hid it. Both platforms now hide it the same
+  way. (#1208, !635)
+- **The mobile app now shows the chat's configured welcome message as soon as
+  the configuration has loaded.** The message declared in the deployment
+  configuration was computed before the configuration had finished loading, so
+  the first screen showed the generic built-in greeting and the configured
+  text appeared only after the user switched language once. The configured
+  message now lands when the configuration load completes — and only while no
+  conversation is open: the first bubble of a conversation restored in the
+  meantime is history, not the welcome slot. (#1210, !635)
 - **A benchmark-suite generation no longer dies on one unparseable chunk (8-6/8-7).** The knowledge-graph phase died when a single chunk's answer came back in a shape the parser did not accept: the format-fix retry failed too, the exception escaped the transform, and the whole generation was lost (live: a Solar System generation died at 137 minutes, at chunk 1599 of 1600, after 5,989 model calls). A node whose answer cannot be parsed now degrades the way a node with a dead call always has — it keeps its other properties, the failure is counted and reported with the suite, and the rest of the corpus keeps its work. A degraded node is also excluded from the relationship pass, which raises on a missing property rather than skipping the node — without that, the tolerance only moved the death one phase later (also found live).
 
 - **The benchmark's progress line counted cache replays as LLM calls (8-6/8-7).** The generation's call counter was incremented before the sidecar's on-disk judge cache was consulted, so a call the cache answered — no request, no GPU — was reported as work the model did. On a corpus that had been generated before, the panel climbed to "673 LLM calls" while the remote GPU sat at 0 % and the remote's own request counters did not move by a single request: the run was never stuck and the model was never wrong, only the number was. The counter now counts the requests that reached the model, and the replays the cache answered are reported beside them, so a replay is never read as an LLM call. Each job also owns its counters, so a concurrent run's calls are never published as this one's.

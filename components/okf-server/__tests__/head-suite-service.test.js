@@ -11,6 +11,7 @@
 jest.mock('../shared-lib/logger', () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() }
 }));
+jest.mock('axios');
 jest.mock('../shared-lib/tracing', () => ({
   withSpan: jest.fn(async (name, fn) => fn({ setAttribute: jest.fn() }))
 }));
@@ -2221,5 +2222,76 @@ describe('1-8g-x — run progress reporting', () => {
     });
     const rows = await svc.listRuns('me', { kind: 'run', limit: 10 });
     expect(rows).toHaveLength(1);
+  });
+});
+
+// #1181 — the suite provenance label (!631): the model that generated
+// the suite — the stamp from the generation calls, else the deployment
+// pin or the served model — never the never-injected placeholder 'vllm'.
+describe('suite generator — model-id provenance (!631 policy)', () => {
+  const cache = require('../services/vllm-model-cache');
+  const axios = require('axios');
+  const { isolateVllmEnv } = require('./vllm-env-helper');
+  const ENV_KEYS = ['VLLM_MODEL_ID', 'VLLM_LLM_MODEL_ID', 'VLLM_ENDPOINT'];
+
+  isolateVllmEnv(ENV_KEYS);
+
+  beforeEach(() => {
+    cache.clearModelCache();
+  });
+
+  afterEach(() => {
+    cache.clearModelCache();
+  });
+
+  it('no generation call stamped a model: the label says none — never a model that did not generate', async () => {
+    process.env.VLLM_ENDPOINT = 'http://vllm:8000';
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/suite-8b' }] } });
+    __mockDb.query.mockResolvedValue({ all: async () => [] });
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        positive: [{ query: 'What is the licensing fee?', reason: 'topic hit' }],
+        negative: [],
+        keywords: []
+      })
+    );
+    const s = await svc.generateSuite('me', {}, {});
+    expect(s.payload.generator).toBe('none');
+  });
+
+  it('the label names EVERY model that generated the suite', async () => {
+    // A suite spans many generation calls: a TTL expiry (or a model change)
+    // mid-suite means two models produced it. The label must say so.
+    require('axios').get.mockResolvedValue({ data: { data: [{ id: 'served/suite-8b' }] } });
+    __mockDb.query.mockResolvedValue({ all: async () => [] });
+    const body = llmResponse({
+      positive: [{ query: 'What is the licensing fee?', reason: 'topic hit' }],
+      negative: [],
+      keywords: []
+    });
+    frontmatterService.vllmChatCompletions
+      .mockResolvedValueOnce({ ...body, model: 'served/first-8b' })
+      .mockResolvedValueOnce({ ...body, model: 'served/second-8b' })
+      .mockResolvedValue({ ...body, model: 'served/second-8b' });
+    const s = await svc.generateSuite('me', {}, {});
+    expect(s.payload.generator).toBe('llm:served/first-8b,llm:served/second-8b');
+  });
+
+  it('the label names the model the generation calls stamped (no probe, no placeholder)', async () => {
+    // No endpoint (the beforeEach baseline) — the base falls back to the
+    // compose service name.
+    require('axios').get.mockResolvedValue({ data: { data: [{ id: 'served/suite-8b' }] } });
+    __mockDb.query.mockResolvedValue({ all: async () => [] });
+    frontmatterService.vllmChatCompletions.mockResolvedValue({
+      ...llmResponse({
+        positive: [{ query: 'What is the licensing fee?', reason: 'topic hit' }],
+        negative: [],
+        keywords: []
+      }),
+      model: 'frontier/tagger-stamped'
+    });
+    const s = await svc.generateSuite('me', {}, {});
+    expect(require('axios').get).not.toHaveBeenCalled(); // the stamp needs no probe
+    expect(s.payload.generator).toBe('llm:frontier/tagger-stamped');
   });
 });

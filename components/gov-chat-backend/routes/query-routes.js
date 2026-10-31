@@ -242,7 +242,7 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
-   * "/queries/stream":
+   * "/api/queries/stream":
    *   post:
    *     summary: Stream a query response via SSE
    *     description: |
@@ -766,7 +766,7 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
-   * "/queries":
+   * "/api/queries":
    *   post:
    *     summary: Create a new query
    *     description: Creates a new query and records it in analytics. Supports single-message or full conversation modes.

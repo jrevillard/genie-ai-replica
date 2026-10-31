@@ -21,7 +21,7 @@ void main() {
     //
     // Retrieves a specific service category with its associated services
     //
-    //Future<ApiServicesCategoriesGet200ResponseInner> apiServicesCategoriesCategoryIdGet(String categoryId, { String locale }) async
+    //Future<ApiServicesCategoriesCategoryIdGet200Response> apiServicesCategoriesCategoryIdGet(String categoryId, { String locale }) async
     test('test apiServicesCategoriesCategoryIdGet', () async {
       // TODO
     });
@@ -30,7 +30,7 @@ void main() {
     //
     // Retrieves all service categories with their associated services
     //
-    //Future<List<ApiServicesCategoriesGet200ResponseInner>> apiServicesCategoriesGet({ String locale }) async
+    //Future<List<CategoryTree>> apiServicesCategoriesGet({ String locale }) async
     test('test apiServicesCategoriesGet', () async {
       // TODO
     });

@@ -1,20 +1,25 @@
-// The scope of a Quick Help button, checked against the live EN hierarchy.
+import 'package:genie_ai_mobile/utils/config_resolver.dart';
+
+// The Quick Help rules, on both sides of the button: the SCOPE it claims
+// against the live EN hierarchy, and the CONFIG shape it is parsed from.
 //
-// English is the SSOT of the filter wire: the corpus's chunk_labels carry the
-// EN translation, so a declared label the hierarchy no longer carries can
-// never match a chunk, and a category that is gone leaves the button with no
-// scope at all. A broken button is a VISIBLE failure — error state, caption,
-// no query — never a silently reduced one.
+// Scope. English is the SSOT of the filter wire: the corpus's chunk_labels
+// carry the EN translation, so a declared label the hierarchy no longer
+// carries can never match a chunk, and a category that is gone leaves the
+// button with no scope at all. A broken button is a VISIBLE failure — error
+// state, caption, no query — never a silently reduced one. The resolver
+// indexes the tree ONCE: the label vocabulary and the category keys are
+// walked a single time, then every button is checked against the index —
+// never against the tree itself.
 //
-// The resolver indexes the tree ONCE: the label vocabulary and the category
-// keys are walked a single time, then every button is checked against the
-// index — never against the tree itself.
-//
-// The CONFIG-side rules of a Quick Help button live here too: its identity
-// (its id), the title it displays, and when the loaded buttons must
-// re-resolve for a new locale. They are the same kind of rule — one copy,
-// read by every path — and they belong to the button, not to the widget
-// that shows it.
+// Config. The CONFIG-side rules live here too, because the widget that
+// shows a button must not be the only place they are read: the section
+// parse (the guarded descent, the hidden filter, the per-entry skip, the
+// button parse, the first-wins dedupe), the button's identity (its id), the
+// title it displays, when the loaded buttons must re-resolve for a new
+// locale, and the grid's layout values. They are the same kind of rule —
+// one copy, read by every path — and they belong to the button, not to the
+// widget that shows it.
 
 /// Whether [id] names a category scope at all. An EMPTY id declares
 /// nothing (it is how a selection is cleared), and 'general' is the
@@ -24,6 +29,142 @@
 /// scope rule drift apart.
 bool declaresCategoryScope(String? id) {
   return id != null && id.isNotEmpty && id != 'general';
+}
+
+/// The loaded shape of one Quick Help button, parsed from its config
+/// entry [btn] under [locale].
+///
+/// The shipped configurations declare the button's texts at the TOP
+/// level: `title` is a locale map (resolved here, once, like the
+/// welcome message), `icon` is an object whose `value` is a served
+/// path whose basename names the bundled asset, and `action` carries
+/// the visible and hidden texts. A button with no icon — or a
+/// malformed one — carries NO asset: the card renders its neutral
+/// help icon, the way the web renders an empty image. A bare STRING
+/// where the label array belongs is wrapped as ONE label — the
+/// wire's own bare-string rule.
+Map<String, dynamic> parseQuickHelpButton(
+  Map<String, dynamic> btn,
+  String locale,
+) {
+  // One malformed value degrades ONE card, never the whole load. A
+  // non-map icon or action is the config-typo class the bare-string
+  // label rule answers. A NON-MAP ENTRY (a stray string) is not a card
+  // at all and stays dropped — the web keeps it as a blank card that
+  // does nothing, so the two platforms show a different card count for
+  // a malformed file. A parsed-but-TITLE-LESS entry IS kept: the web
+  // renders the same blank card and refuses its press.
+  final iconMap = configMapOf(btn['icon']);
+  // The served path's BASENAME names the bundled asset. A NON-STRING
+  // value, or one with no basename, names nothing — no asset, not a
+  // garbage path the card cannot load.
+  final dynamic rawIconValue = iconMap['value'];
+  final iconFile = rawIconValue is String ? rawIconValue.split('/').last : '';
+  final String iconAsset = iconFile.isNotEmpty
+      ? 'assets/config/quickhelp/$iconFile'
+      : '';
+
+  final action = configMapOf(btn['action']);
+
+  return {
+    'id': btn['id']?.toString(),
+    'category': btn['category']?.toString(),
+    'serviceLabels': quickHelpServiceLabelsOf(btn),
+    'iconAsset': iconAsset,
+    'resolvedTitle': resolveConfigText(btn['title'], locale),
+    'resolvedVisibleText': resolveConfigText(action['visibleText'], locale),
+    'resolvedHiddenPrompt': resolveConfigText(action['hiddenPrompt'], locale),
+  };
+}
+
+/// The Quick Help section of a runtime configuration, parsed under
+/// [locale]: the grid layout and the loaded buttons. One resolve pass,
+/// the way the web runs it — the descent to `features.chat.quickHelp`
+/// guarded container by container, hidden cards dropped, malformed
+/// entries skipped, every button parsed, duplicates resolved FIRST-wins.
+/// The section rules live here so the widget keeps only cache, mount
+/// and state.
+(Map<String, dynamic>, List<Map<String, dynamic>>) parseQuickHelpConfig(
+  Map<String, dynamic> config,
+  String locale,
+) {
+  final quickHelp = configSectionOf(config, [...chatConfigPath, 'quickHelp']);
+  final layout = configMapOf(quickHelp['layout']);
+
+  final buttons = <Map<String, dynamic>>[];
+  final rawButtons = quickHelp['buttons'];
+  if (rawButtons is List) {
+    for (final entry in rawButtons) {
+      if (entry is! Map<String, dynamic>) continue;
+      // The web filters on JS truthiness (`!button.hidden`): a
+      // truthy value of any type hides the card on both platforms.
+      if (configTruthy(entry['hidden'])) continue;
+      buttons.add(parseQuickHelpButton(entry, locale));
+    }
+  }
+  return (layout, dedupeQuickHelpButtons(buttons));
+}
+
+/// The card's declared English KB labels, as strings — the ONE rule and
+/// the ONE read of a button's label list. The parse stores what this
+/// returns; every scope rule (the grid verdict, the unavailable caption,
+/// the restore union, the press filter) reads it, so the rule cannot
+/// drift between the copies.
+///
+/// A bare STRING where the array belongs is ONE label — the wire's own
+/// rule. A stored string list is handed back as-is (the grid reads this
+/// per frame); any other list is stringified, so a card never silently
+/// loses its scope.
+List<String> quickHelpServiceLabelsOf(Map<String, dynamic> button) {
+  final labels = button['serviceLabels'];
+  if (labels is List<String>) return labels;
+  if (labels is List) return labels.map((label) => label.toString()).toList();
+  if (labels is String && labels.isNotEmpty) return [labels];
+  return const <String>[];
+}
+
+/// The spacing between the grid's columns — the delegate's own
+/// crossAxisSpacing and the column bound's denominator are ONE value.
+const double quickHelpGridSpacing = 10;
+
+/// The grid's column count, from the config's `layout` block, bounded
+/// by [maxWidth] (the width the grid is given). A malformed value — a
+/// non-number, a non-positive or non-finite count (a JSON `1e400`
+/// decodes to an infinite double) — degrades to 2, and a count wider
+/// than the grid is bounded by the width, so neither throws inside the
+/// build nor trips the grid delegate's assertions.
+///
+/// The WEB never reads this field: its grid is CSS auto-fit (a 217px
+/// card minimum, up to 4 columns). No shipped configuration sets a
+/// count, so the platforms' default layouts differ — mobile's fixed 2,
+/// the web's responsive — an accepted divergence, not a shared
+/// contract.
+int quickHelpGridColumns(
+  Map<String, dynamic> layout, {
+  double maxWidth = double.infinity,
+}) {
+  final raw = layout['columns'];
+  final int parsed = raw is num && raw.isFinite && raw.toInt() >= 1
+      ? raw.toInt()
+      : 2;
+  if (!maxWidth.isFinite) return parsed;
+  // The bound delivers ONE guarantee: the delegate never lays out a
+  // NEGATIVE-extent child (a debug assertion, garbage in release) —
+  // count and width must leave room for the spacing between the
+  // columns. An absurd-but-bounded count still yields sub-pixel tiles;
+  // a readable-minimum policy is a layout decision no shipped
+  // configuration needs (none sets a count).
+  int byWidth = (maxWidth ~/ quickHelpGridSpacing).toInt();
+  if (byWidth < 1) byWidth = 1;
+  return parsed.clamp(1, byWidth);
+}
+
+/// The grid's card aspect ratio, from the config's `layout` block. A
+/// malformed value — a non-number, a non-positive or non-finite ratio —
+/// degrades to 3.5, for the same reason the column count does.
+double quickHelpGridAspectRatio(Map<String, dynamic> layout) {
+  final raw = layout['childAspectRatio'];
+  return raw is num && raw.isFinite && raw > 0 ? raw.toDouble() : 3.5;
 }
 
 /// The loaded Quick Help buttons, with a duplicated id keeping only the
@@ -40,7 +181,7 @@ List<Map<String, dynamic>> dedupeQuickHelpButtons(
   final seen = <String>{};
   final unique = <Map<String, dynamic>>[];
   for (final button in buttons) {
-    final id = button['id']?.toString();
+    final id = quickHelpFieldOf(button, 'id');
     if (id == null || id.isEmpty || seen.add(id)) {
       unique.add(button);
     }
@@ -60,7 +201,7 @@ Map<String, dynamic>? quickHelpButtonById(
 ) {
   if (id == null || id.isEmpty) return null;
   for (final button in buttons) {
-    if (button['id']?.toString() == id) {
+    if ((quickHelpFieldOf(button, 'id')) == id) {
       return button;
     }
   }
@@ -87,8 +228,9 @@ bool shouldReloadQuickHelpButtons({
 ///
 /// An EMPTY title is no title: a config card with a blank title text
 /// must not blank the context bar — the caller keeps the name it has
-/// (the saved category name on a restore, the caller's fallback on a
-/// press). One rule for every path that shows a Quick Help title.
+/// (the saved category name on a restore). One rule for every path that
+/// shows a Quick Help title. A PRESS never reaches the install with an
+/// empty title: the press gate (quickHelpPressable) refuses it first.
 String? quickHelpTitleOf(Map<String, dynamic>? button) {
   final title = button?['resolvedTitle']?.toString() ?? '';
   return title.isNotEmpty ? title : null;
@@ -110,6 +252,21 @@ String? activeQuickHelpTitleFor(
   return quickHelpTitleOf(
     quickHelpButtonById(buttons, activeQuickHelpButtonId),
   );
+}
+
+/// The button's [key] as a string — ONE read of the id and the category,
+/// whatever shape the value carries: the parse normalizes them, a
+/// hand-built map need not, and a numeric id must degrade to its string
+/// form rather than throw.
+String? quickHelpFieldOf(Map<String, dynamic> button, String key) =>
+    button[key]?.toString();
+
+/// Whether the card DECLARES a scope — a category the hierarchy names, or
+/// labels it carries. ONE rule, read by the grid's unavailable verdict and
+/// by the press path.
+bool quickHelpDeclaresScope(Map<String, dynamic> button) {
+  return declaresCategoryScope(quickHelpFieldOf(button, 'category')) ||
+      quickHelpServiceLabelsOf(button).isNotEmpty;
 }
 
 /// Checks Quick Help buttons against the live hierarchy.
@@ -166,14 +323,11 @@ class QuickHelpScopeResolver {
   /// reachable when the hierarchy is down. Every card that DOES declare a
   /// scope cannot be verified, so it says so.
   static Map<String, dynamic> unavailableScopeFor(Map<String, dynamic> button) {
-    final category = button['category']?.toString();
-    final labels =
-        (button['serviceLabels'] as List<dynamic>?) ?? const <dynamic>[];
     // 'general' is the placeholder a category-less selection is stored
     // under: it names no category, and every rule treats it as NO scope —
     // this one included, or a category-less card would look healthy in
     // the grid and be refused at send time.
-    final declaresScope = declaresCategoryScope(category) || labels.isNotEmpty;
+    final declaresScope = quickHelpDeclaresScope(button);
     return {
       'broken': declaresScope,
       'unavailable': declaresScope,
@@ -287,15 +441,12 @@ class QuickHelpScopeResolver {
 
   /// The scope state of [button] against the live tree.
   Map<String, dynamic> stateFor(Map<String, dynamic> button) {
-    final declared =
-        (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
-            .map((e) => e.toString())
-            .toList();
+    final declared = quickHelpServiceLabelsOf(button);
     final missingLabels = declared
         .where((l) => !_enLabels.contains(l))
         .toList();
 
-    final category = button['category']?.toString();
+    final category = quickHelpFieldOf(button, 'category');
     // The category is usable only when the hierarchy names it in
     // ENGLISH: that spelling is the wire. A category the hierarchy does
     // not carry, and a category it carries without an EN translation,
@@ -317,7 +468,7 @@ class QuickHelpScopeResolver {
   /// carries it, or the entity has no EN translation (it cannot be filtered
   /// on at all).
   String? categoryLabelEn(Map<String, dynamic> button) =>
-      categoryEnLabel(button['category']?.toString());
+      categoryEnLabel(quickHelpFieldOf(button, 'category'));
 
   /// The ENGLISH label of the category the [reference] names. Null when
   /// the hierarchy does not carry it, or carries it without an EN
@@ -425,7 +576,7 @@ class ConversationScopeResolver {
   ) {
     final byId = <String, Map<String, dynamic>>{};
     for (final button in buttons) {
-      final id = button['id']?.toString();
+      final id = quickHelpFieldOf(button, 'id');
       if (id == null || id.isEmpty) continue;
       if (byId.containsKey(id)) continue;
       byId[id] = button;
@@ -475,11 +626,8 @@ class ConversationScopeResolver {
     for (final tag in tagList) {
       final button = _buttons[tag];
       if (button == null) continue;
-      final category = button['category']?.toString();
-      final buttonLabels =
-          (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
-              .map((label) => label.toString())
-              .toList();
+      final category = quickHelpFieldOf(button, 'category');
+      final buttonLabels = quickHelpServiceLabelsOf(button);
       // A legacy conversation can carry SEVERAL button ids: the web
       // restores every chip and sends the union of their labels. Every
       // other button tag is CONSUMED here (counted as a sidebar tag, it
@@ -490,9 +638,7 @@ class ConversationScopeResolver {
           .toList();
       final labels = [
         ...buttonLabels,
-        for (final other in otherButtons)
-          ...(other['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
-              .map((label) => label.toString()),
+        for (final other in otherButtons) ...quickHelpServiceLabelsOf(other),
       ];
       // A LEGACY 'category.<id>' tag beside the button named the same
       // category the button declares (the old web wrote the pair): it is
@@ -608,6 +754,42 @@ bool shouldReResolveRestoredScope({
   return (restoredTags?.isNotEmpty ?? false) || restoredCategoryKey != null;
 }
 
+/// Whether a tap on the card may proceed at all — the three refusals the
+/// web's selectQuickHelpOption applies before any branch, ONE predicate:
+/// a broken scope is a visible failure the tap must not send, a scope
+/// the tree cannot EN-name would leave the filter unnamed, and a
+/// title-less card would install a scope under a blank context bar.
+///
+/// The broken verdict needs a RESOLVER: with the hierarchy unavailable,
+/// the grid's own scope state (the unavailable caption and the disabled
+/// tap) covers the outage before this predicate is ever reached.
+bool quickHelpPressable(
+  Map<String, dynamic> button,
+  QuickHelpScopeResolver? resolver,
+) {
+  return (resolver?.stateFor(button)['broken'] as bool?) != true &&
+      quickHelpScopeIsNameable(button, resolver) &&
+      quickHelpTitleOf(button) != null;
+}
+
+/// Whether the card must render as the visible failure — the grid's
+/// DISPLAY twin of the press gate (quickHelpPressable): every press
+/// refusal has a face. The scope verdict alone misses the title gate:
+/// a card with no title looks pressable — an icon, an enabled ripple —
+/// while the tap refuses itself silently, so the card renders broken
+/// (danger border, caption, no tap) instead.
+///
+/// The title is a CONFIG fact, judged without the hierarchy: it holds
+/// while the tree is pending or down, and [scope]'s own verdict decides
+/// the rest exactly as the grid reads it today.
+bool quickHelpCardBroken(
+  Map<String, dynamic> button,
+  Map<String, dynamic> scope,
+) {
+  return (scope['broken'] as bool? ?? false) ||
+      quickHelpTitleOf(button) == null;
+}
+
 /// Whether the button's scope can be put on the wire.
 ///
 /// The config names the category; the wire needs its ENGLISH label, and
@@ -618,7 +800,7 @@ bool quickHelpScopeIsNameable(
   Map<String, dynamic> button,
   QuickHelpScopeResolver? resolver,
 ) {
-  final category = button['category']?.toString();
+  final category = quickHelpFieldOf(button, 'category');
   // An id that declares NO category scope (empty, or the 'general'
   // placeholder) is how a selection is cleared — the hierarchy has
   // nothing to deny. declaresCategoryScope is the ONE predicate.

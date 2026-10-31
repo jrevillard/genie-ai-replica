@@ -1,18 +1,12 @@
 'use strict';
 
-// Closure-based references for jest.mock hoisting compatibility
+// Closure-based references for jest.mock hoisting compatibility.
+// The service only ever calls httpService.get — the read-only analytics
+// routes are the only ones it consumes.
 const mockGet = jest.fn();
-const mockPost = jest.fn();
-const mockPut = jest.fn();
-const mockDelete = jest.fn();
-const mockPatch = jest.fn();
 
 jest.mock('@/services/httpService', () => ({
-  get: (...args) => mockGet(...args),
-  post: (...args) => mockPost(...args),
-  put: (...args) => mockPut(...args),
-  delete: (...args) => mockDelete(...args),
-  patch: (...args) => mockPatch(...args)
+  get: (...args) => mockGet(...args)
 }));
 
 // Mock window.APP_CONFIG for baseUrl resolution
@@ -221,43 +215,6 @@ describe('analyticsService', () => {
         );
 
         expect(result).toEqual({ current: null, previous: null });
-      });
-    });
-
-    describe('recordQuery', () => {
-      it('posts analytics query record', async () => {
-        mockPost.mockResolvedValue({ data: { success: true } });
-
-        const result = await analyticsService.recordQuery({ query: 'test', timestamp: '2026-05-19T00:00:00Z' });
-
-        expect(mockPost).toHaveBeenCalledWith('/api/analytics/query', {
-          query: 'test',
-          timestamp: '2026-05-19T00:00:00Z'
-        });
-        expect(result).toEqual({ success: true });
-      });
-
-      it('throws on API failure', async () => {
-        mockPost.mockRejectedValue(new Error('Server error'));
-
-        await expect(analyticsService.recordQuery({ query: 'test' })).rejects.toThrow('Server error');
-      });
-    });
-
-    describe('recordFeedback', () => {
-      it('posts analytics feedback with queryId', async () => {
-        mockPost.mockResolvedValue({ data: { success: true } });
-
-        const result = await analyticsService.recordFeedback('q-1', { rating: 5 });
-
-        expect(mockPost).toHaveBeenCalledWith('/api/analytics/feedback', { queryId: 'q-1', feedback: { rating: 5 } });
-        expect(result).toEqual({ success: true });
-      });
-
-      it('throws on API failure', async () => {
-        mockPost.mockRejectedValue(new Error('Server error'));
-
-        await expect(analyticsService.recordFeedback('q-1', { rating: 5 })).rejects.toThrow('Server error');
       });
     });
   });

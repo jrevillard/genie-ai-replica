@@ -16,8 +16,33 @@ void main() {
   // final instance = Analytics();
 
   group('test Analytics', () {
+    // Unique identifier
     // String key
     test('to test the property `key`', () async {
+      // TODO
+    });
+
+    // Number of queries
+    // int queryCount
+    test('to test the property `queryCount`', () async {
+      // TODO
+    });
+
+    // Number of feedback submissions
+    // int feedbackCount
+    test('to test the property `feedbackCount`', () async {
+      // TODO
+    });
+
+    // Average rating
+    // num avgRating
+    test('to test the property `avgRating`', () async {
+      // TODO
+    });
+
+    // Analytics timestamp
+    // DateTime timestamp
+    test('to test the property `timestamp`', () async {
       // TODO
     });
 
@@ -33,11 +58,6 @@ void main() {
 
     // String userId
     test('to test the property `userId`', () async {
-      // TODO
-    });
-
-    // DateTime timestamp
-    test('to test the property `timestamp`', () async {
       // TODO
     });
 

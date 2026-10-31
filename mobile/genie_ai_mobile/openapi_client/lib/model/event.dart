@@ -14,14 +14,16 @@ class Event {
   /// Returns a new [Event] instance.
   Event({
     this.key,
-    this.id,
-    this.rev,
     this.userId,
     this.eventType,
+    this.eventData,
     this.timestamp,
+    this.id,
+    this.rev,
     this.data,
   });
 
+  /// Unique identifier
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -30,22 +32,7 @@ class Event {
   ///
   String? key;
 
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
-  String? id;
-
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
-  String? rev;
-
+  /// ID of the user
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -63,6 +50,16 @@ class Event {
   ///
   String? eventType;
 
+  /// Additional event data
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  Object? eventData;
+
+  /// Event timestamp
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -70,6 +67,22 @@ class Event {
   /// Consider adding a "default:" property in the specification file to hide this note.
   ///
   DateTime? timestamp;
+
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  String? id;
+
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  String? rev;
 
   /// Additional event data
   ///
@@ -83,26 +96,28 @@ class Event {
   @override
   bool operator ==(Object other) => identical(this, other) || other is Event &&
     other.key == key &&
-    other.id == id &&
-    other.rev == rev &&
     other.userId == userId &&
     other.eventType == eventType &&
+    other.eventData == eventData &&
     other.timestamp == timestamp &&
+    other.id == id &&
+    other.rev == rev &&
     other.data == data;
 
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
     (key == null ? 0 : key!.hashCode) +
-    (id == null ? 0 : id!.hashCode) +
-    (rev == null ? 0 : rev!.hashCode) +
     (userId == null ? 0 : userId!.hashCode) +
     (eventType == null ? 0 : eventType!.hashCode) +
+    (eventData == null ? 0 : eventData!.hashCode) +
     (timestamp == null ? 0 : timestamp!.hashCode) +
+    (id == null ? 0 : id!.hashCode) +
+    (rev == null ? 0 : rev!.hashCode) +
     (data == null ? 0 : data!.hashCode);
 
   @override
-  String toString() => 'Event[key=$key, id=$id, rev=$rev, userId=$userId, eventType=$eventType, timestamp=$timestamp, data=$data]';
+  String toString() => 'Event[key=$key, userId=$userId, eventType=$eventType, eventData=$eventData, timestamp=$timestamp, id=$id, rev=$rev, data=$data]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -110,16 +125,6 @@ class Event {
       json[r'_key'] = this.key;
     } else {
       json[r'_key'] = null;
-    }
-    if (this.id != null) {
-      json[r'_id'] = this.id;
-    } else {
-      json[r'_id'] = null;
-    }
-    if (this.rev != null) {
-      json[r'_rev'] = this.rev;
-    } else {
-      json[r'_rev'] = null;
     }
     if (this.userId != null) {
       json[r'userId'] = this.userId;
@@ -131,10 +136,25 @@ class Event {
     } else {
       json[r'eventType'] = null;
     }
+    if (this.eventData != null) {
+      json[r'eventData'] = this.eventData;
+    } else {
+      json[r'eventData'] = null;
+    }
     if (this.timestamp != null) {
       json[r'timestamp'] = this.timestamp!.toUtc().toIso8601String();
     } else {
       json[r'timestamp'] = null;
+    }
+    if (this.id != null) {
+      json[r'_id'] = this.id;
+    } else {
+      json[r'_id'] = null;
+    }
+    if (this.rev != null) {
+      json[r'_rev'] = this.rev;
+    } else {
+      json[r'_rev'] = null;
     }
     if (this.data != null) {
       json[r'data'] = this.data;
@@ -160,11 +180,12 @@ class Event {
 
       return Event(
         key: mapValueOfType<String>(json, r'_key'),
-        id: mapValueOfType<String>(json, r'_id'),
-        rev: mapValueOfType<String>(json, r'_rev'),
         userId: mapValueOfType<String>(json, r'userId'),
         eventType: mapValueOfType<String>(json, r'eventType'),
+        eventData: mapValueOfType<Object>(json, r'eventData'),
         timestamp: mapDateTime(json, r'timestamp', r''),
+        id: mapValueOfType<String>(json, r'_id'),
+        rev: mapValueOfType<String>(json, r'_rev'),
         data: mapValueOfType<Object>(json, r'data'),
       );
     }

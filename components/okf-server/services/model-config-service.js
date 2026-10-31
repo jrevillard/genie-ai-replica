@@ -23,6 +23,7 @@ const { logger } = require('../shared-lib/logger');
 const { isArangoNotFound } = require('./arango-errors');
 const { withSpan } = require('../shared-lib/tracing');
 const auditService = require('./audit-service');
+const modelCache = require('./vllm-model-cache');
 
 const COLLECTION = 'okf_model_configs';
 const PROVIDERS = new Set(['openai', 'anthropic']);
@@ -170,7 +171,7 @@ async function listConfigs(opts = {}) {
     // default control must never be the only statement of what is in use).
     // base_url + model only — the env key never crosses the wire.
     const envJudge = process.env.RAGAS_JUDGE_BASE_URL
-      ? { base_url: process.env.RAGAS_JUDGE_BASE_URL, model: process.env.RAGAS_JUDGE_MODEL || null }
+      ? { base_url: process.env.RAGAS_JUDGE_BASE_URL, model: envJudgeModel() }
       : null;
     // The list is readable by every OKF user (the RAGAS judge picker needs
     // it); `opts.includeKeyHint` is false for a caller without tools-admin,
@@ -339,14 +340,18 @@ async function deleteConfig(key, opts = {}) {
 
 /**
  * Shared provider probe: list models at an endpoint with the given creds.
- * OpenAI-compatible bases carry their own prefix (…/v1) — list at
- * {base}/models. Anthropic's surface is always /v1/models; accept the base
- * with or without the /v1 the user may have typed. One-shot with a hard
- * timeout; throws MODEL_LIST_FAILED with the honest reason.
+ * OpenAI-compatible bases follow the ONE base-completion rule (llm-url.js):
+ * a base that already carries a version segment lists at {base}/models, a
+ * bare host at {base}/v1/models — the same rule the chat call uses, so the
+ * listing and the chat can never disagree about where /v1 goes. Anthropic's
+ * surface is always /v1/models; accept the base with or without the /v1 the
+ * user may have typed. One-shot with a hard timeout; throws MODEL_LIST_FAILED
+ * with the honest reason.
  */
 async function fetchModelList({ provider, base_url, api_key }) {
   const base = String(base_url || '').replace(/\/+$/, '');
-  const url = provider === 'anthropic' ? `${base.replace(/\/v1$/, '')}/v1/models` : `${base}/models`;
+  const url =
+    provider === 'anthropic' ? `${base.replace(/\/v1$/, '')}/v1/models` : require('./llm-url').openAiModelsUrl(base);
   const headers =
     provider === 'anthropic'
       ? { 'x-api-key': api_key, 'anthropic-version': '2023-06-01' }
@@ -365,11 +370,15 @@ async function fetchModelList({ provider, base_url, api_key }) {
     const body = await resp.text().catch(() => '');
     let hint = '';
     // The one mismatch users actually hit (live, 2026-10-19: MiniMax's
-    // /anthropic base saved under the openai provider): an OpenAI-style
-    // listing against an Anthropic-compatible base 404s because that base
-    // serves /v1/models, not /models.
-    if (resp.status === 404 && provider === 'openai' && /\/anthropic\/?$/.test(base)) {
-      hint = ' — this base URL looks like an Anthropic-compatible endpoint: switch the provider to Anthropic';
+    // /anthropic base saved under the openai provider): the OpenAI wire
+    // does not match that base — it publishes no OpenAI model list (404),
+    // or it wants x-api-key instead of a bearer (401; a wrong key must not
+    // read like a missing listing, hence the extra hint clause). Either
+    // way the base speaks Anthropic and the provider is wrong.
+    if ((resp.status === 404 || resp.status === 401) && provider === 'openai' && /\/anthropic\/?$/.test(base)) {
+      hint =
+        ' — this base URL looks like an Anthropic-compatible endpoint: switch the provider to Anthropic' +
+        (resp.status === 401 ? ' (or check the API key)' : '');
     }
     throw httpErr('MODEL_LIST_FAILED', 502, `model listing returned ${resp.status}: ${body.slice(0, 200)}${hint}`);
   }
@@ -624,13 +633,31 @@ async function resolveModelOverride(pick = {}) {
   };
 }
 
+/** The model the ENV judge runs on — the same name the ragas sidecar
+ * judges with. The sidecar has NO discovery: its compose block defaults
+ * RAGAS_JUDGE_MODEL to VLLM_LLM_MODEL_ID on ANY judge base
+ * (`${RAGAS_JUDGE_MODEL:-${VLLM_LLM_MODEL_ID:-}}`), and an empty result
+ * means its judge is not configured at all (the engine requires a model
+ * name). The record mirrors exactly that — including on a foreign judge
+ * base, where the pin names a model the base may not serve: every judge
+ * row then 404s, and the record naming the pin is what surfaces why. */
+function envJudgeModel() {
+  const named = (process.env.RAGAS_JUDGE_MODEL || '').trim();
+  if (named) return named;
+  // The SIDECAR's spelling only: its compose default fills the judge name
+  // from VLLM_LLM_MODEL_ID alone — a raw VLLM_MODEL_ID (okf-server's own
+  // escape hatch) never reaches it, so naming it here would describe a
+  // judge that does not exist.
+  return modelCache.envPinLLMSpelling() || null;
+}
+
 /** What the run's fidelity block records — name + model, never the key. */
 function judgeFidelity(override) {
   if (!override) {
     return {
       source: process.env.RAGAS_JUDGE_BASE_URL ? 'env' : 'builtin-default',
       config: null,
-      model: process.env.RAGAS_JUDGE_MODEL || null
+      model: envJudgeModel()
     };
   }
   return { source: override.source, config: override.config_name, model: override.model };

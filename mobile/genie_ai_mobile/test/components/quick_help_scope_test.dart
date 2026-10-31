@@ -1146,20 +1146,6 @@ void main() {
         isFalse,
       );
     });
-
-    test('a failed load marks the locale it failed under', () {
-      // The retry is scoped to a LOCALE change — the trigger the pre-fix
-      // code used. A keyboard opening (a dependency change under the
-      // same locale) must not re-read the asset.
-      expect(
-        shouldReloadQuickHelpButtons(loadedLocale: 'en', currentLocale: 'en'),
-        isFalse,
-      );
-      expect(
-        shouldReloadQuickHelpButtons(loadedLocale: 'en', currentLocale: 'fr'),
-        isTrue,
-      );
-    });
   });
 
   /// One rule for every path that shows a Quick Help title: an EMPTY
@@ -1179,6 +1165,199 @@ void main() {
     test('a card without a title has no title', () {
       expect(quickHelpTitleOf({'id': 'births'}), isNull);
       expect(quickHelpTitleOf(null), isNull);
+    });
+  });
+
+  /// The press refusals — the three gates the web's
+  /// selectQuickHelpOption applies before any branch, as ONE predicate:
+  /// a broken scope, a scope the tree cannot EN-name, a card with no
+  /// title. The tap sends nothing and installs nothing.
+  group('quickHelpPressable', () {
+    test('a healthy card with a title is pressable', () {
+      final button = {
+        'id': 'civil',
+        'resolvedTitle': 'Civil Registry',
+        'serviceLabels': ['Births'],
+        'category': '2',
+      };
+
+      expect(quickHelpPressable(button, resolver), isTrue);
+    });
+
+    test('a broken scope refuses the press', () {
+      final button = {
+        'id': 'civil',
+        'resolvedTitle': 'Civil Registry',
+        'serviceLabels': ['Registration'],
+        'category': '2',
+      };
+
+      expect(quickHelpPressable(button, resolver), isFalse);
+    });
+
+    test('a card with no title refuses the press', () {
+      final button = {'id': 'blank', 'resolvedTitle': '', 'category': null};
+
+      expect(quickHelpPressable(button, resolver), isFalse);
+    });
+
+    test('a scoped card with no hierarchy resolver refuses the press', () {
+      // The one case where the nameable gate is not implied by the
+      // broken gate: no resolver, no stateFor, no broken verdict —
+      // the wire would carry a scope nothing could EN-name.
+      final button = {
+        'id': 'civil',
+        'resolvedTitle': 'Civil Registry',
+        'category': '2',
+      };
+
+      expect(quickHelpPressable(button, null), isFalse);
+    });
+  });
+
+  /// The grid's DISPLAY verdict — the twin of the press gate
+  /// (quickHelpPressable): every press refusal must have a face, so a
+  /// card the tap would silently refuse renders as the visible failure
+  /// (danger border, caption, no tap). The title gate is the one
+  /// refusal the scope verdict does not carry: a title-less card looks
+  /// pressable — an icon, an enabled ripple — while the tap does
+  /// nothing.
+  group('quickHelpCardBroken', () {
+    final titled = {
+      'id': 'civil',
+      'resolvedTitle': 'Civil Registry',
+      'serviceLabels': ['Births'],
+      'category': '2',
+    };
+    final titleless = {'id': 'blank', 'resolvedTitle': '', 'category': null};
+
+    test('a healthy card with a title is not broken', () {
+      expect(quickHelpCardBroken(titled, resolver.stateFor(titled)), isFalse);
+    });
+
+    test('a broken scope renders broken', () {
+      // The titled card, with the one field that breaks the scope changed.
+      final button = {
+        ...titled,
+        'serviceLabels': ['Registration'],
+      };
+
+      expect(quickHelpCardBroken(button, resolver.stateFor(button)), isTrue);
+    });
+
+    test('a card with no title renders broken — the silent dead tap', () {
+      // The scope is healthy and the hierarchy is up: the ONLY defect
+      // is the missing title, and the press gate refuses the tap with
+      // no feedback at all.
+      expect(
+        quickHelpCardBroken(titleless, resolver.stateFor(titleless)),
+        isTrue,
+      );
+    });
+
+    test('a title-less card stays broken while the hierarchy is pending', () {
+      // The title is a CONFIG fact: it needs no hierarchy to be judged.
+      expect(
+        quickHelpCardBroken(titleless, QuickHelpScopeResolver.pending),
+        isTrue,
+      );
+    });
+
+    test('a titled scope-less card stays healthy while the tree is down', () {
+      // unavailableScopeFor marks only the cards that DECLARE a scope;
+      // the "just chat" card keeps its title and must not wear the
+      // failure state of an outage it does not suffer.
+      final justChat = {
+        'id': 'just-chat',
+        'resolvedTitle': 'Just chat',
+        'serviceLabels': <dynamic>[],
+        'category': 'general',
+      };
+
+      expect(
+        quickHelpCardBroken(
+          justChat,
+          QuickHelpScopeResolver.unavailableScopeFor(justChat),
+        ),
+        isFalse,
+      );
+    });
+
+    test('a title-less card is broken even when the outage broke nothing', () {
+      // The outage and the missing title are independent failures:
+      // unavailableScopeFor leaves a scope-less card healthy, the
+      // title gate must still fire.
+      expect(
+        quickHelpCardBroken(
+          titleless,
+          QuickHelpScopeResolver.unavailableScopeFor(titleless),
+        ),
+        isTrue,
+      );
+    });
+  });
+
+  /// The declared labels of a LOADED button - the parse normalizes them
+  /// (a bare string is wrapped as ONE label there), so this reader
+  /// returns what the card carries.
+  group('quickHelpServiceLabelsOf', () {
+    test('a card carries its declared labels', () {
+      final button = {
+        'serviceLabels': ['Births', 'Weddings'],
+      };
+
+      expect(quickHelpServiceLabelsOf(button), ['Births', 'Weddings']);
+    });
+
+    test('a list of anything else is stringified, never dropped', () {
+      final button = {
+        'serviceLabels': <dynamic>['Births', 3],
+      };
+
+      expect(quickHelpServiceLabelsOf(button), ['Births', '3']);
+    });
+
+    test('a card that declares none carries none', () {
+      expect(quickHelpServiceLabelsOf({'id': 'chat'}), isEmpty);
+    });
+  });
+
+  /// Whether a card DECLARES a scope — a category the hierarchy names,
+  /// or labels it carries. ONE rule, read by the grid's unavailable
+  /// verdict and by the press path.
+  group('quickHelpDeclaresScope', () {
+    test('a card with a category declares a scope', () {
+      expect(quickHelpDeclaresScope({'id': 'civil', 'category': '2'}), isTrue);
+    });
+
+    test('a card with labels declares a scope', () {
+      expect(
+        quickHelpDeclaresScope({
+          'id': 'civil',
+          'category': null,
+          'serviceLabels': <String>['Births'],
+        }),
+        isTrue,
+      );
+    });
+
+    test('a card with neither declares no scope', () {
+      expect(quickHelpDeclaresScope({'id': 'chat'}), isFalse);
+      expect(
+        quickHelpDeclaresScope({
+          'id': 'chat',
+          'category': null,
+          'serviceLabels': <String>[],
+        }),
+        isFalse,
+      );
+    });
+
+    test("the 'general' placeholder declares no scope", () {
+      expect(
+        quickHelpDeclaresScope({'id': 'chat', 'category': 'general'}),
+        isFalse,
+      );
     });
   });
 
@@ -1207,6 +1386,292 @@ void main() {
       ];
 
       expect(quickHelpButtonById(buttons, 'crops'), isNull);
+    });
+  });
+
+  /// The config-side parse of a Quick Help button — the shape the shipped
+  /// configurations declare: a top-level `title` locale map, a top-level
+  /// `icon` object and an optional `action`. The grid card's label and the
+  /// card icon are the two reads that drifted to a non-existent
+  /// `appearance` block; the parse is where the shipped shape is read.
+  ///
+  /// One malformed value degrades ONE card (no asset, an empty text),
+  /// never the whole load — the same isolation the web applies to the
+  /// same file.
+  group('parseQuickHelpButton', () {
+    final shippedButton = {
+      'id': 'just-chat',
+      'title': {'en': 'Just Chat', 'fr': 'Discuter'},
+      'icon': {'type': 'file', 'value': '/config/quickhelp/just-chat.svg'},
+      'category': null,
+    };
+
+    test(
+      'a shipped button resolves its title locale map and its icon basename',
+      () {
+        final parsed = parseQuickHelpButton(shippedButton, 'en');
+
+        expect(parsed['id'], 'just-chat');
+        expect(parsed['resolvedTitle'], 'Just Chat');
+        expect(parsed['iconAsset'], 'assets/config/quickhelp/just-chat.svg');
+      },
+    );
+
+    test('a falsy value in the active locale falls through to English', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'title': {'es': 0, 'en': 'Apply for ID'},
+      }, 'es');
+
+      expect(parsed['resolvedTitle'], 'Apply for ID');
+    });
+
+    test('a title missing the active locale falls back to English', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'title': {'en': 'Just Chat'},
+      }, 'fr');
+
+      expect(parsed['resolvedTitle'], 'Just Chat');
+    });
+
+    test('a button with no icon carries no asset', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'icon': null,
+      }, 'en');
+
+      expect(parsed['iconAsset'], '');
+    });
+
+    test('a malformed icon (a bare string) carries no asset', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'icon': '/config/quickhelp/just-chat.svg',
+      }, 'en');
+
+      expect(parsed['iconAsset'], '');
+    });
+
+    test('a malformed action (a bare string) carries no action texts', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'action': 'ask',
+      }, 'en');
+
+      expect(parsed['resolvedVisibleText'], '');
+      expect(parsed['resolvedHiddenPrompt'], '');
+    });
+
+    test('an empty string in the active locale falls through to English', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'title': {'en': 'Apply for ID', 'es': ''},
+      }, 'es');
+
+      expect(parsed['resolvedTitle'], 'Apply for ID');
+    });
+
+    test('an empty title locale map resolves to no text', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'title': {},
+      }, 'en');
+
+      expect(parsed['resolvedTitle'], '');
+    });
+
+    test('an icon value with no basename carries no asset', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'icon': {'type': 'file', 'value': '/config/quickhelp/'},
+      }, 'en');
+
+      expect(parsed['iconAsset'], '');
+    });
+
+    test('a bare-string serviceLabel is wrapped as ONE label', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'serviceLabels': 'Births',
+      }, 'en');
+
+      expect(parsed['serviceLabels'], ['Births']);
+    });
+
+    test('the label list is stored as strings, ready for the wire', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'serviceLabels': ['Births', 'Weddings'],
+      }, 'en');
+
+      final labels = parsed['serviceLabels'];
+      expect(labels, isA<List<String>>());
+    });
+
+    test('the action texts resolve their locale maps', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'action': {
+          'visibleText': {'en': 'Ask about IDs', 'fr': 'Demander une CNI'},
+          'hiddenPrompt': {'en': 'prompt-en'},
+        },
+      }, 'fr');
+
+      expect(parsed['resolvedVisibleText'], 'Demander une CNI');
+      expect(parsed['resolvedHiddenPrompt'], 'prompt-en');
+    });
+  });
+
+  /// The grid layout the config's `layout` block declares. A malformed
+  /// value (a string, a non-positive count, a non-finite number) degrades
+  /// to the default instead of throwing inside the build.
+  group('quickHelpGridColumns', () {
+    test('an integer count is used as-is', () {
+      expect(quickHelpGridColumns({'columns': 3}), 3);
+    });
+
+    test('a JSON float count is truncated to an integer', () {
+      expect(quickHelpGridColumns({'columns': 2.0}), 2);
+    });
+
+    test('a string, a non-positive or a non-finite count degrades to 2', () {
+      expect(quickHelpGridColumns({'columns': '2'}), 2);
+      expect(quickHelpGridColumns({'columns': 0}), 2);
+      expect(quickHelpGridColumns({'columns': double.infinity}), 2);
+      expect(quickHelpGridColumns({'columns': double.nan}), 2);
+    });
+
+    test('a missing count degrades to 2', () {
+      expect(quickHelpGridColumns({}), 2);
+    });
+
+    test('a count wider than the grid is bounded by the width', () {
+      // 500 columns on a 328px grid: the cap is width/10 = 32 — the
+      // highest count whose columns still have a positive extent beside
+      // the 10px spacing (32 columns leave 18px for the tiles).
+      expect(quickHelpGridColumns({'columns': 500}, maxWidth: 328), 32);
+      expect(quickHelpGridColumns({'columns': 3}, maxWidth: 328), 3);
+      expect(quickHelpGridColumns({'columns': 500}, maxWidth: 25), 2);
+    });
+
+    test('a width without room for two columns degrades to one', () {
+      // A negative or sub-spacing width cannot be produced by the
+      // widget's BoxConstraints, but the helper is public: its own
+      // contract (never throw) must hold for any width.
+      expect(quickHelpGridColumns({'columns': 3}, maxWidth: -50), 1);
+      expect(quickHelpGridColumns({'columns': 3}, maxWidth: 0), 1);
+    });
+
+    test('an unbounded width keeps the parsed count', () {
+      expect(quickHelpGridColumns({'columns': 4}), 4);
+    });
+  });
+
+  /// The section-level pipeline: the descent to `features.chat.quickHelp`,
+  /// the container guards, the hidden filter, the per-entry skip, the
+  /// button parse and the first-wins dedupe — the same resolve pass the
+  /// web runs, so the widget keeps only cache, mount and state.
+  group('parseQuickHelpConfig', () {
+    const justChat = {
+      'id': 'just-chat',
+      'title': {'en': 'Just Chat', 'fr': 'Discuter'},
+      'icon': {'type': 'file', 'value': '/config/quickhelp/just-chat.svg'},
+      'category': null,
+    };
+    final section = {
+      'features': {
+        'chat': {
+          'quickHelp': {
+            'layout': {'columns': 3},
+            'buttons': [
+              justChat,
+              {
+                'id': 'dup',
+                'title': {'en': 'Second'},
+              },
+              {
+                'id': 'dup',
+                'title': {'en': 'Dropped'},
+              },
+              {
+                'id': 'gone',
+                'title': {'en': 'Hidden'},
+                'hidden': true,
+              },
+              'a stray string',
+            ],
+          },
+        },
+      },
+    };
+
+    test(
+      'parses the section: buttons in order, first of a duplicate id wins',
+      () {
+        final (layout, buttons) = parseQuickHelpConfig(section, 'en');
+
+        expect(layout, {'columns': 3});
+        expect(buttons.map((b) => b['id']), ['just-chat', 'dup']);
+        expect(buttons[0]['resolvedTitle'], 'Just Chat');
+      },
+    );
+
+    test('a hidden card is dropped, string-typed flag included', () {
+      final (layout, buttons) = parseQuickHelpConfig({
+        'features': {
+          'chat': {
+            'quickHelp': {
+              'buttons': [
+                {
+                  'id': 'gone',
+                  'title': {'en': 'Hidden'},
+                  'hidden': 'true',
+                },
+              ],
+            },
+          },
+        },
+      }, 'en');
+
+      expect(buttons, isEmpty);
+    });
+
+    test('a missing or malformed container degrades to the empty section', () {
+      for (final config in <Map<String, dynamic>>[
+        {},
+        {'features': 'oops'},
+        {
+          'features': {
+            'chat': {
+              'quickHelp': {'layout': 'wide', 'buttons': {}},
+            },
+          },
+        },
+      ]) {
+        final (layout, buttons) = parseQuickHelpConfig(config, 'en');
+        expect(layout, isEmpty);
+        expect(buttons, isEmpty);
+      }
+    });
+  });
+
+  group('quickHelpGridAspectRatio', () {
+    test('a positive ratio is used as-is', () {
+      expect(quickHelpGridAspectRatio({'childAspectRatio': 3.5}), 3.5);
+    });
+
+    test('a non-positive or non-finite ratio degrades to 3.5', () {
+      expect(quickHelpGridAspectRatio({'childAspectRatio': 0}), 3.5);
+      expect(quickHelpGridAspectRatio({'childAspectRatio': -1}), 3.5);
+      expect(
+        quickHelpGridAspectRatio({'childAspectRatio': double.infinity}),
+        3.5,
+      );
+    });
+
+    test('a missing ratio degrades to 3.5', () {
+      expect(quickHelpGridAspectRatio({}), 3.5);
     });
   });
 }

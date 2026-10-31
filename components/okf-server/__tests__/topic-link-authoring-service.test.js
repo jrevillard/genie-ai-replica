@@ -512,3 +512,89 @@ describe('topic-link-authoring-service — fail-soft end to end', () => {
     expect(res.plan.index).toBeUndefined();
   });
 });
+
+// #1181 — the topic-link client's model-id policy (!631): the pin wins,
+// else the model is discovered from the endpoint, and the probe shares
+// the call budget.
+describe('callVllm — model-id resolution (!631 policy)', () => {
+  // The service is required INSIDE each test after a resetModules (this file
+  // resets the registry in another describe) — the cache handle must come
+  // from the SAME registry, or the test clears an instance the service never
+  // reads.
+  let cache;
+  // Two concepts, so the LLM pass actually fires.
+  const rows = [
+    { concept_id: 'a', title: 'Alpha subject', summary: 'alpha', links: [] },
+    { concept_id: 'b', title: 'Beta subject', summary: 'beta', links: [] }
+  ];
+  const loadAll = () => ({ all: async () => rows });
+  const { isolateVllmEnv } = require('./vllm-env-helper');
+  const ENV_KEYS = ['VLLM_MODEL_ID', 'VLLM_LLM_MODEL_ID', 'VLLM_ENDPOINT'];
+
+  isolateVllmEnv(ENV_KEYS);
+
+  beforeEach(() => {
+    jest.resetModules();
+    cache = require('../services/vllm-model-cache');
+    cache.clearModelCache();
+    // The axios mock is shared across this file's tests — start clean.
+    require('axios').get.mockReset();
+    require('axios').post.mockReset();
+    // The deployment endpoint (the client resolves against it).
+    process.env.VLLM_ENDPOINT = 'http://vllm.test:8000/v1';
+  });
+
+  afterEach(() => {
+    cache.clearModelCache();
+  });
+
+  it('no pin: the chat body carries the model discovered from the endpoint', async () => {
+    const svc2 = require('../services/topic-link-authoring-service');
+    const db2 = require('../shared-lib/db-connection-service');
+    const http2 = require('axios');
+    db2.getConnection.mockResolvedValue({ query: jest.fn(() => loadAll()) });
+    http2.get.mockResolvedValue({ data: { data: [{ id: 'served/linker-8b' }] } });
+    http2.post.mockResolvedValue({
+      data: { choices: [{ message: { content: JSON.stringify({ links: [] }) } }] }
+    });
+    await svc2.authorRepoTopicLinks({ repo_id: 'r1' });
+    expect(http2.get).toHaveBeenCalledWith('http://vllm.test:8000/v1/models', expect.anything());
+    const call = http2.post.mock.calls.find((c) => String(c[0]).includes('/chat/completions'));
+    expect(call[1].model).toBe('served/linker-8b');
+  });
+
+  it('no pin and nothing discoverable: zero links, no call under a fabricated name', async () => {
+    const svc2 = require('../services/topic-link-authoring-service');
+    const db2 = require('../shared-lib/db-connection-service');
+    const http2 = require('axios');
+    db2.getConnection.mockResolvedValue({ query: jest.fn(() => loadAll()) });
+    http2.get.mockRejectedValue(new Error('ECONNREFUSED'));
+    const res = await svc2.authorRepoTopicLinks({ repo_id: 'r1' });
+    expect(res.written).toBe(0);
+    expect(res.failures).toBeGreaterThan(0);
+    expect(http2.post.mock.calls.filter((c) => String(c[0]).includes('/chat/completions'))).toHaveLength(0);
+  });
+
+  it('r4: the discovery probe is bounded by the call budget', async () => {
+    const svc2 = require('../services/topic-link-authoring-service');
+    const db2 = require('../shared-lib/db-connection-service');
+    const http2 = require('axios');
+    const conceptRows = [
+      { concept_id: 'a', title: 'Alpha subject', summary: 'alpha', links: [] },
+      { concept_id: 'b', title: 'Beta subject', summary: 'beta', links: [] }
+    ];
+    db2.getConnection.mockResolvedValue({
+      query: jest.fn(() => ({ all: async () => conceptRows }))
+    });
+    http2.get.mockResolvedValue({ data: { data: [{ id: 'served/linker-8b' }] } });
+    http2.post.mockResolvedValue({
+      data: { choices: [{ message: { content: JSON.stringify({ links: [] }) } }] }
+    });
+    await svc2.authorRepoTopicLinks({ repo_id: 'r1' });
+    // This scenario's own probe (the mock is fresh here).
+    expect(http2.get).toHaveBeenCalledTimes(1);
+    const probeTimeout = http2.get.mock.calls[0][1].timeout;
+    expect(probeTimeout).toBeLessThanOrEqual(10000); // the env ceiling
+    expect(probeTimeout).toBeGreaterThan(0);
+  });
+});

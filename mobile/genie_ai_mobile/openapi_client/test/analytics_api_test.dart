@@ -44,15 +44,6 @@ void main() {
       // TODO
     });
 
-    // Get general analytics
-    //
-    // Retrieves general analytics data with optional filters and date range
-    //
-    //Future<ApiAnalyticsGet200Response> apiAnalyticsGet({ DateTime startDate, DateTime endDate, String filters, String locale }) async
-    test('test apiAnalyticsGet', () async {
-      // TODO
-    });
-
     // Get specific metric data
     //
     // Retrieves data for a specific analytics metric

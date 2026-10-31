@@ -50,6 +50,25 @@ contractual evidence — a fresh clone does not carry them.)
   vs `main` is empty. Rebase trap noted: the vendored `charts/*.tgz`
   (untracked) block the replay — move them aside first, regenerate
   with `helm dependency update` after.
+- **The post-OKF review round (0.2.139)** — an adversarial pass over
+  everything after the OKF verification found the OKF NetworkPolicy
+  graph inverted against the application's real call graph: the chart
+  admitted document-repository as an okf-server client it never was,
+  while the tier's REAL flows (okf-server → document-repository:3001,
+  dataprep → okf-server:3002, okf-server → chatqna:8888) had no
+  admission at one or both ends — silent timeouts under an enforcing
+  CNI, invisible to every gate including the flow crosscheck, whose
+  flows are declared BY the very lists the defect lives in. All three
+  pairs fixed, and the crosscheck gained the okf-tier expectation the
+  defect class needs: okf clients derived from the render's
+  OKF_SERVER_URL rows, plus the documented app-default pair checked at
+  both ends (mutation-proven red on a removed half). Also: the
+  chart-internal comment paths swept to `scripts/ci/`, the minikube
+  overlay label reconciled to the chart version (the lockstep slip the
+  ledger's pass-35 already named, recurred), and a correction of
+  record — the "living-intelligence" doc deleted with the app-design
+  purge was a STALE pre-incident duplicate (14 lines off), not the
+  byte-identical copy the commit message claimed.
 
 - **All six live checks green at 0.2.130 on the rebuilt node (2026-10-29,
   16:20)** — health through the Envoy edge, genie theme + register link,

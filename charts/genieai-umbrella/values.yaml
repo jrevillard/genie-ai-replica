@@ -3,7 +3,7 @@
 # every key a template reads is declared here (with its template default,
 # so an operator can discover the knob and its type without reading
 # template source), and keys no template reads are not declared.
-# scripts/values-surface-check.py enforces the first half in CI.
+# scripts/ci/values-surface-check.py enforces the first half in CI.
 #
 # CLEARING A BLOCK. Helm's `null` DELETES a key — it does not merge an
 # empty map over it. So `services.backend: null` removes the whole
@@ -13,7 +13,7 @@
 # block is read through a normalized binding, so a cleared block
 # degrades to the chart's own default, or the render fails with a
 # message naming the values key (never a template-engine crash).
-# scripts/clearable-blocks-check.py sweeps every block in this file on
+# scripts/ci/clearable-blocks-check.py sweeps every block in this file on
 # both render surfaces and asserts exactly that. The documented way to
 # drop an override WITHOUT losing the chart's defaults is an empty map
 # (`global: {}`), which MERGES.
@@ -274,7 +274,7 @@ data:
     # defaults to it; a dedicated database would have to be created and,
     # for an existing deployment, migrated collection by collection.
     # Compose uses `genie-ai` (docker-compose.yaml) — an intentional
-    # divergence, declared in scripts/config-parity-allowlist.json.
+    # divergence, declared in scripts/ci/config-parity-allowlist.json.
     database: _system
     storageSize: 50Gi
     agentsStorageSize: 2Gi             # cluster-mode Agency volume — config state (MBs), not document data
@@ -567,7 +567,7 @@ dependencyGraph:
 #   image.pullPolicy: optional; derived from the tag when absent
 #   podSecurityContext: optional pod-level securityContext (fsGroup...)
 #
-# scripts/values-surface-check.py enforces this shape list against the
+# scripts/ci/values-surface-check.py enforces this shape list against the
 # factory's `$svc.<key>` reads — the list cannot drift from the surface.
 services:
   backend:
@@ -645,7 +645,7 @@ services:
     # Environment rows the chart adds to the backend, beyond the ones its
     # templates derive. Docker Compose sets the same variables on the
     # `backend` service, and the two must stay in step: the parity gate
-    # (scripts/config-parity-check.py) fails the build when Compose names
+    # (scripts/ci/config-parity-check.py) fails the build when Compose names
     # a variable the chart does not, or when the two disagree on a value
     # that is not a Kubernetes address. Keep the values here identical to
     # the Compose defaults.
@@ -830,7 +830,7 @@ services:
     # Environment rows the chart adds to the document-repository, beyond
     # the ones its template derives. Docker Compose sets the same
     # variables on the `document-repository` service; the parity gate
-    # (scripts/config-parity-check.py) keeps the two in step. A MAP, not a
+    # (scripts/ci/config-parity-check.py) keeps the two in step. A MAP, not a
     # list: Helm merges maps key by key, so an overlay that sets one
     # variable keeps every default declared here beside it.
     env:
@@ -1039,7 +1039,7 @@ opea:
     # CHATQNA_*, RERANKING_*, MULTI_TURN_* — every knob the chatqna
     # template reads, declared with its template default so an operator
     # can discover the tuning surface without reading template source
-    # (scripts/values-surface-check.py keeps this list complete).
+    # (scripts/ci/values-surface-check.py keeps this list complete).
     chatqnaType: "ChatQnA"                # CHATQNA_TYPE; OPEA pipeline name
     logLevel: "info"                      # LOG_LEVEL
     rerankingStrategy: "slice"            # RERANKING_STRATEGY: slice | threshold | slice_threshold | knee_threshold | adaptive
@@ -1070,7 +1070,7 @@ opea:
     chatqnaEnforceAbstention: true
     retrieverArangoTraversalEnabled: true
     # `env` carries the variables the chart must configure the way Compose
-    # configures them. The parity gate (scripts/config-parity-check.py)
+    # configures them. The parity gate (scripts/ci/config-parity-check.py)
     # keeps the two in step. A MAP, not a list: Helm merges maps key by
     # key, so an overlay that sets one variable keeps every default
     # declared here beside it.

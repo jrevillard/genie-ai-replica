@@ -192,6 +192,20 @@ spec:
       ports:
         - protocol: TCP
           port: {{ $servicesDocumentRepository.port | default 3001 }}
+  {{- if eq true (index (.Values.okf | default dict) "enabled") }}
+  # The OKF server (DOCUMENT_REPOSITORY_URL, app default
+  # http://document-repository:3001): its ingest worker POSTs bundles
+  # and its backing-file service deletes here. Peer half of the
+  # tier's own egress rule — one without the other passes every
+  # render gate and silently drops the traffic.
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: okf-server
+      ports:
+        - protocol: TCP
+          port: {{ $servicesDocumentRepository.port | default 3001 }}
+  {{- end }}
   {{- if $obsMetrics.enabled }}
   # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
   # VMServiceScrape CRs match nothing on purpose (VMSingle carries no

@@ -1524,11 +1524,11 @@ export default {
       if (this.quickHelpCardTitle(button) === null) {
         parts.push(this.translate('chatbot.quickHelpTitleMissing', ''));
       }
-      const scopeCaption = this.quickHelpErrorCaption(button);
-      if (scopeCaption) {
-        parts.push(scopeCaption);
-      }
-      return parts.join(' ');
+      parts.push(this.quickHelpErrorCaption(button));
+      // A part the i18n layer resolves to nothing (a locale shipping an
+      // empty value) contributes no text: an empty join part would leave
+      // a stray leading space, or an empty caption on a broken card.
+      return parts.filter(Boolean).join(' ');
     },
 
     // The caption for a set of BROKEN scope states — the ONE assembly both

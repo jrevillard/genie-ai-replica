@@ -5558,9 +5558,12 @@ describe('Quick Help card with no title', () => {
       icon: 'x'
     };
 
-    // The caption names the defect: the title is missing, so the card
-    // cannot be used. The text ships in all 14 locales.
-    expect(vm.quickHelpCardCaption(button)).toContain('no title');
+    // The caption IS the locale's own text for the missing title — the
+    // expectation reads the same locale file the app translates from, so
+    // a copy reword keeps this green while a dropped clause (an empty
+    // caption) or a dropped key (the raw key coming back) goes red. The
+    // text ships in all 14 locales.
+    expect(vm.quickHelpCardCaption(button)).toBe(en.chatbot.quickHelpTitleMissing);
   });
 
   it('shows the caption and the error icon on the card', async () => {

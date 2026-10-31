@@ -30,6 +30,17 @@ from core import embedding_query_prefix as core_query_prefix
 from tests.conftest import FakeServiceType, create_mock_service_node
 
 
+@pytest.fixture(autouse=True)
+def _translation_count_capability_available():
+    """The translation server's counting capability is module state: every
+    test starts with the count available, so a test that makes the server
+    unable to count does not leak that into the next one."""
+    original = chatqna_module._TRANSLATION_COUNT_UNAVAILABLE
+    chatqna_module._TRANSLATION_COUNT_UNAVAILABLE = False
+    yield
+    chatqna_module._TRANSLATION_COUNT_UNAVAILABLE = original
+
+
 # ---------------------------------------------------------------------------
 # Helper functions
 # ---------------------------------------------------------------------------
@@ -2568,7 +2579,6 @@ class TestQueryTranslationStatus:
             assert await chatqna_module._translation_completion_cap("prompt", {"prompt": "prompt"}, 4096) == 512
 
     @pytest.mark.asyncio
-    @pytest.mark.asyncio
     async def test_the_degraded_bound_is_clamped_by_the_window(self):
         """The degraded estimate cannot exceed the window: a long prompt on
         a small window is bounded by the room, not by the estimate."""
@@ -2590,7 +2600,6 @@ class TestQueryTranslationStatus:
         ):
             await chatqna_module._translation_completion_cap("prompt", {"prompt": "prompt"}, 1024)
 
-    @pytest.mark.asyncio
     @pytest.mark.asyncio
     async def test_a_prompt_that_leaves_a_little_room_is_refused(self):
         """A prompt that leaves a sliver of room (under the minimum output
@@ -2623,7 +2632,6 @@ class TestQueryTranslationStatus:
         assert mock_client.post.call_args.args[0] == "http://translation.test/tokenize"
         assert mock_client.post.call_args.kwargs["json"] == {"prompt": "hello", "model": "tg-test"}
 
-    @pytest.mark.asyncio
     @pytest.mark.asyncio
     async def test_the_generic_shape_counts_the_payload_as_it_will_be_sent(self):
         """The chat shape counts its MESSAGES, so the count covers the chat
@@ -2772,7 +2780,6 @@ class TestQueryTranslationStatus:
         assert status == "fallback_error"
 
     @pytest.mark.asyncio
-    @pytest.mark.asyncio
     async def test_a_max_tokens_finish_reason_is_not_a_truncation(self):
         """Only the protocol's truncation value counts: "max_tokens" is the
         request field's name, not a finish_reason. A complete completion
@@ -2904,7 +2911,6 @@ class TestQueryTranslationStatus:
         assert text == "¿qué es X?"  # the source, not the cut-off completion
         assert status == "fallback_error"
 
-    @pytest.mark.asyncio
     @pytest.mark.asyncio
     async def test_a_single_message_that_does_not_fit_the_window_reports_fallback_error(self):
         """A single-message history that does not fit the translation

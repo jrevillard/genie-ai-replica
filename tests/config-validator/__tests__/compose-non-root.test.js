@@ -740,6 +740,48 @@ describe('compose non-root contract (#1227)', () => {
     expect(violations.some((v) => v.includes('kong') && v.includes('create_host_path: false'))).toBe(true);
   });
 
+  test('mutations: flow-list volumes, quoted service keys, deeper short binds', () => {
+    // volumes: as a FLOW LIST — each entry carries the same contract.
+    const flowList = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes: ["\${DATA_DIR:-./data}/logs/kong:/var/log/kong"]',
+      ''
+    ].join('\n');
+    const { violations: v1 } = validateComposeNonRoot(flowList);
+    expect(v1.some((v) => v.includes('kong') && v.includes('short syntax'))).toBe(true);
+
+    const flowListOpted = [
+      'services:',
+      '  backend:',
+      '    user: "1000:1000"',
+      '    volumes: [{type: bind, source: ./data/database_backups, target: /app/database_backups, bind: {create_host_path: false}}]',
+      ''
+    ].join('\n');
+    expect(validateComposeNonRoot(flowListOpted).violations).toEqual([]);
+
+    // A QUOTED service key starts its own block — the quoted service's
+    // user: root must be checked against ITSELF, not charged to the
+    // previous service.
+    const quoted = ['services:', '  backend:', '    user: "1000:1000"', '  "kong":', '    user: root', ''].join('\n');
+    const { violations: v2 } = validateComposeNonRoot(quoted);
+    expect(v2.some((v) => v.includes('kong') && v.includes('is root'))).toBe(true);
+    expect(v2.filter((v) => v.includes('backend') && v.includes('is root'))).toEqual([]);
+
+    // A deeper-indented SHORT bind is still collected.
+    const deepShort = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes:',
+      '        - "\${DATA_DIR:-./data}/x:/y"',
+      ''
+    ].join('\n');
+    const { violations: v3 } = validateComposeNonRoot(deepShort);
+    expect(v3.some((v) => v.includes('kong') && v.includes('short syntax'))).toBe(true);
+  });
+
   test('allowlist entries reference services that exist in the compose file', () => {
     // A renamed or removed service would leave a stale allowlist entry that
     // enforces nothing — dead enforcement data. Uses the validator's OWN

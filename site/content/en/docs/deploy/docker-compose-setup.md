@@ -37,7 +37,7 @@ Upgrading an existing deployment with a pre-#1227 certificate pair?
 The edge nginx now runs as uid 101 and must READ the private key:
 
 ```bash
-chgrp 101 secrets/ssl/server.key && chmod 0640 secrets/ssl/server.key
+sudo chgrp 101 secrets/ssl/server.key && sudo chmod 0640 secrets/ssl/server.key
 ```
 
 (A root-owned 0600 key crash-loops nginx with a misleading openssl

@@ -202,6 +202,24 @@ else
   fi
 fi
 
+# --- 3. the backend (uid 1000) must own its backup directory ------------------
+# Rule 2 catches ROOT-owned paths; the migration's predicate is broader
+# (! -uid 1000) because the uid-1000 backend needs to OWN the directory —
+# a backup dir left owned by the deploying user passes rule 2 while every
+# dump write dies EACCES. Same prune + symlink logic as rule 2.
+backup_dir="$DATA_DIR/database_backups"
+if [ -L "$backup_dir" ]; then
+  backup_dir="$(readlink -f "$backup_dir")"
+fi
+if [ -d "$backup_dir" ]; then
+  misowned=$(find "$backup_dir" ! -uid 1000 -print 2>/dev/null | head -20)
+  if [ -n "$misowned" ]; then
+    echo "NON-BACKEND-OWNED paths under $backup_dir (the uid-1000 backend must own them):"
+    echo "$misowned" | sed 's/^/  /'
+    violations=$((violations + 1))
+  fi
+fi
+
 if [ "$violations" -gt 0 ]; then
   echo "NON-ROOT CONTRACT: $violations violation group(s)"
   exit 1

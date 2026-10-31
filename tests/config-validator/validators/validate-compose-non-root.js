@@ -333,14 +333,14 @@ function validateComposeNonRoot(composeText) {
     const trimmed = line.trim();
     if (trimmed.startsWith('#') || trimmed === '') continue;
 
-    if (line.match(/^[a-z][\w-]*:\s*$/) && !line.startsWith(' ')) {
+    if ((line.match(/^[a-z][\w-]*:\s*$/) || line.match(/^["'][\w.-]+["']:\s*$/)) && !line.startsWith(' ')) {
       flush();
       inServices = trimmed === 'services:';
       continue;
     }
     if (!inServices) continue;
 
-    const serviceMatch = line.match(/^ {2}([\w.-]+):\s*$/);
+    const serviceMatch = line.match(/^ {2}["']?([\w.-]+)["']?:\s*$/);
     if (serviceMatch) {
       flush();
       currentService = serviceMatch[1];
@@ -463,6 +463,34 @@ function validateComposeNonRoot(composeText) {
     // `volumes:` — collect host binds with their create_host_path opt-out
     if (/^ {4}volumes:\s*(?:#.*)?$/.test(line)) {
       inVolumes = true;
+      continue;
+    }
+    // flow LIST: volumes: [ "host:/container", {type: bind, source: ...} ] —
+    // same contract per entry, collected without opening the block scope
+    const volumesFlow = line.match(/^ {4}volumes:\s*\[(.*)\]\s*(?:#.*)?$/);
+    if (volumesFlow) {
+      const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
+      for (const entry of volumesFlow[1].match(/\{[^}]*\}|"[^"]*"|'[^']*'/g) || []) {
+        const inner = entry.replace(/^[{'"]+|[}'"]+$/g, '');
+        const ft = inner.match(/type:\s*['"]?(\w+)/);
+        const fsrc = inner.match(/source:\s*['"]?([^,'"}]+)/);
+        if (ft && ft[1] === 'bind' && fsrc) {
+          binds.push({
+            path: fsrc[1].trim(),
+            createHostPathFalse: /create_host_path:\s*false/.test(inner),
+            shortSyntax: false
+          });
+          continue;
+        }
+        // quoted short-syntax entry (greedy host: ${VAR:-d} spans colons)
+        const sb = inner.match(/(.+):(\/[^:\s]+)(?::\S+)?/);
+        if (sb) {
+          const hostPart = sb[1].trim().replace(/^['"]|['"]$/g, '');
+          if (/[/${]|^\.?\.?\//.test(hostPart)) {
+            binds.push({ path: hostPart, createHostPathFalse: false, shortSyntax: true });
+          }
+        }
+      }
       continue;
     }
     if (inVolumes) {
@@ -608,7 +636,7 @@ function validateComposeNonRoot(composeText) {
       // kong logs bind used. The container side always starts with `/` and
       // the greedy host group absorbs `${VAR:-default}` spans (which contain
       // colons); a named volume is a bare name with no `/`-rooted target.
-      const shortBind = line.match(/^ {6}-\s*(.+):(\/[^:\s]+)(?::\S+)?\s*(?:#.*)?$/);
+      const shortBind = line.match(/^ {6,}-\s*(.+):(\/[^:\s]+)(?::\S+)?\s*(?:#.*)?$/);
       if (shortBind) {
         const hostPart = shortBind[1].replace(/^['"]|['"]$/g, '');
         if (/[/${]|^\.?\.?\//.test(hostPart)) {
@@ -638,7 +666,7 @@ function collectServiceNames(composeText) {
     if (/^[a-z][\w.-]*:\s*$/.test(line)) {
       inServices = line.trim() === 'services:';
     } else if (inServices) {
-      const m = line.match(/^ {2}([\w.-]+):\s*$/);
+      const m = line.match(/^ {2}["']?([\w.-]+)["']?:\s*$/);
       if (m) names.add(m[1]);
     }
   }

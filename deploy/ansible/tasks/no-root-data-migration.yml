@@ -10,10 +10,12 @@
 # the runtime gate prunes it from its sweep (not a bind source), and it
 # can be removed at will.
 # data_dir / deploy_dir come from group_vars; both plays run these with
-# the same variable surface. NOTE on privilege surfaces: the probes run
-# with the PLAY's identity (manager play: the unprivileged ansible_user;
-# worker play: root) — only the escalated tasks below carry their own
-# become_user.
+# the same variable surface. NOTE on privilege surfaces: the backup DETECT
+# task carries its OWN become_user: root (an unprivileged find exits
+# nonzero on a 0700 uid-1000 subdir — EACCES the chown cannot fix — which
+# would churn the handover 'changed' forever), and the handover tasks
+# escalate for the same reason. There is no unprivileged surface left in
+# this file by design.
 
 - name: Create the backend backup directory as the backend uid (#1227)
   # Pinned to the backend uid AT CREATION: a fresh dir left

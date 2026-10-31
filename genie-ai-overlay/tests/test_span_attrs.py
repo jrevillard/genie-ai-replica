@@ -171,8 +171,10 @@ class TestVocabularyShape:
         # 108 -> 109 for answer.abstention_reason (main, Query Inspector
         # !1121 - the boolean alone cannot split a spike into stale scopes vs
         # an over-rejecting reranker); 109 -> 111 for llm.endpoint +
-        # token.count on the /tokenize counting span.
-        assert len(ATTRIBUTE_NAMES) == 111
+        # token.count on the /tokenize counting span; 111 -> 112 for
+        # rag.translation.query_status (issue #1026 - the query-translation
+        # fallback the embedder receives).
+        assert len(ATTRIBUTE_NAMES) == 112
 
 
 class TestLegacyAttributeNames:
@@ -268,8 +270,9 @@ class TestLegacyAttributeNames:
         # See test_vocabulary_entry_count_is_pinned - 83 (bounded-LLM wave)
         # + 10 okf.fanout.* + 15 rag.route.* routing attributes from the okf
         # line; 108 -> 109 with answer.abstention_reason (main, !1121);
-        # 109 -> 111 with the counting-span keys (llm.endpoint, token.count).
-        assert len(ATTRIBUTE_NAMES) == 111
+        # 109 -> 111 with the counting-span keys (llm.endpoint, token.count);
+        # 111 -> 112 with rag.translation.query_status (issue #1026).
+        assert len(ATTRIBUTE_NAMES) == 112
         assert len(LEGACY_ATTRIBUTE_NAMES) == 21
 
 
@@ -803,9 +806,14 @@ class TestOwnedSpanCoverage:
         non-key constant means the resolver has a second special case nobody
         wrote down, and a reader cannot tell which shape it will refuse next.
         """
+        from core.span_attrs import QUERY_TRANSLATION_STATUSES
+
         declared = _span_attrs_string_constants()
         not_keys = {value for value in declared.values() if value not in _REGISTERED_NAMES}
-        assert not_keys == {UNRESOLVED}, (
+        # The query-translation status values are VALUES (written into
+        # rag.translation.query_status), not keys: the vocabulary tuple is
+        # imported here so the pin and the vocabulary cannot drift apart.
+        assert not_keys == {UNRESOLVED, *QUERY_TRANSLATION_STATUSES}, (
             f"span_attrs string constants that are not registered attribute names: "
             f"{sorted(not_keys)}. Each is invisible to the key derivation, so a "
             "constant written as a key carries nothing the sweep can check."

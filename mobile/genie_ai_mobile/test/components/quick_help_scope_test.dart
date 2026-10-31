@@ -329,8 +329,9 @@ void main() {
         // `candidate.id === tag`). A title tag is therefore not a Quick
         // Help scope on restore: it is a tag the live hierarchy cannot
         // name, the count remembers it, and the send guard refuses the
-        // follow-up — a VISIBLE refusal, never the silent widening of a
-        // scope-less restore the pre-fix mobile saved.
+        // follow-up — a VISIBLE refusal. (An identity-keyed index here
+        // would reinstate the scope instead — the silent widening a
+        // scope-less restore gives, diverging from the web.)
         final idless = [
           {
             'resolvedTitle': 'Civil registry help',

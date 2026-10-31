@@ -18,10 +18,11 @@ import '../helpers/theme_helper.dart';
 // SAVED conversation. The tag carries the button's identity —
 // `id || title` (#1194): an id'd card tags its id, an id-less card (a
 // hand-edited deployment configuration; no shipped configuration
-// carries one) tags its title — never nothing, which is what the
-// id-only identity saved before the fix. The tag is asserted at the
-// HTTP boundary (the conversation-write requests the saves send), so
-// the test covers the whole user path: tap, install, save.
+// carries one) tags its title — never nothing: an id-only identity
+// leaves an id-less card's conversation without a Quick Help tag at
+// all. The tag is asserted at the HTTP boundary (the conversation-write
+// requests the saves send), so the test covers the whole user path:
+// tap, install, save.
 void main() {
   final tree = <dynamic>[
     {
@@ -59,11 +60,13 @@ void main() {
     // The locale is a singleton: a test that switched it must not name
     // the next test's mount.
     I18nService().changeLanguage('en');
-    // The asset mock must not outlive its test: a later test in this
-    // file would silently read the mutated config instead of the real
-    // bundle.
+    // The asset mock must not outlive its test — neither the handler
+    // (a later test would read the mutated config through it) nor the
+    // bundle's CACHE of the mutated bytes (a later test reading the
+    // real asset would get a cache hit serving them).
     TestWidgetsFlutterBinding.instance.defaultBinaryMessenger
         .setMockMessageHandler('flutter/assets', null);
+    rootBundle.evict('assets/config/genie-ai-config.json');
   });
 
   // The REAL bundled configuration (read OUTSIDE the widget test's fake

@@ -27,10 +27,12 @@
  *     concept), where the Python side resolves per file/job. Python applies
  *     the same mechanism to its own request-path field (max_model_len); the
  *     exact model-id negative-cache semantics stay open in #1127;
- *   - concurrent callers share ONE in-flight probe — per probe BUDGET
- *     (the window and the in-flight map are keyed by the budget bucket, so
- *     a tight-budget caller never narrows an ample-budget one, and an
- *     endpoint that is down costs one probe per budget class per window);
+ *   - concurrent callers share ONE in-flight probe — per probe BUDGET and
+ *     probe CLASS (the window and the in-flight map are keyed by the
+ *     budget bucket and by quiet/loud, so a tight-budget caller never
+ *     narrows an ample-budget one, a quiet caller never silences a loud
+ *     one, and an endpoint that is down costs one probe per class and
+ *     budget bucket per window);
  *   - cache keys carry the CREDENTIAL as well as the base: gateways can
  *     filter /v1/models per key, so two configs on one base must never
  *     resolve each other's model.
@@ -49,7 +51,12 @@
  *     base that already carries a version segment is listed at {base}/models,
  *     a bare host at {base}/v1/models. The twin appends /v1 models
  *     unconditionally, so for a base that already ends in /v1 the two worlds
- *     probe different URLs (the twin 404s, this one answers).
+ *     probe different URLs (the twin 404s, this one answers);
+ *   - the probe_failed warn is CLASS-SCOPED here and unconditional in the
+ *     twin: the best-effort soft path (servedModelId — the provenance
+ *     labels) probes quiet (no warn, the label stays null), the loud
+ *     resolution paths keep the twin's warn, and each class owns its own
+ *     probe window.
  *
  * Knobs (same names and defaults as the Python side, so one .env line tunes
  * both worlds): MODEL_DETECT_TTL (seconds, default 60),
@@ -150,6 +157,18 @@ function ttlSeconds() {
   return value;
 }
 
+/** Fresh vs stale for a cached id — ONE home for the boundary: the serve
+ * path and the serving_stale warn must never disagree on it. */
+function cacheEntryIsFresh(ts) {
+  return Date.now() - ts < ttlSeconds() * 1000;
+}
+
+/** Live vs expired for a negative stub — one home for the cool-down
+ * boundary (the stub check and the age sweep must agree on it). */
+function negativeEntryIsLive(ts) {
+  return Date.now() - ts < NEGATIVE_CACHE_TTL * 1000;
+}
+
 function probeTimeoutMs() {
   // Strict float (the Python twin's positive_float_env): '10abc' is NOT 10 —
   // it is a malformed value and falls back to the default. A different rule
@@ -177,8 +196,16 @@ const PROBE_ATTEMPTS = 3;
  * the deployment key may only be aimed at the deployment endpoint
  * (deploymentServedModelId / resolveVllmModelId add it for that path); a
  * foreign base (named model-config, judge base) must never receive it
- * uninvited. */
-async function probe(url, timeoutMs, apiKey) {
+ * uninvited.
+ *
+ * quiet marks the BEST-EFFORT callers (the provenance labels, whose
+ * contract is "null is a fine answer"): their probe failure is not an
+ * incident, so it must not emit the warn that is the PRIMARY failure
+ * signal of the paths that DO fail (tagging, curation). Quiet gates the
+ * probe_failed warn ONLY — the multi-model ambiguity warn is a config
+ * signal and stays. The thrown error is unchanged either way: quiet
+ * shapes that one log line, never the result. */
+async function probe(url, timeoutMs, apiKey, { quiet = false } = {}) {
   const headers = {};
   const key = (apiKey || '').trim();
   if (key) headers.Authorization = `Bearer ${key}`;
@@ -225,7 +252,7 @@ async function probe(url, timeoutMs, apiKey) {
     // exact message — one incident must be one line in VL, not two.
     throw new Error('the endpoint listed no model');
   } catch (e) {
-    logger.warn('vllm_model_cache.probe_failed', { url, error: e.message });
+    if (!quiet) logger.warn('vllm_model_cache.probe_failed', { url, error: e.message });
     throw probeFailure(url, e);
   }
 }
@@ -245,8 +272,9 @@ function probeBudgetBucket(timeoutMs) {
 
 /** get_model_id twin: served id for baseUrl, TTL-cached, stale-served on
  * probe failure. When nothing ever answered, it THROWS the probe's cause
- * (a null id would hide the reason from the caller). */
-async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
+ * (a null id would hide the reason from the caller). `quiet` marks the
+ * best-effort caller and is part of the probe identity (see probe). */
+async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = {}) {
   const base = String(baseUrl || '').replace(/\/+$/, '');
   if (!base) return null;
   // Cache key = the NORMALIZED probe URL + a HASH of the credential:
@@ -258,25 +286,25 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
   const modelsUrl = openAiModelsUrl(base);
   const cacheKey = `${modelsUrl}|${credentialHash(apiKey)}`;
   const entry = _cache.get(cacheKey);
-  if (entry && Date.now() - entry.ts < ttlSeconds() * 1000) return entry.id;
+  if (entry && cacheEntryIsFresh(entry.ts)) return entry.id;
 
-  // Concurrent callers share ONE probe — per probe BUDGET: the first
-  // caller's budget must not narrow a concurrent caller's probe (the
-  // best-effort summary leg probes for 1 s while a tagging call may wait 30 s).
-  // The failure marker is keyed the same way: a 1 s probe that gave up must
-  // not lock out a caller that had 10 s and would have answered. The bucket
+  // Concurrent callers share ONE probe — per probe BUDGET and probe CLASS
+  // (see probe): the class in the key gives quiet and loud callers each
+  // their own probe and their own cool-down stub, so a quiet failure can
+  // neither silence a loud one nor share its level by race. The failure
+  // marker is keyed the same way: a 1 s probe that gave up must not lock
+  // out a caller that had 10 s and would have answered. The bucket
   // quantizes to one SECOND: two callers inside the same bucket share the
   // first one's raw budget, so the narrowing is bounded by the bucket's
   // remainder (never more than 1 s) — exact per-caller budgets would mean
   // one probe per distinct timeout, which is the storm the shared probe
   // exists to prevent.
-  const probeKey = `${cacheKey}|${probeBudgetBucket(timeoutMs)}`;
+  const probeKey = `${cacheKey}|${probeBudgetBucket(timeoutMs)}|${quiet ? 'quiet' : 'loud'}`;
 
   // A recent failure is remembered: answer without touching the network.
   const failed = _negative.get(probeKey);
-  if (failed && Date.now() - failed.ts < NEGATIVE_CACHE_TTL * 1000) {
-    const stale = entry ? entry.id : null;
-    if (stale) return stale; // stale beats broken
+  if (failed && negativeEntryIsLive(failed.ts)) {
+    if (entry) return entry.id; // stale beats broken
     // A COPY per caller: the stored stub would otherwise be thrown — and
     // travel to unrelated requests — as one shared, mutable Error whose
     // stack names the first failure's frames.
@@ -290,7 +318,16 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
 
   let pending = _inflight.get(probeKey);
   if (!pending) {
-    pending = probe(modelsUrl, timeoutMs, apiKey)
+    // The shared chain settles to ONE outcome object that every awaiter —
+    // the creator and every same-class joiner — unwraps identically:
+    // success carries the probed id; a failure carries the id the failure
+    // serves, decided ONCE at settle time (the freshest known one — a
+    // concurrent probe of the other class may have refreshed the cache
+    // mid-failure — else the captured entry when eviction removed it;
+    // expired by construction, a fresh one returned early) or null when
+    // nothing was ever known. The serving_stale warn and every caller's
+    // served id derive from this one value, so they can never disagree.
+    pending = probe(modelsUrl, timeoutMs, apiKey, { quiet })
       .then((id) => {
         // delete+set: the refreshed entry becomes the newest, so the
         // count-bounded prune drops the OLDEST one first.
@@ -298,7 +335,7 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
         _cache.set(cacheKey, { id, ts: Date.now() });
         _negative.delete(probeKey);
         _inflight.delete(probeKey);
-        return id;
+        return { id, err: null };
       })
       .catch((err) => {
         // Stored SANITIZED: the axios error retains the request config —
@@ -308,18 +345,26 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
         // (HTTP status, error code); only the raw cause object is dropped.
         const stored = err instanceof ModelDiscoveryError && err.cause ? new ModelDiscoveryError(err.message) : err;
         _negative.set(probeKey, { ts: Date.now(), cause: stored });
-        // The degradation must be VISIBLE: every call this negative window
-        // serves resolves the STALE id while provenance fields keep naming
-        // it — one line here (not per served call) says so without flooding.
-        if (entry) {
+        const serving = _cache.get(cacheKey) || entry;
+        // The degradation must be VISIBLE: when the failing probe leaves
+        // only an EXPIRED id in the cache, callers resolve that stale id —
+        // one line per probe class (not per served call) says so without
+        // flooding. A fresh id in the cache (a mid-failure refresh) means
+        // nothing is degraded AT SETTLE TIME and the line would lie. The
+        // decision is settle-time only: with a TTL shorter than the
+        // remaining cool-down, that id crosses into staleness unnamed for
+        // the rest of the stub window (bounded by NEGATIVE_CACHE_TTL; the
+        // 60 s default TTL dwarfs the 10 s window, so only a deliberately
+        // shortened MODEL_DETECT_TTL can reach the edge).
+        if (serving && !cacheEntryIsFresh(serving.ts)) {
           logger.warn('vllm_model_cache.serving_stale', {
             url: modelsUrl,
-            stale_id: entry.id,
-            note: 'probe failed — the stale cached id serves until the endpoint answers'
+            stale_id: serving.id,
+            note: 'probe failed — the call was served the stale last-known id (stale beats broken)'
           });
         }
         _inflight.delete(probeKey);
-        throw err;
+        return { id: serving ? serving.id : null, err };
       })
       // Prune on BOTH settle paths, after the insert: the maps never sit
       // above their bounds — an endpoint that stays down would otherwise
@@ -328,15 +373,13 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey } = {}) {
       .finally(pruneCache);
     _inflight.set(probeKey, pending);
   }
-  try {
-    return await pending;
-  } catch (err) {
-    // The probe failed: serve the last known id when there is one (stale >
-    // broken — the Python twin keeps it too), else let the cause through.
-    const stale = entry ? entry.id : null;
-    if (stale) return stale;
-    throw err;
-  }
+  const outcome = await pending;
+  if (outcome.id !== null) return outcome.id;
+  // The err instance is shared by every awaiter of this one settlement —
+  // transient and request-scoped, unlike the STORED stub whose per-caller
+  // copy rationale sits above (the stub outlives the incident; this error
+  // dies with it).
+  throw outcome.err;
 }
 
 /** Drop the entries that no caller can use any more (the maps live for the
@@ -353,9 +396,8 @@ function pruneCache() {
   while (_cache.size > MAX_CACHE_ENTRIES) {
     _cache.delete(_cache.keys().next().value); // the oldest insertion first
   }
-  const now = Date.now();
   for (const [key, value] of _negative) {
-    if (now - value.ts >= NEGATIVE_CACHE_TTL * 1000) _negative.delete(key);
+    if (!negativeEntryIsLive(value.ts)) _negative.delete(key);
   }
   // The age sweep above only runs when a probe settles — a credential that
   // probes once and is never used again would otherwise leave its stub for
@@ -537,10 +579,11 @@ async function deploymentServedModelId({ timeoutMs } = {}) {
 }
 
 /** The served model of ANY base, soft: null when nothing answers. The
- * provenance callers record what answered — they must not fail on it. */
+ * provenance callers record what answered — they must not fail on it,
+ * and their probes are quiet (see probe). */
 async function servedModelId(baseUrl, { apiKey, timeoutMs } = {}) {
   try {
-    return await getServedModelId(baseUrl, { timeoutMs, apiKey });
+    return await getServedModelId(baseUrl, { timeoutMs, apiKey, quiet: true });
   } catch {
     return null;
   }

@@ -4,15 +4,13 @@ const { createUser, deleteUser, updateRealmSettings } = require('../helpers/keyc
 
 test.describe.serial('Phase K: Auth Error Display', () => {
   let adminToken;
-  let userToken;
   let noRolesUserId;
   let originalLifespan;
   const NOROLES_USERNAME = 'noroles-user-e2e';
   const NOROLES_PASSWORD = 'TestPass123!';
 
-  test.beforeAll(async ({ browser }) => {
+  test.beforeAll(async () => {
     adminToken = await getAdminToken();
-    userToken = await getSessionTokenViaUI({ browser });
 
     // K.2 mutates the realm's token lifespan; restore whatever the
     // deployment actually runs, not an assumed default. Failing the
@@ -29,12 +27,16 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   });
 
   test.afterAll(async () => {
-    // Always restore realm settings (even if K.2 or K.3 failed)
-    try {
-      const token = await getAdminToken();
-      await updateRealmSettings(token, 'genie', { accessTokenLifespan: originalLifespan || '300' });
-    } catch {
-      // Best-effort restore
+    // Restore the lifespan only when it was actually captured AND K.2
+    // could have mutated it — afterAll runs even when beforeAll threw,
+    // and guessing 300 would rewrite a deployment running something else.
+    if (originalLifespan) {
+      try {
+        const token = await getAdminToken();
+        await updateRealmSettings(token, 'genie', { accessTokenLifespan: originalLifespan });
+      } catch {
+        // Best-effort restore
+      }
     }
 
     // Cleanup: delete no-roles user if created
@@ -49,8 +51,10 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   });
 
   test('K.1 — TOKEN_INVALID (modified token)', async () => {
-    // Modify one character in the token
-    const tokenParts = userToken.split('.');
+    // Any well-formed JWT with a mangled payload dies in signature
+    // validation — corrupting the admin token (already in hand)
+    // exercises that path without a browser login.
+    const tokenParts = adminToken.split('.');
     tokenParts[1] = 'X' + tokenParts[1].slice(1); // Change first char of payload
     const modifiedToken = tokenParts.join('.');
 

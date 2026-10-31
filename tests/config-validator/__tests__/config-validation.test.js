@@ -10,6 +10,7 @@ const {
   parseComposeImages,
   parseAnsibleImages,
   parseGitlabCiImages,
+  parseGitlabCiJobChanges,
   parseComposeServiceContracts
 } = require('../validators/parse-compose');
 const { parseEnvTemplateImageVars } = require('../validators/parse-env-template');
@@ -2221,5 +2222,38 @@ describe('Configuration Validation Suite', () => {
         }
       });
     });
+  });
+});
+
+// --- e2e merge-train changes filters (#1264) ---
+// e2e:playwright hard-needs e2e:integration on merge trains: an MR whose paths
+// match only e2e:playwright's changes: filter instantiates e2e:playwright
+// while its needs-partner is filtered out, and GitLab fails pipeline creation
+// ("needs" references a job not in the pipeline) — the whole train goes red.
+// Conversely, every path the job executes or imports must stay listed, or e2e
+// silently skips on the train: e2e:playwright runs
+// tests/e2e/theme-runtime-config.spec.js and imports tests/e2e/helpers/.
+describe('e2e merge-train changes filters (#1264)', () => {
+  const ciFile = path.join(ROOT, '.gitlab-ci.yml');
+
+  test("e2e:playwright's changes: filter is a subset of e2e:integration's", () => {
+    const filters = parseGitlabCiJobChanges(ciFile, ['e2e:integration', 'e2e:playwright']);
+    const integrationPaths = new Set(filters.get('e2e:integration'));
+    const playwrightPaths = filters.get('e2e:playwright');
+
+    expect(playwrightPaths.length).toBeGreaterThan(0);
+    expect(integrationPaths.size).toBeGreaterThan(0);
+
+    const missing = playwrightPaths.filter((p) => !integrationPaths.has(p));
+    expect(missing).toEqual([]);
+  });
+
+  test('executed/dependency paths are listed in both filters', () => {
+    const filters = parseGitlabCiJobChanges(ciFile, ['e2e:integration', 'e2e:playwright']);
+    for (const job of ['e2e:integration', 'e2e:playwright']) {
+      for (const required of ['tests/e2e/helpers/**/*', 'tests/e2e/theme-runtime-config.spec.js']) {
+        expect(filters.get(job)).toContain(required);
+      }
+    }
   });
 });

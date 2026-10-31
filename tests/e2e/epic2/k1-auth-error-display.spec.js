@@ -93,7 +93,8 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     expect(res.status).toBe(401);
     expect(res.data.error).toBe('TOKEN_EXPIRED');
 
-    // Note: lifespan restore happens in afterAll
+    // Note: K.3 restores the captured lifespan before its own mint;
+    // afterAll restores it again for the failure paths.
   });
 
   test('K.3 — FORBIDDEN (user without roles)', async ({ browser }) => {

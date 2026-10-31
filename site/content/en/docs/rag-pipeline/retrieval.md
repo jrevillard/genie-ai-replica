@@ -52,7 +52,11 @@ names, legislation references — that dense models tend to blur. Enabled by
 default; the `env` template comments it as `false`, which is overridden by
 docker-compose). Set it to `false` in `.env` to fall back to dense-only.
 The lexical analyzer is set by
-`RETRIEVER_HYBRID_BM25_ANALYZER` (default `text_en`).
+`RETRIEVER_HYBRID_BM25_ANALYZER` (default `text_en`). The English analyzer
+is correct because the corpus is English by construction — do not switch it
+for a non-English UI without re-verifying the corpus language and recreating
+the BM25 view (changing the env var alone never updates an existing view).
+See [Multilingual Architecture]({{< relref "/docs/architecture/multilingual-ssot" >}}).
 
 ### 3. Knowledge-graph traversal (optional)
 
@@ -83,7 +87,7 @@ selection only.
 | `RETRIEVER_HYBRID_LEXICAL_WEIGHT` | 1.0 | Weight of the BM25 ranking. |
 | `RETRIEVER_HYBRID_RRF_K` | 60 | RRF smoothing constant (literature standard). |
 | `RETRIEVER_HYBRID_BM25_CANDIDATES` | 50 | BM25 candidate fetch depth before fusion. |
-| `RETRIEVER_HYBRID_BM25_ANALYZER` | `text_en` | ArangoSearch analyzer on the text field. |
+| `RETRIEVER_HYBRID_BM25_ANALYZER` | `text_en` | ArangoSearch analyzer on the text field. Assumes an English corpus (see [Multilingual Architecture]({{< relref "/docs/architecture/multilingual-ssot" >}})); applies only to newly created views. |
 
 Graph-traversal hits are merged in alongside the fused set.
 

@@ -16,7 +16,8 @@ import 'package:genie_ai_mobile/utils/config_resolver.dart';
 // Config. The CONFIG-side rules live here too, because the widget that
 // shows a button must not be the only place they are read: the section
 // parse (the guarded descent, the hidden filter, the per-entry skip, the
-// button parse, the first-wins dedupe), the button's identity (its id), the
+// button parse, the first-wins dedupe), the button's identity (its id
+// when it declares one, its title when it does not), the
 // title it displays, when the loaded buttons must re-resolve for a new
 // locale, and the grid's layout values. They are the same kind of rule —
 // one copy, read by every path — and they belong to the button, not to the
@@ -171,11 +172,13 @@ double quickHelpGridAspectRatio(Map<String, dynamic> layout) {
 /// The loaded Quick Help buttons, with a duplicated id keeping only the
 /// FIRST entry.
 ///
-/// The id is the button's IDENTITY: the conversation tag carries it, the
-/// restore resolves it, the grid's verdict keys on it. Two cards with one
-/// id cannot both be honoured — the web keeps the first and drops the
-/// duplicate at load, so the mobile must too, or the same saved
-/// conversation would carry a different scope on the two platforms.
+/// The dedupe keys on the ID — as the web's own load filter does — not on
+/// the identity (quickHelpButtonIdentity): two cards with one id cannot
+/// both be honoured, and the web keeps the first and drops the duplicate
+/// at load, so the mobile must too, or the same saved conversation would
+/// carry a different scope on the two platforms. A card with NO id is
+/// kept, and two id-less cards sharing a title stay two cards — they then
+/// write the SAME conversation tag, exactly as the web does.
 List<Map<String, dynamic>> dedupeQuickHelpButtons(
   List<Map<String, dynamic>> buttons,
 ) {
@@ -207,6 +210,31 @@ Map<String, dynamic>? quickHelpButtonById(
     }
   }
   return null;
+}
+
+/// The identity a conversation tag carries for [button] — the web's
+/// `serviceKey` rule (`button.id || title`): the id when the
+/// configuration declares one, the button's own title when it does not.
+/// Null when neither exists. Like every rule here, it reads the PARSED
+/// button (the [quickHelpTitleOf] shape the load produces).
+///
+/// The identity must never be the id ALONE: a scoped card can be declared
+/// without an id (a hand-edited deployment configuration — no shipped
+/// configuration carries one), and an id-only identity then leaves the
+/// saved conversation without a Quick Help tag. The restore would answer
+/// every follow-up from the whole corpus while the user believed the
+/// scope survived. Carrying the title — what the web saves — tags the
+/// conversation; the restore resolves buttons by id only, on both
+/// platforms, so the title tag falls to the SIDEBAR branch there: the
+/// hierarchy refuses to name it (a visible refusal, the module's rule)
+/// unless the title happens to be one of its ENGLISH labels, in which case
+/// it replays as that sidebar label — the web's own behaviour for the
+/// same tag.
+String? quickHelpButtonIdentity(Map<String, dynamic>? button) {
+  if (button == null) return null;
+  final id = quickHelpFieldOf(button, 'id');
+  if (configTruthy(id)) return id;
+  return quickHelpTitleOf(button);
 }
 
 /// Whether a locale-marker state is a DRIFT: the consumer's per-locale
@@ -261,20 +289,26 @@ String? quickHelpTitleOf(Map<String, dynamic>? button) {
 }
 
 /// The title of the ACTIVE Quick Help scope, re-resolved from the button
-/// list by its id — the mobile twin of the web's quickHelpTitleFor.
+/// list — the mobile twin of the web's quickHelpTitleFor.
 ///
-/// A locale switch re-resolves the buttons (a load in the new locale) and
-/// the context bar's title must follow: the scope's identity is the button
-/// id, not the title it was pressed under. A button the config no longer
-/// declares, or a null or EMPTY id (empty declares nothing — the file's
-/// own scope rule — and a sidebar scope has no id at all), resolves to
-/// null so the caller keeps the title it already has.
+/// The lookup is ID-keyed (quickHelpButtonById): only an id'd button's
+/// scope follows a locale switch, because a locale switch re-resolves the
+/// buttons and the bar must read the new language's title for the SAME
+/// button. An active identity the lookup cannot match — a TITLE (an
+/// id-less card's identity, see quickHelpButtonIdentity), an id the
+/// config no longer declares, or null/EMPTY (empty declares nothing, the
+/// file's own scope rule, and a sidebar scope has no id at all) —
+/// resolves to null so the caller keeps the title it already has: for a
+/// title identity that is the title it was pressed under. (The web's own
+/// re-title does NOT keep it: its `b.id === item.id` matches an undefined
+/// id against the FIRST id-less button and re-titles from that — a
+/// web-side slip the mobile does not copy.)
 String? activeQuickHelpTitleFor(
   List<Map<String, dynamic>> buttons,
-  String? activeQuickHelpButtonId,
+  String? activeQuickHelpIdentity,
 ) {
   return quickHelpTitleOf(
-    quickHelpButtonById(buttons, activeQuickHelpButtonId),
+    quickHelpButtonById(buttons, activeQuickHelpIdentity),
   );
 }
 
@@ -295,12 +329,12 @@ String? activeQuickHelpTitleFor(
 /// selection's join.
 bool sidebarTitleFollowsLocale({
   required bool fromSelection,
-  required String? activeButtonId,
+  required String? activeIdentity,
   required int serviceCount,
   required List<String> serviceLabelsEn,
 }) {
   return fromSelection &&
-      activeButtonId == null &&
+      activeIdentity == null &&
       serviceCount > 0 &&
       serviceLabelsEn.length == serviceCount;
 }
@@ -318,12 +352,12 @@ bool sidebarTitleCaptureMatchesSelection({
   required List<String> labels,
   required int count,
   required bool fromSelection,
-  required String? activeButtonId,
+  required String? activeIdentity,
 }) {
   return listEquals(capturedLabels, labels) &&
       capturedCount == count &&
       fromSelection &&
-      activeButtonId == null;
+      activeIdentity == null;
 }
 
 /// The localized DISPLAY name of every entity the [tree] carries, by its
@@ -673,11 +707,12 @@ class ConversationScope {
 /// and the Quick Help buttons.
 ///
 /// A conversation carries the scope it was asked in: the Quick Help button
-/// that produced it — by its id, the button's identity — or the ENGLISH
-/// labels of the sidebar scope it was narrowed by. The scope is only
-/// usable when the live hierarchy can still NAME it: a scope that cannot
-/// be named leaves the query unscoped, and an unscoped query answers from
-/// the whole corpus.
+/// that produced it — a Quick Help tag is the button ID (quickHelpButtonIdentity
+/// may carry a title for an id-less card, and the resolver matches IDS only,
+/// exactly as the web's own restore does) — or the ENGLISH labels of the
+/// sidebar scope it was narrowed by. The scope is only usable when the live
+/// hierarchy can still NAME it: a scope that cannot be named leaves the
+/// query unscoped, and an unscoped query answers from the whole corpus.
 class ConversationScopeResolver {
   ConversationScopeResolver({
     required QuickHelpScopeResolver hierarchy,
@@ -982,13 +1017,13 @@ List<String> mergeServiceLabels(List<String> active, List<String> sidebar) => [
   ...sidebar,
 ];
 
-/// The tags a conversation carries: the Quick Help button's id — its
-/// identity — and, BESIDE it, the ENGLISH labels of the sidebar scope
-/// that was selected with it. The web writes one tag per context item; a
-/// conversation carrying both scopes must carry both tags, or the sidebar
-/// one is lost on the next restore. A conversation that carries no scope
-/// carries no tags.
+/// The tags a conversation carries: the Quick Help button's identity —
+/// `id || title` (quickHelpButtonIdentity) — and, BESIDE it, the ENGLISH
+/// labels of the sidebar scope that was selected with it. The web writes
+/// one tag per context item; a conversation carrying both scopes must
+/// carry both tags, or the sidebar one is lost on the next restore. A
+/// conversation that carries no scope carries no tags.
 List<String> conversationScopeTags({
-  String? quickHelpButtonId,
+  String? quickHelpIdentity,
   List<String> sidebarServiceLabels = const <String>[],
-}) => [?quickHelpButtonId, ...sidebarServiceLabels];
+}) => [?quickHelpIdentity, ...sidebarServiceLabels];

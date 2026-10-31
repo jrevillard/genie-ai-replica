@@ -69,6 +69,23 @@ QUERY_ID_KEY = "genie.query_id"
 # far below this; prose does not.
 MAX_STRING_LEN = 96
 
+# The closed vocabulary of ``rag.translation.query_status`` — what the history
+# translator handed the embedder on a chat turn. The one home the emitting code
+# imports its values from; the operator runbook and the API reference document
+# the same values in prose.
+QUERY_TRANSLATION_TRANSLATED = "translated"
+QUERY_TRANSLATION_PASSTHROUGH_ENGLISH = "passthrough_english"
+QUERY_TRANSLATION_PASSTHROUGH_UNKNOWN = "passthrough_unknown_language"
+QUERY_TRANSLATION_FALLBACK_TIMEOUT = "fallback_timeout"
+QUERY_TRANSLATION_FALLBACK_ERROR = "fallback_error"
+QUERY_TRANSLATION_STATUSES = (
+    QUERY_TRANSLATION_TRANSLATED,
+    QUERY_TRANSLATION_PASSTHROUGH_ENGLISH,
+    QUERY_TRANSLATION_PASSTHROUGH_UNKNOWN,
+    QUERY_TRANSLATION_FALLBACK_TIMEOUT,
+    QUERY_TRANSLATION_FALLBACK_ERROR,
+)
+
 # Recorded when a join could not resolve. NOT "unknown" and NOT "" — both would
 # satisfy the shape rule while reading like a real value.
 UNRESOLVED = "__unresolved__"
@@ -198,6 +215,12 @@ ATTRIBUTE_NAMES = {
     "rag_blend_enabled": "rag.blend.enabled",
     "rag_blend_alpha": "rag.blend.alpha",
     "rag_blend_history_turns": "rag.blend.history_turns",
+    # What the history translator handed the embedder: "translated",
+    # "passthrough_english", "passthrough_unknown_language",
+    # "fallback_timeout" or "fallback_error" — the passthrough/fallback
+    # values name the request where the English corpus was queried with
+    # something else.
+    "rag_translation_query_status": "rag.translation.query_status",
     "rag_history_segments_in": "rag.history.segments_in",
     "rag_history_segments_sent": "rag.history.segments_sent",
     "rag_prompt_window_tokens": "rag.prompt.window_tokens",

@@ -523,7 +523,9 @@ flutter build appbundle --flavor itu --release --no-tree-shake-icons --dart-defi
 
 Replace `itu` with the flavor you deploy — `staging`, or your own institution
 flavor. Never build a release from `dev` or `e2e`: both arm the trust-all TLS
-client, and `build-release.ps1` refuses them.
+client, `build-release.ps1` refuses them, and the app itself fails at startup
+when a release build resolves a configuration with `allowInsecureConnections`
+on.
 
 **Output locations:**
 - APK: `build/app/outputs/flutter-apk/app-itu-release.apk`

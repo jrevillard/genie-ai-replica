@@ -167,6 +167,7 @@ COPY genie-ai-overlay/core/model_cache.py /app/core/model_cache.py
 # token fetch; without them the image fails at import, not at runtime. Its own
 # vLLM chat-completion client is NOT yet wired to this module.
 COPY genie-ai-overlay/core/model_http_policy.py /app/core/model_http_policy.py
+COPY genie-ai-overlay/core/service_endpoints.py /app/core/service_endpoints.py
 
 # Copy the shared span-attribute vocabulary (importable as core.span_attrs).
 # The LLM timeout attributes this overlay added are stamped through it rather

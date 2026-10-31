@@ -77,6 +77,15 @@ There is no `text`, no nested `metadata` object, and no `chunk_id`/`source`
 field on the wire. The frontend renders these as **Source** chips under the
 answer (label = `document_name`, link = `url`).
 
+### `metadata.query_translation_status`
+
+What the query-translation step fed the embedder, on the metadata event
+(`translated`, `passthrough_english`, `passthrough_unknown_language`,
+`fallback_timeout` or `fallback_error`). Diagnostic: a non-English query
+whose translation timed out is embedded in its source language, which
+degrades retrieval against the English corpus. The same value is stamped
+on the `chatqna.orchestrate` span as `rag.translation.query_status`.
+
 ### `metadata.rag_chunks`
 
 **Not emitted.** The chatqna terminal-event payload (`genieai_chatqna.py`,

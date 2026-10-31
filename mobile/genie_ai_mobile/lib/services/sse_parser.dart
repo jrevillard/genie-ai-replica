@@ -22,11 +22,24 @@ class SseMetadataEvent extends SseEvent {
   final double confidenceScore;
   final int? responseTime;
   final bool isGrounded;
+
+  /// What the query-translation step fed the embedder ("translated",
+  /// "passthrough_english", "passthrough_unknown_language",
+  /// "fallback_timeout" or "fallback_error").
+  ///
+  /// A non-English query whose translation timed out is embedded in its
+  /// source language, which degrades retrieval against the English corpus.
+  /// The non-streaming path keeps the whole metadata map; the streamed path
+  /// rebuilds it, so the field has to be carried here for the two paths to
+  /// report the same thing.
+  final String? queryTranslationStatus;
+
   const SseMetadataEvent({
     required this.sourceDocuments,
     required this.confidenceScore,
     required this.isGrounded,
     this.responseTime,
+    this.queryTranslationStatus,
   });
 }
 
@@ -120,6 +133,7 @@ class SseParser {
         confidenceScore: (json['confidence_score'] as num?)?.toDouble() ?? 0.0,
         isGrounded: json['is_grounded'] as bool? ?? false,
         responseTime: json['responseTime'] as int?,
+        queryTranslationStatus: json['query_translation_status'] as String?,
       ),
       'translation' => SseTranslationEvent(json['content'] as String? ?? ''),
       'done' => SseDoneEvent(

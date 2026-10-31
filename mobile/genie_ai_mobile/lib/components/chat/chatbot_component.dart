@@ -117,11 +117,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // The in-flight hierarchy fetch. It runs ONCE: every button is checked
   // against the resolver it builds, and a tap must not start a second one.
   Future<void>? _enTreeFuture;
-  // The id of the Quick Help button whose scope is active — the IDENTITY
-  // the conversation carries, so a reopened conversation can be re-scoped
-  // by the button (a Quick Help tag is the button id, never a label: a
-  // sidebar selection and a button can carry the same label).
-  String? _activeQuickHelpButtonId;
+  // The identity of the Quick Help button whose scope is active — the
+  // value the conversation tag carries (quickHelpButtonIdentity: the
+  // web's serviceKey rule). A tag is never a LABEL: a sidebar selection
+  // and a button can carry the same label. The restore resolves buttons
+  // by id, so a title identity still travels with the conversation but
+  // never reinstalls the button's scope — it falls to the sidebar branch,
+  // as the web's own restore does for the same tag.
+  String? _activeQuickHelpIdentity;
   // The scope state of the ACTIVE Quick Help button against the live
   // hierarchy (stateFor's map): a restored button whose declared labels
   // or category left the hierarchy refuses the follow-up, with a caption
@@ -272,7 +275,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     if (titleDrift &&
         sidebarTitleFollowsLocale(
           fromSelection: _sidebarTitleIsSelection,
-          activeButtonId: _activeQuickHelpButtonId,
+          activeIdentity: _activeQuickHelpIdentity,
           serviceCount: _sidebarServiceCount,
           serviceLabelsEn: _sidebarServiceLabelsEn,
         )) {
@@ -411,7 +414,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         // id and keeps its own name.
         final activeTitle = activeQuickHelpTitleFor(
           _quickHelpButtons,
-          _activeQuickHelpButtonId,
+          _activeQuickHelpIdentity,
         );
         if (activeTitle != null) {
           _selectedCategoryName = activeTitle;
@@ -496,7 +499,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // context bar.
     _selectedCategoryName =
         quickHelpTitleOf(button) ?? scope.categoryName ?? '';
-    _activeQuickHelpButtonId = scope.quickHelpButtonId;
+    _activeQuickHelpIdentity = scope.quickHelpButtonId;
     // During a hierarchy OUTAGE the resolver was built over an
     // empty tree: every declared label reads as missing, and the
     // refusal would name a configuration problem that may not exist.
@@ -623,7 +626,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         labels: _sidebarServiceLabelsEn,
         count: _sidebarServiceCount,
         fromSelection: _sidebarTitleIsSelection,
-        activeButtonId: _activeQuickHelpButtonId,
+        activeIdentity: _activeQuickHelpIdentity,
       )) {
         return;
       }
@@ -988,6 +991,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     List<dynamic>? sources;
     double? confidence;
     bool? isGrounded;
+    // What the query-translation step fed the embedder for this answer (the
+    // non-streaming path keeps the whole metadata map; this path rebuilds
+    // it, so the field is carried here for the two to agree).
+    String? streamQueryTranslationStatus;
     // Whether the backend could not translate the answer into the requested
     // language. The answer that arrives is then the English original, and the
     // user has to be told — an English answer presented as a translated one
@@ -1059,10 +1066,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     :final sourceDocuments,
                     :final confidenceScore,
                     isGrounded: final grounded,
+                    :final queryTranslationStatus,
                   ):
                     sources = sourceDocuments;
                     confidence = confidenceScore;
                     isGrounded = grounded;
+                    streamQueryTranslationStatus = queryTranslationStatus;
                   case SseTranslationEvent(:final content):
                     accumulatedContent = content;
                     setState(() {
@@ -1090,10 +1099,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     :final sourceDocuments,
                     :final confidenceScore,
                     isGrounded: final grounded,
+                    :final queryTranslationStatus,
                   ):
                     sources = sourceDocuments;
                     confidence = confidenceScore;
                     isGrounded = grounded;
+                    streamQueryTranslationStatus = queryTranslationStatus;
                   case SseTranslationEvent(:final content):
                     accumulatedContent = content;
                   case SseErrorEvent(:final message):
@@ -1116,6 +1127,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     'sources': sources,
                     'confidence_score': confidence,
                     'is_grounded': isGrounded,
+                    'query_translation_status': streamQueryTranslationStatus,
                   }..removeWhere((key, value) => value == null);
                 });
               }
@@ -1328,7 +1340,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _scopeEpoch++;
     _restoredTags = null;
     _activeServiceLabels = declaredLabels;
-    _activeQuickHelpButtonId = quickHelpFieldOf(button, 'id');
+    // The conversation tag carries the button's IDENTITY — never the id
+    // alone: see quickHelpButtonIdentity.
+    _activeQuickHelpIdentity = quickHelpButtonIdentity(button);
     _activeQuickHelpScope = _scopeResolver?.stateFor(button);
   }
 
@@ -1340,7 +1354,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   void _clearQuickHelpScopeFields() {
     _scopeEpoch++;
     _restoredTags = null;
-    _activeQuickHelpButtonId = null;
+    _activeQuickHelpIdentity = null;
     _activeQuickHelpScope = null;
     _activeServiceLabels = const [];
     _sidebarTitleIsSelection = false;
@@ -1490,7 +1504,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // ===========================================================================
   /// The scope of the conversation, as the web writes it.
   List<String> _contextTags() => conversationScopeTags(
-    quickHelpButtonId: _activeQuickHelpButtonId,
+    quickHelpIdentity: _activeQuickHelpIdentity,
     sidebarServiceLabels: _sidebarServiceLabelsEn,
   );
 

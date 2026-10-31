@@ -320,6 +320,36 @@ void main() {
       expect(scope.serviceLabelsEn, ['Births']);
     });
 
+    test(
+      'an id-less button conversation travels as its title tag, and the restore refuses it',
+      () {
+        // The press of an id-less scoped card writes its TITLE as the tag
+        // (the web's identity rule, #1194) — but the restore resolves
+        // BUTTONS by id only, on both platforms (the web's own lookup is
+        // `candidate.id === tag`). A title tag is therefore not a Quick
+        // Help scope on restore: it is a tag the live hierarchy cannot
+        // name, the count remembers it, and the send guard refuses the
+        // follow-up — a VISIBLE refusal. (An identity-keyed index here
+        // would reinstate the scope instead — the silent widening a
+        // scope-less restore gives, diverging from the web.)
+        final idless = [
+          {
+            'resolvedTitle': 'Civil registry help',
+            'category': '2',
+            'serviceLabels': ['Births'],
+          },
+        ];
+        final scope = convResolver(
+          idless,
+        ).resolve(tags: ['Civil registry help'], categoryKey: '2');
+
+        expect(scope.quickHelpButtonId, isNull);
+        expect(scope.sidebarTagCount, 1);
+        expect(scope.sidebarLabelsEn, isEmpty);
+        expect(scope.serviceLabelsEn, isEmpty);
+      },
+    );
+
     test('a button that names its category by ENGLISH resolves to the key', () {
       // The configuration names the category; the conversation's edge
       // speaks the hierarchy's own key — the one the backend writes as
@@ -1006,7 +1036,7 @@ void main() {
       // next restore.
       expect(
         conversationScopeTags(
-          quickHelpButtonId: 'civil',
+          quickHelpIdentity: 'civil',
           sidebarServiceLabels: ['Births'],
         ),
         ['civil', 'Births'],
@@ -1064,7 +1094,8 @@ void main() {
 
   /// A locale switch reloads the buttons with the new locale's titles: the
   /// context bar's title of an ACTIVE Quick Help scope must follow, and it
-  /// follows by IDENTITY (the button id), never by the pressed title.
+  /// follows by the button ID for an id'd button; a TITLE identity (an
+  /// id-less card's) matches nothing and keeps the pressed title.
   group('activeQuickHelpTitleFor', () {
     test('returns the reloaded button title for the active id', () {
       // The button was pressed under 'en' ('Births'); the reload carried
@@ -1076,6 +1107,26 @@ void main() {
 
       expect(activeQuickHelpTitleFor(buttons, 'births'), 'Naissances');
     });
+
+    test(
+      'a TITLE identity (an id-less card) matches no button and keeps the pressed title',
+      () {
+        // The re-title lookup is ID-keyed (quickHelpButtonById): an
+        // id-less card's identity is its title, and no button's ID equals
+        // it — the caller keeps the title the card was pressed under.
+        // (The web's own re-title does NOT keep it: b.id === item.id
+        // matches an undefined id against the FIRST id-less button and
+        // re-titles from that — a web-side slip the mobile does not
+        // copy.) A lookup that matched on IDENTITY instead would re-title
+        // the bar from another card on every locale switch.
+        final buttons = [
+          {'id': 'births', 'resolvedTitle': 'Naissances'},
+          {'resolvedTitle': 'Registry Card'},
+        ];
+
+        expect(activeQuickHelpTitleFor(buttons, 'Registry Card'), isNull);
+      },
+    );
 
     test('a null active id (sidebar scope or none) resolves nothing', () {
       final buttons = [
@@ -1386,6 +1437,44 @@ void main() {
       ];
 
       expect(quickHelpButtonById(buttons, 'crops'), isNull);
+    });
+  });
+
+  /// The identity a conversation tag carries for a button — the web's
+  /// `serviceKey` rule (`button.id || title`): the id when the config
+  /// declares one, the title when it does not (#1194).
+  group('quickHelpButtonIdentity', () {
+    test('the id wins when the config declares one', () {
+      expect(
+        quickHelpButtonIdentity({
+          'id': 'civil',
+          'resolvedTitle': 'Civil Registry',
+        }),
+        'civil',
+      );
+    });
+
+    test('an id-less button is identified by its title', () {
+      // A scoped card can be declared without an id (a hand-edited
+      // deployment configuration): its identity — what the conversation
+      // tag carries — is its title, exactly as the web's serviceKey is.
+      // An EMPTY id is no id (the file's own rule), not a title override.
+      const titleOnly = {'resolvedTitle': 'Civil Registry'};
+      expect(quickHelpButtonIdentity(titleOnly), 'Civil Registry');
+      expect(
+        quickHelpButtonIdentity({'id': null, ...titleOnly}),
+        'Civil Registry',
+      );
+      expect(
+        quickHelpButtonIdentity({'id': '', ...titleOnly}),
+        'Civil Registry',
+      );
+    });
+
+    test('a button with neither id nor title has no identity', () {
+      expect(quickHelpButtonIdentity({}), isNull);
+      expect(quickHelpButtonIdentity({'id': '', 'resolvedTitle': ''}), isNull);
+      expect(quickHelpButtonIdentity(null), isNull);
     });
   });
 
@@ -1785,7 +1874,7 @@ void main() {
           labels: ['Births'],
           count: 1,
           fromSelection: true,
-          activeButtonId: null,
+          activeIdentity: null,
         ),
         isTrue,
       );
@@ -1799,7 +1888,7 @@ void main() {
           labels: ['Marriages'],
           count: 1,
           fromSelection: true,
-          activeButtonId: null,
+          activeIdentity: null,
         ),
         isFalse,
       );
@@ -1815,7 +1904,7 @@ void main() {
           labels: ['Births'],
           count: 2,
           fromSelection: true,
-          activeButtonId: null,
+          activeIdentity: null,
         ),
         isFalse,
       );
@@ -1831,7 +1920,7 @@ void main() {
           labels: ['Births'],
           count: 1,
           fromSelection: false,
-          activeButtonId: null,
+          activeIdentity: null,
         ),
         isFalse,
       );
@@ -1845,7 +1934,7 @@ void main() {
           labels: ['Births'],
           count: 1,
           fromSelection: true,
-          activeButtonId: 'btn-1',
+          activeIdentity: 'btn-1',
         ),
         isFalse,
       );
@@ -1857,7 +1946,7 @@ void main() {
       expect(
         sidebarTitleFollowsLocale(
           fromSelection: true,
-          activeButtonId: null,
+          activeIdentity: null,
           serviceCount: 2,
           serviceLabelsEn: const ['Births', 'Marriages'],
         ),
@@ -1869,7 +1958,7 @@ void main() {
       expect(
         sidebarTitleFollowsLocale(
           fromSelection: false,
-          activeButtonId: null,
+          activeIdentity: null,
           serviceCount: 1,
           serviceLabelsEn: const ['Births'],
         ),
@@ -1881,7 +1970,7 @@ void main() {
       expect(
         sidebarTitleFollowsLocale(
           fromSelection: true,
-          activeButtonId: 'btn-1',
+          activeIdentity: 'btn-1',
           serviceCount: 1,
           serviceLabelsEn: const ['Births'],
         ),
@@ -1893,7 +1982,7 @@ void main() {
       expect(
         sidebarTitleFollowsLocale(
           fromSelection: true,
-          activeButtonId: null,
+          activeIdentity: null,
           serviceCount: 2,
           serviceLabelsEn: const ['Births'],
         ),
@@ -1905,7 +1994,7 @@ void main() {
       expect(
         sidebarTitleFollowsLocale(
           fromSelection: true,
-          activeButtonId: null,
+          activeIdentity: null,
           serviceCount: 0,
           serviceLabelsEn: const <String>[],
         ),

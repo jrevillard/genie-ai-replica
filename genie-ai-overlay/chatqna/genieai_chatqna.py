@@ -595,20 +595,204 @@ def _build_user_content(user_context_string: str, history_string: str, rag_augme
     )
 
 
-# Fixed completion ceiling a translation request falls back to when no
-# window is known, and the default for the callers that translate
-# chunk-bounded inputs (the chunk path). The history path replaces it with
-# the window-derived allowance.
+# Translation completion budget. The cap is MEASURED, not guessed: the
+# prompt's tokens come from the translation server's own tokenizer, because
+# a char/token ratio is wrong for dense scripts (CJK runs ~1 token/char,
+# Latin ~4) — and a wrong estimate either overflows the window (the server
+# rejects the request) or truncates the translation.
+# The constants mirror the backend translation path's rule
+# (components/gov-chat-backend/services/translation/gpu-translate-backend.js):
+# the same safety margin, the same refusal floor, the same need bound.
+TRANSLATION_COMPLETION_SAFETY_TOKENS = 128
+# A prompt that leaves less room than this cannot produce a translation:
+# the completion would be cut off, and the guard would refuse it. Refused
+# up front, with the reason named.
+TRANSLATION_COMPLETION_MIN_ROOM = 256
+# What a translation needs: the backend translation path sizes the same
+# request at 4x the input tokens plus a margin (the target script can cost
+# more tokens than the source), and that bound keeps a big window from
+# inviting an unbounded completion.
+TRANSLATION_COMPLETION_NEEDED_MULTIPLIER = 4
+TRANSLATION_COMPLETION_NEEDED_MARGIN = 256
+# Set when the translation server REJECTS the prompt count (a client-error
+# status: no route, or a route that cannot take this payload shape) — the
+# gap is permanent, so the count is not attempted again and the degraded
+# estimate bounds the completion. Transient failures (an unreachable
+# endpoint, a timeout, a rate limit) do NOT latch: the next request counts
+# again.
+_TRANSLATION_COUNT_UNAVAILABLE = False
+# The ceiling a translation request falls back to when the completion
+# cannot be MEASURED (no window, or a server that cannot count): roughly
+# half the input, bounded. It is an estimate — the degraded path only — but
+# it is a bound: without it the server's default would let the completion
+# run to the whole window.
 TRANSLATION_BASE_CEILING = 4096
 
 
-def _translation_base_cap(text: str, ceiling: int = TRANSLATION_BASE_CEILING) -> int:
+def _translation_base_cap(text: str) -> int:
     """Base completion cap for a translation request: roughly half the input
     size, with a 512 floor that keeps short inputs translatable and a
-    ceiling that keeps long ones bounded (a ceiling below the floor wins —
-    the window caller may clamp that far). Shared by every translation path;
-    the history caller passes the window-derived ceiling it discovered."""
-    return min(max(len(text) // 2, 512), ceiling)
+    ceiling that keeps long ones bounded. The DEGRADED bound — used when
+    the completion cannot be measured."""
+    return min(max(len(text) // 2, 512), TRANSLATION_BASE_CEILING)
+
+
+async def _translation_completion_cap(prompt: str, count_body: dict, window: int | None) -> int:
+    """Completion cap for a translation request.
+
+    The cap is the room the window leaves beside the MEASURED prompt (the
+    translation server's own token count of the payload as it will be
+    sent), bounded by what the translation needs (4x the prompt tokens plus
+    a margin — the rule the backend translation path uses). The room is
+    what the server would grant anyway; stating it explicitly bounds the
+    completion instead of leaving it to the server's default.
+
+    When the completion cannot be measured — no window, or a server that
+    cannot count — the degraded estimate bounds it instead (see
+    ``_translation_base_cap``): a bound is better than the server's
+    default, which would let the completion run to the whole window.
+
+    Args:
+        prompt: the request's prompt text (the estimate's input).
+        count_body: the payload's prompt half, as it will be sent
+            (``{"messages": [...]}`` or ``{"prompt": "..."}``), so the count
+            covers the chat template the server applies.
+        window: the translation model's window, or None when unknown.
+
+    Raises:
+        TranslationInputTooLongError: the prompt leaves too little room in
+        the window for a translation. The server would reject the request
+        (or cut the completion off); the callers refuse the translation
+        instead, with the reason named.
+    """
+    if not window:
+        return _translation_base_cap(prompt)
+    prompt_tokens = await _count_translation_tokens(count_body)
+    if prompt_tokens is None:
+        # Degraded: the estimate bounds the completion, clamped by the
+        # window so the request cannot overflow it.
+        return min(_translation_base_cap(prompt), max(1, window - TRANSLATION_COMPLETION_SAFETY_TOKENS))
+    room = window - prompt_tokens - TRANSLATION_COMPLETION_SAFETY_TOKENS
+    if room < TRANSLATION_COMPLETION_MIN_ROOM:
+        raise TranslationInputTooLongError(
+            f"translation prompt ({prompt_tokens} tokens) leaves {room} of {window} tokens, "
+            "too little for a translation"
+        )
+    needed = TRANSLATION_COMPLETION_NEEDED_MULTIPLIER * prompt_tokens + TRANSLATION_COMPLETION_NEEDED_MARGIN
+    return min(room, needed)
+
+
+def _translation_payload(prompt: str, translategemma: bool, model_id: str | None) -> tuple[dict, str, dict]:
+    """The request shape for one translation prompt: the payload, the endpoint
+    it goes to, and the prompt half the token count must measure.
+
+    The count body is the payload's prompt half AS IT WILL BE SENT, so the
+    count covers what the server will tokenize (the chat template included).
+    """
+    if translategemma:
+        # The completions API takes a pre-formatted prompt (vLLM v0.10.0
+        # cannot pass structured content through chat completions to
+        # TranslateGemma's template).
+        payload = {
+            "model": model_id,
+            "prompt": prompt,
+            "temperature": 0.0,
+            "repetition_penalty": 1.2,
+        }
+        return payload, TRANSLATION_COMPLETIONS_URL, {"prompt": prompt, "model": model_id}
+    payload = {
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0,
+        "stream": False,
+    }
+    return payload, TRANSLATION_LLM_URL, {"messages": payload["messages"]}
+
+
+async def _translate_prompt(prompt: str, translategemma: bool, model_id: str | None) -> str:
+    """Translate one prompt and return the translated text.
+
+    The one seam behind both translation paths (the history and the chunk):
+    the completion budget is measured against the window the translation
+    model serves, the request goes out with that budget, and a completion
+    the server cut off is refused — so the budget, the request and the
+    refusal live in one place.
+
+    Raises:
+        TranslationTimeoutError: the service did not answer in time.
+        TranslationFailedError: the service failed, or answered with a
+            completion it cut off.
+        TranslationInputTooLongError: the prompt does not fit the window.
+    """
+    payload, url, count_body = _translation_payload(prompt, translategemma, model_id)
+    payload["max_tokens"] = await _translation_completion_cap(prompt, count_body, _get_translation_window())
+    if logflag:
+        logger.debug(
+            f"Payload for translation service ({'TranslateGemma' if translategemma else 'generic'}): {payload}"
+        )
+    try:
+        async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT, verify=endpoint_verify()) as client:
+            response = await client.post(
+                url,
+                json=payload,
+                headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+            )
+            response.raise_for_status()
+            choice = response.json()["choices"][0]
+            content = _choice_content(choice, translategemma)
+    except Exception as e:
+        # Fail-loud on vLLM context overflow: silently returning the
+        # original English text breaks the multilingual UX (#829). Classify
+        # by the HTTP body / error text and raise TranslationInputTooLongError
+        # so the route layer maps this to a 422 the BFF can surface.
+        from dataprep.genieai_dataprep_arangodb import _is_vllm_input_overflow
+
+        if _is_vllm_input_overflow(e):
+            raise TranslationInputTooLongError(
+                f"translation request exceeds the translation window: {type(e).__name__}: {str(e)[:200]}"
+            ) from e
+        if isinstance(e, (httpx.TimeoutException, TimeoutError)):
+            # One typed subtype: the answer path still sees a
+            # TranslationFailedError, while the history path reports
+            # "the service was slow" without unwrapping __cause__. The
+            # handlers log the failure — one line per event.
+            raise TranslationTimeoutError(f"translation timed out: {type(e).__name__}: {str(e)[:200]}") from e
+        raise TranslationFailedError(f"translation failed: {type(e).__name__}: {str(e)[:200]}") from e
+
+    if _completion_truncated(choice):
+        # The completion hit max_tokens: the translation is cut off, not
+        # finished. Embedding the cut-off text would put a half-translated
+        # history into the retrieval space under a success status — the same
+        # defect as an empty completion, and the backend translation path
+        # rejects it the same way.
+        logger.error("Translation model hit max_tokens; treating the translation as failed.")
+        raise TranslationFailedError("translation model hit max_tokens: the translation is cut off")
+    return content
+
+
+def _completion_truncated(choice: dict) -> bool:
+    """True when the server cut the completion off at max_tokens.
+
+    One decision for every translation path: a cut-off completion is not a
+    translation, whatever the payload shape. The paths refuse it
+    differently — the history path falls back to the source history, the
+    chunk path raises so the answer is not spliced half-translated — but
+    they must agree on what counts as truncated.
+
+    ``length`` is the OpenAI name for the condition.
+    """
+    return choice.get("finish_reason") == "length"
+
+
+def _choice_content(choice: dict, completions: bool) -> str:
+    """The text of a completion, whatever payload shape carries it.
+
+    The chat shape nests it under ``message.content``, the completions
+    shape under ``text``; a server that cut the completion off before any
+    token can leave the content null. The read never raises: a missing or
+    null content is an empty completion, which the callers already refuse.
+    """
+    raw = choice.get("text") if completions else (choice.get("message") or {}).get("content")
+    return (raw or "").strip()
 
 
 def _get_max_model_len() -> int:
@@ -664,10 +848,12 @@ def _get_max_translation_chars() -> int:
     return max(budget, 1)
 
 
-# Translation budget derivation from the discovered window. The completion
-# reserve assumes the translated output is roughly the size of the input (the
-# TranslateGemma history payload caps max_tokens at half the input, clamped
-# to the room the window leaves beside the prompt estimate).
+# Translation INPUT budget derivation from the discovered window: how many
+# characters of history may be forwarded to the translation model. The
+# char/token ratio is an estimate (dense scripts run ~1 token/char, Latin
+# ~4), so a deployment serving a dense script lowers the ratio with
+# MAX_TRANSLATION_CHARS. The completion budget is measured separately (see
+# TRANSLATION_COMPLETION_SAFETY_TOKENS).
 TRANSLATION_PROMPT_OVERHEAD_TOKENS = 512
 
 
@@ -1960,6 +2146,39 @@ class UserContextBuilder:
 ##################################################################################################################################
 
 
+def _parse_tokenize_count(payload) -> int:
+    """The token count out of a ``/tokenize`` payload.
+
+    vLLM returns both the token list and a precomputed "count"; prefer the
+    scalar, fall back to the list length for servers that omit it. A proxy
+    may serialize the count as a digit string (the same coercion stance as
+    the window value); anything non-integral is malformed.
+    """
+    if not isinstance(payload, dict):
+        raise TokenCountError(f"/tokenize returned a non-object payload: {payload!r}")
+    raw = payload.get("count")
+    if raw is None:
+        tokens = payload.get("tokens")
+        if not isinstance(tokens, list):
+            raise TokenCountError(f"/tokenize payload has neither a count nor a token list: {payload!r}")
+        count = len(tokens)
+    else:
+        # A proxy may serialize count as a digit string (same coercion stance
+        # as the window value); anything non-integral is malformed.
+        count = coerce_int(raw)
+        if count is None:
+            raise TokenCountError(f"/tokenize count is not an integer: {raw!r}")
+    if count < 0:
+        # 0 is an honest count for an empty piece; a negative count is a lie
+        # that would silently defeat the overflow guard.
+        raise TokenCountError(f"/tokenize count is negative: {raw!r}")
+    if count > MAX_SANE_MODEL_WINDOW_TOKENS:
+        # Same sanity bound as the window value: a number this large is a
+        # broken proxy, and it would wipe the history budget outright.
+        raise TokenCountError(f"/tokenize count is absurdly large: {raw!r}")
+    return count
+
+
 @lru_cache(maxsize=4)
 def _count_static_tokens(text: str) -> int:
     """Memoized ``_count_tokens`` for request-invariant text (the system
@@ -2006,33 +2225,78 @@ def _count_tokens(text: str) -> int:
             verify=verify,
         )
         resp.raise_for_status()
-        payload = resp.json()
-        # vLLM returns both the token list and a precomputed "count"; prefer
-        # the scalar, fall back to the list length for servers that omit it.
-        if not isinstance(payload, dict):
-            raise TokenCountError(f"/tokenize returned a non-object payload: {payload!r}")
-        count = payload.get("count")
-        if count is None:
-            tokens = payload.get("tokens")
-            if not isinstance(tokens, list):
-                raise TokenCountError(f"/tokenize payload has neither a count nor a token list: {payload!r}")
-            count = len(tokens)
-        else:
-            # A proxy may serialize count as a digit string (same coercion
-            # stance as the window value); anything non-integral is malformed.
-            count = coerce_int(count)
-            if count is None:
-                raise TokenCountError(f"/tokenize count is not an integer: {payload!r}")
-            if count < 0:
-                # 0 is an honest count for an empty piece; a negative count is
-                # a lie that would silently defeat the overflow guard.
-                raise TokenCountError(f"/tokenize count is negative: {payload!r}")
-            if count > MAX_SANE_MODEL_WINDOW_TOKENS:
-                # Same sanity bound as the window value: a number this large is
-                # a broken proxy, and it would wipe the history budget outright.
-                raise TokenCountError(f"/tokenize count is absurdly large: {payload!r}")
+        count = _parse_tokenize_count(resp.json())
         span.set_attribute(ATTRIBUTE_NAMES["token_count"], count)
         return count
+
+
+async def _count_translation_tokens(count_body: dict) -> int | None:
+    """Count a translation request's prompt tokens with the TRANSLATION
+    server's own tokenizer (vLLM ``/tokenize``).
+
+    The count is measured because a client's own char/token ratio is a
+    guess: dense scripts (CJK) run ~1 token/char, Latin ~4, so a budget
+    computed from a ratio either overflows the window (the server rejects
+    the request) or truncates the translation. The translation server
+    tokenizes with the model that will translate — so the count is the
+    model's own.
+
+    ``count_body`` is the payload's prompt half, AS IT WILL BE SENT:
+    ``{"messages": [...]}`` for the chat-completions shape (the server
+    applies the chat template, so the count covers it) or
+    ``{"prompt": "...", "model": ...}`` for the completions shape. The
+    model name is the one the request carries, so the count matches the
+    request exactly: the TranslateGemma payload names its model, the
+    generic one does not (the server then answers with its default model,
+    exactly as the translation request does).
+
+    Best-effort by contract: when the server cannot count, None comes back
+    and the caller sizes the completion with the degraded estimate instead
+    of refusing the translation — a count failure never stops a
+    translation. (The MEASURED count, once it exists, feeds the budget that
+    may refuse a prompt that cannot fit the window — that refusal is the
+    caller's decision, not this helper's.)
+    """
+    global _TRANSLATION_COUNT_UNAVAILABLE
+    if _TRANSLATION_COUNT_UNAVAILABLE:
+        # The server could not count once: the gap is permanent.
+        return None
+    # The count presents the SAME credentials the translation request it
+    # sizes presents (Bearer OPENAI_API_KEY): same server, same auth.
+    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
+    verify = endpoint_verify()
+    body = dict(count_body)
+    url = f"{_TRANSLATION_DISCOVERY_ENDPOINT}/tokenize"
+    try:
+        with with_span(
+            "chatqna.translation_count_tokens",
+            attributes={ATTRIBUTE_NAMES["llm_endpoint"]: url},
+        ) as span:
+            async with httpx.AsyncClient(timeout=PROBE_TIMEOUT_SECONDS, verify=verify) as client:
+                resp = await client.post(url, headers=headers, json=body)
+            resp.raise_for_status()
+            count = _parse_tokenize_count(resp.json())
+            span.set_attribute(ATTRIBUTE_NAMES["token_count"], count)
+            return count
+    except httpx.HTTPStatusError as e:
+        # A client-error status is a permanent capability gap (no route, or
+        # a route that rejects this payload shape): the count is not
+        # attempted again, and the failure is warned once. Rate limiting is
+        # transient, and so is everything below 400 — the next request
+        # counts again instead of latching the degradation.
+        if 400 <= e.response.status_code < 500 and e.response.status_code != 429:
+            _TRANSLATION_COUNT_UNAVAILABLE = True
+            logger.warning(
+                "Translation server rejected the prompt count (%s); "
+                "the completion falls back to the degraded estimate.",
+                e.response.status_code,
+            )
+        else:
+            logger.debug("Translation prompt could not be counted (%s)", e)
+        return None
+    except Exception as e:
+        logger.debug("Translation prompt could not be counted (%s: %s)", type(e).__name__, e)
+        return None
 
 
 ##################################################################################################################################
@@ -3663,29 +3927,6 @@ class ChatQnAService:
             f"<end_of_turn>\n<start_of_turn>model\n"
         )
 
-    def _translation_output_cap(self, flattened_history_string: str) -> int | None:
-        """Completion cap for the TranslateGemma payload.
-
-        Roughly half the input (512 floor). When the translation window is
-        discovered, the ceiling is the room the window leaves beside the
-        prompt estimate (chars / chars-per-token ratio), so prompt and
-        completion stay inside the window together. A history whose estimate
-        exceeds that allowance yields None — the completion would be shorter
-        than what there is to translate — and the caller skips the
-        translation, sending the history as-is.
-        """
-        window = _get_translation_window()
-        prompt_token_estimate = len(flattened_history_string) // TRANSLATION_CHARS_PER_TOKEN
-        ceiling = (
-            max(1, window - TRANSLATION_PROMPT_OVERHEAD_TOKENS - prompt_token_estimate)
-            if window
-            else TRANSLATION_BASE_CEILING
-        )
-        cap = _translation_base_cap(flattened_history_string, ceiling=ceiling)
-        if window and cap < prompt_token_estimate:
-            return None
-        return cap
-
     async def _get_translated_history_string(
         self, history: list | str, source_lang_code: str = "en"
     ) -> tuple[str, str]:
@@ -3796,9 +4037,11 @@ class ChatQnAService:
         # translation did not happen (it reports the status, unlike the
         # answer path where the swallowed fallback is the contract). The
         # chunk translator classifies its failures into typed exceptions, so
-        # the split here is isinstance-only. Overflow still propagates
-        # fail-loud — but note that on this path nothing maps it to the #829
-        # 422 contract: it escapes handle_request as an unhandled 500.
+        # the split here is isinstance-only. A prompt that does not fit the
+        # translation window is refused here too (it falls back like the
+        # list shape): the history path has no 422 contract — it is a text
+        # normalized for the retriever, never shown — so the refusal is
+        # reported, not raised.
         if isinstance(history, str):
             if not history.strip():
                 # An empty prompt would only harvest the model's junk reply
@@ -3812,10 +4055,18 @@ class ChatQnAService:
                     ),
                     QUERY_TRANSLATION_TRANSLATED,
                 )
-            except TranslationTimeoutError:
-                # Already logged by the chunk translator's wrap site (the one
-                # line that names the timeout); the status is the observable.
+            except TranslationTimeoutError as e:
+                # The seam raises the typed error without logging; this
+                # handler's line is the one that names the timeout.
+                logger.warning(f"History translation timed out: {e}")
                 return history, QUERY_TRANSLATION_FALLBACK_TIMEOUT
+            except TranslationInputTooLongError as e:
+                # The prompt does not fit the translation window: the
+                # history goes back untranslated, exactly as the list
+                # shape reports it. The condition is named in the log; the
+                # status is the observable.
+                logger.warning(f"History translation refused: {e}")
+                return history, QUERY_TRANSLATION_FALLBACK_ERROR
             except TranslationFailedError as e:
                 logger.error(f"History translation failed: {e}")
                 return history, QUERY_TRANSLATION_FALLBACK_ERROR
@@ -3824,87 +4075,45 @@ class ChatQnAService:
         # parse must branch on the SAME decision (and the same id).
         translation_model_id = _get_translation_model_id()
         translategemma = _is_translategemma(translation_model_id)
-        # Build payload based on model type
         if translategemma:
-            # Use completions API with pre-formatted prompt (vLLM v0.10.0 cannot
-            # pass structured content through chat completions to TranslateGemma's template)
             prompt = self._build_translategemma_prompt(
                 text=flattened_history_string,
                 source_lang_code=source_lang_code,
                 target_lang_code=canonical_target,
             )
-            output_cap = self._translation_output_cap(flattened_history_string)
-            if output_cap is None:
-                logger.warning(
-                    "Translation window too tight to translate the history meaningfully; returning it untranslated"
-                )
-                return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
-            payload = {
-                "model": translation_model_id,
-                "prompt": prompt,
-                "temperature": 0.0,
-                "max_tokens": output_cap,
-                "repetition_penalty": 1.2,
-            }
-            url = TRANSLATION_COMPLETIONS_URL
         else:
             prompt = (
                 f"Translate the following chat history to {target_name}. "
                 f"Preserve the role markers (e.g., 'USER:', 'ASSISTANT:')."
                 f"\n\nHISTORY:\n{flattened_history_string}"
             )
-            payload = {"messages": [{"role": "user", "content": prompt}], "temperature": 0, "stream": False}
-            url = TRANSLATION_LLM_URL
-
-        if logflag:
-            svc = "TranslateGemma" if translategemma else "generic"
-            logger.debug(f"Payload for translation service ({svc}): {payload}")
 
         try:
-            async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:
-                response = await client.post(
-                    url,
-                    json=payload,
-                    headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
-                )
-                response.raise_for_status()
-                response_data = response.json()
-                if translategemma:
-                    choice = response_data["choices"][0]
-                    if choice.get("finish_reason") == "length":
-                        # The completion hit max_tokens: the translation is cut
-                        # off, not finished. Embedding the cut-off text would
-                        # put a half-translated history into the retrieval
-                        # space under a success status — the same defect as an
-                        # empty completion, and the backend translation path
-                        # rejects it the same way.
-                        logger.error("Translation model hit max_tokens; treating the history translation as failed.")
-                        return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
-                    translated_blob = choice["text"]
-                else:
-                    translated_blob = response_data["choices"][0]["message"]["content"]
-                translated_blob = translated_blob.strip()
-                if not translated_blob:
-                    # A 200 with an empty completion is a failure, not a
-                    # translation: the chunk translator refuses it for the
-                    # same reason (an empty history would silently blank the
-                    # retrieval query), and the fallback status says so.
-                    logger.error("Translation model returned an empty history translation; using the source.")
-                    return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
-                if logflag:
-                    logger.debug(f"Translated chat history: {translated_blob}")
-                return translated_blob, QUERY_TRANSLATION_TRANSLATED
-
-        except (httpx.TimeoutException, TimeoutError) as e:
+            translated_blob = await _translate_prompt(prompt, translategemma, translation_model_id)
+        except TranslationTimeoutError as e:
             logger.error(
                 f"History translation timeout after "
                 f"{TRANSLATION_SERVICE_TIMEOUT} seconds. Returning history "
                 f"in original language. Error: {e}"
             )
             return flattened_history_string, QUERY_TRANSLATION_FALLBACK_TIMEOUT
-        except Exception as e:
-            logger.error(f"Translation error: {e}")
+        except TranslationInputTooLongError as e:
+            logger.warning(f"History translation refused: {e}")
             return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
+        except TranslationFailedError as e:
+            logger.error(f"History translation failed: {e}")
+            return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
+
+        if not translated_blob:
+            # A 200 with an empty completion is a failure, not a
+            # translation: the chunk translator refuses it for the same
+            # reason (an empty history would silently blank the retrieval
+            # query), and the fallback status says so.
+            logger.error("Translation model returned an empty history translation; using the source.")
+            return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
+        if logflag:
+            logger.debug(f"Translated chat history: {translated_blob}")
+        return translated_blob, QUERY_TRANSLATION_TRANSLATED
 
     async def _condense_query(self, history_text: str, last_message: str) -> str:
         """Rewrite a follow-up into a standalone retrieval query (issue #1091).
@@ -4073,14 +4282,6 @@ class ChatQnAService:
                 source_lang_code=source_lang_code,
                 target_lang_code=target_lang_code,
             )
-            payload = {
-                "model": translation_model_id,
-                "prompt": prompt,
-                "temperature": 0.0,
-                "max_tokens": _translation_base_cap(text),
-                "repetition_penalty": 1.2,
-            }
-            url = TRANSLATION_COMPLETIONS_URL
         else:
             language_notes = {
                 "Sesotho": "NOTE: Sesotho is spoken in Lesotho and South Africa. It is NOT Afrikaans.",
@@ -4094,45 +4295,7 @@ class ChatQnAService:
                 f"Only output the translated text, nothing else."
                 f"\n\nText: {text}\n\nTranslation:"
             )
-            payload = {"messages": [{"role": "user", "content": prompt}], "temperature": 0, "stream": False}
-            url = TRANSLATION_LLM_URL
-
-        if logflag:
-            logger.debug(f"Translation payload ({'TranslateGemma' if translategemma else 'generic'}): {payload}")
-
-        try:
-            async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:
-                response = await client.post(
-                    url,
-                    json=payload,
-                    headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
-                )
-                response.raise_for_status()
-                response_data = response.json()
-                if translategemma:
-                    translated = response_data["choices"][0]["text"].strip()
-                else:
-                    translated = response_data["choices"][0]["message"]["content"].strip()
-        except Exception as e:
-            # Fail-loud on vLLM context overflow: silently returning the
-            # original English text breaks the multilingual UX (#829). Classify
-            # by the HTTP body / error text and raise TranslationInputTooLongError
-            # so the route layer maps this to a 422 the BFF can surface.
-            from dataprep.genieai_dataprep_arangodb import _is_vllm_input_overflow
-
-            if _is_vllm_input_overflow(e):
-                logger.warning(f"Translation context overflow: {type(e).__name__}: {str(e)[:200]}")
-                raise TranslationInputTooLongError(
-                    f"translation chunk exceeds VLLM_TRANSLATION_MAX_MODEL_LEN: {type(e).__name__}: {str(e)[:200]}"
-                ) from e
-            if isinstance(e, (httpx.TimeoutException, TimeoutError)):
-                # One typed subtype: the answer path still sees a
-                # TranslationFailedError, while the history path reports
-                # "the service was slow" without unwrapping __cause__.
-                logger.warning(f"Translation chunk timed out after {TRANSLATION_SERVICE_TIMEOUT} seconds.")
-                raise TranslationTimeoutError(f"translation chunk timed out: {type(e).__name__}: {str(e)[:200]}") from e
-            logger.warning(f"Failed to translate chunk: {type(e).__name__}: {e}")
-            raise TranslationFailedError(f"translation chunk failed: {type(e).__name__}: {str(e)[:200]}") from e
+        translated = await _translate_prompt(prompt, translategemma, translation_model_id)
 
         if not translated and text.strip():
             # The model answered with nothing. The chunk would join the answer

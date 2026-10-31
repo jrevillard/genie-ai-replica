@@ -30,6 +30,17 @@ from core import embedding_query_prefix as core_query_prefix
 from tests.conftest import FakeServiceType, create_mock_service_node
 
 
+@pytest.fixture(autouse=True)
+def _translation_count_capability_available():
+    """The translation server's counting capability is module state: every
+    test starts with the count available, so a test that makes the server
+    unable to count does not leak that into the next one."""
+    original = chatqna_module._TRANSLATION_COUNT_UNAVAILABLE
+    chatqna_module._TRANSLATION_COUNT_UNAVAILABLE = False
+    yield
+    chatqna_module._TRANSLATION_COUNT_UNAVAILABLE = original
+
+
 # ---------------------------------------------------------------------------
 # Helper functions
 # ---------------------------------------------------------------------------
@@ -2035,9 +2046,10 @@ class TestTranslationHelpers:
 
     @pytest.mark.asyncio
     async def test_translategemma_output_cap_fits_discovered_window(self):
-        """The TranslateGemma payload's max_tokens is clamped so prompt estimate +
-        completion cannot exceed the discovered window (else vLLM rejects the
-        whole request and the history goes back untranslated)."""
+        """The TranslateGemma payload's max_tokens is measured against the
+        discovered window, so prompt + completion cannot exceed it (else the
+        server rejects the whole request and the history goes back
+        untranslated)."""
         svc = create_chatqna_service()
         history = [
             {"role": "user", "content": "A" * 4000},
@@ -2060,21 +2072,21 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://localhost/v1/completions"),
             patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
             patch("httpx.get", return_value=models_resp),
+            patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=2676),
         ):
             await svc._get_translated_history_string(history)
 
         payload = mock_client.post.call_args.kwargs["json"]
-        # Both messages survive the char-budget filter (8028 ≤ 8448). Flattened
-        # prompt ≈ 8028 chars → ~2676 tokens at 3 chars/token; the output cap is
-        # clamped to 6144 − 512 (prompt wrapper) − 2676 = 2956, below the len//2
-        # base ceiling that would overflow a 6144-token window.
-        assert payload["max_tokens"] == 2956
+        # The completion cap is MEASURED: the translation server counts the
+        # prompt at 2676 tokens, so the room the 6144-token window leaves is
+        # 6144 − 2676 − 128 (safety) = 3340, and the translation needs less.
+        assert payload["max_tokens"] == 3340
 
     @pytest.mark.asyncio
     async def test_small_window_still_translates_tiny_history(self):
         """A tiny history on a small (1024-token) window fits comfortably: the
-        cap is clamped to the room left (1024 − 512 − ~109 = ~147) and the
-        translation RUNS — the old fixed 512-token floor disabled it forever."""
+        measured cap is the room left (1024 − 109 − 128 = 787) bounded by what
+        the translation needs (4 × 109 + 256 = 692), and the translation RUNS."""
         svc = create_chatqna_service()
         history = [
             {"role": "user", "content": "A" * 150},
@@ -2098,14 +2110,16 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://localhost/v1/completions"),
             patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
             patch("httpx.get", return_value=models_resp),
+            patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=109),
         ):
             result = await svc._get_translated_history_string(history)
 
         assert result == ("Translated", "translated")
         payload = mock_client.post.call_args.kwargs["json"]
-        # flattened ≈ 328 chars → ~109 prompt tokens; base cap floor 512
-        # clamped to the room left: 1024 − 512 − 109 = 403
-        assert payload["max_tokens"] == 403
+        # The server counts the prompt at 109 tokens: the room left is
+        # 1024 − 109 − 128 = 787, the translation needs 4 × 109 + 256 = 692,
+        # so the need is the binding bound.
+        assert payload["max_tokens"] == 692
 
     @pytest.mark.asyncio
     async def test_translation_skipped_when_budget_fits_no_message(self):
@@ -2169,9 +2183,76 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
             patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
+            patch("chatqna.genieai_chatqna._get_translation_window", return_value=2048),
+            patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=20),
         ):
             result = await svc._translate_chunk_in_language("Hello", "es", "Spanish")
         assert result == "Hola"
+        # The chunk payload carries the measured cap too: the prompt costs 20
+        # tokens, so the room the 2048-token window leaves is 2048 − 20 − 128
+        # = 1900, and the translation needs 4 × 20 + 256 = 336.
+        assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 336
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "completions",
+        [
+            pytest.param(True, id="translategemma"),
+            pytest.param(False, id="generic"),
+        ],
+    )
+    async def test_translate_chunk_in_language_refuses_a_truncated_completion(self, completions):
+        """A chunk completion cut off at max_tokens is not a translation:
+        spliced into the answer it would read as a translation missing its
+        tail. Both payload shapes refuse it (the answer path fails loudly,
+        the single-message history path maps the raise to fallback_error)."""
+        from chatqna.genieai_chatqna import TranslationFailedError
+
+        svc = create_chatqna_service()
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        if completions:
+            mock_response.json.return_value = {"choices": [{"text": "Bonjo", "finish_reason": "length"}]}
+        else:
+            mock_response.json.return_value = {"choices": [{"message": {"content": "Hola"}, "finish_reason": "length"}]}
+        mock_response.raise_for_status = MagicMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=completions),
+            patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://localhost/v1/completions"),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+            patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
+            pytest.raises(TranslationFailedError),
+        ):
+            await svc._translate_chunk_in_language("Hello", "es", "Spanish")
+
+    @pytest.mark.asyncio
+    async def test_translate_chunk_in_language_refuses_a_truncated_completion_without_content(self):
+        """A server that cuts the completion off before any token comes back
+        reports a null content: the refusal must name the truncation, not
+        crash on the null content."""
+        from chatqna.genieai_chatqna import TranslationFailedError
+
+        svc = create_chatqna_service()
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"choices": [{"message": {"content": None}, "finish_reason": "length"}]}
+        mock_response.raise_for_status = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+            pytest.raises(TranslationFailedError, match="max_tokens"),
+        ):
+            await svc._translate_chunk_in_language("Hello", "es", "Spanish")
 
     @pytest.mark.asyncio
     async def test_translate_chunk_in_language_context_overflow_raises_typed(self):
@@ -2346,7 +2427,6 @@ class TestQueryTranslationStatus:
         assert text == "USER: what is X?"
         assert status == "translated"
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "timeout",
         [
@@ -2354,6 +2434,7 @@ class TestQueryTranslationStatus:
             pytest.param("builtin", id="builtin_timeout"),
         ],
     )
+    @pytest.mark.asyncio
     async def test_a_timeout_reports_fallback_timeout_and_returns_the_source(self, timeout):
         """The issue's headline path: the translation service times out, the
         flattened Spanish history goes to the embedder, and the caller can
@@ -2472,32 +2553,182 @@ class TestQueryTranslationStatus:
         assert status == "fallback_error"
         mock_client.post.assert_not_called()
 
-    def test_no_window_keeps_the_fixed_ceiling_without_a_refusal(self):
-        """Without a discovered window the cap stays at the fixed 4096
-        ceiling and the refusal never fires: a history past the ceiling is
-        sent under the default bound, not refused locally."""
-        svc = create_chatqna_service()
-        with patch("chatqna.genieai_chatqna._get_translation_window", return_value=None):
-            assert svc._translation_output_cap("A" * 13000) == 4096
-
-    def test_a_window_too_tight_refuses_the_output_cap(self):
-        """The TranslateGemma output-cap guard refuses a window too tight to
-        translate into (cap below the input estimate): the helper returns
-        None and the history-string caller maps that refusal to
-        `fallback_error`."""
-        svc = create_chatqna_service()
-        with patch("chatqna.genieai_chatqna._get_translation_window", return_value=256):
-            assert svc._translation_output_cap("A" * 3000) is None
-        with patch("chatqna.genieai_chatqna._get_translation_window", return_value=6144):
-            assert svc._translation_output_cap("A" * 3000) == 1500
+    @pytest.mark.asyncio
+    async def test_the_completion_cap_is_the_room_the_window_leaves_beside_the_prompt(self):
+        """The cap is measured: the room the window leaves beside the prompt
+        the translation server counted."""
+        with patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=1000):
+            assert await chatqna_module._translation_completion_cap("prompt", {"prompt": "prompt"}, 4096) == 2968
 
     @pytest.mark.asyncio
-    async def test_a_history_past_the_output_base_cap_is_translated_inside_the_window(self):
-        """The completion ceiling scales with the discovered translation
-        window: a history past the 4096 base ceiling still goes out as a
-        translation request — the fixed ceiling capped the completion below
-        the input past ~12k chars (their prompt estimate crossed 4096 tokens
-        inside the char budget) and refused them untranslated."""
+    async def test_the_completion_cap_is_bounded_by_what_the_translation_needs(self):
+        """A big window must not invite an unbounded completion: the cap is
+        also bounded by what the translation needs (4x the prompt tokens
+        plus a margin)."""
+        with patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=100):
+            assert await chatqna_module._translation_completion_cap("prompt", {"prompt": "prompt"}, 65536) == 656
+
+    @pytest.mark.asyncio
+    async def test_the_degraded_bound_applies_without_a_window_or_a_count(self):
+        """Without a window, or without a count, the completion falls back to
+        the degraded estimate: a bound is better than the server's default,
+        which would let the completion run to the whole window."""
+        assert await chatqna_module._translation_completion_cap("prompt", {"prompt": "prompt"}, None) == 512
+        with patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=None):
+            assert await chatqna_module._translation_completion_cap("prompt", {"prompt": "prompt"}, 4096) == 512
+
+    @pytest.mark.asyncio
+    async def test_the_degraded_bound_is_clamped_by_the_window(self):
+        """The degraded estimate cannot exceed the window: a long prompt on
+        a small window is bounded by the room, not by the estimate."""
+        with patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=None):
+            # 4000 chars → the estimate is 2000 tokens, but the 2048-token
+            # window leaves only 2048 − 128 = 1920.
+            cap = await chatqna_module._translation_completion_cap("A" * 4000, {"prompt": "x"}, 2048)
+        assert cap == 1920
+
+    async def test_a_prompt_that_leaves_too_little_room_is_refused(self):
+        """The prompt leaves less room than a translation needs: the server
+        would cut the completion off, so the translation is refused up
+        front, with the reason named."""
+        from chatqna.genieai_chatqna import TranslationInputTooLongError
+
+        with (
+            patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=2000),
+            pytest.raises(TranslationInputTooLongError),
+        ):
+            await chatqna_module._translation_completion_cap("prompt", {"prompt": "prompt"}, 1024)
+
+    @pytest.mark.asyncio
+    async def test_a_prompt_that_leaves_a_little_room_is_refused(self):
+        """A prompt that leaves a sliver of room (under the minimum output
+        budget) is refused: the completion would be cut off, and the guard
+        would refuse it anyway."""
+        from chatqna.genieai_chatqna import TranslationInputTooLongError
+
+        with (
+            patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=1000),
+            pytest.raises(TranslationInputTooLongError),
+        ):
+            # 1228 − 1000 − 128 = 100 tokens of room: under the floor.
+            await chatqna_module._translation_completion_cap("prompt", {"prompt": "prompt"}, 1228)
+
+    async def test_the_translation_count_asks_the_translation_server(self):
+        """The count comes from the translation server — the model that will
+        translate the prompt — carrying the prompt as it will be sent."""
+        resp = MagicMock()
+        resp.json.return_value = {"count": 42}
+        resp.raise_for_status = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.post.return_value = resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+            patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "http://translation.test"),
+        ):
+            assert await chatqna_module._count_translation_tokens({"prompt": "hello", "model": "tg-test"}) == 42
+        assert mock_client.post.call_args.args[0] == "http://translation.test/tokenize"
+        assert mock_client.post.call_args.kwargs["json"] == {"prompt": "hello", "model": "tg-test"}
+
+    @pytest.mark.asyncio
+    async def test_the_generic_shape_counts_the_payload_as_it_will_be_sent(self):
+        """The chat shape counts its MESSAGES, so the count covers the chat
+        template the server wraps them in."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="USER: what is X?")
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=2048))
+        with (
+            patch(
+                "chatqna.genieai_chatqna._count_translation_tokens",
+                new=AsyncMock(return_value=100),
+            ) as mock_count,
+            stack,
+        ):
+            await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        body = mock_count.call_args.args[0]
+        assert list(body) == ["messages"]
+        assert body["messages"] == mock_client.post.call_args.kwargs["json"]["messages"]
+
+    async def test_a_translation_server_that_cannot_count_leaves_the_budget_to_the_server(self):
+        """The count is best-effort: it sizes the budget, and a budget must
+        never decide whether the translation happens. A server that cannot
+        count leaves the completion to the degraded estimate."""
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock(side_effect=RuntimeError("no /tokenize here"))
+        mock_client = AsyncMock()
+        mock_client.post.return_value = resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client):
+            assert await chatqna_module._count_translation_tokens({"prompt": "hello"}) is None
+
+    @pytest.mark.asyncio
+    async def test_a_transient_count_failure_does_not_disable_the_count(self):
+        """An unreachable endpoint is transient: the next request counts
+        again instead of latching the degradation for the process life."""
+        failing = AsyncMock()
+        failing.post.side_effect = httpx.ConnectTimeout("network partition")
+        failing.__aenter__ = AsyncMock(return_value=failing)
+        failing.__aexit__ = AsyncMock(return_value=False)
+        working = AsyncMock()
+        resp = MagicMock()
+        resp.json.return_value = {"count": 7}
+        resp.raise_for_status = MagicMock()
+        working.post.return_value = resp
+        working.__aenter__ = AsyncMock(return_value=working)
+        working.__aexit__ = AsyncMock(return_value=False)
+        with patch("chatqna.genieai_chatqna.httpx.AsyncClient", side_effect=[failing, working]) as mock_client:
+            assert await chatqna_module._count_translation_tokens({"prompt": "x"}) is None
+            assert await chatqna_module._count_translation_tokens({"prompt": "x"}) == 7
+        assert mock_client.call_count == 2
+
+    @pytest.mark.asyncio
+    @pytest.mark.asyncio
+    async def test_a_rate_limited_count_does_not_disable_the_count(self):
+        """429 is transient by definition: a rate-limited count is retried
+        on the next request, never latched for the process life."""
+        limited = AsyncMock()
+        req = httpx.Request("POST", "http://translation.test/tokenize")
+        limited.post.side_effect = httpx.HTTPStatusError(
+            "rate limited", request=req, response=httpx.Response(429, request=req)
+        )
+        limited.__aenter__ = AsyncMock(return_value=limited)
+        limited.__aexit__ = AsyncMock(return_value=False)
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=limited) as mock_client,
+            patch("chatqna.genieai_chatqna.logger"),
+        ):
+            assert await chatqna_module._count_translation_tokens({"prompt": "x"}) is None
+            assert await chatqna_module._count_translation_tokens({"prompt": "x"}) is None
+        assert mock_client.call_count == 2
+
+    async def test_a_missing_tokenize_route_disables_the_count(self):
+        """A missing /tokenize route is permanent: the count is not
+        attempted again, and the degradation is warned once."""
+        failing = AsyncMock()
+        req = httpx.Request("POST", "http://translation.test/tokenize")
+        failing.post.side_effect = httpx.HTTPStatusError(
+            "not found", request=req, response=httpx.Response(404, request=req)
+        )
+        failing.__aenter__ = AsyncMock(return_value=failing)
+        failing.__aexit__ = AsyncMock(return_value=False)
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=failing) as mock_client,
+            patch("chatqna.genieai_chatqna.logger") as mock_logger,
+        ):
+            assert await chatqna_module._count_translation_tokens({"prompt": "x"}) is None
+            assert await chatqna_module._count_translation_tokens({"prompt": "x"}) is None
+        assert mock_client.call_count == 1
+        logged = " ".join(str(c) for c in mock_logger.warning.call_args_list)
+        assert "rejected the prompt count" in logged
+        assert any(c.args and c.args[-1] == 404 for c in mock_logger.warning.call_args_list)
+
+    async def test_a_long_history_is_translated_inside_the_discovered_window(self):
+        """A long history still goes out as a translation request, with a
+        measured cap: the room the window leaves beside the prompt, bounded
+        by what the translation needs."""
         svc = create_chatqna_service()
         history = [{"role": "user", "content": "A" * 13000}]
         mock_client = self._mock_client(content="USER: AAAA", completions=True)
@@ -2508,15 +2739,17 @@ class TestQueryTranslationStatus:
             patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation")
         )
         stack.enter_context(patch("httpx.get", return_value=models_resp))
+        stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=4335))
         with stack:
             text, status = await svc._get_translated_history_string(history)
         assert status == "translated"
         # The completions payload goes to the completions endpoint: vLLM
         # cannot route the TranslateGemma template through chat completions.
         assert mock_client.post.call_args.args[0] == "http://completions.test/v1/completions"
-        # Flattened "USER: " + 13000 chars → cap len//2 = 6503, inside the
-        # 65536-window allowance (65536 − 512 − 4335 = 60689).
-        assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 6503
+        # The measured prompt (4335 tokens) leaves 65536 − 4335 − 128 = 61073
+        # tokens of room; the translation needs 4 × 4335 + 256 = 17596, so
+        # the need is the binding bound.
+        assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 17596
         assert text == "USER: AAAA"
 
     @pytest.mark.asyncio
@@ -2529,13 +2762,14 @@ class TestQueryTranslationStatus:
         history = [{"role": "user", "content": "A" * 13000}]
         mock_client = self._mock_client()
         stack = self._translation_patches(mock_client, translategemma=True)
-        # A 9000-token window leaves 9000 − 512 − 4335 = 4153 tokens beside
-        # the 4335-token prompt estimate: less than the estimate, so the
-        # completion could not cover what there is to translate. The char
-        # budget is patched wide so the history reaches the cap guard
-        # instead of being dropped by the budget loop.
+        # The server counts the prompt at 9000 tokens: the 9000-token window
+        # has no room left beside it, so the translation is refused before
+        # the request goes out. The char budget is patched wide so the
+        # history reaches the cap guard instead of being dropped by the
+        # budget loop.
         stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=9000))
         stack.enter_context(patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=20000))
+        stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=9000))
         with stack:
             text, status = await svc._get_translated_history_string(history)
         assert text.startswith("USER: AAAA")  # untranslated
@@ -2562,6 +2796,196 @@ class TestQueryTranslationStatus:
         assert status == "fallback_error"
 
     @pytest.mark.asyncio
+    async def test_a_generic_payload_carries_the_window_derived_budget(self):
+        """The generic (chat-completions) branch — the shape the shipped
+        default model takes — sizes its completion too: an explicit
+        max_tokens measured against the window the model serves, so the
+        completion length is a decision instead of the server's default
+        sampling budget."""
+        svc = create_chatqna_service()
+        history = [{"role": "user", "content": "A" * 13000}]
+        mock_client = self._mock_client(content="USER: AAAA")
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=65536))
+        # The char budget is patched wide so the history reaches the cap
+        # guard instead of being dropped by the budget loop (an exported
+        # MAX_TRANSLATION_CHARS would otherwise shrink the budget).
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=20000))
+        stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=4335))
+        with stack:
+            text, status = await svc._get_translated_history_string(history)
+        assert status == "translated"
+        # The chat payload goes to the chat-completions endpoint.
+        assert mock_client.post.call_args.args[0] == "http://chat-llm.test/v1/chat/completions"
+        # The measured prompt (4335 tokens) leaves 65536 − 4335 − 128 = 61073
+        # tokens of room; the translation needs 4 × 4335 + 256 = 17596.
+        assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 17596
+        assert text == "USER: AAAA"
+
+    @pytest.mark.asyncio
+    async def test_a_generic_truncated_completion_is_refused_not_translated(self):
+        """The generic branch reads finish_reason too: a completion cut off
+        by the server (finish_reason "length") is not a translation — the
+        same refusal the TranslateGemma branch makes."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="USER: what is")
+        mock_client.post.return_value.json.return_value = {
+            "choices": [{"message": {"content": "USER: what is"}, "finish_reason": "length"}]
+        }
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=None))
+        with stack:
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: qué es X?"  # untranslated
+        assert status == "fallback_error"
+
+    @pytest.mark.asyncio
+    async def test_a_max_tokens_finish_reason_is_not_a_truncation(self):
+        """Only the protocol's truncation value counts: "max_tokens" is the
+        request field's name, not a finish_reason. A complete completion
+        that carries it is a translation, not a refusal."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="USER: what is X?")
+        mock_client.post.return_value.json.return_value = {
+            "choices": [{"message": {"content": "USER: what is X?"}, "finish_reason": "max_tokens"}]
+        }
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=None))
+        with stack:
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: what is X?"
+        assert status == "translated"
+
+    async def test_a_generic_payload_cap_is_clamped_to_the_discovered_window(self):
+        """The generic payload's cap is clamped so the measured prompt plus
+        the completion cannot exceed the discovered window (else the server
+        rejects the whole request and the history goes back untranslated)."""
+        svc = create_chatqna_service()
+        history = [
+            {"role": "user", "content": "A" * 4000},
+            {"role": "assistant", "content": "B" * 4000},
+        ]
+        mock_client = self._mock_client(content="Translated")
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=6144))
+        stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=2676))
+        with stack:
+            text, status = await svc._get_translated_history_string(history)
+        assert status == "translated"
+        # The measured prompt (2676 tokens) leaves 6144 − 2676 − 128 = 3340
+        # tokens of room, and the translation needs less than that.
+        assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 3340
+
+    @pytest.mark.asyncio
+    async def test_a_generic_payload_without_a_discovered_window_falls_back_to_the_degraded_bound(self):
+        """Without a discovered window the completion cannot be measured:
+        the payload carries the degraded estimate, which bounds the
+        completion instead of leaving it to the server's default."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="USER: what is X?")
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=None))
+        with stack:
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert status == "translated"
+        assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 512
+        assert text == "USER: what is X?"
+
+    async def test_a_generic_history_in_a_window_too_tight_is_refused_and_named(self):
+        """A window that cannot hold the prompt plus a full-length
+        translation refuses before the request goes out — the guard covers
+        the generic shape too."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="USER: what is X?")
+        stack = self._translation_patches(mock_client, translategemma=False)
+        # The prompt the server counts does not fit the 256-token window.
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=256))
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=20000))
+        stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=300))
+        with stack:
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: qué es X?"  # untranslated
+        assert status == "fallback_error"
+        mock_client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_dense_script_history_gets_a_cap_that_fits_the_window(self):
+        """A dense script (CJK ~1 token/char) is where a char/token guess
+        breaks: the cap is measured, so the request still fits the window
+        and the completion still covers the English rendering."""
+        svc = create_chatqna_service()
+        history = [{"role": "user", "content": "汉" * 1000}]
+        mock_client = self._mock_client(content="USER: translated")
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=2048))
+        # The translation server counts 1000 dense characters as 1000
+        # tokens — three times what a chars/3 estimate would say.
+        stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=1000))
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=20000))
+        with stack:
+            text, status = await svc._get_translated_history_string(history)
+        assert status == "translated"
+        cap = mock_client.post.call_args.kwargs["json"]["max_tokens"]
+        # The prompt plus the cap fit the window…
+        assert 1000 + cap <= 2048
+        # …and the cap still covers what the English rendering needs
+        # (~900 tokens for 1000 dense characters).
+        assert cap >= 900
+
+    @pytest.mark.asyncio
+    async def test_a_truncated_completion_with_no_content_is_named_as_truncated(self):
+        """A server that cuts the completion off before any token comes
+        back reports finish_reason "length" with a null content: the
+        truncation is the cause, and the refusal must name it instead of
+        crashing on the null content."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client()
+        mock_client.post.return_value.json.return_value = {
+            "choices": [{"message": {"content": None}, "finish_reason": "length"}]
+        }
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=None))
+        mock_logger = MagicMock()
+        stack.enter_context(patch("chatqna.genieai_chatqna.logger", mock_logger))
+        with stack:
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: qué es X?"  # untranslated
+        assert status == "fallback_error"
+        logged = " ".join(str(call) for call in mock_logger.error.call_args_list)
+        assert "hit max_tokens" in logged
+        assert "NoneType" not in logged
+
+    @pytest.mark.asyncio
+    async def test_a_single_message_truncated_completion_reports_fallback_error(self):
+        """Single-message mode goes through the chunk translator, whose
+        truncation refusal raises: the history path keeps its own contract
+        and reports the source text under fallback_error — never the
+        cut-off completion under `translated`."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="what is")
+        mock_client.post.return_value.json.return_value = {
+            "choices": [{"message": {"content": "what is"}, "finish_reason": "length"}]
+        }
+        with self._translation_patches(mock_client, translategemma=False):
+            text, status = await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
+        assert text == "¿qué es X?"  # the source, not the cut-off completion
+        assert status == "fallback_error"
+
+    @pytest.mark.asyncio
+    async def test_a_single_message_that_does_not_fit_the_window_reports_fallback_error(self):
+        """A single-message history that does not fit the translation
+        window is refused like the list shape: the source text comes back
+        under fallback_error, not as an unhandled failure."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client()
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=2048))
+        stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=4000))
+        with stack:
+            text, status = await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
+        assert text == "¿qué es X?"
+        assert status == "fallback_error"
+
     async def test_a_map_without_english_reports_fallback_error(self):
         svc = create_chatqna_service()
         stack = self._translation_patches(self._mock_client())

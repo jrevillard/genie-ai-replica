@@ -25,10 +25,11 @@ async function navigateToDocumentManagement(page) {
 }
 
 /**
- * Upload a file via the upload dialog.
- * Opens dialog → sets file on input → confirms upload → waits for success.
+ * Open the upload dialog and return it. One copy of the dialog-entry
+ * contract (action-bar button → dialog container), shared by uploadFile
+ * and the rejection spec.
  */
-async function uploadFile(page, filePath) {
+async function openUploadDialog(page) {
   // The upload button lives in the documents card's action bar
   // (.card-actions), not in .filter-bar — the filter bar holds only the
   // search and status controls.
@@ -38,6 +39,15 @@ async function uploadFile(page, filePath) {
 
   const dialog = page.locator('.dialog-container');
   await expect(dialog).toBeVisible({ timeout: 5000 });
+  return dialog;
+}
+
+/**
+ * Upload a file via the upload dialog.
+ * Opens dialog → sets file on input → confirms upload → waits for success.
+ */
+async function uploadFile(page, filePath) {
+  await openUploadDialog(page);
 
   const fileInput = page.locator('.drop-zone input[type="file"]');
   await fileInput.setInputFiles(filePath);
@@ -123,10 +133,15 @@ async function getDocumentTableRows(page) {
  * Used for test cleanup. Direct access grants are disabled on the realm by
  * design, so the deletes run with a browser-session token (the master admin
  * token is minted for the wrong issuer — the document-repository validates
- * realm tokens only).
+ * realm tokens only). Pass `{ browser }` from the afterAll fixture to reuse
+ * the worker's browser instead of launching a throwaway one.
+ * @param {string} [prefix] - File-name prefix to delete
+ * @param {object} [options]
+ * @param {import('@playwright/test').Browser} [options.browser] - Reuse this
+ *        browser for the cleanup login
  */
-async function deleteAllTestDocuments(prefix = 'test-document') {
-  const token = await getSessionTokenViaUI({ user: TEST_ADMIN_USER });
+async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}) {
+  const token = await getSessionTokenViaUI({ user: TEST_ADMIN_USER, browser });
 
   // The list endpoint validates limit <= 50 — a bigger page is a 400.
   const listRes = await request('GET', '/api/files?limit=50', {
@@ -163,6 +178,7 @@ async function deleteAllTestDocuments(prefix = 'test-document') {
 
 module.exports = {
   navigateToDocumentManagement,
+  openUploadDialog,
   uploadFile,
   waitForDocumentInTable,
   searchDocuments,

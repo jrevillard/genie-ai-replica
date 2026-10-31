@@ -16,8 +16,8 @@ test.describe('Document Search', () => {
     await navigateToDocumentManagement(page);
   });
 
-  test.afterAll(async () => {
-    await deleteAllTestDocuments('test-document');
+  test.afterAll(async ({ browser }) => {
+    await deleteAllTestDocuments('test-document', { browser });
   });
 
   test('search by partial file name returns matching documents', async ({ page }) => {
@@ -69,11 +69,11 @@ test.describe('Document Search', () => {
     await page.waitForTimeout(500);
 
     const rows = await getDocumentTableRows(page);
-    if (rows.length > 0) {
-      const allPending = rows.every(
-        (r) => r.status.toLowerCase() === 'pending',
-      );
-      expect(allPending).toBeTruthy();
-    }
+    // Earlier tests in this suite uploaded pending test documents, so a
+    // working Pending filter lists them; an empty table means the filter
+    // regressed, and the assertion must fail, not skip.
+    expect(rows.length, 'the Pending filter lists the pending documents').toBeGreaterThanOrEqual(1);
+    const allPending = rows.every((r) => r.status.toLowerCase() === 'pending');
+    expect(allPending, 'every listed document is Pending').toBeTruthy();
   });
 });

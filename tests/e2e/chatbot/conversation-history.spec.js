@@ -62,14 +62,23 @@ test.describe('Conversation history persistence', () => {
     if (createdConversationIds.length === 0) return;
 
     const token = await getSessionTokenViaUI({ browser });
+    let failed = 0;
     for (const convId of createdConversationIds) {
       try {
-        await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
+        const res = await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        if (res.status < 200 || res.status >= 300) {
+          failed++;
+          console.error(`cleanup: delete of conversation ${convId} returned ${res.status}`);
+        }
       } catch (err) {
+        failed++;
         console.error(`cleanup: failed to delete conversation ${convId}: ${err.message}`);
       }
+    }
+    if (failed > 0) {
+      console.warn(`cleanup: deleted ${createdConversationIds.length - failed} of ${createdConversationIds.length} conversations — leftovers will accumulate`);
     }
   });
 

@@ -2,6 +2,7 @@ const { test, expect } = require('@playwright/test');
 const path = require('path');
 const {
   navigateToDocumentManagement,
+  openUploadDialog,
   uploadFile,
   waitForDocumentInTable,
   deleteAllTestDocuments,
@@ -14,8 +15,8 @@ test.describe('Document Upload', () => {
     await navigateToDocumentManagement(page);
   });
 
-  test.afterAll(async () => {
-    await deleteAllTestDocuments('test-document');
+  test.afterAll(async ({ browser }) => {
+    await deleteAllTestDocuments('test-document', { browser });
   });
 
   for (const ext of ['txt', 'md', 'pdf']) {
@@ -38,19 +39,12 @@ test.describe('Document Upload', () => {
   }
 
   test('reject .exe file and display error message', async ({ page }) => {
-    // Same locator rule as the helper: the button lives in the card action
-    // bar, located by role — .filter-bar holds only search and status.
-    const uploadBtn = page.getByRole('button', { name: /Upload Files/i });
-    await expect(uploadBtn).toBeVisible({ timeout: 5000 });
-    await uploadBtn.click();
-
-    const dialog = page.locator('.dialog-container');
-    await expect(dialog).toBeVisible({ timeout: 5000 });
+    const dialog = await openUploadDialog(page);
 
     const fileInput = page.locator('.drop-zone input[type="file"]');
     await fileInput.setInputFiles(path.join(FIXTURES_DIR, 'invalid-document.exe'));
 
-    const errorMessage = page.locator('.dialog-container .error-message');
+    const errorMessage = dialog.locator('.error-message');
     await expect(errorMessage).toBeVisible({ timeout: 5000 });
     const errorText = await errorMessage.innerText();
     expect(errorText.toLowerCase()).toMatch(/not allowed|not supported|invalid/i);

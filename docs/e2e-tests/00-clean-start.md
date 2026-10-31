@@ -335,46 +335,43 @@ port, e.g. the k8s dev cluster.)
 
 ```bash
 EXPORT=components/gov-chat-backend/scripts/new-schema-scripts/exports/serviceCategoriesAndServices_export_2025-06-18T11-38-02.json
-
-# Split the export (one JSON object) into per-collection payloads
-python3 - "$EXPORT" <<'PY'
-import json, sys
-data = json.load(open(sys.argv[1]))["data"]
-for coll in ("serviceCategories", "services"):
-    with open(f"/tmp/seed-{coll}.json", "w") as f:
-        json.dump(data[coll], f)
-    print(coll, len(data[coll]))
-PY
-# Expected: serviceCategories 13, services 53
-
 BCK=$(docker ps --filter name=backend --format '{{.ID}}' | head -1)
 
-# Insert each collection (type=array bulk POST). Skip a collection that
-# already has documents — the docs carry their _key, a re-insert conflicts.
-for COLL in serviceCategories services; do
-  COUNT=$(docker exec $BCK bash -c \
-    "curl -s -u root:\${ARANGO_PASSWORD} \"http://arango-vector-db:8529/_db/\${ARANGO_DB}/_api/collection/$COLL/count\"" \
-    | python3 -c "import sys,json; print(json.load(sys.stdin).get('count', 0))")
-  if [ "$COUNT" != "0" ]; then
-    echo "$COLL already seeded ($COUNT docs), skipping"
-    continue
-  fi
-  docker exec -i $BCK bash -c \
-    "curl -s -u root:\${ARANGO_PASSWORD} -X POST \
-    \"http://arango-vector-db:8529/_db/\${ARANGO_DB}/_api/document/$COLL?type=array\" \
-    -H 'Content-Type: application/json' --data-binary @-" \
-    < /tmp/seed-$COLL.json > /dev/null && echo "$COLL seeded"
-done
+# The backend image ships node, not curl — push the export in and seed
+# from inside the container, with the container's own ARANGO_* env.
+docker cp "$EXPORT" "$BCK:/tmp/hierarchy-seed.json"
+docker exec $BCK node -e "
+const fs = require('fs');
+const auth = 'Basic ' + Buffer.from('root:' + process.env.ARANGO_PASSWORD).toString('base64');
+const base = (process.env.ARANGO_URL || 'http://arango-vector-db:8529') + '/_db/' + process.env.ARANGO_DB + '/_api';
+async function api(path, method, body) {
+  const res = await fetch(base + path, { method, headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  return res.json();
+}
+(async () => {
+  const data = JSON.parse(fs.readFileSync('/tmp/hierarchy-seed.json', 'utf8')).data;
+  for (const coll of ['serviceCategories', 'services']) {
+    const c = await api('/collection/' + coll + '/count');
+    if ((c.count || 0) > 0) { console.log(coll, 'already seeded (' + c.count + ' docs), skipping'); continue; }
+    const created = await api('/document/' + coll + '?type=array', 'POST', data[coll]);
+    console.log(coll, 'seeded:', Array.isArray(created) ? created.length : JSON.stringify(created));
+  }
+})().catch((e) => { console.error('SEED FAIL:', e.message); process.exit(1); });
+"
 ```
 
-The loop prints the counts it seeded (`serviceCategories 13`,
-`services 53`) or `already seeded` — that output is the verification.
+The script prints the counts it seeded (`serviceCategories seeded: 13`,
+`services seeded: 53`) or `already seeded` — that output is the
+verification. The docs carry their `_key`, so a re-run of the insert on a
+non-empty collection would conflict — the count guard prevents it.
 
-**On the k8s dev cluster** the same POST runs inside the backend pod — the
-only differences are `kubectl -n genieai exec deploy/<backend-deployment> --`
-instead of `docker exec`, and the ArangoDB host
-(`arangodb-single.genieai.svc.cluster.local:8529`, DB as configured by the
-chart's `ARANGO_DB`).
+**On the k8s dev cluster** the same script runs inside the backend pod —
+the differences are the file transfer (`kubectl -n genieai cp` or
+`kubectl -n genieai exec -i ... -- sh -c 'cat > /tmp/hierarchy-seed.json'`
+instead of `docker cp`), `kubectl -n genieai exec deploy/<backend-deployment> -- node -e`
+instead of `docker exec`, and the env the pod already carries
+(`ARANGO_URL=http://arangodb-single...:8529`, `ARANGO_DB` as configured by
+the chart).
 
 ---
 

@@ -28,7 +28,8 @@ directory fails the backend loudly instead of being created root-owned.
 
 ```bash
 mkdir -p data/database_backups
-# Upgrading a root-era install (backend ran as root before #1227):
+# The backend runs as uid 1000 and must own the directory — your own
+# uid is rarely 1000:
 chown 1000:1000 data/database_backups
 ```
 

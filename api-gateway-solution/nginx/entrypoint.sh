@@ -7,22 +7,27 @@ set -e
 CERT_PATH="/etc/nginx/certs"
 VOLUME_CERT_PATH="/etc/nginx/ssl"
 
+# Certificates must be readable by this container's uid (101 since #1227):
+# a root-owned 0600 key fails downstream with a misleading message (openssl
+# "Invalid private key format", or an unguarded set -e cp). Shared by the
+# first-run path AND the certbot reload loop.
+check_certs_readable() {
+    if [ ! -r "${VOLUME_CERT_PATH}/server.key" ]; then
+        echo "ERROR: ${VOLUME_CERT_PATH}/server.key is not readable by uid $(id -u)."
+        echo "Make it group-readable by the nginx group: chgrp 101 server.key && chmod 0640 server.key"
+        return 1
+    fi
+    if [ ! -r "${VOLUME_CERT_PATH}/server.crt" ]; then
+        echo "ERROR: ${VOLUME_CERT_PATH}/server.crt is not readable by uid $(id -u)."
+        return 1
+    fi
+}
+
 # Function to use volume-mounted certificates
 use_volume_certs() {
     echo "Using SSL certificates from volume mount..."
 
-    # Validate readability first: this container runs as uid 101 (#1227), so
-    # a root-owned 0600 key fails the openssl check below with a misleading
-    # "Invalid private key format" — name the real problem instead.
-    if [ ! -r "${VOLUME_CERT_PATH}/server.key" ]; then
-        echo "ERROR: ${VOLUME_CERT_PATH}/server.key is not readable by uid $(id -u)."
-        echo "Make it group-readable by the nginx group: chgrp 101 server.key && chmod 0640 server.key"
-        exit 1
-    fi
-    if [ ! -r "${VOLUME_CERT_PATH}/server.crt" ]; then
-        echo "ERROR: ${VOLUME_CERT_PATH}/server.crt is not readable by uid $(id -u)."
-        exit 1
-    fi
+    check_certs_readable || exit 1
 
     # Validate certificate format
     if ! openssl x509 -in "${VOLUME_CERT_PATH}/server.crt" -noout -text >/dev/null 2>&1; then
@@ -122,13 +127,19 @@ while true; do
     # Flag is consumed by writing an empty file (certbot clears it after a delay).
     if [ -f /var/www/certbot/reload-nginx ]; then
         echo "Reload signal received from certbot, updating certificates..."
-        # Re-copy certificates from volume mount (nginx does not reload cert files on HUP)
+        # Re-copy certificates from volume mount (nginx does not reload cert files on HUP).
+        # Same readability guard as first-run: an unreadable rotated key
+        # must NOT kill PID 1 under set -e — keep serving the old certs.
         if [ -f "${VOLUME_CERT_PATH}/server.crt" ] && [ -f "${VOLUME_CERT_PATH}/server.key" ]; then
-            cp "${VOLUME_CERT_PATH}/server.crt" "${CERT_PATH}/server.crt"
-            cp "${VOLUME_CERT_PATH}/server.key" "${CERT_PATH}/server.key"
-            chmod 644 "${CERT_PATH}/server.crt"
-            chmod 600 "${CERT_PATH}/server.key"
-            echo "Certificates updated from volume mount"
+            if check_certs_readable; then
+                cp "${VOLUME_CERT_PATH}/server.crt" "${CERT_PATH}/server.crt"
+                cp "${VOLUME_CERT_PATH}/server.key" "${CERT_PATH}/server.key"
+                chmod 644 "${CERT_PATH}/server.crt"
+                chmod 600 "${CERT_PATH}/server.key"
+                echo "Certificates updated from volume mount"
+            else
+                echo "WARNING: rotated certificate unreadable, keeping current certificates"
+            fi
         fi
         nginx -s reload || echo "WARNING: nginx reload failed"
     fi

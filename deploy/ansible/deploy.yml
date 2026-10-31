@@ -380,23 +380,32 @@
 
     - name: Create required directories
       ansible.builtin.file:
-        path: "{{ deploy_dir }}/{{ item }}"
+        path: "{{ deploy_dir }}/{{ item.path }}"
         state: directory
         mode: '0755'
+        owner: "{{ item.owner | default(omit) }}"
+        group: "{{ item.group | default(omit) }}"
       loop:
         # data/logs/kong was removed with #1227: Kong logs to stdout (the
         # fluentd driver ships them) and the directory's only effect was a
         # root-owned leftover under the data dir.
-        - "{{ data_dir }}/database_backups"
-        - "{{ data_dir }}/huggingface"
-        - secrets/ssl
+        # database_backups is pinned to the backend uid AT CREATION (#1227):
+        # a fresh dir left ansible_user-owned would never pass the
+        # root-only migration probe below, and the uid-1000 backend would
+        # get EACCES on its own dumps.
+        - { path: "{{ data_dir }}/database_backups", owner: "1000", group: "1000" }
+        - { path: "{{ data_dir }}/huggingface" }
+        - { path: "secrets/ssl" }
 
     - name: Remove the stale root-owned log directories (#1227)
       # Kong no longer bind-mounts a log directory; deployments from before
       # #1227 keep a root-owned data/logs/kong AND its root-owned data/logs
       # parent (the old per-service log binds lived there) — both trip the
       # no-root runtime gate on every run. state:absent deletes recursively.
+      # become_user: root — the dirs ARE the root-owned leftovers this task
+      # targets; the play's unprivileged ansible_user cannot remove them.
       become: true
+      become_user: root
       ansible.builtin.file:
         path: "{{ deploy_dir }}/{{ item }}"
         state: absent
@@ -405,32 +414,29 @@
         - "{{ data_dir }}/logs"
 
     - name: Detect root-era files in the backend backup directory
-      # The handover is a ONE-TIME migration, not an every-deploy
-      # re-assertion over the dump archive: the recursive chown runs only
-      # when something under the tree is still root-owned (the same
-      # marker-file pattern the volume inits use), so operator- or
-      # restore-placed dumps under other uids are left alone on later runs.
+      # The migration chowns ONLY the root-owned leftovers (the root-era
+      # daemon's files), never the whole tree: dumps an operator or restore
+      # tool placed under another uid keep their ownership, and the walk
+      # runs once (after it, the probe is empty and the task skips).
       ansible.builtin.command: >-
         find {{ deploy_dir }}/{{ data_dir }}/database_backups -uid 0 -print -quit
       register: _backup_root_owned
       changed_when: false
 
-    - name: Give the backend backup directory to the backend uid
+    - name: Hand the root-era backup files to the backend uid (#1227)
       # #1227: the backend container runs as uid 1000 and writes its DB
       # dumps here; mode alone leaves the directory root-owned. Escalate to
       # root: the play's become_user is the unprivileged ansible_user, which
-      # cannot chown to uid 1000. recurse hands over the root-era dump
-      # FILES inside, not just the directory itself.
+      # cannot chown. Targeted -exec chown touches exactly the root-owned
+      # paths — recurse:true would have re-flipped the WHOLE tree on every
+      # trigger, breaking per-uid ownership of restore-placed dumps.
       become: true
       become_user: root
-      ansible.builtin.file:
-        path: "{{ deploy_dir }}/{{ data_dir }}/database_backups"
-        state: directory
-        mode: '0755'
-        owner: "1000"
-        group: "1000"
-        recurse: true
+      ansible.builtin.command: >-
+        find {{ deploy_dir }}/{{ data_dir }}/database_backups -uid 0
+        -exec chown 1000:1000 {} +
       when: _backup_root_owned.stdout | length > 0
+      changed_when: true
 
 - name: GENIE.AI - Pre-create data directories on worker nodes (#1227)
   # swarmkit silently creates a missing bind source ROOT-owned on the node

@@ -11,6 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const {
   validateComposeNonRoot,
+  collectServiceNames,
   SELF_DROPPING,
   ONE_SHOT_ROOT_INIT
 } = require('../validators/validate-compose-non-root');
@@ -226,22 +227,38 @@ describe('compose non-root contract (#1227)', () => {
     expect(violations.some((v) => v.includes('kong') && v.includes('create_host_path: false'))).toBe(true);
   });
 
+  test('bind: opts written BEFORE their source: still attach to the right entry', () => {
+    // YAML mapping order is free: the reversed spelling (bind: block first,
+    // source: after) must attach the opt-out to ITS OWN entry, not the
+    // previous one — and the previous entry must stay unopted-out.
+    const text = [
+      'services:',
+      '  backend:',
+      '    user: "1000:1000"',
+      '    volumes:',
+      '      - type: bind',
+      '        source: ./data/database_backups',
+      '        target: /app/database_backups',
+      '      - type: bind',
+      '        bind:',
+      '          create_host_path: false',
+      '        source: ./data/other',
+      '        target: /app/other',
+      ''
+    ].join('\n');
+    const { violations } = validateComposeNonRoot(text);
+    expect(violations).toEqual([
+      'backend: host bind "./data/database_backups" sits under the data directory without ' +
+        '`create_host_path: false` — docker creates a missing source as root-owned'
+    ]);
+  });
+
   test('allowlist entries reference services that exist in the compose file', () => {
     // A renamed or removed service would leave a stale allowlist entry that
-    // enforces nothing — dead enforcement data. Scan ONLY 2-space keys
-    // under the services: section: the top-level volumes: section carries
-    // 2-space keys too (postgres_data, backend_data, ...), and a
-    // volume-name collision would falsely confirm a dead entry.
-    const serviceNames = new Set();
-    let inServices = false;
-    for (const line of composeText.split('\n')) {
-      if (/^[a-z][\w-]*:\s*$/.test(line)) {
-        inServices = line.trim() === 'services:';
-      } else if (inServices) {
-        const m = line.match(/^ {2}([\w-]+):\s*$/);
-        if (m) serviceNames.add(m[1]);
-      }
-    }
+    // enforces nothing — dead enforcement data. Uses the validator's OWN
+    // collector: a private re-scan would drift silently when the validator
+    // extends its notion of a service name.
+    const serviceNames = collectServiceNames(composeText);
     for (const name of [...Object.keys(SELF_DROPPING), ...Object.keys(ONE_SHOT_ROOT_INIT)]) {
       expect(serviceNames.has(name)).toBe(true);
     }

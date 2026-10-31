@@ -2905,6 +2905,21 @@ class TestQueryTranslationStatus:
         assert status == "fallback_error"
 
     @pytest.mark.asyncio
+    @pytest.mark.asyncio
+    async def test_a_single_message_that_does_not_fit_the_window_reports_fallback_error(self):
+        """A single-message history that does not fit the translation
+        window is refused like the list shape: the source text comes back
+        under fallback_error, not as an unhandled failure."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client()
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=2048))
+        stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=4000))
+        with stack:
+            text, status = await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
+        assert text == "¿qué es X?"
+        assert status == "fallback_error"
+
     async def test_a_map_without_english_reports_fallback_error(self):
         svc = create_chatqna_service()
         stack = self._translation_patches(self._mock_client())

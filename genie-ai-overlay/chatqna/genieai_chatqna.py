@@ -3935,9 +3935,11 @@ class ChatQnAService:
         # translation did not happen (it reports the status, unlike the
         # answer path where the swallowed fallback is the contract). The
         # chunk translator classifies its failures into typed exceptions, so
-        # the split here is isinstance-only. Overflow still propagates
-        # fail-loud — but note that on this path nothing maps it to the #829
-        # 422 contract: it escapes handle_request as an unhandled 500.
+        # the split here is isinstance-only. A prompt that does not fit the
+        # translation window is refused here too (it falls back like the
+        # list shape): the history path has no 422 contract — it is a text
+        # normalized for the retriever, never shown — so the refusal is
+        # reported, not raised.
         if isinstance(history, str):
             if not history.strip():
                 # An empty prompt would only harvest the model's junk reply
@@ -3955,6 +3957,13 @@ class ChatQnAService:
                 # Already logged by the chunk translator's wrap site (the one
                 # line that names the timeout); the status is the observable.
                 return history, QUERY_TRANSLATION_FALLBACK_TIMEOUT
+            except TranslationInputTooLongError as e:
+                # The prompt does not fit the translation window: the
+                # history goes back untranslated, exactly as the list
+                # shape reports it. The condition is named in the log; the
+                # status is the observable.
+                logger.warning(f"History translation refused: {e}")
+                return history, QUERY_TRANSLATION_FALLBACK_ERROR
             except TranslationFailedError as e:
                 logger.error(f"History translation failed: {e}")
                 return history, QUERY_TRANSLATION_FALLBACK_ERROR

@@ -51,7 +51,12 @@
  *     base that already carries a version segment is listed at {base}/models,
  *     a bare host at {base}/v1/models. The twin appends /v1 models
  *     unconditionally, so for a base that already ends in /v1 the two worlds
- *     probe different URLs (the twin 404s, this one answers).
+ *     probe different URLs (the twin 404s, this one answers);
+ *   - the probe_failed warn is CLASS-SCOPED here and unconditional in the
+ *     twin: the best-effort soft path (servedModelId — the provenance
+ *     labels) probes quiet (no warn, the label stays null), the loud
+ *     resolution paths keep the twin's warn, and each class owns its own
+ *     probe window.
  *
  * Knobs (same names and defaults as the Python side, so one .env line tunes
  * both worlds): MODEL_DETECT_TTL (seconds, default 60),
@@ -196,8 +201,10 @@ const PROBE_ATTEMPTS = 3;
  * quiet marks the BEST-EFFORT callers (the provenance labels, whose
  * contract is "null is a fine answer"): their probe failure is not an
  * incident, so it must not emit the warn that is the PRIMARY failure
- * signal of the paths that DO fail (tagging, curation). The thrown error
- * is unchanged either way — quiet shapes the logging, never the result. */
+ * signal of the paths that DO fail (tagging, curation). Quiet gates the
+ * probe_failed warn ONLY — the multi-model ambiguity warn is a config
+ * signal and stays. The thrown error is unchanged either way: quiet
+ * shapes that one log line, never the result. */
 async function probe(url, timeoutMs, apiKey, { quiet = false } = {}) {
   const headers = {};
   const key = (apiKey || '').trim();
@@ -302,8 +309,7 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
   // A recent failure is remembered: answer without touching the network.
   const failed = _negative.get(probeKey);
   if (failed && negativeEntryIsLive(failed.ts)) {
-    const stale = _cache.get(cacheKey) || entry;
-    if (stale) return stale.id; // stale beats broken
+    if (entry) return entry.id; // stale beats broken
     // A COPY per caller: the stored stub would otherwise be thrown — and
     // travel to unrelated requests — as one shared, mutable Error whose
     // stack names the first failure's frames.
@@ -316,6 +322,14 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
   }
 
   let pending = _inflight.get(probeKey);
+  // The id a FAILING probe serves, decided ONCE at settlement and reused
+  // by every awaiting caller below: the freshest known one at settle time
+  // (a concurrent probe of the other class may have refreshed the cache
+  // mid-failure), else the captured entry when eviction removed it
+  // (expired by construction — a fresh one returned early). The
+  // serving_stale warn and the served id read THE SAME value, so they
+  // can never disagree.
+  let settledServing;
   if (!pending) {
     pending = probe(modelsUrl, timeoutMs, apiKey, { quiet })
       .then((id) => {
@@ -335,21 +349,16 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
         // (HTTP status, error code); only the raw cause object is dropped.
         const stored = err instanceof ModelDiscoveryError && err.cause ? new ModelDiscoveryError(err.message) : err;
         _negative.set(probeKey, { ts: Date.now(), cause: stored });
+        settledServing = _cache.get(cacheKey) || entry;
         // The degradation must be VISIBLE: when the failing probe leaves
         // only an EXPIRED id in the cache, callers resolve that stale id —
         // one line per probe class (not per served call) says so without
-        // flooding. The read below is the same one the awaiting caller's
-        // serve path makes (nothing asynchronous sits between the two), so
-        // the warn and the served id can never disagree. A concurrent probe
-        // of the other class that refreshed the id mid-failure makes this a
-        // no-op — a fresh id serves, nothing is degraded. Eviction falls
-        // back to the captured entry: expired by construction (a fresh one
-        // returned early), and it is what this caller was served.
-        const servingNow = _cache.get(cacheKey) || entry;
-        if (servingNow && !cacheEntryIsFresh(servingNow.ts)) {
+        // flooding. A fresh id in the cache (a mid-failure refresh) means
+        // nothing is degraded and the line would lie.
+        if (settledServing && !cacheEntryIsFresh(settledServing.ts)) {
           logger.warn('vllm_model_cache.serving_stale', {
             url: modelsUrl,
-            stale_id: servingNow.id,
+            stale_id: settledServing.id,
             note: 'probe failed — the call was served the stale last-known id (stale beats broken)'
           });
         }
@@ -366,14 +375,10 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
   try {
     return await pending;
   } catch (err) {
-    // The probe failed: serve the id the cache holds NOW — the freshest
-    // known one (a concurrent probe of the other class may have refreshed
-    // it mid-failure), else the captured entry when eviction removed it.
-    // The same read the serving_stale warn above is based on, so the warn
-    // and the served id can never disagree. No id at all: let the cause
+    // The probe failed: serve what the settlement decided (above) — the
+    // warn, if any, named exactly this id. No id at all: let the cause
     // through.
-    const serving = _cache.get(cacheKey) || entry;
-    if (serving) return serving.id;
+    if (settledServing) return settledServing.id;
     throw err;
   }
 }

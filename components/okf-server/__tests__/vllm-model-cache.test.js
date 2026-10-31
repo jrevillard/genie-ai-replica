@@ -489,6 +489,22 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
     expect(stale[0][1]).toMatchObject({ stale_id: 'model-v2' });
   });
 
+  test('one serving_stale line per probe class per window — the served calls stay silent', async () => {
+    mockProbeSuccess('served/model');
+    await cache.servedModelId('http://vllm:8000');
+    Date.now.mockReturnValue(1_000_000 + 61_000);
+    axios.get.mockRejectedValue(http401());
+    await expect(cache.servedModelId('http://vllm:8000')).resolves.toBe('served/model'); // settle: warns once
+    // Every further call inside the negative window is served the stale id
+    // by the stub in silence — the warn is the settle event's, never the
+    // served call's (per-concept curation loops must not flood VL).
+    await expect(cache.servedModelId('http://vllm:8000')).resolves.toBe('served/model');
+    await expect(cache.servedModelId('http://vllm:8000')).resolves.toBe('served/model');
+    const stale = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.serving_stale');
+    expect(stale).toHaveLength(1);
+    expect(axios.get).toHaveBeenCalledTimes(2); // warmup + the one failing probe
+  });
+
   test('serving_stale still fires when the stale entry was evicted before the probe settled', async () => {
     mockProbeSuccess('stale/model');
     await cache.servedModelId('http://vllm:8000');

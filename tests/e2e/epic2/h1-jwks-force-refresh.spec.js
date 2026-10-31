@@ -3,10 +3,18 @@ const { getAdminToken, getSessionTokenViaUI, request: authRequest } = require('.
 const { rotateRealmKeys } = require('../helpers/keycloak-admin');
 
 test.describe('Phase H: JWKS Force-Refresh', () => {
+  // The session mints log in through the browser — a stalled cycle costs
+  // ≈135s (two attempts of 30s navigation + 15s redirect wait + retry
+  // budget). test.describe.configure covers the tests; the in-hook
+  // test.setTimeout covers beforeAll, which reads the project timeout
+  // otherwise.
+  test.describe.configure({ timeout: 360000 });
+
   let adminToken;
   let userToken;
 
   test.beforeAll(async ({ browser }) => {
+    test.setTimeout(360000);
     adminToken = await getAdminToken();
     userToken = await getSessionTokenViaUI({ browser });
   });

@@ -88,10 +88,15 @@ async function getAdminToken(adminPassword) {
 
 /**
  * Get a user token via ROPC (Resource Owner Password Credentials).
+ *
+ * Only works on realms whose client has directAccessGrantsEnabled —
+ * i.e. test-only realms like `genie2` whose spec provisions the grant
+ * (see enableDirectAccessGrants). The primary `genie` realm refuses
+ * ROPC by design; use getSessionTokenViaUI there.
  * @param {string} username - Keycloak username
  * @param {string} password - User password
  * @param {object} [options] - Optional overrides
- * @param {string} [options.realm='genie'] - Keycloak realm
+ * @param {string} [options.realm='genie'] - Keycloak realm (must be ROPC-enabled)
  * @param {string} [options.clientId='genie-app'] - Keycloak client ID
  * @returns {Promise<string>} Access token string
  */

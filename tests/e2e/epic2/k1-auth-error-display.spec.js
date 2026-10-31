@@ -3,6 +3,12 @@ const { getAdminToken, getSessionTokenViaUI, request: authRequest } = require('.
 const { createUser, deleteUser, getRealmSettings, updateRealmSettings } = require('../helpers/keycloak-admin');
 
 test.describe.serial('Phase K: Auth Error Display', () => {
+  // The session mints log in through the browser — a stalled cycle costs
+  // ≈135s, and K.2 stacks a 30s expiry poll on top of its own mint.
+  // test.describe.configure covers the tests; the in-hook test.setTimeout
+  // covers beforeAll, which reads the project timeout otherwise.
+  test.describe.configure({ timeout: 360000 });
+
   let adminToken;
   let noRolesUserId;
   let originalLifespan;
@@ -10,6 +16,7 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   const NOROLES_PASSWORD = 'TestPass123!';
 
   test.beforeAll(async () => {
+    test.setTimeout(360000);
     adminToken = await getAdminToken();
 
     // K.2 mutates the realm's token lifespan; restore whatever the
@@ -51,9 +58,10 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   });
 
   test('K.1 — TOKEN_INVALID (modified token)', async () => {
-    // Any well-formed JWT with a mangled payload dies in signature
-    // validation — corrupting the admin token (already in hand)
-    // exercises that path without a browser login.
+    // Mangling the first payload character corrupts the base64/JSON —
+    // the token dies at payload decode, before signature verification
+    // is attempted. The admin token (already in hand) keeps this a
+    // pure-API test with no browser login.
     const tokenParts = adminToken.split('.');
     tokenParts[1] = 'X' + tokenParts[1].slice(1); // Change first char of payload
     const modifiedToken = tokenParts.join('.');

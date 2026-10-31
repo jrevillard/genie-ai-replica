@@ -96,9 +96,12 @@ async function loginAttempt(page, user, budgetMs) {
   );
 
   const finalUrl = page.url();
+  // Same exits as the waitForURL predicate above — a login that settled
+  // on the bare origin (the SPA's interim landing) succeeded and must
+  // not be reported as a failure.
   expect(
-    finalUrl.includes('dashboard'),
-    `Expected URL to contain 'dashboard', got: ${finalUrl}`,
+    finalUrl.includes('dashboard') || finalUrl === `${BASE_URL.replace(/\/+$/, '')}/`,
+    `Expected the login to land on the dashboard or the bare origin, got: ${finalUrl}`,
   ).toBeTruthy();
 }
 

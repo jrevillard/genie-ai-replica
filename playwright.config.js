@@ -3,13 +3,12 @@ require('dotenv').config();
 
 module.exports = defineConfig({
   testDir: './tests/e2e',
-  // Session-token mints log in through the browser — on a stalled stack
-  // one login cycle costs ≈135s (two attempts of 30s navigation + 15s
-  // redirect wait + retry budget). The ceiling is sized for the worst
-  // beforeAll stacking such a login on top of its admin-API requests
-  // (i1: ~5 requests at the 30s cap). It also bounds hooks: this project
-  // timeout is what beforeAll/afterAll run under.
-  timeout: 360000,
+  // Fail fast by default. Suites that mint session tokens through a
+  // browser login need more — a stalled login cycle costs ≈135s — and
+  // scope their own ceiling with test.describe.configure plus a
+  // test.setTimeout inside their beforeAll (hooks read this project
+  // timeout, not the suite timeout). See tests/e2e/epic2/*.
+  timeout: 60000,
   expect: {
     timeout: 15000,
   },

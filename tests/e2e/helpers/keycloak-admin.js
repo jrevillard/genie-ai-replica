@@ -76,10 +76,7 @@ async function createUser(adminToken, realm, userData) {
  */
 async function rotateRealmKeys(adminToken, realm) {
   // Get realm UUID (parentId for key components)
-  const realmRes = await request('GET', `/auth/admin/realms/${realm}`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-  });
-  const realmId = realmRes.data.id;
+  const realmId = (await getRealmSettings(adminToken, realm)).id;
 
   // Get existing key providers
   const keysRes = await request(

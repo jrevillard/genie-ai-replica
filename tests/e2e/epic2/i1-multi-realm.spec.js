@@ -17,12 +17,19 @@ const { createUser, deleteUser, enableDirectAccessGrants } = require('../helpers
  *   - Backend has been restarted to load genie2 JWKS
  */
 test.describe.serial('Phase I: Multi-Realm Configuration', () => {
+  // The session mints log in through the browser — a stalled cycle costs
+  // ≈135s. test.describe.configure covers the tests; the in-hook
+  // test.setTimeout covers beforeAll, which reads the project timeout
+  // otherwise.
+  test.describe.configure({ timeout: 360000 });
+
   let adminToken;
   let genie1Token;
   const TEST_REALM = 'genie2';
   const TEST_USER = { username: 'testuser2', password: 'TestPass123!', email: 'testuser2@genie2.local' };
 
   test.beforeAll(async ({ browser }) => {
+    test.setTimeout(360000);
     adminToken = await getAdminToken();
 
     // genie2 is test-only: enable ROPC for its direct token mints
@@ -33,15 +40,9 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
     // like the sibling suites.
     genie1Token = await getSessionTokenViaUI({ browser });
 
-    // Create test user in genie2 (realm should already exist from Phase 0.6)
-    try {
-      await createUser(adminToken, TEST_REALM, TEST_USER);
-    } catch (err) {
-      // User may already exist from a previous test run — that's OK
-      if (!err.message.includes('409')) {
-        throw err; // Re-throw real errors (e.g. realm doesn't exist)
-      }
-    }
+    // Create test user in genie2 (realm should already exist from Phase
+    // 0.6; createUser tolerates a 409 from a previous run)
+    await createUser(adminToken, TEST_REALM, TEST_USER);
   });
 
   test.afterAll(async () => {

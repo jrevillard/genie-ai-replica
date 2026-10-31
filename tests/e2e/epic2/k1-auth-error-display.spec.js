@@ -36,6 +36,10 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   });
 
   test.afterAll(async () => {
+    // Cleanup chains up to four 30s-capped admin requests on a stalled
+    // stack — past the 60s project timeout the hook otherwise runs under.
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
+
     // Restore the lifespan only when it was actually captured AND K.2
     // could have mutated it — afterAll runs even when beforeAll threw,
     // and guessing 300 would rewrite a deployment running something else.
@@ -44,9 +48,9 @@ test.describe.serial('Phase K: Auth Error Display', () => {
         const token = await getAdminToken();
         await updateRealmSettings(token, 'genie', { accessTokenLifespan: originalLifespan });
       } catch (e) {
-        // Best-effort, never silent: a failed restore leaves the realm
-        // at K.2's 10s lifespan, poisoning every suite that runs after.
-        console.warn(`k1 afterAll: lifespan restore failed — realm may still be at 10s: ${e.message}`);
+        // Best-effort, never silent: if K.2 ran, a failed restore leaves
+        // the realm at its 10s lifespan, poisoning every suite after.
+        console.warn(`k1 afterAll: lifespan restore failed — verify the realm's accessTokenLifespan manually: ${e.message}`);
       }
     }
 

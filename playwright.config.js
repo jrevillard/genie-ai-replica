@@ -6,8 +6,10 @@ module.exports = defineConfig({
   // Fail fast by default. Suites that mint session tokens through a
   // browser login need more — a stalled login cycle costs ≈135s — and
   // scope their own ceiling with test.describe.configure plus a
-  // test.setTimeout inside their beforeAll (hooks read this project
-  // timeout, not the suite timeout). See tests/e2e/epic2/*.
+  // test.setTimeout inside their beforeAll/afterAll (hooks read this
+  // project timeout, not the suite timeout). See tests/e2e/epic2/*;
+  // SESSION_MINT_TIMEOUT_MS in tests/e2e/helpers/auth.js holds the value
+  // and its derivation.
   timeout: 60000,
   expect: {
     timeout: 15000,

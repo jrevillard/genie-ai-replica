@@ -46,6 +46,10 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
   });
 
   test.afterAll(async () => {
+    // Cleanup chains up to three 30s-capped admin requests on a stalled
+    // stack — past the 60s project timeout the hook otherwise runs under.
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
+
     // Cleanup: delete test user only (realm lifecycle is managed by Phase 0)
     try {
       const token = await getAdminToken();

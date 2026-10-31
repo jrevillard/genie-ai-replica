@@ -1,9 +1,6 @@
 const https = require('https');
 const { chromium } = require('@playwright/test');
-const { loginViaUI, TEST_USER } = require('./chatbot');
-
-// Normalized once — see the same constant in helpers/chatbot.js.
-const BASE_URL = (process.env.BASE_URL || 'https://localhost').replace(/\/+$/, '');
+const { loginViaUI, TEST_USER, BASE_URL } = require('./chatbot');
 
 /**
  * Make an HTTPS request ignoring self-signed certificate errors.

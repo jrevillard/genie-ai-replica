@@ -96,12 +96,14 @@ async function loginAttempt(page, user, budgetMs) {
   );
 
   const finalUrl = page.url();
-  // Same exits as the waitForURL predicate above — a login that settled
-  // on the bare origin (the SPA's interim landing) succeeded and must
-  // not be reported as a failure.
+  // Dashboard only — deliberately stricter than the waitForURL predicate:
+  // the bare origin is also where CallbackView lands when the code
+  // exchange fails (router.replace('/')), so accepting it here would
+  // report a failed exchange as success and skip the retry that recovers
+  // a transient one by re-entering Keycloak with the session cookie.
   expect(
-    finalUrl.includes('dashboard') || finalUrl === `${BASE_URL}/`,
-    `Expected the login to land on the dashboard or the bare origin, got: ${finalUrl}`,
+    finalUrl.includes('dashboard'),
+    `Expected URL to contain 'dashboard', got: ${finalUrl}`,
   ).toBeTruthy();
 }
 

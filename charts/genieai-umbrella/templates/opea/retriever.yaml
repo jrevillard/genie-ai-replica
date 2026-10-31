@@ -25,6 +25,7 @@
 {{- $embeddingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "embedding") -}}
 {{- $tuningEnv := list
     (dict "name" "ARANGO_GRAPH_NAME" "value" ($opeaRetriever.arangoGraphName | default "GRAPH" | toString))
+    (dict "name" "MODEL_DETECT_TTL" "value" "60")
     (dict "name" "RETRIEVER_COMPONENT_NAME" "value" ($opeaRetriever.retrieverComponentName | default "GENIE_RETRIEVER_ARANGODB" | toString))
     (dict "name" "RETRIEVER_ARANGO_K" "value" ($opeaRetriever.retrieverArangoK | default "20" | toString))
     (dict "name" "RETRIEVER_ARANGO_FETCH_K" "value" ($opeaRetriever.retrieverArangoFetchK | default "30" | toString))

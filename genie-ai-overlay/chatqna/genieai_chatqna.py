@@ -595,7 +595,13 @@ def _build_user_content(user_context_string: str, history_string: str, rag_augme
     )
 
 
-def _translation_base_cap(text: str, ceiling: int = 4096) -> int:
+# Fixed completion ceiling a translation request falls back to when no
+# window is known — and the default bound for the callers whose inputs are
+# bounded upstream (the chunk path).
+TRANSLATION_BASE_CEILING = 4096
+
+
+def _translation_base_cap(text: str, ceiling: int = TRANSLATION_BASE_CEILING) -> int:
     """Base completion cap for a translation request: roughly half the input
     size, with a 512 floor that keeps short inputs translatable and a
     ceiling that keeps long ones bounded (a ceiling below the floor wins —
@@ -3670,7 +3676,11 @@ class ChatQnAService:
         """
         window = _get_translation_window()
         prompt_token_estimate = len(flattened_history_string) // TRANSLATION_CHARS_PER_TOKEN
-        ceiling = max(1, window - TRANSLATION_PROMPT_OVERHEAD_TOKENS - prompt_token_estimate) if window else 4096
+        ceiling = (
+            max(1, window - TRANSLATION_PROMPT_OVERHEAD_TOKENS - prompt_token_estimate)
+            if window
+            else TRANSLATION_BASE_CEILING
+        )
         cap = _translation_base_cap(flattened_history_string, ceiling=ceiling)
         if window and cap < prompt_token_estimate:
             return None

@@ -2320,27 +2320,21 @@ class TestQueryTranslationStatus:
 
     SPANISH_HISTORY = [{"role": "user", "content": "qué es X?"}]
 
-    def _translation_patches(self, mock_client):
+    def _translation_patches(self, mock_client, translategemma=False):
         # ExitStack: `with` takes no star-unpacking, and the patches live in a
-        # helper so each test states only what it varies.
+        # helper so each test states only what it varies. The TranslateGemma
+        # payload branch posts to the completions endpoint; the generic branch
+        # to the chat-completions one. Window derivation stays per-test (the
+        # live discovery probe and a patched window are different mechanisms).
         stack = contextlib.ExitStack()
         for p in (
             patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
-            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
-            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
-        ):
-            stack.enter_context(p)
-        return stack
-
-    def _translategemma_patches(self, mock_client):
-        # The TranslateGemma payload branch: completions endpoint against the
-        # structured-prompt model. Window derivation stays per-test (the live
-        # discovery probe and a patched window are different mechanisms).
-        stack = contextlib.ExitStack()
-        for p in (
-            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
-            patch("chatqna.genieai_chatqna._is_translategemma", return_value=True),
-            patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://localhost/v1/completions"),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=translategemma),
+            patch(
+                "chatqna.genieai_chatqna."
+                + ("TRANSLATION_COMPLETIONS_URL" if translategemma else "TRANSLATION_LLM_URL"),
+                "http://localhost/v1/completions" if translategemma else "http://localhost/v1/chat/completions",
+            ),
         ):
             stack.enter_context(p)
         return stack
@@ -2503,7 +2497,7 @@ class TestQueryTranslationStatus:
         mock_client = self._mock_client(content="USER: AAAA", completions=True)
         models_resp = MagicMock()
         models_resp.json.return_value = {"data": [{"id": "gemma", "max_model_len": 65536}]}
-        stack = self._translategemma_patches(mock_client)
+        stack = self._translation_patches(mock_client, translategemma=True)
         stack.enter_context(
             patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation")
         )
@@ -2529,7 +2523,7 @@ class TestQueryTranslationStatus:
         # (9193 − 512 − 4341 = 4340) falls one token short of the estimate.
         history = [{"role": "assistant", "content": "A" * 1840} for _ in range(7)]
         mock_client = self._mock_client()
-        stack = self._translategemma_patches(mock_client)
+        stack = self._translation_patches(mock_client, translategemma=True)
         stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=9193))
         with stack:
             text, status = await svc._get_translated_history_string(history)

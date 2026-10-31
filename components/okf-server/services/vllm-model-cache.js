@@ -31,8 +31,8 @@
  *     probe CLASS (the window and the in-flight map are keyed by the
  *     budget bucket and by quiet/loud, so a tight-budget caller never
  *     narrows an ample-budget one, a quiet caller never silences a loud
- *     one, and an endpoint that is down costs one probe per class per
- *     window);
+ *     one, and an endpoint that is down costs one probe per class and
+ *     budget bucket per window);
  *   - cache keys carry the CREDENTIAL as well as the base: gateways can
  *     filter /v1/models per key, so two configs on one base must never
  *     resolve each other's model.
@@ -350,7 +350,12 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
         // only an EXPIRED id in the cache, callers resolve that stale id —
         // one line per probe class (not per served call) says so without
         // flooding. A fresh id in the cache (a mid-failure refresh) means
-        // nothing is degraded and the line would lie.
+        // nothing is degraded AT SETTLE TIME and the line would lie. The
+        // decision is settle-time only: with a TTL shorter than the
+        // remaining cool-down, that id crosses into staleness unnamed for
+        // the rest of the stub window (bounded by NEGATIVE_CACHE_TTL; the
+        // 60 s default TTL dwarfs the 10 s window, so only a deliberately
+        // shortened MODEL_DETECT_TTL can reach the edge).
         if (serving && !cacheEntryIsFresh(serving.ts)) {
           logger.warn('vllm_model_cache.serving_stale', {
             url: modelsUrl,

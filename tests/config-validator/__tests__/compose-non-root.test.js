@@ -391,6 +391,61 @@ describe('compose non-root contract (#1227)', () => {
     expect(validateComposeNonRoot(namedVolume).violations).toEqual([]);
   });
 
+  test('mutations: type-after-source volume, commented opt-out, flow cap_add, literal absolute paths', () => {
+    // type: volume AFTER its source: (mapping order free) — the entry is a
+    // named volume, not a host bind needing create_host_path.
+    const lateVolume = [
+      'services:',
+      '  backend:',
+      '    user: "1000:1000"',
+      '    volumes:',
+      '      - source: data',
+      '        target: /app/data',
+      '        type: volume',
+      ''
+    ].join('\n');
+    expect(validateComposeNonRoot(lateVolume).violations).toEqual([]);
+
+    // A commented opt-out is legal spelling (source: and user: tolerate it).
+    const commentedOptOut = [
+      'services:',
+      '  backend:',
+      '    user: "1000:1000"',
+      '    volumes:',
+      '      - type: bind',
+      '        source: ./data/database_backups',
+      '        target: /app/database_backups',
+      '        bind:',
+      '          create_host_path: false # pre-created by Ansible',
+      ''
+    ].join('\n');
+    expect(validateComposeNonRoot(commentedOptOut).violations).toEqual([]);
+
+    // Flow-style cap_add parses like block style — an allowlisted init
+    // with cap_add: [CHOWN] satisfies the CHOWN invariant.
+    const flowCaps = ['services:', '  x-init:', '    <<: *chown-init', '    cap_add: [CHOWN, DAC_OVERRIDE]', ''].join(
+      '\n'
+    );
+    const { violations: vFlow } = validateComposeNonRoot(flowCaps);
+    expect(vFlow.filter((v) => v.includes('CHOWN'))).toEqual([]);
+
+    // An absolute LITERAL host path (/etc/localtime) pre-exists on every
+    // host — no create_host_path demand; the TEMPLATED absolute sibling
+    // stays under the rule.
+    const literalAbsolute = [
+      'services:',
+      '  otel-collector:',
+      '    user: "10001:10001"',
+      '    volumes:',
+      '      - type: bind',
+      '        source: /etc/localtime',
+      '        target: /etc/localtime',
+      '        read_only: true',
+      ''
+    ].join('\n');
+    expect(validateComposeNonRoot(literalAbsolute).violations).toEqual([]);
+  });
+
   test('allowlist entries reference services that exist in the compose file', () => {
     // A renamed or removed service would leave a stale allowlist entry that
     // enforces nothing — dead enforcement data. Uses the validator's OWN

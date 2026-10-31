@@ -12,7 +12,9 @@
 # Usage: tests/compose-non-root/check-runtime.sh <compose-project> [data_dir]
 # Env:   DATA_DIR overrides ./data default when data_dir arg is omitted.
 #
-# Exit 0 = contract holds; 1 = violations listed; 4 = usage error. One-shot init
+# Exit 0 = contract holds; 1 = violations listed; 2 = VACUOUS RUN (no
+# container matched the project name — nothing was inspected, never read
+# it as OK); 3 = docker daemon unreachable; 4 = usage error. One-shot init
 # containers (arango-vector-db-init, victorialogs-init,
 # document-repository-init, backend-init, otel-collector-init,
 # postgres-init, kong-config, kong-migrations, db-migrations) have
@@ -60,17 +62,18 @@ if [ -z "$containers" ]; then
   exit 2
 fi
 while IFS= read -r container; do
-  # `user` (not `UID`): procps rejects the uppercase specifier, and the
-  # lowercase form prints "root" for uid 0 and the numeric uid otherwise.
-  # A failed inspection is NOT skippable — skipping would turn an
-  # un-inspectable container into a silent pass.
-  top=$(docker top "$container" -o user,pid,args 2>/dev/null)
+  # `uid` (effective, NUMERIC): matching the username string would pass
+  # a uid-0 process whose container passwd aliases 0 to another name
+  # (useradd -o -u 0 admin) — the alias makes docker top print "admin"
+  # for a root process. A failed inspection is NOT skippable — skipping
+  # would turn an un-inspectable container into a silent pass.
+  top=$(docker top "$container" -o uid,pid,args 2>/dev/null)
   if [ $? -ne 0 ]; then
     echo "UNINSPECTABLE container $container (docker top failed) — treating as a violation:"
     violations=$((violations + 1))
     continue
   fi
-  offenders=$(echo "$top" | awk 'NR>1 && $1=="root" {print "  pid "$2": "substr($0, index($0,$3))}')
+  offenders=$(echo "$top" | awk 'NR>1 && $1==0 {print "  pid "$2": "substr($0, index($0,$3))}')
   if [ -n "$offenders" ]; then
     echo "ROOT PROCESS in $container:"
     echo "$offenders"

@@ -3,10 +3,17 @@
 # swarm_workers play in deploy.yml via import_tasks. One doctrine, two
 # placements: the tasks below create the backend backup directory as the
 # backend uid, hand the root-era (root-owned) backup files to it, and
-# remove the root-era log-directory leftovers — TARGETED, never wholesale
-# (operator files under other uids are never touched).
+# hand the root-era log-directory leftovers to the ansible user —
+# TARGETED, never wholesale, and never destructive (operator files under
+# other uids are never touched).
 # data_dir / deploy_dir come from group_vars; both plays run these with
-# the same variable surface.
+# the same variable surface. NOTE on privilege surfaces: the probes run
+# with the PLAY's identity (manager play: the unprivileged ansible_user;
+# worker play: root) — only the escalated tasks below carry their own
+# become_user. The probes' rc != 0 handling covers the unprivileged
+# case (find exit 1 on an untraversable root-owned 0700 subdir); under
+# the root surface rc != 0 can only mean a vanished path, which the
+# stat guards already exclude.
 
 - name: Stat the log directory
   # A MISSING data/logs is the NORMAL case on fresh nodes (the pre-create
@@ -32,19 +39,21 @@
   failed_when: false
   changed_when: false
 
-- name: Remove the root-era log-directory leftovers (#1227)
-  # TARGETED rm of the root-owned paths only — recurse-everything
-  # (state: absent on the tree) would destroy co-located operator files
-  # the probe was written to protect. Kong no longer bind-mounts a log
-  # directory; the root-era dirs trip the no-root runtime gate on every
-  # run. become_user: root — the paths ARE root-owned. Best-effort: a
-  # batch flush mid-traversal on a large tree can make find exit 1 after
-  # the deletions — whatever survived is flagged by the runtime gate on
-  # the next run.
+- name: Hand the root-era log-directory leftovers to the ansible user (#1227)
+  # CHOWN, never delete: the root-era paths are exactly what the no-root
+  # runtime gate forbids, but deleting them would also destroy
+  # operator-owned files nested inside a root-owned parent (a bare-docker
+  # root-era auto-created the whole data/logs/kong chain). Handing the
+  # root-owned paths to the ansible user clears the contract with zero
+  # destruction — old log files stay on disk for forensics. become_user:
+  # root — the paths ARE root-owned. Best-effort: a batch flush
+  # mid-traversal on a large tree can make find exit 1 — whatever
+  # survived is flagged by the runtime gate on the next run.
   become: true
   become_user: root
   ansible.builtin.command: >-
-    find {{ deploy_dir }}/{{ data_dir }}/logs -uid 0 -exec rm -rf {} +
+    find {{ deploy_dir }}/{{ data_dir }}/logs -uid 0
+    -exec chown -f "{{ ansible_user }}:{{ ansible_user }}" {} +
   when: _logs_dir.stat.exists and (_logs_root_owned.stdout | length > 0 or _logs_root_owned.rc != 0)
   changed_when: true
   failed_when: false

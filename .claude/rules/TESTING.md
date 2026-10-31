@@ -133,6 +133,9 @@ the always-on services, and profile-gated ones (opea/gpu-models/
 observability/okf — e.g. grafana, victoriametrics) intentionally run
 their upstream images' root users, so a stack started with
 `--profile observability` trips rule 1 by design.
+**Run it ON EVERY NODE of a multi-node swarm** — rule 2 sweeps the
+invoking host's data dir only, and bind sources materialize per node:
+a manager-side run passes while a worker keeps a root-owned tree.
 The static half runs in CI
 (`tests/config-validator` jest suite); this runtime half has no CI job —
 run it after any change to `docker-compose.yaml` service identities,

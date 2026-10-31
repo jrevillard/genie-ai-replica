@@ -169,10 +169,14 @@ The fallback is observable in two places:
   event) carries `query_translation_status`:
   - `translated` — the query was translated to English before embedding;
   - `passthrough_english` — the query was already English, nothing to do;
+  - `passthrough_unknown_language` — no language could be named for the
+    query (detection failed or produced nothing); the query was embedded
+    as-is, language unknown;
   - `fallback_timeout` — the translation service timed out; the
     **untranslated** query was embedded;
   - `fallback_error` — the translation failed or was refused for any other
-    reason; the untranslated query was embedded.
+    reason (including an empty completion); the untranslated query was
+    embedded.
 - **Trace attribute**: the same status is stamped as
   `rag.translation.query_status` on the `chatqna.orchestrate` span, so a
   degraded period can be found in the Trace explorer by filtering for

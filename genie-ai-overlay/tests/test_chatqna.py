@@ -2132,7 +2132,7 @@ class TestTranslationHelpers:
         mock_client.post.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_translate_text_chunk_translategemma_format(self):
+    async def test_translate_chunk_in_language_translategemma_format(self):
         svc = create_chatqna_service()
         mock_response = MagicMock()
         mock_response.json.return_value = {"choices": [{"text": "Bonjour"}]}
@@ -2149,11 +2149,11 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://localhost/v1/completions"),
             patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "translategemma-test"),
         ):
-            result = await svc._translate_text_chunk("Hello", "fr")
+            result = await svc._translate_chunk_in_language("Hello", "fr", "French")
         assert result == "Bonjour"
 
     @pytest.mark.asyncio
-    async def test_translate_text_chunk_generic_format(self):
+    async def test_translate_chunk_in_language_generic_format(self):
         svc = create_chatqna_service()
         mock_response = MagicMock()
         mock_response.json.return_value = {"choices": [{"message": {"content": "Hola"}}]}
@@ -2170,33 +2170,11 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
             patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
         ):
-            result = await svc._translate_text_chunk("Hello", "es")
+            result = await svc._translate_chunk_in_language("Hello", "es", "Spanish")
         assert result == "Hola"
 
     @pytest.mark.asyncio
-    async def test_translate_text_chunk_error_returns_original(self):
-        svc = create_chatqna_service()
-        with (
-            patch("chatqna.genieai_chatqna.httpx.AsyncClient", side_effect=Exception("Connection error")),
-            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
-            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
-        ):
-            result = await svc._translate_text_chunk("Original text", "fr")
-        assert result == "Original text"
-
-    @pytest.mark.asyncio
-    async def test_translate_text_chunk_timeout_returns_original(self):
-        svc = create_chatqna_service()
-        with (
-            patch("chatqna.genieai_chatqna.httpx.AsyncClient", side_effect=TimeoutError("Request timed out")),
-            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
-            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
-        ):
-            result = await svc._translate_text_chunk("Original text", "fr")
-        assert result == "Original text"
-
-    @pytest.mark.asyncio
-    async def test_translate_text_chunk_context_overflow_raises_typed(self):
+    async def test_translate_chunk_in_language_context_overflow_raises_typed(self):
         """vLLM context overflow on translation raises TranslationInputTooLongError
         instead of silently returning the English source (multilingual UX issue #829)."""
         from chatqna.genieai_chatqna import TranslationInputTooLongError
@@ -2214,10 +2192,10 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
             pytest.raises(TranslationInputTooLongError),
         ):
-            await svc._translate_text_chunk("x" * 10000, "fr")
+            await svc._translate_chunk_in_language("x" * 10000, "fr", "French")
 
     @pytest.mark.asyncio
-    async def test_translate_text_chunk_classifier_matches_live_httpx_shape(self):
+    async def test_translate_chunk_in_language_classifier_matches_live_httpx_shape(self):
         """Reviewer Finding 1+2 regression: production exception is `httpx.HTTPStatusError`
         whose `str()` is JUST the status phrase — the body lives on `.response.text`.
         The classifier must read the body, not just `str(exc)`. Construct a real
@@ -2263,7 +2241,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
             pytest.raises(TranslationInputTooLongError),
         ):
-            await svc._translate_text_chunk("x" * 10000, "fr")
+            await svc._translate_chunk_in_language("x" * 10000, "fr", "French")
 
     @pytest.mark.asyncio
     async def test_finalize_llm_response_propagates_translation_overflow(self):
@@ -2399,6 +2377,38 @@ class TestQueryTranslationStatus:
         svc._translate_chunk_in_language = fail
         text, status = await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
         assert text == "¿qué es X?"
+        assert status == "fallback_error"
+
+    @pytest.mark.asyncio
+    async def test_a_single_message_timeout_reports_fallback_timeout(self):
+        """The chunk translator folds every failure into a
+        TranslationFailedError with the original as __cause__: a timeout
+        keeps its own status, on the list path as on this one."""
+        import httpx as _httpx
+
+        from chatqna.genieai_chatqna import TranslationFailedError
+
+        svc = create_chatqna_service()
+
+        async def fail(text, canonical_code, target_lang, **_kwargs):
+            raise TranslationFailedError("translation chunk failed: TimeoutException: t") from _httpx.TimeoutException(
+                "timed out"
+            )
+
+        svc._translate_chunk_in_language = fail
+        _text, status = await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
+        assert status == "fallback_timeout"
+
+    @pytest.mark.asyncio
+    async def test_an_empty_completion_reports_fallback_error(self):
+        """A 200 with an empty completion is not a translation: an empty
+        history would blank the retrieval query, and the status must not
+        claim `translated`."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="   ")
+        with self._translation_patches(mock_client):
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: qué es X?"
         assert status == "fallback_error"
 
     @pytest.mark.asyncio
@@ -4008,12 +4018,13 @@ class TestAbstentionDefault:
 # ===========================================================================
 # Query-translation status on the response and the orchestrate span
 # ===========================================================================
-async def _full_flow_payload(svc, *, stream, language="es", history_status=None):
+async def _full_flow_payload(svc, *, stream, language="es", history_status=None, messages=None):
     """Drive handle_request end to end with the history translation mocked.
 
     `history_status` is the (text, status) tuple the history-translation
     helper reports; None leaves the real helper in place (used by the
-    passthrough case, which never reaches it).
+    passthrough cases, which never reach it). `messages` overrides the
+    request's message list; None keeps the Spanish-query default.
     """
     svc.user_profile_client = MagicMock()
     svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
@@ -4038,14 +4049,14 @@ async def _full_flow_payload(svc, *, stream, language="es", history_status=None)
     svc._translate_with_chunking = fake_translate
 
     req = create_mock_request(
-        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "qué es X?"}]),
+        data=create_mock_chat_request_data(messages=messages or [{"role": "user", "content": "qué es X?"}]),
         headers={"Authorization": "Bearer dummy.jwt.token"},
     )
     patches = [
         patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
         patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
         patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
-        _patched_chat_request(stream=stream, language=language),
+        _patched_chat_request(stream=stream, language=language, **({"messages": messages} if messages else {})),
     ]
     with contextlib.ExitStack() as stack:
         for p in patches:
@@ -4076,6 +4087,16 @@ async def test_an_english_query_reports_passthrough_english():
     svc = create_chatqna_service()
     payload = await _full_flow_payload(svc, stream=False, language="en")
     assert payload["metadata"]["query_translation_status"] == "passthrough_english"
+
+
+@pytest.mark.asyncio
+async def test_an_undetectable_query_reports_passthrough_unknown_language():
+    """A query whose language nobody could name is embedded as-is too — but
+    it must not be reported as if it were English (detection-healthy
+    passthrough), or the runbook filter misses exactly these turns."""
+    svc = create_chatqna_service()
+    payload = await _full_flow_payload(svc, stream=False, language=None, messages=[{"role": "user", "content": ""}])
+    assert payload["metadata"]["query_translation_status"] == "passthrough_unknown_language"
 
 
 @pytest.mark.asyncio

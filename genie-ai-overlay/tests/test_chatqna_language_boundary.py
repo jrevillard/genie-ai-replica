@@ -365,10 +365,15 @@ class TestLanguageMapShape:
 
 
 def fake_translation_client():
-    """An httpx client that records the request instead of calling the model."""
+    """An httpx client that records the request instead of calling the model.
+
+    The response carries both completion shapes (TranslateGemma reads
+    ``choices[0].text``, the generic chat path reads
+    ``choices[0].message.content``), so the same helper serves both prompt
+    paths."""
     response = MagicMock()
     response.raise_for_status = MagicMock()
-    response.json = MagicMock(return_value={"choices": [{"message": {"content": "translated"}}]})
+    response.json = MagicMock(return_value={"choices": [{"text": "translated", "message": {"content": "translated"}}]})
     client = MagicMock()
     client.post = AsyncMock(return_value=response)
     context = MagicMock()
@@ -385,7 +390,7 @@ class TestTranslateChunkLanguageBoundary:
         svc = create_service()
         client, context = fake_translation_client()
         with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
-            result = await svc._translate_text_chunk("hello", INJECTION)
+            result = await svc._translate_with_chunking("hello", INJECTION)
 
         assert client.post.await_count == 0
         assert result == "hello"
@@ -397,7 +402,7 @@ class TestTranslateChunkLanguageBoundary:
         svc = create_service()
         client, context = fake_translation_client()
         with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
-            await svc._translate_text_chunk("hello", "fr")
+            await svc._translate_chunk_in_language("hello", "fr", "French")
 
         prompt = client.post.await_args.kwargs["json"]["messages"][0]["content"]
         assert "French" in prompt
@@ -410,7 +415,7 @@ class TestTranslateChunkLanguageBoundary:
         svc = create_service()
         client, context = fake_translation_client()
         with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
-            await svc._translate_text_chunk("hello", "fr")
+            await svc._translate_chunk_in_language("hello", "fr", "French")
 
         prompt = client.post.await_args.kwargs["json"]["prompt"]
         assert "French" in prompt
@@ -423,7 +428,7 @@ class TestTranslateChunkLanguageBoundary:
         svc = create_service()
         client, context = fake_translation_client()
         with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
-            await svc._translate_text_chunk("hello", "fr", source_lang_code="en")
+            await svc._translate_chunk_in_language("hello", "fr", "French", source_lang_code="en")
         prompt = client.post.await_args.kwargs["json"]["prompt"]
         assert "English (en)" in prompt
         assert "EN (en)" not in prompt
@@ -436,7 +441,7 @@ class TestTranslateChunkLanguageBoundary:
         svc = create_service()
         client, context = fake_translation_client()
         with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
-            await svc._translate_text_chunk("hello", "fr", source_lang_code="hi")
+            await svc._translate_chunk_in_language("hello", "fr", "French", source_lang_code="hi")
         prompt = client.post.await_args.kwargs["json"]["prompt"]
         assert "Latin" in prompt
         assert "Devanagari" in prompt
@@ -450,7 +455,7 @@ class TestTranslateChunkLanguageBoundary:
         svc = create_service()
         client, context = fake_translation_client()
         with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
-            await svc._translate_text_chunk("hello", "hi", source_lang_code="en")
+            await svc._translate_chunk_in_language("hello", "hi", "Hindi", source_lang_code="en")
         prompt = client.post.await_args.kwargs["json"]["prompt"]
         assert "Latin" not in prompt
         assert "Devanagari" in prompt
@@ -531,23 +536,6 @@ class TestTranslationFailureStatus:
 
         assert result == "English answer"
         assert status == "failed"
-
-    @pytest.mark.asyncio
-    async def test_the_history_keeps_the_english_source_when_a_chunk_fails(self):
-        """The history is normalized for the retriever, never shown: an
-        untranslated history is a worse answer than a wrong one, and the
-        answer the user reads is unaffected by it."""
-        svc = create_service()
-        client = MagicMock()
-        client.post = AsyncMock(side_effect=RuntimeError("the model is unreachable"))
-        context = MagicMock()
-        context.__aenter__ = AsyncMock(return_value=client)
-        context.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
-            result = await svc._translate_text_chunk("USER: what is X?", "en")
-
-        assert result == "USER: what is X?"
 
 
 class TestLanguageDisplay:
@@ -694,7 +682,7 @@ class TestTranslationPromptBoundary:
         svc = create_service()
         client, context = fake_translation_client()
         with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
-            await svc._translate_text_chunk("hello", "en", source_lang_code="zh-cn")
+            await svc._translate_chunk_in_language("hello", "en", "English", source_lang_code="zh-cn")
 
         prompt = client.post.await_args.kwargs["json"]["prompt"]
         assert "zh-cn" not in prompt.lower()
@@ -707,7 +695,7 @@ class TestTranslationPromptBoundary:
         svc = create_service()
         client, context = fake_translation_client()
         with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=context):
-            await svc._translate_text_chunk("hello", "en", source_lang_code="not a language")
+            await svc._translate_chunk_in_language("hello", "en", "English", source_lang_code="not a language")
 
         prompt = client.post.await_args.kwargs["json"]["prompt"]
         assert "not a language" not in prompt

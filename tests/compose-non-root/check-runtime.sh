@@ -13,9 +13,10 @@
 # Env:   DATA_DIR overrides ./data default when data_dir arg is omitted.
 #
 # Exit 0 = contract holds; exit 1 = violations listed. One-shot init
-# containers (arango-vector-db-init, victorialogs-init, postgres-init,
-# kong-config, keycloak-config, kong-migrations, db-migrations,
-# otel-collector-init) have exited by the time this runs and are not
+# containers (arango-vector-db-init, victorialogs-init,
+# document-repository-init, backend-init, otel-collector-init,
+# postgres-init, kong-config, keycloak-config, kong-migrations,
+# db-migrations) have exited by the time this runs and are not
 # inspected; their contract is enforced by the static test + this sweep.
 
 set -u
@@ -34,6 +35,12 @@ violations=0
 # com.docker.compose.project, `docker stack deploy` sets
 # com.docker.stack.namespace — check both so the swarm/Ansible deployment
 # path is covered too.
+if ! docker ps >/dev/null 2>&1; then
+  echo "ERROR: docker daemon unreachable (docker ps failed) — no container"
+  echo "can be inspected. Fix the daemon/socket first; this is not a"
+  echo "project-name problem."
+  exit 3
+fi
 containers=$(
   {
     docker ps --filter "label=com.docker.compose.project=$PROJECT" --format '{{.Names}}'

@@ -107,7 +107,10 @@ function validateComposeNonRoot(composeText) {
           const resolved = b.path
             .replace(/^['"]|['"]$/g, '')
             .replace(/^\$\{[\w-]+:-([^}]*)\}/, '$1')
-            .replace(/^\$\{[\w-]+\}/, './data');
+            .replace(/^\$\{[\w-]+\}/, './data')
+            // braceless $VAR is legal compose interpolation too — same
+            // conservative treatment (unknown location = under the data dir)
+            .replace(/^\$(?!\{)[\w-]+/, './data');
           if (!/^(\.\/)?data(\/|$)/.test(resolved)) continue;
           if (b.shortSyntax) {
             violations.push(
@@ -211,7 +214,7 @@ function validateComposeNonRoot(composeText) {
         anchorDefaults.capAdds.push(cap[1]);
         continue;
       }
-      const restart = line.match(/^ {2}restart:\s*['"]?([\w-]+)['"]?\s*$/);
+      const restart = line.match(/^ {2}restart:\s*['"]?([\w:-]+)['"]?\s*$/);
       if (restart) anchorDefaults.restart = restart[1];
       const anchorAttempts = line.match(/^ {4}max_attempts:\s*(\d+)\s*$/);
       if (anchorAttempts) anchorDefaults.maxAttempts = anchorAttempts[1];
@@ -285,7 +288,7 @@ function validateComposeNonRoot(composeText) {
 
     // restart / cap_add / deploy.restart_policy.condition — the one-shot
     // init invariants
-    const restartMatch = line.match(/^ {4}restart:\s*['"]?([\w-]+)['"]?\s*$/);
+    const restartMatch = line.match(/^ {4}restart:\s*['"]?([\w:-]+)['"]?\s*$/);
     if (restartMatch) {
       currentRestart = restartMatch[1];
       continue;

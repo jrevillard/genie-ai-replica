@@ -253,6 +253,30 @@ describe('compose non-root contract (#1227)', () => {
     ]);
   });
 
+  test('mutations: restart ":N" bound and braceless $VAR cannot slip past the gate', () => {
+    // restart: "on-failure:10" is compose's bounded form — the old [\w-]+
+    // regex could not see it and the init passed as one-shot.
+    const bounded = composeText.replaceAll('restart: "no"', 'restart: "on-failure:10"');
+    expect(bounded).not.toBe(composeText);
+    const { violations: v1 } = validateComposeNonRoot(bounded);
+    expect(v1.some((v) => v.includes('victorialogs-init') && v.includes('one-shot'))).toBe(true);
+
+    // Braceless $VAR interpolation is legal compose — the bind must still
+    // land under the data-dir rule (conservative resolution).
+    const braceless = [
+      'services:',
+      '  backend:',
+      '    user: "1000:1000"',
+      '    volumes:',
+      '      - type: bind',
+      '        source: $DATA_DIR/database_backups',
+      '        target: /app/database_backups',
+      ''
+    ].join('\n');
+    const { violations: v2 } = validateComposeNonRoot(braceless);
+    expect(v2.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
+  });
+
   test('allowlist entries reference services that exist in the compose file', () => {
     // A renamed or removed service would leave a stale allowlist entry that
     // enforces nothing — dead enforcement data. Uses the validator's OWN

@@ -21,9 +21,7 @@ test.describe('Document Search', () => {
   });
 
   test.afterAll(async ({ browser }) => {
-    // deleteAllTestDocuments chains a browser session mint plus a list and
-    // a delete sweep on a stalled stack — past the 60s project timeout the
-    // hook otherwise runs under.
+    // The helper's mint + list + delete sweep outlives the 60s hook default.
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
     await deleteAllTestDocuments('test-document', { browser });
   });

@@ -52,9 +52,7 @@ test.describe('Conversation history persistence', () => {
   // that failed between its save and its bookkeeping must not leak the
   // conversation it already persisted.
   test.afterAll(async ({ browser }) => {
-    // Cleanup chains a browser session mint plus a list and a delete sweep
-    // on a stalled stack — past the 60s project timeout the hook otherwise
-    // runs under.
+    // The cleanup's mint + list + delete sweep outlives the 60s hook default.
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
 
     const token = await getSessionTokenViaUI({ browser }).catch((e) => {

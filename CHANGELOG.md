@@ -20,7 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   translation window (the room the window leaves beside the prompt
   estimate), so a long history is translated instead of refused; a window
   genuinely too tight to translate into is still refused and still reported
-  as `fallback_error`. (#1241, !657)
+  as `fallback_error`. The scaling relies on the translation window being
+  discoverable — an endpoint that never answers the discovery keeps the
+  fixed 4096-token bound. (#1241, !657)
 
 - **A mobile release build of the `dev` or `e2e` flavor now fails at startup
   instead of shipping with the trust-all TLS client armed.** Both flavors set

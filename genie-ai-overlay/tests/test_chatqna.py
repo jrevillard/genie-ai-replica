@@ -2472,6 +2472,14 @@ class TestQueryTranslationStatus:
         assert status == "fallback_error"
         mock_client.post.assert_not_called()
 
+    def test_no_window_keeps_the_fixed_ceiling_without_a_refusal(self):
+        """Without a discovered window the cap stays at the fixed 4096
+        ceiling and the refusal never fires: a history past the ceiling is
+        sent under the default bound, not refused locally."""
+        svc = create_chatqna_service()
+        with patch("chatqna.genieai_chatqna._get_translation_window", return_value=None):
+            assert svc._translation_output_cap("A" * 13000) == 4096
+
     def test_a_window_too_tight_refuses_the_output_cap(self):
         """The TranslateGemma output-cap guard refuses a window too tight to
         translate into (cap below the input estimate): the helper returns

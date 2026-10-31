@@ -253,12 +253,7 @@ function parseAnsibleImages(filePath) {
  * @returns {Array<{ job: string|null, image: string }>}
  */
 function parseGitlabCiImages(filePath) {
-  let content;
-  try {
-    content = fs.readFileSync(filePath, 'utf-8');
-  } catch (err) {
-    throw new Error(`Failed to read GitLab CI file: ${filePath}`, { cause: err });
-  }
+  const content = readFileOrThrow(filePath, 'GitLab CI file');
 
   const lines = content.split('\n');
   const results = [];
@@ -291,34 +286,51 @@ function parseGitlabCiImages(filePath) {
 }
 
 /**
+ * Read a file, rethrowing IO errors with the file path in the message.
+ *
+ * Shared by the parsers in this module so each failure says which config
+ * file could not be read.
+ *
+ * @param {string} filePath - Path to the file to read
+ * @param {string} label - Human-readable file kind for the error message
+ * @returns {string} file content
+ */
+function readFileOrThrow(filePath, label) {
+  try {
+    return fs.readFileSync(filePath, 'utf-8');
+  } catch (err) {
+    throw new Error(`Failed to read ${label}: ${filePath}`, { cause: err });
+  }
+}
+
+/**
  * Extract the `rules[].changes` path filters of named jobs from a
  * .gitlab-ci.yml file.
  *
  * Line-based, like parseGitlabCiImages: a top-level key at indent 0 starts a
  * job; inside a wanted job, a `changes:` key starts a filter and the
- * ` - <path>` lines indented deeper than the first entry are its entries. A
- * sibling key or the next rule's `- if:` list item sits at or above that
- * depth and ends the block. Assumes the plain-list form of `changes:` (no
- * `paths:`/`compare_to:` mapping) and unions every `changes:` block of the
- * wanted jobs.
+ * ` - <path>` lines indented deeper than that key are its entries. A sibling
+ * key or the next rule's `- if:` list item sits at or above the key's depth
+ * and ends the block; every `changes:` block of a wanted job is unioned.
+ * Hidden anchor keys (`.name: &name`) hold their list directly under the key
+ * and parse the same way. `changes: {paths: *alias}` blocks are opaque to
+ * line parsing (the alias is never expanded) and yield no entries —
+ * assert the alias reference textually instead. Assumes the plain-list form
+ * otherwise (no inline `paths:`/`compare_to:` lists).
  *
  * @param {string} filePath - Path to a .gitlab-ci.yml file
  * @param {string[]} jobNames - Top-level job keys to extract (e.g. ['e2e:integration'])
  * @returns {Map<string, string[]>} job name → changes paths (missing job → empty list)
  */
 function parseGitlabCiJobChanges(filePath, jobNames) {
-  let content;
-  try {
-    content = fs.readFileSync(filePath, 'utf-8');
-  } catch (err) {
-    throw new Error(`Failed to read GitLab CI file: ${filePath}`, { cause: err });
-  }
+  const content = readFileOrThrow(filePath, 'GitLab CI file');
 
   const wanted = new Set(jobNames);
   const result = new Map(jobNames.map((name) => [name, []]));
   let currentJob = null;
-  let inChanges = false;
-  let entryIndent = null;
+  // Indent of the list-owning key (`changes:` or a hidden anchor); null =
+  // not inside a filter block. Entries sit strictly deeper than the key.
+  let listIndent = null;
 
   for (const line of content.split('\n')) {
     const trimmed = line.trim();
@@ -327,19 +339,17 @@ function parseGitlabCiJobChanges(filePath, jobNames) {
 
     // Top-level key (indent 0) — starts a job (or ends the previous one)
     if (indent === 0) {
-      const jobMatch = trimmed.match(/^([\w:-]+):\s*$/);
+      const jobMatch = trimmed.match(/^([\w:.-]+):\s*(?:&[\w-]+)?\s*$/);
       currentJob = jobMatch ? jobMatch[1] : null;
-      inChanges = false;
-      entryIndent = null;
+      listIndent = jobMatch && currentJob.startsWith('.') ? 0 : null;
       continue;
     }
 
     if (!wanted.has(currentJob)) continue;
 
-    if (inChanges) {
+    if (listIndent !== null) {
       const entryMatch = trimmed.match(/^-\s+(.+)$/);
-      if (entryMatch && (entryIndent === null || indent >= entryIndent)) {
-        if (entryIndent === null) entryIndent = indent;
+      if (entryMatch && indent > listIndent) {
         result.get(currentJob).push(
           entryMatch[1]
             .replace(/\s+#.*$/, '')
@@ -347,12 +357,10 @@ function parseGitlabCiJobChanges(filePath, jobNames) {
             .trim()
         );
       } else {
-        inChanges = false;
-        entryIndent = null;
+        listIndent = null;
       }
     } else if (trimmed === 'changes:') {
-      inChanges = true;
-      entryIndent = null;
+      listIndent = indent;
     }
   }
   return result;

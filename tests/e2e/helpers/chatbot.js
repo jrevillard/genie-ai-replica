@@ -87,7 +87,10 @@ async function loginAttempt(page, user, budgetMs) {
   await page.waitForURL(
     (url) => {
       const urlStr = url.toString();
-      return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
+      // Strip a trailing slash from BASE_URL first: page.url() never
+      // produces a double slash, so a configured BASE_URL ending in '/'
+      // would make the bare-origin exit unreachable.
+      return urlStr.includes('dashboard') || urlStr === `${BASE_URL.replace(/\/+$/, '')}/`;
     },
     { timeout: budgetMs },
   );

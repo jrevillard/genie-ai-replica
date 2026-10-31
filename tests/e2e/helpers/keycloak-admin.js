@@ -130,6 +130,23 @@ async function rotateRealmKeys(adminToken, realm) {
 }
 
 /**
+ * Read a realm's settings.
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @returns {Promise<object>} The realm representation
+ */
+async function getRealmSettings(adminToken, realm) {
+  const res = await request('GET', `/auth/admin/realms/${realm}`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+
+  if (res.status !== 200) {
+    throw new Error(`Failed to get realm settings for ${realm}: ${res.status} ${JSON.stringify(res.data)}`);
+  }
+  return res.data;
+}
+
+/**
  * Update realm settings (partial update).
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
@@ -203,6 +220,7 @@ async function enableDirectAccessGrants(adminToken, realm, clientId) {
 module.exports = {
   createUser,
   rotateRealmKeys,
+  getRealmSettings,
   updateRealmSettings,
   deleteUser,
   enableDirectAccessGrants,

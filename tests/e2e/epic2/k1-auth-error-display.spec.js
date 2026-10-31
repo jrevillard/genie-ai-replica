@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { getAdminToken, getSessionTokenViaUI, request: authRequest } = require('../helpers/auth');
-const { createUser, deleteUser, updateRealmSettings } = require('../helpers/keycloak-admin');
+const { createUser, deleteUser, getRealmSettings, updateRealmSettings } = require('../helpers/keycloak-admin');
 
 test.describe.serial('Phase K: Auth Error Display', () => {
   let adminToken;
@@ -17,13 +17,11 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     // capture fails the suite BEFORE K.2 can mutate anything — a
     // best-guess restore would write 300 onto a stack running
     // something else.
-    const realmRes = await authRequest('GET', '/auth/admin/realms/genie', {
-      headers: { Authorization: `Bearer ${adminToken}` },
-    });
-    if (realmRes.status !== 200 || !realmRes.data.accessTokenLifespan) {
-      throw new Error(`Cannot capture accessTokenLifespan (HTTP ${realmRes.status}) — refusing to run the lifespan-mutating tests`);
+    const realm = await getRealmSettings(adminToken, 'genie');
+    if (!realm.accessTokenLifespan) {
+      throw new Error('Cannot capture accessTokenLifespan — refusing to run the lifespan-mutating tests');
     }
-    originalLifespan = String(realmRes.data.accessTokenLifespan);
+    originalLifespan = String(realm.accessTokenLifespan);
   });
 
   test.afterAll(async () => {
@@ -100,17 +98,16 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   });
 
   test('K.3 — FORBIDDEN (user without roles)', async ({ browser }) => {
-    // K.2 left the lifespan at 10s, so a token minted right now would
-    // itself carry a 10-second expiry. Restore first with a throwaway
-    // mint (one call, inside its window), then mint the real admin
-    // token — it inherits the restored lifespan.
-    const restoreToken = await getAdminToken();
-    await updateRealmSettings(restoreToken, 'genie', { accessTokenLifespan: originalLifespan });
+    // Fresh admin token — the beforeAll mint can be minutes old by now.
     adminToken = await getAdminToken();
 
-    // The browser-session mint below adds SPA-bootstrap latency after
-    // the no-roles token is issued — with the lifespan restored, a
-    // loaded stack still sees FORBIDDEN, not TOKEN_EXPIRED.
+    // Restore the genie lifespan before the browser mint below: K.2
+    // left it at 10s, and the no-roles token is issued by genie — with
+    // the lifespan still at 10s, a loaded stack could see that token
+    // expire between its mint and the admin request, where FORBIDDEN
+    // is what this test verifies. Admin tokens are issued by the
+    // master realm and are not affected by the genie setting.
+    await updateRealmSettings(adminToken, 'genie', { accessTokenLifespan: originalLifespan });
 
     // Create no-roles user
     noRolesUserId = await createUser(adminToken, 'genie', {

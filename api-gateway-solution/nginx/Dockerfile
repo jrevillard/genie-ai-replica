@@ -7,6 +7,13 @@ RUN apk add --no-cache openssl gettext
 # the rootless-safe one, and hand the entrypoint's writable state (rendered
 # config, certificates) to the nginx user (uid 101) the container runs as.
 COPY nginx-rootless.conf /etc/nginx/nginx.conf
+# The rootless main config includes /etc/nginx/conf.d/*.conf; the stock
+# package ships a default.conf there (listen 80, stock welcome page) that
+# the entrypoint used to overwrite at runtime. The render now goes to
+# /tmp/rendered-default.conf, so the stock file must go — otherwise every
+# edge container serves a third listener on :80 (and crash-loops on
+# runtimes that keep the unprivileged-port floor).
+RUN rm -f /etc/nginx/conf.d/default.conf
 RUN mkdir -p /etc/nginx/certs /tmp/nginx_client_body /tmp/nginx_proxy /tmp/nginx_fastcgi /tmp/nginx_uwsgi /tmp/nginx_scgi \
     && chown -R 101:101 /etc/nginx/certs /tmp/nginx_*
 

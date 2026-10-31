@@ -40,9 +40,9 @@ const SELF_DROPPING = {
 const ONE_SHOT_ROOT_INIT = {
   'otel-collector-init': 'chowns the otel-queue volume for the collector (uid 10001) before it starts',
   'arango-vector-db-init': 'chowns the arango_data volume for arangodb (uid 999) before it starts',
-  'victorialogs-init': 'chowns the vlogs-data volume for victoria-logs (uid 65534) before it starts'
+  'victorialogs-init': 'chowns the vlogs-data volume for victoria-logs (uid 65534) before it starts',
+  'document-repository-init': 'chowns the doc_repo_uploads volume for document-repository (uid 1000) before it starts'
 };
-
 
 /**
  * @param {string} composeText raw docker-compose.yaml content (the file
@@ -63,6 +63,12 @@ function validateComposeNonRoot(composeText) {
   let currentProfiles = [];
   let inProfiles = false;
   let inVolumes = false;
+  let currentRestart = null;
+  let currentRestartPolicyCondition = null;
+  let currentCapAdds = [];
+  let inCapAdds = false;
+  let inDeploy = false;
+  let inRestartPolicy = false;
   const serviceBinds = {}; // service -> [{path, createHostPath}]
 
   const flush = () => {
@@ -83,15 +89,47 @@ function validateComposeNonRoot(composeText) {
         }
       }
       serviceBinds[currentService] = serviceBinds[currentService] || [];
-      const binds = serviceBinds[currentService];
-      for (const b of binds) {
-        // A host path under the data dir that docker would silently create
-        // (root-owned) is a violation unless the config opts out.
-        if (/^(\.\/)?data(\/|$)/.test(b.path) && !b.createHostPathFalse) {
-          violations.push(
-            `${currentService}: host bind "${b.path}" sits under the data directory without ` +
-              '`create_host_path: false` — docker creates a missing source as root-owned'
-          );
+      // Profile-gated services are out of the contract's scope entirely —
+      // same boundary as the user: check above (they never run in the
+      // default deployment the contract governs).
+      if (!gated) {
+        const binds = serviceBinds[currentService];
+        for (const b of binds) {
+          // A host path under the data dir that docker would silently create
+          // (root-owned) is a violation unless the config opts out. Sources
+          // carry the ${DATA_DIR:-./data} form — resolve it to the default
+          // the data directory actually is.
+          const resolved = b.path.replace(/^\$\{DATA_DIR:-([^}]*)\}/, '$1');
+          if (!/^(\.\/)?data(\/|$)/.test(resolved)) continue;
+          if (b.shortSyntax) {
+            violations.push(
+              `${currentService}: host bind "${b.path}" sits under the data directory in short syntax, ` +
+                'which cannot carry `create_host_path: false` — use long syntax or a named volume'
+            );
+          } else if (!b.createHostPathFalse) {
+            violations.push(
+              `${currentService}: host bind "${b.path}" sits under the data directory without ` +
+                '`create_host_path: false` — docker creates a missing source as root-owned'
+            );
+          }
+        }
+        if (ONE_SHOT_ROOT_INIT[currentService]) {
+          // Documented invariants, enforced: a root init exists to chown a
+          // named volume (needs CAP_CHOWN) and must stay a one-shot (a
+          // restart-always policy would make it a permanent root container).
+          if (!currentCapAdds.includes('CHOWN')) {
+            violations.push(`${currentService}: ONE_SHOT_ROOT_INIT member must keep cap_add: [CHOWN]`);
+          }
+          const oneShot =
+            currentRestart === 'no' ||
+            currentRestartPolicyCondition === 'none' ||
+            currentRestartPolicyCondition === 'on-failure';
+          if (!oneShot) {
+            violations.push(
+              `${currentService}: ONE_SHOT_ROOT_INIT member must be a one-shot ` +
+                '(restart "no" or restart_policy none/on-failure)'
+            );
+          }
         }
       }
     }
@@ -100,6 +138,12 @@ function validateComposeNonRoot(composeText) {
     currentProfiles = [];
     inProfiles = false;
     inVolumes = false;
+    currentRestart = null;
+    currentRestartPolicyCondition = null;
+    currentCapAdds = [];
+    inCapAdds = false;
+    inDeploy = false;
+    inRestartPolicy = false;
   };
 
   for (let i = 0; i < lines.length; i++) {
@@ -133,6 +177,46 @@ function validateComposeNonRoot(composeText) {
     if (userMatch) {
       currentUser = userMatch[1];
       continue;
+    }
+
+    // restart / cap_add / deploy.restart_policy.condition — the one-shot
+    // init invariants
+    const restartMatch = line.match(/^ {4}restart:\s*['"]?([\w-]+)['"]?\s*$/);
+    if (restartMatch) {
+      currentRestart = restartMatch[1];
+      continue;
+    }
+    if (/^ {4}cap_add:\s*$/.test(line)) {
+      inCapAdds = true;
+      continue;
+    }
+    if (inCapAdds) {
+      if (!/^ {6}/.test(line)) {
+        inCapAdds = false;
+      } else {
+        const cap = line.match(/^ {6}-\s*([A-Z_]+)\s*$/);
+        if (cap) currentCapAdds.push(cap[1]);
+        continue;
+      }
+    }
+    if (/^ {4}deploy:\s*$/.test(line)) {
+      inDeploy = true;
+      continue;
+    }
+    if (inDeploy) {
+      if (/^ {6}restart_policy:\s*$/.test(line)) {
+        inRestartPolicy = true;
+        continue;
+      }
+      if (inRestartPolicy) {
+        if (!/^ {8}/.test(line)) {
+          inRestartPolicy = false;
+        } else {
+          const cond = line.match(/^ {8}condition:\s*['"]?([\w-]+)['"]?\s*$/);
+          if (cond) currentRestartPolicyCondition = cond[1];
+          continue;
+        }
+      }
     }
 
     // `profiles:` — inline list or block list
@@ -177,12 +261,25 @@ function validateComposeNonRoot(composeText) {
       const srcMatch = line.match(/^ {8}source:\s*(\S+)\s*$/);
       if (srcMatch) {
         const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
-        binds.push({ path: srcMatch[1], createHostPathFalse: false, sourceLine: i + 1 });
+        binds.push({ path: srcMatch[1], createHostPathFalse: false, shortSyntax: false, sourceLine: i + 1 });
         continue;
       }
       const createFalse = line.match(/^ {10}create_host_path:\s*false\s*$/);
       if (createFalse && serviceBinds[currentService] && serviceBinds[currentService].length) {
         serviceBinds[currentService][serviceBinds[currentService].length - 1].createHostPathFalse = true;
+        continue;
+      }
+      // Short syntax: - <host>:<container>[:mode] — the form the deleted
+      // kong logs bind used. The container side always starts with `/` and
+      // the greedy host group absorbs `${VAR:-default}` spans (which contain
+      // colons); a named volume is a bare name with no `/`-rooted target.
+      const shortBind = line.match(/^ {6}-\s*(.+):(\/[^:\s]+)(?::\S+)?\s*$/);
+      if (shortBind) {
+        const hostPart = shortBind[1].replace(/^['"]|['"]$/g, '');
+        if (/[/${]|^\.?\.?\//.test(hostPart)) {
+          const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
+          binds.push({ path: hostPart, createHostPathFalse: false, shortSyntax: true, sourceLine: i + 1 });
+        }
         continue;
       }
     }

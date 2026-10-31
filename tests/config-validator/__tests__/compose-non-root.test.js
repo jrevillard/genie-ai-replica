@@ -79,6 +79,58 @@ describe('compose non-root contract (#1227)', () => {
     expect(alwaysOn).toEqual([]);
   });
 
+  test('mutation: flipping the real file create_host_path to true trips the gate', () => {
+    // The gate exists for the REAL file's ${DATA_DIR:-./data} form — proving
+    // it on a synthetic literal path proves nothing. Mutate the actual
+    // committed content and watch the violation appear.
+    const mutated = composeText.replace('create_host_path: false', 'create_host_path: true');
+    expect(mutated).not.toBe(composeText);
+    const { violations } = validateComposeNonRoot(mutated);
+    expect(violations.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
+  });
+
+  test('mutation: a short-syntax data bind trips the gate', () => {
+    // The deleted kong logs bind was short syntax — reintroducing that form
+    // must be visible to the parser.
+    const text = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes:',
+      '      - "${DATA_DIR:-./data}/logs/kong:/var/log/kong"',
+      ''
+    ].join('\n');
+    const { violations } = validateComposeNonRoot(text);
+    expect(violations.some((v) => v.includes('kong') && v.includes('short syntax'))).toBe(true);
+  });
+
+  test('one-shot init allowlist members carry cap_add CHOWN and a one-shot policy', () => {
+    // Enforces the invariants the ONE_SHOT_ROOT_INIT documentation promises:
+    // the chown needs CAP_CHOWN, and a restart-always policy would turn the
+    // init into a permanent root container.
+    const { violations } = validateComposeNonRoot(composeText);
+    expect(violations.filter((v) => v.includes('ONE_SHOT_ROOT_INIT member'))).toEqual([]);
+  });
+
+  test('mutation: a one-shot init without CHOWN or with restart-always trips the gate', () => {
+    // Enforcement only applies to allowlisted members, so mutate the REAL
+    // file's init services: strip their CHOWN cap, then flip their one-shot
+    // restart policy — each mutation must surface as a violation.
+    const noChown = composeText.replaceAll('    cap_add:\n      - CHOWN\n', '');
+    expect(noChown).not.toBe(composeText);
+    const { violations: v1 } = validateComposeNonRoot(noChown);
+    expect(v1.some((v) => v.includes('arango-vector-db-init') && v.includes('CHOWN'))).toBe(true);
+
+    // Both one-shot forms must be mutated: restart "no" OR the deploy
+    // restart_policy condition each satisfy the invariant on their own.
+    const always = composeText
+      .replaceAll('condition: "none"', 'condition: always')
+      .replaceAll('restart: "no"', 'restart: always');
+    expect(always).not.toBe(composeText);
+    const { violations: v2 } = validateComposeNonRoot(always);
+    expect(v2.some((v) => v.includes('victorialogs-init') && v.includes('one-shot'))).toBe(true);
+  });
+
   test('self-dropping allowlist documents its two members with a reason', () => {
     expect(Object.keys(SELF_DROPPING).sort()).toEqual(['postgres', 'redis-cache']);
     for (const reason of Object.values(SELF_DROPPING)) {

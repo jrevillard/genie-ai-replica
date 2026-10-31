@@ -557,7 +557,10 @@ services:
       # (1000) out of its backup dir. The Ansible deploy pre-creates the
       # directory (deploy/ansible/deploy.yml); a bare `docker compose up` from
       # a clean checkout must `mkdir -p data/database_backups` first - the
-      # failure is then loud instead of silently root-owned.
+      # failure is then loud instead of silently root-owned. Swarm caveat:
+      # swarmkit ignores bind options on `docker stack deploy`, so on the
+      # Swarm path the guarantee IS the Ansible pre-create task - keep the
+      # playbook task and this bind in step.
       - type: bind
         source: ${DATA_DIR:-./data}/database_backups
         target: /app/database_backups
@@ -1159,6 +1162,34 @@ services:
         delay: 5s
         max_attempts: 10
 
+  # Chowns the doc_repo_uploads volume to uid 1000 (#1227): deployments that
+  # ran the root-era image hold a root-owned volume, and the now non-root
+  # document-repository would get EACCES on every upload. Same one-shot
+  # pattern as arango-vector-db-init / victorialogs-init.
+  document-repository-init:
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
+    logging: *fluent-logging
+    image: busybox:1.38.0
+    command: ["sh", "-c", "[ -f /app/uploads/.chowned-1000 ] || { chown -R 1000:1000 /app/uploads && touch /app/uploads/.chowned-1000; }"]
+    volumes:
+      - doc_repo_uploads:/app/uploads
+    networks:
+      - genieai_network
+    restart: "no"
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: "none"
+
   document-repository:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
     cap_drop:
@@ -1177,6 +1208,8 @@ services:
         condition: service_healthy
       keycloak-config:
         condition: service_healthy
+      document-repository-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     build:
       context: components/
@@ -1308,11 +1341,15 @@ services:
       - ALL
     cap_add:
       - CHOWN
+      # DAC_OVERRIDE: on a re-run the volume is already owned by the target
+      # uid, and a chown-only root cannot drop the marker file into a
+      # 0755 directory it does not own.
+      - DAC_OVERRIDE
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
     image: busybox:1.38.0
-    command: ["sh", "-c", "chown -R 999:999 /var/lib/arangodb3 /var/lib/arangodb3-apps"]
+    command: ["sh", "-c", "[ -f /var/lib/arangodb3/.chowned-999 ] || { chown -R 999:999 /var/lib/arangodb3 /var/lib/arangodb3-apps && touch /var/lib/arangodb3/.chowned-999; }"]
     volumes:
       - arango_data:/var/lib/arangodb3
       - arango_apps:/var/lib/arangodb3-apps
@@ -2547,10 +2584,13 @@ services:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
     # Exception: cap_add CHOWN — the init's only job is chown 10001 on /var/lib/otelcol;
     # cap_drop ALL strips CAP_CHOWN, so we add it back scoped to this one-shot init.
+    # DAC_OVERRIDE (added in #1227): on a re-run the volume is already owned
+    # by the target uid and the marker write needs to bypass the owner check.
     cap_drop:
       - ALL
     cap_add:
       - CHOWN
+      - DAC_OVERRIDE
     security_opt:
       - no-new-privileges:true
     image: busybox:1.38.0
@@ -2671,11 +2711,12 @@ services:
       - ALL
     cap_add:
       - CHOWN
+      - DAC_OVERRIDE
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
     image: busybox:1.38.0
-    command: ["sh", "-c", "chown -R 65534:65534 /var/lib/victoria-logs"]
+    command: ["sh", "-c", "[ -f /var/lib/victoria-logs/.chowned-65534 ] || { chown -R 65534:65534 /var/lib/victoria-logs && touch /var/lib/victoria-logs/.chowned-65534; }"]
     volumes:
       - vlogs-data:/var/lib/victoria-logs
     networks:

@@ -529,7 +529,7 @@ export default {
       actionSuccess: "Baara \"{'{'}action{'}'}\" fayil {'{'}fileId{'}'} to benta.",
       metadataUpdateSuccess: "Metadeta fayil {'{'}fileId{'}'} yailamata.",
       deletePartialNotice:
-        "{'{'{'}'}blocked{'}'} selected file(s) cannot be deleted ({'{'{'}'}reason{'}'}) — only the other {'{'{'}'}n{'}'} will be deleted.",
+        "{'{'}blocked{'}'} selected file(s) cannot be deleted ({'{'}reason{'}'}) — only the other {'{'}n{'}'} will be deleted.",
       confirmDeleteSkipped:
         "{'{'{'}'}count{'}'} ingested/ingesting file(s) will be SKIPPED — retract them first to delete them."
     },

@@ -12,10 +12,14 @@ class AsyncJobGate {
     this._inFlight = new Map(); // key -> job marker (suite_key / run_key)
   }
 
-  /** Fast-fail check for UX: 409 with the in-flight marker if held. */
+  /** Fast-fail check for UX: 409 with the in-flight marker if held. The
+   * predicate is `!== undefined`, IDENTICAL to reserve's (round 21): a
+   * truthy check let a reserved-but-falsy marker (0, '', false, null) slip
+   * assertFree while reserve kept refusing it — the two disagreed about
+   * whether the key was held. */
   assertFree(key, { code = 'GENERATION_IN_FLIGHT', message } = {}) {
     const inflight = this._inFlight.get(key);
-    if (inflight) {
+    if (inflight !== undefined) {
       const err = new Error(message || 'a job is already running for this key');
       err.code = code;
       err.status = 409;

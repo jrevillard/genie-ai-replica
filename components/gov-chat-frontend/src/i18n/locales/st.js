@@ -535,7 +535,7 @@ export default {
       actionSuccess: "Keto ya \"{'{'}action{'}'}\" faeleng ya {'{'}fileId{'}'} e bile le katleho.",
       metadataUpdateSuccess: "Metadata ya faele ya {'{'}fileId{'}'} e ntlafaditswe.",
       deletePartialNotice:
-        "{'{'{'}'}blocked{'}'} lifaele tse khethiloeng ha li ka tlosoa ({'{'{'}'}reason{'}'}) — feela tse ling {'{'{'}'}n{'}'} li tla tlosoa.",
+        "{'{'}blocked{'}'} lifaele tse khethiloeng ha li ka tlosoa ({'{'}reason{'}'}) — feela tse ling {'{'}n{'}'} li tla tlosoa.",
       confirmDeleteSkipped:
         "{'{'{'}'}count{'}'} lifaele tse kennyeng/tsa kennyang li TLA TLOHESOA — di khutlisa pele ho li tlosa."
     },

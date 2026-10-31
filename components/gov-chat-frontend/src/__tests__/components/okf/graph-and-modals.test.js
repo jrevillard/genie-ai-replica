@@ -56,7 +56,7 @@ jest.mock('@/services/crawlerToOkfService', () => ({
 
 function realStore() {
   return createStore({
-    modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state)) } }
+    modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state())) } }
   });
 }
 

@@ -75,8 +75,16 @@ describe('okfFlag.isOkfEnabled', () => {
 // the "no config → enabled" dev arm never fired). Production is unaffected:
 // the container entrypoint overwrites the file from VUE_APP_OKF_ENABLED.
 describe('the DEV runtime config keeps the dev server surfaces visible', () => {
-  it('public/runtime/config.js carries okfEnabled: "1"', () => {
+  it('public/runtime/config.js loads and sets okfEnabled: "1"', () => {
+    // Owner-boundary check (round 21, #80881): EVALUATE the file the way
+    // the dev server serves it and read the flag off window.APP_CONFIG —
+    // the round-20 raw grep passed on a commented-out assignment (delete
+    // the real one, keep `// okfEnabled: "1"` and it stayed green while
+    // the dev server went dark). Evaluation also proves the file is still
+    // valid JS, which a substring search never did.
     const src = require('fs').readFileSync('public/runtime/config.js', 'utf8');
-    expect(src).toContain('okfEnabled: "1"');
+    delete window.APP_CONFIG;
+    window.eval(src);
+    expect(window.APP_CONFIG && window.APP_CONFIG.okfEnabled).toBe('1');
   });
 });

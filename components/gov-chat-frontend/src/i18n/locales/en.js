@@ -531,7 +531,7 @@ export default {
       actionSuccess: "Action \"{'{'}action{'}'}\" on file {'{'}fileId{'}'} was successful.",
       metadataUpdateSuccess: "Metadata for file {'{'}fileId{'}'} was updated.",
       deletePartialNotice:
-        "{'{'{'}'}blocked{'}'} selected file(s) cannot be deleted ({'{'{'}'}reason{'}'}) — only the other {'{'{'}'}n{'}'} will be deleted.",
+        "{'{'}blocked{'}'} selected file(s) cannot be deleted ({'{'}reason{'}'}) — only the other {'{'}n{'}'} will be deleted.",
       confirmDeleteSkipped:
         "{'{'{'}'}count{'}'} ingested/ingesting file(s) will be SKIPPED — retract them first to delete them."
     },

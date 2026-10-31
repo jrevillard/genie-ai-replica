@@ -537,7 +537,7 @@ export default {
       actionSuccess: "L'action \"{'{'}action{'}'}\" sur le fichier {'{'}fileId{'}'} a réussi.",
       metadataUpdateSuccess: "Les métadonnées du fichier {'{'}fileId{'}'} ont été mises à jour.",
       deletePartialNotice:
-        "{'{'{'}'}blocked{'}'} fichier(s) sélectionné(s) ne peuvent pas être supprimés ({'{'{'}'}reason{'}'}) — seuls les {'{'{'}'}n{'}'} autres seront supprimés.",
+        "{'{'}blocked{'}'} fichier(s) sélectionné(s) ne peuvent pas être supprimés ({'{'}reason{'}'}) — seuls les {'{'}n{'}'} autres seront supprimés.",
       confirmDeleteSkipped:
         "{'{'{'}'}count{'}'} fichier(s) ingéré(s)/en cours seront IGNORÉS — rétractez-les d’abord pour les supprimer."
     },

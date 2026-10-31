@@ -48,7 +48,7 @@ const settle = async (w, ticks = 4) => {
 function buildStore(rows, fetchImpl) {
   const okfModule = require('@/store/modules/okf').default;
   const store = new Vuex.Store({
-    modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state)) } }
+    modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state())) } }
   });
   store.commit('okf/setConcepts', { repoId: 'r1', concepts: rows });
   expect(store.getters['okf/conceptsByRepo']('r1')).toHaveLength(rows.length); // harness self-check

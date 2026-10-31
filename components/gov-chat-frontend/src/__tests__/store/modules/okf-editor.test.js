@@ -71,7 +71,7 @@ function buildStore() {
         ...okfModule,
         // The module exports `state: initialState()` (an object, not a
         // factory) — clone per store so tests don't share mutations.
-        state: () => JSON.parse(JSON.stringify(okfModule.state))
+        state: () => JSON.parse(JSON.stringify(okfModule.state()))
       }
     }
   });

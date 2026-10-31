@@ -64,7 +64,7 @@ function buildStore() {
     modules: {
       okf: {
         ...okfModule,
-        state: () => JSON.parse(JSON.stringify(okfModule.state))
+        state: () => JSON.parse(JSON.stringify(okfModule.state()))
       }
     }
   });

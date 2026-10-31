@@ -532,7 +532,7 @@ export default {
       actionSuccess: "การดำเนินการ \"{'{'}action{'}'}\" กับไฟล์ {'{'}fileId{'}'} สำเร็จ",
       metadataUpdateSuccess: "อัปเดตข้อมูลเมตาสำหรับไฟล์ {'{'}fileId{'}'} แล้ว",
       deletePartialNotice:
-        "ไฟล์ที่เลือก {'{'{'}'}blocked{'}'} ไฟล์ลบไม่ได้ ({'{'{'}'}reason{'}'}) — จะลบเฉพาะที่เหลืออีก {'{'{'}'}n{'}'} ไฟล์",
+        "ไฟล์ที่เลือก {'{'}blocked{'}'} ไฟล์ลบไม่ได้ ({'{'}reason{'}'}) — จะลบเฉพาะที่เหลืออีก {'{'}n{'}'} ไฟล์",
       confirmDeleteSkipped: "ไฟล์ที่ ingest แล้ว/กำลัง ingest {'{'{'}'}count{'}'} ไฟล์จะถูกข้าม — ถอนคืนก่อนจึงจะลบได้"
     },
     queryInspector: {

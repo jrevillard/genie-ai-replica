@@ -8,6 +8,7 @@ const mockSignoutRedirect = jest.fn();
 const mockRemoveUser = jest.fn();
 const mockClearStaleState = jest.fn();
 const mockSigninSilent = jest.fn();
+const mockStoreUser = jest.fn();
 const mockAddUserLoaded = jest.fn(() => jest.fn());
 const mockAddSilentRenewError = jest.fn(() => jest.fn());
 const MockUserManager = jest.fn().mockImplementation(() => ({
@@ -18,6 +19,7 @@ const MockUserManager = jest.fn().mockImplementation(() => ({
   removeUser: mockRemoveUser,
   clearStaleState: mockClearStaleState,
   signinSilent: mockSigninSilent,
+  storeUser: mockStoreUser,
   events: {
     addUserLoaded: mockAddUserLoaded,
     addSilentRenewError: mockAddSilentRenewError
@@ -561,33 +563,47 @@ describe('cross-tab renew lease (#80800)', () => {
 
   const LEASE_KEY = 'genie.renew.lease';
   const DONE_KEY = 'genie.renew.done';
+  const USER_KEY = 'genie.renew.user';
 
   async function initialized() {
     mockGetUser.mockResolvedValue(createMockUser());
     await keycloakAuthService.initialize();
   }
 
-  it('waits while another tab holds the lease, then adopts its shared tokens', async () => {
+  // Round 21 (#80879): the round-20 version of this test drove the adopt
+  // path with mockGetUser handing back the HOLDER's user — but production
+  // getUser() reads THIS tab's per-tab oidc store, so the mock supplied the
+  // cross-tab part the code did not actually have. The honest drive is the
+  // PUBLICATION the holder writes (#80876): user BEFORE the done marker,
+  // and this tab's own getUser keeps returning its STALE user throughout —
+  // it must never be the answer.
+  it('waits while another tab holds the lease, then adopts the PUBLISHED tokens (#80876)', async () => {
     jest.useFakeTimers();
     try {
       await initialized();
+      // This tab's OWN store: still the PRE-renew user (unexpired, but its
+      // refresh token was already rotated away by the holder).
+      mockGetUser.mockResolvedValue(createMockUser({ access_token: 'this-tab-stale-token' }));
       // Another tab's FRESH lease:
       window.localStorage.setItem(LEASE_KEY, JSON.stringify({ tab: 'other-tab', at: Date.now() }));
-      // The other tab renews during our wait and marks done with a fresh,
-      // unexpired shared user:
-      const shared = createMockUser({ access_token: 'shared-fresh-token' });
-      mockGetUser.mockResolvedValue(shared);
+      // The holder renews during our wait and PUBLISHES its minted user —
+      // a done MARKER alone carries no token.
+      const published = createMockUser({ access_token: 'holder-published-token' });
       setTimeout(() => {
+        window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), user: published }));
         window.localStorage.setItem(DONE_KEY, String(Date.now()));
         window.localStorage.removeItem(LEASE_KEY);
       }, 300);
       const p = keycloakAuthService.signinSilent();
-      const assertion = expect(p).resolves.toMatchObject({ access_token: 'shared-fresh-token' });
+      const assertion = expect(p).resolves.toMatchObject({ access_token: 'holder-published-token' });
       await jest.advanceTimersByTimeAsync(600);
       await assertion;
-      // We never issued our own renew — the holder's tokens were adopted.
+      // The adopted user is the holder's PUBLISHED one, and this tab never
+      // issued its own renew.
       expect(mockSigninSilent).not.toHaveBeenCalled();
-      expect(keycloakAuthService.getAccessToken()).toBe('shared-fresh-token');
+      expect(keycloakAuthService.getAccessToken()).toBe('holder-published-token');
+      // The waiter SEEDED its per-tab oidc store with the fresh tokens.
+      expect(mockStoreUser).toHaveBeenCalledWith(expect.objectContaining({ access_token: 'holder-published-token' }));
     } finally {
       jest.useRealTimers();
     }
@@ -618,5 +634,89 @@ describe('cross-tab renew lease (#80800)', () => {
     mockSigninSilent.mockRejectedValue(new Error('renew blew up'));
     await expect(keycloakAuthService.signinSilent()).rejects.toThrow('renew blew up');
     expect(window.localStorage.getItem(LEASE_KEY)).toBeNull();
+  });
+
+  // ── Round 21, #80864: the settle window fences the simultaneous-claim race
+  // the round-20 read-back missed (jsdom has no Web Locks → lease path).
+  it('settle window: a rival claim DURING the window makes this tab back off', async () => {
+    jest.useFakeTimers();
+    try {
+      await initialized();
+      const refreshed = createMockUser({ access_token: 'late-takeover-token' });
+      mockSigninSilent.mockResolvedValue(refreshed);
+      const p = keycloakAuthService.signinSilent();
+      // A rival tab overwrites our claim 10ms into our 80ms settle window —
+      // by the time our window closes we see ITS tab id and back off.
+      setTimeout(() => {
+        window.localStorage.setItem(LEASE_KEY, JSON.stringify({ tab: 'rival-tab', at: Date.now() }));
+      }, 10);
+      await jest.advanceTimersByTimeAsync(50); // inside the settle window
+      expect(mockSigninSilent).not.toHaveBeenCalled();
+      // The rival never publishes; after the TTL this tab takes over the
+      // stale lease and renews exactly once.
+      await jest.advanceTimersByTimeAsync(21000);
+      await expect(p).resolves.toMatchObject({ access_token: 'late-takeover-token' });
+      expect(mockSigninSilent).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  // ── Round 21, #80864: Web Locks are the PRIMARY mechanism — the only
+  // genuinely atomic cross-tab claim. jsdom lacks navigator.locks, so these
+  // tests install a minimal fake with the semantics the code relies on:
+  // ifAvailable:true + a busy lock resolves null WITHOUT invoking the
+  // callback (never queues).
+  describe('web locks (primary mechanism, #80864)', () => {
+    afterEach(() => {
+      try {
+        delete navigator.locks;
+      } catch {
+        /* not defined — nothing to clean */
+      }
+    });
+
+    it('granted lock: renews once and PUBLISHES the minted user', async () => {
+      Object.defineProperty(navigator, 'locks', {
+        configurable: true,
+        value: { request: (name, opts, cb) => cb({ name, mode: 'exclusive' }) }
+      });
+      await initialized();
+      const refreshed = createMockUser({ access_token: 'lock-holder-token' });
+      mockSigninSilent.mockResolvedValue(refreshed);
+      const user = await keycloakAuthService.signinSilent();
+      expect(user.access_token).toBe('lock-holder-token');
+      expect(mockSigninSilent).toHaveBeenCalledTimes(1);
+      // The publication is what waiters adopt: the user lands BEFORE the
+      // done marker, both stamped at the same instant.
+      const entry = JSON.parse(window.localStorage.getItem(USER_KEY));
+      expect(entry.user.access_token).toBe('lock-holder-token');
+      expect(Number(window.localStorage.getItem(DONE_KEY))).toBe(entry.at);
+    });
+
+    it('busy lock: waits for the holder PUBLICATION — never its own signinSilent', async () => {
+      // Busy on every request: resolves null, callback never invoked.
+      Object.defineProperty(navigator, 'locks', {
+        configurable: true,
+        value: { request: () => Promise.resolve(null) }
+      });
+      jest.useFakeTimers();
+      try {
+        await initialized();
+        const published = createMockUser({ access_token: 'locked-holder-token' });
+        setTimeout(() => {
+          window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), user: published }));
+          window.localStorage.setItem(DONE_KEY, String(Date.now()));
+        }, 300);
+        const p = keycloakAuthService.signinSilent();
+        const assertion = expect(p).resolves.toMatchObject({ access_token: 'locked-holder-token' });
+        await jest.advanceTimersByTimeAsync(600);
+        await assertion;
+        expect(mockSigninSilent).not.toHaveBeenCalled();
+        expect(mockStoreUser).toHaveBeenCalledWith(expect.objectContaining({ access_token: 'locked-holder-token' }));
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 });

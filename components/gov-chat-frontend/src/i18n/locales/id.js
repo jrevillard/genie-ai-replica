@@ -535,7 +535,7 @@ export default {
       actionSuccess: "Tindakan \"{'{'}action{'}'}\" pada file {'{'}fileId{'}'} berhasil.",
       metadataUpdateSuccess: "Metadata untuk file {'{'}fileId{'}'} telah diperbarui.",
       deletePartialNotice:
-        "{'{'{'}'}blocked{'}'} file terpilih tidak dapat dihapus ({'{'{'}'}reason{'}'}) — hanya {'{'{'}'}n{'}'} lainnya yang akan dihapus.",
+        "{'{'}blocked{'}'} file terpilih tidak dapat dihapus ({'{'}reason{'}'}) — hanya {'{'}n{'}'} lainnya yang akan dihapus.",
       confirmDeleteSkipped:
         "{'{'{'}'}count{'}'} file yang di-ingest/sedang di-ingest akan DILEWATI — retract dulu untuk menghapusnya."
     },

@@ -3669,16 +3669,12 @@ class ChatQnAService:
         caller should skip the translation and send the history as-is.
         """
         window = _get_translation_window()
-        if window:
-            prompt_token_estimate = len(flattened_history_string) // TRANSLATION_CHARS_PER_TOKEN
-            cap = _translation_base_cap(
-                flattened_history_string,
-                ceiling=max(1, window - TRANSLATION_PROMPT_OVERHEAD_TOKENS - prompt_token_estimate),
-            )
-            if cap < prompt_token_estimate:
-                return None
-            return cap
-        return _translation_base_cap(flattened_history_string)
+        prompt_token_estimate = len(flattened_history_string) // TRANSLATION_CHARS_PER_TOKEN
+        ceiling = max(1, window - TRANSLATION_PROMPT_OVERHEAD_TOKENS - prompt_token_estimate) if window else 4096
+        cap = _translation_base_cap(flattened_history_string, ceiling=ceiling)
+        if window and cap < prompt_token_estimate:
+            return None
+        return cap
 
     async def _get_translated_history_string(
         self, history: list | str, source_lang_code: str = "en"

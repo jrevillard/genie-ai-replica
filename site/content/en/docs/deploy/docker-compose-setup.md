@@ -140,7 +140,10 @@ Upgrading from a pre-#1227 install that has a stale root-owned
 no-root runtime gate until cleaned. Nothing is deleted for you:
 
 ```bash
-sudo find data/logs -uid 0 -exec chown -h -R "$(id -u):$(id -g)" {} +
+# targeted: only the ROOT-owned inodes are handed over — operator files
+# nested under them keep their ownership (the same doctrine the Ansible
+# migration applies):
+sudo find data/logs -uid 0 -exec chown -h "$(id -u):$(id -g)" {} +
 ```
 
 (The Ansible path does this handover automatically.)

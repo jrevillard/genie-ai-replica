@@ -137,7 +137,7 @@ describe('compose non-root contract (#1227)', () => {
     // file: strip CHOWN from the x-chown-init anchor (the five merged
     // inits inherit their caps from it), then flip the one-shot restart
     // policy — each mutation must surface as a violation.
-    const noChown = composeText.replaceAll('  cap_add:\n    - CHOWN\n', '');
+    const noChown = composeText.replaceAll('    - CHOWN\n', '');
     expect(noChown).not.toBe(composeText);
     const { violations: v1 } = validateComposeNonRoot(noChown);
     expect(v1.some((v) => v.includes('arango-vector-db-init') && v.includes('CHOWN'))).toBe(true);
@@ -150,7 +150,7 @@ describe('compose non-root contract (#1227)', () => {
     const { violations: vSwarm } = validateComposeNonRoot(swarmFlip);
     expect(vSwarm.some((v) => v.includes('victorialogs-init') && v.includes('one-shot'))).toBe(true);
 
-    const composeFlip = composeText.replaceAll('restart: "no"', 'restart: always');
+    const composeFlip = composeText.replaceAll('restart: "on-failure:3"', 'restart: always');
     expect(composeFlip).not.toBe(composeText);
     const { violations: vCompose } = validateComposeNonRoot(composeFlip);
     expect(vCompose.some((v) => v.includes('victorialogs-init') && v.includes('one-shot'))).toBe(true);
@@ -297,13 +297,18 @@ describe('compose non-root contract (#1227)', () => {
     ]);
   });
 
-  test('mutations: restart ":N" bound and braceless $VAR cannot slip past the gate', () => {
-    // restart: "on-failure:10" is compose's bounded form — the old [\w-]+
-    // regex could not see it and the init passed as one-shot.
-    const bounded = composeText.replaceAll('restart: "no"', 'restart: "on-failure:10"');
-    expect(bounded).not.toBe(composeText);
+  test('mutations: unbounded restart always trips; the bounded ":N" form is one-shot-in-spirit', () => {
+    // restart: "on-failure:10" TERMINATES by itself — the one-shot rule
+    // accepts it as one-shot-in-spirit (the anchor ships exactly this
+    // form). The unbounded spellings are the danger and still trip.
+    const bounded = composeText.replaceAll('restart: "on-failure:3"', 'restart: "on-failure:10"');
     const { violations: v1 } = validateComposeNonRoot(bounded);
-    expect(v1.some((v) => v.includes('victorialogs-init') && v.includes('one-shot'))).toBe(true);
+    expect(v1.filter((v) => v.includes('one-shot'))).toEqual([]);
+
+    const always = composeText.replaceAll('restart: "on-failure:3"', 'restart: always');
+    expect(always).not.toBe(composeText);
+    const { violations: v2 } = validateComposeNonRoot(always);
+    expect(v2.some((v) => v.includes('victorialogs-init') && v.includes('one-shot'))).toBe(true);
 
     // Braceless $VAR interpolation is legal compose — the bind must still
     // land under the data-dir rule (conservative resolution).
@@ -317,8 +322,8 @@ describe('compose non-root contract (#1227)', () => {
       '        target: /app/database_backups',
       ''
     ].join('\n');
-    const { violations: v2 } = validateComposeNonRoot(braceless);
-    expect(v2.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
+    const { violations: v3 } = validateComposeNonRoot(braceless);
+    expect(v3.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
   });
 
   test('mutations: numeric-zero uid and local-deploy shallow-replace cannot slip past the gate', () => {
@@ -461,6 +466,18 @@ describe('compose non-root contract (#1227)', () => {
       ''
     ].join('\n');
     expect(validateComposeNonRoot(literalAbsolute).violations).toEqual([]);
+  });
+
+  test("the runtime gate's SELF_DROPPING list matches the validator's allowlist", () => {
+    // The shell gate keeps its own copy (no JS runtime there); without
+    // this pin a third self-dropping image added to the validator would
+    // silently stay unskipped in the runtime half — the prose-drift class
+    // that bit the Ansible migration three times.
+    const shell = fs.readFileSync(path.join(__dirname, '..', '..', 'compose-non-root', 'check-runtime.sh'), 'utf-8');
+    const m = shell.match(/^SELF_DROPPING='([^']*)'$/m);
+    expect(m).not.toBeNull();
+    const shellList = m[1].trim().split(/\s+/).sort();
+    expect(shellList).toEqual(Object.keys(SELF_DROPPING).sort());
   });
 
   test('allowlist entries reference services that exist in the compose file', () => {

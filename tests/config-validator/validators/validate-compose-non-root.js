@@ -130,7 +130,7 @@ function validateComposeNonRoot(composeText) {
           // paths are flagged there — an absolute host path with a /data/
           // segment counts (a DATA_DIR repointed absolute), while the
           // docker socket and /dev nodes do not.
-          const underDataDir = /^(\.\/)?data(\/|$)/.test(resolved);
+          const underDataDir = /^(\.\/|\.\.\/)*data(\/|$)/.test(resolved);
           const dataShaped = underDataDir || /\/[\w.-]*data(\/|$)/.test(resolved);
           // An absolute LITERAL path (/etc/localtime, the docker socket)
           // pre-exists on every host — create_host_path is irrelevant on
@@ -186,8 +186,12 @@ function validateComposeNonRoot(composeText) {
           // front-end while the other still looks safe. An ABSENT key is the
           // front-end's no-restart default (compose "no", swarm "none"), so
           // only an explicit non-one-shot value violates.
+          // A BOUNDED compose retry (on-failure:N) terminates by itself —
+          // one-shot-in-spirit, same as a bounded swarm policy. An
+          // unbounded restart: always would BE a permanent root container.
+          const restartBounded = typeof restart === 'string' && /^on-failure:\d+$/.test(restart);
           const oneShot =
-            (restart === null || restart === 'no') &&
+            (restart === null || restart === 'no' || restartBounded) &&
             (condition === null || condition === 'none' || condition === 'on-failure');
           // on-failure restarts a FAILING container — on swarm, without a
           // max_attempts bound that is an infinite loop, i.e. a permanent
@@ -418,11 +422,11 @@ function validateComposeNonRoot(composeText) {
       }
       if (/^ {6}-\s/.test(line)) {
         // a new entry begins — its opts may only attach to a source: seen
-        // from here on; type: decides host-bind vs named volume (compose
-        // default when omitted: bind)
+        // from here on; type: decides host-bind vs named volume (compose-go
+        // defaults an UNtyped long-syntax entry to volume)
         sourceSeenThisEntry = false;
         const t = line.match(/^ {6}-\s*type:\s*['"]?(\w+)/);
-        entryType = t ? t[1] : null;
+        entryType = t ? t[1] : 'volume';
       }
       // long syntax:
       //   - type: bind

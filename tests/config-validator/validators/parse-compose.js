@@ -295,11 +295,12 @@ function parseGitlabCiImages(filePath) {
  * .gitlab-ci.yml file.
  *
  * Line-based, like parseGitlabCiImages: a top-level key at indent 0 starts a
- * job; inside a wanted job, a `changes:` key starts the filter and ` - <path>`
- * lines are its entries. Assumes the plain-list form of `changes:` (no
- * `paths:`/`compare_to:` mapping) and reads every `changes:` block of the
- * wanted jobs — the e2e merge-train jobs each declare exactly one, inside
- * their single rule.
+ * job; inside a wanted job, a `changes:` key starts a filter and the
+ * ` - <path>` lines indented deeper than the first entry are its entries. A
+ * sibling key or the next rule's `- if:` list item sits at or above that
+ * depth and ends the block. Assumes the plain-list form of `changes:` (no
+ * `paths:`/`compare_to:` mapping) and unions every `changes:` block of the
+ * wanted jobs.
  *
  * @param {string} filePath - Path to a .gitlab-ci.yml file
  * @param {string[]} jobNames - Top-level job keys to extract (e.g. ['e2e:integration'])
@@ -317,6 +318,7 @@ function parseGitlabCiJobChanges(filePath, jobNames) {
   const result = new Map(jobNames.map((name) => [name, []]));
   let currentJob = null;
   let inChanges = false;
+  let entryIndent = null;
 
   for (const line of content.split('\n')) {
     const trimmed = line.trim();
@@ -328,6 +330,7 @@ function parseGitlabCiJobChanges(filePath, jobNames) {
       const jobMatch = trimmed.match(/^([\w:-]+):\s*$/);
       currentJob = jobMatch ? jobMatch[1] : null;
       inChanges = false;
+      entryIndent = null;
       continue;
     }
 
@@ -335,13 +338,21 @@ function parseGitlabCiJobChanges(filePath, jobNames) {
 
     if (inChanges) {
       const entryMatch = trimmed.match(/^-\s+(.+)$/);
-      if (entryMatch) {
-        result.get(currentJob).push(entryMatch[1].replace(/^['"]|['"]$/g, '').trim());
+      if (entryMatch && (entryIndent === null || indent >= entryIndent)) {
+        if (entryIndent === null) entryIndent = indent;
+        result.get(currentJob).push(
+          entryMatch[1]
+            .replace(/\s+#.*$/, '')
+            .replace(/^['"]|['"]$/g, '')
+            .trim()
+        );
       } else {
         inChanges = false;
+        entryIndent = null;
       }
     } else if (trimmed === 'changes:') {
       inChanges = true;
+      entryIndent = null;
     }
   }
   return result;

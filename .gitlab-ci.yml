@@ -3062,15 +3062,22 @@ test:flutter:
 # An MR whose paths match only e2e:playwright's filter instantiates
 # e2e:playwright while its needs-partner is filtered out → GitLab fails
 # pipeline creation → the whole merge train goes red. Conversely, every path
-# the job executes or imports must be listed, or e2e silently skips on the
-# train: e2e:playwright runs tests/e2e/chatbot/, tests/e2e/documents/ and
-# tests/e2e/theme-runtime-config.spec.js, and imports tests/e2e/helpers/.
+# a job executes or consumes must be listed, or e2e silently skips on the
+# train:
+#   - e2e:playwright runs tests/e2e/chatbot/, tests/e2e/documents/ and
+#     tests/e2e/theme-runtime-config.spec.js; it reads tests/e2e/helpers/
+#     and tests/e2e/fixtures/ at runtime, and is installed/configured from
+#     package.json, package-lock.json and playwright.config.js (see
+#     .e2e_web_base before_script + cache keys).
+#   - e2e:integration deploys the stack from docker-compose.yaml seeded by
+#     the env template (cp env .env) — inputs to every e2e job.
 # tests/e2e/okf/ is not executed yet (MR2 wires the OKF specs into the
 # script — see .e2e_web_base script comment) but stays listed so those MRs
 # still get train coverage. YAML cannot concatenate lists, so the two filters
 # cannot share one list, and mobile/genie_ai_mobile is deliberately
 # integration-only (the web suite does not test the mobile app). The subset
-# invariant is enforced by tests/config-validator.
+# invariant and the executed/consumed-path lists are enforced by
+# tests/config-validator.
 e2e:integration:
   extends: .e2e_integration_base
   stage: e2e
@@ -3081,14 +3088,20 @@ e2e:integration:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
       changes:
         - mobile/genie_ai_mobile/**/*
+        - components/gov-chat-frontend/**/*
+        - components/gov-chat-backend/**/*
+        - components/document-repository/**/*
         - tests/e2e/chatbot/**/*
         - tests/e2e/documents/**/*
         - tests/e2e/okf/**/*
         - tests/e2e/helpers/**/*
+        - tests/e2e/fixtures/**/*
         - tests/e2e/theme-runtime-config.spec.js
-        - components/gov-chat-frontend/**/*
-        - components/gov-chat-backend/**/*
-        - components/document-repository/**/*
+        - playwright.config.js
+        - package.json
+        - package-lock.json
+        - docker-compose.yaml
+        - env
         - .gitlab-ci.yml
 
 # Playwright E2E — runs on merge trains. Its changes: filter must stay a
@@ -3101,14 +3114,20 @@ e2e:playwright:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
       changes:
+        - components/gov-chat-frontend/**/*
+        - components/gov-chat-backend/**/*
+        - components/document-repository/**/*
         - tests/e2e/chatbot/**/*
         - tests/e2e/documents/**/*
         - tests/e2e/okf/**/*
         - tests/e2e/helpers/**/*
+        - tests/e2e/fixtures/**/*
         - tests/e2e/theme-runtime-config.spec.js
-        - components/gov-chat-frontend/**/*
-        - components/gov-chat-backend/**/*
-        - components/document-repository/**/*
+        - playwright.config.js
+        - package.json
+        - package-lock.json
+        - docker-compose.yaml
+        - env
         - .gitlab-ci.yml
 
 # --- Configuration validation ---

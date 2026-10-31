@@ -41,22 +41,9 @@ describe('compose non-root contract (#1227)', () => {
     expect(violations.some((v) => v.includes('backend') && v.includes('is root'))).toBe(true);
   });
 
-  test('a data bind without create_host_path: false is a violation', () => {
-    const text = [
-      'services:',
-      '  backend:',
-      '    user: "1000:1000"',
-      '    volumes:',
-      '      - type: bind',
-      '        source: ./data/database_backups',
-      '        target: /app/database_backups',
-      ''
-    ].join('\n');
-    const { violations } = validateComposeNonRoot(text);
-    expect(violations.some((v) => v.includes('create_host_path: false'))).toBe(true);
-  });
-
   test('a data bind WITH create_host_path: false is accepted', () => {
+    // Negative control for the mutation test below: the accepted form must
+    // produce zero violations, so the gate cannot pass for a looser reason.
     const text = [
       'services:',
       '  backend:',

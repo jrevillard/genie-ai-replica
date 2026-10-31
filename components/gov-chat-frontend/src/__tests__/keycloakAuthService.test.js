@@ -659,6 +659,34 @@ describe('cross-tab renew lease (#80800)', () => {
     expect(window.localStorage.getItem(LEASE_KEY)).toBeNull();
   });
 
+  it('wrapManagerSignin is idempotent per instance and getUserManager lazy-wraps (#80941)', async () => {
+    await initialized();
+    const first = keycloakAuthService.getUserManager();
+    expect(first.__signinWrapped).toBe(true);
+    // Re-wrapping the SAME instance must not double-wrap.
+    mockGetUser.mockResolvedValue(null);
+    await keycloakAuthService.initialize(); // a re-initialize creates a NEW manager
+    const second = keycloakAuthService.getUserManager();
+    expect(second).not.toBe(first);
+    expect(second.__signinWrapped).toBe(true);
+    expect(second.signinSilent).not.toBe(mockSigninSilent);
+  });
+
+  it('getAccessTokenClaims: null without a token, null on a malformed token, claims on a valid JWT', async () => {
+    mockGetUser.mockResolvedValue(null);
+    await keycloakAuthService.initialize();
+    expect(keycloakAuthService.getAccessTokenClaims()).toBeNull(); // no-token arm
+
+    const payload = btoa(JSON.stringify({ sub: 'user-123', realm_access: { roles: ['admin'] } }));
+    mockGetUser.mockResolvedValue(createMockUser({ access_token: `hdr.${payload}.sig` }));
+    await keycloakAuthService.initialize();
+    expect(keycloakAuthService.getAccessTokenClaims().sub).toBe('user-123'); // decode path
+
+    mockGetUser.mockResolvedValue(createMockUser({ access_token: 'not-a-jwt' }));
+    await keycloakAuthService.initialize();
+    expect(keycloakAuthService.getAccessTokenClaims()).toBeNull(); // decode-throw catch arm
+  });
+
   it('two tabs contending: exactly ONE renew runs, the other adopts (#80914)', async () => {
     jest.useFakeTimers();
     // Each isolate is a fresh service module — its own RENEW_TAB_ID, its own

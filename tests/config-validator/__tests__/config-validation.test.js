@@ -2226,25 +2226,40 @@ describe('Configuration Validation Suite', () => {
 });
 
 // --- e2e merge-train changes filters (#1264) ---
-// e2e:playwright hard-needs e2e:integration on merge trains: an MR whose paths
-// match only e2e:playwright's changes: filter instantiates e2e:playwright
-// while its needs-partner is filtered out, and GitLab fails pipeline creation
-// ("needs" references a job not in the pipeline) — the whole train goes red.
-// Conversely, every path the job executes or consumes must stay listed, or e2e
-// silently skips on the train.
+// e2e:playwright hard-needs e2e:integration on merge trains: a train whose
+// paths instantiate e2e:playwright must also instantiate its needs-partner,
+// or GitLab fails pipeline creation and the whole train goes red. The CI file
+// makes that hold structurally — both jobs alias one hidden anchor
+// (.e2e_merge_train_changes) — so this guard pins the alias wiring and the
+// anchor contents instead of re-deriving a subset relation. Every path the
+// jobs execute or consume must be in the anchor, or e2e silently skips on
+// the train.
 describe('e2e merge-train changes filters (#1264)', () => {
   const ciFile = path.join(ROOT, '.gitlab-ci.yml');
+  const ANCHOR = '.e2e_merge_train_changes';
+  const E2E_JOBS = ['e2e:integration', 'e2e:playwright'];
+  let content;
   let filters;
 
   beforeAll(() => {
-    filters = parseGitlabCiJobChanges(ciFile, ['e2e:integration', 'e2e:playwright']);
+    content = fs.readFileSync(ciFile, 'utf-8');
+    filters = parseGitlabCiJobChanges(ciFile, [ANCHOR, ...E2E_JOBS]);
   });
+
+  // Section of the file from a top-level key to the next one.
+  const sectionOf = (job) => {
+    const start = content.indexOf(`\n${job}:`);
+    expect(start).toBeGreaterThan(-1);
+    const rest = content.slice(start + 1);
+    const end = rest.search(/\n[^\s]/);
+    return end === -1 ? rest : rest.slice(0, end + 1);
+  };
 
   // Executed paths are derived from the `npx playwright test` invocation in
   // .e2e_web_base rather than copied into a second hand-maintained list — a
   // hardcoded list would inherit the same drift this guard exists to catch.
   const executedPaths = () => {
-    const invocation = fs.readFileSync(ciFile, 'utf-8').match(/npx playwright test ([^\n]+)/);
+    const invocation = content.match(/npx playwright test ([^\n]+)/);
     expect(invocation).not.toBeNull();
     const targets = invocation[1]
       .split(/\s+/)
@@ -2258,46 +2273,49 @@ describe('e2e merge-train changes filters (#1264)', () => {
     return targets;
   };
 
-  test('executed paths (derived from the playwright invocation) are listed in both filters', () => {
-    const targets = executedPaths();
-    for (const job of ['e2e:integration', 'e2e:playwright']) {
-      for (const required of targets) {
-        expect(filters.get(job)).toContain(required);
-      }
-    }
-  });
-
   // Consumed at runtime by the executed specs but not visible on the
   // invocation line: helpers are imported, fixtures are uploaded/read by the
   // documents specs.
-  test('consumed paths (helpers, fixtures) are listed in both filters', () => {
-    for (const job of ['e2e:integration', 'e2e:playwright']) {
-      for (const required of ['tests/e2e/helpers/**/*', 'tests/e2e/fixtures/**/*']) {
-        expect(filters.get(job)).toContain(required);
-      }
+  const CONSUMED_PATHS = ['tests/e2e/helpers/**/*', 'tests/e2e/fixtures/**/*'];
+
+  test('executed and consumed paths are listed in the shared anchor', () => {
+    const anchorPaths = filters.get(ANCHOR);
+    for (const required of [...executedPaths(), ...CONSUMED_PATHS]) {
+      expect(anchorPaths).toContain(required);
     }
   });
 
-  test("e2e:playwright's changes: filter is a subset of e2e:integration's", () => {
-    const integrationPaths = new Set(filters.get('e2e:integration'));
-    const playwrightPaths = filters.get('e2e:playwright');
+  test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {
+    for (const job of E2E_JOBS) {
+      expect(sectionOf(job)).toContain('paths: *e2e_merge_train_changes');
+    }
+    // The line parser cannot see through the alias; an empty parse proves
+    // e2e:playwright carries no inline changes: entries beside it.
+    expect(filters.get('e2e:playwright')).toEqual([]);
+  });
 
-    expect(playwrightPaths.length).toBeGreaterThan(0);
-    expect(integrationPaths.size).toBeGreaterThan(0);
-
-    const missing = playwrightPaths.filter((p) => !integrationPaths.has(p));
-    expect(missing).toEqual([]);
+  test('mobile stays integration-only', () => {
+    expect(filters.get('e2e:integration')).toEqual(['mobile/genie_ai_mobile/**/*']);
+    expect(sectionOf('e2e:playwright')).not.toContain('mobile/');
   });
 });
 
 // --- parseGitlabCiJobChanges: block scoping ---
 describe('parseGitlabCiJobChanges', () => {
+  const tempDirs = [];
   const writeTempCi = (lines) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-job-changes-'));
+    tempDirs.push(dir);
     const file = path.join(dir, '.gitlab-ci.yml');
     fs.writeFileSync(file, lines.join('\n') + '\n');
     return file;
   };
+
+  afterEach(() => {
+    for (const dir of tempDirs.splice(0)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 
   test('entries are scoped to their changes: block — the next rule is not swallowed', () => {
     const file = writeTempCi([
@@ -2315,13 +2333,9 @@ describe('parseGitlabCiJobChanges', () => {
       '      changes:',
       '        - tests/e2e/chatbot/**/*'
     ]);
-    try {
-      const parsed = parseGitlabCiJobChanges(file, ['job-a', 'job-b']);
-      expect(parsed.get('job-a')).toEqual(['tests/e2e/chatbot/**/*']);
-      expect(parsed.get('job-b')).toEqual(['tests/e2e/chatbot/**/*']);
-    } finally {
-      fs.rmSync(path.dirname(file), { recursive: true, force: true });
-    }
+    const parsed = parseGitlabCiJobChanges(file, ['job-a', 'job-b']);
+    expect(parsed.get('job-a')).toEqual(['tests/e2e/chatbot/**/*']);
+    expect(parsed.get('job-b')).toEqual(['tests/e2e/chatbot/**/*']);
   });
 
   test('inline comments are stripped from entries', () => {
@@ -2332,11 +2346,24 @@ describe('parseGitlabCiJobChanges', () => {
       '      changes:',
       '        - tests/e2e/okf/**/*  # not executed yet (MR2 wires the specs)'
     ]);
-    try {
-      const parsed = parseGitlabCiJobChanges(file, ['job-a']);
-      expect(parsed.get('job-a')).toEqual(['tests/e2e/okf/**/*']);
-    } finally {
-      fs.rmSync(path.dirname(file), { recursive: true, force: true });
-    }
+    const parsed = parseGitlabCiJobChanges(file, ['job-a']);
+    expect(parsed.get('job-a')).toEqual(['tests/e2e/okf/**/*']);
+  });
+
+  test('hidden anchor keys parse their direct list; aliases stay opaque', () => {
+    const file = writeTempCi([
+      '.shared_changes: &shared_changes',
+      '  - tests/a/**/*',
+      '  - tests/b/**/*  # trailing comment',
+      '',
+      'job-a:',
+      '  rules:',
+      "    - if: '$X'",
+      '      changes:',
+      '        paths: *shared_changes'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['.shared_changes', 'job-a']);
+    expect(parsed.get('.shared_changes')).toEqual(['tests/a/**/*', 'tests/b/**/*']);
+    expect(parsed.get('job-a')).toEqual([]);
   });
 });

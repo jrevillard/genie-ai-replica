@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Tuning `RETRIEVER_ARANGO_DISTANCE_STRATEGY` / `RETRIEVER_ARANGO_NUM_CENTROIDS` now takes effect on the maintained vector index.** docker-compose.yaml delivered both only to the retriever, while the dataprep service — the component that actually creates `vector_index` — kept seeing the defaults (COSINE / 1): an operator-set value shaped the retriever's lazy-created index and was then dropped and recreated at defaults by the drift check on the next ingest, silently reverting the tuning every ingest. Both vars now reach the dataprep container too, mirroring `RETRIEVER_ARANGO_NPROBE`. Deployments that set them get a one-time index rebuild on upgrade; unset deployments see no change. (#1230, !656)
+- **Long non-English conversations are translated again.** The TranslateGemma
+  history translation capped its completion at a fixed 4096 tokens while the
+  prompt grew with the conversation, so past ~12k characters of history the
+  cap fell below the input and the service refused the request — the turn
+  embedded its history untranslated into the English retrieval space even
+  though the char budget (raised to ~97k chars by the discovered window)
+  had admitted it. The completion ceiling now scales with the discovered
+  translation window (the room the window leaves beside the prompt
+  estimate), so a long history is translated instead of refused; a window
+  genuinely too tight to translate into is still refused and still reported
+  as `fallback_error`. (#1241, !MR)
 
 - **A mobile release build of the `dev` or `e2e` flavor now fails at startup
   instead of shipping with the trust-all TLS client armed.** Both flavors set

@@ -595,11 +595,12 @@ def _build_user_content(user_context_string: str, history_string: str, rag_augme
     )
 
 
-def _translation_base_cap(text: str) -> int:
+def _translation_base_cap(text: str, ceiling: int = 4096) -> int:
     """Base completion cap for a translation request: roughly half the input
     size, bounded to a floor that keeps short inputs translatable and a
-    ceiling that keeps long ones bounded. Shared by every translation path."""
-    return min(max(len(text) // 2, 512), 4096)
+    ceiling that keeps long ones bounded. Shared by every translation path;
+    the history caller passes the window-derived ceiling it discovered."""
+    return min(max(len(text) // 2, 512), ceiling)
 
 
 def _get_max_model_len() -> int:
@@ -3656,23 +3657,26 @@ class ChatQnAService:
     def _translation_output_cap(self, flattened_history_string: str) -> int | None:
         """Completion cap for the TranslateGemma payload.
 
-        Base ceiling is len//2 (bounded 512..4096). When the translation window
-        is discovered, the cap is clamped so the prompt estimate (chars /
-        chars-per-token ratio) plus the completion stays inside the window —
-        otherwise vLLM rejects the whole request and the history goes back
-        untranslated. Returns None when the clamped cap drops below the
-        estimated input size (the completion would be shorter than what there
-        is to translate); the caller should skip the translation and send the
-        history as-is.
+        Base shape is len//2 with a 512 floor. When the translation window is
+        discovered, the ceiling is the room the window leaves beside the
+        prompt estimate (chars / chars-per-token ratio) — not the fixed 4096,
+        which would cap the completion below the input past ~12k chars and
+        refuse histories the char budget passes. The cap is None when even
+        the scaled ceiling drops below the estimated input size (the
+        completion would be shorter than what there is to translate); the
+        caller should skip the translation and send the history as-is.
         """
-        cap = _translation_base_cap(flattened_history_string)
         window = _get_translation_window()
         if window:
             prompt_token_estimate = len(flattened_history_string) // TRANSLATION_CHARS_PER_TOKEN
-            cap = min(cap, max(1, window - TRANSLATION_PROMPT_OVERHEAD_TOKENS - prompt_token_estimate))
+            cap = _translation_base_cap(
+                flattened_history_string,
+                ceiling=max(1, window - TRANSLATION_PROMPT_OVERHEAD_TOKENS - prompt_token_estimate),
+            )
             if cap < prompt_token_estimate:
                 return None
-        return cap
+            return cap
+        return _translation_base_cap(flattened_history_string)
 
     async def _get_translated_history_string(
         self, history: list | str, source_lang_code: str = "en"

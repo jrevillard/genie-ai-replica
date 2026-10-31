@@ -1462,6 +1462,8 @@ export default {
       'Tatizo la usanidi: lebo "{labels}" haipo tena katika mpangilio wa maarifa. Kitufe hiki hakiwezi kutumika hadi usanidi wake ukoreshwe.',
     quickHelpCategoryGone:
       'Tatizo la usanidi: kundi la kitufe hiki haipo tena katika mpangilio wa maarifa. Kitufe hiki hakiwezi kutumika hadi usanidi wake ukoreshwe.',
+    quickHelpTitleMissing:
+      'Tatizo la usanidi: kitufe hiki haina kichwa katika lugha hii. Kitufe hiki hakiwezi kutumika hadi usanidi wake ukoreshwe.',
     quickHelpScopeUnavailable:
       'Tatizo la usanidi: mpangilio wa maarifa haukuweza kupakiwa, hivyo kwa hiyo upeo wa kitufe hiki hauwezi kuthibitishwa. Kitufe hiki hakiwezi kutumika hadi mpangilio upo.',
     scopeNotNameable:

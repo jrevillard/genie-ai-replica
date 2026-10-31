@@ -134,6 +134,7 @@ jest.mock('jspdf', () => {
   }));
 });
 jest.mock('@lucide/vue', () => ({
+  AlertTriangle: { template: '<svg />' },
   Brain: { template: '<svg />' },
   Loader2: { template: '<svg />' },
   Plus: { template: '<svg />' },
@@ -204,12 +205,16 @@ async function createChatBotWrapperAsync(tree, storeOverrides = {}) {
   return wrapper;
 }
 
-function createChatBotWrapper(storeOverrides = {}, { rehydrate = false } = {}) {
+function createChatBotWrapper(storeOverrides = {}, { rehydrate = false, renderStubDefaultSlot = false } = {}) {
   const store = createChatBotStore(storeOverrides);
   if (rehydrate) rehydrateConversation(store.state.conversation);
   return mount(ChatBotComponent, {
     global: {
       plugins: [store],
+      // The stubs render no slot content by default, so what a card holds
+      // is invisible to the tests. A test that reads what a card SHOWS
+      // asks for the slot.
+      renderStubDefaultSlot,
       mocks: {
         $t: (key) => key,
         // Reactive, so a test can switch the locale the way the app does and
@@ -241,6 +246,28 @@ function createChatBotWrapper(storeOverrides = {}, { rehydrate = false } = {}) {
         FileText: true
       }
     }
+  });
+}
+
+// Mount with a configuration whose Quick Help buttons are [buttons]. The
+// config-loader mock is module-level, and clearAllMocks() does not reset an
+// implementation — resetQuickHelpButtons() restores the empty-button default
+// afterwards (from the describes' afterEach), so the rest of the suite is
+// unaffected. [options] is passed through to createChatBotWrapper.
+async function mountWithButtons(buttons, options = {}) {
+  const configLoader = require('../../config-loader');
+  configLoader.default.mockResolvedValue({
+    features: { chat: { quickHelp: { buttons } } }
+  });
+  const wrapper = createChatBotWrapper({}, options);
+  await flushPromises();
+  return wrapper;
+}
+
+function resetQuickHelpButtons() {
+  const configLoader = require('../../config-loader');
+  configLoader.default.mockResolvedValue({
+    features: { chat: { quickHelp: { buttons: [] } } }
   });
 }
 
@@ -4927,8 +4954,6 @@ describe('ChatBotComponent', () => {
   });
 
   describe('quick-help card tint', () => {
-    const configLoader = require('../../config-loader');
-
     const tintedButton = {
       id: 'identity-civil',
       title: { en: 'Apply for ID' },
@@ -4948,23 +4973,7 @@ describe('ChatBotComponent', () => {
       category: null
     };
 
-    const mountWithButtons = async (buttons) => {
-      configLoader.default.mockResolvedValue({
-        features: { chat: { quickHelp: { buttons } } }
-      });
-      const wrapper = createChatBotWrapper();
-      await flushPromises();
-      return wrapper;
-    };
-
-    afterEach(() => {
-      // The config-loader mock is module-level, and clearAllMocks() does
-      // not reset an implementation — restore the empty-button default so
-      // the rest of the suite is unaffected.
-      configLoader.default.mockResolvedValue({
-        features: { chat: { quickHelp: { buttons: [] } } }
-      });
-    });
+    afterEach(resetQuickHelpButtons);
 
     it('exposes the button tint as custom properties', () => {
       const wrapper = createChatBotWrapper();
@@ -5468,5 +5477,117 @@ describe('Quick Help category reference', () => {
 
     const button = wrapper.vm.quickHelpButtons.find((b) => b.id === 'civil');
     expect(button.category).toBe('2');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A Quick Help card with NO TITLE
+//
+// The configuration's title resolves to nothing (an absent title, an empty
+// locale map, or a map whose every entry is empty). The card then carries no
+// label — and the press gate refuses it (selectQuickHelpOption's first rule:
+// no service, no selection), so the tap did nothing at all: no caption, no
+// toast, no state change. A card that LOOKS alive and swallows the press.
+//
+// The mobile twin fixed the same shape with quickHelpCardBroken —
+// the DISPLAY twin of the press gate: every press refusal has a face. The web
+// renders the card as the broken card it is, with the caption naming the
+// missing title.
+// ---------------------------------------------------------------------------
+describe('Quick Help card with no title', () => {
+  // A card whose title resolves to nothing: the locale map's every entry
+  // is empty, so resolveConfigText finds nothing to show.
+  const titleLessButton = {
+    id: 'title-less',
+    title: { en: '' },
+    icon: { type: 'file', value: '/config/quickhelp/just-chat.svg' },
+    category: null,
+    styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
+  };
+
+  const titledButton = {
+    id: 'titled',
+    title: { en: 'A titled card' },
+    icon: { type: 'file', value: '/config/quickhelp/just-chat.svg' },
+    category: null,
+    styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
+  };
+
+  afterEach(resetQuickHelpButtons);
+
+  it('maps a title that resolves to nothing onto an empty label', async () => {
+    const wrapper = await mountWithButtons([titleLessButton]);
+
+    const button = wrapper.vm.quickHelpButtons.find((b) => b.id === 'title-less');
+    expect(button.service).toBe('');
+  });
+
+  it('marks the card broken, the way a broken scope does', async () => {
+    const wrapper = await mountWithButtons([titleLessButton]);
+    const vm = wrapper.vm;
+
+    const button = vm.quickHelpButtons.find((b) => b.id === 'title-less');
+    // The card's own verdict: the scope is fine, the TITLE is not, and
+    // the card is broken all the same — it is the display twin of the
+    // press refusal.
+    expect(vm.quickHelpScopeState(button).broken).toBe(false);
+    expect(vm.quickHelpCardBroken(button)).toBe(true);
+  });
+
+  it('leaves a card with a title alone', async () => {
+    const wrapper = await mountWithButtons([titledButton]);
+    const vm = wrapper.vm;
+
+    const button = vm.quickHelpButtons.find((b) => b.id === 'titled');
+    expect(vm.quickHelpCardBroken(button)).toBe(false);
+  });
+
+  it('names the missing title in the caption', async () => {
+    const en = require('../../i18n/locales/en').default;
+    const wrapper = createChatBotWrapperWithI18n({ en });
+    const vm = wrapper.vm;
+    mockLiveTree([]);
+    vm.serviceCategories = [];
+    vm.serviceCategoriesStatus = 'loaded';
+
+    const button = {
+      id: 'title-less',
+      service: '',
+      serviceLabels: [],
+      category: null,
+      icon: 'x'
+    };
+
+    // The caption IS the locale's own text for the missing title — the
+    // expectation reads the same locale file the app translates from, so
+    // a copy reword keeps this green while a dropped clause (an empty
+    // caption) or a dropped key (the raw key coming back) goes red. The
+    // text ships in all 14 locales.
+    expect(vm.quickHelpCardCaption(button)).toBe(en.chatbot.quickHelpTitleMissing);
+  });
+
+  it('shows the caption and the error icon on the card', async () => {
+    const wrapper = await mountWithButtons([titleLessButton], { renderStubDefaultSlot: true });
+    await wrapper.vm.$nextTick();
+
+    // The card renders as the broken card: the error class, the warning
+    // icon and the caption that says why.
+    const card = wrapper.find('.quick-help-item');
+    expect(card.classes()).toContain('config-error');
+    expect(wrapper.find('.config-error-icon').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="quick-help-error-caption"]').exists()).toBe(true);
+  });
+
+  it('sends no query when the card is pressed', async () => {
+    const wrapper = await mountWithButtons([titleLessButton]);
+    const vm = wrapper.vm;
+
+    const button = vm.quickHelpButtons.find((b) => b.id === 'title-less');
+    await vm.selectQuickHelpOption(button);
+
+    // The press installs nothing and sends nothing — the caption on the
+    // card is what the user reads.
+    expect(mockSubmitQueryStream).not.toHaveBeenCalled();
+    expect(vm.selectedContextItems).toHaveLength(0);
   });
 });

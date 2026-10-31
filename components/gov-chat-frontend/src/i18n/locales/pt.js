@@ -1475,6 +1475,8 @@ export default {
       'Problema de configuração: o rótulo «{labels}» já não existe na hierarquia de conhecimento. Este botão não pode ser usado até que a sua configuração seja atualizada.',
     quickHelpCategoryGone:
       'Problema de configuração: a categoria deste botão já não existe na hierarquia de conhecimento. Este botão não pode ser usado até que a sua configuração seja atualizada.',
+    quickHelpTitleMissing:
+      'Problema de configuração: este botão não tem título neste idioma. Este botão não pode ser usado até que a sua configuração seja atualizada.',
     quickHelpScopeUnavailable:
       'Problema de configuração: a hierarquia de conhecimento não pôde ser carregada, portanto o escopo deste botão não pode ser verificado. Este botão não pode ser usado até que a hierarquia esteja disponível.',
     scopeNotNameable:

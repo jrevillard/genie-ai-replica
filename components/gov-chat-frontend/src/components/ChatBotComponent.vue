@@ -339,25 +339,25 @@
             :key="button.id"
             variant="flat"
             padding="md"
-            :hoverable="!quickHelpScopeState(button).broken"
+            :hoverable="!quickHelpCardBroken(button)"
             class="quick-help-item"
-            :class="{ 'just-chat': !button.category, 'config-error': quickHelpScopeState(button).broken }"
+            :class="{ 'just-chat': !button.category, 'config-error': quickHelpCardBroken(button) }"
             :style="buttonTintStyle(button)"
             @click="selectQuickHelpOption(button)"
           >
             <AlertTriangle
-              v-if="quickHelpScopeState(button).broken"
+              v-if="quickHelpCardBroken(button)"
               class="quick-help-icon config-error-icon"
               aria-hidden="true"
             />
             <img v-else class="quick-help-icon" :src="button.icon" alt="Quick Help Icon" />
             <div class="quick-help-text">{{ button.service }}</div>
             <div
-              v-if="quickHelpScopeState(button).broken"
+              v-if="quickHelpCardBroken(button)"
               class="quick-help-error-caption"
               data-testid="quick-help-error-caption"
             >
-              {{ quickHelpErrorCaption(button) }}
+              {{ quickHelpCardCaption(button) }}
             </div>
           </DsCard>
         </div>
@@ -1436,6 +1436,25 @@ export default {
       return this.computeQuickHelpScopeState(button);
     },
 
+    // The card's title, or null when it carries none. An EMPTY title is
+    // no title: the card renders a blank label, and the press gate
+    // refuses it (selectQuickHelpOption) — a silent dead tap. The
+    // mobile twin reads the same fact from the parsed button's own
+    // 'resolvedTitle'; the web's mapped button carries the resolved
+    // title in `service`.
+    quickHelpCardTitle(button) {
+      return (button && button.service) || null;
+    },
+
+    // The card's DISPLAY verdict — the twin of the press gate. The
+    // scope verdict alone misses the title gate: a card with no title
+    // looks pressable (an icon, a blank label) while the tap refuses
+    // itself silently, so the card renders broken too. The scope
+    // verdict itself stays scope-only — the send-time guard reads it.
+    quickHelpCardBroken(button) {
+      return this.quickHelpScopeState(button).broken || this.quickHelpCardTitle(button) === null;
+    },
+
     computeQuickHelpScopeState(button) {
       if (this.serviceCategoriesStatus === 'failed') {
         // The hierarchy is what NAMES a scope. Without it, no scope can be
@@ -1493,6 +1512,23 @@ export default {
 
     quickHelpErrorCaption(button) {
       return this.quickHelpStatesCaption([this.quickHelpScopeState(button)]);
+    },
+
+    // The caption a GRID CARD shows. It names EVERY failure the card
+    // carries: the missing title first — the configuration defect is
+    // the diagnosis that outlives a hierarchy outage (the outage text
+    // describes a state that recovery ends) — then the scope's own
+    // caption. The mobile twin joins the two in the same order.
+    quickHelpCardCaption(button) {
+      const parts = [];
+      if (this.quickHelpCardTitle(button) === null) {
+        parts.push(this.translate('chatbot.quickHelpTitleMissing', ''));
+      }
+      parts.push(this.quickHelpErrorCaption(button));
+      // A part the i18n layer resolves to nothing (a locale shipping an
+      // empty value) contributes no text: an empty join part would leave
+      // a stray leading space, or an empty caption on a broken card.
+      return parts.filter(Boolean).join(' ');
     },
 
     // The caption for a set of BROKEN scope states — the ONE assembly both

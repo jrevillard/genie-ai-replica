@@ -597,8 +597,9 @@ def _build_user_content(user_context_string: str, history_string: str, rag_augme
 
 def _translation_base_cap(text: str, ceiling: int = 4096) -> int:
     """Base completion cap for a translation request: roughly half the input
-    size, bounded to a floor that keeps short inputs translatable and a
-    ceiling that keeps long ones bounded. Shared by every translation path;
+    size, with a 512 floor that keeps short inputs translatable and a
+    ceiling that keeps long ones bounded (a ceiling below the floor wins —
+    the window caller may clamp that far). Shared by every translation path;
     the history caller passes the window-derived ceiling it discovered."""
     return min(max(len(text) // 2, 512), ceiling)
 
@@ -3657,12 +3658,13 @@ class ChatQnAService:
     def _translation_output_cap(self, flattened_history_string: str) -> int | None:
         """Completion cap for the TranslateGemma payload.
 
-        Base shape is len//2 with a 512 floor. When the translation window is
-        discovered, the ceiling is the room the window leaves beside the
-        prompt estimate (chars / chars-per-token ratio) — not the fixed 4096,
-        which would cap the completion below the input past ~12k chars and
-        refuse histories the char budget passes. The cap is None when even
-        the scaled ceiling drops below the estimated input size (the
+        Base shape is len//2 with a 512 floor, clamped down to the room the
+        window leaves when the translation window is discovered — the
+        ceiling is the allowance beside the prompt estimate (chars /
+        chars-per-token ratio), not the fixed 4096, which would cap the
+        completion below the input past ~12k chars and refuse histories the
+        char budget passes. The cap is None when even the scaled ceiling
+        drops below the estimated input size (the
         completion would be shorter than what there is to translate); the
         caller should skip the translation and send the history as-is.
         """

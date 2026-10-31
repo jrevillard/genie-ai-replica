@@ -1433,11 +1433,13 @@ services:
   # the job) and writes nothing outside the named volumes — see the no-root
   # contract test. Each run PROBES for root-owned paths (find -user root) and
   # hands exactly those to the service uid — no marker file, so nothing
-  # written after the sweep is stranded under a permanent skip, and the
-  # empty-volume repopulation docker does at every container create is
-  # re-healed on the next COMPOSE deploy (swarm re-runs an init only when
-  # its service spec changes — a fresh root-era volume on an unchanged
-  # spec needs `docker service update --force <stack>_<init>`).
+  # written after the sweep is stranded under a permanent skip. BOTH
+  # front-ends only re-run this init when its container is RECREATED:
+  # compose keeps an exited-0 one-shot exited across unchanged `up`s, and
+  # swarm re-runs a task only when the service spec changes — a fresh
+  # root-era volume needs `docker compose up -d --force-recreate
+  # arango-vector-db-init` (compose) or `docker service update --force
+  # <stack>_<init>` (swarm).
   arango-vector-db-init:
     <<: *chown-init
     # PER-VOLUME guard (same doctrine as backend-init): a missing marker

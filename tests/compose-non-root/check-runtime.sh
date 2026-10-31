@@ -211,13 +211,28 @@ backup_dir="$DATA_DIR/database_backups"
 if [ -L "$backup_dir" ]; then
   backup_dir="$(readlink -f "$backup_dir")"
 fi
-if [ -d "$backup_dir" ]; then
-  misowned=$(find "$backup_dir" ! -uid 1000 -print 2>/dev/null | head -20)
+if [ ! -d "$backup_dir" ]; then
+  echo "BACKUP DIR MISSING: $backup_dir does not exist — the backend bind is"
+  echo "create_host_path:false, so on a RUNNING stack this directory must exist."
+  echo "A skipped ownership check is never an OK."
+  violations=$((violations + 1))
+else
+  find_err=$(mktemp)
+  find_out=$(mktemp)
+  find "$backup_dir" ! -uid 1000 -print > "$find_out" 2>"$find_err"
+  find_rc=$?
+  if [ -s "$find_err" ] || [ $find_rc -ne 0 ]; then
+    echo "FIND ERRORS while sweeping $backup_dir (untraversable paths are NOT checked):"
+    sed 's/^/  /' "$find_err"
+    violations=$((violations + 1))
+  fi
+  misowned=$(head -20 "$find_out")
   if [ -n "$misowned" ]; then
     echo "NON-BACKEND-OWNED paths under $backup_dir (the uid-1000 backend must own them):"
     echo "$misowned" | sed 's/^/  /'
     violations=$((violations + 1))
   fi
+  rm -f "$find_err" "$find_out"
 fi
 
 if [ "$violations" -gt 0 ]; then

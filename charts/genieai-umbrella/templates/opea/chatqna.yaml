@@ -70,6 +70,7 @@
     (dict "name" "VLLM_TRANSLATION_ENDPOINT" "value" $translationEndpoint)
     (dict "name" "LLM_MODEL" "value" ($opeaModelsLlm.modelId | default "ibm-granite/granite-4.1-8b" | toString))
     (dict "name" "VLLM_MODEL_ID" "value" "")
+    (dict "name" "MODEL_DETECT_TTL" "value" "60")
     (dict "name" "VLLM_TRANSLATION_MODEL_ID" "value" ($opeaTranslation.modelId | default "google/gemma-3-4b-it" | toString))
     (dict "name" "RERANKING_STRATEGY" "value" ($opeaChatqna.rerankingStrategy | default "slice" | toString))
     (dict "name" "RERANKING_THRESHOLD" "value" ($opeaChatqna.rerankingThreshold | default "0.75" | toString))

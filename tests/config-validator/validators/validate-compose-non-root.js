@@ -236,6 +236,9 @@ function validateComposeNonRoot(composeText) {
   // line must attach to the entry its own `bind:` key opened, not to the
   // last-pushed source (a misplaced opt-out would otherwise silence the
   // wrong bind).
+  let inBindOpts = false;
+  let pendingCreateFalse = false;
+  let sourceSeenThisEntry = false;
   let bindOptsTarget = null;
 
   for (let i = 0; i < lines.length; i++) {
@@ -256,6 +259,9 @@ function validateComposeNonRoot(composeText) {
       currentService = serviceMatch[1];
       serviceBinds[currentService] = [];
       anchorMerged = false;
+      inBindOpts = false;
+      pendingCreateFalse = false;
+      sourceSeenThisEntry = false;
       bindOptsTarget = null;
       continue;
     }
@@ -350,8 +356,16 @@ function validateComposeNonRoot(composeText) {
     if (inVolumes) {
       if (!/^ {6}/.test(line)) {
         inVolumes = false;
+        inBindOpts = false;
+        pendingCreateFalse = false;
+        sourceSeenThisEntry = false;
         bindOptsTarget = null;
         continue;
+      }
+      if (/^ {6}-\s/.test(line)) {
+        // a new long-syntax entry begins — its opts may only attach to a
+        // source: seen from here on
+        sourceSeenThisEntry = false;
       }
       // long syntax:
       //   - type: bind
@@ -362,19 +376,33 @@ function validateComposeNonRoot(composeText) {
       const srcMatch = line.match(/^ {8}source:\s*(\S+)\s*(?:#.*)?$/);
       if (srcMatch) {
         const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
+        // YAML mapping order is free: a `bind:` opts block may follow its
+        // own source: (the common spelling) or precede it. Retro-attach to
+        // the source: this entry opened when we saw one; otherwise arm the
+        // pending flag the next source: consumes.
+        const idx = binds.length;
         binds.push({ path: srcMatch[1], createHostPathFalse: false, shortSyntax: false });
-        bindOptsTarget = null; // the next `bind:` block belongs to THIS entry
+        if (pendingCreateFalse) {
+          binds[idx].createHostPathFalse = true;
+          pendingCreateFalse = false;
+        }
+        sourceSeenThisEntry = true;
+        inBindOpts = false;
         continue;
       }
       if (/^ {8}bind:\s*$/.test(line)) {
-        // The opts block attaches to the entry just pushed — remember which.
-        const binds = serviceBinds[currentService] || [];
-        if (binds.length) bindOptsTarget = binds.length - 1;
+        inBindOpts = true;
+        bindOptsTarget = sourceSeenThisEntry ? (serviceBinds[currentService] || []).length - 1 : null;
         continue;
       }
       const createFalse = line.match(/^ {10}create_host_path:\s*false\s*$/);
-      if (createFalse && bindOptsTarget !== null && serviceBinds[currentService]) {
-        serviceBinds[currentService][bindOptsTarget].createHostPathFalse = true;
+      if (createFalse && inBindOpts) {
+        if (bindOptsTarget !== null) {
+          serviceBinds[currentService][bindOptsTarget].createHostPathFalse = true;
+          bindOptsTarget = null;
+        } else {
+          pendingCreateFalse = true;
+        }
         continue;
       }
       // Short syntax: - <host>:<container>[:mode] — the form the deleted
@@ -397,4 +425,25 @@ function validateComposeNonRoot(composeText) {
   return { violations, alwaysOn };
 }
 
-module.exports = { validateComposeNonRoot, SELF_DROPPING, ONE_SHOT_ROOT_INIT };
+/**
+ * Collect the service names declared under the top-level `services:`
+ * section — 2-space keys only, tracked by section so the top-level
+ * `volumes:` keys never leak in. compose-non-root.test.js MUST use this
+ * helper (not its own scan) or the two notions of "a service exists"
+ * drift apart silently.
+ */
+function collectServiceNames(composeText) {
+  const names = new Set();
+  let inServices = false;
+  for (const line of composeText.split('\n')) {
+    if (/^[a-z][\w-]*:\s*$/.test(line)) {
+      inServices = line.trim() === 'services:';
+    } else if (inServices) {
+      const m = line.match(/^ {2}([\w-]+):\s*$/);
+      if (m) names.add(m[1]);
+    }
+  }
+  return names;
+}
+
+module.exports = { validateComposeNonRoot, collectServiceNames, SELF_DROPPING, ONE_SHOT_ROOT_INIT };

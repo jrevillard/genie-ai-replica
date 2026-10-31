@@ -17,21 +17,22 @@
 
 - name: Stat the log directory
   # A MISSING data/logs is the NORMAL case on fresh nodes (the pre-create
-  # loop no longer creates it) and after a successful cleanup (the rm
-  # below removes the tree) — it must be a no-op, never "leftovers
-  # present" (find's ENOENT would fail the rm task and abort the play).
+  # loop no longer creates it) — it must be a no-op, never "leftovers
+  # present" (find's ENOENT would fail the chown task and abort the
+  # play). The directory is never deleted by this file; only its
+  # root-era OWNERSHIP is handed over below.
   ansible.builtin.stat:
     path: "{{ deploy_dir }}/{{ data_dir }}/logs"
   register: _logs_dir
 
 - name: Detect root-era leftovers under the log directory
-  # Runs only when the directory exists. The cleanup below deletes only
-  # what this probe finds: ROOT-owned paths (what the docker daemon
-  # created for the removed log binds). Logs an operator copied back for
+  # Runs only when the directory exists. The task below CHOWNS only what
+  # this probe finds: ROOT-owned paths (what the docker daemon created
+  # for the removed log binds). Logs an operator copied back for
   # forensics under their own uid leave the probe empty and are never
   # touched. failed_when:false + rc: an untraversable root-owned 0700
   # subdir makes find (running as the unprivileged ansible_user) exit 1 —
-  # treat that as "leftovers present" (the root rm below heals it).
+  # treat that as "leftovers present" (the root chown below heals it).
   ansible.builtin.command: >-
     find {{ deploy_dir }}/{{ data_dir }}/logs -uid 0 -print -quit
   register: _logs_root_owned

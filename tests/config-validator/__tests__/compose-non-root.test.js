@@ -145,7 +145,7 @@ describe('compose non-root contract (#1227)', () => {
     // EACH key alone must trip the gate: compose reads `restart:` while
     // swarm reads deploy.restart_policy — flipping one must not hide behind
     // the other.
-    const swarmFlip = composeText.replaceAll('condition: "none"', 'condition: always');
+    const swarmFlip = composeText.replaceAll('condition: on-failure', 'condition: always');
     expect(swarmFlip).not.toBe(composeText);
     const { violations: vSwarm } = validateComposeNonRoot(swarmFlip);
     expect(vSwarm.some((v) => v.includes('victorialogs-init') && v.includes('one-shot'))).toBe(true);
@@ -157,12 +157,12 @@ describe('compose non-root contract (#1227)', () => {
   });
 
   test('mutation: on-failure without max_attempts trips the gate', () => {
-    // The anchor carries restart_policy.condition "none" and NO max_attempts:
-    // flipping the condition to on-failure makes every anchor-merged init an
-    // UNBOUNDED restart loop of a failing root container (swarm restarts
-    // forever without a bound). Each must trip by name — arango-vector-db-init
-    // asserted as the canary.
-    const unbounded = composeText.replaceAll('condition: "none"', 'condition: on-failure');
+    // The anchor carries restart_policy.condition on-failure WITH a bound
+    // (the one-shot rule's blessed self-healing form). Stripping the bound
+    // turns every anchor-merged init into an UNBOUNDED restart loop of a
+    // failing root container (swarm restarts forever without a bound). Each
+    // must trip by name — arango-vector-db-init asserted as the canary.
+    const unbounded = composeText.replace('\n      max_attempts: 3\n', '\n');
     expect(unbounded).not.toBe(composeText);
     const { violations } = validateComposeNonRoot(unbounded);
     expect(
@@ -185,6 +185,23 @@ describe('compose non-root contract (#1227)', () => {
     expect(
       vBounded.filter((v) => v.includes('arango-vector-db-init') && v.includes('on-failure without max_attempts'))
     ).toEqual([]);
+  });
+
+  test('mutation: a doubly-nested variable default cannot defeat the gate', () => {
+    // ${DATA_DIR:-${MOUNT_DIR:-./data}} is legal compose — the resolver
+    // must strip nesting until stable, not stop at the first inner brace.
+    const nested = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes:',
+      '      - type: bind',
+      '        source: ${DATA_DIR:-${MOUNT_DIR:-./data}}/logs/kong',
+      '        target: /var/log/kong',
+      ''
+    ].join('\n');
+    const { violations } = validateComposeNonRoot(nested);
+    expect(violations.some((v) => v.includes('kong') && v.includes('create_host_path: false'))).toBe(true);
   });
 
   test('data-dir detection survives variable spellings (renaming cannot defeat the gate)', () => {

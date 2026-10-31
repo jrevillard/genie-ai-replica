@@ -177,6 +177,9 @@ relevant node:
 
 ```bash
 mkdir -p data/database_backups data/huggingface secrets/ssl
+# The backend runs as uid 1000 and must own the backup directory —
+# your own uid is rarely 1000 (chown needs root):
+sudo chown 1000:1000 data/database_backups
 ```
 
 | Directory | Purpose | Which node |

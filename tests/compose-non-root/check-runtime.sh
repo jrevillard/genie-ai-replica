@@ -61,7 +61,21 @@ if [ -z "$containers" ]; then
   echo "A vacuous pass would be worse than a failure — check the project name and rerun."
   exit 2
 fi
+# SELF_DROPPING services (the static contract's allowlist): their upstream
+# entrypoints gosu/su-exec the SERVER to its package user, but the
+# container's configured user stays root — so the periodic healthcheck
+# exec (pg_isready / redis-cli) legitimately runs as uid 0 for its
+# sub-second lifetime. Rule 1 governs LONG-TERM processes; these services
+# are skipped for rule 1 (rule 2 still sweeps everything).
+SELF_DROPPING=' postgres redis-cache '
+
 while IFS= read -r container; do
+  service="${container#"$PROJECT"-}"; service="${service#"${PROJECT}_"}"
+  case "$SELF_DROPPING" in
+    *" $service "*)
+      echo "  (self-dropping service $service: server runs as its package user; transient root healthcheck execs skipped)"
+      continue;;
+  esac
   # `uid` (effective, NUMERIC): matching the username string would pass
   # a uid-0 process whose container passwd aliases 0 to another name
   # (useradd -o -u 0 admin) — the alias makes docker top print "admin"

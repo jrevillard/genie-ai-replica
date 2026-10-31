@@ -22,12 +22,7 @@ const fs = require('fs');
  * @returns {Array<{ name: string, default: string|null, hasDefault: boolean, raw: string }>}
  */
 function parseComposeEnvVars(filePath) {
-  let content;
-  try {
-    content = fs.readFileSync(filePath, 'utf-8');
-  } catch (err) {
-    throw new Error(`Failed to read docker-compose file: ${filePath}`, { cause: err });
-  }
+  const content = readFileOrThrow(filePath, 'docker-compose file');
   // Filter out comment lines to avoid false positives from documentation text
   const codeLines = content
     .split('\n')
@@ -150,12 +145,7 @@ function crossReference(composeVars, envParsed) {
  * @returns {Array<{ service: string|null, image: string, isVariableRef: boolean }>}
  */
 function parseComposeImages(filePath) {
-  let content;
-  try {
-    content = fs.readFileSync(filePath, 'utf-8');
-  } catch (err) {
-    throw new Error(`Failed to read compose file: ${filePath}`, { cause: err });
-  }
+  const content = readFileOrThrow(filePath, 'compose file');
 
   const lines = content.split('\n');
   const results = [];
@@ -217,12 +207,7 @@ function parseComposeImages(filePath) {
  * @returns {Array<{ name: string, image: string }>}
  */
 function parseAnsibleImages(filePath) {
-  let content;
-  try {
-    content = fs.readFileSync(filePath, 'utf-8');
-  } catch (err) {
-    throw new Error(`Failed to read Ansible file: ${filePath}`, { cause: err });
-  }
+  const content = readFileOrThrow(filePath, 'Ansible file');
 
   const results = [];
   for (const line of content.split('\n')) {
@@ -359,7 +344,7 @@ function parseGitlabCiJobChanges(filePath, jobNames) {
       } else {
         listIndent = null;
       }
-    } else if (trimmed === 'changes:') {
+    } else if (/^changes:\s*(?:#.*)?$/.test(trimmed)) {
       listIndent = indent;
     }
   }
@@ -409,12 +394,7 @@ module.exports = {
  * @returns {Array<{ service: string, profiles: string[], replicas: string|null, replicasLine: number|null, envVars: string[] }>}
  */
 function parseComposeServiceContracts(filePath) {
-  let content;
-  try {
-    content = fs.readFileSync(filePath, 'utf-8');
-  } catch (err) {
-    throw new Error(`Failed to read docker-compose file: ${filePath}`, { cause: err });
-  }
+  const content = readFileOrThrow(filePath, 'docker-compose file');
 
   const lines = content.split('\n');
   const contracts = [];

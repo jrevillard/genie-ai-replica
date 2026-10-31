@@ -2246,12 +2246,14 @@ describe('e2e merge-train changes filters (#1264)', () => {
     filters = parseGitlabCiJobChanges(ciFile, [ANCHOR, ...E2E_JOBS]);
   });
 
-  // Section of the file from a top-level key to the next one.
+  // Section of the file from a top-level key to the next one. The boundary
+  // matches a top-level KEY line only — a column-0 comment inside the job
+  // body is valid YAML there and must not truncate the section.
   const sectionOf = (job) => {
     const start = content.indexOf(`\n${job}:`);
     expect(start).toBeGreaterThan(-1);
     const rest = content.slice(start + 1);
-    const end = rest.search(/\n[^\s]/);
+    const end = rest.search(/\n[\w:.-]+:(\s|$)/);
     return end === -1 ? rest : rest.slice(0, end + 1);
   };
 
@@ -2292,6 +2294,16 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // The line parser cannot see through the alias; an empty parse proves
     // e2e:playwright carries no inline changes: entries beside it.
     expect(filters.get('e2e:playwright')).toEqual([]);
+  });
+
+  test('every rule carries the merge-train condition', () => {
+    // Broadening e2e:playwright's rule to all merge_request_event pipelines
+    // would dangle its hard needs on every ordinary MR pipeline and fail
+    // pipeline creation repo-wide; e2e:integration's two rules must stay
+    // scoped the same way.
+    const trainCondition = 'CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"';
+    expect(sectionOf('e2e:playwright').split(trainCondition).length - 1).toBe(1);
+    expect(sectionOf('e2e:integration').split(trainCondition).length - 1).toBe(2);
   });
 
   test('mobile stays integration-only', () => {
@@ -2348,6 +2360,18 @@ describe('parseGitlabCiJobChanges', () => {
     ]);
     const parsed = parseGitlabCiJobChanges(file, ['job-a']);
     expect(parsed.get('job-a')).toEqual(['tests/e2e/okf/**/*']);
+  });
+
+  test('a changes: key carrying a trailing comment still starts a block', () => {
+    const file = writeTempCi([
+      'job-a:',
+      '  rules:',
+      "    - if: '$X'",
+      '      changes:  # why these paths',
+      '        - tests/a/**/*'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['job-a']);
+    expect(parsed.get('job-a')).toEqual(['tests/a/**/*']);
   });
 
   test('hidden anchor keys parse their direct list; aliases stay opaque', () => {

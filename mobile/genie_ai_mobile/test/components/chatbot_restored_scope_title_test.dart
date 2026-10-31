@@ -63,19 +63,6 @@ void main() {
     resetThemeManager();
   });
 
-  tearDown(() {
-    // The locale is a singleton: a test that switched it must not name
-    // the next test's mount.
-    I18nService().changeLanguage('en');
-    // The asset mock must not outlive its test — neither the handler
-    // (a later test would read the mutated config through it) nor the
-    // bundle's CACHE of the mutated bytes (a later test reading the
-    // real asset would get a cache hit serving them).
-    TestWidgetsFlutterBinding.instance.defaultBinaryMessenger
-        .setMockMessageHandler('flutter/assets', null);
-    rootBundle.evict('assets/config/genie-ai-config.json');
-  });
-
   // The REAL bundled configuration, with the buttons replaced by the
   // card the button-scope test restores. Encoded ONCE: the mock serves
   // the same bytes for every request.
@@ -143,11 +130,16 @@ void main() {
     heldConfig = null;
   }
 
+  /// The mock the CURRENT test mounted — the tearDown releases its held
+  /// responses even when an assertion failed before the test could.
+  _RestoredScopeMockClient? activeMock;
+
   Future<void> pumpChat(
     WidgetTester tester,
     _RestoredScopeMockClient mock, {
     GlobalKey<ChatBotComponentState>? chatKey,
   }) async {
+    activeMock = mock;
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -182,6 +174,27 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  tearDown(() {
+    // The locale is a singleton: a test that switched it must not name
+    // the next test's mount.
+    I18nService().changeLanguage('en');
+    // The asset mock must not outlive its test — neither the handler
+    // (a later test would read the mutated config through it) nor the
+    // bundle's CACHE of the mutated bytes (a later test reading the
+    // real asset would get a cache hit serving them).
+    TestWidgetsFlutterBinding.instance.defaultBinaryMessenger
+        .setMockMessageHandler('flutter/assets', null);
+    rootBundle.evict('assets/config/genie-ai-config.json');
+    // A test that FAILED while a response was still held must not take
+    // the held fetches to its grave: an in-flight future never settles,
+    // the next pumpAndSettle hangs, and the one-line assertion failure
+    // that actually regressed is masked by a timeout. Releasing here is
+    // a no-op for tests that released their own holds.
+    releaseConfigAsset();
+    activeMock?.releaseHeld();
+    activeMock = null;
+  });
 
   testWidgets('a restored sidebar scope titles its bar in the UI locale', (
     tester,

@@ -30,6 +30,18 @@ import 'package:genie_ai_mobile/utils/config_resolver.dart';
 
 import 'quick_help_scope.dart';
 
+/// The identity of the restored scope whose title the context bar
+/// carries: the raw source (the conversation's category id, the Quick
+/// Help button id) plus the category key the localized tree re-names
+/// the title by. ONE spelling — the fetch's stale-response capture and
+/// the "title source moved" guard must compare the same shape, and a
+/// structurally-identical record would unify silently.
+typedef _RestoredTitleSource = ({
+  String? categoryId,
+  String? buttonId,
+  String? key,
+});
+
 class ChatBotComponent extends ConsumerStatefulWidget {
   final String userId;
   final VoidCallback onRefreshSidebar;
@@ -207,7 +219,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // service names, a Quick Help button's title (the config reload
   // re-resolves that one by id), a scope-less restore, or no scope at
   // all.
-  ({String? categoryId, String? buttonId, String? key})? _restoredTitleSource;
+  _RestoredTitleSource? _restoredTitleSource;
 
   bool get _hasUnsavedChanges {
     if (_currentConversationId == null) {
@@ -685,8 +697,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // conversation's edge carries.
     final List<String> labels = List<String>.of(_sidebarServiceLabelsEn);
     final int serviceCount = _sidebarServiceCount;
-    final ({String? categoryId, String? buttonId, String? key})?
-    restoredSource = _restoredTitleSource;
+    final _RestoredTitleSource? restoredSource = _restoredTitleSource;
     final String locale = _currentLocale;
     try {
       final categoriesApi = ref.read(serviceCategoriesApiProvider);

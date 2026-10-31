@@ -404,6 +404,17 @@
         - "{{ data_dir }}/logs/kong"
         - "{{ data_dir }}/logs"
 
+    - name: Detect root-era files in the backend backup directory
+      # The handover is a ONE-TIME migration, not an every-deploy
+      # re-assertion over the dump archive: the recursive chown runs only
+      # when something under the tree is still root-owned (the same
+      # marker-file pattern the volume inits use), so operator- or
+      # restore-placed dumps under other uids are left alone on later runs.
+      ansible.builtin.command: >-
+        find {{ deploy_dir }}/{{ data_dir }}/database_backups -uid 0 -print -quit
+      register: _backup_root_owned
+      changed_when: false
+
     - name: Give the backend backup directory to the backend uid
       # #1227: the backend container runs as uid 1000 and writes its DB
       # dumps here; mode alone leaves the directory root-owned. Escalate to
@@ -419,6 +430,7 @@
         owner: "1000"
         group: "1000"
         recurse: true
+      when: _backup_root_owned.stdout | length > 0
 
 - name: GENIE.AI - Pre-create data directories on worker nodes (#1227)
   # swarmkit silently creates a missing bind source ROOT-owned on the node

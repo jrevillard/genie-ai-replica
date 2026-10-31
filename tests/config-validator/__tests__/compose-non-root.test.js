@@ -106,7 +106,7 @@ describe('compose non-root contract (#1227)', () => {
 
   test('mutation: a one-shot init without CHOWN or with restart-always trips the gate', () => {
     // Enforcement only applies to allowlisted members, so mutate the REAL
-    // file: strip CHOWN from the x-chown-init anchor (the three merged
+    // file: strip CHOWN from the x-chown-init anchor (the five merged
     // inits inherit their caps from it), then flip the one-shot restart
     // policy — each mutation must surface as a violation.
     const noChown = composeText.replaceAll('  cap_add:\n    - CHOWN\n', '');
@@ -228,8 +228,20 @@ describe('compose non-root contract (#1227)', () => {
 
   test('allowlist entries reference services that exist in the compose file', () => {
     // A renamed or removed service would leave a stale allowlist entry that
-    // enforces nothing — dead enforcement data.
-    const serviceNames = new Set([...composeText.matchAll(/^ {2}([\w-]+):\s*$/gm)].map((m) => m[1]));
+    // enforces nothing — dead enforcement data. Scan ONLY 2-space keys
+    // under the services: section: the top-level volumes: section carries
+    // 2-space keys too (postgres_data, backend_data, ...), and a
+    // volume-name collision would falsely confirm a dead entry.
+    const serviceNames = new Set();
+    let inServices = false;
+    for (const line of composeText.split('\n')) {
+      if (/^[a-z][\w-]*:\s*$/.test(line)) {
+        inServices = line.trim() === 'services:';
+      } else if (inServices) {
+        const m = line.match(/^ {2}([\w-]+):\s*$/);
+        if (m) serviceNames.add(m[1]);
+      }
+    }
     for (const name of [...Object.keys(SELF_DROPPING), ...Object.keys(ONE_SHOT_ROOT_INIT)]) {
       expect(serviceNames.has(name)).toBe(true);
     }

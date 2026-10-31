@@ -71,7 +71,11 @@ EOF
 # directory itself is root-owned by design (the Ansible loop creates the
 # parent), and data/huggingface belongs to the profile-gated GPU TEI
 # services, which the contract excludes.
-if [ -d "$DATA_DIR" ]; then
+if [ ! -d "$DATA_DIR" ]; then
+  echo "DATA DIR MISSING: '$DATA_DIR' does not exist — the root-owned sweep"
+  echo "would be vacuous. Fix the path (or create the dir) and rerun."
+  violations=$((violations + 1))
+else
   find_err=$(mktemp)
   rootowned=$(find "$DATA_DIR" -mindepth 1 -path "$DATA_DIR/huggingface" -prune -o -uid 0 -print 2>"$find_err")
   if [ -s "$find_err" ]; then

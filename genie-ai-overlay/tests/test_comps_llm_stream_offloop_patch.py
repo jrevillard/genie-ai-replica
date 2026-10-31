@@ -325,6 +325,28 @@ def test_mangled_helper_body_is_not_already_patched(tmp_path):
         mod.apply_patch(p)
 
 
+def test_wrong_receiver_helper_body_is_not_already_patched(tmp_path):
+    """Same shape, wrong receiver: `othermod.to_thread(other.post)` matches
+    the attribute names but dispatches neither asyncio nor requests — the
+    already-patched shortcut must refuse it like any other mangled body."""
+    p = tmp_path / "orchestrator.py"
+    body = FAKE_ORCHESTRATOR.replace("response = requests.post(", "response = await _llm_post_offloop(")
+    dispatch = "return await asyncio.to_thread(requests.post, *args, **kwargs)"
+    mangled_helper = mod.HELPER.replace(dispatch, "return await other.to_thread(other.post, *args, **kwargs)")
+    p.write_text(body + mangled_helper, encoding="utf-8")
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
+def test_guard_fails_with_diagnostic_on_undecodable_file(tmp_path):
+    """A layout shift resolving the orchestrator path to a non-UTF-8 file
+    must produce the guard diagnostic, not a raw UnicodeDecodeError."""
+    p = tmp_path / "orchestrator.py"
+    p.write_bytes(b"import requests\n\xff\xfe\x00binary\n")
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
 def test_unawaited_helper_calls_are_not_wrapped_sites(tmp_path):
     """`response = _llm_post_offloop(...)` without `await` is not a wrapped
     site — it is the broken shape the patch exists to prevent. With two such

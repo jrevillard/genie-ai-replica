@@ -56,8 +56,9 @@ def test_the_imported_orchestrator_is_the_patched_copy(comps):
     source = inspect.getsource(module)
     tree = ast.parse(source)
 
-    live_helper = any(isinstance(node, ast.AsyncFunctionDef) and node.name == "_llm_post_offloop" for node in tree.body)
-    assert live_helper, (
+    # The patcher's own detector, not a weaker local copy: module-level def
+    # AND the to_thread(requests.post) dispatch in its body.
+    assert patcher.helper_present(source), (
         "the orchestrator module Python imports carries no live _llm_post_offloop helper — the "
         "build-time patch either did not run or patched a copy Python does not import; the "
         "streaming LLM POST is back on the event loop and /health will stop answering during queries"
@@ -71,7 +72,21 @@ def test_the_imported_orchestrator_is_the_patched_copy(comps):
         "a streaming call site is still calling requests.post directly in the imported module — "
         "the event loop would stay pinned for the duration of the LLM first-headers wait"
     )
-    assert source.count("res = requests.post(") == 2, (
+    # The generator sites are assignments of requests.post(...) to `res` —
+    # counted through the AST like everything else, so prose quoting the
+    # shape cannot inflate the count.
+    res_assignments = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Attribute)
+        and node.value.func.attr == "post"
+        and isinstance(node.value.func.value, ast.Name)
+        and node.value.func.value.id == "requests"
+        and any(isinstance(target, ast.Name) and target.id == "res" for target in node.targets)
+    ]
+    assert len(res_assignments) == 2, (
         "the two sync generator call sites must stay untouched — they already run off-loop in "
         "StreamingResponse's threadpool and cannot await"
     )

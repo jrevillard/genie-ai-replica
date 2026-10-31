@@ -174,9 +174,14 @@ def apply_patch(path: Path) -> str:
     if not path.is_file():
         raise SystemExit(f"ASSERT-ON-PATCH GUARD FAILED: {path} does not exist")
 
-    original = _read(path)
     try:
+        original = _read(path)
         ast.parse(original)
+    except UnicodeDecodeError as exc:
+        raise SystemExit(
+            f"ASSERT-ON-PATCH GUARD FAILED: {path} is not UTF-8 text ({exc}) — "
+            "the image layout resolved the orchestrator path to something else; re-derive the patch."
+        ) from exc
     except SyntaxError as exc:
         raise SystemExit(
             f"ASSERT-ON-PATCH GUARD FAILED: {path} is not valid Python ({exc.lineno}: {exc.msg}) — "
@@ -252,14 +257,15 @@ def apply_patch(path: Path) -> str:
     # A guard failure therefore leaves the original file untouched.
     try:
         compile(patched, str(path), "exec")
-    except SyntaxError as exc:
+    except (SyntaxError, ValueError) as exc:
         # The rewrap injects `await`; if upstream moved the sites into a sync
         # def, that injection is invalid and the build must say so in the
-        # guard's voice, not with a raw traceback.
+        # guard's voice, not with a raw traceback. ValueError covers a null
+        # byte reaching compile(), the same class of layout-shift content.
         raise SystemExit(
             f"ASSERT-ON-PATCH GUARD FAILED: the rewrapped {path} does not compile "
-            f"({exc.lineno}: {exc.msg}) — the streaming sites moved out of their async context; "
-            "re-derive the patch."
+            f"({exc}) — the streaming sites moved out of their async context or the "
+            "source carries content compile() cannot process; re-derive the patch."
         ) from exc
     if len(_wrapped_site_lines(patched)) != 2 or _streaming_site_lines(patched) or not helper_present(patched):
         raise SystemExit(f"ASSERT-ON-PATCH GUARD FAILED: post-patch verification failed for {path}")
@@ -314,9 +320,13 @@ def helper_present(source: str) -> bool:
                 and isinstance(child.value, ast.Call)
                 and isinstance(child.value.func, ast.Attribute)
                 and child.value.func.attr == "to_thread"
+                and isinstance(child.value.func.value, ast.Name)
+                and child.value.func.value.id == "asyncio"
                 and child.value.args
                 and isinstance(child.value.args[0], ast.Attribute)
                 and child.value.args[0].attr == "post"
+                and isinstance(child.value.args[0].value, ast.Name)
+                and child.value.args[0].value.id == "requests"
             ):
                 return True
     return False

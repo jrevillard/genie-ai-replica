@@ -226,7 +226,7 @@ export default {
       security: 'Keamanan',
       users: 'Pengguna',
       models: 'Model',
-      studio: "OKF Studio"
+      studio: 'OKF Studio'
     },
     contentManagement: 'MANAJEMEN KONTEN',
     knowledgeHierarchy: 'Hierarki Pengetahuan',
@@ -1913,7 +1913,8 @@ export default {
       paneLabel: 'Panel tampilan',
       saveFailed: 'Penyimpanan gagal — coba lagi',
       piiRescan: {
-      timeout: 'Pemindaian ulang masih berjalan setelah 15 menit — prosesnya berlanjut di sisi server. Tidak ada yang hilang; periksa lagi dalam satu menit.',
+        timeout:
+          'Pemindaian ulang masih berjalan setelah 15 menit — prosesnya berlanjut di sisi server. Tidak ada yang hilang; periksa lagi dalam satu menit.',
         label: 'Data pribadi',
         button: 'Pindai ulang semua halaman',
         working: 'Memindai ulang semua halaman…',
@@ -1970,8 +1971,8 @@ export default {
     },
     dashboard: {
       health: {
-        ariaNone: "Tidak ada metrik",
-        aria: "Kesehatan: {pct} persen, {n} konsep"
+        ariaNone: 'Tidak ada metrik',
+        aria: 'Kesehatan: {pct} persen, {n} konsep'
       },
       bulk: {
         body: 'Setiap repositori dipublikasikan dengan pemeriksaan gerbang penuh (peninjauan PII, pengindeksan, kesesuaian). Hasil per repositori:',

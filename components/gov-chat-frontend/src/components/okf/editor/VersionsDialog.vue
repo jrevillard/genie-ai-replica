@@ -195,7 +195,10 @@ export default {
         });
         this.loading = false;
         if (!res.ok) {
-          this.error = okfRepoOps.translateLifecycleError(okfRepoOps.friendlyLifecycleError(res.code, res.message), this.translate);
+          this.error = okfRepoOps.translateLifecycleError(
+            okfRepoOps.friendlyLifecycleError(res.code, res.message),
+            this.translate
+          );
           return;
         }
         this.lastResult = res.result;

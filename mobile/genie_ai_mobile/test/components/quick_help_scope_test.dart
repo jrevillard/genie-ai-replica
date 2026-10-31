@@ -1827,6 +1827,143 @@ void main() {
     });
   });
 
+  group('localizedCategoryDisplayNamesOf', () {
+    test('maps every category by its key to its display name', () {
+      final tree = <dynamic>[
+        {
+          'catKey': '2',
+          'name': 'Registro Civil',
+          'nameEN': 'Civil Registry',
+          'children': [
+            {'name': 'Nacimientos', 'nameEN': 'Births'},
+          ],
+        },
+      ];
+      expect(localizedCategoryDisplayNamesOf(tree), {'2': 'Registro Civil'});
+    });
+
+    test('the label field is the display name when the tree carries one', () {
+      final tree = <dynamic>[
+        {
+          'catKey': '2',
+          'label': 'Registro Civil',
+          'name': 'legacy-name',
+          'nameEN': 'Civil Registry',
+        },
+      ];
+      expect(localizedCategoryDisplayNamesOf(tree)['2'], 'Registro Civil');
+    });
+
+    test('a service row names no category', () {
+      // The tree's children are services: their `_key` is a service key,
+      // never a category key — a service must not be reachable through
+      // the category read.
+      final tree = <dynamic>[
+        {
+          'catKey': '2',
+          'name': 'Registro Civil',
+          'nameEN': 'Civil Registry',
+          'children': [
+            {'_key': 'svc-1', 'name': 'Nacimientos', 'nameEN': 'Births'},
+          ],
+        },
+      ];
+      expect(
+        localizedCategoryDisplayNamesOf(tree).containsKey('svc-1'),
+        isFalse,
+      );
+    });
+
+    test('the first category wins when two share a key', () {
+      final tree = <dynamic>[
+        {'catKey': '2', 'name': 'Primero', 'nameEN': 'Civil Registry'},
+        {'catKey': '2', 'name': 'Segundo', 'nameEN': 'Civil Registry'},
+      ];
+      expect(localizedCategoryDisplayNamesOf(tree)['2'], 'Primero');
+    });
+
+    test('a category with no display name is skipped', () {
+      final tree = <dynamic>[
+        {'catKey': '2', 'name': null},
+        {'catKey': '2'},
+      ];
+      expect(localizedCategoryDisplayNamesOf(tree), isEmpty);
+    });
+
+    test('a category with no key is skipped', () {
+      final tree = <dynamic>[
+        {'name': 'Sin clave'},
+        {'catKey': '', 'name': 'Sin clave'},
+      ];
+      expect(localizedCategoryDisplayNamesOf(tree), isEmpty);
+    });
+
+    test('a non-map entry is skipped', () {
+      final tree = <dynamic>[
+        'stray',
+        {'catKey': '2', 'name': 'Registro Civil'},
+      ];
+      expect(localizedCategoryDisplayNamesOf(tree)['2'], 'Registro Civil');
+    });
+  });
+
+  group('restoredScopeTitleFollowsLocale', () {
+    test('a restored scope with a category key follows the locale', () {
+      expect(
+        restoredScopeTitleFollowsLocale(
+          fromSelection: false,
+          activeIdentity: null,
+          categoryKey: '2',
+        ),
+        isTrue,
+      );
+    });
+
+    test('a live selection is the join rule, not this one', () {
+      expect(
+        restoredScopeTitleFollowsLocale(
+          fromSelection: true,
+          activeIdentity: null,
+          categoryKey: '2',
+        ),
+        isFalse,
+      );
+    });
+
+    test('a Quick Help scope is re-titled by the config, by id', () {
+      expect(
+        restoredScopeTitleFollowsLocale(
+          fromSelection: false,
+          activeIdentity: 'births-id',
+          categoryKey: '2',
+        ),
+        isFalse,
+      );
+    });
+
+    test('no category names nothing', () {
+      expect(
+        restoredScopeTitleFollowsLocale(
+          fromSelection: false,
+          activeIdentity: null,
+          categoryKey: null,
+        ),
+        isFalse,
+      );
+    });
+
+    test('an empty category key names nothing', () {
+      expect(
+        restoredScopeTitleFollowsLocale(
+          fromSelection: false,
+          activeIdentity: null,
+          categoryKey: '',
+        ),
+        isFalse,
+      );
+    });
+  });
+
   group('sidebarScopeTitleFor', () {
     test('joins the localized names in the stored label order', () {
       expect(

@@ -55,8 +55,10 @@ The lexical analyzer is set by
 `RETRIEVER_HYBRID_BM25_ANALYZER` (default `text_en`). The English analyzer
 is correct because the corpus is English by construction — do not switch it
 for a non-English UI without re-verifying the corpus language and recreating
-the BM25 view (changing the env var alone never updates an existing view).
-See [Multilingual Architecture]({{< relref "/docs/architecture/multilingual-ssot" >}}).
+the BM25 view: the same env var is also the query-time analyzer, so changing
+it against an existing view mismatches query analyzer and indexed field and
+breaks the BM25 leg (see
+[Multilingual Architecture]({{< relref "/docs/architecture/multilingual-ssot" >}})).
 
 ### 3. Knowledge-graph traversal (optional)
 

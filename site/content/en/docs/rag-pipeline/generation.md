@@ -178,8 +178,8 @@ only when `MULTI_TURN_BLEND_ENABLED=true`. See
 [Multilingual Architecture]({{< relref "/docs/architecture/multilingual-ssot" >}})
 for the full query-side picture.
 
-The translation cost is one translation call per prior turn at request
-time. Disable by serving English-only.
+The translation cost is one translation call per request for the whole
+budget-capped history. Disable by serving English-only.
 
 ## User profile enrichment
 

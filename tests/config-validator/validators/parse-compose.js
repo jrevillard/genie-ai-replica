@@ -282,7 +282,9 @@ function parseGitlabCiImages(filePath) {
  * Hidden anchor keys (`.name: &name`) hold their list directly under the key
  * and parse the same way. `changes: {paths: *alias}` blocks are opaque to
  * line parsing (the alias is never expanded) and yield no entries —
- * assert the alias reference textually instead. Assumes the plain-list form
+ * assert the alias reference textually instead. Entries are expected
+ * unquoted (house style); a quoted path containing ' #' would truncate at
+ * the hash. Assumes the plain-list form
  * otherwise (no inline `paths:`/`compare_to:` lists).
  *
  * @param {string} filePath - Path to a .gitlab-ci.yml file
@@ -296,7 +298,8 @@ function parseGitlabCiJobChanges(filePath, jobNames) {
   const result = new Map(jobNames.map((name) => [name, []]));
   let currentJob = null;
   // Indent of the list-owning key (`changes:` or a hidden anchor); null =
-  // not inside a filter block. Entries sit strictly deeper than the key.
+  // not inside a filter block. Entries sit at or deeper than the key's
+  // indent — both sequence forms are valid YAML.
   let listIndent = null;
 
   for (const line of content.split('\n')) {

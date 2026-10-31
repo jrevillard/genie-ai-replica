@@ -348,7 +348,11 @@ const auth = 'Basic ' + Buffer.from('root:' + process.env.ARANGO_PASSWORD).toStr
 const base = (process.env.ARANGO_URL || 'http://arango-vector-db:8529') + '/_db/' + process.env.ARANGO_DB + '/_api';
 async function api(path, method, body) {
   const res = await fetch(base + path, { method, headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
-  return res.json();
+  const data = await res.json();
+  if (!res.ok || data.error) {
+    throw new Error(path + ' -> HTTP ' + res.status + ': ' + JSON.stringify(data).slice(0, 200));
+  }
+  return data;
 }
 (async () => {
   const data = JSON.parse(fs.readFileSync('/tmp/hierarchy-seed.json', 'utf8')).data;

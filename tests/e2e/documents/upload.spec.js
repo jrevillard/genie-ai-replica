@@ -11,6 +11,10 @@ const {
 const FIXTURES_DIR = path.join(__dirname, '..', 'fixtures');
 
 test.describe('Document Upload', () => {
+  // Login (30 s + 15 s retry) + navigation + table waits compose past the
+  // 60 s default on a stalling stack; keep the failure on its own step.
+  test.setTimeout(120000);
+
   test.beforeEach(async ({ page }) => {
     await navigateToDocumentManagement(page);
   });

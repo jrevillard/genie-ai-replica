@@ -12,6 +12,9 @@ const {
 const FIXTURES_DIR = path.join(__dirname, '..', 'fixtures');
 
 test.describe('Document Search', () => {
+  // Same composition as the upload suite: login + navigation + table waits.
+  test.setTimeout(120000);
+
   test.beforeEach(async ({ page }) => {
     await navigateToDocumentManagement(page);
   });

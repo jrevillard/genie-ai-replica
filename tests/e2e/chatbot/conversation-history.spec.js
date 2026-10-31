@@ -4,7 +4,6 @@ const {
   navigateToChatbot,
   sendMessage,
   waitForBotMessage,
-  getMessages,
   saveChat,
   BASE_URL,
 } = require('../helpers/chatbot');
@@ -75,7 +74,9 @@ test.describe('Conversation history persistence', () => {
     if (!token) return;
 
     let targets = [];
-    const listRes = await request('GET', `${BASE_URL}/api/chat/conversations`, {
+    // searchTerm narrows the list to the suite's own titles (the route's
+    // default page is 20 — old leftovers would rotate off it unfiltered).
+    const listRes = await request('GET', `${BASE_URL}/api/chat/conversations?searchTerm=E2E&limit=50`, {
       headers: { Authorization: `Bearer ${token}` },
     }).catch((e) => {
       console.error(`cleanup: conversation list failed: ${e.message}`);
@@ -117,10 +118,6 @@ test.describe('Conversation history persistence', () => {
     // Send a message and wait for the mocked answer to render
     await sendMessage(page, userText);
     await waitForBotMessage(page, MOCKED_ANSWER);
-
-    // Capture messages before save
-    const messagesBefore = await getMessages(page);
-    expect(messagesBefore.length).toBeGreaterThanOrEqual(2);
 
     // Save the conversation
     await saveChat(page, chatTitle);

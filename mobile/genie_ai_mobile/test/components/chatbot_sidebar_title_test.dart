@@ -70,7 +70,7 @@ void main() {
           animation: I18nService(),
           builder: (context, _) => MaterialApp(
             locale: I18nService().currentLocale,
-            supportedLocales: const [Locale('en'), Locale('es')],
+            supportedLocales: const [Locale('en'), Locale('es'), Locale('fr')],
             localizationsDelegates: const [
               FallbackMaterialLocalizationsDelegate(),
               FallbackWidgetsLocalizationsDelegate(),
@@ -198,6 +198,16 @@ void main() {
     // of the panel's tree cannot satisfy it.
     expect(find.text('Contexto: Births'), findsOneWidget);
     expect(find.textContaining('Nacimientos'), findsNothing);
+
+    // The failed attempt marked its locale: the NEXT locale change (and
+    // only that) starts one new chatbot fetch — the marker did not stay
+    // at the old locale, and the failure did not turn every subsequent
+    // dependency change into a fetch. 'fr' names an empty tree: the
+    // title keeps its language, and the fetch is still exactly one.
+    I18nService().changeLanguage('fr');
+    await tester.pumpAndSettle();
+    expect(mock.requestsByLocale['fr'], 2);
+    expect(find.text('Contexte : Births'), findsOneWidget);
   });
 
   testWidgets(

@@ -2703,7 +2703,8 @@ class TestQueryTranslationStatus:
             assert await chatqna_module._count_translation_tokens({"prompt": "x"}) is None
         assert mock_client.call_count == 1
         logged = " ".join(str(c) for c in mock_logger.warning.call_args_list)
-        assert "/tokenize route" in logged
+        assert "rejected the prompt count" in logged
+        assert any(c.args and c.args[-1] == 404 for c in mock_logger.warning.call_args_list)
 
     async def test_a_long_history_is_translated_inside_the_discovered_window(self):
         """A long history still goes out as a translation request, with a

@@ -614,10 +614,12 @@ TRANSLATION_COMPLETION_MIN_ROOM = 256
 # inviting an unbounded completion.
 TRANSLATION_COMPLETION_NEEDED_MULTIPLIER = 4
 TRANSLATION_COMPLETION_NEEDED_MARGIN = 256
-# Set when the translation server could not count a prompt: the gap is
-# permanent (no /tokenize route, an unreachable endpoint), so the count is
-# not attempted again — the degraded estimate bounds the completion, and
-# the failure is warned once.
+# Set when the translation server REJECTS the prompt count (a client-error
+# status: no route, or a route that cannot take this payload shape) — the
+# gap is permanent, so the count is not attempted again and the degraded
+# estimate bounds the completion. Transient failures (an unreachable
+# endpoint, a timeout, a rate limit) do NOT latch: the next request counts
+# again.
 _TRANSLATION_COUNT_UNAVAILABLE = False
 # The ceiling a translation request falls back to when the completion
 # cannot be MEASURED (no window, or a server that cannot count): roughly
@@ -736,6 +738,7 @@ async def _translate_prompt(prompt: str, translategemma: bool, model_id: str | N
             )
             response.raise_for_status()
             choice = response.json()["choices"][0]
+            content = _choice_content(choice, translategemma)
     except Exception as e:
         # Fail-loud on vLLM context overflow: silently returning the
         # original English text breaks the multilingual UX (#829). Classify
@@ -764,7 +767,7 @@ async def _translate_prompt(prompt: str, translategemma: bool, model_id: str | N
         # rejects it the same way.
         logger.error("Translation model hit max_tokens; treating the translation as failed.")
         raise TranslationFailedError("translation model hit max_tokens: the translation is cut off")
-    return _choice_content(choice, translategemma)
+    return content
 
 
 def _completion_truncated(choice: dict) -> bool:
@@ -2248,11 +2251,12 @@ async def _count_translation_tokens(count_body: dict) -> int | None:
     generic one does not (the server then answers with its default model,
     exactly as the translation request does).
 
-    Best-effort by contract: this count sizes the completion budget, and a
-    budget must never decide whether the translation happens. When the
-    server cannot count, None comes back and the caller falls back to the
-    degraded estimate — and the truncation guard still refuses a cut-off
-    completion.
+    Best-effort by contract: when the server cannot count, None comes back
+    and the caller sizes the completion with the degraded estimate instead
+    of refusing the translation — a count failure never stops a
+    translation. (The MEASURED count, once it exists, feeds the budget that
+    may refuse a prompt that cannot fit the window — that refusal is the
+    caller's decision, not this helper's.)
     """
     global _TRANSLATION_COUNT_UNAVAILABLE
     if _TRANSLATION_COUNT_UNAVAILABLE:
@@ -2274,14 +2278,17 @@ async def _count_translation_tokens(count_body: dict) -> int | None:
             span.set_attribute(ATTRIBUTE_NAMES["token_count"], count)
             return count
     except httpx.HTTPStatusError as e:
-        # A missing route is a permanent capability gap: the count is not
-        # attempted again, and the failure is warned once. Any other
-        # failure (an unreachable endpoint, a timeout) is transient — the
-        # next request counts again instead of latching the degradation.
-        if e.response.status_code in (404, 405) and not _TRANSLATION_COUNT_UNAVAILABLE:
+        # A client-error status is a permanent capability gap (no route, or
+        # a route that rejects this payload shape): the count is not
+        # attempted again, and the failure is warned once. Rate limiting is
+        # transient, and so is everything below 400 — the next request
+        # counts again instead of latching the degradation.
+        if 400 <= e.response.status_code < 500 and e.response.status_code != 429:
             _TRANSLATION_COUNT_UNAVAILABLE = True
             logger.warning(
-                "Translation server has no /tokenize route; the completion falls back to the degraded estimate."
+                "Translation server rejected the prompt count (%s); "
+                "the completion falls back to the degraded estimate.",
+                e.response.status_code,
             )
         else:
             logger.debug("Translation prompt could not be counted (%s)", e)
@@ -4047,9 +4054,10 @@ class ChatQnAService:
                     ),
                     QUERY_TRANSLATION_TRANSLATED,
                 )
-            except TranslationTimeoutError:
-                # Already logged by the chunk translator's wrap site (the one
-                # line that names the timeout); the status is the observable.
+            except TranslationTimeoutError as e:
+                # The seam raises the typed error without logging; this
+                # handler's line is the one that names the timeout.
+                logger.warning(f"History translation timed out: {e}")
                 return history, QUERY_TRANSLATION_FALLBACK_TIMEOUT
             except TranslationInputTooLongError as e:
                 # The prompt does not fit the translation window: the
@@ -4088,10 +4096,8 @@ class ChatQnAService:
                 f"in original language. Error: {e}"
             )
             return flattened_history_string, QUERY_TRANSLATION_FALLBACK_TIMEOUT
-        except TranslationInputTooLongError:
-            logger.warning(
-                "Translation window too tight to translate the history meaningfully; returning it untranslated"
-            )
+        except TranslationInputTooLongError as e:
+            logger.warning(f"History translation refused: {e}")
             return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
         except TranslationFailedError as e:
             logger.error(f"History translation failed: {e}")

@@ -1674,4 +1674,243 @@ void main() {
       expect(quickHelpGridAspectRatio({}), 3.5);
     });
   });
+
+  group('localizedDisplayNamesOf', () {
+    test('maps every entity by its ENGLISH label to its display name', () {
+      final tree = <dynamic>[
+        {
+          'catKey': '2',
+          'name': 'Registro Civil',
+          'nameEN': 'Civil Registry',
+          'children': [
+            {'name': 'Nacimientos', 'nameEN': 'Births'},
+          ],
+        },
+      ];
+      expect(localizedDisplayNamesOf(tree), {
+        'Civil Registry': 'Registro Civil',
+        'Births': 'Nacimientos',
+      });
+    });
+
+    test('the label field is the display name when the tree carries one', () {
+      final tree = <dynamic>[
+        {
+          'catKey': '2',
+          'label': 'Registro Civil',
+          'name': 'legacy-name',
+          'nameEN': 'Civil Registry',
+        },
+      ];
+      expect(localizedDisplayNamesOf(tree)['Civil Registry'], 'Registro Civil');
+    });
+
+    test('the first entity wins when two share an ENGLISH label', () {
+      final tree = <dynamic>[
+        {'catKey': '2', 'name': 'Primero', 'nameEN': 'Civil Registry'},
+        {'catKey': '3', 'name': 'Segundo', 'nameEN': 'Civil Registry'},
+      ];
+      expect(localizedDisplayNamesOf(tree)['Civil Registry'], 'Primero');
+    });
+
+    test('an entity with no ENGLISH label is skipped', () {
+      final tree = <dynamic>[
+        {'name': 'Sin etiqueta'},
+        {'nameEN': null, 'name': 'Sin etiqueta'},
+      ];
+      expect(localizedDisplayNamesOf(tree), isEmpty);
+    });
+
+    test('an entity with no display name is skipped', () {
+      final tree = <dynamic>[
+        {'nameEN': 'Births', 'name': null},
+        {'nameEN': 'Births'},
+      ];
+      expect(localizedDisplayNamesOf(tree), isEmpty);
+    });
+
+    test('a non-map entry is skipped', () {
+      final tree = <dynamic>[
+        'stray',
+        {'nameEN': 'Births', 'name': 'Nacimientos'},
+      ];
+      expect(localizedDisplayNamesOf(tree)['Births'], 'Nacimientos');
+    });
+  });
+
+  group('sidebarScopeTitleFor', () {
+    test('joins the localized names in the stored label order', () {
+      expect(
+        sidebarScopeTitleFor(
+          ['Births', 'Marriages'],
+          {'Births': 'Nacimientos', 'Marriages': 'Matrimonios'},
+        ),
+        'Nacimientos, Matrimonios',
+      );
+    });
+
+    test('a single label joins without a separator', () {
+      expect(
+        sidebarScopeTitleFor(['Births'], {'Births': 'Nacimientos'}),
+        'Nacimientos',
+      );
+    });
+
+    test('null when a stored label is missing from the localized tree', () {
+      expect(
+        sidebarScopeTitleFor(['Births', 'Gone'], {'Births': 'Nacimientos'}),
+        isNull,
+      );
+    });
+
+    test('null when the localized display is empty', () {
+      expect(sidebarScopeTitleFor(['Births'], {'Births': ''}), isNull);
+    });
+
+    test('null for an empty label list', () {
+      expect(
+        sidebarScopeTitleFor(const <String>[], {'Births': 'Nacimientos'}),
+        isNull,
+      );
+    });
+  });
+
+  group('sidebarTitleCaptureMatchesSelection', () {
+    final labels = ['Births'];
+    test('the identical selection still matches', () {
+      expect(
+        sidebarTitleCaptureMatchesSelection(
+          capturedLabels: labels,
+          capturedCount: 1,
+          labels: ['Births'],
+          count: 1,
+          fromSelection: true,
+          activeButtonId: null,
+        ),
+        isTrue,
+      );
+    });
+
+    test('a changed label list does not match', () {
+      expect(
+        sidebarTitleCaptureMatchesSelection(
+          capturedLabels: labels,
+          capturedCount: 1,
+          labels: ['Marriages'],
+          count: 1,
+          fromSelection: true,
+          activeButtonId: null,
+        ),
+        isFalse,
+      );
+    });
+
+    test('a grown count does not match even when the labels do', () {
+      // The unnamed pick: the labels list is untouched but the scope
+      // grew — the join would show a scope narrower than the query's.
+      expect(
+        sidebarTitleCaptureMatchesSelection(
+          capturedLabels: labels,
+          capturedCount: 1,
+          labels: ['Births'],
+          count: 2,
+          fromSelection: true,
+          activeButtonId: null,
+        ),
+        isFalse,
+      );
+    });
+
+    test('a restored scope does not match', () {
+      // A restore mid-flight carries the SAME labels and count the fetch
+      // captured — only the live-selection flag tells the two apart.
+      expect(
+        sidebarTitleCaptureMatchesSelection(
+          capturedLabels: labels,
+          capturedCount: 1,
+          labels: ['Births'],
+          count: 1,
+          fromSelection: false,
+          activeButtonId: null,
+        ),
+        isFalse,
+      );
+    });
+
+    test('a button scope does not match', () {
+      expect(
+        sidebarTitleCaptureMatchesSelection(
+          capturedLabels: labels,
+          capturedCount: 1,
+          labels: ['Births'],
+          count: 1,
+          fromSelection: true,
+          activeButtonId: 'btn-1',
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('sidebarTitleFollowsLocale', () {
+    test('a live selection whose every pick carries a label follows', () {
+      expect(
+        sidebarTitleFollowsLocale(
+          fromSelection: true,
+          activeButtonId: null,
+          serviceCount: 2,
+          serviceLabelsEn: const ['Births', 'Marriages'],
+        ),
+        isTrue,
+      );
+    });
+
+    test('a restored scope does not follow', () {
+      expect(
+        sidebarTitleFollowsLocale(
+          fromSelection: false,
+          activeButtonId: null,
+          serviceCount: 1,
+          serviceLabelsEn: const ['Births'],
+        ),
+        isFalse,
+      );
+    });
+
+    test('an active button scope does not follow', () {
+      expect(
+        sidebarTitleFollowsLocale(
+          fromSelection: true,
+          activeButtonId: 'btn-1',
+          serviceCount: 1,
+          serviceLabelsEn: const ['Births'],
+        ),
+        isFalse,
+      );
+    });
+
+    test('a selection with an unnamed pick does not follow', () {
+      expect(
+        sidebarTitleFollowsLocale(
+          fromSelection: true,
+          activeButtonId: null,
+          serviceCount: 2,
+          serviceLabelsEn: const ['Births'],
+        ),
+        isFalse,
+      );
+    });
+
+    test('no selection does not follow', () {
+      expect(
+        sidebarTitleFollowsLocale(
+          fromSelection: true,
+          activeButtonId: null,
+          serviceCount: 0,
+          serviceLabelsEn: const <String>[],
+        ),
+        isFalse,
+      );
+    });
+  });
 }

@@ -101,9 +101,13 @@ function validateComposeNonRoot(composeText) {
         for (const b of binds) {
           // A host path under the data dir that docker would silently create
           // (root-owned) is a violation unless the config opts out. Sources
-          // carry the ${DATA_DIR:-./data} form — resolve it to the default
-          // the data directory actually is.
-          const resolved = b.path.replace(/^\$\{DATA_DIR:-([^}]*)\}/, '$1');
+          // carry variable forms — resolve them: `${VAR:-default}` to its
+          // default; a bare `${VAR}` (unknown location) to the data dir
+          // CONSERVATIVELY, so renaming the variable cannot defeat the gate.
+          const resolved = b.path
+            .replace(/^['"]|['"]$/g, '')
+            .replace(/^\$\{[\w-]+:-([^}]*)\}/, '$1')
+            .replace(/^\$\{[\w-]+\}/, './data');
           if (!/^(\.\/)?data(\/|$)/.test(resolved)) continue;
           if (b.shortSyntax) {
             violations.push(
@@ -184,6 +188,7 @@ function validateComposeNonRoot(composeText) {
   {
     let inAnchor = false;
     let inAnchorPolicy = false;
+    let anchorKey = null; // which 2-space key the current 4-space list belongs to
     for (const line of lines) {
       if (/^x-chown-init:/.test(line)) {
         inAnchor = true;
@@ -194,7 +199,14 @@ function validateComposeNonRoot(composeText) {
         inAnchor = false;
         continue;
       }
-      const cap = line.match(/^ {4}-\s*([A-Z_]+)\s*$/);
+      // Only items under `cap_add:` are capabilities the anchor GRANTS —
+      // the anchor also carries `cap_drop: [ALL]`, whose ALL would poison
+      // the CHOWN invariant check if it leaked into the same list.
+      if (/^ {2}[\w-]+:\s*(\[.*\]\s*)?$/.test(line)) {
+        anchorKey = line.match(/^ {2}([\w-]+):/)[1];
+        continue;
+      }
+      const cap = anchorKey === 'cap_add' ? line.match(/^ {4}-\s*([A-Z_]+)\s*$/) : null;
       if (cap) {
         anchorDefaults.capAdds.push(cap[1]);
         continue;
@@ -219,6 +231,12 @@ function validateComposeNonRoot(composeText) {
     }
   }
   let anchorMerged = false;
+  // Long-syntax state: the index of the bind entry the current `bind:` opts
+  // block nests under, or null when there is none — a `create_host_path:`
+  // line must attach to the entry its own `bind:` key opened, not to the
+  // last-pushed source (a misplaced opt-out would otherwise silence the
+  // wrong bind).
+  let bindOptsTarget = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -238,6 +256,7 @@ function validateComposeNonRoot(composeText) {
       currentService = serviceMatch[1];
       serviceBinds[currentService] = [];
       anchorMerged = false;
+      bindOptsTarget = null;
       continue;
     }
     if (!currentService) continue;
@@ -331,6 +350,7 @@ function validateComposeNonRoot(composeText) {
     if (inVolumes) {
       if (!/^ {6}/.test(line)) {
         inVolumes = false;
+        bindOptsTarget = null;
         continue;
       }
       // long syntax:
@@ -343,11 +363,18 @@ function validateComposeNonRoot(composeText) {
       if (srcMatch) {
         const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
         binds.push({ path: srcMatch[1], createHostPathFalse: false, shortSyntax: false });
+        bindOptsTarget = null; // the next `bind:` block belongs to THIS entry
+        continue;
+      }
+      if (/^ {8}bind:\s*$/.test(line)) {
+        // The opts block attaches to the entry just pushed — remember which.
+        const binds = serviceBinds[currentService] || [];
+        if (binds.length) bindOptsTarget = binds.length - 1;
         continue;
       }
       const createFalse = line.match(/^ {10}create_host_path:\s*false\s*$/);
-      if (createFalse && serviceBinds[currentService] && serviceBinds[currentService].length) {
-        serviceBinds[currentService][serviceBinds[currentService].length - 1].createHostPathFalse = true;
+      if (createFalse && bindOptsTarget !== null && serviceBinds[currentService]) {
+        serviceBinds[currentService][bindOptsTarget].createHostPathFalse = true;
         continue;
       }
       // Short syntax: - <host>:<container>[:mode] — the form the deleted

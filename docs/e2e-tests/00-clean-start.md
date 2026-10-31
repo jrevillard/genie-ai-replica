@@ -64,6 +64,8 @@ DEPLOY_OPEA=0
 # (#1227), so a missing directory fails the backend loudly instead of docker
 # silently creating it root-owned.
 mkdir -p data/database_backups
+# Root-era install only (backend ran as root before #1227):
+chown 1000:1000 data/database_backups
 
 docker compose up -d
 ```

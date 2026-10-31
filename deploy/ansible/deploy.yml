@@ -391,14 +391,18 @@
         - "{{ data_dir }}/huggingface"
         - secrets/ssl
 
-    - name: Remove the stale root-owned Kong log directory (#1227)
+    - name: Remove the stale root-owned log directories (#1227)
       # Kong no longer bind-mounts a log directory; deployments from before
-      # #1227 keep a root-owned data/logs/kong that trips the no-root
-      # runtime gate on every run.
+      # #1227 keep a root-owned data/logs/kong AND its root-owned data/logs
+      # parent (the old per-service log binds lived there) — both trip the
+      # no-root runtime gate on every run. state:absent deletes recursively.
       become: true
       ansible.builtin.file:
-        path: "{{ deploy_dir }}/{{ data_dir }}/logs/kong"
+        path: "{{ deploy_dir }}/{{ item }}"
         state: absent
+      loop:
+        - "{{ data_dir }}/logs/kong"
+        - "{{ data_dir }}/logs"
 
     - name: Give the backend backup directory to the backend uid
       # #1227: the backend container runs as uid 1000 and writes its DB
@@ -409,6 +413,33 @@
         mode: '0755'
         owner: "1000"
         group: "1000"
+
+- name: GENIE.AI - Pre-create data directories on worker nodes (#1227)
+  # swarmkit silently creates a missing bind source ROOT-owned on the node
+  # the service lands on — the exact defect the #1227 contract forbids.
+  # The manager play above covers single-node deployments (where every node
+  # is a manager); this play covers the multi-node future where a
+  # genieai-labeled service lands on a worker. The commented [swarm_workers]
+  # group in inventory.example keeps this a no-op on single-node inventories.
+  hosts: swarm_workers
+  tags: [prepare]
+  become: true
+  tasks:
+    - name: Create the backend backup directory (its bind source materializes here)
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}/{{ data_dir }}/database_backups"
+        state: directory
+        mode: '0755'
+        owner: "1000"
+        group: "1000"
+
+    - name: Remove stale root-owned log directories (#1227)
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}/{{ item }}"
+        state: absent
+      loop:
+        - "{{ data_dir }}/logs/kong"
+        - "{{ data_dir }}/logs"
 
 - name: GENIE.AI - Copy SSL certificates
   hosts: swarm_managers

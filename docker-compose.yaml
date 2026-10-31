@@ -52,7 +52,9 @@
 #   ./data/database_backups     (Backend DB dumps; MUST pre-exist: the bind is
 #                               create_host_path:false, so a missing directory
 #                               fails the backend loudly instead of docker
-#                               silently creating it root-owned — #1227)
+#                               silently creating it root-owned — #1227.
+#                               Upgrading a root-era install: chown it to the
+#                               backend uid — chown 1000:1000 data/database_backups)
 #   ./data/huggingface          (TEI model cache, GPU nodes only)
 #   ./secrets/ssl/              (server.crt, server.key)
 #
@@ -1200,10 +1202,6 @@ services:
         delay: 5s
         max_attempts: 10
 
-  # Chowns the doc_repo_uploads volume to uid 1000 (#1227): deployments that
-  # ran the root-era image hold a root-owned volume, and the now non-root
-  # document-repository would get EACCES on every upload. Same one-shot
-  # pattern as arango-vector-db-init / victorialogs-init.
   # Chowns the backend's root-era named volumes to uid 1000 (#1227) — same
   # upgrade migration as document-repository-init: deployments that ran the
   # root-era backend hold root-owned files in backend_data and
@@ -1215,6 +1213,9 @@ services:
       - backend_data:/app/data
       - backend_uploads:/app/Uploads
 
+  # Chowns the doc_repo_uploads volume to uid 1000 (#1227): deployments
+  # that ran the root-era image hold a root-owned volume, and the now
+  # non-root document-repository would get EACCES on every upload.
   document-repository-init:
     <<: *chown-init
     command: ["sh", "-c", "[ -f /app/uploads/.chowned-1000 ] || { chown -R 1000:1000 /app/uploads && touch /app/uploads/.chowned-1000; }"]
@@ -1380,15 +1381,12 @@ services:
       - arango_apps:/var/lib/arangodb3-apps
 
   arango-vector-db:
-    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    # least-privilege hardening (SAST wave-4): no capabilities at all.
+    # No cap_add (#1227): the service runs as uid 999 with no privilege
+    # manipulation of its own (the image's root-only setup path is bypassed
+    # by arango-vector-db-init).
     cap_drop:
       - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-      - FOWNER
-      - SETGID
-      - SETUID
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging

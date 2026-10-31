@@ -136,3 +136,30 @@ it('zip import: selection STAGES, the Create click creates → navigates → imp
   expect(wrapper.vm.view).toBe('dashboard'); // the card is the progress surface
   wrapper.unmount();
 });
+
+// Round 18, #80489: the view switch sat OUTSIDE the repoId guard — a
+// repo-less 'okf:okf-repo-created' dispatch flipped to the repo shell with
+// a null activeRepoId and the v-if rendered NOTHING (blank pane).
+it('a repo-less okf-repo-created event is ignored (no blank repo shell)', async () => {
+  const { store } = buildStore();
+  const wrapper = mountTab(store);
+  await wrapper.vm.$nextTick();
+  const before = wrapper.vm.view;
+  wrapper.vm.onOkfRepoCreated({ detail: {} }); // no repo_id
+  await wrapper.vm.$nextTick();
+  expect(wrapper.vm.view).toBe(before); // still dashboard, not a blank 'repo'
+  expect(wrapper.vm.activeRepoId).toBeNull();
+  wrapper.unmount();
+});
+
+// Round 18, #80478: StudioTab signals readiness from mounted() AFTER its
+// entry-point listeners are registered — the AdminDashboard defers its
+// hand-off dispatches on this emit while the async chunk loads.
+it('emits studio-ready on mount (the async-chunk hand-off handshake)', async () => {
+  const { store } = buildStore();
+  const wrapper = mountTab(store);
+  await wrapper.vm.$nextTick();
+  expect(wrapper.emitted('studio-ready')).toBeTruthy();
+  expect(wrapper.emitted('studio-ready')).toHaveLength(1);
+  wrapper.unmount();
+});

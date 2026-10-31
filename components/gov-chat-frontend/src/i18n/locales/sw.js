@@ -225,7 +225,8 @@ export default {
       logs: 'Kumbukumbu',
       security: 'Usalama',
       users: 'Watumiaji',
-      models: 'Modeli'
+      models: 'Modeli',
+      studio: "OKF Studio"
     },
     contentManagement: 'USIMAMIZI WA MAUDHUI',
     knowledgeHierarchy: 'Uongozi wa Maarifa',
@@ -1905,6 +1906,7 @@ export default {
       paneLabel: 'Kidirisha cha mwonekano',
       saveFailed: 'Uhifadhi umeshindwa — jaribu tena',
       piiRescan: {
+      timeout: 'Ukchanganuzi upya bado unaendelea baada ya dakika 15 — unaendelea upande wa seva. Hakuna kilichopotea; angalia tena baada ya dakika moja.',
         label: 'Data za binafsi',
         button: 'Changanua upya kurasa zote',
         working: 'Inachanganua upya kurasa zote…',
@@ -1960,6 +1962,10 @@ export default {
       }
     },
     dashboard: {
+      health: {
+        ariaNone: "Hakuna vipimo",
+        aria: "Afya: asilimia {pct}, dhana {n}"
+      },
       bulk: {
         body: 'Kila ghala huchapishwa kupitia ukaguzi kamili wa geti (ukaguzi wa PII, uorodheshaji, ulinganifu). Matokeo kwa kila ghala:',
         pending: 'Thibitisha kufanya publish kwa maghala yaliyochaguliwa.',
@@ -2108,6 +2114,7 @@ export default {
       openExisting: 'Fungua ghala lililopo',
       name: 'Jina la ghala',
       importing: 'Inaingiza kifurushi…',
+      bundleLabel: 'Kifurushi (.zip)',
       importHint: 'Au ingiza kifurushi cha zip kilichopo kama ghala jipya.',
       importDefaultName: 'Ghala lililoingizwa',
       failed: 'Uundaji wa ghala umeshindwa',
@@ -2717,6 +2724,7 @@ export default {
       saveBlocked: 'Uhifadhi umezuiwa: rekebisha masuala ya ulinganifu kwanza.'
     },
     validation: {
+      healthAria: 'Afya: asilimia {pct}, matatizo {n}',
       frozen:
         'Maudhui yamesitishwa kwenye toleo la {v} — hakikisho la kusoma tu. Lifanyie toleo la serving hatua ya retract ili kufanya mabadiliko.',
       none: 'Hakuna',

@@ -2704,6 +2704,12 @@ describe('AdminDashboard — crawl→OKF relay and route deep links', () => {
       detail: { repo_id: 'r1', file_id: 'f1' }
     });
     expect(wrapper.vm.activeTab).toBe('studio');
+    // Round 18 (#80478): the dispatch is DEFERRED until OkfStudioTab emits
+    // studio-ready (the async chunk may still be loading on first
+    // activation — a single $nextTick fired with zero listeners). The stub
+    // never emits, so drain the queue the way the real component's
+    // 'studio-ready' handler would.
+    wrapper.vm.flushPendingStudioEvents();
     const relayed = dispatch.mock.calls[0][0];
     expect(relayed.type).toBe('okf:create-from-crawl');
     expect(relayed.__okfRelayed).toBe(true);
@@ -2727,6 +2733,114 @@ describe('AdminDashboard — crawl→OKF relay and route deep links', () => {
     expect(wrapper.vm.activeTab).toBe('documents'); // stayed put
     expect(dispatch).not.toHaveBeenCalled(); // nothing re-dispatched
     dispatch.mockRestore();
+    wrapper.unmount();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Round 18 — Studio hand-off handshake (#80478), honest delete counts
+// (#80486), mount-time theme persistence (#80483)
+// ---------------------------------------------------------------------------
+describe('round 18 — studio hand-off + selection + theme', () => {
+  const STUBS = { OkfStudioTab: true, OkfModelConfigPanel: true, QueryInspector: true };
+
+  afterEach(() => {
+    window.APP_CONFIG = { okfEnabled: '0' };
+  });
+
+  // #80478: OkfStudioTab is a defineAsyncComponent — on the FIRST activation
+  // the chunk is not cached and one $nextTick resolves before it mounts, so
+  // the hand-off events fired with zero listeners. Dispatches must QUEUE
+  // until the component emits studio-ready, then drain.
+  it('hand-off dispatches queue while the async Studio chunk has not mounted, then drain', async () => {
+    window.APP_CONFIG = { okfEnabled: '1' };
+    const wrapper = createAdminDashboardWrapper({}, {}, STUBS);
+    await wrapper.vm.$nextTick();
+    const dispatch = jest.spyOn(window, 'dispatchEvent').mockImplementation(() => true);
+    await wrapper.vm.relayCreateFromCrawl({ __wantsStudio: true, detail: { file_id: 'f1' } });
+    expect(wrapper.vm.activeTab).toBe('studio');
+    // The stubbed OkfStudioTab never emits studio-ready → still queued.
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(wrapper.vm.pendingStudioEvents).toHaveLength(1);
+    // The component mounts and signals readiness → the queue drains.
+    wrapper.vm.flushPendingStudioEvents();
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    const evt = dispatch.mock.calls[0][0];
+    expect(evt.type).toBe('okf:create-from-crawl');
+    expect(evt.__okfRelayed).toBe(true);
+    expect(wrapper.vm.pendingStudioEvents).toHaveLength(0);
+    dispatch.mockRestore();
+    wrapper.unmount();
+  });
+
+  it('a dispatch with the Studio tab already mounted fires immediately (no queue)', async () => {
+    window.APP_CONFIG = { okfEnabled: '1' };
+    // A TEMPLATE stub (not `true`) so the ref binding materialises once the
+    // v-if pane renders — $refs itself is not assignable from outside.
+    const wrapper = createAdminDashboardWrapper(
+      {},
+      {},
+      { ...STUBS, OkfStudioTab: { template: '<div class="studio-stub" />' } }
+    );
+    await wrapper.vm.$nextTick();
+    wrapper.vm.activeTab = 'studio';
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.$refs.okfStudioTab).toBeTruthy(); // mounted = listeners live
+    const fired = [];
+    wrapper.vm.dispatchWhenStudioReady(() => fired.push(1));
+    expect(fired).toHaveLength(1);
+    expect(wrapper.vm.pendingStudioEvents).toHaveLength(0);
+    wrapper.unmount();
+  });
+
+  // #80486: blockedSelection only sees LOADED rows — a blocked row hidden by
+  // the active filter (or a stale id) must not be promised deletable.
+  it('deletableSelection counts only ids present in the loaded documents list', async () => {
+    const wrapper = createAdminDashboardWrapper({}, {}, STUBS);
+    await wrapper.vm.$nextTick();
+    wrapper.vm.documents = [
+      { file_id: 'ok', file_name: 'a.md', dataprep: { status: 'parsed' } },
+      // serving → blocked (present in the list)
+      { file_id: 'blocked', file_name: 'b.md', dataprep: { status: 'ingested' } },
+      // blocked but NOT in the loaded list (hidden by the search filter)
+      { file_id: 'hidden-blocked', file_name: 'c.md', dataprep: { status: 'ingested' } }
+    ];
+    wrapper.vm.selectedDocuments = ['ok', 'blocked', 'hidden-blocked', 'stale-id'];
+    // Hide c.md from the loaded list (the filter case): remove it.
+    wrapper.vm.documents = wrapper.vm.documents.filter((d) => d.file_id !== 'hidden-blocked');
+    expect(wrapper.vm.blockedSelection.map((d) => d.file_id)).toEqual(['blocked']);
+    expect(wrapper.vm.deletableSelection).toEqual(['ok']);
+    wrapper.unmount();
+  });
+
+  // #80483: localStorage 'theme' has exactly one writer — applyTheme. The old
+  // same-theme early return (the echo guard) also skipped the MOUNT-time
+  // call, so a boot with the DOM indicator set but storage empty never
+  // persisted and the NEXT boot reverted to light.
+  it('mount persists the DOM-indicated theme to localStorage', async () => {
+    window.APP_CONFIG = { okfEnabled: '0' };
+    localStorage.clear();
+    document.documentElement.setAttribute('data-theme', 'dark');
+    const wrapper = createAdminDashboardWrapper({}, {}, STUBS);
+    await wrapper.vm.$nextTick();
+    expect(localStorage.getItem('theme')).toBe('dark');
+    document.documentElement.removeAttribute('data-theme');
+    wrapper.unmount();
+  });
+
+  it('the echo of an applied theme is dropped (no setTheme recursion)', async () => {
+    window.APP_CONFIG = { okfEnabled: '0' };
+    localStorage.clear();
+    const wrapper = createAdminDashboardWrapper({}, {}, STUBS);
+    await wrapper.vm.$nextTick();
+    const before = localStorage.getItem('theme');
+    const setItem = jest.spyOn(Storage.prototype, 'setItem');
+    // themeManager.setTheme re-dispatches 'themeChange' with the theme it
+    // just applied — the echo must be dropped, not re-applied.
+    window.dispatchEvent(new CustomEvent('themeChange', { detail: { theme: before } }));
+    await wrapper.vm.$nextTick();
+    expect(setItem).not.toHaveBeenCalled();
+    setItem.mockRestore();
     wrapper.unmount();
   });
 });

@@ -311,7 +311,11 @@ const actions = {
    *  local cache (same mutation saveDraft uses). */
   setDraftLocal({ commit }, { repoId, draft } = {}) {
     if (!repoId || !draft) return { ok: false, code: 'VALIDATION_ERROR' };
-    commit('setDraft', { repoId, draft });
+    // This action OWNS the updated_at stamp (round 18, #80468): leaving it to
+    // the caller was one forgotten field away from silently breaking resume
+    // ordering — and saveDraft's unavailable branch now delegates here rather
+    // than inlining a second stamping site.
+    commit('setDraft', { repoId, draft: { ...draft, updated_at: draft.updated_at ?? Date.now() } });
     return { ok: true, local: true };
   },
   // NON-BLOCKING LOAD: bumped on every fetchConcepts call — a superseded
@@ -385,7 +389,7 @@ const actions = {
    * still committed FIRST (Vuex-first), so the wizard renders regardless of
    * the network outcome.
    */
-  async saveDraft({ commit, state }, { repoId, draft }) {
+  async saveDraft({ commit, state, dispatch }, { repoId, draft }) {
     if (!repoId || !draft) {
       return { ok: false, code: 'VALIDATION_ERROR', message: 'repoId and draft required' };
     }
@@ -394,7 +398,8 @@ const actions = {
     // the missing route — the "session stops writing it" the state flag
     // always promised.
     if (state.draftsUnavailable) {
-      commit('setDraft', { repoId, draft: { ...draft, updated_at: Date.now() } });
+      // delegate to the ONE local-write owner (#80468) — no second stamping site
+      await dispatch('setDraftLocal', { repoId, draft });
       return { ok: true, skipped: 'unavailable' };
     }
     // WIZARD IDEMPOTENCY R-C (David, 2026-09-04): a published/ingested repo
@@ -1330,6 +1335,60 @@ const actions = {
         message: err.message
       };
     }
+  },
+
+  /** Round 18 (#80465) — the Lab's suite-generation wait, on pollJob instead
+   * of the dialog's hand-rolled loop: transient gateway failures (one 502
+   * mid-generation) now tolerate up to 60 consecutive misses instead of
+   * rejecting the whole wait. FIRST-FETCH FAST PATH: pollJob sleeps before
+   * its first fetch, but a fast generation lands on attempt 0 — fetch once
+   * up front and only enter the loop while still generating. */
+  async pollHeadSuite({ dispatch }, { repoId, suiteKey, signal } = {}) {
+    const fetchDoc = () => dispatch('headSuiteGet', { repoId, suiteKey }).then((r) => (r && r.ok ? r.result : null));
+    const first = await fetchDoc();
+    if (first && first.suite_key && first.status !== 'generating') return { ok: true, result: first };
+    return pollJob({
+      fetchDoc,
+      pollMs: 2500,
+      deadlineMs: 4 * 60 * 1000,
+      // The server answers 200 {suite_key, status:'generating'} while the
+      // async worker runs (never a 404) — keep waiting on that envelope.
+      isRunning: (doc) => !doc || !doc.suite_key || doc.status === 'generating',
+      timeout: { code: 'SUITE_GEN_TIMEOUT', message: 'Suite generation timed out.' },
+      failed: { code: 'SUITE_GEN_FAILED', message: 'Suite generation failed.' },
+      done: (doc) => ({ ok: true, result: doc }),
+      signal
+    });
+  },
+
+  /** Round 18 (#80465) — the Lab's async-run wait, same treatment: pollJob
+   * tolerance + first-fetch fast path; onProgress keeps the live bar fed
+   * ({phase, done, total} straight off the run envelope). */
+  async pollHeadSuiteRun({ dispatch }, { repoId, suiteKey, runKey, signal, onProgress } = {}) {
+    const fetchDoc = () =>
+      dispatch('headSuiteGetRun', { repoId, suiteKey, runKey }).then((r) => (r && r.ok ? r.result : null));
+    const failedEnvelope = (doc) => ({
+      ok: false,
+      code: (doc.error && doc.error.code) || 'RUN_FAILED',
+      message: (doc.error && doc.error.message) || 'Suite run failed'
+    });
+    const first = await fetchDoc();
+    if (onProgress && first && first.progress && first.progress.total) onProgress(first.progress);
+    // Fast path keeps the SAME contract as the slow path: a failed run maps
+    // to the failed envelope (not ok:true), a finished run to its doc.
+    if (first && first.status === 'failed') return failedEnvelope(first);
+    if (first && !first.status) return { ok: true, result: first };
+    return pollJob({
+      fetchDoc,
+      pollMs: 2500,
+      deadlineMs: 6 * 60 * 1000,
+      isRunning: (doc) => !doc || doc.status === 'running',
+      onProgress,
+      timeout: { code: 'RUN_TIMEOUT', message: 'The run is taking unusually long.' },
+      failed: { code: 'RUN_FAILED', message: 'Suite run failed' },
+      done: (doc) => (doc.status === 'failed' ? failedEnvelope(doc) : { ok: true, result: doc }),
+      signal
+    });
   },
 
   /** Story 1-8c — explain ONE query's gate outcome; the result carries

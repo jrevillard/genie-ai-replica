@@ -627,12 +627,17 @@ export default {
       if (this.saveTimer) clearTimeout(this.saveTimer);
       this.saveTimer = setTimeout(() => this.saveNow(), AUTOSAVE_DEBOUNCE_MS);
     },
+    // Returns the in-flight (or just-started) saveNow() promise so callers
+    // can AWAIT the flush (round 18, #80479: a fire-and-forget flush lets
+    // the panel's own two-write save race the autosave PATCH and write a
+    // stale body). Not dirty / already saving → resolves immediately.
     flushPendingSave() {
       if (this.saveTimer) {
         clearTimeout(this.saveTimer);
         this.saveTimer = null;
       }
-      if (this.dirty && !this.saving) this.saveNow();
+      if (this.dirty && !this.saving) return this.saveNow();
+      return Promise.resolve();
     },
     async saveNow() {
       if (this.saveTimer) {
@@ -821,9 +826,12 @@ export default {
           } catch {
             return; // match spans styled nodes — skip rather than corrupt
           }
-          span.style.background = 'var(--warning, #f59e0b)';
+          // Round 18, #80491: tokenized — the paired --warning-ink (darkened
+          // warning in light mode, the badge token itself in dark) instead of
+          // a hardcoded near-black that was unreadable on the dark theme.
+          span.style.background = 'var(--warning)';
           span.style.borderRadius = '3px';
-          span.style.color = '#111';
+          span.style.color = 'var(--warning-ink)';
           span.scrollIntoView({ block: 'center', behavior: 'smooth' });
           return;
         }

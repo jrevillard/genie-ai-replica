@@ -187,6 +187,11 @@ export default {
       // reactive: canLoadMore keys off the RAW page size (F8) — a plain
       // instance prop would never invalidate the computed
       lastRawCount: 0,
+      // RAW docs fetched across pages, BEFORE the bundle strip (round 18,
+      // #80487): the Load-more horizon must compare against the server
+      // total, which INCLUDES bundle zips — the filtered rows can never
+      // reach it, so the button never disabled once any bundle existed.
+      rawLoadedCount: 0,
       loading: false,
       loadError: '',
       // 3.10 T1: search + origin chips
@@ -215,11 +220,13 @@ export default {
       return this.search.trim().length > 0 || this.sourceFilter !== 'all';
     },
     canLoadMore() {
-      // F8: the backend puts the count at body.pagination.totalFiles (not
-      // body.total). Without it, a RAW FULL page is the only honest hint —
-      // comparing the BUNDLE-FILTERED rows against page*size hides the
-      // button whenever a bundle zip shrank the page.
-      if (this.total > 0) return this.rows.length < this.total;
+      // F8 + round 18 (#80487): compare the RAW fetched count (pre-strip)
+      // against the server total — `rows` is bundle-filtered and the total
+      // includes bundle zips, so rows.length can never reach it; the button
+      // never disabled and every further click loaded a page whose rows
+      // were all stripped. Without a total, a RAW FULL page is the only
+      // honest hint.
+      if (this.total > 0) return this.rawLoadedCount < this.total;
       return this.lastRawCount === this.pageSize;
     },
     // W1 preflight pills (port of the 7.7 dialog's warnings): the steward
@@ -303,6 +310,11 @@ export default {
         // bundle zips are the OKF artifacts — never sources
         const kept = raw.filter((f) => !f.is_bundle);
         this.lastRawCount = raw.length;
+        // RAW fetched count, pre-strip (round 18, #80487): page 1 REPLACES
+        // (a fresh search/filter), later pages APPEND — same semantics as
+        // `rows`, but counting what the server actually returned so the
+        // Load-more horizon can reach a bundle-inclusive total.
+        this.rawLoadedCount = p === 1 ? raw.length : this.rawLoadedCount + raw.length;
         this.rows = p === 1 ? kept : this.rows.concat(kept);
         // F8: the count lives at pagination.totalFiles on this backend;
         // body.total accepted for forward-compat.

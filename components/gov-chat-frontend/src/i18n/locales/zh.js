@@ -225,7 +225,8 @@ export default {
       logs: '日志',
       security: '安全',
       users: '用户',
-      models: '模型'
+      models: '模型',
+      studio: "OKF Studio"
     },
     contentManagement: '内容管理',
     knowledgeHierarchy: '知识层级',
@@ -1636,7 +1637,7 @@ export default {
       version: 'v{n}',
       versions: '版本',
       deleteLabel: '删除',
-      testingLab: 'Testing Lab'
+      testingLab: '测试实验室'
     },
     logs: {
       labeled: '已标注：{n}',
@@ -1782,8 +1783,8 @@ export default {
           problem: '问题',
           noError: '被标记为失败，但没有记录原因。',
           fixLabel: '如何修复',
-          attempts: 'Attempts: {n}',
-          when: 'Last attempt {when}',
+          attempts: '尝试次数：{n}',
+          when: '上次尝试 {when}',
           fix: {
             reaper:
               '摄取工作进程在宽限期内停止等待（排空已饱和）——内容完好无损。修复方法：对此文件稍作修改并保存即可重新入队；或撤回整个仓库并重新摄取。',
@@ -1808,7 +1809,7 @@ export default {
         bulkRedact: '全部隐去',
         bulkRemove: '全部移除',
         loadProgress: '正在加载文件 {done}/{total}',
-        addSource: '+ From documents',
+        addSource: '+ 从文档添加',
         reingest: '重新摄取此概念',
         reingestBusy: '该存储库已有 RAG 摄取任务正在运行——请等待其完成后再重试。',
         reingestFailed: '重新摄取失败——请重试。'
@@ -1833,8 +1834,8 @@ export default {
         trust: '信任层级',
         type: '类型',
         typePlaceholder: '选择类型…',
-        hide: 'Hide metadata',
-        show: 'Show metadata'
+        hide: '隐藏元数据',
+        show: '显示元数据'
       },
       pane: {
         files: '文件',
@@ -1865,6 +1866,7 @@ export default {
       paneLabel: '视图窗格',
       saveFailed: '保存失败 — 请重试',
       piiRescan: {
+      timeout: '重新扫描运行已超过 15 分钟 — 仍在服务器端继续执行。没有任何内容丢失；请稍后再来查看。',
         label: '个人数据',
         button: '重新扫描所有页面',
         working: '正在重新扫描所有页面…',
@@ -1913,6 +1915,10 @@ export default {
       }
     },
     dashboard: {
+      health: {
+        ariaNone: "暂无指标",
+        aria: "健康度：{pct}%，{n} 个概念"
+      },
       bulk: {
         body: '每个知识库都会经过完整的关卡检查（PII 审查、索引编制、规范符合性）后执行 publish。按知识库分类的结果：',
         pending: '确认对所选知识库执行 publish。',
@@ -1929,7 +1935,7 @@ export default {
         logs: '日志',
         rename: '重命名',
         versions: '版本',
-        testingLab: 'Testing Lab'
+        testingLab: '测试实验室'
       },
       delete: {
         body: '此操作将永久移除该知识库、其概念、已索引内容、图谱及资产包构件。此操作无法撤销。',
@@ -1962,7 +1968,7 @@ export default {
         ingested: '已完成 ingest v{n}',
         published: '已 publish v{n}',
         retracted: '已撤回',
-        stepOf: 'Step {n} of 10'
+        stepOf: '第 {n} 步，共 10 步'
       },
       title: '存储库',
       topics: '主题',
@@ -2061,6 +2067,7 @@ export default {
       openExisting: '打开已有知识库',
       name: '知识库名称',
       importing: '正在导入资产包…',
+      bundleLabel: '资产包 (.zip)',
       importHint: '或将现有的 zip 资产包导入为新知识库。',
       importDefaultName: '导入的知识库',
       failed: '知识库创建失败',
@@ -2098,7 +2105,7 @@ export default {
       arrayPh: '逗号分隔的数值',
       addKey: '添加字段',
       saved: 'Frontmatter 已保存',
-      label: 'frontmatter',
+      label: 'Frontmatter 元数据',
       tipLabel: '什么是 Frontmatter？',
       edit: '编辑',
       empty: '暂无 frontmatter — 编辑可补齐类型、标题和标签。',
@@ -2114,18 +2121,18 @@ export default {
       perRepoHint:
         '仓库级标签（主题 / 实体 / 范围 / 禁用 / 摘要 / 关键词）驱动检索器。相同数据也存于仓库文档字段上——保存时两者保持同步。',
       perRepoField: {
-        topic: 'Topic',
-        entity: 'Entity',
-        scope: 'Scope',
-        forbidden: 'Forbidden',
-        summary: 'Summary',
-        keyword: 'Keyword'
+        topic: '主题',
+        entity: '实体',
+        scope: '范围',
+        forbidden: '禁用',
+        summary: '摘要',
+        keyword: '关键词'
       },
       perRepoPh: {
-        topic: 'One topic per line',
-        entity: 'One entity per line',
+        topic: '每行一个主题',
+        entity: '每行一个实体',
         forbidden: '每行一个禁用主题',
-        keyword: 'One keyword per line'
+        keyword: '每行一个关键词'
       },
       perRepoHelp: {
         topic: '添加、修改或移除主题——每行一个。空行将被忽略。',
@@ -2196,8 +2203,8 @@ export default {
       classificationStrategy:
         '生产模块如何决定每个主题的标签：启发式快速且免费；LLM 逐页阅读（更适合复杂版式）；混合模式先用启发式，再对疑难项升级处理。仅用于策展——绝不会触发摄取。',
       clsHeur: '启发式（快速，无 LLM）',
-      clsLlm: 'LLM classification',
-      clsHybrid: 'Hybrid',
+      clsLlm: 'LLM 分类',
+      clsHybrid: '混合',
       fsPick:
         '每个文件成为一个主题——聚焦的主题比一份冗长的文档检索更精准。文件名将成为标题；您可以在策展步骤中完善一切。',
       autocorrect:
@@ -2336,12 +2343,12 @@ export default {
     wizard: {
       working: 'Working…',
       state: {
-        draft: 'In progress',
-        register: 'In progress',
-        review: 'In review',
-        approve: 'Approved',
-        retracted: 'Retracted',
-        publish: 'Ready to ingest'
+        draft: '进行中',
+        register: '进行中',
+        review: '审核中',
+        approve: '已批准',
+        retracted: '已撤回',
+        publish: '待摄取'
       },
       status: {
         published: '已发布',
@@ -2350,7 +2357,7 @@ export default {
       },
       exit: '返回仪表盘',
       context: {
-        version: 'Version',
+        version: '版本',
         untitled: '未命名知识库',
         trust: '信任',
         title: '存储库',
@@ -2361,7 +2368,7 @@ export default {
       label: 'OKF Studio 向导',
       back: '返回',
       continue: '继续',
-      finish: 'Open the Editor'
+      finish: '打开编辑器'
     },
     steps: {
       entry: {
@@ -2407,16 +2414,16 @@ export default {
         manual: '您可以在下一步中直接编写主题。',
         clone: '选择要克隆的已有知识库。',
         placeholder: '此步骤 UI 将在后续故事中接入。',
-        chooseCrawl: 'Choose crawled documents',
-        chooseDocs: 'Choose source documents',
-        writeOne: '+ Write a concept',
+        chooseCrawl: '选择抓取的文档',
+        chooseDocs: '选择来源文档',
+        writeOne: '+ 撰写概念',
         fsPick: '+ 从此计算机导入 markdown',
         fsBusy: 'Importing your files…',
         fsFailed: '导入失败——请检查文件后重试。',
         skippedEmpty: '已跳过 {n} 个空文件。',
-        noneSelected: 'No sources selected yet.',
-        selectedN: 'Selected: {n}',
-        moreN: ' +{n} more',
+        noneSelected: '尚未选择任何来源。',
+        selectedN: '已选择：{n}',
+        moreN: ' 另有 {n} 个',
         noRepo: '请先创建仓库（返回入口步骤）。',
         noRepoYet: '请先创建仓库（返回入口步骤）。',
         benchTitle: '此仓库中的主题',
@@ -2424,12 +2431,12 @@ export default {
         benchLoading: 'Reading topics…',
         benchEmpty: '此处暂无内容——在下方选择来源、导入 markdown，或撰写您的第一个主题。',
         benchFailed: '暂时无法读取主题。',
-        editTitle: 'Edit concept',
+        editTitle: '编辑概念',
         deleteFailed: '无法删除该概念。',
         added: '此仓库目前共有 {n} 个主题。',
-        deleteTitle: 'Delete topic',
+        deleteTitle: '删除主题',
         deleteBody: '此操作将永久移除该仓库中的此主题。',
-        labelFailed: 'Could not set the label.',
+        labelFailed: '未能设置标签。',
         cloned: '此仓库是一个克隆——其主题已就位。请继续前往策展步骤进行复核。'
       },
       produce: {
@@ -2437,37 +2444,37 @@ export default {
         hint: '我们正在读取您的来源并提炼主题建议。',
         progress: '生产模块运行中...',
         placeholder: '生成服务将在后续故事中接入。',
-        retry: 'Retry conversion',
-        restart: 'Run again',
+        retry: '重试转换',
+        restart: '重新运行',
         running: '转换中…您可以在此查看进度；在您于策展步骤复核之前不会确认任何内容。',
         failed: '转换失败——请重试，或返回上一步选择其他输入。',
         done: '{n} 个主题已就绪——请继续前往策展步骤进行复核。',
         noSources: '未选择任何来源——请返回输入步骤。',
         neverStarted: '转换未启动——请重试。',
         manualSkip: '手写的主题无需生成——请继续前往策展步骤进行复核。',
-        labelDone: 'Conversion complete',
+        labelDone: '转换完成',
         dupContent: '这些来源已导入另一个 OKF 仓库。请先撤回或删除该仓库，或另选文档。',
         inFlight: '此仓库已有一个转换正在运行——请等待其完成。',
         stage: {
-          files: 'Files',
+          files: '文件',
           filesCount: '{done}/{total} 份文档',
-          concepts: 'Concepts',
-          conceptsCount: '{done} of {total} topics',
-          conceptsSoFar: '{n} topics so far',
-          curating: 'Curating',
+          concepts: '概念',
+          conceptsCount: '{done}/{total} 个主题',
+          conceptsSoFar: '目前已有 {n} 个主题',
+          curating: '策展中',
           curatingCount: '{done}/{total} 个概念已标注',
-          crosslink: 'Cross-linking topics',
+          crosslink: '正在交叉链接主题',
           linkCount: '{done}/{total} 批 · 已写入 {w} 条链接',
-          complete: 'Complete',
-          unavailable: 'Count unavailable',
-          waiting: 'Waiting'
+          complete: '完成',
+          unavailable: '计数不可用',
+          waiting: '等待中'
         },
         filesNote: '已转换 {done}/{total} 份文档',
         pagesNote: '已转换 {done}/{total} 页',
         pagesSoFar: '目前已转换 {n} 页',
-        sourceStat: '+{n} new (total {t})',
+        sourceStat: '+{n} 新增（共 {t}）',
         sourceStatMerged: '+{n} 新增 · {m} 个按 slug 合并（共 {t}）',
-        docsLeg: '{n} selected document(s)',
+        docsLeg: '已选择 {n} 份文档',
         legWait: '正在等待上一个转换释放…'
       },
       label: {
@@ -2475,7 +2482,7 @@ export default {
         hint: '标签自动从知识层级分配——并限定在本仓库的主题领域内。',
         loading: 'Reading labels…',
         preview: '{labeled}/{n} 个主题带有知识层级标签。',
-        unlabeled: 'no labels yet',
+        unlabeled: '尚无标签',
         adjust: '在策展步骤中调整任意主题的标签——标签限定在此仓库的主题领域内。',
         loadFailed: '暂时无法读取标签。'
       },
@@ -2506,15 +2513,15 @@ export default {
         topics: '主题',
         labels: '标签',
         sources: '来源',
-        state: 'Lifecycle state',
-        labelsSet: 'set per topic in Curate',
+        state: '生命周期状态',
+        labelsSet: '在策展步骤中按主题设置',
         browserHint: '移交前的最后浏览：下方每个文件、其 markdown 及标签——与助手引用它们的形态完全一致。',
         noRepo: '尚无仓库——创建仓库后，文件复核会显示在这里。',
         ritualOutside:
           '复核仪式——提交审查、审核者批准、发布——在编辑器和 Studio 仪表盘中进行，而非此处。请打开编辑器完成后续操作。',
-        versions: 'Versions',
-        logs: 'Action log',
-        rename: 'Rename',
+        versions: '版本',
+        logs: '操作日志',
+        rename: '重命名',
         noVersions: '尚无版本——版本在审批仪式中铸造。',
         versionSummary: '{n} 个版本 · 最新 v{latest}'
       },
@@ -2524,12 +2531,12 @@ export default {
         nameOk: '知识库名称已设定',
         labelsOk: '标签已选定',
         topicsOk: '主题已审核',
-        topicsPending: 'No topics yet',
-        topicsServing: 'Topics serving',
+        topicsPending: '尚无主题',
+        topicsServing: '主题服务中',
         noTopics: '尚无主题——请返回策展步骤生成或撰写它们。',
         frozen: '此仓库正在提供服务——此处为只读摘要。请打开编辑器管理版本或执行撤回。',
         ritual: '下一步：在 Studio 仪表盘提交审批 → 批准人接受 → 从仪表盘或编辑器发布。向导有意在此止步。',
-        openDashboard: 'Open the Dashboard'
+        openDashboard: '打开仪表盘'
       }
     },
     trust: {
@@ -2628,15 +2635,15 @@ export default {
         notReady: '标签已保存在本地 — 服务端同步功能即将上线。'
       },
       frontmatter: {
-        label: 'frontmatter',
+        label: 'Frontmatter 元数据',
         edit: '编辑 frontmatter',
         dialogTitle: '编辑 frontmatter',
         okfVersion: 'okf_version',
-        status: 'lifecycle.status',
-        staleAfter: 'lifecycle.stale_after',
+        status: 'lifecycle.status（生命周期状态）',
+        staleAfter: 'lifecycle.stale_after（陈旧期限）',
         trustTier: 'trust_tier',
         attestation: 'attestation',
-        sources: 'provenance.sources',
+        sources: 'provenance.sources（来源）',
         onlyOnIndex: '仓库级标签仅存在于索引概念上——请打开索引查看它们。'
       },
       showSource: '显示来源',
@@ -2647,6 +2654,7 @@ export default {
       saveBlocked: '保存已被阻止：请先修复规范符合性问题。'
     },
     validation: {
+      healthAria: '健康度：{pct}%，{n} 个问题',
       frozen: '内容已冻结于 {v} — 仅供只读预览。如需更改，请先对 serving 版本执行 retract。',
       none: '无',
       expertHint: '切换至专家模式可查看原始校验 JSON、按严重级别过滤并覆盖检查项。',
@@ -2665,25 +2673,25 @@ export default {
       piiTitle: '个人数据——请逐一复核每个被标记的概念',
       loading: 'Checking the repository…',
       loadFailed: '无法加载校验报告。',
-      retry: 'Retry',
-      issuesTitle: 'Issues to review',
-      howToFix: 'How to fix',
+      retry: '重试',
+      issuesTitle: '待复核问题',
+      howToFix: '如何修复',
       indexFailed: '重新建立索引失败——请编辑或重新切分该页面。',
       indexFailedRemedy: '在编辑器中打开该页面并保存（保存会重新建立索引），或从源文件重新切分该仓库。',
       severity: {
-        blocker: 'Blocking',
-        warning: 'Needs review',
-        info: 'Info'
+        blocker: '阻断',
+        warning: '需复核',
+        info: '信息'
       },
       type: {
-        conformance: 'Frontmatter',
-        orphan: 'Not linked',
-        near_duplicate: 'Near-duplicate',
-        citation: 'Citations',
-        index_failed: 'Index'
+        conformance: 'Frontmatter 规范',
+        orphan: '未链接',
+        near_duplicate: '近似重复',
+        citation: '引用',
+        index_failed: '索引'
       },
       topicLinks: {
-        title: 'Cross-link topics',
+        title: '交叉链接主题',
         tip: '读取此仓库的每个页面，并在真正相互归属的页面之间写入链接——与导入向导所运行的处理相同。可以安全地重复运行：现有链接会保留，只添加新链接。',
         progress: '正在交叉链接…第 {done} 批，共 {total} 批',
         progressIdle: '正在交叉链接…正在读取仓库',
@@ -2691,18 +2699,18 @@ export default {
         failed: '交叉链接失败：{msg}'
       },
       action: {
-        suggestLinks: 'Suggest links',
-        accept: 'Accept',
-        dismiss: 'Dismiss',
-        delete: 'Delete',
+        suggestLinks: '建议链接',
+        accept: '接受',
+        dismiss: '忽略',
+        delete: '删除',
         working: 'Working…',
         wireCreate: '创建 Sources 页面并链接 {n} 个页面',
         wireExisting: '将 {n} 个页面链接到“{hub}”',
-        preview: 'Preview duplicates',
-        hidePreview: 'Hide preview'
+        preview: '预览重复项',
+        hidePreview: '隐藏预览'
       },
       actionDone: {
-        done: 'Done'
+        done: '完成'
       },
       suggest: {
         working: '正在请助手建议链接…',
@@ -2713,7 +2721,7 @@ export default {
       },
       wireDone: '已将 {n} 个页面链接到“{hub}”。',
       wireCreated: '已创建 Sources 页面并链接 {n} 个页面。',
-      mergedPages: '{n} pages',
+      mergedPages: '{n} 个页面',
       preview: {
         loading: 'Loading page contents…',
         truncated: '前 {n} 个字符——请打开编辑器查看完整页面。'
@@ -2729,9 +2737,9 @@ export default {
           '页面在其元数据中引用了文档，但没有任何内容将它们链接到 Sources 页面——因此引用永远到不了图谱，无法在应答时被遍历或引用。修复方法：一键即可挂接所有引用页面。',
         index_failed: '页面已导入，但其搜索索引构建失败——在重新建立索引之前无法被检索。在编辑器中保存该页面会重试构建。'
       },
-      piiRescan: 'Re-scan all pages',
+      piiRescan: '重新扫描所有页面',
       piiRescanWorking: 'Re-scanning every page…',
-      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanDone: '已重新扫描 {n} 个页面。',
       piiRescanPartial: '已重新扫描 {n} 个页面。仍有 {e} 个失败——它们的扫描结论没有变化，因此这些页面仍会阻止发布。',
       piiRescanMissing: '此服务器不支持重新扫描（404）。没有任何更改——扫描失败的页面仍在阻止发布。',
       piiRescanFrozen: '重新扫描被拒绝：仓库正在发布（409）。没有任何更改。',
@@ -2739,20 +2747,20 @@ export default {
       piiRescanProgress: '正在重新扫描…第 {done} 页，共 {total} 页',
       piiRescanProgressIdle: '正在重新扫描…正在读取仓库',
       piiRescanNoKey: '服务器接受了重新扫描，但未返回运行 ID，因此无法跟踪进度。没有任何结果被报告。',
-      piiStateError: 'Scan error',
+      piiStateError: '扫描错误',
       piiTally: {
-        scanned: '{n} page(s) re-scanned',
+        scanned: '已重新扫描 {n} 个页面',
         clean: 'clear',
         hit: 'flagged',
-        error: 'scan error',
-        stillBlocking: 'Still blocking'
+        error: '扫描错误',
+        stillBlocking: '仍在阻止'
       }
     },
     pii: {
       panel: '标记的实体',
       nFlagged: '找到 {n} 个',
       rescan: '重新扫描',
-      stateError: 'Scan failed',
+      stateError: '扫描失败',
       errorTitle: '此页面正在阻止移交。',
       errorBody:
         '此页面的 PII 扫描失败（不是没有发现——而是无法读取文本）。在扫描成功之前，发布将保持阻止状态。请使用上方的“重新扫描”。',
@@ -2830,102 +2838,102 @@ export default {
       hint: '从文档库中选择来源、从此计算机上传新文件，或两者兼用。',
       repoSec: '来自文档库',
       searchPh: 'Search by name or site…',
-      chipsLabel: 'Filter by origin',
-      chipAll: 'All',
-      chipCrawl: 'Crawls',
-      chipUpload: 'Uploads',
+      chipsLabel: '按来源筛选',
+      chipAll: '全部',
+      chipCrawl: '抓取',
+      chipUpload: '上传',
       noMatches: '没有与此搜索或筛选匹配的结果。',
       crawlBadge: 'crawl',
-      crawlTip: 'Crawled from: {url}',
-      total: '{n} document(s)',
+      crawlTip: '抓取自：{url}',
+      total: '{n} 份文档',
       titleSingle: '选择抓取的文档',
       loading: 'Loading documents…',
-      retry: 'Retry',
+      retry: '重试',
       empty: '文档库中还没有文档——请在下方上传。',
-      more: 'Load more',
-      fsSec: 'From this computer',
-      fsPick: '+ Upload files',
+      more: '加载更多',
+      fsSec: '来自此计算机',
+      fsPick: '+ 上传文件',
       uploading: 'Uploading…',
-      uploaded: '{n} file(s) uploaded.',
+      uploaded: '{n} 个文件已上传。',
       uploadFailed: '一个上传失败——请检查文件后重试。',
       fsNote: '上传的文件会加入文档库，并在此处自动选中。',
-      count: 'Selected: {n}',
+      count: '已选择：{n}',
       needOne: '请至少选择一个来源。',
-      confirm: 'Use {n} source(s)',
-      cancel: 'Cancel',
+      confirm: '使用 {n} 个来源',
+      cancel: '取消',
       loadFailed: '无法加载文档列表。',
-      servingBadge: 'serving free-form RAG',
+      servingBadge: '正在服务自由 RAG',
       servingTip: '该文档当前正在服务自由格式 RAG 语料库——转换会成功，但在撤回之前，此仓库无法被摄取。',
-      alreadyBadge: 'already in an OKF repo',
+      alreadyBadge: '已属于某个 OKF 仓库',
       alreadyTip: '该文档已经是另一个 OKF 仓库的来源——转换将拒绝它。'
     },
     frontmatter: {
       title: 'Frontmatter 标签——此仓库是关于什么的',
       help: '标签描述此仓库包含什么——以及同样重要的是——不包含什么（禁用列表）。它们决定哪些查询路由到此仓库。点击“刷新”从语料库起草，或在下方编辑标签。发布要求 ≥3 个主题标签 + ≥1 个禁用标签。',
-      refresh: 'Refresh suggestions',
+      refresh: '刷新建议',
       suggesting: 'Curating…',
       suggestEmpty: 'LLM 未返回任何标签。请待语料库扩充后再试。',
       suggestCoverage: '基于 {total} 个概念中的 {sampled} 个生成，覆盖 {labels} 个知识层级标签。',
-      suggestFailed: 'Suggest failed.',
+      suggestFailed: '建议失败。',
       suggestedTag: 'LLM 建议——移除即可忽略。',
-      removeTag: 'Remove tag',
+      removeTag: '移除标签',
       fieldEmpty: '—',
-      addPlaceholder: 'Add {field}',
-      add: 'Add',
+      addPlaceholder: '添加{field}',
+      add: '添加',
       saving: 'Saving…',
-      save: 'Save tags',
-      saved: 'Saved',
-      error: 'Save failed.',
+      save: '保存标签',
+      saved: '已保存',
+      error: '保存失败。',
       errorWithStep: '保存在步骤“{step}”（{code}）失败——请重试。',
       field: {
-        topic: 'Topic',
-        entity: 'Entity',
-        scope: 'Scope',
-        forbidden: 'Forbidden',
-        summary: 'Summary',
-        keyword: 'Keyword'
+        topic: '主题',
+        entity: '实体',
+        scope: '范围',
+        forbidden: '禁用',
+        summary: '摘要',
+        keyword: '关键词'
       }
     },
     testingLab: {
-      title: 'Testing Lab',
-      cta: 'Testing Lab',
+      title: '测试实验室',
+      cta: '测试实验室',
       badge: {
-        present: 'head ready',
-        stale: 'head stale',
-        missing: 'no head'
+        present: '头向量就绪',
+        stale: '头向量过期',
+        missing: '无头向量'
       },
       tab: {
-        head: 'Head',
-        test: 'Test',
-        suites: 'Suites & analytics',
+        head: '头向量',
+        test: '测试',
+        suites: '测试集与分析',
         ragas: 'RAGAS 基准测试',
         models: '模型'
       },
       head: {
-        dim: 'Dimensions',
-        model: 'Model',
-        version: 'Head version',
-        computedAt: 'Computed',
+        dim: '维度',
+        model: '模型',
+        version: '头向量版本',
+        computedAt: '计算时间',
         staleNote: '标签在头向量构建后发生了变更——请先重建再信任这些测试。',
         missingNote: '尚无头向量。它在发布时构建；若当时嵌入服务不可用，现在可从已存储的标签重建。',
-        rebuild: 'Rebuild head',
+        rebuild: '重建头向量',
         rebuildTip: '将已存储的标签重新嵌入为新的头向量。每个标签字段一次嵌入调用。',
         rebuildBusy: '重建中——正在嵌入各标签字段…'
       },
       test: {
         placeholder: '例如：癌症筛查指南',
-        run: 'Run test',
+        run: '运行测试',
         running: '正在嵌入查询并为各头向量评分…',
         adversarial: '对抗测试——此查询不应选中此仓库（禁用或相邻主题）',
-        embeddedWith: 'Embedded with',
+        embeddedWith: '嵌入模型',
         col: {
-          repo: 'Repository',
-          state: 'State',
-          headScore: 'Head score',
-          rank: 'Rank',
-          claimed: 'Claims query'
+          repo: '仓库',
+          state: '状态',
+          headScore: '头向量得分',
+          rank: '排名',
+          claimed: '认领查询'
         },
-        provenance: 'Routing provenance',
+        provenance: '路由溯源',
         empty: '输入一条用户会问的查询并运行——实验室会按照实际扇出的方式为每个已发布仓库的头向量评分。',
         pass: '通过 — 此仓库赢得头向量路由。',
         fail: '失败 — {repo} 赢得了此查询的头向量路由。',
@@ -2981,25 +2989,25 @@ export default {
         progress: '{done}/{total} 条查询（{pct}%）',
         progressStarting: 'Starting the run…',
         phase: {
-          routing: 'Scoring routes',
-          corpus: 'Checking the corpus'
+          routing: '正在为路由评分',
+          corpus: '正在检查语料'
         }
       },
       suites: {
-        generate: 'Generate test suite',
+        generate: '生成测试集',
         generateTip: 'LLM 按每类 30 条分批生成 — 大批量（100+）需要几分钟。完成后测试集会出现在此处和已保存列表中。',
         generating: '正在分批生成 — 大批量需要几分钟…',
-        run: 'Run all queries',
+        run: '运行全部查询',
         running: '正在运行测试集中的每条查询…',
-        current: 'Current suite',
+        current: '当前测试集',
         col: {
-          query: 'Query',
-          kind: 'Kind',
-          outcome: 'Outcome',
-          run: 'Run',
-          when: 'When',
-          passRate: 'Pass rate',
-          headVersion: 'Head',
+          query: '查询',
+          kind: '类型',
+          outcome: '结果',
+          run: '运行',
+          when: '时间',
+          passRate: '通过率',
+          headVersion: '头向量',
           tags: '标签',
           actions: '编辑',
           name: '名称',
@@ -3008,17 +3016,17 @@ export default {
         notEvaluatable: '不可评估（暂无竞争头向量）',
         pass: 'pass',
         fail: 'fail',
-        passRate: 'Pass rate',
-        positives: 'Positives',
-        negatives: 'Negatives',
+        passRate: '通过率',
+        positives: '正例',
+        negatives: '负例',
         noCompetitors: '不适用 — 尚无竞争头向量',
-        avgMargin: 'Avg margin',
-        steal: '{repo} stole {n} queries',
+        avgMargin: '平均余量',
+        steal: '{repo} 抢走了 {n} 条查询',
         addPlaceholder: 'Your own probe query…',
-        add: 'Add to suite',
-        kindPositive: 'should select',
-        kindNegative: 'should NOT select',
-        history: 'Run history',
+        add: '添加到测试集',
+        kindPositive: '应选择',
+        kindNegative: '不应选择',
+        history: '运行历史',
         noRuns: '暂无运行记录——请先生成测试集并运行。',
         explainFailures: '解释失败项',
         explainBusy: '正在解释失败项——对每个失败的负向查询一次模型调用…',
@@ -3063,11 +3071,11 @@ export default {
       error: {
         explain: '解释失败',
         saveTag: '无法保存禁用标签',
-        rebuild: 'Head rebuild failed',
-        test: 'Routing test failed',
-        generate: 'Suite generation failed',
-        run: 'Suite run failed',
-        add: 'Could not add the query',
+        rebuild: '头向量重建失败',
+        test: '路由测试失败',
+        generate: '测试集生成失败',
+        run: '测试集运行失败',
+        add: '无法添加该查询',
         history: '加载保存历史失败',
         revert: '回滚 frontmatter 失败',
         advisor: '顾问失败',
@@ -3083,7 +3091,7 @@ export default {
           '该仓库还没有可构建头向量的标签——请在 Frontmatter 面板中创建标签（或使用“建议标签”），然后再生成测试集。'
       },
       footer: {
-        unpublish: 'Unpublish to review'
+        unpublish: '取消发布以进行审核'
       },
       publishCard: {
         present: '头向量已就绪——实验室中的路由测试会告诉您此仓库是否赢得了它应胜出的查询。',

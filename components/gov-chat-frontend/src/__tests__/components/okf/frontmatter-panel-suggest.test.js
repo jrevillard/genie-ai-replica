@@ -155,3 +155,82 @@ describe('FrontmatterPanel — Suggest tags (1-8g-m)', () => {
     expect(w.html()).toContain('okf-fmp__error');
   });
 });
+
+describe('FrontmatterPanel — pre-save flush (round 18, #80479)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  // mapActions needs a REAL Vuex store with the okf module (a plain-object
+  // mock leaves the namespace map undefined — same reason the lifecycle-ui
+  // suite builds a real store).
+  const Vuex = require('vuex');
+  const okfModule = require('@/store/modules/okf').default;
+  function buildStore() {
+    return new Vuex.Store({
+      modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state)) } }
+    });
+  }
+
+  // The data-loss race this pins: the panel's two-write save reads /index.md
+  // AFTER dispatching saveFrontmatter — before the fix, the flushed autosave
+  // PATCH could still be in flight and the save wrote a STALE body. The
+  // flusher prop must be AWAITED: no dispatch until it resolves.
+  test('onSave AWAITS the flusher promise before dispatching the save', async () => {
+    let releaseFlush;
+    const flushGate = new Promise((r) => {
+      releaseFlush = r;
+    });
+    const flusher = jest.fn(() => flushGate);
+    const store = buildStore();
+    const dispatch = jest.fn(() => Promise.resolve({ ok: true }));
+    store.dispatch = dispatch;
+    const w = mount(OkfFrontmatterPanel, {
+      global: {
+        mocks: { $store: store },
+        stubs: {
+          DsButton: { template: '<button><slot /></button>' },
+          DsInput: true,
+          DsSelect: true,
+          DsTag: { template: '<span><slot /></span>' },
+          DsSpinner: true,
+          DsInfoTip: true
+        }
+      },
+      props: { repoId: REPO.repo_id, flusher }
+    });
+    w.vm.shape.topic = ['indonesian-history']; // canSave needs content
+    const saving = w.vm.onSave();
+    await Promise.resolve(); // a microtask: the flush call itself runs
+    expect(flusher).toHaveBeenCalledTimes(1);
+    expect(dispatch).not.toHaveBeenCalled(); // still gated on the flush
+    releaseFlush();
+    await saving;
+    expect(dispatch).toHaveBeenCalledWith('okf/saveFrontmatter', expect.objectContaining({ repoId: REPO.repo_id }));
+    expect(w.vm.saving).toBe(false);
+  });
+
+  // No flusher prop → the legacy notification event still fires (hosts
+  // without a concept editor keep the old best-effort contract).
+  test('without a flusher the flush-before-save notification still emits', async () => {
+    const store = buildStore();
+    const dispatch = jest.fn(() => Promise.resolve({ ok: true }));
+    store.dispatch = dispatch;
+    const w = mount(OkfFrontmatterPanel, {
+      global: {
+        mocks: { $store: store },
+        stubs: {
+          DsButton: { template: '<button><slot /></button>' },
+          DsInput: true,
+          DsSelect: true,
+          DsTag: { template: '<span><slot /></span>' },
+          DsSpinner: true,
+          DsInfoTip: true
+        }
+      },
+      props: { repoId: REPO.repo_id }
+    });
+    w.vm.shape.topic = ['indonesian-history'];
+    await w.vm.onSave();
+    expect(w.emitted('flush-before-save')).toHaveLength(1);
+    expect(dispatch).toHaveBeenCalledWith('okf/saveFrontmatter', expect.anything());
+  });
+});

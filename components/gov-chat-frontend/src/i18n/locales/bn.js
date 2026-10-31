@@ -225,7 +225,8 @@ export default {
       logs: 'লগস',
       security: 'নিরাপত্তা',
       users: 'ব্যবহারকারী',
-      models: 'মডেল'
+      models: 'মডেল',
+      studio: "OKF Studio"
     },
     contentManagement: 'কনটেন্ট ম্যানেজমেন্ট',
     knowledgeHierarchy: 'জ্ঞান অনুক্রম',
@@ -1671,7 +1672,7 @@ export default {
       version: 'v{n}',
       versions: 'সংস্করণ',
       deleteLabel: 'মুছুন',
-      testingLab: 'Testing Lab'
+      testingLab: 'টেস্ট ল্যাব'
     },
     logs: {
       labeled: 'লেবেলযুক্ত: {n}',
@@ -1821,8 +1822,8 @@ export default {
           problem: 'সমস্যা',
           noError: 'কোনো কারণ রেকর্ড ছাড়াই ব্যর্থ চিহ্নিত।',
           fixLabel: 'সমাধান',
-          attempts: 'Attempts: {n}',
-          when: 'Last attempt {when}',
+          attempts: 'চেষ্টা: {n}',
+          when: 'সর্বশেষ চেষ্টা {when}',
           fix: {
             reaper:
               'গ্রেস উইন্ডোর মধ্যে ইনজেস্ট ওয়ার্কার অপেক্ষা ছেড়ে দিয়েছে (ড্রেন পরিপূর্ণ ছিল) — বিষয়বস্তু অক্ষত। সমাধান: ফাইলটি সামান্য সম্পাদনা করে সেভ করুন, অথবা পুরো রিপো রিট্র্যাক্ট করে পুনরায় ইনজেস্ট করুন।',
@@ -1849,7 +1850,7 @@ export default {
         bulkRedact: 'সব রিডাক্ট করুন',
         bulkRemove: 'সব সরান',
         loadProgress: 'ফাইল লোড হচ্ছে {done}/{total}',
-        addSource: '+ From documents',
+        addSource: '+ নথি থেকে',
         reingest: 'এই ধারণাটি পুনরায় ইনজেস্ট করুন',
         reingestBusy: 'এই রিপোজিটরির জন্য একটি RAG ইনজেস্ট ইতিমধ্যে চলছে — এটি শেষ হতে দিন, তারপর আবার চেষ্টা করুন।',
         reingestFailed: 'পুনরায় ইনজেস্ট ব্যর্থ হয়েছে — আবার চেষ্টা করুন।'
@@ -1874,8 +1875,8 @@ export default {
         trust: 'বিশ্বাসের স্তর',
         type: 'ধরন',
         typePlaceholder: 'ধরন নির্বাচন করুন…',
-        hide: 'Hide metadata',
-        show: 'Show metadata'
+        hide: 'মেটাডেটা লুকান',
+        show: 'মেটাডেটা দেখান'
       },
       pane: {
         files: 'ফাইল',
@@ -1906,6 +1907,7 @@ export default {
       paneLabel: 'প্যান ভিউ',
       saveFailed: 'সংরক্ষণ ব্যর্থ হয়েছে — আবার চেষ্টা করুন',
       piiRescan: {
+      timeout: 'পুনরায় স্ক্যান 15 মিনিট পরেও চলছে — এটি সার্ভারে চলতেই থাকবে। কিছুই হারায়নি; এক মিনিট পরে আবার দেখুন।',
         label: 'ব্যক্তিগত তথ্য',
         button: 'সব পৃষ্ঠা পুনরায় স্ক্যান করুন',
         working: 'সব পৃষ্ঠা পুনরায় স্ক্যান হচ্ছে…',
@@ -1961,6 +1963,10 @@ export default {
       }
     },
     dashboard: {
+      health: {
+        ariaNone: "কোনো মেট্রিক নেই",
+        aria: "স্বাস্থ্য: {pct} শতাংশ, {n}টি ধারণা"
+      },
       bulk: {
         body: 'প্রতিটি রিপোজিটরি সম্পূর্ণ গেট চেক (PII পর্যালোচনা, ইনডেক্সিং, সঙ্গতি) সহ প্রকাশিত হয়। রিপোজিটরি ভিত্তিক ফলাফল:',
         pending: 'নির্বাচিত রিপোজিটরিগুলি publish করতে নিশ্চিত করুন।',
@@ -1977,7 +1983,7 @@ export default {
         logs: 'লগস',
         rename: 'নাম পরিবর্তন করুন',
         versions: 'সংস্করণ',
-        testingLab: 'Testing Lab'
+        testingLab: 'টেস্ট ল্যাব'
       },
       delete: {
         body: 'এটি স্থায়ীভাবে রিপোজিটরি, এর ধারণা, ইনডেক্স করা সামগ্রী, গ্রাফ এবং বান্ডিল উপাদানগুলি সরিয়ে দেয়। এটি পূর্বাবস্থায় ফেরানো যাবে না।',
@@ -2010,7 +2016,7 @@ export default {
         ingested: 'গৃহীত সংস্করণ {n}',
         published: 'প্রকাশিত সংস্করণ {n}',
         retracted: 'প্রত্যাহার করা হয়েছে',
-        stepOf: 'Step {n} of 10'
+        stepOf: 'ধাপ {n}/১০'
       },
       title: 'রিপোজিটরি',
       topics: 'টপিক',
@@ -2109,6 +2115,7 @@ export default {
       openExisting: 'বিদ্যমান রিপোজিটরি খুলুন',
       name: 'রিপোজিটরির নাম',
       importing: 'বান্ডিল আমদানি করা হচ্ছে…',
+      bundleLabel: 'বান্ডেল (.zip)',
       importHint: 'অথবা একটি বিদ্যমান zip বান্ডিলকে নতুন রিপোজিটরি হিসেবে আমদানি করুন।',
       importDefaultName: 'আমদানিকৃত রিপোজিটরি',
       failed: 'রিপোজিটরি তৈরি ব্যর্থ হয়েছে',
@@ -2162,18 +2169,18 @@ export default {
       perRepoHint:
         'প্রতি-রিপো ট্যাগ (বিষয় / সত্ত্বা / স্কোপ / নিষিদ্ধ / সারসংক্ষেপ / কীওয়ার্ড) রিট্রিভারকে চালায়। একই তথ্য রিপো ডক ফিল্ডেও থাকে — সেভ করলে দুটিই সমন্বয় থাকে।',
       perRepoField: {
-        topic: 'Topic',
-        entity: 'Entity',
-        scope: 'Scope',
-        forbidden: 'Forbidden',
-        summary: 'Summary',
-        keyword: 'Keyword'
+        topic: 'বিষয়',
+        entity: 'সত্ত্বা',
+        scope: 'স্কোপ',
+        forbidden: 'নিষিদ্ধ',
+        summary: 'সারসংক্ষেপ',
+        keyword: 'কীওয়ার্ড'
       },
       perRepoPh: {
-        topic: 'One topic per line',
-        entity: 'One entity per line',
+        topic: 'প্রতি লাইনে একটি বিষয়',
+        entity: 'প্রতি লাইনে একটি সত্ত্বা',
         forbidden: 'প্রতি লাইনে একটি নিষিদ্ধ বিষয়',
-        keyword: 'One keyword per line'
+        keyword: 'প্রতি লাইনে একটি কীওয়ার্ড'
       },
       perRepoHelp: {
         topic: 'বিষয় যোগ, পরিবর্তন বা সরান — প্রতি লাইনে একটি। ফাঁকা লাইন উপেক্ষা করা হয়।',
@@ -2253,8 +2260,8 @@ export default {
       classificationStrategy:
         'প্রযোজক প্রতিটি বিষয়ের লেবেল কীভাবে নির্ধারণ করে: হিউরিস্টিক দ্রুত ও বিনামূল্যে; LLM প্রতিটি পৃষ্ঠা পড়ে (জটिल লেআউটের জন্য ভালো); হাইব্রিড হিউরিস্টিক দিয়ে শুরু করে কঠিনগুলোকে এগিয়ে নেয়। শুধু কিউরেশন — এটি কখনও ইনজেস্ট চালু করে না।',
       clsHeur: 'হিউরিস্টিক (দ্রুত, LLM ছাড়া)',
-      clsLlm: 'LLM classification',
-      clsHybrid: 'Hybrid',
+      clsLlm: 'LLM শ্রেণিবিন্যাস',
+      clsHybrid: 'হাইব্রিড',
       fsPick:
         'প্রতিটি ফাইল একটি বিষয় হয়ে ওঠে — মনোযোগ দিয়ে সাজানো বিষয় একটি বিশাল নথির চেয়ে অনেক বেশি নির্ভুলভাবে পুনরুদ্ধার করা যায়। ফাইলের নামই শিরোনাম হয়; Curate-এ আপনি সবকিছু পরিমার্জ করতে পারেন।',
       autocorrect:
@@ -2395,12 +2402,12 @@ export default {
     wizard: {
       working: 'Working…',
       state: {
-        draft: 'In progress',
-        register: 'In progress',
-        review: 'In review',
-        approve: 'Approved',
-        retracted: 'Retracted',
-        publish: 'Ready to ingest'
+        draft: 'চলমান',
+        register: 'চলমান',
+        review: 'পর্যালোচনা চলছে',
+        approve: 'অনুমোদিত',
+        retracted: 'প্রত্যাহার করা হয়েছে',
+        publish: 'ইনজেস্টের জন্য প্রস্তুত'
       },
       status: {
         published: 'প্রকাশিত',
@@ -2409,7 +2416,7 @@ export default {
       },
       exit: 'ড্যাশবোর্ডে ফিরে যান',
       context: {
-        version: 'Version',
+        version: 'সংস্করণ',
         untitled: 'শিরোনামহীন রিপোজিটরি',
         trust: 'বিশ্বাস',
         title: 'রিপোজিটরি',
@@ -2420,7 +2427,7 @@ export default {
       label: 'OKF Studio উইজার্ড',
       back: 'পেছনে যান',
       continue: 'চালিয়ে যান',
-      finish: 'Open the Editor'
+      finish: 'এডিটর খুলুন'
     },
     steps: {
       entry: {
@@ -2466,16 +2473,16 @@ export default {
         manual: 'আপনি পরবর্তী ধাপে সরাসরি বিষয়গুলি লিখতে পারেন।',
         clone: 'ক্লোন করার জন্য বিদ্যমান রিপোজিটরিটি বেছে নিন।',
         placeholder: 'ধাপের UI পরবর্তী একটি গল্পে আসবে।',
-        chooseCrawl: 'Choose crawled documents',
-        chooseDocs: 'Choose source documents',
-        writeOne: '+ Write a concept',
+        chooseCrawl: 'ক্রল করা নথিগুলি বেছে নিন',
+        chooseDocs: 'উৎস নথিগুলি বেছে নিন',
+        writeOne: '+ একটি ধারণা লিখুন',
         fsPick: '+ এই কম্পিউটার থেকে markdown আমদানি করুন',
         fsBusy: 'Importing your files…',
         fsFailed: 'আমদানি ব্যর্থ — ফাইলগুলো পরীক্ষা করে আবার চেষ্টা করুন।',
         skippedEmpty: '{n}টি ফাঁকা ফাইল বাদ পড়েছে।',
-        noneSelected: 'No sources selected yet.',
-        selectedN: 'Selected: {n}',
-        moreN: ' +{n} more',
+        noneSelected: 'এখনো কোনো উৎস নির্বাচিত হয়নি।',
+        selectedN: 'নির্বাচিত: {n}',
+        moreN: ' +{n}টি আরও',
         noRepo: 'প্রথমে রিপোজিটরি তৈরি করুন (Entry-তে ফিরে যান)।',
         noRepoYet: 'প্রথমে রিপোজিটরি তৈরি করুন (Entry-তে ফিরে যান)।',
         benchTitle: 'এই রিপোজিটরির বিষয়গুলি',
@@ -2483,12 +2490,12 @@ export default {
         benchLoading: 'Reading topics…',
         benchEmpty: 'এখানে এখনো কিছু নেই — নিচে উৎস বেছে নিন, markdown আমদানি করুন, বা আপনার প্রথম বিষয়টি লিখুন।',
         benchFailed: 'এই মুহূর্তে বিষয়গুলি পড়া যায়নি।',
-        editTitle: 'Edit concept',
+        editTitle: 'ধারণা সম্পাদনা করুন',
         deleteFailed: 'ধারণাটি মুছে ফেলা যায়নি।',
         added: 'এই রিপোজিটরিতে এখন পর্যন্ত {n}টি বিষয়।',
-        deleteTitle: 'Delete topic',
+        deleteTitle: 'বিষয় মুছুন',
         deleteBody: 'এটি এই রিপোজিটরি থেকে বিষয়টি স্থায়ীভাবে সরিয়ে দেয়।',
-        labelFailed: 'Could not set the label.',
+        labelFailed: 'লেবেল সেট করা যায়নি।',
         cloned: 'এই রিপোজিটরিটি একটি ক্লোন — এর বিষয়গুলি ইতিমধ্যে আছে। পর্যালোচনার জন্য Curate-এ যান।'
       },
       produce: {
@@ -2496,38 +2503,38 @@ export default {
         hint: 'আমরা আপনার উৎসগুলি পড়ছি এবং বিষয় প্রস্তাব করছি।',
         progress: 'প্রযোজক চলছে...',
         placeholder: 'প্রযোজক পরিষেবা পরবর্তী একটি গল্পে যুক্ত হবে।',
-        retry: 'Retry conversion',
-        restart: 'Run again',
+        retry: 'রূপান্তর পুনরায় চেষ্টা করুন',
+        restart: 'পুনরায় চালান',
         running: 'রূপান্তর হচ্ছে… এখানে অগ্রগতি দেখতে পারেন; Curate-এ পর্যালোচনা করার আগে কিছুই চূড়ান্ত হয় না।',
         failed: 'রূপান্তর ব্যর্থ হয়েছে — আবার চেষ্টা করুন, বা পেছনে গিয়ে অন্য ইনপুট বেছে নিন।',
         done: '{n}টি বিষয় প্রস্তুত — পর্যালোচনার জন্য Curate-এ যান।',
         noSources: 'কোনো উৎস নির্বাচিত হয়নি — Input-এ ফিরে যান।',
         neverStarted: 'রূপান্তর শুরু হয়নি — আবার চেষ্টা করুন।',
         manualSkip: 'হাতে লেখা বিষয়ের জন্য জেনারেশনের দরকার নেই — পর্যালোচনার জন্য Curate-এ যান।',
-        labelDone: 'Conversion complete',
+        labelDone: 'রূপান্তর সম্পূর্ণ',
         dupContent:
           'এই উৎসগুলি ইতিমধ্যে অন্য একটি OKF রিপোজিটরিতে আমদানি করা হয়েছে। আগে সেই রিপোজিটরি প্রত্যাহার বা মুছে ফেলুন, অথবা অন্য নথি বেছে নিন।',
         inFlight: 'এই রিপোজিটরির জন্য ইতিমধ্যেই একটি রূপান্তর চলছে — শেষ হতে দিন।',
         stage: {
-          files: 'Files',
+          files: 'ফাইল',
           filesCount: '{total}টির মধ্যে {done}টি নথি',
-          concepts: 'Concepts',
-          conceptsCount: '{done} of {total} topics',
-          conceptsSoFar: '{n} topics so far',
-          curating: 'Curating',
+          concepts: 'ধারণা',
+          conceptsCount: '{total}টির মধ্যে {done}টি বিষয়',
+          conceptsSoFar: 'এখন পর্যন্ত {n}টি বিষয়',
+          curating: 'কিউরেট করা হচ্ছে',
           curatingCount: '{total}টির মধ্যে {done}টি ধারণা লেবেলযুক্ত',
-          crosslink: 'Cross-linking topics',
+          crosslink: 'বিষয়গুলোর পারস্পরিক লিঙ্ক তৈরি হচ্ছে',
           linkCount: '{total}টির মধ্যে {done}টি ব্যাচ · {w}টি লিঙ্ক লেখা হয়েছে',
-          complete: 'Complete',
-          unavailable: 'Count unavailable',
-          waiting: 'Waiting'
+          complete: 'সম্পূর্ণ',
+          unavailable: 'গণনা অনুপলব্ধ',
+          waiting: 'অপেক্ষা করা হচ্ছে'
         },
         filesNote: '{total}টির মধ্যে {done}টি নথি রূপান্তরিত হয়েছে',
         pagesNote: '{total}টির মধ্যে {done}টি পৃষ্ঠা রূপান্তরিত হয়েছে',
         pagesSoFar: 'এখন পর্যন্ত {n}টি পৃষ্ঠা রূপান্তরিত হয়েছে',
-        sourceStat: '+{n} new (total {t})',
+        sourceStat: '+{n}টি নতুন (মোট {t})',
         sourceStatMerged: '+{n}টি নতুন · slug অনুযায়ী {m}টি একীভূত (মোট {t})',
-        docsLeg: '{n} selected document(s)',
+        docsLeg: '{n}টি নির্বাচিত নথি',
         legWait: 'পূর্ববর্তী রূপান্তর ছাড়া দেওয়ার অপেক্ষায়…'
       },
       label: {
@@ -2535,7 +2542,7 @@ export default {
         hint: 'লেবেলগুলো জ্ঞান-শ্রেণিবদ্ধতা থেকে স্বয়ংক্রিয়ভাবে নির্ধারিত হয় এবং এই রিপোজিটরির বিষয়ক্ষেত্রের মধ্যে সীমাবদ্ধ।',
         loading: 'Reading labels…',
         preview: '{n}টির মধ্যে {labeled}টি বিষয়ে জ্ঞান-শ্রেণিবিন্যাস লেবেল আছে।',
-        unlabeled: 'no labels yet',
+        unlabeled: 'এখনো কোনো লেবেল নেই',
         adjust: 'Curate-এ যেকোনো বিষয়ের লেবেল সমন্বয় করুন — লেবেল এই রিপোজিটরির বিষয়ক্ষেত্রের মধ্যে সীমাবদ্ধ থাকে।',
         loadFailed: 'এই মুহূর্তে লেবেলগুলি পড়া যায়নি।'
       },
@@ -2566,16 +2573,16 @@ export default {
         topics: 'বিষয়',
         labels: 'লেবেল',
         sources: 'উৎস',
-        state: 'Lifecycle state',
-        labelsSet: 'set per topic in Curate',
+        state: 'লাইফসাইকেল অবস্থা',
+        labelsSet: 'Curate-এ প্রতি বিষয়ে সেট করা হয়',
         browserHint:
           'হস্তান্তরের আগে চূড়ান্ত দৃষ্টি: নিচের প্রতিটি ফাইল, তার markdown ও তার লেবেল — ঠিক যেভাবে সহকারী উদ্ধৃত করবে।',
         noRepo: 'এখনও কোনো রিপোজিটরি নেই — একটি রিপোজিটরি তৈরি হলে ফাইল পর্যালোচনা এখানে দেখা যাবে।',
         ritualOutside:
           'পর্যালোচনার আনুষ্ঠানিকতা — পর্যালোচনার জন্য জমা দেওয়া, পর্যালোচকের অনুমোদন, প্রকাশ — এডিটর ও Studio ড্যাশবোর্ডে ঘটে, এখানে নয়। শেষ করতে এডিটর খুলুন।',
-        versions: 'Versions',
-        logs: 'Action log',
-        rename: 'Rename',
+        versions: 'সংস্করণ',
+        logs: 'অ্যাক্টিভিটি লগ',
+        rename: 'নাম পরিবর্তন করুন',
         noVersions: 'এখনও কোনো সংস্করণ নেই — সংস্করণ তৈরি হয় অনুমোদনের আনুষ্ঠানিকতার সময়।',
         versionSummary: '{n}টি সংস্করণ · সর্বশেষ v{latest}'
       },
@@ -2585,14 +2592,14 @@ export default {
         nameOk: 'রিপোজিটরির নাম সেট করা হয়েছে',
         labelsOk: 'লেবেল নির্বাচিত হয়েছে',
         topicsOk: 'বিষয় পর্যালোচনা করা হয়েছে',
-        topicsPending: 'No topics yet',
-        topicsServing: 'Topics serving',
+        topicsPending: 'এখনো কোনো বিষয় নেই',
+        topicsServing: 'পরিবেশিত বিষয়',
         noTopics: 'এখনও কোনো বিষয় নেই — তৈরি করতে বা লিখতে Curate-এ ফিরে যান।',
         frozen:
           'এই রিপোজিটরি পরিবেশন করছে — এখানে কেবল একটি পঠনযোগ্য সারসংক্ষেপ। সংস্করণ পরিচালনা বা প্রত্যাহার করতে এডিটর খুলুন।',
         ritual:
           'পরবর্তী: Studio ড্যাশবোর্ডে অনুমোদনের জন্য জমা দিন → একজন অনুমোদনকারী গ্রহণ করেন → ড্যাশবোর্ড বা এডিটর থেকে প্রকাশ করুন। উইজার্ড ইচ্ছাকৃতভাবে এখানেই থামে।',
-        openDashboard: 'Open the Dashboard'
+        openDashboard: 'ড্যাশবোর্ড খুলুন'
       }
     },
     trust: {
@@ -2713,6 +2720,7 @@ export default {
       saveBlocked: 'সংরক্ষণ অবরুদ্ধ: প্রথমে সঙ্গতি সমস্যাগুলি ঠিক করুন।'
     },
     validation: {
+      healthAria: 'স্বাস্থ্য: {pct} শতাংশ, {n}টি সমস্যা',
       frozen:
         '{v}-এ সামগ্রী স্থির করা হয়েছে — শুধুমাত্র পড়ার জন্য পূর্বরূপ। পরিবর্তন করতে serving সংস্করণটি retract করুন।',
       none: 'কিছুই না',
@@ -2733,26 +2741,26 @@ export default {
       piiTitle: 'ব্যক্তিগত তথ্য — প্রতিটি চিহ্নিত ধারণা পর্যালোচনা করুন',
       loading: 'Checking the repository…',
       loadFailed: 'যাচাইকরণ রিপোর্ট লোড করা যায়নি।',
-      retry: 'Retry',
-      issuesTitle: 'Issues to review',
-      howToFix: 'How to fix',
+      retry: 'আবার চেষ্টা করুন',
+      issuesTitle: 'পর্যালোচনার জন্য সমস্যা',
+      howToFix: 'কীভাবে ঠিক করবেন',
       indexFailed: 'পুনরায় ইনডেক্স ব্যর্থ — পৃষ্ঠাটি সম্পাদনা করুন বা পুনরায় ভাগ করুন।',
       indexFailedRemedy:
         'পৃষ্ঠাটি এডিটরে খুলে সেভ করুন (সেভ করলে পুনরায় ইনডেক্স হয়), অথবা উৎস থেকে রিপোজিটরি পুনরায় ভাগ করুন।',
       severity: {
-        blocker: 'Blocking',
-        warning: 'Needs review',
-        info: 'Info'
+        blocker: 'ব্লকিং',
+        warning: 'পর্যালোচনা প্রয়োজন',
+        info: 'তথ্য'
       },
       type: {
-        conformance: 'Frontmatter',
-        orphan: 'Not linked',
-        near_duplicate: 'Near-duplicate',
-        citation: 'Citations',
-        index_failed: 'Index'
+        conformance: 'ফ্রন্টম্যাটার',
+        orphan: 'লিঙ্কযুক্ত নয়',
+        near_duplicate: 'প্রায়-সদৃশ',
+        citation: 'উদ্ধৃতি',
+        index_failed: 'ইনডেক্স'
       },
       topicLinks: {
-        title: 'Cross-link topics',
+        title: 'বিষয়গুলোর পারস্পরিক লিঙ্ক',
         tip: 'এই রিপোজিটরির প্রতিটি পৃষ্ঠা পড়ে এবং সত্যিই একসঙ্গে থাকা পৃষ্ঠাগুলোর মধ্যে লিঙ্ক লেখে — আমদানি উইজার্ড যে একই প্রক্রিয়া চালায়। এটি আবার চালানো নিরাপদ: পুরোনো লিঙ্ক থাকে এবং কেবল নতুনগুলো যোগ হয়।',
         progress: 'পারস্পরিক লিঙ্ক তৈরি হচ্ছে… {total}টির মধ্যে {done}টি ব্যাচ',
         progressIdle: 'পারস্পরিক লিঙ্ক তৈরি হচ্ছে… রিপোজিটরি পড়া হচ্ছে',
@@ -2760,18 +2768,18 @@ export default {
         failed: 'পারস্পরিক লিঙ্ক তৈরি ব্যর্থ: {msg}'
       },
       action: {
-        suggestLinks: 'Suggest links',
-        accept: 'Accept',
-        dismiss: 'Dismiss',
-        delete: 'Delete',
+        suggestLinks: 'লিঙ্কের পরামর্শ দিন',
+        accept: 'গ্রহণ করুন',
+        dismiss: 'বাতিল করুন',
+        delete: 'মুছুন',
         working: 'Working…',
         wireCreate: 'Sources পৃষ্ঠা তৈরি করুন এবং {n}টি পৃষ্ঠা লিঙ্ক করুন',
         wireExisting: '{n}টি পৃষ্ঠাকে "{hub}"-এ লিঙ্ক করুন',
-        preview: 'Preview duplicates',
-        hidePreview: 'Hide preview'
+        preview: 'সদৃশগুলো প্রিভিউ করুন',
+        hidePreview: 'প্রিভিউ লুকান'
       },
       actionDone: {
-        done: 'Done'
+        done: 'সম্পন্ন'
       },
       suggest: {
         working: 'সহকারীর কাছ থেকে লিঙ্কের পরামর্শ চাইছি…',
@@ -2782,7 +2790,7 @@ export default {
       },
       wireDone: '{n}টি পৃষ্ঠা "{hub}"-এ লিঙ্ক করা হয়েছে।',
       wireCreated: 'Sources পৃষ্ঠা তৈরি করে {n}টি পৃষ্ঠা লিঙ্ক করা হয়েছে।',
-      mergedPages: '{n} pages',
+      mergedPages: '{n}টি পৃষ্ঠা',
       preview: {
         loading: 'Loading page contents…',
         truncated: 'প্রথম {n}টি অক্ষর — পূর্ণ পৃষ্ঠা দেখতে এডিটর খুলুন।'
@@ -2799,9 +2807,9 @@ export default {
         index_failed:
           'পৃষ্ঠাটি আমদানি হয়েছে কিন্তু তার সার্চ-ইনডেক্স তৈরি ব্যর্থ — পুনরায় ইনডেক্স হওয়ার আগে এটি পুনরুদ্ধার করা যায় না। এডিটরে পৃষ্ঠাটি সেভ করলে তৈরির চেষ্টা আবার হয়।'
       },
-      piiRescan: 'Re-scan all pages',
+      piiRescan: 'সব পৃষ্ঠা পুনরায় স্ক্যান করুন',
       piiRescanWorking: 'Re-scanning every page…',
-      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanDone: '{n}টি পৃষ্ঠা পুনরায় স্ক্যান করা হয়েছে।',
       piiRescanPartial:
         '{n}টি পৃষ্ঠা পুনরায় স্ক্যান করা হয়েছে। {e}টি এখনও ব্যর্থ — তাদের স্ক্যান রায় বদলায়নি, তাই তাদের জন্য প্রকাশ এখনও বন্ধ।',
       piiRescanMissing:
@@ -2813,20 +2821,20 @@ export default {
       piiRescanProgressIdle: 'পুনরায় স্ক্যান হচ্ছে… রিপোজিটরি পড়া হচ্ছে',
       piiRescanNoKey:
         'সার্ভার পুনরায় স্ক্যান গ্রহণ করেছে কিন্তু কোনো রান আইডি ফেরত দেয়নি, তাই তার অগ্রগতি অনুসরণ করা যায় না। কিছুই জানানো হয়নি।',
-      piiStateError: 'Scan error',
+      piiStateError: 'স্ক্যান ত্রুটি',
       piiTally: {
-        scanned: '{n} page(s) re-scanned',
+        scanned: '{n}টি পৃষ্ঠা পুনরায় স্ক্যান করা হয়েছে',
         clean: 'clear',
         hit: 'flagged',
-        error: 'scan error',
-        stillBlocking: 'Still blocking'
+        error: 'স্ক্যান ত্রুটি',
+        stillBlocking: 'এখনও বন্ধ রাখছে'
       }
     },
     pii: {
       panel: 'চিহ্নিত সত্ত্বা',
       nFlagged: '{n} টি পাওয়া গেছে',
       rescan: 'পুনরায় স্ক্যান করুন',
-      stateError: 'Scan failed',
+      stateError: 'স্ক্যান ব্যর্থ হয়েছে',
       errorTitle: 'এই পৃষ্ঠা হস্তান্তর আটকে দিচ্ছে।',
       errorBody:
         'এই পৃষ্ঠার PII স্ক্যান ব্যর্থ হয়েছে (কিছু পাওয়া যায়নি বলে নয় — এটি লেখাই পড়তে পারেনি)। একটি স্ক্যান সফল না হওয়া পর্যন্ত প্রকাশ বন্ধ থাকবে। উপরে Re-scan ব্যবহার করুন।',
@@ -2905,105 +2913,105 @@ export default {
       hint: 'ডকুমেন্ট রিপোজিটরি থেকে উৎস বেছে নিন, এই কম্পিউটার থেকে নতুন আপলোড করুন, বা দুটিই করুন।',
       repoSec: 'ডকুমেন্ট রিপোজিটরি থেকে',
       searchPh: 'Search by name or site…',
-      chipsLabel: 'Filter by origin',
-      chipAll: 'All',
-      chipCrawl: 'Crawls',
-      chipUpload: 'Uploads',
+      chipsLabel: 'উৎস অনুসারে ফিল্টার করুন',
+      chipAll: 'সব',
+      chipCrawl: 'ক্রল',
+      chipUpload: 'আপলোড',
       noMatches: 'এই অনুসন্ধান বা ফিল্টারের সঙ্গে কিছু মেলেনি।',
       crawlBadge: 'crawl',
-      crawlTip: 'Crawled from: {url}',
-      total: '{n} document(s)',
+      crawlTip: 'ক্রলের উৎস: {url}',
+      total: '{n}টি নথি',
       titleSingle: 'ক্রল করা নথিটি নির্বাচন করুন',
       loading: 'Loading documents…',
-      retry: 'Retry',
+      retry: 'আবার চেষ্টা করুন',
       empty: 'রিপোজিটরিতে এখনো কোনো নথি নেই — নিচে কিছু আপলোড করুন।',
-      more: 'Load more',
-      fsSec: 'From this computer',
-      fsPick: '+ Upload files',
+      more: 'আরও লোড করুন',
+      fsSec: 'এই কম্পিউটার থেকে',
+      fsPick: '+ ফাইল আপলোড করুন',
       uploading: 'Uploading…',
-      uploaded: '{n} file(s) uploaded.',
+      uploaded: '{n}টি ফাইল আপলোড হয়েছে।',
       uploadFailed: 'একটি আপলোড ব্যর্থ — ফাইলগুলো পরীক্ষা করে আবার চেষ্টা করুন।',
       fsNote: 'আপলোড করা ফাইলগুলি ডকুমেন্ট রিপোজিটরিতে যুক্ত হয় এবং এখানে স্বয়ংক্রিয়ভাবে নির্বাচিত হয়।',
-      count: 'Selected: {n}',
+      count: 'নির্বাচিত: {n}',
       needOne: 'অন্তত একটি উৎস নির্বাচন করুন।',
-      confirm: 'Use {n} source(s)',
-      cancel: 'Cancel',
+      confirm: '{n}টি উৎস ব্যবহার করুন',
+      cancel: 'বাতিল',
       loadFailed: 'নথির তালিকা লোড করা যায়নি।',
-      servingBadge: 'serving free-form RAG',
+      servingBadge: 'ফ্রি-ফর্ম RAG সরবরাহ করছে',
       servingTip:
         'এই নথিটি এখন ফ্রি-ফর্ম RAG কর্পাস সরবরাহ করছে — রূপান্তর সফল হবে, তবে প্রত্যাহার না হওয়া পর্যন্ত এই রিপোজিটরি ইনজেস্ট করা যাবে না।',
-      alreadyBadge: 'already in an OKF repo',
+      alreadyBadge: 'ইতিমধ্যে একটি OKF রিপোতে',
       alreadyTip: 'এই নথিটি ইতিমধ্যে অন্য একটি OKF রিপোজিটরির উৎস — রূপান্তর তা প্রত্যাখ্যান করবে।'
     },
     frontmatter: {
       title: 'Frontmatter ট্যাগ — এই রিপো কী নিয়ে',
       help: 'ট্যাগগুলো বর্ণনা করে এই রিপো কী রয়েছে এবং — সমান গুরুত্বে — কী রয়েছে না (নিষিদ্ধ তালিকা)। তারাই ঠিক করে কোন কোয়েরি এই রিপোতে রাউট হবে। কর্পাস থেকে খসড়া নিতে Refresh চাপুন, অথবা নিচের চিপগুলো সম্পাদনা করুন। প্রকাশের জন্য ≥৩টি বিষয় + ≥১টি নিষিদ্ধ প্রয়োজন।',
-      refresh: 'Refresh suggestions',
+      refresh: 'পরামর্শ রিফ্রেশ করুন',
       suggesting: 'Curating…',
       suggestEmpty: 'LLM কোনো ট্যাগ ফেরত দেয়নি। কর্পাস বড় হলে আবার চেষ্টা করুন।',
       suggestCoverage: '{total}টির মধ্যে {sampled}টি ধারণা থেকে প্রাপ্ত, {labels}টি জ্ঞান-শ্রেণি লেবেলে।',
-      suggestFailed: 'Suggest failed.',
+      suggestFailed: 'পরামর্শ ব্যর্থ হয়েছে।',
       suggestedTag: 'LLM-এর পরামর্শ — বাতিল করতে সরান।',
-      removeTag: 'Remove tag',
+      removeTag: 'ট্যাগ সরান',
       fieldEmpty: '—',
-      addPlaceholder: 'Add {field}',
-      add: 'Add',
+      addPlaceholder: '{field} যোগ করুন',
+      add: 'যোগ করুন',
       saving: 'Saving…',
-      save: 'Save tags',
-      saved: 'Saved',
-      error: 'Save failed.',
+      save: 'ট্যাগ সংরক্ষণ করুন',
+      saved: 'সংরক্ষিত',
+      error: 'সংরক্ষণ ব্যর্থ হয়েছে।',
       errorWithStep: '"{step}" ধাপে সংরক্ষণ ব্যর্থ ({code}) — আবার চেষ্টা করুন।',
       field: {
-        topic: 'Topic',
-        entity: 'Entity',
-        scope: 'Scope',
-        forbidden: 'Forbidden',
-        summary: 'Summary',
-        keyword: 'Keyword'
+        topic: 'বিষয়',
+        entity: 'সত্ত্বা',
+        scope: 'স্কোপ',
+        forbidden: 'নিষিদ্ধ',
+        summary: 'সারসংক্ষেপ',
+        keyword: 'কীওয়ার্ড'
       }
     },
     testingLab: {
-      title: 'Testing Lab',
-      cta: 'Testing Lab',
+      title: 'টেস্ট ল্যাব',
+      cta: 'টেস্ট ল্যাব',
       badge: {
-        present: 'head ready',
-        stale: 'head stale',
-        missing: 'no head'
+        present: 'হেড প্রস্তুত',
+        stale: 'হেড পুরানো',
+        missing: 'হেড নেই'
       },
       tab: {
-        head: 'Head',
-        test: 'Test',
-        suites: 'Suites & analytics',
+        head: 'হেড',
+        test: 'পরীক্ষা',
+        suites: 'স্যুট ও বিশ্লেষণ',
         ragas: 'RAGAS মানদণ্ড পরীক্ষা',
         models: 'মডেল'
       },
       head: {
-        dim: 'Dimensions',
-        model: 'Model',
-        version: 'Head version',
-        computedAt: 'Computed',
+        dim: 'মাত্রা',
+        model: 'মডেল',
+        version: 'হেড সংস্করণ',
+        computedAt: 'গণনা করা হয়েছে',
         staleNote: 'এই হেড তৈরির পর ট্যাগ বদলেছে — পরীক্ষার ওপর ভরসা করার আগে পুনর্নির্মাণ করুন।',
         missingNote:
           'এখনো কোনো ভেক্টরায়িত হেড নেই। এটি প্রকাশের সময় তৈরি হয়; তখন এম্বেড সেবা অনুপলব্ধ ছিল, তাহলে সংরক্ষিত ট্যাগ থেকে এখনই এটি পুনর্নির্মাণ করুন।',
-        rebuild: 'Rebuild head',
+        rebuild: 'হেড পুনর্নির্মাণ করুন',
         rebuildTip:
           'সংরক্ষিত ট্যাগগুলিকে একটি নতুন হেড ভেক্টরে পুনরায় এম্বেড করে। প্রতিটি ট্যাগ ফিল্ডের জন্য একটি এম্বেড কল।',
         rebuildBusy: 'পুনর্নির্মাণ করা হচ্ছে — ট্যাগ ফিল্ডগুলো এম্বেড হচ্ছে…'
       },
       test: {
         placeholder: 'যেমন: ক্যান্সার স্ক্রিনিং নির্দেশিকা',
-        run: 'Run test',
+        run: 'পরীক্ষা চালান',
         running: 'কোয়েরি এম্বেড হচ্ছে এবং হেডগুলো স্কোর করা হচ্ছে…',
         adversarial: 'প্রতিবাধী — এই কোয়েরি এই রিপোজিটরি নির্বাচন করা উচিত নয় (একটি নিষিদ্ধ/সম্পর্কিত বিষয়)',
-        embeddedWith: 'Embedded with',
+        embeddedWith: 'এম্বেডে ব্যবহৃত',
         col: {
-          repo: 'Repository',
-          state: 'State',
-          headScore: 'Head score',
-          rank: 'Rank',
-          claimed: 'Claims query'
+          repo: 'রিপোজিটরি',
+          state: 'অবস্থা',
+          headScore: 'হেড স্কোর',
+          rank: 'র‍্যাঙ্ক',
+          claimed: 'কোয়েরি দাবি করে'
         },
-        provenance: 'Routing provenance',
+        provenance: 'রাউটিং উৎস',
         empty:
           'একজন ব্যবহারকারী যে কোয়েরি করতেন তা লিখে চালান — ল্যাবটি প্রতিটি প্রকাশিত রিপোজিটরির হেডকে ঠিক যেভাবে fan-out করত তেমন স্কোর করে।',
         pass: 'পাস — এই রিপোজিটরিই হেড রাউটিং জেতে।',
@@ -3063,26 +3071,26 @@ export default {
         progress: '{total}টির মধ্যে {done}টি কোয়েরি ({pct}%)',
         progressStarting: 'Starting the run…',
         phase: {
-          routing: 'Scoring routes',
-          corpus: 'Checking the corpus'
+          routing: 'রুটগুলো স্কোর করা হচ্ছে',
+          corpus: 'কর্পাস পরীক্ষা করা হচ্ছে'
         }
       },
       suites: {
-        generate: 'Generate test suite',
+        generate: 'টেস্ট স্যুট তৈরি করুন',
         generateTip:
           'LLM প্রতি শ্রেণিতে ৩০ করে ব্যাচে কোয়েরি লেখে — বড় অনুরোধ (১০০+) কয়েক মিনিট নেয়। শেষ হলে স্যুট এখানে ও সংরক্ষিত স্যুট তালিকায় দেখা যাবে।',
         generating: 'ব্যাচে তৈরি হচ্ছে — বড় অনুরোধ কয়েক মিনিট নেয়…',
-        run: 'Run all queries',
+        run: 'সব কোয়েরি চালান',
         running: 'স্যুটের প্রতিটি কোয়েরি চালানো হচ্ছে…',
-        current: 'Current suite',
+        current: 'বর্তমান স্যুট',
         col: {
-          query: 'Query',
-          kind: 'Kind',
-          outcome: 'Outcome',
-          run: 'Run',
-          when: 'When',
-          passRate: 'Pass rate',
-          headVersion: 'Head',
+          query: 'কোয়েরি',
+          kind: 'ধরন',
+          outcome: 'ফলাফল',
+          run: 'রান',
+          when: 'তারিখ ও সময়',
+          passRate: 'পাসের হার',
+          headVersion: 'হেড',
           tags: 'ট্যাগ',
           actions: 'সম্পাদনা',
           name: 'নাম',
@@ -3091,17 +3099,17 @@ export default {
         notEvaluatable: 'মূল্যায়নযোগ্য নয় (কোনো প্রতিদ্বন্দ্বী নেই)',
         pass: 'pass',
         fail: 'fail',
-        passRate: 'Pass rate',
-        positives: 'Positives',
-        negatives: 'Negatives',
+        passRate: 'পাসের হার',
+        positives: 'পজিটিভ',
+        negatives: 'নেগেটিভ',
         noCompetitors: 'প্রযোজ্য নয় — এখনো কোনো প্রতিদ্বন্দ্বী হেড নেই',
-        avgMargin: 'Avg margin',
-        steal: '{repo} stole {n} queries',
+        avgMargin: 'গড় মার্জিন',
+        steal: '{repo} {n}টি কোয়েরি চুরি করেছে',
         addPlaceholder: 'Your own probe query…',
-        add: 'Add to suite',
-        kindPositive: 'should select',
-        kindNegative: 'should NOT select',
-        history: 'Run history',
+        add: 'স্যুটে যোগ করুন',
+        kindPositive: 'নির্বাচন করা উচিত',
+        kindNegative: 'নির্বাচন করা উচিত নয়',
+        history: 'রান-ইতিহাস',
         noRuns: 'এখনো কোনো রান নেই — একটি স্যুট তৈরি করে চালান।',
         explainFailures: 'ব্যর্থতা ব্যাখ্যা করুন',
         explainBusy: 'ব্যর্থতা ব্যাখ্যা করা হচ্ছে — প্রতিটি ব্যর্থ নেগেটিভের জন্য একটি মডেল কল…',
@@ -3148,11 +3156,11 @@ export default {
       error: {
         explain: 'ব্যাখ্যা ব্যর্থ হয়েছে',
         saveTag: 'নিষিদ্ধ ট্যাগ সংরক্ষণ করা যায়নি',
-        rebuild: 'Head rebuild failed',
-        test: 'Routing test failed',
-        generate: 'Suite generation failed',
-        run: 'Suite run failed',
-        add: 'Could not add the query',
+        rebuild: 'হেড পুনর্নির্মাণ ব্যর্থ হয়েছে',
+        test: 'রাউটিং পরীক্ষা ব্যর্থ হয়েছে',
+        generate: 'স্যুট তৈরি ব্যর্থ হয়েছে',
+        run: 'স্যুট রান ব্যর্থ হয়েছে',
+        add: 'কোয়েরিটি যোগ করা যায়নি',
         history: 'সেভ ইতিহাস লোড করা যায়নি',
         revert: 'ফ্রন্টম্যাটার ফিরিয়ে আনা যায়নি',
         advisor: 'উপদেষ্টা ব্যর্থ হয়েছে',
@@ -3168,7 +3176,7 @@ export default {
           'এই রিপোজিটরিতে এখনো হেড ট্যাগ নেই — Frontmatter প্যানেলে ট্যাগ তৈরি করুন (বা ট্যাগ প্রস্তাব ব্যবহার করুন), তারপর স্যুট তৈরি করুন।'
       },
       footer: {
-        unpublish: 'Unpublish to review'
+        unpublish: 'পর্যালোচনার জন্য আনপাবলিশ করুন'
       },
       publishCard: {
         present:

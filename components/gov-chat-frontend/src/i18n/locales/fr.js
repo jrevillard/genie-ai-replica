@@ -225,7 +225,8 @@ export default {
       logs: 'Journaux',
       security: 'Sécurité',
       users: 'Utilisateurs',
-      models: 'Modèles'
+      models: 'Modèles',
+      studio: "OKF Studio"
     },
     contentManagement: 'GESTION DE CONTENU',
     knowledgeHierarchy: 'Hiérarchie des connaissances',
@@ -1923,6 +1924,7 @@ export default {
       paneLabel: "Volet d'affichage",
       saveFailed: "Échec de l'enregistrement — réessayer",
       piiRescan: {
+      timeout: 'La réanalyse tourne toujours après 15 minutes — elle continue côté serveur. Rien n’a été perdu ; revérifiez dans une minute.',
         label: 'Données personnelles',
         button: 'Réanalyser toutes les pages',
         working: 'Réanalyse de toutes les pages…',
@@ -1978,6 +1980,10 @@ export default {
       }
     },
     dashboard: {
+      health: {
+        ariaNone: "Aucune métrique",
+        aria: "Santé : {pct} pour cent, {n} concepts"
+      },
       bulk: {
         body: "Chaque référentiel fait l'objet d'un contrôle de validation complet (examen PII, indexation, conformité) lors de l'action publish. Résultats par référentiel :",
         pending: 'Confirmez pour exécuter publish sur les référentiels sélectionnés.',
@@ -2127,6 +2133,7 @@ export default {
       openExisting: 'Ouvrir un référentiel existant',
       name: 'Nom du référentiel',
       importing: "Importation de l'archive...",
+      bundleLabel: 'Bundle (.zip)',
       importHint: 'Ou importez une archive zip existante en tant que nouveau référentiel.',
       importDefaultName: 'Référentiel importé',
       failed: 'Échec de la création du référentiel',
@@ -2742,6 +2749,7 @@ export default {
       saveBlocked: "Enregistrement bloqué : corrigez d'abord les problèmes de conformité."
     },
     validation: {
+      healthAria: 'Santé : {pct} pour cent, {n} problème(s)',
       frozen:
         'Contenu figé à la version {v} — aperçu en lecture seule. Exécutez retract sur la version serving pour apporter des modifications.',
       none: 'Aucun',

@@ -42,8 +42,8 @@
       :read-only="readOnly"
       :show-title="true"
       :compact="false"
+      :flusher="flushEmbeddedEditorSave"
       @saved="onPanelSaved"
-      @flush-before-save="flushEmbeddedEditorSave"
     />
     <OkfRepoEditor
       v-if="repoId"
@@ -106,14 +106,15 @@ export default {
       // freshly-saved YAML on the next render cycle.
       this.editorReloadKey += 1;
     },
+    // Race-condition guard (post-Story-1.7 audit, made awaitable round 18
+    // #80479): the embedded editor's debounced autosave (1.5s) can overwrite
+    // our just-saved YAML if the curator was typing in the center pane when
+    // Save was clicked. The panel awaits the returned promise, so the
+    // autosave PATCH commits before its two-write save starts.
     flushEmbeddedEditorSave() {
-      // Race-condition guard (per the post-Story-1.7 audit): the embedded
-      // editor's debounced autosave (1.5s) can overwrite our just-saved
-      // YAML if the curator was typing in the center pane when Save was
-      // clicked. Forward the panel's `flush-before-save` event to the
-      // editor, which forwards to the concept editor's flushPendingSave().
       const ed = this.$refs.repoEditor;
-      if (ed && typeof ed.flushPendingSave === 'function') ed.flushPendingSave();
+      if (ed && typeof ed.flushPendingSave === 'function') return ed.flushPendingSave();
+      return Promise.resolve();
     }
   }
 };

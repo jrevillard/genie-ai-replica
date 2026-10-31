@@ -225,7 +225,8 @@ export default {
       logs: 'Protokolle',
       security: 'Sicherheit',
       users: 'Benutzer',
-      models: 'Modelle'
+      models: 'Modelle',
+      studio: "OKF Studio"
     },
     contentManagement: 'INHALTSVERWALTUNG',
     knowledgeHierarchy: 'Wissenshierarchie',
@@ -1921,6 +1922,7 @@ export default {
       paneLabel: 'Ansichtsbereich',
       saveFailed: 'Speichern fehlgeschlagen — wiederholen',
       piiRescan: {
+      timeout: 'Der erneute Scan läuft nach 15 Minuten noch — er arbeitet serverseitig weiter. Nichts ging verloren; prüfen Sie in einer Minute erneut.',
         label: 'Personenbezogene Daten',
         button: 'Alle Seiten erneut scannen',
         working: 'Alle Seiten werden erneut gescannt…',
@@ -1977,6 +1979,10 @@ export default {
       }
     },
     dashboard: {
+      health: {
+        ariaNone: "Keine Metriken",
+        aria: "Zustand: {pct} Prozent, {n} Konzepte"
+      },
       bulk: {
         body: 'Jedes Repository wird mit der vollständigen Gate-Prüfung veröffentlicht (PII-Prüfung, Indexierung, Konformität). Ergebnisse pro Repository:',
         pending: 'Bestätigen, um ausgewählte Repositories zu publish.',
@@ -2126,6 +2132,7 @@ export default {
       openExisting: 'Vorhandenes Repository öffnen',
       name: 'Repository-Name',
       importing: 'Bundle wird importiert…',
+      bundleLabel: 'Bundle (.zip)',
       importHint: 'Oder importieren Sie ein vorhandenes zip-Bundle als neues Repository.',
       importDefaultName: 'Importiertes Repository',
       failed: 'Repository-Erstellung fehlgeschlagen',
@@ -2744,6 +2751,7 @@ export default {
       saveBlocked: 'Speichern blockiert: Beheben Sie zuerst Konformitätsprobleme.'
     },
     validation: {
+      healthAria: 'Zustand: {pct} Prozent, {n} Problem(e)',
       frozen:
         'Inhalt bei {v} eingefroren — schreibgeschützte Vorschau. Retract für die serving-Version ausführen, um Änderungen vorzunehmen.',
       none: 'Keine',

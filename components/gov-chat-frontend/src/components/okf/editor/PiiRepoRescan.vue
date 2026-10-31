@@ -81,6 +81,13 @@ import translateMixin from '../../../mixins/translateMixin';
 // the control polls. Same cadence as the Validate step's panel — fast enough
 // that the bar moves, slow enough not to hammer the API.
 const PII_RESCAN_POLL_MS = 3000;
+// CEILING (round 18, #80488): a server run wedged at status 'running'
+// (worker crash without reaping) used to re-arm the 3s timer forever and
+// the button spun indefinitely — the exact dead-end class the surrounding
+// poll hardening exists to remove. Same horizon class as the store's
+// pollJob PII actions (15 min); past it the run STOPS being followed with
+// a readable timeout. The server-side run itself is untouched.
+const PII_RESCAN_MAX_MS = 15 * 60 * 1000;
 
 export default {
   name: 'OkfPiiRepoRescan',
@@ -187,6 +194,7 @@ export default {
         );
         return;
       }
+      this._deadline = Date.now() + PII_RESCAN_MAX_MS;
       this._poll(epoch, repoId, conceptId, scanKey);
     },
     async _poll(epoch, repoId, conceptId, scanKey) {
@@ -199,6 +207,17 @@ export default {
       }
       const run = res.result || {};
       if (run.status === 'running') {
+        // Horizon (#80488 — see PII_RESCAN_MAX_MS): stop following with a
+        // readable timeout instead of spinning forever on a wedged run.
+        if (this._deadline && Date.now() > this._deadline) {
+          this.busy = false;
+          this._timer = null;
+          this.error = this.translate(
+            'okf.editor.piiRescan.timeout',
+            'The re-scan is still running after 15 minutes — it keeps going server-side. Nothing was lost; check back in a minute.'
+          );
+          return;
+        }
         const p = run.progress || {};
         const done = Number(p.done || 0);
         const total = Number(p.total || 0);

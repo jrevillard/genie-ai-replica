@@ -516,7 +516,10 @@ export default {
       return Math.max(0, Math.min(100, Math.round(100 * (1 - total / Math.max(concepts, 5)))));
     },
     healthAria() {
-      return `Health: ${this.healthScore} percent, ${this.validationIssues.length} issue(s)`;
+      // Translated (round 18, #80492) — aria labels are user-facing text.
+      return this.translate('okf.validation.healthAria', 'Health: {pct} percent, {n} issue(s)')
+        .replace('{pct}', String(this.healthScore))
+        .replace('{n}', String(this.validationIssues.length));
     },
     headline() {
       const blockers = this.validationIssues.filter((i) => i.severity === 'blocker').length;

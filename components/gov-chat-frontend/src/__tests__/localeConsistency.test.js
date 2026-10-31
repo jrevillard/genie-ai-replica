@@ -316,8 +316,16 @@ describe('Locale consistency', () => {
       }
     })(en, '');
     const offenders = [];
+    // FLOOR (round 18, #80475): a vacuous scan stays green — if the section
+    // list drifts (rename, a flat()/get() regression), offenders=[] passes
+    // while the contract dies. The checked-key count must stay in the
+    // hundreds (post-remediation baseline: 671 in-scope leaves >= 25 chars;
+    // 321 were offenders before the fix). Emptying UNTRANSLATED_SECTIONS
+    // fails HERE, not vacuously-green.
+    let checkedCount = 0;
     for (const key of enKeys) {
       if (!UNTRANSLATED_SECTIONS.some((s) => key === s || key.startsWith(s + '.'))) continue;
+      checkedCount++;
       const enVal = get(en, key);
       if (typeof enVal !== 'string' || enVal.length < UNTRANSLATED_MIN_LEN) continue;
       for (const locale of localeFiles) {
@@ -326,6 +334,7 @@ describe('Locale consistency', () => {
         if (v === enVal) offenders.push(`${locale}:${key} is the raw English string: ${v.slice(0, 50)}`);
       }
     }
+    expect(checkedCount).toBeGreaterThan(300);
     expect(offenders).toEqual([]);
   });
 });

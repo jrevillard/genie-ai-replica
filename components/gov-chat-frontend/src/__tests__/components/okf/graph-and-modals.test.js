@@ -21,6 +21,7 @@ jest.mock('@/services/repoOkfService', () => ({
     get: jest.fn(),
     getMetrics: jest.fn().mockResolvedValue(null),
     patchConcept: jest.fn().mockResolvedValue({ ok: true }),
+    bulkPiiAction: jest.fn().mockResolvedValue({ ok: true }),
     resplit: jest.fn(),
     autocorrect: jest.fn().mockResolvedValue({ ok: true, changes: [], warnings: [] }),
     importConcepts: jest.fn().mockResolvedValue({ ok: true }),
@@ -524,5 +525,47 @@ describe('OkfRepoEditor - fresh-repo regression (syncMetaFields null row)', () =
     await store.commit('okf/setSelectedConcept', 'w');
     await wrapper.vm.$nextTick();
     expect(wrapper.vm.metaLabel).toBe('Health');
+  });
+});
+
+describe('OkfRepoEditor - bulk PII action failure surfacing (round 18, #80480)', () => {
+  // Pre-fix, onPiiBulkAction was try/finally with NO catch: a rejected
+  // bulkPiiAction (409 drain-freeze, 5xx) became an unhandled rejection —
+  // the busy flag and the dialog reset via finally, and the curator got
+  // ZERO feedback while the flags stayed as if the action had run.
+  it('a rejected bulk action surfaces a readable error and resets the dialog', async () => {
+    const repoOkfService = require('@/services/repoOkfService').default;
+    repoOkfService.bulkPiiAction.mockRejectedValueOnce(
+      Object.assign(new Error('drain freeze'), { code: 'PUBLISH_DRAIN_ACTIVE' })
+    );
+    const store = realStore();
+    const wrapper = mount(OkfRepoEditor, {
+      global: { plugins: [store] },
+      props: { repoId: 'r-1' }
+    });
+    await wrapper.vm.$nextTick();
+    wrapper.vm.piiBulkAsk = { action: 'suppress', concept_ids: ['c1'] };
+    await wrapper.vm.onPiiBulkAction('confirm');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.metaError).toBeTruthy(); // surfaced, not swallowed
+    expect(wrapper.vm.piiBulkBusy).toBe(false); // busy released by finally
+    expect(wrapper.vm.piiBulkAsk).toBeNull(); // dialog closed
+  });
+
+  it('a successful bulk action refreshes the concept list and stays quiet', async () => {
+    const repoOkfService = require('@/services/repoOkfService').default;
+    repoOkfService.bulkPiiAction.mockResolvedValueOnce({ ok: true, results: [] });
+    const store = realStore();
+    const wrapper = mount(OkfRepoEditor, {
+      global: { plugins: [store] },
+      props: { repoId: 'r-1' }
+    });
+    await wrapper.vm.$nextTick();
+    wrapper.vm.metaError = 'stale';
+    wrapper.vm.piiBulkAsk = { action: 'suppress', concept_ids: ['c1'] };
+    await wrapper.vm.onPiiBulkAction('confirm');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.metaError).toBe('stale'); // untouched — no bogus error
+    expect(wrapper.vm.piiBulkBusy).toBe(false);
   });
 });

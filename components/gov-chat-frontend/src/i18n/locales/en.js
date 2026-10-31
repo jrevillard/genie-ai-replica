@@ -225,7 +225,8 @@ export default {
       logs: 'Logs',
       security: 'Security',
       users: 'Users',
-      models: 'Models'
+      models: 'Models',
+      studio: "OKF Studio"
     },
     contentManagement: 'CONTENT MANAGEMENT',
     knowledgeHierarchy: 'Knowledge Hierarchy',
@@ -2715,6 +2716,7 @@ export default {
       },
       pickConcept: 'Select a concept from the list to start editing.',
       piiRescan: {
+      timeout: 'The re-scan is still running after 15 minutes — it keeps going server-side. Nothing was lost; check back in a minute.',
         label: 'Personal data',
         button: 'Re-scan all pages',
         working: 'Re-scanning every page…',
@@ -2781,6 +2783,10 @@ export default {
       paneLabel: 'View pane'
     },
     dashboard: {
+      health: {
+        ariaNone: "No metrics",
+        aria: "Health: {pct} percent, {n} concepts"
+      },
       bulk: {
         body: 'Each repository is published with the full gate check (PII review, indexing, conformance). Per-repository outcomes:',
         pending: 'Confirm to publish the selected repositories.',
@@ -2932,6 +2938,7 @@ export default {
       openExisting: 'Open existing repository',
       name: 'Repository name',
       importing: 'Importing bundle…',
+      bundleLabel: 'Bundle (.zip)',
       importHint: 'Or import an existing zip bundle as a new repository.',
       importDefaultName: 'Imported repository',
       failed: 'Repository creation failed',
@@ -3534,6 +3541,7 @@ export default {
       saveBlocked: 'Save blocked: fix conformance issues first.'
     },
     validation: {
+      healthAria: 'Health: {pct} percent, {n} issue(s)',
       frozen: 'Content frozen at {v} — read-only preview. Retract the serving version to make changes.',
       none: 'None',
       expertHint: 'Switch to Expert mode to see raw validation JSON, filter by severity, and override checks.',

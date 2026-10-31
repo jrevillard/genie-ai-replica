@@ -96,7 +96,7 @@
       </p>
       <DsFormGroup input-id="okf-create-zip">
         <template #label>
-          Bundle (.zip)
+          {{ translate('okf.create.bundleLabel', 'Bundle (.zip)') }}
           <DsInfoTip
             :text="
               translate(
@@ -215,6 +215,12 @@ export default {
     OkfRepoEditorShell
   },
   mixins: [translateMixin],
+  // 'studio-ready' fires from mounted() AFTER the entry-point window
+  // listeners are registered — the AdminDashboard defers its hand-off
+  // dispatches on it (round 18, #80478: the async component chunk may not
+  // be cached yet on first activation, so a single $nextTick in the parent
+  // resolves before this component mounts and the events fire unheard).
+  emits: ['studio-ready'],
   data() {
     return {
       view: 'dashboard', // 'dashboard' | 'repo' (shell) | 'wizard' (create flows)
@@ -336,6 +342,9 @@ export default {
     // switch to the wizard view with a 'crawl'-source draft at Step 5 (Curate)
     // — mirrors the Clone amendment's UX (clone skips Produce → opens at Curate).
     window.addEventListener('okf:okf-repo-created', this.onOkfRepoCreated);
+    // Listeners are live — let the parent flush anything it queued while the
+    // async chunk was loading (see the emits note above).
+    this.$emit('studio-ready');
   },
   beforeUnmount() {
     window.removeEventListener('okf:create-from-documents', this.onCreateFromDocuments);
@@ -723,8 +732,13 @@ export default {
         // crawl flow's designed post-create UX (#977); the Editor is one
         // sub-tab click away.
         this.$store.dispatch('okf/setEditorSubTab', 'wizard');
+        // GUARDED on repo_id (round 18, #80489): the view switch used to sit
+        // OUTSIDE the if, so a repo-less dispatch (the window-event contract
+        // is wider than the store's own guarded dispatch) flipped to the
+        // repo shell with a null activeRepoId — the v-if renders NOTHING:
+        // blank pane, no dashboard, no wizard, no error.
+        this.view = 'repo';
       }
-      this.view = 'repo';
     },
     resetWizard() {
       this.activeDraft = null;

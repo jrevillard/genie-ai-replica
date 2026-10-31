@@ -225,7 +225,8 @@ export default {
       logs: 'Журналы',
       security: 'Безопасность',
       users: 'Пользователи',
-      models: 'Модели'
+      models: 'Модели',
+      studio: "OKF Studio"
     },
     contentManagement: 'УПРАВЛЕНИЕ КОНТЕНТОМ',
     knowledgeHierarchy: 'Иерархия знаний',
@@ -1606,7 +1607,7 @@ export default {
       cancel: 'Отмена',
       colName: 'Имя',
       colProvider: 'Провайдер',
-      colUrl: 'Endpoint',
+      colUrl: 'Конечная точка',
       colKey: 'Ключ',
       colModel: 'Модель',
       colState: 'Состояние',
@@ -1673,7 +1674,7 @@ export default {
       version: 'v{n}',
       versions: 'Версии',
       deleteLabel: 'Удалить',
-      testingLab: 'Testing Lab'
+      testingLab: 'Тестовая лаборатория'
     },
     logs: {
       labeled: 'с метками: {n}',
@@ -1826,8 +1827,8 @@ export default {
           problem: 'Проблема',
           noError: 'Помечен как ошибочный без указания причины.',
           fixLabel: 'Как исправить',
-          attempts: 'Attempts: {n}',
-          when: 'Last attempt {when}',
+          attempts: 'Попыток: {n}',
+          when: 'Последняя попытка {when}',
           fix: {
             reaper:
               'Рабочий процесс загрузки прекратил ожидание в пределах льготного окна (слив был перегружен) — содержимое не повреждено. Исправление: внесите небольшое изменение в файл и сохраните — он встанет в очередь заново; либо отзовите и заново загрузите весь репозиторий.',
@@ -1854,7 +1855,7 @@ export default {
         bulkRedact: 'Скрыть все',
         bulkRemove: 'Удалить всё',
         loadProgress: 'Загрузка файлов: {done}/{total}',
-        addSource: '+ From documents',
+        addSource: '+ Из документов',
         reingest: 'Обработать эту концепцию заново',
         reingestBusy:
           'Для этого репозитория уже выполняется обработка RAG — дождитесь её завершения и повторите попытку.',
@@ -1880,8 +1881,8 @@ export default {
         trust: 'Уровень доверия',
         type: 'Тип',
         typePlaceholder: 'Выберите тип…',
-        hide: 'Hide metadata',
-        show: 'Show metadata'
+        hide: 'Скрыть метаданные',
+        show: 'Показать метаданные'
       },
       pane: {
         files: 'Файлы',
@@ -1912,6 +1913,7 @@ export default {
       paneLabel: 'Панель просмотра',
       saveFailed: 'Ошибка сохранения — повторите попытку',
       piiRescan: {
+      timeout: 'Пересканирование всё ещё идёт спустя 15 минут — оно продолжается на сервере. Ничего не потеряно; проверьте снова через минуту.',
         label: 'Персональные данные',
         button: 'Пересканировать все страницы',
         working: 'Пересканирование всех страниц…',
@@ -1967,6 +1969,10 @@ export default {
       }
     },
     dashboard: {
+      health: {
+        ariaNone: "Нет метрик",
+        aria: "Состояние: {pct} процентов, {n} концептов"
+      },
       bulk: {
         body: 'Каждый репозиторий проходит полную входную проверку (проверка PII, индексация, соответствие) при публикации. Результаты по репозиториям:',
         pending: 'Подтвердите, чтобы выполнить publish для выбранных репозиториев.',
@@ -1983,7 +1989,7 @@ export default {
         logs: 'Журналы',
         rename: 'Переименовать',
         versions: 'Версии',
-        testingLab: 'Testing Lab'
+        testingLab: 'Тестовая лаборатория'
       },
       delete: {
         body: 'Это действие безвозвратно удалит репозиторий, его концепты, проиндексированный контент, граф и артефакты пакета. Отменить операцию невозможно.',
@@ -2016,7 +2022,7 @@ export default {
         ingested: 'Выполнен ingest для v{n}',
         published: 'Опубликована v{n}',
         retracted: 'Отозвано',
-        stepOf: 'Step {n} of 10'
+        stepOf: 'Шаг {n} из 10'
       },
       title: 'Репозитории',
       topics: 'темы',
@@ -2115,6 +2121,7 @@ export default {
       openExisting: 'Открыть существующий репозиторий',
       name: 'Имя репозитория',
       importing: 'Импорт пакета…',
+      bundleLabel: 'Пакет (.zip)',
       importHint: 'Или импортируйте существующий zip-пакет как новый репозиторий.',
       importDefaultName: 'Импортированный репозиторий',
       failed: 'Не удалось создать репозиторий',
@@ -2169,18 +2176,18 @@ export default {
       perRepoHint:
         'Теги уровня репозитория (topic / entity / scope / forbidden / summary / keyword) управляют поиском. Те же данные хранятся и в поле документа репозитория — при сохранении оба остаются синхронными.',
       perRepoField: {
-        topic: 'Topic',
-        entity: 'Entity',
-        scope: 'Scope',
-        forbidden: 'Forbidden',
-        summary: 'Summary',
-        keyword: 'Keyword'
+        topic: 'Тема',
+        entity: 'Сущность',
+        scope: 'Охват',
+        forbidden: 'Запрещено',
+        summary: 'Сводка',
+        keyword: 'Ключевое слово'
       },
       perRepoPh: {
-        topic: 'One topic per line',
-        entity: 'One entity per line',
+        topic: 'Одна тема на строку',
+        entity: 'Одна сущность на строку',
         forbidden: 'Одна запрещённая тема на строку',
-        keyword: 'One keyword per line'
+        keyword: 'Одно ключевое слово на строку'
       },
       perRepoHelp: {
         topic: 'Добавьте, измените или удалите темы — по одной на строку. Пустые строки игнорируются.',
@@ -2262,8 +2269,8 @@ export default {
       classificationStrategy:
         'Как модуль генерации определяет метки для каждой темы: эвристика — быстро и бесплатно; LLM читает каждую страницу (лучше для сложной вёрстки); гибрид начинает с эвристики и передаёт сложные случаи наверх. Только куратория — загрузка никогда не запускается.',
       clsHeur: 'Эвристика (быстро, без LLM)',
-      clsLlm: 'LLM classification',
-      clsHybrid: 'Hybrid',
+      clsLlm: 'Классификация LLM',
+      clsHybrid: 'Гибридная',
       fsPick:
         'Каждый файл становится одной темой — сфокусированные темы находятся точнее, чем один длинный документ. Имя файла становится заголовком; всё можно уточнить в Curate.',
       autocorrect:
@@ -2405,12 +2412,12 @@ export default {
     wizard: {
       working: 'Working…',
       state: {
-        draft: 'In progress',
-        register: 'In progress',
-        review: 'In review',
-        approve: 'Approved',
-        retracted: 'Retracted',
-        publish: 'Ready to ingest'
+        draft: 'В процессе',
+        register: 'В процессе',
+        review: 'На проверке',
+        approve: 'Утверждено',
+        retracted: 'Отозвано',
+        publish: 'Готов к поглощению'
       },
       status: {
         published: 'опубликовано',
@@ -2419,7 +2426,7 @@ export default {
       },
       exit: 'Вернуться в панель управления',
       context: {
-        version: 'Version',
+        version: 'Версия',
         untitled: 'Репозиторий без названия',
         trust: 'Доверие',
         title: 'Репозиторий',
@@ -2430,7 +2437,7 @@ export default {
       label: 'Мастер OKF Studio',
       back: 'Назад',
       continue: 'Продолжить',
-      finish: 'Open the Editor'
+      finish: 'Открыть редактор'
     },
     steps: {
       entry: {
@@ -2477,16 +2484,16 @@ export default {
         manual: 'Вы сможете составить темы непосредственно на следующем шаге.',
         clone: 'Выберите существующий репозиторий для клонирования.',
         placeholder: 'Интерфейс шага появится в следующей истории.',
-        chooseCrawl: 'Choose crawled documents',
-        chooseDocs: 'Choose source documents',
-        writeOne: '+ Write a concept',
+        chooseCrawl: 'Выберите документы из обхода',
+        chooseDocs: 'Выберите исходные документы',
+        writeOne: '+ Написать концепт',
         fsPick: '+ Импортировать markdown с этого компьютера',
         fsBusy: 'Importing your files…',
         fsFailed: 'Импортировать не удалось — проверьте файлы и повторите.',
         skippedEmpty: 'Пропущено пустых файлов: {n}.',
-        noneSelected: 'No sources selected yet.',
-        selectedN: 'Selected: {n}',
-        moreN: ' +{n} more',
+        noneSelected: 'Источники пока не выбраны.',
+        selectedN: 'Выбрано: {n}',
+        moreN: ' +{n} ещё',
         noRepo: 'Сначала создайте репозиторий (вернитесь на шаг входа).',
         noRepoYet: 'Сначала создайте репозиторий (вернитесь на шаг входа).',
         benchTitle: 'Темы в этом репозитории',
@@ -2495,12 +2502,12 @@ export default {
         benchEmpty:
           'Здесь пока ничего нет — выберите источники ниже, импортируйте markdown или напишите свою первую тему.',
         benchFailed: 'Не удалось прочитать темы прямо сейчас.',
-        editTitle: 'Edit concept',
+        editTitle: 'Изменить концепт',
         deleteFailed: 'Не удалось удалить концепт.',
         added: 'Тем в этом репозитории на данный момент: {n}.',
-        deleteTitle: 'Delete topic',
+        deleteTitle: 'Удалить тему',
         deleteBody: 'Это навсегда удалит тему из этого репозитория.',
-        labelFailed: 'Could not set the label.',
+        labelFailed: 'Не удалось задать метку.',
         cloned: 'Этот репозиторий — клон, его темы уже на месте. Продолжайте в Curate, чтобы их просмотреть.'
       },
       produce: {
@@ -2508,8 +2515,8 @@ export default {
         hint: 'Мы анализируем ваши источники и предлагаем темы.',
         progress: 'Модуль генерации работает...',
         placeholder: 'Служба генерации появится в следующей истории.',
-        retry: 'Retry conversion',
-        restart: 'Run again',
+        retry: 'Повторить конвертацию',
+        restart: 'Запустить снова',
         running:
           'Конвертация… за прогрессом можно следить здесь; ничего не фиксируется, пока вы не проверите результат в Curate.',
         failed: 'Конвертация не удалась — повторите или вернитесь и выберите другие входные данные.',
@@ -2517,30 +2524,30 @@ export default {
         noSources: 'Источники не выбраны — вернитесь к шагу входных данных.',
         neverStarted: 'Конвертация не началась — повторите.',
         manualSkip: 'Темам, написанным вручную, генерация не нужна — продолжайте в Curate, чтобы их просмотреть.',
-        labelDone: 'Conversion complete',
+        labelDone: 'Конвертация завершена',
         dupContent:
           'Эти источники уже импортированы в другой OKF-репозиторий. Сначала отзовите или удалите тот репозиторий либо выберите другие документы.',
         inFlight: 'Для этого репозитория уже выполняется конвертация — дождитесь её завершения.',
         stage: {
-          files: 'Files',
+          files: 'Файлы',
           filesCount: '{done} из {total} документов',
-          concepts: 'Concepts',
-          conceptsCount: '{done} of {total} topics',
-          conceptsSoFar: '{n} topics so far',
-          curating: 'Curating',
+          concepts: 'Концепции',
+          conceptsCount: '{done} из {total} тем',
+          conceptsSoFar: 'Тем на данный момент: {n}',
+          curating: 'Курирование',
           curatingCount: 'Размечено концептов: {done} из {total}',
-          crosslink: 'Cross-linking topics',
+          crosslink: 'Перекрёстные связи тем',
           linkCount: '{done} из {total} пакетов · записано связей: {w}',
-          complete: 'Complete',
-          unavailable: 'Count unavailable',
-          waiting: 'Waiting'
+          complete: 'Завершено',
+          unavailable: 'Количество недоступно',
+          waiting: 'Ожидание'
         },
         filesNote: 'Сконвертировано документов: {done} из {total}',
         pagesNote: 'Сконвертировано страниц: {done} из {total}',
         pagesSoFar: 'Сконвертировано страниц: {n}',
-        sourceStat: '+{n} new (total {t})',
+        sourceStat: '+{n} новых (всего {t})',
         sourceStatMerged: '+{n} новых · {m} объединено по slug (всего {t})',
-        docsLeg: '{n} selected document(s)',
+        docsLeg: '{n} выбранных документ(ов)',
         legWait: 'Ожидание освобождения предыдущей конвертации…'
       },
       label: {
@@ -2548,7 +2555,7 @@ export default {
         hint: 'Метки назначаются автоматически из Иерархии знаний — ограничены тематической областью этого репозитория.',
         loading: 'Reading labels…',
         preview: 'Метку из Иерархии знаний несут {labeled} из {n} тем.',
-        unlabeled: 'no labels yet',
+        unlabeled: 'меток пока нет',
         adjust:
           'Скорректируйте метки любой темы в Curate — метки остаются в рамках предметной области этого репозитория.',
         loadFailed: 'Не удалось прочитать метки прямо сейчас.'
@@ -2580,16 +2587,16 @@ export default {
         topics: 'Темы',
         labels: 'Метки',
         sources: 'Источники',
-        state: 'Lifecycle state',
-        labelsSet: 'set per topic in Curate',
+        state: 'Состояние жизненного цикла',
+        labelsSet: 'задаётся по каждой теме в Curate',
         browserHint:
           'Последний взгляд перед передачей: каждый файл ниже, его markdown и его метки — в точности такими, как их будет цитировать ассистент.',
         noRepo: 'Репозитория пока нет — проверка файлов появится здесь, когда репозиторий будет создан.',
         ritualOutside:
           'Ритуал проверки — отправка на проверку, утверждение рецензентом, публикация — происходит в редакторе и на панели управления Studio, а не здесь. Откройте редактор, чтобы завершить.',
-        versions: 'Versions',
-        logs: 'Action log',
-        rename: 'Rename',
+        versions: 'Версии',
+        logs: 'Журнал действий',
+        rename: 'Переименовать',
         noVersions: 'Версий пока нет — версии создаются во время ритуала утверждения.',
         versionSummary: 'Версий: {n} · последняя v{latest}'
       },
@@ -2599,14 +2606,14 @@ export default {
         nameOk: 'Имя репозитория задано',
         labelsOk: 'Метки выбраны',
         topicsOk: 'Темы проверены',
-        topicsPending: 'No topics yet',
-        topicsServing: 'Topics serving',
+        topicsPending: 'Тем пока нет',
+        topicsServing: 'Темы обслуживаются',
         noTopics: 'Тем пока нет — вернитесь в Curate, чтобы создать или написать их.',
         frozen:
           'Этот репозиторий обслуживается — здесь сводка только для чтения. Откройте редактор, чтобы управлять версиями или отозвать его.',
         ritual:
           'Далее: отправка на утверждение на панели управления Studio → утверждающий принимает → публикация с панели управления или из редактора. Мастер сознательно останавливается здесь.',
-        openDashboard: 'Open the Dashboard'
+        openDashboard: 'Открыть панель управления'
       }
     },
     trust: {
@@ -2728,6 +2735,7 @@ export default {
       saveBlocked: 'Сохранение заблокировано: сначала устраните проблемы соответствия.'
     },
     validation: {
+      healthAria: 'Состояние: {pct} процентов, {n} проблем',
       frozen:
         'Контент зафиксирован на версии {v} — режим только для чтения. Выполните retract для рабочей версии, чтобы внести изменения.',
       none: 'Нет',
@@ -2748,26 +2756,26 @@ export default {
       piiTitle: 'Персональные данные — проверьте каждый отмеченный концепт',
       loading: 'Checking the repository…',
       loadFailed: 'Не удалось загрузить отчёт валидации.',
-      retry: 'Retry',
-      issuesTitle: 'Issues to review',
-      howToFix: 'How to fix',
+      retry: 'Повторить',
+      issuesTitle: 'Проблемы для проверки',
+      howToFix: 'Как исправить',
       indexFailed: 'Повторная индексация не удалась — измените страницу или разделите её заново.',
       indexFailedRemedy:
         'Откройте страницу в редакторе и сохраните её (сохранение переиндексирует) либо заново разделите репозиторий из его источника.',
       severity: {
-        blocker: 'Blocking',
-        warning: 'Needs review',
-        info: 'Info'
+        blocker: 'Блокирует',
+        warning: 'Требует проверки',
+        info: 'Инфо'
       },
       type: {
-        conformance: 'Frontmatter',
-        orphan: 'Not linked',
-        near_duplicate: 'Near-duplicate',
-        citation: 'Citations',
-        index_failed: 'Index'
+        conformance: 'Соответствие frontmatter',
+        orphan: 'Не связана',
+        near_duplicate: 'Почти дубликат',
+        citation: 'Цитаты',
+        index_failed: 'Индекс'
       },
       topicLinks: {
-        title: 'Cross-link topics',
+        title: 'Перекрёстные связи тем',
         tip: 'Читает каждую страницу этого репозитория и создаёт связи между страницами, которые действительно связаны между собой, — та же обработка, что выполняет мастер импорта. Повторный запуск безопасен: существующие связи сохраняются, добавляются только новые.',
         progress: 'Перекрёстные связи… {done} из {total} пакетов',
         progressIdle: 'Перекрёстные связи… чтение репозитория',
@@ -2775,18 +2783,18 @@ export default {
         failed: 'Не удалось создать перекрёстные связи: {msg}'
       },
       action: {
-        suggestLinks: 'Suggest links',
-        accept: 'Accept',
-        dismiss: 'Dismiss',
-        delete: 'Delete',
+        suggestLinks: 'Предложить связи',
+        accept: 'Принять',
+        dismiss: 'Отклонить',
+        delete: 'Удалить',
         working: 'Working…',
         wireCreate: 'Создать страницу источников и связать страниц: {n}',
         wireExisting: 'Связать {n} страниц(ы) с «{hub}»',
-        preview: 'Preview duplicates',
-        hidePreview: 'Hide preview'
+        preview: 'Предпросмотр дубликатов',
+        hidePreview: 'Скрыть предпросмотр'
       },
       actionDone: {
-        done: 'Done'
+        done: 'Готово'
       },
       suggest: {
         working: 'Запрашиваем у ассистента предложения связей…',
@@ -2797,7 +2805,7 @@ export default {
       },
       wireDone: 'Связано страниц с «{hub}»: {n}.',
       wireCreated: 'Страница источников создана, связано страниц: {n}.',
-      mergedPages: '{n} pages',
+      mergedPages: 'Страниц: {n}',
       preview: {
         loading: 'Loading page contents…',
         truncated: 'Первые {n} символов — откройте редактор для полной страницы.'
@@ -2814,9 +2822,9 @@ export default {
         index_failed:
           'Страница импортирована, но сборка её поискового индекса не удалась — она недоступна для поиска, пока не переиндексируется. Сохранение страницы в редакторе повторит сборку.'
       },
-      piiRescan: 'Re-scan all pages',
+      piiRescan: 'Пересканировать все страницы',
       piiRescanWorking: 'Re-scanning every page…',
-      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanDone: 'Пересканировано страниц: {n}.',
       piiRescanPartial:
         'Пересканировано страниц: {n}. {e} по-прежнему не удалось — их вердикт скана не изменился, публикация для них остаётся заблокированной.',
       piiRescanMissing:
@@ -2828,20 +2836,20 @@ export default {
       piiRescanProgressIdle: 'Пересканирование… чтение репозитория',
       piiRescanNoKey:
         'Сервер принял пересканирование, но не вернул идентификатор запуска, поэтому его ход нельзя отследить. Ничего не сообщено.',
-      piiStateError: 'Scan error',
+      piiStateError: 'Ошибка скана',
       piiTally: {
-        scanned: '{n} page(s) re-scanned',
+        scanned: 'Пересканировано страниц: {n}',
         clean: 'clear',
         hit: 'flagged',
-        error: 'scan error',
-        stillBlocking: 'Still blocking'
+        error: 'ошибка скана',
+        stillBlocking: 'По-прежнему блокируют'
       }
     },
     pii: {
       panel: 'Отмеченные сущности',
       nFlagged: 'Найдено {n}',
       rescan: 'Пересканировать',
-      stateError: 'Scan failed',
+      stateError: 'Скан не удался',
       errorTitle: 'Эта страница блокирует передачу репозитория.',
       errorBody:
         'Скан PII этой страницы ПРОВАЛЕН (речь не о том, что ничего не найдено, — текст не удалось прочитать). Публикация останется заблокированной, пока скан не завершится успешно. Используйте «Пересканировать» выше.',
@@ -2922,105 +2930,105 @@ export default {
       hint: 'Выберите источники из репозитория документов, загрузите новые с этого компьютера — или и то и другое.',
       repoSec: 'Из репозитория документов',
       searchPh: 'Search by name or site…',
-      chipsLabel: 'Filter by origin',
-      chipAll: 'All',
-      chipCrawl: 'Crawls',
-      chipUpload: 'Uploads',
+      chipsLabel: 'Фильтр по происхождению',
+      chipAll: 'Все',
+      chipCrawl: 'Обходы',
+      chipUpload: 'Загрузки',
       noMatches: 'Ничего не подходит под этот поиск или фильтр.',
       crawlBadge: 'crawl',
-      crawlTip: 'Crawled from: {url}',
-      total: '{n} document(s)',
+      crawlTip: 'Из обхода: {url}',
+      total: '{n} документ(ов)',
       titleSingle: 'Выберите документ из обхода',
       loading: 'Loading documents…',
-      retry: 'Retry',
+      retry: 'Повторить',
       empty: 'В репозитории документов пока нет документов — загрузите их ниже.',
-      more: 'Load more',
-      fsSec: 'From this computer',
-      fsPick: '+ Upload files',
+      more: 'Загрузить ещё',
+      fsSec: 'С этого компьютера',
+      fsPick: '+ Загрузить файлы',
       uploading: 'Uploading…',
-      uploaded: '{n} file(s) uploaded.',
+      uploaded: 'Загружено файлов: {n}.',
       uploadFailed: 'Загрузить файлы не удалось — проверьте их и повторите.',
       fsNote: 'Загруженные файлы попадают в репозиторий документов и автоматически выбираются здесь.',
-      count: 'Selected: {n}',
+      count: 'Выбрано: {n}',
       needOne: 'Выберите хотя бы один источник.',
-      confirm: 'Use {n} source(s)',
-      cancel: 'Cancel',
+      confirm: 'Использовать {n} источник(ов)',
+      cancel: 'Отмена',
       loadFailed: 'Не удалось загрузить список документов.',
-      servingBadge: 'serving free-form RAG',
+      servingBadge: 'обслуживает свободный RAG',
       servingTip:
         'Этот документ сейчас обслуживает свободный RAG-корпус — конвертация выполнится, но этот репозиторий нельзя будет загрузить, пока документ не отозван.',
-      alreadyBadge: 'already in an OKF repo',
+      alreadyBadge: 'уже в OKF-репозитории',
       alreadyTip: 'Этот документ уже является источником другого OKF-репозитория — конвертация его отвергнет.'
     },
     frontmatter: {
       title: 'Теги frontmatter — о чём этот репозиторий',
       help: 'Теги описывают, что содержит этот репозиторий и — не менее важно — чего он НЕ содержит (список запрещённого). Они определяют, какие запросы маршрутизируются в этот репозиторий. Нажмите «Обновить», чтобы составить черновик из корпуса, или редактируйте метки ниже. Для публикации требуется ≥3 тега topic и ≥1 тег forbidden.',
-      refresh: 'Refresh suggestions',
+      refresh: 'Обновить предложения',
       suggesting: 'Curating…',
       suggestEmpty: 'LLM не вернул тегов. Попробуйте снова, когда корпус вырастет.',
       suggestCoverage: 'Получено из {sampled} из {total} концепций, по {labels} меткам иерархии знаний.',
-      suggestFailed: 'Suggest failed.',
+      suggestFailed: 'Не удалось предложить теги.',
       suggestedTag: 'Предложение LLM — удалите, чтобы отклонить.',
-      removeTag: 'Remove tag',
+      removeTag: 'Убрать тег',
       fieldEmpty: '—',
-      addPlaceholder: 'Add {field}',
-      add: 'Add',
+      addPlaceholder: 'Добавить: {field}',
+      add: 'Добавить',
       saving: 'Saving…',
-      save: 'Save tags',
-      saved: 'Saved',
-      error: 'Save failed.',
+      save: 'Сохранить теги',
+      saved: 'Сохранено',
+      error: 'Не удалось сохранить.',
       errorWithStep: 'Сохранение не удалось на шаге «{step}» ({code}) — повторите.',
       field: {
-        topic: 'Topic',
-        entity: 'Entity',
-        scope: 'Scope',
-        forbidden: 'Forbidden',
-        summary: 'Summary',
-        keyword: 'Keyword'
+        topic: 'Тема',
+        entity: 'Сущность',
+        scope: 'Охват',
+        forbidden: 'Запрещено',
+        summary: 'Сводка',
+        keyword: 'Ключевое слово'
       }
     },
     testingLab: {
-      title: 'Testing Lab',
-      cta: 'Testing Lab',
+      title: 'Тестовая лаборатория',
+      cta: 'Тестовая лаборатория',
       badge: {
-        present: 'head ready',
-        stale: 'head stale',
-        missing: 'no head'
+        present: 'голова готова',
+        stale: 'голова устарела',
+        missing: 'нет головы'
       },
       tab: {
-        head: 'Head',
-        test: 'Test',
-        suites: 'Suites & analytics',
+        head: 'Голова',
+        test: 'Тест',
+        suites: 'Наборы и аналитика',
         ragas: 'Сравнительные тесты RAGAS',
         models: 'Модели'
       },
       head: {
-        dim: 'Dimensions',
-        model: 'Model',
-        version: 'Head version',
-        computedAt: 'Computed',
+        dim: 'Размерность',
+        model: 'Модель',
+        version: 'Версия головы',
+        computedAt: 'Вычислена',
         staleNote: 'Теги изменились после сборки этой головы — перестройте её, прежде чем доверять тестам.',
         missingNote:
           'Векторизованной головы пока нет. Она строится при публикации; если служба эмбеддинга была тогда недоступна, перестройте её сейчас из сохранённых тегов.',
-        rebuild: 'Rebuild head',
+        rebuild: 'Перестроить голову',
         rebuildTip:
           'Заново векторизует сохранённые теги в свежий вектор головы. Один вызов эмбеддинга на каждое поле тега.',
         rebuildBusy: 'Перестройка — векторизация полей тегов…'
       },
       test: {
         placeholder: 'например, рекомендации по скринингу онкозаболеваний',
-        run: 'Run test',
+        run: 'Запустить тест',
         running: 'Векторизация запроса и оценка голов…',
         adversarial: 'Состязательный — этот запрос НЕ должен выбирать этот репозиторий (запрещённая или смежная тема)',
-        embeddedWith: 'Embedded with',
+        embeddedWith: 'Векторизовано с помощью',
         col: {
-          repo: 'Repository',
-          state: 'State',
-          headScore: 'Head score',
-          rank: 'Rank',
-          claimed: 'Claims query'
+          repo: 'Репозиторий',
+          state: 'Состояние',
+          headScore: 'Оценка головы',
+          rank: 'Ранг',
+          claimed: 'Претендует на запрос'
         },
-        provenance: 'Routing provenance',
+        provenance: 'Происхождение маршрутизации',
         empty:
           'Введите запрос, который мог бы задать пользователь, и запустите его — лаборатория оценивает голову каждого опубликованного репозитория ровно так, как это сделал бы веерный запрос.',
         pass: 'УСПЕХ — этот репозиторий выигрывает маршрутизацию по голове.',
@@ -3080,26 +3088,26 @@ export default {
         progress: '{done} из {total} запросов ({pct}%)',
         progressStarting: 'Starting the run…',
         phase: {
-          routing: 'Scoring routes',
-          corpus: 'Checking the corpus'
+          routing: 'Оценка маршрутов',
+          corpus: 'Проверка корпуса'
         }
       },
       suites: {
-        generate: 'Generate test suite',
+        generate: 'Сгенерировать тестовый набор',
         generateTip:
           'LLM пишет запросы пакетами по 30 на класс — большой запрос (100+) занимает несколько минут. Набор появится здесь и в сохранённых наборах по завершении.',
         generating: 'Генерация пакетами — большие запросы занимают несколько минут…',
-        run: 'Run all queries',
+        run: 'Запустить все запросы',
         running: 'Выполняются все запросы набора…',
-        current: 'Current suite',
+        current: 'Текущий набор',
         col: {
-          query: 'Query',
-          kind: 'Kind',
-          outcome: 'Outcome',
-          run: 'Run',
-          when: 'When',
-          passRate: 'Pass rate',
-          headVersion: 'Head',
+          query: 'Запрос',
+          kind: 'Тип',
+          outcome: 'Результат',
+          run: 'Запуск',
+          when: 'Когда',
+          passRate: 'Доля успешных',
+          headVersion: 'Голова',
           tags: 'Теги',
           actions: 'Правка',
           name: 'Имя',
@@ -3108,17 +3116,17 @@ export default {
         notEvaluatable: 'не оценивается (нет конкурентов)',
         pass: 'pass',
         fail: 'fail',
-        passRate: 'Pass rate',
-        positives: 'Positives',
-        negatives: 'Negatives',
+        passRate: 'Доля успешных',
+        positives: 'Позитивные',
+        negatives: 'Негативные',
         noCompetitors: 'н/д — конкурирующих голов пока нет',
-        avgMargin: 'Avg margin',
-        steal: '{repo} stole {n} queries',
+        avgMargin: 'Средний запас',
+        steal: '{repo} перехватил {n} запрос(ов)',
         addPlaceholder: 'Your own probe query…',
-        add: 'Add to suite',
-        kindPositive: 'should select',
-        kindNegative: 'should NOT select',
-        history: 'Run history',
+        add: 'Добавить в набор',
+        kindPositive: 'должен выбираться',
+        kindNegative: 'не должен выбираться',
+        history: 'История запусков',
         noRuns: 'Запусков пока нет — сгенерируйте набор и запустите его.',
         explainFailures: 'Объяснить сбои',
         explainBusy: 'Объяснение сбоев — один вызов модели на каждый провалившийся негативный запрос…',
@@ -3165,11 +3173,11 @@ export default {
       error: {
         explain: 'Не удалось объяснить',
         saveTag: 'Не удалось сохранить запрещённый тег',
-        rebuild: 'Head rebuild failed',
-        test: 'Routing test failed',
-        generate: 'Suite generation failed',
-        run: 'Suite run failed',
-        add: 'Could not add the query',
+        rebuild: 'Не удалось перестроить голову',
+        test: 'Не удалось выполнить тест маршрутизации',
+        generate: 'Не удалось сгенерировать набор',
+        run: 'Не удалось выполнить запуск набора',
+        add: 'Не удалось добавить запрос',
         history: 'Не удалось загрузить историю сохранений',
         revert: 'Не удалось откатить frontmatter',
         advisor: 'Ошибка советника',
@@ -3187,7 +3195,7 @@ export default {
           'В этом репозитории пока нет тегов головы — создайте теги в панели Frontmatter (или используйте «Предложить теги»), затем сгенерируйте набор.'
       },
       footer: {
-        unpublish: 'Unpublish to review'
+        unpublish: 'Отменить публикацию для проверки'
       },
       publishCard: {
         present:

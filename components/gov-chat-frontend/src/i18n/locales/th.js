@@ -225,7 +225,8 @@ export default {
       logs: 'บันทึก',
       security: 'ความปลอดภัย',
       users: 'ผู้ใช้',
-      models: 'โมเดล'
+      models: 'โมเดล',
+      studio: "OKF Studio"
     },
     contentManagement: 'การจัดการเนื้อหา',
     knowledgeHierarchy: 'ลำดับชั้นความรู้',
@@ -1658,7 +1659,7 @@ export default {
       version: 'v{n}',
       versions: 'เวอร์ชัน',
       deleteLabel: 'ลบ',
-      testingLab: 'Testing Lab'
+      testingLab: 'ห้องทดสอบ'
     },
     logs: {
       labeled: 'ติดป้ายกำกับแล้ว: {n}',
@@ -1808,8 +1809,8 @@ export default {
           problem: 'ปัญหา',
           noError: 'ทำเครื่องหมายว่าล้มเหลวโดยไม่มีเหตุผลที่บันทึกไว้',
           fixLabel: 'วิธีแก้ไข',
-          attempts: 'Attempts: {n}',
-          when: 'Last attempt {when}',
+          attempts: 'ความพยายาม: {n}',
+          when: 'ความพยายามล่าสุด {when}',
           fix: {
             reaper:
               'ตัวทำงานนำเข้าหยุดรอภายในกรอบเวลาผ่อนปรนเพราะท่อระบายแน่นเกินไป — เนื้อหาไม่เสียหาย วิธีแก้: แก้ไขไฟล์นี้เล็กน้อยแล้วบันทึกเพื่อเข้าคิวใหม่ หรือถอนคืนแล้วนำเข้าทั้งรีโพใหม่',
@@ -1835,7 +1836,7 @@ export default {
         bulkRedact: 'ปกปิดทั้งหมด',
         bulkRemove: 'ลบทั้งหมด',
         loadProgress: 'กำลังโหลดไฟล์ {done}/{total}',
-        addSource: '+ From documents',
+        addSource: '+ จากเอกสาร',
         reingest: 'นำเข้าข้อมูลแนวคิดนี้ใหม่',
         reingestBusy: 'มีการนำเข้าข้อมูล RAG กำลังทำงานสำหรับที่เก็บข้อมูลนี้อยู่ — โปรดรอให้เสร็จสิ้นแล้วลองใหม่',
         reingestFailed: 'การนำเข้าข้อมูลใหม่ล้มเหลว — กรุณาลองใหม่'
@@ -1860,8 +1861,8 @@ export default {
         trust: 'ระดับความน่าเชื่อถือ',
         type: 'ประเภท',
         typePlaceholder: 'เลือกประเภท…',
-        hide: 'Hide metadata',
-        show: 'Show metadata'
+        hide: 'ซ่อนข้อมูลเมตา',
+        show: 'แสดงข้อมูลเมตา'
       },
       pane: {
         files: 'ไฟล์',
@@ -1892,6 +1893,7 @@ export default {
       paneLabel: 'บานหน้าต่างมุมมอง',
       saveFailed: 'การบันทึกล้มเหลว — ลองใหม่',
       piiRescan: {
+      timeout: 'การสแกนใหม่ยังทำงานต่อหลัง 15 นาที — กระบวนการยังดำเนินอยู่ที่เซิร์ฟเวอร์ ไม่มีอะไรสูญหาย ลองตรวจอีกครั้งในอีกหนึ่งนาที',
         label: 'ข้อมูลส่วนบุคคล',
         button: 'สแกนหน้าทั้งหมดอีกครั้ง',
         working: 'กำลังสแกนหน้าทั้งหมดอีกครั้ง…',
@@ -1944,6 +1946,10 @@ export default {
       }
     },
     dashboard: {
+      health: {
+        ariaNone: "ไม่มีค่าวัด",
+        aria: "สุขภาพ: {pct} เปอร์เซ็นต์, {n} แนวคิด"
+      },
       bulk: {
         body: 'ที่เก็บแต่ละแห่งจะได้รับการเผยแพร่พร้อมการตรวจสอบอย่างสมบูรณ์ (การตรวจทาน PII การจัดทำดัชนี ความสอดคล้อง) ผลลัพธ์ของแต่ละที่เก็บ:',
         pending: 'ยืนยันเพื่อ publish ที่เก็บที่เลือก',
@@ -1960,7 +1966,7 @@ export default {
         logs: 'บันทึก',
         rename: 'เปลี่ยนชื่อ',
         versions: 'เวอร์ชัน',
-        testingLab: 'Testing Lab'
+        testingLab: 'ห้องทดสอบ'
       },
       delete: {
         body: 'การดำเนินการนี้จะลบที่เก็บ แนวคิด เนื้อหาที่จัดทำดัชนี กราฟ และชุดไฟล์อาร์ติแฟกต์อย่างถาวร ไม่สามารถยกเลิกได้',
@@ -1993,7 +1999,7 @@ export default {
         ingested: 'ทำ ingest แล้ว v{n}',
         published: 'เผยแพร่แล้ว v{n}',
         retracted: 'เพิกถอนแล้ว',
-        stepOf: 'Step {n} of 10'
+        stepOf: 'ขั้นตอนที่ {n} จาก 10'
       },
       title: 'ที่เก็บข้อมูล',
       topics: 'หัวข้อ',
@@ -2092,6 +2098,7 @@ export default {
       openExisting: 'เปิดที่เก็บที่มีอยู่',
       name: 'ชื่อที่เก็บ',
       importing: 'กำลังนำเข้าชุดไฟล์…',
+      bundleLabel: 'แพ็กเกจ (.zip)',
       importHint: 'หรือนำเข้าชุดไฟล์ zip ที่มีอยู่เป็นที่เก็บใหม่',
       importDefaultName: 'ที่เก็บที่นำเข้า',
       failed: 'การสร้างที่เก็บล้มเหลว',
@@ -2129,7 +2136,7 @@ export default {
       arrayPh: 'ค่าที่คั่นด้วยเครื่องหมายจุลภาค',
       addKey: 'เพิ่มฟิลด์',
       saved: 'บันทึก frontmatter แล้ว',
-      label: 'frontmatter',
+      label: 'frontmatter (ข้อมูลเมตาส่วนหัว)',
       tipLabel: 'Frontmatter คืออะไร?',
       edit: 'แก้ไข',
       empty: 'ยังไม่มี frontmatter — การแก้ไขจะเพิ่มประเภท ชื่อ และป้ายกำกับ',
@@ -2145,18 +2152,18 @@ export default {
       perRepoHint:
         'แท็กระดับรีโพ (หัวข้อ / เอนทิตี / ขอบเขต / ต้องห้าม / สรุป / คำสำคัญ) เป็นตัวขับเครื่องมือดึงข้อมูล ข้อมูลชุดเดียวกันนี้ยังอยู่ในฟิลด์เอกสารของรีโพด้วย — ทั้งสองอย่างจะซิงค์กันเมื่อบันทึก',
       perRepoField: {
-        topic: 'Topic',
-        entity: 'Entity',
-        scope: 'Scope',
-        forbidden: 'Forbidden',
-        summary: 'Summary',
-        keyword: 'Keyword'
+        topic: 'หัวข้อ',
+        entity: 'เอนทิตี',
+        scope: 'ขอบเขต',
+        forbidden: 'ต้องห้าม',
+        summary: 'สรุป',
+        keyword: 'คำสำคัญ'
       },
       perRepoPh: {
-        topic: 'One topic per line',
-        entity: 'One entity per line',
+        topic: 'หัวข้อหนึ่งรายการต่อบรรทัด',
+        entity: 'เอนทิตีหนึ่งรายการต่อบรรทัด',
         forbidden: 'หัวข้อที่ต้องห้ามหนึ่งรายการต่อบรรทัด',
-        keyword: 'One keyword per line'
+        keyword: 'คำสำคัญหนึ่งรายการต่อบรรทัด'
       },
       perRepoHelp: {
         topic: 'เพิ่ม แก้ไข หรือลบหัวข้อ — หนึ่งรายการต่อบรรทัด บรรทัดว่างจะถูกข้าม',
@@ -2235,8 +2242,8 @@ export default {
       classificationStrategy:
         'วิธีที่โมดูลตัวสร้างตัดสินป้ายกำกับของแต่ละหัวข้อ: ฮิวริสติกเร็วและไม่มีค่าใช้จ่าย; LLM อ่านทุกหน้า (ดีกว่าสำหรับเลย์เอาต์ที่ซับซ้อน); ไฮบริดเริ่มจากฮิวริสติกแล้วส่งต่อเฉพาะเคสที่ยาก การคัดสรรเท่านั้น — ไม่เคยสั่งให้นำเข้าข้อมูล',
       clsHeur: 'ฮิวริสติก (เร็ว ไม่ใช้ LLM)',
-      clsLlm: 'LLM classification',
-      clsHybrid: 'Hybrid',
+      clsLlm: 'จัดหมวดหมู่ด้วย LLM',
+      clsHybrid: 'ไฮบริด',
       fsPick:
         'แต่ละไฟล์จะกลายเป็นหนึ่งหัวข้อ — หัวข้อที่กระชับจะดึงข้อมูลได้แม่นยำกว่าเอกสารยาวฉบับเดียว ชื่อไฟล์จะกลายเป็นชื่อเรื่อง คุณปรับแต่งทุกอย่างได้ในขั้นตอนการคัดสรร',
       autocorrect:
@@ -2377,12 +2384,12 @@ export default {
     wizard: {
       working: 'Working…',
       state: {
-        draft: 'In progress',
-        register: 'In progress',
-        review: 'In review',
-        approve: 'Approved',
-        retracted: 'Retracted',
-        publish: 'Ready to ingest'
+        draft: 'กำลังดำเนินการ',
+        register: 'กำลังดำเนินการ',
+        review: 'อยู่ระหว่างการตรวจทาน',
+        approve: 'อนุมัติแล้ว',
+        retracted: 'เพิกถอนแล้ว',
+        publish: 'พร้อมนำเข้าข้อมูล'
       },
       status: {
         published: 'เผยแพร่แล้ว',
@@ -2391,7 +2398,7 @@ export default {
       },
       exit: 'กลับสู่แดชบอร์ด',
       context: {
-        version: 'Version',
+        version: 'เวอร์ชัน',
         untitled: 'ที่เก็บที่ไม่มีชื่อ',
         trust: 'ความน่าเชื่อถือ',
         title: 'ที่เก็บข้อมูล',
@@ -2402,7 +2409,7 @@ export default {
       label: 'วิซาร์ด OKF Studio',
       back: 'ย้อนกลับ',
       continue: 'ดำเนินการต่อ',
-      finish: 'Open the Editor'
+      finish: 'เปิดตัวแก้ไข'
     },
     steps: {
       entry: {
@@ -2448,16 +2455,16 @@ export default {
         manual: 'คุณสามารถเขียนหัวข้อได้โดยตรงในขั้นตอนถัดไป',
         clone: 'เลือกที่เก็บที่มีอยู่เพื่อโคลน',
         placeholder: 'UI ขั้นตอนนี้จะพร้อมใช้งานในเรื่องราวถัดไป',
-        chooseCrawl: 'Choose crawled documents',
-        chooseDocs: 'Choose source documents',
-        writeOne: '+ Write a concept',
+        chooseCrawl: 'เลือกเอกสารที่รวบรวมมา',
+        chooseDocs: 'เลือกเอกสารต้นทาง',
+        writeOne: '+ เขียนแนวคิด',
         fsPick: '+ นำเข้า markdown จากคอมพิวเตอร์ของคุณ',
         fsBusy: 'Importing your files…',
         fsFailed: 'การนำเข้าล้มเหลว — ตรวจสอบไฟล์แล้วลองใหม่',
         skippedEmpty: 'ข้ามไฟล์ว่าง {n} รายการ',
-        noneSelected: 'No sources selected yet.',
-        selectedN: 'Selected: {n}',
-        moreN: ' +{n} more',
+        noneSelected: 'ยังไม่ได้เลือกแหล่งที่มา',
+        selectedN: 'เลือกแล้ว: {n}',
+        moreN: ' +อีก {n} รายการ',
         noRepo: 'สร้างรีโพก่อน (ย้อนกลับไปที่ขั้นตอนเริ่มต้น)',
         noRepoYet: 'สร้างรีโพก่อน (ย้อนกลับไปที่ขั้นตอนเริ่มต้น)',
         benchTitle: 'หัวข้อในรีโพนี้',
@@ -2465,12 +2472,12 @@ export default {
         benchLoading: 'Reading topics…',
         benchEmpty: 'ยังไม่มีอะไรที่นี่ — เลือกแหล่งที่มาด้านล่าง นำเข้า markdown หรือเขียนหัวข้อแรกของคุณ',
         benchFailed: 'ไม่สามารถอ่านหัวข้อได้ในขณะนี้',
-        editTitle: 'Edit concept',
+        editTitle: 'แก้ไขแนวคิด',
         deleteFailed: 'ลบแนวคิดไม่สำเร็จ',
         added: 'มีหัวข้อ {n} รายการในรีโพนี้จนถึงตอนนี้',
-        deleteTitle: 'Delete topic',
+        deleteTitle: 'ลบหัวข้อ',
         deleteBody: 'การนี้จะลบหัวข้อออกจากรีโพนี้อย่างถาวร',
-        labelFailed: 'Could not set the label.',
+        labelFailed: 'ไม่สามารถตั้งป้ายกำกับได้',
         cloned: 'รีโพนี้เป็นรีโพที่โคลนมา — หัวข้อของมันอยู่ครบแล้ว ดำเนินการต่อไปที่ขั้นตอนการคัดสรรเพื่อตรวจทาน'
       },
       produce: {
@@ -2478,37 +2485,37 @@ export default {
         hint: 'เรากำลังอ่านแหล่งที่มาของคุณและเสนอหัวข้อ',
         progress: 'โมดูลตัวสร้างกำลังทำงาน...',
         placeholder: 'บริการตัวสร้างจะเชื่อมต่อในเรื่องราวถัดไป',
-        retry: 'Retry conversion',
-        restart: 'Run again',
+        retry: 'ลองแปลงใหม่',
+        restart: 'รันอีกครั้ง',
         running: 'กำลังแปลง… คุณดูความคืบหน้าได้ที่นี่ ไม่มีสิ่งใดถูกบันทึกจนกว่าคุณจะตรวจทานในขั้นตอนการคัดสรร',
         failed: 'การแปลงล้มเหลว — ลองอีกครั้ง หรือย้อนกลับไปเลือกอินพุตอื่น',
         done: 'หัวข้อพร้อม {n} รายการ — ดำเนินการต่อไปเพื่อตรวจทานในขั้นตอนการคัดสรร',
         noSources: 'ยังไม่ได้เลือกแหล่งที่มา — ย้อนกลับไปที่ขั้นตอนนำเข้าข้อมูล',
         neverStarted: 'การแปลงไม่ได้เริ่มขึ้น — ลองอีกครั้ง',
         manualSkip: 'หัวข้อที่เขียนเองไม่ต้องสร้างใหม่ — ดำเนินการต่อไปที่ขั้นตอนการคัดสรรเพื่อตรวจทาน',
-        labelDone: 'Conversion complete',
+        labelDone: 'การแปลงเสร็จสมบูรณ์',
         dupContent: 'แหล่งที่มาเหล่านี้ถูกนำเข้าไว้ในรีโพ OKF อื่นแล้ว ถอนคืนหรือลบรีโพนั้นก่อน หรือเลือกเอกสารอื่น',
         inFlight: 'มีการแปลงกำลังทำงานอยู่แล้วสำหรับรีโพนี้ — โปรดรอให้เสร็จสิ้น',
         stage: {
-          files: 'Files',
+          files: 'ไฟล์',
           filesCount: '{done} จาก {total} เอกสาร',
-          concepts: 'Concepts',
-          conceptsCount: '{done} of {total} topics',
-          conceptsSoFar: '{n} topics so far',
-          curating: 'Curating',
+          concepts: 'แนวคิด',
+          conceptsCount: '{done} จาก {total} หัวข้อ',
+          conceptsSoFar: 'มี {n} หัวข้อแล้ว',
+          curating: 'กำลังคัดสรร',
           curatingCount: 'ติดป้ายกำกับแล้ว {done} จาก {total} แนวคิด',
-          crosslink: 'Cross-linking topics',
+          crosslink: 'กำลังเชื่อมโยงหัวข้อ',
           linkCount: '{done} จาก {total} ชุด · เขียนลิงก์แล้ว {w} รายการ',
-          complete: 'Complete',
-          unavailable: 'Count unavailable',
-          waiting: 'Waiting'
+          complete: 'เสร็จสมบูรณ์',
+          unavailable: 'ไม่ทราบจำนวน',
+          waiting: 'กำลังรอ'
         },
         filesNote: 'แปลงแล้ว {done} จาก {total} เอกสาร',
         pagesNote: 'แปลงแล้ว {done} จาก {total} หน้า',
         pagesSoFar: 'แปลงไปแล้ว {n} หน้า',
-        sourceStat: '+{n} new (total {t})',
+        sourceStat: '+ใหม่ {n} (ทั้งหมด {t})',
         sourceStatMerged: 'ใหม่ {n} · รวมตาม slug อีก {m} (ทั้งหมด {t})',
-        docsLeg: '{n} selected document(s)',
+        docsLeg: 'เอกสารที่เลือก {n} รายการ',
         legWait: 'กำลังรอการแปลงก่อนหน้าปล่อยล็อค…'
       },
       label: {
@@ -2516,7 +2523,7 @@ export default {
         hint: 'ป้ายกำกับได้รับการกำหนดโดยอัตโนมัติจากลำดับชั้นความรู้ และจำกัดอยู่ในหัวข้อของที่เก็บข้อมูลนี้',
         loading: 'Reading labels…',
         preview: 'หัวข้อ {labeled} จาก {n} มีป้ายกำกับจากลำดับชั้นความรู้',
-        unlabeled: 'no labels yet',
+        unlabeled: 'ยังไม่มีป้ายกำกับ',
         adjust: 'ปรับแต่งป้ายกำกับของหัวข้อใดก็ได้ในขั้นตอนการคัดสรร — ป้ายกำกับยังจำกัดอยู่ในพื้นที่เรื่องของรีโพนี้',
         loadFailed: 'ไม่สามารถอ่านป้ายกำกับได้ในขณะนี้'
       },
@@ -2547,16 +2554,16 @@ export default {
         topics: 'หัวข้อ',
         labels: 'ป้ายกำกับ',
         sources: 'แหล่งที่มา',
-        state: 'Lifecycle state',
-        labelsSet: 'set per topic in Curate',
+        state: 'สถานะวงจรชีวิต',
+        labelsSet: 'ตั้งค่าต่อหัวข้อในขั้นตอนการคัดสรร',
         browserHint:
           'มุมมองสุดท้ายก่อนส่งมอบ: ทุกไฟล์ด้านล่าง ทั้ง markdown และป้ายกำกับ — ตรงตามที่ผู้ช่วยจะอ้างอิงพอดี',
         noRepo: 'ยังไม่มีรีโพ — มุมมองตรวจไฟล์จะปรากฏที่นี่เมื่อมีรีโพแล้ว',
         ritualOutside:
           'พิธีกรรมการตรวจทาน — ส่งเพื่อขอตรวจ ผู้ตรวจอนุมัติ และเผยแพร่ — เกิดขึ้นในตัวแก้ไขและแดชบอร์ด Studio ไม่ใช่ที่นี่ เปิดตัวแก้ไขเพื่อทำขั้นตอนสุดท้าย',
-        versions: 'Versions',
-        logs: 'Action log',
-        rename: 'Rename',
+        versions: 'เวอร์ชัน',
+        logs: 'บันทึกกิจกรรม',
+        rename: 'เปลี่ยนชื่อ',
         noVersions: 'ยังไม่มีเวอร์ชัน — เวอร์ชันถูกสร้างขึ้นในพิธีกรรมการอนุมัติ',
         versionSummary: '{n} เวอร์ชัน · ล่าสุด v{latest}'
       },
@@ -2566,13 +2573,13 @@ export default {
         nameOk: 'ตั้งชื่อที่เก็บแล้ว',
         labelsOk: 'เลือกป้ายกำกับแล้ว',
         topicsOk: 'ตรวจสอบหัวข้อแล้ว',
-        topicsPending: 'No topics yet',
-        topicsServing: 'Topics serving',
+        topicsPending: 'ยังไม่มีหัวข้อ',
+        topicsServing: 'หัวข้อที่ให้บริการ',
         noTopics: 'ยังไม่มีหัวข้อ — ย้อนกลับไปที่ขั้นตอนการคัดสรรเพื่อสร้างหรือเขียนหัวข้อ',
         frozen: 'รีโพนี้กำลังให้บริการ — ที่นี่เป็นสรุปแบบอ่านอย่างเดียว เปิดตัวแก้ไขเพื่อจัดการเวอร์ชันหรือถอนคืน',
         ritual:
           'ขั้นตอนถัดไป: ส่งเพื่อขออนุมัติบนแดชบอร์ด Studio → ผู้อนุมัติรับ → เผยแพร่จากแดชบอร์ดหรือตัวแก้ไข วิซาร์ดจบที่นี่โดยตั้งใจ',
-        openDashboard: 'Open the Dashboard'
+        openDashboard: 'เปิดแดชบอร์ด'
       }
     },
     trust: {
@@ -2673,7 +2680,7 @@ export default {
         notReady: 'บันทึกป้ายกำกับในเครื่องแล้ว — การซิงค์กับเซิร์ฟเวอร์จะพร้อมใช้งานเร็วๆ นี้'
       },
       frontmatter: {
-        label: 'frontmatter',
+        label: 'frontmatter (ข้อมูลเมตาส่วนหัว)',
         edit: 'แก้ไข frontmatter',
         dialogTitle: 'แก้ไข frontmatter',
         okfVersion: 'okf_version',
@@ -2692,6 +2699,7 @@ export default {
       saveBlocked: 'การบันทึกถูกบล็อก: โปรดแก้ไขปัญหาความสอดคล้องก่อน'
     },
     validation: {
+      healthAria: 'สุขภาพ: {pct} เปอร์เซ็นต์, {n} ปัญหา',
       frozen:
         'เนื้อหาถูกตรึงไว้ที่ {v} — ดูตัวอย่างแบบอ่านอย่างเดียว ทำ retract เวอร์ชันที่ serving เพื่อทำการเปลี่ยนแปลง',
       none: 'ไม่มี',
@@ -2711,25 +2719,25 @@ export default {
       piiTitle: 'ข้อมูลส่วนบุคคล — ตรวจทานแนวคิดที่ถูกแจ้งเตือนแต่ละรายการ',
       loading: 'Checking the repository…',
       loadFailed: 'ไม่สามารถโหลดรายงานการตรวจสอบได้',
-      retry: 'Retry',
-      issuesTitle: 'Issues to review',
-      howToFix: 'How to fix',
+      retry: 'ลองใหม่',
+      issuesTitle: 'ปัญหาที่ต้องตรวจทาน',
+      howToFix: 'วิธีแก้ไข',
       indexFailed: 'การจัดทำดัชนีใหม่ล้มเหลว — แก้ไขหรือแบ่งส่วนหน้าใหม่',
       indexFailedRemedy: 'เปิดหน้าในตัวแก้ไขแล้วบันทึก (การบันทึกจะจัดทำดัชนีใหม่) หรือแบ่งส่วนรีโพใหม่จากแหล่งที่มา',
       severity: {
-        blocker: 'Blocking',
-        warning: 'Needs review',
-        info: 'Info'
+        blocker: 'ติดขัด',
+        warning: 'ต้องตรวจทาน',
+        info: 'ข้อมูล'
       },
       type: {
-        conformance: 'Frontmatter',
-        orphan: 'Not linked',
-        near_duplicate: 'Near-duplicate',
-        citation: 'Citations',
-        index_failed: 'Index'
+        conformance: 'สอดคล้อง frontmatter',
+        orphan: 'ไม่ถูกเชื่อมโยง',
+        near_duplicate: 'ใกล้เคียงกันมาก',
+        citation: 'การอ้างอิง',
+        index_failed: 'ดัชนี'
       },
       topicLinks: {
-        title: 'Cross-link topics',
+        title: 'เชื่อมโยงหัวข้อ',
         tip: 'อ่านทุกหน้าในรีโพนี้แล้วเขียนลิงก์ระหว่างหน้าที่เกี่ยวข้องกันจริง — เป็นการประมวลผลแบบเดียวกับที่วิซาร์ดนำเข้าทำงาน เรียกซ้ำได้อย่างปลอดภัย: ลิงก์เดิมยังอยู่ และเพิ่มเฉพาะลิงก์ใหม่',
         progress: 'กำลังเชื่อมโยงข้าม… {done} จาก {total} ชุด',
         progressIdle: 'กำลังเชื่อมโยงข้าม… กำลังอ่านรีโพ',
@@ -2737,18 +2745,18 @@ export default {
         failed: 'การเชื่อมโยงข้ามล้มเหลว: {msg}'
       },
       action: {
-        suggestLinks: 'Suggest links',
-        accept: 'Accept',
-        dismiss: 'Dismiss',
-        delete: 'Delete',
+        suggestLinks: 'แนะนำลิงก์',
+        accept: 'ยอมรับ',
+        dismiss: 'ปิดทิ้ง',
+        delete: 'ลบ',
         working: 'Working…',
         wireCreate: 'สร้างหน้า Sources และเชื่อมโยง {n} หน้า',
         wireExisting: 'เชื่อมโยง {n} หน้าไปยัง "{hub}"',
-        preview: 'Preview duplicates',
-        hidePreview: 'Hide preview'
+        preview: 'ดูตัวอย่างรายการซ้ำ',
+        hidePreview: 'ซ่อนตัวอย่าง'
       },
       actionDone: {
-        done: 'Done'
+        done: 'เสร็จสิ้น'
       },
       suggest: {
         working: 'กำลังขอคำแนะนำลิงก์จากผู้ช่วย…',
@@ -2759,7 +2767,7 @@ export default {
       },
       wireDone: 'เชื่อมโยง {n} หน้าไปยัง "{hub}" แล้ว',
       wireCreated: 'สร้างหน้า Sources และเชื่อมโยง {n} หน้าแล้ว',
-      mergedPages: '{n} pages',
+      mergedPages: '{n} หน้า',
       preview: {
         loading: 'Loading page contents…',
         truncated: '{n} อักขระแรก — เปิดตัวแก้ไขเพื่อดูหน้าเต็ม'
@@ -2776,9 +2784,9 @@ export default {
         index_failed:
           'หน้านี้ถูกนำเข้าแล้ว แต่การสร้างดัชนีค้นหาล้มเหลว — จะดึงข้อมูลไม่ได้จนกว่าจะจัดทำดัชนีใหม่ การบันทึกหน้าในตัวแก้ไขจะลองสร้างดัชนีอีกครั้ง'
       },
-      piiRescan: 'Re-scan all pages',
+      piiRescan: 'สแกนหน้าทั้งหมดอีกครั้ง',
       piiRescanWorking: 'Re-scanning every page…',
-      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanDone: 'สแกนใหม่แล้ว {n} หน้า',
       piiRescanPartial:
         'สแกนใหม่แล้ว {n} หน้า {e} หน้ายังล้มเหลว — ผลการสแกนไม่เปลี่ยนแปลง การเผยแพร่จึงยังถูกปิดกั้นสำหรับหน้าเหล่านั้น',
       piiRescanMissing:
@@ -2789,20 +2797,20 @@ export default {
       piiRescanProgressIdle: 'สแกนใหม่… กำลังอ่านรีโพ',
       piiRescanNoKey:
         'เซิร์ฟเวอร์รับการสแกนใหม่แล้วแต่ไม่คืนรหัสการทำงาน จึงติดตามความคืบหน้าไม่ได้ ไม่มีการรายงานผลใด ๆ',
-      piiStateError: 'Scan error',
+      piiStateError: 'สแกนผิดพลาด',
       piiTally: {
-        scanned: '{n} page(s) re-scanned',
+        scanned: 'สแกนใหม่แล้ว {n} หน้า',
         clean: 'clear',
         hit: 'flagged',
-        error: 'scan error',
-        stillBlocking: 'Still blocking'
+        error: 'สแกนผิดพลาด',
+        stillBlocking: 'ยังคงปิดกั้น'
       }
     },
     pii: {
       panel: 'เอนทิตีที่ถูกแจ้งเตือน',
       nFlagged: 'พบ {n} รายการ',
       rescan: 'สแกนอีกครั้ง',
-      stateError: 'Scan failed',
+      stateError: 'การสแกนล้มเหลว',
       errorTitle: 'หน้านี้กำลังปิดกั้นการส่งมอบ',
       errorBody:
         'การสแกน PII ของหน้านี้ล้มเหลว (ไม่ใช่การไม่พบสิ่งใด แต่คืออ่านข้อความไม่ได้) การเผยแพร่ยังถูกปิดกั้นจนกว่าจะมีการสแกนที่สำเร็จ โปรดใช้ปุ่มสแกนใหม่ด้านบน',
@@ -2880,104 +2888,104 @@ export default {
       hint: 'เลือกแหล่งที่มาจากที่เก็บเอกสาร อัปโหลดไฟล์ใหม่จากคอมพิวเตอร์ของคุณ หรือทำทั้งสองอย่าง',
       repoSec: 'จากที่เก็บเอกสาร',
       searchPh: 'Search by name or site…',
-      chipsLabel: 'Filter by origin',
-      chipAll: 'All',
-      chipCrawl: 'Crawls',
-      chipUpload: 'Uploads',
+      chipsLabel: 'กรองตามแหล่งที่มา',
+      chipAll: 'ทั้งหมด',
+      chipCrawl: 'การรวบรวมข้อมูล',
+      chipUpload: 'การอัปโหลด',
       noMatches: 'ไม่พบสิ่งใดที่ตรงกับการค้นหาหรือตัวกรองนี้',
       crawlBadge: 'crawl',
-      crawlTip: 'Crawled from: {url}',
-      total: '{n} document(s)',
+      crawlTip: 'รวบรวมมาจาก: {url}',
+      total: 'เอกสาร {n} รายการ',
       titleSingle: 'เลือกเอกสารที่เก็บข้อมูลจากเว็บไซต์',
       loading: 'Loading documents…',
-      retry: 'Retry',
+      retry: 'ลองใหม่',
       empty: 'ยังไม่มีเอกสารในที่เก็บ — อัปโหลดบางไฟล์ด้านล่าง',
-      more: 'Load more',
-      fsSec: 'From this computer',
-      fsPick: '+ Upload files',
+      more: 'โหลดเพิ่มเติม',
+      fsSec: 'จากคอมพิวเตอร์นี้',
+      fsPick: '+ อัปโหลดไฟล์',
       uploading: 'Uploading…',
-      uploaded: '{n} file(s) uploaded.',
+      uploaded: 'อัปโหลดไฟล์แล้ว {n} รายการ',
       uploadFailed: 'การอัปโหลดล้มเหลว — ตรวจสอบไฟล์แล้วลองใหม่',
       fsNote: 'ไฟล์ที่อัปโหลดจะเข้าร่วมที่เก็บเอกสารและถูกเลือกให้อัตโนมัติที่นี่',
-      count: 'Selected: {n}',
+      count: 'เลือกแล้ว: {n}',
       needOne: 'เลือกแหล่งที่มาอย่างน้อยหนึ่งรายการ',
-      confirm: 'Use {n} source(s)',
-      cancel: 'Cancel',
+      confirm: 'ใช้แหล่งที่มา {n} รายการ',
+      cancel: 'ยกเลิก',
       loadFailed: 'ไม่สามารถโหลดรายการเอกสารได้',
-      servingBadge: 'serving free-form RAG',
+      servingBadge: 'ให้บริการ RAG อิสระ',
       servingTip:
         'เอกสารนี้กำลังให้บริการคอร์ปัสอิสระของ RAG — การแปลงสำเร็จ แต่รีโพนี้จะนำเข้าข้อมูลไม่ได้จนกว่าจะถอนคืน',
-      alreadyBadge: 'already in an OKF repo',
+      alreadyBadge: 'อยู่ในรีโพ OKF แล้ว',
       alreadyTip: 'เอกสารนี้เป็นที่มาของรีโพ OKF อื่นอยู่แล้ว — การแปลงจะปฏิเสธไฟล์นี้'
     },
     frontmatter: {
       title: 'แท็ก frontmatter — รีโพนี้เกี่ยวกับอะไร',
       help: 'แท็กอธิบายว่ารีโพนี้มีอะไรบ้าง และ — สำคัญไม่แพ้กัน — ไม่มีอะไรบ้าง (รายการที่ต้องห้าม) แท็กเหล่านี้เป็นตัวกำหนดว่าคำค้นใดจะถูกกำหนดเส้นทางมาที่รีโพนี้ คลิกรีเฟรชเพื่อร่างจากคลังข้อมูล หรือแก้ไขชิปด้านล่าง การเผยแพร่ต้องมีหัวข้อ ≥3 และต้องห้าม ≥1',
-      refresh: 'Refresh suggestions',
+      refresh: 'รีเฟรชข้อเสนอแนะ',
       suggesting: 'Curating…',
       suggestEmpty: 'LLM ไม่ได้ส่งแท็กใดกลับมา ลองอีกครั้งหลังจากคลังข้อมูลเติบโตขึ้น',
       suggestCoverage: 'ได้มาจาก {sampled} จาก {total} แนวคิด ครอบคลุม {labels} ป้ายกำกับของลำดับชั้นความรู้',
-      suggestFailed: 'Suggest failed.',
+      suggestFailed: 'การเสนอแท็กล้มเหลว',
       suggestedTag: 'คำแนะนำจาก LLM — นำออกเพื่อปฏิเสธ',
-      removeTag: 'Remove tag',
+      removeTag: 'นำแท็กออก',
       fieldEmpty: '—',
-      addPlaceholder: 'Add {field}',
-      add: 'Add',
+      addPlaceholder: 'เพิ่ม{field}',
+      add: 'เพิ่ม',
       saving: 'Saving…',
-      save: 'Save tags',
-      saved: 'Saved',
-      error: 'Save failed.',
+      save: 'บันทึกแท็ก',
+      saved: 'บันทึกแล้ว',
+      error: 'การบันทึกล้มเหลว',
       errorWithStep: 'การบันทึกล้มเหลวที่ขั้นตอน "{step}" ({code}) — ลองอีกครั้ง',
       field: {
-        topic: 'Topic',
-        entity: 'Entity',
-        scope: 'Scope',
-        forbidden: 'Forbidden',
-        summary: 'Summary',
-        keyword: 'Keyword'
+        topic: 'หัวข้อ',
+        entity: 'เอนทิตี',
+        scope: 'ขอบเขต',
+        forbidden: 'ต้องห้าม',
+        summary: 'สรุป',
+        keyword: 'คำสำคัญ'
       }
     },
     testingLab: {
-      title: 'Testing Lab',
-      cta: 'Testing Lab',
+      title: 'ห้องทดสอบ',
+      cta: 'ห้องทดสอบ',
       badge: {
-        present: 'head ready',
-        stale: 'head stale',
-        missing: 'no head'
+        present: 'หัวพร้อม',
+        stale: 'หัวล้าสมัย',
+        missing: 'ไม่มีหัว'
       },
       tab: {
-        head: 'Head',
-        test: 'Test',
-        suites: 'Suites & analytics',
+        head: 'หัว',
+        test: 'ทดสอบ',
+        suites: 'ชุดทดสอบและการวิเคราะห์',
         ragas: 'การทดสอบเปรียบเทียบ RAGAS',
         models: 'โมเดล'
       },
       head: {
-        dim: 'Dimensions',
-        model: 'Model',
-        version: 'Head version',
-        computedAt: 'Computed',
+        dim: 'มิติ',
+        model: 'โมเดล',
+        version: 'เวอร์ชันหัว',
+        computedAt: 'คำนวณเมื่อ',
         staleNote: 'แท็กเปลี่ยนแปลงหลังจากสร้างหัวนี้ — สร้างหัวใหม่ก่อนจึงจะเชื่อถือผลการทดสอบได้',
         missingNote:
           'ยังไม่มีหัวที่ฝังเวกเตอร์แล้ว หัวจะถูกสร้างตอนเผยแพร่ หากบริการฝังใช้งานไม่ได้ในตอนนั้น ให้สร้างหัวใหม่ตอนนี้จากแท็กที่บันทึกไว้',
-        rebuild: 'Rebuild head',
+        rebuild: 'สร้างหัวใหม่',
         rebuildTip: 'ฝังแท็กที่บันทึกไว้ใหม่เป็นเวกเตอร์หัวชุดใหม่ มีการเรียกฝังหนึ่งครั้งต่อหนึ่งฟิลด์แท็ก',
         rebuildBusy: 'กำลังสร้างหัวใหม่ — กำลังฝังฟิลด์แท็ก…'
       },
       test: {
         placeholder: 'เช่น แนวทางการตรวจคัดกรองมะเร็ง',
-        run: 'Run test',
+        run: 'รันการทดสอบ',
         running: 'กำลังฝังคำค้นและให้คะแนนหัว…',
         adversarial: 'การทดสอบโจมแย้ง — คำค้นนี้ไม่ควรเลือกที่เก็บนี้ (หัวข้อที่ต้องห้ามหรืออยู่ใกล้เคียง)',
-        embeddedWith: 'Embedded with',
+        embeddedWith: 'ฝังด้วย',
         col: {
-          repo: 'Repository',
-          state: 'State',
-          headScore: 'Head score',
-          rank: 'Rank',
-          claimed: 'Claims query'
+          repo: 'ที่เก็บ',
+          state: 'สถานะ',
+          headScore: 'คะแนนหัว',
+          rank: 'อันดับ',
+          claimed: 'อ้างคำค้น'
         },
-        provenance: 'Routing provenance',
+        provenance: 'ที่มาของการกำหนดเส้นทาง',
         empty:
           'พิมพ์คำค้นที่ผู้ใช้จะถามแล้วรัน — ห้องทดสอบจะให้คะแนนหัวของทุกที่เก็บที่เผยแพร่แล้วเหมือนการกระจายเส้นทางจริง',
         pass: 'ผ่าน — ที่เก็บนี้ชนะการกำหนดเส้นทางด้วยหัว',
@@ -3036,26 +3044,26 @@ export default {
         progress: '{done} จาก {total} คำค้น ({pct}%)',
         progressStarting: 'Starting the run…',
         phase: {
-          routing: 'Scoring routes',
-          corpus: 'Checking the corpus'
+          routing: 'กำลังให้คะแนนเส้นทาง',
+          corpus: 'กำลังตรวจสอบคลังข้อมูล'
         }
       },
       suites: {
-        generate: 'Generate test suite',
+        generate: 'สร้างชุดทดสอบ',
         generateTip:
           'LLM เขียนคำถามเป็นชุดละ 30 ต่อประเภท — จำนวนมาก (100+) ใช้เวลาหลายนาที เสร็จแล้วชุดทดสอบจะปรากฏที่นี่และในรายการที่บันทึกไว้',
         generating: 'กำลังสร้างเป็นชุด — จำนวนมากใช้เวลาหลายนาที…',
-        run: 'Run all queries',
+        run: 'รันคำถามทั้งหมด',
         running: 'กำลังรันคำถามทุกรายการในชุด…',
-        current: 'Current suite',
+        current: 'ชุดปัจจุบัน',
         col: {
-          query: 'Query',
-          kind: 'Kind',
-          outcome: 'Outcome',
-          run: 'Run',
-          when: 'When',
-          passRate: 'Pass rate',
-          headVersion: 'Head',
+          query: 'คำค้น',
+          kind: 'ประเภท',
+          outcome: 'ผลลัพธ์',
+          run: 'รัน',
+          when: 'เมื่อ',
+          passRate: 'อัตราผ่าน',
+          headVersion: 'หัว',
           tags: 'แท็ก',
           actions: 'แก้ไข',
           name: 'ชื่อ',
@@ -3064,17 +3072,17 @@ export default {
         notEvaluatable: 'ประเมินไม่ได้ (ไม่มีคู่แข่ง)',
         pass: 'pass',
         fail: 'fail',
-        passRate: 'Pass rate',
-        positives: 'Positives',
-        negatives: 'Negatives',
+        passRate: 'อัตราผ่าน',
+        positives: 'เคสบวก',
+        negatives: 'เคสลบ',
         noCompetitors: 'ไม่เกี่ยวข้อง — ยังไม่มีหัวคู่แข่ง',
-        avgMargin: 'Avg margin',
-        steal: '{repo} stole {n} queries',
+        avgMargin: 'ระยะขอบเฉลี่ย',
+        steal: '{repo} แย่งคำค้นไป {n} รายการ',
         addPlaceholder: 'Your own probe query…',
-        add: 'Add to suite',
-        kindPositive: 'should select',
-        kindNegative: 'should NOT select',
-        history: 'Run history',
+        add: 'เพิ่มเข้าชุด',
+        kindPositive: 'ควรเลือก',
+        kindNegative: 'ไม่ควรเลือก',
+        history: 'ประวัติการรัน',
         noRuns: 'ยังไม่มีการรัน — สร้างชุดทดสอบแล้วรัน',
         explainFailures: 'อธิบายความล้มเหลว',
         explainBusy: 'กำลังอธิบายความล้มเหลว — เรียกโมเดลหนึ่งครั้งสำหรับข้อลบที่ล้มเหลวแต่ละรายการ…',
@@ -3119,11 +3127,11 @@ export default {
       error: {
         explain: 'การอธิบายล้มเหลว',
         saveTag: 'ไม่สามารถบันทึกแท็กต้องห้ามได้',
-        rebuild: 'Head rebuild failed',
-        test: 'Routing test failed',
-        generate: 'Suite generation failed',
-        run: 'Suite run failed',
-        add: 'Could not add the query',
+        rebuild: 'การสร้างหัวใหม่ล้มเหลว',
+        test: 'การทดสอบการกำหนดเส้นทางล้มเหลว',
+        generate: 'การสร้างชุดทดสอบล้มเหลว',
+        run: 'การรันชุดทดสอบล้มเหลว',
+        add: 'ไม่สามารถเพิ่มคำค้นได้',
         history: 'โหลดประวัติการบันทึกไม่สำเร็จ',
         revert: 'ย้อนกลับ frontmatter ไม่สำเร็จ',
         advisor: 'ที่ปรึกษาล้มเหลว',
@@ -3138,7 +3146,7 @@ export default {
         noFrontmatter: 'ที่เก็บนี้ยังไม่มีแท็กหัว — สร้างแท็กในแผง Frontmatter (หรือใช้แนะนำแท็ก) แล้วจึงสร้างชุดทดสอบ'
       },
       footer: {
-        unpublish: 'Unpublish to review'
+        unpublish: 'ยกเลิกการเผยแพร่เพื่อตรวจทาน'
       },
       publishCard: {
         present:

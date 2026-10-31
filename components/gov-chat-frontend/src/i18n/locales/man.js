@@ -225,7 +225,8 @@ export default {
       logs: 'Logolu',
       security: 'Kantari',
       users: 'Moolu',
-      models: 'Models'
+      models: 'Models',
+      studio: "OKF Studio"
     },
     contentManagement: 'KONTENTI LATARAMOO',
     knowledgeHierarchy: 'Longo jukutol',
@@ -1884,23 +1885,24 @@ export default {
       paneLabel: 'Juube-dulaa',
       saveFailed: 'Kōjparok ear l̦apier — bar kajjieon̦',
       piiRescan: {
-        label: '个人信息',
-        button: '重新扫描所有页面',
-        working: '正在重新扫描所有页面…',
-        progress: '重新扫描…共 {total} 页中的 {done} 页',
-        progressIdle: '重新扫描…正在读取存储库',
-        done: '已重新扫描 {n} 页。',
-        partial: '已重新扫描 {n} 页。仍有 {e} 页失败 — 它们的扫描结论没有变化，因此这些页面仍会阻止发布。',
-        noKey: '服务器接受了重新扫描，但未返回运行 ID，因此无法跟踪其进度。没有报告任何结果。',
-        missing: '此服务器不支持重新扫描（404）。没有任何更改 — 扫描失败的页面仍在阻止发布。',
-        frozen: '重新扫描被拒绝：存储库正在发布（409）。没有任何更改。',
-        failed: '重新扫描失败。没有任何更改 — 扫描失败的页面仍在阻止发布。',
-        scanned: '已重新扫描 {n} 页',
-        clean: '无发现',
-        hit: '已标记',
-        error: '扫描错误',
-        vanished: '已消失',
-        stillBlocking: '仍在阻止'
+      timeout: 'Ālikin 15 minit ko, re-scan eo ej bar jerbal ilo server (server-side) eo. Ejjel̦o̦k men in loss; bar etale ñan juon minit.',
+        label: 'Personal data (PII)',
+        button: 'Re-scan aolep page ko',
+        working: 'A re-scan aolep page ko…',
+        progress: 'Re-scan… page {done} to {total}',
+        progressIdle: 'Re-scan… repository a looti',
+        done: 'Page {n} re-scan benta.',
+        partial: 'Page {n} re-scan benta. {e} fila saaying — scan verdict ti yailama, o la publish block saaying ka se u.',
+        noKey: 'Serveroo re-scan accept nga run id ti jaabi, o la a progress track ti be run. Haya ti report ke.',
+        missing: 'Re-scan server ninyu kono ti je (404). Haya ti yailama — page scan failu be publish block saaying.',
+        frozen: 'Re-scan bulu: repositoryoo be publish saaying (409). Haya ti yailama.',
+        failed: 'Re-scan filita. Haya ti yailama — page scan failu be publish block saaying.',
+        scanned: '{n} page re-scan benta',
+        clean: 'clear',
+        hit: 'flagged',
+        error: 'Scan error',
+        vanished: 'Ejjab ie',
+        stillBlocking: 'Still blocking'
       },
       piiBulk: {
         done_accept: 'Benta — entity flagta bee {n} concept kono reviewed-and-kept markta. PII flagu bee clear.',
@@ -1932,6 +1934,10 @@ export default {
       }
     },
     dashboard: {
+      health: {
+        ariaNone: "Ejjel̦o̦k metrik",
+        aria: "Menin: {pct} percent, {n} concept"
+      },
       bulk: {
         body: 'Kajojo jikin kakwōn ej publish kōn aolep etale ko (PII etale, kakoba ilo laajrak, jim̦we). Jem̦l̦o̦k an kajojo:',
         pending: 'Kam̦ool ñan publish jikin kakwōn ko em̦ōj kāāleti.',
@@ -2080,6 +2086,7 @@ export default {
       openExisting: 'Kipel̦o̦k jikin kakwōn em̦ōj kōm̦m̦ane',
       name: 'Āt an jikin kakwōn',
       importing: 'Bōktok bundle…',
+      bundleLabel: 'Bundle (.zip)',
       importHint: 'Ak bōktok juon zip bundle ñan kōm̦m̦an juon jikin kakwōn ekāāl.',
       importDefaultName: 'Jikin kakwōn eo em̦ōj bōktok',
       failed: 'Kōm̦m̦an jikin kakwōn eo ear l̦apier',
@@ -2157,28 +2164,31 @@ export default {
         'Repository-level tagu ({summary}) repo kono ye, concept nyingu ti — Tag panel kono u latara, right rail la.'
     },
     piiReview: {
-      title: '个人信息检查',
-      checking: '检查中…',
-      checkingBody: '正在读取每个页面的个人信息状态…',
-      unreadableTitle: '状态未知',
-      unreadableBody: '无法读取此存储库的个人信息状态。是否发现了任何内容属未知 — 这不是干净的结果。',
-      unscanned: '未扫描',
+      title: 'Etale personal data (PII)',
+      checking: 'Etale…',
+      checkingBody: 'A looti personal data (PII) state an aolep page ko…',
+      unreadableTitle: 'State ti kile',
+      unreadableBody:
+        'Personal data (PII) state an repository in ti loota. Men soto ewōr ewe ti kile — ejjab juon verdict clear.',
+      unscanned: 'Ti scana',
       unscannedBody:
-        '没有完整的个人信息扫描覆盖此存储库（有 {n} 页从未扫描）。没有任何内容被确认不含个人信息 — 发布不是被命中阻止的，但此结论背后没有扫描。',
-      errorTitle: '扫描失败',
-      errorBody: '{n} 页无法扫描。它们的文本未被成功读取，因此是否包含个人信息属未知 — 它们并不干净，并且会阻止发布。',
-      unreviewed: '已标记，未复核',
+        'Scan an personal data (PII) complete ti kōba repository in (page {n} ti scana abada). Ejjab men in kile bwe ej free ie personal data (PII) — publishu ejjab block ilo findings, nga verdict kōkō scan ti je ie.',
+      errorTitle: 'Scan filita',
+      errorBody:
+        'Page {n} ti scana. Contentu ti loota benta, o la personal data (PII) ewōr ewe ti kile — page ko rej jab clear im be publish block saaying.',
+      unreviewed: 'Flagged, ti reviewta',
       unreviewedBody:
-        '扫描器在 {n} 页发现了可能的个人信息，且无人查看。发布仍被允许，但这些页面上没有任何内容经过复核。',
-      reviewed: '已标记，已复核',
-      reviewedBody: '{n} 页带有已标记的个人信息，已由策展人确认（{by}，{at}）。',
-      cleanVerdict: '已扫描 — 未发现',
-      cleanBody: '每个页面都已扫描，未发现个人信息。',
-      staleAck: '先前的确认于 {at} 标记了 {a} 页；现在有 {n} 页被标记，因此它并不涵盖它们。',
-      bannerTitle: '没有人复核过这些命中。',
+        'Scanneroo personal data (PII) possible soto page {n} ilo — ejjab juon ri etale. Kwomaron̦ bar publish, nga pageu ewōr ti reviewta.',
+      reviewed: 'Flagged, reviewta',
+      reviewedBody: 'Page {n} personal data (PII) flagged ewōr — steward juo signoff benta ({by}, {at}).',
+      cleanVerdict: 'Scana benta — ejjab soto',
+      cleanBody: 'Aolep page ko scana benta im personal data (PII) ejjab soto.',
+      staleAck:
+        'Signoff m̦okta ({at}) page {a} flagged record benta; ienaō {n} flagged — o la u ko ti kōba.',
+      bannerTitle: 'Ejjab juon ri findings in reviewta.',
       bannerBody:
-        '发布仍然被允许，也没有任何关卡会阻止你 — 但被标记的页面将原样进入已发布的存储库。请逐个打开并在发布前做出决定。',
-      unknownActor: '未知'
+        'Kwomaron̦ bar publish im gate ejjab block am — nga page flagged ko repository publish kono na lo wōt ewe ie. Bar kipel̦o̦k juon-juon im kōm̦m̦an decisionoo m̦okta ibay kwō publish.',
+      unknownActor: 'ti kile'
     },
     glossary: {
       addConcept:
@@ -2679,6 +2689,7 @@ export default {
       saveBlocked: 'Bōjrak kōjparok: kōm̦m̦an bwe en jim̦we wāween ko m̦oktata.'
     },
     validation: {
+      healthAria: 'Menin: {pct} percent, {n} issue',
       frozen: 'Kobban em̦ōj kabōjrak ilo {v} — riiti wōt. Retract wāween eo ej serving bwe kwōn kōm̦m̦an oktak.',
       none: 'Ejjel̦o̦k',
       expertHint:

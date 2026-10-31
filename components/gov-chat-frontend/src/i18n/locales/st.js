@@ -225,7 +225,8 @@ export default {
       logs: 'Lilog',
       security: 'Tshireletso',
       users: 'Basebedisi',
-      models: 'Mesebetsi'
+      models: 'Mesebetsi',
+      studio: "OKF Studio"
     },
     contentManagement: 'TSAMAISO YA MOKOTLA',
     knowledgeHierarchy: 'Tharollo ya Tsebo',
@@ -1916,6 +1917,7 @@ export default {
       paneLabel: 'Sefate se bontšang',
       saveFailed: 'Ho boloka ho hlolehile — leka hape',
       piiRescan: {
+      timeout: 'Re-skan e ntse e ea ka morao ho metsotso e 15 — e tsoela pele serveñ. Ha ho lahloehe; hlahloba hape ka motsotso o le mong.',
         label: 'Lintso tsa motho',
         button: 'H scanu hape-khele',
         working: 'Ho hana scansa mehele…',
@@ -1973,6 +1975,10 @@ export default {
       }
     },
     dashboard: {
+      health: {
+        ariaNone: "Ha ho na metrike",
+        aria: "Bophelo: {pct} lekholo, mohopolo {n}"
+      },
       bulk: {
         body: "Polokelo ka 'ngoe e phatlalatsoa ka tlhahlobo e felletseng ea heke (tlhahlobo ea PII, ho indexa, boikamahanyo). Liphetho tsa polokelo ka 'ngoe:",
         pending: 'Netefatsa ho etsa publish polokelong tse khethiloeng.',
@@ -2121,6 +2127,7 @@ export default {
       openExisting: 'Bula polokelo e teng',
       name: 'Lebitso la polokelo',
       importing: 'Ho kenya ngata…',
+      bundleLabel: 'Sephuthelo (.zip)',
       importHint: 'Kapa kenya ngata e teng ea zip e le polokelo e ncha.',
       importDefaultName: 'Polokelo e kentseng',
       failed: 'Ho thehoa ha polokelo ho hlolehile',
@@ -2732,6 +2739,7 @@ export default {
       saveBlocked: 'Ho boloka ho thibiloe: lokisa litaba tsa boikamahanyo pele.'
     },
     validation: {
+      healthAria: 'Bophelo: {pct} lekholo, bothata {n}',
       frozen:
         'Litaba li emisitsoe ho {v} — pono ea ho bala feela. Etsa retract mofuteng o sebetsang ho serving ho etsa liphetoho.',
       none: 'Ha e eo',

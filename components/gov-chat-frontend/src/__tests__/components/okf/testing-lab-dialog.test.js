@@ -651,7 +651,10 @@ it('1-8g-v: an async run (202 + poll) adopts the run doc when the poll lands it'
   dispatch.mockImplementation((action) => {
     if (action === 'okf/headSuiteRun')
       return Promise.resolve({ ok: true, result: { run_key: 'r9', status: 'running' } });
-    if (action === 'okf/headSuiteGetRun')
+    // Round 18 (#80465): the run wait is the store's pollHeadSuiteRun now —
+    // the finished run doc arrives through it (the raw headSuiteGetRun
+    // service call is that action's internal detail).
+    if (action === 'okf/pollHeadSuiteRun')
       return Promise.resolve({
         ok: true,
         result: {
@@ -1189,16 +1192,20 @@ it('1-8f2: generation is 202+poll — the UI polls and adopts the suite when it 
   expect(w.vm.error).toBe('');
 });
 
-it('1-8f2: pollForSuite keeps waiting on the {status:"generating"} envelope and adopts the real suite', async () => {
+it('1-8f2: pollForSuite delegates to the pollJob-backed store action and adopts its suite', async () => {
   const w = mountDialog({ initialTab: 'suites' });
   await w.vm.$nextTick();
   const landed = { suite_key: 's-x', payload: { positive: [], negative: [] } };
-  const results = [
-    { ok: true, result: { suite_key: 's-x', status: 'generating' } }, // poll 1: keep waiting
-    { ok: true, result: landed } // poll 2: adopt
-  ];
-  dispatch.mockImplementation((action) => {
-    if (action === 'okf/headSuiteGet') return Promise.resolve(results.shift() || { ok: true, result: landed });
+  // Round 18 (#80465): the wait moved into okf/pollHeadSuite (pollJob
+  // tolerance + first-fetch fast path — the generating-envelope patience is
+  // asserted at the store level in okf-head-suite-poll.test.js). Here the
+  // component seam is: dispatch it with the cancel signal, adopt its result.
+  dispatch.mockImplementation((action, payload) => {
+    if (action === 'okf/pollHeadSuite') {
+      expect(payload).toMatchObject({ repoId: 'r-1', suiteKey: 's-x' });
+      expect(payload.signal).toBe(w.vm.pollSignal);
+      return Promise.resolve({ ok: true, result: landed });
+    }
     return Promise.resolve({ ok: true });
   });
   const suite = await w.vm.pollForSuite('s-x');
@@ -1402,14 +1409,22 @@ describe('poll cancel token (round 16, #80124)', () => {
   });
 
   // Round 17, #80355: the component-LOCAL polls must honor the signal too.
-  it('pollForSuite/pollForRun bail immediately once the signal is aborted', async () => {
+  // Round 18 (#80465): the loops live in the store actions now — the
+  // component's job is to PASS the signal and translate POLL_ABORTED to
+  // null (the dialog's discard-on-close contract).
+  it('pollForSuite/pollForRun pass the signal and translate POLL_ABORTED to null', async () => {
     const w = await mountDialog();
     dispatch.mockClear();
     w.vm.pollSignal.aborted = true;
+    dispatch.mockImplementation((action, payload) => {
+      if (action === 'okf/pollHeadSuite' || action === 'okf/pollHeadSuiteRun') {
+        expect(payload.signal.aborted).toBe(true); // the signal rides along
+        return Promise.resolve({ ok: false, code: 'POLL_ABORTED', message: 'Tracking stopped.' });
+      }
+      return Promise.resolve({ ok: true });
+    });
     await expect(w.vm.pollForSuite('s1')).resolves.toBeNull();
     await expect(w.vm.pollForRun('s1', 'rk1')).resolves.toBeNull();
-    // no dispatch past the bail — the loops never issued a GET
-    expect(dispatch).not.toHaveBeenCalled();
     w.unmount();
   });
 

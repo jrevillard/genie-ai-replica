@@ -228,3 +228,49 @@ describe('okf/fetchDraft — server-backed hydration', () => {
     expect(store.state.okf.drafts.WRONG).toBeUndefined();
   });
 });
+
+// ─── Round 18, #80472 — the pre-create local-draft path is pinned ──────────
+// Two credible green regressions these cases close:
+//   (a) re-pointing StudioWizard at saveDraft would PUT /okf/repos/pending/draft
+//       on every keystroke → 404 → arms draftsUnavailable against a HEALTHY
+//       backend (the exact round-17 #80359 bug);
+//   (b) deleting saveDraft's consume branch re-hammers the missing route.
+describe('okf/setDraftLocal + the draftsUnavailable consume branch (#80472)', () => {
+  beforeEach(() => {
+    studioService.saveDraft.mockReset();
+    studioService.getDraft.mockReset();
+  });
+
+  it('setDraftLocal commits the draft and NEVER touches the server', async () => {
+    const store = buildStore();
+    const res = await store.dispatch('okf/setDraftLocal', {
+      repoId: 'pending',
+      draft: { name: 'New repo', studio_step: 0 }
+    });
+    expect(res).toMatchObject({ ok: true, local: true });
+    expect(studioService.saveDraft).not.toHaveBeenCalled();
+    // the draft is resumable in-session and carries a stamp
+    const d = store.state.okf.drafts.pending;
+    expect(d.name).toBe('New repo');
+    expect(typeof d.updated_at).toBe('number');
+    // an explicit stamp is preserved (caller-owned ordering wins)
+    await store.dispatch('okf/setDraftLocal', {
+      repoId: 'pending',
+      draft: { name: 'New repo 2', studio_step: 1, updated_at: 12345 }
+    });
+    expect(store.state.okf.drafts.pending.updated_at).toBe(12345);
+  });
+
+  it('saveDraft CONSUMES draftsUnavailable: local-only, no more server calls, skipped flag', async () => {
+    const store = buildStore();
+    // arm the flag the honest way — a NOT_READY from the server
+    studioService.saveDraft.mockRejectedValueOnce(Object.assign(new Error('no route'), { code: 'NOT_READY' }));
+    await store.dispatch('okf/saveDraft', { repoId: 'r1', draft: { name: 'A' } });
+    expect(store.state.okf.draftsUnavailable).toBe(true);
+    // the consume branch: same dispatch again — no further server call
+    const res = await store.dispatch('okf/saveDraft', { repoId: 'r1', draft: { name: 'B' } });
+    expect(res).toMatchObject({ ok: true, skipped: 'unavailable' });
+    expect(studioService.saveDraft).toHaveBeenCalledTimes(1); // only the arming call
+    expect(store.state.okf.drafts.r1.name).toBe('B'); // local cache updated
+  });
+});

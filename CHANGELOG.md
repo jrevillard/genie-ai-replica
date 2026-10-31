@@ -9,7 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **The OKF Studio interface is now fully available in all 14 supported languages.** 321 previously untranslated interface texts (the Studio wizard, Testing Lab, PII review, editor and glossary) showed in English regardless of the selected language; every one is now translated in all locales, with a CI guard that fails when a new interface text ships as a raw English copy.
+- **The OKF Studio interface is now fully available in all 14 supported languages.** 321 previously untranslated interface texts (the Studio wizard, Testing Lab, PII review, editor and glossary) showed in English regardless of the selected language; every one is now translated in all locales, with a CI guard that fails when a new interface text ships as a raw English copy. The completion sweep also covered the ~170 shorter Studio labels (badges, table columns, wizard states) that remained English in the five non-Latin locales (Arabic, Bengali, Russian, Thai, Chinese), the Studio tab label and the bundle-import field label, and made the dashboard's screen-reader health announcements translatable (aria labels are user-facing text — a screen-reader user now hears them in their language).
+
+### Fixed
+
+- **Eight Studio race and dead-end conditions fixed (review round 18).** The document→Studio hand-off queued its event before the Studio tab's async chunk had mounted, so the first "Create OKF repository" of a session did nothing (the wizard now opens once the tab signals it is ready); saving the tag panel could race the editor's debounced autosave and silently revert unsaved edits (the flush is now awaited before the save reads the document); a failed bulk PII action closed its dialog with no error shown; the tag advisor reported failure on a single transient gateway error during its minutes-long run; the Testing Lab's polls kept running after the dialog was closed and had no tolerance for transient errors (both now run on the store's hardened poll loop with cancel and deadlines); a page load with cleared browser storage forgot a dark-theme choice; and a malformed Studio event could blank the pane. The document list's delete confirmation also no longer promises to delete files it cannot see (blocked rows hidden by the active filter), and its Load-more button now disables once everything is actually loaded (bundle artifacts no longer keep it permanently clickable).
 
 ### Fixed
 

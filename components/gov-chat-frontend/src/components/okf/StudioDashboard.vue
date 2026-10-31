@@ -580,17 +580,6 @@ export default {
   },
   methods: {
     /**
-     * friendlyLifecycleError returns an i18n KEY (okf.lifecycle.*) or an
-     * already-human string (the server's own message) — translate the keys
-     * (round 17, #80361).
-     */
-    translateLifecycleError(text) {
-      if (typeof text === 'string' && text.startsWith('okf.lifecycleErrors.')) {
-        return this.translate(text, text);
-      }
-      return text;
-    },
-    /**
      * Can this repo be re-ingested? (David, 2026-10-14: "the Re-Ingest menu must
      * only be available after a repo is ingested" and "should only appear for
      * repo's with failed concept ingestions".)
@@ -830,7 +819,10 @@ export default {
       const res = await this.$store.dispatch('okf/lifecycleTransition', { repoId: r.repo_id, action });
       this.actionBusy = false;
       if (!res.ok)
-        this.actionError = this.translateLifecycleError(okfRepoOps.friendlyLifecycleError(res.code, res.message));
+        this.actionError = okfRepoOps.translateLifecycleError(
+          okfRepoOps.friendlyLifecycleError(res.code, res.message),
+          this.translate
+        );
     },
     onVersions(r) {
       this.versionsRepo = r;
@@ -944,7 +936,10 @@ export default {
       this.reingestAsk = null;
       this.reingestCount = null;
       if (!res.ok) {
-        this.actionError = this.translateLifecycleError(okfRepoOps.friendlyLifecycleError(res.code, res.message));
+        this.actionError = okfRepoOps.translateLifecycleError(
+          okfRepoOps.friendlyLifecycleError(res.code, res.message),
+          this.translate
+        );
       }
     },
     async onUnpublishAction(key) {
@@ -962,7 +957,10 @@ export default {
       this.actionBusy = false;
       this.unpublishAsk = null;
       if (!res.ok)
-        this.actionError = this.translateLifecycleError(okfRepoOps.friendlyLifecycleError(res.code, res.message));
+        this.actionError = okfRepoOps.translateLifecycleError(
+          okfRepoOps.friendlyLifecycleError(res.code, res.message),
+          this.translate
+        );
     },
     onPublishDialogClose() {
       // While the bundle transfer is in flight the dialog stays visible with
@@ -987,7 +985,10 @@ export default {
           action: 'publish'
         });
         if (!res.ok) {
-          this.publishError = this.translateLifecycleError(okfRepoOps.friendlyLifecycleError(res.code, res.message));
+          this.publishError = okfRepoOps.translateLifecycleError(
+            okfRepoOps.friendlyLifecycleError(res.code, res.message),
+            this.translate
+          );
           if (res.code === 'PII_GATE_BLOCKED') this.piiBlocked = true;
           return; // keep the dialog open — the steward decides on the ack
         }
@@ -1019,10 +1020,15 @@ export default {
       return Math.max(0, Math.min(100, Math.round(100 * (1 - ratio))));
     },
     healthAria(r) {
+      // Screen-reader text IS user-facing (round 18, #80492): a French
+      // screen-reader user heard hardcoded English on a translated
+      // dashboard. Same translate().replace() idiom as the visible strings.
       const pct = this.healthScore(r);
       const m = r.metrics;
-      if (!m) return 'No metrics';
-      return 'Health: ' + pct + ' percent, ' + (m.concept_count || 0) + ' concepts';
+      if (!m) return this.translate('okf.dashboard.health.ariaNone', 'No metrics');
+      return this.translate('okf.dashboard.health.aria', 'Health: {pct} percent, {n} concepts')
+        .replace('{pct}', String(pct))
+        .replace('{n}', String(m.concept_count || 0));
     },
     async runBulkPublish() {
       // BUSY GUARD (round 17, #80360): two interleaved sequential publish

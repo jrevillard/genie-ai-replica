@@ -118,13 +118,13 @@ describe('design tokens', () => {
     // must rely on the token alone.
     //
     // Scoped to <style> blocks on purpose. ConceptEditor also sets an inline
-    // style from script for the transient PII flash — `var(--warning, #f59e0b)`
-    // with a hardcoded `#111` text colour — and that is a deliberate
-    // high-contrast highlight on an amber wash, not themed chrome. Flagging it
-    // would be the test being wrong rather than the code.
+    // style from script for the transient PII flash — that one is tokenized
+    // too (round 18, #80491: var(--warning)/var(--warning-ink), replacing a
+    // hardcoded #111 that was unreadable on the dark theme).
     const files = [
       path.resolve(SRC, 'components/okf/FrontmatterPanel.vue'),
-      path.resolve(SRC, 'components/okf/editor/ConceptEditor.vue')
+      path.resolve(SRC, 'components/okf/editor/ConceptEditor.vue'),
+      path.resolve(SRC, 'components/okf/editor/PiiOccurrences.vue')
     ];
     const offenders = [];
     for (const file of files) {

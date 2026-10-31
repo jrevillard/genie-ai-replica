@@ -225,7 +225,8 @@ export default {
       logs: 'Logs',
       security: 'Segurança',
       users: 'Usuários',
-      models: 'Modelos'
+      models: 'Modelos',
+      studio: "OKF Studio"
     },
     contentManagement: 'GERENCIAMENTO DE CONTEÚDO',
     knowledgeHierarchy: 'Hierarquia de Conhecimento',
@@ -1917,6 +1918,7 @@ export default {
       paneLabel: 'Painel de exibição',
       saveFailed: 'Falha ao salvar — tente novamente',
       piiRescan: {
+      timeout: 'A reexaminação ainda decorre passados 15 minutos — continua no servidor. Nada se perdeu; verifique de novo dentro de um minuto.',
         label: 'Dados pessoais',
         button: 'Reexaminar todas as páginas',
         working: 'Reexaminando todas as páginas…',
@@ -1972,6 +1974,10 @@ export default {
       }
     },
     dashboard: {
+      health: {
+        ariaNone: "Sem métricas",
+        aria: "Saúde: {pct} por cento, {n} conceitos"
+      },
       bulk: {
         body: 'Cada repositório passa pela verificação completa de controle (revisão de PII, indexação, conformidade) ao ser publicado. Resultados por repositório:',
         pending: 'Confirme para executar publish nos repositórios selecionados.',
@@ -2120,6 +2126,7 @@ export default {
       openExisting: 'Abrir repositório existente',
       name: 'Nome do repositório',
       importing: 'Importando pacote…',
+      bundleLabel: 'Pacote (.zip)',
       importHint: 'Ou importe um pacote zip existente como um novo repositório.',
       importDefaultName: 'Repositório importado',
       failed: 'Falha na criação do repositório',
@@ -2730,6 +2737,7 @@ export default {
       saveBlocked: 'Salvamento bloqueado: corrija os problemas de conformidade primeiro.'
     },
     validation: {
+      healthAria: 'Saúde: {pct} por cento, {n} problema(s)',
       frozen:
         'Conteúdo congelado em {v} — visualização somente leitura. Execute retract na versão em serving para fazer alterações.',
       none: 'Nenhum',

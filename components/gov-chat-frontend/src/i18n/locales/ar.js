@@ -225,7 +225,8 @@ export default {
       logs: 'السجلات',
       security: 'الأمان',
       users: 'المستخدمون',
-      models: 'النماذج'
+      models: 'النماذج',
+      studio: "OKF Studio"
     },
     contentManagement: 'إدارة المحتوى',
     knowledgeHierarchy: 'هرمية المعرفة',
@@ -1658,7 +1659,7 @@ export default {
       version: 'الإصدار {n}',
       versions: 'الإصدارات',
       deleteLabel: 'حذف',
-      testingLab: 'Testing Lab'
+      testingLab: 'مختبر الاختبار'
     },
     logs: {
       labeled: 'تمت تسميتها: {n}',
@@ -1806,8 +1807,8 @@ export default {
           problem: 'المشكلة',
           noError: 'وُسم فاشلًا دون سبب مسجَّل.',
           fixLabel: 'كيفية الإصلاح',
-          attempts: 'Attempts: {n}',
-          when: 'Last attempt {when}',
+          attempts: 'المحاولات: {n}',
+          when: 'آخر محاولة {when}',
           fix: {
             reaper:
               'توقف عامل الاستيعاب عن الانتظار خلال نافذة السماح لأن التصريف كان مشبعًا — المحتوى سليم. للإصلاح: عدِّل هذا الملف تعديلًا بسيطًا واحفظ لإعادة إدراجه في الطابور، أو اسحب المستودع وأعد الاستيعاب بالكامل.',
@@ -1833,7 +1834,7 @@ export default {
         bulkRedact: 'تنقيح الكل',
         bulkRemove: 'إزالة الكل',
         loadProgress: 'تحميل الملفات {done}/{total}',
-        addSource: '+ From documents',
+        addSource: '+ من المستندات',
         reingest: 'إعادة استيعاب هذا المفهوم',
         reingestBusy: 'توجد عملية استيعاب RAG قيد التشغيل لهذا المستودع — انتظر حتى تنتهي ثم أعد المحاولة.',
         reingestFailed: 'فشلت إعادة الاستيعاب — أعد المحاولة.'
@@ -1858,8 +1859,8 @@ export default {
         trust: 'مستوى الثقة',
         type: 'النوع',
         typePlaceholder: 'اختر النوع…',
-        hide: 'Hide metadata',
-        show: 'Show metadata'
+        hide: 'إخفاء البيانات الوصفية',
+        show: 'إظهار البيانات الوصفية'
       },
       pane: {
         files: 'الملفات',
@@ -1890,6 +1891,7 @@ export default {
       paneLabel: 'جزء العرض',
       saveFailed: 'فشل الحفظ — أعد المحاولة',
       piiRescan: {
+      timeout: 'ما زالت إعادة الفحص تعمل بعد 15 دقيقة — وهي مستمرة على الخادم. لم يُفقد شيء؛ عاود التحقق بعد دقيقة.',
         label: 'بيانات شخصية',
         button: 'إعادة فحص كل الصفحات',
         working: 'جارٍ إعادة فحص كل الصفحات…',
@@ -1940,6 +1942,10 @@ export default {
       }
     },
     dashboard: {
+      health: {
+        ariaNone: "لا توجد مقاييس",
+        aria: "الصحة: {pct} بالمئة، {n} مفهومًا"
+      },
       bulk: {
         body: 'يتم نشر كل مستودع مع الفحص الكامل للبوابة (مراجعة PII، الفهرسة، المطابقة). النتائج لكل مستودع:',
         pending: 'تأكيد publish للمستودعات المحددة.',
@@ -1956,7 +1962,7 @@ export default {
         logs: 'السجلات',
         rename: 'إعادة تسمية',
         versions: 'الإصدارات',
-        testingLab: 'Testing Lab'
+        testingLab: 'مختبر الاختبار'
       },
       delete: {
         body: 'يؤدي هذا إلى إزالة المستودع ومفاهيمه والمحتوى المفهرس والرسم البياني ومخرجات الحزمة نهائيًا. لا يمكن التراجع عن هذا الإجراء.',
@@ -1989,7 +1995,7 @@ export default {
         ingested: 'تمت عملية ingest لـ v{n}',
         published: 'تم publish لـ v{n}',
         retracted: 'مسحوب',
-        stepOf: 'Step {n} of 10'
+        stepOf: 'الخطوة {n} من 10'
       },
       title: 'المستودعات',
       topics: 'المواضيع',
@@ -2088,6 +2094,7 @@ export default {
       openExisting: 'فتح مستودع موجود',
       name: 'اسم المستودع',
       importing: 'جارٍ استيراد الحزمة…',
+      bundleLabel: 'حزمة (.zip)',
       importHint: 'أو استورد حزمة zip موجودة كمستودع جديد.',
       importDefaultName: 'مستودع مستورد',
       failed: 'فشل إنشاء المستودع',
@@ -2141,18 +2148,18 @@ export default {
       perRepoHint:
         'وسوم على مستوى المستودع (موضوع / كيان / نطاق / محظور / ملخص / كلمة مفتاحية) تحرك المسترجِع. البيانات نفسها موجودة أيضًا في حقل مستند المستودع — يبقى الاثنان متزامنين عند الحفظ.',
       perRepoField: {
-        topic: 'Topic',
-        entity: 'Entity',
-        scope: 'Scope',
-        forbidden: 'Forbidden',
-        summary: 'Summary',
-        keyword: 'Keyword'
+        topic: 'الموضوع',
+        entity: 'الكيان',
+        scope: 'النطاق',
+        forbidden: 'المحظور',
+        summary: 'الملخص',
+        keyword: 'الكلمة المفتاحية'
       },
       perRepoPh: {
-        topic: 'One topic per line',
-        entity: 'One entity per line',
+        topic: 'موضوع واحد لكل سطر',
+        entity: 'كيان واحد لكل سطر',
         forbidden: 'موضوع محظور واحد لكل سطر',
-        keyword: 'One keyword per line'
+        keyword: 'كلمة مفتاحية واحدة لكل سطر'
       },
       perRepoHelp: {
         topic: 'أضف أو عدّل أو أزل المواضيع — واحدًا لكل سطر. الأسطر الفارغة تُهمَل.',
@@ -2230,8 +2237,8 @@ export default {
       classificationStrategy:
         'كيف يقرر المنشئ تسميات كل موضوع: الاستدلال سريع ومجاني؛ وLLM يقرأ كل صفحة (أفضل للتخطيطات المعقدة)؛ والهجين يبدأ استدلاليًا ويصعّد الحالات الصعبة. تنقيح فقط — لا يطلق الاستيعاب أبدًا.',
       clsHeur: 'الاستدلال (سريع، بدون LLM)',
-      clsLlm: 'LLM classification',
-      clsHybrid: 'Hybrid',
+      clsLlm: 'تصنيف LLM',
+      clsHybrid: 'هجين',
       fsPick:
         'كل ملف يصبح موضوعًا واحدًا — الموضوعات المركّزة تُسترجع بدقة أعلى من مستند طويل واحد. يصبح اسم الملف العنوان؛ ويمكنك تنقيح كل شيء في Curate.',
       autocorrect:
@@ -2371,12 +2378,12 @@ export default {
     wizard: {
       working: 'Working…',
       state: {
-        draft: 'In progress',
-        register: 'In progress',
-        review: 'In review',
-        approve: 'Approved',
-        retracted: 'Retracted',
-        publish: 'Ready to ingest'
+        draft: 'قيد التقدم',
+        register: 'قيد التقدم',
+        review: 'قيد المراجعة',
+        approve: 'معتمد',
+        retracted: 'مسحوب',
+        publish: 'جاهز للاستيعاب'
       },
       status: {
         published: 'منشور',
@@ -2385,7 +2392,7 @@ export default {
       },
       exit: 'العودة إلى لوحة التحكم',
       context: {
-        version: 'Version',
+        version: 'الإصدار',
         untitled: 'مستودع بدون عنوان',
         trust: 'الثقة',
         title: 'المستودع',
@@ -2396,7 +2403,7 @@ export default {
       label: 'معالج OKF Studio',
       back: 'رجوع',
       continue: 'متابعة',
-      finish: 'Open the Editor'
+      finish: 'فتح المحرر'
     },
     steps: {
       entry: {
@@ -2442,16 +2449,16 @@ export default {
         manual: 'يمكنك كتابة الموضوعات مباشرة في الخطوة التالية.',
         clone: 'اختر المستودع الحالي لنسخه.',
         placeholder: 'ستتوفر واجهة الخطوة في مهمة لاحقة.',
-        chooseCrawl: 'Choose crawled documents',
-        chooseDocs: 'Choose source documents',
-        writeOne: '+ Write a concept',
+        chooseCrawl: 'اختيار المستندات المزحوفة',
+        chooseDocs: 'اختيار المستندات المصدر',
+        writeOne: '+ كتابة مفهوم',
         fsPick: '+ استيراد markdown من هذا الكمبيوتر',
         fsBusy: 'Importing your files…',
         fsFailed: 'فشل الاستيراد — تحقق من الملفات وأعد المحاولة.',
         skippedEmpty: 'تم تخطي {n} ملفًا فارغًا.',
-        noneSelected: 'No sources selected yet.',
-        selectedN: 'Selected: {n}',
-        moreN: ' +{n} more',
+        noneSelected: 'لم تُحدد أي مصادر بعد.',
+        selectedN: 'المحدد: {n}',
+        moreN: ' +{n} أخرى',
         noRepo: 'أنشئ المستودع أولاً (ارجع إلى خطوة الدخول).',
         noRepoYet: 'أنشئ المستودع أولاً (ارجع إلى خطوة الدخول).',
         benchTitle: 'الموضوعات في هذا المستودع',
@@ -2459,12 +2466,12 @@ export default {
         benchLoading: 'Reading topics…',
         benchEmpty: 'لا يوجد شيء هنا بعد — اختر المصادر أدناه، أو استورد markdown، أو اكتب موضوعك الأول.',
         benchFailed: 'تعذّرت قراءة الموضوعات الآن.',
-        editTitle: 'Edit concept',
+        editTitle: 'تعديل المفهوم',
         deleteFailed: 'تعذر حذف المفهوم.',
         added: 'يوجد {n} موضوعًا في هذا المستودع حتى الآن.',
-        deleteTitle: 'Delete topic',
+        deleteTitle: 'حذف الموضوع',
         deleteBody: 'يؤدي هذا إلى إزالة الموضوع من هذا المستودع نهائيًا.',
-        labelFailed: 'Could not set the label.',
+        labelFailed: 'تعذر تعيين التسمية.',
         cloned: 'هذا المستودع نسخة مستنسخة — موضوعاته في مكانها بالفعل. تابع إلى Curate لمراجعتها.'
       },
       produce: {
@@ -2472,38 +2479,38 @@ export default {
         hint: 'نحن نقرأ مصادرك ونقترح الموضوعات.',
         progress: 'المنشئ قيد التشغيل...',
         placeholder: 'سيتم ربط خدمة الإنشاء في مهمة لاحقة.',
-        retry: 'Retry conversion',
-        restart: 'Run again',
+        retry: 'إعادة محاولة التحويل',
+        restart: 'تشغيل مرة أخرى',
         running: 'جارٍ التحويل… يمكنك متابعة التقدم هنا؛ لا يُعتمد شيء حتى تراجع في Curate.',
         failed: 'فشل التحويل — أعد المحاولة، أو ارجع واختر مدخلات أخرى.',
         done: '{n} من الموضوعات جاهزة — تابع لمراجعتها في Curate.',
         noSources: 'لم تُحدد مصادر — ارجع إلى خطوة المدخلات.',
         neverStarted: 'لم يبدأ التحويل — أعد المحاولة.',
         manualSkip: 'الموضوعات المكتوبة يدويًا لا تحتاج توليدًا — تابع إلى Curate لمراجعتها.',
-        labelDone: 'Conversion complete',
+        labelDone: 'اكتمل التحويل',
         dupContent:
           'هذه المصادر مستوردة بالفعل إلى مستودع OKF آخر. اسحب ذلك المستودع أو احذفه أولاً، أو اختر مستندات أخرى.',
         inFlight: 'هناك تحويل قيد التشغيل بالفعل لهذا المستودع — انتظر انتهاءه.',
         stage: {
-          files: 'Files',
+          files: 'الملفات',
           filesCount: '{done} من {total} مستندًا',
-          concepts: 'Concepts',
-          conceptsCount: '{done} of {total} topics',
-          conceptsSoFar: '{n} topics so far',
-          curating: 'Curating',
+          concepts: 'المفاهيم',
+          conceptsCount: '{done} من {total} موضوعًا',
+          conceptsSoFar: '{n} موضوعًا حتى الآن',
+          curating: 'التنقيح',
           curatingCount: '{done} من {total} مفهومًا مُوسومًا',
-          crosslink: 'Cross-linking topics',
+          crosslink: 'الربط المتقاطع للموضوعات',
           linkCount: '{done} من {total} دفعة · كُتب {w} رابطًا',
-          complete: 'Complete',
-          unavailable: 'Count unavailable',
-          waiting: 'Waiting'
+          complete: 'مكتمل',
+          unavailable: 'العدد غير متاح',
+          waiting: 'انتظار'
         },
         filesNote: 'تم تحويل {done} من {total} مستندًا',
         pagesNote: 'تم تحويل {done} من {total} صفحة',
         pagesSoFar: 'تم تحويل {n} صفحة حتى الآن',
-        sourceStat: '+{n} new (total {t})',
+        sourceStat: '+{n} جديدًا (الإجمالي {t})',
         sourceStatMerged: '+{n} جديدًا · {m} دُمجت بحسب الـ slug (الإجمالي {t})',
-        docsLeg: '{n} selected document(s)',
+        docsLeg: '{n} مستندًا محددًا',
         legWait: 'في انتظار أن يفرج التحويل السابق…'
       },
       label: {
@@ -2511,7 +2518,7 @@ export default {
         hint: 'تُحدَّد التسميات تلقائيًا من تسلسل المعرفة، وتقتصر على المجال الموضوعي لهذا المستودع.',
         loading: 'Reading labels…',
         preview: '{labeled} من {n} موضوعًا تحمل تسميات هرمية المعرفة.',
-        unlabeled: 'no labels yet',
+        unlabeled: 'لا تسميات بعد',
         adjust: 'اضبط تسميات أي موضوع في Curate — تبقى التسميات مقيدة بمجال الموضوع لهذا المستودع.',
         loadFailed: 'تعذّرت قراءة التسميات الآن.'
       },
@@ -2542,16 +2549,16 @@ export default {
         topics: 'الموضوعات',
         labels: 'التسميات',
         sources: 'المصادر',
-        state: 'Lifecycle state',
-        labelsSet: 'set per topic in Curate',
+        state: 'حالة دورة الحياة',
+        labelsSet: 'تُعيَّن لكل موضوع في Curate',
         browserHint:
           'نظرة أخيرة قبل التسليم: كل ملف أدناه، وmarkdown الخاص به وتسمياته — تمامًا كما سيستشهد به المساعد.',
         noRepo: 'لا يوجد مستودع بعد — تظهر مراجعة الملفات هنا بمجرد وجود مستودع.',
         ritualOutside:
           'طقس المراجعة — الإرسال للمراجعة، وموافقة المراجع، والنشر — يحدث في المحرر ولوحة Studio، لا هنا. افتح المحرر للإنهاء.',
-        versions: 'Versions',
-        logs: 'Action log',
-        rename: 'Rename',
+        versions: 'الإصدارات',
+        logs: 'سجل النشاط',
+        rename: 'إعادة تسمية',
         noVersions: 'لا توجد إصدارات بعد — تُنشأ الإصدارات خلال طقس الموافقة.',
         versionSummary: '{n} إصدارًا · الأحدث v{latest}'
       },
@@ -2561,13 +2568,13 @@ export default {
         nameOk: 'تم تعيين اسم المستودع',
         labelsOk: 'تم تحديد التسميات',
         topicsOk: 'تمت مراجعة الموضوعات',
-        topicsPending: 'No topics yet',
-        topicsServing: 'Topics serving',
+        topicsPending: 'لا موضوعات بعد',
+        topicsServing: 'موضوعات قيد الخدمة',
         noTopics: 'لا توجد موضوعات بعد — ارجع إلى Curate لإنتاجها أو كتابتها.',
         frozen: 'هذا المستودع يخدم — ملخص للقراءة فقط هنا. افتح المحرر لإدارة الإصدارات أو السحب.',
         ritual:
           'التالي: الإرسال للموافقة من لوحة Studio ← يوافق معتمِد ← النشر من لوحة التحكم أو المحرر. يتوقف المعالج هنا عمدًا.',
-        openDashboard: 'Open the Dashboard'
+        openDashboard: 'فتح لوحة التحكم'
       }
     },
     trust: {
@@ -2686,6 +2693,7 @@ export default {
       saveBlocked: 'تم حظر الحفظ: أصلح مشكلات المطابقة أولاً.'
     },
     validation: {
+      healthAria: 'الصحة: {pct} بالمئة، {n} مشكلة',
       frozen: 'المحتوى مجمد عند {v} — معاينة للقراءة فقط. اسحب الإصدار المتاح للخدمة لإجراء تغييرات.',
       none: 'لا يوجد',
       expertHint: 'قم بالتبديل إلى وضع الخبير لرؤية كائن JSON الأولي للتحقق، والتصفية حسب الأهمية، وتجاوز الفحوصات.',
@@ -2704,25 +2712,25 @@ export default {
       piiTitle: 'البيانات الشخصية — راجع كل مفهوم مُعلَّم',
       loading: 'Checking the repository…',
       loadFailed: 'تعذر تحميل تقرير التحقق.',
-      retry: 'Retry',
-      issuesTitle: 'Issues to review',
-      howToFix: 'How to fix',
+      retry: 'إعادة المحاولة',
+      issuesTitle: 'مشكلات للمراجعة',
+      howToFix: 'كيفية الإصلاح',
       indexFailed: 'فشلت إعادة الفهرسة — عدّل الصفحة أو أعد تقسيمها.',
       indexFailedRemedy: 'افتح الصفحة في المحرر واحفظها (الحفظ يعيد الفهرسة)، أو أعد تقسيم المستودع من مصدره.',
       severity: {
-        blocker: 'Blocking',
-        warning: 'Needs review',
-        info: 'Info'
+        blocker: 'معرقل',
+        warning: 'يحتاج إلى مراجعة',
+        info: 'معلومات'
       },
       type: {
-        conformance: 'Frontmatter',
-        orphan: 'Not linked',
-        near_duplicate: 'Near-duplicate',
-        citation: 'Citations',
-        index_failed: 'Index'
+        conformance: 'المادة الأمامية',
+        orphan: 'غير مرتبط',
+        near_duplicate: 'شبه مكرر',
+        citation: 'الاستشهادات',
+        index_failed: 'الفهرسة'
       },
       topicLinks: {
-        title: 'Cross-link topics',
+        title: 'الربط المتقاطع للموضوعات',
         tip: 'يقرأ كل صفحة في هذا المستودع ويكتب روابط بين الصفحات التي تنتمي فعلًا إلى بعضها — المعالجة نفسها التي يجريها معالج الاستيراد. إعادة التشغيل آمنة: الروابط القائمة تُحفظ ولا يُضاف إلا الجديد.',
         progress: 'ربط متقاطع… {done} من {total} دفعة',
         progressIdle: 'ربط متقاطع… جارٍ قراءة المستودع',
@@ -2730,18 +2738,18 @@ export default {
         failed: 'فشل الربط المتقاطع: {msg}'
       },
       action: {
-        suggestLinks: 'Suggest links',
-        accept: 'Accept',
-        dismiss: 'Dismiss',
-        delete: 'Delete',
+        suggestLinks: 'اقتراح الروابط',
+        accept: 'قبول',
+        dismiss: 'تجاهل',
+        delete: 'حذف',
         working: 'Working…',
         wireCreate: 'أنشئ صفحة المصادر واربط {n} صفحة',
         wireExisting: 'اربط {n} صفحة بـ «{hub}»',
-        preview: 'Preview duplicates',
-        hidePreview: 'Hide preview'
+        preview: 'معاينة التكرارات',
+        hidePreview: 'إخفاء المعاينة'
       },
       actionDone: {
-        done: 'Done'
+        done: 'تم'
       },
       suggest: {
         working: 'جارٍ سؤال المساعد عن اقتراحات الروابط…',
@@ -2752,7 +2760,7 @@ export default {
       },
       wireDone: 'تم ربط {n} صفحة بـ «{hub}».',
       wireCreated: 'تم إنشاء صفحة المصادر وربط {n} صفحة.',
-      mergedPages: '{n} pages',
+      mergedPages: '{n} صفحة',
       preview: {
         loading: 'Loading page contents…',
         truncated: 'أول {n} حرفًا — افتح المحرر للصفحة الكاملة.'
@@ -2769,9 +2777,9 @@ export default {
         index_failed:
           'استُوردت الصفحة لكن فشل بناء فهرس البحث الخاص بها — لا يمكن استرجاعها حتى تُعاد الفهرسة. حفظ الصفحة في المحرر يعيد محاولة البناء.'
       },
-      piiRescan: 'Re-scan all pages',
+      piiRescan: 'إعادة فحص كل الصفحات',
       piiRescanWorking: 'Re-scanning every page…',
-      piiRescanDone: 'Re-scanned {n} page(s).',
+      piiRescanDone: 'تمت إعادة فحص {n} صفحة.',
       piiRescanPartial:
         'تمت إعادة فحص {n} صفحة. ما زالت {e} فاشلة — لم يتغير حكم الفحص الخاص بها، لذا يظل النشر محظورًا لها.',
       piiRescanMissing:
@@ -2782,20 +2790,20 @@ export default {
       piiRescanProgressIdle: 'إعادة الفحص… جارٍ قراءة المستودع',
       piiRescanNoKey:
         'قبل الخادم إعادة الفحص لكنه لم يُعِد معرّف تشغيل، لذا لا يمكن متابعة تقدّمه. لم يتم الإبلاغ عن أي شيء.',
-      piiStateError: 'Scan error',
+      piiStateError: 'خطأ في الفحص',
       piiTally: {
-        scanned: '{n} page(s) re-scanned',
+        scanned: 'تمت إعادة فحص {n} صفحة',
         clean: 'clear',
         hit: 'flagged',
-        error: 'scan error',
-        stillBlocking: 'Still blocking'
+        error: 'خطأ في الفحص',
+        stillBlocking: 'ما زالت تحظر'
       }
     },
     pii: {
       panel: 'الكيانات المميزة بنجمة',
       nFlagged: 'تم العثور على {n}',
       rescan: 'إعادة المسح',
-      stateError: 'Scan failed',
+      stateError: 'فشل الفحص',
       errorTitle: 'هذه الصفحة تحظر التسليم.',
       errorBody:
         'فشل فحص PII لهذه الصفحة (لم تكن النتيجة «لا شيء» — بل تعذّرت قراءة النص). يظل النشر محظورًا حتى ينجح فحص. استخدم «إعادة الفحص» أعلاه.',
@@ -2874,103 +2882,103 @@ export default {
       hint: 'اختر المصادر من مستودع المستندات، أو ارفع مستندات جديدة من هذا الكمبيوتر، أو كلاهما.',
       repoSec: 'من مستودع المستندات',
       searchPh: 'Search by name or site…',
-      chipsLabel: 'Filter by origin',
-      chipAll: 'All',
-      chipCrawl: 'Crawls',
-      chipUpload: 'Uploads',
+      chipsLabel: 'تصفية حسب الأصل',
+      chipAll: 'الكل',
+      chipCrawl: 'عمليات الزحف',
+      chipUpload: 'عمليات الرفع',
       noMatches: 'لا شيء يطابق هذا البحث أو التصفية.',
       crawlBadge: 'crawl',
-      crawlTip: 'Crawled from: {url}',
-      total: '{n} document(s)',
+      crawlTip: 'تم الزحف من: {url}',
+      total: '{n} مستند',
       titleSingle: 'اختر المستند المزحوف',
       loading: 'Loading documents…',
-      retry: 'Retry',
+      retry: 'إعادة المحاولة',
       empty: 'لا توجد مستندات في المستودع بعد — ارفع بعضها أدناه.',
-      more: 'Load more',
-      fsSec: 'From this computer',
-      fsPick: '+ Upload files',
+      more: 'تحميل المزيد',
+      fsSec: 'من هذا الكمبيوتر',
+      fsPick: '+ رفع الملفات',
       uploading: 'Uploading…',
-      uploaded: '{n} file(s) uploaded.',
+      uploaded: 'تم رفع {n} ملف.',
       uploadFailed: 'فشل أحد عمليات الرفع — تحقق من الملفات وأعد المحاولة.',
       fsNote: 'تنضم الملفات المرفوعة إلى مستودع المستندات وتُحدد هنا تلقائيًا.',
-      count: 'Selected: {n}',
+      count: 'المحدد: {n}',
       needOne: 'حدد مصدرًا واحدًا على الأقل.',
-      confirm: 'Use {n} source(s)',
-      cancel: 'Cancel',
+      confirm: 'استخدام {n} مصدرًا',
+      cancel: 'إلغاء',
       loadFailed: 'تعذر تحميل قائمة المستندات.',
-      servingBadge: 'serving free-form RAG',
+      servingBadge: 'يخدم RAG الحر',
       servingTip: 'هذا المستند يخدم متن RAG الحر حاليًا — ينجح التحويل، لكن لا يمكن استيعاب هذا المستودع حتى يُسحب.',
-      alreadyBadge: 'already in an OKF repo',
+      alreadyBadge: 'في مستودع OKF بالفعل',
       alreadyTip: 'هذا المستند هو مصدر مستودع OKF آخر بالفعل — سيرفضه التحويل.'
     },
     frontmatter: {
       title: 'وسوم Frontmatter — ما يتناوله هذا المستودع',
       help: 'تصف الوسوم ما يحتويه هذا المستودع وما — بالأهمية نفسها — لا يحتويه (قائمة المحظورات). إنها تحدد أي الاستعلامات تُوجَّه إلى هذا المستودع. انقر «تحديث» لصياغة مسودة من المتن، أو حرّر الرقائق أدناه. يتطلب النشر ≥3 مواضيع + ≥1 محظور.',
-      refresh: 'Refresh suggestions',
+      refresh: 'تحديث الاقتراحات',
       suggesting: 'Curating…',
       suggestEmpty: 'لم يُرجع LLM أي وسوم. حاول مجددًا بعد أن يكبر المتن.',
       suggestCoverage: 'مشتق من {sampled} من أصل {total} مفهومًا، عبر {labels} تسميات من هرمية المعرفة.',
-      suggestFailed: 'Suggest failed.',
+      suggestFailed: 'فشل الاقتراح.',
       suggestedTag: 'اقتراح LLM — أزِله للرفض.',
-      removeTag: 'Remove tag',
+      removeTag: 'إزالة الوسم',
       fieldEmpty: '—',
-      addPlaceholder: 'Add {field}',
-      add: 'Add',
+      addPlaceholder: 'إضافة {field}',
+      add: 'إضافة',
       saving: 'Saving…',
-      save: 'Save tags',
-      saved: 'Saved',
-      error: 'Save failed.',
+      save: 'حفظ الوسوم',
+      saved: 'تم الحفظ',
+      error: 'فشل الحفظ.',
       errorWithStep: 'فشل الحفظ عند الخطوة «{step}» ({code}) — أعد المحاولة.',
       field: {
-        topic: 'Topic',
-        entity: 'Entity',
-        scope: 'Scope',
-        forbidden: 'Forbidden',
-        summary: 'Summary',
-        keyword: 'Keyword'
+        topic: 'الموضوع',
+        entity: 'الكيان',
+        scope: 'النطاق',
+        forbidden: 'المحظور',
+        summary: 'الملخص',
+        keyword: 'الكلمة المفتاحية'
       }
     },
     testingLab: {
-      title: 'Testing Lab',
-      cta: 'Testing Lab',
+      title: 'مختبر الاختبار',
+      cta: 'مختبر الاختبار',
       badge: {
-        present: 'head ready',
-        stale: 'head stale',
-        missing: 'no head'
+        present: 'الرأس جاهز',
+        stale: 'الرأس قديم',
+        missing: 'بدون رأس'
       },
       tab: {
-        head: 'Head',
-        test: 'Test',
-        suites: 'Suites & analytics',
+        head: 'الرأس',
+        test: 'اختبار',
+        suites: 'المجموعات والتحليلات',
         ragas: 'اختبارات RAGAS المرجعية',
         models: 'النماذج'
       },
       head: {
-        dim: 'Dimensions',
-        model: 'Model',
-        version: 'Head version',
-        computedAt: 'Computed',
+        dim: 'الأبعاد',
+        model: 'النموذج',
+        version: 'إصدار الرأس',
+        computedAt: 'تم الحساب',
         staleNote: 'تغيّرت الوسوم بعد بناء هذا الرأس — أعد البناء قبل الوثوق بالاختبارات.',
         missingNote:
           'لا يوجد رأس متجهي بعد. يُبنى عند النشر؛ وإذا كانت خدمة التضمين غير متاحة حينها، فأعد بناءه الآن من الوسوم المخزنة.',
-        rebuild: 'Rebuild head',
+        rebuild: 'إعادة بناء الرأس',
         rebuildTip: 'يعيد تضمين الوسوم المخزنة في متجه رأس جديد. استدعاء تضمين واحد لكل حقل وسم.',
         rebuildBusy: 'جارٍ إعادة البناء — تضمين حقول الوسوم…'
       },
       test: {
         placeholder: 'مثال: إرشادات فحص السرطان',
-        run: 'Run test',
+        run: 'تشغيل الاختبار',
         running: 'جارٍ تضمين الاستعلام وتقييم الرؤوس…',
         adversarial: 'عدائي — هذا الاستعلام لا ينبغي أن يختار هذا المستودع (موضوع محظور/مجاور)',
-        embeddedWith: 'Embedded with',
+        embeddedWith: 'مضمّن بواسطة',
         col: {
-          repo: 'Repository',
-          state: 'State',
-          headScore: 'Head score',
-          rank: 'Rank',
-          claimed: 'Claims query'
+          repo: 'المستودع',
+          state: 'الحالة',
+          headScore: 'نتيجة الرأس',
+          rank: 'الترتيب',
+          claimed: 'يطالب بالاستعلام'
         },
-        provenance: 'Routing provenance',
+        provenance: 'نسب التوجيه',
         empty:
           'اكتب استعلامًا قد يطرحه مستخدم وشغّله — يقيّم المختبر رأس كل مستودع منشور تمامًا كما يفعل مسار التوزيع.',
         pass: 'نجاح — هذا المستودع يفوز بتوجيه الرأس.',
@@ -3029,26 +3037,26 @@ export default {
         progress: '{done} من {total} استعلام ({pct}%)',
         progressStarting: 'Starting the run…',
         phase: {
-          routing: 'Scoring routes',
-          corpus: 'Checking the corpus'
+          routing: 'حساب نقاط التوجيه',
+          corpus: 'فحص المتن'
         }
       },
       suites: {
-        generate: 'Generate test suite',
+        generate: 'توليد مجموعة اختبارات',
         generateTip:
           'يكتب النموذج الاستعلامات على دفعات من 30 لكل فئة — الطلب الكبير (100+) يستغرق دقائق. تظهر المجموعة هنا وفي المجموعات المحفوظة عند الانتهاء.',
         generating: 'جارٍ التوليد على دفعات — الطلبات الكبيرة تستغرق دقائق…',
-        run: 'Run all queries',
+        run: 'تشغيل كل الاستعلامات',
         running: 'جارٍ تشغيل كل استعلامات المجموعة…',
-        current: 'Current suite',
+        current: 'المجموعة الحالية',
         col: {
-          query: 'Query',
-          kind: 'Kind',
-          outcome: 'Outcome',
-          run: 'Run',
-          when: 'When',
-          passRate: 'Pass rate',
-          headVersion: 'Head',
+          query: 'الاستعلام',
+          kind: 'النوع',
+          outcome: 'النتيجة',
+          run: 'تشغيل',
+          when: 'التاريخ والوقت',
+          passRate: 'نسبة النجاح',
+          headVersion: 'الرأس',
           tags: 'الوسوم',
           actions: 'تعديل',
           name: 'الاسم',
@@ -3057,17 +3065,17 @@ export default {
         notEvaluatable: 'غير قابل للتقييم (لا منافسين)',
         pass: 'pass',
         fail: 'fail',
-        passRate: 'Pass rate',
-        positives: 'Positives',
-        negatives: 'Negatives',
+        passRate: 'نسبة النجاح',
+        positives: 'الإيجابيات',
+        negatives: 'السالبات',
         noCompetitors: 'غير متاح — لا توجد رؤوس منافسة بعد',
-        avgMargin: 'Avg margin',
-        steal: '{repo} stole {n} queries',
+        avgMargin: 'متوسط الهامش',
+        steal: 'سرق {repo} {n} استعلامًا',
         addPlaceholder: 'Your own probe query…',
-        add: 'Add to suite',
-        kindPositive: 'should select',
-        kindNegative: 'should NOT select',
-        history: 'Run history',
+        add: 'إضافة إلى المجموعة',
+        kindPositive: 'يجب اختياره',
+        kindNegative: 'يجب عدم اختياره',
+        history: 'سجل التشغيلات',
         noRuns: 'لا توجد تشغيلات بعد — أنشئ مجموعة وشغّلها.',
         explainFailures: 'اشرح الإخفاقات',
         explainBusy: 'جارٍ شرح الإخفاقات — نداء واحد للنموذج لكل سالب فاشل…',
@@ -3113,11 +3121,11 @@ export default {
       error: {
         explain: 'فشل الشرح',
         saveTag: 'تعذر حفظ الوسم المحظور',
-        rebuild: 'Head rebuild failed',
-        test: 'Routing test failed',
-        generate: 'Suite generation failed',
-        run: 'Suite run failed',
-        add: 'Could not add the query',
+        rebuild: 'فشلت إعادة بناء الرأس',
+        test: 'فشل اختبار التوجيه',
+        generate: 'فشل توليد المجموعة',
+        run: 'فشل تشغيل المجموعة',
+        add: 'تعذر إضافة الاستعلام',
         history: 'تعذر تحميل سجل الحفظ',
         revert: 'تعذر التراجع عن الوسوم',
         advisor: 'فشل المستشار',
@@ -3133,7 +3141,7 @@ export default {
           'لا توجد وسوم رأس لهذا المستودع بعد — أنشئ الوسوم من لوحة الواجهة الأمامية (أو استخدم اقتراح الوسوم) ثم أنشئ مجموعة.'
       },
       footer: {
-        unpublish: 'Unpublish to review'
+        unpublish: 'ألغِ النشر للمراجعة'
       },
       publishCard: {
         present:

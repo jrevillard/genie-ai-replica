@@ -1798,6 +1798,8 @@ services:
       # by a previous crash. A doc-repo unreachable longer than
       # attempts × seconds skips the recovery until the NEXT dataprep
       # restart — raise the window when doc-repo boots slower than that.
+      # 0 attempts = recovery DISABLED (rows stay stuck until the next
+      # restart with a fresh setting).
       DATAPREP_RECOVERY_MAX_ATTEMPTS: ${DATAPREP_RECOVERY_MAX_ATTEMPTS:-30}
       DATAPREP_RECOVERY_RETRY_SECONDS: ${DATAPREP_RECOVERY_RETRY_SECONDS:-10}
       # REMOTE-LLM RESILIENCE (David, 2026-09-09): the remote vLLM gateway

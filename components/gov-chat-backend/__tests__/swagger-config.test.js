@@ -2,8 +2,9 @@
 
 require('./setup-env');
 
-// Mock only the infrastructure dependencies — no need to mock swagger-jsdoc
-// or swagger-ui-express because we test the exported config objects directly.
+// Mock only the infrastructure dependencies. swagger-jsdoc is NOT mocked —
+// the spec-building tests below run it for real; swagger-ui-express is
+// untouched because we test the exported config objects directly.
 
 jest.mock(
   '../shared-lib',
@@ -294,6 +295,13 @@ describe('Swagger Configuration', () => {
         // A route the app actually serves, as declared in query-routes.js.
         const annotatedPath = '/api/queries/{queryId}/responsetime';
         expect(spec.paths).toHaveProperty(annotatedPath);
+        // The other half of the join invariant below: every annotated path
+        // starts with /api. An annotation without the prefix (a natural
+        // copy of the router's own mount-relative path) would make
+        // Try-it-out drop /api for that route.
+        for (const specPath of Object.keys(spec.paths)) {
+          expect(specPath).toMatch(/^\/api\//);
+        }
 
         // swagger-ui's Try-it-out executes servers[0].url + path.
         const url = swaggerOptions.definition.servers[0].url;

@@ -154,7 +154,11 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
   // many unrelated files the stack holds.
   const listRes = await request('GET', `/api/files?limit=50&search=${encodeURIComponent(prefix)}`, {
     headers: { Authorization: `Bearer ${token}` },
+  }).catch((e) => {
+    console.warn(`cleanup: file list failed (${e.message}) — nothing deleted`);
+    return null;
   });
+  if (!listRes) return;
   if (listRes.status !== 200) {
     console.warn(`cleanup: file list failed (HTTP ${listRes.status}) — nothing deleted`);
     return;

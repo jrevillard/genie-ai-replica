@@ -12,12 +12,15 @@ const {
 const FIXTURES_DIR = path.join(__dirname, '..', 'fixtures');
 
 test.describe('Document Search', () => {
+  // Same composition as the upload suite: login + navigation + table waits.
+  test.setTimeout(120000);
+
   test.beforeEach(async ({ page }) => {
     await navigateToDocumentManagement(page);
   });
 
-  test.afterAll(async () => {
-    await deleteAllTestDocuments('test-document');
+  test.afterAll(async ({ browser }) => {
+    await deleteAllTestDocuments('test-document', { browser });
   });
 
   test('search by partial file name returns matching documents', async ({ page }) => {
@@ -62,17 +65,24 @@ test.describe('Document Search', () => {
     await uploadFile(page, path.join(FIXTURES_DIR, 'test-document.txt'));
     await waitForDocumentInTable(page, 'test-document.txt');
 
-    const statusFilter = page.locator('.filter-select select');
+    // DsSelect renders the passed class on the native select itself
+    const statusFilter = page.locator('select.filter-select');
     await expect(statusFilter).toBeVisible({ timeout: 5000 });
+    // The filter watcher fires loadDocuments immediately (no debounce) —
+    // wait for that request, then one render tick, before reading rows.
+    // No .catch here: a filter that fires no request IS the defect this
+    // test exists to catch, and the wait must fail loudly on it.
+    const filesResponse = page.waitForResponse((r) => r.url().includes('/api/files'), { timeout: 5000 });
     await statusFilter.selectOption('pending');
-    await page.waitForTimeout(500);
+    await filesResponse;
+    await page.waitForTimeout(250);
 
     const rows = await getDocumentTableRows(page);
-    if (rows.length > 0) {
-      const allPending = rows.every(
-        (r) => r.status.toLowerCase() === 'pending',
-      );
-      expect(allPending).toBeTruthy();
-    }
+    // Earlier tests in this suite uploaded pending test documents, so a
+    // working Pending filter lists them; an empty table means the filter
+    // regressed, and the assertion must fail, not skip.
+    expect(rows.length, 'the Pending filter lists the pending documents').toBeGreaterThanOrEqual(1);
+    const allPending = rows.every((r) => r.status.toLowerCase() === 'pending');
+    expect(allPending, 'every listed document is Pending').toBeTruthy();
   });
 });

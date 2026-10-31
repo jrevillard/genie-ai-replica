@@ -5,6 +5,15 @@ const TEST_USER = {
   password: 'TestPass123!',
 };
 
+// The documents admin surface (upload, delete, lifecycle) is ADMIN_ONLY on
+// the document-repository — a plain user's POST /api/files/upload is 403 by
+// design. The admin test user is provisioned with the `admin` realm role by
+// Phase 0 of docs/e2e-tests/00-clean-start.md.
+const TEST_ADMIN_USER = {
+  username: 'testadmin',
+  password: 'TestAdmin123!',
+};
+
 const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
 // The wait from the submit click to the dashboard: the identity provider
@@ -161,12 +170,13 @@ async function getLastBotMessage(page) {
 }
 
 /**
- * Click the save chat button and fill in the save dialog.
- * Uses chat-header button selector (last button in header) to avoid
- * dependency on i18n-translated title attributes.
+ * Click the save button and fill in the save dialog.
+ * The conversation-header save button is the only save affordance that
+ * renders: ChatComposer's save-chat-btn is gated on a show-save prop no
+ * parent passes, so the header button is what the app ships.
  */
 async function saveChat(page, title) {
-  const button = page.locator('[data-testid="save-chat-btn"]');
+  const button = page.locator('[data-testid="conversation-header-save"]');
   await expect(button).toBeVisible({ timeout: 5000 });
   await button.click();
 
@@ -180,14 +190,31 @@ async function saveChat(page, title) {
   await confirmButton.click();
 }
 
+/**
+ * Wait until the last bot bubble carries the given text. The bubble mounts
+ * as a streaming placeholder the moment the send handler runs, so bubble
+ * presence alone says nothing — this waits for CONTENT. Under the specs'
+ * SSE mock (chunk + done delivered in one body) content-on-screen means
+ * the turn is complete and storable; against a real streamed answer it
+ * would not, so a spec driving a live stream needs its own completion
+ * signal.
+ */
+async function waitForBotMessage(page, text, { timeout = 30000 } = {}) {
+  await expect(page.locator('.chat-message.bot .message-bubble').last()).toContainText(text, {
+    timeout,
+  });
+}
+
 module.exports = {
   loginViaUI,
   navigateToChatbot,
   sendMessage,
   waitForBotResponse,
+  waitForBotMessage,
   getMessages,
   getLastBotMessage,
   saveChat,
   TEST_USER,
+  TEST_ADMIN_USER,
   BASE_URL,
 };

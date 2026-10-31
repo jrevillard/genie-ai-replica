@@ -1,18 +1,23 @@
 const { expect } = require('@playwright/test');
-const { loginViaUI, BASE_URL, TEST_USER } = require('./chatbot');
-const { getAdminToken, request } = require('./auth');
+const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('./chatbot');
+const { getSessionTokenViaUI, request } = require('./auth');
 
 /**
  * Login and navigate to Document Management tab in Admin Dashboard.
+ * The documents surface (upload, delete, lifecycle) is ADMIN_ONLY on the
+ * document-repository, so the session is the admin test user.
  */
 async function navigateToDocumentManagement(page) {
-  await loginViaUI(page);
+  await loginViaUI(page, TEST_ADMIN_USER);
   await page.goto(`${BASE_URL}/admin`, {
     waitUntil: 'networkidle',
     timeout: 30000,
   });
 
-  const docTab = page.getByText('Document Management');
+  // The admin shell renders "Document Management" twice by design: the
+  // sidebar nav link and the DsTabs tab button. Only the sidebar entry is
+  // a link, so scope by role — a bare getByText resolves to both.
+  const docTab = page.getByRole('link', { name: /Document Management/ });
   await expect(docTab).toBeVisible({ timeout: 10000 });
   await docTab.click();
 
@@ -20,16 +25,29 @@ async function navigateToDocumentManagement(page) {
 }
 
 /**
- * Upload a file via the upload dialog.
- * Opens dialog → sets file on input → confirms upload → waits for success.
+ * Open the upload dialog and return it. One copy of the dialog-entry
+ * contract (action-bar button → dialog container), shared by uploadFile
+ * and the rejection spec.
  */
-async function uploadFile(page, filePath) {
-  const uploadBtn = page.locator('.filter-bar').getByText('Upload Files');
+async function openUploadDialog(page) {
+  // The upload button lives in the documents card's action bar
+  // (.card-actions), not in .filter-bar — the filter bar holds only the
+  // search and status controls.
+  const uploadBtn = page.getByRole('button', { name: /Upload Files/i });
   await expect(uploadBtn).toBeVisible({ timeout: 5000 });
   await uploadBtn.click();
 
   const dialog = page.locator('.dialog-container');
   await expect(dialog).toBeVisible({ timeout: 5000 });
+  return dialog;
+}
+
+/**
+ * Upload a file via the upload dialog.
+ * Opens dialog → sets file on input → confirms upload → waits for success.
+ */
+async function uploadFile(page, filePath) {
+  await openUploadDialog(page);
 
   const fileInput = page.locator('.drop-zone input[type="file"]');
   await fileInput.setInputFiles(filePath);
@@ -49,7 +67,10 @@ async function uploadFile(page, filePath) {
  */
 async function waitForDocumentInTable(page, fileName, options = {}) {
   const timeout = options.timeout || 15000;
-  const row = page.locator('tr.document-row').filter({ hasText: fileName });
+  // The specs upload fixed fixture names repeatedly within one run, so a
+  // name can legitimately match more than one row — assert that the file
+  // appears (the first matching row), not that it appears exactly once.
+  const row = page.locator('tr.document-row').filter({ hasText: fileName }).first();
   await expect(row).toBeVisible({ timeout });
   return row;
 }
@@ -58,13 +79,22 @@ async function waitForDocumentInTable(page, fileName, options = {}) {
  * Search documents by typing in the search input and waiting for table refresh.
  */
 async function searchDocuments(page, query) {
-  const searchInput = page.locator('.search-input input');
+  // DsInput renders the passed class on the input element itself — the
+  // search field IS `input.search-input`, not a child of `.search-input`.
+  const searchInput = page.locator('input.search-input');
   await expect(searchInput).toBeVisible({ timeout: 5000 });
   await searchInput.clear();
+  // The table refreshes on a 250 ms debounce plus a fetch: wait for the
+  // request this input triggers, then one render tick before callers read
+  // the rows (getDocumentTableRows reads once, without retrying).
+  const filesResponse = page
+    .waitForResponse((r) => r.url().includes('/api/files'), { timeout: 5000 })
+    .catch(() => null);
   if (query) {
     await searchInput.fill(query);
   }
-  await page.waitForTimeout(500);
+  await filesResponse;
+  await page.waitForTimeout(250);
 }
 
 /**
@@ -100,30 +130,63 @@ async function getDocumentTableRows(page) {
 
 /**
  * Delete all test documents matching a prefix via API.
- * Used for test cleanup.
+ * Used for test cleanup. Direct access grants are disabled on the realm by
+ * design, so the deletes run with a browser-session token (the master admin
+ * token is minted for the wrong issuer — the document-repository validates
+ * realm tokens only). Pass `{ browser }` from the afterAll fixture to reuse
+ * the worker's browser instead of launching a throwaway one.
+ * @param {string} [prefix] - File-name prefix to delete
+ * @param {object} [options]
+ * @param {import('@playwright/test').Browser} [options.browser] - Reuse this
+ *        browser for the cleanup login
  */
-async function deleteAllTestDocuments(prefix = 'test-document') {
-  const token = await getAdminToken();
+async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}) {
+  let token;
+  try {
+    token = await getSessionTokenViaUI({ user: TEST_ADMIN_USER, browser });
+  } catch (e) {
+    console.warn('cleanup: cleanup login failed — skipping document cleanup:', e.message);
+    return;
+  }
 
-  const listRes = await request('GET', '/api/files?limit=100', {
+  // The search param narrows the list to the prefix itself, so one page
+  // (the endpoint validates limit <= 50) covers the test documents however
+  // many unrelated files the stack holds.
+  const listRes = await request('GET', `/api/files?limit=50&search=${encodeURIComponent(prefix)}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
+  if (listRes.status !== 200) {
+    console.warn(`cleanup: file list failed (HTTP ${listRes.status}) — nothing deleted`);
+    return;
+  }
+  const files = listRes.data?.data || [];
+  if (files.length === 50) {
+    console.warn('cleanup: file list hit the 50-entry page cap — coverage may be partial');
+  }
 
-  if (listRes.status !== 200) return;
-
-  const files = listRes.data.files || listRes.data;
   const testFiles = files.filter((f) => f.file_name && f.file_name.startsWith(prefix));
-
+  let failed = 0;
   for (const f of testFiles) {
     const file_id = f.file_id || f._key || f.id;
-    await request('DELETE', `/api/files/${file_id}`, {
+    const res = await request('DELETE', `/api/files/${file_id}`, {
       headers: { Authorization: `Bearer ${token}` },
-    }).catch((e) => console.error('Cleanup: failed to delete', f.file_name, e.message));
+    }).catch((e) => {
+      console.error('Cleanup: failed to delete', f.file_name, e.message);
+      return null;
+    });
+    if (!res || res.status < 200 || res.status >= 300) {
+      failed++;
+      console.error(`Cleanup: delete of ${f.file_name} returned ${res ? res.status : 'no response'}`);
+    }
+  }
+  if (failed > 0) {
+    console.warn(`cleanup: deleted ${testFiles.length - failed} of ${testFiles.length} test documents — leftovers will accumulate`);
   }
 }
 
 module.exports = {
   navigateToDocumentManagement,
+  openUploadDialog,
   uploadFile,
   waitForDocumentInTable,
   searchDocuments,

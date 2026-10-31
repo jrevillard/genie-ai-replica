@@ -3,17 +3,43 @@ const {
   loginViaUI,
   navigateToChatbot,
   sendMessage,
-  waitForBotResponse,
-  getMessages,
+  waitForBotMessage,
   saveChat,
   BASE_URL,
-  TEST_USER,
 } = require('../helpers/chatbot');
-const { getUserToken } = require('../helpers/auth');
+const { getSessionToken, getSessionTokenViaUI, request } = require('../helpers/auth');
 
 const API_TIMEOUT_MS = 30000;
 
+const MOCKED_ANSWER = 'Mocked answer for the history test.';
+
+// The save path only persists conversations carrying a completed turn
+// (isStorableTurn refuses an all-error chat), so every test drives a
+// mocked answer stream — the same posture the conversation invariants
+// suite uses. Deterministic on any stack: no LLM dependency.
+async function mockAnswerStream(page) {
+  const frames = [
+    `data: ${JSON.stringify({ type: 'chunk', content: MOCKED_ANSWER })}`,
+    '',
+    `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`,
+    '',
+  ].join('\n');
+  await page.route('**/queries/stream**', async (route) => {
+    try {
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: frames });
+    } catch {
+      /* the context closed before the fulfillment */
+    }
+  });
+}
+
 test.describe('Conversation history persistence', () => {
+  // The steps compose: a mocked answer on a slow stack, a reload and two
+  // API fetches each carry their own budgets — well past the 60 s default
+  // if several run long. The suite's own timeout keeps a failure attached
+  // to its step instead of dying on the generic 60 s wall.
+  test.setTimeout(120000);
+
   let page;
   let context;
   const createdConversationIds = [];
@@ -27,28 +53,61 @@ test.describe('Conversation history persistence', () => {
 
     await loginViaUI(page);
     await navigateToChatbot(page);
+    await mockAnswerStream(page);
   });
 
   test.afterEach(async () => {
     await context?.close();
   });
 
-  test.afterAll(async () => {
-    const token = await getUserToken(TEST_USER.username, TEST_USER.password).catch(() => null);
-    if (!token) {
-      console.warn('cleanup: failed to get token, skipping conversation deletion');
-      return;
+  // Direct access grants are disabled on the realm by design, so the
+  // cleanup session logs in through the browser like the tests do and
+  // reuses that session's token for the API deletes. The sweep is by the
+  // suite's title prefix, not just the ids captured in-flight — a test
+  // that failed between its save and its bookkeeping must not leak the
+  // conversation it already persisted.
+  test.afterAll(async ({ browser }) => {
+    const token = await getSessionTokenViaUI({ browser }).catch((e) => {
+      console.warn('cleanup: cleanup login failed — skipping conversation cleanup:', e.message);
+      return null;
+    });
+    if (!token) return;
+
+    let targets = [];
+    // searchTerm narrows the list to the suite's own titles (the route's
+    // default page is 20 — old leftovers would rotate off it unfiltered).
+    const listRes = await request('GET', `${BASE_URL}/api/chat/conversations?searchTerm=E2E&limit=50`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).catch((e) => {
+      console.error(`cleanup: conversation list failed: ${e.message}`);
+      return null;
+    });
+    if (listRes && listRes.status === 200) {
+      const list = listRes.data.conversations || listRes.data;
+      targets = (Array.isArray(list) ? list : [])
+        .filter((c) => c.title?.startsWith('E2E '))
+        .map((c) => c._key || c.id);
+    } else {
+      targets = [...createdConversationIds];
     }
 
-    const { request } = require('../helpers/auth');
-    for (const convId of createdConversationIds) {
+    let failed = 0;
+    for (const convId of targets) {
       try {
-        await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
+        const res = await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        if (res.status < 200 || res.status >= 300) {
+          failed++;
+          console.error(`cleanup: delete of conversation ${convId} returned ${res.status}`);
+        }
       } catch (err) {
+        failed++;
         console.error(`cleanup: failed to delete conversation ${convId}: ${err.message}`);
       }
+    }
+    if (failed > 0) {
+      console.warn(`cleanup: deleted ${targets.length - failed} of ${targets.length} conversations — leftovers will accumulate`);
     }
   });
 
@@ -56,13 +115,9 @@ test.describe('Conversation history persistence', () => {
     const userText = 'Tell me about healthcare services';
     const chatTitle = `E2E Test Chat ${Date.now()}`;
 
-    // Send a message and wait for response
+    // Send a message and wait for the mocked answer to render
     await sendMessage(page, userText);
-    await waitForBotResponse(page, { timeout: 120000 });
-
-    // Capture messages before save
-    const messagesBefore = await getMessages(page);
-    expect(messagesBefore.length).toBeGreaterThanOrEqual(2);
+    await waitForBotMessage(page, MOCKED_ANSWER);
 
     // Save the conversation
     await saveChat(page, chatTitle);
@@ -76,8 +131,8 @@ test.describe('Conversation history persistence', () => {
     // Navigate to chatbot to load saved chats
     await navigateToChatbot(page);
 
-    // Verify via the chat history API
-    const token = await getUserToken(TEST_USER.username, TEST_USER.password);
+    // Verify via the chat history API, with the token the page session holds
+    const token = await getSessionToken(page);
     const conversationsResponse = await page.evaluate(async (args) => {
       const res = await fetch(`${args.baseUrl}/api/chat/conversations`, {
         headers: { Authorization: `Bearer ${args.token}` },
@@ -104,7 +159,7 @@ test.describe('Conversation history persistence', () => {
   });
 
   test('list conversations endpoint returns conversations for authenticated user', async () => {
-    const token = await getUserToken(TEST_USER.username, TEST_USER.password);
+    const token = await getSessionToken(page);
 
     const response = await page.evaluate(async (args) => {
       const res = await fetch(`${args.baseUrl}/api/chat/conversations`, {
@@ -125,20 +180,16 @@ test.describe('Conversation history persistence', () => {
     const userText = 'What education programs exist?';
     const chatTitle = `E2E Order Test ${Date.now()}`;
 
-    // Send a message and wait for response
+    // Send a message and wait for the mocked answer to render
     await sendMessage(page, userText);
-    await waitForBotResponse(page, { timeout: 120000 });
-
-    // Capture message order before save
-    const messagesBefore = await getMessages(page);
-    const sendersBefore = messagesBefore.map((m) => m.sender);
+    await waitForBotMessage(page, MOCKED_ANSWER);
 
     // Save the conversation
     await saveChat(page, chatTitle);
     await expect(page.locator('#chatTitle')).toBeHidden({ timeout: 10000 });
 
-    // Get the saved conversation via API
-    const token = await getUserToken(TEST_USER.username, TEST_USER.password);
+    // Get the saved conversation via API, with the page session's token
+    const token = await getSessionToken(page);
     const convResponse = await page.evaluate(async (args) => {
       const res = await fetch(`${args.baseUrl}/api/chat/conversations`, {
         headers: { Authorization: `Bearer ${args.token}` },
@@ -173,15 +224,20 @@ test.describe('Conversation history persistence', () => {
     const messages = fullConv.messages || fullConv.data?.messages || [];
     expect(messages.length).toBeGreaterThanOrEqual(1);
 
-    // Verify order: user message comes before bot message (when both exist)
+    // Verify order: the turn was complete on screen before the save (the
+    // mocked answer text was asserted), so both sides must have persisted —
+    // a one-sided save is exactly the defect this spec exists to catch.
+    expect(messages.length, 'both turns persisted').toBeGreaterThanOrEqual(2);
     const firstUserIdx = messages.findIndex(
       (m) => m.role === 'user' || m.sender === 'user',
     );
     const firstBotIdx = messages.findIndex(
-      (m) => m.role === 'assistant' || m.sender === 'bot',
+      (m) => m.role === 'assistant' || m.sender === 'assistant' || m.sender === 'bot',
     );
-    if (firstUserIdx !== -1 && firstBotIdx !== -1) {
-      expect(firstUserIdx).toBeLessThan(firstBotIdx);
-    }
+    expect(firstUserIdx, 'the user turn persisted').toBeGreaterThanOrEqual(0);
+    // The API persists the assistant turn with sender 'assistant'; the UI
+    // spells the same side 'bot' — match both.
+    expect(firstBotIdx, 'the bot turn persisted').toBeGreaterThanOrEqual(0);
+    expect(firstUserIdx).toBeLessThan(firstBotIdx);
   });
 });

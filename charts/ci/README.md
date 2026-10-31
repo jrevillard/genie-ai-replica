@@ -24,7 +24,7 @@ Pinned K8s version: **1.33.0** — solely via the kind node image (`kindest/node
 
 `https://gpu.ci-render.local:444` — one value, in every job's render
 (`chart:lint`, `chart:parity`, `chart:crd-validate`) and in the gate
-scripts' own renders (`scripts/clearable-blocks-check.py`). The external
+scripts' own renders (`scripts/ci/clearable-blocks-check.py`). The external
 GPU mode refuses to render without a node host, so every surface that
 enables the OPEA tier names one; when two jobs named two different hosts,
 their "prod" renders stopped being the same surface, and a defect that

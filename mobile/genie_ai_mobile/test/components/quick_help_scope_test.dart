@@ -1112,10 +1112,12 @@ void main() {
       () {
         // The re-title lookup is ID-keyed (quickHelpButtonById): an
         // id-less card's identity is its title, and no button's ID equals
-        // it — the caller keeps the title the card was pressed under, the
-        // same fallback the web's own re-title takes (b.id === item.id
-        // misses the same way). A lookup that matched on IDENTITY instead
-        // would re-title the bar from another card on every locale switch.
+        // it — the caller keeps the title the card was pressed under.
+        // (The web's own re-title does NOT keep it: b.id === item.id
+        // matches an undefined id against the FIRST id-less button and
+        // re-titles from that — a web-side slip the mobile does not
+        // copy.) A lookup that matched on IDENTITY instead would re-title
+        // the bar from another card on every locale switch.
         final buttons = [
           {'id': 'births', 'resolvedTitle': 'Naissances'},
           {'resolvedTitle': 'Registry Card'},

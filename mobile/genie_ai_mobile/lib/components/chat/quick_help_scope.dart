@@ -291,16 +291,18 @@ String? quickHelpTitleOf(Map<String, dynamic>? button) {
 /// The title of the ACTIVE Quick Help scope, re-resolved from the button
 /// list — the mobile twin of the web's quickHelpTitleFor.
 ///
-/// The lookup is ID-keyed (quickHelpButtonById), like the web's own
-/// re-title (`b.id === item.id`): only an id'd button's scope follows a
-/// locale switch, because a locale switch re-resolves the buttons and the
-/// bar must read the new language's title for the SAME button. An active
-/// identity the lookup cannot match — a TITLE (an id-less card's
-/// identity, see quickHelpButtonIdentity), an id the config no longer
-/// declares, or null/EMPTY (empty declares nothing, the file's own scope
-/// rule, and a sidebar scope has no id at all) — resolves to null so the
-/// caller keeps the title it already has: for a title identity that is
-/// the title it was pressed under, the same fallback the web takes.
+/// The lookup is ID-keyed (quickHelpButtonById): only an id'd button's
+/// scope follows a locale switch, because a locale switch re-resolves the
+/// buttons and the bar must read the new language's title for the SAME
+/// button. An active identity the lookup cannot match — a TITLE (an
+/// id-less card's identity, see quickHelpButtonIdentity), an id the
+/// config no longer declares, or null/EMPTY (empty declares nothing, the
+/// file's own scope rule, and a sidebar scope has no id at all) —
+/// resolves to null so the caller keeps the title it already has: for a
+/// title identity that is the title it was pressed under. (The web's own
+/// re-title does NOT keep it: its `b.id === item.id` matches an undefined
+/// id against the FIRST id-less button and re-titles from that — a
+/// web-side slip the mobile does not copy.)
 String? activeQuickHelpTitleFor(
   List<Map<String, dynamic>> buttons,
   String? activeQuickHelpIdentity,

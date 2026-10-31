@@ -59,6 +59,11 @@ void main() {
     // The locale is a singleton: a test that switched it must not name
     // the next test's mount.
     I18nService().changeLanguage('en');
+    // The asset mock must not outlive its test: a later test in this
+    // file would silently read the mutated config instead of the real
+    // bundle.
+    TestWidgetsFlutterBinding.instance.defaultBinaryMessenger
+        .setMockMessageHandler('flutter/assets', null);
   });
 
   // The REAL bundled configuration (read OUTSIDE the widget test's fake
@@ -90,7 +95,8 @@ void main() {
     tester.binding.defaultBinaryMessenger.setMockMessageHandler(
       'flutter/assets',
       (ByteData? message) async {
-        final key = utf8.decode(message!.buffer.asUint8List());
+        if (message == null) return null;
+        final key = utf8.decode(message.buffer.asUint8List());
         if (key != 'assets/config/genie-ai-config.json') return null;
         return ByteData.sublistView(configBytes);
       },

@@ -134,7 +134,7 @@ KeycloakConfig getConfig() {
     throw FlavorConfigError(
       'The "$flavor" configuration enables allowInsecureConnections and '
       'cannot be built into a release artifact. Build a deployment flavor '
-      'instead: --flavor <name> --dart-define=FLAVOR=<name> ($_knownFlavors).',
+      'instead: --flavor <name> --dart-define=FLAVOR=<name>.',
     );
   }
   return config;

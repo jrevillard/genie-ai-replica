@@ -68,9 +68,10 @@ variables:
   #   site/content/en/docs/mobile/mobile-deployment-guide.md (§ Build) — and
   #   getConfig() fails at startup in a release or profile build made without
   #   the define (#1099), so the missing-define fallback cannot reach a
-  #   release artifact any more. (An explicit FLAVOR=dev release still runs
-  #   devConfig — a developer's --release run against the local stack — and
-  #   build-release.ps1 refuses dev/e2e on the artifact path.)
+  #   release artifact any more. An explicit FLAVOR=dev release fails at
+  #   startup too — getConfig() refuses any configuration with
+  #   allowInsecureConnections on in a release artifact (#1099), and
+  #   build-release.ps1 refuses dev/e2e on the artifact path as well.
   # - genie-ai-overlay/contracts/: real-comps contract tests (test code, NOT shipped in image)
   # - **/scripts/**: dev/migration scripts NOT shipped in container. We list specific
   #   sub-patterns (rather than the broad **/scripts/) so the production entrypoint

@@ -782,14 +782,9 @@ describe('File Routes Integration', () => {
       // "No write at all" is the property — a differently-shaped failure write
       // would slip past the weaker form.
       expect(metadataService.updateMetadata).not.toHaveBeenCalled();
-      // The duplicate attempt is recorded, so the operator reading the log
-      // sees why nothing happened — and sees no false ERROR.
-      expect(fileService.addIngestionLog).toHaveBeenCalledWith(
-        'file-abc123',
-        expect.objectContaining({ level: 'INFO' })
-      );
       // And no ERROR line in the service log: a duplicate request is not a
-      // failure, and a stack-bearing ERROR says it was.
+      // failure, and a stack-bearing ERROR says it was. (The level of the
+      // ingestion-log row is owned by the controller's own unit test.)
       const { logger } = require('../../../shared-lib');
       expect(logger.error).not.toHaveBeenCalled();
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('file-abc123'));

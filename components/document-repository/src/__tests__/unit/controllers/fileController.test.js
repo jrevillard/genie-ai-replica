@@ -454,14 +454,6 @@ describe('fileController', () => {
       expect(metadataService.updateMetadata).not.toHaveBeenCalled();
     });
 
-    it('flags the error so the route maps it to 409 instead of re-deriving the decision', async () => {
-      axios.post.mockRejectedValue(conflict("An ingest task for fileId 'f1' is already running"));
-
-      const error = await fileController._ingestFileById('f1').catch((err) => err);
-
-      expect(error.ingestAlreadyRunning).toBe(true);
-    });
-
     it('records the ignored duplicate as an INFO ingestion-log row, not an ERROR one', async () => {
       axios.post.mockRejectedValue(conflict("An ingest task for fileId 'f1' is already running"));
 

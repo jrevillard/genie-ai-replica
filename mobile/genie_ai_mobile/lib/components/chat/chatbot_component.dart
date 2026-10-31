@@ -991,6 +991,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     List<dynamic>? sources;
     double? confidence;
     bool? isGrounded;
+    // What the query-translation step fed the embedder for this answer (the
+    // non-streaming path keeps the whole metadata map; this path rebuilds
+    // it, so the field is carried here for the two to agree).
+    String? streamQueryTranslationStatus;
     // Whether the backend could not translate the answer into the requested
     // language. The answer that arrives is then the English original, and the
     // user has to be told — an English answer presented as a translated one
@@ -1062,10 +1066,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     :final sourceDocuments,
                     :final confidenceScore,
                     isGrounded: final grounded,
+                    :final queryTranslationStatus,
                   ):
                     sources = sourceDocuments;
                     confidence = confidenceScore;
                     isGrounded = grounded;
+                    streamQueryTranslationStatus = queryTranslationStatus;
                   case SseTranslationEvent(:final content):
                     accumulatedContent = content;
                     setState(() {
@@ -1093,10 +1099,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     :final sourceDocuments,
                     :final confidenceScore,
                     isGrounded: final grounded,
+                    :final queryTranslationStatus,
                   ):
                     sources = sourceDocuments;
                     confidence = confidenceScore;
                     isGrounded = grounded;
+                    streamQueryTranslationStatus = queryTranslationStatus;
                   case SseTranslationEvent(:final content):
                     accumulatedContent = content;
                   case SseErrorEvent(:final message):
@@ -1119,6 +1127,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     'sources': sources,
                     'confidence_score': confidence,
                     'is_grounded': isGrounded,
+                    'query_translation_status': streamQueryTranslationStatus,
                   }..removeWhere((key, value) => value == null);
                 });
               }

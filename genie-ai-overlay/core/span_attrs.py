@@ -71,14 +71,19 @@ MAX_STRING_LEN = 96
 
 # The closed vocabulary of ``rag.translation.query_status`` — what the history
 # translator handed the embedder on a chat turn. The one home the emitting code
-# unpacks its values from; the operator runbook and the API reference document
+# imports its values from; the operator runbook and the API reference document
 # the same values in prose.
+QUERY_TRANSLATION_TRANSLATED = "translated"
+QUERY_TRANSLATION_PASSTHROUGH_ENGLISH = "passthrough_english"
+QUERY_TRANSLATION_PASSTHROUGH_UNKNOWN = "passthrough_unknown_language"
+QUERY_TRANSLATION_FALLBACK_TIMEOUT = "fallback_timeout"
+QUERY_TRANSLATION_FALLBACK_ERROR = "fallback_error"
 QUERY_TRANSLATION_STATUSES = (
-    "translated",
-    "passthrough_english",
-    "passthrough_unknown_language",
-    "fallback_timeout",
-    "fallback_error",
+    QUERY_TRANSLATION_TRANSLATED,
+    QUERY_TRANSLATION_PASSTHROUGH_ENGLISH,
+    QUERY_TRANSLATION_PASSTHROUGH_UNKNOWN,
+    QUERY_TRANSLATION_FALLBACK_TIMEOUT,
+    QUERY_TRANSLATION_FALLBACK_ERROR,
 )
 
 # Recorded when a join could not resolve. NOT "unknown" and NOT "" — both would

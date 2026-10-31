@@ -806,9 +806,14 @@ class TestOwnedSpanCoverage:
         non-key constant means the resolver has a second special case nobody
         wrote down, and a reader cannot tell which shape it will refuse next.
         """
+        from core.span_attrs import QUERY_TRANSLATION_STATUSES
+
         declared = _span_attrs_string_constants()
         not_keys = {value for value in declared.values() if value not in _REGISTERED_NAMES}
-        assert not_keys == {UNRESOLVED}, (
+        # The query-translation status values are VALUES (written into
+        # rag.translation.query_status), not keys: the vocabulary tuple is
+        # imported here so the pin and the vocabulary cannot drift apart.
+        assert not_keys == {UNRESOLVED, *QUERY_TRANSLATION_STATUSES}, (
             f"span_attrs string constants that are not registered attribute names: "
             f"{sorted(not_keys)}. Each is invisible to the key derivation, so a "
             "constant written as a key carries nothing the sweep can check."

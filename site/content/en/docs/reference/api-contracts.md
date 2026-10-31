@@ -383,6 +383,12 @@ that the deployment can answer in). `refused` and `failed` both leave the
 English answer in place, so a client has to be able to tell an untranslated
 answer from a translated one — the status is that signal.
 
+The same metadata also carries `query_translation_status` — what the
+QUERY-translation step fed the embedder (`translated`,
+`passthrough_english`, `passthrough_unknown_language`, `fallback_timeout`
+or `fallback_error`). It describes the retrieval query, not the answer;
+see the streaming `metadata` event table below for the full value list.
+
 **`GET /api/queries`** is paginated, scoped to the JWT user. Query params:
 
 | Param                   | Type     | Default | Notes                                         |

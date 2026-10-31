@@ -2433,18 +2433,52 @@ class TestQueryTranslationStatus:
         assert text == "what is X?"
         assert status == "translated"
 
+    @pytest.mark.asyncio
+    async def test_an_empty_single_message_is_refused_not_translated(self):
+        """A blank history sent to the model would only harvest its junk
+        reply as the embedded query (the chunk translator's empty check
+        passes for a whitespace input): the empty-history refusal applies
+        to the string shape too."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="JUNK-FROM-EMPTY-PROMPT")
+        with self._translation_patches(mock_client):
+            text, status = await svc._get_translated_history_string("  ", source_lang_code="es")
+        assert text == "  "  # nothing to translate: the blank comes back
+        assert status == "fallback_error"
+        mock_client.post.assert_not_called()
+
     def test_a_window_too_tight_refuses_the_output_cap(self):
         """The TranslateGemma output-cap guard refuses a window too tight to
-        translate into (cap below the input estimate). The history-string
-        caller maps that refusal to `fallback_error`; the budget filter
-        upstream makes the refusal unreachable through a normal call (its
-        math guarantees cap >= estimate), so the helper is asserted directly
-        on its window seam."""
+        translate into (cap below the input estimate): the helper returns
+        None and the history-string caller maps that refusal to
+        `fallback_error`."""
         svc = create_chatqna_service()
         with patch("chatqna.genieai_chatqna._get_translation_window", return_value=256):
             assert svc._translation_output_cap("A" * 3000) is None
         with patch("chatqna.genieai_chatqna._get_translation_window", return_value=6144):
             assert svc._translation_output_cap("A" * 3000) == 1500
+
+    @pytest.mark.asyncio
+    async def test_a_history_past_the_output_base_cap_is_refused_and_named(self):
+        """The output cap is bounded at 4096 tokens while the prompt estimate
+        grows with the input, so a history past ~12k chars is refused even
+        inside the char budget (a discovered window raises the char budget
+        far past the cap ceiling). The refusal is live, not theoretical: the
+        history goes out untranslated and the status names it."""
+        svc = create_chatqna_service()
+        history = [{"role": "user", "content": "A" * 13000}]
+        models_resp = MagicMock()
+        models_resp.json.return_value = {"data": [{"id": "gemma", "max_model_len": 65536}]}
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=self._mock_client()),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=True),
+            patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://localhost/v1/completions"),
+            patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
+            patch("httpx.get", return_value=models_resp),
+        ):
+            text, status = await svc._get_translated_history_string(history)
+        assert text.startswith("USER: AAAA")  # untranslated
+        assert status == "fallback_error"
 
     @pytest.mark.asyncio
     async def test_a_map_without_english_reports_fallback_error(self):
@@ -4135,6 +4169,19 @@ async def test_a_crashed_detection_reports_unknown_not_english():
     with patch("chatqna.genieai_chatqna.detect", side_effect=RuntimeError("detector exploded")):
         payload = await _full_flow_payload(
             svc, stream=False, language=None, messages=[{"role": "user", "content": "what is X?"}]
+        )
+    assert payload["metadata"]["query_translation_status"] == "passthrough_unknown_language"
+
+
+@pytest.mark.asyncio
+async def test_a_whitespace_declared_language_is_no_establishment():
+    """A blank language value resolves to 'no language asked for'; if the
+    detection then crashes, the fabricated English fallback must not be
+    read as an established English declaration."""
+    svc = create_chatqna_service()
+    with patch("chatqna.genieai_chatqna.detect", side_effect=RuntimeError("detector exploded")):
+        payload = await _full_flow_payload(
+            svc, stream=False, language="  ", messages=[{"role": "user", "content": "what is X?"}]
         )
     assert payload["metadata"]["query_translation_status"] == "passthrough_unknown_language"
 

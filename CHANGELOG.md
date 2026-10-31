@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A mobile release build of the `dev` or `e2e` flavor now fails at startup
+  instead of shipping with the trust-all TLS client armed.** Both flavors set
+  `allowInsecureConnections` for local development; a release build resolving
+  one of them was either broken (localhost endpoints) or — with `DEV_SERVER`
+  repointed — a working app that accepts any certificate. In release mode
+  `getConfig()` now refuses any configuration with the flag on (profile builds
+  are unaffected: profiling a dev build never leaves the developer's machine).
+  `build-release.ps1` already refused these flavors; the app itself now
+  enforces it, on both platforms. (#1099, !655)
+
 - **The generated mobile OpenAPI client matches the backend API again.** The Dart client under `mobile/genie_ai_mobile/openapi_client/` had not been regenerated since the `/api/service-categories/categories` response changed (children are now `{ name, nameEN }` objects and the category carries `nameEN`), so the committed artifact described a contract the backend no longer serves. Regenerated from the current spec: the category-tree endpoints are typed (`CategoryTree`) and the chat/analytics/query endpoints gained the models the spec already documented. Two generator-path defects fixed along the way — the generation script now builds the same spec the backend serves (the shared component schemas moved to `components/gov-chat-backend/swagger-schemas.js`, consumed by both the runtime and the script; previously the schemas only existed in `index.js`, so every `$ref` to them dangled and the generator silently dropped those models), and the script patches a dart-generator emission bug that produced non-compiling Dart for an array-of-binary multipart property (verified on generator 7.22.0 and 7.26.0). The regeneration also corrected two backend swagger annotations that had lost their `/api` prefix (`/queries`, `/queries/stream`) — the old artifact had hardcoded the correct `/api/queries` paths, so the fresh one would have pointed those two chat endpoints at 404s. At runtime nothing changed: the category tree is consumed through a raw `jsonDecode`, never through the generated models, and the app's generated-model call sites keep their names except one — the query-submission context is now the shared `QueryContext` model (the inline `ApiQueriesPostRequestContext` the old artifact invented is gone), a one-line migration in `chatbot_component.dart`. (#1122, !642)
 
 - **The web analytics service no longer offers two endpoints the backend never served.** `recordQuery` (`POST /api/analytics/query`) and `recordFeedback` (`POST /api/analytics/feedback`) in `components/gov-chat-frontend/src/services/analyticsService.js` called routes that do not exist; nothing in the app used them apart from their own unit tests, and both are removed. (#1122, !642)

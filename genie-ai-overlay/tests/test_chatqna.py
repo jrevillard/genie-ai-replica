@@ -2085,7 +2085,7 @@ class TestTranslationHelpers:
     @pytest.mark.asyncio
     async def test_small_window_still_translates_tiny_history(self):
         """A tiny history on a small (1024-token) window fits comfortably: the
-        measured cap is the room left (1024 − 109 − 64 = 851) bounded by what
+        measured cap is the room left (1024 − 109 − 128 = 787) bounded by what
         the translation needs (4 × 109 + 256 = 692), and the translation RUNS."""
         svc = create_chatqna_service()
         history = [
@@ -2727,7 +2727,7 @@ class TestQueryTranslationStatus:
         # The completions payload goes to the completions endpoint: vLLM
         # cannot route the TranslateGemma template through chat completions.
         assert mock_client.post.call_args.args[0] == "http://completions.test/v1/completions"
-        # The measured prompt (4335 tokens) leaves 65536 − 4335 − 64 = 61137
+        # The measured prompt (4335 tokens) leaves 65536 − 4335 − 128 = 61073
         # tokens of room; the translation needs 4 × 4335 + 256 = 17596, so
         # the need is the binding bound.
         assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 17596
@@ -2798,7 +2798,7 @@ class TestQueryTranslationStatus:
         assert status == "translated"
         # The chat payload goes to the chat-completions endpoint.
         assert mock_client.post.call_args.args[0] == "http://chat-llm.test/v1/chat/completions"
-        # The measured prompt (4335 tokens) leaves 65536 − 4335 − 64 = 61137
+        # The measured prompt (4335 tokens) leaves 65536 − 4335 − 128 = 61073
         # tokens of room; the translation needs 4 × 4335 + 256 = 17596.
         assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 17596
         assert text == "USER: AAAA"

@@ -730,7 +730,7 @@ async def _translate_prompt(prompt: str, translategemma: bool, model_id: str | N
             f"Payload for translation service ({'TranslateGemma' if translategemma else 'generic'}): {payload}"
         )
     try:
-        async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:
+        async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT, verify=endpoint_verify()) as client:
             response = await client.post(
                 url,
                 json=payload,
@@ -747,7 +747,6 @@ async def _translate_prompt(prompt: str, translategemma: bool, model_id: str | N
         from dataprep.genieai_dataprep_arangodb import _is_vllm_input_overflow
 
         if _is_vllm_input_overflow(e):
-            logger.warning(f"Translation context overflow: {type(e).__name__}: {str(e)[:200]}")
             raise TranslationInputTooLongError(
                 f"translation request exceeds the translation window: {type(e).__name__}: {str(e)[:200]}"
             ) from e
@@ -2262,10 +2261,12 @@ async def _count_translation_tokens(count_body: dict) -> int | None:
     if _TRANSLATION_COUNT_UNAVAILABLE:
         # The server could not count once: the gap is permanent.
         return None
-    url = f"{_TRANSLATION_DISCOVERY_ENDPOINT}/tokenize"
-    headers = endpoint_auth_headers()
+    # The count presents the SAME credentials the translation request it
+    # sizes presents (Bearer OPENAI_API_KEY): same server, same auth.
+    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
     verify = endpoint_verify()
     body = dict(count_body)
+    url = f"{_TRANSLATION_DISCOVERY_ENDPOINT}/tokenize"
     try:
         with with_span(
             "chatqna.translation_count_tokens",

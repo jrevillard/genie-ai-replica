@@ -719,6 +719,8 @@ router.patch('/:fileId', authorizeRole(DOCUMENT_LIFECYCLE), fileController.updat
  *         description: Forbidden - Admin role required
  *       '404':
  *         description: File not found
+ *       '409':
+ *         description: Conflict - an ingest for this file is already running
  */
 // okf-service allowed (Story 2.9.6/2.9.4): the OKF orchestrator's worker owns
 // draining per-concept Pending files — it authenticates as the okf-server

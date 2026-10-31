@@ -216,6 +216,16 @@ const scheduleCrawlSchema = Joi.object({
   }).optional()
 });
 
+// The reason a dataprep call failed, as dataprep reported it: the response
+// body's `detail` (or `message`), falling back to the error's own message.
+// ONE extraction for every caller — three copies of this chain had already
+// drifted apart, and a drift here blinds the ingestion log exactly when it
+// matters.
+function errorDetail(err) {
+  const data = err && err.response && err.response.data;
+  return String((data && (data.detail || data.message)) || (err && err.message) || '');
+}
+
 // Dataprep's ingest IDEMPOTENCY GUARD answers HTTP 409 when an ingest task
 // for the SAME fileId is already in flight (genieai_dataprep_microservice.py).
 // That is a SUCCESS signal for the running ingest — the live task owns the
@@ -237,8 +247,7 @@ const scheduleCrawlSchema = Joi.object({
 function isIngestAlreadyRunning(err, fileId) {
   const response = err && err.response;
   if (!response || response.status !== 409) return false;
-  const data = response.data || {};
-  const detail = String(data.detail || data.message || '');
+  const detail = errorDetail(err);
   const named = detail.match(/fileId\s+'?([^'\s]+)'?/);
   if (!named || !fileId || named[1] !== String(fileId)) return false;
   return /already running/i.test(detail);
@@ -1264,16 +1273,18 @@ class FileController {
       // whatever dataprep answers — the failure path is the honest report.
       const busy = err && err.response && err.response.status === 429;
       const alreadyRunning = !clearedPreviously && isIngestAlreadyRunning(err, file.file_id);
-      if (!busy && !alreadyRunning) {
-        const detail =
-          (err.response && err.response.data && (err.response.data.detail || err.response.data.message)) || err.message;
-        await this._markIngestFailure(fileId, file, `dataprep call failed: ${detail}`);
-      } else if (alreadyRunning) {
-        await this._logIngestAlreadyRunning(fileId, err);
+      if (alreadyRunning) {
+        await this._writeIngestionLog(
+          fileId,
+          'INFO',
+          `Duplicate ingest request ignored (dataprep 409): ${errorDetail(err)}`
+        );
         // The route maps this error to 409. It reads the flag rather than
         // re-deriving the decision from its own copy of the id, so the two
         // can never disagree about one event.
         err.ingestAlreadyRunning = true;
+      } else if (!busy) {
+        await this._markIngestFailure(fileId, file, `dataprep call failed: ${errorDetail(err)}`);
       }
       throw err;
     }
@@ -1312,30 +1323,20 @@ class FileController {
     } catch (metaErr) {
       logger.error(`Failed to mark file ${fileId} as Ingestion Error: ${metaErr.message}`);
     }
-    try {
-      await fileService.addIngestionLog(fileId, {
-        level: 'ERROR',
-        stage: 'dataprep',
-        message: String(detail).slice(0, 500)
-      });
-    } catch (logErr) {
-      logger.error(`Failed to write ingestion log for ${fileId}: ${logErr.message}`);
-    }
+    await this._writeIngestionLog(fileId, 'ERROR', detail);
     logger.error(`Ingest failed for ${fileId}: ${detail}`);
   }
 
-  /** Record an ignored duplicate ingest request (dataprep 409). The file status is NOT touched. */
-  async _logIngestAlreadyRunning(fileId, err) {
-    const detail =
-      (err && err.response && err.response.data && (err.response.data.detail || err.response.data.message)) || '';
+  /** Write one ingestion-log row. A log-write failure never masks the ingest outcome. */
+  async _writeIngestionLog(fileId, level, message) {
     try {
       await fileService.addIngestionLog(fileId, {
-        level: 'INFO',
+        level,
         stage: 'dataprep',
-        message: `Duplicate ingest request ignored (dataprep 409): ${detail}`.slice(0, 500)
+        message: String(message).slice(0, 500)
       });
     } catch (logErr) {
-      logger.warn(`Failed to write ingestion log for ${fileId}: ${logErr.message}`);
+      logger.error(`Failed to write ingestion log for ${fileId}: ${logErr.message}`);
     }
   }
 
@@ -1439,6 +1440,16 @@ class FileController {
       if (!value.defer_kick && !value.is_bundle) {
         setImmediate(() => {
           this._ingestFileById(result.file_id).catch((ingestErr) => {
+            // A duplicate kick (dataprep's 409 idempotency guard) is not a
+            // failure: the bundle is already being ingested. Logging it as an
+            // error would put the same false ERROR into the log stream that
+            // the ingestion log no longer carries.
+            if (ingestErr.ingestAlreadyRunning) {
+              logger.info(
+                `[FILE-CONTROLLER] Bundle ingest already running for ${result.file_id} — duplicate kick ignored`
+              );
+              return;
+            }
             logger.error(`[FILE-CONTROLLER] Bundle async ingestion failed for ${result.file_id}: ${ingestErr.message}`);
           });
         });
@@ -1477,6 +1488,24 @@ class FileController {
         return res.status(500).json({ success: false, error: 'Data prep failed.', details: result.error });
       }
     } catch (error) {
+      // A 409 from dataprep is its idempotency guard: an ingest for THIS file
+      // is already running, so the duplicate request conflicts with a live
+      // ingest. 409 Conflict says that; a 500 would report a healthy ingest
+      // as a server failure. The flag is set by _ingestFileById, which owns
+      // the decision — re-deriving it here could disagree with it. Handled
+      // BEFORE the error log: a duplicate request is not a failure, and a
+      // full axios error with its stack says it was.
+      if (error.ingestAlreadyRunning) {
+        logger.info(
+          `[FILE-CONTROLLER] Ingest request ignored for ${req.params.fileId}: an ingest for this file is already running`
+        );
+        return res.status(409).json({
+          success: false,
+          error: 'Conflict',
+          message: 'An ingest for this file is already running. Wait for it to finish before starting another one.'
+        });
+      }
+
       logger.error('Ingest file error:', error);
 
       // --- FIXED: Check for 429 Busy status from Dataprep ---
@@ -1486,19 +1515,6 @@ class FileController {
           error: 'Too Many Requests',
           message:
             'Only a single dataprep job can be run at any given time. Wait until the current job finishes before submitting new jobs'
-        });
-      }
-
-      // A 409 from dataprep is its idempotency guard: an ingest for THIS file
-      // is already running, so the duplicate request conflicts with a live
-      // ingest. 409 Conflict says that; a 500 would report a healthy ingest
-      // as a server failure. The flag is set by _ingestFileById, which owns
-      // the decision — re-deriving it here could disagree with it.
-      if (error.ingestAlreadyRunning) {
-        return res.status(409).json({
-          success: false,
-          error: 'Conflict',
-          message: 'An ingest for this file is already running. Wait for it to finish before starting another one.'
         });
       }
 
@@ -1524,7 +1540,16 @@ class FileController {
           const result = await this._ingestFileById(fileId, batchOverlap);
           results.push({ fileId, ...result });
         } catch (error) {
-          results.push({ fileId, success: false, error: error.message });
+          // A duplicate (dataprep's 409 idempotency guard) is not an ingest
+          // failure: the file IS being ingested, by the task that is already
+          // running. Reporting it as a failure would tell the operator a
+          // healthy ingest failed, and keep the file selected for a retry
+          // that hits the same 409.
+          results.push(
+            error.ingestAlreadyRunning
+              ? { fileId, success: true, duplicate: true, message: 'An ingest for this file is already running.' }
+              : { fileId, success: false, error: error.message }
+          );
         }
       }
       const successCount = results.filter((r) => r.success).length;

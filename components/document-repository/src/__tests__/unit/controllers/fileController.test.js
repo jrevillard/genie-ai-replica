@@ -435,6 +435,10 @@ describe('fileController', () => {
 
     afterEach(() => {
       jest.restoreAllMocks();
+      // clearAllMocks resets call records, NOT implementations: without this
+      // the last 409 rejection stays installed on axios.post and leaks into
+      // the next describe, failing an unrelated test with a 409 it never set up.
+      axios.post.mockReset();
     });
 
     it('does not mark the file as Ingestion Error when the ingest is already running', async () => {
@@ -470,11 +474,19 @@ describe('fileController', () => {
       expect(fileService.addIngestionLog).not.toHaveBeenCalledWith('f1', expect.objectContaining({ level: 'ERROR' }));
     });
 
-    it('still errors on a 409 that is not the idempotency guard', async () => {
-      // Any other conflict is a real failure: only the guard's own conflict —
-      // the one naming THIS file AND saying it is already running — is carved
-      // out.
-      axios.post.mockRejectedValue(conflict('Conflict: the file is locked'));
+    // Only the guard's own conflict is carved out: a 409 that names THIS file
+    // AND says it is already running. Every other conflict is a real failure
+    // and must still mark the file.
+    it.each([
+      ['is not the idempotency guard at all', 'Conflict: the file is locked'],
+      ['names this file but is not the guard', "Conflict: fileId 'f1' is locked"],
+      ['names a different file', "An ingest task for fileId 'other-file' is already running"],
+      [
+        "names a file whose id merely contains ours ('f1' is inside 'f12')",
+        "An ingest task for fileId 'f12' is already running"
+      ]
+    ])('still errors on a 409 that %s', async (_case, detail) => {
+      axios.post.mockRejectedValue(conflict(detail));
 
       await expect(fileController._ingestFileById('f1')).rejects.toThrow('Request failed with status code 409');
 
@@ -483,43 +495,6 @@ describe('fileController', () => {
         expect.objectContaining({ dataprep: expect.objectContaining({ status: 'Ingestion Error' }) })
       );
       expect(fileService.addIngestionLog).toHaveBeenCalledWith('f1', expect.objectContaining({ level: 'ERROR' }));
-    });
-
-    it('still errors on a 409 that names this file but is not the guard', async () => {
-      // The file id matches, the meaning does not: a conflict about THIS file
-      // that is not "already running" is a real conflict.
-      axios.post.mockRejectedValue(conflict("Conflict: fileId 'f1' is locked"));
-
-      await expect(fileController._ingestFileById('f1')).rejects.toThrow('Request failed with status code 409');
-
-      expect(metadataService.updateMetadata).toHaveBeenCalledWith(
-        'f1',
-        expect.objectContaining({ dataprep: expect.objectContaining({ status: 'Ingestion Error' }) })
-      );
-      expect(fileService.addIngestionLog).toHaveBeenCalledWith('f1', expect.objectContaining({ level: 'ERROR' }));
-    });
-
-    it('still errors when a 409 names a different file', async () => {
-      axios.post.mockRejectedValue(conflict("An ingest task for fileId 'other-file' is already running"));
-
-      await expect(fileController._ingestFileById('f1')).rejects.toThrow('Request failed with status code 409');
-
-      expect(metadataService.updateMetadata).toHaveBeenCalledWith(
-        'f1',
-        expect.objectContaining({ dataprep: expect.objectContaining({ status: 'Ingestion Error' }) })
-      );
-    });
-
-    it('still errors when a 409 names a file whose id merely contains ours', async () => {
-      // A substring match would swallow this one: 'f1' is inside 'f12'.
-      axios.post.mockRejectedValue(conflict("An ingest task for fileId 'f12' is already running"));
-
-      await expect(fileController._ingestFileById('f1')).rejects.toThrow('Request failed with status code 409');
-
-      expect(metadataService.updateMetadata).toHaveBeenCalledWith(
-        'f1',
-        expect.objectContaining({ dataprep: expect.objectContaining({ status: 'Ingestion Error' }) })
-      );
     });
 
     it('still errors on a 409 after a degraded clear already destroyed the file chunks', async () => {

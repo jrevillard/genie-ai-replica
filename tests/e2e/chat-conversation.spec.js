@@ -6,8 +6,6 @@ const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen, contrastRatio } = require('./helpers/welcome');
 const { mockChatStream, sseBody, ackFeedback } = require('./helpers/chatbot');
 
-const BASE_URL = process.env.BASE_URL || 'https://localhost';
-
 async function askAndAnswer(page, question) {
   await page.locator('[data-testid="welcome-composer"] textarea').fill(question);
   await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
@@ -501,6 +499,7 @@ test.describe('Conversation — surface invariants', () => {
       releaseStream = resolve;
     });
     await ackFeedback(page);
+    const body = sseBody(['The answer completes in the background.']);
     await page.route('**/queries/stream**', async (route) => {
       if (route.request().method() !== 'POST') {
         await route.continue();
@@ -511,7 +510,7 @@ test.describe('Conversation — surface invariants', () => {
         await route.fulfill({
           status: 200,
           contentType: 'text/event-stream',
-          body: sseBody(['The answer completes in the background.'])
+          body
         });
       } catch {
         /* the context closed before the fulfillment */

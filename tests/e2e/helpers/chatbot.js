@@ -212,20 +212,18 @@ async function waitForBotMessage(page, text, { timeout = 30000 } = {}) {
   });
 }
 
-// The queryId the mocked done frame carries. The store records it on the
-// finished message when present; the value itself is never asserted.
-const MOCK_QUERY_ID = 'mock-query-1';
-
 /**
  * Build the SSE body the specs mock the answer stream with: `data: ` frames,
  * one JSON payload per line, ending with a done frame — the app's wire
  * contract, in one place. `metadata`, when given, travels as its own frame
- * before the done frame (an is_grounded flag, source_documents, ...).
+ * before the done frame (an is_grounded flag, source_documents, ...). The
+ * done frame's queryId is recorded on the finished message by the store;
+ * the value itself is never asserted.
  */
 function sseBody(chunks, metadata) {
   const frames = chunks.map((c) => `data: ${JSON.stringify({ type: 'chunk', content: c })}`);
   if (metadata) frames.push(`data: ${JSON.stringify({ type: 'metadata', ...metadata })}`);
-  return [...frames, '', `data: ${JSON.stringify({ type: 'done', queryId: MOCK_QUERY_ID })}`, ''].join('\n');
+  return [...frames, '', `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`, ''].join('\n');
 }
 
 /**
@@ -235,9 +233,12 @@ function sseBody(chunks, metadata) {
  * parsing path runs — only the bytes on the wire are scripted.
  */
 async function mockChatStream(page, chunks, metadata) {
+  // The body is registration-invariant: chunks and metadata are literals at
+  // every call site, so build the wire bytes once, not per interception.
+  const body = sseBody(chunks, metadata);
   await page.route('**/queries/stream**', async (route) => {
     try {
-      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: sseBody(chunks, metadata) });
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body });
     } catch {
       /* the context closed before the fulfillment */
     }

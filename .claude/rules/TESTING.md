@@ -96,6 +96,17 @@ comes back redacted. Takes ~30 s. No CI job exists for it.
 - the shape of log bodies arriving at the collector
   (`stamp_log_metadata_from_msg`, the fluentd driver config)
 
+Two failure modes it catches that nothing else does:
+
+1. **OTTL parse error** → the collector exits 1 and the entire log
+   pipeline dies. Caught in seconds by the config gate at the top of the
+   runner. Note the two-unescape trap: the regexes are double-escaped
+   (`\\s`, `\\.`) because YAML single-quoted scalars are literal **and**
+   OTTL's own string literal then unescapes them. Single-escaping looks
+   correct and is catastrophic.
+2. **Redaction that silently stopped matching** → PII reaches
+   VictoriaLogs unredacted while the collector reports healthy.
+
 ### Compose no-root runtime gate
 
 ```bash
@@ -114,17 +125,6 @@ volumes or images.
 - `docker-compose.yaml` (a `user:`, a volume, a new service)
 - any Dockerfile `USER`/chown wiring
 - `tests/compose-non-root/check-runtime.sh` itself
-
-Two failure modes it catches that nothing else does:
-
-1. **OTTL parse error** → the collector exits 1 and the entire log
-   pipeline dies. Caught in seconds by the config gate at the top of the
-   runner. Note the two-unescape trap: the regexes are double-escaped
-   (`\\s`, `\\.`) because YAML single-quoted scalars are literal **and**
-   OTTL's own string literal then unescapes them. Single-escaping looks
-   correct and is catastrophic.
-2. **Redaction that silently stopped matching** → PII reaches
-   VictoriaLogs unredacted while the collector reports healthy.
 
 Why it is a shell script and not Jest: it must start containers, inject a
 curl sidecar into the collector's netns (the collector image is

@@ -124,10 +124,13 @@ x-chown-init: &chown-init
     - genieai_network
   restart: "no"
   deploy:
-    replicas: 1
-    placement:
-      constraints:
-        - node.labels.genieai == true
+    # mode: global (the otel-collector-init precedent): named volumes are
+    # node-local and swarm ignores depends_on, so a per-node init is the
+    # only way to guarantee the chown ran on WHATEVER node the follow-up
+    # service lands on — including a swarm with more than one
+    # genieai-labeled node. Compose mode ignores this and runs the init
+    # once.
+    mode: global
     restart_policy:
       condition: "none"
 
@@ -2586,31 +2589,14 @@ services:
   # In Swarm mode, depends_on is removed by Ansible — the Collector's
   # restart policy handles the race condition until init completes.
   otel-collector-init:
-    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
-    # Exception: cap_add CHOWN — the init's only job is chown 10001 on /var/lib/otelcol;
-    # cap_drop ALL strips CAP_CHOWN, so we add it back scoped to this one-shot init.
-    # DAC_OVERRIDE (added in #1227): on a re-run the volume is already owned
-    # by the target uid and the marker write needs to bypass the owner check.
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-    security_opt:
-      - no-new-privileges:true
-    image: busybox:1.38.0
-    command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && chown -R 10001:10001 /var/lib/otelcol"]
+    # One-shot chown of the collector's queue volume for uid 10001, shared
+    # with the other volume-chown inits through the x-chown-init anchor
+    # (CHOWN + DAC_OVERRIDE caps, one-shot on both front-ends, global mode
+    # so the chown has run on every node the collector can land on).
+    <<: *chown-init
+    command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && chown -R 10001:10001 /var/lib/otelcol && touch /var/lib/otelcol/.chowned-10001"]
     volumes:
       - otel-queue:/var/lib/otelcol
-    networks:
-      - genieai_network
-    deploy:
-      # Global mode: runs once on every Swarm node (matches otel-collector's
-      # global placement) to set volume permissions before Collector starts.
-      # In compose mode, depends_on ensures ordering instead.
-      mode: global
-      restart_policy:
-        condition: none
 
   otel-collector:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed

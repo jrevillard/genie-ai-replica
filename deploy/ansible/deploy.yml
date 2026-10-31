@@ -344,19 +344,20 @@
         - server.key
       failed_when: false
 
-    # The cap-dropped nginx container (root with no DAC_OVERRIDE) can
-    # only read files it owns. Re-owning here keeps the fix idempotent
-    # and self-healing across re-runs.
-    - name: Normalize SSL certificate ownership for the cap-dropped nginx container
+    # The edge nginx runs as uid 101 since #1227 and reads both files
+    # through the read-only /etc/nginx/ssl bind: the private key must be
+    # group-readable by that uid (0640 + group 101), not root-only 0600.
+    # Re-normalizing here keeps the fix idempotent and self-healing.
+    - name: Normalize SSL certificate ownership for the uid-101 nginx edge
       become: true
       become_user: root
       ansible.builtin.file:
         path: "{{ item.stat.path }}"
         state: file
         owner: root
-        group: root
+        group: "101"
         mode: >-
-          {{ '0644' if (item.item == 'server.crt') else '0600' }}
+          {{ '0644' if (item.item == 'server.crt') else '0640' }}
       loop: "{{ ssl_files_pre.results }}"
       loop_control:
         label: "{{ item.item }}"
@@ -390,6 +391,15 @@
         - "{{ data_dir }}/huggingface"
         - secrets/ssl
 
+    - name: Remove the stale root-owned Kong log directory (#1227)
+      # Kong no longer bind-mounts a log directory; deployments from before
+      # #1227 keep a root-owned data/logs/kong that trips the no-root
+      # runtime gate on every run.
+      become: true
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}/{{ data_dir }}/logs/kong"
+        state: absent
+
     - name: Give the backend backup directory to the backend uid
       # #1227: the backend container runs as uid 1000 and writes its DB
       # dumps here; mode alone leaves the directory root-owned.
@@ -420,9 +430,11 @@
       ansible.builtin.copy:
         src: "{{ playbook_dir }}/files/certificates/{{ group_names[0] }}/{{ item.item }}"
         dest: "{{ deploy_dir }}/secrets/ssl/{{ item.item }}"
-        mode: '0600'
+        # group-readable by the edge's uid 101 (#1227) - see the normalize
+        # task above.
+        mode: '0640'
         owner: root
-        group: root
+        group: "101"
       loop: "{{ local_certs.results }}"
       when: item.stat.exists
       loop_control:

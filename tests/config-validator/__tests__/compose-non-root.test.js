@@ -124,6 +124,21 @@ describe('compose non-root contract (#1227)', () => {
     expect(vCompose.some((v) => v.includes('victorialogs-init') && v.includes('one-shot'))).toBe(true);
   });
 
+  test('mutation: on-failure without max_attempts trips the gate', () => {
+    // Swarm restarts a failing on-failure container forever without a bound
+    // — a permanent root init. Strip the anchor's max_attempts and flip the
+    // condition: the unbounded form must trip.
+    const unbounded = composeText
+      .replaceAll('condition: "none"', 'condition: on-failure')
+      .replace(
+        '    restart_policy:\n      condition: on-failure\n      max_attempts: 60\n',
+        '    restart_policy:\n      condition: on-failure\n'
+      );
+    expect(unbounded).not.toBe(composeText);
+    const { violations } = validateComposeNonRoot(unbounded);
+    expect(violations.some((v) => v.includes('on-failure without max_attempts'))).toBe(true);
+  });
+
   test('self-dropping allowlist documents its two members with a reason', () => {
     expect(Object.keys(SELF_DROPPING).sort()).toEqual(['postgres', 'redis-cache']);
     for (const reason of Object.values(SELF_DROPPING)) {

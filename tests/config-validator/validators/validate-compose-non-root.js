@@ -71,6 +71,7 @@ function validateComposeNonRoot(composeText) {
   let inCapAdds = false;
   let inDeploy = false;
   let inRestartPolicy = false;
+  let currentMaxAttempts = null;
   const serviceBinds = {}; // service -> [{path, createHostPath}]
 
   const flush = () => {
@@ -128,6 +129,8 @@ function validateComposeNonRoot(composeText) {
               : anchorMerged
                 ? anchorDefaults.condition
                 : null;
+          const maxAttempts =
+            currentMaxAttempts !== null ? currentMaxAttempts : anchorMerged ? anchorDefaults.maxAttempts : null;
           if (!capAdds.includes('CHOWN')) {
             violations.push(`${currentService}: ONE_SHOT_ROOT_INIT member must keep cap_add: [CHOWN]`);
           }
@@ -140,6 +143,15 @@ function validateComposeNonRoot(composeText) {
           const oneShot =
             (restart === null || restart === 'no') &&
             (condition === null || condition === 'none' || condition === 'on-failure');
+          // on-failure restarts a FAILING container — on swarm, without a
+          // max_attempts bound that is an infinite loop, i.e. a permanent
+          // root container for exactly as long as the chown keeps failing.
+          if (condition === 'on-failure' && maxAttempts === null) {
+            violations.push(
+              `${currentService}: restart_policy on-failure without max_attempts restarts a failing ` +
+                'root init forever on swarm — bound it'
+            );
+          }
           if (!oneShot) {
             violations.push(
               `${currentService}: ONE_SHOT_ROOT_INIT member must be a one-shot on BOTH front-ends ` +
@@ -156,6 +168,7 @@ function validateComposeNonRoot(composeText) {
     inVolumes = false;
     currentRestart = null;
     currentRestartPolicyCondition = null;
+    currentMaxAttempts = null;
     currentCapAdds = [];
     inCapAdds = false;
     inDeploy = false;
@@ -165,7 +178,7 @@ function validateComposeNonRoot(composeText) {
   // Pre-scan the x-chown-init extension anchor: services merge it via
   // `<<: *chown-init`, and a line-level parser must resolve that merge to
   // see the invariants it carries (cap_add, restart, restart_policy).
-  const anchorDefaults = { capAdds: [], restart: null, condition: null };
+  const anchorDefaults = { capAdds: [], restart: null, condition: null, maxAttempts: null };
   {
     let inAnchor = false;
     let inAnchorPolicy = false;
@@ -186,6 +199,8 @@ function validateComposeNonRoot(composeText) {
       }
       const restart = line.match(/^ {2}restart:\s*['"]?([\w-]+)['"]?\s*$/);
       if (restart) anchorDefaults.restart = restart[1];
+      const anchorAttempts = line.match(/^ {4}max_attempts:\s*(\d+)\s*$/);
+      if (anchorAttempts) anchorDefaults.maxAttempts = anchorAttempts[1];
       if (/^ {4}restart_policy:\s*$/.test(line)) {
         inAnchorPolicy = true;
         continue;
@@ -233,7 +248,9 @@ function validateComposeNonRoot(composeText) {
     }
 
     // `user:` — mapping form only (the form every service in this file uses)
-    const userMatch = line.match(/^ {4}user:\s*['"]?([^'"\s]+)['"]?\s*$/);
+    // A trailing # comment is legal documentation on the pin — the value
+    // ends at whitespace or the comment marker.
+    const userMatch = line.match(/^ {4}user:\s*['"]?([^'"\s#]+)['"]?\s*(?:#.*)?$/);
     if (userMatch) {
       currentUser = userMatch[1];
       continue;
@@ -274,6 +291,8 @@ function validateComposeNonRoot(composeText) {
         } else {
           const cond = line.match(/^ {8}condition:\s*['"]?([\w-]+)['"]?\s*$/);
           if (cond) currentRestartPolicyCondition = cond[1];
+          const attempts = line.match(/^ {8}max_attempts:\s*(\d+)\s*$/);
+          if (attempts) currentMaxAttempts = attempts[1];
           continue;
         }
       }

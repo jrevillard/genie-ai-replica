@@ -44,7 +44,14 @@ fi
 while IFS= read -r container; do
   # `user` (not `UID`): procps rejects the uppercase specifier, and the
   # lowercase form prints "root" for uid 0 and the numeric uid otherwise.
-  top=$(docker top "$container" -o user,pid,args 2>/dev/null) || continue
+  # A failed inspection is NOT skippable — skipping would turn an
+  # un-inspectable container into a silent pass.
+  top=$(docker top "$container" -o user,pid,args 2>/dev/null)
+  if [ $? -ne 0 ]; then
+    echo "UNINSPECTABLE container $container (docker top failed) — treating as a violation:"
+    violations=$((violations + 1))
+    continue
+  fi
   offenders=$(echo "$top" | awk 'NR>1 && $1=="root" {print "  pid "$2": "substr($0, index($0,$3))}')
   if [ -n "$offenders" ]; then
     echo "ROOT PROCESS in $container:"
@@ -61,7 +68,14 @@ EOF
 # parent), and data/huggingface belongs to the profile-gated GPU TEI
 # services, which the contract excludes.
 if [ -d "$DATA_DIR" ]; then
-  rootowned=$(find "$DATA_DIR" -mindepth 1 -path "$DATA_DIR/huggingface" -prune -o -uid 0 -print 2>/dev/null)
+  find_err=$(mktemp)
+  rootowned=$(find "$DATA_DIR" -mindepth 1 -path "$DATA_DIR/huggingface" -prune -o -uid 0 -print 2>"$find_err")
+  if [ -s "$find_err" ]; then
+    echo "FIND ERRORS while sweeping $DATA_DIR (untraversable paths are NOT checked):"
+    sed 's/^/  /' "$find_err"
+    violations=$((violations + 1))
+  fi
+  rm -f "$find_err"
   if [ -n "$rootowned" ]; then
     echo "ROOT-OWNED paths under $DATA_DIR:"
     echo "$rootowned" | sed 's/^/  /'

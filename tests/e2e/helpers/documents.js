@@ -134,7 +134,10 @@ async function getDocumentTableRows(page) {
  * design, so the deletes run with a browser-session token (the master admin
  * token is minted for the wrong issuer — the document-repository validates
  * realm tokens only). Pass `{ browser }` from the afterAll fixture to reuse
- * the worker's browser instead of launching a throwaway one.
+ * the worker's browser instead of launching a throwaway one. The mint plus
+ * list plus delete sweep outlives the 60s hook default — callers must set
+ * `test.setTimeout(SESSION_MINT_TIMEOUT_MS)` as the first line of the hook
+ * (see tests/e2e/helpers/auth.js).
  * @param {string} [prefix] - File-name prefix to delete
  * @param {object} [options]
  * @param {import('@playwright/test').Browser} [options.browser] - Reuse this
@@ -154,7 +157,11 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
   // many unrelated files the stack holds.
   const listRes = await request('GET', `/api/files?limit=50&search=${encodeURIComponent(prefix)}`, {
     headers: { Authorization: `Bearer ${token}` },
+  }).catch((e) => {
+    console.warn(`cleanup: file list failed (${e.message}) — nothing deleted`);
+    return null;
   });
+  if (!listRes) return;
   if (listRes.status !== 200) {
     console.warn(`cleanup: file list failed (HTTP ${listRes.status}) — nothing deleted`);
     return;

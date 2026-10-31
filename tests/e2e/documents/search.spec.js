@@ -8,6 +8,7 @@ const {
   getDocumentTableRows,
   deleteAllTestDocuments,
 } = require('../helpers/documents');
+const { SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 
 const FIXTURES_DIR = path.join(__dirname, '..', 'fixtures');
 
@@ -20,6 +21,8 @@ test.describe('Document Search', () => {
   });
 
   test.afterAll(async ({ browser }) => {
+    // The helper's mint + list + delete sweep outlives the 60s hook default.
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
     await deleteAllTestDocuments('test-document', { browser });
   });
 

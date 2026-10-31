@@ -72,10 +72,16 @@ SELF_DROPPING=' postgres redis-cache '
 while IFS= read -r container; do
   service="${container#"$PROJECT"-}"; service="${service#"${PROJECT}_"}"
   # compose names the container <project>-postgres-1, swarm
-  # <stack>_postgres.1.<id> — match the service PREFIX
+  # <stack>_postgres.1.<id> — take the SERVICE segment (before the
+  # first -<digits> / . task suffix) and match it EXACTLY, so
+  # postgres-init (a one-shot root init) is never exempted
   case "$service" in
-    postgres.*|postgres-*|redis-cache.*|redis-cache-*)
-      echo "  (self-dropping service $service: server runs as its package user; transient root healthcheck execs skipped)"
+    *.*) svc="${service%%.*}";;   # swarm: postgres.1.<id>
+    *)    svc="${service%-[0-9]*}";; # compose: postgres-1
+  esac
+  case "$SELF_DROPPING" in
+    *" $svc "*)
+      echo "  (self-dropping service $svc: server runs as its package user; transient root healthcheck execs skipped)"
       continue;;
   esac
   # `uid` (effective, NUMERIC): matching the username string would pass

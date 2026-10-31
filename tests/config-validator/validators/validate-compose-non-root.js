@@ -91,9 +91,14 @@ function validateComposeNonRoot(composeText) {
         } else if (currentUser !== null) {
           const uid = String(currentUser).split(':')[0];
           // Number() closes the numeric-zero spellings ("00", "000") that
-          // docker treats exactly as uid 0
-          if (uid === 'root' || Number(uid) === 0) {
-            violations.push(`${currentService}: \`user: ${currentUser}\` is root — the contract forbids it`);
+          // docker treats exactly as uid 0. A TEMPLATED pin (${...}, $VAR)
+          // resolves conservatively to root: the identity pin is the
+          // contract's primary rule and must be a literal — a
+          // compose-legal default-to-root variable would ship as root.
+          if (uid === 'root' || Number(uid) === 0 || /[\x24]/.test(currentUser)) {
+            violations.push(
+              `${currentService}: \`user: ${currentUser}\` is root (or a templated pin that could resolve to root) — the contract forbids it`
+            );
           }
         }
       }
@@ -109,12 +114,12 @@ function validateComposeNonRoot(composeText) {
           // default; a bare `${VAR}` (unknown location) to the data dir
           // CONSERVATIVELY, so renaming the variable cannot defeat the gate.
           let resolved = b.path.replace(/^['"]|['"]$/g, '');
-          // ${VAR:-default} strips to its default; defaults can NEST
-          // (${DATA_DIR:-${MOUNT_DIR:-./data}} — legal compose), so
-          // iterate until stable (bounded) instead of stopping at the
-          // first inner brace
-          for (let depth = 0; depth < 5; depth += 1) {
-            const next = resolved.replace(/^\$\{[\w-]+:-((?:[^{}]|\$\{[^{}]*\})*)\}/, '$1');
+          // ${VAR:-default} strips to its default; defaults can NEST to
+          // any depth (${A:-${B:-${C:-./data}}} — legal compose), so strip
+          // from the INNERMOST braces outward until stable (bounded pass
+          // count), instead of matching one fixed nesting depth
+          for (let depth = 0; depth < 10; depth += 1) {
+            const next = resolved.replace(/\$\{[\w-]+:-([^${}]*)\}/, '$1');
             if (next === resolved) break;
             resolved = next;
           }
@@ -259,7 +264,7 @@ function validateComposeNonRoot(composeText) {
         anchorKey = line.match(/^ {2}([\w-]+):/)[1];
         continue;
       }
-      const cap = anchorKey === 'cap_add' ? line.match(/^ {4}-\s*([A-Z_]+)\s*$/) : null;
+      const cap = anchorKey === 'cap_add' ? line.match(/^ {4}-\s*([A-Z_]+)\s*(?:#.*)?$/) : null;
       if (cap) {
         anchorDefaults.capAdds.push(cap[1]);
         continue;
@@ -276,7 +281,7 @@ function validateComposeNonRoot(composeText) {
         if (!/^ {6}/.test(line)) {
           inAnchorPolicy = false;
         } else {
-          const cond = line.match(/^ {6}condition:\s*['"]?([\w-]+)['"]?\s*$/);
+          const cond = line.match(/^ {6}condition:\s*['"]?([\w-]+)['"]?\s*(?:#.*)?$/);
           if (cond) anchorDefaults.condition = cond[1];
           continue;
         }
@@ -344,7 +349,7 @@ function validateComposeNonRoot(composeText) {
 
     // restart / cap_add / deploy.restart_policy.condition — the one-shot
     // init invariants
-    const restartMatch = line.match(/^ {4}restart:\s*['"]?([\w:-]+)['"]?\s*$/);
+    const restartMatch = line.match(/^ {4}restart:\s*['"]?([\w:-]+)['"]?\s*(?:#.*)?$/);
     if (restartMatch) {
       currentRestart = restartMatch[1];
       continue;
@@ -387,9 +392,9 @@ function validateComposeNonRoot(composeText) {
         if (!/^ {8}/.test(line)) {
           inRestartPolicy = false;
         } else {
-          const cond = line.match(/^ {8}condition:\s*['"]?([\w-]+)['"]?\s*$/);
+          const cond = line.match(/^ {8}condition:\s*['"]?([\w-]+)['"]?\s*(?:#.*)?$/);
           if (cond) currentRestartPolicyCondition = cond[1];
-          const attempts = line.match(/^ {8}max_attempts:\s*(\d+)\s*$/);
+          const attempts = line.match(/^ {8}max_attempts:\s*(\d+)\s*(?:#.*)?$/);
           if (attempts) currentMaxAttempts = attempts[1];
           continue;
         }
@@ -535,12 +540,25 @@ function validateComposeNonRoot(composeText) {
         inBindOpts = false;
         continue;
       }
-      if (/^ {8}bind:\s*$/.test(line)) {
+      const bindKey = line.match(/^ {8}bind:\s*(?:#.*)?$/);
+      const bindFlow = line.match(/^ {8}bind:\s*\{(.*)\}\s*(?:#.*)?$/);
+      if (bindKey || bindFlow) {
         inBindOpts = true;
         bindOptsTarget = sourceSeenThisEntry ? (serviceBinds[currentService] || []).length - 1 : null;
+        // flow form carries the opt-out inline: bind: {create_host_path: false}
+        if (bindFlow && /create_host_path:\s*false/.test(bindFlow[1])) {
+          if (bindOptsTarget !== null) {
+            serviceBinds[currentService][bindOptsTarget].createHostPathFalse = true;
+            bindOptsTarget = null;
+          } else {
+            pendingCreateFalse = true;
+          }
+        }
         continue;
       }
-      const createFalse = line.match(/^ {10}create_host_path:\s*false\s*(?:#.*)?$/);
+      // indentation-flexible: a re-indented block is still the opts of the
+      // bind: above it — exact-indent matching rejected legal spellings
+      const createFalse = line.match(/^ {10,}create_host_path:\s*false\s*(?:#.*)?$/);
       if (createFalse && inBindOpts) {
         if (bindOptsTarget !== null) {
           serviceBinds[currentService][bindOptsTarget].createHostPathFalse = true;

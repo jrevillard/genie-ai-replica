@@ -2,8 +2,8 @@
 # no-root-data-migration (#1227) — shared by the manager play and the
 # swarm_workers play in deploy.yml via import_tasks. One doctrine, two
 # placements: the tasks below create the backend backup directory as the
-# backend uid, hand the root-era (root-owned) backup files to it, and
-# hand the root-era log-directory leftovers to the ansible user —
+# backend uid (1000), hand the mis-owned backup files to it, and hand
+# the root-era log-directory leftovers to the SAME backend uid —
 # TARGETED, never wholesale, and never destructive (operator files under
 # other uids are never touched).
 # data_dir / deploy_dir come from group_vars; both plays run these with

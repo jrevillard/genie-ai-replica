@@ -60,7 +60,7 @@ function fakeStore() {
   const dispatched = [];
   const okfModule = require('@/store/modules/okf').default;
   const store = new Vuex.Store({
-    modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state)) } }
+    modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state())) } }
   });
   store.__dispatched = dispatched;
   const real = store.dispatch.bind(store);

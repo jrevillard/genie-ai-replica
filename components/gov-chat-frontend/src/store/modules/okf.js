@@ -2121,7 +2121,12 @@ Object.keys(actions).forEach((key) => {
 
 export default {
   namespaced: true,
-  state: initialState(),
+  // Round 21: `initialState()` (INVOKED at import) created ONE object shared
+  // by every store that registers this module — the jest suites' buildStore()
+  // instances mutated each other's state through it. Vuex's module contract
+  // takes the FACTORY here and calls it per store, so each store gets its
+  // own deep-fresh state.
+  state: initialState,
   getters,
   mutations,
   actions: actionsWithServices

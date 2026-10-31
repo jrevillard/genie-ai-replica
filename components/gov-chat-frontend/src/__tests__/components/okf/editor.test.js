@@ -289,7 +289,7 @@ const OkfStudioDashboard = require('@/components/okf/StudioDashboard.vue').defau
 describe('OkfStudioDashboard — domain filter (DsSelect options regression)', () => {
   it('renders the subject-area options via the DsSelect slot', async () => {
     const realStore = createStore({
-      modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state)) } }
+      modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state())) } }
     });
     realStore.commit('okf/setExpertMode', true);
     const wrapper = mount(OkfStudioDashboard, { global: { plugins: [realStore] } });
@@ -311,7 +311,7 @@ describe('OkfStudioDashboard — building poll (the 11-hour ghost fix, 2026-09-0
 
   function buildStore() {
     return createStore({
-      modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state)) } }
+      modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state())) } }
     });
   }
 
@@ -350,7 +350,7 @@ const OkfRepoEditorShell = require('@/components/okf/editor/RepoEditorShell.vue'
 describe('OkfRepoEditorShell', () => {
   it('defaults to the Editor sub-tab and dispatches on switch', async () => {
     const realStore = createStore({
-      modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state)) } }
+      modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state())) } }
     });
     const wrapper = shallowMount(OkfRepoEditorShell, {
       global: { plugins: [realStore] },
@@ -368,7 +368,7 @@ describe('OkfRepoEditorShell', () => {
   // conversion shows an actionable error instead of an empty editor.
   it('renders the building panel instead of the tabs while the conversion runs', () => {
     const realStore = createStore({
-      modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state)) } }
+      modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state())) } }
     });
     realStore.commit('okf/upsertRepo', {
       repo_id: 'r-1',
@@ -387,7 +387,7 @@ describe('OkfRepoEditorShell', () => {
 
   it('renders an actionable failure panel when the conversion failed', () => {
     const realStore = createStore({
-      modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state)) } }
+      modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state())) } }
     });
     realStore.commit('okf/upsertRepo', {
       repo_id: 'r-1',
@@ -419,7 +419,7 @@ const OkfRepoEditorFull = require('@/components/okf/editor/RepoEditor.vue').defa
 describe('OkfRepoEditor — cross-repo stale-selection guard', () => {
   function buildStore() {
     return createStore({
-      modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state)) } }
+      modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state())) } }
     });
   }
 

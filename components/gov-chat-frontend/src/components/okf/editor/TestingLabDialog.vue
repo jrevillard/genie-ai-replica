@@ -2442,7 +2442,12 @@ export default {
                 'The advisor is still running on the model host. Reopen the Lab later to see its result — nothing was lost.'
               )
             : res.code === 'RECOMMEND_FAILED'
-              ? this.translate('okf.testingLab.error.advisor', 'Advisor failed')
+              ? // #80880: recommendTags throws the SERVER's reason for this
+                // code ('vLLM 503: model not ready', 'no head tags yet', …) —
+                // keep it; the generic sentence is only the fallback when the
+                // message is absent (translateLabError's own contract: server
+                // detail must not be swapped for a generic sentence).
+                res.message || this.translate('okf.testingLab.error.advisor', 'Advisor failed')
               : translateLabError(res.message, this.translate) ||
                 this.translate('okf.testingLab.error.advisor', 'Advisor failed');
         return;

@@ -536,7 +536,7 @@ export default {
       actionSuccess: "Aktion \"{'{'}action{'}'}\" für Datei {'{'}fileId{'}'} war erfolgreich.",
       metadataUpdateSuccess: "Metadaten für Datei {'{'}fileId{'}'} wurden aktualisiert.",
       deletePartialNotice:
-        "{'{'{'}'}blocked{'}'} ausgewählte Datei(en) können nicht gelöscht werden ({'{'{'}'}reason{'}'}) — nur die anderen {'{'{'}'}n{'}'} werden gelöscht.",
+        "{'{'}blocked{'}'} ausgewählte Datei(en) können nicht gelöscht werden ({'{'}reason{'}'}) — nur die anderen {'{'}n{'}'} werden gelöscht.",
       confirmDeleteSkipped:
         "{'{'{'}'}count{'}'} inginierte/in Arbeit befindliche Datei(en) werden ÜBERSPRUNGEN — erst zurückziehen, dann löschen."
     },

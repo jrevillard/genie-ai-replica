@@ -68,7 +68,7 @@ function mountTab(store) {
 
 function buildStore() {
   return new Vuex.Store({
-    modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state)) } }
+    modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state())) } }
   });
 }
 

@@ -536,7 +536,7 @@ export default {
       actionSuccess: "Ação \"{'{'}action{'}'}\" no arquivo {'{'}fileId{'}'} foi bem-sucedida.",
       metadataUpdateSuccess: "Metadados do arquivo {'{'}fileId{'}'} foram atualizados.",
       deletePartialNotice:
-        "{'{'{'}'}blocked{'}'} arquivo(s) selecionado(s) não podem ser excluídos ({'{'{'}'}reason{'}'}) — apenas os outros {'{'{'}'}n{'}'} serão excluídos.",
+        "{'{'}blocked{'}'} arquivo(s) selecionado(s) não podem ser excluídos ({'{'}reason{'}'}) — apenas os outros {'{'}n{'}'} serão excluídos.",
       confirmDeleteSkipped:
         "{'{'{'}'}count{'}'} arquivo(s) ingerido(s)/em andamento serão PULADOS — retrate-os primeiro para excluí-los."
     },

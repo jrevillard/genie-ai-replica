@@ -77,7 +77,7 @@ function buildStore() {
   const okfModule = require('@/store/modules/okf').default;
   return new Vuex.Store({
     modules: {
-      okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state)) }
+      okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state())) }
     }
   });
 }

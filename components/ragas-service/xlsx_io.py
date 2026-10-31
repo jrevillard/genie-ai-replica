@@ -167,6 +167,24 @@ def _style_header(ws, row: int, ncols: int) -> None:
     ws.auto_filter.ref = f"A{row}:{get_column_letter(ncols)}{max(row + 1, ws.max_row)}"
 
 
+def _deformula(cell) -> None:
+    """Spreadsheet formula-injection guard (!622 round 21): openpyxl types a
+    string that starts with '=' as a FORMULA (data_type 'f'), so a
+    curator-authored query/reference starting '=' would execute when the
+    exported workbook is opened in Excel/LibreOffice. Force the string type —
+    the cell CONTENT is preserved byte-for-byte (an apostrophe prefix would
+    corrupt his round-trip import)."""
+    if cell.data_type == "f" and isinstance(cell.value, str):
+        cell.data_type = "s"
+
+
+def _append_text_safe(ws, row: list) -> None:
+    """ws.append + the formula guard on the row just written."""
+    ws.append(row)
+    for c in range(1, ws.max_column + 1):
+        _deformula(ws.cell(row=ws.max_row, column=c))
+
+
 def write_suite_workbook(name: str, entries: list[dict]) -> bytes:
     """Serialize a benchmark suite to his INPUT xlsx format."""
     wb = Workbook()
@@ -174,7 +192,7 @@ def write_suite_workbook(name: str, entries: list[dict]) -> bytes:
     ws.title = SUITE_SHEET
     ws.append(SUITE_HEADERS)
     for row in suite_rows(entries):
-        ws.append(row)
+        _append_text_safe(ws, row)
     _style_header(ws, 1, len(SUITE_HEADERS))
     if name:
         ws.sheet_properties.tabColor = "1F6FEB"
@@ -349,7 +367,7 @@ def write_results_workbook(suite: dict, runs: list[dict]) -> bytes:
     ws.title = "Gold"
     ws.append(SUITE_HEADERS)
     for row in suite_rows(entries):
-        ws.append(row)
+        _append_text_safe(ws, row)
     _style_header(ws, 1, len(SUITE_HEADERS))
 
     # Run_<label> tabs — 2-row preamble + data from row 3
@@ -357,9 +375,9 @@ def write_results_workbook(suite: dict, runs: list[dict]) -> bytes:
         label = str(run.get("label") or "run")[:26]
         rs = wb.create_sheet(f"Run_{label}")
         rs.cell(row=1, column=1, value="params").font = _HEADER_FONT
-        rs.cell(row=1, column=2, value=json.dumps(run.get("params") or {}, ensure_ascii=False))
+        _deformula(rs.cell(row=1, column=2, value=json.dumps(run.get("params") or {}, ensure_ascii=False)))
         rs.cell(row=1, column=4, value="note").font = _HEADER_FONT
-        rs.cell(row=1, column=5, value=str(run.get("note") or ""))
+        _deformula(rs.cell(row=1, column=5, value=str(run.get("note") or "")))
         header = SUITE_HEADERS + NEW_COLS + [f"ragas_{m}" for m in extra]
         rs.append([])  # row 1 already written via cells; append moves to row 2
         for c, h in enumerate(header, start=1):
@@ -377,7 +395,7 @@ def write_results_workbook(suite: dict, runs: list[dict]) -> bytes:
                 _cell(entry.get("source_doc") or ""),
             ]
             for c, v in enumerate(body + _run_row(entry, res, extra), start=1):
-                rs.cell(row=3 + i, column=c, value=v)
+                _deformula(rs.cell(row=3 + i, column=c, value=v))
 
     # Compare tab — one row per run, first is baseline
     cs = wb.create_sheet("Compare")

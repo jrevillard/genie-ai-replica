@@ -55,7 +55,7 @@ const OkfStudioTab = require('@/components/okf/StudioTab.vue').default;
 // module; dispatch is spied so assertions see the exact payloads.
 function buildStore() {
   const store = new Vuex.Store({
-    modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state)) } }
+    modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state())) } }
   });
   const dispatch = jest.spyOn(store, 'dispatch');
   return { store, dispatch };

@@ -2521,24 +2521,45 @@ class TestQueryTranslationStatus:
 
     @pytest.mark.asyncio
     async def test_a_history_in_a_window_too_tight_is_still_refused_and_named(self):
-        """A window too tight even after scaling (the allowance falls below
-        the prompt estimate) still refuses at the caller: the history goes
-        out untranslated and the status names it — scaling the ceiling must
-        not turn a genuinely tight window into a doomed request."""
+        """A window that cannot hold the prompt plus a full-length
+        translation still refuses at the caller: the history goes out
+        untranslated and the status names it — scaling the ceiling must not
+        turn a genuinely tight window into a doomed request."""
         svc = create_chatqna_service()
-        # Seven assistant messages whose flattened length (13023 chars) sits
-        # just past the half-window line on a 9193-token window: the char
-        # budget (13020) admits every message while the allowance
-        # (9193 − 512 − 4341 = 4340) falls one token short of the estimate.
-        history = [{"role": "assistant", "content": "A" * 1840} for _ in range(7)]
+        history = [{"role": "user", "content": "A" * 13000}]
         mock_client = self._mock_client()
         stack = self._translation_patches(mock_client, translategemma=True)
-        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=9193))
+        # A 9000-token window leaves 9000 − 512 − 4335 = 4153 tokens beside
+        # the 4335-token prompt estimate: less than the estimate, so the
+        # completion could not cover what there is to translate. The char
+        # budget is patched wide so the history reaches the cap guard
+        # instead of being dropped by the budget loop.
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=9000))
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=20000))
         with stack:
             text, status = await svc._get_translated_history_string(history)
-        assert text.startswith("ASSISTANT: AAAA")  # untranslated
+        assert text.startswith("USER: AAAA")  # untranslated
         assert status == "fallback_error"
         mock_client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_truncated_completion_is_refused_not_translated(self):
+        """A completion cut off at max_tokens (finish_reason "length") is not
+        a translation: embedding the cut-off text would put a half-
+        translated history into the retrieval space under a success
+        status."""
+        svc = create_chatqna_service()
+        history = [{"role": "user", "content": "A" * 13000}]
+        mock_client = self._mock_client(content="USER: AAAA", completions=True)
+        mock_client.post.return_value.json.return_value = {
+            "choices": [{"text": "USER: AAAA", "finish_reason": "length"}]
+        }
+        stack = self._translation_patches(mock_client, translategemma=True)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=65536))
+        with stack:
+            text, status = await svc._get_translated_history_string(history)
+        assert text.startswith("USER: AAAA")  # untranslated
+        assert status == "fallback_error"
 
     @pytest.mark.asyncio
     async def test_a_map_without_english_reports_fallback_error(self):

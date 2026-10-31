@@ -13,16 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Long non-English conversations are translated again.** The TranslateGemma
   history translation capped its completion at a fixed 4096 tokens while the
   prompt grew with the conversation, so past ~12k characters of history the
-  cap fell below the input and the service refused the request — the turn
-  embedded its history untranslated into the English retrieval space even
-  though the char budget (raised to ~97k chars by the discovered window)
-  had admitted it. The completion ceiling now scales with the discovered
-  translation window (the room the window leaves beside the prompt
-  estimate), so a long history is translated instead of refused; a window
-  genuinely too tight to translate into is still refused and still reported
-  as `fallback_error`. The scaling relies on the translation window being
-  discoverable — an endpoint that never answers the discovery keeps the
-  fixed 4096-token bound. (#1241, !657)
+  cap fell below the input and the request was refused locally (no call to
+  the translation service) — the turn embedded its history untranslated into
+  the English retrieval space even though the char budget (raised to ~97k
+  chars by the discovered window) had admitted it. The completion ceiling now
+  scales with the discovered translation window (the room the window leaves
+  beside the prompt estimate), so a long history is translated instead of
+  refused. A window too tight to hold the prompt plus a full-length
+  translation is still refused locally and still reported as
+  `fallback_error`, and a completion cut off at `max_tokens` is now refused
+  too instead of being embedded half-translated under a `translated` status.
+  The scaling relies on the translation window being discoverable — an
+  endpoint that never answers the discovery keeps the fixed 4096-token
+  bound. (#1241, !657)
 
 - **A mobile release build of the `dev` or `e2e` flavor now fails at startup
   instead of shipping with the trust-all TLS client armed.** Both flavors set

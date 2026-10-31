@@ -3870,7 +3870,17 @@ class ChatQnAService:
                 response.raise_for_status()
                 response_data = response.json()
                 if translategemma:
-                    translated_blob = response_data["choices"][0]["text"]
+                    choice = response_data["choices"][0]
+                    if choice.get("finish_reason") == "length":
+                        # The completion hit max_tokens: the translation is cut
+                        # off, not finished. Embedding the cut-off text would
+                        # put a half-translated history into the retrieval
+                        # space under a success status — the same defect as an
+                        # empty completion, and the backend translation path
+                        # rejects it the same way.
+                        logger.error("Translation model hit max_tokens; treating the history translation as failed.")
+                        return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
+                    translated_blob = choice["text"]
                 else:
                     translated_blob = response_data["choices"][0]["message"]["content"]
                 translated_blob = translated_blob.strip()

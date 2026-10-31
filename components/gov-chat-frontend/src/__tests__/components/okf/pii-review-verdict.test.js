@@ -157,6 +157,23 @@ describe('isAckCurrent — a stale ack must not render as a completed review', (
     expect(isAckCurrent(goodAck, 2, 'garbage')).toBe(false);
   });
 
+  // Round 17, #80357: an epoch-SECONDS stamp (1729…) is ~1000× smaller than
+  // the ISO-derived millis instant — unnormalized, `ackMs < scanMs` never
+  // fired and EVERY ack read current. Seconds-scale numerics (< 1e11) are
+  // normalized to millis before comparing.
+  it('normalizes epoch-SECONDS stamps before comparing (both sides)', () => {
+    const scanAtSeconds = Math.floor(Date.parse('2026-10-13T09:00:00.000Z') / 1000); // 1791… in seconds
+    const newerAck = { by: 'steward@itu', at: '2026-10-13T10:00:00.000Z', flagged_concepts: 2 };
+    expect(isAckCurrent(newerAck, 2, scanAtSeconds)).toBe(true);
+    const olderAck = { by: 'steward@itu', at: '2026-10-13T08:00:00.000Z', flagged_concepts: 2 };
+    expect(isAckCurrent(olderAck, 2, scanAtSeconds)).toBe(false);
+    // …and a seconds-scale ACK against an ISO scan, the mirror image.
+    const ackSec = Math.floor(Date.parse('2026-10-13T10:00:00.000Z') / 1000);
+    expect(isAckCurrent({ by: 's', at: ackSec, flagged_concepts: 2 }, 2, '2026-10-13T09:00:00.000Z')).toBe(true);
+    const staleAckSec = Math.floor(Date.parse('2026-10-13T08:00:00.000Z') / 1000);
+    expect(isAckCurrent({ by: 's', at: staleAckSec, flagged_concepts: 2 }, 2, '2026-10-13T09:00:00.000Z')).toBe(false);
+  });
+
   it('rejects a malformed / missing ack rather than defaulting to current', () => {
     expect(isAckCurrent(null, 2, null)).toBe(false);
     expect(isAckCurrent({}, 2, null)).toBe(false);

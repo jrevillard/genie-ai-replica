@@ -1499,6 +1499,16 @@ export default {
       'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
+    lifecycleErrors: {
+      drainInProgress:
+        '部分文件仍在处理（索引）中。在编辑器中打开此仓库 — 文件列表会显示是哪些文件，系统会自动重试摄取。当每个文件都显示为已索引后，再重新发布。',
+      publishGateBlocked: '仓库尚未准备好发布 — 所有文件必须已索引、合规且完成 PII 扫描。',
+      publishEmpty: '此仓库还没有内容 — 请先添加概念再发布。',
+      invalidTransition: '当前状态下不允许此操作。',
+      repoReadOnly: '此仓库正在提供服务（已摄取），为只读 — 如需修改请先撤回。',
+      graphNameConflict: '另一个同名同版本的仓库已占用该服务图名称 — 请重命名其中一个后重试。',
+      generic: '操作失败'
+    },
     models: {
       title: '模型配置',
       add: '新建配置',

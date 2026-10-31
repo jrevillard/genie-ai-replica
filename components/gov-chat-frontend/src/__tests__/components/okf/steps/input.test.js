@@ -292,11 +292,16 @@ it('FS import: the patch SPREADS draft.input (conversion_kicked survives) and th
   const last = wrapper.emitted('update').pop()[0].input;
   expect(last.conversion_kicked).toBe(true); // not clobbered
   // F13: 'Water Points' AND 'Water Points 2' already exist in the mock tree
-  // → the slug builder walks to water-points-3. The import payload's path is
-  // the bare concept_id (this lineage's /import convention — the caller
-  // overrides buildConceptPayload's .md-suffixed path).
+  // → the slug builder walks to water-points-3. The payload is sent AS
+  // BUILT (round 17, #80363): .md-suffixed path + explicit concept_id — the
+  // SAME shape addConcept sends, so both callers mint ONE identity per slug
+  // (the bare-slug form drifted and silently defeated the slug-merge).
   expect(mockImportConcepts).toHaveBeenCalledWith('r1', [
-    expect.objectContaining({ path: 'water-points-3', frontmatter: expect.objectContaining({ title: 'Water Points' }) })
+    expect.objectContaining({
+      path: 'water-points-3.md',
+      concept_id: 'water-points-3',
+      frontmatter: expect.objectContaining({ title: 'Water Points' })
+    })
   ]);
   expect(mockListConcepts).toHaveBeenCalledWith('r1');
 });

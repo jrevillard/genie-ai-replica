@@ -1515,6 +1515,16 @@ export default {
       'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
+    lifecycleErrors: {
+      drainInProgress:
+        'I filew fan be kɛ ka jɔ (indexing). Kɔnɔkow ye repository ini a la editor kɔnɔ — filew lisiti be jira fila minnu ye, an ingestion be to na kɛ o ye automatic. Publish kɔ a la filew sila ye indexed i diya.',
+      publishGateBlocked: 'Repository man ke publish to — filew sila ka kɛ indexed ye, an be PII check kɛ.',
+      publishEmpty: 'Repository ini man ke content ye — a la concepts fara a publi shiye.',
+      invalidTransition: 'I ti a daminɛ state numa ye.',
+      repoReadOnly: 'Repository ini be serve (ingested) an a ye READ ONLY ye — a retract i na a change kama.',
+      graphNameConflict: 'Repository woloro nda mone an version kin ye graph numu ka na — a furu nda a kɔ ɔ.',
+      generic: 'A kɛ tɔ.'
+    },
     models: {
       title: 'Model configurations',
       add: 'New configuration',

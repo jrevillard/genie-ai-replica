@@ -1688,8 +1688,7 @@ import DsSpinner from './ds/Spinner.vue';
 import DsStateDisplay from './ds/StateDisplay.vue';
 import DsTabs from './ds/Tabs.vue';
 import DsSelect from './ds/Select.vue';
-import OkfStudioTab from './okf/StudioTab.vue';
-import OkfModelConfigPanel from './okf/editor/ModelConfigPanel.vue';
+import { defineAsyncComponent } from 'vue';
 import { Loader2 } from '@lucide/vue';
 import { eventBus } from '../eventBus.js';
 import { getAvailableLanguages } from '../config/languageConfig.js';
@@ -1697,6 +1696,15 @@ import oidcConfig from '../config/oidcConfig.js';
 import documentFileService from '../services/documentFileService.js';
 import { formatFileSize } from '../utils/fileUtils.js';
 import { themeManager } from '../utils/ThemeManager';
+
+// OKF HEAVY COMPONENTS — ASYNC (round 17, #80362): StudioTab and
+// ModelConfigPanel pull cytoscape, cytoscape-fcose, markdown-it,
+// highlight.js and gray-matter. Statically imported, a flag-OFF deployment
+// still downloaded and parsed those hundreds of KB at startup. Async
+// components load their chunk only on FIRST RENDER — both panes render
+// exclusively behind isOkfEnabled(), so the dark build never fetches them.
+const OkfStudioTab = defineAsyncComponent(() => import('./okf/StudioTab.vue'));
+const OkfModelConfigPanel = defineAsyncComponent(() => import('./okf/editor/ModelConfigPanel.vue'));
 
 // Shared empty named-params dict for translate() — a frozen module constant
 // so the default argument allocates once, not on every per-render call.
@@ -3689,9 +3697,21 @@ export default {
      */
     /** Crawl→OKF hand-off relay (#78745): switch to the studio tab, wait the
      * tick that lets StudioTab mount its wizard listener, then re-dispatch
-     * the event flagged so this relay never re-catches its own send. */
+     * the event flagged so this relay never re-catches its own send.
+     * RELAY-MARKED ONLY (round 17, #80354): the AddFromLinkDialog still
+     * fires the LEGACY seed event — "pre-fill an already-open wizard,
+     * harmless no-op otherwise" per its own comment. Relaying that event
+     * teleported the steward out of Document Management into the 10-step
+     * wizard on every multi-page crawl, the opposite of harmless. Only
+     * events that carry the relay marker (or an explicit __wantsStudio
+     * flag) switch tabs; the legacy event stays a no-op. */
     async relayCreateFromCrawl(event) {
       if (event && event.__okfRelayed) return;
+      // RELAY INTENT ONLY: a sender that wants the tab switch flags it.
+      // The wizard's own re-dispatch carries __okfRelayed; FileDetailsDialog's
+      // hand-off sets __wantsStudio. Anything else is the legacy pre-fill
+      // event — StudioTab's already-open listener handles it or nobody does.
+      if (!(event && (event.__okfRelayed || event.__wantsStudio))) return;
       // Flag guard (round 16, #80125): the relay is registered
       // unconditionally, but with the flag parked the Studio pane's target
       // module is not registered — switching the tab there renders a dead

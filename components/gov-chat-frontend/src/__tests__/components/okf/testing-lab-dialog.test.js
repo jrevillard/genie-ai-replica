@@ -1400,6 +1400,60 @@ describe('poll cancel token (round 16, #80124)', () => {
     w.unmount();
     expect(w.vm.pollSignal.aborted).toBe(true);
   });
+
+  // Round 17, #80355: the component-LOCAL polls must honor the signal too.
+  it('pollForSuite/pollForRun bail immediately once the signal is aborted', async () => {
+    const w = await mountDialog();
+    dispatch.mockClear();
+    w.vm.pollSignal.aborted = true;
+    await expect(w.vm.pollForSuite('s1')).resolves.toBeNull();
+    await expect(w.vm.pollForRun('s1', 'rk1')).resolves.toBeNull();
+    // no dispatch past the bail — the loops never issued a GET
+    expect(dispatch).not.toHaveBeenCalled();
+    w.unmount();
+  });
+
+  // Round 17, #80355(2): a suite switch mid-run must discard the result.
+  it('onRunSuite discards the run result when the suite moved while it ran', async () => {
+    const w = await mountDialog();
+    w.vm.suite = { suite_key: 's-old' };
+    w.vm.lastRunSummary = null;
+    dispatch.mockImplementationOnce(async () => {
+      // the suite switches WHILE the run request is in flight
+      w.vm.suite = { suite_key: 's-new' };
+      return {
+        ok: true,
+        result: { status: 'done', suite_key: 's-old', payload: { summary: { positive_passed: 1 }, results: [] } }
+      };
+    });
+    await w.vm.onRunSuite();
+    // the old run's verdict was NOT adopted into the new suite
+    expect(w.vm.lastRunSummary).toBeNull();
+    w.unmount();
+  });
+});
+
+describe('headStatus — parsed instants, never raw string compare (round 17, #80358)', () => {
+  const withTimes = (updated_at, computed_at) => {
+    const repo = { ...REPO, frontmatter: { updated_at }, head: { vector: {}, computed_at } };
+    return { repo };
+  };
+  const epochSeconds = Math.floor(Date.parse('2026-10-13T09:00:00.000Z') / 1000);
+
+  it('an epoch-SECONDS computed_at compares correctly against an ISO updated_at', async () => {
+    const w1 = await mountDialog(withTimes('2026-10-13T10:00:00.000Z', epochSeconds));
+    expect(w1.vm.headStatus).toBe('stale'); // frontmatter AFTER the head
+    w1.unmount();
+    const w2 = await mountDialog(withTimes('2026-10-13T08:00:00.000Z', epochSeconds));
+    expect(w2.vm.headStatus).toBe('present'); // head is fresh
+    w2.unmount();
+  });
+
+  it('unparseable stamps degrade to present, never throw', async () => {
+    const w = await mountDialog(withTimes('garbage', epochSeconds));
+    expect(w.vm.headStatus).toBe('present');
+    w.unmount();
+  });
 });
 
 describe('contended shared-busy slot: reads still dispatch', () => {

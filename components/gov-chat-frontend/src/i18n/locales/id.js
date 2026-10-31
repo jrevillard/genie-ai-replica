@@ -1534,6 +1534,18 @@ export default {
       'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
+    lifecycleErrors: {
+      drainInProgress:
+        'Beberapa berkas masih diproses (diindekskan). Buka repositori ini di editor — daftar berkas menunjukkan yang mana, dan ingestion mencoba ulang otomatis. Publikasikan kembali setelah setiap berkas berstatus terindeks.',
+      publishGateBlocked:
+        'Repositori belum siap dipublikasikan — semua berkas harus terindeks, sesuai konformansi, dan telah dipindai (PII).',
+      publishEmpty: 'Repositori ini belum memiliki konten — tambahkan konsep sebelum mempublikasikan.',
+      invalidTransition: 'Tindakan itu tidak diizinkan dari status saat ini.',
+      repoReadOnly: 'Repositori ini sedang melayani (ter-ingest) dan HANYA-BACA — retract jika ingin mengubahnya.',
+      graphNameConflict:
+        'Repositori lain dengan nama dan versi yang sama sudah memiliki nama graf layanan — ganti nama salah satu lalu coba lagi.',
+      generic: 'Tindakan gagal'
+    },
     models: {
       title: 'Konfigurasi model',
       add: 'Konfigurasi baru',

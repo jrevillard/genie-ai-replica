@@ -1544,6 +1544,18 @@ export default {
       'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
+    lifecycleErrors: {
+      drainInProgress:
+        "Certains fichiers sont encore en cours de traitement (indexation). Ouvrez ce dépôt dans l'éditeur — la liste des fichiers indique lesquels, et l'ingestion réessaie automatiquement. Republiez lorsque chaque fichier apparaît comme indexé.",
+      publishGateBlocked:
+        "Le dépôt n'est pas prêt à être publié — tous les fichiers doivent être indexés, conformes et analysés (PII).",
+      publishEmpty: 'Ce dépôt est encore vide — ajoutez des concepts avant de publier.',
+      invalidTransition: "Cette action n'est pas permise depuis l'état actuel.",
+      repoReadOnly: 'Ce dépôt est actuellement servi (ingéré) et est en LECTURE SEULE — rétractez-le pour le modifier.',
+      graphNameConflict:
+        "Un autre dépôt portant le même nom et la même version possède déjà le nom du graphe de service — renommez l'un des deux puis réessayez.",
+      generic: "L'action a échoué"
+    },
     models: {
       title: 'Configurations de modèle',
       add: 'Nouvelle configuration',

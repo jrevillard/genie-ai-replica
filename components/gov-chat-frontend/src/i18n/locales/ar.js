@@ -1520,6 +1520,17 @@ export default {
       'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
+    lifecycleErrors: {
+      drainInProgress:
+        'لا تزال بعض الملفات قيد المعالجة (الفهرسة). افتح هذا المستودع في المحرر — تعرض قائمة الملفات أيّها، وتُعاد المحاولة تلقائيًا. أعد النشر عندما تظهر كل ملفات ك مفهرسة.',
+      publishGateBlocked: 'المستودع غير جاهز للنشر — يجب أن تكون جميع الملفات مفهرسة ومطابقة وفحصها (PII).',
+      publishEmpty: 'لا يوجد محتوى في هذا المستودع بعد — أضف مفاهيم قبل النشر.',
+      invalidTransition: 'هذا الإجراء غير مسموح به من الحالة الحالية.',
+      repoReadOnly: 'هذا المستودع قيد التقديم (مُستوعب) وللقراءة فقط — اسحبه إذا أردت تغييره.',
+      graphNameConflict:
+        'مستودع آخر بنفس الاسم والإصدار يملك بالفعل اسم الرسم البياني للخدمة — أعد تسمية أحدهما وأعد المحاولة.',
+      generic: 'فشل الإجراء'
+    },
     models: {
       title: 'تكوينات النماذج',
       add: 'تكوين جديد',

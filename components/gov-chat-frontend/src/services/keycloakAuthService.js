@@ -34,19 +34,39 @@ async function initialize() {
   // A FAILED RENEW IS NOT A DEAD SESSION (David's 2026-10-11 logout). This used
   // to call login() unconditionally, so ONE rejected refresh in a burst threw
   // the user to the login page and discarded a perfectly good session — which
-  // is exactly what happened mid-import while two tabs were racing. Retry once
-  // through the shared renew; only a second failure justifies a redirect.
+  // is exactly what happened mid-import while two tabs were racing. Retry
+  // through the shared renew; only a run of consecutive failures justifies a
+  // redirect.
+  // BOUNDED RETRIES (round 17, #80353): the comment used to say "Retry once"
+  // but nothing enforced it — a persistently failing grant re-raised
+  // silentRenewError, re-entered this handler, failed again… one renew every
+  // few seconds forever with no backoff. The counter below caps consecutive
+  // failures (reset on any success) and escalates through the same
+  // stored-user/login check as the 401 path.
+  let consecutiveRenewFailures = 0;
+  const MAX_RENEW_FAILURES = 3;
   unsubscribeSilentRenewError = userManager.events.addSilentRenewError(async () => {
     try {
       const user = await signinSilent();
-      if (user && !user.expired) return; // recovered — nothing to tell the user
+      if (user && !user.expired) {
+        consecutiveRenewFailures = 0; // recovered — the grant works again
+        return;
+      }
     } catch (retryError) {
       console.warn('[KeycloakAuth] Silent renew retry failed:', retryError?.message);
     }
-    // Still failing: check whether the session is actually unusable before
-    // discarding it. A live, unexpired user is not a reason to log out.
-    const user = await getUser();
-    if (user && !user.expired) return;
+    consecutiveRenewFailures += 1;
+    if (consecutiveRenewFailures < MAX_RENEW_FAILURES) return; // back off — let the next timer tick try
+    // Still failing after the cap: check whether the session is actually
+    // unusable before discarding it. A live, unexpired user is not a reason
+    // to log out — but stop re-arming the loop either way.
+    consecutiveRenewFailures = 0;
+    try {
+      const user = await getUser();
+      if (user && !user.expired) return;
+    } catch (escalationError) {
+      console.error('[KeycloakAuth] Session check after renew failures failed:', escalationError?.message);
+    }
     login();
   });
 

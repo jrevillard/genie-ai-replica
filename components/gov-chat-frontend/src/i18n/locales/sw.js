@@ -1529,6 +1529,19 @@ export default {
       'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
+    lifecycleErrors: {
+      drainInProgress:
+        'Baadhi ya faili bado zinachakatwa (kuwekwa kwenye faharasa). Fungua hazina hii kwenye kihariri — orodha ya faili inaonyesha zipi, na kumeza kunajaribu tena kiotomatiki. Chapisha tena faili zikionyesha zimeingizwa.',
+      publishGateBlocked:
+        'Hazina haija tayari kuchapishwa — faili zote lazima ziwekwe kwenye faharasa, ziendelee na kanuni, na zichunguzwe (PII).',
+      publishEmpty: 'Hazina hii bado hana maudhui — ongeza mada kabla ya kuchapisha.',
+      invalidTransition: 'Hatio hiyo hairuhusiwi katika hali ya sasa.',
+      repoReadOnly:
+        'Hazina hii inatumika kwa sasa (imeingizwa) na ni ya KUSOMA TU — irejeshe kama unataka kuibadilisha.',
+      graphNameConflict:
+        'Hazina nyingine yenye jina na toleo lile lile ina jina la grafu ya huduma tayari — badilisha jina la moja kisha ujaribu tena.',
+      generic: 'Hatio imeshindikana'
+    },
     models: {
       title: 'Mipangilio ya modeli',
       add: 'Mipangilio mpya',

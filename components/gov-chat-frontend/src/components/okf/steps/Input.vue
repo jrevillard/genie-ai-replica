@@ -559,7 +559,12 @@ export default {
           const title = file.name.replace(/\.(md|markdown|txt)$/i, '');
           const payload = buildConceptPayload({ title, type: 'topic', body: raw, existingIds: [...taken] });
           taken.add(payload.concept_id);
-          concepts.push({ path: payload.concept_id, frontmatter: payload.frontmatter, body: payload.body });
+          // Send the payload AS BUILT (round 17, #80363): path carries the
+          // `.md` suffix and concept_id rides explicitly — the SAME shape
+          // addConcept sends to this /import upsert. The old bare-slug,
+          // no-concept_id form minted a different identity per shape for the
+          // same slug, silently defeating the documented slug-merge (A3/F13).
+          concepts.push(payload);
         }
         if (concepts.length) await repoOkfService.importConcepts(this.repoId, concepts);
         await this.refreshConcepts();

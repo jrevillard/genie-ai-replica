@@ -102,7 +102,14 @@ export function isAckCurrent(ack, hitCount, scannedAt) {
   // gate. Anything unparseable also fails CLOSED (not current).
   if (scannedAt && ack.at) {
     const toMs = (v) => {
-      if (typeof v === 'number' && Number.isFinite(v)) return v; // raw epoch millis
+      // Numeric epochs are normalized to MILLISECONDS (round 17, #80357): a
+      // seconds-scale epoch (1729…) compared against an ISO-derived millis
+      // instant (1791…) is always "smaller", `ackMs < scanMs` never fires,
+      // and every acknowledgement reads current — the PII gate failing open
+      // on exactly the mixed-writer input this comparison exists for.
+      // < 1e11 ms ≈ 1973-5138 → any sane modern stamp in SECONDS; millis
+      // stamps are ≥ 1e11 until the year 5138.
+      if (typeof v === 'number' && Number.isFinite(v)) return v < 1e11 ? v * 1000 : v;
       const t = Date.parse(v);
       return Number.isFinite(t) ? t : null;
     };

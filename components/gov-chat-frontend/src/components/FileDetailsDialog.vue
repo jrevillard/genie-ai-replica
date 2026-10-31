@@ -972,11 +972,15 @@ export default {
         // kicks a conversion against a filename string as a bogus file_id.
         // So the honest behavior is: no prefill, no bogus seed on the wire.
         await this.$store.dispatch('okf/setSelection', { crawlSeeds: [] });
-        window.dispatchEvent(
-          new CustomEvent('okf:create-from-crawl', {
-            detail: { file_id: null, crawl_job_id: crawlJobId }
-          })
-        );
+        // __wantsStudio (round 17, #80354): this dispatch is an explicit
+        // hand-off BUTTON — the steward asked for the Studio, so the
+        // AdminDashboard relay may switch tabs. The legacy seeding event
+        // (AddFromLinkDialog) carries no marker and stays pre-fill-only.
+        const handoff = new CustomEvent('okf:create-from-crawl', {
+          detail: { file_id: null, crawl_job_id: crawlJobId }
+        });
+        handoff.__wantsStudio = true;
+        window.dispatchEvent(handoff);
         this.$emit('close');
         return;
       }

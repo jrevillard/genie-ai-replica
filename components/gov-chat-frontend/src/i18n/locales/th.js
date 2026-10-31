@@ -1520,6 +1520,17 @@ export default {
       'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
+    lifecycleErrors: {
+      drainInProgress:
+        'ไฟล์บางส่วนยังอยู่ระหว่างดำเนินการ (การจัดทำดัชนี) เปิดคลังนี้ในตัวแก้ไข — รายการไฟล์จะแสดงว่าไฟล์ใด และระบบจะลองนำเข้าใหม่โดยอัตโนมัติ เผยแพร่อีกครั้งเมื่อไฟล์ทุกไฟล์แสดงว่าจัดทำดัชนีแล้ว',
+      publishGateBlocked: 'คลังยังไม่พร้อมเผยแพร่ — ไฟล์ทั้งหมดต้องถูกจัดทำดัชนี สอดคล้องมาตรฐาน และตรวจสอบ PII แล้ว',
+      publishEmpty: 'คลังนี้ยังไม่มีเนื้อหา — เพิ่มแนวคิดก่อนเผยแพร่',
+      invalidTransition: 'ไม่อนุญาตการดำเนินการนี้จากสถานะปัจจุบัน',
+      repoReadOnly: 'คลังนี้กำลังให้บริการ (นำเข้าแล้ว) และเป็นแบบอ่านอย่างเดียว — ให้เพิกถอนหากต้องการแก้ไข',
+      graphNameConflict:
+        'คลังอื่นที่มีชื่อและเวอร์ชันเดียวกันครองชื่อกราฟบริการอยู่แล้ว — เปลี่ยนชื่อหนึ่งรายการแล้วลองอีกครั้ง',
+      generic: 'การดำเนินการล้มเหลว'
+    },
     models: {
       title: 'การตั้งค่าโมเดล',
       add: 'การตั้งค่าใหม่',

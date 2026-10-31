@@ -1526,6 +1526,19 @@ export default {
       'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
+    lifecycleErrors: {
+      drainInProgress:
+        'Some files are still being processed (indexed). Open this repository in the editor — the file list shows which ones, and ingestion retries automatically. Try publishing again once every file shows indexed.',
+      publishGateBlocked:
+        'The repository is not ready to publish — all files must be indexed, conformance-clean and PII-scanned.',
+      publishEmpty: 'This repository has no content yet — add concepts before publishing.',
+      invalidTransition: 'That action is not allowed from the current state.',
+      repoReadOnly:
+        'This repository is currently serving (ingested) and is READ ONLY — retract it if you want to change it.',
+      graphNameConflict:
+        'Another repository with the same name and version already owns the serving graph name — rename one of them and retry.',
+      generic: 'Action failed'
+    },
     models: {
       title: 'Model configurations',
       add: 'New configuration',

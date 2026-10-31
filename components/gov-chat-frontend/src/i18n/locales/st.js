@@ -1539,6 +1539,19 @@ export default {
       'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
+    lifecycleErrors: {
+      drainInProgress:
+        'Mefutso ea mangolo e ntse e sebetsa (ho hlahloba). Bula polokelo ena ho mohlophisi — lenaneo la mangolo le bontsa ke efe, kenyo e qale hape ka o iketsang. Phatlalatsa hape ha mongolo o mong le o mong o bontsa hore o hlahlobilwe.',
+      publishGateBlocked:
+        'Polokelo ha e lokolohile ho phatlalatswa — mangolo ohle a lokela ho hlahlojwa, ho lumellana le melao, le ho hlahlobwa (PII).',
+      publishEmpty: 'Polokelo ena esale e se na teng — eketsa dikgopolo pele o phatlalatsa.',
+      invalidTransition: 'Tseo e sa lumelloang ho boemo ba hajwale.',
+      repoReadOnly:
+        'Polokelo ena e ntse e direla (e kenntsoeng) e bile ke HO BALA HOSEA — e khutlise ha o batla ho e fetola.',
+      graphNameConflict:
+        'Polokelo e nngwe eo lebitso le tokomane e tshwanang e se e nang le lebitso la grafo ea tshebeletso — reha e le nngwe lebitso le letonya hape.',
+      generic: 'Tiro ha ea atleha'
+    },
     models: {
       title: 'Dipehelo tsa dimela',
       add: 'Pehelo e ncha',

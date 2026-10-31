@@ -1539,6 +1539,18 @@ export default {
       'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
+    lifecycleErrors: {
+      drainInProgress:
+        'Alguns arquivos ainda estão sendo processados (indexados). Abra este repositório no editor — a lista de arquivos mostra quais, e a ingestão tenta novamente automaticamente. Publique novamente quando todos os arquivos aparecerem como indexados.',
+      publishGateBlocked:
+        'O repositório não está pronto para publicar — todos os arquivos devem estar indexados, conformes e analisados (PII).',
+      publishEmpty: 'Este repositório ainda não tem conteúdo — adicione conceitos antes de publicar.',
+      invalidTransition: 'Essa ação não é permitida no estado atual.',
+      repoReadOnly: 'Este repositório está em serviço (ingerido) e é SOMENTE LEITURA — retraia-o se quiser alterá-lo.',
+      graphNameConflict:
+        'Outro repositório com o mesmo nome e versão já possui o nome do grafo de serviço — renomeie um deles e tente novamente.',
+      generic: 'A ação falhou'
+    },
     models: {
       title: 'Configurações de modelo',
       add: 'Nova configuração',

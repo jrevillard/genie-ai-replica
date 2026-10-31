@@ -359,14 +359,28 @@ export default {
     },
     persistMerged(merged) {
       const step = this.activeStep;
-      this.$store.dispatch('okf/saveDraft', {
-        repoId: merged.repo_id || 'pending',
-        draft: {
-          ...merged,
-          studio_step: step,
-          updated_at: Date.now()
-        }
-      });
+      // PRE-CREATE DRAFTS ARE IN-MEMORY ONLY (round 17, #80359): the server
+      // has no repo to attach a draft to, and the old `repoId: 'pending'`
+      // alias PUT /okf/repos/pending/draft on every keystroke — which 404s,
+      // maps to NOT_READY, and armed draftsUnavailable against a perfectly
+      // healthy backend. The store still keeps the draft under 'pending'
+      // (same alias saveDraft uses), so resume works; only the server write
+      // waits for a real repo_id.
+      if (merged.repo_id) {
+        this.$store.dispatch('okf/saveDraft', {
+          repoId: merged.repo_id,
+          draft: {
+            ...merged,
+            studio_step: step,
+            updated_at: Date.now()
+          }
+        });
+      } else {
+        this.$store.dispatch('okf/setDraftLocal', {
+          repoId: 'pending',
+          draft: { ...merged, studio_step: step, updated_at: Date.now() }
+        });
+      }
       // A4 server resume: the cheap okf_repositories.studio_step pointer.
       // Best-effort + silent; skipped for frozen repos (R-C parity — the
       // backend 409s serving repos anyway). G4 (max-review): ONLY when the

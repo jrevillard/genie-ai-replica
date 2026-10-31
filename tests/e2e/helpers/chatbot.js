@@ -14,7 +14,10 @@ const TEST_ADMIN_USER = {
   password: 'TestAdmin123!',
 };
 
-const BASE_URL = process.env.BASE_URL || 'https://localhost';
+// Normalized once: page.url() never produces a trailing double slash,
+// so every `${BASE_URL}/...` interpolation stays well-formed even when
+// the environment configures BASE_URL with a trailing '/'.
+const BASE_URL = (process.env.BASE_URL || 'https://localhost').replace(/\/+$/, '');
 
 // The wait from the submit click to the dashboard: the identity provider
 // deciding to issue a code, then the app exchanging it. On an idle stack the
@@ -23,9 +26,11 @@ const BASE_URL = process.env.BASE_URL || 'https://localhost';
 // a stack that stalls or rejects, and the retry is what recovers from that.
 const AUTH_BUDGET_MS = 30000;
 
-// The retry runs after the first budget has already been spent, and both have
-// to fit inside Playwright's 60 s per-test timeout alongside the spec's own
-// work. 30 s + 15 s = 45 s leaves room; 30 s + 30 s would not, and a helper
+// The retry catches a partially recovered stack: a token exchange that
+// completed just after the first wait expired, or a slow identity
+// provider that recovered mid-attempt. The retry budget is therefore
+// shorter than the first (15 s vs 30 s) — the per-test ceiling that
+// constrains the total is playwright.config.js's timeout, and a helper
 // that cannot report why it failed is no better than one that failed.
 const AUTH_RETRY_BUDGET_MS = 15000;
 
@@ -91,6 +96,11 @@ async function loginAttempt(page, user, budgetMs) {
   );
 
   const finalUrl = page.url();
+  // Dashboard only — deliberately stricter than the waitForURL predicate:
+  // the bare origin is also where CallbackView lands when the code
+  // exchange fails (router.replace('/')), so accepting it here would
+  // report a failed exchange as success and skip the retry that recovers
+  // a transient one by re-entering Keycloak with the session cookie.
   expect(
     finalUrl.includes('dashboard'),
     `Expected URL to contain 'dashboard', got: ${finalUrl}`,

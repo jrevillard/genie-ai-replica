@@ -1,8 +1,6 @@
 const https = require('https');
 const { chromium } = require('@playwright/test');
-const { loginViaUI, TEST_USER } = require('./chatbot');
-
-const BASE_URL = process.env.BASE_URL || 'https://localhost';
+const { loginViaUI, TEST_USER, BASE_URL } = require('./chatbot');
 
 /**
  * Make an HTTPS request ignoring self-signed certificate errors.
@@ -39,6 +37,13 @@ function request(method, path, options = {}) {
     });
 
     req.on('error', reject);
+
+    // https.request's timeout option only starts the clock — without a
+    // handler the stalled socket is never destroyed and the promise
+    // hangs past the 30s budget.
+    req.on('timeout', () => {
+      req.destroy(new Error(`Request timed out after ${reqOptions.timeout}ms: ${method} ${path}`));
+    });
 
     if (options.body) {
       const bodyStr = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
@@ -81,10 +86,15 @@ async function getAdminToken(adminPassword) {
 
 /**
  * Get a user token via ROPC (Resource Owner Password Credentials).
+ *
+ * Only works on realms whose client has directAccessGrantsEnabled —
+ * i.e. test-only realms like `genie2` whose spec provisions the grant
+ * (see enableDirectAccessGrants). The primary `genie` realm refuses
+ * ROPC by design; use getSessionTokenViaUI there.
  * @param {string} username - Keycloak username
  * @param {string} password - User password
  * @param {object} [options] - Optional overrides
- * @param {string} [options.realm='genie'] - Keycloak realm
+ * @param {string} [options.realm='genie'] - Keycloak realm (must be ROPC-enabled)
  * @param {string} [options.clientId='genie-app'] - Keycloak client ID
  * @returns {Promise<string>} Access token string
  */
@@ -140,6 +150,15 @@ async function getSessionToken(page) {
   return token;
 }
 
+// Ceiling for suites that mint session tokens through a browser login:
+// on a stalled stack one login cycle costs ≈135s (two attempts of 30s
+// navigation + 15s redirect wait + retry budget), and a beforeAll can
+// stack admin-API requests (each at the 30s request cap) on top of it.
+// Apply with test.describe.configure({ timeout: ... }) for the tests
+// and test.setTimeout(...) inside beforeAll — hooks read the project
+// timeout, not the suite timeout.
+const SESSION_MINT_TIMEOUT_MS = 360000;
+
 /**
  * Log in through the UI in a throwaway session and return that session's
  * access token — the cleanup paths' replacement for minting a token with
@@ -194,4 +213,5 @@ module.exports = {
   getSessionTokenViaUI,
   parseJwtClaims,
   request,
+  SESSION_MINT_TIMEOUT_MS,
 };

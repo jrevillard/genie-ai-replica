@@ -76,10 +76,7 @@ async function createUser(adminToken, realm, userData) {
  */
 async function rotateRealmKeys(adminToken, realm) {
   // Get realm UUID (parentId for key components)
-  const realmRes = await request('GET', `/auth/admin/realms/${realm}`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-  });
-  const realmId = realmRes.data.id;
+  const realmId = (await getRealmSettings(adminToken, realm)).id;
 
   // Get existing key providers
   const keysRes = await request(
@@ -130,6 +127,23 @@ async function rotateRealmKeys(adminToken, realm) {
 }
 
 /**
+ * Read a realm's settings.
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @returns {Promise<object>} The realm representation
+ */
+async function getRealmSettings(adminToken, realm) {
+  const res = await request('GET', `/auth/admin/realms/${realm}`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+
+  if (res.status !== 200) {
+    throw new Error(`Failed to get realm settings for ${realm}: ${res.status} ${JSON.stringify(res.data)}`);
+  }
+  return res.data;
+}
+
+/**
  * Update realm settings (partial update).
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
@@ -164,9 +178,47 @@ async function deleteUser(adminToken, realm, userId) {
   }
 }
 
+/**
+ * Enable ROPC (direct access grants) on a client, preserving the rest of
+ * its representation. The primary `genie` realm refuses ROPC by design —
+ * only ever call this for a test-only realm (e.g. `genie2`) whose specs
+ * mint tokens directly and have no UI login posture.
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @param {string} clientId - Client ID (e.g. 'genie-app')
+ * @returns {Promise<void>}
+ */
+async function enableDirectAccessGrants(adminToken, realm, clientId) {
+  if (realm === 'genie') {
+    throw new Error('enableDirectAccessGrants must never target the primary realm — ROPC is disabled there by design');
+  }
+
+  const searchRes = await request('GET', `/auth/admin/realms/${realm}/clients?clientId=${clientId}`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+
+  if (searchRes.status !== 200 || !Array.isArray(searchRes.data) || searchRes.data.length === 0) {
+    throw new Error(`Client ${clientId} not found in realm ${realm} (HTTP ${searchRes.status})`);
+  }
+
+  const client = searchRes.data[0];
+  if (client.directAccessGrantsEnabled) return;
+
+  const res = await request('PUT', `/auth/admin/realms/${realm}/clients/${client.id}`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+    body: { ...client, directAccessGrantsEnabled: true },
+  });
+
+  if (res.status !== 204) {
+    throw new Error(`Failed to enable direct access grants on ${clientId}: ${res.status} ${JSON.stringify(res.data)}`);
+  }
+}
+
 module.exports = {
   createUser,
   rotateRealmKeys,
+  getRealmSettings,
   updateRealmSettings,
   deleteUser,
+  enableDirectAccessGrants,
 };

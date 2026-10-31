@@ -1214,7 +1214,12 @@ services:
   # backend_uploads, which the now non-root backend could no longer write.
   backend-init:
     <<: *chown-init
-    command: ["sh", "-c", "[ -f /app/data/.chowned-1000 ] && [ -f /app/Uploads/.chowned-1000 ] || { chown -R 1000:1000 /app/data /app/Uploads && touch /app/data/.chowned-1000 /app/Uploads/.chowned-1000; }"]
+    # PER-VOLUME guard: an AND-ed pair would re-chown BOTH volumes
+    # wholesale whenever EITHER marker is missing (e.g. an operator
+    # recovered one volume with `docker volume rm`) — re-flipping uids an
+    # operator deliberately restored. Same targeted-chown doctrine the
+    # Ansible migration tasks state.
+    command: ["sh", "-c", "[ -f /app/data/.chowned-1000 ] || { chown -R 1000:1000 /app/data && touch /app/data/.chowned-1000; }; [ -f /app/Uploads/.chowned-1000 ] || { chown -R 1000:1000 /app/Uploads && touch /app/Uploads/.chowned-1000; }"]
     volumes:
       - backend_data:/app/data
       - backend_uploads:/app/Uploads
@@ -1378,7 +1383,9 @@ services:
   # the chowned ownership.
   arango-vector-db-init:
     <<: *chown-init
-    command: ["sh", "-c", "[ -f /var/lib/arangodb3/.chowned-999 ] && [ -f /var/lib/arangodb3-apps/.chowned-999 ] || { chown -R 999:999 /var/lib/arangodb3 /var/lib/arangodb3-apps && touch /var/lib/arangodb3/.chowned-999 /var/lib/arangodb3-apps/.chowned-999; }"]
+    # PER-VOLUME guard (same doctrine as backend-init): a missing marker
+    # re-chowns only ITS volume, never both.
+    command: ["sh", "-c", "[ -f /var/lib/arangodb3/.chowned-999 ] || { chown -R 999:999 /var/lib/arangodb3 && touch /var/lib/arangodb3/.chowned-999; }; [ -f /var/lib/arangodb3-apps/.chowned-999 ] || { chown -R 999:999 /var/lib/arangodb3-apps && touch /var/lib/arangodb3-apps/.chowned-999; }"]
     volumes:
       - arango_data:/var/lib/arangodb3
       - arango_apps:/var/lib/arangodb3-apps

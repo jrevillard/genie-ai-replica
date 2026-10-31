@@ -380,22 +380,32 @@
 
     - name: Create required directories
       ansible.builtin.file:
-        path: "{{ deploy_dir }}/{{ item.path }}"
+        path: "{{ deploy_dir }}/{{ item }}"
         state: directory
         mode: '0755'
-        owner: "{{ item.owner | default(omit) }}"
-        group: "{{ item.group | default(omit) }}"
       loop:
         # data/logs/kong was removed with #1227: Kong logs to stdout (the
         # fluentd driver ships them) and the directory's only effect was a
         # root-owned leftover under the data dir.
-        # database_backups is pinned to the backend uid AT CREATION (#1227):
-        # a fresh dir left ansible_user-owned would never pass the
-        # root-only migration probe below, and the uid-1000 backend would
-        # get EACCES on its own dumps.
-        - { path: "{{ data_dir }}/database_backups", owner: "1000", group: "1000" }
-        - { path: "{{ data_dir }}/huggingface" }
-        - { path: "secrets/ssl" }
+        - "{{ data_dir }}/huggingface"
+        - secrets/ssl
+
+    - name: Create the backend backup directory as the backend uid (#1227)
+      # Pinned to the backend uid AT CREATION: a fresh dir left
+      # ansible_user-owned would never pass the root-only migration probe
+      # below, and the uid-1000 backend would get EACCES on its own dumps.
+      # Escalate to root — a foreign-uid chown (or a dir pre-existing
+      # root-owned from a bare-docker root-era install) is EPERM for the
+      # play's unprivileged ansible_user, and aborting here would skip the
+      # migration task below that exists for exactly that state.
+      become: true
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}/{{ data_dir }}/database_backups"
+        state: directory
+        mode: '0755'
+        owner: "1000"
+        group: "1000"
 
     - name: Remove the stale root-owned log directories (#1227)
       # Kong no longer bind-mounts a log directory; deployments from before

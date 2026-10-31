@@ -188,7 +188,7 @@ HUGGING_FACE_HUB_TOKEN=
 # RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE=2000      # 1-8g-l: per-hop edge-visit cap in the traversal
 #                                                         # AQL (0 = unbounded) — bounds hub-entity cost.
 
-# Retriever tuning (used by retriever and chatqna)
+# Retriever tuning (used by retriever, chatqna and dataprep index maintenance)
 # RETRIEVER_ARANGO_K=4
 # RETRIEVER_ARANGO_FETCH_K=20
 # RETRIEVER_ARANGO_SCORE_THRESHOLD=0.1

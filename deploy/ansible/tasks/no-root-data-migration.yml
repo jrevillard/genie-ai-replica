@@ -53,7 +53,7 @@
   become_user: root
   ansible.builtin.command: >-
     find {{ deploy_dir }}/{{ data_dir }}/logs -uid 0
-    -exec chown -f "{{ ansible_user }}:{{ ansible_user }}" {} +
+    -exec chown -h -f "{{ ansible_user }}:{{ ansible_user }}" {} +
   when: _logs_dir.stat.exists and (_logs_root_owned.stdout | length > 0 or _logs_root_owned.rc != 0)
   changed_when: true
   failed_when: false
@@ -91,6 +91,6 @@
   become_user: root
   ansible.builtin.command: >-
     find {{ deploy_dir }}/{{ data_dir }}/database_backups -uid 0
-    -exec chown 1000:1000 {} +
+    -exec chown -h 1000:1000 {} +
   when: _backup_root_owned.stdout | length > 0 or _backup_root_owned.rc != 0
   changed_when: true

@@ -1231,7 +1231,13 @@ services:
     # recovered one volume with `docker volume rm`) — re-flipping uids an
     # operator deliberately restored. Same targeted-chown doctrine the
     # Ansible migration tasks state.
-    command: ["sh", "-c", "[ -f /app/data/.chowned-1000 ] || { chown -R 1000:1000 /app/data && touch /app/data/.chowned-1000; }; [ -f /app/Uploads/.chowned-1000 ] || { chown -R 1000:1000 /app/Uploads && touch /app/Uploads/.chowned-1000; }"]
+    # Exit-status honesty: the two volume guards are && - grouped, so a
+    # FAILED first chown (EIO, ENOENT mid-traversal) fails the whole init
+    # instead of being masked by the second statement's status — a masked
+    # failure exited 0, passed service_completed_successfully, and left
+    # the backend starting against a partially root-owned volume with no
+    # marker and nothing to ever retry the chown.
+    command: ["sh", "-c", "{ [ -f /app/data/.chowned-1000 ] || { chown -R 1000:1000 /app/data && touch /app/data/.chowned-1000; }; } && { [ -f /app/Uploads/.chowned-1000 ] || { chown -R 1000:1000 /app/Uploads && touch /app/Uploads/.chowned-1000; }; }"]
     volumes:
       - backend_data:/app/data
       - backend_uploads:/app/Uploads
@@ -1398,8 +1404,9 @@ services:
   arango-vector-db-init:
     <<: *chown-init
     # PER-VOLUME guard (same doctrine as backend-init): a missing marker
-    # re-chowns only ITS volume, never both.
-    command: ["sh", "-c", "[ -f /var/lib/arangodb3/.chowned-999 ] || { chown -R 999:999 /var/lib/arangodb3 && touch /var/lib/arangodb3/.chowned-999; }; [ -f /var/lib/arangodb3-apps/.chowned-999 ] || { chown -R 999:999 /var/lib/arangodb3-apps && touch /var/lib/arangodb3-apps/.chowned-999; }"]
+    # re-chowns only ITS volume, never both. && - grouped: a failed first
+    # chown fails the init (see backend-init) instead of being masked.
+    command: ["sh", "-c", "{ [ -f /var/lib/arangodb3/.chowned-999 ] || { chown -R 999:999 /var/lib/arangodb3 && touch /var/lib/arangodb3/.chowned-999; }; } && { [ -f /var/lib/arangodb3-apps/.chowned-999 ] || { chown -R 999:999 /var/lib/arangodb3-apps && touch /var/lib/arangodb3-apps/.chowned-999; }; }"]
     volumes:
       - arango_data:/var/lib/arangodb3
       - arango_apps:/var/lib/arangodb3-apps

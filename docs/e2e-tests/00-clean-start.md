@@ -354,18 +354,23 @@ async function api(path, method, body) {
   const data = JSON.parse(fs.readFileSync('/tmp/hierarchy-seed.json', 'utf8')).data;
   for (const coll of ['serviceCategories', 'services']) {
     const c = await api('/collection/' + coll + '/count');
-    if ((c.count || 0) > 0) { console.log(coll, 'already seeded (' + c.count + ' docs), skipping'); continue; }
+    if ((c.count || 0) >= data[coll].length) { console.log(coll, 'already complete (' + c.count + ' docs), skipping'); continue; }
+    if ((c.count || 0) > 0) console.log(coll, 'partial (' + c.count + '/' + data[coll].length + '), re-seeding');
+    // A partial collection re-inserts every doc: the already-present _keys
+    // come back as per-document conflicts, the missing ones insert — the
+    // re-run converges.
     const created = await api('/document/' + coll + '?type=array', 'POST', data[coll]);
-    console.log(coll, 'seeded:', Array.isArray(created) ? created.length : JSON.stringify(created));
+    const conflicts = Array.isArray(created) ? created.filter((d) => d.error).length : 0;
+    console.log(coll, 'seeded:', Array.isArray(created) ? created.length - conflicts : JSON.stringify(created), conflicts ? '(' + conflicts + ' already present)' : '');
   }
 })().catch((e) => { console.error('SEED FAIL:', e.message); process.exit(1); });
 "
 ```
 
-The script prints the counts it seeded (`serviceCategories seeded: 13`,
-`services seeded: 53`) or `already seeded` — that output is the
-verification. The docs carry their `_key`, so a re-run of the insert on a
-non-empty collection would conflict — the count guard prevents it.
+The script prints what it seeded (`serviceCategories seeded: 13`,
+`services seeded: 53`) or `already complete` — that output is the
+verification, and a partially-seeded collection (a crash mid-insert)
+converges on the next run instead of being skipped as done.
 
 **On the k8s dev cluster** the same script runs inside the backend pod —
 the differences are the file transfer (`kubectl -n genieai cp` or

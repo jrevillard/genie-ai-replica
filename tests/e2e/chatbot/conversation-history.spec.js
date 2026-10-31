@@ -35,6 +35,12 @@ async function mockAnswerStream(page) {
 }
 
 test.describe('Conversation history persistence', () => {
+  // The steps compose: a mocked answer on a slow stack, a reload and two
+  // API fetches each carry their own budgets — well past the 60 s default
+  // if several run long. The suite's own timeout keeps a failure attached
+  // to its step instead of dying on the generic 60 s wall.
+  test.setTimeout(120000);
+
   let page;
   let context;
   const createdConversationIds = [];
@@ -57,18 +63,35 @@ test.describe('Conversation history persistence', () => {
 
   // Direct access grants are disabled on the realm by design, so the
   // cleanup session logs in through the browser like the tests do and
-  // reuses that session's token for the API deletes.
+  // reuses that session's token for the API deletes. The sweep is by the
+  // suite's title prefix, not just the ids captured in-flight — a test
+  // that failed between its save and its bookkeeping must not leak the
+  // conversation it already persisted.
   test.afterAll(async ({ browser }) => {
-    if (createdConversationIds.length === 0) return;
-
     const token = await getSessionTokenViaUI({ browser }).catch((e) => {
       console.warn('cleanup: cleanup login failed — skipping conversation cleanup:', e.message);
       return null;
     });
     if (!token) return;
 
+    let targets = [];
+    const listRes = await request('GET', `${BASE_URL}/api/chat/conversations`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).catch((e) => {
+      console.error(`cleanup: conversation list failed: ${e.message}`);
+      return null;
+    });
+    if (listRes && listRes.status === 200) {
+      const list = listRes.data.conversations || listRes.data;
+      targets = (Array.isArray(list) ? list : [])
+        .filter((c) => c.title?.startsWith('E2E '))
+        .map((c) => c._key || c.id);
+    } else {
+      targets = [...createdConversationIds];
+    }
+
     let failed = 0;
-    for (const convId of createdConversationIds) {
+    for (const convId of targets) {
       try {
         const res = await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -83,7 +106,7 @@ test.describe('Conversation history persistence', () => {
       }
     }
     if (failed > 0) {
-      console.warn(`cleanup: deleted ${createdConversationIds.length - failed} of ${createdConversationIds.length} conversations — leftovers will accumulate`);
+      console.warn(`cleanup: deleted ${targets.length - failed} of ${targets.length} conversations — leftovers will accumulate`);
     }
   });
 
@@ -163,9 +186,6 @@ test.describe('Conversation history persistence', () => {
     // Send a message and wait for the mocked answer to render
     await sendMessage(page, userText);
     await waitForBotMessage(page, MOCKED_ANSWER);
-
-    // Capture messages before save
-    const messagesBefore = await getMessages(page);
 
     // Save the conversation
     await saveChat(page, chatTitle);

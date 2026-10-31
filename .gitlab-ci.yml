@@ -3560,7 +3560,7 @@ chart:parity:
       --set okf.enabled=true
       --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
       > /tmp/rendered.yaml
-    # --min-compared is the floor on variables actually compared (311 —
+    # --min-compared is the floor on variables actually compared (323 —
     # the number the gate compares TODAY, with the OPEA and OKF tiers
     # switched on; secretProvided, mayDiffer and
     # codeDefault rows are excluded from the count, so growing ANY of
@@ -3568,7 +3568,7 @@ chart:parity:
     # quietly greening the gate). The floor equals the count, not one
     # below it: with a floor of 171 a single reclassification was
     # invisible.
-    - python3 scripts/ci/config-parity-check.py /tmp/rendered.yaml --min-compared=311
+    - python3 scripts/ci/config-parity-check.py /tmp/rendered.yaml --min-compared=323
   rules:
     # The gate verifies its `notRead` claims against the APPLICATION
     # source: a commit under components/ or genie-ai-overlay/ that starts

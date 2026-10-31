@@ -2573,8 +2573,12 @@ and the rows below name each plan and its outcome.
 ## Remaining phases
 
 0. **Pre-merge gate (2026-10-30 ruling): !520 does not merge while any
-   follow-up it spawned is open.** Tracked as issues #1213 (A), #1214
-   (B, blocked by #1213) and #1215 (C); D lives in the MR itself. Each
+   follow-up it spawned is open.** Tracked as issues #1213 (A, CLOSED
+   — every group qualified SPEC DRIFT on Compose, the app is correct),
+   #1214 (B, CLOSED — !647 fixed the specs: locator scoping, the
+   `testadmin` Phase-0.8b user, a repaired PDF fixture) and #1215
+   (C, OPEN — the only gate item left); D lives in the MR itself. #1182
+   also closed on `main` (runtime doc-context window discovery). Each
    item an app-side MR off `main` (fresh session/worktree per item;
    this branch carries no app code by contract):
    - **A. Qualify the three E2E drift spots against a Compose stack**

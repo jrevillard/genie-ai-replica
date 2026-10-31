@@ -1122,6 +1122,7 @@ opea:
     retrieverArangoSearchMode: "vector"   # RETRIEVER_ARANGO_SEARCH_MODE: vector | hybrid
     retrieverArangoUseApproxSearch: "false"     # RETRIEVER_ARANGO_USE_APPROX_SEARCH
     retrieverArangoDistanceStrategy: "COSINE"   # RETRIEVER_ARANGO_DISTANCE_STRATEGY
+    retrieverArangoNprobe: "1"            # RETRIEVER_ARANGO_NPROBE (dataprep row reads it too)
     retrieverArangoNumCentroids: "1"      # RETRIEVER_ARANGO_NUM_CENTROIDS
     retrieverArangoFilterStrategy: "OR"   # RETRIEVER_ARANGO_FILTER_STRATEGY
     retrieverArangoTraversalMaxDepth: "2"              # RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH

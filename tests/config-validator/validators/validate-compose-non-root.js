@@ -257,7 +257,7 @@ function validateComposeNonRoot(composeText) {
   // Pre-scan the x-chown-init extension anchor: services merge it via
   // `<<: *chown-init`, and a line-level parser must resolve that merge to
   // see the invariants it carries (cap_add, restart, restart_policy).
-  const anchorDefaults = { capAdds: [], restart: null, condition: null, maxAttempts: null, mode: 'global' };
+  const anchorDefaults = { capAdds: [], restart: null, condition: null, maxAttempts: null, mode: null };
   {
     let inAnchor = false;
     let inAnchorPolicy = false;
@@ -290,6 +290,11 @@ function validateComposeNonRoot(composeText) {
       if (anchorAttempts) anchorDefaults.maxAttempts = anchorAttempts[1];
       if (/^ {4}restart_policy:\s*(?:#.*)?$/.test(line)) {
         inAnchorPolicy = true;
+        continue;
+      }
+      const anchorMode = line.match(/^ {4}mode:\s*['"]?(\w+)['"]?\s*(?:#.*)?$/);
+      if (anchorMode) {
+        anchorDefaults.mode = anchorMode[1];
         continue;
       }
       if (inAnchorPolicy) {
@@ -484,7 +489,7 @@ function validateComposeNonRoot(composeText) {
         }
         continue;
       }
-      if (/^ {6}-\s/.test(line)) {
+      if (/^ {6,}-\s/.test(line)) {
         // a new entry begins — its opts may only attach to a source: seen
         // from here on, and a pending opt-out armed by a bind: block with
         // no source: of its own dies here (it must never leak into the
@@ -495,7 +500,7 @@ function validateComposeNonRoot(composeText) {
         deferredSource = null;
         pendingCreateFalse = false;
         inBindOpts = false;
-        const t = line.match(/^ {6}-\s*type:\s*['"]?(\w+)/);
+        const t = line.match(/^ {6,}-\s*type:\s*['"]?(\w+)/);
         if (t) {
           entryType = t[1];
           entryTypeExplicit = true;
@@ -504,7 +509,7 @@ function validateComposeNonRoot(composeText) {
         }
         // source: can also be the entry's FIRST key (- source: X ...) —
         // same deferral as the 8-space spelling below
-        const dashSrc = line.match(/^ {6}-\s*source:\s*['"]?(\S+)/);
+        const dashSrc = line.match(/^ {6,}-\s*source:\s*['"]?(\S+)/);
         if (dashSrc && !entryTypeExplicit) deferredSource = dashSrc[1];
         // no continue: the same line may be a short-syntax bind
       }
@@ -518,7 +523,7 @@ function validateComposeNonRoot(composeText) {
       // a late `type: volume` reclassifies a just-pushed host bind into
       // the named volume it is; a late `type: bind` claims a deferred
       // source: as the host bind it is
-      const typeMatch = line.match(/^ {8}type:\s*['"]?(\w+)/);
+      const typeMatch = line.match(/^ {8,}type:\s*['"]?(\w+)/);
       if (typeMatch) {
         entryType = typeMatch[1];
         entryTypeExplicit = true;
@@ -537,7 +542,7 @@ function validateComposeNonRoot(composeText) {
         }
         continue;
       }
-      const srcMatch = line.match(/^ {8}source:\s*(\S+)\s*(?:#.*)?$/);
+      const srcMatch = line.match(/^ {8,}source:\s*(\S+)\s*(?:#.*)?$/);
       if (srcMatch) {
         if (entryTypeExplicit && entryType === 'volume') {
           // an EXPLICIT type: volume names a NAMED volume — not a host
@@ -565,8 +570,8 @@ function validateComposeNonRoot(composeText) {
         inBindOpts = false;
         continue;
       }
-      const bindKey = line.match(/^ {8}bind:\s*(?:#.*)?$/);
-      const bindFlow = line.match(/^ {8}bind:\s*\{(.*)\}\s*(?:#.*)?$/);
+      const bindKey = line.match(/^ {8,}bind:\s*(?:#.*)?$/);
+      const bindFlow = line.match(/^ {8,}bind:\s*\{(.*)\}\s*(?:#.*)?$/);
       if (bindKey || bindFlow) {
         inBindOpts = true;
         bindOptsTarget = sourceSeenThisEntry ? (serviceBinds[currentService] || []).length - 1 : null;

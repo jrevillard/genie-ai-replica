@@ -1264,11 +1264,12 @@ services:
     # -user root, targeted -h chown, verify, exit nonzero if anything
     # survived (a failed init is VISIBLE and retried by the bounded
     # policy; the next deploy heals the rest).
-    # Every find runs with its EXIT STATUS checked (\"probe || exit 9\" \
-    # \"verify || exit 9\"): an EIO-class traversal failure yields a failed
-    # init (visible + retried by the bounded policy), never a masked \
-    # \"nothing root-owned\" behind a discarded rc. DAC_OVERRIDE covers
-    # EACCES traversal; I/O errors surface as failures.
+    # Every find runs with its EXIT STATUS checked (probe and verify both
+    # write to a temp file and fail the init on a nonzero rc): an EIO-class
+    # traversal failure yields a failed init (visible + retried by the
+    # bounded policy), never a masked "nothing root-owned" behind a
+    # discarded rc. DAC_OVERRIDE covers EACCES traversal; I/O errors
+    # surface as failures.
     command: ["sh", "-c", "for d in /app/data /app/Uploads; do find \"$$d\" -user root -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find \"$$d\" -user root -exec chown -h 1000:1000 {} + || exit 9; fi; find \"$$d\" -user root -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; done"]
     volumes:
       - backend_data:/app/data

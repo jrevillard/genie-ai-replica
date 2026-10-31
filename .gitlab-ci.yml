@@ -601,6 +601,17 @@ container_scanning:
       - gl-container-scanning-report.json
       - "**/gl-sbom-*.cdx.json"
 
+# The chatqna image consumes the language registry from the backend tree
+# (COPY in Dockerfile-chatqna_genie-ai), so a registry-only change must
+# rebuild it like a chatqna change. build-patches/ is named by FILE, not by
+# directory: the image runs exactly two scripts from there (the off-loop
+# patcher and install_site_startup.sh), and a directory glob would also
+# rebuild this image for dataprep-only patcher edits. tracing.py is COPYed
+# into the image too and carries the entrypoint-wired access-log
+# middleware, so it is a chatqna source like core/**.
+.chatqna_server_source_changes: &chatqna_server_source_changes
+  [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/tracing.py", "genie-ai-overlay/build-patches/comps_llm_stream_offloop_patch.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml" ]
+
 .build_template: &build_template
   stage: build
   image: docker:28
@@ -905,23 +916,30 @@ contract:chatqna-server:
     # docker-cp's `contracts/` into the container. With no conftest present the
     # inventory is empty, every real comps module reads as a "missing stub", and
     # the test fails for a reason that has nothing to do with the image.
-    CONTRACT_TEST_PATTERN: "test_contract_orchestrator_wire.py test_contract_nfrp_budgets.py::test_wire_latency_within_budget"
+    CONTRACT_TEST_PATTERN: "test_contract_orchestrator_wire.py test_contract_llm_stream_offloop.py test_contract_nfrp_budgets.py::test_wire_latency_within_budget"
   rules:
+    # The monthly forced rebuild is the event most likely to shift the base
+    # image or the comps layout the /home/user/comps import path rests on —
+    # the contract lane must run then, not only on path-matching MRs.
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    # One source of truth for the paths: the same anchor the build job uses,
+    # so a path addition cannot drift between "rebuild the image" and "run
+    # the contract lane" again (configs/ssl/**/* already did).
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml" ]
+        paths: *chatqna_server_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml" ]
+        paths: *chatqna_server_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml" ]
+        paths: *chatqna_server_source_changes
 
 # Pure contract tests — repo-side, no built image needed (run in a plain venv).
 # These validate the harness logic + telemetry assertions against the repo's
@@ -1687,12 +1705,6 @@ promote:kong-config:
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
         paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
-
-# The chatqna image consumes the language registry from the backend tree
-# (COPY in Dockerfile-chatqna_genie-ai), so a registry-only change must
-# rebuild it like a chatqna change.
-.chatqna_server_source_changes: &chatqna_server_source_changes
-  [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml" ]
 
 # genie-ai-chatqna-server
 build:chatqna-server:

@@ -37,7 +37,7 @@ docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro \
 # Chatqna-shaped suite (real comps orchestrator, in the chatqna image):
 docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro \
   --entrypoint sh genie-ai-chatqna-server:latest \
-  -c "cd /contracts && python -m pytest test_contract_orchestrator_wire.py -p no:cacheprovider"
+  -c "cd /contracts && python -m pytest test_contract_orchestrator_wire.py test_contract_llm_stream_offloop.py -p no:cacheprovider"
 
 # Pure logic (dev venv — no image needed):
 cd genie-ai-overlay && python -m venv .venv && .venv/bin/pip install pytest pytest-asyncio
@@ -64,6 +64,7 @@ matching `build:` job, or no contract-only MR will be buildable.
 | `conftest.py` | The `comps` fixture — real vendored `comps` or skip |
 | `test_contract_harness.py` | Pure-logic unit tests for the harness (runs in dev venv) |
 | `test_contract_orchestrator_wire.py` | The 6 GENIE kwargs reach the handlers with exact values; all RAG services register |
+| `test_contract_llm_stream_offloop.py` | The imported orchestrator module IS the patched copy: helper defined, 2 wrapped streaming sites, generator sites untouched |
 | `test_contract_ingest.py` | Real docling chunker: structured, text-bearing, deterministic chunks |
 | `test_contract_label_filter.py` | Wrong-category excluded; the AQL `FILTER` clause is built AND passed to the vector search; the installed `ArangoVector` exposes `filter_clause` as a named param |
 | `test_contract_retriever_fusion.py` | `rrf_fuse` dense+BM25 fusion behavior (dedup, weights, unkeyed-doc isolation); hybrid `invoke` still calls `rrf_fuse` with the default ON |

@@ -2667,6 +2667,28 @@ class TestQueryTranslationStatus:
         assert status == "fallback_error"
 
     @pytest.mark.asyncio
+    async def test_a_generic_payload_cap_is_clamped_to_the_discovered_window(self):
+        """The generic payload's cap is clamped so prompt estimate +
+        completion cannot exceed the discovered window (else the server
+        rejects the whole request and the history goes back untranslated)."""
+        svc = create_chatqna_service()
+        history = [
+            {"role": "user", "content": "A" * 4000},
+            {"role": "assistant", "content": "B" * 4000},
+        ]
+        mock_client = self._mock_client(content="Translated")
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=6144))
+        with stack:
+            text, status = await svc._get_translated_history_string(history)
+        assert status == "translated"
+        # Both messages survive the char-budget filter (8028 ≤ 8448). The
+        # flattened prompt ≈ 8028 chars → ~2676 tokens at 3 chars/token; the
+        # cap is clamped to 6144 − 512 (prompt wrapper) − 2676 = 2956, below
+        # the len//2 base ceiling that would overflow the window.
+        assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 2956
+
+    @pytest.mark.asyncio
     async def test_a_generic_payload_without_a_discovered_window_sends_no_cap(self):
         """Without a discovered window there is no window-safe budget to
         send: an explicit cap could exceed the model's window and the

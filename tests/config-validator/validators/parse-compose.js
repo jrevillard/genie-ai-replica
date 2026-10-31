@@ -294,9 +294,9 @@ function readFileOrThrow(filePath, label) {
  *
  * Line-based, like parseGitlabCiImages: a top-level key at indent 0 starts a
  * job; inside a wanted job, a `changes:` key starts a filter and the
- * ` - <path>` lines indented deeper than that key are its entries. A sibling
- * key or the next rule's `- if:` list item sits at or above the key's depth
- * and ends the block; every `changes:` block of a wanted job is unioned.
+ * ` - <path>` lines indented at or deeper than that key are its entries. A
+ * sibling key or the next rule's `- if:` list item sits shallower than the
+ * key and ends the block; every `changes:` block of a wanted job is unioned.
  * Hidden anchor keys (`.name: &name`) hold their list directly under the key
  * and parse the same way. `changes: {paths: *alias}` blocks are opaque to
  * line parsing (the alias is never expanded) and yield no entries —
@@ -334,7 +334,10 @@ function parseGitlabCiJobChanges(filePath, jobNames) {
 
     if (listIndent !== null) {
       const entryMatch = trimmed.match(/^-\s+(.+)$/);
-      if (entryMatch && indent > listIndent) {
+      // A block sequence may sit deeper than its key or at the same indent —
+      // both are valid YAML for a `changes:` filter; the next rule's `- if:`
+      // item is always shallower and ends the block.
+      if (entryMatch && indent >= listIndent) {
         result.get(currentJob).push(
           entryMatch[1]
             .replace(/\s+#.*$/, '')

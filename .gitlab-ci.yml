@@ -3061,8 +3061,10 @@ test:flutter:
 # relation GitLab requires for a hard `needs` (a train whose paths
 # instantiate e2e:playwright must also instantiate e2e:integration, or
 # pipeline creation fails and the whole train goes red) hold by
-# construction. Everything the jobs execute or consume must be listed here,
-# or e2e silently skips on the train:
+# construction. Every DIRECT input the jobs execute or consume must be
+# listed here, or e2e silently skips on the train (image-source inputs —
+# the trees compiled into the pulled candidate images — are a deliberate
+# exception, tracked in #1283):
 #   - e2e:playwright runs tests/e2e/chatbot/, tests/e2e/documents/ and
 #     tests/e2e/theme-runtime-config.spec.js; it reads tests/e2e/helpers/
 #     and tests/e2e/fixtures/ at runtime, and is installed/configured from

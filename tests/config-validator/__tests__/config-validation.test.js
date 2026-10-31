@@ -2248,20 +2248,28 @@ describe('e2e merge-train changes filters (#1264)', () => {
 
   // Section of the file from a top-level key to the next one. The boundary
   // matches a top-level KEY line only — a column-0 comment inside the job
-  // body is valid YAML there and must not truncate the section.
+  // body is valid YAML there and must not truncate the section. Column-0
+  // comment lines are stripped entirely: they are layout between jobs and
+  // must not leak literals (a path, a condition) into the assertions below.
   const sectionOf = (job) => {
     const start = content.indexOf(`\n${job}:`);
     expect(start).toBeGreaterThan(-1);
     const rest = content.slice(start + 1);
     const end = rest.search(/\n[\w:.-]+:(\s|$)/);
-    return end === -1 ? rest : rest.slice(0, end + 1);
+    const section = end === -1 ? rest : rest.slice(0, end + 1);
+    return section
+      .split('\n')
+      .filter((line) => !line.startsWith('#'))
+      .join('\n');
   };
 
   // Executed paths are derived from the `npx playwright test` invocation in
   // .e2e_web_base rather than copied into a second hand-maintained list — a
   // hardcoded list would inherit the same drift this guard exists to catch.
+  // The derivation is anchored to that base's section so a second invocation
+  // added elsewhere in the file cannot silently redirect it.
   const executedPaths = () => {
-    const invocation = content.match(/npx playwright test ([^\n]+)/);
+    const invocation = sectionOf('.e2e_web_base').match(/npx playwright test ([^\n]+)/);
     expect(invocation).not.toBeNull();
     const targets = invocation[1]
       .split(/\s+/)
@@ -2300,8 +2308,10 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // Broadening e2e:playwright's rule to all merge_request_event pipelines
     // would dangle its hard needs on every ordinary MR pipeline and fail
     // pipeline creation repo-wide; e2e:integration's two rules must stay
-    // scoped the same way.
-    const trainCondition = 'CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"';
+    // scoped the same way. The FULL condition is pinned — dropping either
+    // half re-scopes the rule.
+    const trainCondition =
+      '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"';
     expect(sectionOf('e2e:playwright').split(trainCondition).length - 1).toBe(1);
     expect(sectionOf('e2e:integration').split(trainCondition).length - 1).toBe(2);
   });
@@ -2309,6 +2319,9 @@ describe('e2e merge-train changes filters (#1264)', () => {
   test('mobile stays integration-only', () => {
     expect(filters.get('e2e:integration')).toEqual(['mobile/genie_ai_mobile/**/*']);
     expect(sectionOf('e2e:playwright')).not.toContain('mobile/');
+    // Neither half of the split may reach the shared anchor: an alias entry
+    // is invisible to the section checks above.
+    expect(filters.get(ANCHOR)).not.toContain('mobile/genie_ai_mobile/**/*');
   });
 });
 
@@ -2372,6 +2385,21 @@ describe('parseGitlabCiJobChanges', () => {
     ]);
     const parsed = parseGitlabCiJobChanges(file, ['job-a']);
     expect(parsed.get('job-a')).toEqual(['tests/a/**/*']);
+  });
+
+  test('a same-indent sequence is a valid changes: block', () => {
+    const file = writeTempCi([
+      'job-a:',
+      '  rules:',
+      "    - if: '$X'",
+      '      changes:',
+      '      - tests/a/**/*',
+      '      - tests/b/**/*  # trailing comment',
+      "    - if: '$Y'",
+      '      when: manual'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['job-a']);
+    expect(parsed.get('job-a')).toEqual(['tests/a/**/*', 'tests/b/**/*']);
   });
 
   test('hidden anchor keys parse their direct list; aliases stay opaque', () => {

@@ -1515,9 +1515,9 @@ export default {
       uploadFailed: "فشل تحميل {'{'}fileName{'}'}."
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+      'لماذا تهم عمليات الرفع لـ RAG: كل مستند ترفعه يمكن أن يصبح معرفة منقّحة وموسومة — المستندات المركّزة جيّدة البنية تُسترجع بدقة أكبر بكثير من ملف طويل واحد. يحوّل معالج OKF Studio الملفات المرفوعة إلى موضوعات مراجَعة.',
     ragTipNoOkf:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
+      'لماذا تهم عمليات الرفع لـ RAG: كل مستند ترفعه يمكن أن يصبح معرفة منقّحة وموسومة — المستندات المركّزة جيّدة البنية تُسترجع بدقة أكبر بكثير من ملف طويل واحد.'
   },
   okf: {
     lifecycleErrors: {
@@ -1534,7 +1534,7 @@ export default {
     models: {
       title: 'تكوينات النماذج',
       add: 'تكوين جديد',
-      hint: 'نقاط نهاية نماذج بعيدة مسماة للتقييم والتوليد — أي واجهة متوافقة مع OpenAI (OpenAI، بوابة LiteLLM، vLLM، Gemini-compat، Ollama) أو Anthropic مباشرة. يمكن أن تكون تكوين واحد فقط نشطًا؛ وعند عدم وجود أي تكوين نشط يُستخدم النموذج الافتراضي المكون للنشر. تُخزَّن المفاتيح على الخادم ولا تُعرض أبدًا.',
+      hint: 'نقاط نهاية نماذج بعيدة مسماة للتقييم والتوليد — أي واجهة متوافقة مع OpenAI (OpenAI، بوابة LiteLLM، vLLM، Gemini-compat، Ollama) أو Anthropic مباشرة. يمكن أن يكون تكوين واحد فقط نشطًا؛ وعند عدم وجود أي تكوين نشط يُستخدم النموذج الافتراضي المُكن للنشر. تُخزَّن المفاتيح على الخادم ولا تُعرض أبدًا.',
       name: 'الاسم',
       provider: 'المزوّد',
       providerOpenai: 'متوافق مع OpenAI (OpenAI، LiteLLM، vLLM…)',
@@ -1548,7 +1548,7 @@ export default {
       modelFetch: 'جلب النماذج',
       modelFetching: 'جارٍ الجلب…',
       modelsEmpty: 'لم تُرجع نقطة النهاية نماذج — اكتب معرّف النموذج.',
-      modelsFailed: 'فشل جلب قائمة النماذج — اكتب المعرّف.',
+      modelsFailed: 'فشل جلب قائمة النماذج — اكتب معرّف النموذج.',
       modelsLoaded: 'تم تحميل {n} من النماذج — اختر من القائمة المنسدلة أو اكتب بحرية',
       test: 'اختبار الاتصال',
       testing: 'جارٍ الاختبار…',
@@ -1558,8 +1558,8 @@ export default {
       testGenFail: '✗ نقطة النهاية سليمة لكن استدعاء النموذج فشل',
       testNotListed: ' — ملاحظة: «{model}» ليس في قائمة نماذج نقطة النهاية',
       testFail: '✗ فشل الاختبار — لا استجابة',
-      services: 'استخدم هذا التهيئة لـ',
-      svcJudge: 'الاختبارات المعيارية (حكم RAGAS + المرشد)',
+      services: 'استخدم هذا التكوين لـ',
+      svcJudge: 'الاختبارات المعيارية (حَكَم RAGAS + المرشد)',
       svcJudgeShort: 'اختبارات',
       svcCuration: 'تنقيح المفاهيم',
       svcCurationShort: 'تنقيح',
@@ -1585,7 +1585,7 @@ export default {
       providerTipAnthropic:
         'نقاط نهاية Anthropic الأصلية التي تم التحقق منها: Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
       baseUrlTip:
-        'يسرد الخادم النماذج على هذا الأساس + /models (متوافق مع OpenAI) أو + /v1/models (Anthropic — تتم تسوية /v1 الختامية)، ويولّد اختبار الاتصال على + /chat/completions أو + /v1/messages. تم التحقق من المسارات القياسية الأربعة مباشرة في 2026-10-20.',
+        'يسرد الخادم النماذج على هذا الأساس + /models (متوافق مع OpenAI) أو + /v1/models (Anthropic — تُسوَّى الشرطة المائلة الختامية /v1)، ويولّد اختبار الاتصال على + /chat/completions أو + /v1/messages. تم التحقق من المسارات القياسية الأربعة مباشرة في 2026-10-20.',
       save: 'حفظ التغييرات',
       create: 'إنشاء',
       cancel: 'إلغاء',
@@ -1600,10 +1600,10 @@ export default {
       edit: 'إعادة تسمية / تعديل',
       copy: 'نسخ',
       activate: 'تنشيط (واحد فقط نشط)',
-      deactivate: 'إلغاء التنشيط — سيُستخدم النموذج الافتراضي',
+      deactivate: 'إلغاء التنشيط — سيُستخدم النموذج الافتراضي للنشر',
       delete: 'حذف',
       deleteConfirm: 'حذف تكوين النموذج «{name}»؟',
-      empty: 'لا توجد تكوينات نماذج بعد — النموذج الافتراضي (env) قيد الاستخدام.',
+      empty: 'لا توجد تكوينات نماذج بعد — النموذج الافتراضي (env) للنشر قيد الاستخدام.',
       adminOnly: 'تتطلب تكوينات النماذج دور مسؤول المنصة.'
     },
     versions: {
@@ -1700,7 +1700,7 @@ export default {
       title: 'استيراد المستندات إلى مستودع OKF جديد',
       hint: 'تتحول المستندات إلى مستودع واحد — تُقسَّم وتربط وتُوسم معًا. لا يُنشر شيء؛ يتبع سير العمل المعتاد: مراجعة → نشر → استيعاب.',
       name: 'اسم المستودع',
-      namePh: 'مثال: حزمة سياسات',
+      namePh: 'مثال: حزمة سياسات المسالخ',
       domain: 'المجال الموضوعي',
       strategy: 'استراتيجية التصنيف',
       stratHeuristics: 'الاستدلال (سريع، بدون LLM)',
@@ -1709,10 +1709,10 @@ export default {
       files: 'المستندات المحددة',
       servingBadge: 'يخدم RAG الحر',
       alreadyBadge: 'في مستودع OKF بالفعل',
-      servingTip: 'هذا المستند يخدم النص الحر حاليًا — لا يمكن استيعاب المستودع الجديد حتى يتم سحبه.',
+      servingTip: 'هذا المستند يخدم متن RAG الحر حاليًا — لا يمكن استيعاب المستودع الجديد حتى يتم سحبه.',
       alreadyTip: 'هذا المستند هو مصدر مستودع OKF آخر بالفعل.',
       servingWarn:
-        '{n} من المستندات لا تزال تخدم النص الحر. الاستيراد ينجح، لكن لا يمكن استيعاب هذا المستودع حتى يتم سحبها.',
+        '{n} من المستندات لا تزال تخدم المتن الحر. ينجح الاستيراد، لكن لا يمكن استيعاب هذا المستودع حتى يتم سحبها.',
       cancel: 'إلغاء',
       importing: 'جارٍ الاستيراد…',
       go: 'استيراد',
@@ -1812,7 +1812,7 @@ export default {
             reaper:
               'توقف عامل الاستيعاب عن الانتظار خلال نافذة السماح لأن التصريف كان مشبعًا — المحتوى سليم. للإصلاح: عدِّل هذا الملف تعديلًا بسيطًا واحفظ لإعادة إدراجه في الطابور، أو اسحب المستودع وأعد الاستيعاب بالكامل.',
             dataprep:
-              'أخفقت خدمة إعداد المحتوى في هذا الاستيعاب. للإصلاح: عدِّل واحفظ لإعادة الإدراج؛ وإن تكرر الفشل فتحقق من صحة الخدمة.',
+              'أخفقت خدمة إعداد المحتوى في هذا الاستيعاب. للإصلاح: عدِّل واحفظ لإعادة الإدراج؛ وإن تكرر فتحقق من صحة خدمة إعداد البيانات.',
             generic:
               'فشلت الفهرسة. للإصلاح: عدِّل المحتوى واحفظ لإعادة الإدراج، أو اسحب المستودع وأعد الاستيعاب بالكامل.'
           }
@@ -1910,10 +1910,9 @@ export default {
         stillBlocking: 'ما زالت تحظر'
       },
       piiBulk: {
-        done_accept:
-          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
-        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
-        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
+        done_accept: 'تم — وُسم كل كيان مُعلَّم بأنه تمت مراجعته والاحتفاظ به على {n} من المفاهيم. أُزيلت أعلام PII.',
+        done_redact: 'تم — استُبدل المحتوى المُعلَّم على {n} من المفاهيم بإشعار الحجب.',
+        done_remove: 'تم — أُزيل المحتوى المُعلَّم على {n} من المفاهيم.',
         title: {
           redact: 'حجب جميع المحتويات المميزة',
           remove: 'إزالة جميع المحتويات المميزة',
@@ -1935,9 +1934,9 @@ export default {
       },
       addSources: {
         working: 'Converting sources…',
-        done: '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).',
-        failed: 'A conversion failed — check the logs; the rest may still have queued.',
-        landed: 'Conversions complete — {t} topics now in the tree.'
+        done: '{n} مصدرًا في قائمة الانتظار — تصل الموضوعات إلى الشجرة مع اكتمال التحويلات ({t} موضوعًا الآن).',
+        failed: 'فشل أحد التحويلات — راجع السجلات؛ قد يكون الباقي أُدرج في قائمة الانتظار.',
+        landed: 'اكتملت التحويلات — {t} موضوعًا الآن في الشجرة.'
       }
     },
     dashboard: {
@@ -2138,9 +2137,9 @@ export default {
       descriptionLabel: 'الوصف',
       save: 'حفظ frontmatter',
       saveFailed: 'فشل حفظ frontmatter',
-      perRepoTitle: 'Routing tags — what this repo is about',
+      perRepoTitle: 'وسوم التوجيه — ما يتناوله هذا المستودع',
       perRepoHint:
-        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+        'وسوم على مستوى المستودع (موضوع / كيان / نطاق / محظور / ملخص / كلمة مفتاحية) تحرك المسترجِع. البيانات نفسها موجودة أيضًا في حقل مستند المستودع — يبقى الاثنان متزامنين عند الحفظ.',
       perRepoField: {
         topic: 'Topic',
         entity: 'Entity',
@@ -2152,16 +2151,16 @@ export default {
       perRepoPh: {
         topic: 'One topic per line',
         entity: 'One entity per line',
-        forbidden: 'One forbidden topic per line',
+        forbidden: 'موضوع محظور واحد لكل سطر',
         keyword: 'One keyword per line'
       },
       perRepoHelp: {
-        topic: 'Add, modify or remove topics — one per line. Empty lines are ignored.',
-        entity: 'Add, modify or remove entities — one per line. Empty lines are ignored.',
-        forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
-        keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
+        topic: 'أضف أو عدّل أو أزل المواضيع — واحدًا لكل سطر. الأسطر الفارغة تُهمَل.',
+        entity: 'أضف أو عدّل أو أزل الكيانات — واحدًا لكل سطر. الأسطر الفارغة تُهمَل.',
+        forbidden: 'أضف أو عدّل أو أزل المواضيع المحظورة — واحدًا لكل سطر. الأسطر الفارغة تُهمَل.',
+        keyword: 'أضف أو عدّل أو أزل الكلمات المفتاحية — واحدة لكل سطر. الأسطر الفارغة تُهمَل.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      perRepoRepoErr: 'حُفظ محليًا؛ فشلت كتابة حقل مستند المستودع — أعد المحاولة.',
       repoTagsHint:
         'الوسوم على مستوى المستودع ({summary}) تخص المستودع وليس هذا المفهوم — أدرها من لوحة الوسوم في الشريط الأيمن.'
     },
@@ -2193,14 +2192,14 @@ export default {
     },
     glossary: {
       addConcept:
-        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
-      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+        'اكتب موضوعًا جديدًا يدويًا (markdown مع frontmatter). كل موضوع يصبح وحدة قابلة للاستشهاد — الموضوعات المركّزة تُسترجع بدقة أعلى من مستند طويل واحد.',
+      type: 'نوع هذا المفهوم — خدمة أو سياسة أو شخص أو مكان… يُخزَّن النوع على كل جزء، فيستطيع الاسترجاع تفضيل النوع الصحيح من المصدر، وتستطيع الإجابات بيان ما تستشهد به.',
       title:
-        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+        'الاسم المقروء الظاهر في الإجابات والاستشهادات. العنوان الدقيق يساعد المساعد على اختيار هذا الموضوع تحديدًا على حساب الموضوعات المشابهة — العناوين الغامضة تخسر أمام المحددة وقت الاسترجاع.',
       indexStatus:
-        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+        'موقع هذا المفهوم في مسار الاستيعاب: محلّل = بانتظار التقسيم والتضمين؛ مفهرس = قابل للبحث والاستشهاد في RAG؛ فاشل = غير قابل للبحث — أصلحه وأعد استيعابه. المفاهيم المفهرسة فقط يمكن استرجاعها.',
       trustTier:
-        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+        'مدى التحقق من هذا المفهوم: غير متحقق منه = منتَج آليًا، مؤكد آليًا = مفحوص مقابل قواعد، تمت مراجعته بشريًا = وقّع عليه أمين. تستطيع الإجابات إبراز الثقة ليعرف المستخدمون ما يقرؤونه — الثقة الأعلى تكسب ثقة المستخدم لا استرجاعًا أفضل.',
       concept:
         'مدخل واحد في المستودع الخاص بك — عادةً صفحة واحدة أو موضوع واحد. يحتوي كل مفهوم على frontmatter مهيكل يقرأه المساعد، بالإضافة إلى نص markdown الذي يجيب منه.',
       repository:
@@ -2220,33 +2219,33 @@ export default {
       classification:
         'كيف نحدد ماهية كل مفهوم (موضوع، كيان، عملية…). يقرأ الاستدلال الصفحة تلقائيًا؛ بينما خيار LLM أبطأ ولكنه يتعامل مع الصفحات المعقدة.',
       resplit:
-        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+        'إعادة تقسيم مستند مصدر طويل إلى موضوعات بالحجم الصحيح. الموضوعات الكبيرة جدًا تميع دقة الاسترجاع (تختبئ الإجابة بين الحشو)؛ والصغيرة جدًا تفقد السياق الذي تحتاجه الإجابة.',
       saveFailed: 'فشل الحفظ',
       importFailedTitle: 'فشل الاستيراد — تعذر تحويل الملف المصدر.',
       importFailedHint: 'احذف هذا المستودع واستورد الملف المصدر مرة أخرى.',
       frontmatter:
         'المعلومات المنظمة في الجزء العلوي من كل ملف — النوع، العنوان، التسميات. يستخدمها المساعد لمعرفة موضوع كل مفهوم.',
       pickSource:
-        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+        'المصادر تغذّي المنشئ، الذي يقترح موضوعات لمراجعتك — لا يُعتمد شيء حتى توافق في Curate. المستندات المستوعبة بالفعل لأجل RAG الحر مسموحة؛ يبقى مستودعك محجوزًا عن الاستيعاب حتى تُسحب.',
       classificationStrategy:
-        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
-      clsHeur: 'Heuristics (fast, no LLM)',
+        'كيف يقرر المنشئ تسميات كل موضوع: الاستدلال سريع ومجاني؛ وLLM يقرأ كل صفحة (أفضل للتخطيطات المعقدة)؛ والهجين يبدأ استدلاليًا ويصعّد الحالات الصعبة. تنقيح فقط — لا يطلق الاستيعاب أبدًا.',
+      clsHeur: 'الاستدلال (سريع، بدون LLM)',
       clsLlm: 'LLM classification',
       clsHybrid: 'Hybrid',
       fsPick:
-        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+        'كل ملف يصبح موضوعًا واحدًا — الموضوعات المركّزة تُسترجع بدقة أعلى من مستند طويل واحد. يصبح اسم الملف العنوان؛ ويمكنك تنقيح كل شيء في Curate.',
       autocorrect:
-        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+        'التصحيح التلقائي يمسّ frontmatter فقط (العناوين، الأنواع، البنية) — لا يمس محتواك المكتوب أبدًا. تُعرض المقترحات قبل أي تغيير؛ والتطبيق يكتب الإصلاحات فورًا ويمكنك مراجعة النتيجة في Curate.',
       handoff:
-        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+        'طقس دورة الحياة (إرسال → موافقة → نشر) خارج هذا المعالج عمدًا: الموافقات تخص تدفق الحوكمة في لوحة التحكم وفي المحرر، حيث تُدار الإصدارات وحالة الخدمة.',
       lifecycle:
-        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+        'العقد ذو الخطوات الست: مسودة → مراجعة → معتمد → منشور (إنشاء الإصدار + الحزمة) → مستوعب (يخدم في RAG) → مسحوب (عودة للتحرير). المحتوى لا يصبح قابلًا للاستشهاد إلا بعد الاستيعاب — والمحتوى المراجَع فقط يمكن نشره.',
       labelsAuto:
-        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+        'تُعيَّن التسميات تلقائيًا من هرمية المعرفة — خدمات L2 مقيدة بمجال الموضوع لهذا المستودع. راجعها واضبطها لكل موضوع في Curate.',
       reviewHandoff:
-        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+        'إبقاء طقس الموافقة في مكان واحد (المحرر/لوحة التحكم) يعني أن المراجعين يوقعون دائمًا على السطح نفسه بالسجل التدقيقي نفسه — المعالج يجهّز المستودع، والطقس ينشره.',
       piiReview:
-        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+        'عثر الفاحص على بيانات شخصية محتملة. لكل نتيجة تختار: حجب (استبدال بإشعار)، أو استبدال (اكتب نصك الخاص)، أو إزالة (احذفها)، أو قبول (إبقاؤها — القرار يُدوَّن تدقيقيًا). لا يمكن تسليم المستودع بنتائج غير مراجَعة.'
     },
     md: {
       toolbar: 'تنسيق',
@@ -2283,9 +2282,9 @@ export default {
       step7:
         'يمكن إصلاح بعض التحذيرات تلقائيًا: يمكن ضبط قيم الحالة إلى تعدادات صالحة، ويمكن ملء الحقول المفقودة بقيم افتراضية معقولة. طبق الإصلاحات التي توافق عليها، ثم عد إلى المسؤول للمراجعة.',
       step8:
-        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+        'ملخص لما أنشأته: الموضوعات، والتسميات، والمصادر، وأي مشكلات غير محلولة. عندما يبدو صحيحًا، سلّمه — الإرسال ← الموافقة ← النشر تتم في لوحة التحكم وفي المحرر، لا في هذا المعالج أبدًا.',
       step9:
-        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+        'هذا المستودع جاهز للمراجعة. أرسله للموافقة من لوحة Studio؛ ويوافق معتمِد؛ والنشر يحدث من لوحة التحكم أو المحرر — لا من هذا المعالج أبدًا. يبقى المحرر موطن كل تغيير مستقبلي.',
       docMgmtEntry:
         'إنشاء مستودع OKF جديد من المستندات المحددة. ستصبح المستندات مصادر؛ وستراجع وتسمي الموضوعات التي تنتجها قبل نشر أي شيء.',
       crawlSegment: 'مستودع OKF هو مجموعة منظمة ذات إصدارات من الموضوعات التي يمكن لإجابات الدردشة الاستشهاد بها.',
@@ -2401,7 +2400,7 @@ export default {
     },
     steps: {
       entry: {
-        createdHint: 'Repository created — rename it later from the editor.',
+        createdHint: 'أُنشئ المستودع — أعد تسميته لاحقًا من المحرر.',
         title: 'اسم المستودع ومجال الموضوع',
         hint: 'امنح مستودع OKF هذا اسمًا واضحًا واختر مجال موضوعه.',
         nameLabel: 'اسم المستودع',
@@ -2429,12 +2428,12 @@ export default {
             desc: 'تفرع الموضوعات والهيكل من مستودع OKF آخر.'
           }
         },
-        cloneSource: 'Source repository (not yet serving)',
-        clonePh: 'Select the repository to clone from',
-        cloning: 'Cloning topics into this repository…',
-        cloneNeed: 'Pick the repository to clone from first.',
-        cloneBusy: 'The previous repository is still being removed — go Back and Continue again in a moment.',
-        cloneFailed: 'The clone failed — try again.'
+        cloneSource: 'المستودع المصدر (لا يخدم بعد)',
+        clonePh: 'اختر المستودع للاستنساخ منه',
+        cloning: 'جارٍ استنساخ الموضوعات إلى هذا المستودع…',
+        cloneNeed: 'اختر المستودع للاستنساخ منه أولاً.',
+        cloneBusy: 'لا يزال المستودع السابق قيد الإزالة — ارجع للخلف وتابع مجددًا بعد لحظات.',
+        cloneFailed: 'فشل الاستنساخ — حاول مرة أخرى.'
       },
       input: {
         title: 'المدخلات',
@@ -2446,27 +2445,27 @@ export default {
         chooseCrawl: 'Choose crawled documents',
         chooseDocs: 'Choose source documents',
         writeOne: '+ Write a concept',
-        fsPick: '+ Import markdown from this computer',
+        fsPick: '+ استيراد markdown من هذا الكمبيوتر',
         fsBusy: 'Importing your files…',
-        fsFailed: 'Import failed — check the files and retry.',
-        skippedEmpty: '{n} empty file(s) skipped.',
+        fsFailed: 'فشل الاستيراد — تحقق من الملفات وأعد المحاولة.',
+        skippedEmpty: 'تم تخطي {n} ملفًا فارغًا.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',
-        noRepo: 'Create the repository first (go back to Entry).',
-        noRepoYet: 'Create the repository first (go back to Entry).',
-        benchTitle: 'Topics in this repository',
+        noRepo: 'أنشئ المستودع أولاً (ارجع إلى خطوة الدخول).',
+        noRepoYet: 'أنشئ المستودع أولاً (ارجع إلى خطوة الدخول).',
+        benchTitle: 'الموضوعات في هذا المستودع',
         benchCount: '{n}',
         benchLoading: 'Reading topics…',
-        benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
-        benchFailed: 'Could not read the topics right now.',
+        benchEmpty: 'لا يوجد شيء هنا بعد — اختر المصادر أدناه، أو استورد markdown، أو اكتب موضوعك الأول.',
+        benchFailed: 'تعذّرت قراءة الموضوعات الآن.',
         editTitle: 'Edit concept',
-        deleteFailed: 'Could not delete the concept.',
-        added: '{n} topic(s) in this repository so far.',
+        deleteFailed: 'تعذر حذف المفهوم.',
+        added: 'يوجد {n} موضوعًا في هذا المستودع حتى الآن.',
         deleteTitle: 'Delete topic',
-        deleteBody: 'This permanently removes the topic from this repository.',
+        deleteBody: 'يؤدي هذا إلى إزالة الموضوع من هذا المستودع نهائيًا.',
         labelFailed: 'Could not set the label.',
-        cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
+        cloned: 'هذا المستودع نسخة مستنسخة — موضوعاته في مكانها بالفعل. تابع إلى Curate لمراجعتها.'
       },
       produce: {
         title: 'توليد الموضوعات',
@@ -2475,51 +2474,51 @@ export default {
         placeholder: 'سيتم ربط خدمة الإنشاء في مهمة لاحقة.',
         retry: 'Retry conversion',
         restart: 'Run again',
-        running: 'Converting… you can watch progress here; nothing is committed until you review in Curate.',
-        failed: 'The conversion failed — retry, or go back and pick different inputs.',
-        done: '{n} topic(s) are ready — continue to review them in Curate.',
-        noSources: 'No sources selected — go back to Input.',
-        neverStarted: 'The conversion did not start — retry.',
-        manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
+        running: 'جارٍ التحويل… يمكنك متابعة التقدم هنا؛ لا يُعتمد شيء حتى تراجع في Curate.',
+        failed: 'فشل التحويل — أعد المحاولة، أو ارجع واختر مدخلات أخرى.',
+        done: '{n} من الموضوعات جاهزة — تابع لمراجعتها في Curate.',
+        noSources: 'لم تُحدد مصادر — ارجع إلى خطوة المدخلات.',
+        neverStarted: 'لم يبدأ التحويل — أعد المحاولة.',
+        manualSkip: 'الموضوعات المكتوبة يدويًا لا تحتاج توليدًا — تابع إلى Curate لمراجعتها.',
         labelDone: 'Conversion complete',
         dupContent:
-          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
-        inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+          'هذه المصادر مستوردة بالفعل إلى مستودع OKF آخر. اسحب ذلك المستودع أو احذفه أولاً، أو اختر مستندات أخرى.',
+        inFlight: 'هناك تحويل قيد التشغيل بالفعل لهذا المستودع — انتظر انتهاءه.',
         stage: {
           files: 'Files',
-          filesCount: '{done} of {total} documents',
+          filesCount: '{done} من {total} مستندًا',
           concepts: 'Concepts',
           conceptsCount: '{done} of {total} topics',
           conceptsSoFar: '{n} topics so far',
           curating: 'Curating',
-          curatingCount: '{done} of {total} concepts labelled',
+          curatingCount: '{done} من {total} مفهومًا مُوسومًا',
           crosslink: 'Cross-linking topics',
-          linkCount: '{done} of {total} batches · {w} links written',
+          linkCount: '{done} من {total} دفعة · كُتب {w} رابطًا',
           complete: 'Complete',
           unavailable: 'Count unavailable',
           waiting: 'Waiting'
         },
-        filesNote: '{done} of {total} documents converted',
-        pagesNote: '{done} of {total} pages converted',
-        pagesSoFar: '{n} pages converted so far',
+        filesNote: 'تم تحويل {done} من {total} مستندًا',
+        pagesNote: 'تم تحويل {done} من {total} صفحة',
+        pagesSoFar: 'تم تحويل {n} صفحة حتى الآن',
         sourceStat: '+{n} new (total {t})',
-        sourceStatMerged: '+{n} new · {m} merged by slug (total {t})',
+        sourceStatMerged: '+{n} جديدًا · {m} دُمجت بحسب الـ slug (الإجمالي {t})',
         docsLeg: '{n} selected document(s)',
-        legWait: 'Waiting for the previous conversion to release…'
+        legWait: 'في انتظار أن يفرج التحويل السابق…'
       },
       label: {
         title: 'التسميات — تلقائي',
         hint: 'تُحدَّد التسميات تلقائيًا من تسلسل المعرفة، وتقتصر على المجال الموضوعي لهذا المستودع.',
         loading: 'Reading labels…',
-        preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
+        preview: '{labeled} من {n} موضوعًا تحمل تسميات هرمية المعرفة.',
         unlabeled: 'no labels yet',
-        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
-        loadFailed: 'Could not read the labels right now.'
+        adjust: 'اضبط تسميات أي موضوع في Curate — تبقى التسميات مقيدة بمجال الموضوع لهذا المستودع.',
+        loadFailed: 'تعذّرت قراءة التسميات الآن.'
       },
       curate: {
         embedHint:
-          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
-        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
+          'راجع كل موضوع وحسّنه: أصلح النص، وحدد نوعه وتسميته في هرمية المعرفة، وأضف موضوعات أو أزلها. كل ما تصلحه هنا هو ما سيستشهد به المساعد لاحقًا.',
+        noRepo: 'لا يوجد مستودع بعد — ارجع إلى خطوة الدخول وأنشئ مستودعًا أو اختر واحدًا أولاً.',
         title: 'مراجعة الموضوعات',
         hint: 'كل موضوع هو وحدة معرفية صغيرة وقابلة للاستشهاد. قم بتحرير العنوان والوصف.',
         placeholder: 'ستتوفر شجرة الإشراف والمحرر في المهمة 3-8.'
@@ -2533,12 +2532,12 @@ export default {
         title: 'إصلاح تلقائي',
         hint: 'يمكن إصلاح بعض التحذيرات تلقائيًا. طبق الإصلاحات التي توافق عليها، ثم عد إلى المسؤول للمراجعة.',
         placeholder: 'ستتوفر خدمة التصحيح التلقائي في المهمة 10.2.',
-        noRepo: 'No repository yet — go back to Entry and create one first.',
-        applied: 'Fixes applied — continue, or go back to Curate to review the result.'
+        noRepo: 'لا يوجد مستودع بعد — ارجع إلى خطوة الدخول وأنشئ واحدًا أولاً.',
+        applied: 'طُبقت الإصلاحات — تابع، أو ارجع إلى Curate لمراجعة النتيجة.'
       },
       review: {
         title: 'مراجعة',
-        hint: 'ملخص لما أنشأته — يتم الإرسال والموافقة والنشر في لوحة التحكم والمحرر.',
+        hint: 'ملخص لما أنشأته — الإرسال والموافقة والنشر تتم في لوحة التحكم وفي المحرر.',
         repo: 'المستودع',
         topics: 'الموضوعات',
         labels: 'التسميات',
@@ -2546,28 +2545,28 @@ export default {
         state: 'Lifecycle state',
         labelsSet: 'set per topic in Curate',
         browserHint:
-          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
-        noRepo: 'No repository yet — the file review appears here once a repository exists.',
+          'نظرة أخيرة قبل التسليم: كل ملف أدناه، وmarkdown الخاص به وتسمياته — تمامًا كما سيستشهد به المساعد.',
+        noRepo: 'لا يوجد مستودع بعد — تظهر مراجعة الملفات هنا بمجرد وجود مستودع.',
         ritualOutside:
-          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+          'طقس المراجعة — الإرسال للمراجعة، وموافقة المراجع، والنشر — يحدث في المحرر ولوحة Studio، لا هنا. افتح المحرر للإنهاء.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
-        noVersions: 'No versions yet — versions are minted during the approval ritual.',
-        versionSummary: '{n} version(s) · latest v{latest}'
+        noVersions: 'لا توجد إصدارات بعد — تُنشأ الإصدارات خلال طقس الموافقة.',
+        versionSummary: '{n} إصدارًا · الأحدث v{latest}'
       },
       publish: {
         title: 'تأمين وإنهاء',
-        hint: 'هذا المستودع جاهز للمراجعة. النشر لا يحدث هنا أبدًا — أرسله للموافقة من لوحة التحكم؛ تتم الموافقة والنشر من لوحة التحكم أو المحرر.',
+        hint: 'هذا المستودع جاهز للمراجعة. النشر لا يحدث هنا أبدًا — أرسله للموافقة من لوحة التحكم، ثم وافق وانشر من لوحة التحكم أو المحرر.',
         nameOk: 'تم تعيين اسم المستودع',
         labelsOk: 'تم تحديد التسميات',
         topicsOk: 'تمت مراجعة الموضوعات',
         topicsPending: 'No topics yet',
         topicsServing: 'Topics serving',
-        noTopics: 'No topics yet — go back to Curate to produce or write them.',
-        frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
+        noTopics: 'لا توجد موضوعات بعد — ارجع إلى Curate لإنتاجها أو كتابتها.',
+        frozen: 'هذا المستودع يخدم — ملخص للقراءة فقط هنا. افتح المحرر لإدارة الإصدارات أو السحب.',
         ritual:
-          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+          'التالي: الإرسال للموافقة من لوحة Studio ← يوافق معتمِد ← النشر من لوحة التحكم أو المحرر. يتوقف المعالج هنا عمدًا.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2593,7 +2592,7 @@ export default {
         alreadyInOkf: 'إزالة المستندات الموجودة بالفعل في مستودع OKF',
         alreadyIngested: 'إزالة المستندات التي تمت معالجتها بالفعل عبر ingest',
         servingWarn:
-          "{'{'}n{'}'} من المستندات المحددة لا تزال تخدم النص الحر — لا يمكن استيعاب المستودع الجديد حتى يتم سحبها."
+          "{'{'}n{'}'} من المستندات المحددة لا تزال تخدم المتن الحر — لا يمكن استيعاب المستودع الجديد حتى يتم سحبها."
       },
       produce: {
         notReady: 'سيتم ربط المنشئ في مهمة لاحقة.'
@@ -2677,7 +2676,7 @@ export default {
         trustTier: 'trust_tier',
         attestation: 'attestation',
         sources: 'provenance.sources',
-        onlyOnIndex: 'Per-repo tags live on the index concept only — open the index to see them.'
+        onlyOnIndex: 'وسوم لكل مستودع تعيش على مفهوم الفهرس فقط — افتح الفهرس لرؤيتها.'
       },
       showSource: 'إظهار المصدر',
       issue: {
@@ -2702,15 +2701,14 @@ export default {
       run: {
         notReady: 'سيتم ربط التحقق في مهمة لاحقة.'
       },
-      piiTitle: 'Personal data — review each flagged concept',
+      piiTitle: 'البيانات الشخصية — راجع كل مفهوم مُعلَّم',
       loading: 'Checking the repository…',
-      loadFailed: 'Could not load the validation report.',
+      loadFailed: 'تعذر تحميل تقرير التحقق.',
       retry: 'Retry',
       issuesTitle: 'Issues to review',
       howToFix: 'How to fix',
-      indexFailed: 'Re-index failed — edit or re-split the page.',
-      indexFailedRemedy:
-        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+      indexFailed: 'فشلت إعادة الفهرسة — عدّل الصفحة أو أعد تقسيمها.',
+      indexFailedRemedy: 'افتح الصفحة في المحرر واحفظها (الحفظ يعيد الفهرسة)، أو أعد تقسيم المستودع من مصدره.',
       severity: {
         blocker: 'Blocking',
         warning: 'Needs review',
@@ -2725,11 +2723,11 @@ export default {
       },
       topicLinks: {
         title: 'Cross-link topics',
-        tip: 'Reads every page in this repository and writes links between the pages that genuinely belong together — the same processing the import wizard runs. It is safe to re-run: existing links are kept and only new ones are added.',
-        progress: 'Cross-linking… {done} of {total} batches',
-        progressIdle: 'Cross-linking… reading the repository',
-        done: 'Added {n} link(s) across {c} page(s).',
-        failed: 'Cross-linking failed: {msg}'
+        tip: 'يقرأ كل صفحة في هذا المستودع ويكتب روابط بين الصفحات التي تنتمي فعلًا إلى بعضها — المعالجة نفسها التي يجريها معالج الاستيراد. إعادة التشغيل آمنة: الروابط القائمة تُحفظ ولا يُضاف إلا الجديد.',
+        progress: 'ربط متقاطع… {done} من {total} دفعة',
+        progressIdle: 'ربط متقاطع… جارٍ قراءة المستودع',
+        done: 'أُضيف {n} رابطًا عبر {c} صفحة.',
+        failed: 'فشل الربط المتقاطع: {msg}'
       },
       action: {
         suggestLinks: 'Suggest links',
@@ -2737,8 +2735,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: 'Create the Sources page and link {n} page(s)',
-        wireExisting: 'Link {n} page(s) to "{hub}"',
+        wireCreate: 'أنشئ صفحة المصادر واربط {n} صفحة',
+        wireExisting: 'اربط {n} صفحة بـ «{hub}»',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2746,45 +2744,44 @@ export default {
         done: 'Done'
       },
       suggest: {
-        working: 'Asking the assistant for link suggestions…',
-        empty: 'No suggestions — link it manually in the editor.'
+        working: 'جارٍ سؤال المساعد عن اقتراحات الروابط…',
+        empty: 'لا توجد اقتراحات — اربطها يدويًا في المحرر.'
       },
       nearDup: {
-        keepHint: 'Keep one copy — delete the rest.'
+        keepHint: 'أبقِ نسخة واحدة — واحذف الباقي.'
       },
-      wireDone: 'Linked {n} page(s) to "{hub}".',
-      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      wireDone: 'تم ربط {n} صفحة بـ «{hub}».',
+      wireCreated: 'تم إنشاء صفحة المصادر وربط {n} صفحة.',
       mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: 'First {n} characters — open the editor for the full page.'
+        truncated: 'أول {n} حرفًا — افتح المحرر للصفحة الكاملة.'
       },
       tip: {
         conformance:
-          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+          'تفتقد واجهة الصفحة (frontmatter) إلى مواصفة OKF (النوع، تاريخ الحداثة، المصادر…). التصحيح التلقائي في الخطوة 8 يصلح هذه آليًا؛ لا يتغير شيء في محتواك المكتوب.',
         orphan:
-          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+          'لا صفحة ترتبط هنا وهذه الصفحة لا ترتبط بأي مكان. يسترجاع الرسم البياني يسير عبر الروابط لربط المحتوى، فالصفحة غير المرتبطة تظهر فقط عند تطابق موضوع تام. للإصلاح: اقبل اقتراحات الروابط أو أضف روابط في المحرر.',
         near_duplicate:
-          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+          'تحمل هذه الصفحات نصًا شبه متطابق. عند الاستيعاب تصبح كل منها أجزاءها الخاصة، فيمكن لسؤال واحد أن يعيد المادة نفسها عدة مرات. للإصلاح: عاين، وأبقِ أفضل نسخة، واحذف الباقي.',
         citation:
-          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+          'تستشهد الصفحات بمستندات في بياناتها الوصفية لكن لا شيء يربطها بصفحة المصادر — فلا تصل الاستشهادات إلى الرسم البياني أبدًا ولا يمكن السير عبرها أو الاستشهاد بها وقت الإجابة. للإصلاح: نقرة واحدة تربط كل صفحة مستشهدة.',
         index_failed:
-          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+          'استُوردت الصفحة لكن فشل بناء فهرس البحث الخاص بها — لا يمكن استرجاعها حتى تُعاد الفهرسة. حفظ الصفحة في المحرر يعيد محاولة البناء.'
       },
       piiRescan: 'Re-scan all pages',
       piiRescanWorking: 'Re-scanning every page…',
       piiRescanDone: 'Re-scanned {n} page(s).',
       piiRescanPartial:
-        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+        'تمت إعادة فحص {n} صفحة. ما زالت {e} فاشلة — لم يتغير حكم الفحص الخاص بها، لذا يظل النشر محظورًا لها.',
       piiRescanMissing:
-        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
-      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
-      piiRescanFailed:
-        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
-      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
-      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+        'إعادة الفحص غير متاحة على هذا الخادم (404). لم يتغير شيء — الصفحات التي فشل فحصها ما زالت تحظر النشر.',
+      piiRescanFrozen: 'رُفضت إعادة الفحص: المستودع قيد النشر (409). لم يتغير شيء.',
+      piiRescanFailed: 'فشلت إعادة الفحص. لم يتغير شيء — الصفحات التي فشل فحصها ما زالت تحظر النشر.',
+      piiRescanProgress: 'إعادة الفحص… {done} من {total} صفحة',
+      piiRescanProgressIdle: 'إعادة الفحص… جارٍ قراءة المستودع',
       piiRescanNoKey:
-        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+        'قبل الخادم إعادة الفحص لكنه لم يُعِد معرّف تشغيل، لذا لا يمكن متابعة تقدّمه. لم يتم الإبلاغ عن أي شيء.',
       piiStateError: 'Scan error',
       piiTally: {
         scanned: '{n} page(s) re-scanned',
@@ -2799,13 +2796,12 @@ export default {
       nFlagged: 'تم العثور على {n}',
       rescan: 'إعادة المسح',
       stateError: 'Scan failed',
-      errorTitle: 'This page is blocking the hand-off.',
+      errorTitle: 'هذه الصفحة تحظر التسليم.',
       errorBody:
-        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
-      rescanMissing:
-        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
-      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
-      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
+        'فشل فحص PII لهذه الصفحة (لم تكن النتيجة «لا شيء» — بل تعذّرت قراءة النص). يظل النشر محظورًا حتى ينجح فحص. استخدم «إعادة الفحص» أعلاه.',
+      rescanMissing: 'إعادة الفحص غير متاحة على هذا الخادم (404). لم يتغير شيء — ما زالت الصفحة تحظر النشر.',
+      rescanFrozen: 'رُفضت إعادة الفحص: المستودع قيد النشر (409). لم يتغير شيء.',
+      rescanFailed: 'فشلت إعادة الفحص. لم يتغير شيء — ما زالت الصفحة تحظر النشر.',
       scanning: 'جارٍ المسح…',
       clean: 'لا توجد كيانات مميزة — هذا الـ concept سليم.',
       how: 'الإصلاح: قم بإزالته أو إعادة صياغته (مثلًا للإشارة إلى الدور بدلًا من الاسم)، ثم احفظ — إعادة المسح تحدّث هذه القائمة.',
@@ -2874,49 +2870,48 @@ export default {
       unpublish: 'إلغاء النشر'
     },
     src: {
-      title: 'Choose the source documents',
-      hint: 'Pick sources from the document repository, upload new ones from this computer, or both.',
-      repoSec: 'From the document repository',
+      title: 'اختر المستندات المصدر',
+      hint: 'اختر المصادر من مستودع المستندات، أو ارفع مستندات جديدة من هذا الكمبيوتر، أو كلاهما.',
+      repoSec: 'من مستودع المستندات',
       searchPh: 'Search by name or site…',
       chipsLabel: 'Filter by origin',
       chipAll: 'All',
       chipCrawl: 'Crawls',
       chipUpload: 'Uploads',
-      noMatches: 'Nothing matches this search or filter.',
+      noMatches: 'لا شيء يطابق هذا البحث أو التصفية.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
       total: '{n} document(s)',
-      titleSingle: 'Choose the crawled document',
+      titleSingle: 'اختر المستند المزحوف',
       loading: 'Loading documents…',
       retry: 'Retry',
-      empty: 'No documents in the repository yet — upload some below.',
+      empty: 'لا توجد مستندات في المستودع بعد — ارفع بعضها أدناه.',
       more: 'Load more',
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
       uploaded: '{n} file(s) uploaded.',
-      uploadFailed: 'An upload failed — check the files and retry.',
-      fsNote: 'Uploaded files join the document repository and are selected here automatically.',
+      uploadFailed: 'فشل أحد عمليات الرفع — تحقق من الملفات وأعد المحاولة.',
+      fsNote: 'تنضم الملفات المرفوعة إلى مستودع المستندات وتُحدد هنا تلقائيًا.',
       count: 'Selected: {n}',
-      needOne: 'Select at least one source.',
+      needOne: 'حدد مصدرًا واحدًا على الأقل.',
       confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
-      loadFailed: 'Could not load the document list.',
+      loadFailed: 'تعذر تحميل قائمة المستندات.',
       servingBadge: 'serving free-form RAG',
-      servingTip:
-        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+      servingTip: 'هذا المستند يخدم متن RAG الحر حاليًا — ينجح التحويل، لكن لا يمكن استيعاب هذا المستودع حتى يُسحب.',
       alreadyBadge: 'already in an OKF repo',
-      alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
+      alreadyTip: 'هذا المستند هو مصدر مستودع OKF آخر بالفعل — سيرفضه التحويل.'
     },
     frontmatter: {
-      title: 'Frontmatter tags — what this repo is about',
-      help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',
+      title: 'وسوم Frontmatter — ما يتناوله هذا المستودع',
+      help: 'تصف الوسوم ما يحتويه هذا المستودع وما — بالأهمية نفسها — لا يحتويه (قائمة المحظورات). إنها تحدد أي الاستعلامات تُوجَّه إلى هذا المستودع. انقر «تحديث» لصياغة مسودة من المتن، أو حرّر الرقائق أدناه. يتطلب النشر ≥3 مواضيع + ≥1 محظور.',
       refresh: 'Refresh suggestions',
       suggesting: 'Curating…',
-      suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestEmpty: 'لم يُرجع LLM أي وسوم. حاول مجددًا بعد أن يكبر المتن.',
       suggestCoverage: 'مشتق من {sampled} من أصل {total} مفهومًا، عبر {labels} تسميات من هرمية المعرفة.',
       suggestFailed: 'Suggest failed.',
-      suggestedTag: 'LLM suggestion — remove to dismiss.',
+      suggestedTag: 'اقتراح LLM — أزِله للرفض.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2925,7 +2920,7 @@ export default {
       save: 'Save tags',
       saved: 'Saved',
       error: 'Save failed.',
-      errorWithStep: 'Save failed at step "{step}" ({code}) — retry.',
+      errorWithStep: 'فشل الحفظ عند الخطوة «{step}» ({code}) — أعد المحاولة.',
       field: {
         topic: 'Topic',
         entity: 'Entity',
@@ -2955,18 +2950,18 @@ export default {
         model: 'Model',
         version: 'Head version',
         computedAt: 'Computed',
-        staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
+        staleNote: 'تغيّرت الوسوم بعد بناء هذا الرأس — أعد البناء قبل الوثوق بالاختبارات.',
         missingNote:
-          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+          'لا يوجد رأس متجهي بعد. يُبنى عند النشر؛ وإذا كانت خدمة التضمين غير متاحة حينها، فأعد بناءه الآن من الوسوم المخزنة.',
         rebuild: 'Rebuild head',
-        rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
-        rebuildBusy: 'Rebuilding — embedding the tag fields…'
+        rebuildTip: 'يعيد تضمين الوسوم المخزنة في متجه رأس جديد. استدعاء تضمين واحد لكل حقل وسم.',
+        rebuildBusy: 'جارٍ إعادة البناء — تضمين حقول الوسوم…'
       },
       test: {
-        placeholder: 'e.g. cancer screening guidelines',
+        placeholder: 'مثال: إرشادات فحص السرطان',
         run: 'Run test',
-        running: 'Embedding the query and scoring the heads…',
-        adversarial: 'Adversarial — this query should NOT select this repository (a forbidden/adjacent topic)',
+        running: 'جارٍ تضمين الاستعلام وتقييم الرؤوس…',
+        adversarial: 'عدائي — هذا الاستعلام لا ينبغي أن يختار هذا المستودع (موضوع محظور/مجاور)',
         embeddedWith: 'Embedded with',
         col: {
           repo: 'Repository',
@@ -2977,14 +2972,14 @@ export default {
         },
         provenance: 'Routing provenance',
         empty:
-          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
-        pass: 'PASS — this repository wins the head routing.',
-        fail: 'FAIL — {repo} wins the head routing for this query.',
-        passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
+          'اكتب استعلامًا قد يطرحه مستخدم وشغّله — يقيّم المختبر رأس كل مستودع منشور تمامًا كما يفعل مسار التوزيع.',
+        pass: 'نجاح — هذا المستودع يفوز بتوجيه الرأس.',
+        fail: 'فشل — يفوز {repo} بتوجيه الرأس لهذا الاستعلام.',
+        passAdversarial: 'نجاح — لم يُختر بشكل صحيح (الفائز: {repo}).',
         failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
-        passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
+        passSuppressed: 'نجاح — مكبوت بواسطة بوابة المنع/الضوضاء: الرأس لا يطالب بهذا الاستعلام',
         notSelectedSuppressed:
-          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+          'غير محدد — مكبوت بواسطة بوابة المنع/الضوضاء: الاستعلام أقرب إلى ما يستبعده هذا المستودع، أو هو ضوضاء خارج المجال',
         claimed: 'claims',
         suppressed: 'suppressed'
       },
@@ -3015,7 +3010,7 @@ export default {
       },
       teach: {
         claim:
-          'الرأس يطالب بهذا الاستعلام — لقد اجتاز البوابات الثلاثة. إذا كان لا ينبغي توجيهه إلى هنا، فاطلب وسومًا محظورة تستبعد موضوعه، وأضفها، ثم أعد بناء الرأس.',
+          'الرأس يطالب بهذا الاستعلام — لقد اجتاز البوابات الثلاث. إذا كان لا ينبغي توجيهه إلى هنا، فاطلب وسومًا محظورة تستبعد موضوعه، وأضفها، ثم أعد بناء الرأس.',
         explain: 'اشرح واقترح',
         explainBusy: 'جارٍ الشرح — النموذج يقترح وسومًا محظورة…',
         addTag: 'أضف إلى الوسوم المحظورة',
@@ -3031,7 +3026,7 @@ export default {
         rejected: 'تم رفضه بواسطة الحاجز الآلي — يجب ألا يطابق الوسم المحظور موضوع هذا المستودع نفسه.'
       },
       run: {
-        progress: '{done} of {total} queries ({pct}%)',
+        progress: '{done} من {total} استعلام ({pct}%)',
         progressStarting: 'Starting the run…',
         phase: {
           routing: 'Scoring routes',
@@ -3044,7 +3039,7 @@ export default {
           'يكتب النموذج الاستعلامات على دفعات من 30 لكل فئة — الطلب الكبير (100+) يستغرق دقائق. تظهر المجموعة هنا وفي المجموعات المحفوظة عند الانتهاء.',
         generating: 'جارٍ التوليد على دفعات — الطلبات الكبيرة تستغرق دقائق…',
         run: 'Run all queries',
-        running: 'Running every suite query…',
+        running: 'جارٍ تشغيل كل استعلامات المجموعة…',
         current: 'Current suite',
         col: {
           query: 'Query',
@@ -3059,13 +3054,13 @@ export default {
           name: 'الاسم',
           corpus: 'المتن'
         },
-        notEvaluatable: 'not evaluatable (no competitors)',
+        notEvaluatable: 'غير قابل للتقييم (لا منافسين)',
         pass: 'pass',
         fail: 'fail',
         passRate: 'Pass rate',
         positives: 'Positives',
         negatives: 'Negatives',
-        noCompetitors: 'n/a — no competing heads yet',
+        noCompetitors: 'غير متاح — لا توجد رؤوس منافسة بعد',
         avgMargin: 'Avg margin',
         steal: '{repo} stole {n} queries',
         addPlaceholder: 'Your own probe query…',
@@ -3073,7 +3068,7 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.',
+        noRuns: 'لا توجد تشغيلات بعد — أنشئ مجموعة وشغّلها.',
         explainFailures: 'اشرح الإخفاقات',
         explainBusy: 'جارٍ شرح الإخفاقات — نداء واحد للنموذج لكل سالب فاشل…',
         batchTitle: 'لماذا تم توجيه السالبة الفاشلة إلى هنا',
@@ -3086,7 +3081,7 @@ export default {
         vetoedBy: 'استُبعد بواسطة',
         marginKilled: 'خسر {n} من اختبارات الإيجابية بسبب الهامش (دون فيتو من وسم واحد).',
         removals: 'وسوم لإزالتها (تمارس الفيتو ضد إيجابيات هذا المستودع نفسه)',
-        removeTip: 'أزِل "{tag}" — أنهى الفيتو {n} من الاختبارات الإيجابية',
+        removeTip: 'أزِل «{tag}» — أنهى الفيتو {n} من الاختبارات الإيجابية',
         tripwire: 'كسرت هذه الدورة {n} من الاختبارات الإيجابية — الوسوم المضافة تبالغ في الكبح. هل تريد التراجع؟',
         tripwireRevert: 'خيارات التراجع',
         staleSnapshot: 'تغيّرت الوسوم منذ توليد هذه المجموعة — أعد التوليد للحصول على صفوف منع حديثة.',
@@ -3101,13 +3096,13 @@ export default {
         tagsetTip: 'الوسوم المحظورة لهذا التشغيل',
         savedTitle: 'المجموعات المحفوظة',
         savedTip:
-          'كل مجموعة تم إنشاؤها أو استيرادها تُحفظ هنا، لكل مستودع. نوعان يتشاركان هذه القائمة: مجموعات الترويسة (مجموعات استعلامات مشتقة من الوسوم والواجهة، تُعرض بأعداد الإيجابيات/السلبيات) ومجموعات معايير RAGAS (مجموعات أسئلة بإجابات متوقعة، مميزة بشارة RAGAS وعدد الإدخالات). يعرض زر التحميل مجموعة الترويسة في هذا التبويب ومجموعة RAGAS في تبويب معايير RAGAS حيث يمكن تشغيلها وتقييمها مقابل المدونة الحية. الحذف يزيل المجموعة نهائيًا؛ وإعادة التسمية تتم مباشرة على الاسم.',
+          'كل مجموعة تم إنشاؤها أو استيرادها تُحفظ هنا، لكل مستودع. نوعان يتشاركان هذه القائمة: مجموعات الترويسة (مجموعات استعلامات مشتقة من الوسوم والواجهة، تُعرض بأعداد الإيجابيات/السلبيات) ومجموعات معايير RAGAS (مجموعات أسئلة بإجابات متوقعة، مميزة بشارة RAGAS وعدد الإدخالات). يعرض زر التحميل مجموعة الترويسة في هذا التبويب ومجموعة RAGAS في تبويب معايير RAGAS حيث يمكن تشغيلها وتقييمها مقابل المتن الحي. الحذف يزيل المجموعة نهائيًا؛ وإعادة التسمية تتم مباشرة على الاسم.',
         load: 'تحميل',
         flipTip: 'التبديل بين يجب-اختياره / يجب-عدم-اختياره',
         deleteTip: 'إزالة هذا الصف من المجموعة',
         namePlaceholder: 'اسم المجموعة (اختياري) — مثال: مجموعة انحدار الأمراض غير السارية',
         probeTip: 'اختبر هذا الاستعلام ضد المتن الحي',
-        deleteSuiteTip: 'احذف هذه المجموعة وسجلها',
+        deleteSuiteTip: 'احذف هذه المجموعة وسجل تشغيلها',
         corpusNeedsIngest: 'قم أولاً باستيعاب المستودع — اختبار المتن يبحث في المتن المستوعب',
         deleteConfirmTitle: 'حذف هذه المجموعة؟',
         deleteConfirmBody: 'يؤدي هذا إلى حذف المجموعة وسجل تشغيلها نهائيًا. لا يمكن التراجع.',
@@ -3126,8 +3121,8 @@ export default {
         history: 'تعذر تحميل سجل الحفظ',
         revert: 'تعذر التراجع عن الوسوم',
         advisor: 'فشل المستشار',
-        noSuite: 'أنشئ مجموعة اختبارات أولاً، ثم أعد بناء head وأعد التشغيل.',
-        applyNoSuite: 'تم حفظ الوسوم وإعادة بناء head — أنشئ مجموعة اختبارات ثم شغّل الكل لرؤية التأثير.',
+        noSuite: 'أنشئ مجموعة اختبارات أولاً، ثم أعد بناء الرأس وأعد التشغيل.',
+        applyNoSuite: 'تم حفظ الوسوم وإعادة بناء الرأس — أنشئ مجموعة اختبارات ثم شغّل الكل لرؤية التأثير.',
         suiteLoad: 'تعذر تحميل المجموعة',
         suiteUpdate: 'تعذر تحديث المجموعة',
         suiteRename: 'تعذر إعادة تسمية المجموعة',
@@ -3142,30 +3137,30 @@ export default {
       },
       publishCard: {
         present:
-          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
-        stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
-        missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+          'الرأس المتجهي جاهز — تخبرك اختبارات التوجيه في المختبر ما إذا كان هذا المستودع يفوز بالاستعلامات التي يجب أن يفوز بها.',
+        stale: 'الرأس قديم (تغيّرت الوسوم بعد بنائه) — النشر يعيد بناءه.',
+        missing: 'لا يوجد رأس متجهي بعد — النشر يبنيه من الوسوم المعتمدة.'
       },
       advisor: {
         run: 'المستشار: اقتراح تغييرات على الوسوم',
         busy: 'محاكاة تغييرات الوسوم عبر التشغيلات الأخيرة…',
         title: 'توصية مجموعة الوسوم (محاكاة عبر التشغيلات الأخيرة)',
-        apply: 'تطبيق التغييرات وإعادة بناء head وإعادة تشغيل المجموعة',
+        apply: 'تطبيق التغييرات وإعادة بناء الرأس وإعادة تشغيل المجموعة',
         scorecard: 'الموجبات {p}/{pt} مقبولة · السالبات {n}/{nt} محظورة',
         now: 'الآن',
         predicted: 'المتوقع',
-        scope: ' (عبر {q} استعلامات من آخر {r} تشغيلات)',
-        applying: 'جارٍ التطبيق: حفظ الوسوم، إعادة بناء head، إعادة تشغيل المجموعة…',
+        scope: ' (عبر {q} استعلامًا من آخر {r} تشغيلات)',
+        applying: 'جارٍ التطبيق: حفظ الوسوم، إعادة بناء الرأس، إعادة تشغيل المجموعة…',
         blockedTitle: 'إزالات محظورة — انقر لتضمينها في التطبيق',
         blockedGain: 'يستعيد {n} استعلامًا إيجابيًا',
         narrowTitle: 'بدائل أضيق — يستعيد الإيجابيات دون إعادة قبول السلبيات',
         narrowChip: 'أزل الوسم الواسع وأضف الضيق',
         reasonCurator: 'أنت من أعلن هذا الوسم أصلًا — أكّد قبل الإزالة',
-        reasonRotated: 'تجاوز السجل خط الأساس — أكّد قبل الإزالة',
+        reasonRotated: 'تجاوز سجل التعديلات خط الأساس — أكّد قبل الإزالة',
         scopeDetail: 'المجموعات: {s} · أطقم الوسوم: {t}',
-        rowActionsTitle: 'قلبات مؤسسة على المحتوى — المحتوى يجيب عن هذه «السالبات»: حوّلها إلى إيجابيات',
+        rowActionsTitle: 'قلبات مؤسسة على المتن — المتن يجيب عن هذه «السالبات»: حوّلها إلى إيجابيات',
         flipToPositive: 'تحويل إلى إيجابي',
-        ungroundedNote: '{n} من السالبات الراسببة بلا تغطية في المحتوى وبلا وسم آمن — على المستودع المنافس أن يفوز بها.'
+        ungroundedNote: '{n} من السالبات الفاشلة بلا تغطية في المتن وبلا وسم آمن — على المستودع المنافس أن يفوز بها.'
       },
       probe: {
         answerable: 'قابلة للإجابة',
@@ -3192,7 +3187,7 @@ export default {
         }
       },
       corpus: {
-        capped: 'مبني على {parts} (حد المجموعة)',
+        capped: 'مبني على {parts} (ميزانية المتن)',
         part: '{used} من {total} مقطع'
       },
       gen: {
@@ -3219,7 +3214,7 @@ export default {
         },
         questions: {
           title: 'الأسئلة',
-          text: 'عدد الأسئلة المطلوب توليدها (الافتراضي ٢٠). المجموعات الأكبر تستغرق وقتًا أطول نسبيًا في التوليد والتشغيل.'
+          text: 'عدد الأسئلة المطلوب توليدها (الافتراضي 20). المجموعات الأكبر تستغرق وقتًا أطول نسبيًا في التوليد والتشغيل.'
         },
         singleHop: {
           title: 'خطوة واحدة %',
@@ -3231,7 +3226,7 @@ export default {
         },
         multiSpecific: {
           title: 'خطوات متعددة (محددة) %',
-          text: 'نصيب الأسئلة التي تجمع عدة مفاهيم مع البقاء متجذرة في صياغتها الدقيقة. مجموع الحصص الثلاث يجب أن يكون ١٠٠.'
+          text: 'نصيب الأسئلة التي تجمع عدة مفاهيم مع البقاء متجذرة في صياغتها الدقيقة. مجموع الحصص الثلاث يجب أن يكون 100.'
         },
         personas: {
           title: 'الشخصيات',
@@ -3239,7 +3234,7 @@ export default {
         },
         generate: {
           title: 'إنشاء',
-          text: 'يبني المجموعة بواسطة نموذج اللغة: تمريرة على مخطط المعرفة عبر المتن أولًا (هذا هو الجزء الذي يستغرق دقائق)، ثم توليد الأسئلة. يعمل في الخلفية — يمكنك إغلاق Lab دون فقدان أي شيء. حذف مجموعة قيد الإنشاء يلغي العمل.'
+          text: 'يبني المجموعة بواسطة نموذج اللغة: تمريرة على مخطط المعرفة عبر المتن أولًا (هذا هو الجزء الذي يستغرق دقائق)، ثم توليد الأسئلة. يعمل في الخلفية — يمكنك إغلاق المختبر دون فقدان أي شيء. حذف مجموعة قيد الإنشاء يلغي العمل.'
         },
         importSuite: {
           title: 'استيراد مجموعة (.xlsx)',
@@ -3251,7 +3246,7 @@ export default {
         },
         metrics: {
           title: 'المقاييس',
-          text: 'الافتراضية الأربعة — الوفاء، دقة السياق، استرجاع السياق، ملاءمة الإجابة — إضافة إلى كتالوج RAGAS الموسّع. المقاييس التي تحتاج نموذج تضمين تُستبعد مع تحذير عندما لا يكون أي نموذج مُعد.'
+          text: 'الافتراضية الأربعة — الأمانة، دقة السياق، استرجاع السياق، ملاءمة الإجابة — إضافة إلى كتالوج RAGAS الموسّع. المقاييس التي تحتاج نموذج تضمين تُستبعد مع تحذير عندما لا يكون أي نموذج مُعدًا.'
         },
         run: {
           title: 'تشغيل الاختبار المرجعي',
@@ -3461,7 +3456,7 @@ export default {
       current: 'الحالي',
       generate: {
         title: 'إنشاء مجموعة اختبارات مرجعية',
-        hint: 'يولّد أسئلة بإجابات متوقعة من المستودعات المحددة — واحد أو أكثر، المستودع الحالي وحده أو مع مستودعات ذات صلة.',
+        hint: 'يولّد أسئلة بإجابات متوقعة من المستودعات المحددة — واحدًا أو أكثر، المستودع الحالي وحده أو مع مستودعات ذات صلة.',
         size: 'الأسئلة',
         config: 'تكوين نموذج التوليد',
         default: 'افتراضي النشر (.env)',
@@ -3474,7 +3469,7 @@ export default {
         model: 'النموذج',
         modelPick: 'افتراضي التكوين',
         modelDefault: 'افتراضي التكوين',
-        note: 'النموذج الذي يصوغ الأسئلة ويقيّم الإجابات. التكوين النشط (★، تبويب النماذج) يُطبَّق تلقائيًا؛ واختياره هنا يتجاوزه لهذه العملية فقط. المقيّمات الأقوى تحسّن استرجاع الكيانات وجودة النصائح بشكل ملحوظ.',
+        note: 'النموذج الذي يصوغ الأسئلة ويقيّم الإجابات. التكوين النشط (★، تبويب النماذج) يُطبَّق تلقائيًا؛ واختياره هنا يتجاوزه لهذه العملية فقط. المحكِّمات الأقوى تحسّن استرجاع الكيانات وجودة النصائح بشكل ملحوظ على النماذج المحلية الصغيرة.',
         single: 'خطوة واحدة %',
         multiAbstract: 'خطوات متعددة (مجردة) %',
         multiSpecific: 'خطوات متعددة (محددة) %',
@@ -3539,10 +3534,10 @@ export default {
           '{n} أسئلة تقل عن حدود مقاييسها. شغّل المرشد لإسناد كل إخفاق إلى مرحلة في خط المعالجة والحصول على إجراءات ملموسة.',
         copy: 'نسخ الإجابة الكاملة',
         coverageTitle: 'قيّم الحَكَم هذه المقياس في {n} من {total} صف — النتيجة تغطي تلك الصفوف فقط.',
-        colResizeTip: 'اسحب المقبض لتغيير الحجم — نقرة مزدوجة على الرأس لإعادة التعيين',
+        colResizeTip: 'اسحب المقبض لتغيير الحجم — نقرة مزدوجة على العنوان لإعادة التعيين',
         trendTitle: 'اتجاه المقاييس عبر التشغيلات',
         trendNote:
-          'كل خط هو متوسط مقياس RAGAS لكل تشغيل، من الأقدم إلى الأحدث، ولا يعبر أبدًا حدّ الحَكَم — كل تسمية على المحور السيني تُسمّي الحَكَم الذي قيّم التشغيل. الإجابات المُقيَّمة مخزنة مؤقتًا؛ الإعادات المتطابقة تختلف فقط حيث تغيرت الإجابة أو الاسترجاع.',
+          'كل خط هو متوسط مقياس RAGAS للمجموعة في كل تشغيل، من الأقدم إلى الأحدث، ولا يعبر أبدًا حدّ الحَكَم — كل تسمية على المحور السيني تُسمّي الحَكَم الذي قيّم التشغيل. الإجابات المُقيَّمة مخزنة مؤقتًا؛ الإعادات المتطابقة تختلف فقط حيث تغيرت الإجابة أو الاسترجاع.',
         trendMixedJudges: 'تختلف نماذج الحَكَم بين هذه التشغيلات — قارن داخل مقطع حَكَم واحد، لا عبر المقاطع',
         statusTitle: 'نتائج كل سؤال',
         statusNote:
@@ -3563,7 +3558,7 @@ export default {
         answered: 'تمت الإجابة',
         noisy: 'الإجابة سليمة — ضوضاء في الاسترجاع',
         noisyTitle:
-          'اجتازت الإجابة جميع مقاييس جودة الإجابة؛ فقط مجموعة السياقات المُسلَّمة (الدقة/الاستدعاء) جاءت تحت الحد المطلوب',
+          'اجتازت الإجابة جميع مقاييس جودة الإجابة؛ فقط مجموعة السياقات المُسلَّمة (الدقة/الاسترجاع) جاءت تحت الحد المطلوب',
         pdf: 'تصدير تقرير PDF'
       },
       explain: {
@@ -3604,7 +3599,7 @@ export default {
       },
       runDelete: {
         title: 'حذف التشغيل',
-        body: 'سيؤدي هذا إلى إزالة التشغيل وتحليل أعطاله نهائيًا. تبقى مجموعة الاختبارات وأسئلتها.',
+        body: 'يؤدي هذا إلى إزالة التشغيل وتحليل أعطاله نهائيًا. تبقى مجموعة الاختبارات وأسئلتها.',
         confirm: 'حذف',
         inFlight: 'هذا التشغيل لا يزال قيد التنفيذ — ألغِه أولاً.',
         explainInFlight: 'تحليل الأعطال لا يزال قيد التنفيذ لهذا التشغيل — انتظر انتهاءه.',
@@ -3637,23 +3632,25 @@ export default {
         noise_sensitivity: 'الحساسية للضوضاء',
         note: {
           faithfulness:
-            'مدى استناد الإجابة واقعيًا إلى المقاطع المسترجعة — نسبة الادعاءات التي تدعمها المصادر. الانخفاض يعني أن الإجابة تقول ما لا تقوله الأدلة (هلوسة).',
+            'مدى استناد الإجابة واقعيًا إلى المقاطع المسترجعة — نسبة ادعاءات الإجابة التي تدعمها المصادر. الانخفاض يعني أن الإجابة تقول ما لا تقوله الأدلة (هلوسة).',
           context_precision:
             'هل المقاطع المهمة احتلت صدارة النتائج المسترجعة. الانخفاض يعني أن الدليل الصحيح استُرجع لكن دفنته مقاطع أقل صلة.',
           context_recall:
-            'هل تغطي المقاطع المسترجعة كل ما تتطلبه الإجابة المرجعية. الانخفاض يعني أن الاسترجاع فاتته أدلة كانت السؤال يحتاجها.',
+            'هل تغطي المقاطع المسترجعة كل ما تتطلبه الإجابة المرجعية — يجب أن يكون كل ادعاء في المرجع قابلًا للإسناد إلى السياق المسترجع. الانخفاض يعني أن الاسترجاع فاتته أدلة كان السؤال يحتاجها.',
           answer_relevancy:
-            'مدى معالجة الإجابة للسؤال المطروح: يعيد RAGAS توليد أسئلة من نص الإجابة ويقارنها بالأصل بالتشابه الدلالي. لا يتحقق من الصحة الواقعية — الإجابات المطوّلة تقييمها منخفض حتى لو كانت صحيحة.',
-          context_utilization: 'هل السياق المسترجع كافٍ لإنتاج الإجابة المرجعية — فحص لاكتمال الاسترجاع.',
+            'مدى معالجة الإجابة للسؤال المطروح: يعيد RAGAS توليد أسئلة من نص الإجابة ويقارنها بالأصل بالتشابه الدلالي عبر المتجهات. لا يتحقق من الصحة الواقعية — الإجابات المطوّلة أو خارج الموضوع تقييمها منخفض حتى لو كانت صحيحة.',
+          context_utilization:
+            'هل السياق المسترجع كافٍ لإنتاج الإجابة المرجعية — فحص لاكتمال الاسترجاع مقابل ما تحتاجه الإجابة المثالية.',
           context_entities_recall:
-            'استرجاع على مستوى الكيانات: نسبة الكيانات المسمّاة في مقاطع المرجع للمدخل (شركات، تواريخ، مبالغ، أماكن) التي تظهر أيضًا في المقاطع المسترجعة. القيمة المنخفضة تعني أن الاسترجاع جلب مقاطع تفتقد كيانات وردت في المرجع. حساس للمرشد — الدرجة المنخفضة مع نجاح استرجاع السياق تعني عادةً أن استخراج الكيانات لدى المرشد أخفق، وليس أن المحتوى ناقص.',
+            'استرجاع على مستوى الكيانات: نسبة الكيانات المسمّاة في مقاطع المرجع للمدخل (شركات، تواريخ، مبالغ، أماكن) التي تظهر أيضًا في المقاطع المسترجعة. القيمة المنخفضة تعني أن الاسترجاع جلب مقاطع تفتقد كيانات وردت في المرجع. حساس للحَكَم — الدرجة المنخفضة مع نجاح استرجاع السياق تعني عادةً أن استخراج الكيانات لدى الحَكَم أخفق، وليس أن المحتوى ناقص.',
           factual_correctness:
-            'تطابق واقعي على مستوى الادعاءات مع الإجابة المرجعية — يفكك الحكم كليهما إلى ادعاءات ويقيّم التداخل. أصرم مقاييس الصحة.',
+            'تطابق واقعي على مستوى الادعاءات مع الإجابة المرجعية — يفكك الحَكَم كليهما إلى ادعاءات ويقيّم التداخل. أصرم مقاييس الصحة.',
           answer_correctness:
-            'الجودة الكلية مقابل المرجع — صحة واقعية مدمجة بتشابه دلالي. أقرب مقياس إلى «هل كانت الإجابة صحيحة».',
-          answer_similarity: 'تشابه دلالي (تمثيلات متجهة) بين الإجابة المولّدة والمرجعية — العلو يعني نقل المعنى ذاته.',
+            'الجودة الكلية مقابل الإجابة المرجعية — صحة واقعية مدمجة بتشابه دلالي. أقرب مقياس إلى «هل أعطى الإجابة الصحيحة».',
+          answer_similarity:
+            'تشابه دلالي (متجهات التضمين) بين الإجابة المولّدة والإجابة المرجعية — العلو يعني نقل المعنى ذاته.',
           noise_sensitivity:
-            'مقدار تدهور الإجابة عند خلط مقاطع غير ذات صلة بالسياق — مقياس متانة. الأدنى أفضل؛ عتبته معكوسة.'
+            'مقدار تدهور الإجابة عند خلط مقاطع غير ذات صلة بالسياق المسترجع — مقياس متانة. الأدنى أفضل؛ عتبة الفشل فيه معكوسة.'
         }
       },
       pdf: {
@@ -3666,7 +3663,7 @@ export default {
         n: 'أسئلة',
         evaluable: 'قابلة للتقييم',
         abstained: 'امتناعات',
-        compare: 'مقارنة التشغيلات (الفرع مقابل الأول)'
+        compare: 'مقارنة عبر التشغيلات (الفرق مقابل الأول)'
       }
     }
   },

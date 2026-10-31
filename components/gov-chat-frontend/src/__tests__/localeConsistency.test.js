@@ -292,4 +292,40 @@ describe('Locale consistency', () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  // UNTRANSLATED-LEAF GUARD (David, 2026-10-31 — "comprehensively remediated"):
+  // the OKF Studio surface shipped 321 leaves that were byte-identical to
+  // English in all 13 locales (ragTip, the Testing-Lab strings, the glossary,
+  // the PII dialogs…). A real sentence translation is never byte-identical
+  // across languages — even the loanword-heavy man/st locales restructure —
+  // so identity to en on a leaf this long means "nobody translated it".
+  // Short leaves (< 25 chars) are exempt: technical terms and one-word
+  // labels legitimately coincide.
+  const UNTRANSLATED_SECTIONS = ['okf', 'uploadDialog'];
+  const UNTRANSLATED_MIN_LEN = 25;
+
+  test('OKF-surface leaves are actually translated (no raw English copies)', () => {
+    const get = (o, d) => d.split('.').reduce((a, k) => (a && a[k] != null ? a[k] : undefined), o);
+    const en = getLocaleData('en');
+    const enKeys = [];
+    (function flat(node, prefix) {
+      for (const k of Object.keys(node || {})) {
+        const p = prefix ? `${prefix}.${k}` : k;
+        if (typeof node[k] === 'string') enKeys.push(p);
+        else if (node[k] && typeof node[k] === 'object') flat(node[k], p);
+      }
+    })(en, '');
+    const offenders = [];
+    for (const key of enKeys) {
+      if (!UNTRANSLATED_SECTIONS.some((s) => key === s || key.startsWith(s + '.'))) continue;
+      const enVal = get(en, key);
+      if (typeof enVal !== 'string' || enVal.length < UNTRANSLATED_MIN_LEN) continue;
+      for (const locale of localeFiles) {
+        if (locale === 'en') continue;
+        const v = get(getLocaleData(locale), key);
+        if (v === enVal) offenders.push(`${locale}:${key} is the raw English string: ${v.slice(0, 50)}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
 });

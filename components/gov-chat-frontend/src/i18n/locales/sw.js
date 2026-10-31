@@ -1524,9 +1524,9 @@ export default {
       uploadFailed: "Imeshindwa kupakia {'{'}fileName{'}'}."
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+      'Kwa nini kupakia kuna umuhimu kwa RAG: kila nyaraka unayopakia inaweza kuwa maarifa yaliyoratibiwa na kuwekewa lebo — nyaraka zenye umoja na muundo mzuri hupatikana kwa usahihi mkubwa zaidi kuliko faili moja ndefu. Kielekezi cha OKF Studio hubadilisha yaliyopakiwa kuwa mada zilizokaguliwa.',
     ragTipNoOkf:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
+      'Kwa nini kupakia kuna umuhimu kwa RAG: kila nyaraka unayopakia inaweza kuwa maarifa yaliyoratibiwa na kuwekewa lebo — nyaraka zenye umoja na muundo mzuri hupatikana kwa usahihi mkubwa zaidi kuliko faili moja ndefu.'
   },
   okf: {
     lifecycleErrors: {
@@ -1929,9 +1929,9 @@ export default {
       },
       piiBulk: {
         done_accept:
-          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
-        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
-        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
+          'Imekamilika — kila kitambulisho kilichowekewa alama kimeitiwa alama ya kukaguliwa na kuhifadhiwa kwenye dhana {n}. Alama za PII zimeondolewa.',
+        done_redact: 'Imekamilika — maudhui yaliyowekewa alama kwenye dhana {n} yamebadilishwa na taarifa ya kuficha.',
+        done_remove: 'Imekamilika — maudhui yaliyowekewa alama kwenye dhana {n} yameondolewa.',
         title: {
           redact: 'Kinga maelezo yote yaliyowekewa alama',
           remove: 'Ondoa maudhui yote yaliyowekewa alama',
@@ -1954,9 +1954,9 @@ export default {
       },
       addSources: {
         working: 'Converting sources…',
-        done: '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).',
-        failed: 'A conversion failed — check the logs; the rest may still have queued.',
-        landed: 'Conversions complete — {t} topics now in the tree.'
+        done: 'Vyanzo {n} vimewekwa foleni — mada zinaingia kwenye mti kadiri ubadilishaji unavyokamilika (mada {t} sasa).',
+        failed: 'Ubadilishaji mmoja umeshindwa — angalia kumbukumbu; vingine bado vinaweza kuwa kwenye foleni.',
+        landed: 'Ubadilishaji umekamilika — mada {t} sasa ziko kwenye mti.'
       }
     },
     dashboard: {
@@ -2158,9 +2158,9 @@ export default {
       descriptionLabel: 'Maelezo',
       save: 'Hifadhi frontmatter',
       saveFailed: 'Uhifadhi wa frontmatter umeshindwa',
-      perRepoTitle: 'Routing tags — what this repo is about',
+      perRepoTitle: 'Lebo za uelekezo — hazina hii inahusu nini',
       perRepoHint:
-        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+        'Lebo za kila hazina (topic / entity / scope / forbidden / summary / keyword) ndizo zinazoendesha retriever. Data hiyo hiyo pia ipo kwenye uwanja wa doc ya hazina — zote mbili hubaki zikilingana unapohifadhi.',
       perRepoField: {
         topic: 'Topic',
         entity: 'Entity',
@@ -2172,16 +2172,16 @@ export default {
       perRepoPh: {
         topic: 'One topic per line',
         entity: 'One entity per line',
-        forbidden: 'One forbidden topic per line',
+        forbidden: 'Mada moja iliyozuiwa kwa kila mstari',
         keyword: 'One keyword per line'
       },
       perRepoHelp: {
-        topic: 'Add, modify or remove topics — one per line. Empty lines are ignored.',
-        entity: 'Add, modify or remove entities — one per line. Empty lines are ignored.',
-        forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
-        keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
+        topic: 'Ongeza, badilisha au ondoa mada — moja kwa kila mstari. Mistari tupu inapuuzwa.',
+        entity: 'Ongeza, badilisha au ondoa vitu — moja kwa kila mstari. Mistari tupu inapuuzwa.',
+        forbidden: 'Ongeza, badilisha au ondoa mada zilizozuiwa — moja kwa kila mstari. Mistari tupu inapuuzwa.',
+        keyword: 'Ongeza, badilisha au ondoa maneno-msingi — moja kwa kila mstari. Mistari tupu inapuuzwa.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      perRepoRepoErr: 'Imehifadhiwa kwa ndani; kuandika uwanja wa doc ya hazina kumeshindwa — jaribu tena.',
       repoTagsHint:
         'Lebe za kiwango cha hazina ({summary}) ni za hazina, si la dhana hii — dhibiti kutoka kipanele cha lebe kwenye reli ya kulia.'
     },
@@ -2214,14 +2214,14 @@ export default {
     },
     glossary: {
       addConcept:
-        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
-      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+        'Andika mada mpya kwa mkono (markdown yenye frontmatter). Kila mada huwa kipengee kimoja kinachoweza kutajwa — mada zenye umoja hupatikana kwa usahihi mkubwa zaidi kuliko nyaraka moja ndefu.',
+      type: 'Aina ya kitu ambacho dhana hii ni — huduma, sera, mtu, mahali… Aina huhifadhiwa kwenye kila kipande, hivyo utafutaji unaweza kupendelea aina sahihi ya chanzo na majibu yanaweza kusema yanayotaja nini.',
       title:
-        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+        'Jina linalosomeka kwa urahisi, linaonyeshwa kwenye majibu na marejeleo. Kichwa sahihi humsaidia msaidizi kuchagua MADA HII badala ya nyingine zinazofanana — vichwa visivyo wazi hushindwa na vilivyo wazi wakati wa utafutaji.',
       indexStatus:
-        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+        'Mahali dhana hii ilipo katika mchiriza wa ingest: parsed = inasubiri kugawanywa na kupachikwa; indexed = inatafutwa na kutajwa kwenye RAG; failed = HAITAFUTWI — rekebisha kisha uingize tena. Dhana zilizo indexed pekee ndizo zinazoweza kupatikana.',
       trustTier:
-        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+        'Kiwango cha uthibitisho wa dhana hii: unverified = imetengenezwa na mashine, machine-confirmed = imekaguliwa dhidi ya kanuni, human-reviewed = mratibu aliidhinisha. Majibu yanaweza kuonyesha uaminifu ili watumiaji wajue wanachosoma — uaminifu wa juu hupata imani ya mtumiaji, si utafutaji bora.',
       concept:
         'Kipengee kimoja katika ghala lako — kwa kawaida ukurasa mmoja au mada moja. Kila dhana ina frontmatter yenye muundo thabiti ambayo msaidizi husoma, pamoja na matini ya markdown anayotumia kutoa majibu.',
       repository:
@@ -2243,33 +2243,33 @@ export default {
       classification:
         'Jinsi tunavyoamua kila dhana NI nini (mada, kitambulisho, mchakato…). Mbinu za uzoefu husoma ukurasa kiotomatiki; chaguo la LLM linachukua muda mrefu zaidi lakini linashughulikia kurasa ngumu vizuri.',
       resplit:
-        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+        'Gawanya tena hati ndefu ya chanzo kuwa mada za ukubwa unaofaa. Mada kubwa mno hupunguza usahihi wa utafutaji (jibu linajificha kati ya vitu vya kuchanganya); mada ndogo mno hupoteza muktadha ambao jibu linahitaji.',
       saveFailed: 'Imeshindwa kuhifadhi',
       importFailedTitle: 'Uingizaji umeshindwa — faili chanzo haikuweza kubadilishwa.',
       importFailedHint: 'Futa ghala hili na uingize faili chanzo tena.',
       frontmatter:
         'Taarifa zilizoundwa kimpangilio zilizo juu ya kila faili — aina, kichwa, lebo. Msaidizi huzitumia kujua mada ya kila dhana inahusu nini.',
       pickSource:
-        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+        'Vyanzo vinamlisha mzalishaji, naye hupendekeza mada ili upitishe — hakuna kinachothibitishwa hadi utakapoidhinisha kwenye Curate. Nyaraka zilizoingizwa tayari kwa RAG huru zinakubaliwa; hazina yako inabaki imefungwa isiingizwe hadi hizo zitakapotolewa.',
       classificationStrategy:
-        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
-      clsHeur: 'Heuristics (fast, no LLM)',
+        'Jinsi mzalishaji anavyoamua lebo za kila mada: heuristics ni ya haraka na bure; LLM inasoma kila ukurasa (nzuri zaidi kwa miundo migumu); mchanganyiko huanza na heuristics kisha hupeleka zile ngumu kwa LLM. Ni uratibu pekee — hauanzishi uingizaji kamwe.',
+      clsHeur: 'Heuristics (haraka, bila LLM)',
       clsLlm: 'LLM classification',
       clsHybrid: 'Hybrid',
       fsPick:
-        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+        'Kila faili huwa mada moja — mada zenye umoja hupatikana kwa usahihi mkubwa zaidi kuliko nyaraka moja ndefu. Jina la faili huwa kichwa; unaweza kuboresha kila kitu kwenye Curate.',
       autocorrect:
-        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+        'Usahihishaji otomatiki unagusa frontmatter pekee (vichwa, aina, muundo) — kamwe haugusi maudhui uliyoandika. Mapendekezo huonyeshwa kabla ya kitu chochote kubadilika; kutumia huandika marekebisho papo hapo na unaweza kupitia matokeo kwenye Curate.',
       handoff:
-        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+        'Mtaratibu wa mzunguko wa maisha (wasilisha → idhinisha → chapisha) umewekwa nje ya kielekezi huu kwa makusudi: idhini ni za mtiririko wa utawala kwenye dashibodi na kwenye mhariri, ambako matoleo na hali ya huduma zinadhibitiwa.',
       lifecycle:
-        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+        'Mkataba wa hatua sita: rasimu → ukaguzi → imeidhinishwa → imechapishwa (unda toleo + kifurushi) → imeingizwa (inahudumia kwenye RAG) → imebatilishwa (inarudi kwa kuhariri). Maudhui yanaweza kutajwa baada ya ingest tu — na maudhui yaliyokaguliwa tu ndiyo yanaweza kuchapishwa.',
       labelsAuto:
-        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+        'Lebo hutolewa kiotomatiki kutoka kwenye Muundo wa Maarifa — huduma za L2 zilizofungwa kwenye Eneo la Mada la hazina hii. Pitia na zirekebishe kwa kila mada kwenye Curate.',
       reviewHandoff:
-        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+        'Kuweka mtaratibu wa idhini mahali pamoja (Mhariri/dashibodi) kumaanisha wakaguzi hudhibisha kila wakati kwenye sehemu ile ile na kwa kumbukumbu ile ile — kielekezi kinatayarisha hazina, mtaratibu ndio unaoichapisha.',
       piiReview:
-        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+        'Kichanganuzi kilipata data za binafsi zinazowezekana. Kwa kila matokeo unachagua: Ficha (badilisha na taarifa), Badilisha (andika maandishi yako mwenyewe), Ondoa (yafute), au Kubali (yihifadhi — uamuzi unaingizwa kwenye kumbukumbu). Hazina haiwezi kuhamishwa ikiwa ina matokeo yaliyowekwa alama ambayo hayajakaguliwa.'
     },
     md: {
       toolbar: 'Uumbizaji',
@@ -2306,9 +2306,9 @@ export default {
       step7:
         'Baadhi ya maonyo yanaweza kurekebishwa kiotomatiki: maadili ya hali yanaweza kurekebishwa kuwa orodha sahihi, nyanja zilizokosekana zinaweza kujazwa na maadili yanayofaa. Tumia marekebisho unayokubaliana nayo, kisha rudi kwa mratibu ili kukagua.',
       step8:
-        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+        'Muhtasari wa ulichojenga: mada, lebo, vyanzo, na matatizo yoyote yaliyobaki bila suluhisho. Ukisoma vizuri, ihamishie — wasilisha → idhinisha → chapisha hufanyika kwenye dashibodi na kwenye mhariri, kamwe kwenye kielekezi huu.',
       step9:
-        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+        'Hazina hii iko tayari kwa ukaguzi. Iwasilishe kwa idhini kwenye dashibodi ya Studio; muidhinishaji anakubali; kuchapisha hufanyika kutoka kwenye dashibodi au mhariri — kamwe kwenye kielekezi huu. Mhariri unabaki kuwa nyumbani kwa kila mabadiliko yajayo.',
       docMgmtEntry:
         'Unda ghala jipya la OKF kutoka kwenye nyaraka zilizochaguliwa. Nyaraka zitakuwa vyanzo; utakagua na kutaja mada zinazozalishwa kabla ya chochote kuchapishwa.',
       crawlSegment:
@@ -2425,7 +2425,7 @@ export default {
     },
     steps: {
       entry: {
-        createdHint: 'Repository created — rename it later from the editor.',
+        createdHint: 'Hazina imeundwa — badilisha jina lake baadaye kutoka kwenye mhariri.',
         title: 'Jina la ghala & eneo la mada',
         hint: 'Lipe ghala hili la OKF jina lililo wazi na uchague eneo la mada yake.',
         nameLabel: 'Jina la ghala',
@@ -2453,12 +2453,12 @@ export default {
             desc: 'Gawa mada na muundo kutoka ghala lingine la OKF.'
           }
         },
-        cloneSource: 'Source repository (not yet serving)',
-        clonePh: 'Select the repository to clone from',
-        cloning: 'Cloning topics into this repository…',
-        cloneNeed: 'Pick the repository to clone from first.',
-        cloneBusy: 'The previous repository is still being removed — go Back and Continue again in a moment.',
-        cloneFailed: 'The clone failed — try again.'
+        cloneSource: 'Hazina ya chanzo (bado haitoi huduma)',
+        clonePh: 'Chagua hazina unayotaka kunakili kutoka humo',
+        cloning: 'Inanakili mada kwenye hazina hii…',
+        cloneNeed: 'Chagua kwanza hazina unayotaka kunakili kutoka humo.',
+        cloneBusy: 'Hazina iliyotangulia bado inaondolewa — nenda Nyuma kisha Endelea tena baada ya muda mfupi.',
+        cloneFailed: 'Kunakili kumeshindwa — jaribu tena.'
       },
       input: {
         title: 'Pembejeo',
@@ -2470,27 +2470,27 @@ export default {
         chooseCrawl: 'Choose crawled documents',
         chooseDocs: 'Choose source documents',
         writeOne: '+ Write a concept',
-        fsPick: '+ Import markdown from this computer',
+        fsPick: '+ Ingiza markdown kutoka kwenye kompyuta hii',
         fsBusy: 'Importing your files…',
-        fsFailed: 'Import failed — check the files and retry.',
-        skippedEmpty: '{n} empty file(s) skipped.',
+        fsFailed: 'Uingizaji umeshindwa — angalia faili kisha ujaribu tena.',
+        skippedEmpty: 'Faili {n} tupu zimepuuzwa.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',
-        noRepo: 'Create the repository first (go back to Entry).',
-        noRepoYet: 'Create the repository first (go back to Entry).',
-        benchTitle: 'Topics in this repository',
+        noRepo: 'Unda hazina kwanza (rudi kwenye hatua ya Entry).',
+        noRepoYet: 'Unda hazina kwanza (rudi kwenye hatua ya Entry).',
+        benchTitle: 'Mada katika hazina hii',
         benchCount: '{n}',
         benchLoading: 'Reading topics…',
-        benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
-        benchFailed: 'Could not read the topics right now.',
+        benchEmpty: 'Bado hakuna kitu hapa — chagua vyanzo hapa chini, ingiza markdown, au andika mada yako ya kwanza.',
+        benchFailed: 'Haikuweza kusoma mada kwa sasa.',
         editTitle: 'Edit concept',
-        deleteFailed: 'Could not delete the concept.',
-        added: '{n} topic(s) in this repository so far.',
+        deleteFailed: 'Haikuweza kufuta dhana.',
+        added: 'Mada {n} katika hazina hii hadi sasa.',
         deleteTitle: 'Delete topic',
-        deleteBody: 'This permanently removes the topic from this repository.',
+        deleteBody: 'Hii huondoa kabisa mada hii kutoka kwenye hazina hii.',
         labelFailed: 'Could not set the label.',
-        cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
+        cloned: 'Hazina hii ni nakala — mada zake tayari zimo mahali. Endelea kwenye Curate kuzikagua.'
       },
       produce: {
         title: 'Zalisha mada',
@@ -2499,51 +2499,53 @@ export default {
         placeholder: 'Huduma ya mzalishaji itaunganishwa katika kisa cha baadaye.',
         retry: 'Retry conversion',
         restart: 'Run again',
-        running: 'Converting… you can watch progress here; nothing is committed until you review in Curate.',
-        failed: 'The conversion failed — retry, or go back and pick different inputs.',
-        done: '{n} topic(s) are ready — continue to review them in Curate.',
-        noSources: 'No sources selected — go back to Input.',
-        neverStarted: 'The conversion did not start — retry.',
-        manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
+        running:
+          'Inabadilisha… unaweza kuona maendeleo hapa; hakuna kinachothibitishwa hadi utakapokagua kwenye Curate.',
+        failed: 'Ubadilishaji umeshindwa — jaribu tena, au rudi nyuma kuchagua ingizo lingine.',
+        done: 'Mada {n} ziko tayari — endelea kuzikagua kwenye Curate.',
+        noSources: 'Hakuna vyanzo vilivyochaguliwa — rudi kwenye hatua ya Input.',
+        neverStarted: 'Ubadilishaji haukuanza — jaribu tena.',
+        manualSkip: 'Mada zilizoandikwa kwa mkono hazihitaji uzalishaji — endelea kwenye Curate kuzikagua.',
         labelDone: 'Conversion complete',
         dupContent:
-          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
-        inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+          'Vyanzo hivi tayari vimeingizwa kwenye hazina nyingine ya OKF. Rejesha au futa hazina hiyo kwanza, au chagua nyaraka nyingine.',
+        inFlight: 'Ubadilishaji mmoja tayari unaendelea kwa hazina hii — subiri umalize.',
         stage: {
           files: 'Files',
-          filesCount: '{done} of {total} documents',
+          filesCount: '{done} kati ya {total} nyaraka',
           concepts: 'Concepts',
           conceptsCount: '{done} of {total} topics',
           conceptsSoFar: '{n} topics so far',
           curating: 'Curating',
-          curatingCount: '{done} of {total} concepts labelled',
+          curatingCount: '{done} kati ya {total} dhana zimewekewa lebo',
           crosslink: 'Cross-linking topics',
-          linkCount: '{done} of {total} batches · {w} links written',
+          linkCount: '{done} kati ya {total} makundi · viungo {w} vimeandikwa',
           complete: 'Complete',
           unavailable: 'Count unavailable',
           waiting: 'Waiting'
         },
-        filesNote: '{done} of {total} documents converted',
-        pagesNote: '{done} of {total} pages converted',
-        pagesSoFar: '{n} pages converted so far',
+        filesNote: '{done} kati ya {total} nyaraka zimebadilishwa',
+        pagesNote: '{done} kati ya {total} kurasa zimebadilishwa',
+        pagesSoFar: 'Kurasa {n} zimebadilishwa hadi sasa',
         sourceStat: '+{n} new (total {t})',
-        sourceStatMerged: '+{n} new · {m} merged by slug (total {t})',
+        sourceStatMerged: '+{n} mpya · {m} zimeunganishwa kwa slug (jumla {t})',
         docsLeg: '{n} selected document(s)',
-        legWait: 'Waiting for the previous conversion to release…'
+        legWait: 'Inasubiri ubadilishaji uliotangulia kuachilia…'
       },
       label: {
         title: 'Lebo — za moja kwa moja',
         hint: 'Lebo hutambuliwa kiotomatiki kutoka kwa Hierarchia ya Maarifa — zimezuwa kwenye Eneo la Mada la hifadhi hii.',
         loading: 'Reading labels…',
-        preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
+        preview: 'Mada {labeled} kati ya {n} zina lebo za Muundo wa Maarifa.',
         unlabeled: 'no labels yet',
-        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
-        loadFailed: 'Could not read the labels right now.'
+        adjust:
+          'Rekebisha lebo za mada yoyote kwenye Curate — lebo zinabaki zimefungwa kwenye Eneo la Mada la hazina hii.',
+        loadFailed: 'Haikuweza kusoma lebo kwa sasa.'
       },
       curate: {
         embedHint:
-          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
-        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
+          'Kagua na boresha kila mada: rekebisha maandishi, weka aina yake na lebo ya Muundo wa Maarifa, ongeza au ondoa mada. Kila unachorekebisha hapa ndicho msaidizi atakachotaja baadaye.',
+        noRepo: 'Bado hakuna hazina — rudi kwenye Entry uunde au uchague kwanza.',
         title: 'Kagua mada',
         hint: 'Kila mada ni kipande kidogo cha maarifa kinachoweza kutajwa. Hariri kichwa na maelezo.',
         placeholder: 'Mti wa uratibu + kihariri vitatolewa katika Kisa cha 3-8.'
@@ -2557,8 +2559,8 @@ export default {
         title: 'Marekebisho ya kiotomatiki',
         hint: 'Baadhi ya maonyo yanaweza kurekebishwa kiotomatiki. Tumia marekebisho unayokubaliana nayo, kisha rudi kwa mratibu ili kukagua.',
         placeholder: 'Huduma ya kusahihisha kiotomatiki inatolewa katika Kisa cha 10.2.',
-        noRepo: 'No repository yet — go back to Entry and create one first.',
-        applied: 'Fixes applied — continue, or go back to Curate to review the result.'
+        noRepo: 'Bado hakuna hazina — rudi kwenye Entry uunde kwanza.',
+        applied: 'Marekebisho yametumika — endelea, au rudi kwenye Curate kukagua matokeo.'
       },
       review: {
         title: 'Ukaguzi',
@@ -2570,15 +2572,15 @@ export default {
         state: 'Lifecycle state',
         labelsSet: 'set per topic in Curate',
         browserHint:
-          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
-        noRepo: 'No repository yet — the file review appears here once a repository exists.',
+          'Tazama la mwisho kabla ya kuhamisha: kila faili hapa chini, markdown yake na lebo zake — hasa kama msaidizi atakavyozitaja.',
+        noRepo: 'Bado hakuna hazina — ukaguzi wa faili utaonekana hapa mara hazina ikianza kuwepo.',
         ritualOutside:
-          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+          'Mtaratibu wa ukaguzi — wasilisha kwa ukaguzi, idhini ya mkaguzi, chapisha — unafanyika kwenye Mhariri na dashibodi ya Studio, si hapa. Fungua Mhariri ukamilishe.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
-        noVersions: 'No versions yet — versions are minted during the approval ritual.',
-        versionSummary: '{n} version(s) · latest v{latest}'
+        noVersions: 'Bado hakuna matoleo — matoleo hutolewa wakati wa mtaratibu wa idhini.',
+        versionSummary: 'Matoleo {n} · jipya zaidi v{latest}'
       },
       publish: {
         title: 'Linda na Kamilisha',
@@ -2588,10 +2590,11 @@ export default {
         topicsOk: 'Mada zimekaguliwa',
         topicsPending: 'No topics yet',
         topicsServing: 'Topics serving',
-        noTopics: 'No topics yet — go back to Curate to produce or write them.',
-        frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
+        noTopics: 'Bado hakuna mada — rudi kwenye Curate kuzalisha au kuandika.',
+        frozen:
+          'Hazina hii inatoa huduma — muhtasari wa kusoma tu hapa. Fungua Mhariri kudhibiti matoleo au kurejesha.',
         ritual:
-          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+          'Ifuatayo: wasilisha kwa idhini kwenye dashibodi ya Studio → muidhinishaji anakubali → chapisha kutoka kwenye dashibodi au mhariri. Kielekezi husimama hapa kwa makusudi.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2704,7 +2707,7 @@ export default {
         trustTier: 'trust_tier',
         attestation: 'attestation',
         sources: 'provenance.sources',
-        onlyOnIndex: 'Per-repo tags live on the index concept only — open the index to see them.'
+        onlyOnIndex: 'Lebo za kila hazina zipo kwenye dhana ya index pekee — fungua index ili kuziona.'
       },
       showSource: 'Onyesha chanzo',
       issue: {
@@ -2731,15 +2734,15 @@ export default {
       run: {
         notReady: 'Uhalalishaji utaunganishwa katika kisa cha baadaye.'
       },
-      piiTitle: 'Personal data — review each flagged concept',
+      piiTitle: 'Data za binafsi — kagua kila dhana iliyowekewa alama',
       loading: 'Checking the repository…',
-      loadFailed: 'Could not load the validation report.',
+      loadFailed: 'Haikuweza kupakia ripoti ya uthibitishaji.',
       retry: 'Retry',
       issuesTitle: 'Issues to review',
       howToFix: 'How to fix',
-      indexFailed: 'Re-index failed — edit or re-split the page.',
+      indexFailed: 'Kuorodhesha upya kumeshindwa — hariri au ugawanye upya ukurasa.',
       indexFailedRemedy:
-        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+        'Fungua ukurasa kwenye mhariri kisha uhifadhi (kuhifadhi kunarudia uorodheshaji), au ugawanye upya hazina kutoka kwenye chanzo chake.',
       severity: {
         blocker: 'Blocking',
         warning: 'Needs review',
@@ -2754,11 +2757,11 @@ export default {
       },
       topicLinks: {
         title: 'Cross-link topics',
-        tip: 'Reads every page in this repository and writes links between the pages that genuinely belong together — the same processing the import wizard runs. It is safe to re-run: existing links are kept and only new ones are added.',
-        progress: 'Cross-linking… {done} of {total} batches',
-        progressIdle: 'Cross-linking… reading the repository',
-        done: 'Added {n} link(s) across {c} page(s).',
-        failed: 'Cross-linking failed: {msg}'
+        tip: 'Inasoma kila ukurasa katika hazina hii na kuandika viungo kati ya kurasa zinazohusiana kweli — utaratibu uleule unaotumika na kielekezi wa uingizaji. Ni salama kuendesha tena: viungo vilivyopo vinahifadhiwa na mpya tu ndio unaongezwa.',
+        progress: 'Inaunganisha… {done} kati ya {total} makundi',
+        progressIdle: 'Inaunganisha… inasoma hazina',
+        done: 'Viungo {n} vimeongezwa katika kurasa {c}.',
+        failed: 'Uunganishaji umeshindwa: {msg}'
       },
       action: {
         suggestLinks: 'Suggest links',
@@ -2766,8 +2769,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: 'Create the Sources page and link {n} page(s)',
-        wireExisting: 'Link {n} page(s) to "{hub}"',
+        wireCreate: 'Unda ukurasa wa Vyanzo na uunganishe kurasa {n}',
+        wireExisting: 'Unganisha kurasa {n} na "{hub}"',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2775,45 +2778,45 @@ export default {
         done: 'Done'
       },
       suggest: {
-        working: 'Asking the assistant for link suggestions…',
-        empty: 'No suggestions — link it manually in the editor.'
+        working: 'Inaomba msaidizi mapendekezo ya viungo…',
+        empty: 'Hakuna mapendekezo — unganisha kwa mkono kwenye mhariri.'
       },
       nearDup: {
-        keepHint: 'Keep one copy — delete the rest.'
+        keepHint: 'Weka nakala moja — futa zilizobaki.'
       },
-      wireDone: 'Linked {n} page(s) to "{hub}".',
-      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      wireDone: 'Kurasa {n} zimeunganishwa na "{hub}".',
+      wireCreated: 'Ukurasa wa Vyanzo umeundwa na kurasa {n} zimeunganishwa.',
       mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: 'First {n} characters — open the editor for the full page.'
+        truncated: 'Herufi {n} za mwanzo — fungua mhariri uone ukurasa mzima.'
       },
       tip: {
         conformance:
-          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+          'Frontmatter ya ukurasa inakosa vipengele vya spec ya OKF (aina, tarehe ya matumizi, vyanzo…). Usahihishaji otomatiki katika Hatua 8 huurekebisha yote haya kimashine; hakuna kinachobadilika katika maudhui uliyoandika.',
         orphan:
-          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+          'Hakuna ukurasa unaounganishwa na huu, na ukurasa huu hauunganishi na lolote. Utafutaji wa grafu hutembea viungo kuhusisha maudhui, hivyo ukurasa usio na viungo huonekana tu kwenye mlingano kamili wa mada. Rekebisha: pokea mapendekezo ya viungo au ongeza viungo kwenye mhariri.',
         near_duplicate:
-          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+          'Kurasa hizi zina maandishi yanayofanana karibu kabisa. Wakati wa ingest kila moja huwa vipande vyake, hivyo swali moja linaweza kurudisha maudhui yale yale mara kadhaa. Rekebisha: onesha, weka nakala bora, futa zilizobaki.',
         citation:
-          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+          'Kurasa zinarejelea nyaraka katika metadata zao lakini hakuna kinachounganisha na ukurasa wa Vyanzo — hivyo marejeleo hayafiki grafu na hayawezi kutembezwa au kutajwa wakati wa kujibu. Rekebisha: bofya mara moja huunganisha kurasa zote zinazorejelea.',
         index_failed:
-          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+          'Ukurasa uliingizwa lakini ujenzi wa faharasa ya utafutaji wake umeshindwa — hauwezi kupatikana hadi uorodheshwe upya. Kuhifadhi ukurasa kwenye mhariri kunarudia ujenzi.'
       },
       piiRescan: 'Re-scan all pages',
       piiRescanWorking: 'Re-scanning every page…',
       piiRescanDone: 'Re-scanned {n} page(s).',
       piiRescanPartial:
-        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+        'Kurasa {n} zimechanganuliwa upya. {e} bado zimeshindwa — hukumu yao ya uchanganuzi haikubadilika, hivyo kuchapisha kunabaki kuzuiliwa kwazo.',
       piiRescanMissing:
-        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
-      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+        'Uchanganuzi upya haupatikani kwenye seva hii (404). Hakuna kilichobadilishwa — kurasa zilizoshindwa kuchanganuliwa bado zinazuia kuchapisha.',
+      piiRescanFrozen: 'Uchanganuzi upya umekataliwa: hazina inachapishwa (409). Hakuna kilichobadilishwa.',
       piiRescanFailed:
-        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
-      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
-      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+        'Uchanganuzi upya umeshindwa. Hakuna kilichobadilishwa — kurasa zilizoshindwa kuchanganuliwa bado zinazuia kuchapisha.',
+      piiRescanProgress: 'Inachanganua upya… {done} kati ya {total} kurasa',
+      piiRescanProgressIdle: 'Inachanganua upya… inasoma hazina',
       piiRescanNoKey:
-        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+        'Seva ilikubali uchanganuzi upya lakini haikurudisha kitambulisho cha uendeshaji, hivyo maendeleo yake hayawezi kufuatiliwa. Hakuna kilichoripotiwa.',
       piiStateError: 'Scan error',
       piiTally: {
         scanned: '{n} page(s) re-scanned',
@@ -2828,13 +2831,13 @@ export default {
       nFlagged: '{n} zimepatikana',
       rescan: 'Changanua tena',
       stateError: 'Scan failed',
-      errorTitle: 'This page is blocking the hand-off.',
+      errorTitle: 'Ukurasa huu unazuia kuhamishwa.',
       errorBody:
-        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+        'Ukaguzi wa PII wa ukurasa huu UMESHINDWA (si kwamba haukupata chochote — haukuweza kusoma maandishi). Kuchapisha kunabaki kuzuiliwa hadi ukaguzi kufanikiwa. Tumia Changanua upya hapo juu.',
       rescanMissing:
-        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
-      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
-      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
+        'Uchanganuzi upya haupatikani kwenye seva hii (404). Hakuna kilichobadilishwa — ukurasa bado unazuia kuchapisha.',
+      rescanFrozen: 'Uchanganuzi upya umekataliwa: hazina inachapishwa (409). Hakuna kilichobadilishwa.',
+      rescanFailed: 'Uchanganuzi upya umeshindwa. Hakuna kilichobadilishwa — ukurasa bado unazuia kuchapisha.',
       scanning: 'Inachanganua…',
       clean: 'Hakuna vipengele vilivyotiwa alama — concept hii ni safi.',
       how: 'Suluhisho: ondoa au badilisha maneno (mfano kutumia jukumu badala ya jina), kisha hifadhi — uchanganuzi upya utasasisha orodha hii.',
@@ -2902,49 +2905,49 @@ export default {
       unpublish: 'Sitisha uchapishaji'
     },
     src: {
-      title: 'Choose the source documents',
-      hint: 'Pick sources from the document repository, upload new ones from this computer, or both.',
-      repoSec: 'From the document repository',
+      title: 'Chagua nyaraka za chanzo',
+      hint: 'Chagua vyanzo kutoka kwenye hazina ya nyaraka, pakia mpya kutoka kwenye kompyuta hii, au vyote.',
+      repoSec: 'Kutoka kwenye hazina ya nyaraka',
       searchPh: 'Search by name or site…',
       chipsLabel: 'Filter by origin',
       chipAll: 'All',
       chipCrawl: 'Crawls',
       chipUpload: 'Uploads',
-      noMatches: 'Nothing matches this search or filter.',
+      noMatches: 'Hakuna kinacholingana na utafutaji huu au kichujio hiki.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
       total: '{n} document(s)',
-      titleSingle: 'Choose the crawled document',
+      titleSingle: 'Chagua waraka uliokusanywa',
       loading: 'Loading documents…',
       retry: 'Retry',
-      empty: 'No documents in the repository yet — upload some below.',
+      empty: 'Bado hakuna nyaraka kwenye hazina — pakia chache hapa chini.',
       more: 'Load more',
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
       uploaded: '{n} file(s) uploaded.',
-      uploadFailed: 'An upload failed — check the files and retry.',
-      fsNote: 'Uploaded files join the document repository and are selected here automatically.',
+      uploadFailed: 'Upakiaji mmoja umeshindwa — angalia faili kisha ujaribu tena.',
+      fsNote: 'Faili zilizopakiwa zinajiunga na hazina ya nyaraka na huchaguliwa hapa kiotomatiki.',
       count: 'Selected: {n}',
-      needOne: 'Select at least one source.',
+      needOne: 'Chagua angalau chanzo kimoja.',
       confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
-      loadFailed: 'Could not load the document list.',
+      loadFailed: 'Haikuweza kupakia orodha ya nyaraka.',
       servingBadge: 'serving free-form RAG',
       servingTip:
-        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+        'Waraka huu kwa sasa unahudumia korpus huru wa RAG — ubadilishaji unafanikiwa, lakini hazina hii haiwezi kuingizwa hadi itakapotolewa.',
       alreadyBadge: 'already in an OKF repo',
-      alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
+      alreadyTip: 'Waraka huu tayari ni chanzo cha hazina nyingine ya OKF — ubadilishaji utaukataa.'
     },
     frontmatter: {
-      title: 'Frontmatter tags — what this repo is about',
-      help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',
+      title: 'Lebo za frontmatter — hazina hii inahusu nini',
+      help: 'Lebo zinaeleza kile ambacho hazina hii ina na — kwa umuhimu sawa — kile ambacho haina (orodha ya zilizozuiwa). Zinaamua maswali gani yanaelekezwa kwenye hazina hii. Bofya Refresh kupanga rasimu kutoka kwenye korpus, au hariri lebo hapa chini. Kuchapisha kunahitaji topic ≥3 + forbidden ≥1.',
       refresh: 'Refresh suggestions',
       suggesting: 'Curating…',
-      suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestEmpty: 'LLM haikurudisha lebo zozote. Jaribu tena baada ya korpus kukua.',
       suggestCoverage: 'Imetokana na {sampled} kati ya {total} dhana, katika {labels} lebo za mpangilio wa maarifa.',
       suggestFailed: 'Suggest failed.',
-      suggestedTag: 'LLM suggestion — remove to dismiss.',
+      suggestedTag: 'Pendekezo la LLM — ondoa ili kulipuuza.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2953,7 +2956,7 @@ export default {
       save: 'Save tags',
       saved: 'Saved',
       error: 'Save failed.',
-      errorWithStep: 'Save failed at step "{step}" ({code}) — retry.',
+      errorWithStep: 'Kuhifadhi kumeshindwa katika hatua "{step}" ({code}) — jaribu tena.',
       field: {
         topic: 'Topic',
         entity: 'Entity',
@@ -2983,18 +2986,19 @@ export default {
         model: 'Model',
         version: 'Head version',
         computedAt: 'Computed',
-        staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
+        staleNote: 'Lebo zimebadilika baada ya kichwa hiki kujengwa — jenga kichwa upya kabla ya kuziamini vipimo.',
         missingNote:
-          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+          'Bado hakuna kichwa cha vektari. Kinaundwa wakati wa kuchapisha; kama huduma ya embedding haikuwepo wakati huo, jenga kichwa upya sasa kutoka kwenye lebo zilizohifadhiwa.',
         rebuild: 'Rebuild head',
-        rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
-        rebuildBusy: 'Rebuilding — embedding the tag fields…'
+        rebuildTip:
+          'Hupachika upya lebo zilizohifadhiwa kuwa vektari mpya ya kichwa. Wito mmoja wa embedding kwa kila uwanja wa lebo.',
+        rebuildBusy: 'Inajenga upya — inapachika viwanja vya lebo…'
       },
       test: {
-        placeholder: 'e.g. cancer screening guidelines',
+        placeholder: 'mf. miongozo ya uchunguzi wa saratani',
         run: 'Run test',
-        running: 'Embedding the query and scoring the heads…',
-        adversarial: 'Adversarial — this query should NOT select this repository (a forbidden/adjacent topic)',
+        running: 'Inapachika swali na kupima vichwa…',
+        adversarial: 'Ya kupingana — swali hili halipaswi kuchagua hazina hii (mada iliyozuiwa au iliyo karibu)',
         embeddedWith: 'Embedded with',
         col: {
           repo: 'Repository',
@@ -3005,14 +3009,14 @@ export default {
         },
         provenance: 'Routing provenance',
         empty:
-          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
-        pass: 'PASS — this repository wins the head routing.',
-        fail: 'FAIL — {repo} wins the head routing for this query.',
-        passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
+          'Andika swali ambalo mtumiaji angeuliza kisha liendeshe — maabara hupima kichwa cha kila hazina iliyochapishwa kwa njia ile ile ambayo fan-out ingefanya.',
+        pass: 'IMEFAULU — hazina hii inashinda uelekezo wa kichwa.',
+        fail: 'IMESHINDWA — {repo} inashinda uelekezo wa kichwa kwa swali hili.',
+        passAdversarial: 'IMEFAULU — haisikuchaguliwa kwa usahihi (mshindi: {repo}).',
         failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
-        passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
+        passSuppressed: 'IMEFAULU — imezuiwa na lango la zilizozuiwa/kelele: kichwa hakidai swali hili',
         notSelectedSuppressed:
-          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+          'HAJACHAGULIWA — imezuiwa na lango la zilizozuiwa/kelele: swali hili linafanana zaidi na yale ambayo hazina hii inayazuia, au ni kelele za nje ya uwanja',
         claimed: 'claims',
         suppressed: 'suppressed'
       },
@@ -3059,7 +3063,7 @@ export default {
         rejected: 'Imezuiwa na ulinzi — lebo iliyozuiwa haipaswi kulingana na mada ya hifadhi hii yenyewe.'
       },
       run: {
-        progress: '{done} of {total} queries ({pct}%)',
+        progress: '{done} kati ya {total} maswali ({pct}%)',
         progressStarting: 'Starting the run…',
         phase: {
           routing: 'Scoring routes',
@@ -3072,7 +3076,7 @@ export default {
           'LLM huandika maswali kwa vipande vya 30 kwa kila aina — ombi kubwa (100+) huchukua dakika chache. Kipima hutokea hapa na kwenye vilivyohifadhiwa ikikamilika.',
         generating: 'Inatengeneza kwa vipande — maombi makubwa huchukua dakika…',
         run: 'Run all queries',
-        running: 'Running every suite query…',
+        running: 'Inaendesha kila swali la kipima…',
         current: 'Current suite',
         col: {
           query: 'Query',
@@ -3087,13 +3091,13 @@ export default {
           name: 'Jina',
           corpus: 'Korpusi'
         },
-        notEvaluatable: 'not evaluatable (no competitors)',
+        notEvaluatable: 'haiwezi kupimwa (hakuna washindani)',
         pass: 'pass',
         fail: 'fail',
         passRate: 'Pass rate',
         positives: 'Positives',
         negatives: 'Negatives',
-        noCompetitors: 'n/a — no competing heads yet',
+        noCompetitors: 'haitumiki — bado hakuna vichwa vinavyoshindana',
         avgMargin: 'Avg margin',
         steal: '{repo} stole {n} queries',
         addPlaceholder: 'Your own probe query…',
@@ -3101,7 +3105,7 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.',
+        noRuns: 'Bado hakuna uendeshaji — tengeneza kipima kisha uendeshe.',
         explainFailures: 'Eleza mashindikizo',
         explainBusy: 'Inaeleza mashindikizo — wito mmoja wa model kwa kila hasi iliyoshindikana…',
         batchTitle: 'Kwa nini hasi zilizoshindikana zilielekezwa hapa',
@@ -3173,9 +3177,9 @@ export default {
       },
       publishCard: {
         present:
-          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
-        stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
-        missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+          'Kichwa cha vektari kiko tayari — vipimo vya uelekezo kwenye Lab vitakuambia kama hazina hii inashinda maswali yanayopaswa kuwa yake.',
+        stale: 'Kichwa kimepitwa na wakati (lebo zimebadilika baada ya kujengwa) — kuchapisha kunakijenga upya.',
+        missing: 'Bado hakuna kichwa cha vektari — kuchapisha kunakijenga kutoka kwenye lebo zilizoidhinishwa.'
       },
       advisor: {
         run: 'Mshauri: pendekeza mabadiliko ya tag',

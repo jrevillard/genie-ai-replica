@@ -1510,9 +1510,9 @@ export default {
       uploadFailed: "Filiyata {'{'}fileName{'}'} yele to."
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+      'Elego mun na a maa RAG la: dokuuma kili-kili min i yelata, a be run ka ke kibaro curated, labeled ye — dokuudu focused, dada kumbalu soto jaabi faama ju be dokuuma warayaa kili bolo. OKF Studio wizardoo bɛ yelelu falan topicu reviewta ye.',
     ragTipNoOkf:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
+      'Elego mun na a maa RAG la: dokuuma kili-kili min i yelata, a be run ka ke kibaro curated, labeled ye — dokuudu focused, dada kumbalu soto jaabi faama ju be dokuuma warayaa kili bolo.'
   },
   okf: {
     lifecycleErrors: {
@@ -1528,10 +1528,10 @@ export default {
     models: {
       title: 'Model configurations',
       add: 'New configuration',
-      hint: 'Named remote-model endpoints for judging and generation — any OpenAI-compatible surface (OpenAI, a LiteLLM gateway, vLLM, Gemini-compat, Ollama) or Anthropic direct. Exactly one configuration can be active; when none is, the deployment’s configured default model is used. Keys are stored server-side and never displayed.',
+      hint: 'Endpoint konfigurasion toh-namalu judging ani generation la baara — OpenAI-compatible surface kili-kili sila (OpenAI, LiteLLM gateway, vLLM, Gemini-compat, Ollama) wala Anthropic direct. Konfigurasion kili dingo waa be run ka active ke; ni kelen ti active, deployment ka default modeloo na baara ke. Keyolu server kono marata ani a ti yitandi abada.',
       name: 'Name',
       provider: 'Provider',
-      providerOpenai: 'OpenAI-compatible (OpenAI, LiteLLM, vLLM…)',
+      providerOpenai: 'OpenAI-compatible endpoint (OpenAI, LiteLLM, vLLM…)',
       providerAnthropic: 'Anthropic (native API)',
       baseUrl: 'Base URL',
       apiKey: 'API key',
@@ -1541,46 +1541,45 @@ export default {
       modelFreeText: 'model id (free text)',
       modelFetch: 'Fetch models',
       modelFetching: 'Fetching…',
-      modelsEmpty: 'The endpoint returned no models — type the model id.',
-      modelsFailed: 'Model listing failed — type the model id.',
-      modelsLoaded: '{n} models loaded — pick from the dropdown or type freely',
+      modelsEmpty: 'Endpointoo modelu ti jaabi — model idoo kuma jang.',
+      modelsFailed: 'Model listin filita — model idoo kuma jang.',
+      modelsLoaded: 'Modelu {n} lootita — dropdown kono ceng wala a kuma fulaa',
       test: 'Test connection',
       testing: 'Testing…',
-      testTitle: 'Probe the endpoint and (with a model chosen) a one-token generation',
-      testOkModel: '✓ Connected — the model answered ({ms} ms)',
-      testOkEndpoint: '✓ Endpoint reachable — {n} models listed (pick a model to also test generation)',
-      testGenFail: '✗ Endpoint OK, but the model call failed',
-      testNotListed: ' — note: “{model}” is not in the endpoint’s model list',
-      testFail: '✗ test failed — no response',
-      services: 'Use this configuration for',
-      svcJudge: 'Benchmarks (RAGAS judge + advisor)',
+      testTitle: 'Endpointoo probe ani (model cengta la) generation kelen-token ke',
+      testOkModel: '✓ A kafata — modeloo jaabita ({ms} ms)',
+      testOkEndpoint: '✓ Endpointoo mutata — modelolu {n} yitandita (generation fana test la model dingo ceng)',
+      testGenFail: '✗ Endpointoo kumba, nga model goo filita',
+      testNotListed: ' — kankutay: “{model}” ti wuli endpoint ka model listi kono',
+      testFail: '✗ test filita — jaabi ti ke',
+      services: 'Ninyan konfigurasionoo baara kɛ',
+      svcJudge: 'Benchmarku (RAGAS judge + advisor)',
       svcJudgeShort: 'benchmarks',
       svcCuration: 'Concept curation',
       svcCurationShort: 'curation',
       svcTagging: 'Topics & tags',
       svcTaggingShort: 'topics/tags',
-      svcOpenaiOnly:
-        'Concept curation and topics/tags speak the OpenAI wire format — they need an OpenAI-compatible endpoint.',
+      svcOpenaiOnly: 'Concept curation ani topic/tagu OpenAI wire format kuma — OpenAI-compatible endpointu u lafiya.',
       colServices: 'Used by',
       svcNone: 'nothing (dormant)',
       groupTestLab: 'Test Lab Pipelines',
       groupDataPrep: 'Data Prep Pipeline',
       groupInference: 'Inference Pipeline',
-      mockNote: 'planned — not yet configurable',
+      mockNote: 'planita — a ti ka configuru saaying',
       svcAnswers: 'Benchmark answers — offline replay kelen ye (Lab bɛ na jipa deployment chat la)',
       svcAnswersShort: 'benchmark answers (offline kelen ye)',
-      mockContextual: 'Contextual retrieval (doc context)',
+      mockContextual: 'Contextual retrieval (dokuuma context)',
       mockChunkLabeling: 'Chunk labeling',
-      mockGraphExtraction: 'Knowledge-graph extraction',
+      mockGraphExtraction: 'Knowledge-graph dada (extraction)',
       mockChatServing: 'Chat answering',
       mockTranslation: 'Chat translation',
-      svcOpenaiOnlyShort: 'OpenAI-compatible endpoints only',
+      svcOpenaiOnlyShort: 'OpenAI-compatible endpointolu waa dingo',
       providerTipOpenai:
-        'Verified OpenAI-compatible endpoints: OpenAI https://api.openai.com/v1 · MiniMax https://api.minimax.io/v1 · z.ai https://api.z.ai/api/paas/v4 · a LiteLLM gateway http://your-gateway:4000/v1',
+        'Endpointu verifita benta (OpenAI-compatible): OpenAI https://api.openai.com/v1 · MiniMax https://api.minimax.io/v1 · z.ai https://api.z.ai/api/paas/v4 · LiteLLM gateway dingo http://your-gateway:4000/v1',
       providerTipAnthropic:
-        'Verified Anthropic-native endpoints: Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
+        'Endpointu verifita benta (Anthropic-native): Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
       baseUrlTip:
-        'The server lists models at this base + /models (OpenAI-compatible) or + /v1/models (Anthropic — a trailing /v1 is normalized away), and Test connection generates at + /chat/completions or + /v1/messages. All four standard paths verified live 2026-10-20.',
+        'Serveroo modelu listi nying base + /models kono (OpenAI-compatible) wala + /v1/models (Anthropic — /v1 tailoo normalize fiti), ani Test connection generate + /chat/completions wala + /v1/messages kono ke. Path standard naa bee verifita live 2026-10-20.',
       save: 'Save changes',
       create: 'Create',
       cancel: 'Cancel',
@@ -1594,12 +1593,12 @@ export default {
       inactive: 'inactive',
       edit: 'Rename / modify',
       copy: 'Copy',
-      activate: 'Activate (exactly one is active)',
-      deactivate: 'Deactivate — the deployment default model will be used',
+      activate: 'Activate (kiling dingo waa active)',
+      deactivate: 'Deactivate — deployment ka default modeloo na baara ke',
       delete: 'Delete',
-      deleteConfirm: 'Delete model configuration "{name}"?',
-      empty: 'No model configurations yet — the deployment default (env) model is in use.',
-      adminOnly: 'Model configurations require the platform admin role.'
+      deleteConfirm: 'Model konfigurasion «{name}» fiti?',
+      empty: 'Model konfigurasyonu ti je saaying — deployment default (env) modeloo be baara.',
+      adminOnly: 'Model konfigurasyonu platform admin role lafiya.'
     },
     versions: {
       bundle: 'Bulo',
@@ -1641,7 +1640,7 @@ export default {
         inProgress: 'A kabuḷo publishing — a bōk eddo kakkwon bundle im jōt e…',
         title: 'A ke'
       },
-      readonly: 'CONTENT READ ONLY — head/tags stay editable',
+      readonly: 'KONOO READ ONLY waa — head ani tagu ka editable kutu ke',
       serving: 'A bering baara',
       state: {
         ingested: 'A marata'
@@ -1692,28 +1691,27 @@ export default {
       }
     },
     import: {
-      title: 'Import documents into a new OKF repository',
-      hint: 'The documents become one repository — segmented, cross-linked and labeled together. Nothing is published; the normal review → publish → ingest workflow follows.',
+      title: 'Dokuumalu import OKF repository kuraa kono',
+      hint: 'Dokuumalu bee na ke repository kiling ye — segment, cross-link ani label ju ju la. Haya ti publish; review → publish → ingest workflow normaloo na kuma koto.',
       name: 'Repository name',
-      namePh: 'e.g. Abattoir policy pack',
+      namePh: 'misal: Abattoir policy pack',
       domain: 'Subject Area (domain)',
       strategy: 'Classification strategy',
-      stratHeuristics: 'Heuristics (fast, no LLM)',
+      stratHeuristics: 'Heuristics (a jooyata, LLM ti baara)',
       stratLlm: 'LLM classification',
       stratHybrid: 'Hybrid',
       files: 'Selected documents',
       servingBadge: 'serving free-form RAG',
       alreadyBadge: 'already in an OKF repo',
-      servingTip:
-        'This document currently serves the free-form RAG corpus — the new repository cannot be ingested until it is retracted.',
-      alreadyTip: 'This document is already the source of another OKF repository.',
+      servingTip: 'Dokuumaa free-form RAG corpus serve saaying — repository kuraa ti ka ingest ka se a retract ma.',
+      alreadyTip: 'Dokuumaa OKF repository foro ka source ye saaying.',
       servingWarn:
-        '{n} document(s) still serve the free-form corpus. The import succeeds, but this repository cannot be ingested until they are retracted.',
+        'Dokuumaa {n} be free-form corpus serve saaying. Importoo pasa, nga repositoryoo ti ka ingest ka se u retract ma.',
       cancel: 'Cancel',
       importing: 'Importing…',
       go: 'Import',
-      dupRepo: 'That repository name already exists — pick another.',
-      failed: 'The import could not be started. Check the documents and try again.'
+      dupRepo: 'Repository toh be yen saaying — foro dingo ceng.',
+      failed: 'Importoo ti damina ke. Dokuumalu etale ka ñining tugung.'
     },
     editor: {
       addConcept: {
@@ -1801,17 +1799,16 @@ export default {
         failedCard: {
           title: 'Failed to ingest',
           problem: 'The problem',
-          noError: 'Marked failed without a recorded reason.',
+          noError: 'A fail markta nga reezon rekodu ti ke.',
           fixLabel: 'How to fix',
           attempts: 'Attempts: {n}',
           when: 'Last attempt {when}',
           fix: {
             reaper:
-              'The ingest worker gave up waiting within its grace window (the drain was saturated) — the content is intact. Fix: edit this file slightly and save to re-queue it, or retract and re-ingest the whole repo.',
+              'Ingest workeroo grace window kono suganta (drain saturateta) — kono a intact. Fix: fayiloo dila dikidiki ka mara ka a re-queue, wala repo fiti ani a re-ingest.',
             dataprep:
-              'The content-preparation service failed this ingest. Fix: edit and save to re-queue it; if it repeats, check the dataprep service health.',
-            generic:
-              'Indexing failed. Fix: edit the content and save to re-queue it, or retract and re-ingest the whole repo.'
+              'Content-preparation serviceoo ingestoo filita. Fix: dada ka mara ka a re-queue; ni a kura kura ke, dataprep service kendeya etale.',
+            generic: 'Indexing filita. Fix: konoo dada ka mara ka a re-queue, wala repo fiti ani a re-ingest.'
           }
         },
         indexBadge: 'indeksi',
@@ -1906,10 +1903,9 @@ export default {
         stillBlocking: '仍在阻止'
       },
       piiBulk: {
-        done_accept:
-          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
-        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
-        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
+        done_accept: 'Benta — entity flagta bee {n} concept kono reviewed-and-kept markta. PII flagu bee clear.',
+        done_redact: 'Benta — kono flagta {n} concept kono redaction notice la replaced benta.',
+        done_remove: 'Benta — kono flagta {n} concept kono fitita.',
         title: {
           redact: 'Bwōbwe aolep men ko ewōr kakōl̦l̦e ie',
           remove: 'Jol̦o̦k aolep kobba ko ewōr kakōl̦l̦e ie',
@@ -1930,9 +1926,9 @@ export default {
       },
       addSources: {
         working: 'Converting sources…',
-        done: '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).',
-        failed: 'A conversion failed — check the logs; the rest may still have queued.',
-        landed: 'Conversions complete — {t} topics now in the tree.'
+        done: 'Sourceu {n} queue kono laata — conversionu bee benta ni, topicolu na tree kono landing ({t} topic saaying).',
+        failed: 'Conversion kiling filita — logolu etale; foro be run na queue benta.',
+        landed: 'Conversionu bee benta — topicolu {t} saaying tree kono.'
       }
     },
     dashboard: {
@@ -2133,9 +2129,9 @@ export default {
       descriptionLabel: 'Kibaru',
       save: 'Kōjparok frontmatter',
       saveFailed: 'Kōjparok frontmatter ear l̦apier',
-      perRepoTitle: 'Routing tags — what this repo is about',
+      perRepoTitle: 'Routing tagu — nying repo ka kuma',
       perRepoHint:
-        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+        'Repo tagu (topic / entity / scope / forbidden / summary / keyword) bɛ retriever drive. Data kiling fana repo doc field kono ye — ju bee mara la sync saaying.',
       perRepoField: {
         topic: 'Topic',
         entity: 'Entity',
@@ -2147,18 +2143,18 @@ export default {
       perRepoPh: {
         topic: 'One topic per line',
         entity: 'One entity per line',
-        forbidden: 'One forbidden topic per line',
+        forbidden: 'Forbidden topic kiling layini kiling la',
         keyword: 'One keyword per line'
       },
       perRepoHelp: {
-        topic: 'Add, modify or remove topics — one per line. Empty lines are ignored.',
-        entity: 'Add, modify or remove entities — one per line. Empty lines are ignored.',
-        forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
-        keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
+        topic: 'Topice kafu, yailama wala fiti — layini kiling la. Layini kongolu bulu.',
+        entity: 'Entity kafu, yailama wala fiti — layini kiling la. Layini kongolu bulu.',
+        forbidden: 'Forbidden topice kafu, yailama wala fiti — layini kiling la. Layini kongolu bulu.',
+        keyword: 'Keyword kafu, yailama wala fiti — layini kiling la. Layini kongolu bulu.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      perRepoRepoErr: 'Local marata; repo doc field write filita — ñining tugung.',
       repoTagsHint:
-        'Repository-level tags ({summary}) live on the repo, not this concept — manage them in the Tags panel in the right rail.'
+        'Repository-level tagu ({summary}) repo kono ye, concept nyingu ti — Tag panel kono u latara, right rail la.'
     },
     piiReview: {
       title: '个人信息检查',
@@ -2186,14 +2182,14 @@ export default {
     },
     glossary: {
       addConcept:
-        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
-      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+        'Topic kuraa bulu-ma dada (markdown frontmatter la). Topic kiling ke citable unit kiling ye — topicu focusedlu retrieve la preciseren long dokuuma kili pasa.',
+      type: 'Nying concept suko — baara, policy, moo, dulaa… Typeoo chunk bee kono marata, o la retrieval source suko right ceng be run ani jaabiu cite kuma be run.',
       title:
-        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+        'Toh human-readable min jaabi ani citation kono wuli. Toh precise assistantoo TOPIC NYING ceng similaru pasi — tohu vagueu tohu specificuRetrieve waatoo la jaŋ.',
       indexStatus:
-        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+        'Nying concept ingest pipeline kono ia: parsed = chunk ani embed lafiya saaying; indexed = RAG kono search ani cite be run; failed = A TI SEARCH — dada ka a re-ingest. Conceptu indexed waa retrieval be run.',
       trustTier:
-        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+        'Nying concept verified cogo jati: unverified = makin producir, machine-confirmed = kooto rule check benta, human-reviewed = steward signoff benta. Jaabiu trust surface be run moo bɛ a kuma — trust santu user lafiya soto, retrieval o pasa.',
       concept:
         'Juon bwijin ilo jikin kakwōn eo am — juon wōt peij ak un. Kajojo kōm̦m̦an ewōr frontmatter ie me jipañ eo ej riiti, koba markdown me ej uwaak jān e.',
       repository:
@@ -2214,32 +2210,32 @@ export default {
       classification:
         'Ewi wāween ad kalikkar ta in kōm̦m̦an eo (un, m̦ōttan, wāween…). Heuristics ej riiti peij eo ilo make; LLM ej etto l̦o̦k ak emaron̦ jerbale peij ko rekanooj ben.',
       resplit:
-        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+        'Source dokuuma warayaa topicu right warayaa la farra. Topicu minnu ba baa, u retrieval precision dilu (jaabi filler kono fulu); topicu minnu dikika, u jaabi lafiya context bula.',
       saveFailed: 'A mara baata',
       importFailedTitle: 'Bōktok ear l̦apier — ban ukōt fail eo.',
       importFailedHint: 'Jol̦o̦k jikin kakwōn in innem bar bōktok fail eo jān jikin eo.',
       frontmatter: 'Melele ko ioon aolep fail — kain, āt, kakōl̦l̦e. Jipañ eo ej kōjerbale bwe en jel̦ā ta in kōm̦m̦an eo.',
       pickSource:
-        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+        'Sourcelu bɛ produceryo di, min bɛ topicolu nimal i la etale kaben — haya ti commit ka se i Curate kono sign-off ma. Dokuumalu minnu free-form RAG la ingest benta u pass; i la repository be ingest gate saaying ka se u retract ma.',
       classificationStrategy:
-        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
-      clsHeur: 'Heuristics (fast, no LLM)',
+        'Produceroo cogo min la topic kiling label decide: heuristics a jooyata ani free; LLM page bee dada (layout complex lu la a ka nyɛ); hybrid heuristics damina ani hardu escalata. Curation waa — ingest a ti trigger abada.',
+      clsHeur: 'Heuristics (a jooyata, LLM ti baara)',
       clsLlm: 'LLM classification',
       clsHybrid: 'Hybrid',
       fsPick:
-        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+        'Fayil kiling ke topic kiling ye — topicu focusedlu retrieve la preciseren long dokuuma kili pasa. Fayil tohoo ke title ye; Curate kono i bee refine be run.',
       autocorrect:
-        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+        'Auto-fix frontmatter waa dinda (title, type, structure) — i la kono dada bee ti. Proposalu yitandi kaben haya ti yailama; apply bɛ fixu write saaying ani Curate kono fatala etale be run.',
       handoff:
-        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+        'Lifecycle ritual (submit → approve → publish) wizard ninyu kono bula o wajibya: approval governance flow kono ye, dashboard ani editor la, min kono version ani serving state latara.',
       lifecycle:
-        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+        'Step-naa kontratoo: draft → review → approved → published (mint + bundle) → ingested (RAG serving) → retracted (edit murung). Koo cite be run ingest koto waa — ani review kono koo waa publish be run.',
       labelsAuto:
-        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+        'Labelu Knowledge Hierarchy kono automatic assign — L2 serviceu nying repository Subject Area la bound. Curate kono topic kiling la u etale ani adjust.',
       reviewHandoff:
-        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+        'Approval ritual dulaa kiling kono (Editor/dashboard) ke: revieweru bee surface kiling la signoff — audit trail kiling — wizardoo repository prepare, ritualoo publish.',
       piiReview:
-        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+        'Scanneroo personal data possible soto. Finding kiling la i ceng: Redact (notice la replaced), Replace (i la kuma dada), Remove (a fiti), wala Accept (a mara — decisionoo audita). Repository hand-off ti be run finding unreviewed la.'
     },
     md: {
       toolbar: 'Cogo kuta',
@@ -2272,13 +2268,13 @@ export default {
       step5:
         'Eñin ej aolepen jerbal eo. Kajojo un ej juon m̦ōttan dik in jel̦āl̦o̦kjen̦ me kwomaron̦ kōjerbale. Un ko rej bōk āt, melele, im laa Labels ayn y Réim Réy. Jerbal eo am ej bwe en alikkar: ukōt āt ko rejjab alikkar, kobaik men ko reāinwōt doon, jol̦o̦k men ko ejjel̦o̦k jikin aer itok jān e.',
       step6:
-        'We run conformance checks: does every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before you hand the repository off; warnings can be acknowledged.',
+        'Conformance checku be run: topic bee toh lafiya? Labelu valid? Source attribution intact? Issue blockingu hand-off kaben fix lafiya; warningu acknowledge be run.',
       step7:
         'Jet kakkōl remaron̦ make jim̦we: wāween ko remaron̦ pedped ioon kien ko, jikin ko ejjel̦o̦k kobbaer remaron̦ koba melele ko rejim̦we. Jerbale jim̦we ko kwotōmak ie, innem jeblak ñan ri-karōk eo ñan etale.',
       step8:
-        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+        'I la build kumaa: topicolu, labelu, sourcelu, ani issue unresolvedu. A kuma kumba ni, a hand-off — submit → approve → publish dashboard ani editor kono ke, wizard ninyu kono abada ti.',
       step9:
-        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+        'Nying repository review a ready. Studio dashboard kono submit ka approval lafiya; approver dingo accept; publish dashboard wala editor kono ke — wizard kono abada ti. Editoroo kura yailamawoo foo ye.',
       docMgmtEntry:
         'Kōm̦m̦an juon jikin kakwōn OKF ekāāl jān peba ko em̦ōj kāāleti. Peba ko renaj jikin bōk melele; kwonaj etale im nōmbaar un ko renaj kōm̦m̦ani m̦okta jān an jabdewōt publish.',
       crawlSegment:
@@ -2395,7 +2391,7 @@ export default {
     },
     steps: {
       entry: {
-        createdHint: 'Repository created — rename it later from the editor.',
+        createdHint: 'Repository dadata — a toh editor kono koto yailama.',
         title: 'Āt an jikin kakwōn & un ko',
         hint: 'Kōm̦m̦an juon āt ealikkar ñan jikin kakwōn OKF in im kāālet un ko ie.',
         nameLabel: 'Āt an jikin kakwōn',
@@ -2423,12 +2419,12 @@ export default {
             desc: 'Bōk un ko im ejaak eo jān bar juon jikin kakwōn OKF.'
           }
         },
-        cloneSource: 'Source repository (not yet serving)',
-        clonePh: 'Select the repository to clone from',
-        cloning: 'Cloning topics into this repository…',
-        cloneNeed: 'Pick the repository to clone from first.',
-        cloneBusy: 'The previous repository is still being removed — go Back and Continue again in a moment.',
-        cloneFailed: 'The clone failed — try again.'
+        cloneSource: 'Source repository (serve ti saaying)',
+        clonePh: 'Repositoryoo ceng min kono clone',
+        cloning: 'Topicolu nying repository kono clone…',
+        cloneNeed: 'Clone source repositoryoo folo ceng.',
+        cloneBusy: 'Repository koto be fiti saaying — Back ka miniti kili kono Continue tugung.',
+        cloneFailed: 'Cloneoo filita — ñining tugung.'
       },
       input: {
         title: 'Kōdāl̦o̦k ko',
@@ -2440,27 +2436,27 @@ export default {
         chooseCrawl: 'Choose crawled documents',
         chooseDocs: 'Choose source documents',
         writeOne: '+ Write a concept',
-        fsPick: '+ Import markdown from this computer',
+        fsPick: '+ Markdown kompyuta nyingu kono import',
         fsBusy: 'Importing your files…',
-        fsFailed: 'Import failed — check the files and retry.',
-        skippedEmpty: '{n} empty file(s) skipped.',
+        fsFailed: 'Import filita — fayilolu etale ka ñining tugung.',
+        skippedEmpty: 'Fayil kongolu {n} skip benta.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',
-        noRepo: 'Create the repository first (go back to Entry).',
-        noRepoYet: 'Create the repository first (go back to Entry).',
-        benchTitle: 'Topics in this repository',
+        noRepo: 'Repositoryoo folo dada (Entry murung).',
+        noRepoYet: 'Repositoryoo folo dada (Entry kono murung).',
+        benchTitle: 'Topicolu nying repository kono',
         benchCount: '{n}',
         benchLoading: 'Reading topics…',
-        benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
-        benchFailed: 'Could not read the topics right now.',
+        benchEmpty: 'Haya ti je saaying — sourcelu juu kono ceng, markdown import, wala i la topic folo dada.',
+        benchFailed: 'Topicolu saaying looti ti ben.',
         editTitle: 'Edit concept',
-        deleteFailed: 'Could not delete the concept.',
-        added: '{n} topic(s) in this repository so far.',
+        deleteFailed: 'Conceptoo ti fiti.',
+        added: 'Topicu {n} nying repository kono saaying kono.',
         deleteTitle: 'Delete topic',
-        deleteBody: 'This permanently removes the topic from this repository.',
+        deleteBody: 'Nying bɛ topicoo nying repository kono murung fiti.',
         labelFailed: 'Could not set the label.',
-        cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
+        cloned: 'Nying repository clone ye — a topicolu be o kono saaying. Curate taa ka u etale.'
       },
       produce: {
         title: 'Kōm̦m̦an un ko',
@@ -2469,70 +2465,70 @@ export default {
         placeholder: 'Jerbal in kōm̦m̦an enaj itok ilo bwebwenato ko tok ālik.',
         retry: 'Retry conversion',
         restart: 'Run again',
-        running: 'Converting… you can watch progress here; nothing is committed until you review in Curate.',
-        failed: 'The conversion failed — retry, or go back and pick different inputs.',
-        done: '{n} topic(s) are ready — continue to review them in Curate.',
-        noSources: 'No sources selected — go back to Input.',
-        neverStarted: 'The conversion did not start — retry.',
-        manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
+        running: 'A bɛ convert… progress i be jang je; Curate kono review kaben haya ti commit.',
+        failed: 'Conversionoo filita — ñining tugung, wala murung ka input forolu ceng.',
+        done: 'Topicu {n} ready — Curate taa ka u etale.',
+        noSources: 'Source ti ceng saaying — Input murung.',
+        neverStarted: 'Conversionoo ti damina — ñining tugung.',
+        manualSkip: 'Bulu-dadata topicolu generation lafiya ti — Curate taa ka u etale.',
         labelDone: 'Conversion complete',
         dupContent:
-          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
-        inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+          'Sourcelu ninyu OKF repository foro kono import benta saaying. Repository nyngu retract wala fiti folo, wala dokuuma forolu ceng.',
+        inFlight: 'Conversion dingo be run saaying nying repository kono — a benta kaben.',
         stage: {
           files: 'Files',
-          filesCount: '{done} of {total} documents',
+          filesCount: 'Dokuumaa {done} to {total}',
           concepts: 'Concepts',
           conceptsCount: '{done} of {total} topics',
           conceptsSoFar: '{n} topics so far',
           curating: 'Curating',
-          curatingCount: '{done} of {total} concepts labelled',
+          curatingCount: 'Conceptu labelta {done} to {total}',
           crosslink: 'Cross-linking topics',
-          linkCount: '{done} of {total} batches · {w} links written',
+          linkCount: 'Batchu {done} to {total} · linku {w} write benta',
           complete: 'Complete',
           unavailable: 'Count unavailable',
           waiting: 'Waiting'
         },
-        filesNote: '{done} of {total} documents converted',
-        pagesNote: '{done} of {total} pages converted',
-        pagesSoFar: '{n} pages converted so far',
+        filesNote: 'Dokuumaa {done} to {total} convert benta',
+        pagesNote: 'Page {done} to {total} convert benta',
+        pagesSoFar: 'Page {n} saaying kono convert benta',
         sourceStat: '+{n} new (total {t})',
-        sourceStatMerged: '+{n} new · {m} merged by slug (total {t})',
+        sourceStatMerged: '+{n} kura · slug la merge {m} benta (total {t})',
         docsLeg: '{n} selected document(s)',
-        legWait: 'Waiting for the previous conversion to release…'
+        legWait: 'Conversion koto release lafiya saaying…'
       },
       label: {
         title: 'Labels — automateet',
         hint: 'Gur Labels ainn dy chòrree yn laa er y Réim Réy — fo myr Çá subject er y rívs shoh.',
         loading: 'Reading labels…',
-        preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
+        preview: 'Topicu {labeled} to {n} Knowledge-Hierarchy labelu soto.',
         unlabeled: 'no labels yet',
-        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
-        loadFailed: 'Could not read the labels right now.'
+        adjust: 'Topic kiling labelu Curate kono adjust — labelu nying repository Subject Area la bound.',
+        loadFailed: 'Labelu saaying looti ti ben.'
       },
       curate: {
         embedHint:
-          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
-        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
+          'Topic kiling etale ani a improvement: kumaa fix, a type ani Knowledge-Hierarchy label set, topic kafu wala fiti. I fixu ninyu bee, assistantoo na u cite koto.',
+        noRepo: 'Repository ti je saaying — Entry murung ka kura dada wala kili ceng folo.',
         title: 'Etale un ko',
         hint: 'Kajojo un ej juon m̦ōttan dik in jel̦āl̦o̦kjen̦ me kwomaron̦ kōjerbale. Jeje āt im melele eo.',
         placeholder: 'Wōjke in ri-karōk + ri-jeje enaj itok ilo Bwebwenato 3-8.'
       },
       validate: {
         title: 'Lale eñin ewōr men enana',
-        hint: 'We run conformance checks. Blocking issues must be fixed before you hand the repository off.',
+        hint: 'Conformance checku be run. Issue blockingu hand-off kaben fix lafiya.',
         placeholder: 'Jikin kam̦ool enaj itok ilo Bwebwenato 3-8.'
       },
       autocorrect: {
         title: 'Make-kōjim̦we',
         hint: 'Jet kakkōl remaron̦ make jim̦we. Jerbale jim̦we ko kwotōmak ie, innem jeblak ñan ri-karōk eo ñan etale.',
         placeholder: 'Make-kōjim̦we enaj itok ilo Bwebwenato 10.2.',
-        noRepo: 'No repository yet — go back to Entry and create one first.',
-        applied: 'Fixes applied — continue, or go back to Curate to review the result.'
+        noRepo: 'Repository ti je saaying — Entry murung ka kili dada folo.',
+        applied: 'Fixu apply benta — kuma taa, wala Curate murung ka fatala etale.'
       },
       review: {
         title: 'Etale',
-        hint: 'A summary of what you built — submit, approval and publishing happen on the dashboard and in the editor.',
+        hint: 'I la build kumaa — submit, approval ani publish dashboard ani editor kono ke.',
         repo: 'Jikin kakwōn',
         topics: 'Un ko',
         labels: 'Kakōl̦l̦e ko',
@@ -2540,28 +2536,29 @@ export default {
         state: 'Lifecycle state',
         labelsSet: 'set per topic in Curate',
         browserHint:
-          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
-        noRepo: 'No repository yet — the file review appears here once a repository exists.',
+          'Hand-off kaben etoo labang: fayilu bee juu kono, a markdown ani a labelu — assistantoo cite cogo min la o waa.',
+        noRepo: 'Repository ti je saaying — repository kelen na, fayil reviewoo jang na wuli.',
         ritualOutside:
-          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+          'Review ritual — submit for review, reviewer approval, publish — Editor ani Studio dashboard kono ke, jang ti. Editoroo aade ka a ban ke.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
-        noVersions: 'No versions yet — versions are minted during the approval ritual.',
-        versionSummary: '{n} version(s) · latest v{latest}'
+        noVersions: 'Versionu ti je saaying — versionu approval ritual kono mint.',
+        versionSummary: 'Versionu {n} · labang v{latest}'
       },
       publish: {
         title: 'Sigura i kaba',
-        hint: 'This repository is ready for review. Publishing never happens here — submit it for approval on the dashboard, then approve and publish from the dashboard or the editor.',
+        hint: 'Nying repository review a ready. Publish jang ti abada ke — dashboard kono approval lafiya submit, koto dashboard wala editor kono approve ani publish.',
         nameOk: 'Āt an jikin kakwōn em̦ōj likūti',
         labelsOk: 'Kakōl̦l̦e ko em̦ōj kāāleti',
         topicsOk: 'Un ko em̦ōj etale',
         topicsPending: 'No topics yet',
         topicsServing: 'Topics serving',
-        noTopics: 'No topics yet — go back to Curate to produce or write them.',
-        frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
+        noTopics: 'Topicu ti je saaying — Curate murung ka u produce wala dada.',
+        frozen:
+          'Nying repository be serve saaying — read-only summary jang. Editoroo aade ka version latara wala retract.',
         ritual:
-          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+          'Noo: Studio dashboard kono approval submit → approver dingo accept → dashboard wala editor kono publish. Wizardoo jang a ban o wajibya la.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2587,7 +2584,7 @@ export default {
         alreadyInOkf: 'Jol̦o̦k peba ko epād m̦okta ilo jikin kakwōn OKF',
         alreadyIngested: 'Jol̦o̦k peba ko em̦ōj an ingest',
         servingWarn:
-          "{'{'}n{'}'} selected document(s) still serve the free-form corpus — the new repository cannot be ingested until they are retracted."
+          "{'{'}n{'}'} dokuuma cengta be free-form corpus serve saaying — repository kuraa ti ka ingest ka se u retract ma."
       },
       produce: {
         notReady: 'Kōm̦m̦an in ej pād ilo bwebwenato ko tok ālik.'
@@ -2672,7 +2669,7 @@ export default {
         trustTier: 'trust_tier',
         attestation: 'attestation',
         sources: 'provenance.sources',
-        onlyOnIndex: 'Per-repo tags live on the index concept only — open the index to see them.'
+        onlyOnIndex: 'Repo tagu index conceptoo kono waa wuli — u je ka index aade.'
       },
       showSource: 'Kwal̦o̦k jikin eo ear itok jān e',
       issue: {
@@ -2687,7 +2684,7 @@ export default {
       expertHint:
         'Ukōt ñan wāween Expert bwe kwōn lo JSON kam̦ool eo, kāālet ekkar ñan l̦ap an l̦apier, im jol̦o̦k etale ko.',
       headline: {
-        blockers: '{n} blocking issue(s) — fix before you hand the repository off',
+        blockers: 'Issue blockingu {n} — repository hand-off kaben fix lafiya',
         warnings: '{n} men ko rej aikuj am bar lale',
         ok: 'Em̦m̦an aolep men. Ejjel̦o̦k men in kōm̦m̦ane.'
       },
@@ -2698,15 +2695,14 @@ export default {
       run: {
         notReady: 'Kam̦ool enaj itok ilo bwebwenato ko tok ālik.'
       },
-      piiTitle: 'Personal data — review each flagged concept',
+      piiTitle: 'Personal data — concept flagta kiling etale',
       loading: 'Checking the repository…',
-      loadFailed: 'Could not load the validation report.',
+      loadFailed: 'Validation reportoo ti looti.',
       retry: 'Retry',
       issuesTitle: 'Issues to review',
       howToFix: 'How to fix',
-      indexFailed: 'Re-index failed — edit or re-split the page.',
-      indexFailedRemedy:
-        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+      indexFailed: 'Re-index filita — page dada wala a farra.',
+      indexFailedRemedy: 'Pageoo editor kono yeeli ka mara (mara re-index ke), wala repository source kono farra.',
       severity: {
         blocker: 'Blocking',
         warning: 'Needs review',
@@ -2721,11 +2717,11 @@ export default {
       },
       topicLinks: {
         title: 'Cross-link topics',
-        tip: 'Reads every page in this repository and writes links between the pages that genuinely belong together — the same processing the import wizard runs. It is safe to re-run: existing links are kept and only new ones are added.',
-        progress: 'Cross-linking… {done} of {total} batches',
-        progressIdle: 'Cross-linking… reading the repository',
-        done: 'Added {n} link(s) across {c} page(s).',
-        failed: 'Cross-linking failed: {msg}'
+        tip: 'Repository kono page bee dada ani page beewula minnu kiling maa dileru link write — import wizard processing kiling la. A re-run a baa: linku beewulu marata, kura waa kafu.',
+        progress: 'Cross-link… batchu {done} to {total}',
+        progressIdle: 'Cross-link… repository a looti',
+        done: 'Linku {n} page {c} kono kafuta.',
+        failed: 'Cross-link filita: {msg}'
       },
       action: {
         suggestLinks: 'Suggest links',
@@ -2733,8 +2729,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: 'Create the Sources page and link {n} page(s)',
-        wireExisting: 'Link {n} page(s) to "{hub}"',
+        wireCreate: 'Sources page dada ani page {n} link',
+        wireExisting: 'Page {n} «{hub}» la link',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2742,45 +2738,44 @@ export default {
         done: 'Done'
       },
       suggest: {
-        working: 'Asking the assistant for link suggestions…',
-        empty: 'No suggestions — link it manually in the editor.'
+        working: 'Assistantoo link nimalu lafiya saaying…',
+        empty: 'Nimalu ti je — editor kono manual link ke.'
       },
       nearDup: {
-        keepHint: 'Keep one copy — delete the rest.'
+        keepHint: 'Kopi kiling mara — foro bee fiti.'
       },
-      wireDone: 'Linked {n} page(s) to "{hub}".',
-      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      wireDone: 'Page {n} «{hub}» la link benta.',
+      wireCreated: 'Sources page dadata ani page {n} link benta.',
       mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: 'First {n} characters — open the editor for the full page.'
+        truncated: 'Karakteru folo {n} — page faa editor kono aade.'
       },
       tip: {
         conformance:
-          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+          'Page frontmatteroo OKF spec miss (type, freshness lung, sourcelu…). Step 8 Autocorrect u mechanical fix; i la kono dada haya ti yailama.',
         orphan:
-          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+          'Page ti jang link ani page nyingu ti foro link. Graph retrieval link dileru koo relate, o la page unlinked waa topic match exact kono wuli. Fix: link nimalu accept wala editor kono link kafu.',
         near_duplicate:
-          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+          'Pageu ninyu kumalu near-identical. Ingest kono kiling chunk dingo ke ye, o la ñiningo kili material kiling kuru jaabi be run. Fix: preview, kopi kumba mara, foro bee fiti.',
         citation:
-          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+          'Pageu metadata kono dokuuma cite nga haya ti link Sources page la — citation graph ti du ani jaabi waatoo kono walk wala cite ti be run. Fix: klik kiling citing page bee wire.',
         index_failed:
-          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+          'Page import benta nga a search-index build filita — re-index kaben a retrieval ti be run. Editor kono page mara a build retry.'
       },
       piiRescan: 'Re-scan all pages',
       piiRescanWorking: 'Re-scanning every page…',
       piiRescanDone: 'Re-scanned {n} page(s).',
       piiRescanPartial:
-        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+        'Page {n} re-scan benta. {e} fila saaying — u scan verdict ti yailama, o la publish u kono block saaying.',
       piiRescanMissing:
-        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
-      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
-      piiRescanFailed:
-        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
-      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
-      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+        'Re-scan server ninyu kono ti je (404). Haya ti yailama — page scan failu be publish block saaying.',
+      piiRescanFrozen: 'Re-scan bulu: repositoryoo be publish saaying (409). Haya ti yailama.',
+      piiRescanFailed: 'Re-scan filita. Haya ti yailama — page scan failu be publish block saaying.',
+      piiRescanProgress: 'Re-scan… page {done} to {total}',
+      piiRescanProgressIdle: 'Re-scan… repository a looti',
       piiRescanNoKey:
-        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+        'Serveroo re-scan accept nga run id ti jaabi, o la a progress track ti be run. Haya ti report ke.',
       piiStateError: 'Scan error',
       piiTally: {
         scanned: '{n} page(s) re-scanned',
@@ -2795,13 +2790,12 @@ export default {
       nFlagged: '{n} soto',
       rescan: 'Scan kuta',
       stateError: 'Scan failed',
-      errorTitle: 'This page is blocking the hand-off.',
+      errorTitle: 'Nying page bɛ hand-off block ke.',
       errorBody:
-        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
-      rescanMissing:
-        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
-      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
-      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
+        'Pageoo PII scana A BAN (a lijan ti soti — a kuma dada ti). Publish block saaying ka se scan pasi ma. Re-scan juu kono baara.',
+      rescanMissing: 'Re-scan server ninyu kono ti je (404). Haya ti yailama — pageoo be publish block saaying.',
+      rescanFrozen: 'Re-scan bulu: repositoryoo be publish saaying (409). Haya ti yailama.',
+      rescanFailed: 'Re-scan filita. Haya ti yailama — pageoo be publish block saaying.',
       scanning: 'Scan…',
       clean: 'Flagged entities amatta yaode — concept asi clear oire.',
       how: 'Fix: remove nattraga reword tou (e.g. name gi mahutta role), aduga save tou — re-scan na list asi update touba ngamgani.',
@@ -2869,49 +2863,49 @@ export default {
       unpublish: 'Falsifya bugbugu'
     },
     src: {
-      title: 'Choose the source documents',
-      hint: 'Pick sources from the document repository, upload new ones from this computer, or both.',
-      repoSec: 'From the document repository',
+      title: 'Source dokuumalu ceng',
+      hint: 'Sourcelu document repository kono ceng, kompyuta nyingu kono kurau yele, wala ju bee.',
+      repoSec: 'Document repository kono',
       searchPh: 'Search by name or site…',
       chipsLabel: 'Filter by origin',
       chipAll: 'All',
       chipCrawl: 'Crawls',
       chipUpload: 'Uploads',
-      noMatches: 'Nothing matches this search or filter.',
+      noMatches: 'Ñiningo wala filter ninyu match ti je.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
       total: '{n} document(s)',
-      titleSingle: 'Choose the crawled document',
+      titleSingle: 'Crawled dokuumaa ceng',
       loading: 'Loading documents…',
       retry: 'Retry',
-      empty: 'No documents in the repository yet — upload some below.',
+      empty: 'Dokuuma repository kono ti je saaying — juu kono yela.',
       more: 'Load more',
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
       uploaded: '{n} file(s) uploaded.',
-      uploadFailed: 'An upload failed — check the files and retry.',
-      fsNote: 'Uploaded files join the document repository and are selected here automatically.',
+      uploadFailed: 'Yele kiling filita — fayilolu etale ka ñining tugung.',
+      fsNote: 'Fayilu yelata document repository kono don ani jang automatic cengta.',
       count: 'Selected: {n}',
-      needOne: 'Select at least one source.',
+      needOne: 'Source kiling waa lafiya ceng.',
       confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
-      loadFailed: 'Could not load the document list.',
+      loadFailed: 'Dokuuma listoo ti looti.',
       servingBadge: 'serving free-form RAG',
       servingTip:
-        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+        'Dokuumaa free-form RAG corpus serve saaying — conversionoo pasa, nga repositoryoo ti ka ingest ka se a retract ma.',
       alreadyBadge: 'already in an OKF repo',
-      alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
+      alreadyTip: 'Dokuumaa OKF repository foro ka source ye saaying — conversionoo na a bula.'
     },
     frontmatter: {
-      title: 'Frontmatter tags — what this repo is about',
-      help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',
+      title: 'Frontmatter tagu — nying repo ka kuma',
+      help: 'Tagu kuma repo kono koo ani — maa o koto — a koo ti ke (forbidden listo). U decide querylu minnu route nying repo. Refresh klik ka corpus kono draft, wala chipu juu dada. Publish lafiya-le: topic ≥3 + forbidden ≥1.',
       refresh: 'Refresh suggestions',
       suggesting: 'Curating…',
-      suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestEmpty: 'LLMoo tagu ti jaabi. Corpus damina koto a ñining tugung.',
       suggestCoverage: 'E qaqeeqeeq na {sampled} na {total} idee, ni {labels} wooqee hidin hibrid.',
       suggestFailed: 'Suggest failed.',
-      suggestedTag: 'LLM suggestion — remove to dismiss.',
+      suggestedTag: 'LLM nimalo — a bulu ka a dismiss.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2920,7 +2914,7 @@ export default {
       save: 'Save tags',
       saved: 'Saved',
       error: 'Save failed.',
-      errorWithStep: 'Save failed at step "{step}" ({code}) — retry.',
+      errorWithStep: 'Mara filita step «{step}» kono ({code}) — ñining tugung.',
       field: {
         topic: 'Topic',
         entity: 'Entity',
@@ -2950,18 +2944,18 @@ export default {
         model: 'Model',
         version: 'Head version',
         computedAt: 'Computed',
-        staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
+        staleNote: 'Tagolu yailamata headoo daminɛ koto — testolu lafiya kaben, a rebuild saaying.',
         missingNote:
-          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+          'Vectorized head ti je saaying. A daminɛ publish waatoo la; ni embed serviceoo o kono ti soto, tagolu marata kono ka a rebuild saaying.',
         rebuild: 'Rebuild head',
-        rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
-        rebuildBusy: 'Rebuilding — embedding the tag fields…'
+        rebuildTip: 'Tagolu marata kono bɛ embed ka kura head vector kono. Embed koo kiling tag field kiling la.',
+        rebuildBusy: 'A bɛ rebuild — tag fieldolu bɛ embed…'
       },
       test: {
-        placeholder: 'e.g. cancer screening guidelines',
+        placeholder: 'misal: cancer screening guidelines',
         run: 'Run test',
-        running: 'Embedding the query and scoring the heads…',
-        adversarial: 'Adversarial — this query should NOT select this repository (a forbidden/adjacent topic)',
+        running: 'Queryoo bɛ embed ani headolu bɛ score…',
+        adversarial: 'Adversarial — nying query ti ka nying repository ceng (forbidden/adjacent topic dingo)',
         embeddedWith: 'Embedded with',
         col: {
           repo: 'Repository',
@@ -2972,14 +2966,14 @@ export default {
         },
         provenance: 'Routing provenance',
         empty:
-          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
-        pass: 'PASS — this repository wins the head routing.',
-        fail: 'FAIL — {repo} wins the head routing for this query.',
-        passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
+          'Ñiningo dingo ñining min moo na ñining ke, ka a run — laboo bɛ repository publishta bee ka head score ka, fan-out cogo min na o waa.',
+        pass: 'A PASSI — nying repository ka win head routingoo.',
+        fail: 'A BAN — {repo} ka win nying query ka head routingoo.',
+        passAdversarial: 'A PASSI — a ma cho ka kumba (winner: {repo}).',
         failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
-        passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
+        passSuppressed: 'A PASSI — forbidden/noise gate bɛ a suppress: headoo ti kuma nying query ka',
         notSelectedSuppressed:
-          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+          'A MA CHO — forbidden/noise gate bɛ a suppress: queryoo be run ka nying repository ka banluŋ kuma, wala a ti domain kono noise ye',
         claimed: 'claims',
         suppressed: 'suppressed'
       },
@@ -2999,7 +2993,7 @@ export default {
         negativeRandom: 'Off-domain',
         meta: 'Meta',
         nearMiss: 'Near miss',
-        hint: "Forbidden-derived rows scale with the repository's forbidden tag count — they cannot be set here."
+        hint: 'Forbidden-derived rowolu bɛ repository ka forbidden tag kontoo la kaba — u ti ke jang ceng.'
       },
       cls: {
         nearMiss: 'Near miss',
@@ -3010,23 +3004,23 @@ export default {
       },
       teach: {
         claim:
-          'The head CLAIMS this query — it passed all three gates. If it should NOT route here, ask for forbidden tags that exclude its subject, add them, then rebuild the head.',
+          'Headoo kuma CLAIM nying query — gate sabuu bee pasa. Ning a ti ka route jang, forbidden tagolu ñining minnu bɛ a subject ban, u kafu, ka headoo rebuild.',
         explain: 'Explain & suggest',
-        explainBusy: 'Explaining — the model is proposing forbidden tags…',
+        explainBusy: 'A bɛ explain — modeloo bɛ forbidden tag nimalu kuma…',
         addTag: 'Add to forbidden tags',
-        suggestNone: 'No forbidden tag was suggested — review the query against the declared scope manually.',
-        added: 'Added to the forbidden tags — rebuild the head to apply them.',
+        suggestNone: 'Forbidden tag ti nimal je — queryoo declared scope ka kan manual etale.',
+        added: 'A kafuta forbidden tagolu kono — headoo rebuild ka u apply.',
         rebuildRerun: 'Rebuild head & re-run',
-        savingTag: 'Saving the forbidden tag…',
-        rebuildBusy: 'Rebuilding the head and re-running…',
+        savingTag: 'Forbidden tagoo bɛ mara…',
+        rebuildBusy: 'Headoo bɛ rebuild ani a bɛ run tugung…',
         title: 'Ta ṇe?',
         veto: 'Kajjitōk in ej lukkun im forbidden tag “{tag}”. Elane e jikin ilo repo in, jol̦o̦k “{tag}” ilo forbidden tags ko ilo Frontmatter, im publish ak in rebuild head eo.',
         floor:
           'Kajjitōk in ejab naan ko ilo repo in (score eo ej jab elōn floor eo) — tag ko enaj jab kōm̦m̦an melele; kōnka ej suppress eo em̦ōj.',
-        rejected: 'Screened out by the guardrail — a forbidden tag must not match this repository’s own subject.'
+        rejected: 'Guardrail bɛ a fiti — forbidden tag ti ka run ka nying repository ka subject kuma.'
       },
       run: {
-        progress: '{done} of {total} queries ({pct}%)',
+        progress: '{done} to {total} querylu ({pct}%)',
         progressStarting: 'Starting the run…',
         phase: {
           routing: 'Scoring routes',
@@ -3036,10 +3030,10 @@ export default {
       suites: {
         generate: 'Generate test suite',
         generateTip:
-          'The LLM writes the queries in batches of 30 per class — a large ask (100+) takes a few minutes. The suite lands here and in Saved suites when done.',
-        generating: 'Generating in batches — large asks take a few minutes…',
+          'LLMoo bɛ querylu sili batch 30 class kili la — askoo min ba (100+), a bɛ kɛ miniti fuu. Suiteoo na jang ani Saved suites kono landing ni a benta.',
+        generating: 'A bɛ generate batch la — asku baalu bɛ kɛ miniti fuu…',
         run: 'Run all queries',
-        running: 'Running every suite query…',
+        running: 'Suite queryu bee bɛ run…',
         current: 'Current suite',
         col: {
           query: 'Query',
@@ -3054,13 +3048,13 @@ export default {
           name: 'Name',
           corpus: 'Corpus'
         },
-        notEvaluatable: 'not evaluatable (no competitors)',
+        notEvaluatable: 'a ti ka evaluatu (competitorlu ti je)',
         pass: 'pass',
         fail: 'fail',
         passRate: 'Pass rate',
         positives: 'Positives',
         negatives: 'Negatives',
-        noCompetitors: 'n/a — no competing heads yet',
+        noCompetitors: 'a ti ka di — head competinglu ti je saaying',
         avgMargin: 'Avg margin',
         steal: '{repo} stole {n} queries',
         addPlaceholder: 'Your own probe query…',
@@ -3068,101 +3062,100 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.',
+        noRuns: 'Run ti je saaying — suite generate ka a run.',
         explainFailures: 'Explain failures',
-        explainBusy: 'Explaining the failures — one model call for every failing negative…',
-        batchTitle: 'Why the failing negatives routed here',
-        batchNone: 'No fix was suggested — review the failing queries against the declared scope manually.',
+        explainBusy: 'Filiyaa bee bɛ explain — modelu koo kiling negative kili fail la…',
+        batchTitle: 'Mun na negative failulu jang route',
+        batchNone: 'Fix ti nimal — query failulu declared scope ka kan manual etale.',
         addAll: 'Add all',
-        rebuildRerun: 'Rebuild head & re-run suite',
-        positiveFailuresTitle: 'Why positives stopped passing',
+        rebuildRerun: 'Head rebuild & suite run tugung',
+        positiveFailuresTitle: 'Mun na positivelu pasa ke kura',
         positiveFailures:
-          '{n} positive test(s) were suppressed this run — the forbidden tags over-match the repository scope.',
+          'Positive testu {n} nying run kono suppress benta — forbidden tagolu bɛ repository scope diming baa.',
         vetoedBy: 'Vetoed by',
-        marginKilled: '{n} positive test(s) lost on margin (no single veto tag).',
-        removals: 'Tags to remove (they veto this repository’s own positives)',
-        removeTip: 'Remove "{tag}" — it vetoed {n} positive test(s)',
-        tripwire: 'This cycle broke {n} positive tests — the added tags over-suppress. Revert?',
+        marginKilled: 'Positive testu {n} margin la jaŋ benta (veto tag kiling ti ke).',
+        removals: 'Tagolu minnu ka fiti (u bɛ nying repository ka positiveu veto)',
+        removeTip: '«{tag}» fiti — a bɛ positive testu {n} veto',
+        tripwire: 'Nying cycle bɛ positive testu {n} jaŋ — tag kafuta bɛ o-suppress ke. A fitindi?',
         tripwireRevert: 'View revert options',
-        staleSnapshot: 'Tags changed since this suite was generated — regenerate for fresh forbidden rows.',
+        staleSnapshot: 'Tagolu yailamata suite generate koto — forbidden row kura lafiya a regenerate.',
         revertTitle: 'Revert tags',
         revertForbiddenCount: '{n} forbidden tags',
         revertAction: 'Revert',
         revertBusy: 'Loading save history…',
-        revertSaving: 'Restoring the frontmatter…',
-        revertEmpty: 'No frontmatter saves recorded yet.',
-        revertDone: 'Frontmatter restored — rebuild the head and re-run to apply it.',
-        removeTag: 'Remove from forbidden tags',
-        tagsetTip: 'Forbidden tags for this run',
+        revertSaving: 'Frontmatteroo bɛ fitindi…',
+        revertEmpty: 'Frontmatter mara rekodu ti ke saaying.',
+        revertDone: 'Frontmatter fitindita — headoo rebuild ani a run tugung ka a apply.',
+        removeTag: 'Forbidden tagolu kono a fiti',
+        tagsetTip: 'Nying run ka forbidden tagolu',
         savedTitle: 'Saved suites',
         savedTip:
-          'Every generated or imported suite is saved here, per repository. Two kinds share this list: head suites (tag- and frontmatter-derived query sets, shown with Positives/Negatives counts) and RAGAS benchmark suites (question sets with expected answers, badged with a RAGAS pill and an entries count). Load shows a head suite in this tab and a RAGAS suite into the RAGAS Benchmarks tab, where it can be run and scored against the live corpus. Delete removes the suite permanently; rename is inline on the name.',
+          'Suite bee minnu generate wala import benta, u jang marata, repository kiling kiling la. Kindu fila listi nying kono bila: head suiteolu (tag ani frontmatter ka query setu, Positives/Negatives kontoo la yitandi) ani RAGAS benchmark suiteolu (ñiningo setu expected jaabiu la, RAGAS pill ani entries kontoo badge la). Load bɛ head suite yitandi tab nying kono ani RAGAS suite RAGAS Benchmarks tab kono, min kono a be run ani a score live corpus ka kan. Delete bɛ suiteoo murung fiti; rename bɛ toh dinda kono ke.',
         load: 'Load',
-        flipTip: 'Flip should-select / should-NOT-select',
-        deleteTip: 'Remove this row from the suite',
-        namePlaceholder: 'Suite name (optional) — e.g. NCD regression set',
-        probeTip: 'Test this query against the live corpus',
-        deleteSuiteTip: 'Delete this suite and its run history',
-        corpusNeedsIngest: 'Ingest the repository first — the corpus test searches the ingested corpus',
+        flipTip: 'Flip: a ka cho / a ma cho',
+        deleteTip: 'Rowoo nying suite kono a fiti',
+        namePlaceholder: 'Suite toh (optional) — misal: NCD regression set',
+        probeTip: 'Nying query test live corpus ka kan',
+        deleteSuiteTip: 'Nying suite ani a run tariiku fiti',
+        corpusNeedsIngest: 'Repositoryoo ingest folo saaying — corpus testoo bɛ corpus ingestta kono ñining',
         deleteConfirmTitle: 'Delete this suite?',
-        deleteConfirmBody: 'This permanently removes the suite and its run history. This cannot be undone.',
+        deleteConfirmBody: 'Nying bɛ suiteoo ani a run tariiku murung fiti. Nying kwoo mang si murung.',
         deleteConfirm: 'Delete suite',
         deleteCancel: 'Cancel',
         unnamedFallback: 'unnamed suite'
       },
       error: {
         explain: 'Explain failed',
-        saveTag: 'Could not save the forbidden tag',
+        saveTag: 'Forbidden tagoo ti mara',
         rebuild: 'Head rebuild failed',
         test: 'Routing test failed',
         generate: 'Suite generation failed',
         run: 'Suite run failed',
         add: 'Could not add the query',
-        history: 'Could not load the save history',
-        revert: 'Could not revert the frontmatter',
+        history: 'Mara tariikoo ti looti',
+        revert: 'Frontmatteroo ti fitindi',
         advisor: 'Advisor failed',
-        noSuite: 'Generate a suite first, then rebuild + re-run.',
-        applyNoSuite: 'Tags saved and the head rebuilt — generate a suite, then Run all to see the effect.',
+        noSuite: 'Suite generate folo, ka rebuild + run tugung.',
+        applyNoSuite: 'Tagolu marata ani headoo rebuild benta — suite generate, ka Run all ke ka efeku je.',
         suiteLoad: 'Could not load the suite',
-        suiteUpdate: 'Could not update the suite',
-        suiteRename: 'Could not rename the suite',
-        generateTimeout:
-          'The suite is taking unusually long — it may still land in Saved suites; check there in a minute.',
+        suiteUpdate: 'Suiteoo ti update',
+        suiteRename: 'Suiteoo toh ti yailama',
+        generateTimeout: 'Suiteoo bɛ waatoo joona ke — a run na Saved suites kono landing; miniti kili kono jang a je.',
         probe: 'Corpus test failed',
-        suiteDelete: 'Could not delete the suite',
+        suiteDelete: 'Suiteoo ti fiti',
         noFrontmatter:
-          'This repository has no head tags yet — create tags in the Frontmatter panel (or use Suggest tags), then generate a suite.'
+          'Nying repository ka head tagu ti je saaying — tag dada Frontmatter panel kono (wala Suggest tags baara), ka suite generate.'
       },
       footer: {
         unpublish: 'Unpublish to review'
       },
       publishCard: {
         present:
-          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
-        stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
-        missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+          'Vectorized head a ready — Lab kono routing testolu bɛ i lafita: nying repository ka querylu min a ka kan, o bee win wala a ti.',
+        stale: 'Headoo a stale (tagolu yailamata a daminɛ koto) — publishoo ka a rebuild.',
+        missing: 'Vectorized head ti je saaying — publishoo ka a tagolu approveta kono dada.'
       },
       advisor: {
-        run: 'Advisor: recommend tag changes',
-        busy: 'Simulating tag changes across recent runs…',
-        title: 'Tag-set recommendation (simulated across recent runs)',
-        apply: 'Apply changes & rebuild & re-run suite',
-        scorecard: 'positives {p}/{pt} claimed · negatives {n}/{nt} suppressed',
+        run: 'Advisor: tag yailamawolu nimal',
+        busy: 'Tag yailamawolu bɛ run kootolu kono simulate…',
+        title: 'Tag-set nimalu (run kootolu kono simulata)',
+        apply: 'Yailamawolu apply & rebuild & suite run tugung',
+        scorecard: 'positive {p}/{pt} claimta · negative {n}/{nt} suppresa',
         now: 'Now',
         predicted: 'predicted',
-        scope: ' (across {q} queries from the last {r} runs)',
-        applying: 'Applying: saving tags, rebuilding the head, re-running the suite…',
-        blockedTitle: 'Blocked removals — click to include in Apply',
+        scope: ' (query {q} bee kono, run labuu {r} bee kono)',
+        applying: 'A bɛ apply: tag mara, head rebuild, suite run tugung…',
+        blockedTitle: 'Fitu minnu block — Apply kano a klik ka kafu',
         blockedGain: 'recovers {n} positive(s)',
-        narrowTitle: 'Narrower replacements — recover positives without re-admitting negatives',
-        narrowChip: 'Remove the broad tag, add the narrow one',
-        reasonCurator: 'you declared this tag originally — confirm before removing',
-        reasonRotated: 'the edit history has rotated past the baseline — confirm before removing',
-        scopeDetail: 'suites: {s} · tag sets: {t}',
-        rowActionsTitle: 'Corpus-grounded flips — the corpus answers these "negatives": flip them to positives',
+        narrowTitle: 'Narrower replacementu — negative re-admit baa positive sanni kura',
+        narrowChip: 'Tag baan fiti, narrow dingo kafu',
+        reasonCurator: 'tagoo min i yee declare folo — fiti kaben, i lafiya kuma',
+        reasonRotated: 'edit tariikoo baseline pasiba — fiti kaben, i lafiya kuma',
+        scopeDetail: 'suite: {s} · tag set: {t}',
+        rowActionsTitle: 'Corpus-grounded flipu — corpus bɛ «negative» ninyu jaabi: u flip positive',
         flipToPositive: 'Flip to positive',
         ungroundedNote:
-          '{n} failing negative(s) have no corpus grounding and no safe tag lever — the competing repository must win them.'
+          'Negative failu {n} corpus grounding ti soto ani tag lever baa ti ke — repository competingoo ka u win.'
       },
       probe: {
         answerable: 'answerable',
@@ -3189,7 +3182,7 @@ export default {
         }
       },
       corpus: {
-        capped: 'Grounded in {parts} (corpus budget)',
+        capped: '{parts} kono ground benta (corpus budget)',
         part: '{used} of {total} chunks'
       },
       gen: {
@@ -3203,7 +3196,7 @@ export default {
       },
       paneTitle: 'RAGAS Benchmarks',
       about:
-        'RAGAS scores how well the assistant retrieves and answers — faithfulness, context precision and recall, answer relevancy and more. Run a benchmark suite to measure the repository as a knowledge base.',
+        'RAGAS bɛ sanso cogo min la assistantoo soto ani jaabi kumba — faithfulness, context precision ani recall, answer relevancy ani kura. Benchmark suite run ka repositoryoo knowledge base cogo la kuma.',
       aboutLabel: 'What is RAGAS?',
       aboutLink: 'Read more at ragas.io',
       help: {
@@ -3212,59 +3205,59 @@ export default {
         more: 'Read more at ragas.io',
         repositories: {
           title: 'Repositories',
-          text: 'Which repositories feed generation — the current one alone, or with related ones. Multiple repositories let multi-hop questions cross their boundaries.'
+          text: 'Repositorylu minnu bɛ generation di — saaying kiling waa, wala relatedlu la. Repository ju bɛ multi-hop ñiningolu bɛ u boundary pasi.'
         },
         questions: {
           title: 'Questions',
-          text: 'How many questions to synthesize (default 20). Larger sets take proportionally longer to generate and to run.'
+          text: 'Ñiningo jati min na synthesize (default 20). Setu baalu bɛ generate ani run la waatoo joona ke.'
         },
         singleHop: {
           title: 'Single-hop %',
-          text: 'Share of questions drawn from a single concept.'
+          text: 'Ñiningo kii-coko minnu bɛ concept kiling kono sili.'
         },
         multiAbstract: {
           title: 'Multi-hop (abstract) %',
-          text: 'Share of questions that combine several concepts and reason beyond their literal text.'
+          text: 'Ñiningo kii-coko minnu bɛ concept ju bila ani bɛ u literal kuma pasi reasoning.'
         },
         multiSpecific: {
           title: 'Multi-hop (specific) %',
-          text: 'Share of questions that combine several concepts while staying grounded in their exact wording. The three shares should total 100.'
+          text: 'Ñiningo kii-coko minnu bɛ concept ju bila ka u kuma exact kono. Kii-coko sabuu ka total 100 ke.'
         },
         personas: {
           title: 'Personas',
-          text: 'How many synthetic personas vary the phrasing and perspective of the generated questions.'
+          text: 'Persona synthetic jati minnu bɛ ñiningolu kuma ani perspective varied ke.'
         },
         generate: {
           title: 'Generate',
-          text: 'Builds the suite with the LLM: a knowledge-graph pass over the corpus first (this is the minutes-long part), then question synthesis. It runs in the background — you can close the Lab and nothing is lost. Deleting a generating suite cancels the work.'
+          text: 'Suiteoo LLM la dada: knowledge-graph pass corpus kono folo (miniti fuu bɛ o kono ke), ñiningo synthesis koto. A bɛ background kono baara — Lab a dade be run, lijan ti ke. Suite generating dingo fiti kɛ kɛ a cancel.'
         },
         importSuite: {
           title: 'Import suite (.xlsx)',
-          text: 'Loads an existing suite in the benchmark xlsx format, compatible with the tests/rag-benchmarks gold workflow.'
+          text: 'Suite dingo a load benchmark xlsx format kono, tests/rag-benchmarks gold workflow la compatible.'
         },
         entries: {
           title: 'Benchmark entries',
-          text: 'One row per question with its expected answer and reference passages. Edit a question, probe it against the live corpus, flip it out-of-scope (kept for contrast, excluded from scoring), or remove it.'
+          text: 'Row kiling ñiningo kiling la, a expected jaabi ani reference passagelu la. Ñiningo dada, live corpus ka a probe, out-of-scope flip (contrast la mara, score kono a bulu), wala a fiti.'
         },
         metrics: {
           title: 'Metrics',
-          text: 'The four defaults — faithfulness, context precision, context recall, answer relevancy — plus the extended RAGAS catalog. Metrics that need an embedding model are dropped with a warning when none is configured.'
+          text: 'Default naa lu — faithfulness, context precision, context recall, answer relevancy — ani RAGAS catalog extended. Metriclu minnu embed model lafiya, ni kelen ti configure, warning la u bulu.'
         },
         run: {
           title: 'Run benchmark',
-          text: 'Replays retrieval for every entry, generates answers, then the judge model scores each answer against the references. Progress is reported per phase; results land when the run completes.'
+          text: 'Entry bee la retrieval replay, jaabiu generate, koto judge modeloo jaabi kiling referenceu la score. Progress phase kiling la kuma; run benta ni fatalu na landing.'
         },
         results: {
           title: 'Results',
-          text: 'Metric means as gauges with pass thresholds, the trend across runs, and per-question detail with each answer and its scores.'
+          text: 'Metric meanu gauge cogo la pass thresholdu la, run bee trendu, ani ñiningo kiling detail — jaabi bee ani score bee.'
         },
         explain: {
           title: 'Explain failures',
-          text: 'Attributes each failing row to retrieval, answering, or the reference itself — and suggests guarded fixes, including repository-level changes such as tags and concept curation.'
+          text: 'Row failu kiling attributa: retrieval, answering, wala reference — ani fix guardu nimalu, tag ani concept curation yailamawolu repository-level u kono.'
         },
         exports: {
           title: 'Exports',
-          text: 'Suites and results as xlsx (compatible with the benchmark tooling) and a PDF report of the charts.'
+          text: 'Suite ani fatalu xlsx ye (benchmark tooling compatible) ani caatu PDF report ye.'
         }
       },
       // GUIDE (David, 2026-10-23) — the operator playbook behind
@@ -3463,43 +3456,43 @@ export default {
       },
       current: 'current',
       generate: {
-        title: 'Generate a benchmark suite',
-        hint: 'Synthesizes questions with expected outputs from the selected repositories — one or more, the current repo alone or with related repos.',
+        title: 'Benchmark suite dada',
+        hint: 'Ñiningolu expected output la synthesize, repository cengta kono — kili wala ju, saaying repo waa wala related repolu la.',
         size: 'Questions',
-        config: 'Generation model configuration',
-        default: 'Deployment default (.env)',
-        defaultNamed: 'Active configuration — {name}{model}',
-        effective: 'Judging with {name}{model}',
-        effectiveGenerating: 'Generating with {name}{model}',
+        config: 'Generation model konfigurasion',
+        default: 'Deployment ka default (.env)',
+        defaultNamed: 'Konfigurasion active — {name}{model}',
+        effective: 'Judging {name}{model} la ke',
+        effectiveGenerating: 'Generating {name}{model} la ke',
         envDefault: 'environment default',
-        envJudge: 'Deployment default (.env){model}',
-        envJudgePlain: 'Deployment default (.env)',
+        envJudge: 'Deployment ka default (.env){model}',
+        envJudgePlain: 'Deployment ka default (.env) ye',
         model: 'Model',
         modelPick: 'Configuration default',
         modelDefault: 'configuration default',
-        note: 'The model that synthesizes questions and scores answers. An active configuration (★, Models tab) applies automatically; picking one here overrides it for this operation only. Stronger judges make entity-recall and advice quality markedly better on small local models.',
+        note: 'Modeloo min bɛ ñiningolu synthesize ani jaabiu score. Konfigurasion active (★, Models tab) automatic apply; jang cengta keli nying operation waa o ke. Judge kuralu entity-recall ani advice quality local modelu tewolu la sanganba ke.',
         single: 'Single-hop %',
         multiAbstract: 'Multi-hop (abstract) %',
         multiSpecific: 'Multi-hop (specific) %',
         personas: 'Personas',
         button: 'Generate',
-        working: 'Generating — this takes minutes…',
+        working: 'A bɛ generate — o bɛ miniti fuu ke…',
         cancel: 'Cancel',
         cancelling: 'Cancelling…',
 
-        inFlight: 'A benchmark-suite generation is already running for this repository — attaching you to it.'
+        inFlight: 'Benchmark-suite generation dingo be run saaying nying repository kono — n baata i la a kono.'
       },
       import: {
         button: 'Import suite (.xlsx)',
         working: 'Importing…'
       },
       suite: {
-        namePlaceholder: 'Benchmark name (optional)',
+        namePlaceholder: 'Benchmark toh (optional)',
         add: 'Add question',
         addPrompt: 'Question to add:',
-        addReference: 'Expected answer (optional):',
-        flipTip: 'Flip in-scope / out-of-scope',
-        probeTip: 'Probe this question against the live corpus',
+        addReference: 'Expected jaabi (optional):',
+        flipTip: 'Flip: in-scope / out-of-scope',
+        probeTip: 'Nying ñiningo probe live corpus ka',
         removeTip: 'Remove this question'
       },
       col: {
@@ -3515,7 +3508,7 @@ export default {
       },
       run: {
         button: 'Run benchmark',
-        judge: 'Judge model configuration',
+        judge: 'Judge model konfigurasion',
         working: 'Running…',
         retrieved: 'retrieved',
         pass: 'pass',
@@ -3525,7 +3518,7 @@ export default {
         rowError: 'error',
         cancel: 'Cancel run',
         phase: {
-          'building-knowledge-graph': 'Building the knowledge graph',
+          'building-knowledge-graph': 'Knowledge graphoo bɛ dada',
           'synthesizing-questions': 'Synthesizing questions',
           retrieval: 'retrieving',
           judge: 'scoring'
@@ -3539,14 +3532,14 @@ export default {
         title: 'Benchmark results',
         failing: '{n} failing',
         advisorHint:
-          '{n} questions are below their metric thresholds. Run the advisor to attribute each failure to a pipeline stage and get concrete actions.',
+          'Ñiningolu {n} bɛ u metric threshold koto. Advisor run ka failu kiling pipeline stage la attribute ani kewu concrete soto.',
         copy: 'Copy the full answer',
         coverageTitle: 'Ɲɛri kunnafoni kɛse: nimɔrɔ bɛn na {n} yɔrɔ niin {total} — a yɛrɛma bɛn na kelen ye.',
-        colResizeTip: 'Drag the grip to resize — double-click the header to reset',
+        colResizeTip: 'Gripoo dita ka resize — header double-klik ka a reset',
         trendTitle: 'Metric trend across runs',
         trendNote:
-          'Each line is one RAGAS metric’s suite mean per run, oldest to newest, and never crosses a judge boundary — each x-label names the judge that scored the run. Judged answers are cached, so equal re-runs differ only where answers or retrieval changed.',
-        trendMixedJudges: 'Judges differ across these runs — compare within a judge segment, not across',
+          'Layini kiling RAGAS metric kiling suite mean run la, kotoo ka tunguduma, ani a ti ka judge boundary pasi — x-label kiling judge toh min runoo scoreta o kuma. Jaabi judgeta bee cache kono marata, o la run kiling-kiling bee o koto fella ni jaabi wala retrieval ti yailama.',
+        trendMixedJudges: 'Judgeu runu ninyu kono bɛ fara — compare judge segment kono kɛ, a pasi kabo',
         statusTitle: 'Per-question outcomes',
         statusNote:
           'Question kelen kelen ye suite la i nyininyin run bɛɛ ma, scope la bɛ ye, ka phetoho: jipañ bɛna ye, jipañ bɛ fɔli ye (metric kelen i ceng ye bɛ la bɔ aɲi min ye), ansaa bɔ fɔli ye (jipañ bɛna bɔ fɔli), wallo fila bɛ fɔli ye (pipeline bɛ na fila bɛ fɔli). Out-of-scope control minnu bɛ kaa ma — ni bɛ control ye, ansa bɛ fɛn bɛ kɛn bɔ ye.',
@@ -3565,9 +3558,9 @@ export default {
         declinedUnjudgedTitle:
           'Jipañ bɛna bɔ fɔli mung ani a kaɲi, sɔ row bɛɛ a tɛ judge kɛ. A tɛ fɛn bɛ kɛn bɔ score ye mung: i bɛ dɔ bɔ min mean na — ani i bɛ na kɛ coverage min bɛ mesa mɔnɲin.',
         answered: 'answered',
-        noisy: 'answer OK — retrieval noise',
+        noisy: 'jaabi kumba — retrieval noise be yen',
         noisyTitle:
-          'The answer passed every answer-quality metric; only the delivered context set (precision/recall) fell below threshold',
+          'Jaabioo answer-quality metricu bee pasa; context setoo (precision/recall) waa nungu threshold koto',
         pdf: 'Export PDF report'
       },
       explain: {
@@ -3575,15 +3568,15 @@ export default {
         working: 'በማስታወስ ላይ…',
         advising: 'አማካሪ እያሰበ — {n} የወደቁ ረድፎች',
         guarding: 'የታግ ጥቆማዎች በመመርመር ላይ…',
-        title: 'Failure attribution and advice',
-        none: 'No failing rows to attribute.',
+        title: 'Fail attribution ani advice',
+        none: 'Row failu ti je ka attribute.',
         stage: 'Stage',
         fails: 'Failing metrics',
         recommendation: 'Recommendation',
         unfair: 'soqaa milɣiɣi',
         unfairTitle: 'Weyaa kan kee buniiru tigi e ko korpuuni — ndinɣe beeci eɣa nkaɣeɣi, Assistant ma',
         evidenceTitle: 'Weyaa kan kee founoo e korpuuni / e kandidet koo / e Assistant ma. Modo: {method}',
-        facts: 'Run facts: {rows} rows · {abstentions} abstentions · ~{chars} answer chars',
+        facts: 'Run kibarolu: row {rows} · abstention {abstentions} · jaabi karakte ~{chars}',
         rankTitle: 'Weyaa kan e korpuuni, amma kɔnɔ e kandidet kɔnɔ dɔw — e nia yɔrɔ #{n}.'
       },
       history: {
@@ -3604,14 +3597,14 @@ export default {
         source: 'Source run',
         judge: 'Judge configuration',
         confirm: 'Re-score',
-        failed: 'Re-scoring the run failed.'
+        failed: 'Run rescore filita.'
       },
       runDelete: {
         title: 'Delete run',
-        body: 'This permanently removes the run and its failure explanation. The suite and its queries stay.',
+        body: 'Nying bɛ runoo ani a fail explanation murung fiti. Suiteoo ani a ñiningolu mara.',
         confirm: 'Delete',
-        inFlight: 'This run is still executing — cancel it first.',
-        explainInFlight: 'A failure explanation is still running for this run — wait for it to finish.',
+        inFlight: 'Runoo be execute saaying — a cancel folo.',
+        explainInFlight: 'Fail explanation be run nying run kono saaying — a benta kaben.',
         failed: 'Deleting the run failed.'
       },
       advice: {
@@ -3641,25 +3634,25 @@ export default {
         noise_sensitivity: 'noise sensitivity',
         note: {
           faithfulness:
-            'How factually grounded the answer is against the retrieved passages — the share of the answer’s claims the sources support. Low means the answer says things the evidence does not (hallucination).',
+            'Jaabioo fact cogo min la retrieval passage lu la ground — jaabi ka claimu kii-coko minnu sourceu support. A dooyata: jaabi kumalu keno evidence ti support (hallucination).',
           context_precision:
-            'Whether the passages that matter were ranked at the top of the retrieved set. Low means the right evidence was retrieved but buried under less relevant chunks.',
+            'Passage minnu maa, u rank retrieval setoo daminɛ kono waa. A dooyata: evidence kumba sota nga a teewolu relevance ful kono.',
           context_recall:
-            'Whether the retrieved passages cover everything the reference answer requires — each reference claim must be attributable to retrieved context. Low means retrieval missed evidence the question needed.',
+            'Retrieval passage lu bɛ reference jaabi ka maa bee cover — reference claim kiling retrieval context la attribute lafiya. A dooyata: retrieval bɛ evidence miss ka ñiningoo lafiya.',
           answer_relevancy:
-            'How well the answer addresses the question asked: RAGAS regenerates questions from the answer text and compares them to the original by embedding similarity. It does NOT check factual correctness — verbose or off-topic answers score low even when right.',
+            'Jaabioo ñiningoo min lafiya cogo: RAGAS bɛ ñiningolu jaabi kuma kono regenerate ani u compare embedding similarity la. A ti factual correctness check — jaabi verbose wala off-topic score dooyata ni a kumba.',
           context_utilization:
-            'Whether the retrieved context is sufficient to produce the reference answer — a retrieval-completeness check against what the ideal answer needs.',
+            'Retrieval contextoo reference jaabi produce ka — retrieval-completeness check, jaabi ideal lafiya ka.',
           context_entities_recall:
-            'Entity-level recall: the share of named entities in the entry’s reference passages (companies, dates, amounts, places) that also appear in the retrieved chunks. Low means retrieval brought chunks that miss entities the reference names. Judge-sensitive — a low score while context recall passes usually means the judge’s entity extraction missed, not that content is missing.',
+            'Entity-level recall: entry reference passage kono entity tohu kii-coko (kampani, lung, jati, dulaa) minnu retrieval chunku kono fana wuli. A dooyata: retrieval chunku soto minnu reference entity miss. Judge-sensitive — context recall pasa ni a dooyata, judge ka entity extraction miss kuma koo, koo ti ke.',
           factual_correctness:
-            'Claim-level factual agreement with the reference answer — the judge decomposes both into claims and scores the overlap. The strictest correctness metric.',
+            'Claim-level factual agreement reference jaabi la — judge bɛ ju bee claimu la decompose ani overlap score. Correctness metricoo strictba.',
           answer_correctness:
-            'Overall quality versus the reference answer — factual correctness combined with semantic similarity. The closest metric to “did it give the right answer”.',
+            'Quality kumba reference jaabi ka — factual correctness semantic similarity la bila. «a jaabi kumba di» metric min diira o ye.',
           answer_similarity:
-            'Semantic (embedding) similarity between the generated answer and the reference answer — high means the two convey the same meaning.',
+            'Semantic (embedding) similarity jaabi generate na ani reference jaabi kono — a santuya: ju bɛ meaning kiling kuma.',
           noise_sensitivity:
-            'How much the answer degrades when irrelevant passages are mixed into the retrieved context — a robustness measure. LOWER is better; its failure threshold is inverted.'
+            'Jaabi degrade cogo jati passage irrelevantu retrieval context kono bilasaaying — robustness measure. A dooyata a ka nyɛ; a fail thresholdoo inverted.'
         }
       },
       pdf: {
@@ -3672,7 +3665,7 @@ export default {
         n: 'questions',
         evaluable: 'evaluable',
         abstained: 'ansaa bɔ fɔli',
-        compare: 'Compare across runs (delta vs first)'
+        compare: 'Run bee compare (folo ka delta la)'
       }
     }
   },

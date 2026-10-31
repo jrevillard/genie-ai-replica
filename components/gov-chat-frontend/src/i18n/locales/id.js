@@ -1529,9 +1529,9 @@ export default {
       uploadFailed: "Gagal mengunggah {'{'}fileName{'}'}."
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+      'Mengapa unggahan penting untuk RAG: setiap dokumen yang Anda unggah dapat menjadi pengetahuan terkurasi dan berlabel — dokumen yang fokus dan terstruktur jauh lebih akurat dalam retrieval daripada satu file panjang. Wisaya OKF Studio mengubah unggahan menjadi topik yang telah ditinjau.',
     ragTipNoOkf:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
+      'Mengapa unggahan penting untuk RAG: setiap dokumen yang Anda unggah dapat menjadi pengetahuan terkurasi dan berlabel — dokumen yang fokus dan terstruktur jauh lebih akurat dalam retrieval daripada satu file panjang.'
   },
   okf: {
     lifecycleErrors: {
@@ -1581,7 +1581,7 @@ export default {
       svcTagging: 'Topik & tag',
       svcTaggingShort: 'topik/tag',
       svcOpenaiOnly:
-        'Kurasi konsep serta topik/tag memakai format OpenAI — keduanya butuh endpoint yang kompatibel dengan OpenAI.',
+        'Kurasi konsep serta topik/tag memakai format kawat OpenAI — keduanya butuh endpoint yang kompatibel dengan OpenAI.',
       colServices: 'Dipakai oleh',
       svcNone: 'tidak ada (dorman)',
       groupTestLab: 'Pipeline Test Lab',
@@ -1616,7 +1616,7 @@ export default {
       edit: 'Ganti nama / ubah',
       copy: 'Salin',
       activate: 'Aktifkan (hanya satu aktif)',
-      deactivate: 'Nonaktifkan — model default akan digunakan',
+      deactivate: 'Nonaktifkan — model default deployment akan digunakan',
       delete: 'Hapus',
       deleteConfirm: 'Hapus konfigurasi model "{name}"?',
       empty: 'Belum ada konfigurasi model — model default deployment (env) digunakan.',
@@ -1716,7 +1716,7 @@ export default {
       title: 'Impor dokumen ke repositori OKF baru',
       hint: 'Dokumen menjadi SATU repositori — disegmentasi, ditautkan, dan dilabeli bersama. Tidak ada yang dipublikasikan; alur normal review → publish → ingest mengikuti.',
       name: 'Nama repositori',
-      namePh: 'mis. paket kebijakan',
+      namePh: 'mis. paket kebijakan rumah potong hewan',
       domain: 'Area subjek (domain)',
       strategy: 'Strategi klasifikasi',
       stratHeuristics: 'Heuristik (cepat, tanpa LLM)',
@@ -1725,10 +1725,11 @@ export default {
       files: 'Dokumen terpilih',
       servingBadge: 'melayani RAG bebas',
       alreadyBadge: 'sudah di repositori OKF lain',
-      servingTip: 'Dokumen ini saat ini melayani korpus bebas — repositori baru tidak dapat di-ingest sampai ditarik.',
+      servingTip:
+        'Dokumen ini saat ini melayani korpus RAG bentuk bebas — repositori baru tidak dapat di-ingest sampai ditarik.',
       alreadyTip: 'Dokumen ini sudah menjadi sumber repositori OKF lain.',
       servingWarn:
-        '{n} dokumen masih melayani korpus bebas. Impor berhasil, tetapi repositori ini tidak dapat di-ingest sampai dokumen tersebut ditarik.',
+        '{n} dokumen masih melayani korpus bentuk bebas. Impor berhasil, tetapi repositori ini tidak dapat di-ingest sampai dokumen tersebut ditarik.',
       cancel: 'Batal',
       importing: 'Mengimpor…',
       go: 'Impor',
@@ -1933,9 +1934,9 @@ export default {
       },
       piiBulk: {
         done_accept:
-          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
-        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
-        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
+          'Selesai — setiap entitas yang ditandai ditandai sebagai telah ditinjau-dan-disimpan pada {n} konsep. Penanda PII dibersihkan.',
+        done_redact: 'Selesai — konten yang ditandai pada {n} konsep diganti dengan pemberitahuan redaksi.',
+        done_remove: 'Selesai — konten yang ditandai pada {n} konsep dihapus.',
         title: {
           redact: 'Redaksi semua konten yang ditandai',
           remove: 'Hapus semua konten yang ditandai',
@@ -1958,9 +1959,9 @@ export default {
       },
       addSources: {
         working: 'Converting sources…',
-        done: '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).',
-        failed: 'A conversion failed — check the logs; the rest may still have queued.',
-        landed: 'Conversions complete — {t} topics now in the tree.'
+        done: '{n} sumber mengantri — topik mendarat di pohon seiring konversi selesai ({t} topik sekarang).',
+        failed: 'Satu konversi gagal — periksa log; sisanya mungkin tetap mengantri.',
+        landed: 'Konversi selesai — {t} topik sekarang ada di pohon.'
       }
     },
     dashboard: {
@@ -2161,9 +2162,9 @@ export default {
       descriptionLabel: 'Deskripsi',
       save: 'Simpan frontmatter',
       saveFailed: 'Penyimpanan frontmatter gagal',
-      perRepoTitle: 'Routing tags — what this repo is about',
+      perRepoTitle: 'Tag routing — apa isi repositori ini',
       perRepoHint:
-        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+        'Tag per-repo (topik / entitas / cakupan / terlarang / ringkasan / kata kunci) mengarahkan retriever. Data yang sama juga tersimpan pada field doc repo — keduanya tetap sinkron saat disimpan.',
       perRepoField: {
         topic: 'Topic',
         entity: 'Entity',
@@ -2175,16 +2176,16 @@ export default {
       perRepoPh: {
         topic: 'One topic per line',
         entity: 'One entity per line',
-        forbidden: 'One forbidden topic per line',
+        forbidden: 'Satu topik terlarang per baris',
         keyword: 'One keyword per line'
       },
       perRepoHelp: {
-        topic: 'Add, modify or remove topics — one per line. Empty lines are ignored.',
-        entity: 'Add, modify or remove entities — one per line. Empty lines are ignored.',
-        forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
-        keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
+        topic: 'Tambah, ubah, atau hapus topik — satu per baris. Baris kosong diabaikan.',
+        entity: 'Tambah, ubah, atau hapus entitas — satu per baris. Baris kosong diabaikan.',
+        forbidden: 'Tambah, ubah, atau hapus topik terlarang — satu per baris. Baris kosong diabaikan.',
+        keyword: 'Tambah, ubah, atau hapus kata kunci — satu per baris. Baris kosong diabaikan.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      perRepoRepoErr: 'Tersimpan secara lokal; penulisan field doc repo gagal — coba lagi.',
       repoTagsHint:
         'Tag tingkat repositori ({summary}) milik repositori, bukan konsep ini — kelola di panel Tag di rail kanan.'
     },
@@ -2217,14 +2218,14 @@ export default {
     },
     glossary: {
       addConcept:
-        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
-      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+        'Tulis topik baru secara manual (markdown dengan frontmatter). Setiap topik menjadi satu unit yang dapat dikutip — topik yang fokus diambil lebih presisi daripada satu dokumen panjang.',
+      type: 'Jenis benda yang diwakili konsep ini — layanan, kebijakan, orang, tempat… Tipe disimpan pada setiap potongan, sehingga retrieval dapat lebih memilih sumber yang tepat dan jawaban dapat menyebut apa yang dikutipnya.',
       title:
-        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+        'Nama yang dibaca manusia dan muncul di jawaban serta sitasi. Judul yang presisi membantu asisten memilih topik INI daripada topik yang mirip — judul samar kalah dari judul spesifik saat retrieval.',
       indexStatus:
-        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+        'Di mana konsep ini berada dalam pipeline ingest: parsed = menunggu pemotongan dan embedding; indexed = dapat dicari dan dikutip dalam RAG; failed = TIDAK dapat dicari — perbaiki lalu ingest ulang. Hanya konsep terindeks yang dapat diambil.',
       trustTier:
-        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+        'Seberapa terverifikasi konsep ini: belum diverifikasi = dihasilkan mesin; dikonfirmasi mesin = diperiksa terhadap aturan; ditinjau manusia = disetujui oleh steward. Jawaban dapat menampilkan tingkat kepercayaan sehingga pengguna tahu apa yang dibaca — kepercayaan lebih tinggi memberi keyakinan pengguna, bukan retrieval yang lebih baik.',
       concept:
         'Satu entri di repositori Anda — biasanya satu halaman atau topik tunggal. Setiap konsep memiliki frontmatter terstruktur yang dibaca asisten, ditambah teks markdown yang menjadi rujukan jawabannya.',
       repository:
@@ -2246,33 +2247,33 @@ export default {
       classification:
         'Bagaimana kami menentukan entitas apa dari setiap konsep (topik, entitas, proses…). Heuristik membaca halaman secara otomatis; opsi LLM lebih lambat tetapi dapat menangani halaman yang rumit.',
       resplit:
-        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+        'Bagi ulang dokumen sumber panjang menjadi topik dengan ukuran yang tepat. Topik yang terlalu besar mengencerkan presisi retrieval (jawaban tersembunyi di antara isian); topik yang terlalu kecil kehilangan konteks yang dibutuhkan jawaban.',
       saveFailed: 'Gagal menyimpan',
       importFailedTitle: 'Impor gagal — berkas sumber tidak dapat dikonversi.',
       importFailedHint: 'Hapus repositori ini dan impor kembali berkas sumber.',
       frontmatter:
         'Informasi terstruktur di bagian atas setiap berkas — jenis, judul, label. Asisten menggunakannya untuk mengetahui tentang apa konsep tersebut.',
       pickSource:
-        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+        'Sumber memberi makan produser, yang mengusulkan topik untuk Anda tinjau — tidak ada yang dikomit sampai Anda menyetujuinya di Kurasi. Dokumen yang sudah di-ingest untuk RAG bentuk bebas diperbolehkan; repositori Anda tetap terkunci dari ingest sampai dokumen tersebut ditarik.',
       classificationStrategy:
-        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
-      clsHeur: 'Heuristics (fast, no LLM)',
+        'Bagaimana produser menentukan label untuk tiap topik: heuristik cepat dan gratis; LLM membaca setiap halaman (lebih baik untuk tata letak rumit); hibrida mulai dengan heuristik lalu naik ke kasus yang sulit. Kurasi saja — tidak pernah memicu ingest.',
+      clsHeur: 'Heuristik (cepat, tanpa LLM)',
       clsLlm: 'LLM classification',
       clsHybrid: 'Hybrid',
       fsPick:
-        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+        'Setiap file menjadi satu topik — topik yang fokus diambil lebih presisi daripada satu dokumen panjang. Nama file menjadi judul; Anda dapat menyempurnakan semuanya di Kurasi.',
       autocorrect:
-        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+        'Perbaikan otomatis hanya menyentuh frontmatter (judul, tipe, struktur) — tidak pernah konten yang Anda tulis. Usulan ditampilkan sebelum ada yang berubah; menerapkannya menulis perbaikan seketika dan Anda dapat meninjau hasilnya di Kurasi.',
       handoff:
-        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+        'Ritual siklus hidup (kirim → setujui → publikasikan) sengaja berada di luar wisaya ini: persetujuan milik alur tata kelola di dasbor dan editor, tempat versi dan status serving dikelola.',
       lifecycle:
-        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+        'Kontrak enam langkah: draf → tinjauan → disetujui → dipublikasikan (cetak + bundel) → di-ingest (melayani di RAG) → ditarik (kembali ke edit). Konten baru dapat dikutip setelah ingest — dan hanya konten yang telah ditinjau yang dapat dipublikasikan.',
       labelsAuto:
-        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+        'Label ditetapkan otomatis dari Hierarki Pengetahuan — layanan L2 yang dibatasi pada Area Subjek repositori ini. Tinjau dan sesuaikan per topik di Kurasi.',
       reviewHandoff:
-        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+        'Menjaga ritual persetujuan di satu tempat (Editor/dasbor) berarti peninjau selalu menyetujui permukaan yang sama dengan jejak audit yang sama — wisaya menyiapkan repositori, ritual yang mempublikasikannya.',
       piiReview:
-        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+        'Pemindai menemukan kemungkinan data pribadi. Untuk setiap temuan Anda memilih: Redak (ganti dengan pemberitahuan), Ganti (tulis teks Anda sendiri), Hapus (hapus), atau Terima (simpan — keputusannya diaudit). Repositori tidak dapat diserahkan dengan temuan yang belum ditinjau.'
     },
     md: {
       toolbar: 'Pemformatan',
@@ -2309,9 +2310,9 @@ export default {
       step7:
         'Beberapa peringatan dapat diperbaiki secara otomatis: nilai status dapat disesuaikan ke enum yang valid, bidang yang hilang dapat diisi dengan default yang wajar. Terapkan perbaikan yang Anda setujui, lalu kembali ke kurator untuk meninjau.',
       step8:
-        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+        'Ringkasan dari apa yang Anda bangun: topik, label, sumber, dan setiap masalah yang belum terselesaikan. Setelah terbaca benar, serahkan — kirim → setujui → publikasikan terjadi di dasbor dan editor, tidak pernah di wisaya ini.',
       step9:
-        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+        'Repositori ini siap ditinjau. Kirimkan untuk persetujuan di dasbor Studio; pemberi persetujuan menerima; penerbitan terjadi dari dasbor atau editor — tidak pernah dari wisaya ini. Editor tetap menjadi rumah bagi setiap perubahan mendatang.',
       docMgmtEntry:
         'Buat repositori OKF baru dari dokumen yang dipilih. Dokumen akan menjadi sumber; Anda akan meninjau dan menamai topik yang dihasilkan sebelum apa pun dipublikasikan.',
       crawlSegment:
@@ -2428,7 +2429,7 @@ export default {
     },
     steps: {
       entry: {
-        createdHint: 'Repository created — rename it later from the editor.',
+        createdHint: 'Repositori dibuat — ganti namanya nanti dari editor.',
         title: 'Nama repositori & bidang subjek',
         hint: 'Beri nama yang jelas untuk repositori OKF ini dan pilih bidang subjeknya.',
         nameLabel: 'Nama repositori',
@@ -2456,12 +2457,12 @@ export default {
             desc: 'Cabangkan topik dan struktur dari repositori OKF lain.'
           }
         },
-        cloneSource: 'Source repository (not yet serving)',
-        clonePh: 'Select the repository to clone from',
-        cloning: 'Cloning topics into this repository…',
-        cloneNeed: 'Pick the repository to clone from first.',
-        cloneBusy: 'The previous repository is still being removed — go Back and Continue again in a moment.',
-        cloneFailed: 'The clone failed — try again.'
+        cloneSource: 'Repositori sumber (belum melayani)',
+        clonePh: 'Pilih repositori yang akan dikloning',
+        cloning: 'Mengkloning topik ke repositori ini…',
+        cloneNeed: 'Pilih dulu repositori yang akan dikloning.',
+        cloneBusy: 'Repositori sebelumnya masih sedang dihapus — tekan Kembali, lalu Lanjutkan lagi sebentar.',
+        cloneFailed: 'Kloning gagal — coba lagi.'
       },
       input: {
         title: 'Masukan',
@@ -2473,27 +2474,27 @@ export default {
         chooseCrawl: 'Choose crawled documents',
         chooseDocs: 'Choose source documents',
         writeOne: '+ Write a concept',
-        fsPick: '+ Import markdown from this computer',
+        fsPick: '+ Impor markdown dari komputer ini',
         fsBusy: 'Importing your files…',
-        fsFailed: 'Import failed — check the files and retry.',
-        skippedEmpty: '{n} empty file(s) skipped.',
+        fsFailed: 'Impor gagal — periksa file dan coba lagi.',
+        skippedEmpty: '{n} file kosong dilewati.',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',
-        noRepo: 'Create the repository first (go back to Entry).',
-        noRepoYet: 'Create the repository first (go back to Entry).',
-        benchTitle: 'Topics in this repository',
+        noRepo: 'Buat repositori dulu (kembali ke langkah awal).',
+        noRepoYet: 'Buat repositori dulu (kembali ke langkah awal).',
+        benchTitle: 'Topik dalam repositori ini',
         benchCount: '{n}',
         benchLoading: 'Reading topics…',
-        benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
-        benchFailed: 'Could not read the topics right now.',
+        benchEmpty: 'Belum ada apa pun di sini — pilih sumber di bawah, impor markdown, atau tulis topik pertama Anda.',
+        benchFailed: 'Tidak dapat membaca topik saat ini.',
         editTitle: 'Edit concept',
-        deleteFailed: 'Could not delete the concept.',
-        added: '{n} topic(s) in this repository so far.',
+        deleteFailed: 'Tidak dapat menghapus konsep.',
+        added: '{n} topik dalam repositori ini sejauh ini.',
         deleteTitle: 'Delete topic',
-        deleteBody: 'This permanently removes the topic from this repository.',
+        deleteBody: 'Ini menghapus topik secara permanen dari repositori ini.',
         labelFailed: 'Could not set the label.',
-        cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
+        cloned: 'Repositori ini adalah kloning — topiknya sudah ada. Lanjutkan ke Kurasi untuk meninjaunya.'
       },
       produce: {
         title: 'Hasilkan topik',
@@ -2502,51 +2503,52 @@ export default {
         placeholder: 'Layanan produser dihubungkan dalam story berikutnya.',
         retry: 'Retry conversion',
         restart: 'Run again',
-        running: 'Converting… you can watch progress here; nothing is committed until you review in Curate.',
-        failed: 'The conversion failed — retry, or go back and pick different inputs.',
-        done: '{n} topic(s) are ready — continue to review them in Curate.',
-        noSources: 'No sources selected — go back to Input.',
-        neverStarted: 'The conversion did not start — retry.',
-        manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
+        running:
+          'Mengonversi… Anda dapat memantau kemajuan di sini; tidak ada yang dikomit sampai Anda meninjaunya di Kurasi.',
+        failed: 'Konversi gagal — coba lagi, atau kembali dan pilih masukan yang berbeda.',
+        done: '{n} topik siap — lanjutkan untuk meninjaunya di Kurasi.',
+        noSources: 'Tidak ada sumber yang dipilih — kembali ke Masukan.',
+        neverStarted: 'Konversi tidak dimulai — coba lagi.',
+        manualSkip: 'Topik yang ditulis tangan tidak perlu generasi — lanjutkan ke Kurasi untuk meninjaunya.',
         labelDone: 'Conversion complete',
         dupContent:
-          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
-        inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+          'Sumber ini sudah diimpor ke repositori OKF lain. Tarik atau hapus repositori itu dulu, atau pilih dokumen lain.',
+        inFlight: 'Konversi sudah berjalan untuk repositori ini — tunggu sampai selesai.',
         stage: {
           files: 'Files',
-          filesCount: '{done} of {total} documents',
+          filesCount: '{done} dari {total} dokumen',
           concepts: 'Concepts',
           conceptsCount: '{done} of {total} topics',
           conceptsSoFar: '{n} topics so far',
           curating: 'Curating',
-          curatingCount: '{done} of {total} concepts labelled',
+          curatingCount: '{done} dari {total} konsep telah dilabeli',
           crosslink: 'Cross-linking topics',
-          linkCount: '{done} of {total} batches · {w} links written',
+          linkCount: '{done} dari {total} batch · {w} tautan ditulis',
           complete: 'Complete',
           unavailable: 'Count unavailable',
           waiting: 'Waiting'
         },
-        filesNote: '{done} of {total} documents converted',
-        pagesNote: '{done} of {total} pages converted',
-        pagesSoFar: '{n} pages converted so far',
+        filesNote: '{done} dari {total} dokumen dikonversi',
+        pagesNote: '{done} dari {total} halaman dikonversi',
+        pagesSoFar: '{n} halaman dikonversi sejauh ini',
         sourceStat: '+{n} new (total {t})',
-        sourceStatMerged: '+{n} new · {m} merged by slug (total {t})',
+        sourceStatMerged: '+{n} baru · {m} digabung berdasarkan slug (total {t})',
         docsLeg: '{n} selected document(s)',
-        legWait: 'Waiting for the previous conversion to release…'
+        legWait: 'Menunggu konversi sebelumnya melepas…'
       },
       label: {
         title: 'Label — otomatis',
         hint: 'Label ditetapkan secara otomatis dari Hirarki Pengetahuan — dibatasi pada Area Subjek repositori ini.',
         loading: 'Reading labels…',
-        preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
+        preview: '{labeled} dari {n} topik memiliki label Hierarki Pengetahuan.',
         unlabeled: 'no labels yet',
-        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
-        loadFailed: 'Could not read the labels right now.'
+        adjust: 'Sesuaikan label topik mana pun di Kurasi — label tetap dibatasi pada Area Subjek repositori ini.',
+        loadFailed: 'Tidak dapat membaca label saat ini.'
       },
       curate: {
         embedHint:
-          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
-        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
+          'Tinjau dan tingkatkan setiap topik: perbaiki teksnya, tetapkan tipe dan label Hierarki Pengetahuan, tambah atau hapus topik. Semua yang Anda perbaiki di sinilah yang akan dikutip asisten nanti.',
+        noRepo: 'Belum ada repositori — kembali ke langkah awal dan buat atau pilih satu dulu.',
         title: 'Tinjau topik',
         hint: 'Setiap topik adalah unit pengetahuan kecil yang dapat dikutip. Edit judul dan deskripsi.',
         placeholder: 'Pohon kurator + editor hadir di Story 3-8.'
@@ -2560,8 +2562,8 @@ export default {
         title: 'Perbaikan otomatis',
         hint: 'Beberapa peringatan dapat diperbaiki secara otomatis. Terapkan perbaikan yang Anda setujui, lalu kembali ke kurator untuk meninjau.',
         placeholder: 'Layanan koreksi otomatis hadir di Story 10.2.',
-        noRepo: 'No repository yet — go back to Entry and create one first.',
-        applied: 'Fixes applied — continue, or go back to Curate to review the result.'
+        noRepo: 'Belum ada repositori — kembali ke langkah awal dan buat satu dulu.',
+        applied: 'Perbaikan diterapkan — lanjutkan, atau kembali ke Kurasi untuk meninjau hasilnya.'
       },
       review: {
         title: 'Tinjau',
@@ -2573,28 +2575,29 @@ export default {
         state: 'Lifecycle state',
         labelsSet: 'set per topic in Curate',
         browserHint:
-          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
-        noRepo: 'No repository yet — the file review appears here once a repository exists.',
+          'Tinjauan akhir sebelum Anda menyerahkan: setiap file di bawah, markdown dan labelnya — persis seperti yang akan dikutip asisten.',
+        noRepo: 'Belum ada repositori — tinjauan file muncul di sini setelah repositori ada.',
         ritualOutside:
-          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+          'Ritual tinjauan — kirim untuk ditinjau, persetujuan peninjau, publikasikan — terjadi di Editor dan dasbor Studio, bukan di sini. Buka Editor untuk menyelesaikannya.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
-        noVersions: 'No versions yet — versions are minted during the approval ritual.',
-        versionSummary: '{n} version(s) · latest v{latest}'
+        noVersions: 'Belum ada versi — versi dicetak selama ritual persetujuan.',
+        versionSummary: '{n} versi · terbaru v{latest}'
       },
       publish: {
         title: 'Amankan dan Selesaikan',
-        hint: 'Repositori ini siap untuk ditinjau. Penerbitan tidak pernah terjadi di sini — kirimkan untuk persetujuan dari dasbor; persetujuan dan penerbitan dilakukan dari dasbor atau editor.',
+        hint: 'Repositori ini siap ditinjau. Penerbitan tidak pernah terjadi di sini — kirimkan untuk persetujuan di dasbor, lalu setujui dan publikasikan dari dasbor atau editor.',
         nameOk: 'Nama repositori ditetapkan',
         labelsOk: 'Label dipilih',
         topicsOk: 'Topik ditinjau',
         topicsPending: 'No topics yet',
         topicsServing: 'Topics serving',
-        noTopics: 'No topics yet — go back to Curate to produce or write them.',
-        frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
+        noTopics: 'Belum ada topik — kembali ke Kurasi untuk menghasilkan atau menulisnya.',
+        frozen:
+          'Repositori ini sedang melayani — hanya ringkasan baca-saja di sini. Buka Editor untuk mengelola versi atau menariknya.',
         ritual:
-          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+          'Berikutnya: kirim untuk persetujuan di dasbor Studio → pemberi persetujuan menerima → publikasikan dari dasbor atau editor. Wisaya berhenti di sini dengan sengaja.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2620,7 +2623,7 @@ export default {
         alreadyInOkf: 'Hapus dokumen yang sudah ada di repositori OKF',
         alreadyIngested: 'Hapus dokumen yang sudah di-ingest',
         servingWarn:
-          "{'{'}n{'}'} dokumen terpilih masih melayani korpus bebas — repositori baru tidak dapat di-ingest sampai dokumen tersebut ditarik."
+          "{'{'}n{'}'} dokumen terpilih masih melayani korpus bentuk bebas — repositori baru tidak dapat di-ingest sampai dokumen tersebut ditarik."
       },
       produce: {
         notReady: 'Produser dihubungkan dalam story berikutnya.'
@@ -2706,7 +2709,7 @@ export default {
         trustTier: 'trust_tier',
         attestation: 'attestation',
         sources: 'provenance.sources',
-        onlyOnIndex: 'Per-repo tags live on the index concept only — open the index to see them.'
+        onlyOnIndex: 'Tag per-repo hanya tersimpan pada konsep indeks — buka indeks untuk melihatnya.'
       },
       showSource: 'Tampilkan sumber',
       issue: {
@@ -2733,15 +2736,15 @@ export default {
       run: {
         notReady: 'Validasi dihubungkan dalam story berikutnya.'
       },
-      piiTitle: 'Personal data — review each flagged concept',
+      piiTitle: 'Data pribadi — tinjau setiap konsep yang ditandai',
       loading: 'Checking the repository…',
-      loadFailed: 'Could not load the validation report.',
+      loadFailed: 'Tidak dapat memuat laporan validasi.',
       retry: 'Retry',
       issuesTitle: 'Issues to review',
       howToFix: 'How to fix',
-      indexFailed: 'Re-index failed — edit or re-split the page.',
+      indexFailed: 'Pengindeksan ulang gagal — edit atau bagi ulang halaman.',
       indexFailedRemedy:
-        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+        'Buka halaman di editor lalu simpan (penyimpanan akan mengindeks ulang), atau bagi ulang repositori dari sumbernya.',
       severity: {
         blocker: 'Blocking',
         warning: 'Needs review',
@@ -2756,11 +2759,11 @@ export default {
       },
       topicLinks: {
         title: 'Cross-link topics',
-        tip: 'Reads every page in this repository and writes links between the pages that genuinely belong together — the same processing the import wizard runs. It is safe to re-run: existing links are kept and only new ones are added.',
-        progress: 'Cross-linking… {done} of {total} batches',
-        progressIdle: 'Cross-linking… reading the repository',
-        done: 'Added {n} link(s) across {c} page(s).',
-        failed: 'Cross-linking failed: {msg}'
+        tip: 'Membaca setiap halaman di repositori ini dan menulis tautan antar halaman yang benar-benar berkaitan — pemrosesan yang sama seperti yang dijalankan wisaya impor. Aman untuk dijalankan ulang: tautan yang ada dipertahankan dan hanya yang baru ditambahkan.',
+        progress: 'Menaut silang… {done} dari {total} batch',
+        progressIdle: 'Menaut silang… membaca repositori',
+        done: '{n} tautan ditambahkan di {c} halaman.',
+        failed: 'Penautan silang gagal: {msg}'
       },
       action: {
         suggestLinks: 'Suggest links',
@@ -2768,8 +2771,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: 'Create the Sources page and link {n} page(s)',
-        wireExisting: 'Link {n} page(s) to "{hub}"',
+        wireCreate: 'Buat halaman Sumber dan tautkan {n} halaman',
+        wireExisting: 'Tautkan {n} halaman ke "{hub}"',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2777,45 +2780,45 @@ export default {
         done: 'Done'
       },
       suggest: {
-        working: 'Asking the assistant for link suggestions…',
-        empty: 'No suggestions — link it manually in the editor.'
+        working: 'Meminta saran tautan dari asisten…',
+        empty: 'Tidak ada saran — tautkan secara manual di editor.'
       },
       nearDup: {
-        keepHint: 'Keep one copy — delete the rest.'
+        keepHint: 'Simpan satu salinan — hapus sisanya.'
       },
-      wireDone: 'Linked {n} page(s) to "{hub}".',
-      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      wireDone: '{n} halaman ditautkan ke "{hub}".',
+      wireCreated: 'Halaman Sumber dibuat dan {n} halaman ditautkan.',
       mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: 'First {n} characters — open the editor for the full page.'
+        truncated: '{n} karakter pertama — buka editor untuk halaman utuh.'
       },
       tip: {
         conformance:
-          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+          'Frontmatter halaman tidak memenuhi spesifikasi OKF (tipe, tanggal kesegaran, sumber…). Koreksi otomatis di Langkah 8 memperbaiki ini secara mekanis; tidak ada isi tulisan Anda yang berubah.',
         orphan:
-          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+          'Tidak ada halaman yang menaut ke sini dan halaman ini tidak menaut ke mana pun. Retrieval graf menelusuri tautan untuk menghubungkan konten, sehingga halaman tanpa tautan hanya muncul pada kecocokan topik yang persis. Perbaikan: terima saran tautan atau tambahkan tautan di editor.',
         near_duplicate:
-          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+          'Halaman-halaman ini memuat teks yang nyaris identik. Saat ingest masing-masing menjadi potongannya sendiri, sehingga satu pertanyaan dapat mengembalikan materi yang sama beberapa kali. Perbaikan: tinjau, simpan salinan terbaik, hapus sisanya.',
         citation:
-          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+          'Halaman mengutip dokumen di metadatanya tetapi tidak ada yang menautkannya ke halaman Sumber — sehingga sitasi tidak pernah mencapai graf dan tidak dapat ditelusuri atau dikutip saat menjawab. Perbaikan: satu klik menautkan setiap halaman yang mengutip.',
         index_failed:
-          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+          'Halaman diimpor tetapi pembangunan indeks pencariannya gagal — halaman tidak dapat diambil sampai diindeks ulang. Menyimpan halaman di editor akan mencoba lagi.'
       },
       piiRescan: 'Re-scan all pages',
       piiRescanWorking: 'Re-scanning every page…',
       piiRescanDone: 'Re-scanned {n} page(s).',
       piiRescanPartial:
-        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+        '{n} halaman dipindai ulang. {e} masih gagal — vonis pindainya tidak berubah, jadi penerbitan tetap diblokir untuk halaman tersebut.',
       piiRescanMissing:
-        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
-      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+        'Pemindaian ulang tidak tersedia di server ini (404). Tidak ada yang diubah — halaman yang pindainya gagal tetap memblokir penerbitan.',
+      piiRescanFrozen: 'Pemindaian ulang ditolak: repositori sedang diterbitkan (409). Tidak ada yang diubah.',
       piiRescanFailed:
-        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
-      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
-      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+        'Pemindaian ulang gagal. Tidak ada yang diubah — halaman yang pindainya gagal tetap memblokir penerbitan.',
+      piiRescanProgress: 'Memindai ulang… {done} dari {total} halaman',
+      piiRescanProgressIdle: 'Memindai ulang… membaca repositori',
       piiRescanNoKey:
-        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+        'Server menerima pemindaian ulang tetapi tidak mengembalikan id proses, sehingga kemajuannya tidak dapat dilacak. Tidak ada yang dilaporkan.',
       piiStateError: 'Scan error',
       piiTally: {
         scanned: '{n} page(s) re-scanned',
@@ -2830,13 +2833,13 @@ export default {
       nFlagged: 'Ditemukan {n}',
       rescan: 'Pindai ulang',
       stateError: 'Scan failed',
-      errorTitle: 'This page is blocking the hand-off.',
+      errorTitle: 'Halaman ini memblokir serah-terima.',
       errorBody:
-        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+        'Pemindaian PII halaman ini GAGAL (bukan tidak menemukan apa pun — teksnya tidak dapat dibaca). Penerbitan tetap diblokir sampai pemindaian berhasil. Gunakan Pindai ulang di atas.',
       rescanMissing:
-        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
-      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
-      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
+        'Pemindaian ulang tidak tersedia di server ini (404). Tidak ada yang diubah — halaman ini tetap memblokir penerbitan.',
+      rescanFrozen: 'Pemindaian ulang ditolak: repositori sedang diterbitkan (409). Tidak ada yang diubah.',
+      rescanFailed: 'Pemindaian ulang gagal. Tidak ada yang diubah — halaman ini tetap memblokir penerbitan.',
       scanning: 'Memindai…',
       clean: 'Tidak ada entitas yang ditandai — concept ini aman.',
       how: 'Perbaikan: hapus atau tulis ulang (misal gunakan perannya alih-alih nama), lalu simpan — pemindaian ulang akan memperbarui daftar ini.',
@@ -2905,49 +2908,49 @@ export default {
       unpublish: 'Batalkan publikasi'
     },
     src: {
-      title: 'Choose the source documents',
-      hint: 'Pick sources from the document repository, upload new ones from this computer, or both.',
-      repoSec: 'From the document repository',
+      title: 'Pilih dokumen sumber',
+      hint: 'Pilih sumber dari repositori dokumen, unggah yang baru dari komputer ini, atau keduanya.',
+      repoSec: 'Dari repositori dokumen',
       searchPh: 'Search by name or site…',
       chipsLabel: 'Filter by origin',
       chipAll: 'All',
       chipCrawl: 'Crawls',
       chipUpload: 'Uploads',
-      noMatches: 'Nothing matches this search or filter.',
+      noMatches: 'Tidak ada yang cocok dengan pencarian atau filter ini.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
       total: '{n} document(s)',
-      titleSingle: 'Choose the crawled document',
+      titleSingle: 'Pilih dokumen hasil perayapan',
       loading: 'Loading documents…',
       retry: 'Retry',
-      empty: 'No documents in the repository yet — upload some below.',
+      empty: 'Belum ada dokumen di repositori — unggah beberapa di bawah.',
       more: 'Load more',
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
       uploaded: '{n} file(s) uploaded.',
-      uploadFailed: 'An upload failed — check the files and retry.',
-      fsNote: 'Uploaded files join the document repository and are selected here automatically.',
+      uploadFailed: 'Satu unggahan gagal — periksa file dan coba lagi.',
+      fsNote: 'File yang diunggah bergabung ke repositori dokumen dan otomatis terpilih di sini.',
       count: 'Selected: {n}',
-      needOne: 'Select at least one source.',
+      needOne: 'Pilih setidaknya satu sumber.',
       confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
-      loadFailed: 'Could not load the document list.',
+      loadFailed: 'Tidak dapat memuat daftar dokumen.',
       servingBadge: 'serving free-form RAG',
       servingTip:
-        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+        'Dokumen ini saat ini melayani korpus RAG bentuk bebas — konversi berhasil, tetapi repositori ini tidak dapat di-ingest sampai dokumen tersebut ditarik.',
       alreadyBadge: 'already in an OKF repo',
-      alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
+      alreadyTip: 'Dokumen ini sudah menjadi sumber repositori OKF lain — konversi akan menolaknya.'
     },
     frontmatter: {
-      title: 'Frontmatter tags — what this repo is about',
-      help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',
+      title: 'Tag frontmatter — apa isi repositori ini',
+      help: 'Tag menggambarkan apa yang terkandung dalam repositori ini dan — sama pentingnya — apa yang TIDAK dikandungnya (daftar terlarang). Tag menentukan kueri mana yang dirute ke repositori ini. Klik Segarkan untuk menyusun draf dari korpus, atau edit chip di bawah. Publish memerlukan ≥3 topik + ≥1 terlarang.',
       refresh: 'Refresh suggestions',
       suggesting: 'Curating…',
-      suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestEmpty: 'LLM tidak mengembalikan tag. Coba lagi setelah korpus bertambah.',
       suggestCoverage: 'Diturunkan dari {sampled} dari {total} konsep, pada {labels} label hierarki pengetahuan.',
       suggestFailed: 'Suggest failed.',
-      suggestedTag: 'LLM suggestion — remove to dismiss.',
+      suggestedTag: 'Saran LLM — hapus untuk menutupnya.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2956,7 +2959,7 @@ export default {
       save: 'Save tags',
       saved: 'Saved',
       error: 'Save failed.',
-      errorWithStep: 'Save failed at step "{step}" ({code}) — retry.',
+      errorWithStep: 'Penyimpanan gagal pada langkah "{step}" ({code}) — coba lagi.',
       field: {
         topic: 'Topic',
         entity: 'Entity',
@@ -2986,18 +2989,19 @@ export default {
         model: 'Model',
         version: 'Head version',
         computedAt: 'Computed',
-        staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
+        staleNote: 'Tag berubah setelah head ini dibangun — bangun ulang sebelum mempercayai pengujiannya.',
         missingNote:
-          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+          'Belum ada head tervektorisasi. Head dibangun saat publish; jika layanan embedding tidak tersedia saat itu, bangun ulang sekarang dari tag yang tersimpan.',
         rebuild: 'Rebuild head',
-        rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
-        rebuildBusy: 'Rebuilding — embedding the tag fields…'
+        rebuildTip:
+          'Meng-embed ulang tag tersimpan menjadi vektor head yang baru. Satu panggilan embedding untuk setiap bidang tag.',
+        rebuildBusy: 'Membangun ulang — meng-embed bidang tag…'
       },
       test: {
-        placeholder: 'e.g. cancer screening guidelines',
+        placeholder: 'mis. panduan skrining kanker',
         run: 'Run test',
-        running: 'Embedding the query and scoring the heads…',
-        adversarial: 'Adversarial — this query should NOT select this repository (a forbidden/adjacent topic)',
+        running: 'Meng-embed kueri dan menilai head…',
+        adversarial: 'Adversarial — kueri ini seharusnya TIDAK memilih repositori ini (topik terlarang/berdekatan)',
         embeddedWith: 'Embedded with',
         col: {
           repo: 'Repository',
@@ -3008,14 +3012,14 @@ export default {
         },
         provenance: 'Routing provenance',
         empty:
-          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
-        pass: 'PASS — this repository wins the head routing.',
-        fail: 'FAIL — {repo} wins the head routing for this query.',
-        passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
+          'Ketik kueri yang akan ditanyakan pengguna lalu jalankan — Lab menilai setiap head repositori yang dipublikasikan persis seperti yang akan dilakukan fan-out.',
+        pass: 'LOLOS — repositori ini memenangkan routing head.',
+        fail: 'GAGAL — {repo} memenangkan routing head untuk kueri ini.',
+        passAdversarial: 'LOLOS — benar tidak dipilih (pemenang: {repo}).',
         failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
-        passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
+        passSuppressed: 'LOLOS — ditekan oleh gerbang terlarang/noise: head ini tidak mengklaim kueri tersebut',
         notSelectedSuppressed:
-          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+          'TIDAK DIPILIH — ditekan oleh gerbang terlarang/noise: kueri ini lebih mirip dengan apa yang dikecualikan repositori ini, atau merupakan noise luar domain',
         claimed: 'claims',
         suppressed: 'suppressed'
       },
@@ -3063,7 +3067,7 @@ export default {
         rejected: 'Ditolak oleh pagar pengaman — tag terlarang tidak boleh cocok dengan topik repositori ini sendiri.'
       },
       run: {
-        progress: '{done} of {total} queries ({pct}%)',
+        progress: '{done} dari {total} kueri ({pct}%)',
         progressStarting: 'Starting the run…',
         phase: {
           routing: 'Scoring routes',
@@ -3076,7 +3080,7 @@ export default {
           'LLM menulis kueri dalam batch 30 per kelas — permintaan besar (100+) butuh beberapa menit. Suite muncul di sini dan di suite tersimpan saat selesai.',
         generating: 'Menghasilkan per batch — permintaan besar butuh beberapa menit…',
         run: 'Run all queries',
-        running: 'Running every suite query…',
+        running: 'Menjalankan seluruh kueri suite…',
         current: 'Current suite',
         col: {
           query: 'Query',
@@ -3091,13 +3095,13 @@ export default {
           name: 'Nama',
           corpus: 'Korpus'
         },
-        notEvaluatable: 'not evaluatable (no competitors)',
+        notEvaluatable: 'tidak dapat dinilai (tidak ada pesaing)',
         pass: 'pass',
         fail: 'fail',
         passRate: 'Pass rate',
         positives: 'Positives',
         negatives: 'Negatives',
-        noCompetitors: 'n/a — no competing heads yet',
+        noCompetitors: 't/a — belum ada head pesaing',
         avgMargin: 'Avg margin',
         steal: '{repo} stole {n} queries',
         addPlaceholder: 'Your own probe query…',
@@ -3105,7 +3109,7 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.',
+        noRuns: 'Belum ada eksekusi — buat suite lalu jalankan.',
         explainFailures: 'Jelaskan kegagalan',
         explainBusy: 'Menjelaskan kegagalan — satu panggilan model untuk setiap negatif yang gagal…',
         batchTitle: 'Mengapa negatif yang gagal dirute ke sini',
@@ -3115,7 +3119,7 @@ export default {
         rebuildRerun: 'Bangun ulang head & jalankan ulang suite',
         positiveFailuresTitle: 'Mengapa positif berhenti lolos',
         positiveFailures:
-          '{n} tes positif ditekan pada run ini — tag terlarang mencakup cakupan repositori terlalu luas.',
+          '{n} tes positif ditekan pada eksekusi ini — tag terlarang mencakup cakupan repositori terlalu luas.',
         vetoedBy: 'Diveto oleh',
         marginKilled: '{n} tes positif kalah pada margin (tanpa tag veto tunggal).',
         removals: 'Tag untuk dihapus (tag ini memveto positif milik repositori ini sendiri)',
@@ -3134,7 +3138,7 @@ export default {
         tagsetTip: 'Tag terlarang untuk eksekusi ini',
         savedTitle: 'Suite tersimpan',
         savedTip:
-          'Setiap suite yang dibuat atau diimpor disimpan di sini, per repositori. Dua jenis berbagi daftar ini: suite head (kumpulan kueri dari tag dan frontmatter, dengan jumlah positif/negatif) dan suite tolok ukur RAGAS (kumpulan pertanyaan dengan jawaban yang diharapkan, dengan lencana RAGAS dan jumlah entri). Muat menampilkan suite head di tab ini dan suite RAGAS di tab RAGAS Benchmarks, tempat ia dapat dijalankan dan dinilai terhadap korpus langsung. Hapus menghapus suite secara permanen; ganti nama dilakukan langsung pada nama.',
+          'Setiap suite yang dibuat atau diimpor disimpan di sini, per repositori. Dua jenis berbagi daftar ini: suite head (kumpulan kueri dari tag dan frontmatter, dengan jumlah Positif/Negatif) dan suite tolok ukur RAGAS (kumpulan pertanyaan dengan jawaban yang diharapkan, dengan lencana RAGAS dan jumlah entri). Muat menampilkan suite head di tab ini dan suite RAGAS di tab Tolok ukur RAGAS, tempat ia dapat dijalankan dan dinilai terhadap korpus langsung. Hapus menghapus suite secara permanen; ganti nama dilakukan langsung pada nama.',
         load: 'Muat',
         flipTip: 'Balikkan harus-dipilih / tidak-harus-dipilih',
         deleteTip: 'Hapus baris ini dari suite',
@@ -3159,8 +3163,8 @@ export default {
         history: 'Tidak dapat memuat riwayat penyimpanan',
         revert: 'Tidak dapat mengembalikan frontmatter',
         advisor: 'Penasihat gagal',
-        noSuite: 'Buat suite terlebih dahulu, lalu bangun ulang dan jalankan ulang.',
-        applyNoSuite: 'Tag tersimpan dan head dibangun ulang — buat suite lalu jalankan semua untuk melihat efeknya.',
+        noSuite: 'Buat suite terlebih dahulu, lalu bangun ulang + jalankan ulang.',
+        applyNoSuite: 'Tag tersimpan dan head dibangun ulang — buat suite, lalu Jalankan semua untuk melihat efeknya.',
         suiteLoad: 'Gagal memuat suite',
         suiteUpdate: 'Gagal memperbarui suite',
         suiteRename: 'Gagal mengganti nama suite',
@@ -3168,23 +3172,23 @@ export default {
         probe: 'Uji korpus gagal',
         suiteDelete: 'Tidak dapat menghapus suite',
         noFrontmatter:
-          'Repositori ini belum punya tag kepala — buat tag di panel Frontmatter (atau gunakan Sarankan tag), lalu buat suite.'
+          'Repositori ini belum punya tag head — buat tag di panel Frontmatter (atau gunakan Sarankan tag), lalu buat suite.'
       },
       footer: {
         unpublish: 'Unpublish to review'
       },
       publishCard: {
         present:
-          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
-        stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
-        missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+          'Head tervektorisasi siap — pengujian routing di Lab memberi tahu apakah repositori ini memenangkan kueri yang seharusnya dimenanginya.',
+        stale: 'Head sudah usang (tag berubah setelah dibangun) — penerbitan membangun ulang head.',
+        missing: 'Belum ada head tervektorisasi — penerbitan membangunnya dari tag yang disetujui.'
       },
       advisor: {
         run: 'Penasihat: rekomendasikan perubahan tag',
         busy: 'Menyimulasikan perubahan tag pada eksekusi terbaru…',
         title: 'Rekomendasi set tag (disimulasikan pada eksekusi terbaru)',
-        apply: 'Terapkan perubahan, bangun ulang head & jalankan ulang suite',
-        scorecard: 'positif {p}/{pt} diterima · negatif {n}/{nt} ditekan',
+        apply: 'Terapkan perubahan & bangun ulang & jalankan ulang suite',
+        scorecard: 'positif {p}/{pt} diklaim · negatif {n}/{nt} ditekan',
         now: 'Saat ini',
         predicted: 'perkiraan',
         scope: ' (atas {q} kueri dari {r} eksekusi terakhir)',
@@ -3503,30 +3507,31 @@ export default {
       current: 'saat ini',
       generate: {
         title: 'Buat suite tolok ukur',
-        hint: 'Mensintesis pertanyaan dengan jawaban yang diharapkan dari repositori terpilih — satu atau lebih, repositori saat ini saja atau bersama repositori terkait.',
+        hint: 'Mensintesis pertanyaan dengan keluaran yang diharapkan dari repositori yang dipilih — satu atau lebih, repo saat ini saja atau bersama repo terkait.',
         size: 'Pertanyaan',
         config: 'Konfigurasi model generasi',
         default: 'Default deployment (.env)',
         defaultNamed: 'Konfigurasi aktif — {name}{model}',
-        effective: 'Menilai dengan {name}{model}',
-        effectiveGenerating: 'Membangun dengan {name}{model}',
+        effective: 'Dinilai dengan {name}{model}',
+        effectiveGenerating: 'Dihasilkan dengan {name}{model}',
         envDefault: 'default lingkungan',
         envJudge: 'Default deployment (.env){model}',
         envJudgePlain: 'Default deployment (.env)',
         model: 'Model',
         modelPick: 'Default konfigurasi',
         modelDefault: 'default konfigurasi',
-        note: 'Model yang menyintesis pertanyaan dan menilai jawaban. Konfigurasi aktif (★, tab Model) berlaku otomatis; memilih di sini hanya menimpanya untuk operasi ini. Juri yang lebih kuat memperbaiki recall entitas dan kualitas saran secara nyata.',
+        note: 'Model yang mensintesis pertanyaan dan menilai jawaban. Konfigurasi aktif (★, tab Model) berlaku otomatis; memilih satu di sini hanya menggantinya untuk operasi ini saja. Juri yang lebih kuat membuat recall entitas dan kualitas saran jauh lebih baik pada model lokal yang kecil.',
         single: 'Satu lompatan %',
         multiAbstract: 'Multi-lompatan (abstrak) %',
         multiSpecific: 'Multi-lompatan (spesifik) %',
         personas: 'Persona',
         button: 'Buat',
-        working: 'Membuat — ini memakan waktu beberapa menit…',
+        working: 'Menghasilkan — ini butuh beberapa menit…',
         cancel: 'Batalkan',
         cancelling: 'Membatalkan…',
 
-        inFlight: 'Pembuatan suite benchmark sudah berjalan untuk repositori ini — Anda sedang dikaitkan ke sana.'
+        inFlight:
+          'Pembuatan suite tolok ukur untuk repositori ini sedang berjalan. Anda akan melihat progresnya di sini.'
       },
       import: {
         button: 'Impor suite (.xlsx)',
@@ -3537,7 +3542,7 @@ export default {
         add: 'Tambah pertanyaan',
         addPrompt: 'Pertanyaan yang akan ditambahkan:',
         addReference: 'Jawaban yang diharapkan (opsional):',
-        flipTip: 'Balik dalam cakupan / di luar cakupan',
+        flipTip: 'Balikkan dalam-cakupan / luar-cakupan',
         probeTip: 'Uji pertanyaan ini terhadap korpus langsung',
         removeTip: 'Hapus pertanyaan ini'
       },
@@ -3578,16 +3583,16 @@ export default {
         title: 'Hasil tolok ukur',
         failing: '{n} gagal',
         advisorHint:
-          '{n} pertanyaan berada di bawah ambang batas metriknya. Jalankan penasihat untuk mengaitkan setiap kegagalan dengan tahap pipeline dan mendapatkan tindakan konkret.',
+          '{n} pertanyaan berada di bawah ambang metriknya. Jalankan penasihat untuk mengatribusikan setiap kegagalan ke tahap pipeline dan mendapatkan tindakan konkret.',
         copy: 'Salin jawaban lengkap',
         coverageTitle:
           'Penilai memberi skor metrik ini pada {n} dari {total} baris — skor hanya mencakup baris tersebut.',
-        colResizeTip: 'Seret pegangan untuk mengubah ukuran — klik ganda header untuk mengatur ulang',
+        colResizeTip: 'Seret gagang untuk mengubah ukuran — klik dua kali header untuk mengatur ulang',
         trendTitle: 'Tren metrik per run',
         trendNote:
-          'Setiap garis adalah rata-rata satu metrik RAGAS per run, dari terlama ke terbaru, dan tidak pernah melewati batas judge — setiap label sumbu x menyebutkan judge yang menilai run tersebut. Jawaban yang dinilai di-cache; run ulang identik hanya berbeda bila jawaban atau pengambilan berubah.',
+          'Setiap garis adalah rata-rata suite untuk satu metrik RAGAS per eksekusi, dari yang tertua ke yang terbaru, dan tidak pernah melintasi batas juri — setiap label x menamai juri yang menilai eksekusi itu. Jawaban yang dinilai di-cache, sehingga eksekusi ulang yang sama hanya berbeda di bagian yang jawabannya atau retrieval-nya berubah.',
         trendMixedJudges:
-          'Judge berbeda antar run ini — bandingkan dalam satu segmen judge yang sama, bukan antar segmen',
+          'Juri berbeda di antara eksekusi ini — bandingkan di dalam segmen juri yang sama, bukan antar segmen',
         statusTitle: 'Hasil per pertanyaan',
         statusNote:
           'Setiap pertanyaan suite pada run ini yang berada dalam cakupan, ditumpuk per hasil: terjawab, gagal (metrik terpilih di bawah ambangnya), menahan diri (penjawab menolak), atau error pipeline. Pembanding di luar cakupan tidak dihitung — ia adalah pembanding, bukan hasil.',
@@ -3606,9 +3611,9 @@ export default {
         declinedUnjudgedTitle:
           'Penjawab menolak dan tidak berkata apa-apa, sehingga baris ini tidak pernah diserahkan kepada hakim. Baris itu tidak membawa skor dan dikeluarkan dari rata-rata — dan baris itu menurunkan cakupan yang terukur.',
         answered: 'terjawab',
-        noisy: 'jawaban baik — derau retrieval',
+        noisy: 'jawaban OK — noise pada retrieval',
         noisyTitle:
-          'Jawaban lolos semua metrik kualitas jawaban; hanya set konteks yang dikirim (presisi/recall) yang berada di bawah ambang batas',
+          'Jawaban lolos dari setiap metrik kualitas jawaban; hanya kumpulan konteks yang diserahkan (presisi/recall) yang jatuh di bawah ambang',
         pdf: 'Ekspor laporan PDF'
       },
       explain: {
@@ -3617,14 +3622,14 @@ export default {
         advising: 'Advisor sedang berpikir — {n} baris gagal',
         guarding: 'Memeriksa saran tag…',
         title: 'Atribusi kegagalan dan saran',
-        none: 'Tidak ada baris gagal untuk diatribusikan.',
+        none: 'Tidak ada baris gagal yang dapat diatribusikan.',
         stage: 'Tahap',
         fails: 'Metrik yang gagal',
         recommendation: 'Rekomendasi',
         unfair: 'pertanyaan tidak adil',
         unfairTitle: 'Bagian yang diharapkan tidak ada dalam korpus — baris ini menilai benchmark, bukan asisten',
         evidenceTitle: 'Bagian yang ditemukan di korpus / kumpulan kandidat / diberikan ke model. Metode: {method}',
-        facts: 'Fakta eksekusi: {rows} baris · {abstentions} penolakan · ~{chars} karakter per jawaban',
+        facts: 'Fakta eksekusi: {rows} baris · {abstentions} abstensi · ~{chars} karakter jawaban',
         rankTitle: 'Bagian ini ada di korpus tetapi di luar kumpulan kandidat — peringkatnya #{n}.'
       },
       history: {
@@ -3645,11 +3650,11 @@ export default {
         source: 'Run sumber',
         judge: 'Konfigurasi hakim',
         confirm: 'Nilai ulang',
-        failed: 'Gagal menilai ulang run.'
+        failed: 'Penilaian ulang eksekusi gagal.'
       },
       runDelete: {
         title: 'Hapus eksekusi',
-        body: 'Ini menghapus eksekusi beserta penjelasan kegagalannya secara permanen. Suite dan pertanyaannya tetap ada.',
+        body: 'Ini menghapus eksekusi beserta penjelasan kegagalannya secara permanen. Suite dan kuerinya tetap ada.',
         confirm: 'Hapus',
         inFlight: 'Eksekusi ini masih berjalan — batalkan dulu.',
         explainInFlight: 'Penjelasan kegagalan untuk eksekusi ini masih berjalan — tunggu sampai selesai.',
@@ -3682,25 +3687,25 @@ export default {
         noise_sensitivity: 'sensitivitas derau',
         note: {
           faithfulness:
-            'Seberapa kokoh jawaban secara faktual terhadap pasase yang diambil — proporsi klaim yang didukung sumber. Rendah berarti jawaban mengatakan hal yang tidak dikatakan bukti (halusinasi).',
+            'Seberapa faktual jawaban berpijak pada pasase yang diambil — porsi klaim dalam jawaban yang didukung sumbernya. Rendah berarti jawaban mengatakan hal yang tidak didukung bukti (halusinasi).',
           context_precision:
-            'Apakah pasase yang penting berada di puncak himpunan hasil. Rendah berarti bukti yang tepat diambil tapi terkubur potongan yang kurang relevan.',
+            'Apakah pasase yang penting peringkatnya di bagian atas himpunan yang diambil. Rendah berarti bukti yang benar telah diambil tetapi tertimpa potongan yang kurang relevan.',
           context_recall:
-            'Apakah pasase yang diambil mencakup semua yang dituntut jawaban referensi. Rendah berarti pengambilan melewatkan bukti yang dibutuhkan pertanyaan.',
+            'Apakah pasase yang diambil mencakup semua yang dibutuhkan jawaban referensi — setiap klaim referensi harus dapat ditelusuri ke konteks yang diambil. Rendah berarti retrieval melewatkan bukti yang dibutuhkan pertanyaan.',
           answer_relevancy:
-            'Seberapa baik jawaban menjawab pertanyaan: RAGAS meregenerasi pertanyaan dari teks jawaban dan membandingkannya dengan aslinya lewat kemiripan embedding. TIDAK memeriksa kebenaran faktual — jawaban bertele-tele dapat rendah walau benar.',
+            'Seberapa baik jawaban menjawab pertanyaan yang diajukan: RAGAS membuat ulang pertanyaan dari teks jawaban lalu membandingkannya dengan aslinya melalui kemiripan embedding. Ini TIDAK memeriksa kebenaran faktual — jawaban yang panjang atau tidak relevan tetap skornya rendah meski benar.',
           context_utilization:
-            'Apakah konteks yang diambil cukup untuk menghasilkan jawaban referensi — pemeriksaan kelengkapan pengambilan.',
+            'Apakah konteks yang diambil memadai untuk menghasilkan jawaban referensi — pemeriksaan kelengkapan retrieval terhadap apa yang dibutuhkan jawaban ideal.',
           context_entities_recall:
-            'Recall tingkat entitas: proporsi entitas bernama dalam bagian referensi entri (perusahaan, tanggal, jumlah, tempat) yang juga muncul di potongan yang diambil. Rendah berarti pengambilan membawa potongan yang melewatkan entitas yang disebut referensi. Sensitif terhadap juri — skor rendah saat recall konteks lulus biasanya berarti ekstraksi entitas juri melewatinya, bukan konten yang hilang.',
+            'Recall tingkat entitas: porsi entitas bernama di pasase referensi entri (perusahaan, tanggal, jumlah, tempat) yang juga muncul di potongan yang diambil. Rendah berarti retrieval membawa potongan yang melewatkan entitas yang disebut referensi. Peka pada juri — skor rendah sementara recall konteks lolos biasanya berarti ekstraksi entitas juri melewatkan beberapa, bukan kontennya yang hilang.',
           factual_correctness:
-            'Kesepakatan faktual tingkat klaim dengan jawaban referensi — juri memecah keduanya menjadi klaim dan menilai tumpang tindihnya. Metrik kebenaran paling ketat.',
+            'Kesepakatan faktual tingkat klaim dengan jawaban referensi — juri menguraikan keduanya menjadi klaim lalu menilai tumpang tindihnya. Metrik kebenaran yang paling ketat.',
           answer_correctness:
-            'Kualitas keseluruhan terhadap referensi — kebenaran faktual digabung kemiripan semantik. Metrik terdekat ke “apakah jawabannya benar”.',
+            'Kualitas keseluruhan dibanding jawaban referensi — kebenaran faktual digabungkan dengan kemiripan semantik. Metrik yang paling dekat dengan "apakah ia memberikan jawaban yang benar".',
           answer_similarity:
-            'Kemiripan semantik (embedding) antara jawaban yang dihasilkan dan referensi — tinggi berarti keduanya menyampaikan hal yang sama.',
+            'Kemiripan semantik (embedding) antara jawaban yang dihasilkan dan jawaban referensi — tinggi berarti keduanya menyampaikan makna yang sama.',
           noise_sensitivity:
-            'Seberapa jauh jawaban menurun saat pasase tak relevan tercampur ke konteks — ukuran ketahanan. LEBIH RENDAH lebih baik; ambangnya terbalik.'
+            'Seberapa besar jawaban menurun ketika pasase yang tidak relevan dicampur ke dalam konteks yang diambil — ukuran ketahanan. Makin RENDAH makin baik; ambang kegagalan dibalik.'
         }
       },
       pdf: {
@@ -3713,7 +3718,7 @@ export default {
         n: 'pertanyaan',
         evaluable: 'dapat dinilai',
         abstained: 'menolak jawab',
-        compare: 'Perbandingan antar run (delta vs run pertama)'
+        compare: 'Bandingkan antar eksekusi (selisih vs yang pertama)'
       }
     }
   },

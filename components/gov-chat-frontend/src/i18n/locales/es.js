@@ -1532,9 +1532,9 @@ export default {
       uploadFailed: "Falló la subida de {'{'}fileName{'}'}."
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+      'Por qué las subidas importan para el RAG: cada documento que suba puede convertirse en conocimiento curado y etiquetado — los documentos enfocados y bien estructurados se recuperan con mucha más precisión que un único archivo largo. El asistente de OKF Studio convierte las subidas en temas revisados.',
     ragTipNoOkf:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
+      'Por qué las subidas importan para el RAG: cada documento que suba puede convertirse en conocimiento curado y etiquetado — los documentos enfocados y bien estructurados se recuperan con mucha más precisión que un único archivo largo.'
   },
   okf: {
     lifecycleErrors: {
@@ -1620,11 +1620,11 @@ export default {
       inactive: 'inactiva',
       edit: 'Renombrar / modificar',
       copy: 'Copiar',
-      activate: 'Activar (solo una está activa)',
-      deactivate: 'Desactivar — se usará el modelo por defecto',
+      activate: 'Activar (exactamente una está activa)',
+      deactivate: 'Desactivar — se usará el modelo por defecto del despliegue',
       delete: 'Eliminar',
       deleteConfirm: '¿Eliminar la configuración de modelo «{name}»?',
-      empty: 'Aún no hay configuraciones de modelo — se usa el modelo por defecto (env).',
+      empty: 'Aún no hay configuraciones de modelo — se usa el modelo por defecto del despliegue (env).',
       adminOnly: 'Las configuraciones de modelo requieren el rol de administrador de plataforma.'
     },
     versions: {
@@ -1667,7 +1667,7 @@ export default {
         inProgress: 'Publicando — exportando y transfiriendo el paquete…',
         title: 'Publicar'
       },
-      readonly: 'CONTENIDO SOLO LECTURA — head/etiquetas editables',
+      readonly: 'CONTENIDO SOLO LECTURA — cabecera/etiquetas siguen editables',
       serving: 'Sirviendo',
       state: {
         ingested: 'Ingestado'
@@ -1721,7 +1721,7 @@ export default {
       title: 'Importar documentos en un nuevo repositorio OKF',
       hint: 'Los documentos se convierten en UN repositorio — segmentados, enlazados y etiquetados en conjunto. Nada se publica; sigue el flujo normal: revisión → publicar → ingest.',
       name: 'Nombre del repositorio',
-      namePh: 'p. ej. Paquete de políticas',
+      namePh: 'p. ej. Paquete de políticas de mataderos',
       domain: 'Área temática (dominio)',
       strategy: 'Estrategia de clasificación',
       stratHeuristics: 'Heurística (rápida, sin LLM)',
@@ -1738,8 +1738,8 @@ export default {
       cancel: 'Cancelar',
       importing: 'Importando…',
       go: 'Importar',
-      dupRepo: 'Ese nombre de repositorio ya existe — elige otro.',
-      failed: 'No se pudo iniciar la importación. Revisa los documentos e inténtalo de nuevo.'
+      dupRepo: 'Ese nombre de repositorio ya existe — elija otro.',
+      failed: 'No se pudo iniciar la importación. Revise los documentos e inténtelo de nuevo.'
     },
     editor: {
       addConcept: {
@@ -1836,11 +1836,11 @@ export default {
           when: 'Last attempt {when}',
           fix: {
             reaper:
-              'El trabajador de ingest dejó de esperar dentro de su ventana de gracia (el drenaje estaba saturado) — el contenido está intacto. Solución: edita ligeramente este archivo y guarda para re-encolarlo, o retira y re-ingesta el repositorio completo.',
+              'El trabajador de ingesta dejó de esperar dentro de su ventana de gracia (el drenaje estaba saturado) — el contenido está intacto. Solución: edite ligeramente este archivo y guárdelo para re-encolarlo, o retire y reingeste el repositorio completo.',
             dataprep:
-              'El servicio de preparación de contenido falló en este ingest. Solución: edita y guarda para re-encolarlo; si se repite, revisa la salud del servicio dataprep.',
+              'El servicio de preparación de contenido falló en esta ingesta. Solución: edite y guarde para re-encolarlo; si se repite, revise la salud del servicio dataprep.',
             generic:
-              'Falló la indexación. Solución: edita el contenido y guarda para re-encolarlo, o retira y re-ingesta el repositorio completo.'
+              'Falló la indexación. Solución: edite el contenido y guarde para re-encolarlo, o retire y reingeste el repositorio completo.'
           }
         },
         indexBadge: 'índice',
@@ -1942,9 +1942,9 @@ export default {
       },
       piiBulk: {
         done_accept:
-          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
-        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
-        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
+          'Hecho — todas las entidades marcadas de {n} concepto(s) quedan como revisadas y conservadas. Las marcas de PII se retiran.',
+        done_redact: 'Hecho — el contenido marcado de {n} concepto(s) se sustituye por el aviso de redacción.',
+        done_remove: 'Hecho — el contenido marcado de {n} concepto(s) se elimina.',
         title: {
           redact: 'Ocultar todo el contenido marcado',
           remove: 'Eliminar todo el contenido marcado',
@@ -1967,9 +1967,9 @@ export default {
       },
       addSources: {
         working: 'Converting sources…',
-        done: '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).',
-        failed: 'A conversion failed — check the logs; the rest may still have queued.',
-        landed: 'Conversions complete — {t} topics now in the tree.'
+        done: '{n} fuente(s) en cola — los temas llegan al árbol a medida que se completan las conversiones ({t} temas ahora).',
+        failed: 'Falló una conversión — revise los registros; el resto puede haber quedado en cola.',
+        landed: 'Conversiones completadas — {t} temas ahora en el árbol.'
       }
     },
     dashboard: {
@@ -2171,9 +2171,9 @@ export default {
       descriptionLabel: 'Descripción',
       save: 'Guardar frontmatter',
       saveFailed: 'Error al guardar frontmatter',
-      perRepoTitle: 'Routing tags — what this repo is about',
+      perRepoTitle: 'Etiquetas de enrutamiento — de qué trata este repositorio',
       perRepoHint:
-        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+        'Las etiquetas por repositorio (tema / entidad / alcance / prohibidas / resumen / palabra clave) gobiernan el retriever. Los mismos datos viven también en el campo del documento del repositorio — ambos se mantienen sincronizados al guardar.',
       perRepoField: {
         topic: 'Topic',
         entity: 'Entity',
@@ -2185,16 +2185,16 @@ export default {
       perRepoPh: {
         topic: 'One topic per line',
         entity: 'One entity per line',
-        forbidden: 'One forbidden topic per line',
+        forbidden: 'Un tema prohibido por línea',
         keyword: 'One keyword per line'
       },
       perRepoHelp: {
-        topic: 'Add, modify or remove topics — one per line. Empty lines are ignored.',
-        entity: 'Add, modify or remove entities — one per line. Empty lines are ignored.',
-        forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
-        keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
+        topic: 'Añada, modifique o elimine temas — uno por línea. Las líneas vacías se ignoran.',
+        entity: 'Añada, modifique o elimine entidades — una por línea. Las líneas vacías se ignoran.',
+        forbidden: 'Añada, modifique o elimine temas prohibidos — uno por línea. Las líneas vacías se ignoran.',
+        keyword: 'Añada, modifique o elimine palabras clave — una por línea. Las líneas vacías se ignoran.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      perRepoRepoErr: 'Guardado localmente; falló la escritura del campo del documento del repositorio — reintente.',
       repoTagsHint:
         'Las etiquetas a nivel de repositorio ({summary}) viven en el repositorio, no en este concepto — gestiónelas en el panel de etiquetas del raíl derecho.'
     },
@@ -2227,14 +2227,14 @@ export default {
     },
     glossary: {
       addConcept:
-        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
-      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+        'Escriba un tema nuevo a mano (markdown con frontmatter). Cada tema se convierte en una unidad citable — los temas enfocados se recuperan con más precisión que un documento largo.',
+      type: 'La clase de cosa que es este concepto — un servicio, una política, una persona, un lugar… El tipo se guarda en cada fragmento, de modo que la recuperación puede preferir la clase correcta de fuente y las respuestas pueden decir qué citan.',
       title:
-        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+        'El nombre legible que se muestra en respuestas y citas. Un título preciso ayuda al asistente a elegir ESTE tema frente a otros similares — los títulos vagos pierden contra los específicos al recuperar.',
       indexStatus:
-        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+        'Dónde está este concepto en el pipeline de ingesta: parsed = en espera de fragmentarse e incrustarse; indexed = buscable y citable en RAG; failed = NO buscable — corríjalo y reingéstelo. Solo los conceptos indexados se pueden recuperar.',
       trustTier:
-        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+        'Qué tan verificado está este concepto: unverified = producido por máquina, machine-confirmed = comprobado contra reglas, human-reviewed = un custodio lo firmó. Las respuestas pueden mostrar la confianza para que los usuarios sepan qué están leyendo — más confianza gana la confianza del usuario, no una mejor recuperación.',
       concept:
         'Una entrada en su repositorio — normalmente una sola página o tema. Cada concepto cuenta con frontmatter estructurado que lee el asistente, más el texto markdown con el que formula respuestas.',
       repository:
@@ -2257,33 +2257,33 @@ export default {
       classification:
         'Cómo determinamos qué ES cada concepto (un tema, una entidad, un proceso…). La heurística lee la página automáticamente; la opción LLM es más lenta pero gestiona páginas complejas.',
       resplit:
-        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+        'Redivide un documento fuente largo en temas del tamaño correcto. Los temas demasiado grandes diluyen la precisión de la recuperación (la respuesta se esconde entre el relleno); los demasiado pequeños pierden el contexto que una respuesta necesita.',
       saveFailed: 'Fallo al guardar',
       importFailedTitle: 'Falló la importación — no se pudo convertir el archivo fuente.',
       importFailedHint: 'Elimine este repositorio e importe el archivo fuente de nuevo.',
       frontmatter:
         'La información estructurada en la parte superior de cada archivo — tipo, título, etiquetas. El asistente la utiliza para saber de qué trata cada concepto.',
       pickSource:
-        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+        'Las fuentes alimentan al productor, que propone temas para su revisión — nada se consolida hasta que usted lo apruebe en Curate. Se permiten documentos ya ingestado para el RAG libre; su repositorio queda impedido de ingerir hasta que aquellos se retiren.',
       classificationStrategy:
-        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
-      clsHeur: 'Heuristics (fast, no LLM)',
+        'Cómo decide el productor las etiquetas de cada tema: la heurística es rápida y gratuita; el LLM lee cada página (mejor para diseños complejos); la híbrida empieza heurística y escala los casos difíciles. Solo curación — nunca desencadena una ingesta.',
+      clsHeur: 'Heurística (rápida, sin LLM)',
       clsLlm: 'LLM classification',
       clsHybrid: 'Hybrid',
       fsPick:
-        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+        'Cada archivo se convierte en un tema — los temas enfocados se recuperan con más precisión que un documento largo. El nombre del archivo se convierte en el título; puede refinarlo todo en Curate.',
       autocorrect:
-        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+        'La autocorrección solo toca el frontmatter (títulos, tipos, estructura) — nunca su contenido escrito. Las propuestas se muestran antes de cambiar nada; al aplicar, las correcciones se escriben de inmediato y puede revisar el resultado en Curate.',
       handoff:
-        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+        'El ritual del ciclo de vida (enviar → aprobar → publicar) está deliberadamente fuera de este asistente: las aprobaciones pertenecen al flujo de gobernanza del panel y del editor, donde se gestionan las versiones y el estado de servicio.',
       lifecycle:
-        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+        'El contrato de seis pasos: borrador → revisión → aprobado → publicado (emitir + empaquetar) → ingestado (en servicio en RAG) → retirado (de vuelta a edición). El contenido solo se vuelve citable tras la ingesta — y solo el contenido revisado puede publicarse.',
       labelsAuto:
-        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+        'Las etiquetas se asignan automáticamente desde la Jerarquía de Conocimiento — servicios L2 limitados al Área Temática de este repositorio. Revíselas y ajústelas por tema en Curate.',
       reviewHandoff:
-        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+        'Mantener el ritual de aprobación en un solo lugar (el Editor/panel) significa que los revisores siempre firman en la misma superficie con la misma pista de auditoría — el asistente prepara el repositorio, el ritual lo publica.',
       piiReview:
-        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+        'El escáner encontró posibles datos personales. Para cada hallazgo usted elige: Ocultar (sustituir por un aviso), Reemplazar (escribir su propio texto), Eliminar (borrarlo) o Aceptar (conservarlo — la decisión queda auditada). El repositorio no puede entregarse con hallazgos sin revisar.'
     },
     md: {
       toolbar: 'Formato',
@@ -2320,9 +2320,9 @@ export default {
       step7:
         'Algunas advertencias pueden corregirse automáticamente: los valores de estado pueden ajustarse a enumeraciones válidas y los campos ausentes pueden rellenarse con valores predeterminados adecuados. Aplique las correcciones que considere oportunas y vuelva al curador para revisarlas.',
       step8:
-        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+        'Un resumen de lo que construyó: los temas, las etiquetas, las fuentes y cualquier incidencia sin resolver. Cuando todo lea bien, entréguelo — enviar → aprobar → publicar ocurren en el panel y en el editor, nunca en este asistente.',
       step9:
-        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+        'Este repositorio está listo para revisión. Envíelo para aprobación en el panel de Studio; un aprobador lo acepta; la publicación se hace desde el panel o el editor — nunca desde este asistente. El editor sigue siendo el hogar de cada cambio futuro.',
       docMgmtEntry:
         'Cree un nuevo repositorio OKF a partir de los documentos seleccionados. Los documentos se convertirán en fuentes; usted revisará y nombrará los temas que generen antes de publicar nada.',
       crawlSegment:
@@ -2440,7 +2440,7 @@ export default {
     },
     steps: {
       entry: {
-        createdHint: 'Repository created — rename it later from the editor.',
+        createdHint: 'Repositorio creado — renómbrelo más tarde desde el editor.',
         title: 'Nombre del repositorio y área temática',
         hint: 'Asigne un nombre claro a este repositorio OKF y seleccione su área temática.',
         nameLabel: 'Nombre del repositorio',
@@ -2468,12 +2468,13 @@ export default {
             desc: 'Bifurque los temas y la estructura de otro repositorio OKF.'
           }
         },
-        cloneSource: 'Source repository (not yet serving)',
-        clonePh: 'Select the repository to clone from',
-        cloning: 'Cloning topics into this repository…',
-        cloneNeed: 'Pick the repository to clone from first.',
-        cloneBusy: 'The previous repository is still being removed — go Back and Continue again in a moment.',
-        cloneFailed: 'The clone failed — try again.'
+        cloneSource: 'Repositorio de origen (aún no en servicio)',
+        clonePh: 'Seleccione el repositorio del que clonar',
+        cloning: 'Clonando temas en este repositorio…',
+        cloneNeed: 'Elija primero el repositorio del que clonar.',
+        cloneBusy:
+          'El repositorio anterior aún se está eliminando — vuelva a Atrás y Continuar de nuevo en un momento.',
+        cloneFailed: 'Falló la clonación — inténtelo de nuevo.'
       },
       input: {
         title: 'Entradas',
@@ -2485,27 +2486,27 @@ export default {
         chooseCrawl: 'Choose crawled documents',
         chooseDocs: 'Choose source documents',
         writeOne: '+ Write a concept',
-        fsPick: '+ Import markdown from this computer',
+        fsPick: '+ Importar markdown desde este equipo',
         fsBusy: 'Importing your files…',
-        fsFailed: 'Import failed — check the files and retry.',
-        skippedEmpty: '{n} empty file(s) skipped.',
+        fsFailed: 'Falló la importación — revise los archivos y reintente.',
+        skippedEmpty: 'Se omitieron {n} archivo(s) vacío(s).',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',
-        noRepo: 'Create the repository first (go back to Entry).',
-        noRepoYet: 'Create the repository first (go back to Entry).',
-        benchTitle: 'Topics in this repository',
+        noRepo: 'Cree primero el repositorio (vuelva a Entry).',
+        noRepoYet: 'Cree primero el repositorio (vuelva a Entry).',
+        benchTitle: 'Temas en este repositorio',
         benchCount: '{n}',
         benchLoading: 'Reading topics…',
-        benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
-        benchFailed: 'Could not read the topics right now.',
+        benchEmpty: 'Aún no hay nada aquí — elija fuentes abajo, importe markdown o escriba su primer tema.',
+        benchFailed: 'No se pudieron leer los temas en este momento.',
         editTitle: 'Edit concept',
-        deleteFailed: 'Could not delete the concept.',
-        added: '{n} topic(s) in this repository so far.',
+        deleteFailed: 'No se pudo eliminar el concepto.',
+        added: '{n} tema(s) en este repositorio hasta ahora.',
         deleteTitle: 'Delete topic',
-        deleteBody: 'This permanently removes the topic from this repository.',
+        deleteBody: 'Esto elimina de forma permanente el tema de este repositorio.',
         labelFailed: 'Could not set the label.',
-        cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
+        cloned: 'Este repositorio es un clon — sus temas ya están en su sitio. Continúe a Curate para revisarlos.'
       },
       produce: {
         title: 'Generar temas',
@@ -2514,51 +2515,52 @@ export default {
         placeholder: 'El servicio de producción se integrará en una historia posterior.',
         retry: 'Retry conversion',
         restart: 'Run again',
-        running: 'Converting… you can watch progress here; nothing is committed until you review in Curate.',
-        failed: 'The conversion failed — retry, or go back and pick different inputs.',
-        done: '{n} topic(s) are ready — continue to review them in Curate.',
-        noSources: 'No sources selected — go back to Input.',
-        neverStarted: 'The conversion did not start — retry.',
-        manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
+        running: 'Convirtiendo… puede seguir el progreso aquí; nada se consolida hasta que usted revise en Curate.',
+        failed: 'Falló la conversión — reintente, o vuelva atrás y elija otras entradas.',
+        done: '{n} tema(s) listos — continúe para revisarlos en Curate.',
+        noSources: 'No hay fuentes seleccionadas — vuelva a Input.',
+        neverStarted: 'La conversión no empezó — reintente.',
+        manualSkip: 'Los temas escritos a mano no necesitan generación — continúe a Curate para revisarlos.',
         labelDone: 'Conversion complete',
         dupContent:
-          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
-        inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+          'Estas fuentes ya están importadas en otro repositorio OKF. Retire o elimine primero ese repositorio, o elija otros documentos.',
+        inFlight: 'Ya hay una conversión en ejecución para este repositorio — espere a que termine.',
         stage: {
           files: 'Files',
-          filesCount: '{done} of {total} documents',
+          filesCount: '{done} de {total} documentos',
           concepts: 'Concepts',
           conceptsCount: '{done} of {total} topics',
           conceptsSoFar: '{n} topics so far',
           curating: 'Curating',
-          curatingCount: '{done} of {total} concepts labelled',
+          curatingCount: '{done} de {total} conceptos etiquetados',
           crosslink: 'Cross-linking topics',
-          linkCount: '{done} of {total} batches · {w} links written',
+          linkCount: '{done} de {total} lotes · {w} enlaces escritos',
           complete: 'Complete',
           unavailable: 'Count unavailable',
           waiting: 'Waiting'
         },
-        filesNote: '{done} of {total} documents converted',
-        pagesNote: '{done} of {total} pages converted',
-        pagesSoFar: '{n} pages converted so far',
+        filesNote: '{done} de {total} documentos convertidos',
+        pagesNote: '{done} de {total} páginas convertidas',
+        pagesSoFar: '{n} páginas convertidas hasta ahora',
         sourceStat: '+{n} new (total {t})',
-        sourceStatMerged: '+{n} new · {m} merged by slug (total {t})',
+        sourceStatMerged: '+{n} nuevas · {m} fusionadas por slug (total {t})',
         docsLeg: '{n} selected document(s)',
-        legWait: 'Waiting for the previous conversion to release…'
+        legWait: 'Esperando a que la conversión anterior se libere…'
       },
       label: {
         title: 'Etiquetas — automatizadas',
         hint: 'Las etiquetas se asignan automáticamente desde la Jerarquía de conocimiento — limitadas al Área Temática de este repositorio.',
         loading: 'Reading labels…',
-        preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
+        preview: '{labeled} de {n} temas llevan etiquetas de la Jerarquía de Conocimiento.',
         unlabeled: 'no labels yet',
-        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
-        loadFailed: 'Could not read the labels right now.'
+        adjust:
+          'Ajuste las etiquetas de cualquier tema en Curate — las etiquetas quedan limitadas al Área Temática de este repositorio.',
+        loadFailed: 'No se pudieron leer las etiquetas en este momento.'
       },
       curate: {
         embedHint:
-          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
-        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
+          'Revise y mejore cada tema: corrija el texto, fije su tipo y su etiqueta de la Jerarquía de Conocimiento, añada o elimine temas. Todo lo que corrija aquí es lo que el asistente citará después.',
+        noRepo: 'Aún no hay repositorio — vuelva a Entry y cree o elija uno primero.',
         title: 'Revisar los temas',
         hint: 'Cada tema es una pequeña unidad citable de conocimiento. Edite el título y la descripción.',
         placeholder: 'El árbol del curador y el editor estarán disponibles en la historia 3-8.'
@@ -2572,12 +2574,12 @@ export default {
         title: 'Corrección automática',
         hint: 'Algunas advertencias pueden corregirse automáticamente. Aplique las correcciones con las que esté de acuerdo y luego regrese al curador para revisarlas.',
         placeholder: 'El servicio de autocorrección estará disponible en la historia 10.2.',
-        noRepo: 'No repository yet — go back to Entry and create one first.',
-        applied: 'Fixes applied — continue, or go back to Curate to review the result.'
+        noRepo: 'Aún no hay repositorio — vuelva a Entry y cree uno primero.',
+        applied: 'Correcciones aplicadas — continúe, o vuelva a Curate para revisar el resultado.'
       },
       review: {
         title: 'Revisión',
-        hint: 'Un resumen de lo que ha creado — el envío, la aprobación y la publicación ocurren en el panel y en el editor.',
+        hint: 'Un resumen de lo que construyó — el envío, la aprobación y la publicación ocurren en el panel y en el editor.',
         repo: 'Repositorio',
         topics: 'Temas',
         labels: 'Etiquetas',
@@ -2585,28 +2587,29 @@ export default {
         state: 'Lifecycle state',
         labelsSet: 'set per topic in Curate',
         browserHint:
-          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
-        noRepo: 'No repository yet — the file review appears here once a repository exists.',
+          'Última mirada antes de entregar: cada archivo de abajo, su markdown y sus etiquetas — exactamente como el asistente los citará.',
+        noRepo: 'Aún no hay repositorio — la revisión de archivos aparecerá aquí cuando exista un repositorio.',
         ritualOutside:
-          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+          'El ritual de revisión — enviar a revisión, aprobación del revisor, publicación — ocurre en el Editor y en el panel de Studio, no aquí. Abra el Editor para terminar.',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
-        noVersions: 'No versions yet — versions are minted during the approval ritual.',
-        versionSummary: '{n} version(s) · latest v{latest}'
+        noVersions: 'Aún no hay versiones — las versiones se emiten durante el ritual de aprobación.',
+        versionSummary: '{n} versión(es) · última v{latest}'
       },
       publish: {
         title: 'Asegurar y finalizar',
-        hint: 'Este repositorio está listo para revisión. Aquí nunca se publica — envíelo para aprobación desde el panel; la aprobación y la publicación se realizan desde el panel o el editor.',
+        hint: 'Este repositorio está listo para revisión. Aquí nunca se publica — envíelo para aprobación en el panel, luego apruebe y publique desde el panel o el editor.',
         nameOk: 'Nombre del repositorio establecido',
         labelsOk: 'Etiquetas seleccionadas',
         topicsOk: 'Temas revisados',
         topicsPending: 'No topics yet',
         topicsServing: 'Topics serving',
-        noTopics: 'No topics yet — go back to Curate to produce or write them.',
-        frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
+        noTopics: 'Aún no hay temas — vuelva a Curate para producirlos o escribirlos.',
+        frozen:
+          'Este repositorio está en servicio — aquí, un resumen de solo lectura. Abra el Editor para gestionar versiones o retirarlo.',
         ritual:
-          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+          'Siguiente: enviar para aprobación en el panel de Studio → un aprobador acepta → publicar desde el panel o el editor. El asistente se detiene aquí por diseño.',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2632,7 +2635,7 @@ export default {
         alreadyInOkf: 'Eliminar documentos que ya están en un repositorio OKF',
         alreadyIngested: 'Eliminar documentos ya procesados en ingest',
         servingWarn:
-          "{'{'}n{'}'} documento(s) seleccionado(s) aún sirven al corpus libre: el nuevo repositorio no puede ingerirse hasta que se retiren."
+          "{'{'}n{'}'} documento(s) seleccionado(s) aún sirven al corpus libre — el nuevo repositorio no puede ingerirse hasta que se retiren."
       },
       produce: {
         notReady: 'El productor se integrará en una historia posterior.'
@@ -2719,7 +2722,7 @@ export default {
         trustTier: 'trust_tier',
         attestation: 'attestation',
         sources: 'provenance.sources',
-        onlyOnIndex: 'Per-repo tags live on the index concept only — open the index to see them.'
+        onlyOnIndex: 'Las etiquetas por repositorio viven solo en el concepto índice — abra el índice para verlas.'
       },
       showSource: 'Mostrar origen',
       issue: {
@@ -2746,15 +2749,15 @@ export default {
       run: {
         notReady: 'La validación se integrará en una historia posterior.'
       },
-      piiTitle: 'Personal data — review each flagged concept',
+      piiTitle: 'Datos personales — revise cada concepto marcado',
       loading: 'Checking the repository…',
-      loadFailed: 'Could not load the validation report.',
+      loadFailed: 'No se pudo cargar el informe de validación.',
       retry: 'Retry',
       issuesTitle: 'Issues to review',
       howToFix: 'How to fix',
-      indexFailed: 'Re-index failed — edit or re-split the page.',
+      indexFailed: 'Falló la reindexación — edite o redivida la página.',
       indexFailedRemedy:
-        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+        'Abra la página en el editor y guárdela (al guardar se reindexa), o redivida el repositorio desde su origen.',
       severity: {
         blocker: 'Blocking',
         warning: 'Needs review',
@@ -2769,11 +2772,11 @@ export default {
       },
       topicLinks: {
         title: 'Cross-link topics',
-        tip: 'Reads every page in this repository and writes links between the pages that genuinely belong together — the same processing the import wizard runs. It is safe to re-run: existing links are kept and only new ones are added.',
-        progress: 'Cross-linking… {done} of {total} batches',
-        progressIdle: 'Cross-linking… reading the repository',
-        done: 'Added {n} link(s) across {c} page(s).',
-        failed: 'Cross-linking failed: {msg}'
+        tip: 'Lee cada página de este repositorio y escribe enlaces entre las páginas que de verdad pertenecen juntas — el mismo procesamiento que ejecuta el asistente de importación. Es seguro reejecutarlo: los enlaces existentes se conservan y solo se añaden los nuevos.',
+        progress: 'Enlazando… {done} de {total} lotes',
+        progressIdle: 'Enlazando… leyendo el repositorio',
+        done: 'Añadidos {n} enlace(s) en {c} página(s).',
+        failed: 'Falló el enlazado: {msg}'
       },
       action: {
         suggestLinks: 'Suggest links',
@@ -2781,8 +2784,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: 'Create the Sources page and link {n} page(s)',
-        wireExisting: 'Link {n} page(s) to "{hub}"',
+        wireCreate: 'Crear la página de fuentes y enlazar {n} página(s)',
+        wireExisting: 'Enlazar {n} página(s) a «{hub}»',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2790,45 +2793,45 @@ export default {
         done: 'Done'
       },
       suggest: {
-        working: 'Asking the assistant for link suggestions…',
-        empty: 'No suggestions — link it manually in the editor.'
+        working: 'Pidiendo al asistente sugerencias de enlaces…',
+        empty: 'Sin sugerencias — enlácelo manualmente en el editor.'
       },
       nearDup: {
-        keepHint: 'Keep one copy — delete the rest.'
+        keepHint: 'Conserve una copia — elimine las demás.'
       },
-      wireDone: 'Linked {n} page(s) to "{hub}".',
-      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      wireDone: 'Enlazadas {n} página(s) a «{hub}».',
+      wireCreated: 'Creada la página de fuentes y enlazadas {n} página(s).',
       mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: 'First {n} characters — open the editor for the full page.'
+        truncated: 'Primeros {n} caracteres — abra el editor para la página completa.'
       },
       tip: {
         conformance:
-          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+          'El frontmatter de la página incumple la especificación OKF (tipo, fecha de vigencia, fuentes…). La autocorrección del Paso 8 lo corrige mecánicamente; nada cambia en su contenido escrito.',
         orphan:
-          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+          'Ninguna página enlaza aquí y esta página no enlaza a ninguna. La recuperación por grafo recorre enlaces para relacionar contenido, así que una página sin enlaces solo aparece con una coincidencia exacta de tema. Solución: acepte las sugerencias de enlaces o añada enlaces en el editor.',
         near_duplicate:
-          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+          'Estas páginas llevan un texto casi idéntico. En la ingesta cada una se convierte en sus propios fragmentos, así que una pregunta puede devolver el mismo material varias veces. Solución: previsualice, conserve la mejor copia, elimine las demás.',
         citation:
-          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+          'Las páginas citan documentos en sus metadatos pero nada las enlaza a la página de fuentes — las citas nunca llegan al grafo y no se pueden recorrer ni citar al responder. Solución: un clic conecta todas las páginas citantes.',
         index_failed:
-          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+          'La página se importó pero falló la construcción de su índice de búsqueda — no se puede recuperar hasta que se reindexe. Guardar la página en el editor reintenta la construcción.'
       },
       piiRescan: 'Re-scan all pages',
       piiRescanWorking: 'Re-scanning every page…',
       piiRescanDone: 'Re-scanned {n} page(s).',
       piiRescanPartial:
-        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+        'Reexaminadas {n} página(s). {e} siguen fallando — su veredicto de escaneo no cambió, así que la publicación sigue bloqueada para ellas.',
       piiRescanMissing:
-        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
-      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+        'El reescaneo no está disponible en este servidor (404). No se cambió nada — las páginas cuyo escaneo falló siguen bloqueando la publicación.',
+      piiRescanFrozen: 'Reescaneo rechazado: el repositorio se está publicando (409). No se cambió nada.',
       piiRescanFailed:
-        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
-      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
-      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+        'El reescaneo falló. No se cambió nada — las páginas cuyo escaneo falló siguen bloqueando la publicación.',
+      piiRescanProgress: 'Reexaminando… {done} de {total} páginas',
+      piiRescanProgressIdle: 'Reexaminando… leyendo el repositorio',
       piiRescanNoKey:
-        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+        'El servidor aceptó el reescaneo pero no devolvió ningún id de ejecución, así que su progreso no se puede seguir. No se informó nada.',
       piiStateError: 'Scan error',
       piiTally: {
         scanned: '{n} page(s) re-scanned',
@@ -2843,13 +2846,13 @@ export default {
       nFlagged: '{n} encontradas',
       rescan: 'Volver a escanear',
       stateError: 'Scan failed',
-      errorTitle: 'This page is blocking the hand-off.',
+      errorTitle: 'Esta página está bloqueando la entrega.',
       errorBody:
-        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+        'El análisis de PII de esta página FALLÓ (no es que no encontrara nada: no pudo leer el texto). La publicación sigue bloqueada hasta que un análisis tenga éxito. Use Reexaminar arriba.',
       rescanMissing:
-        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
-      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
-      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
+        'El reescaneo no está disponible en este servidor (404). No se cambió nada — la página sigue bloqueando la publicación.',
+      rescanFrozen: 'Reescaneo rechazado: el repositorio se está publicando (409). No se cambió nada.',
+      rescanFailed: 'El reescaneo falló. No se cambió nada — la página sigue bloqueando la publicación.',
       scanning: 'Escaneando…',
       clean: 'Sin entidades marcadas — este concept está limpio.',
       how: 'Solución: elimínelo o cámbielo (p. ej., por el cargo en lugar del nombre), luego guarde — el nuevo escaneo actualiza esta lista.',
@@ -2920,50 +2923,51 @@ export default {
       unpublish: 'Despublicar'
     },
     src: {
-      title: 'Choose the source documents',
-      hint: 'Pick sources from the document repository, upload new ones from this computer, or both.',
-      repoSec: 'From the document repository',
+      title: 'Elija los documentos de origen',
+      hint: 'Elija fuentes del repositorio de documentos, suba otras nuevas desde este equipo, o ambas.',
+      repoSec: 'Del repositorio de documentos',
       searchPh: 'Search by name or site…',
       chipsLabel: 'Filter by origin',
       chipAll: 'All',
       chipCrawl: 'Crawls',
       chipUpload: 'Uploads',
-      noMatches: 'Nothing matches this search or filter.',
+      noMatches: 'Nada coincide con esta búsqueda o filtro.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
       total: '{n} document(s)',
-      titleSingle: 'Choose the crawled document',
+      titleSingle: 'Elija el documento rastreado',
       loading: 'Loading documents…',
       retry: 'Retry',
-      empty: 'No documents in the repository yet — upload some below.',
+      empty: 'Aún no hay documentos en el repositorio — suba algunos abajo.',
       more: 'Load more',
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
       uploaded: '{n} file(s) uploaded.',
-      uploadFailed: 'An upload failed — check the files and retry.',
-      fsNote: 'Uploaded files join the document repository and are selected here automatically.',
+      uploadFailed: 'Falló una subida — revise los archivos y reintente.',
+      fsNote:
+        'Los archivos subidos se incorporan al repositorio de documentos y quedan seleccionados aquí automáticamente.',
       count: 'Selected: {n}',
-      needOne: 'Select at least one source.',
+      needOne: 'Seleccione al menos una fuente.',
       confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
-      loadFailed: 'Could not load the document list.',
+      loadFailed: 'No se pudo cargar la lista de documentos.',
       servingBadge: 'serving free-form RAG',
       servingTip:
-        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+        'Este documento sirve actualmente al corpus libre de RAG — la conversión tiene éxito, pero este repositorio no puede ingerirse hasta que se retire.',
       alreadyBadge: 'already in an OKF repo',
-      alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
+      alreadyTip: 'Este documento ya es el origen de otro repositorio OKF — la conversión lo rechazará.'
     },
     frontmatter: {
-      title: 'Frontmatter tags — what this repo is about',
-      help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',
+      title: 'Etiquetas de frontmatter — de qué trata este repositorio',
+      help: 'Las etiquetas describen qué contiene este repositorio y — igual de importante — qué NO contiene (la lista de prohibidas). Ellas deciden qué consultas se enrutan a este repositorio. Pulse Refresh para redactarlas desde el corpus, o edite las fichas de abajo. Publicar exige ≥3 temas + ≥1 prohibida.',
       refresh: 'Refresh suggestions',
       suggesting: 'Curating…',
-      suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestEmpty: 'El LLM no devolvió etiquetas. Pruebe de nuevo cuando crezca el corpus.',
       suggestCoverage:
         'Derivado de {sampled} de {total} conceptos, repartidos en {labels} etiquetas de la jerarquía del conocimiento.',
       suggestFailed: 'Suggest failed.',
-      suggestedTag: 'LLM suggestion — remove to dismiss.',
+      suggestedTag: 'Sugerencia del LLM — quítela para descartarla.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2972,7 +2976,7 @@ export default {
       save: 'Save tags',
       saved: 'Saved',
       error: 'Save failed.',
-      errorWithStep: 'Save failed at step "{step}" ({code}) — retry.',
+      errorWithStep: 'Falló el guardado en el paso «{step}» ({code}) — reintente.',
       field: {
         topic: 'Topic',
         entity: 'Entity',
@@ -3002,18 +3006,21 @@ export default {
         model: 'Model',
         version: 'Head version',
         computedAt: 'Computed',
-        staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
+        staleNote:
+          'Las etiquetas cambiaron tras construir esta cabecera — reconstrúyala antes de confiar en las pruebas.',
         missingNote:
-          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+          'Aún no hay cabecera vectorizada. Se construye al publicar; si el servicio de embeddings no estaba disponible entonces, reconstrúyala ahora desde las etiquetas guardadas.',
         rebuild: 'Rebuild head',
-        rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
-        rebuildBusy: 'Rebuilding — embedding the tag fields…'
+        rebuildTip:
+          'Vuelve a incrustar las etiquetas guardadas en un vector de cabecera nuevo. Una llamada de embedding por campo de etiqueta.',
+        rebuildBusy: 'Reconstruyendo — incrustando los campos de etiquetas…'
       },
       test: {
-        placeholder: 'e.g. cancer screening guidelines',
+        placeholder: 'p. ej. directrices de cribado del cáncer',
         run: 'Run test',
-        running: 'Embedding the query and scoring the heads…',
-        adversarial: 'Adversarial — this query should NOT select this repository (a forbidden/adjacent topic)',
+        running: 'Incrustando la consulta y puntuando las cabeceras…',
+        adversarial:
+          'Adversarial — esta consulta NO debería seleccionar este repositorio (un tema prohibido/adyacente)',
         embeddedWith: 'Embedded with',
         col: {
           repo: 'Repository',
@@ -3024,14 +3031,15 @@ export default {
         },
         provenance: 'Routing provenance',
         empty:
-          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
-        pass: 'PASS — this repository wins the head routing.',
-        fail: 'FAIL — {repo} wins the head routing for this query.',
-        passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
+          'Escriba una consulta que haría un usuario y ejecútela — el Lab puntúa la cabecera de cada repositorio publicado exactamente como lo haría el fan-out.',
+        pass: 'CORRECTO — este repositorio gana el enrutamiento por cabecera.',
+        fail: 'FALLO — {repo} gana el enrutamiento por cabecera para esta consulta.',
+        passAdversarial: 'CORRECTO — no seleccionado correctamente (ganador: {repo}).',
         failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
-        passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
+        passSuppressed:
+          'CORRECTO — suprimida por la compuerta de prohibidas/ruido: la cabecera no reclama esta consulta',
         notSelectedSuppressed:
-          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+          'NO SELECCIONADO — suprimida por la compuerta de prohibidas/ruido: la consulta se parece más a lo que este repositorio excluye, o es ruido fuera de dominio',
         claimed: 'claims',
         suppressed: 'suppressed'
       },
@@ -3080,7 +3088,7 @@ export default {
           'Descartado por el guardián — una etiqueta prohibida no debe coincidir con el propio tema de este repositorio.'
       },
       run: {
-        progress: '{done} of {total} queries ({pct}%)',
+        progress: '{done} de {total} consultas ({pct} %)',
         progressStarting: 'Starting the run…',
         phase: {
           routing: 'Scoring routes',
@@ -3093,7 +3101,7 @@ export default {
           'El LLM escribe las consultas en lotes de 30 por clase — una petición grande (100+) tarda unos minutos. La suite aparece aquí y en suites guardadas al terminar.',
         generating: 'Generando por lotes — las peticiones grandes tardan unos minutos…',
         run: 'Run all queries',
-        running: 'Running every suite query…',
+        running: 'Ejecutando todas las consultas de la suite…',
         current: 'Current suite',
         col: {
           query: 'Query',
@@ -3108,13 +3116,13 @@ export default {
           name: 'Nombre',
           corpus: 'Corpus'
         },
-        notEvaluatable: 'not evaluatable (no competitors)',
+        notEvaluatable: 'no evaluable (sin competidores)',
         pass: 'pass',
         fail: 'fail',
         passRate: 'Pass rate',
         positives: 'Positives',
         negatives: 'Negatives',
-        noCompetitors: 'n/a — no competing heads yet',
+        noCompetitors: 'n/d — aún no hay cabeceras competidoras',
         avgMargin: 'Avg margin',
         steal: '{repo} stole {n} queries',
         addPlaceholder: 'Your own probe query…',
@@ -3122,7 +3130,7 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.',
+        noRuns: 'Aún no hay ejecuciones — genere una suite y ejecútela.',
         explainFailures: 'Explicar fallos',
         explainBusy: 'Explicando los fallos — una llamada al modelo para cada negativo fallido…',
         batchTitle: 'Por qué los negativos fallidos enrutaron aquí',
@@ -3136,7 +3144,7 @@ export default {
         vetoedBy: 'Vetado por',
         marginKilled: '{n} prueba(s) positiva(s) perdieron por margen (sin etiqueta de veto única).',
         removals: 'Etiquetas a eliminar (vetan los positivos propios de este repositorio)',
-        removeTip: 'Eliminar "{tag}" — vetó {n} prueba(s) positiva(s)',
+        removeTip: 'Eliminar «{tag}» — vetó {n} prueba(s) positiva(s)',
         tripwire: 'Este ciclo rompió {n} pruebas positivas — las etiquetas añadidas sobre-suprimen. ¿Revertir?',
         tripwireRevert: 'Ver opciones de reversión',
         staleSnapshot:
@@ -3158,8 +3166,8 @@ export default {
         deleteTip: 'Quitar esta fila de la suite',
         namePlaceholder: 'Nombre de la suite (opcional): p. ej. conjunto de regresión ECD',
         probeTip: 'Probar esta consulta contra el corpus real',
-        deleteSuiteTip: 'Eliminar esta suite y su historial',
-        corpusNeedsIngest: 'Ingera primero el repositorio — la prueba del corpus busca en el corpus ingerido',
+        deleteSuiteTip: 'Eliminar esta suite y su historial de ejecuciones',
+        corpusNeedsIngest: 'Ingiera primero el repositorio — la prueba del corpus busca en el corpus ingerido',
         deleteConfirmTitle: '¿Eliminar esta suite?',
         deleteConfirmBody: 'Esto elimina permanentemente la suite y su historial de ejecuciones. No se puede deshacer.',
         deleteConfirm: 'Eliminar suite',
@@ -3177,8 +3185,9 @@ export default {
         history: 'No se pudo cargar el historial de guardado',
         revert: 'No se pudo revertir el frontmatter',
         advisor: 'Fallo del asesor',
-        noSuite: 'Genera primero una suite y luego reconstruye y relanza.',
-        applyNoSuite: 'Etiquetas guardadas y head reconstruido: genera una suite y ejecuta todo para ver el efecto.',
+        noSuite: 'Genere primero una suite y luego reconstruya y relance.',
+        applyNoSuite:
+          'Etiquetas guardadas y cabecera reconstruida — genere una suite y ejecute todo para ver el efecto.',
         suiteLoad: 'No se pudo cargar la suite',
         suiteUpdate: 'No se pudo actualizar la suite',
         suiteRename: 'No se pudo renombrar la suite',
@@ -3194,9 +3203,9 @@ export default {
       },
       publishCard: {
         present:
-          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
-        stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
-        missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+          'Cabecera vectorizada lista — las pruebas de enrutamiento del Lab le dicen si este repositorio gana las consultas que debe ganar.',
+        stale: 'La cabecera está obsoleta (las etiquetas cambiaron tras construirla) — publicar la reconstruye.',
+        missing: 'Aún no hay cabecera vectorizada — publicar la construye a partir de las etiquetas aprobadas.'
       },
       advisor: {
         run: 'Asesor: recomendar cambios de etiquetas',
@@ -3207,16 +3216,16 @@ export default {
         now: 'Ahora',
         predicted: 'previsto',
         scope: ' (sobre {q} consultas de las últimas {r} ejecuciones)',
-        applying: 'Aplicando: guardando etiquetas, reconstruyendo el head, relanzando la suite…',
+        applying: 'Aplicando: guardando etiquetas, reconstruyendo la cabecera, relanzando la suite…',
         blockedTitle: 'Eliminaciones bloqueadas — haga clic para incluirlas en Aplicar',
         blockedGain: 'recupera {n} positiva(s)',
         narrowTitle: 'Reemplazos más estrechos — recupera positivas sin readmitir negativas',
         narrowChip: 'Quitar la etiqueta amplia, añadir la estrecha',
         reasonCurator: 'usted declaró esta etiqueta originalmente — confirme antes de quitarla',
-        reasonRotated: 'el historial pasó la línea base — confirme antes de quitarla',
+        reasonRotated: 'el historial de ediciones dejó atrás la línea base — confirme antes de quitarla',
         scopeDetail: 'suites: {s} · conjuntos de etiquetas: {t}',
         rowActionsTitle:
-          'Cambios respaldados por el corpus — el corpus responde a estos "negativos": conviértelos en positivos',
+          'Cambios respaldados por el corpus — el corpus responde a estos «negativos»: conviértalos en positivos',
         flipToPositive: 'Convertir en positivo',
         ungroundedNote:
           '{n} negativo(s) fallido(s) sin respaldo en el corpus y sin palanca de etiquetas segura: el repositorio competidor debe ganarlos.'
@@ -3537,7 +3546,7 @@ export default {
         model: 'Modelo',
         modelPick: 'Predeterminado de la configuración',
         modelDefault: 'predeterminado de la configuración',
-        note: 'El modelo que sintetiza preguntas y puntúa respuestas. Una configuración activa (★, pestaña Modelos) se aplica automáticamente; elegir una aquí la sobrescribe solo para esta operación. Jueces más potentes mejoran notablemente el recall de entidades y la calidad de los consejos.',
+        note: 'El modelo que sintetiza preguntas y puntúa respuestas. Una configuración activa (★, pestaña Modelos) se aplica automáticamente; elegir una aquí la sobrescribe solo para esta operación. Jueces más potentes mejoran notablemente el recall de entidades y la calidad de los consejos en modelos locales pequeños.',
         single: 'Salto único %',
         multiAbstract: 'Saltos múltiples (abstracto) %',
         multiSpecific: 'Saltos múltiples (específico) %',
@@ -3547,7 +3556,7 @@ export default {
         cancel: 'Cancelar',
         cancelling: 'Cancelando…',
 
-        inFlight: 'Ya se está generando una suite de benchmarks para este repositorio: te estamos conectando a ella.'
+        inFlight: 'Ya se está generando una suite de benchmarks para este repositorio — le estamos conectando a ella.'
       },
       import: {
         button: 'Importar suite (.xlsx)',
@@ -3673,8 +3682,8 @@ export default {
         title: 'Eliminar ejecución',
         body: 'Esto elimina de forma permanente la ejecución y su explicación de fallos. La suite y sus preguntas se conservan.',
         confirm: 'Eliminar',
-        inFlight: 'Esta ejecución sigue en curso — cancélala primero.',
-        explainInFlight: 'Hay una explicación de fallos en curso para esta ejecución — espera a que termine.',
+        inFlight: 'Esta ejecución sigue en curso — cancélela primero.',
+        explainInFlight: 'Hay una explicación de fallos en curso para esta ejecución — espere a que termine.',
         failed: 'No se pudo eliminar la ejecución.'
       },
       advice: {
@@ -3704,25 +3713,25 @@ export default {
         noise_sensitivity: 'sensibilidad al ruido',
         note: {
           faithfulness:
-            'Qué tan fundamentada está la respuesta en los pasajes recuperados: la proporción de afirmaciones que las fuentes respaldan. Bajo significa que la respuesta afirma cosas que la evidencia no dice (alucinación).',
+            'Qué tan fundamentada está la respuesta en los pasajes recuperados: la proporción de afirmaciones de la respuesta que las fuentes respaldan. Bajo significa que la respuesta afirma cosas que la evidencia no dice (alucinación).',
           context_precision:
             'Si los pasajes que importan quedaron arriba del conjunto recuperado. Bajo significa que la evidencia correcta se recuperó pero quedó enterrada bajo fragmentos menos relevantes.',
           context_recall:
-            'Si los pasajes recuperados cubren todo lo que la respuesta de referencia exige. Bajo significa que la recuperación omitió evidencia que la pregunta necesitaba.',
+            'Si los pasajes recuperados cubren todo lo que la respuesta de referencia exige — cada afirmación de la referencia debe poder atribuirse al contexto recuperado. Bajo significa que la recuperación omitió evidencia que la pregunta necesitaba.',
           answer_relevancy:
-            'Qué tan bien la respuesta aborda la pregunta: RAGAS regenera preguntas a partir del texto de la respuesta y las compara con la original por similitud de embeddings. NO verifica corrección factual — las respuestas verbosas puntúan bajo aun siendo correctas.',
+            'Qué tan bien la respuesta aborda la pregunta formulada: RAGAS regenera preguntas a partir del texto de la respuesta y las compara con la original por similitud de embeddings. NO verifica corrección factual — las respuestas verbosas o fuera de tema puntúan bajo aun siendo correctas.',
           context_utilization:
-            'Si el contexto recuperado basta para producir la respuesta de referencia — una verificación de completitud de la recuperación.',
+            'Si el contexto recuperado basta para producir la respuesta de referencia — una verificación de completitud de la recuperación contra lo que la respuesta ideal necesita.',
           context_entities_recall:
             'Recall a nivel de entidades: la proporción de entidades nombradas en los pasajes de referencia de la entrada (empresas, fechas, importes, lugares) que también aparecen en los fragmentos recuperados. Un valor bajo significa que la recuperación trajo fragmentos que omiten entidades de la referencia. Sensible al juez — una puntuación baja con el recall de contexto aprobado suele significar que la extracción de entidades del juez falló, no que falte contenido.',
           factual_correctness:
-            'Coincidencia factual a nivel de afirmaciones con la referencia — el juez descompone ambas y puntúa el solape. La métrica de corrección más estricta.',
+            'Coincidencia factual a nivel de afirmaciones con la respuesta de referencia — el juez descompone ambas y puntúa el solape. La métrica de corrección más estricta.',
           answer_correctness:
-            'Calidad global frente a la referencia — corrección factual combinada con similitud semántica. La métrica más cercana a «¿dio la respuesta correcta?».',
+            'Calidad global frente a la respuesta de referencia — corrección factual combinada con similitud semántica. La métrica más cercana a «¿dio la respuesta correcta?».',
           answer_similarity:
-            'Similitud semántica (embeddings) entre la respuesta generada y la de referencia — alto significa que transmiten lo mismo.',
+            'Similitud semántica (embeddings) entre la respuesta generada y la de referencia — alto significa que ambas transmiten lo mismo.',
           noise_sensitivity:
-            'Cuánto se degrada la respuesta cuando se mezclan pasajes irrelevantes en el contexto — una medida de robustez. MÁS BAJO es mejor; su umbral está invertido.'
+            'Cuánto se degrada la respuesta cuando se mezclan pasajes irrelevantes en el contexto recuperado — una medida de robustez. MÁS BAJO es mejor; su umbral está invertido.'
         }
       },
       pdf: {

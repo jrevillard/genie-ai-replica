@@ -1515,9 +1515,9 @@ export default {
       uploadFailed: "ล้มเหลวในการอัปโหลด {'{'}fileName{'}'}"
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+      'ทำไมการอัปโหลดจึงสำคัญต่อ RAG: ทุกเอกสารที่คุณอัปโหลดสามารถกลายเป็นความรู้ที่ผ่านการดูแลจัดการและติดป้ายกำกับได้ — เอกสารที่กระชับและมีโครงสร้างดีจะดึงข้อมูลได้แม่นยำกว่าไฟล์ยาวไฟล์เดียวมาก วิซาร์ด OKF Studio เปลี่ยนไฟล์ที่อัปโหลดให้เป็นหัวข้อที่ผ่านการตรวจทาน',
     ragTipNoOkf:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
+      'ทำไมการอัปโหลดจึงสำคัญต่อ RAG: ทุกเอกสารที่คุณอัปโหลดสามารถกลายเป็นความรู้ที่ผ่านการดูแลจัดการและติดป้ายกำกับได้ — เอกสารที่กระชับและมีโครงสร้างดีจะดึงข้อมูลได้แม่นยำกว่าไฟล์ยาวไฟล์เดียวมาก'
   },
   okf: {
     lifecycleErrors: {
@@ -1534,7 +1534,7 @@ export default {
     models: {
       title: 'การตั้งค่าโมเดล',
       add: 'การตั้งค่าใหม่',
-      hint: 'จุดเชื่อมต่อโมเดลระยะไกลที่มีชื่อสำหรับการตัดสินและการสร้าง — อินเทอร์เฟซที่เข้ากันได้กับ OpenAI ใดก็ได้ (OpenAI, เกตเวย์ LiteLLM, vLLM, Gemini-compat, Ollama) หรือ Anthropic โดยตรง มีการตั้งค่าเพียงหนึ่งรายการที่ใช้งานได้ในแต่ละช่วงเวลา เมื่อไม่มีรายการใช้งาน จะใช้โมเดลเริ่มต้นที่กำหนดของระบบ คีย์เก็บบนเซิร์ฟเวอร์และไม่แสดงผล',
+      hint: 'จุดเชื่อมต่อโมเดลระยะไกลที่มีชื่อสำหรับการตัดสินและการสร้าง — อินเทอร์เฟซที่เข้ากันได้กับ OpenAI ใดก็ได้ (OpenAI, เกตเวย์ LiteLLM, vLLM, Gemini-compat, Ollama) หรือ Anthropic โดยตรง มีการตั้งค่าใช้งานได้เพียงหนึ่งรายการ หากไม่มี ระบบจะใช้โมเดลเริ่มต้นที่กำหนดไว้ของการติดตั้ง คีย์ถูกเก็บไว้ฝั่งเซิร์ฟเวอร์และไม่แสดงผล',
       name: 'ชื่อ',
       provider: 'ผู้ให้บริการ',
       providerOpenai: 'เข้ากันได้กับ OpenAI (OpenAI, LiteLLM, vLLM…)',
@@ -1565,7 +1565,7 @@ export default {
       svcCurationShort: 'คัดสรร',
       svcTagging: 'หัวข้อและแท็ก',
       svcTaggingShort: 'หัวข้อ/แท็ก',
-      svcOpenaiOnly: 'การคัดสรรแนวคิดและหัวข้อ/แท็กใช้รูปแบบ OpenAI — ต้องใช้ endpoint ที่รองรับ OpenAI',
+      svcOpenaiOnly: 'การคัดสรรแนวคิดและหัวข้อ/แท็กใช้รูปแบบ OpenAI — ต้องใช้ endpoint ที่เข้ากันได้กับ OpenAI',
       colServices: 'ใช้โดย',
       svcNone: 'ไม่มี (ไม่ใช้งาน)',
       groupTestLab: 'ไปป์ไลน์ของห้องทดสอบ',
@@ -1600,10 +1600,10 @@ export default {
       edit: 'เปลี่ยนชื่อ / แก้ไข',
       copy: 'คัดลอก',
       activate: 'เปิดใช้งาน (ใช้งานเพียงรายการเดียว)',
-      deactivate: 'ปิดใช้งาน — จะใช้โมเดลเริ่มต้น',
+      deactivate: 'ปิดใช้งาน — จะใช้โมเดลเริ่มต้นของการติดตั้ง',
       delete: 'ลบ',
       deleteConfirm: 'ลบการตั้งค่าโมเดล "{name}"?',
-      empty: 'ยังไม่มีการตั้งค่าโมเดล — ใช้โมเดลเริ่มต้น (env) อยู่',
+      empty: 'ยังไม่มีการตั้งค่าโมเดล — กำลังใช้โมเดลเริ่มต้น (env) ของการติดตั้งอยู่',
       adminOnly: 'การตั้งค่าโมเดลต้องมีบทบาทผู้ดูแลระบบ'
     },
     versions: {
@@ -1646,7 +1646,7 @@ export default {
         inProgress: 'กำลังเผยแพร่ — กำลังส่งออกและถ่ายโอนชุดไฟล์…',
         title: 'เผยแพร่'
       },
-      readonly: 'เนื้อหาอ่านอย่างเดียว — แก้ไข head/แท็กได้',
+      readonly: 'เนื้อหาอ่านอย่างเดียว — แก้ไขหัว/แท็กได้',
       serving: 'กำลังให้บริการ',
       state: {
         ingested: 'นำเข้าข้อมูลแล้ว'
@@ -1697,10 +1697,10 @@ export default {
       }
     },
     import: {
-      title: 'นำเข้าเอกสารสู่รีโป OKF ใหม่',
-      hint: 'เอกสารจะกลายเป็นหนึ่งรีโป — แบ่งส่วน เชื่อมโยง และติดป้ายร่วมกัน ไม่มีการเผยแพร่ใดๆ; ตามด้วยขั้นตอนปกติ รีวิว → เผยแพร่ → นำเข้า',
+      title: 'นำเข้าเอกสารสู่รีโพ OKF ใหม่',
+      hint: 'เอกสารจะกลายเป็นหนึ่งรีโพ — แบ่งส่วน เชื่อมโยง และติดป้ายร่วมกัน ไม่มีการเผยแพร่ใดๆ; ตามด้วยขั้นตอนปกติ รีวิว → เผยแพร่ → นำเข้าข้อมูล',
       name: 'ชื่อรีโป',
-      namePh: 'เช่น ชุดนโยบาย',
+      namePh: 'เช่น ชุดนโยบายโรงฆ่าสัตว์',
       domain: 'พื้นที่หัวข้อ (โดเมน)',
       strategy: 'กลยุทธ์การจัดหมวดหมู่',
       stratHeuristics: 'ฮิวริสติก (เร็ว ไม่ใช้ LLM)',
@@ -1709,14 +1709,14 @@ export default {
       files: 'เอกสารที่เลือก',
       servingBadge: 'ให้บริการ RAG อิสระ',
       alreadyBadge: 'อยู่ในรีโป OKF อื่นแล้ว',
-      servingTip: 'เอกสารนี้กำลังให้บริการคอร์ปัสอิสระ — รีโปใหม่จะนำเข้าไม่ได้จนกว่าจะถอนคืน',
-      alreadyTip: 'เอกสารนี้เป็นที่มาของรีโป OKF อื่นอยู่แล้ว',
+      servingTip: 'เอกสารนี้กำลังให้บริการคอร์ปัสอิสระ — รีโพใหม่จะนำเข้าไม่ได้จนกว่าจะถอนคืน',
+      alreadyTip: 'เอกสารนี้เป็นที่มาของรีโพ OKF อื่นอยู่แล้ว',
       servingWarn:
-        'เอกสาร {n} รายการยังให้บริการคอร์ปัสอิสระ การนำเข้าสำเร็จ แต่รีโปนี้นำเข้าไม่ได้จนกว่าจะถอนคืนเอกสารเหล่านั้น',
+        'เอกสาร {n} รายการยังให้บริการคอร์ปัสอิสระ การนำเข้าสำเร็จ แต่รีโพนี้นำเข้าไม่ได้จนกว่าจะถอนคืนเอกสารเหล่านั้น',
       cancel: 'ยกเลิก',
       importing: 'กำลังนำเข้า…',
       go: 'นำเข้า',
-      dupRepo: 'ชื่อรีโปนี้มีอยู่แล้ว — เลือกชื่ออื่น',
+      dupRepo: 'ชื่อรีโพนี้มีอยู่แล้ว — เลือกชื่ออื่น',
       failed: 'ไม่สามารถเริ่มการนำเข้าได้ ตรวจสอบเอกสารแล้วลองอีกครั้ง'
     },
     editor: {
@@ -1812,11 +1812,11 @@ export default {
           when: 'Last attempt {when}',
           fix: {
             reaper:
-              'ตัวทำงานนำเข้าหยุดรอภายในกรอบเวลาผ่อนปรนเพราะท่อระบายแน่นเกินไป — เนื้อหาไม่เสียหาย วิธีแก้: แก้ไขไฟล์นี้เล็กน้อยแล้วบันทึกเพื่อเข้าคิวใหม่ หรือถอนคืนแล้วนำเข้าทั้งรีโปใหม่',
+              'ตัวทำงานนำเข้าหยุดรอภายในกรอบเวลาผ่อนปรนเพราะท่อระบายแน่นเกินไป — เนื้อหาไม่เสียหาย วิธีแก้: แก้ไขไฟล์นี้เล็กน้อยแล้วบันทึกเพื่อเข้าคิวใหม่ หรือถอนคืนแล้วนำเข้าทั้งรีโพใหม่',
             dataprep:
-              'บริการเตรียมเนื้อหาล้มเหลวในการนำเข้านี้ วิธีแก้: แก้ไขแล้วบันทึกเพื่อเข้าคิวใหม่ หากซ้ำให้ตรวจสอบสถานะบริการ dataprep',
+              'บริการเตรียมเนื้อหาล้มเหลวในการนำเข้านี้ วิธีแก้: แก้ไขแล้วบันทึกเพื่อเข้าคิวใหม่ หากเกิดซ้ำให้ตรวจสอบสถานะบริการ dataprep',
             generic:
-              'การทำดัชนีล้มเหลว วิธีแก้: แก้ไขเนื้อหาแล้วบันทึกเพื่อเข้าคิวใหม่ หรือถอนคืนแล้วนำเข้าทั้งรีโปใหม่'
+              'การทำดัชนีล้มเหลว วิธีแก้: แก้ไขเนื้อหาแล้วบันทึกเพื่อเข้าคิวใหม่ หรือถอนคืนแล้วนำเข้าทั้งรีโพใหม่'
           }
         },
         indexBadge: 'ดัชนี',
@@ -1914,9 +1914,9 @@ export default {
       },
       piiBulk: {
         done_accept:
-          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
-        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
-        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
+          'เสร็จสิ้น — ทุกเอนทิตีที่ถูกแจ้งเตือนถูกทำเครื่องหมายว่าตรวจทานแล้วและเก็บไว้ใน {n} แนวคิด ป้ายแจ้งเตือน PII ถูกล้างแล้ว',
+        done_redact: 'เสร็จสิ้น — เนื้อหาที่ถูกแจ้งเตือนใน {n} แนวคิดถูกแทนที่ด้วยประกาศการปกปิด',
+        done_remove: 'เสร็จสิ้น — เนื้อหาที่ถูกแจ้งเตือนใน {n} แนวคิดถูกลบออก',
         title: {
           redact: 'เซ็นเซอร์เนื้อหาที่ถูกแจ้งเตือนทั้งหมด',
           remove: 'ลบเนื้อหาที่ถูกแจ้งเตือนทั้งหมด',
@@ -1938,9 +1938,9 @@ export default {
       },
       addSources: {
         working: 'Converting sources…',
-        done: '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).',
-        failed: 'A conversion failed — check the logs; the rest may still have queued.',
-        landed: 'Conversions complete — {t} topics now in the tree.'
+        done: 'เข้าคิวแล้ว {n} รายการ — หัวข้อจะทยอยลงในโครงสร้างเมื่อการแปลงเสร็จสมบูรณ์ (มี {t} หัวข้อแล้ว)',
+        failed: 'การแปลงรายการหนึ่งล้มเหลว — ตรวจสอบบันทึก รายการอื่นอาจเข้าคิวแล้ว',
+        landed: 'การแปลงเสร็จสมบูรณ์ — มี {t} หัวข้อในโครงสร้างแล้ว'
       }
     },
     dashboard: {
@@ -2141,9 +2141,9 @@ export default {
       descriptionLabel: 'คำอธิบาย',
       save: 'บันทึก frontmatter',
       saveFailed: 'การบันทึก frontmatter ล้มเหลว',
-      perRepoTitle: 'Routing tags — what this repo is about',
+      perRepoTitle: 'แท็กการกำหนดเส้นทาง — รีโพนี้เกี่ยวกับอะไร',
       perRepoHint:
-        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+        'แท็กระดับรีโพ (หัวข้อ / เอนทิตี / ขอบเขต / ต้องห้าม / สรุป / คำสำคัญ) เป็นตัวขับเครื่องมือดึงข้อมูล ข้อมูลชุดเดียวกันนี้ยังอยู่ในฟิลด์เอกสารของรีโพด้วย — ทั้งสองอย่างจะซิงค์กันเมื่อบันทึก',
       perRepoField: {
         topic: 'Topic',
         entity: 'Entity',
@@ -2155,17 +2155,17 @@ export default {
       perRepoPh: {
         topic: 'One topic per line',
         entity: 'One entity per line',
-        forbidden: 'One forbidden topic per line',
+        forbidden: 'หัวข้อที่ต้องห้ามหนึ่งรายการต่อบรรทัด',
         keyword: 'One keyword per line'
       },
       perRepoHelp: {
-        topic: 'Add, modify or remove topics — one per line. Empty lines are ignored.',
-        entity: 'Add, modify or remove entities — one per line. Empty lines are ignored.',
-        forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
-        keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
+        topic: 'เพิ่ม แก้ไข หรือลบหัวข้อ — หนึ่งรายการต่อบรรทัด บรรทัดว่างจะถูกข้าม',
+        entity: 'เพิ่ม แก้ไข หรือลบเอนทิตี — หนึ่งรายการต่อบรรทัด บรรทัดว่างจะถูกข้าม',
+        forbidden: 'เพิ่ม แก้ไข หรือลบหัวข้อที่ต้องห้าม — หนึ่งรายการต่อบรรทัด บรรทัดว่างจะถูกข้าม',
+        keyword: 'เพิ่ม แก้ไข หรือลบคำสำคัญ — หนึ่งรายการต่อบรรทัด บรรทัดว่างจะถูกข้าม'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
-      repoTagsHint: 'แท็กระดับรีปอซิทอรี ({summary}) เป็นของรีปอ — ไม่ใช่ของคอนเซปต์นี้ จัดการที่แผงแท็กในแถบด้านขวา'
+      perRepoRepoErr: 'บันทึกในเครื่องแล้ว การเขียนฟิลด์เอกสารของรีโพล้มเหลว — ลองอีกครั้ง',
+      repoTagsHint: 'แท็กระดับรีโพสิทอรี ({summary}) เป็นของรีโพ ไม่ใช่ของคอนเซปต์นี้ จัดการที่แผงแท็กในแถบด้านขวา'
     },
     piiReview: {
       title: 'การตรวจสอบข้อมูลส่วนบุคคล',
@@ -2195,14 +2195,14 @@ export default {
     },
     glossary: {
       addConcept:
-        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
-      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+        'เขียนหัวข้อใหม่ด้วยมือ (markdown พร้อม frontmatter) แต่ละหัวข้อจะกลายเป็นหน่วยที่อ้างอิงได้หนึ่งหน่วย — หัวข้อที่กระชับจะดึงข้อมูลได้แม่นยำกว่าเอกสารยาวฉบับเดียว',
+      type: 'สิ่งที่แนวคิดนี้คือ — บริการ นโยบาย บุคคล สถานที่… ประเภทจะถูกจัดเก็บไว้ในทุกชิ้นข้อมูล การดึงข้อมูลจึงเลือกแหล่งที่มาชนิดที่เหมาะสมได้ และคำตอบก็บอกได้ว่าอ้างอิงอะไร',
       title:
-        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+        'ชื่อที่อ่านเข้าใจได้ซึ่งแสดงในคำตอบและการอ้างอิง ชื่อที่เจาะจงช่วยให้ผู้ช่วยเลือกหัวข้อนี้มากกว่าหัวข้อที่คล้ายกัน — ชื่อที่คลุมเครือจะแพ้ชื่อที่เจาะจงในขั้นตอนการดึงข้อมูล',
       indexStatus:
-        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+        'แนวคิดนี้อยู่ที่ไหนในไปป์ไลน์การนำเข้าข้อมูล: parsed = รอการแบ่งส่วนและการฝัง; indexed = ค้นหาและอ้างอิงได้ใน RAG; failed = ค้นหาไม่ได้ — แก้ไขแล้วนำเข้าใหม่ เฉพาะแนวคิดที่จัดทำดัชนีแล้วเท่านั้นที่ดึงข้อมูลได้',
       trustTier:
-        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+        'แนวคิดนี้ผ่านการยืนยันมากเพียงใด: unverified = สร้างโดยเครื่อง; machine-confirmed = ตรวจสอบตามกฎ; human-reviewed = ผู้ดูแลลงนามรับรองแล้ว คำตอบสามารถแสดงระดับความน่าเชื่อถือได้เพื่อให้ผู้ใช้รู้ว่ากำลังอ่านอะไร — ความน่าเชื่อถือที่สูงขึ้นคว้าความมั่นใจของผู้ใช้ ไม่ใช่ผลการดึงข้อมูลที่ดีขึ้น',
       concept:
         'รายการหนึ่งรายการในที่เก็บของคุณ — มักจะเป็นหน้าเดียวหรือหัวข้อเดียว แต่ละแนวคิดมี frontmatter ที่มีโครงสร้างซึ่งระบบผู้ช่วยอ่านได้ ควบคู่ไปกับข้อความ markdown ที่ใช้อ้างอิงในการตอบ',
       repository:
@@ -2224,33 +2224,33 @@ export default {
       classification:
         'วิธีที่เราใช้กำหนดว่าแต่ละแนวคิดคืออะไร (หัวข้อ เอนทิตี กระบวนการ…) ฮิวริสติกส์จะอ่านหน้าเว็บโดยอัตโนมัติ ตัวเลือก LLM จะช้ากว่าแต่สามารถจัดการกับหน้าที่ซับซ้อนได้ดี',
       resplit:
-        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+        'แบ่งเอกสารต้นฉบับยาวออกเป็นหัวข้อขนาดที่เหมาะสม หัวข้อที่ใหญ่เกินไปจะทำให้ความแม่นยำของการดึงข้อมูลลดลง (คำตอบจมอยู่ท่ามกลางเนื้อหาฟิลเลอร์) ส่วนหัวข้อที่เล็กเกินไปจะทำให้บริบทที่คำตอบต้องการหายไป',
       saveFailed: 'บันทึกล้มเหลว',
       importFailedTitle: 'การนำเข้าล้มเหลว — ไม่สามารถแปลงไฟล์ต้นฉบับได้',
       importFailedHint: 'ลบที่เก็บนี้และนำเข้าไฟล์ต้นฉบับอีกครั้ง',
       frontmatter:
         'ข้อมูลที่มีโครงสร้างที่ด้านบนของแต่ละไฟล์ — ประเภท ชื่อ ป้ายกำกับ ผู้ช่วยใช้ข้อมูลนี้เพื่อให้ทราบว่าแต่ละแนวคิดเกี่ยวกับอะไร',
       pickSource:
-        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+        'แหล่งที่มาเป็นอินพุตของโมดูลตัวสร้าง ซึ่งจะเสนอหัวข้อให้คุณตรวจทาน — ไม่มีสิ่งใดถูกบันทึกถาวรจนกว่าคุณจะอนุมัติในขั้นตอนการคัดสรร เอกสารที่นำเข้าข้อมูลเพื่อใช้กับ RAG อิสระอยู่แล้วสามารถใช้ได้ รีโพของคุณจะยังถูกปิดกั้นไม่ให้นำเข้าข้อมูลจนกว่าจะถอนคืนเอกสารเหล่านั้น',
       classificationStrategy:
-        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
-      clsHeur: 'Heuristics (fast, no LLM)',
+        'วิธีที่โมดูลตัวสร้างตัดสินป้ายกำกับของแต่ละหัวข้อ: ฮิวริสติกเร็วและไม่มีค่าใช้จ่าย; LLM อ่านทุกหน้า (ดีกว่าสำหรับเลย์เอาต์ที่ซับซ้อน); ไฮบริดเริ่มจากฮิวริสติกแล้วส่งต่อเฉพาะเคสที่ยาก การคัดสรรเท่านั้น — ไม่เคยสั่งให้นำเข้าข้อมูล',
+      clsHeur: 'ฮิวริสติก (เร็ว ไม่ใช้ LLM)',
       clsLlm: 'LLM classification',
       clsHybrid: 'Hybrid',
       fsPick:
-        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+        'แต่ละไฟล์จะกลายเป็นหนึ่งหัวข้อ — หัวข้อที่กระชับจะดึงข้อมูลได้แม่นยำกว่าเอกสารยาวฉบับเดียว ชื่อไฟล์จะกลายเป็นชื่อเรื่อง คุณปรับแต่งทุกอย่างได้ในขั้นตอนการคัดสรร',
       autocorrect:
-        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+        'การแก้ไขอัตโนมัติแตะเฉพาะ frontmatter (ชื่อเรื่อง ประเภท โครงสร้าง) — ไม่แตะเนื้อหาที่คุณเขียน ข้อเสนอจะแสดงก่อนมีการเปลี่ยนแปลงใด ๆ การนำไปใช้จะเขียนการแก้ไขทันที และคุณตรวจผลได้ในขั้นตอนการคัดสรร',
       handoff:
-        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+        'พิธีกรรมของวงจรชีวิต (ส่ง → อนุมัติ → เผยแพร่) ถูกจัดไว้นอกวิซาร์ดนี้โดยตั้งใจ: การอนุมัติเป็นส่วนหนึ่งของขั้นตอนการกำกับดูแลบนแดชบอร์ดและในตัวแก้ไข ซึ่งเป็นที่จัดการเวอร์ชันและสถานะการให้บริการ',
       lifecycle:
-        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+        'ข้อตกลงหกขั้นตอน: ฉบับร่าง → รีวิว → อนุมัติแล้ว → เผยแพร่แล้ว (สร้างเวอร์ชัน + รวมชุดไฟล์) → นำเข้าข้อมูลแล้ว (ให้บริการใน RAG) → ถอนคืนแล้ว (กลับไปแก้ไข) เนื้อหาจะอ้างอิงได้หลังนำเข้าข้อมูลเท่านั้น — และเฉพาะเนื้อหาที่ผ่านการรีวิวเท่านั้นที่เผยแพร่ได้',
       labelsAuto:
-        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+        'ป้ายกำกับถูกกำหนดอัตโนมัติจากลำดับชั้นความรู้ — บริการระดับ L2 ที่จำกัดอยู่ในพื้นที่เรื่องของรีโพนี้ ตรวจทานและปรับแต่งรายหัวข้อได้ในขั้นตอนการคัดสรร',
       reviewHandoff:
-        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+        'การเก็บพิธีกรรมการอนุมัติไว้ที่เดียว (ตัวแก้ไข/แดชบอร์ด) หมายความว่าผู้ตรวจทานจะลงนามรับรองบนหน้าจอเดียวกันเสมอ พร้อมร่องรอยการตรวจสอบชุดเดียวกัน — วิซาร์ดเตรียมรีโพ ส่วนพิธีกรรมเป็นผู้เผยแพร่',
       piiReview:
-        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+        'ตัวสแกนพบข้อมูลส่วนบุคคลที่เป็นไปได้ สำหรับแต่ละรายการที่พบ คุณเลือกได้ว่า: ปกปิด (แทนที่ด้วยประกาศ), แทนที่ (เขียนข้อความของคุณเอง), ลบ (ลบทิ้ง) หรือยอมรับ (เก็บไว้ — การตัดสินใจถูกบันทึก) รีโพจะส่งมอบไม่ได้หากยังมีรายการที่ยังไม่ได้ตรวจทาน'
     },
     md: {
       toolbar: 'การจัดรูปแบบ',
@@ -2283,13 +2283,13 @@ export default {
       step5:
         'นี่คือหัวใจสำคัญของงาน แต่ละหัวข้อคือหน่วยความรู้ขนาดเล็กที่สามารถอ้างอิงได้ หัวข้อจะได้รับชื่อ คำอธิบาย และได้รับป้ายกำกับจากลำดับชั้นความรู้ งานของคุณคือทำให้ข้อมูลมีความน่าเชื่อถือ: เปลี่ยนชื่อที่ไม่ชัดเจน รวมรายการที่ซ้ำกัน และตัดรายการที่ไม่มีแหล่งที่มารองรับออก',
       step6:
-        'เราตรวจสอบความสอดคล้อง: ทุกหัวข้อมีชื่อหรือไม่ ป้ายกำกับถูกต้องหรือไม่ การระบุแหล่งที่มาครบถ้วนหรือไม่ ปัญหาที่บล็อกต้องแก้ไขก่อนส่งมอบคลัง คำเตือนสามารถยอมรับได้',
+        'เราตรวจสอบความสอดคล้อง: ทุกหัวข้อมีชื่อหรือไม่ ป้ายกำกับถูกต้องหรือไม่ การระบุแหล่งที่มาครบถ้วนหรือไม่ ปัญหาที่บล็อกต้องแก้ไขก่อนส่งมอบรีโพ คำเตือนสามารถยอมรับได้',
       step7:
         'คำเตือนบางอย่างสามารถแก้ไขได้โดยอัตโนมัติ: ค่าสถานะสามารถปรับให้อยู่ใน enum ที่ถูกต้อง สามารถเติมฟิลด์ที่ขาดหายไปได้ด้วยค่าเริ่มต้นที่สมเหตุสมผล นำการแก้ไขที่คุณเห็นชอบไปปรับใช้ จากนั้นกลับไปตรวจสอบที่โมดูลดูแลจัดการ',
       step8:
-        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+        'สรุปสิ่งที่คุณสร้าง: หัวข้อ ป้ายกำกับ แหล่งที่มา และปัญหาที่ยังค้างอยู่ เมื่ออ่านแล้วถูกต้อง ก็ส่งมอบ — การส่ง → อนุมัติ → เผยแพร่ เกิดขึ้นบนแดชบอร์ดและในตัวแก้ไข ไม่ใช่ในวิซาร์ดนี้',
       step9:
-        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+        'รีโพนี้พร้อมเข้าสู่การตรวจทานแล้ว ส่งเพื่อขออนุมัติบนแดชบอร์ด Studio ผู้อนุมัติจะรับ การเผยแพร่เกิดขึ้นจากแดชบอร์ดหรือตัวแก้ไข — ไม่ใช่จากวิซาร์ดนี้ ตัวแก้ไขยังเป็นที่อยู่ของทุกการเปลี่ยนแปลงในอนาคต',
       docMgmtEntry:
         'สร้างที่เก็บ OKF ใหม่จากเอกสารที่เลือก เอกสารจะกลายเป็นแหล่งที่มา คุณจะได้ตรวจสอบและตั้งชื่อหัวข้อที่สร้างขึ้นก่อนที่จะเผยแพร่สิ่งใด',
       crawlSegment:
@@ -2406,7 +2406,7 @@ export default {
     },
     steps: {
       entry: {
-        createdHint: 'Repository created — rename it later from the editor.',
+        createdHint: 'สร้างรีโพแล้ว — เปลี่ยนชื่อได้ภายหลังจากตัวแก้ไข',
         title: 'ชื่อที่เก็บและสาขาวิชา',
         hint: 'ตั้งชื่อที่เก็บ OKF นี้ให้ชัดเจนและเลือกสาขาวิชา',
         nameLabel: 'ชื่อที่เก็บ',
@@ -2434,12 +2434,12 @@ export default {
             desc: 'แตกแขนงหัวข้อและโครงสร้างจากที่เก็บ OKF อื่น'
           }
         },
-        cloneSource: 'Source repository (not yet serving)',
-        clonePh: 'Select the repository to clone from',
-        cloning: 'Cloning topics into this repository…',
-        cloneNeed: 'Pick the repository to clone from first.',
-        cloneBusy: 'The previous repository is still being removed — go Back and Continue again in a moment.',
-        cloneFailed: 'The clone failed — try again.'
+        cloneSource: 'รีโพต้นทาง (ยังไม่ได้ให้บริการ)',
+        clonePh: 'เลือกรีโพที่จะโคลนจาก',
+        cloning: 'กำลังโคลนหัวข้อเข้ารีโพนี้…',
+        cloneNeed: 'เลือกรีโพที่จะโคลนจากก่อน',
+        cloneBusy: 'รีโพก่อนหน้ายังอยู่ระหว่างการถอนคืน — กลับไปแล้วกดดำเนินการต่ออีกครั้งในอีกสักครู่',
+        cloneFailed: 'การโคลนล้มเหลว — ลองอีกครั้ง'
       },
       input: {
         title: 'ข้อมูลนำเข้า',
@@ -2451,27 +2451,27 @@ export default {
         chooseCrawl: 'Choose crawled documents',
         chooseDocs: 'Choose source documents',
         writeOne: '+ Write a concept',
-        fsPick: '+ Import markdown from this computer',
+        fsPick: '+ นำเข้า markdown จากคอมพิวเตอร์ของคุณ',
         fsBusy: 'Importing your files…',
-        fsFailed: 'Import failed — check the files and retry.',
-        skippedEmpty: '{n} empty file(s) skipped.',
+        fsFailed: 'การนำเข้าล้มเหลว — ตรวจสอบไฟล์แล้วลองใหม่',
+        skippedEmpty: 'ข้ามไฟล์ว่าง {n} รายการ',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',
-        noRepo: 'Create the repository first (go back to Entry).',
-        noRepoYet: 'Create the repository first (go back to Entry).',
-        benchTitle: 'Topics in this repository',
+        noRepo: 'สร้างรีโพก่อน (ย้อนกลับไปที่ขั้นตอนเริ่มต้น)',
+        noRepoYet: 'สร้างรีโพก่อน (ย้อนกลับไปที่ขั้นตอนเริ่มต้น)',
+        benchTitle: 'หัวข้อในรีโพนี้',
         benchCount: '{n}',
         benchLoading: 'Reading topics…',
-        benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
-        benchFailed: 'Could not read the topics right now.',
+        benchEmpty: 'ยังไม่มีอะไรที่นี่ — เลือกแหล่งที่มาด้านล่าง นำเข้า markdown หรือเขียนหัวข้อแรกของคุณ',
+        benchFailed: 'ไม่สามารถอ่านหัวข้อได้ในขณะนี้',
         editTitle: 'Edit concept',
-        deleteFailed: 'Could not delete the concept.',
-        added: '{n} topic(s) in this repository so far.',
+        deleteFailed: 'ลบแนวคิดไม่สำเร็จ',
+        added: 'มีหัวข้อ {n} รายการในรีโพนี้จนถึงตอนนี้',
         deleteTitle: 'Delete topic',
-        deleteBody: 'This permanently removes the topic from this repository.',
+        deleteBody: 'การนี้จะลบหัวข้อออกจากรีโพนี้อย่างถาวร',
         labelFailed: 'Could not set the label.',
-        cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
+        cloned: 'รีโพนี้เป็นรีโพที่โคลนมา — หัวข้อของมันอยู่ครบแล้ว ดำเนินการต่อไปที่ขั้นตอนการคัดสรรเพื่อตรวจทาน'
       },
       produce: {
         title: 'สร้างหัวข้อ',
@@ -2480,70 +2480,69 @@ export default {
         placeholder: 'บริการตัวสร้างจะเชื่อมต่อในเรื่องราวถัดไป',
         retry: 'Retry conversion',
         restart: 'Run again',
-        running: 'Converting… you can watch progress here; nothing is committed until you review in Curate.',
-        failed: 'The conversion failed — retry, or go back and pick different inputs.',
-        done: '{n} topic(s) are ready — continue to review them in Curate.',
-        noSources: 'No sources selected — go back to Input.',
-        neverStarted: 'The conversion did not start — retry.',
-        manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
+        running: 'กำลังแปลง… คุณดูความคืบหน้าได้ที่นี่ ไม่มีสิ่งใดถูกบันทึกจนกว่าคุณจะตรวจทานในขั้นตอนการคัดสรร',
+        failed: 'การแปลงล้มเหลว — ลองอีกครั้ง หรือย้อนกลับไปเลือกอินพุตอื่น',
+        done: 'หัวข้อพร้อม {n} รายการ — ดำเนินการต่อไปเพื่อตรวจทานในขั้นตอนการคัดสรร',
+        noSources: 'ยังไม่ได้เลือกแหล่งที่มา — ย้อนกลับไปที่ขั้นตอนนำเข้าข้อมูล',
+        neverStarted: 'การแปลงไม่ได้เริ่มขึ้น — ลองอีกครั้ง',
+        manualSkip: 'หัวข้อที่เขียนเองไม่ต้องสร้างใหม่ — ดำเนินการต่อไปที่ขั้นตอนการคัดสรรเพื่อตรวจทาน',
         labelDone: 'Conversion complete',
-        dupContent:
-          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
-        inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        dupContent: 'แหล่งที่มาเหล่านี้ถูกนำเข้าไว้ในรีโพ OKF อื่นแล้ว ถอนคืนหรือลบรีโพนั้นก่อน หรือเลือกเอกสารอื่น',
+        inFlight: 'มีการแปลงกำลังทำงานอยู่แล้วสำหรับรีโพนี้ — โปรดรอให้เสร็จสิ้น',
         stage: {
           files: 'Files',
-          filesCount: '{done} of {total} documents',
+          filesCount: '{done} จาก {total} เอกสาร',
           concepts: 'Concepts',
           conceptsCount: '{done} of {total} topics',
           conceptsSoFar: '{n} topics so far',
           curating: 'Curating',
-          curatingCount: '{done} of {total} concepts labelled',
+          curatingCount: 'ติดป้ายกำกับแล้ว {done} จาก {total} แนวคิด',
           crosslink: 'Cross-linking topics',
-          linkCount: '{done} of {total} batches · {w} links written',
+          linkCount: '{done} จาก {total} ชุด · เขียนลิงก์แล้ว {w} รายการ',
           complete: 'Complete',
           unavailable: 'Count unavailable',
           waiting: 'Waiting'
         },
-        filesNote: '{done} of {total} documents converted',
-        pagesNote: '{done} of {total} pages converted',
-        pagesSoFar: '{n} pages converted so far',
+        filesNote: 'แปลงแล้ว {done} จาก {total} เอกสาร',
+        pagesNote: 'แปลงแล้ว {done} จาก {total} หน้า',
+        pagesSoFar: 'แปลงไปแล้ว {n} หน้า',
         sourceStat: '+{n} new (total {t})',
-        sourceStatMerged: '+{n} new · {m} merged by slug (total {t})',
+        sourceStatMerged: 'ใหม่ {n} · รวมตาม slug อีก {m} (ทั้งหมด {t})',
         docsLeg: '{n} selected document(s)',
-        legWait: 'Waiting for the previous conversion to release…'
+        legWait: 'กำลังรอการแปลงก่อนหน้าปล่อยล็อค…'
       },
       label: {
         title: 'ป้ายกำกับ — อัตโนมัติ',
         hint: 'ป้ายกำกับได้รับการกำหนดโดยอัตโนมัติจากลำดับชั้นความรู้ และจำกัดอยู่ในหัวข้อของที่เก็บข้อมูลนี้',
         loading: 'Reading labels…',
-        preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
+        preview: 'หัวข้อ {labeled} จาก {n} มีป้ายกำกับจากลำดับชั้นความรู้',
         unlabeled: 'no labels yet',
-        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
-        loadFailed: 'Could not read the labels right now.'
+        adjust: 'ปรับแต่งป้ายกำกับของหัวข้อใดก็ได้ในขั้นตอนการคัดสรร — ป้ายกำกับยังจำกัดอยู่ในพื้นที่เรื่องของรีโพนี้',
+        loadFailed: 'ไม่สามารถอ่านป้ายกำกับได้ในขณะนี้'
       },
       curate: {
         embedHint:
-          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
-        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
+          'ตรวจทานและปรับปรุงแต่ละหัวข้อ: แก้ไขข้อความ กำหนดประเภทและป้ายกำกับจากลำดับชั้นความรู้ เพิ่มหรือลบหัวข้อ ทุกสิ่งที่คุณแก้ไขที่นี่คือสิ่งที่ผู้ช่วยจะอ้างอิงในภายหลัง',
+        noRepo: 'ยังไม่มีรีโพ — ย้อนกลับไปที่ขั้นตอนเริ่มต้นแล้วสร้างหรือเลือกรีโพก่อน',
         title: 'ตรวจสอบหัวข้อ',
         hint: 'แต่ละหัวข้อคือหน่วยความรู้ขนาดเล็กที่สามารถอ้างอิงได้ แก้ไขชื่อและคำอธิบาย',
         placeholder: 'โครงสร้างแผนผังผู้ดูแล + ตัวแก้ไขจะพร้อมใช้งานในเรื่องราว 3-8'
       },
       validate: {
         title: 'ตรวจสอบปัญหา',
-        hint: 'เราตรวจสอบความสอดคล้อง ปัญหาที่บล็อกต้องได้รับการแก้ไขก่อนส่งมอบคลัง',
+        hint: 'เราตรวจสอบความสอดคล้อง ปัญหาที่บล็อกต้องได้รับการแก้ไขก่อนส่งมอบรีโพ',
         placeholder: 'แผงการตรวจสอบความถูกต้องจะพร้อมใช้งานในเรื่องราว 3-8'
       },
       autocorrect: {
         title: 'แก้ไขอัตโนมัติ',
         hint: 'คำเตือนบางอย่างสามารถแก้ไขได้โดยอัตโนมัติ นำการแก้ไขที่คุณเห็นชอบไปปรับใช้ จากนั้นกลับไปตรวจสอบที่โมดูลดูแลจัดการ',
         placeholder: 'บริการแก้ไขอัตโนมัติจะพร้อมใช้งานในเรื่องราว 10.2',
-        noRepo: 'No repository yet — go back to Entry and create one first.',
-        applied: 'Fixes applied — continue, or go back to Curate to review the result.'
+        noRepo: 'ยังไม่มีรีโพ — ย้อนกลับไปที่ขั้นตอนเริ่มต้นแล้วสร้างรีโพก่อน',
+        applied: 'ใช้การแก้ไขแล้ว — ดำเนินการต่อ หรือย้อนกลับไปที่ขั้นตอนการคัดสรรเพื่อตรวจผล'
       },
       review: {
         title: 'ตรวจสอบ',
-        hint: 'สรุปสิ่งที่คุณสร้าง — การส่ง การอนุมัติ และการเผยแพร่เกิดขึ้นที่แดชบอร์ดและตัวแก้ไข',
+        hint: 'สรุปสิ่งที่คุณสร้าง — การส่ง การอนุมัติ และการเผยแพร่เกิดขึ้นบนแดชบอร์ดและในตัวแก้ไข',
         repo: 'ที่เก็บ',
         topics: 'หัวข้อ',
         labels: 'ป้ายกำกับ',
@@ -2551,28 +2550,28 @@ export default {
         state: 'Lifecycle state',
         labelsSet: 'set per topic in Curate',
         browserHint:
-          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
-        noRepo: 'No repository yet — the file review appears here once a repository exists.',
+          'มุมมองสุดท้ายก่อนส่งมอบ: ทุกไฟล์ด้านล่าง ทั้ง markdown และป้ายกำกับ — ตรงตามที่ผู้ช่วยจะอ้างอิงพอดี',
+        noRepo: 'ยังไม่มีรีโพ — มุมมองตรวจไฟล์จะปรากฏที่นี่เมื่อมีรีโพแล้ว',
         ritualOutside:
-          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+          'พิธีกรรมการตรวจทาน — ส่งเพื่อขอตรวจ ผู้ตรวจอนุมัติ และเผยแพร่ — เกิดขึ้นในตัวแก้ไขและแดชบอร์ด Studio ไม่ใช่ที่นี่ เปิดตัวแก้ไขเพื่อทำขั้นตอนสุดท้าย',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
-        noVersions: 'No versions yet — versions are minted during the approval ritual.',
-        versionSummary: '{n} version(s) · latest v{latest}'
+        noVersions: 'ยังไม่มีเวอร์ชัน — เวอร์ชันถูกสร้างขึ้นในพิธีกรรมการอนุมัติ',
+        versionSummary: '{n} เวอร์ชัน · ล่าสุด v{latest}'
       },
       publish: {
         title: 'รักษาความปลอดภัยและเสร็จสิ้น',
-        hint: 'คลังนี้พร้อมสำหรับการตรวจทานแล้ว การเผยแพร่จะไม่เกิดขึ้นที่นี่ — ส่งเพื่อขออนุมัติจากแดชบอร์ด การอนุมัติและการเผยแพร่ทำที่แดชบอร์ดหรือตัวแก้ไข',
+        hint: 'รีโพนี้พร้อมเข้าสู่การตรวจทานแล้ว การเผยแพร่จะไม่เกิดขึ้นที่นี่ — ส่งเพื่อขออนุมัติบนแดชบอร์ด แล้วอนุมัติและเผยแพร่จากแดชบอร์ดหรือตัวแก้ไข',
         nameOk: 'ตั้งชื่อที่เก็บแล้ว',
         labelsOk: 'เลือกป้ายกำกับแล้ว',
         topicsOk: 'ตรวจสอบหัวข้อแล้ว',
         topicsPending: 'No topics yet',
         topicsServing: 'Topics serving',
-        noTopics: 'No topics yet — go back to Curate to produce or write them.',
-        frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
+        noTopics: 'ยังไม่มีหัวข้อ — ย้อนกลับไปที่ขั้นตอนการคัดสรรเพื่อสร้างหรือเขียนหัวข้อ',
+        frozen: 'รีโพนี้กำลังให้บริการ — ที่นี่เป็นสรุปแบบอ่านอย่างเดียว เปิดตัวแก้ไขเพื่อจัดการเวอร์ชันหรือถอนคืน',
         ritual:
-          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+          'ขั้นตอนถัดไป: ส่งเพื่อขออนุมัติบนแดชบอร์ด Studio → ผู้อนุมัติรับ → เผยแพร่จากแดชบอร์ดหรือตัวแก้ไข วิซาร์ดจบที่นี่โดยตั้งใจ',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2598,7 +2597,7 @@ export default {
         alreadyInOkf: 'ลบเอกสารที่อยู่ในที่เก็บ OKF แล้ว',
         alreadyIngested: 'ลบเอกสารที่ผ่านการ ingest แล้ว',
         servingWarn:
-          "เอกสารที่เลือก {'{'}n{'}'} รายการยังให้บริการคอร์ปัสอิสระอยู่ — รีโปใหม่จะนำเข้าไม่ได้จนกว่าจะถอนคืนเอกสารเหล่านั้น"
+          "เอกสารที่เลือก {'{'}n{'}'} รายการยังให้บริการคอร์ปัสอิสระอยู่ — รีโพใหม่จะนำเข้าไม่ได้จนกว่าจะถอนคืนเอกสารเหล่านั้น"
       },
       produce: {
         notReady: 'โมดูลตัวสร้างจะเชื่อมต่อในเรื่องราวถัดไป'
@@ -2683,7 +2682,7 @@ export default {
         trustTier: 'trust_tier',
         attestation: 'attestation',
         sources: 'provenance.sources',
-        onlyOnIndex: 'Per-repo tags live on the index concept only — open the index to see them.'
+        onlyOnIndex: 'แท็กระดับรีโพอยู่ที่แนวคิดดัชนีเท่านั้น — เปิดดัชนีเพื่อดูแท็กเหล่านั้น'
       },
       showSource: 'แสดงแหล่งที่มา',
       issue: {
@@ -2698,7 +2697,7 @@ export default {
       none: 'ไม่มี',
       expertHint: 'สลับเป็นโหมดผู้เชี่ยวชาญเพื่อดู JSON การตรวจสอบแบบดิบ กรองตามระดับความรุนแรง และแทนที่ผลการตรวจสอบ',
       headline: {
-        blockers: 'มี {n} ปัญหาที่บล็อก — แก้ไขก่อนส่งมอบคลัง',
+        blockers: 'มีปัญหาที่บล็อก {n} รายการ — แก้ไขก่อนส่งมอบรีโพ',
         warnings: '{n} รายการต้องได้รับการตรวจทานจากคุณ',
         ok: 'ดูเรียบร้อยดี ไม่มีส่วนที่ต้องแก้ไข'
       },
@@ -2709,15 +2708,14 @@ export default {
       run: {
         notReady: 'การตรวจสอบจะเชื่อมต่อในเรื่องราวถัดไป'
       },
-      piiTitle: 'Personal data — review each flagged concept',
+      piiTitle: 'ข้อมูลส่วนบุคคล — ตรวจทานแนวคิดที่ถูกแจ้งเตือนแต่ละรายการ',
       loading: 'Checking the repository…',
-      loadFailed: 'Could not load the validation report.',
+      loadFailed: 'ไม่สามารถโหลดรายงานการตรวจสอบได้',
       retry: 'Retry',
       issuesTitle: 'Issues to review',
       howToFix: 'How to fix',
-      indexFailed: 'Re-index failed — edit or re-split the page.',
-      indexFailedRemedy:
-        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+      indexFailed: 'การจัดทำดัชนีใหม่ล้มเหลว — แก้ไขหรือแบ่งส่วนหน้าใหม่',
+      indexFailedRemedy: 'เปิดหน้าในตัวแก้ไขแล้วบันทึก (การบันทึกจะจัดทำดัชนีใหม่) หรือแบ่งส่วนรีโพใหม่จากแหล่งที่มา',
       severity: {
         blocker: 'Blocking',
         warning: 'Needs review',
@@ -2732,11 +2730,11 @@ export default {
       },
       topicLinks: {
         title: 'Cross-link topics',
-        tip: 'Reads every page in this repository and writes links between the pages that genuinely belong together — the same processing the import wizard runs. It is safe to re-run: existing links are kept and only new ones are added.',
-        progress: 'Cross-linking… {done} of {total} batches',
-        progressIdle: 'Cross-linking… reading the repository',
-        done: 'Added {n} link(s) across {c} page(s).',
-        failed: 'Cross-linking failed: {msg}'
+        tip: 'อ่านทุกหน้าในรีโพนี้แล้วเขียนลิงก์ระหว่างหน้าที่เกี่ยวข้องกันจริง — เป็นการประมวลผลแบบเดียวกับที่วิซาร์ดนำเข้าทำงาน เรียกซ้ำได้อย่างปลอดภัย: ลิงก์เดิมยังอยู่ และเพิ่มเฉพาะลิงก์ใหม่',
+        progress: 'กำลังเชื่อมโยงข้าม… {done} จาก {total} ชุด',
+        progressIdle: 'กำลังเชื่อมโยงข้าม… กำลังอ่านรีโพ',
+        done: 'เพิ่มลิงก์แล้ว {n} รายการใน {c} หน้า',
+        failed: 'การเชื่อมโยงข้ามล้มเหลว: {msg}'
       },
       action: {
         suggestLinks: 'Suggest links',
@@ -2744,8 +2742,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: 'Create the Sources page and link {n} page(s)',
-        wireExisting: 'Link {n} page(s) to "{hub}"',
+        wireCreate: 'สร้างหน้า Sources และเชื่อมโยง {n} หน้า',
+        wireExisting: 'เชื่อมโยง {n} หน้าไปยัง "{hub}"',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2753,45 +2751,44 @@ export default {
         done: 'Done'
       },
       suggest: {
-        working: 'Asking the assistant for link suggestions…',
-        empty: 'No suggestions — link it manually in the editor.'
+        working: 'กำลังขอคำแนะนำลิงก์จากผู้ช่วย…',
+        empty: 'ไม่มีคำแนะนำ — เชื่อมโยงด้วยมือในตัวแก้ไข'
       },
       nearDup: {
-        keepHint: 'Keep one copy — delete the rest.'
+        keepHint: 'เก็บไว้หนึ่งสำเนา — ลบที่เหลือ'
       },
-      wireDone: 'Linked {n} page(s) to "{hub}".',
-      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      wireDone: 'เชื่อมโยง {n} หน้าไปยัง "{hub}" แล้ว',
+      wireCreated: 'สร้างหน้า Sources และเชื่อมโยง {n} หน้าแล้ว',
       mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: 'First {n} characters — open the editor for the full page.'
+        truncated: '{n} อักขระแรก — เปิดตัวแก้ไขเพื่อดูหน้าเต็ม'
       },
       tip: {
         conformance:
-          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+          'frontmatter ของหน้าขาดข้อกำหนดของสเปก OKF (ประเภท วันที่ความสด ต้นทาง…) การแก้ไขอัตโนมัติในขั้นตอนที่ 8 จะแก้สิ่งเหล่านี้เชิงกลไก เนื้อหาที่คุณเขียนไม่เปลี่ยน',
         orphan:
-          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+          'ไม่มีหน้าใดเชื่อมโยงที่นี่ และหน้านี้ก็ไม่ได้เชื่อมโยงไปที่ใด การดึงข้อมูลเชิงกราฟใช้การเดินตามลิงก์เพื่อเชื่อมโยงเนื้อหา หน้าที่ไม่มีลิงก์จึงโผล่ขึ้นเฉพาะเมื่อชื่อหัวข้อตรงกันทุกคำ วิธีแก้: ยอมรับคำแนะนำลิงก์ หรือเพิ่มลิงก์ในตัวแก้ไข',
         near_duplicate:
-          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+          'หน้าเหล่านี้มีข้อความเกือบเหมือนกัน เมื่อนำเข้าข้อมูล แต่ละหน้าจะกลายเป็นชิ้นข้อมูลของตัวเอง คำถามจึงอาจได้เนื้อหาเดิมกลับมาหลายครั้ง วิธีแก้: ดูตัวอย่าง เก็บสำเนาที่ดีที่สุด แล้วลบที่เหลือ',
         citation:
-          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+          'หน้าต่าง ๆ อ้างอิงเอกสารในข้อมูลเมตาของตัวเอง แต่ไม่มีอะไรเชื่อมโยงไปยังหน้า Sources — การอ้างอิงจึงไม่เคยไหลเข้าสู่กราฟ และไม่สามารถเดินตามหรืออ้างอิงตอนตอบคำถามได้ วิธีแก้: คลิกเพียงครั้งเดียวเพื่อเชื่อมทุกหน้าที่อ้างอิง',
         index_failed:
-          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+          'หน้านี้ถูกนำเข้าแล้ว แต่การสร้างดัชนีค้นหาล้มเหลว — จะดึงข้อมูลไม่ได้จนกว่าจะจัดทำดัชนีใหม่ การบันทึกหน้าในตัวแก้ไขจะลองสร้างดัชนีอีกครั้ง'
       },
       piiRescan: 'Re-scan all pages',
       piiRescanWorking: 'Re-scanning every page…',
       piiRescanDone: 'Re-scanned {n} page(s).',
       piiRescanPartial:
-        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+        'สแกนใหม่แล้ว {n} หน้า {e} หน้ายังล้มเหลว — ผลการสแกนไม่เปลี่ยนแปลง การเผยแพร่จึงยังถูกปิดกั้นสำหรับหน้าเหล่านั้น',
       piiRescanMissing:
-        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
-      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
-      piiRescanFailed:
-        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
-      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
-      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+        'เซิร์ฟเวอร์นี้ไม่รองรับการสแกนใหม่ (404) ไม่มีสิ่งใดเปลี่ยนแปลง — หน้าที่สแกนล้มเหลวยังคงปิดกั้นการเผยแพร่',
+      piiRescanFrozen: 'ปฏิเสธการสแกนใหม่: ที่เก็บข้อมูลกำลังเผยแพร่ (409) ไม่มีสิ่งใดเปลี่ยนแปลง',
+      piiRescanFailed: 'การสแกนใหม่ล้มเหลว ไม่มีสิ่งใดเปลี่ยนแปลง — หน้าที่สแกนล้มเหลวยังคงปิดกั้นการเผยแพร่',
+      piiRescanProgress: 'สแกนใหม่… {done} จาก {total} หน้า',
+      piiRescanProgressIdle: 'สแกนใหม่… กำลังอ่านรีโพ',
       piiRescanNoKey:
-        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+        'เซิร์ฟเวอร์รับการสแกนใหม่แล้วแต่ไม่คืนรหัสการทำงาน จึงติดตามความคืบหน้าไม่ได้ ไม่มีการรายงานผลใด ๆ',
       piiStateError: 'Scan error',
       piiTally: {
         scanned: '{n} page(s) re-scanned',
@@ -2806,13 +2803,12 @@ export default {
       nFlagged: 'พบ {n} รายการ',
       rescan: 'สแกนอีกครั้ง',
       stateError: 'Scan failed',
-      errorTitle: 'This page is blocking the hand-off.',
+      errorTitle: 'หน้านี้กำลังปิดกั้นการส่งมอบ',
       errorBody:
-        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
-      rescanMissing:
-        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
-      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
-      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
+        'การสแกน PII ของหน้านี้ล้มเหลว (ไม่ใช่การไม่พบสิ่งใด แต่คืออ่านข้อความไม่ได้) การเผยแพร่ยังถูกปิดกั้นจนกว่าจะมีการสแกนที่สำเร็จ โปรดใช้ปุ่มสแกนใหม่ด้านบน',
+      rescanMissing: 'เซิร์ฟเวอร์นี้ไม่รองรับการสแกนใหม่ (404) ไม่มีสิ่งใดเปลี่ยนแปลง — หน้านี้ยังคงปิดกั้นการเผยแพร่',
+      rescanFrozen: 'ปฏิเสธการสแกนใหม่: ที่เก็บข้อมูลกำลังเผยแพร่ (409) ไม่มีสิ่งใดเปลี่ยนแปลง',
+      rescanFailed: 'การสแกนใหม่ล้มเหลว ไม่มีสิ่งใดเปลี่ยนแปลง — หน้านี้ยังคงปิดกั้นการเผยแพร่',
       scanning: 'กำลังสแกน…',
       clean: 'ไม่มีเอนทิตีที่ถูกตั้งค่าสถานะ — concept นี้ปลอดภัย',
       how: 'วิธีแก้: ลบออกหรือใช้คำอื่น (เช่น ใช้ตำแหน่งแทนชื่อ) จากนั้นบันทึก — การสแกนใหม่จะอัปเดตรายการนี้',
@@ -2880,49 +2876,49 @@ export default {
       unpublish: 'ยกเลิกการเผยแพร่'
     },
     src: {
-      title: 'Choose the source documents',
-      hint: 'Pick sources from the document repository, upload new ones from this computer, or both.',
-      repoSec: 'From the document repository',
+      title: 'เลือกเอกสารต้นทาง',
+      hint: 'เลือกแหล่งที่มาจากที่เก็บเอกสาร อัปโหลดไฟล์ใหม่จากคอมพิวเตอร์ของคุณ หรือทำทั้งสองอย่าง',
+      repoSec: 'จากที่เก็บเอกสาร',
       searchPh: 'Search by name or site…',
       chipsLabel: 'Filter by origin',
       chipAll: 'All',
       chipCrawl: 'Crawls',
       chipUpload: 'Uploads',
-      noMatches: 'Nothing matches this search or filter.',
+      noMatches: 'ไม่พบสิ่งใดที่ตรงกับการค้นหาหรือตัวกรองนี้',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
       total: '{n} document(s)',
-      titleSingle: 'Choose the crawled document',
+      titleSingle: 'เลือกเอกสารที่เก็บข้อมูลจากเว็บไซต์',
       loading: 'Loading documents…',
       retry: 'Retry',
-      empty: 'No documents in the repository yet — upload some below.',
+      empty: 'ยังไม่มีเอกสารในที่เก็บ — อัปโหลดบางไฟล์ด้านล่าง',
       more: 'Load more',
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
       uploaded: '{n} file(s) uploaded.',
-      uploadFailed: 'An upload failed — check the files and retry.',
-      fsNote: 'Uploaded files join the document repository and are selected here automatically.',
+      uploadFailed: 'การอัปโหลดล้มเหลว — ตรวจสอบไฟล์แล้วลองใหม่',
+      fsNote: 'ไฟล์ที่อัปโหลดจะเข้าร่วมที่เก็บเอกสารและถูกเลือกให้อัตโนมัติที่นี่',
       count: 'Selected: {n}',
-      needOne: 'Select at least one source.',
+      needOne: 'เลือกแหล่งที่มาอย่างน้อยหนึ่งรายการ',
       confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
-      loadFailed: 'Could not load the document list.',
+      loadFailed: 'ไม่สามารถโหลดรายการเอกสารได้',
       servingBadge: 'serving free-form RAG',
       servingTip:
-        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+        'เอกสารนี้กำลังให้บริการคอร์ปัสอิสระของ RAG — การแปลงสำเร็จ แต่รีโพนี้จะนำเข้าข้อมูลไม่ได้จนกว่าจะถอนคืน',
       alreadyBadge: 'already in an OKF repo',
-      alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
+      alreadyTip: 'เอกสารนี้เป็นที่มาของรีโพ OKF อื่นอยู่แล้ว — การแปลงจะปฏิเสธไฟล์นี้'
     },
     frontmatter: {
-      title: 'Frontmatter tags — what this repo is about',
-      help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',
+      title: 'แท็ก frontmatter — รีโพนี้เกี่ยวกับอะไร',
+      help: 'แท็กอธิบายว่ารีโพนี้มีอะไรบ้าง และ — สำคัญไม่แพ้กัน — ไม่มีอะไรบ้าง (รายการที่ต้องห้าม) แท็กเหล่านี้เป็นตัวกำหนดว่าคำค้นใดจะถูกกำหนดเส้นทางมาที่รีโพนี้ คลิกรีเฟรชเพื่อร่างจากคลังข้อมูล หรือแก้ไขชิปด้านล่าง การเผยแพร่ต้องมีหัวข้อ ≥3 และต้องห้าม ≥1',
       refresh: 'Refresh suggestions',
       suggesting: 'Curating…',
-      suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestEmpty: 'LLM ไม่ได้ส่งแท็กใดกลับมา ลองอีกครั้งหลังจากคลังข้อมูลเติบโตขึ้น',
       suggestCoverage: 'ได้มาจาก {sampled} จาก {total} แนวคิด ครอบคลุม {labels} ป้ายกำกับของลำดับชั้นความรู้',
       suggestFailed: 'Suggest failed.',
-      suggestedTag: 'LLM suggestion — remove to dismiss.',
+      suggestedTag: 'คำแนะนำจาก LLM — นำออกเพื่อปฏิเสธ',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2931,7 +2927,7 @@ export default {
       save: 'Save tags',
       saved: 'Saved',
       error: 'Save failed.',
-      errorWithStep: 'Save failed at step "{step}" ({code}) — retry.',
+      errorWithStep: 'การบันทึกล้มเหลวที่ขั้นตอน "{step}" ({code}) — ลองอีกครั้ง',
       field: {
         topic: 'Topic',
         entity: 'Entity',
@@ -2961,18 +2957,18 @@ export default {
         model: 'Model',
         version: 'Head version',
         computedAt: 'Computed',
-        staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
+        staleNote: 'แท็กเปลี่ยนแปลงหลังจากสร้างหัวนี้ — สร้างหัวใหม่ก่อนจึงจะเชื่อถือผลการทดสอบได้',
         missingNote:
-          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+          'ยังไม่มีหัวที่ฝังเวกเตอร์แล้ว หัวจะถูกสร้างตอนเผยแพร่ หากบริการฝังใช้งานไม่ได้ในตอนนั้น ให้สร้างหัวใหม่ตอนนี้จากแท็กที่บันทึกไว้',
         rebuild: 'Rebuild head',
-        rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
-        rebuildBusy: 'Rebuilding — embedding the tag fields…'
+        rebuildTip: 'ฝังแท็กที่บันทึกไว้ใหม่เป็นเวกเตอร์หัวชุดใหม่ มีการเรียกฝังหนึ่งครั้งต่อหนึ่งฟิลด์แท็ก',
+        rebuildBusy: 'กำลังสร้างหัวใหม่ — กำลังฝังฟิลด์แท็ก…'
       },
       test: {
-        placeholder: 'e.g. cancer screening guidelines',
+        placeholder: 'เช่น แนวทางการตรวจคัดกรองมะเร็ง',
         run: 'Run test',
-        running: 'Embedding the query and scoring the heads…',
-        adversarial: 'Adversarial — this query should NOT select this repository (a forbidden/adjacent topic)',
+        running: 'กำลังฝังคำค้นและให้คะแนนหัว…',
+        adversarial: 'การทดสอบโจมแย้ง — คำค้นนี้ไม่ควรเลือกที่เก็บนี้ (หัวข้อที่ต้องห้ามหรืออยู่ใกล้เคียง)',
         embeddedWith: 'Embedded with',
         col: {
           repo: 'Repository',
@@ -2983,14 +2979,14 @@ export default {
         },
         provenance: 'Routing provenance',
         empty:
-          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
-        pass: 'PASS — this repository wins the head routing.',
-        fail: 'FAIL — {repo} wins the head routing for this query.',
-        passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
+          'พิมพ์คำค้นที่ผู้ใช้จะถามแล้วรัน — ห้องทดสอบจะให้คะแนนหัวของทุกที่เก็บที่เผยแพร่แล้วเหมือนการกระจายเส้นทางจริง',
+        pass: 'ผ่าน — ที่เก็บนี้ชนะการกำหนดเส้นทางด้วยหัว',
+        fail: 'ไม่ผ่าน — {repo} ชนะการกำหนดเส้นทางด้วยหัวสำหรับคำค้นนี้',
+        passAdversarial: 'ผ่าน — ไม่ถูกเลือกอย่างถูกต้อง (ผู้ชนะ: {repo})',
         failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
-        passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
+        passSuppressed: 'ผ่าน — ถูกปิดกั้นโดยด่านต้องห้าม/สัญญาณรบกวน: หัวไม่อ้างสิทธิ์คำค้นนี้',
         notSelectedSuppressed:
-          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+          'ไม่ถูกเลือก — ถูกปิดกั้นโดยด่านต้องห้าม/สัญญาณรบกวน: คำค้นนี้ใกล้เคียงกับสิ่งที่ที่เก็บนี้ตัดออก หรือเป็นสัญญาณรบกวนนอกโดเมน',
         claimed: 'claims',
         suppressed: 'suppressed'
       },
@@ -3010,7 +3006,7 @@ export default {
         negativeRandom: 'นอกโดเมน',
         meta: 'เมตา',
         nearMiss: 'ใกล้เคียงแต่ผิด',
-        hint: 'แถวที่ได้จากแท็กต้องห้ามขึ้นกับจำนวนแท็กต้องห้ามของคลังข้อมูล — ตั้งค่าที่นี่ไม่ได้'
+        hint: 'จำนวนแถวที่ได้จากแท็กต้องห้ามขึ้นอยู่กับจำนวนแท็กต้องห้ามของที่เก็บ — ตั้งค่าที่นี่ไม่ได้'
       },
       cls: {
         nearMiss: 'ใกล้เคียงแต่ผิด',
@@ -3021,7 +3017,7 @@ export default {
       },
       teach: {
         claim:
-          'หัว (head) อ้างสิทธิ์คำค้นนี้ — ผ่านประตูทั้งสามบาน หากไม่ควรถูกกำหนดเส้นทางมาที่นี่ ให้ขอแท็กต้องห้ามที่ตัดหัวข้อนี้ออก เพิ่ม แล้วสร้างหัวใหม่',
+          'หัวอ้างสิทธิ์คำค้นนี้ — ผ่านประตูทั้งสามบาน หากไม่ควรถูกกำหนดเส้นทางมาที่นี่ ให้ขอแท็กต้องห้ามที่ตัดหัวข้อนี้ออก เพิ่ม แล้วสร้างหัวใหม่',
         explain: 'อธิบายและเสนอ',
         explainBusy: 'กำลังอธิบาย — โมเดลกำลังเสนอแท็กต้องห้าม…',
         addTag: 'เพิ่มไปยังแท็กต้องห้าม',
@@ -3034,10 +3030,10 @@ export default {
         veto: 'คำค้นนี้ตรงกับแท็กต้องห้าม “{tag}” อย่างมาก หากควรเป็นของคลังข้อมูลนี้ ให้ลบ “{tag}” ออกจากแท็กต้องห้ามใน Frontmatter แล้วเผยแพร่ใหม่เพื่อสร้าง head ใหม่',
         floor:
           'คำค้นนี้ไม่เกี่ยวข้องกับหัวข้อของคลังข้อมูลนี้ (คะแนนต่ำกว่าคะแนนขั้นต่ำของโดเมน) — การเปลี่ยนแท็กจะไม่ช่วยแก้ไข นี่คือการกดที่ถูกต้อง',
-        rejected: 'ถูกปฏิเสธโดยระบบป้องกัน — แท็กต้องห้ามต้องไม่ตรงกับหัวข้อของคลังข้อมูลนี้เอง'
+        rejected: 'ถูกปฏิเสธโดยระบบป้องกัน — แท็กต้องห้ามต้องไม่ตรงกับหัวข้อของที่เก็บนี้เอง'
       },
       run: {
-        progress: '{done} of {total} queries ({pct}%)',
+        progress: '{done} จาก {total} คำค้น ({pct}%)',
         progressStarting: 'Starting the run…',
         phase: {
           routing: 'Scoring routes',
@@ -3050,7 +3046,7 @@ export default {
           'LLM เขียนคำถามเป็นชุดละ 30 ต่อประเภท — จำนวนมาก (100+) ใช้เวลาหลายนาที เสร็จแล้วชุดทดสอบจะปรากฏที่นี่และในรายการที่บันทึกไว้',
         generating: 'กำลังสร้างเป็นชุด — จำนวนมากใช้เวลาหลายนาที…',
         run: 'Run all queries',
-        running: 'Running every suite query…',
+        running: 'กำลังรันคำถามทุกรายการในชุด…',
         current: 'Current suite',
         col: {
           query: 'Query',
@@ -3065,13 +3061,13 @@ export default {
           name: 'ชื่อ',
           corpus: 'คลังข้อมูล'
         },
-        notEvaluatable: 'not evaluatable (no competitors)',
+        notEvaluatable: 'ประเมินไม่ได้ (ไม่มีคู่แข่ง)',
         pass: 'pass',
         fail: 'fail',
         passRate: 'Pass rate',
         positives: 'Positives',
         negatives: 'Negatives',
-        noCompetitors: 'n/a — no competing heads yet',
+        noCompetitors: 'ไม่เกี่ยวข้อง — ยังไม่มีหัวคู่แข่ง',
         avgMargin: 'Avg margin',
         steal: '{repo} stole {n} queries',
         addPlaceholder: 'Your own probe query…',
@@ -3079,7 +3075,7 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.',
+        noRuns: 'ยังไม่มีการรัน — สร้างชุดทดสอบแล้วรัน',
         explainFailures: 'อธิบายความล้มเหลว',
         explainBusy: 'กำลังอธิบายความล้มเหลว — เรียกโมเดลหนึ่งครั้งสำหรับข้อลบที่ล้มเหลวแต่ละรายการ…',
         batchTitle: 'ทำไมข้อลบที่ล้มเหลวจึงถูกกำหนดเส้นทางมาที่นี่',
@@ -3087,10 +3083,10 @@ export default {
         addAll: 'เพิ่มทั้งหมด',
         rebuildRerun: 'สร้างหัวใหม่และรันชุดทดสอบซ้ำ',
         positiveFailuresTitle: 'ทำไมกรณีบวกจึงผ่านไม่ได้อีกต่อไป',
-        positiveFailures: 'ในรอบนี้มีการทดสอบบวกถูกกด {n} รายการ — แท็กต้องห้ามครอบคลุมขอบเขตของคลังข้อมูลมากเกินไป',
+        positiveFailures: 'ในรอบนี้มีการทดสอบบวกถูกกด {n} รายการ — แท็กต้องห้ามครอบคลุมขอบเขตของที่เก็บมากเกินไป',
         vetoedBy: 'ถูกยับยั้งโดย',
-        marginKilled: 'การทดสอบบวก {n} รายการแพ้ด้วยระยะ margin (ไม่มีแท็กยับยั้งเดี่ยว)',
-        removals: 'แท็กที่ควรลบ (แท็กเหล่านี้ยับยั้งกรณีบวกของคลังข้อมูลนี้เอง)',
+        marginKilled: 'การทดสอบบวก {n} รายการแพ้ด้วยระยะขอบ (ไม่มีแท็กยับยั้งเดี่ยว)',
+        removals: 'แท็กที่ควรลบ (แท็กเหล่านี้ยับยั้งกรณีบวกของที่เก็บนี้เอง)',
         removeTip: 'ลบ "{tag}" — ยับยั้งการทดสอบบวก {n} รายการ',
         tripwire: 'รอบนี้ทำให้การทดสอบบวกล้มเหลว {n} รายการ — แท็กที่เพิ่มกดมากเกินไป ต้องการย้อนกลับหรือไม่?',
         tripwireRevert: 'ดูตัวเลือกการย้อนกลับ',
@@ -3113,7 +3109,7 @@ export default {
         namePlaceholder: 'ชื่อชุดทดสอบ (ไม่บังคับ) — เช่น ชุดทดสอบย้อนหลัง NCD',
         probeTip: 'ทดสอบคำถามนี้กับคลังข้อมูลจริง',
         deleteSuiteTip: 'ลบชุดทดสอบนี้และประวัติของมัน',
-        corpusNeedsIngest: 'โปรด ingest รีปอซิทอรีก่อน — การทดสอบคลังข้อมูลค้นจากคลังที่ ingest แล้ว',
+        corpusNeedsIngest: 'โปรด ingest รีโพสิทอรีก่อน — การทดสอบคลังข้อมูลค้นจากคลังที่ ingest แล้ว',
         deleteConfirmTitle: 'ลบชุดทดสอบนี้?',
         deleteConfirmBody: 'การนี้จะลบชุดทดสอบและประวัติการรันอย่างถาวร ไม่สามารถย้อนกลับได้',
         deleteConfirm: 'ลบชุดทดสอบ',
@@ -3131,36 +3127,35 @@ export default {
         history: 'โหลดประวัติการบันทึกไม่สำเร็จ',
         revert: 'ย้อนกลับ frontmatter ไม่สำเร็จ',
         advisor: 'ที่ปรึกษาล้มเหลว',
-        noSuite: 'สร้างชุดทดสอบก่อน จากนั้นจึงสร้างใหม่และรันซ้ำ',
-        applyNoSuite: 'บันทึกแท็กและสร้าง head ใหม่แล้ว — สร้างชุดทดสอบแล้วรันทั้งหมดเพื่อดูผล',
+        noSuite: 'สร้างชุดทดสอบก่อน จากนั้นจึงสร้างหัวใหม่และรันซ้ำ',
+        applyNoSuite: 'บันทึกแท็กและสร้างหัวใหม่แล้ว — สร้างชุดทดสอบแล้วรันทั้งหมดเพื่อดูผล',
         suiteLoad: 'โหลดชุดทดสอบไม่สำเร็จ',
         suiteUpdate: 'อัปเดตชุดทดสอบไม่สำเร็จ',
         suiteRename: 'เปลี่ยนชื่อชุดทดสอบไม่สำเร็จ',
         generateTimeout: 'ชุดทดสอบใช้เวลานานผิดปกติ — อาจปรากฏในรายการที่บันทึกไว้ ตรวจสอบอีกครั้งในหนึ่งนาที',
         probe: 'การทดสอบคลังข้อมูลล้มเหลว',
         suiteDelete: 'ลบชุดทดสอบไม่สำเร็จ',
-        noFrontmatter:
-          'ที่เก็บนี้ยังไม่มีแท็กหัว — สร้างแท็กในแผง Frontmatter (หรือใช้suggestแท็ก) แล้วจึงสร้างชุดทดสอบ'
+        noFrontmatter: 'ที่เก็บนี้ยังไม่มีแท็กหัว — สร้างแท็กในแผง Frontmatter (หรือใช้แนะนำแท็ก) แล้วจึงสร้างชุดทดสอบ'
       },
       footer: {
         unpublish: 'Unpublish to review'
       },
       publishCard: {
         present:
-          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
-        stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
-        missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+          'หัวที่ฝังเวกเตอร์แล้วพร้อมใช้งาน — การทดสอบการกำหนดเส้นทางในห้องทดสอบจะบอกคุณว่าที่เก็บนี้ชนะคำค้นที่ควรชนะหรือไม่',
+        stale: 'หัวล้าสมัย (แท็กเปลี่ยนแปลงหลังจากสร้างหัว) — การเผยแพร่จะสร้างหัวใหม่',
+        missing: 'ยังไม่มีหัวที่ฝังเวกเตอร์แล้ว — การเผยแพร่จะสร้างหัวจากแท็กที่อนุมัติแล้ว'
       },
       advisor: {
         run: 'ที่ปรึกษา: แนะนำการปรับแท็ก',
         busy: 'กำลังจำลองการปรับแท็กจากการรันล่าสุด…',
         title: 'คำแนะนำชุดแท็ก (จำลองจากการรันล่าสุด)',
-        apply: 'ใช้การเปลี่ยนแปลง สร้าง head ใหม่ และรันชุดทดสอบซ้ำ',
+        apply: 'ใช้การเปลี่ยนแปลง สร้างหัวใหม่ และรันชุดทดสอบซ้ำ',
         scorecard: 'บวก {p}/{pt} ผ่าน · ลบ {n}/{nt} ถูกปิดกั้น',
         now: 'ปัจจุบัน',
         predicted: 'คาดการณ์',
         scope: ' (จาก {q} คำถามในการรันล่าสุด {r} ครั้ง)',
-        applying: 'กำลังใช้งาน: บันทึกแท็ก สร้าง head ใหม่ รันชุดทดสอบซ้ำ…',
+        applying: 'กำลังใช้งาน: บันทึกแท็ก สร้างหัวใหม่ รันชุดทดสอบซ้ำ…',
         blockedTitle: 'การลบที่ถูกบล็อก — คลิกเพื่อรวมในการนำไปใช้',
         blockedGain: 'กู้คืน {n} เคสบวก',
         narrowTitle: 'แท็กที่แคบลง — กู้คืนเคสบวกโดยไม่รับเคสลบกลับมา',
@@ -3212,7 +3207,7 @@ export default {
       },
       paneTitle: 'การทดสอบเปรียบเทียบ RAGAS',
       about:
-        'RAGAS ให้คะแนนว่าผู้ช่วยเรียกข้อมูลและตอบได้ดีเพียงใด — ความซื่อสัตย์ ความแม่นยำและการครอบคลุมของบริบท ความเกี่ยวข้องของคำตอบ และอื่น ๆ รันชุดทดสอบเปรียบเทียบเพื่อวัดคลังเป็นฐานความรู้',
+        'RAGAS ให้คะแนนว่าผู้ช่วยเรียกข้อมูลและตอบได้ดีเพียงใด — ความซื่อสัตย์ ความแม่นยำและการครอบคลุมของบริบท ความเกี่ยวข้องของคำตอบ และอื่น ๆ รันชุดทดสอบเปรียบเทียบเพื่อวัดที่เก็บในฐานะฐานความรู้',
       aboutLabel: 'RAGAS คืออะไร?',
       aboutLink: 'อ่านเพิ่มเติมที่ ragas.io',
       help: {
@@ -3221,7 +3216,7 @@ export default {
         more: 'อ่านเพิ่มเติมที่ ragas.io',
         repositories: {
           title: 'รีปอซิทอรี',
-          text: 'รีปอซิทอรีใดบ้างที่ป้อนการสร้าง — เฉพาะรายการปัจจุบันหรือรวมกับรายการที่เกี่ยวข้อง การมีหลายรีปอซิทอรีทำให้คำถามหลายฮอปข้ามพรมแดนระหว่างกันได้'
+          text: 'รีโพสิทอรีใดบ้างที่ป้อนการสร้าง — เฉพาะรายการปัจจุบันหรือรวมกับรายการที่เกี่ยวข้อง การมีหลายรีโพสิทอรีทำให้คำถามหลายฮอปข้ามพรมแดนระหว่างกันได้'
         },
         questions: {
           title: 'คำถาม',
@@ -3245,7 +3240,7 @@ export default {
         },
         generate: {
           title: 'สร้าง',
-          text: 'สร้างชุดทดสอบด้วย LLM: ขั้นแรกเป็นการไล่กราฟความรู้ทั้งคลัง (นี่คือส่วนที่ใช้เวลาหลายนาที) จากนั้นจึงสังเคราะห์คำถาม ทำงานแบบเบื้องหลัง — คุณปิด Lab ได้โดยไม่สูญเสียอะไร การลบชุดที่กำลังสร้างจะยกเลิกงานนั้น'
+          text: 'สร้างชุดทดสอบด้วย LLM: ขั้นแรกเป็นการไล่กราฟความรู้ทั้งคลัง (นี่คือส่วนที่ใช้เวลาหลายนาที) จากนั้นจึงสังเคราะห์คำถาม ทำงานแบบเบื้องหลัง — คุณปิดห้องทดสอบได้โดยไม่สูญเสียอะไร การลบชุดที่กำลังสร้างจะยกเลิกงานนั้น'
         },
         importSuite: {
           title: 'นำเข้าชุดทดสอบ (.xlsx)',
@@ -3269,7 +3264,7 @@ export default {
         },
         explain: {
           title: 'อธิบายความล้มเหลว',
-          text: 'ระบุว่าแถวที่ไม่ผ่านแต่ละแถวมาจากการดึงข้อมูล การตอบ หรือตัวข้อมูลอ้างอิงเอง — และเสนอแนวทางแก้ไขอย่างระมัดระวัง รวมถึงการเปลี่ยนแปลงระดับรีปอซิทอรี เช่น แท็กและการคัดสรรแนวคิด'
+          text: 'ระบุว่าแถวที่ไม่ผ่านแต่ละแถวมาจากการดึงข้อมูล การตอบ หรือตัวข้อมูลอ้างอิงเอง — และเสนอแนวทางแก้ไขอย่างระมัดระวัง รวมถึงการเปลี่ยนแปลงระดับรีโพสิทอรี เช่น แท็กและการคัดสรรแนวคิด'
         },
         exports: {
           title: 'การส่งออก',
@@ -3472,12 +3467,12 @@ export default {
       current: 'ปัจจุบัน',
       generate: {
         title: 'สร้างชุดทดสอบเปรียบเทียบ',
-        hint: 'สังเคราะห์คำถามพร้อมคำตอบที่คาดหวังจากรีปอซิทอรีที่เลือก — หนึ่งรายการหรือมากกว่า ทั้งรีปอซิทอรีปัจจุบันเพียงลำพังหรือร่วมกับรายการที่เกี่ยวข้อง',
+        hint: 'สังเคราะห์คำถามพร้อมคำตอบที่คาดหวังจากรีโพสิทอรีที่เลือก — หนึ่งรายการหรือมากกว่า ทั้งรีโพสิทอรีปัจจุบันเพียงลำพังหรือร่วมกับรายการที่เกี่ยวข้อง',
         size: 'คำถาม',
         config: 'การตั้งค่าโมเดลผู้สร้าง',
         default: 'ค่าเริ่มต้นของการติดตั้ง (.env)',
         defaultNamed: 'การตั้งค่าที่ใช้งาน — {name}{model}',
-        effective: 'กำลังประเมินด้วย {name}{model}',
+        effective: 'ประเมินด้วย {name}{model}',
         effectiveGenerating: 'กำลังสร้างด้วย {name}{model}',
         envDefault: 'ค่าเริ่มต้นของสภาพแวดล้อม',
         envJudge: 'ค่าเริ่มต้นของการติดตั้ง (.env){model}',
@@ -3485,7 +3480,7 @@ export default {
         model: 'โมเดล',
         modelPick: 'ค่าเริ่มต้นของการตั้งค่า',
         modelDefault: 'ค่าเริ่มต้นของการตั้งค่า',
-        note: 'โมเดลที่สังเคราะห์คำถามและให้คะแนนคำตอบ การตั้งค่าที่ใช้งาน (★, แท็บโมเดล) มีผลอัตโนมัติ การเลือกที่นี่จะ_override เฉพาะการดำเนินการนี้ ผู้ตัดสินที่แข็งแกร่งกว่าช่วยปรับปรุงการระลึกเอนทิตีและคุณภาพคำแนะนำอย่างเห็นได้ชัด',
+        note: 'โมเดลที่สังเคราะห์คำถามและให้คะแนนคำตอบ การตั้งค่าที่ใช้งาน (★, แท็บโมเดล) มีผลอัตโนมัติ การเลือกที่นี่จะแทนที่การตั้งค่านั้นเฉพาะการดำเนินการนี้ ผู้ตัดสินที่แข็งแกร่งกว่าช่วยปรับปรุงการระลึกเอนทิตีและคุณภาพคำแนะนำอย่างเห็นได้ชัดบนโมเดลขนาดเล็กที่รันในเครื่อง',
         single: 'ฮอปเดี่ยว %',
         multiAbstract: 'หลายฮอป (นามธรรม) %',
         multiSpecific: 'หลายฮอป (เฉพาะเจาะจง) %',
@@ -3495,7 +3490,7 @@ export default {
         cancel: 'ยกเลิก',
         cancelling: 'กำลังยกเลิก…',
 
-        inFlight: 'กำลังสร้างชุดทดสอบอยู่แล้วสำหรับคลังนี้ — กำลังเชื่อมต่อคุณเข้ากับงานนั้น'
+        inFlight: 'กำลังสร้างชุดทดสอบเปรียบเทียบอยู่แล้วสำหรับที่เก็บนี้ — กำลังเชื่อมต่อคุณเข้ากับงานนั้น'
       },
       import: {
         button: 'นำเข้าชุดทดสอบ (.xlsx)',
@@ -3547,15 +3542,15 @@ export default {
         title: 'ผลการทดสอบเปรียบเทียบ',
         failing: '{n} รายการไม่ผ่าน',
         advisorHint:
-          '{n} คำถามอยู่ต่ำกว่าเกณฑ์ของตัวชี้วัด เรียกตัวช่วยเพื่อระบุว่าความล้มเหลวแต่ละรายการเกิดจากขั้นตอนใดในไปป์ไลน์และรับการดำเนินการที่เป็นรูปธรรม',
+          '{n} คำถามอยู่ต่ำกว่าเกณฑ์ของตัวชี้วัด เรียกที่ปรึกษาเพื่อระบุว่าความล้มเหลวแต่ละรายการเกิดจากขั้นตอนใดในไปป์ไลน์และรับการดำเนินการที่เป็นรูปธรรม',
         copy: 'คัดลอกคำตอบแบบเต็ม',
         coverageTitle: 'ผู้ตัดสินให้คะแนนเมตริกนี้ใน {n} จาก {total} แถว — คะแนนครอบคลุมเฉพาะแถวเหล่านั้น',
         colResizeTip: 'ลากที่จับเพื่อปรับขนาด — ดับเบิลคลิกที่หัวข้อเพื่อรีเซ็ต',
         trendTitle: 'แนวโน้มเมตริกข้ามการรัน',
         trendNote:
-          'เส้นละเมตริกคือค่าเฉลี่ยต่อการรัน จากเก่าไปใหม่ และไม่ข้ามขอบเขตของผู้ประเมิน — ป้ายกำกับแกน x แต่ละอันระบุผู้ประเมินที่ให้คะแนนการรันนั้น คำตอบที่ประเมินแล้วถูกแคช การรันซ้ำเหมือนกันต่างเฉพาะจุดที่คำตอบหรือการดึงข้อมูลเปลี่ยน',
+          'เส้นละเมตริกคือค่าเฉลี่ยต่อการรัน จากเก่าไปใหม่ และไม่ข้ามขอบเขตของผู้ตัดสิน — ป้ายกำกับแกน x แต่ละอันระบุผู้ตัดสินที่ให้คะแนนการรันนั้น คำตอบที่ถูกตัดสินแล้วถูกแคช การรันซ้ำที่เหมือนกันต่างเฉพาะจุดที่คำตอบหรือการดึงข้อมูลเปลี่ยน',
         trendMixedJudges:
-          'ผู้ประเมินต่างกันระหว่างการรันเหล่านี้ — ให้เปรียบเทียบภายในช่วงของผู้ประเมินเดียวกัน ไม่ข้ามช่วง',
+          'ผู้ตัดสินต่างกันระหว่างการรันเหล่านี้ — ให้เปรียบเทียบภายในช่วงของผู้ตัดสินคนเดียวกัน ไม่ข้ามช่วง',
         statusTitle: 'ผลรายคำถาม',
         statusNote:
           'ทุกคำถามในขอบเขตของการรันนี้ เรียงตามผลลัพธ์: ตอบแล้ว, ไม่ผ่าน (เมตริกที่เลือกต่ำกว่าเกณฑ์), งดตอบ หรือ ไปป์ไลน์ผิดพลาด ตัวควบคุมที่อยู่นอกขอบเขตไม่ถูกนับ — เป็นเพียงตัวควบคุมสำหรับการเปรียบเทียบ ไม่ใช่ผลลัพธ์',
@@ -3615,7 +3610,7 @@ export default {
       },
       runDelete: {
         title: 'ลบการเรียกใช้',
-        body: 'การดำเนินการนี้จะลบการเรียกใช้และการวิเคราะห์ความล้มเหลวอย่างถาวร ชุดทดสอบและคำถามยังคงอยู่',
+        body: 'การดำเนินการนี้จะลบการเรียกใช้และคำอธิบายความล้มเหลวอย่างถาวร ชุดทดสอบและคำถามยังคงอยู่',
         confirm: 'ลบ',
         inFlight: 'การเรียกใช้นี้ยังดำเนินการอยู่ — โปรดยกเลิกก่อน',
         explainInFlight: 'การวิเคราะห์ความล้มเหลวของการเรียกใช้นี้ยังดำเนินการอยู่ — โปรดรอจนเสร็จสิ้น',
@@ -3650,12 +3645,13 @@ export default {
           faithfulness:
             'ความมีหลักฐานรองรับเชิงข้อเท็จจริงของคำตอบเทียบกับช่วงข้อความที่ดึงมา — สัดส่วนข้ออ้างที่แหล่งอ้างอิงสนับสนุน คะแนนต่ำหมายถึงคำตอบกล่าวสิ่งที่หลักฐานไม่ได้บอก (ภาพหลอน)',
           context_precision:
-            'ช่วงข้อความสำคัญถูกจัดอยู่ด้านบนของผลลัพธ์หรือไม่ คะแนนต่ำหมายถึงหลักฐานที่ถูกต้องถูกดึงมาแต่ถูกกลบด้วยช่วงที่เกี่ยวข้องน้อยกว่า',
+            'ช่วงข้อความสำคัญถูกจัดอยู่ด้านบนของผลลัพธ์ที่ดึงมาหรือไม่ คะแนนต่ำหมายถึงหลักฐานที่ถูกต้องถูกดึงมาแต่ถูกกลบด้วยช่วงที่เกี่ยวข้องน้อยกว่า',
           context_recall:
             'ช่วงข้อความที่ดึงมาครอบคลุมทุกสิ่งที่คำตอบอ้างอิงต้องการหรือไม่ คะแนนต่ำหมายถึงการดึงข้อมูลพลาดหลักฐานที่คำถามต้องการ',
           answer_relevancy:
             'คำตอบตอบโจทย์ที่ถามแค่ไหน: RAGAS สร้างคำถามกลับจากข้อความคำตอบแล้วเทียบกับคำถามเดิมด้วยความคล้ายเชิงเวกเตอร์ ไม่ตรวจความถูกต้องเชิงข้อเท็จจริง — คำตอบยาวหรือออกนอกเรื่องได้คะแนนต่ำแม้ถูก',
-          context_utilization: 'บริบทที่ดึงมาเพียงพอที่จะสร้างคำตอบอ้างอิงหรือไม่ — การตรวจความครบถ้วนของการดึงข้อมูล',
+          context_utilization:
+            'บริบทที่ดึงมาเพียงพอที่จะสร้างคำตอบอ้างอิงหรือไม่ — การตรวจความครบถ้วนของการดึงข้อมูลเทียบกับสิ่งที่คำตอบที่ดีที่สุดต้องการ',
           context_entities_recall:
             'การระลึกระดับเอนทิตี: สัดส่วนของเอนทิตีที่มีชื่อในต้นฉบับอ้างอิงของรายการ (บริษัท วันที่ จำนวนเงิน สถานที่) ที่ปรากฏในชิ้นข้อมูลที่ดึงมาด้วย ค่าต่ำหมายถึงการดึงข้อมูลได้ชิ้นที่พลาดเอนทิตีที่อ้างอิงระบุ อ่อนไหวต่อผู้ตัดสิน — คะแนนต่ำขณะที่ context recall ผ่านมักหมายความว่าการสกัดเอนทิตีของผู้ตัดสินพลาด ไม่ใช่เนื้อหาขาดหาย',
           factual_correctness:
@@ -3678,7 +3674,7 @@ export default {
         n: 'คำถาม',
         evaluable: 'ประเมินได้',
         abstained: 'งดตอบ',
-        compare: 'เปรียบเทียบข้ามการรัน (เดลต้าเทียบครั้งแรก)'
+        compare: 'เปรียบเทียบข้ามการเรียกใช้ (เดลต้าเทียบครั้งแรก)'
       }
     }
   },

@@ -1539,9 +1539,9 @@ export default {
       uploadFailed: "Échec du téléchargement de {'{'}fileName{'}'}."
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+      "Pourquoi les téléchargements comptent pour le RAG : chaque document téléchargé peut devenir un savoir organisé et étiqueté — les documents ciblés et bien structurés se récupèrent bien plus précisément qu'un seul long fichier. L'assistant OKF Studio transforme les téléchargements en sujets revus.",
     ragTipNoOkf:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
+      "Pourquoi les téléchargements comptent pour le RAG : chaque document téléchargé peut devenir un savoir organisé et étiqueté — les documents ciblés et bien structurés se récupèrent bien plus précisément qu'un seul long fichier."
   },
   okf: {
     lifecycleErrors: {
@@ -1559,7 +1559,7 @@ export default {
     models: {
       title: 'Configurations de modèle',
       add: 'Nouvelle configuration',
-      hint: 'Points de terminaison de modèles distants nommés pour le jugement et la génération — toute surface compatible OpenAI (OpenAI, une passerelle LiteLLM, vLLM, Gemini-compat, Ollama) ou Anthropic direct. Une seule configuration peut être active ; sans aucune, le modèle par défaut configuré du déploiement s’applique. Les clés sont stockées côté serveur et jamais affichées.',
+      hint: "Points de terminaison de modèles distants nommés pour le jugement et la génération — toute surface compatible OpenAI (OpenAI, une passerelle LiteLLM, vLLM, Gemini-compat, Ollama) ou Anthropic direct. Une seule configuration peut être active ; sans aucune, le modèle par défaut configuré du déploiement s'applique. Les clés sont stockées côté serveur et jamais affichées.",
       name: 'Nom',
       provider: 'Fournisseur',
       providerOpenai: 'Compatible OpenAI (OpenAI, LiteLLM, vLLM…)',
@@ -1572,8 +1572,8 @@ export default {
       modelFreeText: 'id du modèle (texte libre)',
       modelFetch: 'Récupérer les modèles',
       modelFetching: 'Récupération…',
-      modelsEmpty: 'Le point de terminaison n’a renvoyé aucun modèle — saisissez l’id.',
-      modelsFailed: 'Échec de la liste des modèles — saisissez l’id.',
+      modelsEmpty: "Le point de terminaison n'a renvoyé aucun modèle — saisissez l'id du modèle.",
+      modelsFailed: "Échec de la liste des modèles — saisissez l'id du modèle.",
       modelsLoaded: '{n} modèles chargés — choisissez dans la liste ou saisissez librement',
       test: 'Tester la connexion',
       testing: 'Test en cours…',
@@ -1581,7 +1581,7 @@ export default {
       testOkModel: '✓ Connecté — le modèle a répondu ({ms} ms)',
       testOkEndpoint:
         '✓ Point de terminaison joignable — {n} modèles listés (choisissez un modèle pour tester aussi la génération)',
-      testGenFail: '✗ Point de terminaison OK, mais l’appel au modèle a échoué',
+      testGenFail: "✗ Point de terminaison OK, mais l'appel au modèle a échoué",
       testNotListed: ' — note : « {model} » ne figure pas dans la liste des modèles du point de terminaison',
       testFail: '✗ échec du test — aucune réponse',
       services: 'Utiliser cette configuration pour',
@@ -1612,7 +1612,7 @@ export default {
       providerTipAnthropic:
         'Points de terminaison Anthropic natifs vérifiés : Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
       baseUrlTip:
-        'Le serveur liste les modèles sur cette base + /models (compatible OpenAI) ou + /v1/models (Anthropic — un /v1 final est normalisé), et Test connection génère sur + /chat/completions ou + /v1/messages. Les quatre chemins standard vérifiés en direct le 2026-10-20.',
+        'Le serveur liste les modèles sur cette base + /models (compatible OpenAI) ou + /v1/models (Anthropic — un /v1 final est normalisé), et Tester la connexion génère sur + /chat/completions ou + /v1/messages. Les quatre chemins standard vérifiés en direct le 2026-10-20.',
       save: 'Enregistrer',
       create: 'Créer',
       cancel: 'Annuler',
@@ -1631,7 +1631,7 @@ export default {
       delete: 'Supprimer',
       deleteConfirm: 'Supprimer la configuration de modèle « {name} » ?',
       empty: 'Aucune configuration de modèle — le modèle par défaut (env) est utilisé.',
-      adminOnly: 'Les configurations de modèle exigent le rôle d’administrateur de la plateforme.'
+      adminOnly: "Les configurations de modèle exigent le rôle d'administrateur de la plateforme."
     },
     versions: {
       bundle: 'Ensemble',
@@ -1673,7 +1673,7 @@ export default {
         inProgress: 'Publication en cours — export et transfert de l’archive…',
         title: 'Publier'
       },
-      readonly: 'CONTENU EN LECTURE SEULE — head/étiquettes modifiables',
+      readonly: 'CONTENU EN LECTURE SEULE — tête/tags modifiables',
       serving: 'En service',
       state: {
         ingested: 'Ingéré'
@@ -1725,9 +1725,9 @@ export default {
     },
     import: {
       title: 'Importer des documents dans un nouveau dépôt OKF',
-      hint: 'Les documents deviennent UN dépôt — segmentés, liés et étiquetés ensemble. Rien n’est publié ; le flux habituel revue → publication → ingest s’applique.',
+      hint: "Les documents deviennent UN dépôt — segmentés, interliés et étiquetés ensemble. Rien n'est publié ; le flux habituel revue → publication → ingest s'applique.",
       name: 'Nom du dépôt',
-      namePh: 'ex. Dossier de politiques',
+      namePh: 'ex. Dossier de politiques — abattoirs',
       domain: 'Domaine thématique',
       strategy: 'Stratégie de classification',
       stratHeuristics: 'Heuristique (rapide, sans LLM)',
@@ -1737,15 +1737,15 @@ export default {
       servingBadge: 'sert le RAG libre',
       alreadyBadge: 'déjà dans un dépôt OKF',
       servingTip:
-        'Ce document sert actuellement le corpus libre — le nouveau dépôt ne peut être ingesté tant qu’il n’est pas retiré.',
-      alreadyTip: 'Ce document est déjà la source d’un autre dépôt OKF.',
+        "Ce document sert actuellement le corpus libre — le nouveau dépôt ne peut être ingesté tant qu'il n'est pas retiré.",
+      alreadyTip: "Ce document est déjà la source d'un autre dépôt OKF.",
       servingWarn:
-        '{n} document(s) servent encore le corpus libre. L’import réussit, mais ce dépôt ne peut être ingesté tant qu’ils ne sont pas retirés.',
+        "{n} document(s) servent encore le corpus libre. L'import réussit, mais ce dépôt ne peut être ingesté tant qu'ils ne sont pas retirés.",
       cancel: 'Annuler',
       importing: 'Import…',
       go: 'Importer',
       dupRepo: 'Ce nom de dépôt existe déjà — choisissez-en un autre.',
-      failed: 'L’import n’a pas pu être lancé. Vérifiez les documents et réessayez.'
+      failed: "L'import n'a pas pu être lancé. Vérifiez les documents et réessayez."
     },
     editor: {
       addConcept: {
@@ -1842,11 +1842,11 @@ export default {
           when: 'Last attempt {when}',
           fix: {
             reaper:
-              'Le worker d’ingest a cessé d’attendre dans sa fenêtre de grâce (le drainage était saturé) — le contenu est intact. Correction : modifiez légèrement ce fichier et enregistrez pour le remettre en file, ou retirez et re-ingestez tout le dépôt.',
+              "Le worker d'ingest a cessé d'attendre dans sa fenêtre de grâce (le drainage était saturé) — le contenu est intact. Correction : modifiez légèrement ce fichier et enregistrez pour le remettre en file, ou retirez et re-ingestez tout le dépôt.",
             dataprep:
-              'Le service de préparation de contenu a fait échouer cet ingest. Correction : modifiez et enregistrez pour le remettre en file ; si cela se répète, vérifiez l’état du service dataprep.',
+              "Le service de préparation de contenu a fait échouer cet ingest. Correction : modifiez et enregistrez pour le remettre en file ; si cela se répète, vérifiez l'état du service dataprep.",
             generic:
-              'L’indexation a échoué. Correction : modifiez le contenu et enregistrez pour le remettre en file, ou retirez et re-ingestez tout le dépôt.'
+              "L'indexation a échoué. Correction : modifiez le contenu et enregistrez pour le remettre en file, ou retirez et re-ingestez tout le dépôt."
           }
         },
         indexBadge: 'index',
@@ -1947,9 +1947,9 @@ export default {
       },
       piiBulk: {
         done_accept:
-          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
-        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
-        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
+          'Terminé — chaque entité signalée est marquée vérifiée-et-conservée sur {n} concept(s). Les drapeaux PII sont levés.',
+        done_redact: 'Terminé — le contenu signalé sur {n} concept(s) est remplacé par la mention de caviardage.',
+        done_remove: 'Terminé — le contenu signalé sur {n} concept(s) est supprimé.',
         title: {
           redact: 'Caviarder tout le contenu signalé',
           remove: 'Supprimer tout le contenu signalé',
@@ -1972,9 +1972,9 @@ export default {
       },
       addSources: {
         working: 'Converting sources…',
-        done: '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).',
-        failed: 'A conversion failed — check the logs; the rest may still have queued.',
-        landed: 'Conversions complete — {t} topics now in the tree.'
+        done: "{n} source(s) en file — les sujets arrivent dans l'arborescence au fil des conversions ({t} sujets à présent).",
+        failed: 'Une conversion a échoué — consultez les journaux ; les autres sont peut-être toujours en file.',
+        landed: "Conversions terminées — {t} sujets désormais dans l'arborescence."
       }
     },
     dashboard: {
@@ -2177,9 +2177,9 @@ export default {
       descriptionLabel: 'Description',
       save: 'Enregistrer le frontmatter',
       saveFailed: "Échec de l'enregistrement du frontmatter",
-      perRepoTitle: 'Routing tags — what this repo is about',
+      perRepoTitle: 'Tags de routage — le sujet de ce dépôt',
       perRepoHint:
-        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+        "Les tags par dépôt (sujet / entité / périmètre / interdit / résumé / mot-clé) pilotent le retriever. Les mêmes données vivent aussi sur le champ doc du dépôt — les deux restent synchronisés à l'enregistrement.",
       perRepoField: {
         topic: 'Topic',
         entity: 'Entity',
@@ -2191,16 +2191,17 @@ export default {
       perRepoPh: {
         topic: 'One topic per line',
         entity: 'One entity per line',
-        forbidden: 'One forbidden topic per line',
+        forbidden: 'Un sujet interdit par ligne',
         keyword: 'One keyword per line'
       },
       perRepoHelp: {
-        topic: 'Add, modify or remove topics — one per line. Empty lines are ignored.',
-        entity: 'Add, modify or remove entities — one per line. Empty lines are ignored.',
-        forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
-        keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
+        topic: 'Ajoutez, modifiez ou supprimez des sujets — un par ligne. Les lignes vides sont ignorées.',
+        entity: 'Ajoutez, modifiez ou supprimez des entités — un par ligne. Les lignes vides sont ignorées.',
+        forbidden:
+          'Ajoutez, modifiez ou supprimez des sujets interdits — un par ligne. Les lignes vides sont ignorées.',
+        keyword: 'Ajoutez, modifiez ou supprimez des mots-clés — un par ligne. Les lignes vides sont ignorées.'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      perRepoRepoErr: "Enregistré localement ; l'écriture du champ doc du dépôt a échoué — réessayez.",
       repoTagsHint:
         'Les tags de niveau dépôt ({summary}) appartiennent au dépôt, pas à ce concept — gérez-les dans le panneau Tags du rail droit.'
     },
@@ -2233,14 +2234,14 @@ export default {
     },
     glossary: {
       addConcept:
-        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
-      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+        "Rédigez un nouveau sujet à la main (markdown avec frontmatter). Chaque sujet devient une unité citable — les sujets ciblés se récupèrent plus précisément qu'un long document unique.",
+      type: "La nature de ce concept — un service, une politique, une personne, un lieu… Le type est stocké sur chaque fragment, si bien que la récupération peut privilégier le bon type de source et les réponses peuvent dire ce qu'elles citent.",
       title:
-        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+        "Le nom lisible affiché dans les réponses et les citations. Un titre précis aide l'assistant à choisir CE sujet plutôt qu'un sujet semblable — les titres vagues perdent contre les titres spécifiques au moment de la récupération.",
       indexStatus:
-        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+        "Où ce concept en est dans le pipeline d'ingestion : parsed = en attente de découpage et d'embedding ; indexed = interrogeable et citable dans le RAG ; failed = NON interrogeable — corrigez-le puis ré-ingérez-le. Seuls les concepts indexés peuvent être récupérés.",
       trustTier:
-        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+        "Le degré de vérification de ce concept : unverified = produit par la machine, machine-confirmed = vérifié contre des règles, human-reviewed = validé par un steward. Les réponses peuvent afficher la confiance afin que les utilisateurs sachent ce qu'ils lisent — une confiance plus élevée gagne celle des utilisateurs, pas une meilleure récupération.",
       concept:
         "Une entrée de votre référentiel — généralement une seule page ou un seul sujet. Chaque concept comporte un frontmatter structuré lu par l'assistant, ainsi que le texte en markdown sur lequel il s'appuie pour répondre.",
       repository:
@@ -2263,33 +2264,33 @@ export default {
       classification:
         "La méthode employée pour déterminer ce qu'EST chaque concept (un sujet, une entité, un processus...). L'heuristique lit la page automatiquement ; l'option LLM est plus lente mais traite les pages complexes.",
       resplit:
-        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+        'Re-divise un long document source en sujets de la bonne taille. Des sujets trop grands diluent la précision de la récupération (la réponse se cache parmi le remplissage) ; des sujets trop petits perdent le contexte dont une réponse a besoin.',
       saveFailed: "Échec de l'enregistrement",
       importFailedTitle: "L'importation a échoué — le fichier source n'a pas pu être converti.",
       importFailedHint: 'Supprimez ce référentiel et importez à nouveau le fichier source.',
       frontmatter:
         "Les informations structurées en tête de chaque fichier — type, titre, libellés. L'assistant s'en sert pour savoir quel est l'objet de chaque concept.",
       pickSource:
-        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+        "Les sources alimentent le producteur, qui propose des sujets à votre revue — rien n'est validé tant que vous n'avez pas donné votre accord à l'étape de curation. Les documents déjà ingestés pour le RAG libre sont autorisés ; votre dépôt restera bloqué pour l'ingestion tant qu'ils ne sont pas retirés.",
       classificationStrategy:
-        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
-      clsHeur: 'Heuristics (fast, no LLM)',
+        "Comment le producteur détermine les libellés de chaque sujet : l'heuristique est rapide et gratuite ; le LLM lit chaque page (mieux pour les mises en page complexes) ; l'hybride commence en heuristique puis escalade les cas difficiles. Curation uniquement — ne déclenche jamais l'ingestion.",
+      clsHeur: 'Heuristique (rapide, sans LLM)',
       clsLlm: 'LLM classification',
       clsHybrid: 'Hybrid',
       fsPick:
-        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+        "Chaque fichier devient un sujet — les sujets ciblés se récupèrent plus précisément qu'un long document unique. Le nom du fichier devient le titre ; vous pourrez tout affiner à l'étape de curation.",
       autocorrect:
-        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+        "La correction automatique ne touche qu'au frontmatter (titres, types, structure) — jamais votre contenu rédigé. Les propositions s'affichent avant tout changement ; l'application écrit les correctifs immédiatement et vous pouvez vérifier le résultat à l'étape de curation.",
       handoff:
-        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+        "Le rituel de cycle de vie (soumettre → approuver → publier) est volontairement hors de cet assistant : les approbations relèvent du flux de gouvernance, sur le tableau de bord et dans l'éditeur, où les versions et l'état serving sont gérés.",
       lifecycle:
-        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
+        "Le contrat en six étapes : brouillon → revue → approuvé → publié (version + archive) → ingesté (servi dans le RAG) → retiré (retour à l'édition). Le contenu ne devient citable qu'après l'ingestion — et seul le contenu revu peut être publié.",
       labelsAuto:
-        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+        "Les libellés sont attribués automatiquement depuis la Hiérarchie de connaissances — services L2 limités au Domaine thématique de ce dépôt. Vérifiez-les et ajustez-les par sujet à l'étape de curation.",
       reviewHandoff:
-        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+        "Garder le rituel d'approbation au même endroit (l'éditeur / le tableau de bord) garantit que les réviseurs valident toujours sur la même surface avec la même piste d'audit — l'assistant prépare le dépôt, le rituel le publie.",
       piiReview:
-        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+        "Le scanner a trouvé des données personnelles possibles. Pour chaque détection, vous choisissez : Masquer (remplacer par une mention de caviardage), Remplacer (écrire votre propre texte), Supprimer (l'effacer) ou Accepter (le conserver — la décision est auditée). Le dépôt ne peut pas être remis avec des détections non revues."
     },
     md: {
       toolbar: 'Formatage',
@@ -2326,9 +2327,9 @@ export default {
       step7:
         "Certains avertissements peuvent être corrigés automatiquement : les valeurs d'état peuvent être alignées sur des énumérations valides, les champs manquants peuvent être complétés avec des valeurs par défaut appropriées. Appliquez les correctifs approuvés, puis revenez à l'outil de curation pour vérification.",
       step8:
-        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+        "Un résumé de ce que vous avez construit : les sujets, les libellés, les sources et les éventuels problèmes non résolus. Quand tout est juste, remettez-le — soumettre → approuver → publier se font sur le tableau de bord et dans l'éditeur, jamais dans cet assistant.",
       step9:
-        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+        "Ce dépôt est prêt pour la revue. Soumettez-le pour approbation sur le tableau de bord Studio ; un approbateur accepte ; la publication se fait depuis le tableau de bord ou l'éditeur — jamais depuis cet assistant. L'éditeur reste le lieu de tout changement futur.",
       docMgmtEntry:
         "Créez un nouveau référentiel OKF à partir des documents sélectionnés. Les documents deviendront des sources ; vous examinerez et nommerez les sujets qu'ils produisent avant toute publication.",
       crawlSegment:
@@ -2446,7 +2447,7 @@ export default {
     },
     steps: {
       entry: {
-        createdHint: 'Repository created — rename it later from the editor.',
+        createdHint: "Dépôt créé — renommez-le plus tard depuis l'éditeur.",
         title: 'Nom du référentiel et domaine',
         hint: 'Donnez à ce référentiel OKF un nom clair et choisissez son domaine.',
         nameLabel: 'Nom du référentiel',
@@ -2474,12 +2475,13 @@ export default {
             desc: "Dupliquez les sujets et la structure d'un autre référentiel OKF."
           }
         },
-        cloneSource: 'Source repository (not yet serving)',
-        clonePh: 'Select the repository to clone from',
-        cloning: 'Cloning topics into this repository…',
-        cloneNeed: 'Pick the repository to clone from first.',
-        cloneBusy: 'The previous repository is still being removed — go Back and Continue again in a moment.',
-        cloneFailed: 'The clone failed — try again.'
+        cloneSource: 'Dépôt source (pas encore en service)',
+        clonePh: 'Sélectionnez le dépôt à cloner',
+        cloning: 'Clonage des sujets dans ce dépôt…',
+        cloneNeed: "Choisissez d'abord le dépôt à cloner.",
+        cloneBusy:
+          'Le dépôt précédent est encore en cours de suppression — revenez en arrière, puis continuez dans un instant.',
+        cloneFailed: 'Le clonage a échoué — réessayez.'
       },
       input: {
         title: 'Entrées',
@@ -2491,27 +2493,28 @@ export default {
         chooseCrawl: 'Choose crawled documents',
         chooseDocs: 'Choose source documents',
         writeOne: '+ Write a concept',
-        fsPick: '+ Import markdown from this computer',
+        fsPick: '+ Importer du markdown depuis cet ordinateur',
         fsBusy: 'Importing your files…',
-        fsFailed: 'Import failed — check the files and retry.',
-        skippedEmpty: '{n} empty file(s) skipped.',
+        fsFailed: "Échec de l'import — vérifiez les fichiers et réessayez.",
+        skippedEmpty: '{n} fichier(s) vide(s) ignoré(s).',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',
-        noRepo: 'Create the repository first (go back to Entry).',
-        noRepoYet: 'Create the repository first (go back to Entry).',
-        benchTitle: 'Topics in this repository',
+        noRepo: "Créez d'abord le dépôt (revenez à l'étape Entrée).",
+        noRepoYet: "Créez d'abord le dépôt (revenez à l'étape Entrée).",
+        benchTitle: 'Sujets dans ce dépôt',
         benchCount: '{n}',
         benchLoading: 'Reading topics…',
-        benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
-        benchFailed: 'Could not read the topics right now.',
+        benchEmpty:
+          "Rien ici pour l'instant — choisissez des sources ci-dessous, importez du markdown ou rédigez votre premier sujet.",
+        benchFailed: 'Impossible de lire les sujets pour le moment.',
         editTitle: 'Edit concept',
-        deleteFailed: 'Could not delete the concept.',
-        added: '{n} topic(s) in this repository so far.',
+        deleteFailed: 'Impossible de supprimer le concept.',
+        added: '{n} sujet(s) dans ce dépôt à ce jour.',
         deleteTitle: 'Delete topic',
-        deleteBody: 'This permanently removes the topic from this repository.',
+        deleteBody: 'Ceci supprime définitivement le sujet de ce dépôt.',
         labelFailed: 'Could not set the label.',
-        cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
+        cloned: 'Ce dépôt est un clone — ses sujets sont déjà en place. Continuez vers la curation pour les examiner.'
       },
       produce: {
         title: 'Générer des sujets',
@@ -2520,51 +2523,54 @@ export default {
         placeholder: 'Le service de production sera raccordé dans une story ultérieure.',
         retry: 'Retry conversion',
         restart: 'Run again',
-        running: 'Converting… you can watch progress here; nothing is committed until you review in Curate.',
-        failed: 'The conversion failed — retry, or go back and pick different inputs.',
-        done: '{n} topic(s) are ready — continue to review them in Curate.',
-        noSources: 'No sources selected — go back to Input.',
-        neverStarted: 'The conversion did not start — retry.',
-        manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
+        running:
+          "Conversion en cours… suivez la progression ici ; rien n'est validé tant que vous n'avez pas revu à l'étape de curation.",
+        failed: "La conversion a échoué — réessayez, ou revenez en arrière et choisissez d'autres entrées.",
+        done: "{n} sujet(s) prêt(s) — continuez pour les examiner à l'étape de curation.",
+        noSources: "Aucune source sélectionnée — revenez à l'étape Entrées.",
+        neverStarted: "La conversion n'a pas démarré — réessayez.",
+        manualSkip:
+          'Les sujets rédigés à la main ne nécessitent aucune génération — continuez vers la curation pour les examiner.',
         labelDone: 'Conversion complete',
         dupContent:
-          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
-        inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+          "Ces sources sont déjà importées dans un autre dépôt OKF. Retirez ou supprimez d'abord ce dépôt, ou choisissez d'autres documents.",
+        inFlight: 'Une conversion est déjà en cours pour ce dépôt — attendez sa fin.',
         stage: {
           files: 'Files',
-          filesCount: '{done} of {total} documents',
+          filesCount: '{done} sur {total} documents',
           concepts: 'Concepts',
           conceptsCount: '{done} of {total} topics',
           conceptsSoFar: '{n} topics so far',
           curating: 'Curating',
-          curatingCount: '{done} of {total} concepts labelled',
+          curatingCount: '{done} sur {total} concepts étiquetés',
           crosslink: 'Cross-linking topics',
-          linkCount: '{done} of {total} batches · {w} links written',
+          linkCount: '{done} sur {total} lots · {w} liens écrits',
           complete: 'Complete',
           unavailable: 'Count unavailable',
           waiting: 'Waiting'
         },
-        filesNote: '{done} of {total} documents converted',
-        pagesNote: '{done} of {total} pages converted',
-        pagesSoFar: '{n} pages converted so far',
+        filesNote: '{done} sur {total} documents convertis',
+        pagesNote: '{done} sur {total} pages converties',
+        pagesSoFar: '{n} pages converties à ce jour',
         sourceStat: '+{n} new (total {t})',
-        sourceStatMerged: '+{n} new · {m} merged by slug (total {t})',
+        sourceStatMerged: '+{n} nouveau(x) · {m} fusionné(s) par slug (total {t})',
         docsLeg: '{n} selected document(s)',
-        legWait: 'Waiting for the previous conversion to release…'
+        legWait: 'En attente de la libération de la conversion précédente…'
       },
       label: {
         title: 'Libellés — automatisés',
         hint: 'Les libellés sont attribués automatiquement depuis la Hiérarchie de connaissances — limités au Domaine thématique de ce dépôt.',
         loading: 'Reading labels…',
-        preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
+        preview: '{labeled} sur {n} sujets portent des libellés de la Hiérarchie de connaissances.',
         unlabeled: 'no labels yet',
-        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
-        loadFailed: 'Could not read the labels right now.'
+        adjust:
+          "Ajustez les libellés de n'importe quel sujet à l'étape de curation — les libellés restent limités au Domaine thématique de ce dépôt.",
+        loadFailed: 'Impossible de lire les libellés pour le moment.'
       },
       curate: {
         embedHint:
-          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
-        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
+          "Vérifiez et améliorez chaque sujet : corrigez le texte, définissez son type et son libellé de Hiérarchie de connaissances, ajoutez ou supprimez des sujets. Tout ce que vous corrigez ici est ce que l'assistant citera plus tard.",
+        noRepo: "Aucun dépôt pour le moment — revenez à l'étape Entrée pour en créer ou en choisir un.",
         title: 'Examiner les sujets',
         hint: 'Chaque sujet est une petite unité de connaissance citable. Modifiez le titre et la description.',
         placeholder: "L'arborescence de curation et l'éditeur arrivent dans la Story 3-8."
@@ -2578,12 +2584,12 @@ export default {
         title: 'Correction automatique',
         hint: "Certains avertissements peuvent être corrigés automatiquement. Appliquez les correctifs acceptés, puis revenez à l'outil de curation pour vérification.",
         placeholder: 'Le service de correction automatique arrive dans la Story 10.2.',
-        noRepo: 'No repository yet — go back to Entry and create one first.',
-        applied: 'Fixes applied — continue, or go back to Curate to review the result.'
+        noRepo: "Aucun dépôt pour le moment — revenez à l'étape Entrée pour en créer un.",
+        applied: 'Correctifs appliqués — continuez, ou revenez à la curation pour vérifier le résultat.'
       },
       review: {
         title: 'Vérification',
-        hint: 'Un résumé de ce que vous avez construit — la soumission, l’approbation et la publication se font sur le tableau de bord et dans l’éditeur.',
+        hint: "Un résumé de ce que vous avez construit — la soumission, l'approbation et la publication se font sur le tableau de bord et dans l'éditeur.",
         repo: 'Référentiel',
         topics: 'Sujets',
         labels: 'Libellés',
@@ -2591,28 +2597,29 @@ export default {
         state: 'Lifecycle state',
         labelsSet: 'set per topic in Curate',
         browserHint:
-          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
-        noRepo: 'No repository yet — the file review appears here once a repository exists.',
+          "Dernier coup d'œil avant la remise : chaque fichier ci-dessous, son markdown et ses libellés — exactement comme l'assistant les citera.",
+        noRepo: "Aucun dépôt pour le moment — la revue des fichiers apparaît ici dès qu'un dépôt existe.",
         ritualOutside:
-          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+          "Le rituel de revue — soumission pour revue, approbation du réviseur, publication — se fait dans l'éditeur et le tableau de bord Studio, pas ici. Ouvrez l'éditeur pour terminer.",
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
-        noVersions: 'No versions yet — versions are minted during the approval ritual.',
-        versionSummary: '{n} version(s) · latest v{latest}'
+        noVersions: "Aucune version pour le moment — les versions sont générées lors du rituel d'approbation.",
+        versionSummary: '{n} version(s) · dernière v{latest}'
       },
       publish: {
         title: 'Sécuriser et terminer',
-        hint: 'Ce référentiel est prêt pour examen. La publication n’a jamais lieu ici — soumettez-le pour approbation depuis le tableau de bord ; l’approbation et la publication se font depuis le tableau de bord ou l’éditeur.',
+        hint: "Ce référentiel est prêt pour examen. La publication n'a jamais lieu ici — soumettez-le pour approbation depuis le tableau de bord ; l'approbation et la publication se font depuis le tableau de bord ou l'éditeur.",
         nameOk: 'Nom du référentiel défini',
         labelsOk: 'Libellés sélectionnés',
         topicsOk: 'Sujets examinés',
         topicsPending: 'No topics yet',
         topicsServing: 'Topics serving',
-        noTopics: 'No topics yet — go back to Curate to produce or write them.',
-        frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
+        noTopics: 'Aucun sujet pour le moment — revenez à la curation pour les produire ou les rédiger.',
+        frozen:
+          "Ce dépôt est en service — un résumé en lecture seule ici. Ouvrez l'éditeur pour gérer les versions ou le retirer.",
         ritual:
-          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+          "Ensuite : soumettre pour approbation sur le tableau de bord Studio → un approbateur accepte → publier depuis le tableau de bord ou l'éditeur. L'assistant s'arrête ici volontairement.",
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2638,7 +2645,7 @@ export default {
         alreadyInOkf: 'Retirer les documents qui se trouvent déjà dans un référentiel OKF',
         alreadyIngested: 'Retirer les documents déjà traités par ingest',
         servingWarn:
-          "{'{'}n{'}'} document(s) sélectionné(s) servent encore le corpus libre — le nouveau dépôt ne peut être ingesté tant qu’ils ne sont pas retirés."
+          "{'{'}n{'}'} document(s) sélectionné(s) servent encore le corpus libre — le nouveau dépôt ne peut être ingesté tant qu'ils ne sont pas retirés."
       },
       produce: {
         notReady: 'Le module producteur sera raccordé dans une story ultérieure.'
@@ -2725,7 +2732,7 @@ export default {
         trustTier: 'trust_tier',
         attestation: 'attestation',
         sources: 'provenance.sources',
-        onlyOnIndex: 'Per-repo tags live on the index concept only — open the index to see them.'
+        onlyOnIndex: "Les tags par dépôt se trouvent uniquement sur le concept index — ouvrez l'index pour les voir."
       },
       showSource: 'Afficher la source',
       issue: {
@@ -2752,15 +2759,15 @@ export default {
       run: {
         notReady: 'La validation sera raccordée dans une story ultérieure.'
       },
-      piiTitle: 'Personal data — review each flagged concept',
+      piiTitle: 'Données personnelles — vérifiez chaque concept signalé',
       loading: 'Checking the repository…',
-      loadFailed: 'Could not load the validation report.',
+      loadFailed: 'Impossible de charger le rapport de validation.',
       retry: 'Retry',
       issuesTitle: 'Issues to review',
       howToFix: 'How to fix',
-      indexFailed: 'Re-index failed — edit or re-split the page.',
+      indexFailed: 'Échec de la ré-indexation — modifiez ou re-divisez la page.',
       indexFailedRemedy:
-        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+        "Ouvrez la page dans l'éditeur et enregistrez-la (un enregistrement ré-indexe), ou re-divisez le dépôt depuis sa source.",
       severity: {
         blocker: 'Blocking',
         warning: 'Needs review',
@@ -2775,11 +2782,11 @@ export default {
       },
       topicLinks: {
         title: 'Cross-link topics',
-        tip: 'Reads every page in this repository and writes links between the pages that genuinely belong together — the same processing the import wizard runs. It is safe to re-run: existing links are kept and only new ones are added.',
-        progress: 'Cross-linking… {done} of {total} batches',
-        progressIdle: 'Cross-linking… reading the repository',
-        done: 'Added {n} link(s) across {c} page(s).',
-        failed: 'Cross-linking failed: {msg}'
+        tip: "Lit chaque page de ce dépôt et écrit des liens entre les pages qui vont vraiment ensemble — le même traitement que l'assistant d'import exécute. Relancer est sans danger : les liens existants sont conservés et seuls les nouveaux sont ajoutés.",
+        progress: 'Interliage… {done} sur {total} lots',
+        progressIdle: 'Interliage… lecture du dépôt',
+        done: '{n} lien(s) ajouté(s) sur {c} page(s).',
+        failed: "Échec de l'interliage : {msg}"
       },
       action: {
         suggestLinks: 'Suggest links',
@@ -2787,8 +2794,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: 'Create the Sources page and link {n} page(s)',
-        wireExisting: 'Link {n} page(s) to "{hub}"',
+        wireCreate: 'Créer la page Sources et lier {n} page(s)',
+        wireExisting: 'Lier {n} page(s) à « {hub} »',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2796,45 +2803,45 @@ export default {
         done: 'Done'
       },
       suggest: {
-        working: 'Asking the assistant for link suggestions…',
-        empty: 'No suggestions — link it manually in the editor.'
+        working: "Demande de suggestions de liens à l'assistant…",
+        empty: "Aucune suggestion — créez le lien manuellement dans l'éditeur."
       },
       nearDup: {
-        keepHint: 'Keep one copy — delete the rest.'
+        keepHint: 'Conservez une seule copie — supprimez les autres.'
       },
-      wireDone: 'Linked {n} page(s) to "{hub}".',
-      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      wireDone: '{n} page(s) liée(s) à « {hub} ».',
+      wireCreated: 'Page Sources créée et {n} page(s) liée(s).',
       mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: 'First {n} characters — open the editor for the full page.'
+        truncated: "Premiers {n} caractères — ouvrez l'éditeur pour la page complète."
       },
       tip: {
         conformance:
-          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+          "Le frontmatter de la page ne respecte pas la spécification OKF (type, date de fraîcheur, sources…). La correction automatique à l'étape 8 corrige ces points mécaniquement ; rien ne change dans votre contenu rédigé.",
         orphan:
-          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+          "Aucune page ne pointe ici et cette page ne pointe nulle part. La récupération par le graphe suit les liens pour relier les contenus : une page non liée n'apparaît que sur une correspondance exacte de sujet. Correction : acceptez les suggestions de liens ou ajoutez des liens dans l'éditeur.",
         near_duplicate:
-          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+          "Ces pages portent un texte quasi identique. À l'ingestion, chacune devient ses propres fragments : une question peut donc retourner plusieurs fois le même contenu. Correction : prévisualisez, gardez la meilleure copie, supprimez les autres.",
         citation:
-          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
+          "Les pages citent des documents dans leurs métadonnées mais rien ne les lie à la page Sources — les citations n'atteignent donc jamais le graphe et ne peuvent être parcourues ni citées au moment de la réponse. Correction : un seul clic relie toutes les pages citantes.",
         index_failed:
-          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+          "La page a été importée mais la construction de son index de recherche a échoué — elle ne peut pas être récupérée tant qu'elle ne s'est pas ré-indexée. Enregistrer la page dans l'éditeur relance la construction."
       },
       piiRescan: 'Re-scan all pages',
       piiRescanWorking: 'Re-scanning every page…',
       piiRescanDone: 'Re-scanned {n} page(s).',
       piiRescanPartial:
-        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
+        "{n} page(s) réanalysée(s). {e} ont encore échoué — leur verdict de scan n'a pas changé, la publication reste bloquée pour elles.",
       piiRescanMissing:
-        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
-      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
+        "La réanalyse n'est pas disponible sur ce serveur (404). Rien n'a été modifié — les pages dont le scan a échoué bloquent toujours la publication.",
+      piiRescanFrozen: "Réanalyse refusée : le dépôt est en cours de publication (409). Rien n'a été modifié.",
       piiRescanFailed:
-        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
-      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
-      piiRescanProgressIdle: 'Re-scanning… reading the repository',
+        "Échec de la réanalyse. Rien n'a été modifié — les pages dont le scan a échoué bloquent toujours la publication.",
+      piiRescanProgress: 'Réanalyse… {done} sur {total} pages',
+      piiRescanProgressIdle: 'Réanalyse… lecture du dépôt',
       piiRescanNoKey:
-        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+        "Le serveur a accepté la réanalyse mais n'a renvoyé aucun identifiant d'exécution : sa progression ne peut pas être suivie. Rien n'a été signalé.",
       piiStateError: 'Scan error',
       piiTally: {
         scanned: '{n} page(s) re-scanned',
@@ -2849,13 +2856,13 @@ export default {
       nFlagged: '{n} trouvée(s)',
       rescan: 'Re-scanner',
       stateError: 'Scan failed',
-      errorTitle: 'This page is blocking the hand-off.',
+      errorTitle: 'Cette page bloque la remise.',
       errorBody:
-        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
+        "Le scan PII de cette page a ÉCHOUÉ (ce n'est pas un résultat vide — le texte n'a pas pu être lu). La publication reste bloquée tant qu'un scan ne réussit pas. Utilisez Re-scanner ci-dessus.",
       rescanMissing:
-        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
-      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
-      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
+        "Re-scanner n'est pas disponible sur ce serveur (404). Rien n'a été modifié — cette page bloque toujours la publication.",
+      rescanFrozen: "Re-scan refusé : le dépôt est en cours de publication (409). Rien n'a été modifié.",
+      rescanFailed: "Échec du re-scan. Rien n'a été modifié — cette page bloque toujours la publication.",
       scanning: 'Scan en cours…',
       clean: 'Aucune entité signalée — ce concept est propre.',
       how: 'Correction : supprimez ou reformulez (ex. utilisez le rôle au lieu du nom), puis enregistrez — le nouveau scan met à jour cette liste.',
@@ -2924,50 +2931,51 @@ export default {
       unpublish: 'Dépublier'
     },
     src: {
-      title: 'Choose the source documents',
-      hint: 'Pick sources from the document repository, upload new ones from this computer, or both.',
-      repoSec: 'From the document repository',
+      title: 'Choisissez les documents sources',
+      hint: 'Choisissez des sources dans le référentiel de documents, téléchargez-en de nouvelles depuis cet ordinateur, ou les deux.',
+      repoSec: 'Depuis le référentiel de documents',
       searchPh: 'Search by name or site…',
       chipsLabel: 'Filter by origin',
       chipAll: 'All',
       chipCrawl: 'Crawls',
       chipUpload: 'Uploads',
-      noMatches: 'Nothing matches this search or filter.',
+      noMatches: 'Rien ne correspond à cette recherche ou à ce filtre.',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
       total: '{n} document(s)',
-      titleSingle: 'Choose the crawled document',
+      titleSingle: "Choisissez le document issu de l'exploration",
       loading: 'Loading documents…',
       retry: 'Retry',
-      empty: 'No documents in the repository yet — upload some below.',
+      empty: 'Aucun document dans le référentiel pour le moment — téléchargez-en ci-dessous.',
       more: 'Load more',
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
       uploaded: '{n} file(s) uploaded.',
-      uploadFailed: 'An upload failed — check the files and retry.',
-      fsNote: 'Uploaded files join the document repository and are selected here automatically.',
+      uploadFailed: 'Un téléchargement a échoué — vérifiez les fichiers et réessayez.',
+      fsNote:
+        'Les fichiers téléchargés rejoignent le référentiel de documents et sont sélectionnés ici automatiquement.',
       count: 'Selected: {n}',
-      needOne: 'Select at least one source.',
+      needOne: 'Sélectionnez au moins une source.',
       confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
-      loadFailed: 'Could not load the document list.',
+      loadFailed: 'Impossible de charger la liste des documents.',
       servingBadge: 'serving free-form RAG',
       servingTip:
-        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+        "Ce document sert actuellement le corpus RAG libre — la conversion réussit, mais ce dépôt ne peut être ingesté tant qu'il n'est pas retiré.",
       alreadyBadge: 'already in an OKF repo',
-      alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
+      alreadyTip: "Ce document est déjà la source d'un autre dépôt OKF — la conversion le refusera."
     },
     frontmatter: {
-      title: 'Frontmatter tags — what this repo is about',
-      help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',
+      title: 'Tags de frontmatter — le sujet de ce dépôt',
+      help: "Les tags décrivent ce que contient ce dépôt et — tout aussi important — ce qu'il ne contient PAS (la liste des interdits). Ils déterminent quelles requêtes routent vers ce dépôt. Cliquez sur Actualiser pour proposer une rédaction depuis le corpus, ou modifiez les puces ci-dessous. La publication exige ≥3 sujets + ≥1 interdit.",
       refresh: 'Refresh suggestions',
       suggesting: 'Curating…',
-      suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestEmpty: "Le LLM n'a renvoyé aucun tag. Réessayez une fois le corpus étoffé.",
       suggestCoverage:
         'Dérivé de {sampled} concepts sur {total}, répartis sur {labels} étiquettes de la hiérarchie de connaissances.',
       suggestFailed: 'Suggest failed.',
-      suggestedTag: 'LLM suggestion — remove to dismiss.',
+      suggestedTag: 'Suggestion du LLM — retirez-la pour ignorer.',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2976,7 +2984,7 @@ export default {
       save: 'Save tags',
       saved: 'Saved',
       error: 'Save failed.',
-      errorWithStep: 'Save failed at step "{step}" ({code}) — retry.',
+      errorWithStep: "Échec de l'enregistrement à l'étape « {step} » ({code}) — réessayez.",
       field: {
         topic: 'Topic',
         entity: 'Entity',
@@ -3006,18 +3014,20 @@ export default {
         model: 'Model',
         version: 'Head version',
         computedAt: 'Computed',
-        staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
+        staleNote:
+          'Les tags ont changé après la construction de cette tête — reconstruisez-la avant de faire confiance aux tests.',
         missingNote:
-          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+          "Pas encore de tête vectorisée. Elle est construite à la publication ; si le service d'embedding était alors indisponible, reconstruisez-la maintenant depuis les tags enregistrés.",
         rebuild: 'Rebuild head',
-        rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
-        rebuildBusy: 'Rebuilding — embedding the tag fields…'
+        rebuildTip:
+          "Regénère l'embedding des tags enregistrés dans un vecteur de tête neuf. Un appel d'embedding par champ de tag.",
+        rebuildBusy: 'Reconstruction — embedding des champs de tags…'
       },
       test: {
-        placeholder: 'e.g. cancer screening guidelines',
+        placeholder: 'par ex. recommandations de dépistage du cancer',
         run: 'Run test',
-        running: 'Embedding the query and scoring the heads…',
-        adversarial: 'Adversarial — this query should NOT select this repository (a forbidden/adjacent topic)',
+        running: 'Embedding de la requête et notation des têtes…',
+        adversarial: 'Adversaire — cette requête ne doit PAS sélectionner ce dépôt (un sujet interdit/adjacent)',
         embeddedWith: 'Embedded with',
         col: {
           repo: 'Repository',
@@ -3028,14 +3038,14 @@ export default {
         },
         provenance: 'Routing provenance',
         empty:
-          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
-        pass: 'PASS — this repository wins the head routing.',
-        fail: 'FAIL — {repo} wins the head routing for this query.',
-        passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
+          "Saisissez une requête qu'un utilisateur poserait et lancez-la — le lab note la tête de chaque dépôt publié exactement comme le ferait le fan-out.",
+        pass: 'RÉUSSITE — ce dépôt remporte le routage par la tête.',
+        fail: 'ÉCHEC — {repo} remporte le routage par la tête pour cette requête.',
+        passAdversarial: 'RÉUSSITE — correctement non sélectionné (gagnant : {repo}).',
         failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
-        passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
+        passSuppressed: 'RÉUSSITE — supprimée par le filtre interdits/bruit : la tête ne revendique pas cette requête',
         notSelectedSuppressed:
-          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+          'NON SÉLECTIONNÉ — supprimée par le filtre interdits/bruit : la requête ressemble davantage à ce que ce dépôt exclut, ou à du bruit hors domaine',
         claimed: 'claims',
         suppressed: 'suppressed'
       },
@@ -3083,7 +3093,7 @@ export default {
         rejected: 'Écarté par le garde-fou — un tag interdit ne doit pas correspondre au propre sujet de ce dépôt.'
       },
       run: {
-        progress: '{done} of {total} queries ({pct}%)',
+        progress: '{done} sur {total} requêtes ({pct} %)',
         progressStarting: 'Starting the run…',
         phase: {
           routing: 'Scoring routes',
@@ -3096,7 +3106,7 @@ export default {
           'Le LLM écrit les requêtes par lots de 30 par classe — une grande demande (100+) prend quelques minutes. La suite apparaît ici et dans les suites enregistrées une fois terminée.',
         generating: 'Génération par lots — les grandes demandes prennent quelques minutes…',
         run: 'Run all queries',
-        running: 'Running every suite query…',
+        running: 'Exécution de toutes les requêtes de la suite…',
         current: 'Current suite',
         col: {
           query: 'Query',
@@ -3111,13 +3121,13 @@ export default {
           name: 'Nom',
           corpus: 'Corpus'
         },
-        notEvaluatable: 'not evaluatable (no competitors)',
+        notEvaluatable: 'non évaluable (aucun concurrent)',
         pass: 'pass',
         fail: 'fail',
         passRate: 'Pass rate',
         positives: 'Positives',
         negatives: 'Negatives',
-        noCompetitors: 'n/a — no competing heads yet',
+        noCompetitors: 'n/a — aucune tête concurrente pour le moment',
         avgMargin: 'Avg margin',
         steal: '{repo} stole {n} queries',
         addPlaceholder: 'Your own probe query…',
@@ -3125,7 +3135,7 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.',
+        noRuns: 'Aucune exécution pour le moment — générez une suite et exécutez-la.',
         explainFailures: 'Expliquer les échecs',
         explainBusy: 'Explication des échecs — un appel au modèle pour chaque négatif en échec…',
         batchTitle: 'Pourquoi les négatifs en échec ont routé ici',
@@ -3150,21 +3160,21 @@ export default {
         revertBusy: 'Chargement de l’historique des enregistrements…',
         revertSaving: 'Restauration du frontmatter…',
         revertEmpty: 'Aucun enregistrement de frontmatter pour le moment.',
-        revertDone: 'Frontmatter restauré — reconstruisez la tête et relancez pour l’appliquer.',
+        revertDone: "Frontmatter restauré — reconstruisez la tête et relancez pour l'appliquer.",
         removeTag: 'Retirer des tags interdits',
         tagsetTip: 'Tags interdits pour cette exécution',
         savedTitle: 'Suites enregistrées',
         savedTip:
-          'Chaque suite générée ou importée est enregistrée ici, par dépôt. Deux types partagent cette liste : les suites de tête (jeux de requêtes issus des tags et du frontmatter, avec compteurs positifs/négatifs) et les suites de référence RAGAS (jeux de questions avec réponses attendues, avec badge RAGAS et nombre d entrées). Charger affiche une suite de tête dans cet onglet et une suite RAGAS dans l onglet RAGAS Benchmarks, où elle peut être exécutée et notée contre le corpus en direct. Supprimer retire la suite définitivement ; le renommage se fait directement sur le nom.',
+          "Chaque suite générée ou importée est enregistrée ici, par dépôt. Deux types partagent cette liste : les suites de tête (jeux de requêtes issus des tags et du frontmatter, avec compteurs positifs/négatifs) et les suites de référence RAGAS (jeux de questions avec réponses attendues, avec badge RAGAS et nombre d'entrées). Charger affiche une suite de tête dans cet onglet et une suite RAGAS dans l'onglet RAGAS Benchmarks, où elle peut être exécutée et notée contre le corpus en direct. Supprimer retire la suite définitivement ; le renommage se fait directement sur le nom.",
         load: 'Charger',
         flipTip: 'Basculer doit-sélectionner / ne-doit-pas-sélectionner',
         deleteTip: 'Retirer cette ligne de la suite',
         namePlaceholder: 'Nom de la suite (facultatif) — ex. ensemble de régression NCD',
         probeTip: 'Tester cette requête sur le corpus réel',
-        deleteSuiteTip: 'Supprimer cette suite et son historique',
+        deleteSuiteTip: "Supprimer cette suite et son historique d'exécution",
         corpusNeedsIngest: "Ingérez d'abord le dépôt — le test du corpus interroge le corpus ingéré",
         deleteConfirmTitle: 'Supprimer cette suite ?',
-        deleteConfirmBody: 'Cela supprime définitivement la suite et son historique d’exécution. Irréversible.',
+        deleteConfirmBody: "Cela supprime définitivement la suite et son historique d'exécution. Irréversible.",
         deleteConfirm: 'Supprimer la suite',
         deleteCancel: 'Annuler',
         unnamedFallback: 'suite sans nom'
@@ -3177,11 +3187,11 @@ export default {
         generate: 'Suite generation failed',
         run: 'Suite run failed',
         add: 'Could not add the query',
-        history: 'Impossible de charger l’historique des enregistrements',
+        history: "Impossible de charger l'historique des enregistrements",
         revert: 'Impossible de revenir sur le frontmatter',
         advisor: 'Échec du conseiller',
         noSuite: "Générez d'abord une suite, puis reconstruisez et relancez.",
-        applyNoSuite: 'Tags enregistrés et tête reconstruite — générez une suite, puis lancez tout pour voir l’effet.',
+        applyNoSuite: "Tags enregistrés et tête reconstruite — générez une suite, puis lancez tout pour voir l'effet.",
         suiteLoad: 'Impossible de charger la suite',
         suiteUpdate: 'Impossible de mettre à jour la suite',
         suiteRename: 'Impossible de renommer la suite',
@@ -3190,16 +3200,16 @@ export default {
         probe: 'Échec du test du corpus',
         suiteDelete: 'Impossible de supprimer la suite',
         noFrontmatter:
-          'Ce dépôt n’a pas encore de tags de tête — créez des tags dans le panneau Frontmatter (ou utilisez Suggérer des tags), puis générez une suite.'
+          "Ce dépôt n'a pas encore de tags de tête — créez des tags dans le panneau Frontmatter (ou utilisez Suggérer des tags), puis générez une suite."
       },
       footer: {
         unpublish: 'Unpublish to review'
       },
       publishCard: {
         present:
-          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
-        stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
-        missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+          "Tête vectorisée prête — les tests de routage du Lab vous disent si ce dépôt remporte les requêtes qu'il doit.",
+        stale: 'La tête est obsolète (les tags ont changé après sa construction) — la publication la reconstruit.',
+        missing: 'Pas encore de tête vectorisée — la publication la construit depuis les tags approuvés.'
       },
       advisor: {
         run: 'Conseiller : recommander des changements de tags',
@@ -3215,8 +3225,8 @@ export default {
         blockedGain: 'récupère {n} positive(s)',
         narrowTitle: 'Remplacements plus étroits — récupère les positives sans ré-admettre les négatives',
         narrowChip: 'Retirer le tag large, ajouter le tag étroit',
-        reasonCurator: 'vous avez déclaré ce tag à l’origine — confirmez avant de le retirer',
-        reasonRotated: 'l’historique a dépassé la ligne de base — confirmez avant de le retirer',
+        reasonCurator: "vous avez déclaré ce tag à l'origine — confirmez avant de le retirer",
+        reasonRotated: "l'historique a dépassé la ligne de base — confirmez avant de le retirer",
         scopeDetail: 'suites : {s} · jeux de tags : {t}',
         rowActionsTitle:
           'Retournements fondés sur le corpus — le corpus répond à ces « négatifs » : retournez-les en positifs',
@@ -3263,7 +3273,7 @@ export default {
       },
       paneTitle: 'Bancs d’essai RAGAS',
       about:
-        'RAGAS évalue la qualité de récupération et de réponse de l’assistant — fidélité, précision et rappel du contexte, pertinence des réponses, etc. Lancez une suite de bancs d’essai pour mesurer le dépôt comme base de connaissances.',
+        "RAGAS évalue la qualité de récupération et de réponse de l'assistant — fidélité, précision et rappel du contexte, pertinence des réponses, etc. Lancez une suite de bancs d'essai pour mesurer le dépôt comme base de connaissances.",
       aboutLabel: 'Qu’est-ce que RAGAS ?',
       aboutLink: 'En savoir plus sur ragas.io',
       help: {
@@ -3280,7 +3290,7 @@ export default {
         },
         singleHop: {
           title: 'Mono-saut %',
-          text: 'Part des questions tirées d’un seul concept.'
+          text: "Part des questions tirées d'un seul concept."
         },
         multiAbstract: {
           title: 'Multi-sauts (abstrait) %',
@@ -3296,11 +3306,11 @@ export default {
         },
         generate: {
           title: 'Générer',
-          text: 'Construit la suite avec le LLM : d’abord un passage du graphe de connaissances sur le corpus (c’est la partie qui prend des minutes), puis la synthèse des questions. Tout tourne en arrière-plan — vous pouvez fermer le Lab sans rien perdre. Supprimer une suite en cours de génération annule le travail.'
+          text: "Construit la suite avec le LLM : d'abord un passage du graphe de connaissances sur le corpus (c'est la partie qui prend des minutes), puis la synthèse des questions. Tout tourne en arrière-plan — vous pouvez fermer le Lab sans rien perdre. Supprimer une suite en cours de génération annule le travail."
         },
         importSuite: {
           title: 'Importer une suite (.xlsx)',
-          text: 'Charge une suite existante au format xlsx de banc d’essai, compatible avec le flux de référence de tests/rag-benchmarks.'
+          text: "Charge une suite existante au format xlsx de banc d'essai, compatible avec le flux de référence de tests/rag-benchmarks."
         },
         entries: {
           title: 'Entrées du banc d’essai',
@@ -3308,15 +3318,15 @@ export default {
         },
         metrics: {
           title: 'Métriques',
-          text: 'Les quatre par défaut — fidélité, précision du contexte, rappel du contexte, pertinence de la réponse — plus le catalogue RAGAS étendu. Les métriques nécessitant un modèle d’embedding sont écartées avec un avertissement quand aucun n’est configuré.'
+          text: "Les quatre par défaut — fidélité, précision du contexte, rappel du contexte, pertinence de la réponse — plus le catalogue RAGAS étendu. Les métriques nécessitant un modèle d'embedding sont écartées avec un avertissement quand aucun n'est configuré."
         },
         run: {
           title: 'Lancer le banc d’essai',
-          text: 'Rejoue la récupération pour chaque entrée, génère les réponses, puis le modèle juge note chaque réponse par rapport aux références. La progression est rapportée par phase ; les résultats arrivent à la fin de l’exécution.'
+          text: "Rejoue la récupération pour chaque entrée, génère les réponses, puis le modèle juge note chaque réponse par rapport aux références. La progression est rapportée par phase ; les résultats arrivent à la fin de l'exécution."
         },
         results: {
           title: 'Résultats',
-          text: 'Moyennes des métriques en jauges avec seuils de réussite, la tendance d’une exécution à l’autre et le détail par question avec chaque réponse et ses scores.'
+          text: "Moyennes des métriques en jauges avec seuils de réussite, la tendance d'une exécution à l'autre et le détail par question avec chaque réponse et ses scores."
         },
         explain: {
           title: 'Expliquer les échecs',
@@ -3324,7 +3334,7 @@ export default {
         },
         exports: {
           title: 'Exportations',
-          text: 'Suites et résultats en xlsx (compatibles avec l’outillage de banc d’essai) et un rapport PDF des graphiques.'
+          text: "Suites et résultats en xlsx (compatibles avec l'outillage de banc d'essai) et un rapport PDF des graphiques."
         }
       },
       // GUIDE (David, 2026-10-23) — the operator playbook behind
@@ -3526,7 +3536,7 @@ export default {
       },
       current: 'en cours',
       generate: {
-        title: 'Générer une suite de bancs d’essai',
+        title: "Générer une suite de bancs d'essai",
         hint: 'Synthétise des questions avec les sorties attendues à partir des dépôts sélectionnés — un ou plusieurs : le dépôt actuel seul ou avec des dépôts apparentés.',
         size: 'Questions',
         config: 'Configuration du modèle de génération',
@@ -3540,7 +3550,7 @@ export default {
         model: 'Modèle',
         modelPick: 'Valeur par défaut de la configuration',
         modelDefault: 'valeur par défaut de la configuration',
-        note: 'Le modèle qui synthétise les questions et note les réponses. Une configuration active (★, onglet Modèles) s’applique automatiquement ; en choisir une ici ne la remplace que pour cette opération. Des juges plus puissants améliorent nettement le rappel d’entités et la qualité des conseils.',
+        note: "Le modèle qui synthétise les questions et note les réponses. Une configuration active (★, onglet Modèles) s'applique automatiquement ; en choisir une ici ne la remplace que pour cette opération. Des juges plus puissants améliorent nettement le rappel d'entités et la qualité des conseils sur les petits modèles locaux.",
         single: 'Mono-saut %',
         multiAbstract: 'Multi-sauts (abstrait) %',
         multiSpecific: 'Multi-sauts (spécifique) %',
@@ -3557,7 +3567,7 @@ export default {
         working: 'Importation…'
       },
       suite: {
-        namePlaceholder: 'Nom du banc d’essai (facultatif)',
+        namePlaceholder: "Nom du banc d'essai (facultatif)",
         add: 'Ajouter une question',
         addPrompt: 'Question à ajouter :',
         addReference: 'Réponse attendue (facultatif) :',
@@ -3605,12 +3615,12 @@ export default {
           '{n} questions sont sous leurs seuils de métriques. Lancez le conseiller pour attribuer chaque échec à une étape du pipeline et obtenir des actions concrètes.',
         copy: 'Copier la réponse complète',
         coverageTitle: 'Le juge a noté cette métrique sur {n} lignes sur {total} — le score ne couvre que ces lignes.',
-        colResizeTip: 'Faites glisser la poignée pour redimensionner — double-cliquez sur l’en-tête pour réinitialiser',
+        colResizeTip: "Faites glisser la poignée pour redimensionner — double-cliquez sur l'en-tête pour réinitialiser",
         trendTitle: 'Tendance des métriques par exécution',
         trendNote:
-          'Chaque ligne est la moyenne d’une métrique RAGAS par exécution, de la plus ancienne à la plus récente, et ne franchit jamais une frontière de juge — chaque libellé de l’axe X nomme le juge qui a noté l’exécution. Les réponses jugées sont en cache ; des re-exécutions identiques ne diffèrent que si réponses ou récupération changent.',
+          "Chaque ligne est la moyenne d'une métrique RAGAS par exécution, de la plus ancienne à la plus récente, et ne franchit jamais une frontière de juge — chaque libellé de l'axe X nomme le juge qui a noté l'exécution. Les réponses jugées sont en cache ; des re-exécutions identiques ne diffèrent que si réponses ou récupération changent.",
         trendMixedJudges:
-          'Les juges diffèrent entre ces exécutions — comparez au sein d’un segment de juge, pas entre segments',
+          "Les juges diffèrent entre ces exécutions — comparez au sein d'un segment de juge, pas entre segments",
         statusTitle: 'Résultats par question',
         statusNote:
           'Chaque question dans le périmètre de cette exécution, empilée par issue : répondue, échouée (une métrique choisie sous son seuil), abstention (celui qui a répondu s’est abstenu) ou erreur de pipeline (la chaîne a échoué sur cette ligne). Les témoins hors périmètre ne sont pas comptés — ce sont des témoins, pas des résultats.',
@@ -3648,7 +3658,7 @@ export default {
         unfairTitle: "Le passage attendu n'est pas dans le corpus — cette ligne évalue le benchmark, pas l'assistant",
         evidenceTitle:
           'Passages trouvés dans le corpus / le vivret de candidats / transmis au modèle. Méthode : {method}',
-        facts: 'Faits de l’exécution : {rows} lignes · {abstentions} abstentions · ~{chars} caractères par réponse',
+        facts: "Faits de l'exécution : {rows} lignes · {abstentions} abstentions · ~{chars} caractères par réponse",
         rankTitle: 'Le passage est dans le corpus mais hors du vivret de candidats — il se classe #{n}.'
       },
       history: {
@@ -3669,13 +3679,13 @@ export default {
         source: 'Exécution source',
         judge: 'Configuration du juge',
         confirm: 'Ré-évaluer',
-        failed: 'La ré-évaluation de l’exécution a échoué.'
+        failed: "La ré-évaluation de l'exécution a échoué."
       },
       runDelete: {
         title: 'Supprimer l’exécution',
-        body: 'Cette action supprime définitivement l’exécution et son analyse des échecs. La suite et ses questions sont conservées.',
+        body: "Cette action supprime définitivement l'exécution et son analyse des échecs. La suite et ses questions sont conservées.",
         confirm: 'Supprimer',
-        inFlight: 'Cette exécution est encore en cours — annulez-la d’abord.',
+        inFlight: "Cette exécution est encore en cours — annulez-la d'abord.",
         explainInFlight: 'Une analyse des échecs est encore en cours pour cette exécution — attendez sa fin.',
         failed: 'La suppression de l’exécution a échoué.'
       },
@@ -3706,19 +3716,19 @@ export default {
         noise_sensitivity: 'sensibilité au bruit',
         note: {
           faithfulness:
-            'À quel point la réponse est factuellement fondée sur les passages récupérés — la part des affirmations que les sources soutiennent. Faible : la réponse affirme ce que les preuves ne disent pas (hallucination).',
+            'À quel point la réponse est factuellement fondée sur les passages récupérés — la part des affirmations de la réponse que les sources soutiennent. Faible : la réponse affirme ce que les preuves ne disent pas (hallucination).',
           context_precision:
-            'Si les passages décisifs sont placés en tête de l’ensemble récupéré. Faible : la bonne preuve a été récupérée mais noyée sous des fragments moins pertinents.',
+            "Si les passages décisifs sont placés en tête de l'ensemble récupéré. Faible : la bonne preuve a été récupérée mais noyée sous des fragments moins pertinents.",
           context_recall:
-            'Si les passages récupérés couvrent tout ce qu’exige la réponse de référence. Faible : la récupération a manqué des preuves nécessaires à la question.',
+            "Si les passages récupérés couvrent tout ce qu'exige la réponse de référence. Faible : la récupération a manqué des preuves nécessaires à la question.",
           answer_relevancy:
-            'À quel point la réponse traite la question posée : RAGAS régénère des questions depuis le texte de la réponse et les compare à l’originale par similarité d’embeddings. Elle ne vérifie PAS l’exactitude — une réponse verbeuse score bas même juste.',
+            "À quel point la réponse traite la question posée : RAGAS régénère des questions depuis le texte de la réponse et les compare à l'originale par similarité d'embeddings. Elle ne vérifie PAS l'exactitude — une réponse verbeuse score bas même juste.",
           context_utilization:
             'Si le contexte récupéré suffit à produire la réponse de référence — un contrôle de complétude de la récupération.',
           context_entities_recall:
-            'Rappel au niveau des entités : la part des entités nommées des passages de référence de l’entrée (sociétés, dates, montants, lieux) qui apparaissent aussi dans les morceaux récupérés. Un score bas signifie que la récupération a rapporté des morceaux qui manquent des entités de la référence. Sensible au juge — un score bas alors que le rappel de contexte réussit signifie généralement que l’extraction d’entités du juge a manqué des éléments, non que le contenu manque.',
+            "Rappel au niveau des entités : la part des entités nommées des passages de référence de l'entrée (sociétés, dates, montants, lieux) qui apparaissent aussi dans les fragments récupérés. Un score bas signifie que la récupération a rapporté des fragments qui manquent des entités de la référence. Sensible au juge — un score bas alors que le rappel de contexte réussit signifie généralement que l'extraction d'entités du juge a manqué des éléments, non que le contenu manque.",
           factual_correctness:
-            'Accord factuel au niveau des affirmations avec la référence — le juge décompose les deux et note le recouvrement. La métrique d’exactitude la plus stricte.',
+            "Accord factuel au niveau des affirmations avec la référence — le juge décompose les deux et note le recouvrement. La métrique d'exactitude la plus stricte.",
           answer_correctness:
             'Qualité globale face à la référence — exactitude factuelle combinée à la similarité sémantique. La métrique la plus proche de « la réponse est-elle juste ».',
           answer_similarity:

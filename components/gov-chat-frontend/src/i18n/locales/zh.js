@@ -1494,9 +1494,9 @@ export default {
       uploadFailed: "上传 {'{'}fileName{'}'} 失败。"
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+      '上传为何对 RAG 很重要：您上传的每份文档都可以成为经过策展、带标签的知识——聚焦、结构良好的文档比一份冗长的文件检索准确得多。OKF Studio 向导会将上传内容转化为经复核的主题。',
     ragTipNoOkf:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
+      '上传为何对 RAG 很重要：您上传的每份文档都可以成为经过策展、带标签的知识——聚焦、结构良好的文档比一份冗长的文件检索准确得多。'
   },
   okf: {
     lifecycleErrors: {
@@ -1543,7 +1543,7 @@ export default {
       svcCurationShort: '整编',
       svcTagging: '主题与标签',
       svcTaggingShort: '主题/标签',
-      svcOpenaiOnly: '概念整编以及主题/标签使用 OpenAI 线格式 — 需要 OpenAI 兼容端点。',
+      svcOpenaiOnly: '概念整编以及主题/标签使用 OpenAI 线格式——需要 OpenAI 兼容端点。',
       colServices: '使用方',
       svcNone: '无（闲置）',
       groupTestLab: '测试实验室流水线',
@@ -1563,7 +1563,7 @@ export default {
       providerTipAnthropic:
         '已验证的 Anthropic 原生端点：Anthropic https://api.anthropic.com · MiniMax https://api.minimax.io/anthropic · z.ai https://api.z.ai/api/anthropic',
       baseUrlTip:
-        '服务器在此基础地址 + /models（OpenAI 兼容）或 + /v1/models（Anthropic — 结尾的 /v1 会被规范化）列出模型，Test connection 在 + /chat/completions 或 + /v1/messages 生成。四条标准路径已于 2026-10-20 实测验证。',
+        '服务器在此基础地址 + /models（OpenAI 兼容）或 + /v1/models（Anthropic — 结尾的 /v1 会被规范化）列出模型，“测试连接”在 + /chat/completions 或 + /v1/messages 生成。四条标准路径已于 2026-10-20 实测验证。',
       save: '保存更改',
       create: '创建',
       cancel: '取消',
@@ -1578,7 +1578,7 @@ export default {
       edit: '重命名 / 修改',
       copy: '复制',
       activate: '激活（仅一个处于激活状态）',
-      deactivate: '停用——将使用默认模型',
+      deactivate: '停用——将使用部署默认模型',
       delete: '删除',
       deleteConfirm: '删除模型配置“{name}”？',
       empty: '尚无模型配置——正在使用部署默认（env）模型。',
@@ -1624,7 +1624,7 @@ export default {
         inProgress: '正在发布 — 正在导出并传输资产包…',
         title: '发布'
       },
-      readonly: '内容只读 — 头部/标签可编辑',
+      readonly: '内容只读 — 头向量/标签仍可编辑',
       serving: '服务中',
       state: {
         ingested: '已摄取'
@@ -1676,9 +1676,9 @@ export default {
     },
     import: {
       title: '将文档导入新的 OKF 仓库',
-      hint: '这些文档将成为一个仓库——一起分段、链接和标注。不会发布任何内容；随后走正常的审查 → 发布 → 摄取流程。',
+      hint: '这些文档将合并为一个仓库——统一分段、交叉链接和标注。不会发布任何内容；随后走正常的审查 → 发布 → 摄取流程。',
       name: '仓库名称',
-      namePh: '例如：政策文件包',
+      namePh: '例如：屠宰场政策文件包',
       domain: '主题领域（域）',
       strategy: '分类策略',
       stratHeuristics: '启发式（快速，无 LLM）',
@@ -1687,9 +1687,9 @@ export default {
       files: '所选文档',
       servingBadge: '正在服务自由 RAG',
       alreadyBadge: '已属于某个 OKF 仓库',
-      servingTip: '该文档当前正在服务自由语料库——在撤回之前，新仓库无法被摄取。',
+      servingTip: '该文档当前正在服务自由格式 RAG 语料库——在撤回之前，新仓库无法被摄取。',
       alreadyTip: '该文档已经是另一个 OKF 仓库的来源。',
-      servingWarn: '{n} 个文档仍在服务自由语料库。导入会成功，但在撤回它们之前，此仓库无法被摄取。',
+      servingWarn: '{n} 个文档仍在服务自由格式语料库。导入会成功，但在撤回它们之前，此仓库无法被摄取。',
       cancel: '取消',
       importing: '导入中…',
       go: '导入',
@@ -1884,10 +1884,9 @@ export default {
         stillBlocking: '仍在阻止'
       },
       piiBulk: {
-        done_accept:
-          'Done — every flagged entity is marked reviewed-and-kept on {n} concept(s). The PII flags are cleared.',
-        done_redact: 'Done — the flagged content on {n} concept(s) is replaced with the redaction notice.',
-        done_remove: 'Done — the flagged content on {n} concept(s) is removed.',
+        done_accept: '完成——{n} 个概念上的每个被标记实体均已设为“已核对并保留”。PII 标记已清除。',
+        done_redact: '完成——{n} 个概念上的被标记内容已替换为遮盖提示。',
+        done_remove: '完成——{n} 个概念上的被标记内容已移除。',
         title: {
           redact: '遮盖所有标记内容',
           remove: '移除所有标记内容',
@@ -1908,9 +1907,9 @@ export default {
       },
       addSources: {
         working: 'Converting sources…',
-        done: '{n} source(s) queued — topics land in the tree as conversions complete ({t} topics now).',
-        failed: 'A conversion failed — check the logs; the rest may still have queued.',
-        landed: 'Conversions complete — {t} topics now in the tree.'
+        done: '{n} 个来源已排队——主题会随着转换完成逐一进入树中（当前 {t} 个主题）。',
+        failed: '一个转换失败——请检查日志；其余来源可能仍在排队。',
+        landed: '转换完成——树中现有 {t} 个主题。'
       }
     },
     dashboard: {
@@ -2111,9 +2110,9 @@ export default {
       descriptionLabel: '描述',
       save: '保存 frontmatter',
       saveFailed: 'Frontmatter 保存失败',
-      perRepoTitle: 'Routing tags — what this repo is about',
+      perRepoTitle: '路由标签——此仓库是关于什么的',
       perRepoHint:
-        'Per-repo tags (topic / entity / scope / forbidden / summary / keyword) drive the retriever. The same data also lives on the repo doc field — both stay in sync on save.',
+        '仓库级标签（主题 / 实体 / 范围 / 禁用 / 摘要 / 关键词）驱动检索器。相同数据也存于仓库文档字段上——保存时两者保持同步。',
       perRepoField: {
         topic: 'Topic',
         entity: 'Entity',
@@ -2125,16 +2124,16 @@ export default {
       perRepoPh: {
         topic: 'One topic per line',
         entity: 'One entity per line',
-        forbidden: 'One forbidden topic per line',
+        forbidden: '每行一个禁用主题',
         keyword: 'One keyword per line'
       },
       perRepoHelp: {
-        topic: 'Add, modify or remove topics — one per line. Empty lines are ignored.',
-        entity: 'Add, modify or remove entities — one per line. Empty lines are ignored.',
-        forbidden: 'Add, modify or remove forbidden topics — one per line. Empty lines are ignored.',
-        keyword: 'Add, modify or remove keywords — one per line. Empty lines are ignored.'
+        topic: '添加、修改或移除主题——每行一个。空行将被忽略。',
+        entity: '添加、修改或移除实体——每行一个。空行将被忽略。',
+        forbidden: '添加、修改或移除禁用主题——每行一个。空行将被忽略。',
+        keyword: '添加、修改或移除关键词——每行一个。空行将被忽略。'
       },
-      perRepoRepoErr: 'Saved locally; the repo doc field write failed — retry.',
+      perRepoRepoErr: '已保存在本地；仓库文档字段写入失败——请重试。',
       repoTagsHint: '仓库级标签（{summary}）属于仓库而非此概念——请在右侧栏的标签面板中管理。'
     },
     piiReview: {
@@ -2164,14 +2163,14 @@ export default {
     },
     glossary: {
       addConcept:
-        'Write a new topic by hand (markdown with frontmatter). Each topic becomes one citable unit — focused topics retrieve more precisely than one long document.',
-      type: 'The kind of thing this concept is — a service, policy, person, place… The type is stored on every chunk, so retrieval can prefer the right kind of source and answers can say what they are citing.',
+        '亲手编写一个新主题（带 frontmatter 的 markdown）。每个主题都是一个可引用单元——聚焦的主题比一份冗长的文档检索更精准。',
+      type: '此概念属于什么——一项服务、政策、人物、地点……类型存储在每个分块上，因此检索可以偏好正确类型的来源，答案也能说明自己引用的是什么。',
       title:
-        'The human-readable name shown in answers and citations. A precise title helps the assistant pick THIS topic over similar ones — vague titles lose to specific ones at retrieval time.',
+        '显示在答案和引用中的可读名称。精确的标题能帮助助手在相似主题中选中这一个——模糊的标题在检索时会输给具体的标题。',
       indexStatus:
-        'Where this concept sits in the ingest pipeline: parsed = waiting to be chunked and embedded; indexed = searchable and citable in RAG; failed = NOT searchable — fix and re-ingest it. Only indexed concepts can be retrieved.',
+        '此概念在摄取流水线中所处的位置：parsed（已解析）= 等待分块和嵌入；indexed（已索引）= 可在 RAG 中检索和引用；failed（失败）= 不可检索——请修复后重新摄取。只有已索引的概念才能被检索。',
       trustTier:
-        'How verified this concept is: unverified = machine-produced, machine-confirmed = checked against rules, human-reviewed = a steward signed it off. Answers can surface trust so users know what they are reading — higher trust earns user confidence, not better retrieval.',
+        '此概念的验证程度：unverified（未验证）= 机器生成，machine-confirmed（机器确认）= 经规则核对，human-reviewed（人工复核）= 由管护者签核。答案可以展示信任级别，让用户知道自己读到的是什么——更高的信任赢得的是用户信心，而非更好的检索。',
       concept:
         '知识库中的一个条目 — 通常为单页或单一主题。每个概念都具备供助手读取的结构化 frontmatter，以及用于生成答案的 markdown 正文。',
       repository:
@@ -2187,32 +2186,31 @@ export default {
       classification:
         '判定每个概念“究竟是什么”（主题、实体、流程…）的逻辑。启发式规则会自动解析页面；LLM 选项耗时稍长，但能处理结构复杂的页面。',
       resplit:
-        'Re-divide a long source document into topics of the right size. Topics that are too big dilute retrieval precision (the answer hides among filler); topics that are too small lose the context an answer needs.',
+        '将一份冗长的来源文档重新划分为大小合适的主题。过大的主题会稀释检索精度（答案藏身在填充内容之中）；过小的主题会丢失答案所需的上下文。',
       saveFailed: '保存失败',
       importFailedTitle: '导入失败 — 源文件未能完成转换。',
       importFailedHint: '请删除此知识库并重新导入源文件。',
       frontmatter: '位于每个文件顶部的结构化元数据 — 包含类型、标题与标签。助手依此明确每个概念的主旨内容。',
       pickSource:
-        'Sources feed the producer, which proposes topics for your review — nothing is committed until you sign off in Curate. Documents already ingested for free-form RAG are allowed; your repository stays gated from ingesting until they are retracted.',
+        '来源供给生产模块，由它提出主题建议供您复核——在您于策展步骤中签核之前不会确认任何内容。允许使用已为自由格式 RAG 摄取的文档；在其撤回之前，您的仓库将被禁止摄取。',
       classificationStrategy:
-        'How the producer decides the labels for each topic: heuristics is fast and free; LLM reads every page (better for complex layouts); hybrid starts heuristic and escalates the hard ones. Curation only — it never triggers ingestion.',
-      clsHeur: 'Heuristics (fast, no LLM)',
+        '生产模块如何决定每个主题的标签：启发式快速且免费；LLM 逐页阅读（更适合复杂版式）；混合模式先用启发式，再对疑难项升级处理。仅用于策展——绝不会触发摄取。',
+      clsHeur: '启发式（快速，无 LLM）',
       clsLlm: 'LLM classification',
       clsHybrid: 'Hybrid',
       fsPick:
-        'Each file becomes one topic — focused topics retrieve more precisely than one long document. The file name becomes the title; you can refine everything in Curate.',
+        '每个文件成为一个主题——聚焦的主题比一份冗长的文档检索更精准。文件名将成为标题；您可以在策展步骤中完善一切。',
       autocorrect:
-        'Auto-fix only touches frontmatter (titles, types, structure) — never your written content. Proposals are shown before anything changes; applying writes the fixes immediately and you can review the result in Curate.',
+        '自动修复只触及 frontmatter（标题、类型、结构）——绝不会改动您撰写的内容。任何更改之前都会先展示提案；应用后会立即写入修复，您可以在策展步骤中查看结果。',
       handoff:
-        'The lifecycle ritual (submit → approve → publish) is deliberately outside this wizard: approvals belong to the governance flow on the dashboard and in the editor, where versions and serving state are managed.',
+        '生命周期仪式（提交 → 批准 → 发布）有意设在此向导之外：审批属于仪表盘和编辑器中的治理流程，版本与服务状态在那里管理。',
       lifecycle:
-        'The six-step contract: draft → review → approved → published (mint + bundle) → ingested (serving in RAG) → retracted (back to edit). Content only becomes citable after ingest — and only reviewed content can publish.',
-      labelsAuto:
-        "Labels are assigned automatically from the Knowledge Hierarchy — L2 services bounded to this repository's Subject Area. Review and adjust them per topic in Curate.",
+        '六步契约：草稿 → 审查 → 已批准 → 已发布（铸造 + 打包）→ 已摄取（在 RAG 中服务）→ 已撤回（回到编辑）。内容只有在摄取后才可被引用——且只有经过复核的内容才能发布。',
+      labelsAuto: '标签从知识层级自动分配——L2 服务限定在此仓库的主题领域内。请在策展步骤中逐主题复核和调整。',
       reviewHandoff:
-        'Keeping the approval ritual in one place (the Editor/dashboard) means reviewers always sign off on the same surface with the same audit trail — the wizard prepares the repository, the ritual publishes it.',
+        '将审批仪式集中在一处（编辑器/仪表盘）意味着审核者总是在同一界面、依同一条审计记录签核——向导准备好仓库，仪式发布它。',
       piiReview:
-        'The scanner found possible personal data. For each finding you choose: Redact (replace with a notice), Replace (write your own text), Remove (delete it), or Accept (keep it — the decision is audited). The repository cannot be handed off with unreviewed findings.'
+        '扫描器发现了可能的个人数据。对每个发现，您可以选择：遮盖（替换为提示）、替换（自行撰写文字）、移除（删除）或接受（保留——该决定会被审计）。存在未复核的发现时，仓库无法移交。'
     },
     md: {
       toolbar: '格式化',
@@ -2249,9 +2247,9 @@ export default {
       step7:
         '部分警告支持自动修复：状态值可自动对齐至有效枚举，缺失字段可由合理的默认值补齐。应用您认同的修复项，随后返回策展视图进行核对。',
       step8:
-        'A summary of what you built: the topics, the labels, the sources, and any unresolved issues. When it reads right, hand it off — submit → approve → publish happen on the dashboard and in the editor, never in this wizard.',
+        '您所构建内容的摘要：主题、标签、来源以及任何未解决的问题。确认无误后即可移交——提交 → 批准 → 发布都在仪表盘和编辑器中进行，绝不在本向导中。',
       step9:
-        'This repository is ready for review. Submit it for approval on the Studio dashboard; an approver accepts; publishing happens from the dashboard or the editor — never from this wizard. The editor stays the home for every future change.',
+        '此知识库已准备就绪，可供审查。请在 Studio 仪表盘上提交审批；批准人接受后，从仪表盘或编辑器执行发布——绝不在本向导中。编辑器仍是日后所有修改的归宿。',
       docMgmtEntry:
         '基于所选文档创建新的 OKF 知识库。文档将作为来源；在正式发布任何内容前，您将核对并命名由其生成的主题。',
       crawlSegment: 'OKF 知识库是一个结构化、版本化的主题集合，可供对话回答作为引用出处。',
@@ -2367,7 +2365,7 @@ export default {
     },
     steps: {
       entry: {
-        createdHint: 'Repository created — rename it later from the editor.',
+        createdHint: '仓库已创建——稍后可在编辑器中重命名。',
         title: '知识库名称与主题领域',
         hint: '为此 OKF 知识库指定明确的名称，并选定其所属的主题领域。',
         nameLabel: '知识库名称',
@@ -2395,12 +2393,12 @@ export default {
             desc: '从另一个 OKF 知识库中复刻主题与架构。'
           }
         },
-        cloneSource: 'Source repository (not yet serving)',
-        clonePh: 'Select the repository to clone from',
-        cloning: 'Cloning topics into this repository…',
-        cloneNeed: 'Pick the repository to clone from first.',
-        cloneBusy: 'The previous repository is still being removed — go Back and Continue again in a moment.',
-        cloneFailed: 'The clone failed — try again.'
+        cloneSource: '来源仓库（尚未提供服务）',
+        clonePh: '选择要克隆的仓库',
+        cloning: '正在将主题克隆到此仓库…',
+        cloneNeed: '请先选择要克隆的仓库。',
+        cloneBusy: '上一个仓库仍在移除中——请返回上一步，稍候再继续。',
+        cloneFailed: '克隆失败——请重试。'
       },
       input: {
         title: '输入项',
@@ -2412,27 +2410,27 @@ export default {
         chooseCrawl: 'Choose crawled documents',
         chooseDocs: 'Choose source documents',
         writeOne: '+ Write a concept',
-        fsPick: '+ Import markdown from this computer',
+        fsPick: '+ 从此计算机导入 markdown',
         fsBusy: 'Importing your files…',
-        fsFailed: 'Import failed — check the files and retry.',
-        skippedEmpty: '{n} empty file(s) skipped.',
+        fsFailed: '导入失败——请检查文件后重试。',
+        skippedEmpty: '已跳过 {n} 个空文件。',
         noneSelected: 'No sources selected yet.',
         selectedN: 'Selected: {n}',
         moreN: ' +{n} more',
-        noRepo: 'Create the repository first (go back to Entry).',
-        noRepoYet: 'Create the repository first (go back to Entry).',
-        benchTitle: 'Topics in this repository',
+        noRepo: '请先创建仓库（返回入口步骤）。',
+        noRepoYet: '请先创建仓库（返回入口步骤）。',
+        benchTitle: '此仓库中的主题',
         benchCount: '{n}',
         benchLoading: 'Reading topics…',
-        benchEmpty: 'Nothing here yet — pick sources below, import markdown, or write your first topic.',
-        benchFailed: 'Could not read the topics right now.',
+        benchEmpty: '此处暂无内容——在下方选择来源、导入 markdown，或撰写您的第一个主题。',
+        benchFailed: '暂时无法读取主题。',
         editTitle: 'Edit concept',
-        deleteFailed: 'Could not delete the concept.',
-        added: '{n} topic(s) in this repository so far.',
+        deleteFailed: '无法删除该概念。',
+        added: '此仓库目前共有 {n} 个主题。',
         deleteTitle: 'Delete topic',
-        deleteBody: 'This permanently removes the topic from this repository.',
+        deleteBody: '此操作将永久移除该仓库中的此主题。',
         labelFailed: 'Could not set the label.',
-        cloned: 'This repository is a clone — its topics are already in place. Continue to Curate to review them.'
+        cloned: '此仓库是一个克隆——其主题已就位。请继续前往策展步骤进行复核。'
       },
       produce: {
         title: '生成主题',
@@ -2441,99 +2439,96 @@ export default {
         placeholder: '生成服务将在后续故事中接入。',
         retry: 'Retry conversion',
         restart: 'Run again',
-        running: 'Converting… you can watch progress here; nothing is committed until you review in Curate.',
-        failed: 'The conversion failed — retry, or go back and pick different inputs.',
-        done: '{n} topic(s) are ready — continue to review them in Curate.',
-        noSources: 'No sources selected — go back to Input.',
-        neverStarted: 'The conversion did not start — retry.',
-        manualSkip: 'Hand-written topics need no generation — continue to Curate to review them.',
+        running: '转换中…您可以在此查看进度；在您于策展步骤复核之前不会确认任何内容。',
+        failed: '转换失败——请重试，或返回上一步选择其他输入。',
+        done: '{n} 个主题已就绪——请继续前往策展步骤进行复核。',
+        noSources: '未选择任何来源——请返回输入步骤。',
+        neverStarted: '转换未启动——请重试。',
+        manualSkip: '手写的主题无需生成——请继续前往策展步骤进行复核。',
         labelDone: 'Conversion complete',
-        dupContent:
-          'These sources are already imported into another OKF repository. Retract or delete that repository first, or pick different documents.',
-        inFlight: 'A conversion is already running for this repository — wait for it to finish.',
+        dupContent: '这些来源已导入另一个 OKF 仓库。请先撤回或删除该仓库，或另选文档。',
+        inFlight: '此仓库已有一个转换正在运行——请等待其完成。',
         stage: {
           files: 'Files',
-          filesCount: '{done} of {total} documents',
+          filesCount: '{done}/{total} 份文档',
           concepts: 'Concepts',
           conceptsCount: '{done} of {total} topics',
           conceptsSoFar: '{n} topics so far',
           curating: 'Curating',
-          curatingCount: '{done} of {total} concepts labelled',
+          curatingCount: '{done}/{total} 个概念已标注',
           crosslink: 'Cross-linking topics',
-          linkCount: '{done} of {total} batches · {w} links written',
+          linkCount: '{done}/{total} 批 · 已写入 {w} 条链接',
           complete: 'Complete',
           unavailable: 'Count unavailable',
           waiting: 'Waiting'
         },
-        filesNote: '{done} of {total} documents converted',
-        pagesNote: '{done} of {total} pages converted',
-        pagesSoFar: '{n} pages converted so far',
+        filesNote: '已转换 {done}/{total} 份文档',
+        pagesNote: '已转换 {done}/{total} 页',
+        pagesSoFar: '目前已转换 {n} 页',
         sourceStat: '+{n} new (total {t})',
-        sourceStatMerged: '+{n} new · {m} merged by slug (total {t})',
+        sourceStatMerged: '+{n} 新增 · {m} 个按 slug 合并（共 {t}）',
         docsLeg: '{n} selected document(s)',
-        legWait: 'Waiting for the previous conversion to release…'
+        legWait: '正在等待上一个转换释放…'
       },
       label: {
         title: '标签 — 自动生成',
         hint: '标签自动从知识层级分配——并限定在本仓库的主题领域内。',
         loading: 'Reading labels…',
-        preview: '{labeled} of {n} topics carry Knowledge-Hierarchy labels.',
+        preview: '{labeled}/{n} 个主题带有知识层级标签。',
         unlabeled: 'no labels yet',
-        adjust: "Adjust any topic's labels in Curate — labels stay bounded to this repository's Subject Area.",
-        loadFailed: 'Could not read the labels right now.'
+        adjust: '在策展步骤中调整任意主题的标签——标签限定在此仓库的主题领域内。',
+        loadFailed: '暂时无法读取标签。'
       },
       curate: {
         embedHint:
-          'Review and improve each topic: fix the text, set its type and Knowledge-Hierarchy label, add or remove topics. Everything you fix here is what the assistant will cite later.',
-        noRepo: 'No repository yet — go back to Entry and create or choose one first.',
+          '复核并改进每个主题：修正文字、设置类型和知识层级标签、添加或移除主题。您在这里修正的一切，就是助手日后要引用的内容。',
+        noRepo: '尚无仓库——请返回入口步骤，先创建或选择一个。',
         title: '审核主题',
         hint: '每个主题都是一个细粒度、可引用的知识单元。支持编辑标题与描述。',
         placeholder: '策展树与编辑器将在故事 3-8 中交付。'
       },
       validate: {
         title: '检查问题',
-        hint: '我们运行合规性检查。在移交知识库之前，必须修复阻塞性问题。',
+        hint: '我们运行合规性检查。移交仓库之前必须修复阻塞性问题。',
         placeholder: '校验面板将在故事 3-8 中交付。'
       },
       autocorrect: {
         title: '自动修复',
         hint: '部分警告支持自动修复。应用您认可的修复项，然后返回策展视图核对。',
         placeholder: '自动更正服务将在故事 10.2 中落地。',
-        noRepo: 'No repository yet — go back to Entry and create one first.',
-        applied: 'Fixes applied — continue, or go back to Curate to review the result.'
+        noRepo: '尚无仓库——请返回入口步骤先创建一个。',
+        applied: '修复已应用——请继续，或返回策展步骤查看结果。'
       },
       review: {
         title: '核对',
-        hint: '您所构建内容的摘要 — 提交、批准和发布都在仪表板和编辑器中进行。',
+        hint: '您所构建内容的摘要——提交、审批和发布都在仪表盘和编辑器中进行。',
         repo: '知识库',
         topics: '主题',
         labels: '标签',
         sources: '来源',
         state: 'Lifecycle state',
         labelsSet: 'set per topic in Curate',
-        browserHint:
-          'Final look before you hand off: every file below, its markdown and its labels — exactly as the assistant will cite them.',
-        noRepo: 'No repository yet — the file review appears here once a repository exists.',
+        browserHint: '移交前的最后浏览：下方每个文件、其 markdown 及标签——与助手引用它们的形态完全一致。',
+        noRepo: '尚无仓库——创建仓库后，文件复核会显示在这里。',
         ritualOutside:
-          'The review ritual — submit for review, reviewer approval, publish — happens in the Editor and the Studio dashboard, not here. Open the Editor to finish.',
+          '复核仪式——提交审查、审核者批准、发布——在编辑器和 Studio 仪表盘中进行，而非此处。请打开编辑器完成后续操作。',
         versions: 'Versions',
         logs: 'Action log',
         rename: 'Rename',
-        noVersions: 'No versions yet — versions are minted during the approval ritual.',
-        versionSummary: '{n} version(s) · latest v{latest}'
+        noVersions: '尚无版本——版本在审批仪式中铸造。',
+        versionSummary: '{n} 个版本 · 最新 v{latest}'
       },
       publish: {
         title: '安全设置并完成',
-        hint: '此知识库已准备就绪，可供审查。这里从不进行发布 — 请在仪表板上提交审批；批准和发布在仪表板或编辑器中进行。',
+        hint: '此知识库已准备就绪，可供审查。这里从不进行发布——请在仪表盘上提交审批，然后从仪表盘或编辑器批准并发布。',
         nameOk: '知识库名称已设定',
         labelsOk: '标签已选定',
         topicsOk: '主题已审核',
         topicsPending: 'No topics yet',
         topicsServing: 'Topics serving',
-        noTopics: 'No topics yet — go back to Curate to produce or write them.',
-        frozen: 'This repository is serving — a read-only summary here. Open the Editor to manage versions or retract.',
-        ritual:
-          'Next: submit for approval on the Studio dashboard → an approver accepts → publish from the dashboard or the editor. The wizard stops here by design.',
+        noTopics: '尚无主题——请返回策展步骤生成或撰写它们。',
+        frozen: '此仓库正在提供服务——此处为只读摘要。请打开编辑器管理版本或执行撤回。',
+        ritual: '下一步：在 Studio 仪表盘提交审批 → 批准人接受 → 从仪表盘或编辑器发布。向导有意在此止步。',
         openDashboard: 'Open the Dashboard'
       }
     },
@@ -2558,7 +2553,7 @@ export default {
         emptySelection: '请至少选择一份文档',
         alreadyInOkf: '移除已存在于 OKF 知识库中的文档',
         alreadyIngested: '移除已完成 ingest 的文档',
-        servingWarn: "{'{'}n{'}'} 个所选文档仍在服务自由语料库——在撤回它们之前，新仓库无法被摄取。"
+        servingWarn: "{'{'}n{'}'} 个所选文档仍在服务自由格式语料库——在撤回它们之前，新仓库无法被摄取。"
       },
       produce: {
         notReady: '生产模块将在后续故事中接入。'
@@ -2642,7 +2637,7 @@ export default {
         trustTier: 'trust_tier',
         attestation: 'attestation',
         sources: 'provenance.sources',
-        onlyOnIndex: 'Per-repo tags live on the index concept only — open the index to see them.'
+        onlyOnIndex: '仓库级标签仅存在于索引概念上——请打开索引查看它们。'
       },
       showSource: '显示来源',
       issue: {
@@ -2656,7 +2651,7 @@ export default {
       none: '无',
       expertHint: '切换至专家模式可查看原始校验 JSON、按严重级别过滤并覆盖检查项。',
       headline: {
-        blockers: '{n} 个阻塞性问题 — 请在移交知识库前修复',
+        blockers: '{n} 个阻塞性问题——请在移交仓库前修复',
         warnings: '{n} 项内容需要您核对',
         ok: '一切就绪。没有需要修复的问题。'
       },
@@ -2667,15 +2662,14 @@ export default {
       run: {
         notReady: '校验逻辑将在后续故事中接入。'
       },
-      piiTitle: 'Personal data — review each flagged concept',
+      piiTitle: '个人数据——请逐一复核每个被标记的概念',
       loading: 'Checking the repository…',
-      loadFailed: 'Could not load the validation report.',
+      loadFailed: '无法加载校验报告。',
       retry: 'Retry',
       issuesTitle: 'Issues to review',
       howToFix: 'How to fix',
-      indexFailed: 'Re-index failed — edit or re-split the page.',
-      indexFailedRemedy:
-        'Open the page in the editor and save it (a save re-indexes), or re-split the repository from its source.',
+      indexFailed: '重新建立索引失败——请编辑或重新切分该页面。',
+      indexFailedRemedy: '在编辑器中打开该页面并保存（保存会重新建立索引），或从源文件重新切分该仓库。',
       severity: {
         blocker: 'Blocking',
         warning: 'Needs review',
@@ -2690,11 +2684,11 @@ export default {
       },
       topicLinks: {
         title: 'Cross-link topics',
-        tip: 'Reads every page in this repository and writes links between the pages that genuinely belong together — the same processing the import wizard runs. It is safe to re-run: existing links are kept and only new ones are added.',
-        progress: 'Cross-linking… {done} of {total} batches',
-        progressIdle: 'Cross-linking… reading the repository',
-        done: 'Added {n} link(s) across {c} page(s).',
-        failed: 'Cross-linking failed: {msg}'
+        tip: '读取此仓库的每个页面，并在真正相互归属的页面之间写入链接——与导入向导所运行的处理相同。可以安全地重复运行：现有链接会保留，只添加新链接。',
+        progress: '正在交叉链接…第 {done} 批，共 {total} 批',
+        progressIdle: '正在交叉链接…正在读取仓库',
+        done: '已在 {c} 个页面中添加 {n} 条链接。',
+        failed: '交叉链接失败：{msg}'
       },
       action: {
         suggestLinks: 'Suggest links',
@@ -2702,8 +2696,8 @@ export default {
         dismiss: 'Dismiss',
         delete: 'Delete',
         working: 'Working…',
-        wireCreate: 'Create the Sources page and link {n} page(s)',
-        wireExisting: 'Link {n} page(s) to "{hub}"',
+        wireCreate: '创建 Sources 页面并链接 {n} 个页面',
+        wireExisting: '将 {n} 个页面链接到“{hub}”',
         preview: 'Preview duplicates',
         hidePreview: 'Hide preview'
       },
@@ -2711,45 +2705,40 @@ export default {
         done: 'Done'
       },
       suggest: {
-        working: 'Asking the assistant for link suggestions…',
-        empty: 'No suggestions — link it manually in the editor.'
+        working: '正在请助手建议链接…',
+        empty: '没有建议——请在编辑器中手动链接。'
       },
       nearDup: {
-        keepHint: 'Keep one copy — delete the rest.'
+        keepHint: '保留一份——删除其余。'
       },
-      wireDone: 'Linked {n} page(s) to "{hub}".',
-      wireCreated: 'Created the Sources page and linked {n} page(s).',
+      wireDone: '已将 {n} 个页面链接到“{hub}”。',
+      wireCreated: '已创建 Sources 页面并链接 {n} 个页面。',
       mergedPages: '{n} pages',
       preview: {
         loading: 'Loading page contents…',
-        truncated: 'First {n} characters — open the editor for the full page.'
+        truncated: '前 {n} 个字符——请打开编辑器查看完整页面。'
       },
       tip: {
         conformance:
-          'The page frontmatter misses the OKF spec (type, freshness date, sources…). Autocorrect in Step 8 fixes these mechanically; nothing in your written content changes.',
+          '页面 frontmatter 缺少 OKF 规范项（类型、时效日期、来源……）。第 8 步的自动更正会机械地修复这些项；您撰写的内容不会有任何更改。',
         orphan:
-          'No page links here and this page links nowhere. Graph retrieval walks links to relate content, so an unlinked page only surfaces on an exact topic match. Fix: accept link suggestions or add links in the editor.',
+          '没有任何页面链接到此处，此页面也未链接到任何地方。图谱检索沿链接关联内容，因此未链接的页面只会在主题完全匹配时出现。修复方法：接受链接建议，或在编辑器中添加链接。',
         near_duplicate:
-          'These pages carry near-identical text. At ingest each becomes its own chunks, so a question can return the same material several times. Fix: preview, keep the best copy, delete the rest.',
+          '这些页面的文本近乎相同。摄取时每个页面都会生成自己的分块，因此一个问题可能多次返回相同内容。修复方法：预览，保留最好的一份，删除其余。',
         citation:
-          'Pages cite documents in their metadata but nothing links them to the Sources page — so citations never reach the graph and cannot be walked or cited at answer time. Fix: one click wires every citing page.',
-        index_failed:
-          'The page was imported but its search-index build failed — it cannot be retrieved until it re-indexes. Saving the page in the editor retries the build.'
+          '页面在其元数据中引用了文档，但没有任何内容将它们链接到 Sources 页面——因此引用永远到不了图谱，无法在应答时被遍历或引用。修复方法：一键即可挂接所有引用页面。',
+        index_failed: '页面已导入，但其搜索索引构建失败——在重新建立索引之前无法被检索。在编辑器中保存该页面会重试构建。'
       },
       piiRescan: 'Re-scan all pages',
       piiRescanWorking: 'Re-scanning every page…',
       piiRescanDone: 'Re-scanned {n} page(s).',
-      piiRescanPartial:
-        'Re-scanned {n} page(s). {e} still failed — their scan verdict did not change, so publishing stays blocked for them.',
-      piiRescanMissing:
-        'Re-scan is not available on this server (404). Nothing was changed — the pages that failed their scan are still blocking publishing.',
-      piiRescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
-      piiRescanFailed:
-        'Re-scan failed. Nothing was changed — the pages that failed their scan are still blocking publishing.',
-      piiRescanProgress: 'Re-scanning… {done} of {total} pages',
-      piiRescanProgressIdle: 'Re-scanning… reading the repository',
-      piiRescanNoKey:
-        'The server accepted the re-scan but returned no run id, so its progress cannot be followed. Nothing was reported.',
+      piiRescanPartial: '已重新扫描 {n} 个页面。仍有 {e} 个失败——它们的扫描结论没有变化，因此这些页面仍会阻止发布。',
+      piiRescanMissing: '此服务器不支持重新扫描（404）。没有任何更改——扫描失败的页面仍在阻止发布。',
+      piiRescanFrozen: '重新扫描被拒绝：仓库正在发布（409）。没有任何更改。',
+      piiRescanFailed: '重新扫描失败。没有任何更改——扫描失败的页面仍在阻止发布。',
+      piiRescanProgress: '正在重新扫描…第 {done} 页，共 {total} 页',
+      piiRescanProgressIdle: '正在重新扫描…正在读取仓库',
+      piiRescanNoKey: '服务器接受了重新扫描，但未返回运行 ID，因此无法跟踪进度。没有任何结果被报告。',
       piiStateError: 'Scan error',
       piiTally: {
         scanned: '{n} page(s) re-scanned',
@@ -2764,13 +2753,12 @@ export default {
       nFlagged: '找到 {n} 个',
       rescan: '重新扫描',
       stateError: 'Scan failed',
-      errorTitle: 'This page is blocking the hand-off.',
+      errorTitle: '此页面正在阻止移交。',
       errorBody:
-        'The PII scan of this page FAILED (it did not find nothing — it could not read the text). Publishing stays blocked until a scan succeeds. Use Re-scan above.',
-      rescanMissing:
-        'Re-scan is not available on this server (404). Nothing was changed — the page is still blocking publishing.',
-      rescanFrozen: 'Re-scan refused: the repository is being published (409). Nothing was changed.',
-      rescanFailed: 'Re-scan failed. Nothing was changed — the page is still blocking publishing.',
+        '此页面的 PII 扫描失败（不是没有发现——而是无法读取文本）。在扫描成功之前，发布将保持阻止状态。请使用上方的“重新扫描”。',
+      rescanMissing: '此服务器不支持重新扫描（404）。没有任何更改——此页面仍在阻止发布。',
+      rescanFrozen: '重新扫描被拒绝：仓库正在发布（409）。没有任何更改。',
+      rescanFailed: '重新扫描失败。没有任何更改——此页面仍在阻止发布。',
       scanning: '扫描中…',
       clean: '没有标记的实体 — 此 concept 正常。',
       how: '修复：移除或重新表述（例如将名字改为职位），然后保存 — 重新扫描会更新此列表。',
@@ -2838,49 +2826,48 @@ export default {
       unpublish: '取消发布'
     },
     src: {
-      title: 'Choose the source documents',
-      hint: 'Pick sources from the document repository, upload new ones from this computer, or both.',
-      repoSec: 'From the document repository',
+      title: '选择来源文档',
+      hint: '从文档库中选择来源、从此计算机上传新文件，或两者兼用。',
+      repoSec: '来自文档库',
       searchPh: 'Search by name or site…',
       chipsLabel: 'Filter by origin',
       chipAll: 'All',
       chipCrawl: 'Crawls',
       chipUpload: 'Uploads',
-      noMatches: 'Nothing matches this search or filter.',
+      noMatches: '没有与此搜索或筛选匹配的结果。',
       crawlBadge: 'crawl',
       crawlTip: 'Crawled from: {url}',
       total: '{n} document(s)',
-      titleSingle: 'Choose the crawled document',
+      titleSingle: '选择抓取的文档',
       loading: 'Loading documents…',
       retry: 'Retry',
-      empty: 'No documents in the repository yet — upload some below.',
+      empty: '文档库中还没有文档——请在下方上传。',
       more: 'Load more',
       fsSec: 'From this computer',
       fsPick: '+ Upload files',
       uploading: 'Uploading…',
       uploaded: '{n} file(s) uploaded.',
-      uploadFailed: 'An upload failed — check the files and retry.',
-      fsNote: 'Uploaded files join the document repository and are selected here automatically.',
+      uploadFailed: '一个上传失败——请检查文件后重试。',
+      fsNote: '上传的文件会加入文档库，并在此处自动选中。',
       count: 'Selected: {n}',
-      needOne: 'Select at least one source.',
+      needOne: '请至少选择一个来源。',
       confirm: 'Use {n} source(s)',
       cancel: 'Cancel',
-      loadFailed: 'Could not load the document list.',
+      loadFailed: '无法加载文档列表。',
       servingBadge: 'serving free-form RAG',
-      servingTip:
-        'This document currently serves the free-form RAG corpus — the conversion succeeds, but this repository cannot be ingested until it is retracted.',
+      servingTip: '该文档当前正在服务自由格式 RAG 语料库——转换会成功，但在撤回之前，此仓库无法被摄取。',
       alreadyBadge: 'already in an OKF repo',
-      alreadyTip: 'This document is already the source of another OKF repository — the conversion will refuse it.'
+      alreadyTip: '该文档已经是另一个 OKF 仓库的来源——转换将拒绝它。'
     },
     frontmatter: {
-      title: 'Frontmatter tags — what this repo is about',
-      help: 'Tags describe what this repo contains and — equally important — what it does NOT contain (the forbidden list). They decide which queries route to this repo. Click Refresh to draft from the corpus, or edit the chips below. Publish requires ≥3 topic + ≥1 forbidden.',
+      title: 'Frontmatter 标签——此仓库是关于什么的',
+      help: '标签描述此仓库包含什么——以及同样重要的是——不包含什么（禁用列表）。它们决定哪些查询路由到此仓库。点击“刷新”从语料库起草，或在下方编辑标签。发布要求 ≥3 个主题标签 + ≥1 个禁用标签。',
       refresh: 'Refresh suggestions',
       suggesting: 'Curating…',
-      suggestEmpty: 'The LLM returned no tags. Try again after the corpus grows.',
+      suggestEmpty: 'LLM 未返回任何标签。请待语料库扩充后再试。',
       suggestCoverage: '基于 {total} 个概念中的 {sampled} 个生成，覆盖 {labels} 个知识层级标签。',
       suggestFailed: 'Suggest failed.',
-      suggestedTag: 'LLM suggestion — remove to dismiss.',
+      suggestedTag: 'LLM 建议——移除即可忽略。',
       removeTag: 'Remove tag',
       fieldEmpty: '—',
       addPlaceholder: 'Add {field}',
@@ -2889,7 +2876,7 @@ export default {
       save: 'Save tags',
       saved: 'Saved',
       error: 'Save failed.',
-      errorWithStep: 'Save failed at step "{step}" ({code}) — retry.',
+      errorWithStep: '保存在步骤“{step}”（{code}）失败——请重试。',
       field: {
         topic: 'Topic',
         entity: 'Entity',
@@ -2919,18 +2906,17 @@ export default {
         model: 'Model',
         version: 'Head version',
         computedAt: 'Computed',
-        staleNote: 'Tags changed after this head was built — rebuild before trusting the tests.',
-        missingNote:
-          'No vectorized head yet. It is built at publish; if the embed service was unavailable then, rebuild it now from the stored tags.',
+        staleNote: '标签在头向量构建后发生了变更——请先重建再信任这些测试。',
+        missingNote: '尚无头向量。它在发布时构建；若当时嵌入服务不可用，现在可从已存储的标签重建。',
         rebuild: 'Rebuild head',
-        rebuildTip: 'Re-embeds the stored tags into a fresh head vector. One embed call per tag field.',
-        rebuildBusy: 'Rebuilding — embedding the tag fields…'
+        rebuildTip: '将已存储的标签重新嵌入为新的头向量。每个标签字段一次嵌入调用。',
+        rebuildBusy: '重建中——正在嵌入各标签字段…'
       },
       test: {
-        placeholder: 'e.g. cancer screening guidelines',
+        placeholder: '例如：癌症筛查指南',
         run: 'Run test',
-        running: 'Embedding the query and scoring the heads…',
-        adversarial: 'Adversarial — this query should NOT select this repository (a forbidden/adjacent topic)',
+        running: '正在嵌入查询并为各头向量评分…',
+        adversarial: '对抗测试——此查询不应选中此仓库（禁用或相邻主题）',
         embeddedWith: 'Embedded with',
         col: {
           repo: 'Repository',
@@ -2940,15 +2926,13 @@ export default {
           claimed: 'Claims query'
         },
         provenance: 'Routing provenance',
-        empty:
-          'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.',
-        pass: 'PASS — this repository wins the head routing.',
-        fail: 'FAIL — {repo} wins the head routing for this query.',
-        passAdversarial: 'PASS — correctly not selected (winner: {repo}).',
+        empty: '输入一条用户会问的查询并运行——实验室会按照实际扇出的方式为每个已发布仓库的头向量评分。',
+        pass: '通过 — 此仓库赢得头向量路由。',
+        fail: '失败 — {repo} 赢得了此查询的头向量路由。',
+        passAdversarial: '通过 — 正确地未被选中（胜者：{repo}）。',
         failAdversarial: 'FAIL — this query routed HERE but it should not (a forbidden/adjacent topic).',
-        passSuppressed: 'PASS — suppressed by the forbidden/noise gate: the head does not claim this query',
-        notSelectedSuppressed:
-          'NOT SELECTED — suppressed by the forbidden/noise gate: the query is more like what this repository excludes, or is off-domain noise',
+        passSuppressed: '通过 — 被禁用/噪声闸门抑制：头向量不认领此查询',
+        notSelectedSuppressed: '未选中 — 被禁用/噪声闸门抑制：此查询更接近该仓库排除的内容，或属于跨域噪声',
         claimed: 'claims',
         suppressed: 'suppressed'
       },
@@ -2979,22 +2963,22 @@ export default {
       },
       teach: {
         claim:
-          'Head 认领了这条查询——它通过了全部三道闸。如果它不应路由到这里，请让系统建议能排除其主题的禁用标签，添加后重建 head。',
+          '头向量认领了这条查询——它通过了全部三道闸。如果它不应路由到这里，请让系统建议能排除其主题的禁用标签，添加后重建头向量。',
         explain: '解释并建议',
         explainBusy: '解释中——模型正在建议禁用标签…',
         addTag: '添加到禁用标签',
         suggestNone: '没有建议任何禁用标签——请人工将查询与声明的范围进行比对。',
-        added: '已添加到禁用标签——请重建 head 以使其生效。',
+        added: '已添加到禁用标签——请重建头向量以使其生效。',
         rebuildRerun: '重建 head 并重跑',
         savingTag: '正在保存禁用标签…',
-        rebuildBusy: '正在重建 head 并重跑…',
+        rebuildBusy: '正在重建头向量并重跑…',
         title: '这意味着什么',
         veto: '该查询与禁用标签“{tag}”高度匹配。如果它应当属于此仓库，请在 Frontmatter 的禁用标签中移除“{tag}”，然后重新发布以重建 head。',
         floor: '该查询与此仓库的主题无关（分数低于领域下限）——更改标签无法解决此问题；这是正确的抑制。',
         rejected: '已被护栏过滤——禁用标签不得与该仓库自身的主题匹配。'
       },
       run: {
-        progress: '{done} of {total} queries ({pct}%)',
+        progress: '{done}/{total} 条查询（{pct}%）',
         progressStarting: 'Starting the run…',
         phase: {
           routing: 'Scoring routes',
@@ -3006,7 +2990,7 @@ export default {
         generateTip: 'LLM 按每类 30 条分批生成 — 大批量（100+）需要几分钟。完成后测试集会出现在此处和已保存列表中。',
         generating: '正在分批生成 — 大批量需要几分钟…',
         run: 'Run all queries',
-        running: 'Running every suite query…',
+        running: '正在运行测试集中的每条查询…',
         current: 'Current suite',
         col: {
           query: 'Query',
@@ -3021,13 +3005,13 @@ export default {
           name: '名称',
           corpus: '语料'
         },
-        notEvaluatable: 'not evaluatable (no competitors)',
+        notEvaluatable: '不可评估（暂无竞争头向量）',
         pass: 'pass',
         fail: 'fail',
         passRate: 'Pass rate',
         positives: 'Positives',
         negatives: 'Negatives',
-        noCompetitors: 'n/a — no competing heads yet',
+        noCompetitors: '不适用 — 尚无竞争头向量',
         avgMargin: 'Avg margin',
         steal: '{repo} stole {n} queries',
         addPlaceholder: 'Your own probe query…',
@@ -3035,14 +3019,14 @@ export default {
         kindPositive: 'should select',
         kindNegative: 'should NOT select',
         history: 'Run history',
-        noRuns: 'No runs yet — generate a suite and run it.',
+        noRuns: '暂无运行记录——请先生成测试集并运行。',
         explainFailures: '解释失败项',
         explainBusy: '正在解释失败项——对每个失败的负向查询一次模型调用…',
         batchTitle: '失败的负向查询为何路由到这里',
         batchNone: '没有建议任何修复——请人工将失败的查询与声明的范围进行比对。',
         addAll: '全部添加',
-        rebuildRerun: '重建 head 并重跑测试集',
-        positiveFailuresTitle: '为什么正例不再通过',
+        rebuildRerun: '重建头向量并重跑测试集',
+        positiveFailuresTitle: '正例为何不再通过',
         positiveFailures: '本轮有 {n} 个正例测试被抑制——禁用标签过度匹配仓库范围。',
         vetoedBy: '否决来源',
         marginKilled: '{n} 个正例测试因 margin 落败（无单一否决标签）。',
@@ -3050,28 +3034,28 @@ export default {
         removeTip: '移除“{tag}”——它否决了 {n} 个正例测试',
         tripwire: '本轮周期破坏了 {n} 个正例测试——新增标签过度抑制。是否回滚？',
         tripwireRevert: '查看回滚选项',
-        staleSnapshot: '自该测试套件生成以来标签已变更——请重新生成以获得最新的禁用行。',
+        staleSnapshot: '自该测试集生成以来标签已发生变更——请重新生成以获得最新的禁用行。',
         revertTitle: '回滚标签',
         revertForbiddenCount: '{n} 个禁用标签',
         revertAction: '回滚',
         revertBusy: '正在加载保存历史…',
         revertSaving: '正在恢复 frontmatter…',
         revertEmpty: '尚无 frontmatter 保存记录。',
-        revertDone: 'Frontmatter 已恢复——请重建 head 并重跑以使其生效。',
-        removeTag: '从禁止标签中移除',
-        tagsetTip: '本次运行的禁止标签',
+        revertDone: 'Frontmatter 已恢复——请重建头向量并重跑以使其生效。',
+        removeTag: '从禁用标签中移除',
+        tagsetTip: '本次运行使用的禁用标签',
         savedTitle: '已保存的测试集',
         savedTip:
-          '每个生成或导入的套件都保存在这里（按存储库）。此列表包含两种类型：头部套件（源自标签和 frontmatter 的查询集，显示正/负计数）和 RAGAS 基准套件（带预期答案的问题集，带 RAGAS 徽章和条目数）。加载会在此标签页显示头部套件，在 RAGAS Benchmarks 标签页打开 RAGAS 套件，并可在其中针对实时光谱运行和评分。删除会永久移除套件；重命名可直接在名称上进行。',
+          '每个生成或导入的测试集都保存在这里，按仓库分组。此列表包含两种类型：头向量测试集（源自标签和 frontmatter 的查询集，显示正例/负例计数）和 RAGAS 基准测试集（带预期答案的问题集，带 RAGAS 徽章和条目数）。加载会在当前标签页显示头向量测试集，并在 RAGAS 基准测试标签页打开 RAGAS 测试集，可在其中针对实时语料库运行和评分。删除会永久移除测试集；重命名可直接在名称上进行。',
         load: '加载',
         flipTip: '切换 应选择 / 不应选择',
         deleteTip: '从测试集中移除此行',
         namePlaceholder: '测试集名称（可选）— 例如：NCD 回归集',
         probeTip: '用真实语料测试此查询',
-        deleteSuiteTip: '删除此测试集及其历史',
+        deleteSuiteTip: '删除此测试集及其运行历史',
         corpusNeedsIngest: '请先摄取仓库——语料测试搜索的是已摄取的语料',
         deleteConfirmTitle: '删除这个测试集？',
-        deleteConfirmBody: '这将永久删除该测试集及其运行历史，无法撤销。',
+        deleteConfirmBody: '此操作将永久删除该测试集及其运行历史，无法撤销。',
         deleteConfirm: '删除测试集',
         deleteCancel: '取消',
         unnamedFallback: '未命名测试集'
@@ -3088,44 +3072,44 @@ export default {
         revert: '回滚 frontmatter 失败',
         advisor: '顾问失败',
         noSuite: '请先生成测试集，然后重建并重新运行。',
-        applyNoSuite: '标签已保存、head 已重建——请生成测试集并运行全部以查看效果。',
+        applyNoSuite: '标签已保存、头向量已重建——请生成测试集并运行全部以查看效果。',
         suiteLoad: '无法加载测试集',
         suiteUpdate: '无法更新测试集',
         suiteRename: '无法重命名测试集',
-        generateTimeout: '测试集耗时异常 — 可能稍后会出现在已保存列表中；请一分钟后查看。',
+        generateTimeout: '测试集耗时异常——可能仍会出现在已保存测试集中；请一分钟后查看。',
         probe: '语料测试失败',
         suiteDelete: '无法删除测试集',
-        noFrontmatter: '该仓库还没有头部标签 — 请在 Frontmatter 面板中创建标签（或使用“建议标签”），然后再生成测试集。'
+        noFrontmatter:
+          '该仓库还没有可构建头向量的标签——请在 Frontmatter 面板中创建标签（或使用“建议标签”），然后再生成测试集。'
       },
       footer: {
         unpublish: 'Unpublish to review'
       },
       publishCard: {
-        present:
-          'Vectorized head ready — the routing tests in the Lab tell you whether this repository wins the queries it should.',
-        stale: 'The head is stale (tags changed after it was built) — publishing rebuilds it.',
-        missing: 'No vectorized head yet — publishing builds it from the approved tags.'
+        present: '头向量已就绪——实验室中的路由测试会告诉您此仓库是否赢得了它应胜出的查询。',
+        stale: '头向量已过期（构建后标签发生了变更）——发布会将其重建。',
+        missing: '尚无头向量——发布会根据已批准的标签构建它。'
       },
       advisor: {
         run: '顾问：推荐标签调整',
         busy: '正在根据近期运行模拟标签调整…',
         title: '标签集建议（基于近期运行模拟）',
-        apply: '应用更改、重建 head 并重新运行测试集',
+        apply: '应用更改、重建头向量并重新运行测试集',
         scorecard: '正例 {p}/{pt} 通过 · 负例 {n}/{nt} 拦截',
         now: '当前',
         predicted: '预测',
         scope: '（最近 {r} 次运行共 {q} 条查询）',
-        applying: '正在应用：保存标签、重建 head、重新运行测试集…',
-        blockedTitle: '受阻的移除——点击以加入"应用"',
+        applying: '正在应用：保存标签、重建头向量、重新运行测试集…',
+        blockedTitle: '受阻的移除——点击以加入“应用”',
         blockedGain: '可挽回 {n} 个正向用例',
-        narrowTitle: '更窄的替代标签——挽回正向用例而不重新放进负向用例',
+        narrowTitle: '更窄的替代标签——挽回正例而不重新放进负例',
         narrowChip: '移除宽泛标签，添加窄标签',
         reasonCurator: '此标签由您最初声明——移除前请确认',
         reasonRotated: '编辑历史已滚过基线——移除前请确认',
         scopeDetail: '测试集：{s} · 标签集：{t}',
-        rowActionsTitle: '基于语料的翻转 — 语料能回答这些“负向”查询：将它们翻转为正向',
+        rowActionsTitle: '基于语料的翻转——语料能回答这些“负向”查询：将它们翻转为正向',
         flipToPositive: '翻转为正向',
-        ungroundedNote: '{n} 个失败的负向查询既无语料支撑也无安全的标签杠杆 — 应由竞争仓库胜出。'
+        ungroundedNote: '{n} 个失败的负向查询既无语料支撑也无安全的标签杠杆——应由竞争仓库胜出。'
       },
       probe: {
         answerable: '可回答',
@@ -3166,7 +3150,7 @@ export default {
       },
       paneTitle: 'RAGAS 基准测试',
       about:
-        'RAGAS 为助手的检索与回答打分——忠实度、上下文精确率与召回率、回答相关性等。运行基准测试套件，将仓库作为知识库来衡量。',
+        'RAGAS 为助手的检索与回答打分——忠实度、上下文精确率与召回率、答案相关性等。运行基准测试套件，将仓库作为知识库来衡量。',
       aboutLabel: '什么是 RAGAS？',
       aboutLink: '在 ragas.io 阅读更多',
       help: {
@@ -3175,7 +3159,7 @@ export default {
         more: '在 ragas.io 阅读更多',
         repositories: {
           title: '仓库',
-          text: '哪些仓库为生成提供来源 — 仅当前仓库，或与相关仓库一起。多个仓库让多跳问题得以跨越它们的边界。'
+          text: '哪些仓库为生成提供来源——仅当前仓库，或与相关仓库一起。多个仓库让多跳问题得以跨越它们的边界。'
         },
         questions: {
           title: '问题数',
@@ -3199,7 +3183,7 @@ export default {
         },
         generate: {
           title: '生成',
-          text: '用 LLM 构建测试集：先对语料库做一次知识图谱遍历（这是耗时数分钟的部分），然后合成问题。它在后台运行 — 你可以关闭 Lab，不会丢失任何内容。删除正在生成的测试集会取消该工作。'
+          text: '用 LLM 构建测试集：先对语料库做一次知识图谱遍历（这是耗时数分钟的部分），然后合成问题。它在后台运行——您可以关闭 Lab，不会丢失任何内容。删除正在生成的测试集会取消该工作。'
         },
         importSuite: {
           title: '导入测试集（.xlsx）',
@@ -3211,11 +3195,11 @@ export default {
         },
         metrics: {
           title: '指标',
-          text: '四个默认指标 — 忠实度、上下文精确率、上下文召回率、答案相关性 — 外加扩展的 RAGAS 目录。需要嵌入模型的指标在未配置时会附带警告被丢弃。'
+          text: '四个默认指标——忠实度、上下文精确率、上下文召回率、答案相关性——外加扩展的 RAGAS 目录。需要嵌入模型的指标在未配置时会附带警告被丢弃。'
         },
         run: {
           title: '运行基准测试',
-          text: '为每个条目重放检索，生成答案，然后由评审模型对照参考答案为每个答案评分。进度按阶段报告；运行完成后即出结果。'
+          text: '为每个条目重放检索，生成答案，然后由评判模型对照参考答案为每个答案评分。进度按阶段报告；运行完成后即出结果。'
         },
         results: {
           title: '结果',
@@ -3223,7 +3207,7 @@ export default {
         },
         explain: {
           title: '解释失败项',
-          text: '将每个失败行归因于检索、回答或参考答案本身 — 并建议稳妥的修复措施，包括仓库层面的更改（如标签和概念整理）。'
+          text: '将每个失败行归因于检索、回答或参考答案本身——并建议稳妥的修复措施，包括仓库层面的更改（如标签和概念整编）。'
         },
         exports: {
           title: '导出',
@@ -3419,7 +3403,7 @@ export default {
       current: '当前',
       generate: {
         title: '生成基准测试集',
-        hint: '从选定的仓库合成带预期答案的问题 — 可选一个或多个：仅当前仓库，或与相关仓库一起。',
+        hint: '从选定的仓库合成带预期答案的问题——可选一个或多个：仅当前仓库，或与相关仓库一起。',
         size: '问题数',
         config: '生成模型配置',
         default: '部署默认（.env）',
@@ -3432,17 +3416,17 @@ export default {
         model: '模型',
         modelPick: '配置默认',
         modelDefault: '配置默认',
-        note: '合成问题并为答案评分的模型。激活的配置（★，模型标签页）自动生效；在此选择仅覆盖本次操作。更强的评判模型能显著改善实体召回和建议质量。',
+        note: '合成问题并为答案评分的模型。激活的配置（★，模型标签页）自动生效；在此选择仅覆盖本次操作。更强的评判模型能显著改善小本地模型上的实体召回和建议质量。',
         single: '单跳 %',
         multiAbstract: '多跳（抽象）%',
         multiSpecific: '多跳（具体）%',
         personas: '用户画像',
         button: '生成',
-        working: '正在生成 — 需要几分钟…',
+        working: '正在生成——这需要几分钟…',
         cancel: '取消',
         cancelling: '正在取消…',
 
-        inFlight: '此仓库已有正在进行的基准套件生成——正在将您附加到该任务。'
+        inFlight: '此仓库已有正在进行的基准测试集生成——正在将您附加到该任务。'
       },
       import: {
         button: '导入测试集（.xlsx）',
@@ -3493,7 +3477,7 @@ export default {
       results: {
         title: '基准测试结果',
         failing: '{n} 项失败',
-        advisorHint: '{n} 个问题低于其指标阈值。运行顾问，将每个失败归因于某个管道阶段并获取具体操作。',
+        advisorHint: '{n} 个问题低于其指标阈值。运行顾问，将每个失败归因于某个流水线阶段并获取具体操作。',
         copy: '复制完整答案',
         coverageTitle: '评审仅在 {total} 行中的 {n} 行上对该指标评分——得分只覆盖这些行。',
         colResizeTip: '拖动手柄调整大小——双击表头重置',
@@ -3518,7 +3502,7 @@ export default {
         declinedUnjudgedTitle:
           '回答方拒绝作答且什么也没说，因此这一行从未交给评判模型。它不带任何分数，不计入平均值——而且会拉低实测覆盖率。',
         answered: '已回答',
-        noisy: '回答正常 — 检索噪声',
+        noisy: '回答正常——检索噪声',
         noisyTitle: '该回答通过了所有回答质量指标；仅交付的上下文集（精确率/召回率）低于阈值',
         pdf: '导出 PDF 报告'
       },
@@ -3560,7 +3544,7 @@ export default {
       },
       runDelete: {
         title: '删除运行',
-        body: '此操作将永久删除该运行及其失败分析。测试套件及其问题将保留。',
+        body: '此操作将永久删除该运行及其失败分析。测试集及其问题将保留。',
         confirm: '删除',
         inFlight: '该运行仍在执行中——请先取消。',
         explainInFlight: '该运行的失败分析仍在进行中——请等待其完成。',
@@ -3594,18 +3578,19 @@ export default {
         note: {
           faithfulness:
             '答案相对检索段落的事实依据程度——答案中的论断被来源支持的比例。低分表示答案说出了证据中没有的内容（幻觉）。',
-          context_precision: '关键段落是否排在检索结果前列。低分表示正确的证据被检索到，但被较不相关的片段淹没。',
-          context_recall: '检索段落是否覆盖参考答案所需的全部内容。低分表示检索遗漏了问题所需的证据。',
+          context_precision: '关键段落是否排在检索结果前列。低分表示正确的证据被检索到，但被较不相关的分块淹没。',
+          context_recall:
+            '检索段落是否覆盖参考答案所需的全部内容——参考答案中的每个论断都必须能归因到检索到的上下文。低分表示检索遗漏了问题所需的证据。',
           answer_relevancy:
             '答案对所提问题的针对程度：RAGAS 从答案文本反向生成问题并与原问题做嵌入相似度比较。它不检查事实正确性——冗长或偏题的答案即使正确也得分偏低。',
-          context_utilization: '检索到的上下文是否足以生成参考答案——对检索完整性的检查。',
+          context_utilization: '检索到的上下文是否足以生成参考答案——对照理想答案所需内容的检索完整性检查。',
           context_entities_recall:
-            '实体级召回：条目参考段落中出现的命名实体（公司、日期、金额、地点）也出现在检索到的分块中的比例。低分表示检索返回的分块遗漏了参考中提到的实体。 对评判模型敏感——上下文召回通过时得分偏低，通常说明评判模型的实体提取遗漏，而非内容缺失。',
+            '实体级召回：条目参考段落中出现的命名实体（公司、日期、金额、地点）也出现在检索到的分块中的比例。低分表示检索返回的分块遗漏了参考中提到的实体。对评判模型敏感——上下文召回率通过而此指标偏低时，通常是评判模型的实体提取遗漏，而非内容缺失。',
           factual_correctness:
             '与参考答案在论断层面的事实一致性——评判模型将两者分解为论断并评估重合度。最严格的正确性指标。',
           answer_correctness: '相对参考答案的综合质量——事实正确性与语义相似度结合。最接近“答案是否正确”的指标。',
-          answer_similarity: '生成答案与参考答案之间的语义（嵌入）相似度——高表示两者表达同一含义。',
-          noise_sensitivity: '无关片段混入检索上下文时答案的退化程度——鲁棒性度量。越低越好；其阈值方向相反。'
+          answer_similarity: '生成答案与参考答案之间的语义（嵌入）相似度——高分表示两者表达同一含义。',
+          noise_sensitivity: '无关片段混入检索上下文时答案的退化程度——鲁棒性度量。越低越好；其失败阈值方向相反。'
         }
       },
       pdf: {

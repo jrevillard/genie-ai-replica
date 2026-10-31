@@ -1,14 +1,14 @@
 const { expect } = require('@playwright/test');
 const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('./chatbot');
-const { getSessionToken, request } = require('./auth');
+const { getSessionTokenViaUI, request } = require('./auth');
 
 /**
  * Login and navigate to Document Management tab in Admin Dashboard.
  * The documents surface (upload, delete, lifecycle) is ADMIN_ONLY on the
- * document-repository, so the session is the admin test user by default.
+ * document-repository, so the session is the admin test user.
  */
-async function navigateToDocumentManagement(page, user = TEST_ADMIN_USER) {
-  await loginViaUI(page, user);
+async function navigateToDocumentManagement(page) {
+  await loginViaUI(page, TEST_ADMIN_USER);
   await page.goto(`${BASE_URL}/admin`, {
     waitUntil: 'networkidle',
     timeout: 30000,
@@ -74,12 +74,15 @@ async function searchDocuments(page, query) {
   const searchInput = page.locator('input.search-input');
   await expect(searchInput).toBeVisible({ timeout: 5000 });
   await searchInput.clear();
-  // The table refreshes on a 250 ms debounce plus a fetch — wait for the
-  // actual request instead of a fixed sleep, then one tick for the render.
+  // The table refreshes on a 250 ms debounce plus a fetch: wait for the
+  // request this input triggers, then one render tick before callers read
+  // the rows (getDocumentTableRows reads once, without retrying).
   const filesResponse = page
     .waitForResponse((r) => r.url().includes('/api/files'), { timeout: 5000 })
     .catch(() => null);
-  await searchInput.fill(query || '');
+  if (query) {
+    await searchInput.fill(query);
+  }
   await filesResponse;
   await page.waitForTimeout(250);
 }
@@ -123,38 +126,23 @@ async function getDocumentTableRows(page) {
  * realm tokens only).
  */
 async function deleteAllTestDocuments(prefix = 'test-document') {
-  const { chromium } = require('@playwright/test');
-  const browser = await chromium.launch();
-  const context = await browser.newContext({ ignoreHTTPSErrors: true });
-  const page = await context.newPage();
-  let token;
-  try {
-    await loginViaUI(page, TEST_ADMIN_USER);
-    token = await getSessionToken(page);
-  } finally {
-    await browser.close();
-  }
+  const token = await getSessionTokenViaUI({ user: TEST_ADMIN_USER });
 
   // The list endpoint validates limit <= 50 — a bigger page is a 400.
-  const files = [];
-  let listIncomplete = false;
-  for (let pageNum = 1; ; pageNum++) {
-    const listRes = await request('GET', `/api/files?limit=50&page=${pageNum}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (listRes.status !== 200) {
-      console.warn(`cleanup: file list failed on page ${pageNum} (HTTP ${listRes.status}) — coverage may be partial`);
-      listIncomplete = true;
-      break;
-    }
-    const pageFiles = listRes.data?.data || [];
-    files.push(...pageFiles);
-    if (pageFiles.length < 50) break;
+  const listRes = await request('GET', '/api/files?limit=50', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (listRes.status !== 200) {
+    console.warn(`cleanup: file list failed (HTTP ${listRes.status}) — nothing deleted`);
+    return;
+  }
+  const files = listRes.data?.data || [];
+  if (files.length === 50) {
+    console.warn('cleanup: file list hit the 50-entry page cap — coverage may be partial');
   }
 
   const testFiles = files.filter((f) => f.file_name && f.file_name.startsWith(prefix));
-
-  let deleted = 0;
+  let failed = 0;
   for (const f of testFiles) {
     const file_id = f.file_id || f._key || f.id;
     const res = await request('DELETE', `/api/files/${file_id}`, {
@@ -163,11 +151,13 @@ async function deleteAllTestDocuments(prefix = 'test-document') {
       console.error('Cleanup: failed to delete', f.file_name, e.message);
       return null;
     });
-    if (res && res.status >= 200 && res.status < 300) deleted++;
+    if (!res || res.status < 200 || res.status >= 300) {
+      failed++;
+      console.error(`Cleanup: delete of ${f.file_name} returned ${res ? res.status : 'no response'}`);
+    }
   }
-
-  if (listIncomplete || deleted < testFiles.length) {
-    console.warn(`cleanup: deleted ${deleted} of ${testFiles.length} test documents — leftovers will accumulate`);
+  if (failed > 0) {
+    console.warn(`cleanup: deleted ${testFiles.length - failed} of ${testFiles.length} test documents — leftovers will accumulate`);
   }
 }
 

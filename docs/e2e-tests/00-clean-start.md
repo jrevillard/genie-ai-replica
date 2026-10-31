@@ -285,60 +285,32 @@ print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
 The documents suites (`tests/e2e/documents/`) drive the upload/delete
 surfaces, which the document-repository restricts to the `admin` realm role
 (`rolePolicy.ADMIN_ONLY`) — a plain user's upload is 403 by design. Create a
-second test user carrying that role:
+second test user carrying that role, via the same helper the specs use
+(`tests/e2e/helpers/keycloak-admin.js` — handles the 201/409 tolerance, the
+role lookup and the assignment):
 
 ```bash
-# Re-mint the master admin token: the $TOKEN left over from 0.8 is
-# testuser's plain realm token and cannot call the Admin API.
-TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/master/protocol/openid-connect/token" \
-  -d "client_id=admin-cli" -d "username=admin" -d "password=${KEYCLOAK_ADMIN_PASSWORD}" \
-  -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-
-# Create test admin (201 = created, 409 = already exists — OK)
-curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "testadmin",
-    "enabled": true,
-    "email": "testadmin@genie.local",
-    "firstName": "Test",
-    "lastName": "Admin",
-    "credentials": [{"type": "password", "value": "TestAdmin123!", "temporary": false}]
-  }' -w "\nHTTP: %{http_code}\n"
-
-# Grant the admin realm role. Both lookups fail loudly (non-200 or empty
-# id) instead of crashing on a bare KeyError downstream.
-ADMIN_ROLE_ID=$(curl -sk -w "\nHTTP_STATUS:%{http_code}" "https://localhost/auth/admin/realms/genie/roles/admin" \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "
-import sys, json
-lines = sys.stdin.read().rsplit('HTTP_STATUS:', 1)
-body, status = lines[0].strip(), lines[1].strip()
-if status != '200':
-    sys.exit(f'GET /roles/admin returned HTTP {status}: {body[:200]}')
-rid = json.loads(body).get('id')
-if not rid:
-    sys.exit(f'GET /roles/admin returned no id: {body[:200]}')
-print(rid)
-") || { echo "testadmin provisioning aborted"; exit 1; }
-
-TESTADMIN_ID=$(curl -sk -w "\nHTTP_STATUS:%{http_code}" "https://localhost/auth/admin/realms/genie/users?username=testadmin&exact=true" \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "
-import sys, json
-lines = sys.stdin.read().rsplit('HTTP_STATUS:', 1)
-body, status = lines[0].strip(), lines[1].strip()
-if status != '200':
-    sys.exit(f'GET users?username=testadmin returned HTTP {status}: {body[:200]}')
-users = json.loads(body)
-if not users:
-    sys.exit('user testadmin not found — the create call above failed')
-print(users[0]['id'])
-") || { echo "testadmin provisioning aborted"; exit 1; }
-
-curl -sk -X POST "https://localhost/auth/admin/realms/genie/users/${TESTADMIN_ID}/role-mappings/realm" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d "[{\"id\": \"${ADMIN_ROLE_ID}\", \"name\": \"admin\"}]" -w "\nHTTP: %{http_code}\n"
-# Expected: 204
+# From the repository root. Needs KEYCLOAK_ADMIN_PASSWORD in the
+# environment (set -a && source .env && set +a) and BASE_URL pointing at
+# the stack's edge (defaults to https://localhost; the k8s dev cluster is
+# https://genieai.local:4443).
+node -e "
+const { getAdminToken } = require('./tests/e2e/helpers/auth');
+const { createUser } = require('./tests/e2e/helpers/keycloak-admin');
+(async () => {
+  const token = await getAdminToken();
+  await createUser(token, 'genie', {
+    username: 'testadmin',
+    email: 'testadmin@genie.local',
+    firstName: 'Test',
+    lastName: 'Admin',
+    password: 'TestAdmin123!',
+    realmRoles: ['admin'],
+  });
+  console.log('testadmin ready');
+})().catch((e) => { console.error(e.message); process.exit(1); });
+"
+# Expected: testadmin ready (the second run is a no-op — 409 tolerated)
 ```
 
 **Test admin credentials** (documents suites only):
@@ -352,7 +324,14 @@ Quick Help specs (e.g. `tests/e2e/chat-conversation.spec.js` — *"the header
 title reflects the QuickHelp option that opened the chat"*) fail on an empty
 hierarchy: a Quick Help option that names a category is silently refused
 when the live hierarchy cannot resolve it, and the conversation header keeps
-its fallback `Just Chat`. Seed both collections from the committed export:
+its fallback `Just Chat`.
+
+Seed both collections from the committed export. (The canonical importer is
+`components/gov-chat-backend/scripts/new-schema-scripts/import-service-categories.js`,
+which adds validation and an interactive confirm — use it when you can
+reach ArangoDB directly from the host. The pipeline below runs **inside**
+the backend container, so it also works where ArangoDB has no routed host
+port, e.g. the k8s dev cluster.)
 
 ```bash
 EXPORT=components/gov-chat-backend/scripts/new-schema-scripts/exports/serviceCategoriesAndServices_export_2025-06-18T11-38-02.json
@@ -386,13 +365,10 @@ for COLL in serviceCategories services; do
     -H 'Content-Type: application/json' --data-binary @-" \
     < /tmp/seed-$COLL.json > /dev/null && echo "$COLL seeded"
 done
-
-# Verify
-docker exec $BCK bash -c \
-  'for c in serviceCategories services; do curl -s -u root:${ARANGO_PASSWORD} \
-  "http://arango-vector-db:8529/_db/${ARANGO_DB}/_api/collection/$c/count"; echo; done'
-# Expected: {"count":13,...} and {"count":53,...}
 ```
+
+The loop prints the counts it seeded (`serviceCategories 13`,
+`services 53`) or `already seeded` — that output is the verification.
 
 **On the k8s dev cluster** the same POST runs inside the backend pod — the
 only differences are `kubectl -n genieai exec deploy/<backend-deployment> --`

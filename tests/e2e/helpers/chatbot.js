@@ -190,11 +190,25 @@ async function saveChat(page, title) {
   await confirmButton.click();
 }
 
+/**
+ * Wait until the last bot bubble carries the given text — the signal that
+ * a turn is COMPLETE. The bubble mounts as a streaming placeholder the
+ * moment the send handler runs, and a mid-stream turn carries no queryId,
+ * so the save path would silently drop it: waiting for the bubble alone
+ * is not waiting for the turn.
+ */
+async function waitForBotMessage(page, text, { timeout = 30000 } = {}) {
+  await expect(page.locator('.chat-message.bot .message-bubble').last()).toContainText(text, {
+    timeout,
+  });
+}
+
 module.exports = {
   loginViaUI,
   navigateToChatbot,
   sendMessage,
   waitForBotResponse,
+  waitForBotMessage,
   getMessages,
   getLastBotMessage,
   saveChat,

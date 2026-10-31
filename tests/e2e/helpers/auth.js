@@ -1,4 +1,6 @@
 const https = require('https');
+const { chromium } = require('@playwright/test');
+const { loginViaUI, TEST_USER } = require('./chatbot');
 
 const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
@@ -114,20 +116,18 @@ async function getUserToken(username, password, options = {}) {
  * Direct access grants (ROPC) are disabled on the realm by design, so a
  * spec that already logged in through the browser must reuse that
  * session's token instead of minting a second one with getUserToken.
- * oidc-client-ts persists its user under a `oidc.user:` key in web
- * storage (sessionStorage on this app).
+ * oidc-client-ts persists its user under a `oidc.user:` key in
+ * sessionStorage on this app.
  * @param {import('@playwright/test').Page} page - A logged-in page
  * @returns {Promise<string>} Access token string
  * @throws {Error} When the page session carries no token (not logged in)
  */
 async function getSessionToken(page) {
   const token = await page.evaluate(() => {
-    const key = [...Object.keys(localStorage), ...Object.keys(sessionStorage)].find((k) =>
-      k.startsWith('oidc.user:'),
-    );
+    const key = Object.keys(sessionStorage).find((k) => k.startsWith('oidc.user:'));
     if (!key) return null;
     try {
-      const user = JSON.parse(localStorage.getItem(key) ?? sessionStorage.getItem(key));
+      const user = JSON.parse(sessionStorage.getItem(key));
       return user?.access_token || null;
     } catch {
       return null;
@@ -138,6 +138,32 @@ async function getSessionToken(page) {
     throw new Error('No access token in the page session — the page is not logged in');
   }
   return token;
+}
+
+/**
+ * Log in through the UI in a throwaway session and return that session's
+ * access token — the cleanup paths' replacement for minting a token with
+ * ROPC, which the realm refuses by design.
+ * @param {object} [options]
+ * @param {import('@playwright/test').Browser} [options.browser] - Reuse this
+ *        browser; launches a throwaway chromium when omitted.
+ * @param {{username: string, password: string}} [options.user] - Defaults to
+ *        TEST_USER.
+ * @returns {Promise<string>} Access token string
+ */
+async function getSessionTokenViaUI({ browser, user } = {}) {
+  let ownBrowser = null;
+  let context = null;
+  try {
+    ownBrowser = browser ? null : await chromium.launch();
+    context = await (browser || ownBrowser).newContext({ ignoreHTTPSErrors: true });
+    const page = await context.newPage();
+    await loginViaUI(page, user || TEST_USER);
+    return await getSessionToken(page);
+  } finally {
+    if (ownBrowser) await ownBrowser.close();
+    else if (context) await context.close();
+  }
 }
 
 /**
@@ -161,4 +187,11 @@ function parseJwtClaims(token) {
   }
 }
 
-module.exports = { getAdminToken, getUserToken, getSessionToken, parseJwtClaims, request };
+module.exports = {
+  getAdminToken,
+  getUserToken,
+  getSessionToken,
+  getSessionTokenViaUI,
+  parseJwtClaims,
+  request,
+};

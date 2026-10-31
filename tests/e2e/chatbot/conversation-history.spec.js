@@ -3,11 +3,12 @@ const {
   loginViaUI,
   navigateToChatbot,
   sendMessage,
+  waitForBotMessage,
   getMessages,
   saveChat,
   BASE_URL,
 } = require('../helpers/chatbot');
-const { getSessionToken } = require('../helpers/auth');
+const { getSessionToken, getSessionTokenViaUI, request } = require('../helpers/auth');
 
 const API_TIMEOUT_MS = 30000;
 
@@ -30,16 +31,6 @@ async function mockAnswerStream(page) {
     } catch {
       /* the context closed before the fulfillment */
     }
-  });
-}
-
-// The turn's arrival signal is the rendered bot bubble — but that bubble
-// mounts as a streaming placeholder the moment the send handler runs, and a
-// mid-stream turn carries no queryId, so the save path would silently drop
-// it. The turn is complete only when the mocked answer text is on screen.
-async function waitForBotTurn(page) {
-  await expect(page.locator('.chat-message.bot .message-bubble').last()).toContainText(MOCKED_ANSWER, {
-    timeout: 30000,
   });
 }
 
@@ -70,27 +61,15 @@ test.describe('Conversation history persistence', () => {
   test.afterAll(async ({ browser }) => {
     if (createdConversationIds.length === 0) return;
 
-    const cleanupContext = await browser.newContext({
-      ignoreHTTPSErrors: true,
-      bypassCSP: true,
-    });
-    const cleanupPage = await cleanupContext.newPage();
-    try {
-      await loginViaUI(cleanupPage);
-      const token = await getSessionToken(cleanupPage);
-
-      const { request } = require('../helpers/auth');
-      for (const convId of createdConversationIds) {
-        try {
-          await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-        } catch (err) {
-          console.error(`cleanup: failed to delete conversation ${convId}: ${err.message}`);
-        }
+    const token = await getSessionTokenViaUI({ browser });
+    for (const convId of createdConversationIds) {
+      try {
+        await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch (err) {
+        console.error(`cleanup: failed to delete conversation ${convId}: ${err.message}`);
       }
-    } finally {
-      await cleanupContext.close();
     }
   });
 
@@ -100,7 +79,7 @@ test.describe('Conversation history persistence', () => {
 
     // Send a message and wait for the mocked answer to render
     await sendMessage(page, userText);
-    await waitForBotTurn(page);
+    await waitForBotMessage(page, MOCKED_ANSWER);
 
     // Capture messages before save
     const messagesBefore = await getMessages(page);
@@ -169,7 +148,7 @@ test.describe('Conversation history persistence', () => {
 
     // Send a message and wait for the mocked answer to render
     await sendMessage(page, userText);
-    await waitForBotTurn(page);
+    await waitForBotMessage(page, MOCKED_ANSWER);
 
     // Capture message order before save
     const messagesBefore = await getMessages(page);

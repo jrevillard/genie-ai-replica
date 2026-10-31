@@ -338,6 +338,24 @@ def test_wrong_receiver_helper_body_is_not_already_patched(tmp_path):
         mod.apply_patch(p)
 
 
+def test_dispatch_hidden_in_a_nested_def_is_not_the_helper(tmp_path):
+    """A mangled outer body with the real dispatch buried in a nested inner
+    def still runs the POST on the loop: the body check must not descend
+    into nested function scopes."""
+    p = tmp_path / "orchestrator.py"
+    body = FAKE_ORCHESTRATOR.replace("response = requests.post(", "response = await _llm_post_offloop(")
+    mangled_helper = (
+        "\n\nasync def _llm_post_offloop(*args, **kwargs):\n"
+        "    async def _inner():\n"
+        "        return await asyncio.to_thread(requests.post, *args, **kwargs)\n"
+        "\n"
+        "    return requests.post(*args, **kwargs)\n"
+    )
+    p.write_text(body + mangled_helper, encoding="utf-8")
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
 def test_guard_fails_with_diagnostic_on_undecodable_file(tmp_path):
     """A layout shift resolving the orchestrator path to a non-UTF-8 file
     must produce the guard diagnostic, not a raw UnicodeDecodeError."""

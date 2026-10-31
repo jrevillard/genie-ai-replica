@@ -189,6 +189,13 @@ def apply_patch(path: Path) -> str:
             f"ASSERT-ON-PATCH GUARD FAILED: {path} is not UTF-8 text ({exc}) — "
             "the image layout resolved the orchestrator path to something else; re-derive the patch."
         ) from exc
+    except ValueError as exc:
+        # Python 3.11 (the build image) parses a NUL byte as ValueError,
+        # where 3.12+ raises the SyntaxError arm above - same layout-shift class.
+        raise SystemExit(
+            f"ASSERT-ON-PATCH GUARD FAILED: {path} is not parseable Python ({exc}) — "
+            "the image layout resolved the orchestrator path to something else; re-derive the patch."
+        ) from exc
     except SyntaxError as exc:
         raise SystemExit(
             f"ASSERT-ON-PATCH GUARD FAILED: {path} is not valid Python ({exc.lineno}: {exc.msg}) — "
@@ -327,7 +334,14 @@ def helper_present(source: str) -> bool:
     for node in tree.body:
         if not (isinstance(node, ast.AsyncFunctionDef) and node.name == "_llm_post_offloop"):
             continue
-        for child in ast.walk(node):
+        # The helper's OWN body only: ast.walk would descend into a nested
+        # inner def, so a mangled outer body with the real dispatch buried
+        # inside one could pass while the outer call runs sync on the loop.
+        stack = list(ast.iter_child_nodes(node))
+        while stack:
+            child = stack.pop()
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+                continue
             if (
                 isinstance(child, ast.Await)
                 and isinstance(child.value, ast.Call)
@@ -342,6 +356,7 @@ def helper_present(source: str) -> bool:
                 and child.value.args[0].value.id == "requests"
             ):
                 return True
+            stack.extend(ast.iter_child_nodes(child))
     return False
 
 

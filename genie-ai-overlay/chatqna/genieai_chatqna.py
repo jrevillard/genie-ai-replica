@@ -41,7 +41,16 @@ from core.model_http_policy import (
     endpoint_auth_headers,
     endpoint_verify,
 )
-from core.span_attrs import ATTRIBUTE_NAMES, QUERY_ID_KEY, query_id_from_baggage
+from core.span_attrs import (
+    ATTRIBUTE_NAMES,
+    QUERY_ID_KEY,
+    QUERY_TRANSLATION_FALLBACK_ERROR,
+    QUERY_TRANSLATION_FALLBACK_TIMEOUT,
+    QUERY_TRANSLATION_PASSTHROUGH_ENGLISH,
+    QUERY_TRANSLATION_PASSTHROUGH_UNKNOWN,
+    QUERY_TRANSLATION_TRANSLATED,
+    query_id_from_baggage,
+)
 from tracing import (
     get_tracer,
     install_uvicorn_access_logging,
@@ -167,6 +176,18 @@ class TranslationFailedError(RuntimeError):
     keeps the English answer and reports ``"failed"``, while the history path
     — a text that is normalized for the retriever and never shown — falls back
     to the English source.
+    """
+
+
+class TranslationTimeoutError(TranslationFailedError):
+    """A translation chunk timed out waiting for the model.
+
+    A subtype, not a separate family: every ``except TranslationFailedError``
+    keeps working, while the history path — which reports whether the
+    translation service was slow or broken — classifies the timeout by
+    ``isinstance`` instead of unwrapping ``__cause__``. The answer path
+    reports only ``"failed"``, so the chunking gather folds the subtype back
+    into the base class; only the history path splits it.
     """
 
 
@@ -638,6 +659,24 @@ def _get_max_translation_chars() -> int:
 # reserve assumes the translated output is roughly the size of the input (the
 # TranslateGemma payload also caps max_tokens near half the window).
 TRANSLATION_PROMPT_OVERHEAD_TOKENS = 512
+
+
+def _flatten_history_string(history: list) -> str:
+    """Flatten the chat history into the role-tagged string every consumer
+    shares: the translation prompt (and its untranslated fallback), and the
+    passthrough flatten when the history is already in English. One recipe,
+    so a translated and a passthrough history for the same messages differ
+    only in the words, never in the format. A message with no role key
+    flattens as ``UNKNOWN:`` and a message with no content key flattens as
+    an empty content."""
+    parts = []
+    for message in history:
+        role = message.get("role", "unknown").upper()
+        content = message.get("content", "")
+        parts.append(f"{role}: {content}")
+    return " |<-MSG->| ".join(parts)
+
+
 TRANSLATION_CHARS_PER_TOKEN = 3  # conservative: Spanish runs ~4-5 chars/token
 # Rough per-message overhead in the flattened history ("USER: " / "ASSISTANT: "
 # prefixes plus the " |<-MSG->| " separator) — the char budget counts content
@@ -693,6 +732,7 @@ LANGUAGE_MAP_RETRY_SECONDS = 60.0
 # cannot be steered into another language — neither by a caller nor by a
 # later change to the call site.
 HISTORY_TRANSLATION_TARGET = "en"
+
 
 # The script each language is written in (ISO 15924) comes from the same
 # registry entry as its name. The translation prompt has to agree with the
@@ -3249,8 +3289,17 @@ class ChatQnAService:
         abstained=False,
         abstention_reason=None,
         include_contexts: bool = False,
+        query_translation_status: str | None = None,
     ):
         """Forward the LLM token stream, then append a `metadata` SSE event.
+
+        ``query_translation_status`` carries what the history translator fed
+        the embedder (``translated`` / ``passthrough_english`` /
+        ``passthrough_unknown_language`` / ``fallback_timeout`` /
+        ``fallback_error``): a streamed answer must be as observable as a
+        JSON one about the language its retrieval query was really in. It is
+        stamped on ``chatqna.orchestrate`` as well, so the trace and the
+        payload cannot disagree.
 
         ``abstained`` / ``abstention_reason`` carry the outcome handle_request
         already derived for the request metric, so the counter and this
@@ -3389,6 +3438,10 @@ class ChatQnAService:
             "confidence_score": _cs,
             "is_grounded": is_grounded,
         }
+        if query_translation_status is not None:
+            # Always set by handle_request (every turn knows what its embedder
+            # was fed); omitted only when the helper is driven standalone.
+            metadata["query_translation_status"] = query_translation_status
         if abstained:
             _mark_abstention(metadata, abstention_reason)
         if LLM_SELF_CONFIDENCE_ENABLED:
@@ -3621,7 +3674,9 @@ class ChatQnAService:
                 return None
         return cap
 
-    async def _get_translated_history_string(self, history: list, source_lang_code: str = "en") -> str:
+    async def _get_translated_history_string(
+        self, history: list | str, source_lang_code: str = "en"
+    ) -> tuple[str, str]:
         """
         A helper that:
         1. Truncates history to stay within a token limit.
@@ -3640,6 +3695,29 @@ class ChatQnAService:
         The name the prompt carries comes from the language map, so a caller
         cannot put free text in the prompt, and a map that does not know
         English leaves the history as it is.
+
+        Returns:
+            ``(text, status)``. The text is safe to hand to the embedder:
+            the translated English history, or — when the translation could
+            not run — the flattened source-language history. The one
+            exception is a history whose newest message alone exceeds the
+            whole budget: there is no source text to fall back to, so the
+            text is empty and the retrieval query is empty with it. The
+            status tells the caller which one it was:
+            ``"translated"`` when the history came back in English,
+            ``"fallback_timeout"`` when the translation service timed out,
+            and ``"fallback_error"`` when it failed or refused for any other
+            reason (window too tight, unreadable language map, nothing fit
+            the budget, blank input, empty completion). The history is normalized for the
+            retriever and never shown to the user, so the turn is not failed
+            on a fallback — but the fallback is never silent: the caller
+            stamps the status on the ``chatqna.orchestrate`` span and into
+            the response metadata, so a degraded translation service is
+            visible where the retrieval quality it degrades is diagnosed.
+            The passthrough cases never reach this method: the caller
+            classifies them itself (``"passthrough_english"`` when the
+            history is established English, ``"passthrough_unknown_language"``
+            when no language could be established for it).
         """
         # Single-message mode sends history as a plain string
         if isinstance(history, str):
@@ -3654,7 +3732,11 @@ class ChatQnAService:
             for message in reversed(history):
                 if logflag:
                     logger.debug(f"Examining message: {message}")
-                message_chars = len(message["content"])
+                # .get, not [:]: request validation permits a message with no
+                # content key, and a malformed message must not crash the
+                # turn — it counts as empty, exactly as the flatten below
+                # reads it.
+                message_chars = len(message.get("content", ""))
                 if current_chars + message_chars + TRANSLATION_MSG_OVERHEAD_CHARS > max_translation_chars:
                     break
                 messages_to_process.append(message)
@@ -3673,15 +3755,17 @@ class ChatQnAService:
                 # Even the newest message exceeds the whole budget: nothing to
                 # translate — sending an empty prompt would only harvest the
                 # model's junk reply as chat history.
-                return ""
+                return "", QUERY_TRANSLATION_FALLBACK_ERROR
 
-            flattened_history_parts = []
-            for message in messages_to_process:
-                role = message.get("role", "unknown").upper()
-                content = message.get("content", "")
-                flattened_history_parts.append(f"{role}: {content}")
-
-            flattened_history_string = " |<-MSG->| ".join(flattened_history_parts)
+            flattened_history_string = _flatten_history_string(messages_to_process)
+            if not any(message.get("content", "").strip() for message in messages_to_process):
+                # A history of blank messages would only harvest the model's
+                # junk reply as the embedded query, and there is no content
+                # to translate. The flattened string alone cannot be checked:
+                # the role prefixes make it non-blank even when every message
+                # is blank.
+                logger.warning("History translation asked for blank messages; reporting it as a fallback.")
+                return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
 
         # The target steers the prompt, so it is resolved against the language
         # map — ONCE, for both shapes of the history. The target is English:
@@ -3692,11 +3776,37 @@ class ChatQnAService:
         target_name = language_codes.get(canonical_target)
         if target_name is None:
             logger.warning("The language map does not know English — refusing to translate the history.")
-            return flattened_history_string
+            return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
 
-        # Single-message mode sends history as a plain string — translate it
+        # Single-message mode sends history as a plain string — translate it.
+        # The chunk translator is bypassed on purpose: it swallows a failed
+        # chunk into the source text, and this caller has to know the
+        # translation did not happen (it reports the status, unlike the
+        # answer path where the swallowed fallback is the contract). The
+        # chunk translator classifies its failures into typed exceptions, so
+        # the split here is isinstance-only. Overflow still propagates
+        # fail-loud — but note that on this path nothing maps it to the #829
+        # 422 contract: it escapes handle_request as an unhandled 500.
         if isinstance(history, str):
-            return await self._translate_text_chunk(history, canonical_target, source_lang_code=source_lang_code)
+            if not history.strip():
+                # An empty prompt would only harvest the model's junk reply
+                # as the embedded query, and there is nothing to translate.
+                logger.warning("History translation asked for an empty message; reporting it as a fallback.")
+                return history, QUERY_TRANSLATION_FALLBACK_ERROR
+            try:
+                return (
+                    await self._translate_chunk_in_language(
+                        history, canonical_target, target_name, source_lang_code=source_lang_code
+                    ),
+                    QUERY_TRANSLATION_TRANSLATED,
+                )
+            except TranslationTimeoutError:
+                # Already logged by the chunk translator's wrap site (the one
+                # line that names the timeout); the status is the observable.
+                return history, QUERY_TRANSLATION_FALLBACK_TIMEOUT
+            except TranslationFailedError as e:
+                logger.error(f"History translation failed: {e}")
+                return history, QUERY_TRANSLATION_FALLBACK_ERROR
 
         # One derivation per call: the payload, the log line and the response
         # parse must branch on the SAME decision (and the same id).
@@ -3716,7 +3826,7 @@ class ChatQnAService:
                 logger.warning(
                     "Translation window too tight to translate the history meaningfully; returning it untranslated"
                 )
-                return flattened_history_string
+                return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
             payload = {
                 "model": translation_model_id,
                 "prompt": prompt,
@@ -3751,20 +3861,28 @@ class ChatQnAService:
                     translated_blob = response_data["choices"][0]["text"]
                 else:
                     translated_blob = response_data["choices"][0]["message"]["content"]
+                translated_blob = translated_blob.strip()
+                if not translated_blob:
+                    # A 200 with an empty completion is a failure, not a
+                    # translation: the chunk translator refuses it for the
+                    # same reason (an empty history would silently blank the
+                    # retrieval query), and the fallback status says so.
+                    logger.error("Translation model returned an empty history translation; using the source.")
+                    return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
                 if logflag:
-                    logger.debug(f"Translated chat history: {translated_blob.strip()}")
-                return translated_blob.strip()
+                    logger.debug(f"Translated chat history: {translated_blob}")
+                return translated_blob, QUERY_TRANSLATION_TRANSLATED
 
-        except httpx.TimeoutException as e:
+        except (httpx.TimeoutException, TimeoutError) as e:
             logger.error(
                 f"History translation timeout after "
                 f"{TRANSLATION_SERVICE_TIMEOUT} seconds. Returning history "
                 f"in original language. Error: {e}"
             )
-            return flattened_history_string
+            return flattened_history_string, QUERY_TRANSLATION_FALLBACK_TIMEOUT
         except Exception as e:
             logger.error(f"Translation error: {e}")
-            return flattened_history_string
+            return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
 
     async def _condense_query(self, history_text: str, last_message: str) -> str:
         """Rewrite a follow-up into a standalone retrieval query (issue #1091).
@@ -3895,45 +4013,6 @@ class ChatQnAService:
 
         return chunks
 
-    async def _translate_text_chunk(self, text: str, iso_code: str, source_lang_code: str = "en") -> str:
-        """Translate a single chunk of text.
-
-        Automatically uses TranslateGemma completions API (with pre-formatted prompt)
-        or generic chat completions format based on the configured VLLM_TRANSLATION_MODEL_ID.
-
-        Response-side fail-loud: when the translation service returns a 400
-        with a context-overflow marker, raise ``TranslationInputTooLongError``
-        instead of silently returning the English source text (issue #829).
-
-        Args:
-            text: Text to translate.
-            iso_code: Target ISO language code (e.g. "st"). The language name
-                the prompt carries comes from the language map, never from the
-                caller.
-            source_lang_code: Source ISO language code (e.g. "en"). Defaults to "en".
-        """
-        # Last hop before the prompt: the language name and the code that go
-        # into it are taken from the language map, so no caller-supplied text
-        # can reach the translation model. An unknown code is refused and the
-        # source text is returned untranslated.
-        language_codes = language_codes_map()
-        canonical_code, target_lang = _canonical_target_language(iso_code, language_codes)
-        if canonical_code is None:
-            return text
-
-        try:
-            return await self._translate_chunk_in_language(
-                text,
-                canonical_code,
-                target_lang,
-                source_lang_code=source_lang_code,
-            )
-        except TranslationFailedError:
-            # This text is normalized for the retriever, not shown to the
-            # user: an untranslated history is a worse answer than a wrong
-            # one, and the answer the user reads is unaffected by it.
-            return text
-
     async def _translate_chunk_in_language(
         self,
         text: str,
@@ -4024,6 +4103,12 @@ class ChatQnAService:
                 raise TranslationInputTooLongError(
                     f"translation chunk exceeds VLLM_TRANSLATION_MAX_MODEL_LEN: {type(e).__name__}: {str(e)[:200]}"
                 ) from e
+            if isinstance(e, (httpx.TimeoutException, TimeoutError)):
+                # One typed subtype: the answer path still sees a
+                # TranslationFailedError, while the history path reports
+                # "the service was slow" without unwrapping __cause__.
+                logger.warning(f"Translation chunk timed out after {TRANSLATION_SERVICE_TIMEOUT} seconds.")
+                raise TranslationTimeoutError(f"translation chunk timed out: {type(e).__name__}: {str(e)[:200]}") from e
             logger.warning(f"Failed to translate chunk: {type(e).__name__}: {e}")
             raise TranslationFailedError(f"translation chunk failed: {type(e).__name__}: {str(e)[:200]}") from e
 
@@ -4264,22 +4349,44 @@ class ChatQnAService:
         history_language = detected_language or original_language
 
         translated_history_string = ""
+        # What the embedder will be fed: a translated query, the English
+        # source passed through, or — when the history translator fell back —
+        # the untranslated source language. The fallback does not fail the
+        # turn (the history is normalized for the retriever, never shown),
+        # but it is never silent: this status is stamped on the
+        # chatqna.orchestrate span and into the response metadata, so a
+        # degraded translation microservice shows up where the retrieval
+        # quality it degrades is diagnosed (issue #1026).
+        query_translation_status = None
         if history_language and history_language.strip() != "EN":
             if logflag:
                 logger.debug(
                     f"Original language detected: {history_language}. Proceeding with translation of chat history."
                 )
-            translated_history_string = await self._get_translated_history_string(
+            translated_history_string, query_translation_status = await self._get_translated_history_string(
                 full_chat_history, source_lang_code=history_language.lower()
             )
         else:
+            # A passthrough is only "English" when something actually
+            # established English: the request named it (and the code was
+            # not refused), or detection concluded it. A fabricated fallback
+            # — no language given and none detected, a crashed detection, a
+            # refused request code — is reported as unknown, so the runbook
+            # filter cannot mistake an arbitrary-language query for an
+            # English one.
+            english_established = detected_language == "EN" or (
+                original_language == "EN" and not language_refused and bool(raw_language and raw_language.strip())
+            )
+            query_translation_status = (
+                QUERY_TRANSLATION_PASSTHROUGH_ENGLISH if english_established else QUERY_TRANSLATION_PASSTHROUGH_UNKNOWN
+            )
             # Already English, or no source language to translate from:
-            # flatten without translation.
+            # flatten without translation. Same recipe as the translator's
+            # flatten, so the two differ only in the words.
             if isinstance(full_chat_history, str):
                 translated_history_string = full_chat_history
             else:
-                parts = [f"{msg.get('role', '').upper()}: {msg.get('content', '')}" for msg in full_chat_history]
-                translated_history_string = " |<-MSG->| ".join(parts)
+                translated_history_string = _flatten_history_string(full_chat_history)
 
         if logflag:
             logger.debug(f"Translated History String: {translated_history_string}")
@@ -4474,6 +4581,11 @@ class ChatQnAService:
             # agree (same TTL-cached discovery), and the copy here survives a
             # request that dies before the LLM node runs.
             _set_attributes(span, _blend_attributes(_blend_enabled, _blend_alpha, _blend_turns))
+            # What the embedder was fed for this query (translated English or
+            # an untranslated fallback): the retrieval-quality question "was
+            # this Spanish query embedded as Spanish?" is answerable from the
+            # trace alone.
+            span.set_attribute(ATTRIBUTE_NAMES["rag_translation_query_status"], query_translation_status)
             _set_attributes(
                 span,
                 _prompt_budget_attributes(
@@ -4616,6 +4728,9 @@ class ChatQnAService:
                     "retrieval_confidence_score": 0.0,
                     "confidence_score": 0.0,
                     "is_grounded": False,
+                    # Same contract as the normal paths: what the embedder was
+                    # fed for this query.
+                    "query_translation_status": query_translation_status,
                 }
                 _mark_abstention(metadata, "reranker_input_too_long")
                 if chat_request.stream:
@@ -4728,6 +4843,7 @@ class ChatQnAService:
                         abstained=_abstained,
                         abstention_reason=_abstention_reason,
                         include_contexts=bool(getattr(chat_request, "include_contexts", False)),
+                        query_translation_status=query_translation_status,
                     ),
                     media_type="text/event-stream",
                 )
@@ -4808,6 +4924,12 @@ class ChatQnAService:
             # generated from the LLM's parametric knowledge (false). Frontend uses
             # this to flag responses that have no document basis.
             "is_grounded": is_grounded,
+            # What the history translator fed the embedder: "translated",
+            # "passthrough_english", "passthrough_unknown_language",
+            # "fallback_timeout" or "fallback_error". Distinct from
+            # translation_status above, which describes the ANSWER's
+            # translation; this one describes the QUERY's.
+            "query_translation_status": query_translation_status,
         }
         # `_abstained` was computed in the schedule block above (it also drove
         # the metric), so the metric and this metadata cannot come from

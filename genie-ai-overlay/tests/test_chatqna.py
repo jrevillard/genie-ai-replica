@@ -2122,12 +2122,77 @@ class TestTranslationHelpers:
         assert payload["max_tokens"] == 692
 
     @pytest.mark.asyncio
-    async def test_translation_skipped_when_budget_fits_no_message(self):
-        """A budget smaller than the newest message drops everything: no empty
-        prompt is sent to the translation model (its junk reply would become
-        the next prompt's chat history) — the result is an empty history."""
+    async def test_newest_message_over_budget_keeps_tail(self):
+        """A budget smaller than the newest message keeps the message's TAIL
+        instead of dropping it: the tail is the newest text of the turn, so
+        the retrieval query carries it (translated) rather than nothing."""
         svc = create_chatqna_service()
-        history = [{"role": "user", "content": "X" * 600}]
+        newest = "A" * 550 + "TAILTEXT"
+        history = [{"role": "user", "content": newest}]
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"choices": [{"message": {"content": "Translated history"}}]}
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+            patch("chatqna.genieai_chatqna.MAX_TRANSLATION_CHARS", 70),
+            patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
+        ):
+            result = await svc._get_translated_history_string(history)
+
+        # The message went to translation, so the query is its translated
+        # tail — not an empty string.
+        assert result == ("Translated history", "translated")
+        sent_prompt = mock_client.post.call_args.kwargs["json"]["messages"][0]["content"]
+        tail_chars = 70 - chatqna_module.TRANSLATION_MSG_OVERHEAD_CHARS
+        assert sent_prompt.endswith(f"HISTORY:\nUSER: {newest[-tail_chars:]}")
+        # The truncation is observable on the same channel as the
+        # older-message drops.
+        mock_counter.add.assert_called_once_with(1, {"path": "translation"})
+
+    @pytest.mark.asyncio
+    async def test_newest_message_keeps_tail_only(self):
+        """The kept fragment is the tail, not the head: the end of an
+        over-budget message is its newest text."""
+        svc = create_chatqna_service()
+        newest = "HEADMARKER" + "B" * 540 + "TAILMARKER"
+        history = [{"role": "user", "content": newest}]
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"choices": [{"message": {"content": "Translated history"}}]}
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+            patch("chatqna.genieai_chatqna.MAX_TRANSLATION_CHARS", 70),
+        ):
+            await svc._get_translated_history_string(history)
+
+        sent_prompt = mock_client.post.call_args.kwargs["json"]["messages"][0]["content"]
+        assert "TAILMARKER" in sent_prompt
+        assert "HEADMARKER" not in sent_prompt
+
+    @pytest.mark.asyncio
+    async def test_degenerate_budget_still_yields_nonempty_query(self):
+        """A budget smaller than one message's overhead cannot keep any
+        content: the query still never goes out empty — the flattened (blank)
+        message is reported as a fallback, exactly like an all-blank
+        history."""
+        svc = create_chatqna_service()
+        history = [{"role": "user", "content": "Y" * 600}]
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=MagicMock())
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -2137,12 +2202,12 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
             patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
-            patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
-            patch("httpx.get", return_value=MagicMock(json=lambda: {"data": [{"id": "m", "max_model_len": 768}]})),
+            patch("chatqna.genieai_chatqna.MAX_TRANSLATION_CHARS", 1),
         ):
             result = await svc._get_translated_history_string(history)
 
-        assert result == ("", "fallback_error")  # nothing survived the budget: empty history, flagged fallback
+        assert result[0] != ""  # the embedder is never fed an empty query
+        assert result[1] == "fallback_error"  # nothing translatable: flagged fallback
         mock_client.post.assert_not_called()
 
     @pytest.mark.asyncio

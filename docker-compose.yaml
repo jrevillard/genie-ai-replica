@@ -2466,7 +2466,10 @@ services:
     logging: *fluent-logging
     # postgres package user (uid 999): the init only runs the psql client
     # against the database over the network and writes nothing (#1227).
-    # Pinned by name: the image's USER is the numeric source of truth.
+    # Unlike the other pins, this one is NOT a restatement of an image
+    # USER: the postgres:16 base ships no USER (root by default) — the
+    # pin is the #1227 mandate itself, giving this one-shot the postgres
+    # uid for its network-client lifetime.
     user: postgres
     build: configs/postgres/
     image: ${GENIE_AI_POSTGRES_INIT_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-postgres-init}:${GENIE_AI_POSTGRES_INIT_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}

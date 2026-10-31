@@ -670,6 +670,10 @@
         | reject('search', 'keycloak-config')
         | reject('search', 'db-migrations')
         | reject('search', 'otel-collector-init')
+        | reject('search', 'arango-vector-db-init')
+        | reject('search', 'victorialogs-init')
+        | reject('search', 'document-repository-init')
+        | reject('search', 'backend-init')
         | reject('search', '0/0')
         | select('search', '0/')
         | length == 0

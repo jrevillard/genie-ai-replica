@@ -62,11 +62,12 @@ def test_the_imported_orchestrator_is_the_patched_copy(comps):
         "build-time patch either did not run or patched a copy Python does not import; the "
         "streaming LLM POST is back on the event loop and /health will stop answering during queries"
     )
-    assert source.count(patcher.WRAPPED_SITE) == 2, (
+    # The same AST detectors the patcher itself uses, against the imported
+    # module: prose quoting either call shape cannot satisfy the counts.
+    assert len(patcher._wrapped_site_lines(source)) == 2, (
         "expected exactly 2 wrapped streaming call sites in the imported orchestrator"
     )
-    line_shaped_unpatched = any(line.lstrip(" \t").startswith(patcher.UNPATCHED_SITE) for line in source.split("\n"))
-    assert not line_shaped_unpatched, (
+    assert not patcher._streaming_site_lines(source), (
         "a streaming call site is still calling requests.post directly in the imported module — "
         "the event loop would stay pinned for the duration of the LLM first-headers wait"
     )

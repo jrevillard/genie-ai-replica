@@ -301,6 +301,30 @@ def test_guard_fails_on_missing_file(tmp_path):
         mod.apply_patch(tmp_path / "nope.py")
 
 
+def test_guard_fails_with_diagnostic_when_rewrap_lands_in_a_sync_def(tmp_path):
+    """If upstream moved the streaming sites into a plain def, the rewrap
+    injects `await` outside an async function: the compile step must report
+    the guard diagnostic, not leak a raw SyntaxError traceback."""
+    p = tmp_path / "orchestrator.py"
+    body = FAKE_ORCHESTRATOR.replace("async def execute(", "def execute(")
+    p.write_text(body, encoding="utf-8")
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
+def test_mangled_helper_body_is_not_already_patched(tmp_path):
+    """A helper that kept its def but lost the to_thread dispatch puts the
+    POST back on the loop — the already-patched shortcut must refuse it, so
+    a hand-edit or bad merge cannot ship behind a green build."""
+    p = tmp_path / "orchestrator.py"
+    body = FAKE_ORCHESTRATOR.replace("response = requests.post(", "response = await _llm_post_offloop(")
+    dispatch = "return await asyncio.to_thread(requests.post, *args, **kwargs)"
+    mangled_helper = mod.HELPER.replace(dispatch, "return requests.post(*args, **kwargs)")
+    p.write_text(body + mangled_helper, encoding="utf-8")
+    with pytest.raises(SystemExit, match="ASSERT-ON-PATCH GUARD FAILED"):
+        mod.apply_patch(p)
+
+
 def test_unawaited_helper_calls_are_not_wrapped_sites(tmp_path):
     """`response = _llm_post_offloop(...)` without `await` is not a wrapped
     site — it is the broken shape the patch exists to prevent. With two such
@@ -457,9 +481,10 @@ def test_guard_fails_on_half_patched_file(tmp_path):
 
 
 def test_a_mention_of_the_call_in_a_comment_does_not_fail_the_patch(tmp_path):
-    """The post-write verification is line-shaped like site detection: prose
-    merely CONTAINING the call text (a comment, a docstring) must not fail a
-    correct patch — only a real unpatched call site may."""
+    """The post-write verification counts sites through the AST like site
+    detection: prose merely CONTAINING the call text (a comment, a
+    docstring) must not fail a correct patch — only a real unpatched call
+    site may."""
     p = tmp_path / "orchestrator.py"
     mention = "# the old code did response = requests.post( here\n"
     body = FAKE_ORCHESTRATOR.replace("import requests\n", "import requests\n" + mention, 1)

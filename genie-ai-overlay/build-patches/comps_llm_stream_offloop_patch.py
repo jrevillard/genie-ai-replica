@@ -250,7 +250,17 @@ def apply_patch(path: Path) -> str:
     # Verify the EDITED SOURCE before anything reaches disk: valid Python,
     # exactly 2 wrapped sites, no live requests.post site left, one helper.
     # A guard failure therefore leaves the original file untouched.
-    compile(patched, str(path), "exec")
+    try:
+        compile(patched, str(path), "exec")
+    except SyntaxError as exc:
+        # The rewrap injects `await`; if upstream moved the sites into a sync
+        # def, that injection is invalid and the build must say so in the
+        # guard's voice, not with a raw traceback.
+        raise SystemExit(
+            f"ASSERT-ON-PATCH GUARD FAILED: the rewrapped {path} does not compile "
+            f"({exc.lineno}: {exc.msg}) — the streaming sites moved out of their async context; "
+            "re-derive the patch."
+        ) from exc
     if len(_wrapped_site_lines(patched)) != 2 or _streaming_site_lines(patched) or not helper_present(patched):
         raise SystemExit(f"ASSERT-ON-PATCH GUARD FAILED: post-patch verification failed for {path}")
     _write(path, patched)
@@ -286,14 +296,30 @@ def _wrapped_site_lines(source: str) -> list[int]:
 
 
 def helper_present(source: str) -> bool:
-    """Whether the file defines the helper — a live MODULE-LEVEL async def.
+    """Whether the file defines the helper — a live MODULE-LEVEL async def
+    whose body dispatches through ``asyncio.to_thread(requests.post, ...)``.
 
     ast.walk would also accept a nested same-named def, but the call sites
     resolve the name in module scope: only a statement in ``tree.body``
-    binds it there.
+    binds it there. The body check keeps a mangled helper — def kept, sync
+    ``requests.post`` call restored — from passing idempotency as a no-op.
     """
     tree = ast.parse(source)
-    return any(isinstance(node, ast.AsyncFunctionDef) and node.name == "_llm_post_offloop" for node in tree.body)
+    for node in tree.body:
+        if not (isinstance(node, ast.AsyncFunctionDef) and node.name == "_llm_post_offloop"):
+            continue
+        for child in ast.walk(node):
+            if (
+                isinstance(child, ast.Await)
+                and isinstance(child.value, ast.Call)
+                and isinstance(child.value.func, ast.Attribute)
+                and child.value.func.attr == "to_thread"
+                and child.value.args
+                and isinstance(child.value.args[0], ast.Attribute)
+                and child.value.args[0].attr == "post"
+            ):
+                return True
+    return False
 
 
 def main() -> int:

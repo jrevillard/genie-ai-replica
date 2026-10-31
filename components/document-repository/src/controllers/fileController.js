@@ -1715,8 +1715,11 @@ class FileController {
       logResults.forEach((result, i) => {
         if (result.status === 'rejected') {
           // The status flip already happened; a lost log line must not fail
-          // the recovery — dataprep would only retry the whole call.
-          logger.error(`Failed to log recovery for ${recovered[i]}: ${result.reason.message}`);
+          // the recovery — dataprep would only retry the whole call. The
+          // reason is not guaranteed to be an Error, so stringify defensively
+          // (a throw here would become a 500 and a 30× dataprep retry).
+          const reason = result.reason && result.reason.message ? result.reason.message : String(result.reason);
+          logger.error(`Failed to log recovery for ${recovered[i]}: ${reason}`);
         }
       });
       return res.json({ success: true, recovered, count: recovered.length });

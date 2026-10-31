@@ -133,6 +133,15 @@ class TestRecoverStuckIngestStatuses:
 
         assert result == []
 
+    async def test_permanent_rejection_fails_fast(self):
+        """A 4xx (rotated secret, lost role) can never succeed: retrying it
+        30 times just delays the same misconfig being reported."""
+        session = _mock_session(403, {})
+        result = await _recover_with_session(session)
+
+        assert result == []
+        assert session.post.call_count == 1
+
     async def test_token_failure_gives_up_without_raising(self):
         session = _mock_session(200, {"success": True, "recovered": [], "count": 0})
         with (

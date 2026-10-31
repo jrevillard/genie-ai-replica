@@ -829,6 +829,8 @@ router.post('/ingest', authorizeRole(ADMIN_ONLY), fileController.ingestMultipleF
  *                   type: array
  *                   items: { type: string }
  *                 count: { type: integer }
+ *       '400':
+ *         description: Validation error (e.g. excludeFileIds not an array of strings)
  *       '401':
  *         description: Unauthorized
  *       '403':

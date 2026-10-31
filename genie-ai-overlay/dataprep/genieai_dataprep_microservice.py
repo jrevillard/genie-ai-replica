@@ -229,13 +229,24 @@ async def recover_stuck_ingest_statuses():
                             payload = await response.json()
                             recovered = payload.get("recovered") or []
                             if recovered:
+                                # Same 500-char bound as the error branch: a
+                                # long batch would otherwise flood the signal.
                                 logger.info(
                                     f"[ recovery ] Released {len(recovered)} stuck ingest(s) back to "
-                                    f"Pending: {recovered}"
+                                    f"Pending: {str(recovered)[:500]}"
                                 )
                             else:
                                 logger.info("[ recovery ] No stuck ingests found at startup.")
                             return recovered
+                        if 400 <= response.status < 500 and response.status != 429:
+                            # Permanent rejection (rotated secret, lost role):
+                            # retrying burns 30 identical attempts before the
+                            # same misconfig is reported. Fail fast and loud.
+                            logger.error(
+                                f"[ recovery ] giving up: doc-repo rejected the call permanently "
+                                f"(HTTP {response.status}): {(await response.text())[:500]}"
+                            )
+                            return []
                         logger.error(
                             f"[ recovery ] attempt {attempt}/{_RECOVERY_MAX_ATTEMPTS}: "
                             # Truncated: an nginx/HTML error page dumped 30× per
@@ -284,7 +295,6 @@ def schedule_stuck_ingest_recovery(app):
     # comps' add_startup_event hands its argument straight to
     # asyncio.create_task, so pass the INVOKED coroutine.
     add_startup_event(recover_stuck_ingest_statuses())
-    return None
 
 
 # ------------------------------------------------------------------------------

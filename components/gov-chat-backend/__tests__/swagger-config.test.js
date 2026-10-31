@@ -241,6 +241,7 @@ describe('Swagger Configuration', () => {
     // exported.
     const withApiUrl = (apiUrl, fn) => {
       const previous = process.env.API_URL;
+      const previousHandlers = process.listeners('unhandledRejection');
       if (apiUrl === undefined) {
         delete process.env.API_URL;
       } else {
@@ -251,6 +252,11 @@ describe('Swagger Configuration', () => {
         return fn(require('../index'));
       } finally {
         jest.resetModules();
+        // Every index.js evaluation registers another module-level
+        // unhandledRejection handler (which calls process.exit) — restore
+        // the count the file started with.
+        process.removeAllListeners('unhandledRejection');
+        previousHandlers.forEach((handler) => process.on('unhandledRejection', handler));
         if (previous === undefined) {
           delete process.env.API_URL;
         } else {
@@ -275,8 +281,9 @@ describe('Swagger Configuration', () => {
     it('server URL joined with an annotated path resolves to a single /api segment', () => {
       withApiUrl(undefined, ({ swaggerOptions }) => {
         // This suite mocks fs and path (index.js's uploads-dir probe); the
-        // spec build needs the real ones. Same restore dance as the $ref
-        // test above.
+        // spec build needs the real ones. Unlike the $ref test above there
+        // is nothing to put back: withApiUrl's finally resetModules
+        // discards these instances wholesale.
         const fs = require('fs');
         const path = require('path');
         const swaggerJsdoc = require('swagger-jsdoc');

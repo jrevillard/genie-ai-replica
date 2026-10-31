@@ -226,7 +226,7 @@ export default {
       security: '安全',
       users: '用户',
       models: '模型',
-      studio: "OKF Studio"
+      studio: 'OKF Studio'
     },
     contentManagement: '内容管理',
     knowledgeHierarchy: '知识层级',
@@ -1866,7 +1866,7 @@ export default {
       paneLabel: '视图窗格',
       saveFailed: '保存失败 — 请重试',
       piiRescan: {
-      timeout: '重新扫描运行已超过 15 分钟 — 仍在服务器端继续执行。没有任何内容丢失；请稍后再来查看。',
+        timeout: '重新扫描运行已超过 15 分钟 — 仍在服务器端继续执行。没有任何内容丢失；请稍后再来查看。',
         label: '个人数据',
         button: '重新扫描所有页面',
         working: '正在重新扫描所有页面…',
@@ -1916,8 +1916,8 @@ export default {
     },
     dashboard: {
       health: {
-        ariaNone: "暂无指标",
-        aria: "健康度：{pct}%，{n} 个概念"
+        ariaNone: '暂无指标',
+        aria: '健康度：{pct}%，{n} 个概念'
       },
       bulk: {
         body: '每个知识库都会经过完整的关卡检查（PII 审查、索引编制、规范符合性）后执行 publish。按知识库分类的结果：',

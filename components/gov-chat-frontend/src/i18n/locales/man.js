@@ -226,7 +226,7 @@ export default {
       security: 'Kantari',
       users: 'Moolu',
       models: 'Models',
-      studio: "OKF Studio"
+      studio: 'OKF Studio'
     },
     contentManagement: 'KONTENTI LATARAMOO',
     knowledgeHierarchy: 'Longo jukutol',
@@ -1885,14 +1885,16 @@ export default {
       paneLabel: 'Juube-dulaa',
       saveFailed: 'Kōjparok ear l̦apier — bar kajjieon̦',
       piiRescan: {
-      timeout: 'Ālikin 15 minit ko, re-scan eo ej bar jerbal ilo server (server-side) eo. Ejjel̦o̦k men in loss; bar etale ñan juon minit.',
+        timeout:
+          'Ālikin 15 minit ko, re-scan eo ej bar jerbal ilo server (server-side) eo. Ejjel̦o̦k men in loss; bar etale ñan juon minit.',
         label: 'Personal data (PII)',
         button: 'Re-scan aolep page ko',
         working: 'A re-scan aolep page ko…',
         progress: 'Re-scan… page {done} to {total}',
         progressIdle: 'Re-scan… repository a looti',
         done: 'Page {n} re-scan benta.',
-        partial: 'Page {n} re-scan benta. {e} fila saaying — scan verdict ti yailama, o la publish block saaying ka se u.',
+        partial:
+          'Page {n} re-scan benta. {e} fila saaying — scan verdict ti yailama, o la publish block saaying ka se u.',
         noKey: 'Serveroo re-scan accept nga run id ti jaabi, o la a progress track ti be run. Haya ti report ke.',
         missing: 'Re-scan server ninyu kono ti je (404). Haya ti yailama — page scan failu be publish block saaying.',
         frozen: 'Re-scan bulu: repositoryoo be publish saaying (409). Haya ti yailama.',
@@ -1935,8 +1937,8 @@ export default {
     },
     dashboard: {
       health: {
-        ariaNone: "Ejjel̦o̦k metrik",
-        aria: "Menin: {pct} percent, {n} concept"
+        ariaNone: 'Ejjel̦o̦k metrik',
+        aria: 'Menin: {pct} percent, {n} concept'
       },
       bulk: {
         body: 'Kajojo jikin kakwōn ej publish kōn aolep etale ko (PII etale, kakoba ilo laajrak, jim̦we). Jem̦l̦o̦k an kajojo:',
@@ -2183,8 +2185,7 @@ export default {
       reviewedBody: 'Page {n} personal data (PII) flagged ewōr — steward juo signoff benta ({by}, {at}).',
       cleanVerdict: 'Scana benta — ejjab soto',
       cleanBody: 'Aolep page ko scana benta im personal data (PII) ejjab soto.',
-      staleAck:
-        'Signoff m̦okta ({at}) page {a} flagged record benta; ienaō {n} flagged — o la u ko ti kōba.',
+      staleAck: 'Signoff m̦okta ({at}) page {a} flagged record benta; ienaō {n} flagged — o la u ko ti kōba.',
       bannerTitle: 'Ejjab juon ri findings in reviewta.',
       bannerBody:
         'Kwomaron̦ bar publish im gate ejjab block am — nga page flagged ko repository publish kono na lo wōt ewe ie. Bar kipel̦o̦k juon-juon im kōm̦m̦an decisionoo m̦okta ibay kwō publish.',

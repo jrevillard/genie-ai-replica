@@ -226,7 +226,7 @@ export default {
       security: 'Tshireletso',
       users: 'Basebedisi',
       models: 'Mesebetsi',
-      studio: "OKF Studio"
+      studio: 'OKF Studio'
     },
     contentManagement: 'TSAMAISO YA MOKOTLA',
     knowledgeHierarchy: 'Tharollo ya Tsebo',
@@ -1917,7 +1917,8 @@ export default {
       paneLabel: 'Sefate se bontšang',
       saveFailed: 'Ho boloka ho hlolehile — leka hape',
       piiRescan: {
-      timeout: 'Re-skan e ntse e ea ka morao ho metsotso e 15 — e tsoela pele serveñ. Ha ho lahloehe; hlahloba hape ka motsotso o le mong.',
+        timeout:
+          'Re-skan e ntse e ea ka morao ho metsotso e 15 — e tsoela pele serveñ. Ha ho lahloehe; hlahloba hape ka motsotso o le mong.',
         label: 'Lintso tsa motho',
         button: 'H scanu hape-khele',
         working: 'Ho hana scansa mehele…',
@@ -1976,8 +1977,8 @@ export default {
     },
     dashboard: {
       health: {
-        ariaNone: "Ha ho na metrike",
-        aria: "Bophelo: {pct} lekholo, mohopolo {n}"
+        ariaNone: 'Ha ho na metrike',
+        aria: 'Bophelo: {pct} lekholo, mohopolo {n}'
       },
       bulk: {
         body: "Polokelo ka 'ngoe e phatlalatsoa ka tlhahlobo e felletseng ea heke (tlhahlobo ea PII, ho indexa, boikamahanyo). Liphetho tsa polokelo ka 'ngoe:",

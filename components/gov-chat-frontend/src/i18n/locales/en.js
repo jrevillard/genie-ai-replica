@@ -226,7 +226,7 @@ export default {
       security: 'Security',
       users: 'Users',
       models: 'Models',
-      studio: "OKF Studio"
+      studio: 'OKF Studio'
     },
     contentManagement: 'CONTENT MANAGEMENT',
     knowledgeHierarchy: 'Knowledge Hierarchy',
@@ -2716,7 +2716,8 @@ export default {
       },
       pickConcept: 'Select a concept from the list to start editing.',
       piiRescan: {
-      timeout: 'The re-scan is still running after 15 minutes — it keeps going server-side. Nothing was lost; check back in a minute.',
+        timeout:
+          'The re-scan is still running after 15 minutes — it keeps going server-side. Nothing was lost; check back in a minute.',
         label: 'Personal data',
         button: 'Re-scan all pages',
         working: 'Re-scanning every page…',
@@ -2784,8 +2785,8 @@ export default {
     },
     dashboard: {
       health: {
-        ariaNone: "No metrics",
-        aria: "Health: {pct} percent, {n} concepts"
+        ariaNone: 'No metrics',
+        aria: 'Health: {pct} percent, {n} concepts'
       },
       bulk: {
         body: 'Each repository is published with the full gate check (PII review, indexing, conformance). Per-repository outcomes:',

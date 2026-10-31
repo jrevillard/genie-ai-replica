@@ -226,7 +226,7 @@ export default {
       security: 'Segurança',
       users: 'Usuários',
       models: 'Modelos',
-      studio: "OKF Studio"
+      studio: 'OKF Studio'
     },
     contentManagement: 'GERENCIAMENTO DE CONTEÚDO',
     knowledgeHierarchy: 'Hierarquia de Conhecimento',
@@ -1918,7 +1918,8 @@ export default {
       paneLabel: 'Painel de exibição',
       saveFailed: 'Falha ao salvar — tente novamente',
       piiRescan: {
-      timeout: 'A reexaminação ainda decorre passados 15 minutos — continua no servidor. Nada se perdeu; verifique de novo dentro de um minuto.',
+        timeout:
+          'A reexaminação ainda decorre passados 15 minutos — continua no servidor. Nada se perdeu; verifique de novo dentro de um minuto.',
         label: 'Dados pessoais',
         button: 'Reexaminar todas as páginas',
         working: 'Reexaminando todas as páginas…',
@@ -1975,8 +1976,8 @@ export default {
     },
     dashboard: {
       health: {
-        ariaNone: "Sem métricas",
-        aria: "Saúde: {pct} por cento, {n} conceitos"
+        ariaNone: 'Sem métricas',
+        aria: 'Saúde: {pct} por cento, {n} conceitos'
       },
       bulk: {
         body: 'Cada repositório passa pela verificação completa de controle (revisão de PII, indexação, conformidade) ao ser publicado. Resultados por repositório:',

@@ -226,7 +226,7 @@ export default {
       security: 'Usalama',
       users: 'Watumiaji',
       models: 'Modeli',
-      studio: "OKF Studio"
+      studio: 'OKF Studio'
     },
     contentManagement: 'USIMAMIZI WA MAUDHUI',
     knowledgeHierarchy: 'Uongozi wa Maarifa',
@@ -1906,7 +1906,8 @@ export default {
       paneLabel: 'Kidirisha cha mwonekano',
       saveFailed: 'Uhifadhi umeshindwa — jaribu tena',
       piiRescan: {
-      timeout: 'Ukchanganuzi upya bado unaendelea baada ya dakika 15 — unaendelea upande wa seva. Hakuna kilichopotea; angalia tena baada ya dakika moja.',
+        timeout:
+          'Ukchanganuzi upya bado unaendelea baada ya dakika 15 — unaendelea upande wa seva. Hakuna kilichopotea; angalia tena baada ya dakika moja.',
         label: 'Data za binafsi',
         button: 'Changanua upya kurasa zote',
         working: 'Inachanganua upya kurasa zote…',
@@ -1963,8 +1964,8 @@ export default {
     },
     dashboard: {
       health: {
-        ariaNone: "Hakuna vipimo",
-        aria: "Afya: asilimia {pct}, dhana {n}"
+        ariaNone: 'Hakuna vipimo',
+        aria: 'Afya: asilimia {pct}, dhana {n}'
       },
       bulk: {
         body: 'Kila ghala huchapishwa kupitia ukaguzi kamili wa geti (ukaguzi wa PII, uorodheshaji, ulinganifu). Matokeo kwa kila ghala:',

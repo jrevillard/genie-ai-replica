@@ -226,7 +226,7 @@ export default {
       security: 'Sécurité',
       users: 'Utilisateurs',
       models: 'Modèles',
-      studio: "OKF Studio"
+      studio: 'OKF Studio'
     },
     contentManagement: 'GESTION DE CONTENU',
     knowledgeHierarchy: 'Hiérarchie des connaissances',
@@ -1924,7 +1924,8 @@ export default {
       paneLabel: "Volet d'affichage",
       saveFailed: "Échec de l'enregistrement — réessayer",
       piiRescan: {
-      timeout: 'La réanalyse tourne toujours après 15 minutes — elle continue côté serveur. Rien n’a été perdu ; revérifiez dans une minute.',
+        timeout:
+          'La réanalyse tourne toujours après 15 minutes — elle continue côté serveur. Rien n’a été perdu ; revérifiez dans une minute.',
         label: 'Données personnelles',
         button: 'Réanalyser toutes les pages',
         working: 'Réanalyse de toutes les pages…',
@@ -1981,8 +1982,8 @@ export default {
     },
     dashboard: {
       health: {
-        ariaNone: "Aucune métrique",
-        aria: "Santé : {pct} pour cent, {n} concepts"
+        ariaNone: 'Aucune métrique',
+        aria: 'Santé : {pct} pour cent, {n} concepts'
       },
       bulk: {
         body: "Chaque référentiel fait l'objet d'un contrôle de validation complet (examen PII, indexation, conformité) lors de l'action publish. Résultats par référentiel :",

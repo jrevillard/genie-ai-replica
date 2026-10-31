@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The 201 response is documented as the storage metadata the route actually returns (`_id` / `_key` / `_rev`, new `EventCreated` schema) instead of the full document that body never contained.
 - **No runtime behavior change.** The route still reads exactly `eventType` + `eventData`; the service still stores `data: eventData`.
 - **The generated Dart client was regenerated.** The `Event` model drops the request-only `eventData` property, `ApiAnalyticsEventsPostRequest` becomes `EventRequest`, and `apiAnalyticsEventsPost` returns the new `EventCreated` model. This is not a wire change, and no shipped code consumes the renamed models (the client package is generated and consumed in-repo, in the same commit). (#1223)
+- **The OKF Studio interface is now fully available in all 14 supported languages.** 321 previously untranslated interface texts (the Studio wizard, Testing Lab, PII review, editor and glossary) showed in English regardless of the selected language; every one is now translated in all locales, with a CI guard that fails when a new interface text ships as a raw English copy.
 
 ### Fixed
 

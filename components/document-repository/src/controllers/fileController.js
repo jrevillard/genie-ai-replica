@@ -1701,30 +1701,37 @@ class FileController {
         return res.status(400).json({ success: false, error: 'Validation error', message: error.details[0].message });
       }
       const recovered = await metadataService.recoverStuckIngests(value.excludeFileIds);
-      // Bounded-latency: a long batch can leave hundreds of rows stuck, and
-      // the dataprep caller's control-plane timeout (30 s) would fire on a
-      // serial loop, retrying the call and duplicating every log line.
-      const logResults = await Promise.allSettled(
-        recovered.map((fileId) =>
-          fileService.addIngestionLog(fileId, {
-            level: 'WARN',
-            stage: 'dataprep',
-            message:
-              'Ingestion interrupted: the ingestion service restarted while this file was being processed. ' +
-              'Status released to Pending so it can be ingested again.'
-          })
-        )
-      );
-      logResults.forEach((result, i) => {
-        if (result.status === 'rejected') {
-          // The status flip already happened; a lost log line must not fail
-          // the recovery — dataprep would only retry the whole call. The
-          // reason is not guaranteed to be an Error, so stringify defensively
-          // (a throw here would become a 500 and a 30× dataprep retry).
-          const reason = result.reason && result.reason.message ? result.reason.message : String(result.reason);
-          logger.error(`Failed to log recovery for ${recovered[i]}: ${reason}`);
-        }
-      });
+      // Latency + pressure bounds: a long batch can leave hundreds of rows
+      // stuck. A serial loop could outrun the dataprep caller's 30 s
+      // control-plane timeout (retrying the call, duplicating every log
+      // line); an unbounded fan-out would fire hundreds of simultaneous
+      // ArangoDB inserts at the just-booted stack. Chunks of 50 keep both
+      // bounded.
+      const LOG_CHUNK = 50;
+      for (let i = 0; i < recovered.length; i += LOG_CHUNK) {
+        const chunk = recovered.slice(i, i + LOG_CHUNK);
+        const logResults = await Promise.allSettled(
+          chunk.map((fileId) =>
+            fileService.addIngestionLog(fileId, {
+              level: 'WARN',
+              stage: 'dataprep',
+              message:
+                'Ingestion interrupted: the ingestion service restarted while this file was being processed. ' +
+                'Status released to Pending so it can be ingested again.'
+            })
+          )
+        );
+        logResults.forEach((result, j) => {
+          if (result.status === 'rejected') {
+            // The status flip already happened; a lost log line must not fail
+            // the recovery — dataprep would only retry the whole call. The
+            // reason is not guaranteed to be an Error, so stringify defensively
+            // (a throw here would become a 500 and a 30× dataprep retry).
+            const reason = result.reason && result.reason.message ? result.reason.message : String(result.reason);
+            logger.error(`Failed to log recovery for ${chunk[j]}: ${reason}`);
+          }
+        });
+      }
       return res.json({ success: true, recovered, count: recovered.length });
     } catch (error) {
       logger.error('Recover stuck ingests error:', error);

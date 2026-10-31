@@ -149,6 +149,22 @@ class TestRecoverStuckIngestStatuses:
         assert result == []
         assert session.post.call_count == 2
 
+    async def test_200_with_a_non_success_body_is_retried_not_accepted(self):
+        """A misrouted base URL or a proxy's JSON error envelope answers 200
+        without the success flag: reading it as 'nothing stuck' would
+        silently defeat the self-healing."""
+        session = MagicMock()
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=False)
+        session.post.side_effect = [
+            _mock_response(200, {"error": "not the recovery endpoint"}),
+            _mock_response(200, {"success": True, "recovered": [], "count": 0}),
+        ]
+        result = await _recover_with_session(session)
+
+        assert result == []
+        assert session.post.call_count == 2
+
     async def test_permanent_rejection_fails_fast(self):
         """A 4xx that can never succeed (rotated secret, lost role, malformed
         request): retrying it 30 times just delays the same misconfig being

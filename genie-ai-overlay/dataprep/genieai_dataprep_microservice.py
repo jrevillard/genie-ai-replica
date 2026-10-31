@@ -161,9 +161,13 @@ active_ingestion_tasks = {}
 # ------------------------------------------------------------------------------
 # Bounded startup retry: compose/Swarm does not guarantee the doc-repo is
 # listening when dataprep boots, so the recovery call is retried on a fixed
-# cadence for ~5 minutes before giving up with a loud warning.
-_RECOVERY_MAX_ATTEMPTS = 30
-_RECOVERY_RETRY_SECONDS = 10
+# cadence (~5 minutes by default) before giving up with a loud warning.
+# Env-tunable per the model_http_policy convention: a constant no operator
+# can raise is a ceiling that stays wrong for exactly the deployments that
+# hit it (a doc-repo unreachable longer than the window skips the recovery
+# until the NEXT dataprep restart).
+_RECOVERY_MAX_ATTEMPTS = int(os.getenv("DATAPREP_RECOVERY_MAX_ATTEMPTS", "30"))
+_RECOVERY_RETRY_SECONDS = float(os.getenv("DATAPREP_RECOVERY_RETRY_SECONDS", "10"))
 
 
 async def recover_stuck_ingest_statuses():
@@ -227,18 +231,29 @@ async def recover_stuck_ingest_statuses():
                     ) as response:
                         if response.status == 200:
                             payload = await response.json()
-                            recovered = payload.get("recovered") or []
-                            if recovered:
-                                # Same 500-char bound as the error branch: a
-                                # long batch would otherwise flood the signal.
-                                logger.info(
-                                    f"[ recovery ] Released {len(recovered)} stuck ingest(s) back to "
-                                    f"Pending: {str(recovered)[:500]}"
+                            if not payload.get("success"):
+                                # A 200 with a non-success JSON body (a
+                                # misrouted base URL, an interposing proxy's
+                                # JSON error envelope) must NOT read as
+                                # "nothing stuck" — that silently defeats the
+                                # self-healing. Treat it like any failure.
+                                logger.warning(
+                                    f"[ recovery ] attempt {attempt}/{_RECOVERY_MAX_ATTEMPTS}: "
+                                    f"unexpected 200 body: {str(payload)[:500]}"
                                 )
                             else:
-                                logger.info("[ recovery ] No stuck ingests found at startup.")
-                            return recovered
-                        if response.status in (400, 401, 403):
+                                recovered = payload.get("recovered") or []
+                                if recovered:
+                                    # Same 500-char bound as the error branch: a
+                                    # long batch would otherwise flood the signal.
+                                    logger.info(
+                                        f"[ recovery ] Released {len(recovered)} stuck ingest(s) back to "
+                                        f"Pending: {str(recovered)[:500]}"
+                                    )
+                                else:
+                                    logger.info("[ recovery ] No stuck ingests found at startup.")
+                                return recovered
+                        elif response.status in (400, 401, 403):
                             # Permanent rejection (rotated secret, lost role,
                             # malformed request): retrying burns 30 identical
                             # attempts before the same misconfig is reported.
@@ -252,21 +267,27 @@ async def recover_stuck_ingest_statuses():
                                 f"(HTTP {response.status}): {(await response.text())[:500]}"
                             )
                             return []
-                        logger.error(
-                            f"[ recovery ] attempt {attempt}/{_RECOVERY_MAX_ATTEMPTS}: "
-                            # Truncated: an nginx/HTML error page dumped 30× per
-                            # restart would drown the [ recovery ] signal in
-                            # the log stream (same 500-char bound the status
-                            # callback uses for its error payloads).
-                            f"HTTP {response.status}: {(await response.text())[:500]}"
-                        )
+                        else:
+                            # Expected during the boot-order race (connection
+                            # refused, 404 version skew, 5xx): retryable —
+                            # WARNING, not ERROR, so a normal rolling deploy
+                            # does not train operators to dismiss the channel.
+                            logger.warning(
+                                f"[ recovery ] attempt {attempt}/{_RECOVERY_MAX_ATTEMPTS}: "
+                                # Truncated: an nginx/HTML error page dumped 30× per
+                                # restart would drown the [ recovery ] signal in
+                                # the log stream (same 500-char bound the status
+                                # callback uses for its error payloads).
+                                f"HTTP {response.status}: {(await response.text())[:500]}"
+                            )
                 except asyncio.CancelledError:
                     # A cancellation is the event loop shutting down — not a
                     # transient failure. Retrying through it would fight the
                     # loop teardown.
                     raise
                 except Exception as e:  # noqa: BLE001 — recovery must never kill the boot
-                    logger.error(f"[ recovery ] attempt {attempt}/{_RECOVERY_MAX_ATTEMPTS} failed: {e}")
+                    # Connection-class failures are the normal boot-order race.
+                    logger.warning(f"[ recovery ] attempt {attempt}/{_RECOVERY_MAX_ATTEMPTS} failed: {e}")
                 if attempt < _RECOVERY_MAX_ATTEMPTS:
                     await asyncio.sleep(_RECOVERY_RETRY_SECONDS)
         logger.warning(

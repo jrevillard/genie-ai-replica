@@ -330,6 +330,7 @@ OWNED_SPAN_NAMES = frozenset(
         "llm.invoke",
         "chatqna.orchestrate",
         "chatqna.count_tokens",
+        "chatqna.translation_count_tokens",
         "chatqna.query_condense",
         "chatqna.reranker_selection",
         "chatqna.stream_outcome",

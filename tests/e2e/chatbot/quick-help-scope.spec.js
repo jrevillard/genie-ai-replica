@@ -36,8 +36,11 @@
 //   - drop the LABEL-GONE part of the caption assembly          -> test 3 fails
 //     (the caption would name the category instead of the label, and the
 //      user would be pointed at the wrong half of their configuration)
-//   - render every card as an error card                        -> test 4 fails
+//   - render every card as an error card                        -> test 5 fails
 //     (the healthy card's click must reach the query path)
+//   - drop the TITLE clause from the card's broken verdict      -> test 4 fails
+//     (the card with no title would render as a blank-label card
+//      that looks alive, and its click would be swallowed)
 //
 // The NAMEABLE guard has no mutation check HERE, and it cannot have one: a
 // card whose category is gone is refused by the broken-guard too, so no
@@ -138,6 +141,22 @@ const STUB_BUTTONS = [
       visibleText: { en: 'Tell me about births' },
       hiddenPrompt: { en: 'Tell me about births' }
     },
+    styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
+  },
+  {
+    // A card whose TITLE resolves to nothing: the locale map's only entry
+    // is empty, so there is no text to show. Its SCOPE is fine — it
+    // declares none — so the missing title is the only thing wrong with
+    // it, and the card must still say so: a blank-label card that looks
+    // alive and swallows the click is the defect this card exists for.
+    //
+    // It declares no category, so it is the grid's only 'just-chat' card
+    // and can be told apart from the others without a label to find it
+    // by.
+    id: 'e2e-title-missing',
+    title: { en: '' },
+    icon: { type: 'file', value: '/config/quickhelp/just-chat.svg' },
+    category: null,
     styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
   }
 ];
@@ -317,6 +336,34 @@ test.describe('Quick Help scope states', () => {
       labelText.toLowerCase(),
       'the caption does not blame the category — its legacy KEY resolved'
     ).not.toContain('category');
+
+    await ctx.close();
+  });
+
+  test('a card whose title resolves to nothing renders the error state and sends nothing', async ({ browser }) => {
+    const { ctx, page } = await openWelcome(browser);
+
+    // The card declares NO scope, so its scope is fine — the missing TITLE
+    // is the only thing wrong with it. It must still be a VISIBLE failure:
+    // the error class, the warning icon and the caption that says why.
+    const card = page.locator('.quick-help-item.config-error.just-chat');
+    await expect(card).toHaveCount(1);
+
+    await expect(card.first().locator('.config-error-icon')).toBeVisible();
+    const caption = card.first().locator('[data-testid="quick-help-error-caption"]');
+    await expect(caption).toBeVisible();
+    expect((await caption.innerText()).trim().length).toBeGreaterThan(0);
+
+    // And the click sends NOTHING: no turn, and nothing installed — the
+    // welcome screen (which only renders while NO context item is selected)
+    // is still there.
+    const streamed = await watchQueries(page);
+    await card.first().click();
+    await page.waitForTimeout(1200);
+
+    expect(streamed(), 'a card with no title must not reach the query path').toBe(false);
+    expect(await page.locator('[data-testid="user-avatar"]').count()).toBe(0);
+    await expect(page.locator('.quick-help-banner')).toBeVisible();
 
     await ctx.close();
   });

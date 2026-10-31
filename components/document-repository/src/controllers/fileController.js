@@ -216,6 +216,25 @@ const scheduleCrawlSchema = Joi.object({
   }).optional()
 });
 
+// Dataprep's ingest IDEMPOTENCY GUARD answers HTTP 409 when an ingest task
+// for the SAME fileId is already in flight (genieai_dataprep_microservice.py).
+// That is a SUCCESS signal for the running ingest — the live task owns the
+// file and writes its own final status — so doc-repo must not turn it into a
+// file failure.
+//
+// The 409 status alone is not the signal: only the guard's own conflict is,
+// and it names the file it is about ("An ingest task for fileId 'X' is already
+// running"). Matching on the fileId we submitted identifies THAT file's live
+// ingest without depending on the wording of the message, and leaves any
+// other 409 — a real conflict — on the error path.
+function isIngestAlreadyRunning(err, fileId) {
+  const response = err && err.response;
+  if (!response || response.status !== 409) return false;
+  const data = response.data || {};
+  const detail = String(data.detail || data.message || '');
+  return Boolean(fileId) && detail.includes(fileId);
+}
+
 class FileController {
   constructor() {
     // Bind methods to preserve 'this' context
@@ -1224,11 +1243,20 @@ class FileController {
       // failure — marking the file 'Ingestion Error' poisons it permanently
       // (the 2.9.4 worker backs off and retries, but a poisoned file is never
       // Pending again — live-caught run 9). Leave it Pending; rethrow the 429.
+      //
+      // EXCEPT a 409 too: dataprep's idempotency guard means an ingest for THIS
+      // file is already running. The live task owns the file and writes its own
+      // final status, so marking it 'Ingestion Error' here poisoned a healthy
+      // ingest and left a false permanent ERROR record in the ingestion log.
+      // The status stays untouched — a second writer would race the live task.
       const busy = err && err.response && err.response.status === 429;
-      if (!busy) {
+      const alreadyRunning = isIngestAlreadyRunning(err, file.file_id);
+      if (!busy && !alreadyRunning) {
         const detail =
           (err.response && err.response.data && (err.response.data.detail || err.response.data.message)) || err.message;
         await this._markIngestFailure(fileId, file, `dataprep call failed: ${detail}`);
+      } else if (alreadyRunning) {
+        await this._logIngestAlreadyRunning(fileId);
       }
       throw err;
     }
@@ -1277,6 +1305,19 @@ class FileController {
       logger.error(`Failed to write ingestion log for ${fileId}: ${logErr.message}`);
     }
     logger.error(`Ingest failed for ${fileId}: ${detail}`);
+  }
+
+  /** Record an ignored duplicate ingest request (dataprep 409). The file status is NOT touched. */
+  async _logIngestAlreadyRunning(fileId) {
+    try {
+      await fileService.addIngestionLog(fileId, {
+        level: 'INFO',
+        stage: 'dataprep',
+        message: 'Ingest request ignored: an ingest for this file is already running.'
+      });
+    } catch (logErr) {
+      logger.warn(`Failed to write ingestion log for ${fileId}: ${logErr.message}`);
+    }
   }
 
   // --- OKF Bundle Ingest (Story 2.5) ---
@@ -1426,6 +1467,18 @@ class FileController {
           error: 'Too Many Requests',
           message:
             'Only a single dataprep job can be run at any given time. Wait until the current job finishes before submitting new jobs'
+        });
+      }
+
+      // A 409 from dataprep is its idempotency guard: an ingest for THIS file
+      // is already running, so the duplicate request conflicts with a live
+      // ingest. 409 Conflict says that; a 500 would report a healthy ingest
+      // as a server failure.
+      if (isIngestAlreadyRunning(error, req.params.fileId)) {
+        return res.status(409).json({
+          success: false,
+          error: 'Conflict',
+          message: 'An ingest for this file is already running. Wait for it to finish before starting another one.'
         });
       }
 

@@ -408,6 +408,87 @@ describe('fileController', () => {
     });
   });
 
+  // Dataprep's ingest idempotency guard answers 409 when an ingest for the same
+  // fileId is already running. That is a SUCCESS signal for the live task, not
+  // a file failure: marking the file 'Ingestion Error' poisoned a healthy
+  // ingest and left a false permanent ERROR record in the ingestion log.
+  describe('_ingestFileById (dataprep 409 idempotency guard)', () => {
+    const axios = require('axios');
+    const metadataService = require('../../../services/metadataService');
+    const fileService = require('../../../services/fileService');
+
+    const conflict = (detail) => {
+      const error = new Error('Request failed with status code 409');
+      error.response = { status: 409, data: { detail } };
+      return error;
+    };
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      metadataService.updateMetadata = jest.fn().mockResolvedValue({});
+      fileService.addIngestionLog = jest.fn().mockResolvedValue({});
+      jest.spyOn(fileController, '_getFileBase64').mockResolvedValue({
+        file: { file_id: 'f1', dataprep: { status: 'Pending' } },
+        base64String: 'b64'
+      });
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('does not mark the file as Ingestion Error when the ingest is already running', async () => {
+      axios.post.mockRejectedValue(conflict("An ingest task for fileId 'f1' is already running"));
+
+      await expect(fileController._ingestFileById('f1')).rejects.toThrow('Request failed with status code 409');
+
+      // The live task owns this file and writes its own final status. A second
+      // writer would race it — and 'Ingestion Error' is a poison: the file is
+      // never Pending again, so the ingestion worker never re-claims it.
+      expect(metadataService.updateMetadata).not.toHaveBeenCalledWith(
+        'f1',
+        expect.objectContaining({ dataprep: expect.objectContaining({ status: 'Ingestion Error' }) })
+      );
+    });
+
+    it('records the ignored duplicate as an INFO ingestion-log row, not an ERROR one', async () => {
+      axios.post.mockRejectedValue(conflict("An ingest task for fileId 'f1' is already running"));
+
+      await expect(fileController._ingestFileById('f1')).rejects.toThrow();
+
+      expect(fileService.addIngestionLog).toHaveBeenCalledWith(
+        'f1',
+        expect.objectContaining({ level: 'INFO', stage: 'dataprep' })
+      );
+      expect(fileService.addIngestionLog).not.toHaveBeenCalledWith('f1', expect.objectContaining({ level: 'ERROR' }));
+    });
+
+    it('still errors on a 409 that is not the idempotency guard', async () => {
+      // Any other conflict is a real failure: only the guard's own conflict —
+      // the one naming THIS file — is carved out.
+      axios.post.mockRejectedValue(conflict('Conflict: the file is locked'));
+
+      await expect(fileController._ingestFileById('f1')).rejects.toThrow('Request failed with status code 409');
+
+      expect(metadataService.updateMetadata).toHaveBeenCalledWith(
+        'f1',
+        expect.objectContaining({ dataprep: expect.objectContaining({ status: 'Ingestion Error' }) })
+      );
+      expect(fileService.addIngestionLog).toHaveBeenCalledWith('f1', expect.objectContaining({ level: 'ERROR' }));
+    });
+
+    it('still errors when a 409 names a different file', async () => {
+      axios.post.mockRejectedValue(conflict("An ingest task for fileId 'other-file' is already running"));
+
+      await expect(fileController._ingestFileById('f1')).rejects.toThrow('Request failed with status code 409');
+
+      expect(metadataService.updateMetadata).toHaveBeenCalledWith(
+        'f1',
+        expect.objectContaining({ dataprep: expect.objectContaining({ status: 'Ingestion Error' }) })
+      );
+    });
+  });
+
   describe('_retractFileById (retraction guard)', () => {
     const axios = require('axios');
     const metadataService = require('../../../services/metadataService');

@@ -759,6 +759,38 @@ describe('File Routes Integration', () => {
       );
     });
 
+    it('should return 409 when an ingest for this file is already running', async () => {
+      metadataService.getMetadataById.mockResolvedValue(mockFileRecord);
+      readFile.mockResolvedValue(Buffer.from('test file content'));
+      access.mockResolvedValue();
+
+      // Dataprep's idempotency guard: a task for this fileId is already in
+      // flight. The live task owns the file and writes its own final status.
+      const error = new Error('Request failed with status code 409');
+      error.response = {
+        status: 409,
+        data: { detail: "An ingest task for fileId 'file-abc123' is already running" }
+      };
+      axios.post.mockRejectedValue(error);
+
+      const res = await request(app).post('/api/files/file-abc123/ingest');
+
+      expect(res.status).toBe(409);
+      expect(res.body.success).toBe(false);
+      // The file must NOT be marked 'Ingestion Error': the ingest is running,
+      // and a poisoned file is never re-claimed by the ingestion worker.
+      expect(metadataService.updateMetadata).not.toHaveBeenCalledWith(
+        'file-abc123',
+        expect.objectContaining({ dataprep: expect.objectContaining({ status: 'Ingestion Error' }) })
+      );
+      // The duplicate attempt is recorded, so the operator reading the log
+      // sees why nothing happened — and sees no false ERROR.
+      expect(fileService.addIngestionLog).toHaveBeenCalledWith(
+        'file-abc123',
+        expect.objectContaining({ level: 'INFO' })
+      );
+    });
+
     it('should return 500 when dataprep service fails', async () => {
       metadataService.getMetadataById.mockResolvedValue(mockFileRecord);
       readFile.mockResolvedValue(Buffer.from('test file content'));

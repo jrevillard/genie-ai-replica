@@ -296,6 +296,7 @@ function validateComposeNonRoot(composeText) {
       pendingCreateFalse = false;
       sourceSeenThisEntry = false;
       bindOptsTarget = null;
+      entryType = null;
       continue;
     }
     if (!currentService) continue;

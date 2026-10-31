@@ -135,6 +135,16 @@ There is no `data/logs/` since #1227: every service logs to stdout and
 the fluentd logging driver ships the logs — a `data/logs` bind would
 have docker create the directory root-owned.
 
+Upgrading from a pre-#1227 install that has a stale root-owned
+`data/logs` tree? It is no longer mounted by anything and will fail the
+no-root runtime gate until cleaned. Nothing is deleted for you:
+
+```bash
+sudo find data/logs -uid 0 -exec chown -h -R "$(id -u):$(id -g)" {} +
+```
+
+(The Ansible path does this handover automatically.)
+
 ## Step 3: Configure `.env`
 
 ```bash

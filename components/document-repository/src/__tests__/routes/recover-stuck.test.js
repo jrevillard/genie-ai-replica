@@ -74,7 +74,7 @@ jest.mock('../../services/fileService', () => ({
 
 const request = require('supertest');
 const app = require('../../app');
-const { dbService } = require('../../../shared-lib');
+const { dbService, logger } = require('../../../shared-lib');
 const fileService = require('../../services/fileService');
 const { SERVICE_CALLBACK } = require('../../config/rolePolicy');
 
@@ -149,6 +149,8 @@ describe('POST /api/files/ingest/recover-stuck', () => {
   it('still succeeds when the log write for one file fails', async () => {
     // The status flip already happened; a lost log line must not report a
     // failed recovery — dataprep would only retry the whole call for nothing.
+    // But the loss is reported: a rejected write is the only place a dropped
+    // WARN recovery entry becomes visible to an operator.
     mockDb(['file-1', 'file-2']);
     fileService.addIngestionLog.mockRejectedValueOnce(new Error('log write failed'));
     fileService.addIngestionLog.mockResolvedValueOnce({});
@@ -157,6 +159,7 @@ describe('POST /api/files/ingest/recover-stuck', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.count).toBe(2);
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('Failed to log recovery for file-1'));
   });
 
   it('returns 500 when the recovery query fails', async () => {

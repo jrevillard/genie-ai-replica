@@ -81,10 +81,13 @@ const singleIngestSchema = Joi.object({
 // Body of the dataprep startup recovery (#610): the caller's still-live task
 // ids, excluded from the release so a retry landing after the service started
 // serving cannot flip an ingest that is actually running. Optional/empty by
-// default (nothing to exclude at a cold boot).
+// default (nothing to exclude at a cold boot). Unknown keys are ALLOWED: a
+// 400 here would fail fast as a permanent rejection on the dataprep side and
+// silently disable the self-healing until the next restart — a future caller
+// adding a field must degrade, not die.
 const recoverStuckSchema = Joi.object({
   excludeFileIds: Joi.array().items(Joi.string().min(1)).max(10000).default([])
-});
+}).unknown(true);
 
 // WS2 (David, 2026-09-25): bundle zips (is_bundle=true) are OKF per-version
 // ingestion artifacts — they live forever, governed by the OKF lifecycle

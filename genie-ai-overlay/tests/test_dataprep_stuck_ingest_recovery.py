@@ -132,10 +132,27 @@ class TestRecoverStuckIngestStatuses:
         result = await _recover_with_session(session, _RECOVERY_MAX_ATTEMPTS=2)
 
         assert result == []
+        assert session.post.call_count == 2
+
+    async def test_missing_route_is_retried_not_treated_as_permanent(self):
+        """404 from a still-running OLD doc-repo (rolling update, version
+        skew) is the boot-order race the retry loop exists for."""
+        session = MagicMock()
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=False)
+        session.post.side_effect = [
+            _mock_response(404),
+            _mock_response(200, {"success": True, "recovered": [], "count": 0}),
+        ]
+        result = await _recover_with_session(session)
+
+        assert result == []
+        assert session.post.call_count == 2
 
     async def test_permanent_rejection_fails_fast(self):
-        """A 4xx (rotated secret, lost role) can never succeed: retrying it
-        30 times just delays the same misconfig being reported."""
+        """A 4xx that can never succeed (rotated secret, lost role, malformed
+        request): retrying it 30 times just delays the same misconfig being
+        reported."""
         session = _mock_session(403, {})
         result = await _recover_with_session(session)
 

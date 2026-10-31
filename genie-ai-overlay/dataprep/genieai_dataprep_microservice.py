@@ -238,10 +238,15 @@ async def recover_stuck_ingest_statuses():
                             else:
                                 logger.info("[ recovery ] No stuck ingests found at startup.")
                             return recovered
-                        if 400 <= response.status < 500 and response.status != 429:
-                            # Permanent rejection (rotated secret, lost role):
-                            # retrying burns 30 identical attempts before the
-                            # same misconfig is reported. Fail fast and loud.
+                        if response.status in (400, 401, 403):
+                            # Permanent rejection (rotated secret, lost role,
+                            # malformed request): retrying burns 30 identical
+                            # attempts before the same misconfig is reported.
+                            # 404 is deliberately NOT here — a dataprep that
+                            # boots against a still-running OLD doc-repo
+                            # (rolling update, version skew) gets 404 from
+                            # the missing route, and that is exactly the
+                            # boot-order race the retry loop exists for.
                             logger.error(
                                 f"[ recovery ] giving up: doc-repo rejected the call permanently "
                                 f"(HTTP {response.status}): {(await response.text())[:500]}"

@@ -32,13 +32,38 @@ describe('compose non-root contract (#1227)', () => {
     expect(real.violations).toEqual([]);
   });
 
-  test('the always-on set actually covers the services the contract measured as root', () => {
-    // Guards the contract itself against silent scope loss: if one of these
-    // services disappears from the always-on set (renamed, profile-gated,
-    // removed), the contract must be revisited, not silently narrowed.
-    for (const svc of ['nginx', 'frontend', 'kong', 'document-repository', 'arango-vector-db', 'clamav', 'backend']) {
-      expect(real.alwaysOn).toContain(svc);
-    }
+  test('the always-on set is EXACTLY the contract scope (no silent narrowing)', () => {
+    // A subset pin lets a rename (victorialogs → vlogs) shrink the
+    // contract with all tests green: the dropped service's user: pin and
+    // create_host_path guards stop being enforced silently. Equality
+    // against the full list makes any add/remove/rename a loud contract
+    // checkpoint instead.
+    expect([...real.alwaysOn].sort()).toEqual(
+      [
+        'arango-vector-db',
+        'arango-vector-db-init',
+        'backend',
+        'backend-init',
+        'clamav',
+        'db-migrations',
+        'document-repository',
+        'document-repository-init',
+        'frontend',
+        'keycloak',
+        'keycloak-config',
+        'kong',
+        'kong-config',
+        'kong-migrations',
+        'nginx',
+        'otel-collector',
+        'otel-collector-init',
+        'postgres',
+        'postgres-init',
+        'redis-cache',
+        'victorialogs',
+        'victorialogs-init'
+      ].sort()
+    );
   });
 
   test('no pinned user is root', () => {
@@ -319,6 +344,51 @@ describe('compose non-root contract (#1227)', () => {
     const handWritten = repointed.replace('${DATA_DIR:-/srv/genie}/database_backups', '/var/genie/data/logs');
     const { violations: v2 } = validateComposeNonRoot(handWritten);
     expect(v2.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
+  });
+
+  test('mutations: short-syntax absolute data bind, dotted service names, named volume "data"', () => {
+    // A short-syntax ABSOLUTE bind with a /data/ segment is the same
+    // root-created-source defect (short syntax cannot carry the opt-out);
+    // the docker socket stays exempt (no data segment).
+    const shortAbsolute = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes:',
+      '      - /srv/genie/data/database_backups:/app/database_backups',
+      ''
+    ].join('\n');
+    const { violations: v1 } = validateComposeNonRoot(shortAbsolute);
+    expect(v1.some((v) => v.includes('kong') && v.includes('short syntax'))).toBe(true);
+    const socket = [
+      'services:',
+      '  otel-collector:',
+      '    user: "10001:10001"',
+      '    volumes:',
+      '      - /var/run/docker.sock:/var/run/docker.sock:ro',
+      ''
+    ].join('\n');
+    expect(validateComposeNonRoot(socket).violations).toEqual([]);
+
+    // A dotted service key must start its own block — the old regex let
+    // its user:/volumes: bleed into the previous service's verdict.
+    const dotted = ['services:', '  vlogs.gateway:', '    user: root', ''].join('\n');
+    const { violations: v2 } = validateComposeNonRoot(dotted);
+    expect(v2.some((v) => v.includes('vlogs.gateway') && v.includes('is root'))).toBe(true);
+
+    // A NAMED volume whose name is "data" is not a host bind — no
+    // create_host_path demand on it.
+    const namedVolume = [
+      'services:',
+      '  backend:',
+      '    user: "1000:1000"',
+      '    volumes:',
+      '      - type: volume',
+      '        source: data',
+      '        target: /app/data',
+      ''
+    ].join('\n');
+    expect(validateComposeNonRoot(namedVolume).violations).toEqual([]);
   });
 
   test('allowlist entries reference services that exist in the compose file', () => {

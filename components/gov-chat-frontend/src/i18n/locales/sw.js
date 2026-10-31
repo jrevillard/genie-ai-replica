@@ -1543,6 +1543,30 @@ export default {
         'Hazina nyingine yenye jina na toleo lile lile ina jina la grafu ya huduma tayari — badilisha jina la moja kisha ujaribu tena.',
       generic: 'Hatio imeshindikana'
     },
+    labErrors: {
+      pollAborted: 'Ufuatiliaji umeishia — kazi inaendelea upande wa seva.',
+      trackingStopped: 'Ufuatiliaji umeishia.',
+      suiteGenTimeout: 'Muda wa kutengeneza kipima umeisha.',
+      suiteGenFailed: 'Kutengeneza kipima kumeshindwa.',
+      suiteRunFailed: 'Uendeshaji wa kipima umeshindwa',
+      runUnusuallyLong: 'Uendeshaji unachukua muda mrefu zaidi ya kawaida.',
+      explainStillRunning:
+        'Maelezo bado yanaendelea kwenye mwenyeji wa modeli. Fungua tena Lab baadaye kuona matokeo — hakuna kilichopotea.',
+      explainFailed: 'Maelezo yameshindwa',
+      generationStillRunning: 'Uzalishaji bado unaendelea — fungua tena Lab baadaye; hakuna kilichopotea.',
+      generationFailed: 'Uzalishaji umeshindwa',
+      rescoreNotStarted: 'Tathmini upya haikuanza — seva ilikubali ombi lakini haikurudisha uendeshaji wa kufuatilia.',
+      rescoreStillRunning: 'Tathmini upya bado inaendelea kwenye seva — fungua tena Lab baadaye kuona matokeo.',
+      rescoreFailed: 'Tathmini upya imeshindwa',
+      rescoreCancelled: 'Tathmini upya imeghairiwa na mtumiaji',
+      runNotStarted: 'Uendeshaji haukuanza — seva ilikubali ombi lakini haikurudisha uendeshaji wa kufuatilia.',
+      runStillRunning: 'Uendeshaji bado unaendelea kwenye seva — fungua tena Lab baadaye kuona matokeo.',
+      runFailed: 'Uendeshaji umeshindwa',
+      runCancelled: 'Uendeshaji umeghairiwa na mtumiaji',
+      runStillExecuting: 'Uendeshaji bado unaendelea kwenye seva.',
+      generationStillServerSide: 'Uzalishaji bado unaendelea upande wa seva.',
+      explainStillRunningShort: 'Maelezo bado yanaendelea — fungua tena Lab baadaye; hakuna kilichopotea.'
+    },
     models: {
       title: 'Mipangilio ya modeli',
       add: 'Mipangilio mpya',
@@ -2121,6 +2145,8 @@ export default {
       failed: 'Uundaji wa ghala umeshindwa',
       duplicateInline: 'Ghala lenye jina hili tayari lipo. Lifungue, au chagua jina lingine.',
       duplicate: 'Ghala lenye jina hili tayari lipo - lifungue kutoka kwenye dashibodi au chagua jina lingine.',
+      indexImportFailed:
+        'Hifadhi imeundwa, lakini faharasa yake ya mwanzo haikuweza kuingizwa. Fungua kutoka kwenye dashibodi ili uendelee.',
       domain: 'Eneo la somo',
       create: 'Unda ghala',
       title: 'Ghala jipya la OKF',
@@ -2402,6 +2428,8 @@ export default {
       }
     },
     wizard: {
+      clonedFrom: 'Imeclonishwa kutoka {name} · v{version}',
+      clonedFromNoVersion: 'Imeclonishwa kutoka {name}',
       working: 'Working…',
       state: {
         draft: 'In progress',
@@ -3170,6 +3198,8 @@ export default {
         history: 'Imeshindwa kupakia historia ya kuhifadhi',
         revert: 'Imeshindwa kurejesha frontmatter',
         advisor: 'Mshauri umeshindikana',
+        advisorTimeout:
+          'Mshauri bado anaendelea kwenye mwenyeji wa modeli. Fungua tena Lab baadaye kuona matokeo — hakuna kilichopotea.',
         noSuite: 'Tengeneza kipima kwanza, kisha jenga upya na endesha upya.',
         applyNoSuite:
           'Tag zimehifadhiwa na head imejengwa upya — tengeneza kipima kisha endesha zote ili kuona matokeo.',

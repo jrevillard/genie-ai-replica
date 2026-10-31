@@ -230,6 +230,45 @@ describe('okfRepoOps.addConcept + appendToIndexToc', () => {
     expect(headAt).toBeLessThan(lineAt);
     expect(lineAt).toBeLessThan(bodyAt);
   });
+
+  // Round 20, #80799: a paragraph on the line right after the inserted
+  // bullet is a LAZY CONTINUATION of that item in CommonMark — the content
+  // rendered INSIDE the TOC and vanished from the body. A blank line must
+  // separate the bullet from whatever follows, on every insert.
+  it('keeps a BLANK LINE between the inserted bullet and the content below', async () => {
+    mockConceptGet.mockResolvedValue({
+      concept_id: 'index',
+      frontmatter: { type: 'index', title: 'Idx' },
+      body: '# Idx\n\n## Contents\n\n- [A](concepts/a.md)\n\nSome real content below the TOC.\n'
+    });
+    mockPatchBody.mockResolvedValue({ ok: true });
+    await ops.addConcept({
+      repoId: 'r-1',
+      title: 'B',
+      type: 'topic',
+      body: '',
+      existingIds: [],
+      indexRow: { concept_id: 'index', title: 'Idx' }
+    });
+    const patched = mockPatchBody.mock.calls[0][2];
+    expect(patched).toContain('- [B](concepts/b.md)\n\nSome real content below the TOC.');
+    // and under an empty heading too
+    mockConceptGet.mockResolvedValue({
+      concept_id: 'index',
+      frontmatter: { type: 'index', title: 'Idx' },
+      body: '# Idx\n\n## Contents\n\nContent under an empty TOC.\n'
+    });
+    await ops.addConcept({
+      repoId: 'r-1',
+      title: 'C',
+      type: 'topic',
+      body: '',
+      existingIds: [],
+      indexRow: { concept_id: 'index', title: 'Idx' }
+    });
+    const patched2 = mockPatchBody.mock.calls[1][2];
+    expect(patched2).toContain('- [C](concepts/c.md)\n\nContent under an empty TOC.');
+  });
 });
 
 describe('okfRepoOps.applyLabel / deleteConcept', () => {

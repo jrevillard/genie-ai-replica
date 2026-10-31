@@ -18,11 +18,9 @@ jest.mock('../../services/httpService', () => ({
 
 import httpService from '../../services/httpService';
 import repoOkfService, {
-  inspectPii,
   remediatePii,
   acceptPii,
   fileActionPii,
-  redactWholeFilePii,
   getValidation,
   wireCitations,
   suggestLinks,
@@ -374,8 +372,9 @@ describe('repoOkfService — PII surface', () => {
 
   it('the named PII exports delegate to the same endpoints', async () => {
     httpService.post.mockResolvedValue(ok({ ok: true }));
-    await inspectPii('r1', 'c1');
-    expect(httpService.post).toHaveBeenCalledWith('/okf/repos/r1/concepts/c1/pii-inspect', {}, { timeout: 120000 });
+    // Round 20, #80806: the drifted inspectPii named twin and the uncalled
+    // redactWholeFilePii twin were deleted — the OBJECT methods carry those
+    // endpoints (asserted above with their full option sets).
     await remediatePii('r1', 'c1', {});
     expect(httpService.post).toHaveBeenLastCalledWith(
       '/okf/repos/r1/concepts/c1/pii-remediate',
@@ -387,12 +386,6 @@ describe('repoOkfService — PII surface', () => {
     await fileActionPii('r1', 'c1', {});
     expect(httpService.post).toHaveBeenLastCalledWith(
       '/okf/repos/r1/concepts/c1/pii-file-action',
-      {},
-      { timeout: 120000 }
-    );
-    await redactWholeFilePii('r1', 'c1');
-    expect(httpService.post).toHaveBeenLastCalledWith(
-      '/okf/repos/r1/concepts/c1/pii-redact-file',
       {},
       { timeout: 120000 }
     );

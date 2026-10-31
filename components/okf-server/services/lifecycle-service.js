@@ -642,6 +642,10 @@ async function transition(repoId, action, actor, opts = {}) {
         // see fingerprintOfCurrentVersion (the bare-id lookup was dead).
         versionService.fingerprintOfCurrentVersion(repoId, repo.version)
       ]);
+      // Round 20, #80801: set when the bypass below fires — the publish then
+      // COMPLETES repo.version instead of minting the next one (see the mint
+      // guard below).
+      let completingVersion = null;
       if (currentFingerprint && currentFingerprint === liveFingerprint) {
         // Review !622 wave 2 (#78657): a publish that died BETWEEN mint and
         // export leaves the fingerprint recorded on the minted version with
@@ -668,6 +672,7 @@ async function transition(repoId, action, actor, opts = {}) {
           version: repo.version,
           reason: 'fingerprint matches but the version has no bundle artifact — completing the interrupted publish'
         });
+        completingVersion = repo.version;
       }
       // An empty repo must not publish — the mint would snapshot zero concepts.
       logger.info('[OKF-PUBLISH] step=counting concepts', { repo_id: repoId });
@@ -687,10 +692,23 @@ async function transition(repoId, action, actor, opts = {}) {
       // through untouched). It bumps repo.version to N.
       // A recorded steward acknowledgement (pii_ack) waives the PII 'hit'
       // gate (reviewed public entities); a scanner 'error' still blocks.
-      logger.info('[OKF-PUBLISH] step=minting', { repo_id: repoId, pii_acknowledged: !!repo.pii_ack });
-      await versionService.mintVersion(repoId, { trigger: 'publish', acknowledgePii: !!repo.pii_ack }, actor);
-      logger.info('[OKF-PUBLISH] step=minted', { repo_id: repoId });
-      // Re-read the registry post-mint (version/okf_tag bumped).
+      //
+      // Round 20, #80801: an interrupted publish ALREADY minted this version
+      // — the manifest exists and carries the fingerprint the bypass matched.
+      // Minting again would bump the counter to N+1 and strand version N as
+      // an orphan manifest with no bundle, one publish burning TWO version
+      // numbers. Skip the mint and let the export below re-export the SAME
+      // version (exportBundle is idempotent per version). The mint gates
+      // passed when the manifest was first written and the fingerprint match
+      // proves the content unchanged, so re-running them would only re-assert
+      // the same snapshot.
+      if (completingVersion == null) {
+        logger.info('[OKF-PUBLISH] step=minting', { repo_id: repoId, pii_acknowledged: !!repo.pii_ack });
+        await versionService.mintVersion(repoId, { trigger: 'publish', acknowledgePii: !!repo.pii_ack }, actor);
+        logger.info('[OKF-PUBLISH] step=minted', { repo_id: repoId });
+      }
+      // Re-read the registry (post-mint version bump — or unchanged when
+      // completing an interrupted publish: the export then re-uses version N).
       const fresh = await loadRepo(db, repoId);
       // Export the bundle zip — THE repo+version artifact in the doc-repo.
       // A failure here fails the publish (lifecycle unchanged; retryable).

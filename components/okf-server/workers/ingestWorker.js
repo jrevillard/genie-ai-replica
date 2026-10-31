@@ -267,12 +267,26 @@ async function claimNextJob(db) {
   // prior claim. The kick path probes dataprep liveness for such rows — a live
   // task must not be raced by the WS5 retract + re-POST.
   rows[0].was_stale_reclaim = rows[0].worker_claimed_at != null;
-  await _stampClaim(db, rows[0].repo_id, rows[0].concept_id);
+  // Round 20, #80804: the stamp IS the claim. A row whose stamp failed is NOT
+  // this lane's — a 1200 write-conflict means another lane won it, a transient
+  // DB error leaves it claimable next cycle — and returning it would kick a row
+  // we do not own AND let the 429 un-claim below decrement an attempt that was
+  // never counted (the counter drifts below the truth and the poison-pill
+  // reaper fires late). Fail the claim instead: the row is never claimed.
+  if (!(await _stampClaim(db, rows[0].repo_id, rows[0].concept_id))) {
+    logger.warn('Ingest worker: claim stamp failed — row NOT claimed this cycle', {
+      repo_id: rows[0].repo_id,
+      concept_id: rows[0].concept_id
+    });
+    return null;
+  }
   return rows[0];
 }
 
-/** Stamp the claim on a claimed row (best-effort — a failed stamp must not
- * block the drain; the row simply keeps its previous claim state). */
+/** Stamp the claim on a claimed row. Returns true when the stamp landed,
+ * false when it failed — the caller then treats the row as NOT claimed, so
+ * every RETURNED job carries its counted attempt and _unclaimAttempt can
+ * only ever un-count a real stamp (round 20, #80804). */
 async function _stampClaim(db, repoId, conceptId) {
   try {
     await db.query(
@@ -286,8 +300,10 @@ async function _stampClaim(db, repoId, conceptId) {
     `,
       {}
     );
+    return true;
   } catch (err) {
-    logger.warn('Ingest worker: claim stamp failed (non-fatal)', { concept_id: conceptId, error: err.message });
+    logger.warn('Ingest worker: claim stamp failed (claim refused)', { concept_id: conceptId, error: err.message });
+    return false;
   }
 }
 
@@ -296,7 +312,11 @@ async function _stampClaim(db, repoId, conceptId) {
  * the poison-pill reaper (>= OKF_INGEST_WORKER_MAX_CLAIMS REAL attempts)
  * cannot dead-letter healthy rows that merely bounced off a busy slot under
  * routine cross-repo contention (review !622 wave 2, #78658). Same
- * single-writer lane as the claim itself, so read-modify-write is safe. */
+ * single-writer lane as the claim itself, so read-modify-write is safe.
+ * Round 20, #80804: both claim strategies now guarantee a returned job's
+ * attempt was STAMPED (fifo refuses the claim on a failed stamp; fair stamps
+ * inside the fused statement), so this decrement always un-counts a real
+ * increment — never a bare 0-row. */
 async function _unclaimAttempt(db, repoId, conceptId) {
   try {
     await db.query(

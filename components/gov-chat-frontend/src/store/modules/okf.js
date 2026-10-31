@@ -16,6 +16,14 @@
  *   this as a translated toast — never as a hard error.
  *   Studio drafts are the exception since Story 10.5: the endpoint is live,
  *   so NOT_READY only surfaces against an older backend, and it is silent.
+ *
+ * POLL-ENVELOPE i18n (#80805): every message THIS module authors for a poll
+ *   envelope (pollJob's abort/timeout arms and each action's `timeout`/
+ *   `failed` fallbacks) is an okf.labErrors.* KEY, not English — the store
+ *   has no translate context, so the consumer renders it through
+ *   okfRepoOps.translateLabError(). A message that came from the SERVER
+ *   (doc.error.message, err.message) stays verbatim and that helper passes
+ *   it through untouched.
  */
 
 const initialState = () => ({
@@ -160,12 +168,12 @@ async function pollJob({
       return {
         ok: false,
         code: 'POLL_ABORTED',
-        message: 'Tracking stopped — the job keeps running server-side.'
+        message: 'okf.labErrors.pollAborted'
       };
     }
     if (Date.now() > deadline) return { ok: false, code: timeout.code, message: timeout.message };
     await new Promise((resolve) => setTimeout(resolve, pollMs));
-    if (signal && signal.aborted) return { ok: false, code: 'POLL_ABORTED', message: 'Tracking stopped.' };
+    if (signal && signal.aborted) return { ok: false, code: 'POLL_ABORTED', message: 'okf.labErrors.trackingStopped' };
     let doc;
     try {
       doc = await fetchDoc();
@@ -318,21 +326,6 @@ const actions = {
     commit('setDraft', { repoId, draft: { ...draft, updated_at: draft.updated_at ?? Date.now() } });
     return { ok: true, local: true };
   },
-  // NON-BLOCKING LOAD: bumped on every fetchConcepts call — a superseded
-  // loop (repo switched, newer refetch) stops committing stale pages.
-  // Module-scope on purpose: single store instance, not serialized state.
-  /**
-   * Load (or return-cached) draft for a repo. NO-OP if a cached draft exists —
-   * avoids server round-trip when resuming in-process.
-   *
-   * PURE CACHE LOOKUP: the server-backed hydration lives in `fetchDraft`.
-   */
-  loadDraft({ state }, { repoId, force = false } = {}) {
-    if (!repoId) return null;
-    if (!force && state.drafts[repoId]) return state.drafts[repoId];
-    return null;
-  },
-
   /**
    * STORY 10.5 — hydrate the draft from the SERVER (this is what makes the
    * wizard survive a browser refresh: before it, `drafts` lived only in the
@@ -554,7 +547,8 @@ const actions = {
       const repo = await crawlerToOkfService.convertCrawlToOkf(payload);
       if (repo && repo.repo_id) {
         commit('upsertRepo', repo);
-        const byStage = this.state?.okf?.reposByStage || { draft: [], in_review: [], published: [] };
+        // Full 5-lane fallback (round 20, #79901) — see createRepo.
+        const byStage = this.state?.okf?.reposByStage || laneFor();
         const draftLane = Array.isArray(byStage.draft) ? byStage.draft.slice() : [];
         if (!draftLane.includes(repo.repo_id)) draftLane.push(repo.repo_id);
         commit('setReposByStage', { ...byStage, draft: draftLane });
@@ -641,7 +635,12 @@ const actions = {
     try {
       const repo = await okfRepoOps.createRepo({ name, domain });
       commit('upsertRepo', repo);
-      const byStage = this.state?.okf?.reposByStage || { draft: [], in_review: [], published: [] };
+      // Full 5-lane fallback (round 20, #79901): a first create before any
+      // fetchRepos (fresh session deep-linking into the studio) used to
+      // commit a 3-lane shape, leaving `ingested`/`retracted` undefined —
+      // every consumer iterating those lanes dropped cards until the next
+      // full fetch repaired the shape. laneFor() is the one true shape.
+      const byStage = this.state?.okf?.reposByStage || laneFor();
       const draftLane = Array.isArray(byStage.draft) ? byStage.draft.slice() : [];
       if (!draftLane.includes(repo.repo_id)) draftLane.push(repo.repo_id);
       commit('setReposByStage', { ...byStage, draft: draftLane });
@@ -651,7 +650,11 @@ const actions = {
       // Preserve the server's code (DUPLICATE_REPO etc.) — Entry's curated
       // refusal copy keys off it; a hardcoded CREATE_FAILED made the branch
       // unreachable (max-review F11, 2026-09-27).
-      return { ok: false, code: err.code || 'CREATE_FAILED', message: err.message };
+      // Round 20 (#80123): when the repo was created but its index-skeleton
+      // import failed, okfRepoOps attaches it on the error — pass it through
+      // so the UI can say "open it from the dashboard" instead of a blind
+      // "failed" that invites a retry (which mints a SECOND repo).
+      return { ok: false, code: err.code || 'CREATE_FAILED', message: err.message, repo: err.repo };
     }
   },
 
@@ -756,6 +759,17 @@ const actions = {
     const stale = () => myGen !== fetchGeneration || (state.editor.repoId && state.editor.repoId !== repoId);
     try {
       const first = await conceptService.listForRepo(repoId, { limit: PAGE, offset: 0 });
+      // STALE GUARD BEFORE THE FIRST COMMIT (round 20): the repo could have
+      // switched while page 1 was in flight — committing then would plant
+      // the OLD repo's rows over the NEW repo's editor. Same cleanup rule
+      // as the in-loop guard below.
+      if (stale()) {
+        if (myGen === fetchGeneration) {
+          commit('setConceptsLoading', false);
+          commit('setConceptsLoadProgress', null);
+        }
+        return { ok: true, concepts: [], stale: true };
+      }
       // Legacy contract: a plain array (mocked tests / older servers) — one commit.
       if (Array.isArray(first)) {
         commit('setConcepts', { repoId, concepts: first });
@@ -791,7 +805,12 @@ const actions = {
       return { ok: true, concepts: acc };
     } catch (err) {
       commit('setError', err.message || 'fetchConcepts failed');
-      commit('setConcepts', { repoId, concepts: [] });
+      // KEEP THE LAST KNOWN LIST (round 20, #80803): the already-loaded rows
+      // are known-good data — one gateway 502 (or a failed page N of the
+      // paging loop) must not blank the rail to "0 concepts" and destroy
+      // the curator's context; the editor re-fetches on the next concept
+      // click anyway. Empty the list only when none was ever loaded here.
+      if (!state.editor.conceptsByRepo[repoId]) commit('setConcepts', { repoId, concepts: [] });
       commit('setConceptsLoadProgress', null);
       return { ok: false, code: 'FETCH_FAILED', message: err.message };
     } finally {
@@ -1354,8 +1373,8 @@ const actions = {
       // The server answers 200 {suite_key, status:'generating'} while the
       // async worker runs (never a 404) — keep waiting on that envelope.
       isRunning: (doc) => !doc || !doc.suite_key || doc.status === 'generating',
-      timeout: { code: 'SUITE_GEN_TIMEOUT', message: 'Suite generation timed out.' },
-      failed: { code: 'SUITE_GEN_FAILED', message: 'Suite generation failed.' },
+      timeout: { code: 'SUITE_GEN_TIMEOUT', message: 'okf.labErrors.suiteGenTimeout' },
+      failed: { code: 'SUITE_GEN_FAILED', message: 'okf.labErrors.suiteGenFailed' },
       done: (doc) => ({ ok: true, result: doc }),
       signal
     });
@@ -1370,7 +1389,7 @@ const actions = {
     const failedEnvelope = (doc) => ({
       ok: false,
       code: (doc.error && doc.error.code) || 'RUN_FAILED',
-      message: (doc.error && doc.error.message) || 'Suite run failed'
+      message: (doc.error && doc.error.message) || 'okf.labErrors.suiteRunFailed'
     });
     const first = await fetchDoc();
     if (onProgress && first && first.progress && first.progress.total) onProgress(first.progress);
@@ -1384,8 +1403,8 @@ const actions = {
       deadlineMs: 6 * 60 * 1000,
       isRunning: (doc) => !doc || doc.status === 'running',
       onProgress,
-      timeout: { code: 'RUN_TIMEOUT', message: 'The run is taking unusually long.' },
-      failed: { code: 'RUN_FAILED', message: 'Suite run failed' },
+      timeout: { code: 'RUN_TIMEOUT', message: 'okf.labErrors.runUnusuallyLong' },
+      failed: { code: 'RUN_FAILED', message: 'okf.labErrors.suiteRunFailed' },
       done: (doc) => (doc.status === 'failed' ? failedEnvelope(doc) : { ok: true, result: doc }),
       signal
     });
@@ -1432,10 +1451,9 @@ const actions = {
         signal,
         timeout: {
           code: 'EXPLAIN_TIMEOUT',
-          message:
-            'The explain is still running on the model host. Reopen the Lab later to see its result — nothing was lost.'
+          message: 'okf.labErrors.explainStillRunning'
         },
-        failed: { code: 'EXPLAIN_FAILED', message: 'Explain failed' },
+        failed: { code: 'EXPLAIN_FAILED', message: 'okf.labErrors.explainFailed' },
         done: (doc) => ({ ok: true, result: doc.payload })
       });
     } catch (err) {
@@ -1534,9 +1552,9 @@ const actions = {
         onProgress: typeof onProgress === 'function' ? onProgress : null,
         timeout: {
           code: 'GENERATION_TIMEOUT',
-          message: 'The generation is still running — reopen the Lab later; nothing was lost.'
+          message: 'okf.labErrors.generationStillRunning'
         },
-        failed: { code: 'GENERATION_FAILED', message: 'Generation failed' },
+        failed: { code: 'GENERATION_FAILED', message: 'okf.labErrors.generationFailed' },
         done: (doc) => ({ ok: true, result: doc })
       });
     } catch (err) {
@@ -1616,7 +1634,7 @@ const actions = {
         return {
           ok: false,
           code: 'RESCORE_NOT_STARTED',
-          message: 'The re-score did not start — the server accepted the request but returned no run to track.'
+          message: 'okf.labErrors.rescoreNotStarted'
         };
       }
       if (typeof onStarted === 'function') onStarted(started.run_key);
@@ -1627,12 +1645,12 @@ const actions = {
         onProgress: typeof onProgress === 'function' ? onProgress : null,
         timeout: {
           code: 'RUN_TIMEOUT',
-          message: 'The re-score is still executing on the server — reopen the Lab later to see its result.'
+          message: 'okf.labErrors.rescoreStillRunning'
         },
-        failed: { code: 'RESCORE_FAILED', message: 'Re-score failed' },
+        failed: { code: 'RESCORE_FAILED', message: 'okf.labErrors.rescoreFailed' },
         done: (doc) =>
           doc.status === 'cancelled'
-            ? { ok: false, code: 'RUN_CANCELLED', message: 'Re-score cancelled by user', result: doc }
+            ? { ok: false, code: 'RUN_CANCELLED', message: 'okf.labErrors.rescoreCancelled', result: doc }
             : { ok: true, result: doc }
       });
     } catch (err) {
@@ -1735,7 +1753,7 @@ const actions = {
         return {
           ok: false,
           code: 'RUN_NOT_STARTED',
-          message: 'The run did not start — the server accepted the request but returned no run to track.'
+          message: 'okf.labErrors.runNotStarted'
         };
       }
       if (typeof onStarted === 'function') onStarted(started.run_key);
@@ -1746,15 +1764,15 @@ const actions = {
         onProgress: typeof onProgress === 'function' ? onProgress : null,
         timeout: {
           code: 'RUN_TIMEOUT',
-          message: 'The run is still executing on the server — reopen the Lab later to see its result.'
+          message: 'okf.labErrors.runStillRunning'
         },
-        failed: { code: 'RUN_FAILED', message: 'Run failed' },
+        failed: { code: 'RUN_FAILED', message: 'okf.labErrors.runFailed' },
         // A cancelled run is NOT a result (2026-10-21 review F4) — without
         // this branch a cancelled run resolved ok:true and rendered an empty
         // results section.
         done: (doc) =>
           doc.status === 'cancelled'
-            ? { ok: false, code: 'RUN_CANCELLED', message: 'Run cancelled by user', result: doc }
+            ? { ok: false, code: 'RUN_CANCELLED', message: 'okf.labErrors.runCancelled', result: doc }
             : { ok: true, result: doc }
       });
     } catch (err) {
@@ -1778,17 +1796,16 @@ const actions = {
         pollMs: 2000,
         signal,
         onProgress: typeof onProgress === 'function' ? onProgress : null,
-        timeout: { code: 'RUN_TIMEOUT', message: 'The run is still executing on the server.' },
-        failed: { code: 'RUN_FAILED', message: 'Run failed' },
-        // Cancelled folds into failed here (adopt has no user-stop context —
-        // the run was started by an earlier session).
+        timeout: { code: 'RUN_TIMEOUT', message: 'okf.labErrors.runStillExecuting' },
+        failed: { code: 'RUN_FAILED', message: 'okf.labErrors.runFailed' },
+        // Cancelled is its OWN arm (round 20, #79900): folding it into
+        // RUN_FAILED rendered "Run failed" for a run someone deliberately
+        // stopped — the operator retries a run that intentionally never
+        // happened, and telemetry counts a phantom RUN_FAILED. The sibling
+        // polls answer RUN_CANCELLED; the Lab translates this key.
         done: (doc) =>
           doc.status === 'cancelled'
-            ? {
-                ok: false,
-                code: (doc.error && doc.error.code) || 'RUN_FAILED',
-                message: (doc.error && doc.error.message) || 'Run failed'
-              }
+            ? { ok: false, code: 'RUN_CANCELLED', message: 'okf.labErrors.runCancelled' }
             : { ok: true, result: doc }
       });
     } catch (err) {
@@ -1811,8 +1828,8 @@ const actions = {
         signal,
         isRunning: (doc) => !doc || doc.status === 'generating',
         onProgress: typeof onProgress === 'function' ? onProgress : null,
-        timeout: { code: 'GENERATION_TIMEOUT', message: 'The generation is still running server-side.' },
-        failed: { code: 'GENERATION_FAILED', message: 'Generation failed' },
+        timeout: { code: 'GENERATION_TIMEOUT', message: 'okf.labErrors.generationStillServerSide' },
+        failed: { code: 'GENERATION_FAILED', message: 'okf.labErrors.generationFailed' },
         done: (doc) => ({ ok: true, result: doc })
       });
     } catch (err) {
@@ -1996,9 +2013,9 @@ const actions = {
         onProgress: typeof onProgress === 'function' ? onProgress : null,
         timeout: {
           code: 'EXPLAIN_TIMEOUT',
-          message: 'The explain is still running — reopen the Lab later; nothing was lost.'
+          message: 'okf.labErrors.explainStillRunningShort'
         },
-        failed: { code: 'EXPLAIN_FAILED', message: 'Explain failed' },
+        failed: { code: 'EXPLAIN_FAILED', message: 'okf.labErrors.explainFailed' },
         done: (doc) => ({ ok: true, result: doc.payload })
       });
     } catch (err) {

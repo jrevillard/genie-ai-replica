@@ -251,13 +251,11 @@ describe('repo/lifecycle/version/validation pass-throughs', () => {
 });
 
 describe('draft lifecycle (Story 10.5)', () => {
-  it('loadDraft reads the cache; fetchDraft caches-first and null is not an error', async () => {
+  // Round 20: the dead `loadDraft` action (a pure cache lookup nothing
+  // dispatched — the wizard rides fetchDraft's cache-first path) was removed
+  // with its assertions; what remains pins fetchDraft itself.
+  it('fetchDraft caches-first and null is not an error', async () => {
     const store = buildStore();
-    // Vuex 4 dispatch always returns a Promise, even for sync actions
-    expect(await store.dispatch('okf/loadDraft', { repoId: 'r1' })).toBeNull();
-    expect(await store.dispatch('okf/loadDraft', {})).toBeNull();
-    const seeded = buildStore({ drafts: { r1: { step: 3 } } });
-    expect(await seeded.dispatch('okf/loadDraft', { repoId: 'r1' })).toMatchObject({ step: 3 });
     studioService.getDraft.mockResolvedValueOnce({ step: 2 });
     const res = await store.dispatch('okf/fetchDraft', { repoId: 'r1' });
     expect(res).toMatchObject({ ok: true });
@@ -981,6 +979,39 @@ describe('failure envelopes sweep', () => {
     okfRepoOps.createRepo.mockRejectedValueOnce(dup);
     expect(await store.dispatch('okf/createRepo', { name: 'n' })).toMatchObject({ ok: false, code: 'E_DUP' });
     expect(store.state.okf.error).toBeTruthy();
+  });
+
+  // Round 20 (#80123): when the repo was created but its index-skeleton
+  // import failed, okfRepoOps attaches it — the envelope must carry it so
+  // the UI can offer "open it" instead of a blind retry.
+  it('createRepo: a failure AFTER server-side creation passes the repo through (#80123)', async () => {
+    const half = new Error('index import failed');
+    half.code = 'CREATE_FAILED';
+    half.repo = { repo_id: 'r-half', name: 'n', lifecycle_state: 'draft' };
+    okfRepoOps.createRepo.mockRejectedValueOnce(half);
+    const store = buildStore();
+    expect(await store.dispatch('okf/createRepo', { name: 'n' })).toMatchObject({
+      ok: false,
+      code: 'CREATE_FAILED',
+      repo: { repo_id: 'r-half' }
+    });
+  });
+
+  // Round 20 (#79901): the first create in a FRESH store (no fetchRepos yet)
+  // used to commit a 3-lane reposByStage — every consumer iterating the
+  // Ingested/Retracted lanes then dropped cards until a full fetch repaired
+  // the shape. The fallback must be the full 5-lane laneFor() shape.
+  it('createRepo: a first create in a fresh store lands the FULL 5-lane shape (#79901)', async () => {
+    okfRepoOps.createRepo.mockResolvedValueOnce({ repo_id: 'r-new', name: 'n', lifecycle_state: 'draft' });
+    const store = buildStore();
+    expect(await store.dispatch('okf/createRepo', { name: 'n' })).toMatchObject({ ok: true });
+    expect(store.state.okf.reposByStage).toEqual({
+      draft: ['r-new'],
+      in_review: [],
+      published: [],
+      ingested: [],
+      retracted: []
+    });
   });
 
   it('createConcept / getConcept / patchConcept failures map their codes', async () => {

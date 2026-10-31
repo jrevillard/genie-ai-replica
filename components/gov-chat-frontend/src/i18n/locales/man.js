@@ -1526,6 +1526,29 @@ export default {
       graphNameConflict: 'Repository woloro nda mone an version kin ye graph numu ka na — a furu nda a kɔ ɔ.',
       generic: 'A kɛ tɔ.'
     },
+    labErrors: {
+      pollAborted: 'Tracking bɛn na — askuoo bɛ server kono run ko.',
+      trackingStopped: 'Tracking bɛn na.',
+      suiteGenTimeout: 'Suite generation waati bɛn na.',
+      suiteGenFailed: 'Suite generation ma kɛ.',
+      suiteRunFailed: 'Suite run ma kɛ',
+      runUnusuallyLong: 'Runoo bɛ waatoo joona ke.',
+      explainStillRunning: 'Explainoo bɛ model host kono run. A result na Lab land — haya ti loss ke.',
+      explainFailed: 'Explain ma kɛ',
+      generationStillRunning: 'Generationoo bɛ run — Lab land; haya ti loss ke.',
+      generationFailed: 'Generation ma kɛ',
+      rescoreNotStarted: 'Re-score ti wuli — serveroo accept nga asku wa run id ti jaabi o la i ma a track.',
+      rescoreStillRunning: 'Re-scoreoo bɛ server kono run — a result na Lab land.',
+      rescoreFailed: 'Re-score ma kɛ',
+      rescoreCancelled: 'Useroo Re-score bɛn na.',
+      runNotStarted: 'Run ti wuli — serveroo accept nga asku wa run id ti jaabi o la i ma a track.',
+      runStillRunning: 'Runoo bɛ server kono run — a result na Lab land.',
+      runFailed: 'Run ma kɛ',
+      runCancelled: 'Useroo run bɛn na.',
+      runStillExecuting: 'Runoo bɛ server kono run.',
+      generationStillServerSide: 'Generationoo bɛ server kono run.',
+      explainStillRunningShort: 'Explainoo bɛ run — Lab land; haya ti loss ke.'
+    },
     models: {
       title: 'Model configurations',
       add: 'New configuration',
@@ -2094,6 +2117,8 @@ export default {
       failed: 'Kōm̦m̦an jikin kakwōn eo ear l̦apier',
       duplicateInline: 'Ewōr juon jikin kakwōn kōn āt in. Kipel̦o̦k, ak kāālet bar juon āt.',
       duplicate: 'Ewōr juon jikin kakwōn kōn āt in — kipel̦o̦k jān dashboard ak kāālet bar juon āt.',
+      indexImportFailed:
+        'Jikin kakwōn eo ej kōmmane, age index-in ewe jāan ej kabun ikijen impōōt. Kalōkūrlok jen dashboard eo ekōtaan.',
       domain: 'Kuu dulaa',
       create: 'Kōm̦m̦an jikin kakwōn',
       title: 'Jikin kakwōn OKF ekāāl',
@@ -2371,6 +2396,8 @@ export default {
       }
     },
     wizard: {
+      clonedFrom: 'Clone na {name} la · v{version}',
+      clonedFromNoVersion: 'Clone na {name} la',
       working: 'Working…',
       state: {
         draft: 'In progress',
@@ -3129,6 +3156,7 @@ export default {
         history: 'Mara tariikoo ti looti',
         revert: 'Frontmatteroo ti fitindi',
         advisor: 'Advisor failed',
+        advisorTimeout: 'Advisoroo bɛ model host kono run. A result na Lab land — haya ti loss ke.',
         noSuite: 'Suite generate folo, ka rebuild + run tugung.',
         applyNoSuite: 'Tagolu marata ani headoo rebuild benta — suite generate, ka Run all ke ka efeku je.',
         suiteLoad: 'Could not load the suite',

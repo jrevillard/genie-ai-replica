@@ -1552,6 +1552,33 @@ export default {
         'Outro repositório com o mesmo nome e versão já possui o nome do grafo de serviço — renomeie um deles e tente novamente.',
       generic: 'A ação falhou'
     },
+    labErrors: {
+      pollAborted: 'Acompanhamento interrompido — a tarefa continua em execução no servidor.',
+      trackingStopped: 'Acompanhamento interrompido.',
+      suiteGenTimeout: 'A geração da suíte excedeu o tempo limite.',
+      suiteGenFailed: 'A geração da suíte falhou.',
+      suiteRunFailed: 'Falha na execução da suíte',
+      runUnusuallyLong: 'A execução está demorando mais que o normal.',
+      explainStillRunning:
+        'A explicação ainda está em execução no host do modelo. Reabra o Lab mais tarde para ver o resultado — nada foi perdido.',
+      explainFailed: 'A explicação falhou',
+      generationStillRunning: 'A geração ainda está em andamento — reabra o Lab mais tarde; nada foi perdido.',
+      generationFailed: 'A geração falhou',
+      rescoreNotStarted:
+        'A reavaliação não começou — o servidor aceitou a solicitação, mas não retornou nenhuma execução para acompanhar.',
+      rescoreStillRunning:
+        'A reavaliação ainda está em execução no servidor — reabra o Lab mais tarde para ver o resultado.',
+      rescoreFailed: 'A reavaliação falhou',
+      rescoreCancelled: 'Reavaliação cancelada pelo usuário',
+      runNotStarted:
+        'A execução não começou — o servidor aceitou a solicitação, mas não retornou nenhuma execução para acompanhar.',
+      runStillRunning: 'A execução ainda está em andamento no servidor — reabra o Lab mais tarde para ver o resultado.',
+      runFailed: 'A execução falhou',
+      runCancelled: 'Execução cancelada pelo usuário',
+      runStillExecuting: 'A execução ainda está em andamento no servidor.',
+      generationStillServerSide: 'A geração ainda está em andamento no servidor.',
+      explainStillRunningShort: 'A explicação ainda está em andamento — reabra o Lab mais tarde; nada foi perdido.'
+    },
     models: {
       title: 'Configurações de modelo',
       add: 'Nova configuração',
@@ -2133,6 +2160,8 @@ export default {
       failed: 'Falha na criação do repositório',
       duplicateInline: 'Já existe um repositório com este nome. Abra-o ou escolha outro nome.',
       duplicate: 'Já existe um repositório com este nome — abra-o no painel ou escolha outro nome.',
+      indexImportFailed:
+        'O repositório foi criado, mas o seu índice inicial não pôde ser importado. Abra-o no painel para continuar.',
       domain: 'Área de assunto',
       create: 'Criar repositório',
       title: 'Novo repositório OKF',
@@ -2415,6 +2444,8 @@ export default {
       }
     },
     wizard: {
+      clonedFrom: 'Clonado de {name} · v{version}',
+      clonedFromNoVersion: 'Clonado de {name}',
       working: 'Working…',
       state: {
         draft: 'In progress',
@@ -3186,6 +3217,8 @@ export default {
         history: 'Não foi possível carregar o histórico de gravações',
         revert: 'Não foi possível reverter o frontmatter',
         advisor: 'Falha do consultor',
+        advisorTimeout:
+          'O consultor ainda está em execução no host do modelo. Reabra o Lab mais tarde para ver o resultado — nada foi perdido.',
         noSuite: 'Gere primeiro uma suíte e depois reconstrua e execute novamente.',
         applyNoSuite: 'Tags salvas e cabeça reconstruída — gere uma suíte e execute tudo para ver o efeito.',
         suiteLoad: 'Não foi possível carregar a suíte',

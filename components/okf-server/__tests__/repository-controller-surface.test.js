@@ -555,6 +555,21 @@ describe('repository-controller — pii / lifecycle / export / autocorrect surfa
     expect(res.body).toMatchObject({ repo_id: 'r1', name_adjusted: false });
   });
 
+  it('convertFromDocuments: repo_id path NEVER reports name_adjusted — nothing is renamed (round 20, #80807)', async () => {
+    // The existing repo keeps its own name; body.name differs from it but is
+    // ignored for targeting. The old `repo.name !== baseName` comparison read
+    // that difference as a rename and reported name_adjusted: true — a lie,
+    // since only the create-path suffix loop can rename.
+    repoService.getById.mockReset();
+    repoService.getById.mockResolvedValue({ repo_id: 'r1', name: 'Existing Name' });
+    const { res } = await drive(controller.convertFromDocuments, {
+      body: { repo_id: 'r1', name: 'A Totally Different Name', file_ids: ['f1'] }
+    });
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toMatchObject({ repo_id: 'r1', name: 'Existing Name', name_adjusted: false });
+    expect(repoService.create).not.toHaveBeenCalled();
+  });
+
   it('acceptConceptLink: self-links, missing targets and missing sources are refused', async () => {
     const first = await drive(controller.acceptConceptLink, { body: { to_concept_id: 'c1' } });
     expect(first.next).toHaveBeenCalledWith(expect.any(ValidationError)); // self-link

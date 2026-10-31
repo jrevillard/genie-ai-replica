@@ -1355,6 +1355,7 @@
 
 <script>
 import translateMixin from '../../../mixins/translateMixin';
+import { translateLabError } from '../../../services/okfRepoOps';
 import { toEpochMs } from '../piiReview.js';
 import DsDialog from '../../ds/Dialog.vue';
 import DsTabs from '../../ds/Tabs.vue';
@@ -2431,7 +2432,19 @@ export default {
         return;
       }
       if (!res.ok) {
-        this.error = res.message || this.translate('okf.testingLab.error.advisor', 'Advisor failed');
+        // #80805: the advisor's poll (headTestService.recommendTags) throws
+        // with CODES — map them to translated sentences here. The English
+        // message rides the envelope as the fallback for verbatim callers.
+        this.error =
+          res.code === 'ADVISOR_TIMEOUT'
+            ? this.translate(
+                'okf.testingLab.error.advisorTimeout',
+                'The advisor is still running on the model host. Reopen the Lab later to see its result — nothing was lost.'
+              )
+            : res.code === 'RECOMMEND_FAILED'
+              ? this.translate('okf.testingLab.error.advisor', 'Advisor failed')
+              : translateLabError(res.message, this.translate) ||
+                this.translate('okf.testingLab.error.advisor', 'Advisor failed');
         return;
       }
       this.advisor = res.result;
@@ -2631,8 +2644,11 @@ export default {
         // 1-8g-u: a recorded generation failure surfaces the REAL error.
         if (suite && suite.status === 'failed') {
           this.busy = null;
+          // #80805 parity: the failed envelope's message is an
+          // okf.labErrors.* key when the store authored it; a server
+          // doc.error.message passes through translateLabError verbatim.
           this.error =
-            (suite.error && suite.error.message) ||
+            translateLabError(suite.error && suite.error.message, this.translate) ||
             this.translate('okf.testingLab.error.generate', 'Suite generation failed');
           this.refreshRuns();
           return;
@@ -2676,8 +2692,16 @@ export default {
         suiteKey,
         signal: this.pollSignal
       });
-      if (!res || !res.ok) return null;
-      return res.result;
+      if (res && res.ok) return res.result;
+      // A failed generation keeps onGenerate's contract (round 20, #80778):
+      // a doc with status 'failed' whose message is surfaced — NOT the
+      // generic "taking unusually long" timeout branch. POLL_ABORTED /
+      // SUITE_GEN_TIMEOUT fall through to null → the dialog's friendly
+      // "still running server-side" branch, exactly like pollForRun.
+      if (res && res.code && res.code !== 'POLL_ABORTED' && res.code !== 'SUITE_GEN_TIMEOUT') {
+        return { status: 'failed', error: { message: res.message } };
+      }
+      return null;
     },
     async onRunSuite() {
       if (!this.suite) return;
@@ -2717,8 +2741,12 @@ export default {
         runDoc = await this.pollForRun(suiteKey, started.run_key);
         if (runDoc && runDoc.status === 'failed') {
           this.busy = null;
+          // #80805: the failed envelope's message is an okf.labErrors.* key
+          // when the store authored it; a server doc.error.message passes
+          // through translateLabError verbatim.
           this.error =
-            (runDoc.error && runDoc.error.message) || this.translate('okf.testingLab.error.run', 'Suite run failed');
+            translateLabError(runDoc.error && runDoc.error.message, this.translate) ||
+            this.translate('okf.testingLab.error.run', 'Suite run failed');
           this.refreshRuns();
           return;
         }
@@ -2858,7 +2886,11 @@ export default {
       }
       if (!res.ok) {
         if (res.code === 'POLL_ABORTED') return; // the Lab closed — nothing to show
-        this.error = res.message || this.translate('okf.testingLab.error.explain', 'Explain failed');
+        // #80805: EXPLAIN_TIMEOUT/EXPLAIN_FAILED messages are okf.labErrors.*
+        // keys; a server message passes through translateLabError verbatim.
+        this.error =
+          translateLabError(res.message, this.translate) ||
+          this.translate('okf.testingLab.error.explain', 'Explain failed');
         return;
       }
       this.batchAdvice = res.result;

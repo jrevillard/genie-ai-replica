@@ -1540,6 +1540,30 @@ export default {
         'Another repository with the same name and version already owns the serving graph name — rename one of them and retry.',
       generic: 'Action failed'
     },
+    labErrors: {
+      pollAborted: 'Tracking stopped — the job keeps running server-side.',
+      trackingStopped: 'Tracking stopped.',
+      suiteGenTimeout: 'Suite generation timed out.',
+      suiteGenFailed: 'Suite generation failed.',
+      suiteRunFailed: 'Suite run failed',
+      runUnusuallyLong: 'The run is taking unusually long.',
+      explainStillRunning:
+        'The explain is still running on the model host. Reopen the Lab later to see its result — nothing was lost.',
+      explainFailed: 'Explain failed',
+      generationStillRunning: 'The generation is still running — reopen the Lab later; nothing was lost.',
+      generationFailed: 'Generation failed',
+      rescoreNotStarted: 'The re-score did not start — the server accepted the request but returned no run to track.',
+      rescoreStillRunning: 'The re-score is still executing on the server — reopen the Lab later to see its result.',
+      rescoreFailed: 'Re-score failed',
+      rescoreCancelled: 'Re-score cancelled by user',
+      runNotStarted: 'The run did not start — the server accepted the request but returned no run to track.',
+      runStillRunning: 'The run is still executing on the server — reopen the Lab later to see its result.',
+      runFailed: 'Run failed',
+      runCancelled: 'Run cancelled by user',
+      runStillExecuting: 'The run is still executing on the server.',
+      generationStillServerSide: 'The generation is still running server-side.',
+      explainStillRunningShort: 'The explain is still running — reopen the Lab later; nothing was lost.'
+    },
     models: {
       title: 'Model configurations',
       add: 'New configuration',
@@ -1807,6 +1831,8 @@ export default {
         history: 'Could not load the save history',
         revert: 'Could not revert the frontmatter',
         advisor: 'Advisor failed',
+        advisorTimeout:
+          'The advisor is still running on the model host. Reopen the Lab later to see its result — nothing was lost.',
         noSuite: 'Generate a suite first, then rebuild + re-run.',
         applyNoSuite: 'Tags saved and the head rebuilt — generate a suite, then Run all to see the effect.',
         suiteLoad: 'Could not load the suite',
@@ -2945,6 +2971,8 @@ export default {
       failed: 'Repository creation failed',
       duplicateInline: 'A repository with this name already exists. Open it, or pick another name.',
       duplicate: 'A repository with this name already exists - open it from the dashboard or pick another name.',
+      indexImportFailed:
+        'The repository was created, but its starter index could not be imported. Open it from the dashboard to continue.',
       domain: 'Subject area',
       create: 'Create repository',
       title: 'New OKF repository',
@@ -3224,6 +3252,8 @@ export default {
       }
     },
     wizard: {
+      clonedFrom: 'Cloned from {name} · v{version}',
+      clonedFromNoVersion: 'Cloned from {name}',
       working: 'Working…',
       state: {
         draft: 'In progress',

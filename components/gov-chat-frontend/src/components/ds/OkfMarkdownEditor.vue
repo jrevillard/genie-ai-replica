@@ -472,22 +472,37 @@ export default {
   },
   methods: {
     // ── ASYNC CHUNKED RENDER (2026-09-13 "Page Unresponsive" fix) ─────────
-    // Fence-aware splitter: chunks break ONLY at line boundaries outside a
-    // ``` / ~~~ fence, so no code block is ever split across renders.
+    // Fence- and BLOCK-aware splitter. Fences never split (no code block
+    // across renders). Block boundaries (round 20, #79192): once the size
+    // threshold is crossed the cut WAITS for the next blank line, so a
+    // 60KB ordered list, table or blockquote is not severed mid-structure
+    // (each chunk renders independently — a mid-list seam restarted the
+    // numbering and duplicated table headers). A second hard window bounds
+    // the wait: a runaway block with no blank line still cuts at a line
+    // boundary, never mid-line, so the freeze fix keeps its guarantee.
     splitRenderChunks(body) {
       if (body.length <= 48000) return [body];
       const chunks = [];
       let start = 0;
       let fence = false;
       let i = 0;
+      let wantedAt = -1; // past this index, the next blank line is the cut
       while (i < body.length) {
         const nl = body.indexOf('\n', i);
         const lineEnd = nl === -1 ? body.length : nl + 1;
         const line = body.slice(i, lineEnd);
         if (/^\s*(```|~~~)/.test(line)) fence = !fence;
-        if (!fence && lineEnd - start >= 48000) {
+        if (!fence && lineEnd - start >= 48000 && wantedAt < 0) wantedAt = lineEnd;
+        const blank = /^\s*\n?$/.test(line);
+        if (!fence && wantedAt > 0 && lineEnd > wantedAt && blank) {
           chunks.push(body.slice(start, lineEnd));
           start = lineEnd;
+          wantedAt = -1;
+        } else if (!fence && wantedAt > 0 && lineEnd - start >= 48000 * 2) {
+          // hard cap — no blank line within a second window; cut here.
+          chunks.push(body.slice(start, lineEnd));
+          start = lineEnd;
+          wantedAt = -1;
         }
         i = lineEnd;
       }
@@ -638,7 +653,14 @@ export default {
             ? { stale_after: this.draftFrontmatter.lifecycle.stale_after }
             : {})
         },
-        provenance: { sources: this.draftFrontmatter.provenance.sources }
+        // PRESERVE UNKNOWN KEYS under provenance (round 20, #79191): the
+        // import pipeline writes provenance.crawled_at / source_ids — a
+        // wholesale { sources } replacement silently dropped them on save.
+        // Same spread-and-override shape as the lifecycle block above.
+        provenance: {
+          ...(this.parsedData.provenance || {}),
+          sources: this.draftFrontmatter.provenance.sources
+        }
       };
       const body = this.contentBody;
       const next = matter.stringify(body, fm);

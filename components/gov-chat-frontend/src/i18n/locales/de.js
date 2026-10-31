@@ -1556,6 +1556,34 @@ export default {
         'Ein anderes Repository mit demselben Namen und derselben Version besitzt bereits den Graph-Namen — benennen Sie eines um und versuchen Sie es erneut.',
       generic: 'Aktion fehlgeschlagen'
     },
+    labErrors: {
+      pollAborted: 'Die Verfolgung wurde beendet — der Auftrag läuft serverseitig weiter.',
+      trackingStopped: 'Die Verfolgung wurde beendet.',
+      suiteGenTimeout: 'Die Suite-Generierung hat das Zeitlimit überschritten.',
+      suiteGenFailed: 'Die Suite-Generierung ist fehlgeschlagen.',
+      suiteRunFailed: 'Suite-Ausführung fehlgeschlagen',
+      runUnusuallyLong: 'Die Ausführung dauert ungewöhnlich lange.',
+      explainStillRunning:
+        'Die Erklärung läuft noch auf dem Modell-Host. Öffnen Sie das Lab später wieder, um das Ergebnis zu sehen — nichts geht verloren.',
+      explainFailed: 'Erklärung fehlgeschlagen',
+      generationStillRunning: 'Die Generierung läuft noch — öffnen Sie das Lab später wieder; nichts geht verloren.',
+      generationFailed: 'Generierung fehlgeschlagen',
+      rescoreNotStarted:
+        'Die Neubewertung wurde nicht gestartet — der Server hat die Anfrage angenommen, aber keine Ausführung zum Verfolgen zurückgegeben.',
+      rescoreStillRunning:
+        'Die Neubewertung läuft auf dem Server noch — öffnen Sie das Lab später wieder, um das Ergebnis zu sehen.',
+      rescoreFailed: 'Neubewertung fehlgeschlagen',
+      rescoreCancelled: 'Neubewertung vom Benutzer abgebrochen',
+      runNotStarted:
+        'Die Ausführung wurde nicht gestartet — der Server hat die Anfrage angenommen, aber keine Ausführung zum Verfolgen zurückgegeben.',
+      runStillRunning:
+        'Die Ausführung läuft auf dem Server noch — öffnen Sie das Lab später wieder, um das Ergebnis zu sehen.',
+      runFailed: 'Ausführung fehlgeschlagen',
+      runCancelled: 'Ausführung vom Benutzer abgebrochen',
+      runStillExecuting: 'Die Ausführung läuft auf dem Server noch.',
+      generationStillServerSide: 'Die Generierung läuft serverseitig noch.',
+      explainStillRunningShort: 'Die Erklärung läuft noch — öffnen Sie das Lab später wieder; nichts geht verloren.'
+    },
     models: {
       title: 'Modellkonfigurationen',
       add: 'Neue Konfiguration',
@@ -2141,6 +2169,8 @@ export default {
         'Ein Repository mit diesem Namen existiert bereits. Öffnen Sie es oder wählen Sie einen anderen Namen.',
       duplicate:
         'Ein Repository mit diesem Namen existiert bereits – öffnen Sie es über das Dashboard oder wählen Sie einen anderen Namen.',
+      indexImportFailed:
+        'Das Repository wurde erstellt, aber sein Starter-Index konnte nicht importiert werden. Öffnen Sie es über das Dashboard, um fortzufahren.',
       domain: 'Themenbereich',
       create: 'Repository erstellen',
       title: 'Neues OKF-Repository',
@@ -2425,6 +2455,8 @@ export default {
       }
     },
     wizard: {
+      clonedFrom: 'Geklont von {name} · v{version}',
+      clonedFromNoVersion: 'Geklont von {name}',
       working: 'Working…',
       state: {
         draft: 'In progress',
@@ -3210,6 +3242,8 @@ export default {
         history: 'Speicherhistorie konnte nicht geladen werden',
         revert: 'Frontmatter konnte nicht wiederhergestellt werden',
         advisor: 'Berater fehlgeschlagen',
+        advisorTimeout:
+          'Der Berater läuft noch auf dem Modell-Host. Öffnen Sie das Lab später wieder, um das Ergebnis zu sehen — nichts geht verloren.',
         noSuite: 'Generieren Sie zuerst eine Suite, dann neu bauen + erneut ausführen.',
         applyNoSuite:
           'Tags gespeichert und Head neu gebaut — generieren Sie eine Suite und führen Sie dann Alle ausführen aus, um die Wirkung zu sehen.',

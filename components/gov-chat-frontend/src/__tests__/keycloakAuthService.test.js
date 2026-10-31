@@ -542,3 +542,81 @@ describe('keycloakAuthService', () => {
     });
   });
 });
+
+// ── CROSS-TAB RENEW LEASE (round 20, #80800) ─────────────────────────────────
+// The module-scoped renewInFlight promise serialises renews within ONE tab;
+// the localStorage lease extends that across tabs (the measured root cause:
+// two tabs, refresh_token_max_reuse=0, 280 token POSTs in 59s → forced
+// logout). These tests drive the lease protocol through window.localStorage
+// the way a second tab would.
+describe('cross-tab renew lease (#80800)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // implementations persist across clearAllMocks — reset the two this
+    // suite drives, then let each test set what it needs
+    mockGetUser.mockReset();
+    mockSigninSilent.mockReset();
+    window.localStorage.clear();
+  });
+
+  const LEASE_KEY = 'genie.renew.lease';
+  const DONE_KEY = 'genie.renew.done';
+
+  async function initialized() {
+    mockGetUser.mockResolvedValue(createMockUser());
+    await keycloakAuthService.initialize();
+  }
+
+  it('waits while another tab holds the lease, then adopts its shared tokens', async () => {
+    jest.useFakeTimers();
+    try {
+      await initialized();
+      // Another tab's FRESH lease:
+      window.localStorage.setItem(LEASE_KEY, JSON.stringify({ tab: 'other-tab', at: Date.now() }));
+      // The other tab renews during our wait and marks done with a fresh,
+      // unexpired shared user:
+      const shared = createMockUser({ access_token: 'shared-fresh-token' });
+      mockGetUser.mockResolvedValue(shared);
+      setTimeout(() => {
+        window.localStorage.setItem(DONE_KEY, String(Date.now()));
+        window.localStorage.removeItem(LEASE_KEY);
+      }, 300);
+      const p = keycloakAuthService.signinSilent();
+      const assertion = expect(p).resolves.toMatchObject({ access_token: 'shared-fresh-token' });
+      await jest.advanceTimersByTimeAsync(600);
+      await assertion;
+      // We never issued our own renew — the holder's tokens were adopted.
+      expect(mockSigninSilent).not.toHaveBeenCalled();
+      expect(keycloakAuthService.getAccessToken()).toBe('shared-fresh-token');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('runs its own renew when the foreign lease is STALE (dead holder)', async () => {
+    jest.useFakeTimers();
+    try {
+      await initialized();
+      // A lease from a tab that died 30s ago (older than the 20s TTL):
+      window.localStorage.setItem(LEASE_KEY, JSON.stringify({ tab: 'dead-tab', at: Date.now() - 30000 }));
+      const refreshed = createMockUser({ access_token: 'own-renew-token' });
+      mockSigninSilent.mockResolvedValue(refreshed);
+      const p = keycloakAuthService.signinSilent();
+      const assertion = expect(p).resolves.toMatchObject({ access_token: 'own-renew-token' });
+      await jest.advanceTimersByTimeAsync(3000);
+      await assertion;
+      expect(mockSigninSilent).toHaveBeenCalledTimes(1); // took over, ran once
+      // and the lease is released afterwards
+      expect(window.localStorage.getItem(LEASE_KEY)).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('releases the lease even when the renew rejects', async () => {
+    await initialized();
+    mockSigninSilent.mockRejectedValue(new Error('renew blew up'));
+    await expect(keycloakAuthService.signinSilent()).rejects.toThrow('renew blew up');
+    expect(window.localStorage.getItem(LEASE_KEY)).toBeNull();
+  });
+});

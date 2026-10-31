@@ -601,19 +601,14 @@ const repoOkfService = {
 export default repoOkfService;
 
 /**
- * PII REVIEW (David, 2026-09-09): a live Presidio scan of a concept's CURRENT
- * content returning per-occurrence {where, type, start, end, score} so the
- * editor can locate each flagged entity. Nothing is persisted; flagged VALUES
- * are never returned — the editor renders excerpts from the content it has.
+ * PII REVIEW (David, 2026-09-09) — the PII surface lives on the service
+ * OBJECT above (repoOkfService.inspectPii — the one carrying the rescan
+ * option — plus remediate/accept/fileAction/redactWholeFile). The two
+ * named-export twins that used to live here were deleted (round 20,
+ * #80806): the inspectPii twin had already drifted (no opts.rescan) and
+ * neither it nor the redactWholeFilePii twin had a production caller.
+ * Do NOT re-add twins — extend the object.
  */
-export async function inspectPii(repoId, conceptId) {
-  const res = await httpService.post(
-    `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}/pii-inspect`,
-    {},
-    { timeout: 120000 }
-  );
-  return res && res.data ? res.data : { ok: false, occurrences: [] };
-}
 
 /** PII REMEDIATION (David, 2026-09-09): named export twin of the class
  * method — in-place Redact/Replace/Remove on one occurrence. */
@@ -629,11 +624,6 @@ export async function acceptPii(repoId, conceptId, selection) {
 /** PII WHOLE-FILE ACTION: named export twin — redact | remove | accept. */
 export async function fileActionPii(repoId, conceptId, payload) {
   return repoOkfService.fileActionPii(repoId, conceptId, payload);
-}
-
-/** PII REMEDIATION: named export twin — redact the whole file body. */
-export async function redactWholeFilePii(repoId, conceptId) {
-  return repoOkfService.redactWholeFilePii(repoId, conceptId);
 }
 
 // ─── STEP-7 VALIDATION (#1030 + #1036, David 2026-10-02) ─────────────────────

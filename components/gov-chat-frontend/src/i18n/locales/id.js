@@ -1547,6 +1547,32 @@ export default {
         'Repositori lain dengan nama dan versi yang sama sudah memiliki nama graf layanan — ganti nama salah satu lalu coba lagi.',
       generic: 'Tindakan gagal'
     },
+    labErrors: {
+      pollAborted: 'Pelacakan dihentikan — tugas terus berjalan di sisi server.',
+      trackingStopped: 'Pelacakan dihentikan.',
+      suiteGenTimeout: 'Pembuatan suite telah habis waktu.',
+      suiteGenFailed: 'Pembuatan suite gagal.',
+      suiteRunFailed: 'Eksekusi suite gagal',
+      runUnusuallyLong: 'Eksekusi memakan waktu lebih lama dari biasanya.',
+      explainStillRunning:
+        'Penjelasan masih berjalan di host model. Buka kembali Lab nanti untuk melihat hasilnya — tidak ada yang hilang.',
+      explainFailed: 'Penjelasan gagal',
+      generationStillRunning: 'Pembuatan masih berjalan — buka kembali Lab nanti; tidak ada yang hilang.',
+      generationFailed: 'Pembuatan gagal',
+      rescoreNotStarted:
+        'Penilaian ulang tidak dimulai — server menerima permintaan tetapi tidak mengembalikan eksekusi untuk dipantau.',
+      rescoreStillRunning: 'Penilaian ulang masih berjalan di server — buka kembali Lab nanti untuk melihat hasilnya.',
+      rescoreFailed: 'Penilaian ulang gagal',
+      rescoreCancelled: 'Penilaian ulang dibatalkan oleh pengguna',
+      runNotStarted:
+        'Eksekusi tidak dimulai — server menerima permintaan tetapi tidak mengembalikan eksekusi untuk dipantau.',
+      runStillRunning: 'Eksekusi masih berjalan di server — buka kembali Lab nanti untuk melihat hasilnya.',
+      runFailed: 'Eksekusi gagal',
+      runCancelled: 'Eksekusi dibatalkan oleh pengguna',
+      runStillExecuting: 'Eksekusi masih berjalan di server.',
+      generationStillServerSide: 'Pembuatan masih berjalan di sisi server.',
+      explainStillRunningShort: 'Penjelasan masih berjalan — buka kembali Lab nanti; tidak ada yang hilang.'
+    },
     models: {
       title: 'Konfigurasi model',
       add: 'Konfigurasi baru',
@@ -2126,6 +2152,8 @@ export default {
       failed: 'Pembuatan repositori gagal',
       duplicateInline: 'Repositori dengan nama ini sudah ada. Buka, atau pilih nama lain.',
       duplicate: 'Repositori dengan nama ini sudah ada - buka dari dasbor atau pilih nama lain.',
+      indexImportFailed:
+        'Repositori berhasil dibuat, tetapi indeks awalnya gagal diimpor. Buka dari dasbor untuk melanjutkan.',
       domain: 'Area subjek',
       create: 'Buat repositori',
       title: 'Repositori OKF baru',
@@ -2406,6 +2434,8 @@ export default {
       }
     },
     wizard: {
+      clonedFrom: 'Dikloning dari {name} · v{version}',
+      clonedFromNoVersion: 'Dikloning dari {name}',
       working: 'Working…',
       state: {
         draft: 'In progress',
@@ -3174,6 +3204,8 @@ export default {
         history: 'Tidak dapat memuat riwayat penyimpanan',
         revert: 'Tidak dapat mengembalikan frontmatter',
         advisor: 'Penasihat gagal',
+        advisorTimeout:
+          'Penasihat masih berjalan di host model. Buka kembali Lab nanti untuk melihat hasilnya — tidak ada yang hilang.',
         noSuite: 'Buat suite terlebih dahulu, lalu bangun ulang + jalankan ulang.',
         applyNoSuite: 'Tag tersimpan dan head dibangun ulang — buat suite, lalu Jalankan semua untuk melihat efeknya.',
         suiteLoad: 'Gagal memuat suite',

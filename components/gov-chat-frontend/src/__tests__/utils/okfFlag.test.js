@@ -68,3 +68,15 @@ describe('okfFlag.isOkfEnabled', () => {
     expect(isOkfEnabled()).toBe(false);
   });
 });
+
+// Round 20, #80798: the dev server ships the TRACKED public/runtime/config.js
+// (index.html loads it in every build) — without okfEnabled in it the strict
+// read left every OKF surface dark under `npm run serve` (a config EXISTS, so
+// the "no config → enabled" dev arm never fired). Production is unaffected:
+// the container entrypoint overwrites the file from VUE_APP_OKF_ENABLED.
+describe('the DEV runtime config keeps the dev server surfaces visible', () => {
+  it('public/runtime/config.js carries okfEnabled: "1"', () => {
+    const src = require('fs').readFileSync('public/runtime/config.js', 'utf8');
+    expect(src).toContain('okfEnabled: "1"');
+  });
+});

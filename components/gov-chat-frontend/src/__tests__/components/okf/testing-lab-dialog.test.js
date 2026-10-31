@@ -1212,6 +1212,31 @@ it('1-8f2: pollForSuite delegates to the pollJob-backed store action and adopts 
   expect(suite).toBe(landed); // NOT the generating envelope
 });
 
+// Round 20 (#80778): pollForSuite used to collapse a FAILED envelope to
+// null, so onGenerate fell through to the generic "taking unusually long"
+// timeout branch and the real server error never reached the steward — the
+// exact defect pollForRun's mapping fixed for runs.
+it('1-8f2: a FAILED suite envelope maps to a failed doc (not the timeout branch)', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  dispatch.mockImplementation((action) => {
+    if (action === 'okf/pollHeadSuite') {
+      return Promise.resolve({ ok: false, code: 'SUITE_GEN_FAILED', message: 'okf.labErrors.suiteGenFailed' });
+    }
+    return Promise.resolve({ ok: true });
+  });
+  const suite = await w.vm.pollForSuite('s-bad');
+  expect(suite).toEqual({ status: 'failed', error: { message: 'okf.labErrors.suiteGenFailed' } });
+  // The timeout family still maps to null (the friendly server-side branch).
+  dispatch.mockImplementation((action) => {
+    if (action === 'okf/pollHeadSuite') {
+      return Promise.resolve({ ok: false, code: 'SUITE_GEN_TIMEOUT', message: 'still generating' });
+    }
+    return Promise.resolve({ ok: true });
+  });
+  await expect(w.vm.pollForSuite('s-slow')).resolves.toBeNull();
+});
+
 it('1-8g: onProbeRow runs the click-test and patches matching rows with the probe result', async () => {
   const w = mountDialog({ initialTab: 'suites' });
   await w.vm.$nextTick();
@@ -1858,5 +1883,64 @@ describe('empty states distinguish "ran and found nothing" from "not loaded"', (
 
     expect(w.vm.batchAdvice.suggested_tags).toEqual(['keep-me']);
     expect(w.vm.batchAdviceLoaded).toBe(true);
+  });
+});
+
+describe('#80805 — poll-envelope messages render translated, server detail verbatim', () => {
+  const ADVISOR_EN =
+    'The advisor is still running on the model host. Reopen the Lab later to see its result — nothing was lost.';
+
+  it('onRecommend maps ADVISOR_TIMEOUT to the translated sentence (no $i18n → the fallback carries it)', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+    dispatch.mockResolvedValueOnce({ ok: false, code: 'ADVISOR_TIMEOUT', message: ADVISOR_EN });
+    await w.vm.onRecommend();
+    // No $i18n in tests: translate() returns the fallback — the English
+    // sentence this test pins as the key’s fallback text.
+    expect(w.vm.error).toBe(ADVISOR_EN);
+    expect(w.vm.advisorLoaded).toBe(false);
+  });
+
+  it('onRecommend maps RECOMMEND_FAILED by code, not by the raw message', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+    dispatch.mockResolvedValueOnce({ ok: false, code: 'RECOMMEND_FAILED', message: 'Advisor failed' });
+    await w.vm.onRecommend();
+    expect(w.vm.error).toBe('Advisor failed');
+  });
+
+  it('onRecommend still shows a server message verbatim for unmapped codes', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+    dispatch.mockResolvedValueOnce({ ok: false, code: 'E_ADVICE', message: 'llm down' });
+    await w.vm.onRecommend();
+    expect(w.vm.error).toBe('llm down');
+  });
+
+  it('a failed run whose envelope carries the labErrors key routes it through the translator', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+    // headSuiteRun starts the async run; pollHeadSuiteRun answers the
+    // store’s failed envelope whose message is now an okf.labErrors.* KEY.
+    dispatch.mockResolvedValueOnce({ ok: true, result: { status: 'running', run_key: 'rk-1' } });
+    dispatch.mockResolvedValueOnce({ ok: false, code: 'RUN_FAILED', message: 'okf.labErrors.suiteRunFailed' });
+    await w.vm.onRunSuite();
+    // No $i18n in tests: translate(key, key) returns the key — pinning
+    // that the KEY reached the translator (never rendered raw to a user).
+    expect(w.vm.error).toBe('okf.labErrors.suiteRunFailed');
+  });
+
+  it('a failed run with a SERVER message keeps it verbatim', async () => {
+    const w = mountDialog({ initialTab: 'suites' });
+    await w.vm.$nextTick();
+    w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+    dispatch.mockResolvedValueOnce({ ok: true, result: { status: 'running', run_key: 'rk-1' } });
+    dispatch.mockResolvedValueOnce({ ok: false, code: 'SCORING_FAILED', message: 'reranker down' });
+    await w.vm.onRunSuite();
+    expect(w.vm.error).toBe('reranker down');
   });
 });

@@ -1510,6 +1510,29 @@ export default {
       graphNameConflict: '另一个同名同版本的仓库已占用该服务图名称 — 请重命名其中一个后重试。',
       generic: '操作失败'
     },
+    labErrors: {
+      pollAborted: '已停止跟踪——任务仍在服务器端继续运行。',
+      trackingStopped: '已停止跟踪。',
+      suiteGenTimeout: '测试集生成超时。',
+      suiteGenFailed: '测试集生成失败。',
+      suiteRunFailed: '测试集运行失败',
+      runUnusuallyLong: '运行耗时异常。',
+      explainStillRunning: '解释仍在模型主机上运行。稍后重新打开测试实验室即可查看结果——没有任何丢失。',
+      explainFailed: '解释失败',
+      generationStillRunning: '生成仍在进行——稍后重新打开测试实验室；没有任何丢失。',
+      generationFailed: '生成失败',
+      rescoreNotStarted: '重新评分未开始——服务器接受了请求，但未返回可跟踪的运行。',
+      rescoreStillRunning: '重新评分仍在服务器上执行——稍后重新打开测试实验室即可查看结果。',
+      rescoreFailed: '重新评分失败',
+      rescoreCancelled: '用户已取消重新评分',
+      runNotStarted: '运行未开始——服务器接受了请求，但未返回可跟踪的运行。',
+      runStillRunning: '运行仍在服务器上执行——稍后重新打开测试实验室即可查看结果。',
+      runFailed: '运行失败',
+      runCancelled: '用户已取消运行',
+      runStillExecuting: '运行仍在服务器上执行。',
+      generationStillServerSide: '生成仍在服务器端运行。',
+      explainStillRunningShort: '解释仍在进行——稍后重新打开测试实验室；没有任何丢失。'
+    },
     models: {
       title: '模型配置',
       add: '新建配置',
@@ -2073,6 +2096,7 @@ export default {
       failed: '知识库创建失败',
       duplicateInline: '同名知识库已存在。请将其打开，或另选一个名称。',
       duplicate: '同名知识库已存在 — 请从仪表盘中打开它，或另选一个名称。',
+      indexImportFailed: '仓库已创建，但无法导入其起始索引。请从仪表板打开它以继续。',
       domain: '学科领域',
       create: '创建知识库',
       title: '新建 OKF 知识库',
@@ -2341,6 +2365,8 @@ export default {
       }
     },
     wizard: {
+      clonedFrom: '克隆自 {name} · v{version}',
+      clonedFromNoVersion: '克隆自 {name}',
       working: '处理中…',
       state: {
         draft: '进行中',
@@ -3080,6 +3106,7 @@ export default {
         history: '加载保存历史失败',
         revert: '回滚 frontmatter 失败',
         advisor: '顾问失败',
+        advisorTimeout: '顾问仍在模型主机上运行。稍后重新打开测试实验室即可查看结果——没有任何丢失。',
         noSuite: '请先生成测试集，然后重建并重新运行。',
         applyNoSuite: '标签已保存、头向量已重建——请生成测试集并运行全部以查看效果。',
         suiteLoad: '无法加载测试集',

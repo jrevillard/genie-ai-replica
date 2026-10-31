@@ -1553,6 +1553,30 @@ export default {
         'Polokelo e nngwe eo lebitso le tokomane e tshwanang e se e nang le lebitso la grafo ea tshebeletso — reha e le nngwe lebitso le letonya hape.',
       generic: 'Tiro ha ea atleha'
     },
+    labErrors: {
+      pollAborted: 'Ho latela ho emetsoe — mosebetsi o ntse o phethahala seva.',
+      trackingStopped: 'Ho latela ho emetsoe.',
+      suiteGenTimeout: 'Nako ea tlhahiso ea suite e feditse.',
+      suiteGenFailed: 'Tlhahiso ea suite e hlolehile.',
+      suiteRunFailed: 'Tsamaiso ea suite e hlolehile',
+      runUnusuallyLong: 'Tsamaiso e nka nako e sa tloaelehang.',
+      explainStillRunning:
+        'Hlaloso e ntse e phethahala hosteng ea modeli. Bulela Lab hape hamorao ho bona sephetho — ha ho letho le ileng la lahla.',
+      explainFailed: 'Hlaloso e hlolehile',
+      generationStillRunning: 'Tlhahiso e ntse e tsoela pele — bulela Lab hape hamorao; ha ho letho le ileng la lahla.',
+      generationFailed: 'Tlhahiso e hlolehile',
+      rescoreNotStarted: 'Hahlolo hape ha e ea qala — seva e amohetse kopo empa ha e kgutlise tsamaiso ea ho latela.',
+      rescoreStillRunning: 'Hahlolo hape e ntse e phethahala seva — bulela Lab hape hamorao ho bona sephetho.',
+      rescoreFailed: 'Hahlolo hape ho hlolehile',
+      rescoreCancelled: 'Hahlolo hape e khansetsoe ke mosebedisi',
+      runNotStarted: 'Tsamaiso ha e ea qala — seva e amohetse kopo empa ha e kgutlise tsamaiso ea ho latela.',
+      runStillRunning: 'Tsamaiso e ntse e phethahala seva — bulela Lab hape hamorao ho bona sephetho.',
+      runFailed: 'Tsamaiso e hlolehile',
+      runCancelled: 'Tsamaiso e khansetsoe ke mosebedisi',
+      runStillExecuting: 'Tsamaiso e ntse e phethahala seva.',
+      generationStillServerSide: 'Tlhahiso e ntse e tsoela pele seva.',
+      explainStillRunningShort: 'Hlaloso e ntse e tsoela pele — bulela Lab hape hamorao; ha ho letho le ileng la lahla.'
+    },
     models: {
       title: 'Dipehelo tsa dimela',
       add: 'Pehelo e ncha',
@@ -2135,6 +2159,8 @@ export default {
       duplicateInline: 'Polokelo e nang le lebitso lena e se e ntse e le teng. E bule, kapa u khethe lebitso le leng.',
       duplicate:
         'Polokelo e nang le lebitso lena e se e ntse e le teng — e bule ho tsoa ho dashboard kapa u khethe lebitso le leng.',
+      indexImportFailed:
+        'Repo e entsoe, empa index ya eona ya qaleho e ke ke ea kenngoa. Bula e tswa ho dashboard ho tsoela pele.',
       domain: 'Sebaka sa taba',
       create: 'Theha polokelo',
       title: 'Polokelo e ncha ea OKF',
@@ -2417,6 +2443,8 @@ export default {
       }
     },
     wizard: {
+      clonedFrom: 'E kopileng ho {name} · v{version}',
+      clonedFromNoVersion: 'E kopileng ho {name}',
       working: 'Working…',
       state: {
         draft: 'In progress',
@@ -3188,6 +3216,8 @@ export default {
         history: 'Ha e khone ho jarolla histori ea poloko',
         revert: 'Ha e khone ho khutlisa frontmatter',
         advisor: 'Moeletsi o hlolehile',
+        advisorTimeout:
+          'Moeletsi o ntse a phethahala hosteng ea modeli. Bulela Lab hape hamorao ho bona sephetho — ha ho letho le ileng la lahla.',
         noSuite: 'Hlahisa suite pele, ebe o aha hape + phethahatsa hape.',
         applyNoSuite:
           'Ditag di bolokiloe mme head e ahiloe hape — hlahisa suite, ebe o Phethahatsa tsohle ho bona sephetho.',

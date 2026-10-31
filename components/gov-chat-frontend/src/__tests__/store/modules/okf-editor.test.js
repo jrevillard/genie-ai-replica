@@ -109,6 +109,45 @@ describe('okf store — editor actions (Story #978)', () => {
       expect(store.getters['okf/conceptsByRepo']('r-1')).toEqual([]);
     });
 
+    // Round 20 (#80803): one transient failure (gateway 502, a failed page N)
+    // must NOT blank the rail — the already-loaded rows are known-good data,
+    // and the empty-list commit is only for repos that never loaded at all.
+    it('a failed REFRESH keeps the last known list (#80803)', async () => {
+      mockListForRepo.mockResolvedValueOnce(CONCEPTS);
+      const store = buildStore();
+      await store.dispatch('okf/fetchConcepts', 'r-1');
+      expect(store.getters['okf/conceptsByRepo']('r-1')).toHaveLength(2);
+      mockListForRepo.mockRejectedValue(new Error('gateway 502'));
+      const result = await store.dispatch('okf/fetchConcepts', 'r-1');
+      expect(result.ok).toBe(false);
+      expect(result.code).toBe('FETCH_FAILED');
+      expect(store.getters['okf/conceptsByRepo']('r-1')).toHaveLength(2); // NOT wiped to []
+      expect(store.getters['okf/editorLoadProgress']).toBeNull();
+      expect(store.state.okf.editor.loading).toBe(false);
+    });
+
+    // Round 20: the stale guard runs BEFORE the first commit too — the repo
+    // could switch while page 1 is in flight, and committing then would
+    // plant the OLD repo's rows over the NEW repo's editor.
+    it('a repo switch DURING page 1 commits nothing for the old repo', async () => {
+      const store = buildStore();
+      mockListForRepo.mockImplementation(async (_repoId, _opts) => {
+        // Page 1 in flight: the editor moved to another repo WITHOUT a new
+        // fetch (raw mutation — openEditor would start one).
+        store.commit('okf/setEditorRepo', 'r-2');
+        return { concepts: CONCEPTS, total: 2 };
+      });
+      const result = await store.dispatch('okf/fetchConcepts', 'r-1');
+      expect(result.stale).toBe(true);
+      expect(result.concepts).toEqual([]);
+      // Raw state (the getter coerces absent to []): NOTHING was committed
+      // for the dead repo, and the new repo's editor was not touched.
+      expect(store.state.okf.editor.conceptsByRepo['r-1']).toBeUndefined();
+      expect(store.state.okf.editor.conceptsByRepo['r-2']).toBeUndefined();
+      expect(store.state.okf.editor.loading).toBe(false);
+      expect(store.getters['okf/editorLoadProgress']).toBeNull();
+    });
+
     // NON-BLOCKING LOAD (David, 2026-09-12): a large repository streams in
     // pages — progressive commits, REAL server counts on loadProgress, bar
     // cleared when the load settles.

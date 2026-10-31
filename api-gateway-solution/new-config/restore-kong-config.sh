@@ -146,12 +146,37 @@ restore_config() {
         # Paginate (review !622 round 9, #78688): Kong caps /routes at a default
         # page size — beyond page one, okf-tagged routes survived the 1->0 flip
         # while the declarative filter stripped them from the applied config.
+        # Round 20, #80802: the loop is FAIL-HARD. -fsS makes an HTTP error
+        # (5xx/4xx) fail the page fetch; a page that is not valid JSON or lacks
+        # an array .data aborts; the 50-page cap and the repeated-offset guard
+        # bound a caching proxy that keeps serving the same page forever. This
+        # is the OKF kill-switch — a PARTIAL delete must never continue and
+        # log success, so every failure exits non-zero on the spot.
         route_ids=""
         offset=""
+        page_count=0
         while :; do
-            page=$(curl -s "$KONG_ADMIN_URL/routes?size=1000${offset:+&offset=$offset}" < /dev/null)
+            page_count=$((page_count + 1))
+            if [ "$page_count" -gt 50 ]; then
+                log "ERROR: OKF route pagination exceeded 50 pages — aborting (misbehaving Kong/proxy)"
+                exit 1
+            fi
+            if ! page=$(curl -fsS "$KONG_ADMIN_URL/routes?size=1000${offset:+&offset=$offset}" < /dev/null); then
+                log "ERROR: OKF route listing fetch failed (offset='${offset:-first page}') — aborting the OKF parking"
+                exit 1
+            fi
+            data_ok=$(echo "$page" | jq -r '(.data | type) == "array"' 2>/dev/null)
+            if [ "$data_ok" != "true" ]; then
+                log "ERROR: OKF route listing page is not valid JSON or has no array .data (offset='${offset:-first page}') — aborting the OKF parking"
+                exit 1
+            fi
             route_ids="$route_ids $(echo "$page" | jq -r '.data[] | select((.tags // []) | index("okf")) | .id')"
-            offset=$(echo "$page" | jq -r '.offset // empty')
+            next_offset=$(echo "$page" | jq -r '.offset // empty')
+            if [ -n "$next_offset" ] && [ "$next_offset" = "$offset" ]; then
+                log "ERROR: OKF route pagination repeated offset '$offset' (caching proxy loop?) — aborting the OKF parking"
+                exit 1
+            fi
+            offset="$next_offset"
             [ -z "$offset" ] && break
         done
         for route_id in $route_ids; do

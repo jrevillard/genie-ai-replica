@@ -844,5 +844,26 @@ describe('Crawler', () => {
         .mockRejectedValue(new Error('Killed'));
       await expect(crawler.crawl('http://example.com', null, 1, 1)).rejects.toThrow('Killed');
     });
+
+    it('seed-phase fetch canceled by abort() rethrows the Killed sentinel, not the raw axios error (round 20, #79190)', async () => {
+      // A user-killed job aborts the crawler mid-seed. fetch() surfaces the raw
+      // axios 'canceled' as its lastError when the kill lands on its final
+      // retry attempt — the seed catch must normalize it to the canonical
+      // 'Killed' sentinel (matching the processWork arm) so crawlWorker's
+      // error.message.includes('Killed') check records a Killed crawl; the old
+      // `throw e` re-raised the bare 'canceled' and the job was recorded Failed.
+      crawler.abort();
+      const canceled = Object.assign(new Error('canceled'), { code: 'ERR_CANCELED' });
+      crawler.fetch = jest.fn().mockRejectedValue(canceled);
+      let thrown = null;
+      try {
+        await crawler.crawl('http://example.com', null, 1, 1);
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).toBeInstanceOf(Error);
+      expect(thrown.message).toBe('Killed');
+      expect(thrown.cause).toBe(canceled);
+    });
   });
 });

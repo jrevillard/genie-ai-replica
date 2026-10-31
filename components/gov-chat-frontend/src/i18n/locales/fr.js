@@ -1557,6 +1557,33 @@ export default {
         "Un autre dépôt portant le même nom et la même version possède déjà le nom du graphe de service — renommez l'un des deux puis réessayez.",
       generic: "L'action a échoué"
     },
+    labErrors: {
+      pollAborted: "Suivi interrompu — la tâche continue de s'exécuter côté serveur.",
+      trackingStopped: 'Suivi interrompu.',
+      suiteGenTimeout: 'La génération de la suite a expiré.',
+      suiteGenFailed: 'La génération de la suite a échoué.',
+      suiteRunFailed: "Échec de l'exécution de la suite",
+      runUnusuallyLong: "L'exécution prend anormalement longtemps.",
+      explainStillRunning:
+        "L'explication s'exécute encore sur l'hôte de modèle. Rouvrez le Lab plus tard pour voir son résultat — rien n'a été perdu.",
+      explainFailed: "Échec de l'explication",
+      generationStillRunning: "La génération est encore en cours — rouvrez le Lab plus tard ; rien n'a été perdu.",
+      generationFailed: 'Échec de la génération',
+      rescoreNotStarted:
+        "La ré-évaluation n'a pas démarré — le serveur a accepté la requête mais n'a renvoyé aucune exécution à suivre.",
+      rescoreStillRunning:
+        "La ré-évaluation s'exécute encore sur le serveur — rouvrez le Lab plus tard pour voir son résultat.",
+      rescoreFailed: 'Échec de la ré-évaluation',
+      rescoreCancelled: "Ré-évaluation annulée par l'utilisateur",
+      runNotStarted:
+        "L'exécution n'a pas démarré — le serveur a accepté la requête mais n'a renvoyé aucune exécution à suivre.",
+      runStillRunning: "L'exécution se poursuit sur le serveur — rouvrez le Lab plus tard pour voir son résultat.",
+      runFailed: "Échec de l'exécution",
+      runCancelled: "Exécution annulée par l'utilisateur",
+      runStillExecuting: "L'exécution se poursuit sur le serveur.",
+      generationStillServerSide: 'La génération se poursuit côté serveur.',
+      explainStillRunningShort: "L'explication est encore en cours — rouvrez le Lab plus tard ; rien n'a été perdu."
+    },
     models: {
       title: 'Configurations de modèle',
       add: 'Nouvelle configuration',
@@ -2141,6 +2168,8 @@ export default {
       duplicateInline: 'Un référentiel portant ce nom existe déjà. Ouvrez-le ou choisissez un autre nom.',
       duplicate:
         'Un référentiel portant ce nom existe déjà - ouvrez-le depuis le tableau de bord ou choisissez un autre nom.',
+      indexImportFailed:
+        "Le dépôt a été créé, mais son index de démarrage n'a pas pu être importé. Ouvrez-le depuis le tableau de bord pour continuer.",
       domain: 'Domaine thématique',
       create: 'Créer un référentiel',
       title: 'Nouveau référentiel OKF',
@@ -2424,6 +2453,8 @@ export default {
       }
     },
     wizard: {
+      clonedFrom: 'Cloné depuis {name} · v{version}',
+      clonedFromNoVersion: 'Cloné depuis {name}',
       working: 'Working…',
       state: {
         draft: 'In progress',
@@ -3201,6 +3232,8 @@ export default {
         history: "Impossible de charger l'historique des enregistrements",
         revert: 'Impossible de revenir sur le frontmatter',
         advisor: 'Échec du conseiller',
+        advisorTimeout:
+          "Le conseiller s'exécute encore sur l'hôte de modèle. Rouvrez le Lab plus tard pour voir son résultat — rien n'a été perdu.",
         noSuite: "Générez d'abord une suite, puis reconstruisez et relancez.",
         applyNoSuite: "Tags enregistrés et tête reconstruite — générez une suite, puis lancez tout pour voir l'effet.",
         suiteLoad: 'Impossible de charger la suite',

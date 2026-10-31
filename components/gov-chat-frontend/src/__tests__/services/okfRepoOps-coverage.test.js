@@ -37,7 +37,8 @@ import {
   exportRepoZip,
   acknowledgePii,
   createRepo,
-  loadSubjectAreaOptions
+  loadSubjectAreaOptions,
+  translateLabError
 } from '../../services/okfRepoOps';
 
 beforeEach(() => jest.clearAllMocks());
@@ -221,5 +222,26 @@ describe('loadSubjectAreaOptions — legacy domains survive an unreachable hiera
     serviceTreeService.getAdminCategories.mockRejectedValueOnce(new Error('503'));
     const opts = await loadSubjectAreaOptions([]);
     expect(opts).toEqual([{ value: 'general', label: 'General' }]);
+  });
+});
+
+describe('translateLabError (#80805 — the Lab poll-envelope renderer)', () => {
+  it('translates an okf.labErrors.* key through the supplied translate', () => {
+    const t = jest.fn((key) => (key === 'okf.labErrors.trackingStopped' ? 'Suivi interrompu.' : key));
+    expect(translateLabError('okf.labErrors.trackingStopped', t)).toBe('Suivi interrompu.');
+    expect(t).toHaveBeenCalledWith('okf.labErrors.trackingStopped', 'okf.labErrors.trackingStopped');
+  });
+  it('passes a SERVER message through verbatim (detail wins, never swapped for a generic sentence)', () => {
+    const t = jest.fn();
+    expect(translateLabError('vLLM rejected the batch: 429', t)).toBe('vLLM rejected the batch: 429');
+    expect(t).not.toHaveBeenCalled();
+  });
+  it('returns the text unchanged when no translate is available (non-Vue callers)', () => {
+    expect(translateLabError('okf.labErrors.trackingStopped', null)).toBe('okf.labErrors.trackingStopped');
+    expect(translateLabError('Run failed', null)).toBe('Run failed');
+  });
+  it('leaves lifecycle-error keys to their own renderer (prefixes do not collide)', () => {
+    const t = jest.fn((k) => k);
+    expect(translateLabError('okf.lifecycleErrors.generic', t)).toBe('okf.lifecycleErrors.generic');
   });
 });

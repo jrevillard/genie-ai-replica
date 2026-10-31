@@ -3660,7 +3660,9 @@ class ChatQnAService:
                 return None
         return cap
 
-    async def _get_translated_history_string(self, history: list, source_lang_code: str = "en") -> tuple[str, str]:
+    async def _get_translated_history_string(
+        self, history: list | str, source_lang_code: str = "en"
+    ) -> tuple[str, str]:
         """
         A helper that:
         1. Truncates history to stay within a token limit.
@@ -3681,10 +3683,13 @@ class ChatQnAService:
         English leaves the history as it is.
 
         Returns:
-            ``(text, status)``. The text is always safe to hand to the
-            embedder: the translated English history, or — when the
-            translation could not run — the flattened source-language
-            history. The status tells the caller which one it was:
+            ``(text, status)``. The text is safe to hand to the embedder:
+            the translated English history, or — when the translation could
+            not run — the flattened source-language history. The one
+            exception is a history whose newest message alone exceeds the
+            whole budget: there is no source text to fall back to, so the
+            text is empty and the retrieval query is empty with it. The
+            status tells the caller which one it was:
             ``"translated"`` when the history came back in English,
             ``"fallback_timeout"`` when the translation service timed out,
             and ``"fallback_error"`` when it failed or refused for any other
@@ -3764,7 +3769,8 @@ class ChatQnAService:
                     "translated",
                 )
             except TranslationTimeoutError:
-                logger.error(f"History translation timed out after {TRANSLATION_SERVICE_TIMEOUT} seconds.")
+                # Already logged by the chunk translator's wrap site (the one
+                # line that names the timeout); the status is the observable.
                 return history, "fallback_timeout"
             except TranslationFailedError as e:
                 logger.error(f"History translation failed: {e}")

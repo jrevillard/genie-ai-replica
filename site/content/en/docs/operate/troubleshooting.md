@@ -168,10 +168,14 @@ The fallback is observable in two places:
 - **Response metadata**: every chat response (JSON and streamed metadata
   event) carries `query_translation_status`:
   - `translated` — the query was translated to English before embedding;
-  - `passthrough_english` — the query was already English, nothing to do;
-  - `passthrough_unknown_language` — no language could be named for the
-    query (detection failed or produced nothing); the query was embedded
-    as-is, language unknown;
+  - `passthrough_english` — the query was established English: the client
+    declared it (declaration is trusted, not corroborated against the
+    content — a Spanish query submitted with `language: "en"` is embedded
+    as Spanish and still shows this value) or detection concluded it;
+  - `passthrough_unknown_language` — no language was established for the
+    query: detection failed or produced nothing, or the client sent a
+    language code the map refuses; the query was embedded as-is, language
+    unknown;
   - `fallback_timeout` — the translation service timed out; the
     **untranslated** query was embedded;
   - `fallback_error` — the translation failed or was refused for any other

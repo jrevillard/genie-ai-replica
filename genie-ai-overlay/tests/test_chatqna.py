@@ -2365,16 +2365,12 @@ class TestQueryTranslationStatus:
     async def test_a_single_message_failure_reports_fallback_error(self):
         """Single-message mode must not report `translated` for a swallowed
         failure: it goes through the chunk translator, which raises, and the
-        source text is the fallback."""
-        from chatqna.genieai_chatqna import TranslationFailedError
-
+        source text is the fallback. Drives the real translator under a
+        mocked transport, so a drift at the wrap site fails this test."""
         svc = create_chatqna_service()
-
-        async def fail(text, canonical_code, target_lang, **_kwargs):
-            raise TranslationFailedError("translation chunk failed")
-
-        svc._translate_chunk_in_language = fail
-        text, status = await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
+        mock_client = self._mock_client(side_effect=RuntimeError("the model is unreachable"))
+        with self._translation_patches(mock_client):
+            text, status = await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
         assert text == "¿qué es X?"
         assert status == "fallback_error"
 
@@ -4090,14 +4086,18 @@ async def test_a_refused_language_with_nothing_to_detect_reports_unknown_not_eng
 @pytest.mark.asyncio
 async def test_the_query_translation_status_reaches_the_orchestrate_span(captured_spans):
     """The span attribute is the operator's answer to 'why is retrieval bad
-    on this Spanish query' — it must carry what the embedder actually got."""
+    on this Spanish query' — it must carry what the embedder actually got,
+    and only values the shared vocabulary names."""
     svc = create_chatqna_service()
     payload = await _full_flow_payload(svc, stream=False, history_status=("USER: qué es X?", "fallback_timeout"))
     assert payload["metadata"]["query_translation_status"] == "fallback_timeout"
     (orchestrate,) = captured_spans("chatqna.orchestrate")
     from core.span_attrs import ATTRIBUTE_NAMES as A
+    from core.span_attrs import QUERY_TRANSLATION_STATUSES
 
-    assert orchestrate.attributes[A["rag_translation_query_status"]] == "fallback_timeout"
+    status = orchestrate.attributes[A["rag_translation_query_status"]]
+    assert status == "fallback_timeout"
+    assert status in QUERY_TRANSLATION_STATUSES
 
 
 # ===========================================================================

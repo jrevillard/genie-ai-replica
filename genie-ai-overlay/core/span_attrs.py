@@ -69,6 +69,17 @@ QUERY_ID_KEY = "genie.query_id"
 # far below this; prose does not.
 MAX_STRING_LEN = 96
 
+# The closed vocabulary of ``rag.translation.query_status`` — what the history
+# translator handed the embedder on a chat turn. One home, so the span value,
+# the response metadata field and the operator runbook cannot drift apart.
+QUERY_TRANSLATION_STATUSES = (
+    "translated",
+    "passthrough_english",
+    "passthrough_unknown_language",
+    "fallback_timeout",
+    "fallback_error",
+)
+
 # Recorded when a join could not resolve. NOT "unknown" and NOT "" — both would
 # satisfy the shape rule while reading like a real value.
 UNRESOLVED = "__unresolved__"

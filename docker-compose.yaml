@@ -1263,7 +1263,12 @@ services:
     # -user root, targeted -h chown, verify, exit nonzero if anything
     # survived (a failed init is VISIBLE and retried by the bounded
     # policy; the next deploy heals the rest).
-    command: ["sh", "-c", "{ [ -z \"$$(find /app/data -user root -print -quit)\" ] || find /app/data -user root -exec chown -h 1000:1000 {} +; } && { [ -z \"$$(find /app/Uploads -user root -print -quit)\" ] || find /app/Uploads -user root -exec chown -h 1000:1000 {} +; } && [ -z \"$$(find /app/data /app/Uploads -user root -print -quit)\" ]"]
+    # Every find runs with its EXIT STATUS checked (\"probe || exit 9\" \
+    # \"verify || exit 9\"): an EIO-class traversal failure yields a failed
+    # init (visible + retried by the bounded policy), never a masked \
+    # \"nothing root-owned\" behind a discarded rc. DAC_OVERRIDE covers
+    # EACCES traversal; I/O errors surface as failures.
+    command: ["sh", "-c", "for d in /app/data /app/Uploads; do find \"$$d\" -user root -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find \"$$d\" -user root -exec chown -h 1000:1000 {} + || exit 9; fi; find \"$$d\" -user root -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; done"]
     volumes:
       - backend_data:/app/data
       - backend_uploads:/app/Uploads
@@ -1274,7 +1279,7 @@ services:
   document-repository-init:
     <<: *chown-init
     # PROBE form (no marker — see backend-init).
-    command: ["sh", "-c", "{ [ -z \"$$(find /app/uploads -user root -print -quit)\" ] || find /app/uploads -user root -exec chown -h 1000:1000 {} +; } && [ -z \"$$(find /app/uploads -user root -print -quit)\" ]"]
+    command: ["sh", "-c", "find /app/uploads -user root -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /app/uploads -user root -exec chown -h 1000:1000 {} + || exit 9; fi; find /app/uploads -user root -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
     volumes:
       - doc_repo_uploads:/app/uploads
 
@@ -1438,7 +1443,7 @@ services:
     # chown fails the init (see backend-init) instead of being masked.
     # PROBE form (no marker — see backend-init): targeted -h chown of
     # whatever is root-owned, then verify.
-    command: ["sh", "-c", "{ [ -z \"$$(find /var/lib/arangodb3 -user root -print -quit)\" ] || find /var/lib/arangodb3 -user root -exec chown -h 999:999 {} +; } && { [ -z \"$$(find /var/lib/arangodb3-apps -user root -print -quit)\" ] || find /var/lib/arangodb3-apps -user root -exec chown -h 999:999 {} +; } && [ -z \"$$(find /var/lib/arangodb3 /var/lib/arangodb3-apps -user root -print -quit)\" ]"]
+    command: ["sh", "-c", "for d in /var/lib/arangodb3 /var/lib/arangodb3-apps; do find \"$$d\" -user root -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find \"$$d\" -user root -exec chown -h 999:999 {} + || exit 9; fi; find \"$$d\" -user root -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; done"]
     volumes:
       - arango_data:/var/lib/arangodb3
       - arango_apps:/var/lib/arangodb3-apps
@@ -2682,7 +2687,7 @@ services:
     # so the chown has run on every node the collector can land on).
     <<: *chown-init
     # PROBE form (no marker — see backend-init).
-    command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && { [ -z \"$$(find /var/lib/otelcol -user root -print -quit)\" ] || find /var/lib/otelcol -user root -exec chown -h 10001:10001 {} +; } && [ -z \"$$(find /var/lib/otelcol -user root -print -quit)\" ]"]
+    command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && find /var/lib/otelcol -user root -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /var/lib/otelcol -user root -exec chown -h 10001:10001 {} + || exit 9; fi; find /var/lib/otelcol -user root -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
     volumes:
       - otel-queue:/var/lib/otelcol
 
@@ -2788,7 +2793,7 @@ services:
   victorialogs-init:
     <<: *chown-init
     # PROBE form (no marker — see backend-init).
-    command: ["sh", "-c", "{ [ -z \"$$(find /var/lib/victoria-logs -user root -print -quit)\" ] || find /var/lib/victoria-logs -user root -exec chown -h 65534:65534 {} +; } && [ -z \"$$(find /var/lib/victoria-logs -user root -print -quit)\" ]"]
+    command: ["sh", "-c", "find /var/lib/victoria-logs -user root -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /var/lib/victoria-logs -user root -exec chown -h 65534:65534 {} + || exit 9; fi; find /var/lib/victoria-logs -user root -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
     volumes:
       - vlogs-data:/var/lib/victoria-logs
 

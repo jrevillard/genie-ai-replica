@@ -154,7 +154,13 @@ For **remote GPU topology** (AI services on a separate node) — see
 
 ## Step 4 — Bring the stack up
 
+The backend's backup bind is `create_host_path: false` (#1227) and the
+backend runs as uid 1000 — prepare it before the first `up`:
+
 ```bash
+mkdir -p data/database_backups
+sudo chown 1000:1000 data/database_backups
+
 docker compose up -d
 docker compose ps
 ```

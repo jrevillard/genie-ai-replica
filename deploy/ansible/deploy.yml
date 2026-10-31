@@ -390,7 +390,7 @@
         - "{{ data_dir }}/huggingface"
         - secrets/ssl
 
-    # no-root data-dir migration (#1227) — the four tasks live in
+    # no-root data-dir migration (#1227) — the tasks live in
     # tasks/no-root-data-migration.yml, shared VERBATIM with the
     # swarm_workers play below (one doctrine; prose "keep in step"
     # contracts drifted three times before this extraction).

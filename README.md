@@ -33,7 +33,11 @@ cd genie-ai
 #    KEYCLOAK_CLIENT_SECRET, HUGGING_FACE_HUB_TOKEN, VLLM_API_KEY, ...)
 cp env .env && $EDITOR .env
 
-# 3. Deploy
+# 3. Prepare the one host bind that must pre-exist (#1227: the backend
+#    bind is create_host_path:false; the backend runs as uid 1000)
+mkdir -p data/database_backups && sudo chown 1000:1000 data/database_backups
+
+# 4. Deploy
 docker compose up -d                                  # core services
 docker compose --profile opea --profile gpu-models up -d   # full stack
 docker compose --env-file .env --env-file env.t4 --profile opea --profile gpu-models up -d   # NVIDIA T4

@@ -204,6 +204,25 @@ describe('compose non-root contract (#1227)', () => {
     expect(violations.some((v) => v.includes('kong') && v.includes('create_host_path: false'))).toBe(true);
   });
 
+  test('mutations: error/alt variable forms cannot escape the data-dir rule', () => {
+    // \${VAR:?err}, \${VAR?err} and \${VAR:+alt} are legal compose —
+    // resolved CONSERVATIVELY like every other unknown-location spelling.
+    for (const form of ['\${DATA_DIR:?missing}', '\${DATA_DIR?missing}', '\${DATA_DIR:+/srv/alt}']) {
+      const text = [
+        'services:',
+        '  kong:',
+        '    user: "1001:1001"',
+        '    volumes:',
+        '      - type: bind',
+        '        source: ' + form + '/logs/kong',
+        '        target: /var/log/kong',
+        ''
+      ].join('\n');
+      const { violations } = validateComposeNonRoot(text);
+      expect(violations.some((v) => v.includes('kong') && v.includes('create_host_path: false'))).toBe(true);
+    }
+  });
+
   test('data-dir detection survives variable spellings (renaming cannot defeat the gate)', () => {
     // The resolver must see through every spelling a source can carry:
     // the shipped default form, a renamed variable with default, a bare

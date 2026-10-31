@@ -297,8 +297,8 @@ skipped once the streaming translation failed.
 ## Related
 
 - [Multilingual Architecture](/docs/architecture/multilingual-ssot/) — the
-  English single-source-of-truth invariant this translator is the response
-  edge of.
+  English single-source-of-truth invariant. This translator is its response
+  edge.
 - [Generation](/docs/rag-pipeline/generation/) — the prompt and
   temperature settings that affect English-stream quality.
 - [Frontend → Chat UX](/docs/frontend/chat-ux/) — how the browser

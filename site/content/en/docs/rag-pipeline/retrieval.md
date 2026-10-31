@@ -87,7 +87,7 @@ selection only.
 | `RETRIEVER_HYBRID_LEXICAL_WEIGHT` | 1.0 | Weight of the BM25 ranking. |
 | `RETRIEVER_HYBRID_RRF_K` | 60 | RRF smoothing constant (literature standard). |
 | `RETRIEVER_HYBRID_BM25_CANDIDATES` | 50 | BM25 candidate fetch depth before fusion. |
-| `RETRIEVER_HYBRID_BM25_ANALYZER` | `text_en` | ArangoSearch analyzer on the text field. Assumes an English corpus (see [Multilingual Architecture]({{< relref "/docs/architecture/multilingual-ssot" >}})); applies only to newly created views. |
+| `RETRIEVER_HYBRID_BM25_ANALYZER` | `text_en` | ArangoSearch analyzer on the text field. Assumes an English corpus — see §2. |
 
 Graph-traversal hits are merged in alongside the fused set.
 

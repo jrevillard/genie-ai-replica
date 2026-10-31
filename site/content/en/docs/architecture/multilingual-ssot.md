@@ -13,12 +13,10 @@ aliases:
 ---
 
 > **For contributors and deployers.** This page documents the verified
-> multilingual design of the RAG pipeline (audited on the El Salvador
-> deployment, September 2026, [issue #1027](https://opensource.unicc.org/un/itu/genie-ai/-/issues/1027)):
-> the pipeline's *single source of truth is English*. Queries are normalized
-> to English before retrieval, the corpus is English by construction, and the
-> answer is translated back to the user's language only at the rendering
-> edge. Read it before proposing any change to the retrieval language
+> multilingual design of the RAG pipeline, audited on the El Salvador
+> deployment in September 2026
+> ([issue #1027](https://opensource.unicc.org/un/itu/genie-ai/-/issues/1027)).
+> Read it before proposing any change to the retrieval language
 > configuration — the "obvious" fixes (switching the BM25 analyzer, adding a
 > translator node) break retrieval in ways that are hard to diagnose.
 
@@ -38,8 +36,7 @@ Every stage of the pipeline operates in English:
 No translator node exists inside the RAG graph. The megaservice graph built
 by `_build_rag_graph` in
 [`genie-ai-overlay/chatqna/genieai_chatqna.py`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/genie-ai-overlay/chatqna/genieai_chatqna.py)
-is strictly `embedding → retriever → [rerank] → llm`; translation happens
-*before* the graph (query side) and *after* it (response side).
+is strictly `embedding → retriever → [rerank] → llm`.
 
 ```mermaid
 flowchart TB
@@ -73,18 +70,17 @@ English corpus text is enforced for the standard text-bearing document types
    Markdown to English, using the deployment's translation service
    (`vllm-translation-guardrail`) or a local Ollama model. **This tool is
    not part of the automated ingest path** — nothing in `docker-compose.yaml`,
-   dataprep, or document-repository calls it. It is run by an operator
-   before upload; the translated English Markdown is what gets uploaded.
-   This answers the open question left by the September 2026 audit: there is
-   no ingest-time document translation microservice. Translation of source
-   documents is a deliberate, human-triggered preprocessing step.
+   dataprep, or document-repository calls it. That answers the open question
+   the audit left open: there is no ingest-time document translation
+   microservice, and translating source documents is a deliberate,
+   human-triggered step.
 2. **The ingest language gate.** On upload,
    [`document-repository`](https://opensource.unicc.org/un/itu/genie-ai/-/tree/main/components/document-repository)
    extracts text from the file, detects the language (`langdetect.detectOne`)
    and **rejects the upload** when the detected language does not match
    `DOCUMENT_INGESTION_LANGUAGE` (default `en`). The gate runs for the
-   ingestable text types listed above; file types outside that list (e.g.
-   `.pptx`, `.xlsx`, AsciiDoc — which dataprep can still chunk) and OKF
+   ingestable text types listed above. File types outside that list (e.g.
+   `.pptx`, `.xlsx`, AsciiDoc, which dataprep can still chunk) and OKF
    bundle uploads bypass the check, so their content language is whatever
    the operator put in them. The `files.language` field in ArangoDB stores
    the *detected content language* (null when detection was skipped) — an
@@ -112,7 +108,8 @@ translates the chat history (budget-capped) and the last user message to
 **English** — the target is hardcoded (`HISTORY_TRANSLATION_TARGET = "en"`),
 whatever language the caller asked for. Only the English text enters the
 pipeline as the retrieval query, in the same language as the embeddings it
-is compared against.
+is compared against. See also
+[Generation → Multilingual chat history]({{< relref "/docs/rag-pipeline/generation" >}}#multilingual-chat-history).
 
 ## Retrieval side: why `text_en` is correct
 
@@ -138,7 +135,7 @@ Two operational facts make analyzer changes risky:
 - **A non-English analyzer against the English corpus breaks the BM25 leg.**
   Stemming/stop-word rules for the wrong language do not match English
   morphology, and the lexical channel degrades to noise. This is the
-  regression the September 2026 audit flagged as likely: future contributors
+  regression the audit flagged as likely: future contributors
   re-proposing "switch BM25 to `text_es`" for a Spanish deployment without
   noticing the corpus itself is English.
 
@@ -156,21 +153,22 @@ model:
 
 - **`vllm-translation-guardrail`** (compose, `gpu-models` profile) — a vLLM
   server on the GPU node at port 9031 serving `VLLM_TRANSLATION_MODEL_ID`
-  (default `google/gemma-3-4b-it`).
+  (default `google/gemma-3-4b-it`; alternatives in
+  [Generation → Translation]({{< relref "/docs/rag-pipeline/generation" >}}#translation)).
 - **ChatQnA** posts to it directly (compose wires
-  `TRANSLATION_SERVICE_HOST_IP=vllm-translation-guardrail`). The API depends
-  on the model: chat-template models get `/v1/chat/completions`; a
-  TranslateGemma model gets the completions API (`/v1/completions`) with a
-  pre-formatted structured prompt — one read of the resolved model id
-  decides both payload and response parse. The upstream OPEA `translation`
-  microservice (`opea/translation:1.3`) exists in the compose file but the
-  default chatqna wiring bypasses it: its payload reformatting breaks
-  TranslateGemma's structured chat template. ChatQnA falls back to the OPEA
-  proxy only when `VLLM_TRANSLATION_ENDPOINT` is unset *and*
-  `TRANSLATION_SERVICE_*` points at the microservice.
+  `TRANSLATION_SERVICE_HOST_IP=vllm-translation-guardrail`):
+  - chat-template models get `/v1/chat/completions`; a TranslateGemma model
+    gets the completions API (`/v1/completions`) with a pre-formatted
+    structured prompt — one read of the resolved model id decides both
+    payload and response parse.
+  - The upstream OPEA `translation` microservice (`opea/translation:1.3`)
+    exists in the compose file but the default chatqna wiring bypasses it:
+    its payload reformatting breaks TranslateGemma's structured chat
+    template. ChatQnA falls back to the OPEA proxy only when
+    `VLLM_TRANSLATION_ENDPOINT` is unset **and** `TRANSLATION_SERVICE_*`
+    points at the microservice.
 - **The backend BFF** (`gpu-translate-backend.js`) targets the same vLLM
-  (`http://vllm-translation-guardrail:9031` in-cluster; `VLLM_TRANSLATION_ENDPOINT`
-  for remote-GPU deployments).
+  in-cluster, and `VLLM_TRANSLATION_ENDPOINT` on a remote-GPU deployment.
 - **The supported-language registry** (`language-registry.json`) — chatqna
   and the backend each carry their own copy, identical today (the backend's
   language maps are derived from it) but **synchronized by hand, with no CI
@@ -183,9 +181,9 @@ the backend; both then reach the same model through one address.
 
 Without a configured GPU API — or with `TRANSLATION_BACKEND=cpu` — the
 **backend BFF** translates locally with an in-process
-`facebook/nllb-200-distilled-600M` (Xenova) instead: a different model
-family, no vLLM involved, and `VLLM_TRANSLATION_MODEL_ID` has no effect on
-it. ChatQnA has no CPU fallback: its translation endpoint is whatever the
+`Xenova/nllb-200-distilled-600M` instead: a different model family, no vLLM
+involved, and `VLLM_TRANSLATION_MODEL_ID` has no effect on it. ChatQnA has
+no CPU fallback: its translation endpoint is whatever the
 `TRANSLATION_SERVICE_*` / `VLLM_TRANSLATION_ENDPOINT` wiring points at. See
 [Streaming translation → Configuration]({{< relref "/docs/rag-pipeline/streaming-translation" >}}#configuration)
 for the backend selection matrix.
@@ -193,14 +191,16 @@ for the backend selection matrix.
 ## Response side: translate at the edge
 
 The LLM answers in English; translation back to the user's language happens
-in one of two places, never inside the RAG graph:
+in one of two places, outside the RAG graph:
 
 - **Non-streaming (chatqna).** `_finalize_llm_response` translates the final
   English answer to the resolved language, in chunks sized to the
   translation model's window. Its `translation_status` metadata distinguishes
-  `ok` (translated), `refused` (unknown language — English kept) and
-  `failed` (translation error — English kept), so a caller can always tell
-  an English answer that was *not* translated from a translated one.
+  `ok` (translated), `refused` (the requested language was refused — English
+  kept) and `failed` (translation error — English kept), so a caller can
+  always tell an English answer that was *not* translated from a translated
+  one. Wire contract:
+  [API contracts]({{< relref "/docs/reference/api-contracts" >}}).
 - **Streaming (backend BFF).** With `STREAMING_TRANSLATION_ENABLED=1`, the
   backend buffers the English stream and translates complete units
   (sentence/paragraph boundaries) while the answer is being generated, with
@@ -219,12 +219,10 @@ paths above are the only mechanism.
 
 The embedding model (`EMBEDDING_MODEL_ID`, default `BAAI/bge-large-en-v1.5`)
 is English-trained. It happens to carry some cross-lingual signal — audit
-probes (issue #1027, point-in-time) measured top-1 cosine gaps below 0.005
-between raw-Spanish and English queries — but the pipeline does not rely on
-it. Retrieval quality
-for non-English questions comes from the explicit query translation, not
-from incidental embedding multilingualism. Do not treat embedding
-cross-lingual coverage as a substitute for the normalization step.
+probes (point-in-time) measured top-1 cosine gaps below 0.005 between
+raw-Spanish and English queries — but the pipeline does not rely on
+it: non-English retrieval quality comes from the explicit query translation,
+not from incidental embedding multilingualism.
 
 ## Related
 
@@ -236,6 +234,8 @@ cross-lingual coverage as a substitute for the normalization step.
   the response-side streaming translator in depth.
 - [Generation → Translation]({{< relref "/docs/rag-pipeline/generation" >}}#translation) —
   translation models, cost notes, and the non-streaming path.
+- [Generation → Multilingual chat history]({{< relref "/docs/rag-pipeline/generation" >}}#multilingual-chat-history) —
+  the history-to-English normalization on the query side.
 - [Retrieval]({{< relref "/docs/rag-pipeline/retrieval" >}}) — the hybrid
   dense + BM25 configuration surface, including `RETRIEVER_HYBRID_BM25_ANALYZER`.
 - [Ingestion and chunking]({{< relref "/docs/rag-pipeline/ingestion" >}}) —

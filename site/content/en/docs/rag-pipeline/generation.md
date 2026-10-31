@@ -132,10 +132,14 @@ served by `vllm-translation-guardrail`. The default model is
 the `env` template are `google/translategemma-4b-it` and
 `google/translategemma-12b-it`.
 
-**Supported language codes** are defined in
-`components/gov-chat-frontend/src/i18n/locales/` (the same whitelist the UI
-uses): `ar, bn, de, en, es, fr, id, man, pt, ru, st, sw, th, zh`
-(Mandinka uses the `man` code only; there is no separate `mnk` file).
+**Supported language codes** come from two places: the UI's own locale
+whitelist (`components/gov-chat-frontend/src/i18n/locales/`) — `ar, bn, de,
+en, es, fr, id, man, pt, ru, st, sw, th, zh` (Mandinka uses the `man` code
+only; there is no separate `mnk` file) — and the translation models'
+registry (`language-registry.json`), which decides what the translator
+itself accepts. A language the registry does not cover is refused, not
+guessed; see
+[Multilingual Architecture]({{< relref "/docs/architecture/multilingual-ssot" >}}).
 
 Two modes:
 
@@ -165,12 +169,14 @@ For model trade-offs see
 ## Multilingual chat history
 
 When the UI locale differs from English (or when `original_language` is
-falsy in the request body, triggering auto-detection), the backend
+falsy in the request body, triggering auto-detection), ChatQnA
 **translates prior-turn user and assistant messages to English** before
-they reach ChatQnA. This keeps the `bge-large-en-v1.5` embedding space
+the pipeline runs. This keeps the `bge-large-en-v1.5` embedding space
 consistent regardless of UI language and feeds the
 [multi-turn blending]({{< relref "multi-turn-retrieval" >}}) embedding
-only when `MULTI_TURN_BLEND_ENABLED=true`.
+only when `MULTI_TURN_BLEND_ENABLED=true`. See
+[Multilingual Architecture]({{< relref "/docs/architecture/multilingual-ssot" >}})
+for the full query-side picture.
 
 The translation cost is one translation call per prior turn at request
 time. Disable by serving English-only.

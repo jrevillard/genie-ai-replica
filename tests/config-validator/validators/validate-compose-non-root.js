@@ -131,11 +131,19 @@ function validateComposeNonRoot(composeText) {
           if (!capAdds.includes('CHOWN')) {
             violations.push(`${currentService}: ONE_SHOT_ROOT_INIT member must keep cap_add: [CHOWN]`);
           }
-          const oneShot = restart === 'no' || condition === 'none' || condition === 'on-failure';
+          // BOTH keys must be one-shot: compose reads `restart:` while
+          // `docker stack deploy` reads deploy.restart_policy — an OR would
+          // let a single-key flip create a permanent root container on one
+          // front-end while the other still looks safe. An ABSENT key is the
+          // front-end's no-restart default (compose "no", swarm "none"), so
+          // only an explicit non-one-shot value violates.
+          const oneShot =
+            (restart === null || restart === 'no') &&
+            (condition === null || condition === 'none' || condition === 'on-failure');
           if (!oneShot) {
             violations.push(
-              `${currentService}: ONE_SHOT_ROOT_INIT member must be a one-shot ` +
-                '(restart "no" or restart_policy none/on-failure)'
+              `${currentService}: ONE_SHOT_ROOT_INIT member must be a one-shot on BOTH front-ends ` +
+                '(restart "no" AND restart_policy none/on-failure)'
             );
           }
         }
@@ -178,13 +186,17 @@ function validateComposeNonRoot(composeText) {
       }
       const restart = line.match(/^ {2}restart:\s*['"]?([\w-]+)['"]?\s*$/);
       if (restart) anchorDefaults.restart = restart[1];
-      if (/^ {4}restart_policy:\s*$/.test(line)) inAnchorPolicy = true;
+      if (/^ {4}restart_policy:\s*$/.test(line)) {
+        inAnchorPolicy = true;
+        continue;
+      }
       if (inAnchorPolicy) {
         if (!/^ {6}/.test(line)) {
           inAnchorPolicy = false;
         } else {
           const cond = line.match(/^ {6}condition:\s*['"]?([\w-]+)['"]?\s*$/);
           if (cond) anchorDefaults.condition = cond[1];
+          continue;
         }
       }
     }

@@ -110,14 +110,18 @@ describe('compose non-root contract (#1227)', () => {
     const { violations: v1 } = validateComposeNonRoot(noChown);
     expect(v1.some((v) => v.includes('arango-vector-db-init') && v.includes('CHOWN'))).toBe(true);
 
-    // Both one-shot forms must be mutated: restart "no" OR the deploy
-    // restart_policy condition each satisfy the invariant on their own.
-    const always = composeText
-      .replaceAll('condition: "none"', 'condition: always')
-      .replaceAll('restart: "no"', 'restart: always');
-    expect(always).not.toBe(composeText);
-    const { violations: v2 } = validateComposeNonRoot(always);
-    expect(v2.some((v) => v.includes('victorialogs-init') && v.includes('one-shot'))).toBe(true);
+    // EACH key alone must trip the gate: compose reads `restart:` while
+    // swarm reads deploy.restart_policy — flipping one must not hide behind
+    // the other.
+    const swarmFlip = composeText.replaceAll('condition: "none"', 'condition: always');
+    expect(swarmFlip).not.toBe(composeText);
+    const { violations: vSwarm } = validateComposeNonRoot(swarmFlip);
+    expect(vSwarm.some((v) => v.includes('victorialogs-init') && v.includes('one-shot'))).toBe(true);
+
+    const composeFlip = composeText.replaceAll('restart: "no"', 'restart: always');
+    expect(composeFlip).not.toBe(composeText);
+    const { violations: vCompose } = validateComposeNonRoot(composeFlip);
+    expect(vCompose.some((v) => v.includes('victorialogs-init') && v.includes('one-shot'))).toBe(true);
   });
 
   test('self-dropping allowlist documents its two members with a reason', () => {

@@ -22,6 +22,14 @@ single-host production deployments.
 
 ## Prerequisites
 
+Create the backend backup directory before the first `docker compose up`:
+its bind mount uses `create_host_path: false` (#1227), so a missing
+directory fails the backend loudly instead of being created root-owned.
+
+```bash
+mkdir -p data/database_backups
+```
+
 - **Docker Engine 23+** with Compose v2 (`docker compose` subcommand)
 - **NVIDIA Container Toolkit** (only if using `--profile opea` with GPU)
 - **Hugging Face API token** (only if using `--profile opea` — set

@@ -56,8 +56,12 @@ $containers
 EOF
 
 # --- 2. no root-owned file under the data directory ---------------------------
+# Scope mirrors the static half: the always-on contract. The starting
+# directory itself is root-owned by design (the Ansible loop creates the
+# parent), and data/huggingface belongs to the profile-gated GPU TEI
+# services, which the contract excludes.
 if [ -d "$DATA_DIR" ]; then
-  rootowned=$(find "$DATA_DIR" -uid 0 2>/dev/null)
+  rootowned=$(find "$DATA_DIR" -mindepth 1 -path "$DATA_DIR/huggingface" -prune -o -uid 0 -print 2>/dev/null)
   if [ -n "$rootowned" ]; then
     echo "ROOT-OWNED paths under $DATA_DIR:"
     echo "$rootowned" | sed 's/^/  /'

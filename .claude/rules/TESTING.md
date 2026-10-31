@@ -96,6 +96,25 @@ comes back redacted. Takes ~30 s. No CI job exists for it.
 - the shape of log bodies arriving at the collector
   (`stamp_log_metadata_from_msg`, the fluentd driver config)
 
+### Compose no-root runtime gate
+
+```bash
+./tests/compose-non-root/check-runtime.sh <compose-project> [data_dir]
+```
+
+Asserts the #1227 no-root contract against a RUNNING stack: no uid-0
+process in any container (compose or swarm labels), no root-owned file
+under the data directory. The static half runs in CI
+(`tests/config-validator` jest suite); this runtime half has no CI job —
+run it after any change to `docker-compose.yaml` service identities,
+volumes or images.
+
+**Run it whenever you touch:**
+
+- `docker-compose.yaml` (a `user:`, a volume, a new service)
+- any Dockerfile `USER`/chown wiring
+- `tests/compose-non-root/check-runtime.sh` itself
+
 Two failure modes it catches that nothing else does:
 
 1. **OTTL parse error** → the collector exits 1 and the entire log

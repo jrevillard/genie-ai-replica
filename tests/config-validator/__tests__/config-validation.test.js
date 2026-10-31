@@ -2230,14 +2230,55 @@ describe('Configuration Validation Suite', () => {
 // match only e2e:playwright's changes: filter instantiates e2e:playwright
 // while its needs-partner is filtered out, and GitLab fails pipeline creation
 // ("needs" references a job not in the pipeline) — the whole train goes red.
-// Conversely, every path the job executes or imports must stay listed, or e2e
-// silently skips on the train: e2e:playwright runs
-// tests/e2e/theme-runtime-config.spec.js and imports tests/e2e/helpers/.
+// Conversely, every path the job executes or consumes must stay listed, or e2e
+// silently skips on the train.
 describe('e2e merge-train changes filters (#1264)', () => {
   const ciFile = path.join(ROOT, '.gitlab-ci.yml');
+  let filters;
+
+  beforeAll(() => {
+    filters = parseGitlabCiJobChanges(ciFile, ['e2e:integration', 'e2e:playwright']);
+  });
+
+  // Executed paths are derived from the `npx playwright test` invocation in
+  // .e2e_web_base rather than copied into a second hand-maintained list — a
+  // hardcoded list would inherit the same drift this guard exists to catch.
+  const executedPaths = () => {
+    const invocation = fs.readFileSync(ciFile, 'utf-8').match(/npx playwright test ([^\n]+)/);
+    expect(invocation).not.toBeNull();
+    const targets = invocation[1]
+      .split(/\s+/)
+      .filter((arg) => arg.startsWith('tests/e2e'))
+      .map((arg) => (arg.endsWith('/') ? `${arg}**/*` : arg));
+    expect(targets).toEqual([
+      'tests/e2e/chatbot/**/*',
+      'tests/e2e/documents/**/*',
+      'tests/e2e/theme-runtime-config.spec.js'
+    ]);
+    return targets;
+  };
+
+  test('executed paths (derived from the playwright invocation) are listed in both filters', () => {
+    const targets = executedPaths();
+    for (const job of ['e2e:integration', 'e2e:playwright']) {
+      for (const required of targets) {
+        expect(filters.get(job)).toContain(required);
+      }
+    }
+  });
+
+  // Consumed at runtime by the executed specs but not visible on the
+  // invocation line: helpers are imported, fixtures are uploaded/read by the
+  // documents specs.
+  test('consumed paths (helpers, fixtures) are listed in both filters', () => {
+    for (const job of ['e2e:integration', 'e2e:playwright']) {
+      for (const required of ['tests/e2e/helpers/**/*', 'tests/e2e/fixtures/**/*']) {
+        expect(filters.get(job)).toContain(required);
+      }
+    }
+  });
 
   test("e2e:playwright's changes: filter is a subset of e2e:integration's", () => {
-    const filters = parseGitlabCiJobChanges(ciFile, ['e2e:integration', 'e2e:playwright']);
     const integrationPaths = new Set(filters.get('e2e:integration'));
     const playwrightPaths = filters.get('e2e:playwright');
 
@@ -2247,13 +2288,55 @@ describe('e2e merge-train changes filters (#1264)', () => {
     const missing = playwrightPaths.filter((p) => !integrationPaths.has(p));
     expect(missing).toEqual([]);
   });
+});
 
-  test('executed/dependency paths are listed in both filters', () => {
-    const filters = parseGitlabCiJobChanges(ciFile, ['e2e:integration', 'e2e:playwright']);
-    for (const job of ['e2e:integration', 'e2e:playwright']) {
-      for (const required of ['tests/e2e/helpers/**/*', 'tests/e2e/theme-runtime-config.spec.js']) {
-        expect(filters.get(job)).toContain(required);
-      }
+// --- parseGitlabCiJobChanges: block scoping ---
+describe('parseGitlabCiJobChanges', () => {
+  const writeTempCi = (lines) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-job-changes-'));
+    const file = path.join(dir, '.gitlab-ci.yml');
+    fs.writeFileSync(file, lines.join('\n') + '\n');
+    return file;
+  };
+
+  test('entries are scoped to their changes: block — the next rule is not swallowed', () => {
+    const file = writeTempCi([
+      'job-a:',
+      '  rules:',
+      '    - if: \'$CI_PIPELINE_SOURCE == "merge_request_event"\'',
+      '      changes:',
+      '        - tests/e2e/chatbot/**/*',
+      '    - if: \'$CI_PIPELINE_SOURCE == "web"\'',
+      '      when: manual',
+      '',
+      'job-b:',
+      '  rules:',
+      '    - if: \'$CI_PIPELINE_SOURCE == "merge_request_event"\'',
+      '      changes:',
+      '        - tests/e2e/chatbot/**/*'
+    ]);
+    try {
+      const parsed = parseGitlabCiJobChanges(file, ['job-a', 'job-b']);
+      expect(parsed.get('job-a')).toEqual(['tests/e2e/chatbot/**/*']);
+      expect(parsed.get('job-b')).toEqual(['tests/e2e/chatbot/**/*']);
+    } finally {
+      fs.rmSync(path.dirname(file), { recursive: true, force: true });
+    }
+  });
+
+  test('inline comments are stripped from entries', () => {
+    const file = writeTempCi([
+      'job-a:',
+      '  rules:',
+      "    - if: '$X'",
+      '      changes:',
+      '        - tests/e2e/okf/**/*  # not executed yet (MR2 wires the specs)'
+    ]);
+    try {
+      const parsed = parseGitlabCiJobChanges(file, ['job-a']);
+      expect(parsed.get('job-a')).toEqual(['tests/e2e/okf/**/*']);
+    } finally {
+      fs.rmSync(path.dirname(file), { recursive: true, force: true });
     }
   });
 });

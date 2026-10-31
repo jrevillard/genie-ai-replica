@@ -119,9 +119,11 @@ function validateComposeNonRoot(composeText) {
             resolved = next;
           }
           resolved = resolved
-            // a default-less ${VAR} (or a braceless $VAR) names an unknown
-            // location — resolve CONSERVATIVELY to the data dir so
+            // a default-less ${VAR}, an error-form ${VAR:?err}/${VAR?err},
+            // an alt-form ${VAR:+alt}, or a braceless $VAR names an
+            // unknown location — resolve CONSERVATIVELY to the data dir so
             // renaming cannot defeat the gate
+            .replace(/\$\{[\w-]+[:?+][^}]*\}/g, './data')
             .replace(/\$\{[\w-]+\}/g, './data')
             .replace(/\$(?!\{)[\w-]+/g, './data');
           // An ABSOLUTE resolved source is under the data-dir rule too:

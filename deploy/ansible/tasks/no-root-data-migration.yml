@@ -25,6 +25,20 @@
     path: "{{ deploy_dir }}/{{ data_dir }}/logs"
   register: _logs_dir
 
+- name: Resolve the play identity's numeric uid/gid
+  # The handover below chowns NUMERICALLY: guessing "<user>:<user>"
+  # breaks where the primary group differs from the username (and
+  # renders empty where ansible_user is undefined) — id(1) under the
+  # play's identity is the truth.
+  ansible.builtin.command: id -u
+  register: _mig_uid
+  changed_when: false
+
+- name: Resolve the play identity's numeric gid
+  ansible.builtin.command: id -g
+  register: _mig_gid
+  changed_when: false
+
 - name: Detect root-era leftovers under the log directory
   # Runs only when the directory exists. The task below CHOWNS only what
   # this probe finds: ROOT-owned paths (what the docker daemon created
@@ -54,7 +68,7 @@
   become_user: root
   ansible.builtin.command: >-
     find {{ deploy_dir }}/{{ data_dir }}/logs -uid 0
-    -exec chown -h -f "{{ ansible_user }}:{{ ansible_user }}" {} +
+    -exec chown -h -f "{{ _mig_uid.stdout }}:{{ _mig_gid.stdout }}" {} +
   when: _logs_dir.stat.exists and (_logs_root_owned.stdout | length > 0 or _logs_root_owned.rc != 0)
   changed_when: true
   failed_when: false

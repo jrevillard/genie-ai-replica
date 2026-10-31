@@ -44,6 +44,14 @@ violations=0
 # com.docker.compose.project, `docker stack deploy` sets
 # com.docker.stack.namespace — check both so the swarm/Ansible deployment
 # path is covered too.
+# Rule 1 compares HOST-side uids; under a userns-remap daemon every
+# container uid is shifted and container-root is never host 0 — warn that
+# the no-root verdict cannot be seen through the host mapping there.
+if docker info --format '{{.SecurityOptions}}' 2>/dev/null | grep -q 'name=userns'; then
+  echo "WARNING: userns-remap detected — rule 1 compares HOST uids and is"
+  echo "vacuous for container-root under remap; treat a pass as unverified."
+fi
+
 if ! docker ps >/dev/null 2>&1; then
   echo "ERROR: docker daemon unreachable (docker ps failed) — no container"
   echo "can be inspected. Fix the daemon/socket first; this is not a"

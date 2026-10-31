@@ -2700,6 +2700,7 @@ describe('AdminDashboard — crawl→OKF relay and route deep links', () => {
     await wrapper.vm.$nextTick();
     const dispatch = jest.spyOn(window, 'dispatchEvent').mockImplementation(() => true);
     await wrapper.vm.relayCreateFromCrawl({
+      __wantsStudio: true, // explicit hand-off intent (round 17, #80354)
       detail: { repo_id: 'r1', file_id: 'f1' }
     });
     expect(wrapper.vm.activeTab).toBe('studio');
@@ -2711,6 +2712,20 @@ describe('AdminDashboard — crawl→OKF relay and route deep links', () => {
     dispatch.mockClear();
     await wrapper.vm.relayCreateFromCrawl({ __okfRelayed: true, detail: {} });
     expect(dispatch).not.toHaveBeenCalled();
+    dispatch.mockRestore();
+    wrapper.unmount();
+  });
+
+  it('the relay IGNORES the legacy unmarked seed event — no tab teleport on a plain crawl (round 17, #80354)', async () => {
+    const wrapper = createAdminDashboardWrapper({}, {}, STUBS);
+    await wrapper.vm.$nextTick();
+    wrapper.vm.activeTab = 'documents';
+    const dispatch = jest.spyOn(window, 'dispatchEvent').mockImplementation(() => true);
+    // AddFromLinkDialog's seeding event carries detail but NO marker: it
+    // exists to pre-fill an ALREADY-OPEN wizard, not to switch tabs.
+    await wrapper.vm.relayCreateFromCrawl({ detail: { file_id: 'f9', url: 'https://x' } });
+    expect(wrapper.vm.activeTab).toBe('documents'); // stayed put
+    expect(dispatch).not.toHaveBeenCalled(); // nothing re-dispatched
     dispatch.mockRestore();
     wrapper.unmount();
   });

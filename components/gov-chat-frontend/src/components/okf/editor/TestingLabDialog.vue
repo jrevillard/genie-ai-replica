@@ -1539,7 +1539,22 @@ export default {
     headStatus() {
       if (!this.head) return 'missing';
       const fm = this.repo.frontmatter;
-      if (fm && fm.updated_at && this.head.computed_at && fm.updated_at > this.head.computed_at) return 'stale';
+      if (fm && fm.updated_at && this.head.computed_at) {
+        // Compare PARSED instants, never the raw values (round 17, #80358 —
+        // the same ISO-vs-epoch class as isAckCurrent #80121): the two
+        // fields come from different writers, whose lexicographic order is
+        // noise, and the badge gates the pre-publish rebuild decision.
+        // Seconds-scale epochs (< 1e11) are normalized to millis.
+        const toMs = (v) => {
+          const n = Number(v);
+          if (Number.isFinite(n)) return n < 1e11 ? n * 1000 : n;
+          const t = Date.parse(v);
+          return Number.isFinite(t) ? t : null;
+        };
+        const fmMs = toMs(fm.updated_at);
+        const headMs = toMs(this.head.computed_at);
+        if (fmMs !== null && headMs !== null && fmMs > headMs) return 'stale';
+      }
       return 'present';
     },
     tabDefs() {
@@ -2651,6 +2666,10 @@ export default {
     async pollForSuite(suiteKey) {
       const attempts = 96; // 96 × 2.5s ≈ 4 min
       for (let i = 0; i < attempts; i += 1) {
+        // CANCEL GUARD (round 17, #80355): the component's pollSignal is
+        // aborted on unmount — a closed Lab must stop GETting. Without this
+        // the loop kept going for its full 4-minute budget.
+        if (this.pollSignal.aborted) return null;
         // GET first, sleep after — a fast generation lands on attempt 0.
         // The server answers 200 {suite_key, status:'generating'} while the
         // async worker runs (never a 404) — keep waiting on that envelope;
@@ -2668,15 +2687,23 @@ export default {
       // 1-8g-x: never show the previous run's counts while the new one starts.
       this.runProgress = null;
       this.error = '';
+      // STALE-ANSWER GUARD (round 17, #80355): capture the epoch the run
+      // STARTED under. A suite loaded while this run polls must not receive
+      // the OLD run's verdicts — merging them corrupted the outcome column
+      // and the tripwire baseline of the newly loaded suite.
+      const epoch = this.suiteEpoch;
+      const suiteKey = this.suite.suite_key;
       // 1-8d: tripwire baseline — the run being REPLACED, only when it
-      // belongs to the SAME suite (never compare across suites).
+      // belongs to the SAME suite (never compare across suites). The suite
+      // key lives in lastRunSuiteKey (the summary payload has no suite_key
+      // of its own — round 17, #80355).
       const baseline =
-        this.lastRunSummary && this.lastRunSuiteKey === this.suite.suite_key
+        this.lastRunSummary && this.lastRunSuiteKey === suiteKey
           ? { passed: this.lastRunSummary.positive_passed, total: this.lastRunSummary.positive_total }
           : null;
       const res = await this.$store.dispatch('okf/headSuiteRun', {
         repoId: this.repo.repo_id,
-        suiteKey: this.suite.suite_key
+        suiteKey
       });
       if (!res.ok) {
         this.busy = null;
@@ -2689,7 +2716,7 @@ export default {
       const started = res.result;
       let runDoc = null;
       if (started && started.status === 'running' && started.run_key) {
-        runDoc = await this.pollForRun(this.suite.suite_key, started.run_key);
+        runDoc = await this.pollForRun(suiteKey, started.run_key);
         if (runDoc && runDoc.status === 'failed') {
           this.busy = null;
           this.error =
@@ -2701,6 +2728,9 @@ export default {
         runDoc = started; // legacy synchronous response
       }
       this.busy = null;
+      // The suite moved while the run was in flight — discard the result
+      // rather than merge it into a different suite's rows.
+      if (epoch !== this.suiteEpoch || !this.suite || this.suite.suite_key !== suiteKey) return;
       if (!runDoc || !runDoc.payload || !runDoc.payload.summary) {
         this.error = this.translate(
           'okf.testingLab.error.runTimeout',
@@ -2718,6 +2748,8 @@ export default {
     async pollForRun(suiteKey, runKey) {
       const attempts = 144; // 144 × 2.5s ≈ 6 min
       for (let i = 0; i < attempts; i += 1) {
+        // CANCEL GUARD (round 17, #80355) — same as pollForSuite.
+        if (this.pollSignal.aborted) return null;
         const res = await this.$store.dispatch('okf/headSuiteGetRun', { repoId: this.repo.repo_id, suiteKey, runKey });
         const doc = res && res.ok ? res.result : null;
         // 1-8g-x: keep the LIVE progress while waiting — the run envelope

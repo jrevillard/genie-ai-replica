@@ -31,6 +31,7 @@ import {
   isRedraining,
   appendToIndexToc,
   friendlyLifecycleError,
+  LIFECYCLE_ERROR_KEYS,
   importRepoZip,
   importZipIntoRepo,
   exportRepoZip,
@@ -90,22 +91,41 @@ describe('appendToIndexToc edge branches', () => {
   });
 });
 
-describe('friendlyLifecycleError — every gate code has a user-facing sentence', () => {
-  it('maps each known code', () => {
-    expect(friendlyLifecycleError('DRAIN_IN_PROGRESS')).toContain('still being processed');
-    expect(friendlyLifecycleError('PUBLISH_GATE_BLOCKED', 'custom')).toBe('custom');
-    expect(friendlyLifecycleError('PUBLISH_GATE_BLOCKED')).toContain('not ready to publish');
-    expect(friendlyLifecycleError('PUBLISH_EMPTY')).toContain('no content yet');
-    expect(friendlyLifecycleError('INVALID_TRANSITION', 'nope')).toBe('nope');
-    expect(friendlyLifecycleError('INVALID_TRANSITION')).toContain('not allowed');
-    expect(friendlyLifecycleError('REPO_READ_ONLY')).toContain('READ ONLY');
-    expect(friendlyLifecycleError('GRAPH_NAME_CONFLICT')).toContain('serving graph name');
+describe('friendlyLifecycleError — every gate code maps to an i18n KEY (round 17, #80361)', () => {
+  it('maps each known code to its okf.lifecycleErrors.* key', () => {
+    expect(friendlyLifecycleError('DRAIN_IN_PROGRESS')).toBe('okf.lifecycleErrors.drainInProgress');
+    expect(friendlyLifecycleError('PUBLISH_GATE_BLOCKED')).toBe('okf.lifecycleErrors.publishGateBlocked');
+    expect(friendlyLifecycleError('PUBLISH_EMPTY')).toBe('okf.lifecycleErrors.publishEmpty');
+    expect(friendlyLifecycleError('INVALID_TRANSITION')).toBe('okf.lifecycleErrors.invalidTransition');
+    expect(friendlyLifecycleError('REPO_READ_ONLY')).toBe('okf.lifecycleErrors.repoReadOnly');
+    expect(friendlyLifecycleError('GRAPH_NAME_CONFLICT')).toBe('okf.lifecycleErrors.graphNameConflict');
   });
 
-  it('unknown codes fall back message → fallback → generic', () => {
+  it("the server's own message still wins where it is user-meaningful (it names the actual blockers)", () => {
+    expect(friendlyLifecycleError('PUBLISH_GATE_BLOCKED', 'custom blocker list')).toBe('custom blocker list');
+    expect(friendlyLifecycleError('INVALID_TRANSITION', 'nope')).toBe('nope');
+  });
+
+  it('unknown codes fall back message → fallback → generic key', () => {
     expect(friendlyLifecycleError('OTHER', 'msg')).toBe('msg');
     expect(friendlyLifecycleError('OTHER', null, 'fb')).toBe('fb');
-    expect(friendlyLifecycleError('OTHER')).toBe('Action failed');
+    expect(friendlyLifecycleError('OTHER')).toBe('okf.lifecycleErrors.generic');
+  });
+
+  it('every key the service can return EXISTS in the en locale (the callers translate it)', () => {
+    // The service cannot translate (no Vue context) — a key missing from the
+    // locales would render as the raw key in the UI.
+    const fs = require('fs');
+    const path = require('path');
+    const en = new Function(
+      fs.readFileSync(path.join(__dirname, '../../i18n/locales/en.js'), 'utf8').replace(/export default/, 'return')
+    )();
+    for (const code of Object.keys(LIFECYCLE_ERROR_KEYS)) {
+      const key = LIFECYCLE_ERROR_KEYS[code];
+      const leaf = key.split('.').reduce((o, k) => (o && o[k] != null ? o[k] : undefined), en);
+      expect({ code, leaf }).toEqual({ code, leaf: expect.any(String) });
+    }
+    expect(en.okf.lifecycleErrors.generic).toBe('Action failed');
   });
 });
 

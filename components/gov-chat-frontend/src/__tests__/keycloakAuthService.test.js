@@ -119,6 +119,47 @@ describe('keycloakAuthService', () => {
       expect(mockAddSilentRenewError).toHaveBeenCalledTimes(1);
       expect(typeof mockAddSilentRenewError.mock.calls[0][0]).toBe('function');
     });
+
+    // Round 17, #80353: the handler must be BOUNDED. The old version retried
+    // signinSilent on every silentRenewError with no cap — a persistently
+    // failing grant (realm down, refresh_token_max_reuse=0 race) looped one
+    // renew every few seconds forever with no login() escalation.
+    it('silent renew errors are bounded: escalating only after the failure cap, and a success resets it', async () => {
+      mockGetUser.mockResolvedValue(null); // no stored user → escalation calls login()
+      mockSigninSilent.mockRejectedValue(new Error('grant refused'));
+      mockSigninRedirect.mockClear();
+
+      await keycloakAuthService.initialize();
+      const handler = mockAddSilentRenewError.mock.calls[0][0];
+
+      // failures 1 and 2: back off, NO login redirect yet
+      await handler();
+      await handler();
+      expect(mockSigninRedirect).not.toHaveBeenCalled();
+      // failure 3 hits the cap: stored user is gone → login()
+      await handler();
+      expect(mockSigninRedirect).toHaveBeenCalledTimes(1);
+
+      // a RECOVERED renew resets the counter — the next failure run starts over
+      mockSigninSilent.mockResolvedValue(createMockUser());
+      await handler();
+      mockSigninSilent.mockRejectedValue(new Error('blip'));
+      await handler();
+      expect(mockSigninRedirect).toHaveBeenCalledTimes(1); // still just the one
+    });
+
+    it('a live stored user survives the escalation: cap reached, login NOT called (2026-10-11 rule)', async () => {
+      const liveUser = createMockUser();
+      mockGetUser.mockResolvedValue(liveUser); // unexpired cached session
+      mockSigninSilent.mockRejectedValue(new Error('grant refused'));
+
+      await keycloakAuthService.initialize();
+      const handler = mockAddSilentRenewError.mock.calls[0][0];
+      await handler();
+      await handler();
+      await handler(); // cap reached — but the session is alive
+      expect(mockSigninRedirect).not.toHaveBeenCalled();
+    });
   });
 
   describe('login', () => {
@@ -400,13 +441,18 @@ describe('keycloakAuthService', () => {
       expect(mockSigninRedirect).not.toHaveBeenCalled();
     });
 
-    it('redirects only when the session really is gone', async () => {
+    it('redirects only when the session really is gone (after the failure cap — round 17, #80353)', async () => {
       mockGetUser.mockResolvedValue(createMockUser({ expired: true }));
       mockSigninSilent.mockRejectedValue(new Error('Session not active'));
       await keycloakAuthService.initialize();
       mockSigninRedirect.mockResolvedValue(undefined);
 
       const cb = mockAddSilentRenewError.mock.calls[0][0];
+      // two failures: backed off, no redirect yet
+      await cb(new Error('Session not active'));
+      await cb(new Error('Session not active'));
+      expect(mockSigninRedirect).not.toHaveBeenCalled();
+      // third failure reaches the cap — the stored user is expired → redirect
       await cb(new Error('Session not active'));
       await new Promise((r) => setTimeout(r, 0));
 

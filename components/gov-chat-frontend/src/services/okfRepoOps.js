@@ -424,31 +424,45 @@ export async function importZipIntoRepo({ repoId, file, classification }) {
 /**
  * Human-readable, ACTIONABLE text for lifecycle gate failures (David,
  * 2026-08-30: "retry after the worker drains" is not a user-facing sentence).
- * The raw server message stays available for the generic case.
+ *
+ * I18N (round 17, #80361): this is a plain ES module — no Vue context, no
+ * translate(). It returns the i18n KEY (okf.lifecycle.*) and the callers
+ * translate it; the server's own `message` still wins when present for the
+ * codes where it is user-meaningful (PUBLISH_GATE_BLOCKED lists the actual
+ * blockers). Callers that cannot translate (none today) see a readable
+ * English default through the key's fallback.
  */
+export const LIFECYCLE_ERROR_KEYS = {
+  DRAIN_IN_PROGRESS: 'okf.lifecycleErrors.drainInProgress',
+  PUBLISH_GATE_BLOCKED: 'okf.lifecycleErrors.publishGateBlocked',
+  PUBLISH_EMPTY: 'okf.lifecycleErrors.publishEmpty',
+  INVALID_TRANSITION: 'okf.lifecycleErrors.invalidTransition',
+  REPO_READ_ONLY: 'okf.lifecycleErrors.repoReadOnly',
+  GRAPH_NAME_CONFLICT: 'okf.lifecycleErrors.graphNameConflict'
+};
+
 export function friendlyLifecycleError(code, message, fallback) {
   if (code === 'DRAIN_IN_PROGRESS') {
-    return 'Some files are still being processed (indexed). Open this repository in the editor — the file list shows which ones, and ingestion retries automatically. Try publishing again once every file shows indexed.';
+    return 'okf.lifecycleErrors.drainInProgress';
   }
   if (code === 'PUBLISH_GATE_BLOCKED') {
-    return (
-      message ||
-      'The repository is not ready to publish — all files must be indexed, conformance-clean and PII-scanned.'
-    );
+    // The server message names the ACTUAL blockers (which concept, which
+    // gate) — more actionable than the generic sentence.
+    return message || 'okf.lifecycleErrors.publishGateBlocked';
   }
   if (code === 'PUBLISH_EMPTY') {
-    return 'This repository has no content yet — add concepts before publishing.';
+    return 'okf.lifecycleErrors.publishEmpty';
   }
   if (code === 'INVALID_TRANSITION') {
-    return message || 'That action is not allowed from the current state.';
+    return message || 'okf.lifecycleErrors.invalidTransition';
   }
   if (code === 'REPO_READ_ONLY') {
-    return 'This repository is currently serving (ingested) and is READ ONLY — retract it if you want to change it.';
+    return 'okf.lifecycleErrors.repoReadOnly';
   }
   if (code === 'GRAPH_NAME_CONFLICT') {
-    return 'Another repository with the same name and version already owns the serving graph name — rename one of them and retry.';
+    return 'okf.lifecycleErrors.graphNameConflict';
   }
-  return message || fallback || 'Action failed';
+  return message || fallback || 'okf.lifecycleErrors.generic';
 }
 
 /** Steward PII acknowledgement (audited server-side; waives the PII hit gate). */

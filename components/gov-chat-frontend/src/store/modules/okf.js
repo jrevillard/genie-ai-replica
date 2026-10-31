@@ -304,6 +304,16 @@ const mutations = {
 };
 
 const actions = {
+  /** In-memory-only draft write (round 17, #80359): the pre-create wizard
+   *  has no server repo to attach a draft to. Going through saveDraft with a
+   *  'pending' alias PUT a route that 404s on every keystroke and armed
+   *  draftsUnavailable against a healthy backend; this writes ONLY the
+   *  local cache (same mutation saveDraft uses). */
+  setDraftLocal({ commit }, { repoId, draft } = {}) {
+    if (!repoId || !draft) return { ok: false, code: 'VALIDATION_ERROR' };
+    commit('setDraft', { repoId, draft });
+    return { ok: true, local: true };
+  },
   // NON-BLOCKING LOAD: bumped on every fetchConcepts call — a superseded
   // loop (repo switched, newer refetch) stops committing stale pages.
   // Module-scope on purpose: single store instance, not serialized state.
@@ -378,6 +388,14 @@ const actions = {
   async saveDraft({ commit, state }, { repoId, draft }) {
     if (!repoId || !draft) {
       return { ok: false, code: 'VALIDATION_ERROR', message: 'repoId and draft required' };
+    }
+    // draftsUnavailable IS consumed (round 17, #80359): once the endpoint has
+    // proven absent, later saves keep the local cache but stop re-hammering
+    // the missing route — the "session stops writing it" the state flag
+    // always promised.
+    if (state.draftsUnavailable) {
+      commit('setDraft', { repoId, draft: { ...draft, updated_at: Date.now() } });
+      return { ok: true, skipped: 'unavailable' };
     }
     // WIZARD IDEMPOTENCY R-C (David, 2026-09-04): a published/ingested repo
     // has nothing to draft — the server write is SKIPPED entirely (it would

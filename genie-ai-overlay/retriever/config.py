@@ -255,6 +255,13 @@ HYBRID_RRF_K = int(os.getenv("RETRIEVER_HYBRID_RRF_K", "60"))
 HYBRID_BM25_CANDIDATES = int(os.getenv("RETRIEVER_HYBRID_BM25_CANDIDATES", "50"))
 HYBRID_DENSE_WEIGHT = float(os.getenv("RETRIEVER_HYBRID_DENSE_WEIGHT", "1.0"))
 HYBRID_LEXICAL_WEIGHT = float(os.getenv("RETRIEVER_HYBRID_LEXICAL_WEIGHT", "1.0"))
+# The BM25 analyzer must speak the corpus language. The corpus is English by
+# construction — operator preprocessing plus the document-repository ingest
+# gate (DOCUMENT_INGESTION_LANGUAGE, default 'en') — so leave text_en alone
+# unless the ingest gate moves WITH it. _ensure_bm25_view only creates the
+# ArangoSearch view when absent: changing this env var alone never updates an
+# existing view (delete the view and let the service recreate it). Rationale
+# and probes: site/content/en/docs/architecture/multilingual-ssot.md
 HYBRID_BM25_ANALYZER = os.getenv("RETRIEVER_HYBRID_BM25_ANALYZER", "text_en")
 
 # Story 1.1/1.4/1.5 (ADR-039 D4/D5/D8) — multi-graph fan-out governance.

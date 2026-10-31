@@ -259,6 +259,35 @@ void main() {
   });
 
   testWidgets(
+    'a category the EN tree cannot name but the key addresses is localized',
+    (tester) async {
+      // The EN tree carries the category's nameEN but no display `name`:
+      // the scope is wire-healthy (the follow-up filters on the nameEN)
+      // while the restore cannot install an English title. The key still
+      // addresses the category, so the localized tree names the bar —
+      // the bar must not stay hidden for a scope the conversation uses.
+      I18nService().changeLanguage('es');
+      final mock = _RestoredScopeMockClient(
+        treesByLocale: {
+          'en': <dynamic>[
+            {'catKey': '2', 'nameEN': 'Civil Registry'},
+          ],
+          'es': esTree,
+        },
+      );
+      final chatKey = GlobalKey<ChatBotComponentState>();
+      mockConfigAsset(tester);
+      await pumpChat(tester, mock, chatKey: chatKey);
+
+      await chatKey.currentState!.loadConversation('conv-1');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Contexto: Registro Civil'), findsOneWidget);
+      expect(mock.requestsByLocale['es'], 1);
+    },
+  );
+
+  testWidgets(
     'a re-apply of an unchanged scope never downgrades a localized title',
     (tester) async {
       // The first config load FAILS (a transient startup error), so the

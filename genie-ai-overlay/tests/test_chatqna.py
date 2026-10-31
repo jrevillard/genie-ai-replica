@@ -2117,7 +2117,7 @@ class TestTranslationHelpers:
         assert result == ("Translated", "translated")
         payload = mock_client.post.call_args.kwargs["json"]
         # The server counts the prompt at 109 tokens: the room left is
-        # 1024 − 109 − 64 = 851, the translation needs 4 × 109 + 256 = 692,
+        # 1024 − 109 − 128 = 787, the translation needs 4 × 109 + 256 = 692,
         # so the need is the binding bound.
         assert payload["max_tokens"] == 692
 
@@ -2189,8 +2189,8 @@ class TestTranslationHelpers:
             result = await svc._translate_chunk_in_language("Hello", "es", "Spanish")
         assert result == "Hola"
         # The chunk payload carries the measured cap too: the prompt costs 20
-        # tokens, so the room the 2048-token window leaves is 2048 − 20 − 64
-        # = 1964, and the translation needs 4 × 20 + 256 = 336.
+        # tokens, so the room the 2048-token window leaves is 2048 − 20 − 128
+        # = 1900, and the translation needs 4 × 20 + 256 = 336.
         assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 336
 
     @pytest.mark.asyncio
@@ -2427,7 +2427,6 @@ class TestQueryTranslationStatus:
         assert text == "USER: what is X?"
         assert status == "translated"
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "timeout",
         [
@@ -2664,6 +2663,47 @@ class TestQueryTranslationStatus:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client):
             assert await chatqna_module._count_translation_tokens({"prompt": "hello"}) is None
+
+    @pytest.mark.asyncio
+    async def test_a_transient_count_failure_does_not_disable_the_count(self):
+        """An unreachable endpoint is transient: the next request counts
+        again instead of latching the degradation for the process life."""
+        failing = AsyncMock()
+        failing.post.side_effect = httpx.ConnectTimeout("network partition")
+        failing.__aenter__ = AsyncMock(return_value=failing)
+        failing.__aexit__ = AsyncMock(return_value=False)
+        working = AsyncMock()
+        resp = MagicMock()
+        resp.json.return_value = {"count": 7}
+        resp.raise_for_status = MagicMock()
+        working.post.return_value = resp
+        working.__aenter__ = AsyncMock(return_value=working)
+        working.__aexit__ = AsyncMock(return_value=False)
+        with patch("chatqna.genieai_chatqna.httpx.AsyncClient", side_effect=[failing, working]) as mock_client:
+            assert await chatqna_module._count_translation_tokens({"prompt": "x"}) is None
+            assert await chatqna_module._count_translation_tokens({"prompt": "x"}) == 7
+        assert mock_client.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_a_missing_tokenize_route_disables_the_count(self):
+        """A missing /tokenize route is permanent: the count is not
+        attempted again, and the degradation is warned once."""
+        failing = AsyncMock()
+        req = httpx.Request("POST", "http://translation.test/tokenize")
+        failing.post.side_effect = httpx.HTTPStatusError(
+            "not found", request=req, response=httpx.Response(404, request=req)
+        )
+        failing.__aenter__ = AsyncMock(return_value=failing)
+        failing.__aexit__ = AsyncMock(return_value=False)
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=failing) as mock_client,
+            patch("chatqna.genieai_chatqna.logger") as mock_logger,
+        ):
+            assert await chatqna_module._count_translation_tokens({"prompt": "x"}) is None
+            assert await chatqna_module._count_translation_tokens({"prompt": "x"}) is None
+        assert mock_client.call_count == 1
+        logged = " ".join(str(c) for c in mock_logger.warning.call_args_list)
+        assert "/tokenize route" in logged
 
     async def test_a_long_history_is_translated_inside_the_discovered_window(self):
         """A long history still goes out as a translation request, with a

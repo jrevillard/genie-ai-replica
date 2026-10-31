@@ -735,6 +735,7 @@ async def _translate_prompt(prompt: str, translategemma: bool, model_id: str | N
                 headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
             )
             response.raise_for_status()
+            choice = response.json()["choices"][0]
     except Exception as e:
         # Fail-loud on vLLM context overflow: silently returning the
         # original English text breaks the multilingual UX (#829). Classify
@@ -750,13 +751,11 @@ async def _translate_prompt(prompt: str, translategemma: bool, model_id: str | N
         if isinstance(e, (httpx.TimeoutException, TimeoutError)):
             # One typed subtype: the answer path still sees a
             # TranslationFailedError, while the history path reports
-            # "the service was slow" without unwrapping __cause__.
-            logger.warning(f"Translation timed out after {TRANSLATION_SERVICE_TIMEOUT} seconds.")
+            # "the service was slow" without unwrapping __cause__. The
+            # handlers log the failure — one line per event.
             raise TranslationTimeoutError(f"translation timed out: {type(e).__name__}: {str(e)[:200]}") from e
-        logger.warning(f"Translation failed: {type(e).__name__}: {e}")
         raise TranslationFailedError(f"translation failed: {type(e).__name__}: {str(e)[:200]}") from e
 
-    choice = response.json()["choices"][0]
     if _completion_truncated(choice):
         # The completion hit max_tokens: the translation is cut off, not
         # finished. Embedding the cut-off text would put a half-translated
@@ -2160,12 +2159,13 @@ def _parse_tokenize_count(payload) -> int:
         tokens = payload.get("tokens")
         if not isinstance(tokens, list):
             raise TokenCountError(f"/tokenize payload has neither a count nor a token list: {payload!r}")
-        return len(tokens)
-    # A proxy may serialize count as a digit string (same coercion stance as
-    # the window value); anything non-integral is malformed.
-    count = coerce_int(raw)
-    if count is None:
-        raise TokenCountError(f"/tokenize count is not an integer: {raw!r}")
+        count = len(tokens)
+    else:
+        # A proxy may serialize count as a digit string (same coercion stance
+        # as the window value); anything non-integral is malformed.
+        count = coerce_int(raw)
+        if count is None:
+            raise TokenCountError(f"/tokenize count is not an integer: {raw!r}")
     if count < 0:
         # 0 is an honest count for an empty piece; a negative count is a lie
         # that would silently defeat the overflow guard.
@@ -2273,18 +2273,21 @@ async def _count_translation_tokens(count_body: dict) -> int | None:
             count = _parse_tokenize_count(resp.json())
             span.set_attribute(ATTRIBUTE_NAMES["token_count"], count)
             return count
-    except Exception as e:
-        # A server that cannot count is a permanent capability gap: the
-        # count is not attempted again, and the failure is warned once.
-        if not _TRANSLATION_COUNT_UNAVAILABLE:
+    except httpx.HTTPStatusError as e:
+        # A missing route is a permanent capability gap: the count is not
+        # attempted again, and the failure is warned once. Any other
+        # failure (an unreachable endpoint, a timeout) is transient — the
+        # next request counts again instead of latching the degradation.
+        if e.response.status_code in (404, 405) and not _TRANSLATION_COUNT_UNAVAILABLE:
             _TRANSLATION_COUNT_UNAVAILABLE = True
             logger.warning(
-                "Translation prompt could not be counted (%s: %s); the completion falls back to the degraded estimate.",
-                type(e).__name__,
-                e,
+                "Translation server has no /tokenize route; the completion falls back to the degraded estimate."
             )
         else:
-            logger.debug("Translation prompt could not be counted (%s: %s)", type(e).__name__, e)
+            logger.debug("Translation prompt could not be counted (%s)", e)
+        return None
+    except Exception as e:
+        logger.debug("Translation prompt could not be counted (%s: %s)", type(e).__name__, e)
         return None
 
 

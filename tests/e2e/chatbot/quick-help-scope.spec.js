@@ -40,7 +40,7 @@
 //     (the healthy card's click must reach the query path)
 //   - drop the TITLE clause from the card's broken verdict      -> test 4 fails
 //     (the card with no title would render as a blank-label card
-//      that looks alive, and its click would be swallowed)
+//      that looks alive, with no icon and no caption)
 //
 // The NAMEABLE guard has no mutation check HERE, and it cannot have one: a
 // card whose category is gone is refused by the broken-guard too, so no
@@ -340,30 +340,28 @@ test.describe('Quick Help scope states', () => {
     await ctx.close();
   });
 
-  test('a card whose title resolves to nothing renders the error state and sends nothing', async ({ browser }) => {
+  test('a card whose title resolves to nothing renders the error state, and its caption names the title', async ({
+    browser
+  }) => {
     const { ctx, page } = await openWelcome(browser);
 
     // The card declares NO scope, so its scope is fine — the missing TITLE
     // is the only thing wrong with it. It must still be a VISIBLE failure:
     // the error class, the warning icon and the caption that says why.
+    // That the click sends nothing is the press gate's own, pre-existing
+    // rule (no service, no selection) — asserted by the Jest suite for
+    // this exact card shape, and by the error-card test above for the
+    // broken-scope shape — so repeating it here would kill no mutation of
+    // the TITLE gate this card exists to pin.
     const card = page.locator('.quick-help-item.config-error.just-chat');
     await expect(card).toHaveCount(1);
 
     await expect(card.first().locator('.config-error-icon')).toBeVisible();
     const caption = card.first().locator('[data-testid="quick-help-error-caption"]');
     await expect(caption).toBeVisible();
-    expect((await caption.innerText()).trim().length).toBeGreaterThan(0);
-
-    // And the click sends NOTHING: no turn, and nothing installed — the
-    // welcome screen (which only renders while NO context item is selected)
-    // is still there.
-    const streamed = await watchQueries(page);
-    await card.first().click();
-    await page.waitForTimeout(1200);
-
-    expect(streamed(), 'a card with no title must not reach the query path').toBe(false);
-    expect(await page.locator('[data-testid="user-avatar"]').count()).toBe(0);
-    await expect(page.locator('.quick-help-banner')).toBeVisible();
+    const captionText = (await caption.innerText()).trim();
+    expect(captionText.length, 'the caption says something').toBeGreaterThan(0);
+    expect(captionText.toLowerCase(), 'the caption names the missing TITLE').toContain('title');
 
     await ctx.close();
   });

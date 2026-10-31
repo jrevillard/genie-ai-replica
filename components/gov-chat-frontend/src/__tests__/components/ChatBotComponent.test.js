@@ -249,6 +249,28 @@ function createChatBotWrapper(storeOverrides = {}, { rehydrate = false, renderSt
   });
 }
 
+// Mount with a configuration whose Quick Help buttons are [buttons]. The
+// config-loader mock is module-level, and clearAllMocks() does not reset an
+// implementation — resetQuickHelpButtons() restores the empty-button default
+// afterwards (from the describes' afterEach), so the rest of the suite is
+// unaffected. [options] is passed through to createChatBotWrapper.
+async function mountWithButtons(buttons, options = {}) {
+  const configLoader = require('../../config-loader');
+  configLoader.default.mockResolvedValue({
+    features: { chat: { quickHelp: { buttons } } }
+  });
+  const wrapper = createChatBotWrapper({}, options);
+  await flushPromises();
+  return wrapper;
+}
+
+function resetQuickHelpButtons() {
+  const configLoader = require('../../config-loader');
+  configLoader.default.mockResolvedValue({
+    features: { chat: { quickHelp: { buttons: [] } } }
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -4932,8 +4954,6 @@ describe('ChatBotComponent', () => {
   });
 
   describe('quick-help card tint', () => {
-    const configLoader = require('../../config-loader');
-
     const tintedButton = {
       id: 'identity-civil',
       title: { en: 'Apply for ID' },
@@ -4953,23 +4973,7 @@ describe('ChatBotComponent', () => {
       category: null
     };
 
-    const mountWithButtons = async (buttons) => {
-      configLoader.default.mockResolvedValue({
-        features: { chat: { quickHelp: { buttons } } }
-      });
-      const wrapper = createChatBotWrapper();
-      await flushPromises();
-      return wrapper;
-    };
-
-    afterEach(() => {
-      // The config-loader mock is module-level, and clearAllMocks() does
-      // not reset an implementation — restore the empty-button default so
-      // the rest of the suite is unaffected.
-      configLoader.default.mockResolvedValue({
-        features: { chat: { quickHelp: { buttons: [] } } }
-      });
-    });
+    afterEach(resetQuickHelpButtons);
 
     it('exposes the button tint as custom properties', () => {
       const wrapper = createChatBotWrapper();
@@ -5509,25 +5513,7 @@ describe('Quick Help card with no title', () => {
     styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
   };
 
-  const mountWithButtons = async (buttons, options = {}) => {
-    const configLoader = require('../../config-loader');
-    configLoader.default.mockResolvedValue({
-      features: { chat: { quickHelp: { buttons } } }
-    });
-    const wrapper = createChatBotWrapper({}, options);
-    await flushPromises();
-    return wrapper;
-  };
-
-  afterEach(() => {
-    // The config-loader mock is module-level, and clearAllMocks() does
-    // not reset an implementation — restore the empty-button default so
-    // the rest of the suite is unaffected.
-    const configLoader = require('../../config-loader');
-    configLoader.default.mockResolvedValue({
-      features: { chat: { quickHelp: { buttons: [] } } }
-    });
-  });
+  afterEach(resetQuickHelpButtons);
 
   it('maps a title that resolves to nothing onto an empty label', async () => {
     const wrapper = await mountWithButtons([titleLessButton]);

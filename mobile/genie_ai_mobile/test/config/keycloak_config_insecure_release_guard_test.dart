@@ -1,7 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:genie_ai_mobile/config/dev_config.dart';
+import 'package:genie_ai_mobile/config/e2e_config.dart';
 import 'package:genie_ai_mobile/config/keycloak_config.dart';
+import 'package:genie_ai_mobile/config/staging_config.dart';
+import 'package:genie_ai_mobile/config/flavors/itu.dart' as flavors;
 
 /// The insecure-release half of the flavor contract.
 ///
@@ -62,7 +66,7 @@ void main() {
   test(
     'a profile build of the dev flavor still resolves its config',
     () {
-      expect(getConfig(), isA<KeycloakConfig>());
+      expect(getConfig(), same(devConfig));
     },
     skip: !kProfileMode
         ? 'this case compiles with dart.vm.profile=true'
@@ -70,4 +74,19 @@ void main() {
         ? 'this case compiles with FLAVOR=dev'
         : null,
   );
+
+  test('the tested insecure flavors are exactly the flagged configs', () {
+    // The guard keys on allowInsecureConnections, but the per-flavor cases
+    // above iterate a hardcoded list: FLAVOR is a compile-time constant, so
+    // each case needs its own compilation. This check fails when a config
+    // flips the flag (or the flavor files and this list drift apart) — keep
+    // it in sync when a flavor file is added.
+    final flagged = <String>[
+      if (devConfig.allowInsecureConnections) 'dev',
+      if (stagingConfig.allowInsecureConnections) 'staging',
+      if (e2eConfig.allowInsecureConnections) 'e2e',
+      if (flavors.config.allowInsecureConnections) 'itu',
+    ];
+    expect(flagged, unorderedEquals(const ['dev', 'e2e']));
+  });
 }

@@ -439,7 +439,7 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
     expect(axios.get).toHaveBeenCalledTimes(2); // the hard caller owned its probe
   });
 
-  test('serving_stale does not lie when a concurrent probe refreshed the id mid-failure', async () => {
+  test('a refresh mid-failure serves the caller the fresh id and keeps the warn silent', async () => {
     mockProbeSuccess('stale/model');
     await cache.servedModelId('http://vllm:8000');
     Date.now.mockReturnValue(1_000_000 + 61_000); // the entry expires
@@ -453,16 +453,40 @@ describe('soft probe failures stay quiet (provenance labels are best-effort)', (
     const soft = cache.servedModelId('http://vllm:8000'); // quiet probe, held in flight
     await Promise.resolve();
     // A loud probe (its own window) succeeds while the quiet one is still
-    // failing — the FRESH id is what callers get from here on.
+    // failing — the fresh id is what the cache holds when the quiet probe
+    // settles, so THAT is what this caller is served too.
     axios.get.mockResolvedValue(modelsPayload('fresh/model'));
     await expect(cache.resolveVllmModelId('http://vllm:8000', { timeoutMs: 30000 })).resolves.toBe('fresh/model');
     release();
-    // Serving semantics unchanged (stale beats broken for THIS caller), the
-    // soft path stays quiet, and serving_stale must not announce a
-    // staleness that is already over.
-    await expect(soft).resolves.toBe('stale/model');
+    await expect(soft).resolves.toBe('fresh/model');
     expect(logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.probe_failed')).toHaveLength(0);
     expect(logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.serving_stale')).toHaveLength(0);
+  });
+
+  test('serving_stale and the served id never disagree (short-TTL refresh race)', async () => {
+    process.env.MODEL_DETECT_TTL = '1';
+    mockProbeSuccess('stale/model');
+    await cache.servedModelId('http://vllm:8000'); // entry ts = t0
+    Date.now.mockReturnValue(1_000_000 + 61_000); // expired (TTL 1 s)
+    let release;
+    axios.get.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          release = () => reject(http401());
+        })
+    );
+    const soft = cache.servedModelId('http://vllm:8000'); // quiet probe, held in flight
+    await Promise.resolve();
+    axios.get.mockResolvedValue(modelsPayload('model-v2'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000', { timeoutMs: 30000 })).resolves.toBe('model-v2');
+    // The refreshed id expires too before the quiet probe settles: an
+    // EXPIRED id is what serves, and the warn must name exactly that id.
+    Date.now.mockReturnValue(1_000_000 + 62_500);
+    release();
+    await expect(soft).resolves.toBe('model-v2');
+    const stale = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.serving_stale');
+    expect(stale).toHaveLength(1);
+    expect(stale[0][1]).toMatchObject({ stale_id: 'model-v2' });
   });
 
   test('serving_stale still fires when the stale entry was evicted before the probe settled', async () => {

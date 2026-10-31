@@ -501,7 +501,7 @@ test.describe('Conversation — surface invariants', () => {
       releaseStream = resolve;
     });
     await ackFeedback(page);
-    await page.route('**/queries/stream', async (route) => {
+    await page.route('**/queries/stream**', async (route) => {
       if (route.request().method() !== 'POST') {
         await route.continue();
         return;

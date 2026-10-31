@@ -259,7 +259,11 @@ async function ackFeedback(page) {
       }
       return;
     }
-    await route.continue();
+    try {
+      await route.continue();
+    } catch {
+      /* the context closed before the continuation */
+    }
   });
 }
 

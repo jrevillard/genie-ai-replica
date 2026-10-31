@@ -11,6 +11,10 @@ metadata:
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "ragas-service") | nindent 4 }}
 spec:
+  # ReadWriteOnce, like Compose's named volume it mirrors: single
+  # replica today. A future replicas>1 rollout across nodes would wedge
+  # on volume attachment — the same multi-attach caveat the
+  # document-repository PVC carries.
   accessModes:
     - ReadWriteOnce
   resources:

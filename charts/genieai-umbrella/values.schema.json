@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
-  "$comment": "Pins the values a wrong TYPE or a wrong ENUM would silently mis-render. Enums: a wrong clusterProfile renders the dev topology and the drift hook cannot catch it. Booleans: Helm's `not`/`and`/`or`/`ternary` are strict — a knob set to 0 or \"true\" aborts the render with 'wrong type for value; expected bool; got int64', so the type is checked up front instead. Everything else stays permissive (no additionalProperties:false anywhere) — Helm injects `global`, and future tiers add keys. Every boolean leaf of values.yaml is typed here; scripts/values-schema-bools-check.py fails the build when a new one is added without a matching constraint.",
+  "$comment": "Pins the values a wrong TYPE or a wrong ENUM would silently mis-render. Enums: a wrong clusterProfile renders the dev topology and the drift hook cannot catch it. Booleans: Helm's `not`/`and`/`or`/`ternary` are strict — a knob set to 0 or \"true\" aborts the render with 'wrong type for value; expected bool; got int64', so the type is checked up front instead. Everything else stays permissive (no additionalProperties:false anywhere) — Helm injects `global`, and future tiers add keys. Every boolean leaf of values.yaml is typed here; scripts/ci/values-schema-bools-check.py fails the build when a new one is added without a matching constraint.",
   "type": "object",
   "properties": {
     "clusterProfile": {

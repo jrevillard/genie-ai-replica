@@ -59,6 +59,20 @@ spec:
       ports:
         - protocol: TCP
           port: 8888
+  {{- if eq true (index (.Values.okf | default dict) "enabled") }}
+  # The OKF server's RAGAS answer path (OKF_RAGAS_SERVE_URL defaults to
+  # http://chatqna:8888/v1/chatqna): the eval pipeline asks chatqna the
+  # same questions a user would. Peer half of the tier's own egress
+  # rule — one without the other passes every render gate and silently
+  # drops the traffic.
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: okf-server
+      ports:
+        - protocol: TCP
+          port: 8888
+  {{- end }}
   {{- if $obsMetrics.enabled }}
   # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
   # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
@@ -782,15 +796,16 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # The BFF's retrieval-posture client and the document repository's
-    # crawl hooks.
+    # The BFF's retrieval-posture client (OKF_SERVER_URL) and the
+    # dataprep worker, which carries the same wiring and kicks the
+    # server on ingest completions.
     - from:
         - podSelector:
             matchLabels:
               genieai.io/component: backend
         - podSelector:
             matchLabels:
-              genieai.io/component: documentRepository
+              genieai.io/component: dataprep
       ports:
         - protocol: TCP
           port: 3002
@@ -831,6 +846,19 @@ spec:
       ports:
         - protocol: TCP
           port: 8888
+    # The document repository (DOCUMENT_REPOSITORY_URL, app default
+    # http://document-repository:3001): the ingest worker POSTs bundles
+    # to its /api/files/ingest-bundle endpoint and the backing-file
+    # service deletes through it — under default-deny a missing rule
+    # here stalls the whole OKF ingest lifecycle with no error
+    # anywhere. Post-DNAT pod port — services.documentRepository.port.
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+      ports:
+        - protocol: TCP
+          port: {{ index $appPorts "documentRepository" }}
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0

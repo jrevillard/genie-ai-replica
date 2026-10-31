@@ -516,6 +516,96 @@ def keycloak_client_gaps(docs, policies):
     return gaps
 
 
+OKF_SERVER_URL = re.compile(r"https?://okf-server(?::(\d+))?")
+
+
+def index_okf_clients(docs):
+    """{component: port} for the workloads that dial the okf-server.
+
+    Derived from the RENDER, same shape as the keycloak client index:
+    every workload whose env carries a row pointing at the okf-server
+    Service (the chart's OKF_SERVER_URL wiring) needs that port admitted
+    by the okf-server policy's ingress.
+    """
+    clients: dict[str, set] = {}
+    for component, workloads in workload_components(docs).items():
+        if component == "okf-server":
+            continue
+        for doc in workloads:
+            for container in workload_containers(doc):
+                for entry in container.get("env") or []:
+                    url = entry.get("value")
+                    if not isinstance(url, str):
+                        continue
+                    match = OKF_SERVER_URL.search(url)
+                    if not match:
+                        continue
+                    clients.setdefault(component, set()).add(
+                        int(match.group(1)) if match.group(1) else 3002
+                    )
+    return clients
+
+
+def okf_tier_gaps(docs, policies, services):
+    """The OKF tier's flow pairs, checked the way the keycloak policy is.
+
+    Two expectation classes the flow-based gate cannot see on its own:
+    the okf-server ingress is a MEMBERSHIP list (clients derived from
+    the render's OKF_SERVER_URL rows), and the okf-server ->
+    document-repository pair is a documented application default
+    (DOCUMENT_REPOSITORY_URL -> http://document-repository:3001, the
+    ingest worker's bundle POST and the backing-file deletes) that the
+    render does not carry as an env row — so the expectation is
+    hand-written here once, and both ENDS are checked against it. This
+    exact pair shipped inverted (doc-repo admitted as an okf-server
+    client it never was; the real direction absent at both ends) and
+    sailed through every gate.
+    """
+    gaps = []
+    okf_policies = policies.get("okf-server") or []
+    if not okf_policies:
+        return gaps  # tier off: no okf policies render, nothing to expect
+
+    # 1. every render-derived client admitted by the okf-server ingress.
+    admissions: dict[str, set | str] = {}
+    for policy in okf_policies:
+        for rule in (policy.get("spec") or {}).get("ingress") or []:
+            ports = rule_ports(rule)
+            for peer in rule.get("from") or []:
+                selector = peer.get("podSelector")
+                if selector is None:
+                    continue
+                if not (selector.get("matchLabels") or {}):
+                    gaps.append(("okf-server", "all-pods", None, "the okf-server policy admits EVERY pod in the namespace"))
+                    continue
+                component = component_of(selector)
+                if not component:
+                    continue
+                if ports is None:
+                    admissions[component] = "any"
+                    continue
+                current = admissions.get(component)
+                if current == "any":
+                    continue
+                admissions[component] = (current or set()) | set(ports)
+    for component, ports in sorted(index_okf_clients(docs).items()):
+        admitted = admissions.get(component)
+        for port in sorted(ports):
+            if admitted is None:
+                gaps.append((component, "okf-server", port, f"the okf-server policy does not admit {component}"))
+            elif admitted != "any" and port not in admitted:
+                gaps.append((component, "okf-server", port, f"the okf-server policy admits {component} on {sorted(admitted)}, not {port}"))
+
+    # 2. the okf-server -> document-repository pair, both ends, on the
+    # doc-repo's post-DNAT pod port.
+    port = to_pod_ports({3001}, services, "documentRepository").pop()
+    if not policy_allows(policies, "okf-server", "egress", "documentRepository", port, services):
+        gaps.append(("okf-server", "documentRepository", port, "the okf-server policy has no egress rule to the document repository"))
+    if not policy_allows(policies, "documentRepository", "ingress", "okf-server", port, services):
+        gaps.append(("okf-server", "documentRepository", port, "the document-repository policy does not admit okf-server"))
+    return gaps
+
+
 def namespace_wide_egress(docs):
     """The policies that isolate EVERY pod's egress in the namespace.
 
@@ -629,6 +719,7 @@ def crosscheck(path):
     membership = []
     for component, reason in keycloak_client_gaps(docs, policies):
         membership.append((component, reason))
+    okf_gaps = okf_tier_gaps(docs, policies, services)
     reachability = peer_reachability_gaps(docs, policies)
     for source, target, port in sorted(flows, key=lambda f: (f[0], f[1], str(f[2]))):
         missing = []
@@ -657,6 +748,9 @@ def crosscheck(path):
         print(f"  SKIPPED {entry}: mixes a CIDR/namespace peer with a component peer — not asserted here")
     for component, reason in membership:
         print(f"  BLOCKED {component} -> keycloak :{KEYCLOAK_SERVICE_PORT} ({reason})")
+    for source, target, port, reason in okf_gaps:
+        shown = port if port is not None else "any"
+        print(f"  BLOCKED {source} -> {target} :{shown} ({reason})")
     for source, destination, reason in reachability:
         print(f"  BLOCKED {source} -> {destination} :any ({reason})")
     for source, target, port, missing in blocked:
@@ -672,6 +766,8 @@ def crosscheck(path):
         )
     return policies, blocked + [
         (component, "keycloak", KEYCLOAK_SERVICE_PORT, reason) for component, reason in membership
+    ] + [
+        (source, destination, port, reason) for source, destination, port, reason in okf_gaps
     ] + [
         (source, destination, None, reason) for source, destination, reason in reachability
     ]

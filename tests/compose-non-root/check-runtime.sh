@@ -71,8 +71,10 @@ SELF_DROPPING=' postgres redis-cache '
 
 while IFS= read -r container; do
   service="${container#"$PROJECT"-}"; service="${service#"${PROJECT}_"}"
-  case "$SELF_DROPPING" in
-    *" $service "*)
+  # compose names the container <project>-postgres-1, swarm
+  # <stack>_postgres.1.<id> — match the service PREFIX
+  case "$service" in
+    postgres.*|postgres-*|redis-cache.*|redis-cache-*)
       echo "  (self-dropping service $service: server runs as its package user; transient root healthcheck execs skipped)"
       continue;;
   esac

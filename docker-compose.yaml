@@ -116,15 +116,22 @@ x-chown-init: &chown-init
   cap_drop:
     - ALL
   cap_add:
+    # CHOWN only: the probe hands root-owned paths to the service uid, and
+    # CAP_CHOWN is the one capability that needs (DAC_OVERRIDE existed for
+    # the marker-file write, which the probe form no longer does).
     - CHOWN
-    - DAC_OVERRIDE
   security_opt:
     - no-new-privileges:true
   logging: *fluent-logging
   image: busybox:1.38.0
   networks:
     - genieai_network
-  restart: "no"
+  # bounded self-heal on the compose front-end (deploy.restart_policy below
+  # covers swarm): a transient init failure retries 3 times instead of
+  # stranding the dependent services on a failed one-shot. The one-shot
+  # rule treats a BOUNDED retry as one-shot-in-spirit (it terminates);
+  # restart: always would be a permanent root container and still trips.
+  restart: "on-failure:3"
   deploy:
     # mode: global (the otel-collector-init precedent): named volumes are
     # node-local and swarm ignores depends_on, so a per-node init is the
@@ -1248,10 +1255,10 @@ services:
     # sweep under a permanent skip" — on a live root-era upgrade the old
     # container keeps writing while the init chowns, and such a file would
     # never be healed. Same doctrine as the Ansible migration tasks: find
-    # -uid 0, targeted -h chown, verify, exit nonzero if anything
+    # -user root, targeted -h chown, verify, exit nonzero if anything
     # survived (a failed init is VISIBLE and retried by the bounded
     # policy; the next deploy heals the rest).
-    command: ["sh", "-c", "{ [ -z \"$$(find /app/data -uid 0 -print -quit)\" ] || find /app/data -uid 0 -exec chown -h 1000:1000 {} +; } && { [ -z \"$$(find /app/Uploads -uid 0 -print -quit)\" ] || find /app/Uploads -uid 0 -exec chown -h 1000:1000 {} +; } && [ -z \"$$(find /app/data /app/Uploads -uid 0 -print -quit)\" ]"]
+    command: ["sh", "-c", "{ [ -z \"$$(find /app/data -user root -print -quit)\" ] || find /app/data -user root -exec chown -h 1000:1000 {} +; } && { [ -z \"$$(find /app/Uploads -user root -print -quit)\" ] || find /app/Uploads -user root -exec chown -h 1000:1000 {} +; } && [ -z \"$$(find /app/data /app/Uploads -user root -print -quit)\" ]"]
     volumes:
       - backend_data:/app/data
       - backend_uploads:/app/Uploads
@@ -1262,7 +1269,7 @@ services:
   document-repository-init:
     <<: *chown-init
     # PROBE form (no marker — see backend-init).
-    command: ["sh", "-c", "{ [ -z \"$$(find /app/uploads -uid 0 -print -quit)\" ] || find /app/uploads -uid 0 -exec chown -h 1000:1000 {} +; } && [ -z \"$$(find /app/uploads -uid 0 -print -quit)\" ]"]
+    command: ["sh", "-c", "{ [ -z \"$$(find /app/uploads -user root -print -quit)\" ] || find /app/uploads -user root -exec chown -h 1000:1000 {} +; } && [ -z \"$$(find /app/uploads -user root -print -quit)\" ]"]
     volumes:
       - doc_repo_uploads:/app/uploads
 
@@ -1412,7 +1419,7 @@ services:
   # Chowns the arango_data and arango_apps volumes to the unprivileged uid
   # arango runs as (#1227). One-shot, runs as root ON PURPOSE (the chown IS
   # the job) and writes nothing outside the named volumes — see the no-root
-  # contract test. Each run PROBES for root-owned paths (find -uid 0) and
+  # contract test. Each run PROBES for root-owned paths (find -user root) and
   # hands exactly those to the service uid — no marker file, so nothing
   # written after the sweep is stranded under a permanent skip, and the
   # empty-volume repopulation docker does at every container create is
@@ -1424,7 +1431,7 @@ services:
     # chown fails the init (see backend-init) instead of being masked.
     # PROBE form (no marker — see backend-init): targeted -h chown of
     # whatever is root-owned, then verify.
-    command: ["sh", "-c", "{ [ -z \"$$(find /var/lib/arangodb3 -uid 0 -print -quit)\" ] || find /var/lib/arangodb3 -uid 0 -exec chown -h 999:999 {} +; } && { [ -z \"$$(find /var/lib/arangodb3-apps -uid 0 -print -quit)\" ] || find /var/lib/arangodb3-apps -uid 0 -exec chown -h 999:999 {} +; } && [ -z \"$$(find /var/lib/arangodb3 /var/lib/arangodb3-apps -uid 0 -print -quit)\" ]"]
+    command: ["sh", "-c", "{ [ -z \"$$(find /var/lib/arangodb3 -user root -print -quit)\" ] || find /var/lib/arangodb3 -user root -exec chown -h 999:999 {} +; } && { [ -z \"$$(find /var/lib/arangodb3-apps -user root -print -quit)\" ] || find /var/lib/arangodb3-apps -user root -exec chown -h 999:999 {} +; } && [ -z \"$$(find /var/lib/arangodb3 /var/lib/arangodb3-apps -user root -print -quit)\" ]"]
     volumes:
       - arango_data:/var/lib/arangodb3
       - arango_apps:/var/lib/arangodb3-apps
@@ -2666,7 +2673,7 @@ services:
     # so the chown has run on every node the collector can land on).
     <<: *chown-init
     # PROBE form (no marker — see backend-init).
-    command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && { [ -z \"$$(find /var/lib/otelcol -uid 0 -print -quit)\" ] || find /var/lib/otelcol -uid 0 -exec chown -h 10001:10001 {} +; } && [ -z \"$$(find /var/lib/otelcol -uid 0 -print -quit)\" ]"]
+    command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && { [ -z \"$$(find /var/lib/otelcol -user root -print -quit)\" ] || find /var/lib/otelcol -user root -exec chown -h 10001:10001 {} +; } && [ -z \"$$(find /var/lib/otelcol -user root -print -quit)\" ]"]
     volumes:
       - otel-queue:/var/lib/otelcol
 
@@ -2772,7 +2779,7 @@ services:
   victorialogs-init:
     <<: *chown-init
     # PROBE form (no marker — see backend-init).
-    command: ["sh", "-c", "{ [ -z \"$$(find /var/lib/victoria-logs -uid 0 -print -quit)\" ] || find /var/lib/victoria-logs -uid 0 -exec chown -h 65534:65534 {} +; } && [ -z \"$$(find /var/lib/victoria-logs -uid 0 -print -quit)\" ]"]
+    command: ["sh", "-c", "{ [ -z \"$$(find /var/lib/victoria-logs -user root -print -quit)\" ] || find /var/lib/victoria-logs -user root -exec chown -h 65534:65534 {} +; } && [ -z \"$$(find /var/lib/victoria-logs -user root -print -quit)\" ]"]
     volumes:
       - vlogs-data:/var/lib/victoria-logs
 

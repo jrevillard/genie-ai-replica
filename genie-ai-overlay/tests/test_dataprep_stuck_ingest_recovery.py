@@ -15,18 +15,23 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import dataprep.genieai_dataprep_microservice as ms
 
 
-def _mock_session(status=200, payload=None):
-    """An aiohttp.ClientSession mock shaped like the real async context chain."""
-    mock_session = MagicMock()
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=False)
+def _mock_response(status=200, payload=None):
+    """An aiohttp response mock shaped like the real async context chain."""
     mock_resp = MagicMock()
     mock_resp.status = status
     mock_resp.json = AsyncMock(return_value=payload if payload is not None else {})
     mock_resp.text = AsyncMock(return_value="body")
     mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
     mock_resp.__aexit__ = AsyncMock(return_value=False)
-    mock_session.post.return_value = mock_resp
+    return mock_resp
+
+
+def _mock_session(status=200, payload=None):
+    """A ClientSession mock whose post always answers the same response."""
+    mock_session = MagicMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+    mock_session.post.return_value = _mock_response(status, payload)
     return mock_session
 
 
@@ -98,36 +103,54 @@ class TestRecoverStuckIngestStatuses:
         assert url.endswith("/api/files/ingest/recover-stuck")
         headers = session.post.call_args[1]["headers"]
         assert headers["Authorization"] == "Bearer token"
+        assert session.post.call_args[1]["json"] == {"excludeFileIds": []}
 
     async def test_no_stuck_files_returns_empty_list(self):
         session = _mock_session(200, {"success": True, "recovered": [], "count": 0})
         assert await _recover_with_session(session) == []
 
+    async def test_live_tasks_are_excluded_from_the_release(self):
+        """A kick accepted while the recovery was retrying is not an orphan:
+        its id rides the request as excludeFileIds so a later attempt cannot
+        flip an ingest that is actually running."""
+        live = MagicMock(done=MagicMock(return_value=False))
+        finished = MagicMock(done=MagicMock(return_value=True))
+        ms.active_ingestion_tasks["live-1"] = live
+        ms.active_ingestion_tasks["done-2"] = finished
+        try:
+            session = _mock_session(200, {"success": True, "recovered": [], "count": 0})
+            await _recover_with_session(session)
+        finally:
+            ms.active_ingestion_tasks.clear()
+
+        assert session.post.call_args[1]["json"] == {"excludeFileIds": ["live-1"]}
+
     async def test_server_error_is_retried_then_succeeds(self):
-        failing = _mock_session(503, {})
-        ok = _mock_session(200, {"success": True, "recovered": ["f-9"], "count": 1})
-        with (
-            patch.object(ms, "get_service_account_token", new_callable=AsyncMock, return_value="token"),
-            patch.object(ms.aiohttp, "ClientSession", side_effect=[failing, ok]),
-            patch.object(ms, "_RECOVERY_RETRY_SECONDS", 0),
-        ):
-            result = await ms.recover_stuck_ingest_statuses()
+        session = MagicMock()
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=False)
+        session.post.side_effect = [
+            _mock_response(503),
+            _mock_response(200, {"success": True, "recovered": ["f-9"], "count": 1}),
+        ]
+        result = await _recover_with_session(session)
 
         assert result == ["f-9"]
-        assert failing.post.call_count == 1
-        assert ok.post.call_count == 1
+        assert session.post.call_count == 2
 
     async def test_persistent_failure_gives_up_without_raising(self):
         session = _mock_session(500, {})
-        result = await _recover_with_session(session, _RECOVERY_MAX_ATTEMPTS=3)
+        with _apply(_recover_patches(session, _RECOVERY_MAX_ATTEMPTS=3)):
+            result = await ms.recover_stuck_ingest_statuses()
+            # One session across the whole retry loop, not one per attempt.
+            assert ms.aiohttp.ClientSession.call_count == 1
 
         assert result == []
         assert session.post.call_count == 3
 
     async def test_connection_error_is_retried_without_raising(self):
-        session = MagicMock()
-        session.__aenter__ = AsyncMock(side_effect=OSError("connection refused"))
-        session.__aexit__ = AsyncMock(return_value=False)
+        session = _mock_session(500, {})
+        session.post.side_effect = OSError("connection refused")
         result = await _recover_with_session(session, _RECOVERY_MAX_ATTEMPTS=2)
 
         assert result == []

@@ -25,6 +25,7 @@ except ModuleNotFoundError:  # Windows dev checkout: locking degrades to a no-op
 from opentelemetry.trace import Status, StatusCode
 
 from tracing import (
+    background_span,
     get_meter,
     get_tracer,
     install_uvicorn_access_logging,
@@ -171,59 +172,82 @@ async def recover_stuck_ingest_statuses():
 
     ``active_ingestion_tasks`` dies with the process, so a dataprep restart
     orphans every in-flight ingest: the row stays 'Ingesting' forever, the UI
-    disables the Ingest button and ``kill_ingest`` 404s. At boot the registry
-    is empty BY CONSTRUCTION — every 'Ingesting' row belongs to a task that no
-    longer exists (the service runs a single replica), so one call to the
-    doc-repo recovery endpoint releases them all back to 'Pending' for manual
+    disables the Ingest button and ``kill_ingest`` 404s. The recovery asks
+    the doc-repo to release those rows back to 'Pending' for manual
     re-ingestion.
 
+    What makes the release safe is the BOOT-TIME trigger plus the dead
+    in-memory registry — not exclusive writers (doc-repo itself and the
+    okf-server also write 'Ingesting'). The retry window can outlive the
+    boot, so the request carries the ids whose task is STILL alive in this
+    process as ``excludeFileIds``: a kick accepted while the recovery was
+    retrying must not be released by a later attempt. Residual window: ids
+    registered between the snapshot below and the doc-repo's UPDATE —
+    bounded by the ingest 409 idempotency guard, and the live task writes
+    its terminal status when it finishes regardless.
+
     Exhaustion is a loud warning, never an exception — the service must boot
-    regardless. OKF concepts are NOT covered: they have no doc-repo files doc,
-    and the okf-server worker already reclaims timed-out concepts through the
-    task_status probe window (spec #1020 §5.9).
+    regardless. OKF surfaces are NOT covered: bundle-zip docs are excluded
+    on the doc-repo side (okf-server owns their transition) and concepts
+    have no doc-repo files doc at all — the okf-server worker reclaims
+    timed-out concepts through the task_status probe window (spec #1020
+    §5.9).
 
     Returns the list of released file ids ([] when nothing was recovered).
     """
-    url = f"{DOCUMENT_REPOSITORY_URL}/api/files/ingest/recover-stuck"
-    headers = {"Content-Type": "application/json"}
-    for attempt in range(1, _RECOVERY_MAX_ATTEMPTS + 1):
-        try:
-            headers["Authorization"] = f"Bearer {await get_service_account_token()}"
-            async with (
-                aiohttp.ClientSession(
-                    timeout=aiohttp.ClientTimeout(
-                        total=CONTROL_PLANE_TIMEOUT_SECONDS, sock_connect=AIOHTTP_CONNECT_TIMEOUT_SECONDS
-                    )
-                ) as session,
-                session.post(url, headers=headers) as response,
-            ):
-                if response.status == 200:
-                    payload = await response.json()
-                    recovered = payload.get("recovered") or []
-                    if recovered:
-                        logger.info(
-                            f"[ recovery ] Released {len(recovered)} stuck ingest(s) back to Pending: {recovered}"
+    # Post-request background work: the span keeps the [ recovery ] log lines
+    # correlated in the trace store (overlay CLAUDE.md § Public tracing API).
+    with background_span("dataprep.recovery"):
+        url = f"{DOCUMENT_REPOSITORY_URL}/api/files/ingest/recover-stuck"
+        headers = {"Content-Type": "application/json"}
+        exclude_file_ids = sorted(fid for fid, task in active_ingestion_tasks.items() if not task.done())
+        body = {"excludeFileIds": exclude_file_ids}
+        # One session across every retry attempt: a fresh ClientSession per
+        # attempt builds and tears down a connector pool each time for nothing.
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(
+                total=CONTROL_PLANE_TIMEOUT_SECONDS, sock_connect=AIOHTTP_CONNECT_TIMEOUT_SECONDS
+            )
+        ) as session:
+            for attempt in range(1, _RECOVERY_MAX_ATTEMPTS + 1):
+                try:
+                    headers["Authorization"] = f"Bearer {await get_service_account_token()}"
+                    async with session.post(url, json=body, headers=headers) as response:
+                        if response.status == 200:
+                            payload = await response.json()
+                            recovered = payload.get("recovered") or []
+                            if recovered:
+                                logger.info(
+                                    f"[ recovery ] Released {len(recovered)} stuck ingest(s) back to "
+                                    f"Pending: {recovered}"
+                                )
+                            else:
+                                logger.info("[ recovery ] No stuck ingests found at startup.")
+                            return recovered
+                        logger.error(
+                            f"[ recovery ] attempt {attempt}/{_RECOVERY_MAX_ATTEMPTS}: "
+                            f"HTTP {response.status}: {await response.text()}"
                         )
-                    else:
-                        logger.info("[ recovery ] No stuck ingests found at startup.")
-                    return recovered
-                logger.error(
-                    f"[ recovery ] attempt {attempt}/{_RECOVERY_MAX_ATTEMPTS}: "
-                    f"HTTP {response.status}: {await response.text()}"
-                )
-        except asyncio.CancelledError:
-            # A cancellation is the event loop shutting down — not a transient
-            # failure. Retrying through it would fight the loop teardown.
-            raise
-        except Exception as e:  # noqa: BLE001 — recovery must never kill the boot
-            logger.error(f"[ recovery ] attempt {attempt}/{_RECOVERY_MAX_ATTEMPTS} failed: {e}")
-        if attempt < _RECOVERY_MAX_ATTEMPTS:
-            await asyncio.sleep(_RECOVERY_RETRY_SECONDS)
-    logger.warning(
-        f"[ recovery ] Giving up after {_RECOVERY_MAX_ATTEMPTS} attempts — files stuck in 'Ingesting' "
-        "stay stuck until the next dataprep restart."
-    )
-    return []
+                except asyncio.CancelledError:
+                    # A cancellation is the event loop shutting down — not a
+                    # transient failure. Retrying through it would fight the
+                    # loop teardown.
+                    raise
+                except Exception as e:  # noqa: BLE001 — recovery must never kill the boot
+                    logger.error(f"[ recovery ] attempt {attempt}/{_RECOVERY_MAX_ATTEMPTS} failed: {e}")
+                if attempt < _RECOVERY_MAX_ATTEMPTS:
+                    await asyncio.sleep(_RECOVERY_RETRY_SECONDS)
+        logger.warning(
+            f"[ recovery ] Giving up after {_RECOVERY_MAX_ATTEMPTS} attempts — files stuck in 'Ingesting' "
+            "stay stuck until the next dataprep restart."
+        )
+        return []
+
+
+# Strong references to scheduled background tasks: the event loop only keeps
+# weak references to tasks, so an unreferenced one can be garbage-collected
+# mid-retry (CPython asyncio docs) with no error anywhere.
+_background_tasks: set = set()
 
 
 def schedule_stuck_ingest_recovery(app):
@@ -241,7 +265,10 @@ def schedule_stuck_ingest_recovery(app):
     if loop is None or loop.is_closed():
         logger.warning("[ recovery ] No serving event loop found — skipping stuck-ingest recovery.")
         return None
-    return loop.create_task(recover_stuck_ingest_statuses())
+    task = loop.create_task(recover_stuck_ingest_statuses())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
 
 
 # ------------------------------------------------------------------------------

@@ -3,6 +3,10 @@
 // Tests for POST /api/files/ingest/recover-stuck (#610): dataprep calls this
 // once at startup to release files it left stuck in 'Ingesting' when the
 // ingestion service restarted mid-ingest.
+//
+// metadataService is kept REAL (only the shared-lib db handle is mocked) so
+// the AQL contract — the actual release behavior — is pinned, not a mock's
+// idea of it.
 
 // Mock shared-lib before anything else
 jest.mock('../../__tests__/__mocks__/shared-lib', () => ({}), { virtual: true });
@@ -15,7 +19,8 @@ jest.mock(
   { virtual: true }
 );
 
-// Mock auth middleware to bypass Keycloak
+// Mock auth middleware to bypass Keycloak — but keep the authorizeRole mock
+// observable so the route's SERVICE_CALLBACK gate itself can be asserted.
 jest.mock('../../middlewares/keycloak-auth-middleware', () => ({
   authenticateToken: jest.fn((req, res, next) => {
     req.user = {
@@ -63,17 +68,21 @@ jest.mock('../../services/fileService', () => ({
   searchFiles: jest.fn()
 }));
 
-jest.mock('../../services/metadataService', () => ({
-  recoverStuckIngests: jest.fn(),
-  searchMetadata: jest.fn(),
-  getMetadataById: jest.fn(),
-  updateMetadata: jest.fn()
-}));
+// Real metadataService against a mocked db handle.
+jest.mock('../../services/metadataService', () => jest.requireActual('../../services/metadataService'));
 
 const request = require('supertest');
 const app = require('../../app');
+const { dbService } = require('../../../shared-lib');
 const fileService = require('../../services/fileService');
-const metadataService = require('../../services/metadataService');
+const { SERVICE_CALLBACK } = require('../../config/rolePolicy');
+
+// A db whose query resolves to the given recovered file ids.
+function mockDb(recovered) {
+  const query = jest.fn().mockResolvedValue({ all: jest.fn().mockResolvedValue(recovered) });
+  dbService.getConnection.mockResolvedValue({ query });
+  return { query };
+}
 
 describe('POST /api/files/ingest/recover-stuck', () => {
   beforeEach(() => {
@@ -81,7 +90,7 @@ describe('POST /api/files/ingest/recover-stuck', () => {
   });
 
   it('releases stuck files to Pending and logs each one', async () => {
-    metadataService.recoverStuckIngests.mockResolvedValue(['file-1', 'file-2']);
+    const { query } = mockDb(['file-1', 'file-2']);
     fileService.addIngestionLog.mockResolvedValue({});
 
     const res = await request(app).post('/api/files/ingest/recover-stuck');
@@ -95,10 +104,26 @@ describe('POST /api/files/ingest/recover-stuck', () => {
       'file-1',
       expect.objectContaining({ level: 'WARN', stage: 'dataprep' })
     );
+    // The AQL contract: only non-bundle rows with a file_id, exclusion-aware.
+    const aql = query.mock.calls[0][0];
+    expect(aql).toContain("LOWER(file.dataprep.status) == 'ingesting'");
+    expect(aql).toContain('file.file_id != null');
+    expect(aql).toContain('file.is_bundle != true');
+    expect(aql).toContain('file.file_id NOT IN @excludeFileIds');
+    expect(query.mock.calls[0][1]).toEqual({ excludeFileIds: [] });
+  });
+
+  it('passes the caller exclusion list through to the query', async () => {
+    const { query } = mockDb([]);
+    await request(app)
+      .post('/api/files/ingest/recover-stuck')
+      .send({ excludeFileIds: ['live-1', 'live-2'] });
+
+    expect(query.mock.calls[0][1]).toEqual({ excludeFileIds: ['live-1', 'live-2'] });
   });
 
   it('returns an empty recovery when nothing is stuck', async () => {
-    metadataService.recoverStuckIngests.mockResolvedValue([]);
+    mockDb([]);
 
     const res = await request(app).post('/api/files/ingest/recover-stuck');
 
@@ -110,7 +135,7 @@ describe('POST /api/files/ingest/recover-stuck', () => {
   it('still succeeds when the log write for one file fails', async () => {
     // The status flip already happened; a lost log line must not report a
     // failed recovery — dataprep would only retry the whole call for nothing.
-    metadataService.recoverStuckIngests.mockResolvedValue(['file-1', 'file-2']);
+    mockDb(['file-1', 'file-2']);
     fileService.addIngestionLog.mockRejectedValueOnce(new Error('log write failed'));
     fileService.addIngestionLog.mockResolvedValueOnce({});
 
@@ -121,11 +146,42 @@ describe('POST /api/files/ingest/recover-stuck', () => {
   });
 
   it('returns 500 when the recovery query fails', async () => {
-    metadataService.recoverStuckIngests.mockRejectedValue(new Error('arangodb down'));
+    const { query } = mockDb([]);
+    query.mockRejectedValue(new Error('arangodb down'));
 
     const res = await request(app).post('/api/files/ingest/recover-stuck');
 
     expect(res.status).toBe(500);
     expect(res.body.success).toBe(false);
+  });
+
+  it('gates the route behind the SERVICE_CALLBACK role', async () => {
+    // The unit middleware mock bypasses role checks, so assert the
+    // registration instead: a refactor that drops the gate stays red here.
+    // The router is re-required in isolation because beforeEach wipes the
+    // call history recorded when the app was first loaded.
+    let layer;
+    let calls;
+    let results;
+    jest.isolateModules(() => {
+      const freshRouter = require('../../routes/fileRoutes');
+      const freshAuth = require('../../middlewares/keycloak-auth-middleware');
+      layer = freshRouter.stack.find(
+        (l) => l.route && l.route.path === '/ingest/recover-stuck' && l.route.methods.post
+      );
+      calls = freshAuth.authorizeRole.mock.calls;
+      results = freshAuth.authorizeRole.mock.results;
+    });
+
+    expect(layer).toBeTruthy();
+    // authorizeRole(...) returns a fresh handler per call — the one guarding
+    // this route must be among the values it returned for SERVICE_CALLBACK.
+    const serviceCallbackReturnValues = calls
+      .map((call, i) => (JSON.stringify(call[0]) === JSON.stringify(SERVICE_CALLBACK) ? results[i].value : null))
+      .filter(Boolean);
+    expect(serviceCallbackReturnValues.length).toBeGreaterThan(0);
+
+    const routeHandlers = layer.route.stack.map((s) => s.handle);
+    expect(routeHandlers.some((handler) => serviceCallbackReturnValues.includes(handler))).toBe(true);
   });
 });

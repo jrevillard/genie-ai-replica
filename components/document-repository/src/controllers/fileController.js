@@ -78,6 +78,14 @@ const singleIngestSchema = Joi.object({
   chunkOverlap: Joi.number().integer().min(0).max(1000).allow(null).optional()
 });
 
+// Body of the dataprep startup recovery (#610): the caller's still-live task
+// ids, excluded from the release so a retry landing after the service started
+// serving cannot flip an ingest that is actually running. Optional/empty by
+// default (nothing to exclude at a cold boot).
+const recoverStuckSchema = Joi.object({
+  excludeFileIds: Joi.array().items(Joi.string().min(1)).max(10000).default([])
+});
+
 // WS2 (David, 2026-09-25): bundle zips (is_bundle=true) are OKF per-version
 // ingestion artifacts — they live forever, governed by the OKF lifecycle
 // (supersede/superseded by minting a new version), not by doc-repo's
@@ -1680,7 +1688,10 @@ class FileController {
    */
   async recoverStuckIngests(req, res) {
     try {
-      const recovered = await metadataService.recoverStuckIngests();
+      // The caller's still-live task ids: an ingest accepted while the
+      // recovery was retrying is not an orphan and must not be released.
+      const { value } = recoverStuckSchema.validate(req.body || {});
+      const recovered = await metadataService.recoverStuckIngests(value.excludeFileIds);
       for (const fileId of recovered) {
         try {
           await fileService.addIngestionLog(fileId, {

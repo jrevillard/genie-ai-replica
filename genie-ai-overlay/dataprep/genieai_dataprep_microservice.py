@@ -179,12 +179,13 @@ async def recover_stuck_ingest_statuses():
     What makes the release safe is the BOOT-TIME trigger plus the dead
     in-memory registry — not exclusive writers (doc-repo itself and the
     okf-server also write 'Ingesting'). The retry window can outlive the
-    boot, so the request carries the ids whose task is STILL alive in this
-    process as ``excludeFileIds``: a kick accepted while the recovery was
-    retrying must not be released by a later attempt. Residual window: ids
-    registered between the snapshot below and the doc-repo's UPDATE —
-    bounded by the ingest 409 idempotency guard, and the live task writes
-    its terminal status when it finishes regardless.
+    boot, so every attempt carries the ids whose task is STILL alive in
+    this process at that moment as ``excludeFileIds``: a kick accepted
+    while the recovery was retrying must not be released by a later
+    attempt. Residual window: ids registered between an attempt's
+    snapshot and the doc-repo's UPDATE — bounded by the ingest 409
+    idempotency guard, and the live task writes its terminal status when
+    it finishes regardless.
 
     Exhaustion is a loud warning, never an exception — the service must boot
     regardless. OKF surfaces are NOT covered: bundle-zip docs are excluded
@@ -195,13 +196,20 @@ async def recover_stuck_ingest_statuses():
 
     Returns the list of released file ids ([] when nothing was recovered).
     """
+    # Hold a strong reference to THIS task: the event loop only keeps weak
+    # references to tasks, so an unreferenced one can be garbage-collected
+    # during the 10 s retry sleeps (CPython asyncio docs) with no error
+    # anywhere. Self-registering — whichever scheduler ran it (the comps
+    # startup hook drops its own reference).
+    task = asyncio.current_task()
+    if task is not None:
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
     # Post-request background work: the span keeps the [ recovery ] log lines
     # correlated in the trace store (overlay CLAUDE.md § Public tracing API).
     with background_span("dataprep.recovery"):
         url = f"{DOCUMENT_REPOSITORY_URL}/api/files/ingest/recover-stuck"
-        headers = {"Content-Type": "application/json"}
-        exclude_file_ids = sorted(fid for fid, task in active_ingestion_tasks.items() if not task.done())
-        body = {"excludeFileIds": exclude_file_ids}
+        headers = {}
         # One session across every retry attempt: a fresh ClientSession per
         # attempt builds and tears down a connector pool each time for nothing.
         async with aiohttp.ClientSession(
@@ -212,7 +220,12 @@ async def recover_stuck_ingest_statuses():
             for attempt in range(1, _RECOVERY_MAX_ATTEMPTS + 1):
                 try:
                     headers["Authorization"] = f"Bearer {await get_service_account_token()}"
-                    async with session.post(url, json=body, headers=headers) as response:
+                    # Snapshot the live set PER ATTEMPT: a task registered
+                    # since the previous attempt is alive now, not orphaned.
+                    exclude_file_ids = sorted(fid for fid, t in active_ingestion_tasks.items() if not t.done())
+                    async with session.post(
+                        url, json={"excludeFileIds": exclude_file_ids}, headers=headers
+                    ) as response:
                         if response.status == 200:
                             payload = await response.json()
                             recovered = payload.get("recovered") or []
@@ -244,31 +257,31 @@ async def recover_stuck_ingest_statuses():
         return []
 
 
-# Strong references to scheduled background tasks: the event loop only keeps
-# weak references to tasks, so an unreferenced one can be garbage-collected
-# mid-retry (CPython asyncio docs) with no error anywhere.
+# Strong references to the running recovery task (see the comment inside
+# ``recover_stuck_ingest_statuses``).
 _background_tasks: set = set()
 
 
 def schedule_stuck_ingest_recovery(app):
-    """Schedule the stuck-ingest recovery on the serving event loop.
+    """Register the stuck-ingest recovery via the comps startup hook.
 
-    The comps-wrapped FastAPI app does not proxy add_startup_event (see
-    ``tracing.install_uvicorn_access_log_middleware``), so the hook is
-    scheduled directly on the loop ``HTTPService`` created in ``_async_setup``
-    — the same loop that serves the request handlers. Runs once the loop
-    spins up in ``app.start()``; no-op (with a warning) when the loop is
-    missing, so an upstream comps restructure degrades instead of crashing
-    the boot.
+    ``HTTPService.add_startup_event`` is the framework-native hook — comps
+    uses it itself for its dynamic-batch loop. It fires on the uvicorn
+    lifespan startup, on the same loop that serves the request handlers.
+    comps schedules the passed coroutine with ``asyncio.create_task`` and
+    drops the reference; the recovery self-registers into
+    ``_background_tasks`` on entry to survive GC (see the comment inside).
+    No-op (with a warning) when the method is missing, so an upstream
+    comps restructure degrades instead of crashing the boot.
     """
-    loop = getattr(app, "event_loop", None)
-    if loop is None or loop.is_closed():
-        logger.warning("[ recovery ] No serving event loop found — skipping stuck-ingest recovery.")
+    add_startup_event = getattr(app, "add_startup_event", None)
+    if add_startup_event is None:
+        logger.warning("[ recovery ] No add_startup_event on the microservice — skipping stuck-ingest recovery.")
         return None
-    task = loop.create_task(recover_stuck_ingest_statuses())
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-    return task
+    # comps' add_startup_event hands its argument straight to
+    # asyncio.create_task, so pass the INVOKED coroutine.
+    add_startup_event(recover_stuck_ingest_statuses())
+    return None
 
 
 # ------------------------------------------------------------------------------

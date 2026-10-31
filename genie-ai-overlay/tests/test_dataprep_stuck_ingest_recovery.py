@@ -10,6 +10,7 @@ serving event loop, right after boot.
 """
 
 import asyncio
+import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import dataprep.genieai_dataprep_microservice as ms
@@ -50,47 +51,22 @@ def _recover_patches(session, **constants):
     return patches
 
 
-def _apply(patches):
-    return _MultiPatch(patches)
-
-
-class _MultiPatch:
-    def __init__(self, patches):
-        self._patches = list(patches.values())
-
-    def __enter__(self):
-        for p in self._patches:
-            p.start()
-        return self
-
-    def __exit__(self, *exc):
-        for p in reversed(self._patches):
-            p.stop()
-        return False
-
-
 async def _recover_with_session(session, **constants):
-    with _apply(_recover_patches(session, **constants)):
+    with contextlib.ExitStack() as stack:
+        for p in _recover_patches(session, **constants).values():
+            stack.enter_context(p)
         return await ms.recover_stuck_ingest_statuses()
 
 
-class _StubLoop:
-    """Records create_task calls; nothing is ever scheduled to run."""
+class _StubApp:
+    """Captures what the schedule hook registers; nothing ever runs."""
 
     def __init__(self):
-        self.created = []
+        self.registered = []
 
-    def is_closed(self):
-        return False
-
-    def create_task(self, coro):
-        self.created.append(coro)
-        return MagicMock()
-
-
-class _StubApp:
-    def __init__(self, loop):
-        self.event_loop = loop
+    def add_startup_event(self, coro):
+        self.registered.append(coro)
+        return None
 
 
 class TestRecoverStuckIngestStatuses:
@@ -140,7 +116,9 @@ class TestRecoverStuckIngestStatuses:
 
     async def test_persistent_failure_gives_up_without_raising(self):
         session = _mock_session(500, {})
-        with _apply(_recover_patches(session, _RECOVERY_MAX_ATTEMPTS=3)):
+        with contextlib.ExitStack() as stack:
+            for p in _recover_patches(session, _RECOVERY_MAX_ATTEMPTS=3).values():
+                stack.enter_context(p)
             result = await ms.recover_stuck_ingest_statuses()
             # One session across the whole retry loop, not one per attempt.
             assert ms.aiohttp.ClientSession.call_count == 1
@@ -173,35 +151,56 @@ class TestRecoverStuckIngestStatuses:
         the loop shutting down and must propagate, not be retried through."""
         session = _mock_session(200, {"success": True, "recovered": [], "count": 0})
         session.post.side_effect = asyncio.CancelledError()
-        with (
-            patch.object(ms, "get_service_account_token", new_callable=AsyncMock, return_value="token"),
-            patch.object(ms.aiohttp, "ClientSession", return_value=session),
-            patch.object(ms, "_RECOVERY_MAX_ATTEMPTS", 3),
-            patch.object(ms, "_RECOVERY_RETRY_SECONDS", 0),
-        ):
-            try:
-                await ms.recover_stuck_ingest_statuses()
-                raised = False
-            except asyncio.CancelledError:
-                raised = True
+        raised = False
+        try:
+            await _recover_with_session(session, _RECOVERY_MAX_ATTEMPTS=3)
+        except asyncio.CancelledError:
+            raised = True
 
         assert raised is True
         assert session.post.call_count == 1
 
+    async def test_registers_itself_as_a_strong_referenced_task(self):
+        """The recovery self-registers into _background_tasks (the scheduler
+        — comps' startup hook — drops its own reference) and discards the
+        entry when it completes. Runs as its OWN task here so current_task()
+        inside is the recovery task, like production."""
+        seen = {}
+
+        async def _probe():
+            seen["registered"] = asyncio.current_task() in ms._background_tasks
+
+        session = MagicMock()
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=False)
+        response = _mock_response(200, {"success": True, "recovered": [], "count": 0})
+        response.json.side_effect = _probe
+        session.post.return_value = response
+
+        with contextlib.ExitStack() as stack:
+            for p in _recover_patches(session).values():
+                stack.enter_context(p)
+            await asyncio.create_task(ms.recover_stuck_ingest_statuses())
+        # done_callbacks run on the next loop tick after the task finishes.
+        await asyncio.sleep(0)
+
+        assert seen["registered"] is True
+        assert ms._background_tasks == set()
+
 
 class TestScheduleStuckIngestRecovery:
-    async def test_schedules_the_recovery_task_on_the_serving_loop(self):
-        loop = _StubLoop()
+    async def test_registers_the_recovery_via_the_comps_startup_hook(self):
+        app = _StubApp()
         with patch.object(ms, "recover_stuck_ingest_statuses", new_callable=AsyncMock) as mock_recover:
-            task = ms.schedule_stuck_ingest_recovery(_StubApp(loop))
+            result = ms.schedule_stuck_ingest_recovery(app)
 
-        assert task is not None
-        assert len(loop.created) == 1
+        assert result is None
+        assert len(app.registered) == 1
         mock_recover.assert_called_once()
-        loop.created[0].close()  # avoid 'never awaited' warnings
+        app.registered[0].close()  # avoid 'never awaited' warnings
 
-    async def test_missing_event_loop_is_a_warning_not_a_crash(self):
+    async def test_missing_startup_hook_is_a_warning_not_a_crash(self):
         with patch.object(ms, "recover_stuck_ingest_statuses", new_callable=AsyncMock):
-            task = ms.schedule_stuck_ingest_recovery(object())
+            result = ms.schedule_stuck_ingest_recovery(object())
 
-        assert task is None
+        assert result is None

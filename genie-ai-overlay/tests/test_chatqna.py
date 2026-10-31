@@ -2302,9 +2302,12 @@ class TestQueryTranslationStatus:
     """
 
     @staticmethod
-    def _mock_client(side_effect=None, content="Translated history"):
+    def _mock_client(side_effect=None, content="Translated history", completions=False):
         mock_response = MagicMock()
-        mock_response.json.return_value = {"choices": [{"message": {"content": content}}]}
+        if completions:
+            mock_response.json.return_value = {"choices": [{"text": content}]}
+        else:
+            mock_response.json.return_value = {"choices": [{"message": {"content": content}}]}
         mock_response.raise_for_status = MagicMock()
         mock_client = AsyncMock()
         if side_effect is not None:
@@ -2317,14 +2320,19 @@ class TestQueryTranslationStatus:
 
     SPANISH_HISTORY = [{"role": "user", "content": "qué es X?"}]
 
-    def _translation_patches(self, mock_client):
+    def _translation_patches(self, mock_client, translategemma=False):
         # ExitStack: `with` takes no star-unpacking, and the patches live in a
-        # helper so each test states only what it varies.
+        # helper so each test states only what it varies. Both endpoint
+        # constants are patched, to distinct sentinels, so a test asserting
+        # the posted URL also pins which branch built the payload. Window
+        # derivation stays per-test (the live discovery probe and a patched
+        # window are different mechanisms).
         stack = contextlib.ExitStack()
         for p in (
             patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
-            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
-            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=translategemma),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://chat-llm.test/v1/chat/completions"),
+            patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://completions.test/v1/completions"),
         ):
             stack.enter_context(p)
         return stack
@@ -2464,6 +2472,14 @@ class TestQueryTranslationStatus:
         assert status == "fallback_error"
         mock_client.post.assert_not_called()
 
+    def test_no_window_keeps_the_fixed_ceiling_without_a_refusal(self):
+        """Without a discovered window the cap stays at the fixed 4096
+        ceiling and the refusal never fires: a history past the ceiling is
+        sent under the default bound, not refused locally."""
+        svc = create_chatqna_service()
+        with patch("chatqna.genieai_chatqna._get_translation_window", return_value=None):
+            assert svc._translation_output_cap("A" * 13000) == 4096
+
     def test_a_window_too_tight_refuses_the_output_cap(self):
         """The TranslateGemma output-cap guard refuses a window too tight to
         translate into (cap below the input estimate): the helper returns
@@ -2476,23 +2492,71 @@ class TestQueryTranslationStatus:
             assert svc._translation_output_cap("A" * 3000) == 1500
 
     @pytest.mark.asyncio
-    async def test_a_history_past_the_output_base_cap_is_refused_and_named(self):
-        """The output cap is bounded at 4096 tokens while the prompt estimate
-        grows with the input, so a history past ~12k chars is refused even
-        inside the char budget (a discovered window raises the char budget
-        far past the cap ceiling). The refusal is live, not theoretical: the
-        history goes out untranslated and the status names it."""
+    async def test_a_history_past_the_output_base_cap_is_translated_inside_the_window(self):
+        """The completion ceiling scales with the discovered translation
+        window: a history past the 4096 base ceiling still goes out as a
+        translation request — the fixed ceiling capped the completion below
+        the input past ~12k chars (their prompt estimate crossed 4096 tokens
+        inside the char budget) and refused them untranslated."""
         svc = create_chatqna_service()
         history = [{"role": "user", "content": "A" * 13000}]
+        mock_client = self._mock_client(content="USER: AAAA", completions=True)
         models_resp = MagicMock()
         models_resp.json.return_value = {"data": [{"id": "gemma", "max_model_len": 65536}]}
-        with (
-            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=self._mock_client()),
-            patch("chatqna.genieai_chatqna._is_translategemma", return_value=True),
-            patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://localhost/v1/completions"),
-            patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
-            patch("httpx.get", return_value=models_resp),
-        ):
+        stack = self._translation_patches(mock_client, translategemma=True)
+        stack.enter_context(
+            patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation")
+        )
+        stack.enter_context(patch("httpx.get", return_value=models_resp))
+        with stack:
+            text, status = await svc._get_translated_history_string(history)
+        assert status == "translated"
+        # The completions payload goes to the completions endpoint: vLLM
+        # cannot route the TranslateGemma template through chat completions.
+        assert mock_client.post.call_args.args[0] == "http://completions.test/v1/completions"
+        # Flattened "USER: " + 13000 chars → cap len//2 = 6503, inside the
+        # 65536-window allowance (65536 − 512 − 4335 = 60689).
+        assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 6503
+        assert text == "USER: AAAA"
+
+    @pytest.mark.asyncio
+    async def test_a_history_in_a_window_too_tight_is_still_refused_and_named(self):
+        """A window that cannot hold the prompt plus a full-length
+        translation still refuses at the caller: the history goes out
+        untranslated and the status names it — scaling the ceiling must not
+        turn a genuinely tight window into a doomed request."""
+        svc = create_chatqna_service()
+        history = [{"role": "user", "content": "A" * 13000}]
+        mock_client = self._mock_client()
+        stack = self._translation_patches(mock_client, translategemma=True)
+        # A 9000-token window leaves 9000 − 512 − 4335 = 4153 tokens beside
+        # the 4335-token prompt estimate: less than the estimate, so the
+        # completion could not cover what there is to translate. The char
+        # budget is patched wide so the history reaches the cap guard
+        # instead of being dropped by the budget loop.
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=9000))
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=20000))
+        with stack:
+            text, status = await svc._get_translated_history_string(history)
+        assert text.startswith("USER: AAAA")  # untranslated
+        assert status == "fallback_error"
+        mock_client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_truncated_completion_is_refused_not_translated(self):
+        """A completion cut off at max_tokens (finish_reason "length") is not
+        a translation: embedding the cut-off text would put a half-
+        translated history into the retrieval space under a success
+        status."""
+        svc = create_chatqna_service()
+        history = [{"role": "user", "content": "A" * 13000}]
+        mock_client = self._mock_client(content="USER: AAAA", completions=True)
+        mock_client.post.return_value.json.return_value = {
+            "choices": [{"text": "USER: AAAA", "finish_reason": "length"}]
+        }
+        stack = self._translation_patches(mock_client, translategemma=True)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=65536))
+        with stack:
             text, status = await svc._get_translated_history_string(history)
         assert text.startswith("USER: AAAA")  # untranslated
         assert status == "fallback_error"

@@ -595,11 +595,20 @@ def _build_user_content(user_context_string: str, history_string: str, rag_augme
     )
 
 
-def _translation_base_cap(text: str) -> int:
+# Fixed completion ceiling a translation request falls back to when no
+# window is known, and the default for the callers that translate
+# chunk-bounded inputs (the chunk path). The history path replaces it with
+# the window-derived allowance.
+TRANSLATION_BASE_CEILING = 4096
+
+
+def _translation_base_cap(text: str, ceiling: int = TRANSLATION_BASE_CEILING) -> int:
     """Base completion cap for a translation request: roughly half the input
-    size, bounded to a floor that keeps short inputs translatable and a
-    ceiling that keeps long ones bounded. Shared by every translation path."""
-    return min(max(len(text) // 2, 512), 4096)
+    size, with a 512 floor that keeps short inputs translatable and a
+    ceiling that keeps long ones bounded (a ceiling below the floor wins —
+    the window caller may clamp that far). Shared by every translation path;
+    the history caller passes the window-derived ceiling it discovered."""
+    return min(max(len(text) // 2, 512), ceiling)
 
 
 def _get_max_model_len() -> int:
@@ -657,7 +666,8 @@ def _get_max_translation_chars() -> int:
 
 # Translation budget derivation from the discovered window. The completion
 # reserve assumes the translated output is roughly the size of the input (the
-# TranslateGemma payload also caps max_tokens near half the window).
+# TranslateGemma history payload caps max_tokens at half the input, clamped
+# to the room the window leaves beside the prompt estimate).
 TRANSLATION_PROMPT_OVERHEAD_TOKENS = 512
 
 
@@ -3656,22 +3666,24 @@ class ChatQnAService:
     def _translation_output_cap(self, flattened_history_string: str) -> int | None:
         """Completion cap for the TranslateGemma payload.
 
-        Base ceiling is len//2 (bounded 512..4096). When the translation window
-        is discovered, the cap is clamped so the prompt estimate (chars /
-        chars-per-token ratio) plus the completion stays inside the window —
-        otherwise vLLM rejects the whole request and the history goes back
-        untranslated. Returns None when the clamped cap drops below the
-        estimated input size (the completion would be shorter than what there
-        is to translate); the caller should skip the translation and send the
-        history as-is.
+        Roughly half the input (512 floor). When the translation window is
+        discovered, the ceiling is the room the window leaves beside the
+        prompt estimate (chars / chars-per-token ratio), so prompt and
+        completion stay inside the window together. A history whose estimate
+        exceeds that allowance yields None — the completion would be shorter
+        than what there is to translate — and the caller skips the
+        translation, sending the history as-is.
         """
-        cap = _translation_base_cap(flattened_history_string)
         window = _get_translation_window()
-        if window:
-            prompt_token_estimate = len(flattened_history_string) // TRANSLATION_CHARS_PER_TOKEN
-            cap = min(cap, max(1, window - TRANSLATION_PROMPT_OVERHEAD_TOKENS - prompt_token_estimate))
-            if cap < prompt_token_estimate:
-                return None
+        prompt_token_estimate = len(flattened_history_string) // TRANSLATION_CHARS_PER_TOKEN
+        ceiling = (
+            max(1, window - TRANSLATION_PROMPT_OVERHEAD_TOKENS - prompt_token_estimate)
+            if window
+            else TRANSLATION_BASE_CEILING
+        )
+        cap = _translation_base_cap(flattened_history_string, ceiling=ceiling)
+        if window and cap < prompt_token_estimate:
+            return None
         return cap
 
     async def _get_translated_history_string(
@@ -3858,7 +3870,17 @@ class ChatQnAService:
                 response.raise_for_status()
                 response_data = response.json()
                 if translategemma:
-                    translated_blob = response_data["choices"][0]["text"]
+                    choice = response_data["choices"][0]
+                    if choice.get("finish_reason") == "length":
+                        # The completion hit max_tokens: the translation is cut
+                        # off, not finished. Embedding the cut-off text would
+                        # put a half-translated history into the retrieval
+                        # space under a success status — the same defect as an
+                        # empty completion, and the backend translation path
+                        # rejects it the same way.
+                        logger.error("Translation model hit max_tokens; treating the history translation as failed.")
+                        return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
+                    translated_blob = choice["text"]
                 else:
                     translated_blob = response_data["choices"][0]["message"]["content"]
                 translated_blob = translated_blob.strip()

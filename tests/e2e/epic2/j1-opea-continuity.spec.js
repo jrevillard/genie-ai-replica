@@ -5,8 +5,6 @@ test.describe('Phase J: OPEA Continuity', () => {
   let userToken;
 
   test.beforeAll(async ({ browser }) => {
-    // Direct access grants (ROPC) are disabled on the realm by design —
-    // mint the token through a browser login session instead.
     userToken = await getSessionTokenViaUI({ browser });
   });
 

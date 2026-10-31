@@ -25,17 +25,12 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
   test.beforeAll(async ({ browser }) => {
     adminToken = await getAdminToken();
 
-    // The genie2 token minted below arrives via ROPC. The UI login only
-    // speaks to the primary realm, so an additional realm has no session
-    // posture — and genie2 is a test-only realm, not covered by the
-    // committed genie-realm.yaml. The spec therefore provisions its own
-    // ROPC grant (Phase 0.6 already creates the realm with
-    // directAccessGrantsEnabled; this re-asserts it on any stack).
-    // NEVER do this on the primary realm.
+    // genie2 is test-only: enable ROPC for its direct token mints
+    // (see enableDirectAccessGrants — never on the primary realm).
     await enableDirectAccessGrants(adminToken, TEST_REALM, 'genie-app');
 
-    // Primary-realm token from a browser login session (the realm refuses
-    // ROPC by design) — minted once, like the sibling suites.
+    // Primary-realm token from a browser login session — minted once,
+    // like the sibling suites.
     genie1Token = await getSessionTokenViaUI({ browser });
 
     // Create test user in genie2 (realm should already exist from Phase 0.6)

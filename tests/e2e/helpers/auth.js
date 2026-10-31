@@ -40,6 +40,13 @@ function request(method, path, options = {}) {
 
     req.on('error', reject);
 
+    // https.request's timeout option only starts the clock — without a
+    // handler the stalled socket is never destroyed and the promise
+    // hangs past the 30s budget.
+    req.on('timeout', () => {
+      req.destroy(new Error(`Request timed out after ${reqOptions.timeout}ms: ${method} ${path}`));
+    });
+
     if (options.body) {
       const bodyStr = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
       req.setHeader('Content-Type', options.contentType || 'application/json');

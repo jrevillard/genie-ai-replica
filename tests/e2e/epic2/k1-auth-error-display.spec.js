@@ -3,28 +3,32 @@ const { getAdminToken, getSessionTokenViaUI, request: authRequest } = require('.
 const { createUser, deleteUser, updateRealmSettings } = require('../helpers/keycloak-admin');
 
 test.describe.serial('Phase K: Auth Error Display', () => {
-  // The session mints run two login attempts when the stack stalls
-  // (30s navigation + 15s redirect wait + retry budget each), and K.2
-  // stacks a 30s expiry poll on top of its own mint — past the 60s
-  // default. Hooks inherit the test timeout.
-  test.setTimeout(180000);
-
   let adminToken;
   let userToken;
   let noRolesUserId;
+  let originalLifespan;
   const NOROLES_USERNAME = 'noroles-user-e2e';
   const NOROLES_PASSWORD = 'TestPass123!';
 
   test.beforeAll(async ({ browser }) => {
     adminToken = await getAdminToken();
     userToken = await getSessionTokenViaUI({ browser });
+
+    // K.2 mutates the realm's token lifespan; restore whatever the
+    // deployment actually runs, not an assumed default.
+    const realmRes = await authRequest('GET', '/auth/admin/realms/genie', {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    if (realmRes.status === 200 && realmRes.data.accessTokenLifespan) {
+      originalLifespan = String(realmRes.data.accessTokenLifespan);
+    }
   });
 
   test.afterAll(async () => {
     // Always restore realm settings (even if K.2 or K.3 failed)
     try {
       const token = await getAdminToken();
-      await updateRealmSettings(token, 'genie', { accessTokenLifespan: '300' });
+      await updateRealmSettings(token, 'genie', { accessTokenLifespan: originalLifespan || '300' });
     } catch {
       // Best-effort restore
     }
@@ -81,11 +85,11 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   });
 
   test('K.3 — FORBIDDEN (user without roles)', async ({ browser }) => {
-    // Restore the normal lifespan first: K.2 left it at 10s, and the
-    // browser-session mint below adds SPA-bootstrap latency after the
-    // token is issued — on a loaded stack the admin request could hit
-    // TOKEN_EXPIRED instead of the FORBIDDEN this test verifies.
-    await updateRealmSettings(adminToken, 'genie', { accessTokenLifespan: '300' });
+    // Restore the deployment's lifespan first: K.2 left it at 10s, and
+    // the browser-session mint below adds SPA-bootstrap latency after
+    // the token is issued — on a loaded stack the admin request could
+    // hit TOKEN_EXPIRED instead of the FORBIDDEN this test verifies.
+    await updateRealmSettings(adminToken, 'genie', { accessTokenLifespan: originalLifespan || '300' });
 
     // Create no-roles user
     noRolesUserId = await createUser(adminToken, 'genie', {

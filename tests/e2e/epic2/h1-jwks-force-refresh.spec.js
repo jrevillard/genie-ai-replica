@@ -3,11 +3,6 @@ const { getAdminToken, getSessionTokenViaUI, request: authRequest } = require('.
 const { rotateRealmKeys } = require('../helpers/keycloak-admin');
 
 test.describe('Phase H: JWKS Force-Refresh', () => {
-  // The session mints run two login attempts when the stack stalls
-  // (30s navigation + 15s redirect wait + retry budget each) — past the
-  // 60s default before any test starts. Hooks inherit the test timeout.
-  test.setTimeout(180000);
-
   let adminToken;
   let userToken;
 

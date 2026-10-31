@@ -3,7 +3,11 @@ require('dotenv').config();
 
 module.exports = defineConfig({
   testDir: './tests/e2e',
-  timeout: 60000,
+  // Session-token mints log in through the browser (two attempts on a
+  // stalled stack: 30s navigation + 15s redirect wait + retry budget
+  // each ≈ 135s). beforeAll hooks are bounded by this project timeout —
+  // test.setTimeout cannot raise them — so the ceiling lives here.
+  timeout: 180000,
   expect: {
     timeout: 15000,
   },

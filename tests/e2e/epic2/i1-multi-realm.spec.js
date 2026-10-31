@@ -17,11 +17,6 @@ const { createUser, deleteUser, enableDirectAccessGrants } = require('../helpers
  *   - Backend has been restarted to load genie2 JWKS
  */
 test.describe.serial('Phase I: Multi-Realm Configuration', () => {
-  // The session mints run two login attempts when the stack stalls
-  // (30s navigation + 15s redirect wait + retry budget each) — past the
-  // 60s default before any test starts. Hooks inherit the test timeout.
-  test.setTimeout(180000);
-
   let adminToken;
   let genie1Token;
   const TEST_REALM = 'genie2';

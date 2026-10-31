@@ -175,6 +175,10 @@ async function deleteUser(adminToken, realm, userId) {
  * @returns {Promise<void>}
  */
 async function enableDirectAccessGrants(adminToken, realm, clientId) {
+  if (realm === 'genie') {
+    throw new Error('enableDirectAccessGrants must never target the primary realm — ROPC is disabled there by design');
+  }
+
   const searchRes = await request('GET', `/auth/admin/realms/${realm}/clients?clientId=${clientId}`, {
     headers: { Authorization: `Bearer ${adminToken}` },
   });

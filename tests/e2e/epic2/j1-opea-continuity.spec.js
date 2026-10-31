@@ -2,11 +2,6 @@ const { test, expect } = require('@playwright/test');
 const { getSessionTokenViaUI, request: authRequest } = require('../helpers/auth');
 
 test.describe('Phase J: OPEA Continuity', () => {
-  // The session mints run two login attempts when the stack stalls
-  // (30s navigation + 15s redirect wait + retry budget each) — past the
-  // 60s default before any test starts. Hooks inherit the test timeout.
-  test.setTimeout(180000);
-
   let userToken;
 
   test.beforeAll(async ({ browser }) => {

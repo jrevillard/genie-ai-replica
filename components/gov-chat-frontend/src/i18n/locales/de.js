@@ -384,7 +384,7 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Keine Protokolle entsprechen Ihren Suchkriterien',
-        resultsFound: '{count} Protokolleinträge gefunden',
+        resultsFound: "{'{'}count{'}'} Protokolleinträge gefunden",
         degraded:
           'Aufgrund eines VictoriaLogs-Ausfalls werden nur teilweise Ergebnisse angezeigt. Einige kürzliche Protokolleinträge fehlen möglicherweise.'
       }
@@ -455,8 +455,8 @@ export default {
       empty: 'Keine Kategorien gefunden. Klicken Sie auf "Neue Kategorie hinzufügen", um zu beginnen.',
       formTitleCreateCategory: 'Neue Kategorie erstellen',
       formTitleAddService: "Dienst zu \"{'{'}categoryName{'}'}\" hinzufügen",
-      formTitleEditCategory: 'Kategorie bearbeiten: "{itemName}"',
-      formTitleEditService: 'Dienst bearbeiten: "{itemName}"',
+      formTitleEditCategory: "Kategorie bearbeiten: \"{'{'}itemName{'}'}\"",
+      formTitleEditService: "Dienst bearbeiten: \"{'{'}itemName{'}'}\"",
       nameEnLabel: 'Name (Englisch)',
       translationsTitle: 'Übersetzungen zur Anzeige',
       loadingTranslations: 'Übersetzungen werden geladen...',
@@ -473,9 +473,9 @@ export default {
       confirmDeleteTitleCategory: 'Kategorie löschen?',
       confirmDeleteTitleService: 'Dienst löschen?',
       confirmDeleteCategory:
-        'Sind Sie sicher, dass Sie die Kategorie "{itemName}" löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.',
+        "Sind Sie sicher, dass Sie die Kategorie \"{'{'}itemName{'}'}\" löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
       confirmDeleteService:
-        'Sind Sie sicher, dass Sie den Dienst "{itemName}" löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.',
+        "Sind Sie sicher, dass Sie den Dienst \"{'{'}itemName{'}'}\" löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
       deleteSuccessCategory: 'Kategorie erfolgreich gelöscht.',
       deleteSuccessService: 'Dienst erfolgreich gelöscht.',
       deleteErrorCategory: 'Fehler beim Löschen der Kategorie.',
@@ -505,18 +505,20 @@ export default {
       loadError: 'Fehler beim Laden der Dokumente.',
       confirmIngestTitle: 'Batch-Aufnahme bestätigen',
       ingest: 'Aufnehmen',
-      confirmIngestSelected: 'Sind Sie sicher, dass Sie {count} ausgewählte Datei(en) aufnehmen möchten?',
-      ingestQueuedSuccess: '{count} Datei(en) wurden zur Aufnahme in die Warteschlange gestellt.',
+      confirmIngestSelected: "Sind Sie sicher, dass Sie {'{'}count{'}'} ausgewählte Datei(en) aufnehmen möchten?",
+      ingestQueuedSuccess: "{'{'}count{'}'} Datei(en) wurden zur Aufnahme in die Warteschlange gestellt.",
       ingestQueuedError: 'Während des Batch-Aufnahmeprozesses ist ein Fehler aufgetreten.',
-      ingestPartialFailure: '{successCount} von {count} Datei(en) aufgenommen. Fehlgeschlagen: {detail}',
-      ingestAllFailed: 'Alle {count} Datei(en) fehlgeschlagen: {detail}',
+      ingestPartialFailure:
+        "{'{'}successCount{'}'} von {'{'}count{'}'} Datei(en) aufgenommen. Fehlgeschlagen: {'{'}detail{'}'}",
+      ingestAllFailed: "Alle {'{'}count{'}'} Datei(en) fehlgeschlagen: {'{'}detail{'}'}",
       retractSelected: 'Ausgewählte zurückziehen',
       confirmRetractTitle: 'Batch-Zurückziehung bestätigen',
-      confirmRetractSelected: 'Sind Sie sicher, dass Sie {count} ausgewählte Datei(en) zurückziehen möchten?',
+      confirmRetractSelected: "Sind Sie sicher, dass Sie {'{'}count{'}'} ausgewählte Datei(en) zurückziehen möchten?",
       retract: 'Zurückziehen',
-      retractQueuedSuccess: '{count} Datei(en) wurden zur Zurückziehung in die Warteschlange gestellt.',
+      retractQueuedSuccess: "{'{'}count{'}'} Datei(en) wurden zur Zurückziehung in die Warteschlange gestellt.",
       retractQueuedError: 'Während des Batch-Zurückziehungsprozesses ist ein Fehler aufgetreten.',
-      retractPartialFailure: '{successCount} von {count} Datei(en) zurückgezogen. Fehlgeschlagen: {detail}',
+      retractPartialFailure:
+        "{'{'}successCount{'}'} von {'{'}count{'}'} Datei(en) zurückgezogen. Fehlgeschlagen: {'{'}detail{'}'}",
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
@@ -526,11 +528,12 @@ export default {
       deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
       deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
       deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
-      retractAllFailed: 'Alle {count} Datei(en) fehlgeschlagen: {detail}',
-      uploadSuccessMultiple: '{count} Datei(en) erfolgreich hochgeladen.',
-      linkSubmitSuccess: 'Erfolgreich gecrawlt und "{fileName}" gespeichert.',
-      actionSuccess: 'Aktion "{action}" für Datei {fileId} war erfolgreich.',
-      metadataUpdateSuccess: 'Metadaten für Datei {fileId} wurden aktualisiert.',
+      retractAllFailed: "Alle {'{'}count{'}'} Datei(en) fehlgeschlagen: {'{'}detail{'}'}",
+      uploadSuccessMultiple: "{'{'}count{'}'} Datei(en) erfolgreich hochgeladen.",
+      linkSubmitSuccess: "Erfolgreich gecrawlt und \"{'{'}fileName{'}'}\" gespeichert.",
+      crawlScheduled: "Website-Crawl geplant für \"{'{'}fileName{'}'}\". Status im Dashboard prüfen.",
+      actionSuccess: "Aktion \"{'{'}action{'}'}\" für Datei {'{'}fileId{'}'} war erfolgreich.",
+      metadataUpdateSuccess: "Metadaten für Datei {'{'}fileId{'}'} wurden aktualisiert.",
       deletePartialNotice:
         "{'{'{'}'}blocked{'}'} ausgewählte Datei(en) können nicht gelöscht werden ({'{'{'}'}reason{'}'}) — nur die anderen {'{'{'}'}n{'}'} werden gelöscht.",
       confirmDeleteSkipped:
@@ -1520,21 +1523,23 @@ export default {
     title: 'Dateien hochladen',
     dropzone: 'Dateien hierher ziehen & ablegen, oder klicken zum Auswählen',
     allowedTypesLabel: 'Erlaubte Typen:',
-    buttonUpload: 'Lade {count} Datei(en) hoch',
+    buttonUpload: "Lade {'{'}count{'}'} Datei(en) hoch",
     remove: 'Entfernen',
     uploading: 'Hochladen...',
     notifications: {
       dropError:
         'Nur Dateien können abgelegt werden. Bitte prüfen Sie, ob Sie eine gültige Datei von Ihrem Computer ziehen.',
-      typeNotAllowed: 'Dateityp "{extension}" ist nicht erlaubt.',
+      typeNotAllowed: "Dateityp \"{'{'}extension{'}'}\" ist nicht erlaubt.",
       shortcutUnsupported:
         'Verknüpfungsdateien (.url) werden nicht unterstützt. Bitte ziehen Sie die eigentliche Datei.',
-      duplicate: 'Datei "{fileName}" wurde bereits hinzugefügt.',
-      uploadSuccess: '{fileName} erfolgreich hochgeladen',
-      uploadFailed: 'Fehler beim Hochladen von {fileName}.'
+      duplicate: "Datei \"{'{'}fileName{'}'}\" wurde bereits hinzugefügt.",
+      uploadSuccess: "{'{'}fileName{'}'} erfolgreich hochgeladen",
+      uploadFailed: "Fehler beim Hochladen von {'{'}fileName{'}'}."
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+    ragTipNoOkf:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
     models: {
@@ -2620,7 +2625,7 @@ export default {
         alreadyInOkf: 'Bereits in einem OKF-Repository enthaltene Dokumente entfernen',
         alreadyIngested: 'Bereits ingestierte Dokumente entfernen',
         servingWarn:
-          '{n} ausgewählte Dokumente dienen noch dem freien Korpus — das neue Repository kann erst nach deren Rückzug ingestiert werden.'
+          "{'{'}n{'}'} ausgewählte Dokumente dienen noch dem freien Korpus — das neue Repository kann erst nach deren Rückzug ingestiert werden."
       },
       produce: {
         notReady: 'Producer-Anbindung folgt in einer späteren Story.'

@@ -383,7 +383,7 @@ export default {
       },
       logSearch: {
         noResultsFound: 'No logs matched your search criteria',
-        resultsFound: 'Found {count} log entries',
+        resultsFound: "Found {'{'}count{'}'} log entries",
         degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
@@ -452,8 +452,8 @@ export default {
       empty: 'No categories found. Click "Add New Category" to start.',
       formTitleCreateCategory: 'Create New Category',
       formTitleAddService: "Add Service to \"{'{'}categoryName{'}'}\"",
-      formTitleEditCategory: 'Edit Category: "{itemName}"',
-      formTitleEditService: 'Edit Service: "{itemName}"',
+      formTitleEditCategory: "Edit Category: \"{'{'}itemName{'}'}\"",
+      formTitleEditService: "Edit Service: \"{'{'}itemName{'}'}\"",
       nameEnLabel: 'Name (English)',
       translationsTitle: 'Translations for Display',
       loadingTranslations: 'Loading translations...',
@@ -469,8 +469,10 @@ export default {
       confirmCancelEdit: 'You have unsaved changes. Are you sure you want to cancel?',
       confirmDeleteTitleCategory: 'Delete Category?',
       confirmDeleteTitleService: 'Delete Service?',
-      confirmDeleteCategory: 'Are you sure you want to delete the Category "{itemName}"? This action cannot be undone.',
-      confirmDeleteService: 'Are you sure you want to delete the Service "{itemName}"? This action cannot be undone.',
+      confirmDeleteCategory:
+        "Are you sure you want to delete the Category \"{'{'}itemName{'}'}\"? This action cannot be undone.",
+      confirmDeleteService:
+        "Are you sure you want to delete the Service \"{'{'}itemName{'}'}\"? This action cannot be undone.",
       deleteSuccessCategory: 'Category deleted successfully.',
       deleteSuccessService: 'Service deleted successfully.',
       deleteErrorCategory: 'Failed to delete Category.',
@@ -500,18 +502,18 @@ export default {
       loadError: 'Failed to load documents.',
       confirmIngestTitle: 'Confirm Batch Ingestion',
       ingest: 'Ingest',
-      confirmIngestSelected: 'Are you sure you want to ingest {count} selected file(s)?',
-      ingestQueuedSuccess: '{count} file(s) have been queued for ingestion.',
+      confirmIngestSelected: "Are you sure you want to ingest {'{'}count{'}'} selected file(s)?",
+      ingestQueuedSuccess: "{'{'}count{'}'} file(s) have been queued for ingestion.",
       ingestQueuedError: 'An error occurred during the batch ingestion process.',
-      ingestPartialFailure: '{successCount} of {count} ingested. Failed: {detail}',
-      ingestAllFailed: 'All {count} file(s) failed: {detail}',
+      ingestPartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} ingested. Failed: {'{'}detail{'}'}",
+      ingestAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
       retractSelected: 'Retract Selected',
       confirmRetractTitle: 'Confirm Batch Retraction',
-      confirmRetractSelected: 'Are you sure you want to retract {count} selected file(s)?',
+      confirmRetractSelected: "Are you sure you want to retract {'{'}count{'}'} selected file(s)?",
       retract: 'Retract',
-      retractQueuedSuccess: '{count} file(s) have been queued for retraction.',
+      retractQueuedSuccess: "{'{'}count{'}'} file(s) have been queued for retraction.",
       retractQueuedError: 'An error occurred during the batch retraction process.',
-      retractPartialFailure: '{successCount} of {count} retracted. Failed: {detail}',
+      retractPartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} retracted. Failed: {'{'}detail{'}'}",
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
@@ -521,11 +523,12 @@ export default {
       deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
       deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
       deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
-      retractAllFailed: 'All {count} file(s) failed: {detail}',
-      uploadSuccessMultiple: '{count} file(s) uploaded successfully.',
-      linkSubmitSuccess: 'Successfully crawled and saved "{fileName}".',
-      actionSuccess: 'Action "{action}" on file {fileId} was successful.',
-      metadataUpdateSuccess: 'Metadata for file {fileId} was updated.',
+      retractAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
+      uploadSuccessMultiple: "{'{'}count{'}'} file(s) uploaded successfully.",
+      linkSubmitSuccess: "Successfully crawled and saved \"{'{'}fileName{'}'}\".",
+      crawlScheduled: "Site crawl scheduled for \"{'{'}fileName{'}'}\". Check status in dashboard.",
+      actionSuccess: "Action \"{'{'}action{'}'}\" on file {'{'}fileId{'}'} was successful.",
+      metadataUpdateSuccess: "Metadata for file {'{'}fileId{'}'} was updated.",
       deletePartialNotice:
         "{'{'{'}'}blocked{'}'} selected file(s) cannot be deleted ({'{'{'}'}reason{'}'}) — only the other {'{'{'}'}n{'}'} will be deleted.",
       confirmDeleteSkipped:
@@ -1506,19 +1509,21 @@ export default {
     title: 'Upload Files',
     dropzone: 'Drag & drop files here, or click to select',
     allowedTypesLabel: 'Allowed types:',
-    buttonUpload: 'Upload {count} File(s)',
+    buttonUpload: "Upload {'{'}count{'}'} File(s)",
     remove: 'Remove',
     uploading: 'Uploading...',
     notifications: {
       dropError: 'Only files can be dropped. Please check you are dragging a valid file from your computer.',
-      typeNotAllowed: 'File type "{extension}" is not allowed.',
+      typeNotAllowed: "File type \"{'{'}extension{'}'}\" is not allowed.",
       shortcutUnsupported: 'Shortcut files (.url) are not supported. Please drag the actual file.',
-      duplicate: 'File "{fileName}" has already been added.',
-      uploadSuccess: 'Successfully uploaded {fileName}',
-      uploadFailed: 'Failed to upload {fileName}.'
+      duplicate: "File \"{'{'}fileName{'}'}\" has already been added.",
+      uploadSuccess: "Successfully uploaded {'{'}fileName{'}'}",
+      uploadFailed: "Failed to upload {'{'}fileName{'}'}."
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+    ragTipNoOkf:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
     models: {
@@ -3421,7 +3426,7 @@ export default {
         alreadyInOkf: 'Remove documents already in an OKF repository',
         alreadyIngested: 'Remove documents already ingested',
         servingWarn:
-          '{n} selected document(s) still serve the free-form corpus — the new repository cannot be ingested until they are retracted.'
+          "{'{'}n{'}'} selected document(s) still serve the free-form corpus — the new repository cannot be ingested until they are retracted."
       },
       produce: {
         notReady: 'Producer wires in a later story.'

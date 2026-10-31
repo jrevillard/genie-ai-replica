@@ -108,16 +108,18 @@ describe('Locale consistency', () => {
     expect(dupMap).toEqual({});
   });
 
-  // PLACEHOLDER GUARD (David, 2026-09-30, "Step of 10"; re-inked 2026-10-09).
-  // translateMixin now does RAW message lookup (no vue-i18n compilation), so
-  // a replace()-consumed okf.* key must carry the PLAIN {x} form — the
-  // caller's .replace('{x}', …) needs to find it. The old {'{'}x{'}'} escape
-  // renders literally under raw lookup (live: the dashboard Ingested card
-  // showed "Ingested v{'{'}n{'}'}"), so every okf.* escape was un-escaped in
-  // the same change. admin.documents.* keys are the exception: their consumer
-  // is AdminDashboard.translate, which still routes through vue-i18n's
-  // compiler — there the escape form is load-bearing and a plain {x} would
-  // be swallowed as an empty named slot.
+  // PLACEHOLDER GUARD (David, 2026-09-30, "Step of 10"; re-inked 2026-10-09;
+  // widened round 16, #80122). translateMixin does RAW message lookup (no
+  // vue-i18n compilation), so a replace()-consumed okf.* key must carry the
+  // PLAIN {x} form — the caller's .replace('{x}', …) needs to find it. The
+  // old {'{'}x{'}'} escape renders literally under raw lookup (live: the
+  // dashboard Ingested card showed "Ingested v{'{'}n{'}'}"), so every okf.*
+  // escape was un-escaped in the same change. Keys consumed through a
+  // COMPILED $i18n.t path (AdminDashboard + the dialogs it hosts) are the
+  // exception: there the escape form is load-bearing and a plain {x} would
+  // be swallowed as an empty named slot — which is exactly what had happened
+  // to every pre-existing admin.documents/uploadDialog placeholder leaf
+  // before the round-16 migration.
   const RAW = /\{[a-zA-Z][a-zA-Z0-9_]*\}/;
 
   // DERIVED, NOT CURATED (review !622 round 9, #78680): the consumed-key sets
@@ -126,15 +128,36 @@ describe('Locale consistency', () => {
   // replaces was itself the failure mode (an unlisted key slipped the
   // escaped-vs-plain check and rendered literally in the UI).
   //
-  // Classification is by CONSUMER FILE: AdminDashboard.translate routes
+  // Classification is by CONSUMER FILE: files whose translate() routes
   // through vue-i18n's compiler (there the escaped {'{'}x{'}'} form is
   // load-bearing — a plain {x} is swallowed as an empty named slot), while
   // the mixin translate does RAW lookup (there the plain {x} form is
   // required). A future compiled-path consumer file is one entry in
   // COMPILED_FILES — one line, not an inventory.
-  const COMPILED_FILES = ['AdminDashboard.vue'];
+  const COMPILED_FILES = [
+    'AdminDashboard.vue',
+    'AddFromLinkDialog.vue',
+    'UploadFilesDialog.vue',
+    'FileDetailsDialog.vue',
+    'LogSearchDialog.vue',
+    'OperationResultsModal.vue'
+  ];
+  // Dynamic-key call sites the static scan cannot resolve (the key arrives in
+  // a variable): okfRepoGate.warnKey and the hierarchy titleKey/messageKey
+  // ternaries in AdminDashboard — all compiled-path consumers, so their
+  // leaves must stay escaped. One line per call site.
+  const DYNAMIC_COMPILED_KEYS = [
+    'okf.docs.gate.servingWarn',
+    'admin.hierarchy.confirmDeleteCategory',
+    'admin.hierarchy.confirmDeleteService',
+    'admin.hierarchy.formTitleEditCategory',
+    'admin.hierarchy.formTitleEditService'
+  ];
+  // The fallback may be single- OR backtick-quoted (template literals carry
+  // the same {x} tokens and go through the same compiler), and the whole call
+  // may wrap across lines — \s* covers both.
   const TRANSLATE_REPLACE_RE = new RegExp(
-    "(?:this\\.|[^\\w.])translate\\(\\s*'([a-zA-Z][\\w.]*)'\\s*(?:,\\s*'(?:[^'\\\\]|\\\\.)*'\\s*)?\\)\\s*\\.replace\\(",
+    "(?:this\\.|[^\\w.])translate\\(\\s*'([a-zA-Z][\\w.]*)'\\s*(?:,\\s*(?:'(?:[^'\\\\]|\\\\.)*'|`(?:[^`\\\\]|\\\\.)*`)\\s*)?\\)\\s*\\.replace\\(",
     'g'
   );
   function deriveReplaceConsumed() {
@@ -196,15 +219,20 @@ describe('Locale consistency', () => {
       }
     };
     roots.forEach(walk);
-    return { plain, escaped: Array.from(escaped).sort() };
+    return { plain, escaped };
   }
-  const derivedReplace = deriveReplaceConsumed();
+  const derivedScan = deriveReplaceConsumed();
+  const derivedReplace = {
+    plain: derivedScan.plain,
+    escaped: Array.from(new Set([...derivedScan.escaped, ...DYNAMIC_COMPILED_KEYS])).sort()
+  };
 
   test('the consumer scan actually finds call sites (a silently empty scan guards nothing)', () => {
     // round-9 ground truth: ~45 curated entries existed; the scan must see
-    // at least that many, and the compiled path must yield its 5 admin keys.
+    // at least that many. Round 16 (#80122) widened the compiled set from
+    // AdminDashboard's 5 admin keys to the dialogs it hosts too.
     expect(derivedReplace.plain.size).toBeGreaterThan(40);
-    expect(derivedReplace.escaped.length).toBeGreaterThanOrEqual(5);
+    expect(derivedReplace.escaped.length).toBeGreaterThanOrEqual(20);
   });
 
   test('replace()-consumed keys carry every consumed placeholder verbatim in every locale (mixin raw lookup)', () => {
@@ -233,19 +261,32 @@ describe('Locale consistency', () => {
     expect(offenders).toEqual([]);
   });
 
-  test('admin.documents replace()-consumed keys keep the escaped form (AdminDashboard compiled path)', () => {
+  test('compiled-path replace()-consumed keys keep the escaped form AND every token, in every locale', () => {
     const get = (o, d) => d.split('.').reduce((a, k) => (a && a[k] != null ? a[k] : undefined), o);
+    const unescape = (v) => String(v).split("{'{'}").join('{').split("{'}'}").join('}');
     const offenders = [];
     const en = getLocaleData('en');
     for (const locale of localeFiles) {
       const data = getLocaleData(locale);
       for (const key of derivedReplace.escaped) {
-        if (get(en, key) == null) continue; // caller-default fallback — nothing to assert
+        const enLeaf = get(en, key);
+        if (enLeaf == null) continue; // caller-default fallback — nothing to assert
         const v = get(data, key);
         if (typeof v !== 'string') {
           offenders.push(`${locale}:${key} missing`);
-        } else if (RAW.test(v)) {
+          continue;
+        }
+        if (RAW.test(v)) {
           offenders.push(`${locale}:${key} raw placeholder (must stay escaped): ${v}`);
+          continue;
+        }
+        // token parity: the en leaf's placeholders must all survive the
+        // translation — a token the caller .replace()es that a locale
+        // dropped renders the raw token to the user, silently, in that
+        // language only.
+        const tokens = unescape(enLeaf).match(/\{[a-zA-Z][a-zA-Z0-9_]*\}/g) || [];
+        for (const t of tokens) {
+          if (!unescape(v).includes(t)) offenders.push(`${locale}:${key} lost token ${t}: ${v}`);
         }
       }
     }

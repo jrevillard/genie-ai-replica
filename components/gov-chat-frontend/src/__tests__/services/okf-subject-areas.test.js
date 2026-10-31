@@ -38,10 +38,16 @@ it('maps the CATEGORY level to options (KH names as values, display as labels)',
   expect(serviceTreeService.getAdminCategories).toHaveBeenCalledWith('en');
 });
 
-it("'general' is the fallback ONLY when the hierarchy is unreachable", async () => {
+it("'general' is the fallback ONLY when the hierarchy is unreachable AND no live domains exist", async () => {
+  // Round 16, #80129: the legacy-domain append runs BEFORE the empty-list
+  // early return — an unreachable hierarchy is exactly the case that must
+  // NOT force a 'transport' repo to 'general' (the docstring's promise).
   serviceTreeService.getAdminCategories.mockRejectedValueOnce(new Error('down'));
   const opts = await loadSubjectAreaOptions(['transport']);
-  expect(opts).toEqual([{ value: 'general', label: 'General' }]);
+  expect(opts).toEqual([{ value: 'transport', label: 'transport (legacy)' }]);
+  // With nothing to offer instead, the fallback stands:
+  serviceTreeService.getAdminCategories.mockRejectedValueOnce(new Error('down'));
+  expect(await loadSubjectAreaOptions([])).toEqual([{ value: 'general', label: 'General' }]);
 });
 
 it("'general' is the fallback when the tree loads empty", async () => {

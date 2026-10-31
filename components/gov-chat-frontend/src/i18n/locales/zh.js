@@ -384,7 +384,7 @@ export default {
       },
       logSearch: {
         noResultsFound: '未找到匹配搜索条件的日志',
-        resultsFound: '找到 {count} 条日志条目',
+        resultsFound: "找到 {'{'}count{'}'} 条日志条目",
         degraded: '由于 VictoriaLogs 故障,正在显示部分结果。某些最近的日志条目可能缺失。'
       }
     },
@@ -450,8 +450,8 @@ export default {
       empty: '未找到类别。点击 "添加新类别" 开始。',
       formTitleCreateCategory: '创建新类别',
       formTitleAddService: "向 \"{'{'}categoryName{'}'}\" 添加服务",
-      formTitleEditCategory: '编辑类别: "{itemName}"',
-      formTitleEditService: '编辑服务: "{itemName}"',
+      formTitleEditCategory: "编辑类别: \"{'{'}itemName{'}'}\"",
+      formTitleEditService: "编辑服务: \"{'{'}itemName{'}'}\"",
       nameEnLabel: '名称 (英文)',
       translationsTitle: '用于显示的翻译',
       loadingTranslations: '正在加载翻译...',
@@ -467,8 +467,8 @@ export default {
       confirmCancelEdit: '您有未保存的更改。确定要取消吗？',
       confirmDeleteTitleCategory: '删除类别？',
       confirmDeleteTitleService: '删除服务？',
-      confirmDeleteCategory: '您确定要删除类别 "{itemName}" 吗？此操作无法撤销。',
-      confirmDeleteService: '您确定要删除服务 "{itemName}" 吗？此操作无法撤销。',
+      confirmDeleteCategory: "您确定要删除类别 \"{'{'}itemName{'}'}\" 吗？此操作无法撤销。",
+      confirmDeleteService: "您确定要删除服务 \"{'{'}itemName{'}'}\" 吗？此操作无法撤销。",
       deleteSuccessCategory: '类别删除成功。',
       deleteSuccessService: '服务删除成功。',
       deleteErrorCategory: '删除类别失败。',
@@ -498,18 +498,18 @@ export default {
       loadError: '加载文档失败。',
       confirmIngestTitle: '确认批量提取',
       ingest: '提取',
-      confirmIngestSelected: '您确定要提取选中的 {count} 个文件吗？',
-      ingestQueuedSuccess: '{count} 个文件已加入提取队列。',
+      confirmIngestSelected: "您确定要提取选中的 {'{'}count{'}'} 个文件吗？",
+      ingestQueuedSuccess: "{'{'}count{'}'} 个文件已加入提取队列。",
       ingestQueuedError: '批量提取过程中发生错误。',
-      ingestPartialFailure: '已成功提取 {successCount}/{count} 个文件。失败：{detail}',
-      ingestAllFailed: '全部 {count} 个文件提取失败：{detail}',
+      ingestPartialFailure: "已成功提取 {'{'}successCount{'}'}/{'{'}count{'}'} 个文件。失败：{'{'}detail{'}'}",
+      ingestAllFailed: "全部 {'{'}count{'}'} 个文件提取失败：{'{'}detail{'}'}",
       retractSelected: '撤回选中项',
       confirmRetractTitle: '确认批量撤回',
-      confirmRetractSelected: '您确定要撤回选中的 {count} 个文件吗？',
+      confirmRetractSelected: "您确定要撤回选中的 {'{'}count{'}'} 个文件吗？",
       retract: '撤回',
-      retractQueuedSuccess: '{count} 个文件已加入撤回队列。',
+      retractQueuedSuccess: "{'{'}count{'}'} 个文件已加入撤回队列。",
       retractQueuedError: '批量撤回过程中发生错误。',
-      retractPartialFailure: '已撤回 {successCount}/{count} 个文件。失败：{detail}',
+      retractPartialFailure: "已撤回 {'{'}successCount{'}'}/{'{'}count{'}'} 个文件。失败：{'{'}detail{'}'}",
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
@@ -519,11 +519,12 @@ export default {
       deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
       deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
       deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
-      retractAllFailed: '全部 {count} 个文件撤回失败：{detail}',
-      uploadSuccessMultiple: '{count} 个文件上传成功。',
-      linkSubmitSuccess: '成功爬取并保存 "{fileName}"。',
-      actionSuccess: '对文件 {fileId} 的操作 "{action}" 成功。',
-      metadataUpdateSuccess: '文件 {fileId} 的元数据已更新。',
+      retractAllFailed: "全部 {'{'}count{'}'} 个文件撤回失败：{'{'}detail{'}'}",
+      uploadSuccessMultiple: "{'{'}count{'}'} 个文件上传成功。",
+      linkSubmitSuccess: "成功爬取并保存 \"{'{'}fileName{'}'}\"。",
+      crawlScheduled: "已安排对“{'{'}fileName{'}'}”的站点爬取。请在仪表板中查看状态。",
+      actionSuccess: "对文件 {'{'}fileId{'}'} 的操作 \"{'{'}action{'}'}\" 成功。",
+      metadataUpdateSuccess: "文件 {'{'}fileId{'}'} 的元数据已更新。",
       deletePartialNotice:
         "{'{'{'}'}blocked{'}'} 个所选文件无法删除（{'{'{'}'}reason{'}'}）——只会删除其余的 {'{'{'}'}n{'}'} 个。",
       confirmDeleteSkipped: "{'{'{'}'}count{'}'} 个已摄取/摄取中的文件将被跳过——请先撤回它们才能删除。"
@@ -1481,19 +1482,21 @@ export default {
     title: '上传文件',
     dropzone: '将文件拖放到此处，或点击选择',
     allowedTypesLabel: '允许类型:',
-    buttonUpload: '上传 {count} 个文件',
+    buttonUpload: "上传 {'{'}count{'}'} 个文件",
     remove: '移除',
     uploading: '上传中...',
     notifications: {
       dropError: '只能拖放文件。请检查您是否从计算机拖动了有效文件。',
-      typeNotAllowed: '不允许的文件类型 "{extension}"。',
+      typeNotAllowed: "不允许的文件类型 \"{'{'}extension{'}'}\"。",
       shortcutUnsupported: '不支持快捷方式文件 (.url)。请拖动实际文件。',
-      duplicate: '文件 "{fileName}" 已添加。',
-      uploadSuccess: '成功上传 {fileName}',
-      uploadFailed: '上传 {fileName} 失败。'
+      duplicate: "文件 \"{'{'}fileName{'}'}\" 已添加。",
+      uploadSuccess: "成功上传 {'{'}fileName{'}'}",
+      uploadFailed: "上传 {'{'}fileName{'}'} 失败。"
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+    ragTipNoOkf:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
     models: {
@@ -2545,7 +2548,7 @@ export default {
         emptySelection: '请至少选择一份文档',
         alreadyInOkf: '移除已存在于 OKF 知识库中的文档',
         alreadyIngested: '移除已完成 ingest 的文档',
-        servingWarn: '{n} 个所选文档仍在服务自由语料库——在撤回它们之前，新仓库无法被摄取。'
+        servingWarn: "{'{'}n{'}'} 个所选文档仍在服务自由语料库——在撤回它们之前，新仓库无法被摄取。"
       },
       produce: {
         notReady: '生产模块将在后续故事中接入。'

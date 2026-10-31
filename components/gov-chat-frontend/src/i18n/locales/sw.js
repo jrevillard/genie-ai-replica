@@ -384,7 +384,7 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Hakuna kumbukumbu zinazofanana na vigezo vyako vya utafutaji',
-        resultsFound: 'Imepatikana {count} viingizo vya kumbukumbu',
+        resultsFound: "Imepatikana {'{'}count{'}'} viingizo vya kumbukumbu",
         degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
@@ -453,8 +453,8 @@ export default {
       empty: 'Hakuna vitengo vilivyopatikana. Bofya "Ongeza Kitengo Kipya" ili kuanza.',
       formTitleCreateCategory: 'Unda Kitengo Kipya',
       formTitleAddService: "Ongeza Huduma kwa \"{'{'}categoryName{'}'}\"",
-      formTitleEditCategory: 'Hariri Kitengo: "{itemName}"',
-      formTitleEditService: 'Hariri Huduma: "{itemName}"',
+      formTitleEditCategory: "Hariri Kitengo: \"{'{'}itemName{'}'}\"",
+      formTitleEditService: "Hariri Huduma: \"{'{'}itemName{'}'}\"",
       nameEnLabel: 'Jina (Kiingereza)',
       translationsTitle: 'Tafsiri za Kuonyesha',
       loadingTranslations: 'Inapakia tafsiri...',
@@ -470,8 +470,10 @@ export default {
       confirmCancelEdit: 'Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kughairi?',
       confirmDeleteTitleCategory: 'Futa Kitengo?',
       confirmDeleteTitleService: 'Futa Huduma?',
-      confirmDeleteCategory: 'Una uhakika unataka kufuta Kitengo "{itemName}"? Kitendo hiki hakiwezi kutenduliwa.',
-      confirmDeleteService: 'Una uhakika unataka kufuta Huduma "{itemName}"? Kitendo hiki hakiwezi kutenduliwa.',
+      confirmDeleteCategory:
+        "Una uhakika unataka kufuta Kitengo \"{'{'}itemName{'}'}\"? Kitendo hiki hakiwezi kutenduliwa.",
+      confirmDeleteService:
+        "Una uhakika unataka kufuta Huduma \"{'{'}itemName{'}'}\"? Kitendo hiki hakiwezi kutenduliwa.",
       deleteSuccessCategory: 'Kitengo kimefutwa kwa mafanikio.',
       deleteSuccessService: 'Huduma imefutwa kwa mafanikio.',
       deleteErrorCategory: 'Imeshindwa kufuta Kitengo.',
@@ -501,18 +503,20 @@ export default {
       loadError: 'Imeshindwa kupakia nyaraka.',
       confirmIngestTitle: 'Thibitisha Uingizaji wa Kundi',
       ingest: 'Ingiza',
-      confirmIngestSelected: 'Una uhakika unataka kuingiza faili {count} zilizochaguliwa?',
-      ingestQueuedSuccess: 'Faili {count} zimewekwa kwenye foleni ya kuingizwa.',
+      confirmIngestSelected: "Una uhakika unataka kuingiza faili {'{'}count{'}'} zilizochaguliwa?",
+      ingestQueuedSuccess: "Faili {'{'}count{'}'} zimewekwa kwenye foleni ya kuingizwa.",
       ingestQueuedError: 'Hitilafu imetokea wakati wa mchakato wa uingizaji wa kundi.',
-      ingestPartialFailure: '{successCount} kati ya {count} faili zimechakatwa. Zimeshindwa: {detail}',
-      ingestAllFailed: 'Faili {count} zote zimeshindwa: {detail}',
+      ingestPartialFailure:
+        "{'{'}successCount{'}'} kati ya {'{'}count{'}'} faili zimechakatwa. Zimeshindwa: {'{'}detail{'}'}",
+      ingestAllFailed: "Faili {'{'}count{'}'} zote zimeshindwa: {'{'}detail{'}'}",
       retractSelected: 'Ondoa Zilizochaguliwa',
       confirmRetractTitle: 'Thibitisha Kuondoa kwa Kundi',
-      confirmRetractSelected: 'Una uhakika unataka kuondoa faili {count} zilizochaguliwa?',
+      confirmRetractSelected: "Una uhakika unataka kuondoa faili {'{'}count{'}'} zilizochaguliwa?",
       retract: 'Ondoa',
-      retractQueuedSuccess: 'Faili {count} zimewekwa kwenye foleni ya kuondolewa.',
+      retractQueuedSuccess: "Faili {'{'}count{'}'} zimewekwa kwenye foleni ya kuondolewa.",
       retractQueuedError: 'Hitilafu imetokea wakati wa mchakato wa kuondoa kwa kundi.',
-      retractPartialFailure: '{successCount} kati ya {count} faili zimeondolewa. Zimeshindwa: {detail}',
+      retractPartialFailure:
+        "{'{'}successCount{'}'} kati ya {'{'}count{'}'} faili zimeondolewa. Zimeshindwa: {'{'}detail{'}'}",
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
@@ -522,11 +526,12 @@ export default {
       deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
       deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
       deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
-      retractAllFailed: 'Faili {count} zote zimeshindwa: {detail}',
-      uploadSuccessMultiple: 'Faili {count} zimepakiwa kwa mafanikio.',
-      linkSubmitSuccess: 'Imefanikiwa kutambaa na kuhifadhi "{fileName}".',
-      actionSuccess: 'Kitendo "{action}" kwenye faili {fileId} kimefanikiwa.',
-      metadataUpdateSuccess: 'Metadata ya faili {fileId} imesasishwa.',
+      retractAllFailed: "Faili {'{'}count{'}'} zote zimeshindwa: {'{'}detail{'}'}",
+      uploadSuccessMultiple: "Faili {'{'}count{'}'} zimepakiwa kwa mafanikio.",
+      linkSubmitSuccess: "Imefanikiwa kutambaa na kuhifadhi \"{'{'}fileName{'}'}\".",
+      crawlScheduled: "Uchunguzi wa tovuti umepangwa kwa \"{'{'}fileName{'}'}\". Angalia hali kwenye dashibodi.",
+      actionSuccess: "Kitendo \"{'{'}action{'}'}\" kwenye faili {'{'}fileId{'}'} kimefanikiwa.",
+      metadataUpdateSuccess: "Metadata ya faili {'{'}fileId{'}'} imesasishwa.",
       deletePartialNotice:
         "{'{'{'}'}blocked{'}'} faili zilizochaguliwa haziwezi kufutwa ({'{'{'}'}reason{'}'}) — zingine {'{'{'}'}n{'}'} tu zitafutwa.",
       confirmDeleteSkipped: "{'{'{'}'}count{'}'} faili zilizoingizwa/zinaingizwa ZITARUKWA — rejesha kwanza kuzifuta."
@@ -1506,20 +1511,22 @@ export default {
     title: 'Pakia Faili',
     dropzone: 'Buruta na udondoshe faili hapa, au bofya kuchagua',
     allowedTypesLabel: 'Aina zinazoruhusiwa:',
-    buttonUpload: 'Pakia Faili {count}',
+    buttonUpload: "Pakia Faili {'{'}count{'}'}",
     remove: 'Ondoa',
     uploading: 'Inapakia...',
     notifications: {
       dropError:
         'Faili pekee ndizo zinaweza kudondoshwa. Tafadhali hakikisha unaburuta faili halali kutoka kwa kompyuta yako.',
-      typeNotAllowed: 'Aina ya faili "{extension}" hairuhusiwi.',
+      typeNotAllowed: "Aina ya faili \"{'{'}extension{'}'}\" hairuhusiwi.",
       shortcutUnsupported: 'Faili za njia za mkato (.url) hazitumiki. Tafadhali buruta faili halisi.',
-      duplicate: 'Faili "{fileName}" tayari imeongezwa.',
-      uploadSuccess: 'Imefanikiwa kupakia {fileName}',
-      uploadFailed: 'Imeshindwa kupakia {fileName}.'
+      duplicate: "Faili \"{'{'}fileName{'}'}\" tayari imeongezwa.",
+      uploadSuccess: "Imefanikiwa kupakia {'{'}fileName{'}'}",
+      uploadFailed: "Imeshindwa kupakia {'{'}fileName{'}'}."
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+    ragTipNoOkf:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
     models: {
@@ -2597,7 +2604,7 @@ export default {
         alreadyInOkf: 'Ondoa nyaraka ambazo tayari zimo katika ghala la OKF',
         alreadyIngested: 'Ondoa nyaraka ambazo tayari zimefanyiwa ingest',
         servingWarn:
-          '{n} hati zilizochaguliwa bado zinahudumia korpus huru — hazina mpya haiwezi kuingizwa hadi zitakapotolewa.'
+          "{'{'}n{'}'} hati zilizochaguliwa bado zinahudumia korpus huru — hazina mpya haiwezi kuingizwa hadi zitakapotolewa."
       },
       produce: {
         notReady: 'Mzalishaji ataunganishwa katika kisa cha baadaye.'

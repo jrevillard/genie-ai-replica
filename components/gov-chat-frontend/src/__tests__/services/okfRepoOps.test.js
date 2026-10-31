@@ -302,7 +302,14 @@ describe('okfRepoOps zip export / import', () => {
     );
     expect(name).toBe('demo-v3.zip');
     expect(URL.createObjectURL).toHaveBeenCalled();
-    expect(URL.revokeObjectURL).toHaveBeenCalled();
+    // Round 16, #80128: revocation is DEFERRED to the next task — revoking
+    // in the same task as the click can cancel the browser's asynchronous
+    // blob snapshot (empty/partial download). Not yet revoked here…
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    // …revoked exactly once, one macrotask later.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock');
   });
 
   it('exportRepoZip falls back to a name-derived file name without the header', async () => {

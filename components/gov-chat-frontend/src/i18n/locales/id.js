@@ -384,7 +384,7 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Tidak ada log yang cocok dengan kriteria pencarian Anda',
-        resultsFound: 'Ditemukan {count} entri log',
+        resultsFound: "Ditemukan {'{'}count{'}'} entri log",
         degraded: 'Menampilkan hasil sebagian karena gangguan VictoriaLogs. Beberapa entri log terbaru mungkin hilang.'
       }
     },
@@ -453,8 +453,8 @@ export default {
       empty: 'Tidak ada kategori ditemukan. Klik "Tambah Kategori Baru" untuk memulai.',
       formTitleCreateCategory: 'Buat Kategori Baru',
       formTitleAddService: "Tambah Layanan ke \"{'{'}categoryName{'}'}\"",
-      formTitleEditCategory: 'Ubah Kategori: "{itemName}"',
-      formTitleEditService: 'Ubah Layanan: "{itemName}"',
+      formTitleEditCategory: "Ubah Kategori: \"{'{'}itemName{'}'}\"",
+      formTitleEditService: "Ubah Layanan: \"{'{'}itemName{'}'}\"",
       nameEnLabel: 'Nama (Inggris)',
       translationsTitle: 'Terjemahan untuk Tampilan',
       loadingTranslations: 'Memuat terjemahan...',
@@ -472,9 +472,9 @@ export default {
       confirmDeleteTitleCategory: 'Hapus Kategori?',
       confirmDeleteTitleService: 'Hapus Layanan?',
       confirmDeleteCategory:
-        'Apakah Anda yakin ingin menghapus Kategori "{itemName}"? Tindakan ini tidak dapat dibatalkan.',
+        "Apakah Anda yakin ingin menghapus Kategori \"{'{'}itemName{'}'}\"? Tindakan ini tidak dapat dibatalkan.",
       confirmDeleteService:
-        'Apakah Anda yakin ingin menghapus Layanan "{itemName}"? Tindakan ini tidak dapat dibatalkan.',
+        "Apakah Anda yakin ingin menghapus Layanan \"{'{'}itemName{'}'}\"? Tindakan ini tidak dapat dibatalkan.",
       deleteSuccessCategory: 'Kategori berhasil dihapus.',
       deleteSuccessService: 'Layanan berhasil dihapus.',
       deleteErrorCategory: 'Gagal menghapus Kategori.',
@@ -504,18 +504,20 @@ export default {
       loadError: 'Gagal memuat dokumen.',
       confirmIngestTitle: 'Konfirmasi Pemrosesan Batch',
       ingest: 'Proses',
-      confirmIngestSelected: 'Apakah Anda yakin ingin memproses {count} file yang dipilih?',
-      ingestQueuedSuccess: '{count} file telah dimasukkan ke antrian untuk diproses.',
+      confirmIngestSelected: "Apakah Anda yakin ingin memproses {'{'}count{'}'} file yang dipilih?",
+      ingestQueuedSuccess: "{'{'}count{'}'} file telah dimasukkan ke antrian untuk diproses.",
       ingestQueuedError: 'Terjadi kesalahan selama proses pemrosesan batch.',
-      ingestPartialFailure: '{successCount} dari {count} file berhasil diproses. Gagal: {detail}',
-      ingestAllFailed: 'Semua {count} file gagal: {detail}',
+      ingestPartialFailure:
+        "{'{'}successCount{'}'} dari {'{'}count{'}'} file berhasil diproses. Gagal: {'{'}detail{'}'}",
+      ingestAllFailed: "Semua {'{'}count{'}'} file gagal: {'{'}detail{'}'}",
       retractSelected: 'Tarik Kembali Pilihan',
       confirmRetractTitle: 'Konfirmasi Penarikan Batch',
-      confirmRetractSelected: 'Apakah Anda yakin ingin menarik {count} file yang dipilih?',
+      confirmRetractSelected: "Apakah Anda yakin ingin menarik {'{'}count{'}'} file yang dipilih?",
       retract: 'Tarik Kembali',
-      retractQueuedSuccess: '{count} file telah dimasukkan ke antrian untuk penarikan.',
+      retractQueuedSuccess: "{'{'}count{'}'} file telah dimasukkan ke antrian untuk penarikan.",
       retractQueuedError: 'Terjadi kesalahan selama proses penarikan batch.',
-      retractPartialFailure: '{successCount} dari {count} file berhasil ditarik kembali. Gagal: {detail}',
+      retractPartialFailure:
+        "{'{'}successCount{'}'} dari {'{'}count{'}'} file berhasil ditarik kembali. Gagal: {'{'}detail{'}'}",
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
@@ -525,11 +527,12 @@ export default {
       deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
       deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
       deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
-      retractAllFailed: 'Semua {count} file gagal: {detail}',
-      uploadSuccessMultiple: '{count} file berhasil diunggah.',
-      linkSubmitSuccess: 'Berhasil merayapi dan menyimpan "{fileName}".',
-      actionSuccess: 'Tindakan "{action}" pada file {fileId} berhasil.',
-      metadataUpdateSuccess: 'Metadata untuk file {fileId} telah diperbarui.',
+      retractAllFailed: "Semua {'{'}count{'}'} file gagal: {'{'}detail{'}'}",
+      uploadSuccessMultiple: "{'{'}count{'}'} file berhasil diunggah.",
+      linkSubmitSuccess: "Berhasil merayapi dan menyimpan \"{'{'}fileName{'}'}\".",
+      crawlScheduled: "Perayapan situs dijadwalkan untuk \"{'{'}fileName{'}'}\". Periksa statusnya di dasbor.",
+      actionSuccess: "Tindakan \"{'{'}action{'}'}\" pada file {'{'}fileId{'}'} berhasil.",
+      metadataUpdateSuccess: "Metadata untuk file {'{'}fileId{'}'} telah diperbarui.",
       deletePartialNotice:
         "{'{'{'}'}blocked{'}'} file terpilih tidak dapat dihapus ({'{'{'}'}reason{'}'}) — hanya {'{'{'}'}n{'}'} lainnya yang akan dihapus.",
       confirmDeleteSkipped:
@@ -1513,20 +1516,22 @@ export default {
     title: 'Unggah File',
     dropzone: 'Seret & lepas file di sini, atau klik untuk memilih',
     allowedTypesLabel: 'Tipe yang diizinkan:',
-    buttonUpload: 'Unggah {count} File',
+    buttonUpload: "Unggah {'{'}count{'}'} File",
     remove: 'Hapus',
     uploading: 'Mengunggah...',
     notifications: {
       dropError:
         'Hanya file yang bisa dilepaskan. Harap periksa apakah Anda menyeret file yang valid dari komputer Anda.',
-      typeNotAllowed: 'Tipe file "{extension}" tidak diizinkan.',
+      typeNotAllowed: "Tipe file \"{'{'}extension{'}'}\" tidak diizinkan.",
       shortcutUnsupported: 'File pintasan (.url) tidak didukung. Harap seret file yang sebenarnya.',
-      duplicate: 'File "{fileName}" sudah ditambahkan.',
-      uploadSuccess: 'Berhasil mengunggah {fileName}',
-      uploadFailed: 'Gagal mengunggah {fileName}.'
+      duplicate: "File \"{'{'}fileName{'}'}\" sudah ditambahkan.",
+      uploadSuccess: "Berhasil mengunggah {'{'}fileName{'}'}",
+      uploadFailed: "Gagal mengunggah {'{'}fileName{'}'}."
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+    ragTipNoOkf:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
     models: {
@@ -2603,7 +2608,7 @@ export default {
         alreadyInOkf: 'Hapus dokumen yang sudah ada di repositori OKF',
         alreadyIngested: 'Hapus dokumen yang sudah di-ingest',
         servingWarn:
-          '{n} dokumen terpilih masih melayani korpus bebas — repositori baru tidak dapat di-ingest sampai dokumen tersebut ditarik.'
+          "{'{'}n{'}'} dokumen terpilih masih melayani korpus bebas — repositori baru tidak dapat di-ingest sampai dokumen tersebut ditarik."
       },
       produce: {
         notReady: 'Produser dihubungkan dalam story berikutnya.'

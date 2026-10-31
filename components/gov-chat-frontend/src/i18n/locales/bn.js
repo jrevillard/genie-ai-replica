@@ -384,7 +384,7 @@ export default {
       },
       logSearch: {
         noResultsFound: 'আপনার অনুসন্ধানের মানদণ্ডের সাথে কোনো লগ মেলেনি',
-        resultsFound: '{count} টি লগ এন্ট্রি পাওয়া গেছে',
+        resultsFound: "{'{'}count{'}'} টি লগ এন্ট্রি পাওয়া গেছে",
         degraded:
           'VictoriaLogs এর বিভ্রাটের কারণে আংশিক ফলাফল দেখানো হচ্ছে। কিছু সাম্প্রতিক লগ এন্ট্রি অনুপস্থিত থাকতে পারে।'
       }
@@ -454,8 +454,8 @@ export default {
       empty: 'কোনো বিভাগ পাওয়া যায়নি। শুরু করতে "নতুন বিভাগ যোগ করুন" এ ক্লিক করুন।',
       formTitleCreateCategory: 'নতুন বিভাগ তৈরি করুন',
       formTitleAddService: "\"{'{'}categoryName{'}'}\" এ পরিষেবা যোগ করুন",
-      formTitleEditCategory: 'বিভাগ সম্পাদনা করুন: "{itemName}"',
-      formTitleEditService: 'পরিষেবা সম্পাদনা করুন: "{itemName}"',
+      formTitleEditCategory: "বিভাগ সম্পাদনা করুন: \"{'{'}itemName{'}'}\"",
+      formTitleEditService: "পরিষেবা সম্পাদনা করুন: \"{'{'}itemName{'}'}\"",
       nameEnLabel: 'নাম (ইংরেজি)',
       translationsTitle: 'প্রদর্শনের জন্য অনুবাদ',
       loadingTranslations: 'অনুবাদ লোড হচ্ছে...',
@@ -471,8 +471,10 @@ export default {
       confirmCancelEdit: 'আপনার কিছু অসংরক্ষিত পরিবর্তন আছে। আপনি কি নিশ্চিত যে আপনি বাতিল করতে চান?',
       confirmDeleteTitleCategory: 'বিভাগ মুছবেন?',
       confirmDeleteTitleService: 'পরিষেবা মুছবেন?',
-      confirmDeleteCategory: 'আপনি কি নিশ্চিত যে আপনি "{itemName}" বিভাগটি মুছতে চান? এই কাজটি আর ফেরানো যাবে না।',
-      confirmDeleteService: 'আপনি কি নিশ্চিত যে আপনি "{itemName}" পরিষেবাটি মুছতে চান? এই কাজটি আর ফেরানো যাবে না।',
+      confirmDeleteCategory:
+        "আপনি কি নিশ্চিত যে আপনি \"{'{'}itemName{'}'}\" বিভাগটি মুছতে চান? এই কাজটি আর ফেরানো যাবে না।",
+      confirmDeleteService:
+        "আপনি কি নিশ্চিত যে আপনি \"{'{'}itemName{'}'}\" পরিষেবাটি মুছতে চান? এই কাজটি আর ফেরানো যাবে না।",
       deleteSuccessCategory: 'বিভাগ সফলভাবে মুছে ফেলা হয়েছে।',
       deleteSuccessService: 'পরিষেবা সফলভাবে মুছে ফেলা হয়েছে।',
       deleteErrorCategory: 'বিভাগ মুছতে ব্যর্থ হয়েছে।',
@@ -502,18 +504,20 @@ export default {
       loadError: 'ডকুমেন্ট লোড করতে ব্যর্থ হয়েছে।',
       confirmIngestTitle: 'ব্যাচ ইনজেশন নিশ্চিত করুন',
       ingest: 'ইনজেস্ট করুন',
-      confirmIngestSelected: 'আপনি কি নিশ্চিত যে আপনি {count} টি নির্বাচিত ফাইল ইনজেস্ট করতে চান?',
-      ingestQueuedSuccess: '{count} টি ফাইল ইনজেশনের জন্য সারিবদ্ধ করা হয়েছে।',
+      confirmIngestSelected: "আপনি কি নিশ্চিত যে আপনি {'{'}count{'}'} টি নির্বাচিত ফাইল ইনজেস্ট করতে চান?",
+      ingestQueuedSuccess: "{'{'}count{'}'} টি ফাইল ইনজেশনের জন্য সারিবদ্ধ করা হয়েছে।",
       ingestQueuedError: 'ব্যাচ ইনজেশন প্রক্রিয়া চলাকালীন একটি ত্রুটি ঘটেছে।',
-      ingestPartialFailure: '{count}টির মধ্যে {successCount}টি ইনজেস্ট করা হয়েছে। ব্যর্থ: {detail}',
-      ingestAllFailed: 'সমস্ত {count}টি ফাইল ব্যর্থ হয়েছে: {detail}',
+      ingestPartialFailure:
+        "{'{'}count{'}'}টির মধ্যে {'{'}successCount{'}'}টি ইনজেস্ট করা হয়েছে। ব্যর্থ: {'{'}detail{'}'}",
+      ingestAllFailed: "সমস্ত {'{'}count{'}'}টি ফাইল ব্যর্থ হয়েছে: {'{'}detail{'}'}",
       retractSelected: 'নির্বাচিতগুলো প্রত্যাহার করুন',
       confirmRetractTitle: 'ব্যাচ প্রত্যাহার নিশ্চিত করুন',
-      confirmRetractSelected: 'আপনি কি নিশ্চিত যে আপনি {count}টি নির্বাচিত ফাইল প্রত্যাহার করতে চান?',
+      confirmRetractSelected: "আপনি কি নিশ্চিত যে আপনি {'{'}count{'}'}টি নির্বাচিত ফাইল প্রত্যাহার করতে চান?",
       retract: 'প্রত্যাহার করুন',
-      retractQueuedSuccess: '{count}টি ফাইল প্রত্যাহারের জন্য সারিবদ্ধ করা হয়েছে।',
+      retractQueuedSuccess: "{'{'}count{'}'}টি ফাইল প্রত্যাহারের জন্য সারিবদ্ধ করা হয়েছে।",
       retractQueuedError: 'ব্যাচ প্রত্যাহার প্রক্রিয়া চলাকালীন একটি ত্রুটি ঘটেছে।',
-      retractPartialFailure: '{count}টির মধ্যে {successCount}টি প্রত্যাহার করা হয়েছে। ব্যর্থ: {detail}',
+      retractPartialFailure:
+        "{'{'}count{'}'}টির মধ্যে {'{'}successCount{'}'}টি প্রত্যাহার করা হয়েছে। ব্যর্থ: {'{'}detail{'}'}",
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
@@ -523,11 +527,12 @@ export default {
       deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
       deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
       deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
-      retractAllFailed: 'সমস্ত {count}টি ফাইল ব্যর্থ হয়েছে: {detail}',
-      uploadSuccessMultiple: '{count} টি ফাইল সফলভাবে আপলোড হয়েছে।',
-      linkSubmitSuccess: '"{fileName}" সফলভাবে ক্রল এবং সেভ করা হয়েছে।',
-      actionSuccess: '{fileId} ফাইলের উপর "{action}" অ্যাকশন সফল হয়েছে।',
-      metadataUpdateSuccess: '{fileId} ফাইলের মেটাডেটা আপডেট করা হয়েছে।',
+      retractAllFailed: "সমস্ত {'{'}count{'}'}টি ফাইল ব্যর্থ হয়েছে: {'{'}detail{'}'}",
+      uploadSuccessMultiple: "{'{'}count{'}'} টি ফাইল সফলভাবে আপলোড হয়েছে।",
+      linkSubmitSuccess: "\"{'{'}fileName{'}'}\" সফলভাবে ক্রল এবং সেভ করা হয়েছে।",
+      crawlScheduled: "\"{'{'}fileName{'}'}\"-এর জন্য সাইট ক্রল নির্ধারিত হয়েছে। ড্যাশবোর্ডে অবস্থা দেখুন।",
+      actionSuccess: "{'{'}fileId{'}'} ফাইলের উপর \"{'{'}action{'}'}\" অ্যাকশন সফল হয়েছে।",
+      metadataUpdateSuccess: "{'{'}fileId{'}'} ফাইলের মেটাডেটা আপডেট করা হয়েছে।",
       deletePartialNotice:
         "{'{'{'}'}blocked{'}'}টি নির্বাচিত ফাইল মুছা যাবে না ({'{'{'}'}reason{'}'}) — বাকি {'{'{'}'}n{'}'}টি মুছা হবে।",
       confirmDeleteSkipped:
@@ -1506,20 +1511,22 @@ export default {
     title: 'ফাইল আপলোড করুন',
     dropzone: 'এখানে ফাইল টেনে আনুন, অথবা নির্বাচন করতে ক্লিক করুন',
     allowedTypesLabel: 'অনুমোদিত প্রকারগুলি:',
-    buttonUpload: '{count} টি ফাইল আপলোড করুন',
+    buttonUpload: "{'{'}count{'}'} টি ফাইল আপলোড করুন",
     remove: 'সরান',
     uploading: 'আপলোড করা হচ্ছে...',
     notifications: {
       dropError:
         'শুধুমাত্র ফাইল ড্রপ করা যেতে পারে। অনুগ্রহ করে চেক করুন আপনি আপনার কম্পিউটার থেকে একটি বৈধ ফাইল টেনে আনছেন কিনা।',
-      typeNotAllowed: 'ফাইলের প্রকার "{extension}" অনুমোদিত নয়।',
+      typeNotAllowed: "ফাইলের প্রকার \"{'{'}extension{'}'}\" অনুমোদিত নয়।",
       shortcutUnsupported: 'শর্টকাট ফাইল (.url) সমর্থিত নয়। অনুগ্রহ করে আসল ফাইলটি টেনে আনুন।',
-      duplicate: 'ফাইল "{fileName}" ইতিমধ্যে যোগ করা হয়েছে।',
-      uploadSuccess: 'সফলভাবে আপলোড হয়েছে {fileName}',
-      uploadFailed: '{fileName} আপলোড করতে ব্যর্থ।'
+      duplicate: "ফাইল \"{'{'}fileName{'}'}\" ইতিমধ্যে যোগ করা হয়েছে।",
+      uploadSuccess: "সফলভাবে আপলোড হয়েছে {'{'}fileName{'}'}",
+      uploadFailed: "{'{'}fileName{'}'} আপলোড করতে ব্যর্থ।"
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+    ragTipNoOkf:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
     models: {
@@ -2596,7 +2603,7 @@ export default {
         alreadyInOkf: 'ইতিমধ্যে একটি OKF রিপোজিটরিতে থাকা নথিগুলি সরান',
         alreadyIngested: 'ইতিমধ্যে ingest করা নথিগুলি সরান',
         servingWarn:
-          '{n} টি নির্বাচিত নথি এখনও ফ্রি-ফর্ম কর্পাস সরবরাহ করছে — সেগুলি প্রত্যাহার না হওয়া পর্যন্ত নতুন রিপোটি ইনজেস্ট করা যাবে না।'
+          "{'{'}n{'}'} টি নির্বাচিত নথি এখনও ফ্রি-ফর্ম কর্পাস সরবরাহ করছে — সেগুলি প্রত্যাহার না হওয়া পর্যন্ত নতুন রিপোটি ইনজেস্ট করা যাবে না।"
       },
       produce: {
         notReady: 'প্রযোজক পরবর্তী একটি গল্পে যুক্ত হবে।'

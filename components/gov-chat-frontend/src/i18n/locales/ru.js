@@ -384,7 +384,7 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Не найдено журналов, соответствующих вашим критериям поиска',
-        resultsFound: 'Найдено {count} записей журнала',
+        resultsFound: "Найдено {'{'}count{'}'} записей журнала",
         degraded:
           'Показаны частичные результаты из-за сбоя VictoriaLogs. Некоторые недавние записи журнала могут отсутствовать.'
       }
@@ -454,8 +454,8 @@ export default {
       empty: 'Категории не найдены. Нажмите "Добавить новую категорию", чтобы начать.',
       formTitleCreateCategory: 'Создать новую категорию',
       formTitleAddService: "Добавить услугу в \"{'{'}categoryName{'}'}\"",
-      formTitleEditCategory: 'Редактировать категорию: "{itemName}"',
-      formTitleEditService: 'Редактировать услугу: "{itemName}"',
+      formTitleEditCategory: "Редактировать категорию: \"{'{'}itemName{'}'}\"",
+      formTitleEditService: "Редактировать услугу: \"{'{'}itemName{'}'}\"",
       nameEnLabel: 'Название (Английский)',
       translationsTitle: 'Переводы для отображения',
       loadingTranslations: 'Загрузка переводов...',
@@ -471,8 +471,9 @@ export default {
       confirmCancelEdit: 'У вас есть несохраненные изменения. Вы уверены, что хотите отменить?',
       confirmDeleteTitleCategory: 'Удалить категорию?',
       confirmDeleteTitleService: 'Удалить услугу?',
-      confirmDeleteCategory: 'Вы уверены, что хотите удалить категорию "{itemName}"? Это действие необратимо.',
-      confirmDeleteService: 'Вы уверены, что хотите удалить услугу "{itemName}"? Это действие необратимо.',
+      confirmDeleteCategory:
+        "Вы уверены, что хотите удалить категорию \"{'{'}itemName{'}'}\"? Это действие необратимо.",
+      confirmDeleteService: "Вы уверены, что хотите удалить услугу \"{'{'}itemName{'}'}\"? Это действие необратимо.",
       deleteSuccessCategory: 'Категория успешно удалена.',
       deleteSuccessService: 'Услуга успешно удалена.',
       deleteErrorCategory: 'Не удалось удалить категорию.',
@@ -502,18 +503,18 @@ export default {
       loadError: 'Не удалось загрузить документы.',
       confirmIngestTitle: 'Подтвердить пакетную обработку',
       ingest: 'Обработать',
-      confirmIngestSelected: 'Вы уверены, что хотите обработать {count} выбранный(х) файл(ов)?',
-      ingestQueuedSuccess: '{count} файл(ов) добавлен(ы) в очередь на обработку.',
+      confirmIngestSelected: "Вы уверены, что хотите обработать {'{'}count{'}'} выбранный(х) файл(ов)?",
+      ingestQueuedSuccess: "{'{'}count{'}'} файл(ов) добавлен(ы) в очередь на обработку.",
       ingestQueuedError: 'Произошла ошибка во время процесса пакетной обработки.',
-      ingestPartialFailure: 'Обработано {successCount} из {count} файл(ов). Ошибки: {detail}',
-      ingestAllFailed: 'Обработка всех {count} файл(ов) завершилась ошибкой: {detail}',
+      ingestPartialFailure: "Обработано {'{'}successCount{'}'} из {'{'}count{'}'} файл(ов). Ошибки: {'{'}detail{'}'}",
+      ingestAllFailed: "Обработка всех {'{'}count{'}'} файл(ов) завершилась ошибкой: {'{'}detail{'}'}",
       retractSelected: 'Изъять выбранные',
       confirmRetractTitle: 'Подтвердить пакетное изъятие',
-      confirmRetractSelected: 'Вы уверены, что хотите изъять {count} выбранный(х) файл(ов)?',
+      confirmRetractSelected: "Вы уверены, что хотите изъять {'{'}count{'}'} выбранный(х) файл(ов)?",
       retract: 'Изъять',
-      retractQueuedSuccess: '{count} файл(ов) добавлен(ы) в очередь на изъятие.',
+      retractQueuedSuccess: "{'{'}count{'}'} файл(ов) добавлен(ы) в очередь на изъятие.",
       retractQueuedError: 'Произошла ошибка во время процесса пакетного изъятия.',
-      retractPartialFailure: 'Изъято {successCount} из {count} файл(ов). Ошибки: {detail}',
+      retractPartialFailure: "Изъято {'{'}successCount{'}'} из {'{'}count{'}'} файл(ов). Ошибки: {'{'}detail{'}'}",
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
@@ -523,11 +524,12 @@ export default {
       deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
       deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
       deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
-      retractAllFailed: 'Обработка всех {count} файл(ов) завершилась ошибкой: {detail}',
-      uploadSuccessMultiple: '{count} файл(ов) успешно загружен(ы).',
-      linkSubmitSuccess: 'Успешно просканировано и сохранено "{fileName}".',
-      actionSuccess: 'Действие "{action}" с файлом {fileId} прошло успешно.',
-      metadataUpdateSuccess: 'Метаданные для файла {fileId} обновлены.',
+      retractAllFailed: "Обработка всех {'{'}count{'}'} файл(ов) завершилась ошибкой: {'{'}detail{'}'}",
+      uploadSuccessMultiple: "{'{'}count{'}'} файл(ов) успешно загружен(ы).",
+      linkSubmitSuccess: "Успешно просканировано и сохранено \"{'{'}fileName{'}'}\".",
+      crawlScheduled: "Обход сайта запланирован для «{'{'}fileName{'}'}». Статус — на панели управления.",
+      actionSuccess: "Действие \"{'{'}action{'}'}\" с файлом {'{'}fileId{'}'} прошло успешно.",
+      metadataUpdateSuccess: "Метаданные для файла {'{'}fileId{'}'} обновлены.",
       deletePartialNotice:
         "{'{'{'}'}blocked{'}'} выбранный(х) файл(ов) нельзя удалить ({'{'{'}'}reason{'}'}) — будут удалены только остальные {'{'{'}'}n{'}'}.",
       confirmDeleteSkipped:
@@ -1512,19 +1514,21 @@ export default {
     title: 'Загрузить файлы',
     dropzone: 'Перетащите файлы сюда или нажмите для выбора',
     allowedTypesLabel: 'Разрешенные типы:',
-    buttonUpload: 'Загрузить {count} файл(ов)',
+    buttonUpload: "Загрузить {'{'}count{'}'} файл(ов)",
     remove: 'Удалить',
     uploading: 'Загрузка...',
     notifications: {
       dropError: 'Можно перетаскивать только файлы. Убедитесь, что вы перетаскиваете действительный файл с компьютера.',
-      typeNotAllowed: 'Тип файла "{extension}" не разрешен.',
+      typeNotAllowed: "Тип файла \"{'{'}extension{'}'}\" не разрешен.",
       shortcutUnsupported: 'Файлы ярлыков (.url) не поддерживаются. Пожалуйста, перетащите сам файл.',
-      duplicate: 'Файл "{fileName}" уже добавлен.',
-      uploadSuccess: 'Файл {fileName} успешно загружен',
-      uploadFailed: 'Не удалось загрузить файл {fileName}.'
+      duplicate: "Файл \"{'{'}fileName{'}'}\" уже добавлен.",
+      uploadSuccess: "Файл {'{'}fileName{'}'} успешно загружен",
+      uploadFailed: "Не удалось загрузить файл {'{'}fileName{'}'}."
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+    ragTipNoOkf:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
     models: {
@@ -2609,7 +2613,7 @@ export default {
         alreadyInOkf: 'Исключить документы, которые уже находятся в репозитории OKF',
         alreadyIngested: 'Исключить документы, для которых уже выполнен ingest',
         servingWarn:
-          '{n} выбранных документов всё ещё обслуживают свободный корпус — новый репозиторий нельзя загрузить, пока они не отозваны.'
+          "{'{'}n{'}'} выбранных документов всё ещё обслуживают свободный корпус — новый репозиторий нельзя загрузить, пока они не отозваны."
       },
       produce: {
         notReady: 'Интеграция с модулем генерации появится в следующей истории.'

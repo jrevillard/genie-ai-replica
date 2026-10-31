@@ -384,7 +384,7 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Aucun journal ne correspond à vos critères de recherche',
-        resultsFound: '{count} entrées de journal trouvées',
+        resultsFound: "{'{'}count{'}'} entrées de journal trouvées",
         degraded:
           "Affichage de résultats partiels en raison d'une panne de VictoriaLogs. Certaines entrées de journal récentes peuvent être manquantes."
       }
@@ -455,8 +455,8 @@ export default {
       empty: 'Aucune catégorie trouvée. Cliquez sur "Ajouter une nouvelle catégorie" pour commencer.',
       formTitleCreateCategory: 'Créer une nouvelle catégorie',
       formTitleAddService: "Ajouter un service à \"{'{'}categoryName{'}'}\"",
-      formTitleEditCategory: 'Modifier la catégorie : "{itemName}"',
-      formTitleEditService: 'Modifier le service : "{itemName}"',
+      formTitleEditCategory: "Modifier la catégorie : \"{'{'}itemName{'}'}\"",
+      formTitleEditService: "Modifier le service : \"{'{'}itemName{'}'}\"",
       nameEnLabel: 'Nom (Anglais)',
       translationsTitle: "Traductions pour l'affichage",
       loadingTranslations: 'Chargement des traductions...',
@@ -474,9 +474,9 @@ export default {
       confirmDeleteTitleCategory: 'Supprimer la catégorie ?',
       confirmDeleteTitleService: 'Supprimer le service ?',
       confirmDeleteCategory:
-        'Êtes-vous sûr de vouloir supprimer la catégorie "{itemName}" ? Cette action est irréversible.',
+        "Êtes-vous sûr de vouloir supprimer la catégorie \"{'{'}itemName{'}'}\" ? Cette action est irréversible.",
       confirmDeleteService:
-        'Êtes-vous sûr de vouloir supprimer le service "{itemName}" ? Cette action est irréversible.',
+        "Êtes-vous sûr de vouloir supprimer le service \"{'{'}itemName{'}'}\" ? Cette action est irréversible.",
       deleteSuccessCategory: 'Catégorie supprimée avec succès.',
       deleteSuccessService: 'Service supprimé avec succès.',
       deleteErrorCategory: 'Échec de la suppression de la catégorie.',
@@ -506,18 +506,19 @@ export default {
       loadError: 'Échec du chargement des documents.',
       confirmIngestTitle: "Confirmer l'ingestion par lot",
       ingest: 'Ingérer',
-      confirmIngestSelected: 'Êtes-vous sûr de vouloir ingérer {count} fichier(s) sélectionné(s) ?',
-      ingestQueuedSuccess: "{count} fichier(s) ont été mis en file d'attente pour ingestion.",
+      confirmIngestSelected: "Êtes-vous sûr de vouloir ingérer {'{'}count{'}'} fichier(s) sélectionné(s) ?",
+      ingestQueuedSuccess: "{'{'}count{'}'} fichier(s) ont été mis en file d'attente pour ingestion.",
       ingestQueuedError: "Une erreur s'est produite lors du processus d'ingestion par lot.",
-      ingestPartialFailure: '{successCount} fichier(s) ingéré(s) sur {count}. Échec(s) : {detail}',
-      ingestAllFailed: 'Tous les {count} fichier(s) ont échoué : {detail}',
+      ingestPartialFailure:
+        "{'{'}successCount{'}'} fichier(s) ingéré(s) sur {'{'}count{'}'}. Échec(s) : {'{'}detail{'}'}",
+      ingestAllFailed: "Tous les {'{'}count{'}'} fichier(s) ont échoué : {'{'}detail{'}'}",
       retractSelected: 'Rétracter la sélection',
       confirmRetractTitle: 'Confirmer la rétractation par lot',
-      confirmRetractSelected: 'Êtes-vous sûr de vouloir rétracter {count} fichier(s) sélectionné(s) ?',
+      confirmRetractSelected: "Êtes-vous sûr de vouloir rétracter {'{'}count{'}'} fichier(s) sélectionné(s) ?",
       retract: 'Rétracter',
-      retractQueuedSuccess: "{count} fichier(s) ont été mis en file d'attente pour rétractation.",
+      retractQueuedSuccess: "{'{'}count{'}'} fichier(s) ont été mis en file d'attente pour rétractation.",
       retractQueuedError: "Une erreur s'est produite lors du processus de rétractation par lot.",
-      retractPartialFailure: '{successCount} rétracté(s) sur {count}. Échec(s) : {detail}',
+      retractPartialFailure: "{'{'}successCount{'}'} rétracté(s) sur {'{'}count{'}'}. Échec(s) : {'{'}detail{'}'}",
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
@@ -527,11 +528,13 @@ export default {
       deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
       deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
       deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
-      retractAllFailed: 'Tous les {count} fichier(s) ont échoué : {detail}',
-      uploadSuccessMultiple: '{count} fichier(s) téléchargé(s) avec succès.',
-      linkSubmitSuccess: '"{fileName}" a été exploré et enregistré avec succès.',
-      actionSuccess: 'L\'action "{action}" sur le fichier {fileId} a réussi.',
-      metadataUpdateSuccess: 'Les métadonnées du fichier {fileId} ont été mises à jour.',
+      retractAllFailed: "Tous les {'{'}count{'}'} fichier(s) ont échoué : {'{'}detail{'}'}",
+      uploadSuccessMultiple: "{'{'}count{'}'} fichier(s) téléchargé(s) avec succès.",
+      linkSubmitSuccess: "\"{'{'}fileName{'}'}\" a été exploré et enregistré avec succès.",
+      crawlScheduled:
+        "Exploration du site programmée pour « {'{'}fileName{'}'} ». Suivez l'état dans le tableau de bord.",
+      actionSuccess: "L'action \"{'{'}action{'}'}\" sur le fichier {'{'}fileId{'}'} a réussi.",
+      metadataUpdateSuccess: "Les métadonnées du fichier {'{'}fileId{'}'} ont été mises à jour.",
       deletePartialNotice:
         "{'{'{'}'}blocked{'}'} fichier(s) sélectionné(s) ne peuvent pas être supprimés ({'{'{'}'}reason{'}'}) — seuls les {'{'{'}'}n{'}'} autres seront supprimés.",
       confirmDeleteSkipped:
@@ -1522,21 +1525,23 @@ export default {
     title: 'Télécharger des fichiers',
     dropzone: 'Glissez et déposez des fichiers ici, ou cliquez pour sélectionner',
     allowedTypesLabel: 'Types autorisés :',
-    buttonUpload: 'Télécharger {count} fichier(s)',
+    buttonUpload: "Télécharger {'{'}count{'}'} fichier(s)",
     remove: 'Supprimer',
     uploading: 'Téléchargement...',
     notifications: {
       dropError:
         'Seuls les fichiers peuvent être déposés. Veuillez vérifier que vous faites glisser un fichier valide depuis votre ordinateur.',
-      typeNotAllowed: 'Le type de fichier "{extension}" n\'est pas autorisé.',
+      typeNotAllowed: "Le type de fichier \"{'{'}extension{'}'}\" n'est pas autorisé.",
       shortcutUnsupported:
         'Les fichiers raccourcis (.url) ne sont pas pris en charge. Veuillez faire glisser le fichier réel.',
-      duplicate: 'Le fichier "{fileName}" a déjà été ajouté.',
-      uploadSuccess: '{fileName} téléchargé avec succès',
-      uploadFailed: 'Échec du téléchargement de {fileName}.'
+      duplicate: "Le fichier \"{'{'}fileName{'}'}\" a déjà été ajouté.",
+      uploadSuccess: "{'{'}fileName{'}'} téléchargé avec succès",
+      uploadFailed: "Échec du téléchargement de {'{'}fileName{'}'}."
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+    ragTipNoOkf:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
     models: {
@@ -2621,7 +2626,7 @@ export default {
         alreadyInOkf: 'Retirer les documents qui se trouvent déjà dans un référentiel OKF',
         alreadyIngested: 'Retirer les documents déjà traités par ingest',
         servingWarn:
-          '{n} document(s) sélectionné(s) servent encore le corpus libre — le nouveau dépôt ne peut être ingesté tant qu’ils ne sont pas retirés.'
+          "{'{'}n{'}'} document(s) sélectionné(s) servent encore le corpus libre — le nouveau dépôt ne peut être ingesté tant qu’ils ne sont pas retirés."
       },
       produce: {
         notReady: 'Le module producteur sera raccordé dans une story ultérieure.'

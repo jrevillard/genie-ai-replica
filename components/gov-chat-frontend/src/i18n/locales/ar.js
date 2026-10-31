@@ -384,7 +384,7 @@ export default {
       },
       logSearch: {
         noResultsFound: 'لم يتم العثور على سجلات مطابقة لمعايير البحث الخاصة بك',
-        resultsFound: 'تم العثور على {count} مدخلات سجل',
+        resultsFound: "تم العثور على {'{'}count{'}'} مدخلات سجل",
         degraded: 'يتم عرض نتائج جزئية بسبب انقطاع VictoriaLogs. قد تكون بعض إدخالات السجل الحديثة مفقودة.'
       }
     },
@@ -454,8 +454,8 @@ export default {
       empty: 'لم يتم العثور على فئات. انقر فوق "إضافة فئة جديدة" للبدء.',
       formTitleCreateCategory: 'إنشاء فئة جديدة',
       formTitleAddService: "إضافة خدمة إلى \"{'{'}categoryName{'}'}\"",
-      formTitleEditCategory: 'تعديل الفئة: "{itemName}"',
-      formTitleEditService: 'تعديل الخدمة: "{itemName}"',
+      formTitleEditCategory: "تعديل الفئة: \"{'{'}itemName{'}'}\"",
+      formTitleEditService: "تعديل الخدمة: \"{'{'}itemName{'}'}\"",
       nameEnLabel: 'الاسم (الإنجليزية)',
       translationsTitle: 'ترجمات للعرض',
       loadingTranslations: 'جاري تحميل الترجمات...',
@@ -471,8 +471,8 @@ export default {
       confirmCancelEdit: 'لديك تغييرات غير محفوظة سيتم فقدانها. هل أنت متأكد أنك تريد التبديل؟',
       confirmDeleteTitleCategory: 'حذف الفئة؟',
       confirmDeleteTitleService: 'حذف الخدمة؟',
-      confirmDeleteCategory: 'هل أنت متأكد أنك تريد حذف الفئة "{itemName}"؟ لا يمكن التراجع عن هذا الإجراء.',
-      confirmDeleteService: 'هل أنت متأكد أنك تريد حذف الخدمة "{itemName}"؟ لا يمكن التراجع عن هذا الإجراء.',
+      confirmDeleteCategory: "هل أنت متأكد أنك تريد حذف الفئة \"{'{'}itemName{'}'}\"؟ لا يمكن التراجع عن هذا الإجراء.",
+      confirmDeleteService: "هل أنت متأكد أنك تريد حذف الخدمة \"{'{'}itemName{'}'}\"؟ لا يمكن التراجع عن هذا الإجراء.",
       deleteSuccessCategory: 'تم حذف الفئة بنجاح.',
       deleteSuccessService: 'تم حذف الخدمة بنجاح.',
       deleteErrorCategory: 'فشل حذف الفئة.',
@@ -502,18 +502,18 @@ export default {
       loadError: 'فشل تحميل المستندات.',
       confirmIngestTitle: 'تأكيد الاستيعاب الدفعي',
       ingest: 'استيعاب',
-      confirmIngestSelected: 'هل أنت متأكد أنك تريد استيعاب {count} ملف(ات) مختارة؟',
-      ingestQueuedSuccess: 'تم وضع {count} ملف(ات) في قائمة الانتظار للاستيعاب.',
+      confirmIngestSelected: "هل أنت متأكد أنك تريد استيعاب {'{'}count{'}'} ملف(ات) مختارة؟",
+      ingestQueuedSuccess: "تم وضع {'{'}count{'}'} ملف(ات) في قائمة الانتظار للاستيعاب.",
       ingestQueuedError: 'حدث خطأ أثناء عملية الاستيعاب الدفعي.',
-      ingestPartialFailure: 'تمت معالجة {successCount} من {count} ملفات. فشل: {detail}',
-      ingestAllFailed: 'فشل جميع الملفات {count}: {detail}',
+      ingestPartialFailure: "تمت معالجة {'{'}successCount{'}'} من {'{'}count{'}'} ملفات. فشل: {'{'}detail{'}'}",
+      ingestAllFailed: "فشل جميع الملفات {'{'}count{'}'}: {'{'}detail{'}'}",
       retractSelected: 'سحب المحدد',
       confirmRetractTitle: 'تأكيد السحب الجماعي',
-      confirmRetractSelected: 'هل أنت متأكد من أنك تريد سحب {count} ملفات محددة؟',
+      confirmRetractSelected: "هل أنت متأكد من أنك تريد سحب {'{'}count{'}'} ملفات محددة؟",
       retract: 'سحب',
-      retractQueuedSuccess: 'تم وضع {count} ملفات في قائمة الانتظار للسحب.',
+      retractQueuedSuccess: "تم وضع {'{'}count{'}'} ملفات في قائمة الانتظار للسحب.",
       retractQueuedError: 'حدث خطأ أثناء عملية السحب الجماعي.',
-      retractPartialFailure: 'تم سحب {successCount} من {count} ملفات. فشل: {detail}',
+      retractPartialFailure: "تم سحب {'{'}successCount{'}'} من {'{'}count{'}'} ملفات. فشل: {'{'}detail{'}'}",
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
@@ -523,11 +523,12 @@ export default {
       deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
       deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
       deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
-      retractAllFailed: 'فشل جميع الملفات {count}: {detail}',
-      uploadSuccessMultiple: 'تم تحميل {count} ملف(ات) بنجاح.',
-      linkSubmitSuccess: 'تم الزحف وحفظ "{fileName}" بنجاح.',
-      actionSuccess: 'الإجراء "{action}" على الملف {fileId} كان ناجحًا.',
-      metadataUpdateSuccess: 'تم تحديث البيانات الوصفية للملف {fileId}.',
+      retractAllFailed: "فشل جميع الملفات {'{'}count{'}'}: {'{'}detail{'}'}",
+      uploadSuccessMultiple: "تم تحميل {'{'}count{'}'} ملف(ات) بنجاح.",
+      linkSubmitSuccess: "تم الزحف وحفظ \"{'{'}fileName{'}'}\" بنجاح.",
+      crawlScheduled: "تمت جدولة زحف الموقع لـ \"{'{'}fileName{'}'}\". تابع الحالة في لوحة التحكم.",
+      actionSuccess: "الإجراء \"{'{'}action{'}'}\" على الملف {'{'}fileId{'}'} كان ناجحًا.",
+      metadataUpdateSuccess: "تم تحديث البيانات الوصفية للملف {'{'}fileId{'}'}.",
       deletePartialNotice:
         "{'{'{'}'}blocked{'}'} من الملفات المحددة لا يمكن حذفها ({'{'{'}'}reason{'}'}) — سيُحذف الملفات الأخرى فقط بعدد {'{'{'}'}n{'}'}.",
       confirmDeleteSkipped: "{'{'{'}'}count{'}'} من الملفات المستوعبة/قيد الاستيعاب ستُتخطى — اسحبها أولًا لحذفها."
@@ -1502,19 +1503,21 @@ export default {
     title: 'تحميل الملفات',
     dropzone: 'اسحب وأفلت الملفات هنا، أو انقر للاختيار',
     allowedTypesLabel: 'الأنواع المسموح بها:',
-    buttonUpload: 'تحميل {count} ملف (ملفات)',
+    buttonUpload: "تحميل {'{'}count{'}'} ملف (ملفات)",
     remove: 'إزالة',
     uploading: 'جاري الرفع...',
     notifications: {
       dropError: 'يمكن إفلات الملفات فقط. يرجى التحقق من أنك تسحب ملفًا صالحًا من جهاز الكمبيوتر الخاص بك.',
-      typeNotAllowed: 'نوع الملف "{extension}" غير مسموح به.',
+      typeNotAllowed: "نوع الملف \"{'{'}extension{'}'}\" غير مسموح به.",
       shortcutUnsupported: 'ملفات الاختصار (.url) غير مدعومة. يرجى سحب الملف الفعلي.',
-      duplicate: 'تمت إضافة الملف "{fileName}" بالفعل.',
-      uploadSuccess: 'تم تحميل {fileName} بنجاح',
-      uploadFailed: 'فشل تحميل {fileName}.'
+      duplicate: "تمت إضافة الملف \"{'{'}fileName{'}'}\" بالفعل.",
+      uploadSuccess: "تم تحميل {'{'}fileName{'}'} بنجاح",
+      uploadFailed: "فشل تحميل {'{'}fileName{'}'}."
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+    ragTipNoOkf:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
     models: {
@@ -2578,7 +2581,8 @@ export default {
         emptySelection: 'حدد مستندًا واحدًا على الأقل',
         alreadyInOkf: 'إزالة المستندات الموجودة بالفعل في مستودع OKF',
         alreadyIngested: 'إزالة المستندات التي تمت معالجتها بالفعل عبر ingest',
-        servingWarn: '{n} من المستندات المحددة لا تزال تخدم النص الحر — لا يمكن استيعاب المستودع الجديد حتى يتم سحبها.'
+        servingWarn:
+          "{'{'}n{'}'} من المستندات المحددة لا تزال تخدم النص الحر — لا يمكن استيعاب المستودع الجديد حتى يتم سحبها."
       },
       produce: {
         notReady: 'سيتم ربط المنشئ في مهمة لاحقة.'

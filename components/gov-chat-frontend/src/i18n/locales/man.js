@@ -384,7 +384,7 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Log te min benta i la ñiningo to',
-        resultsFound: 'Log suw {count} jeta',
+        resultsFound: "Log suw {'{'}count{'}'} jeta",
         degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
@@ -452,8 +452,8 @@ export default {
       empty: 'Katifo mang je. Piti "Katifo Kura Kafu" ka a damina.',
       formTitleCreateCategory: 'Katifo Kura Dada',
       formTitleAddService: "Baara Kafu \"{'{'}categoryName{'}'}\" to",
-      formTitleEditCategory: 'Katifo Dada: "{itemName}"',
-      formTitleEditService: 'Baara Dada: "{itemName}"',
+      formTitleEditCategory: "Katifo Dada: \"{'{'}itemName{'}'}\"",
+      formTitleEditService: "Baara Dada: \"{'{'}itemName{'}'}\"",
       nameEnLabel: 'Toh (Angalee)',
       translationsTitle: 'Farikung/Tradiksion yitandili',
       loadingTranslations: 'Tradiksion ka looti...',
@@ -469,8 +469,8 @@ export default {
       confirmCancelEdit: 'I la yailamawol ti mara folo. I lafiya la a bula le ti?',
       confirmDeleteTitleCategory: 'Katifo Fiti?',
       confirmDeleteTitleService: 'Baara Fiti?',
-      confirmDeleteCategory: 'I lafiya la ka Katifo "{itemName}" fiti le ti? Nying kwoo mang si murung.',
-      confirmDeleteService: 'I lafiya la ka Baara "{itemName}" fiti le ti? Nying kwoo mang si murung.',
+      confirmDeleteCategory: "I lafiya la ka Katifo \"{'{'}itemName{'}'}\" fiti le ti? Nying kwoo mang si murung.",
+      confirmDeleteService: "I lafiya la ka Baara \"{'{'}itemName{'}'}\" fiti le ti? Nying kwoo mang si murung.",
       deleteSuccessCategory: 'Katifo fitita benta.',
       deleteSuccessService: 'Baara fitita benta.',
       deleteErrorCategory: 'Katifo fitita mang ben.',
@@ -500,18 +500,18 @@ export default {
       loadError: 'Dokuumalu lootay mang ben.',
       confirmIngestTitle: 'Kafung-Dung Kumpabo',
       ingest: 'Dung',
-      confirmIngestSelected: 'I lafiya la ka fayil cengo {count} dung le ti?',
-      ingestQueuedSuccess: 'Fayil {count} laata ka dung.',
+      confirmIngestSelected: "I lafiya la ka fayil cengo {'{'}count{'}'} dung le ti?",
+      ingestQueuedSuccess: "Fayil {'{'}count{'}'} laata ka dung.",
       ingestQueuedError: 'Filiyata kafung-dung to.',
-      ingestPartialFailure: '{count} to {successCount} laata ka dung. Filita: {detail}',
-      ingestAllFailed: 'Fayil {count} bee filita: {detail}',
+      ingestPartialFailure: "{'{'}count{'}'} to {'{'}successCount{'}'} laata ka dung. Filita: {'{'}detail{'}'}",
+      ingestAllFailed: "Fayil {'{'}count{'}'} bee filita: {'{'}detail{'}'}",
       retractSelected: 'Cengo Bota',
       confirmRetractTitle: 'Kafung-Bota Kumpabo',
-      confirmRetractSelected: 'I lafiya la ka fayil cengo {count} bota le ti?',
+      confirmRetractSelected: "I lafiya la ka fayil cengo {'{'}count{'}'} bota le ti?",
       retract: 'Bota',
-      retractQueuedSuccess: 'Fayil {count} laata ka bota.',
+      retractQueuedSuccess: "Fayil {'{'}count{'}'} laata ka bota.",
       retractQueuedError: 'Filiyata kafung-bota to.',
-      retractPartialFailure: '{count} to {successCount} botata. Filita: {detail}',
+      retractPartialFailure: "{'{'}count{'}'} to {'{'}successCount{'}'} botata. Filita: {'{'}detail{'}'}",
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
@@ -521,11 +521,12 @@ export default {
       deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
       deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
       deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
-      retractAllFailed: 'Fayil {count} bee filita: {detail}',
-      uploadSuccessMultiple: 'Fayil {count} yeleta benta.',
-      linkSubmitSuccess: '"{fileName}" ñiningta ani a marata benta.',
-      actionSuccess: 'Baara "{action}" fayil {fileId} to benta.',
-      metadataUpdateSuccess: 'Metadeta fayil {fileId} yailamata.',
+      retractAllFailed: "Fayil {'{'}count{'}'} bee filita: {'{'}detail{'}'}",
+      uploadSuccessMultiple: "Fayil {'{'}count{'}'} yeleta benta.",
+      linkSubmitSuccess: "\"{'{'}fileName{'}'}\" ñiningta ani a marata benta.",
+      crawlScheduled: "Crawl ya site plani na \"{'{'}fileName{'}'}\" la. Dashboard na a status la check.",
+      actionSuccess: "Baara \"{'{'}action{'}'}\" fayil {'{'}fileId{'}'} to benta.",
+      metadataUpdateSuccess: "Metadeta fayil {'{'}fileId{'}'} yailamata.",
       deletePartialNotice:
         "{'{'{'}'}blocked{'}'} selected file(s) cannot be deleted ({'{'{'}'}reason{'}'}) — only the other {'{'{'}'}n{'}'} will be deleted.",
       confirmDeleteSkipped:
@@ -1497,19 +1498,21 @@ export default {
     title: 'Fayilolu Yele',
     dropzone: 'Fayilolu sika jang, wala piti ka ceng',
     allowedTypesLabel: 'Fayil sukol sota:',
-    buttonUpload: 'Fayil {count} Yele',
+    buttonUpload: "Fayil {'{'}count{'}'} Yele",
     remove: 'Bota',
     uploading: 'A ka yele...',
     notifications: {
       dropError: 'Fayilolu dorong si sika jang. Ibay dii kumpabo ko fayiloo beteyata le.',
-      typeNotAllowed: 'Fayil suko "{extension}" mang sota.',
+      typeNotAllowed: "Fayil suko \"{'{'}extension{'}'}\" mang sota.",
       shortcutUnsupported: 'Sootkot fayilolu (.url) mang sota. Ibay dii fayil kiling sika.',
-      duplicate: 'Fayil "{fileName}" kafuta le folo.',
-      uploadSuccess: '{fileName} yeleta benta',
-      uploadFailed: 'Filiyata {fileName} yele to.'
+      duplicate: "Fayil \"{'{'}fileName{'}'}\" kafuta le folo.",
+      uploadSuccess: "{'{'}fileName{'}'} yeleta benta",
+      uploadFailed: "Filiyata {'{'}fileName{'}'} yele to."
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+    ragTipNoOkf:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
     models: {
@@ -2574,7 +2577,7 @@ export default {
         alreadyInOkf: 'Jol̦o̦k peba ko epād m̦okta ilo jikin kakwōn OKF',
         alreadyIngested: 'Jol̦o̦k peba ko em̦ōj an ingest',
         servingWarn:
-          '{n} selected document(s) still serve the free-form corpus — the new repository cannot be ingested until they are retracted.'
+          "{'{'}n{'}'} selected document(s) still serve the free-form corpus — the new repository cannot be ingested until they are retracted."
       },
       produce: {
         notReady: 'Kōm̦m̦an in ej pād ilo bwebwenato ko tok ālik.'

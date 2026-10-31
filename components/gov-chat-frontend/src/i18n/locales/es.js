@@ -383,7 +383,7 @@ export default {
       },
       logSearch: {
         noResultsFound: 'No se encontraron registros que coincidan con sus criterios de búsqueda',
-        resultsFound: 'Encontradas {count} entradas de registro',
+        resultsFound: "Encontradas {'{'}count{'}'} entradas de registro",
         degraded:
           'Mostrando resultados parciales debido a una interrupción de VictoriaLogs. Es posible que falten algunas entradas de registro recientes.'
       }
@@ -454,8 +454,8 @@ export default {
       empty: 'No se encontraron categorías. Haga clic en "Añadir Nueva Categoría" para comenzar.',
       formTitleCreateCategory: 'Crear Nueva Categoría',
       formTitleAddService: "Añadir Servicio a \"{'{'}categoryName{'}'}\"",
-      formTitleEditCategory: 'Editar Categoría: "{itemName}"',
-      formTitleEditService: 'Editar Servicio: "{itemName}"',
+      formTitleEditCategory: "Editar Categoría: \"{'{'}itemName{'}'}\"",
+      formTitleEditService: "Editar Servicio: \"{'{'}itemName{'}'}\"",
       nameEnLabel: 'Nombre (Inglés)',
       translationsTitle: 'Traducciones para Visualización',
       loadingTranslations: 'Cargando traducciones...',
@@ -472,9 +472,9 @@ export default {
       confirmDeleteTitleCategory: '¿Eliminar Categoría?',
       confirmDeleteTitleService: '¿Eliminar Servicio?',
       confirmDeleteCategory:
-        '¿Está seguro de que desea eliminar la Categoría "{itemName}"? Esta acción no se puede deshacer.',
+        "¿Está seguro de que desea eliminar la Categoría \"{'{'}itemName{'}'}\"? Esta acción no se puede deshacer.",
       confirmDeleteService:
-        '¿Está seguro de que desea eliminar el Servicio "{itemName}"? Esta acción no se puede deshacer.',
+        "¿Está seguro de que desea eliminar el Servicio \"{'{'}itemName{'}'}\"? Esta acción no se puede deshacer.",
       deleteSuccessCategory: 'Categoría eliminada correctamente.',
       deleteSuccessService: 'Servicio eliminado correctamente.',
       deleteErrorCategory: 'Error al eliminar la Categoría.',
@@ -504,18 +504,18 @@ export default {
       loadError: 'Error al cargar documentos.',
       confirmIngestTitle: 'Confirmar Ingestión por Lotes',
       ingest: 'Ingerir',
-      confirmIngestSelected: '¿Está seguro de que desea ingerir {count} archivo(s) seleccionado(s)?',
-      ingestQueuedSuccess: '{count} archivo(s) ha(n) sido puesto(s) en cola para ingestión.',
+      confirmIngestSelected: "¿Está seguro de que desea ingerir {'{'}count{'}'} archivo(s) seleccionado(s)?",
+      ingestQueuedSuccess: "{'{'}count{'}'} archivo(s) ha(n) sido puesto(s) en cola para ingestión.",
       ingestQueuedError: 'Ocurrió un error durante el proceso de ingestión por lotes.',
-      ingestPartialFailure: '{successCount} de {count} ingerido(s). Fallaron: {detail}',
-      ingestAllFailed: 'Todos los {count} archivo(s) fallaron: {detail}',
+      ingestPartialFailure: "{'{'}successCount{'}'} de {'{'}count{'}'} ingerido(s). Fallaron: {'{'}detail{'}'}",
+      ingestAllFailed: "Todos los {'{'}count{'}'} archivo(s) fallaron: {'{'}detail{'}'}",
       retractSelected: 'Retractar Seleccionados',
       confirmRetractTitle: 'Confirmar Retracción por Lotes',
-      confirmRetractSelected: '¿Está seguro de que desea retractar {count} archivo(s) seleccionado(s)?',
+      confirmRetractSelected: "¿Está seguro de que desea retractar {'{'}count{'}'} archivo(s) seleccionado(s)?",
       retract: 'Retractar',
-      retractQueuedSuccess: '{count} archivo(s) ha(n) sido puesto(s) en cola para retracción.',
+      retractQueuedSuccess: "{'{'}count{'}'} archivo(s) ha(n) sido puesto(s) en cola para retracción.",
       retractQueuedError: 'Ocurrió un error durante el proceso de retracción por lotes.',
-      retractPartialFailure: '{successCount} de {count} retractado(s). Fallaron: {detail}',
+      retractPartialFailure: "{'{'}successCount{'}'} de {'{'}count{'}'} retractado(s). Fallaron: {'{'}detail{'}'}",
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
@@ -525,11 +525,12 @@ export default {
       deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
       deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
       deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
-      retractAllFailed: 'Todos los {count} archivo(s) fallaron: {detail}',
-      uploadSuccessMultiple: '{count} archivo(s) subido(s) correctamente.',
-      linkSubmitSuccess: 'Se ha rastreado y guardado "{fileName}" correctamente.',
-      actionSuccess: 'La acción "{action}" en el archivo {fileId} fue exitosa.',
-      metadataUpdateSuccess: 'Los metadatos del archivo {fileId} se actualizaron.',
+      retractAllFailed: "Todos los {'{'}count{'}'} archivo(s) fallaron: {'{'}detail{'}'}",
+      uploadSuccessMultiple: "{'{'}count{'}'} archivo(s) subido(s) correctamente.",
+      linkSubmitSuccess: "Se ha rastreado y guardado \"{'{'}fileName{'}'}\" correctamente.",
+      crawlScheduled: "Rastreo del sitio programado para \"{'{'}fileName{'}'}\". Consulte el estado en el panel.",
+      actionSuccess: "La acción \"{'{'}action{'}'}\" en el archivo {'{'}fileId{'}'} fue exitosa.",
+      metadataUpdateSuccess: "Los metadatos del archivo {'{'}fileId{'}'} se actualizaron.",
       deletePartialNotice:
         "{'{'{'}'}blocked{'}'} archivo(s) seleccionado(s) no se pueden eliminar ({'{'{'}'}reason{'}'}) — solo se eliminarán los otros {'{'{'}'}n{'}'}.",
       confirmDeleteSkipped:
@@ -1517,21 +1518,23 @@ export default {
     title: 'Subir Archivos',
     dropzone: 'Arrastre y suelte archivos aquí, o haga clic para seleccionar',
     allowedTypesLabel: 'Tipos permitidos:',
-    buttonUpload: 'Subir {count} Archivo(s)',
+    buttonUpload: "Subir {'{'}count{'}'} Archivo(s)",
     remove: 'Eliminar',
     uploading: 'Subiendo...',
     notifications: {
       dropError:
         'Solo se pueden soltar archivos. Por favor, verifique que está arrastrando un archivo válido desde su computadora.',
-      typeNotAllowed: 'El tipo de archivo "{extension}" no está permitido.',
+      typeNotAllowed: "El tipo de archivo \"{'{'}extension{'}'}\" no está permitido.",
       shortcutUnsupported:
         'Los archivos de acceso directo (.url) no son compatibles. Por favor, arrastre el archivo real.',
-      duplicate: 'El archivo "{fileName}" ya ha sido agregado.',
-      uploadSuccess: '{fileName} subido con éxito',
-      uploadFailed: 'Falló la subida de {fileName}.'
+      duplicate: "El archivo \"{'{'}fileName{'}'}\" ya ha sido agregado.",
+      uploadSuccess: "{'{'}fileName{'}'} subido con éxito",
+      uploadFailed: "Falló la subida de {'{'}fileName{'}'}."
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+    ragTipNoOkf:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
     models: {
@@ -2616,7 +2619,7 @@ export default {
         alreadyInOkf: 'Eliminar documentos que ya están en un repositorio OKF',
         alreadyIngested: 'Eliminar documentos ya procesados en ingest',
         servingWarn:
-          '{n} documento(s) seleccionado(s) aún sirven al corpus libre: el nuevo repositorio no puede ingerirse hasta que se retiren.'
+          "{'{'}n{'}'} documento(s) seleccionado(s) aún sirven al corpus libre: el nuevo repositorio no puede ingerirse hasta que se retiren."
       },
       produce: {
         notReady: 'El productor se integrará en una historia posterior.'

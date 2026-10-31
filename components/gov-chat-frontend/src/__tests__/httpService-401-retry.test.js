@@ -510,5 +510,32 @@ describe('httpService error parsing and notifications', () => {
         });
       });
     });
+
+    describe('session-escalation guard (round 16, #80131)', () => {
+      it('a getUser()/login() failure must NOT replace the 401 rejection envelope', async () => {
+        const mockGetUser = require('@/services/keycloakAuthService').default.getUser;
+        mockGetUser.mockReset();
+        mockGetUser.mockRejectedValue(new Error('storage unavailable'));
+        mockSigninSilent.mockResolvedValue(null); // no usable refreshed token
+
+        let caught = null;
+        try {
+          await callResponseErrorHandler(401, { message: 'session expired' });
+        } catch (e) {
+          caught = e;
+        }
+
+        // The caller ALWAYS gets the {status, statusText, data, message}
+        // envelope — a storage failure inside the escalation used to leak
+        // the raw axios error shape instead (dead branch for every caller's
+        // error.data reads).
+        expect(caught).toMatchObject({
+          status: 401,
+          statusText: 'Unauthorized',
+          data: { message: 'session expired' }
+        });
+        expect(caught.response).toBeUndefined();
+      });
+    });
   });
 });

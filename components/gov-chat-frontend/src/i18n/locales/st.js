@@ -384,7 +384,7 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Ha ho na lilog tse tshoanang le patlo ya hao',
-        resultsFound: 'Ho fumanwe dikeno tsa log tse {count}',
+        resultsFound: "Ho fumanwe dikeno tsa log tse {'{'}count{'}'}",
         degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
@@ -454,8 +454,8 @@ export default {
       empty: 'Ha ho dihlopha tse fumanweng. Tobetsa "Eketsa Sehlopha se Setjha" ho qala.',
       formTitleCreateCategory: 'Theha Sehlopha se Setjha',
       formTitleAddService: "Eketsa Tshebeletso ho \"{'{'}categoryName{'}'}\"",
-      formTitleEditCategory: 'Fetola Sehlopha: "{itemName}"',
-      formTitleEditService: 'Fetola Tshebeletso: "{itemName}"',
+      formTitleEditCategory: "Fetola Sehlopha: \"{'{'}itemName{'}'}\"",
+      formTitleEditService: "Fetola Tshebeletso: \"{'{'}itemName{'}'}\"",
       nameEnLabel: 'Lebitso (Senyesemane)',
       translationsTitle: 'Diphetolelo bakeng sa Pontsho',
       loadingTranslations: 'E kenya diphetolelo...',
@@ -472,9 +472,9 @@ export default {
       confirmDeleteTitleCategory: 'Hlakola Sehlopha?',
       confirmDeleteTitleService: 'Hlakola Tshebeletso?',
       confirmDeleteCategory:
-        'Na o na le bonnete ba hore o batla ho hlakola Sehlopha sa "{itemName}"? Keto ena ha e kgutlele morao.',
+        "Na o na le bonnete ba hore o batla ho hlakola Sehlopha sa \"{'{'}itemName{'}'}\"? Keto ena ha e kgutlele morao.",
       confirmDeleteService:
-        'Na o na le bonnete ba hore o batla ho hlakola Tshebeletso ya "{itemName}"? Keto ena ha e kgutlele morao.',
+        "Na o na le bonnete ba hore o batla ho hlakola Tshebeletso ya \"{'{'}itemName{'}'}\"? Keto ena ha e kgutlele morao.",
       deleteSuccessCategory: 'Sehlopha se hlakotswe ka katleho.',
       deleteSuccessService: 'Tshebeletso e hlakotswe ka katleho.',
       deleteErrorCategory: 'Ho hlolehile ho hlakola Sehlopha.',
@@ -504,18 +504,20 @@ export default {
       loadError: 'Ho hlolehile ho kenya ditokomane.',
       confirmIngestTitle: 'Netefatsa ho Kenya ha Sehlopha',
       ingest: 'Kenya',
-      confirmIngestSelected: 'Na o na le bonnete ba hore o batla ho kenya difaele tse {count} tse kgethilweng?',
-      ingestQueuedSuccess: 'Difaele tse {count} di hlophisitswe molemong wa ho kenngwa.',
+      confirmIngestSelected: "Na o na le bonnete ba hore o batla ho kenya difaele tse {'{'}count{'}'} tse kgethilweng?",
+      ingestQueuedSuccess: "Difaele tse {'{'}count{'}'} di hlophisitswe molemong wa ho kenngwa.",
       ingestQueuedError: 'Ho bile le phoso nakong ya tshebetso ya ho kenya sehlopha.',
-      ingestPartialFailure: '{count} ho tsoa {successCount} li kentswe. Li hlolehile: {detail}',
-      ingestAllFailed: 'Difaele tsohle tse {count} li hlolehile: {detail}',
+      ingestPartialFailure: "{'{'}count{'}'} ho tsoa {'{'}successCount{'}'} li kentswe. Li hlolehile: {'{'}detail{'}'}",
+      ingestAllFailed: "Difaele tsohle tse {'{'}count{'}'} li hlolehile: {'{'}detail{'}'}",
       retractSelected: 'Hulela ho Kgethilweng',
       confirmRetractTitle: 'Netefatsa ho Hulela ha Sehlopha',
-      confirmRetractSelected: 'Na o na le bonnete ba hore o batla ho hulela difaele tse {count} tse kgethilweng?',
+      confirmRetractSelected:
+        "Na o na le bonnete ba hore o batla ho hulela difaele tse {'{'}count{'}'} tse kgethilweng?",
       retract: 'Hulela Morao',
-      retractQueuedSuccess: 'Difaele tse {count} di hlophisitswe molemong wa ho hulelwa.',
+      retractQueuedSuccess: "Difaele tse {'{'}count{'}'} di hlophisitswe molemong wa ho hulelwa.",
       retractQueuedError: 'Ho bile le phoso nakong ya tshebetso ya ho hulela sehlopha.',
-      retractPartialFailure: '{count} ho tsoa {successCount} li huletswe. Li hlolehile: {detail}',
+      retractPartialFailure:
+        "{'{'}count{'}'} ho tsoa {'{'}successCount{'}'} li huletswe. Li hlolehile: {'{'}detail{'}'}",
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
@@ -525,11 +527,12 @@ export default {
       deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
       deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
       deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
-      retractAllFailed: 'Difaele tsohle tse {count} li hlolehile: {detail}',
-      uploadSuccessMultiple: 'Difaele tse {count} di kentswe ka katleho.',
-      linkSubmitSuccess: 'E fetile le ho boloka "{fileName}" ka katleho.',
-      actionSuccess: 'Keto ya "{action}" faeleng ya {fileId} e bile le katleho.',
-      metadataUpdateSuccess: 'Metadata ya faele ya {fileId} e ntlafaditswe.',
+      retractAllFailed: "Difaele tsohle tse {'{'}count{'}'} li hlolehile: {'{'}detail{'}'}",
+      uploadSuccessMultiple: "Difaele tse {'{'}count{'}'} di kentswe ka katleho.",
+      linkSubmitSuccess: "E fetile le ho boloka \"{'{'}fileName{'}'}\" ka katleho.",
+      crawlScheduled: "Crawl ea saete e ratoiloe bakeng sa \"{'{'}fileName{'}'}\". Sheba boemo dashbotong.",
+      actionSuccess: "Keto ya \"{'{'}action{'}'}\" faeleng ya {'{'}fileId{'}'} e bile le katleho.",
+      metadataUpdateSuccess: "Metadata ya faele ya {'{'}fileId{'}'} e ntlafaditswe.",
       deletePartialNotice:
         "{'{'{'}'}blocked{'}'} lifaele tse khethiloeng ha li ka tlosoa ({'{'{'}'}reason{'}'}) — feela tse ling {'{'{'}'}n{'}'} li tla tlosoa.",
       confirmDeleteSkipped:
@@ -1518,20 +1521,22 @@ export default {
     title: 'Kenya Difaele',
     dropzone: 'Hula o behe difaele mona, kapa tobetsa ho kgetha',
     allowedTypesLabel: 'Mefuta e dumelletsweng:',
-    buttonUpload: 'Kenya (Mefuta e {count}) ya Faele',
+    buttonUpload: "Kenya (Mefuta e {'{'}count{'}'}) ya Faele",
     remove: 'Tlosa',
     uploading: 'Ea kenya...',
     notifications: {
       dropError:
         "E batla difaele feela hore di behwe mona. Ka kopo hlahloba hore o hula faele e nepahetseng ho tswa k'homphieutheng ea hao.",
-      typeNotAllowed: 'Mofuta wa faele wa "{extension}" ha o dumellwe.',
+      typeNotAllowed: "Mofuta wa faele wa \"{'{'}extension{'}'}\" ha o dumellwe.",
       shortcutUnsupported: 'Difaele tsa kgaoletso (.url) ha di tshehetswe. Ka kopo hula faele ya sebele.',
-      duplicate: 'Faele ya "{fileName}" e se e ntse e ekeditswe.',
-      uploadSuccess: 'E kentswe ka katleho {fileName}',
-      uploadFailed: 'Ho hlolehile ho kenya {fileName}.'
+      duplicate: "Faele ya \"{'{'}fileName{'}'}\" e se e ntse e ekeditswe.",
+      uploadSuccess: "E kentswe ka katleho {'{'}fileName{'}'}",
+      uploadFailed: "Ho hlolehile ho kenya {'{'}fileName{'}'}."
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+    ragTipNoOkf:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
     models: {
@@ -2611,7 +2616,7 @@ export default {
         alreadyInOkf: "Tlosa litokomane tse seng li ntse li le ka har'a polokelo ea OKF",
         alreadyIngested: 'Tlosa litokomane tse seng li kile tsa etsoa ingest',
         servingWarn:
-          '{n} litokomane tse kgethileng li sebeleleta corpus ea mahala — repo e ncha e ke ke ea kenyelletsoa pele li tlosoa.'
+          "{'{'}n{'}'} litokomane tse kgethileng li sebeleleta corpus ea mahala — repo e ncha e ke ke ea kenyelletsoa pele li tlosoa."
       },
       produce: {
         notReady: 'Moetsi o tla hokahanngoa paleng e tlang.'

@@ -56,11 +56,16 @@ export async function loadSubjectAreaOptions(repoDomains = []) {
     const name = cat && (cat.name || cat.nameEN);
     if (name) opts.push({ value: String(name), label: String(name) });
   }
-  if (!opts.length) return [{ value: 'general', label: 'General' }];
+  // Legacy-domain append runs BEFORE the empty-hierarchy early return
+  // (round 16, #80129): the docstring above promises that a repo whose
+  // domain is missing from the KH list is still offered, so an unreachable
+  // hierarchy (the exact case that produced the empty list) must not leave
+  // a 'water-supply' repo forced to 'general'.
   const known = new Set(opts.map((o) => o.value));
   for (const d of new Set((repoDomains || []).filter(Boolean).map((d) => String(d)))) {
     if (!known.has(d)) opts.push({ value: d, label: d + ' (legacy)' });
   }
+  if (!opts.length) return [{ value: 'general', label: 'General' }];
   return opts;
 }
 
@@ -149,13 +154,23 @@ export async function createRepo({ name, domain }) {
     err.code = 'CREATE_FAILED';
     throw err;
   }
-  await repoOkfService.importConcepts(repo.repo_id, [
-    {
-      path: 'index.md',
-      frontmatter: { type: 'index', title: name.trim(), sources: [] },
-      body: `# ${name.trim()}\n\n## Contents\n\n`
-    }
-  ]);
+  try {
+    await repoOkfService.importConcepts(repo.repo_id, [
+      {
+        path: 'index.md',
+        frontmatter: { type: 'index', title: name.trim(), sources: [] },
+        body: `# ${name.trim()}\n\n## Contents\n\n`
+      }
+    ]);
+  } catch (err) {
+    // The repo EXISTS server-side (round 16, #80123) — a bare CREATE_FAILED
+    // here reads as "nothing happened", the user retries, and the first
+    // repo lingers as an orphan draft card with no index concept. Attach
+    // the created repo exactly like importRepoZip does, so the wizard can
+    // offer "open it" instead of a blind retry.
+    err.repo = repo;
+    throw err;
+  }
   return repo;
 }
 
@@ -351,7 +366,10 @@ export async function exportRepoZip(repo) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  // Revoke on the NEXT task (round 16, #80128): revoking in the same task
+  // as the click can cancel the browser's asynchronous blob snapshot — the
+  // download arrives empty/partial on some paths.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
   return headerName || fallback;
 }
 

@@ -59,7 +59,11 @@
               )
             }}
           </p>
-          <p class="form-hint">
+          <!-- OKF-only promise on a permanently-visible surface: gated with
+              the flag (round 16, #80127 family) — with OKF parked the crawl
+              still works, it just cannot become a repository, and the hint
+              must not advertise what the deployment cannot open. -->
+          <p v-if="okfEnabled" class="form-hint">
             {{
               translate(
                 'okf.crawl.postCrawlHint',
@@ -189,6 +193,7 @@
 <script>
 import documentFileService from '../services/documentFileService.js';
 import { eventBus } from '../eventBus.js';
+import { isOkfEnabled } from '../utils/okfFlag.js';
 import DsButton from './ds/Button.vue';
 import DsInput from './ds/Input.vue';
 import DsInfoTip from './ds/InfoTip.vue';
@@ -358,6 +363,11 @@ export default {
       } catch {
         return false;
       }
+    },
+    /** Shared flag helper (round 16, #80125): guards the OKF seeding leg so
+     * a parked deployment's crawls succeed and close cleanly. */
+    okfEnabled() {
+      return isOkfEnabled();
     }
   },
   watch: {
@@ -490,24 +500,34 @@ export default {
         // without a row once routed the whole crawl through the documents
         // batch (losing per-URL slug identity). No file_id → seed nothing:
         // an async site crawl cannot be converted from a URL string anyway.
-        if (this.crawlMode !== 'single_page') {
+        // OKF seeding is flag-gated AND non-fatal (round 16, #80125): with
+        // the flag parked the `okf` module is not registered and the
+        // dispatch would reject — INSIDE this try, after the success toast,
+        // turning a succeeded crawl into an error toast and swallowing the
+        // dialog's close. The crawl itself is flag-independent; the seeding
+        // is a bonus for an open Studio.
+        if (this.crawlMode !== 'single_page' && this.okfEnabled) {
           const fileId = response.data && response.data.file_id;
           if (fileId) {
-            await this.$store.dispatch('okf/setSelection', {
-              crawlSeeds: [
-                { file_id: fileId, file_name: (response.data && response.data.file_name) || fileId, source: 'crawl' }
-              ]
-            });
-            window.dispatchEvent(
-              new CustomEvent('okf:create-from-crawl', {
-                detail: {
-                  file_id: fileId,
-                  url: this.url.trim(),
-                  crawlMode: this.crawlMode,
-                  crawlDepth: this.crawlDepth
-                }
-              })
-            );
+            try {
+              await this.$store.dispatch('okf/setSelection', {
+                crawlSeeds: [
+                  { file_id: fileId, file_name: (response.data && response.data.file_name) || fileId, source: 'crawl' }
+                ]
+              });
+              window.dispatchEvent(
+                new CustomEvent('okf:create-from-crawl', {
+                  detail: {
+                    file_id: fileId,
+                    url: this.url.trim(),
+                    crawlMode: this.crawlMode,
+                    crawlDepth: this.crawlDepth
+                  }
+                })
+              );
+            } catch (seedErr) {
+              console.warn('OKF crawl seeding skipped (non-fatal):', seedErr);
+            }
           }
         }
         this.$emit('link-submitted', response.data);

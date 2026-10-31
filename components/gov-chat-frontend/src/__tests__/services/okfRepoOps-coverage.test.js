@@ -34,7 +34,9 @@ import {
   importRepoZip,
   importZipIntoRepo,
   exportRepoZip,
-  acknowledgePii
+  acknowledgePii,
+  createRepo,
+  loadSubjectAreaOptions
 } from '../../services/okfRepoOps';
 
 beforeEach(() => jest.clearAllMocks());
@@ -152,5 +154,52 @@ describe('acknowledgePii passes through', () => {
     const res = await acknowledgePii('r1', false, actor);
     expect(res).toMatchObject({ ok: true });
     expect(repoOkfService.acknowledgePii).toHaveBeenCalledWith('r1', false, actor);
+  });
+});
+
+// ─── Round 16 review fixes ─────────────────────────────────────────────────
+
+describe('createRepo — the index import failure still exposes the created repo (#80123)', () => {
+  it('attaches err.repo so the wizard can offer "open it" instead of a blind retry', async () => {
+    repoOkfService.create.mockResolvedValueOnce({ repo_id: 'r-created', name: 'Orphan Risk' });
+    repoOkfService.importConcepts.mockRejectedValueOnce(new Error('index import exploded'));
+    const err = await createRepo({ name: 'Orphan Risk', domain: 'health' }).catch((e) => e);
+    expect(err.message).toBe('index import exploded');
+    // Without this, the user retries and the first repo lingers as an orphan
+    // draft card with no index concept.
+    expect(err.repo).toMatchObject({ repo_id: 'r-created' });
+  });
+});
+
+jest.mock('../../services/serviceTreeService', () => ({
+  __esModule: true,
+  default: { getAdminCategories: jest.fn() }
+}));
+
+describe('loadSubjectAreaOptions — legacy domains survive an unreachable hierarchy (#80129)', () => {
+  const serviceTreeService = require('../../services/serviceTreeService').default;
+
+  it('appends live-repo domains missing from the hierarchy as "(legacy)" — even when the hierarchy read FAILS', async () => {
+    // The exact case the fix targets: an unreachable hierarchy used to hit
+    // the empty-list early return and force every repo to 'general'.
+    serviceTreeService.getAdminCategories.mockRejectedValueOnce(new Error('503'));
+    const opts = await loadSubjectAreaOptions(['water-supply', 'health']);
+    const values = opts.map((o) => o.value);
+    expect(values).toContain('water-supply');
+    expect(values).toContain('health');
+    expect(opts.find((o) => o.value === 'water-supply').label).toBe('water-supply (legacy)');
+  });
+
+  it('does not duplicate a domain the hierarchy already lists', async () => {
+    serviceTreeService.getAdminCategories.mockResolvedValueOnce([{ nameEN: 'Health' }]);
+    const opts = await loadSubjectAreaOptions(['health', 'energy']);
+    expect(opts.filter((o) => o.value === 'health')).toHaveLength(1);
+    expect(opts.find((o) => o.value === 'energy').label).toBe('energy (legacy)');
+  });
+
+  it('an unreachable hierarchy with NO live domains still falls back to General', async () => {
+    serviceTreeService.getAdminCategories.mockRejectedValueOnce(new Error('503'));
+    const opts = await loadSubjectAreaOptions([]);
+    expect(opts).toEqual([{ value: 'general', label: 'General' }]);
   });
 });

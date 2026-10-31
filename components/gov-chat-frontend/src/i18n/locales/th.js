@@ -384,7 +384,7 @@ export default {
       },
       logSearch: {
         noResultsFound: 'ไม่มีบันทึกที่ตรงกับเกณฑ์การค้นหาของคุณ',
-        resultsFound: 'พบ {count} รายการบันทึก',
+        resultsFound: "พบ {'{'}count{'}'} รายการบันทึก",
         degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
@@ -453,8 +453,8 @@ export default {
       empty: 'ไม่พบหมวดหมู่ คลิก "เพิ่มหมวดหมู่ใหม่" เพื่อเริ่มต้น',
       formTitleCreateCategory: 'สร้างหมวดหมู่ใหม่',
       formTitleAddService: "เพิ่มบริการใน \"{'{'}categoryName{'}'}\"",
-      formTitleEditCategory: 'แก้ไขหมวดหมู่: "{itemName}"',
-      formTitleEditService: 'แก้ไขบริการ: "{itemName}"',
+      formTitleEditCategory: "แก้ไขหมวดหมู่: \"{'{'}itemName{'}'}\"",
+      formTitleEditService: "แก้ไขบริการ: \"{'{'}itemName{'}'}\"",
       nameEnLabel: 'ชื่อ (ภาษาอังกฤษ)',
       translationsTitle: 'การแปลสำหรับแสดงผล',
       loadingTranslations: 'กำลังโหลดการแปล...',
@@ -470,8 +470,9 @@ export default {
       confirmCancelEdit: 'คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก คุณแน่ใจว่าต้องการยกเลิกหรือไม่?',
       confirmDeleteTitleCategory: 'ลบหมวดหมู่?',
       confirmDeleteTitleService: 'ลบบริการ?',
-      confirmDeleteCategory: 'คุณแน่ใจว่าต้องการลบหมวดหมู่ "{itemName}" หรือไม่? การกระทำนี้ไม่สามารถยกเลิกได้',
-      confirmDeleteService: 'คุณแน่ใจว่าต้องการลบบริการ "{itemName}" หรือไม่? การกระทำนี้ไม่สามารถยกเลิกได้',
+      confirmDeleteCategory:
+        "คุณแน่ใจว่าต้องการลบหมวดหมู่ \"{'{'}itemName{'}'}\" หรือไม่? การกระทำนี้ไม่สามารถยกเลิกได้",
+      confirmDeleteService: "คุณแน่ใจว่าต้องการลบบริการ \"{'{'}itemName{'}'}\" หรือไม่? การกระทำนี้ไม่สามารถยกเลิกได้",
       deleteSuccessCategory: 'ลบหมวดหมู่สำเร็จ',
       deleteSuccessService: 'ลบบริการสำเร็จ',
       deleteErrorCategory: 'ล้มเหลวในการลบหมวดหมู่',
@@ -501,18 +502,19 @@ export default {
       loadError: 'ล้มเหลวในการโหลดเอกสาร',
       confirmIngestTitle: 'ยืนยันการนำเข้าข้อมูลเป็นชุด',
       ingest: 'นำเข้าข้อมูล',
-      confirmIngestSelected: 'คุณแน่ใจว่าต้องการนำเข้าไฟล์ที่เลือก {count} ไฟล์หรือไม่?',
-      ingestQueuedSuccess: 'ไฟล์ {count} ไฟล์ถูกจัดคิวเพื่อนำเข้าข้อมูลแล้ว',
+      confirmIngestSelected: "คุณแน่ใจว่าต้องการนำเข้าไฟล์ที่เลือก {'{'}count{'}'} ไฟล์หรือไม่?",
+      ingestQueuedSuccess: "ไฟล์ {'{'}count{'}'} ไฟล์ถูกจัดคิวเพื่อนำเข้าข้อมูลแล้ว",
       ingestQueuedError: 'เกิดข้อผิดพลาดระหว่างกระบวนการนำเข้าข้อมูลเป็นชุด',
-      ingestPartialFailure: 'นำเข้าข้อมูลสำเร็จ {successCount} จาก {count} ไฟล์ ล้มเหลว: {detail}',
-      ingestAllFailed: 'ไฟล์ทั้งหมด {count} ไฟล์ล้มเหลว: {detail}',
+      ingestPartialFailure:
+        "นำเข้าข้อมูลสำเร็จ {'{'}successCount{'}'} จาก {'{'}count{'}'} ไฟล์ ล้มเหลว: {'{'}detail{'}'}",
+      ingestAllFailed: "ไฟล์ทั้งหมด {'{'}count{'}'} ไฟล์ล้มเหลว: {'{'}detail{'}'}",
       retractSelected: 'ดึงกลับที่เลือก',
       confirmRetractTitle: 'ยืนยันการดึงกลับเป็นชุด',
-      confirmRetractSelected: 'คุณแน่ใจว่าต้องการดึงกลับไฟล์ที่เลือก {count} ไฟล์หรือไม่?',
+      confirmRetractSelected: "คุณแน่ใจว่าต้องการดึงกลับไฟล์ที่เลือก {'{'}count{'}'} ไฟล์หรือไม่?",
       retract: 'ดึงกลับ',
-      retractQueuedSuccess: 'ไฟล์ {count} ไฟล์ถูกจัดคิวเพื่อดึงกลับแล้ว',
+      retractQueuedSuccess: "ไฟล์ {'{'}count{'}'} ไฟล์ถูกจัดคิวเพื่อดึงกลับแล้ว",
       retractQueuedError: 'เกิดข้อผิดพลาดระหว่างกระบวนการดึงกลับเป็นชุด',
-      retractPartialFailure: 'ดึงกลับสำเร็จ {successCount} จาก {count} ไฟล์ ล้มเหลว: {detail}',
+      retractPartialFailure: "ดึงกลับสำเร็จ {'{'}successCount{'}'} จาก {'{'}count{'}'} ไฟล์ ล้มเหลว: {'{'}detail{'}'}",
       deleteSelected: 'Delete Selected',
       confirmDeleteTitle: 'Confirm Batch Deletion',
       confirmDeleteSelected:
@@ -522,11 +524,12 @@ export default {
       deletePartialFailure: "{'{'}successCount{'}'} of {'{'}count{'}'} deleted. Failed: {'{'}detail{'}'}",
       deleteAllFailed: "All {'{'}count{'}'} file(s) failed: {'{'}detail{'}'}",
       deleteRefuseReason: '{count} file(s) are still ingested — retract them first.',
-      retractAllFailed: 'ไฟล์ทั้งหมด {count} ไฟล์ล้มเหลว: {detail}',
-      uploadSuccessMultiple: 'อัปโหลดไฟล์ {count} ไฟล์สำเร็จ',
-      linkSubmitSuccess: 'รวบรวมข้อมูลและบันทึก "{fileName}" สำเร็จ',
-      actionSuccess: 'การดำเนินการ "{action}" กับไฟล์ {fileId} สำเร็จ',
-      metadataUpdateSuccess: 'อัปเดตข้อมูลเมตาสำหรับไฟล์ {fileId} แล้ว',
+      retractAllFailed: "ไฟล์ทั้งหมด {'{'}count{'}'} ไฟล์ล้มเหลว: {'{'}detail{'}'}",
+      uploadSuccessMultiple: "อัปโหลดไฟล์ {'{'}count{'}'} ไฟล์สำเร็จ",
+      linkSubmitSuccess: "รวบรวมข้อมูลและบันทึก \"{'{'}fileName{'}'}\" สำเร็จ",
+      crawlScheduled: "ตั้งเวลารวบรวมข้อมูล \"{'{'}fileName{'}'}\" แล้ว ตรวจสอบสถานะได้ในแดชบอร์ด",
+      actionSuccess: "การดำเนินการ \"{'{'}action{'}'}\" กับไฟล์ {'{'}fileId{'}'} สำเร็จ",
+      metadataUpdateSuccess: "อัปเดตข้อมูลเมตาสำหรับไฟล์ {'{'}fileId{'}'} แล้ว",
       deletePartialNotice:
         "ไฟล์ที่เลือก {'{'{'}'}blocked{'}'} ไฟล์ลบไม่ได้ ({'{'{'}'}reason{'}'}) — จะลบเฉพาะที่เหลืออีก {'{'{'}'}n{'}'} ไฟล์",
       confirmDeleteSkipped: "ไฟล์ที่ ingest แล้ว/กำลัง ingest {'{'{'}'}count{'}'} ไฟล์จะถูกข้าม — ถอนคืนก่อนจึงจะลบได้"
@@ -1500,19 +1503,21 @@ export default {
     title: 'อัปโหลดไฟล์',
     dropzone: 'ลากและวางไฟล์ที่นี่ หรือคลิกเพื่อเลือก',
     allowedTypesLabel: 'ประเภทที่อนุญาต:',
-    buttonUpload: 'อัปโหลด {count} ไฟล์',
+    buttonUpload: "อัปโหลด {'{'}count{'}'} ไฟล์",
     remove: 'ลบ',
     uploading: 'กำลังอัปโหลด...',
     notifications: {
       dropError: 'สามารถวางไฟล์ได้เท่านั้น โปรดตรวจสอบว่าคุณกำลังลากไฟล์ที่ถูกต้องจากคอมพิวเตอร์ของคุณ',
-      typeNotAllowed: 'ประเภทไฟล์ "{extension}" ไม่ได้รับอนุญาต',
+      typeNotAllowed: "ประเภทไฟล์ \"{'{'}extension{'}'}\" ไม่ได้รับอนุญาต",
       shortcutUnsupported: 'ไฟล์ทางลัด (.url) ไม่รองรับ โปรดลากไฟล์จริง',
-      duplicate: 'ไฟล์ "{fileName}" ถูกเพิ่มแล้ว',
-      uploadSuccess: 'อัปโหลด {fileName} สำเร็จ',
-      uploadFailed: 'ล้มเหลวในการอัปโหลด {fileName}'
+      duplicate: "ไฟล์ \"{'{'}fileName{'}'}\" ถูกเพิ่มแล้ว",
+      uploadSuccess: "อัปโหลด {'{'}fileName{'}'} สำเร็จ",
+      uploadFailed: "ล้มเหลวในการอัปโหลด {'{'}fileName{'}'}"
     },
     ragTip:
-      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.'
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file. The OKF Studio wizard turns uploads into reviewed topics.',
+    ragTipNoOkf:
+      'Why uploads matter for RAG: every document you upload can become curated, labeled knowledge — focused, well-structured documents retrieve far more accurately than one long file.'
   },
   okf: {
     models: {
@@ -2582,7 +2587,7 @@ export default {
         alreadyInOkf: 'ลบเอกสารที่อยู่ในที่เก็บ OKF แล้ว',
         alreadyIngested: 'ลบเอกสารที่ผ่านการ ingest แล้ว',
         servingWarn:
-          'เอกสารที่เลือก {n} รายการยังให้บริการคอร์ปัสอิสระอยู่ — รีโปใหม่จะนำเข้าไม่ได้จนกว่าจะถอนคืนเอกสารเหล่านั้น'
+          "เอกสารที่เลือก {'{'}n{'}'} รายการยังให้บริการคอร์ปัสอิสระอยู่ — รีโปใหม่จะนำเข้าไม่ได้จนกว่าจะถอนคืนเอกสารเหล่านั้น"
       },
       produce: {
         notReady: 'โมดูลตัวสร้างจะเชื่อมต่อในเรื่องราวถัดไป'

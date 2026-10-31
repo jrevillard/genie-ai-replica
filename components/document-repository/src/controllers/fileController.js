@@ -1690,23 +1690,35 @@ class FileController {
     try {
       // The caller's still-live task ids: an ingest accepted while the
       // recovery was retrying is not an orphan and must not be released.
-      const { value } = recoverStuckSchema.validate(req.body || {});
+      // Joi returns the ORIGINAL input on error, so the error must be
+      // checked — an unchecked malformed body reaches the AQL bind and
+      // surfaces as a 500 (retried 30× by dataprep) instead of a 400.
+      const { error, value } = recoverStuckSchema.validate(req.body || {});
+      if (error) {
+        return res.status(400).json({ success: false, error: 'Validation error', message: error.details[0].message });
+      }
       const recovered = await metadataService.recoverStuckIngests(value.excludeFileIds);
-      for (const fileId of recovered) {
-        try {
-          await fileService.addIngestionLog(fileId, {
+      // Bounded-latency: a long batch can leave hundreds of rows stuck, and
+      // the dataprep caller's control-plane timeout (30 s) would fire on a
+      // serial loop, retrying the call and duplicating every log line.
+      const logResults = await Promise.allSettled(
+        recovered.map((fileId) =>
+          fileService.addIngestionLog(fileId, {
             level: 'WARN',
             stage: 'dataprep',
             message:
               'Ingestion interrupted: the ingestion service restarted while this file was being processed. ' +
               'Status released to Pending so it can be ingested again.'
-          });
-        } catch (logErr) {
+          })
+        )
+      );
+      logResults.forEach((result, i) => {
+        if (result.status === 'rejected') {
           // The status flip already happened; a lost log line must not fail
           // the recovery — dataprep would only retry the whole call.
-          logger.error(`Failed to log recovery for ${fileId}: ${logErr.message}`);
+          logger.error(`Failed to log recovery for ${recovered[i]}: ${result.reason.message}`);
         }
-      }
+      });
       return res.json({ success: true, recovered, count: recovered.length });
     } catch (error) {
       logger.error('Recover stuck ingests error:', error);

@@ -68,8 +68,9 @@ jest.mock('../../services/fileService', () => ({
   searchFiles: jest.fn()
 }));
 
-// Real metadataService against a mocked db handle.
-jest.mock('../../services/metadataService', () => jest.requireActual('../../services/metadataService'));
+// metadataService stays REAL (no jest.mock) — only the shared-lib db handle
+// above is mocked, so the AQL contract asserted below is the actual query
+// the service sends, not a mock's idea of it.
 
 const request = require('supertest');
 const app = require('../../app');
@@ -120,6 +121,19 @@ describe('POST /api/files/ingest/recover-stuck', () => {
       .send({ excludeFileIds: ['live-1', 'live-2'] });
 
     expect(query.mock.calls[0][1]).toEqual({ excludeFileIds: ['live-1', 'live-2'] });
+  });
+
+  it('rejects a malformed body with 400 instead of reaching the query', async () => {
+    // Joi returns the ORIGINAL input on error: an unchecked malformed body
+    // used to reach the AQL bind as a string and surface as a 500, which
+    // dataprep then retried 30 times.
+    const { query } = mockDb([]);
+
+    const res = await request(app).post('/api/files/ingest/recover-stuck').send({ excludeFileIds: 'not-an-array' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(query).not.toHaveBeenCalled();
   });
 
   it('returns an empty recovery when nothing is stuck', async () => {

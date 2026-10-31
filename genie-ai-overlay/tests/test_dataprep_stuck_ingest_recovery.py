@@ -169,6 +169,10 @@ class TestRecoverStuckIngestStatuses:
 
         async def _probe():
             seen["registered"] = asyncio.current_task() in ms._background_tasks
+            # Drive the REAL success path: an AsyncMock side_effect returning
+            # None would crash payload parsing and silently exercise the
+            # give-up path instead.
+            return {"success": True, "recovered": [], "count": 0}
 
         session = MagicMock()
         session.__aenter__ = AsyncMock(return_value=session)

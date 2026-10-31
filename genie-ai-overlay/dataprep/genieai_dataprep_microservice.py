@@ -70,6 +70,7 @@ from comps import (
 )
 from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDocRepo
 from core.model_http_policy import AIOHTTP_CONNECT_TIMEOUT_SECONDS, CONTROL_PLANE_TIMEOUT_SECONDS
+from core.service_endpoints import DOCUMENT_REPOSITORY_URL
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -158,8 +159,6 @@ active_ingestion_tasks = {}
 # ------------------------------------------------------------------------------
 # Stuck-ingest startup recovery (#610)
 # ------------------------------------------------------------------------------
-# Same value the arangodb component reads (single deployment, same env var).
-DOCUMENT_REPOSITORY_URL = os.getenv("DOCUMENT_REPOSITORY_URL", "http://document-repository:3001")
 # Bounded startup retry: compose/Swarm does not guarantee the doc-repo is
 # listening when dataprep boots, so the recovery call is retried on a fixed
 # cadence for ~5 minutes before giving up with a loud warning.
@@ -239,7 +238,11 @@ async def recover_stuck_ingest_statuses():
                             return recovered
                         logger.error(
                             f"[ recovery ] attempt {attempt}/{_RECOVERY_MAX_ATTEMPTS}: "
-                            f"HTTP {response.status}: {await response.text()}"
+                            # Truncated: an nginx/HTML error page dumped 30× per
+                            # restart would drown the [ recovery ] signal in
+                            # the log stream (same 500-char bound the status
+                            # callback uses for its error payloads).
+                            f"HTTP {response.status}: {(await response.text())[:500]}"
                         )
                 except asyncio.CancelledError:
                     # A cancellation is the event loop shutting down — not a

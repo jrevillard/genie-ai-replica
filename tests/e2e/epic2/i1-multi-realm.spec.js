@@ -1,11 +1,17 @@
 const { test, expect } = require('@playwright/test');
-const { getAdminToken, getUserToken, request: authRequest, parseJwtClaims } = require('../helpers/auth');
-const { createUser, deleteUser } = require('../helpers/keycloak-admin');
+const {
+  getAdminToken,
+  getUserToken,
+  getSessionTokenViaUI,
+  request: authRequest,
+  parseJwtClaims,
+} = require('../helpers/auth');
+const { createUser, deleteUser, enableDirectAccessGrants } = require('../helpers/keycloak-admin');
 
 /**
  * Phase I: Multi-Realm Configuration (Story 2-9)
  *
- * Prerequisites (set up in Phase 0, Step 0.7b):
+ * Prerequisites (set up in Phase 0, Step 0.6):
  *   - KEYCLOAK_ADDITIONAL_REALMS includes "genie2" in .env
  *   - genie2 realm exists in Keycloak (created before backend started)
  *   - Backend has been restarted to load genie2 JWKS
@@ -17,6 +23,15 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
 
   test.beforeAll(async () => {
     adminToken = await getAdminToken();
+
+    // The genie2 token minted below arrives via ROPC. The UI login only
+    // speaks to the primary realm, so an additional realm has no session
+    // posture — and genie2 is a test-only realm, not covered by the
+    // committed genie-realm.yaml. The spec therefore provisions its own
+    // ROPC grant (Phase 0.6 already creates the realm with
+    // directAccessGrantsEnabled; this re-asserts it on any stack).
+    // NEVER do this on the primary realm.
+    await enableDirectAccessGrants(adminToken, TEST_REALM, 'genie-app');
 
     // Create test user in genie2 (realm should already exist from Phase 0.7b)
     try {
@@ -61,8 +76,10 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
     expect(res.status, 'Backend must accept genie2 tokens').toBe(200);
   });
 
-  test('I.2 — tokens from different realms have different issuers', async () => {
-    const genie1Token = await getUserToken('testuser', 'TestPass123!');
+  test('I.2 — tokens from different realms have different issuers', async ({ browser }) => {
+    // Primary-realm token comes from a browser login session (the realm
+    // refuses ROPC by design); genie2 keeps ROPC as provisioned above.
+    const genie1Token = await getSessionTokenViaUI({ browser });
     const genie2Token = await getUserToken(TEST_USER.username, TEST_USER.password, { realm: TEST_REALM });
 
     const claims1 = parseJwtClaims(genie1Token);
@@ -74,8 +91,8 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
     expect(claims1.iss, 'Issuers must be different').not.toBe(claims2.iss);
   });
 
-  test('I.3 — backend validates tokens from both realms simultaneously', async () => {
-    const genie1Token = await getUserToken('testuser', 'TestPass123!');
+  test('I.3 — backend validates tokens from both realms simultaneously', async ({ browser }) => {
+    const genie1Token = await getSessionTokenViaUI({ browser });
     const genie2Token = await getUserToken(TEST_USER.username, TEST_USER.password, { realm: TEST_REALM });
 
     const res1 = await authRequest('GET', '/api/me', {

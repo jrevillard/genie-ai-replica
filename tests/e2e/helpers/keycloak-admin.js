@@ -164,9 +164,42 @@ async function deleteUser(adminToken, realm, userId) {
   }
 }
 
+/**
+ * Enable ROPC (direct access grants) on a client, preserving the rest of
+ * its representation. The primary `genie` realm refuses ROPC by design —
+ * only ever call this for a test-only realm (e.g. `genie2`) whose specs
+ * mint tokens directly and have no UI login posture.
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @param {string} clientId - Client ID (e.g. 'genie-app')
+ * @returns {Promise<void>}
+ */
+async function enableDirectAccessGrants(adminToken, realm, clientId) {
+  const searchRes = await request('GET', `/auth/admin/realms/${realm}/clients?clientId=${clientId}`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+
+  if (!searchRes.data || searchRes.data.length === 0) {
+    throw new Error(`Client ${clientId} not found in realm ${realm}`);
+  }
+
+  const client = searchRes.data[0];
+  if (client.directAccessGrantsEnabled) return;
+
+  const res = await request('PUT', `/auth/admin/realms/${realm}/clients/${client.id}`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+    body: { ...client, directAccessGrantsEnabled: true },
+  });
+
+  if (res.status !== 204) {
+    throw new Error(`Failed to enable direct access grants on ${clientId}: ${res.status} ${JSON.stringify(res.data)}`);
+  }
+}
+
 module.exports = {
   createUser,
   rotateRealmKeys,
   updateRealmSettings,
   deleteUser,
+  enableDirectAccessGrants,
 };

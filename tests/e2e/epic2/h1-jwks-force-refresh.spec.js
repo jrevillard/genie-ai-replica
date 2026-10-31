@@ -1,14 +1,16 @@
 const { test, expect } = require('@playwright/test');
-const { getAdminToken, getUserToken, request: authRequest, parseJwtClaims } = require('../helpers/auth');
+const { getAdminToken, getSessionTokenViaUI, request: authRequest } = require('../helpers/auth');
 const { rotateRealmKeys } = require('../helpers/keycloak-admin');
 
 test.describe('Phase H: JWKS Force-Refresh', () => {
   let adminToken;
   let userToken;
 
-  test.beforeAll(async () => {
+  test.beforeAll(async ({ browser }) => {
     adminToken = await getAdminToken();
-    userToken = await getUserToken('testuser', 'TestPass123!');
+    // Direct access grants (ROPC) are disabled on the realm by design —
+    // mint the token through a browser login session instead.
+    userToken = await getSessionTokenViaUI({ browser });
   });
 
   test('H.1 — valid token passes with cached JWKS', async () => {

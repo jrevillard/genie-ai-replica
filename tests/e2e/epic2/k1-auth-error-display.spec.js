@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { getAdminToken, getUserToken, request: authRequest } = require('../helpers/auth');
+const { getAdminToken, getSessionTokenViaUI, request: authRequest } = require('../helpers/auth');
 const { createUser, deleteUser, updateRealmSettings } = require('../helpers/keycloak-admin');
 
 test.describe.serial('Phase K: Auth Error Display', () => {
@@ -9,9 +9,11 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   const NOROLES_USERNAME = 'noroles-user-e2e';
   const NOROLES_PASSWORD = 'TestPass123!';
 
-  test.beforeAll(async () => {
+  test.beforeAll(async ({ browser }) => {
     adminToken = await getAdminToken();
-    userToken = await getUserToken('testuser', 'TestPass123!');
+    // Direct access grants (ROPC) are disabled on the realm by design —
+    // mint the token through a browser login session instead.
+    userToken = await getSessionTokenViaUI({ browser });
   });
 
   test.afterAll(async () => {
@@ -47,12 +49,13 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     expect(res.data.error).toBe('TOKEN_INVALID');
   });
 
-  test('K.2 — TOKEN_EXPIRED (short-lived token)', async () => {
+  test('K.2 — TOKEN_EXPIRED (short-lived token)', async ({ browser }) => {
     // Reduce lifespan to 10s
     await updateRealmSettings(adminToken, 'genie', { accessTokenLifespan: '10' });
 
-    // Get fresh token (expires in 10s)
-    const shortToken = await getUserToken('testuser', 'TestPass123!');
+    // Get fresh session token (issued after the lifespan change above,
+    // so it carries the 10s expiry)
+    const shortToken = await getSessionTokenViaUI({ browser });
 
     // Wait for expiry (polling up to 30s)
     const startTime = Date.now();
@@ -73,7 +76,7 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     // Note: lifespan restore happens in afterAll
   });
 
-  test('K.3 — FORBIDDEN (user without roles)', async () => {
+  test('K.3 — FORBIDDEN (user without roles)', async ({ browser }) => {
     // Create no-roles user
     noRolesUserId = await createUser(adminToken, 'genie', {
       username: NOROLES_USERNAME,
@@ -82,8 +85,13 @@ test.describe.serial('Phase K: Auth Error Display', () => {
       realmRoles: [], // No roles
     });
 
-    // Get token for no-roles user
-    const noRolesToken = await getUserToken(NOROLES_USERNAME, NOROLES_PASSWORD);
+    // Get token for no-roles user via a browser login session — the realm
+    // refuses ROPC by design, and login itself is not role-gated (only
+    // the admin endpoint below is).
+    const noRolesToken = await getSessionTokenViaUI({
+      browser,
+      user: { username: NOROLES_USERNAME, password: NOROLES_PASSWORD },
+    });
 
     // Attempt admin endpoint
     const res = await authRequest('GET', '/api/admin/users', {

@@ -1,11 +1,13 @@
 const { test, expect } = require('@playwright/test');
-const { getUserToken, request: authRequest } = require('../helpers/auth');
+const { getSessionTokenViaUI, request: authRequest } = require('../helpers/auth');
 
 test.describe('Phase J: OPEA Continuity', () => {
   let userToken;
 
-  test.beforeAll(async () => {
-    userToken = await getUserToken('testuser', 'TestPass123!');
+  test.beforeAll(async ({ browser }) => {
+    // Direct access grants (ROPC) are disabled on the realm by design —
+    // mint the token through a browser login session instead.
+    userToken = await getSessionTokenViaUI({ browser });
   });
 
   test('J.1 — OPEA callback returns sanitized profile via Bearer token', async () => {

@@ -641,6 +641,24 @@ describe('cross-tab renew lease (#80800)', () => {
   // proved the SCENARIOS, not the CONTENTION. Two module isolates over ONE
   // shared localStorage ARE two tabs: each copy gets its own RENEW_TAB_ID,
   // and exactly ONE signinSilent may run across both.
+  // ── Round 21c (#80941): automaticSilentRenew makes oidc-client-ts's OWN
+  // SilentRenewService call userManager.signinSilent() DIRECTLY — the
+  // timer-driven renew (the measured 280-POST incident) must ride the lease
+  // like every other path. The instance method is wrapped in initialize().
+  it('the TIMER-driven path is wrapped: the instance signinSilent rides the lease (#80941)', async () => {
+    await initialized();
+    const instance = MockUserManager.mock.results[MockUserManager.mock.results.length - 1].value;
+    expect(instance.signinSilent).not.toBe(mockSigninSilent); // wrapped on the instance
+    expect(typeof instance.__rawSigninSilent).toBe('function'); // the raw grant kept
+    mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'timer-driven-token' }));
+    const user = await instance.signinSilent(); // exactly what SilentRenewService calls
+    expect(user.access_token).toBe('timer-driven-token');
+    // Publication + clean release prove it went through the leased wrapper.
+    const entry = JSON.parse(window.localStorage.getItem(USER_KEY));
+    expect(entry.user.access_token).toBe('timer-driven-token');
+    expect(window.localStorage.getItem(LEASE_KEY)).toBeNull();
+  });
+
   it('two tabs contending: exactly ONE renew runs, the other adopts (#80914)', async () => {
     jest.useFakeTimers();
     // Each isolate is a fresh service module — its own RENEW_TAB_ID, its own

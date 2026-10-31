@@ -151,7 +151,9 @@ async function adoptPublishedUser(manager, user) {
  * stale-lease takeover always made (a renew wedged >20s went nowhere). */
 async function renewViaWebLock(manager, startedAt) {
   const renewOnce = async () => {
-    const user = await manager.signinSilent();
+    // The RAW grant (#80941) — manager.signinSilent is the WRAPPED module
+    // function; calling it here would recurse into this very lease.
+    const user = await (manager.__rawSigninSilent || manager.signinSilent.bind(manager))();
     if (user) currentUser = user;
     publishRenewedUser(user);
     return user;
@@ -191,10 +193,28 @@ async function renewViaLease(manager, startedAt) {
     if (adopted) return adoptPublishedUser(manager, adopted);
     held = await acquireRenewLease();
   }
-  const user = await manager.signinSilent();
+  const user = await (manager.__rawSigninSilent || manager.signinSilent.bind(manager))();
   if (user) currentUser = user;
   publishRenewedUser(user);
   return user;
+}
+
+/** Round 21c (#80941): oidcConfig sets automaticSilentRenew: true, so
+ * oidc-client-ts's OWN SilentRenewService runs the access-token-expiry timer
+ * and calls userManager.signinSilent() DIRECTLY — a path that bypassed both
+ * the renewInFlight promise and the cross-tab lease, i.e. the timer-driven
+ * renew (the one that produced the measured 280-POST/two-tab incident) was
+ * never serialised. Wrapping the INSTANCE method routes that internal call
+ * through the module's signinSilent, so every renewal — timer, 401 retry,
+ * error-handler retry — contends for the same lease and adopts the same
+ * publication. The RAW grant is kept on the instance (__rawSigninSilent) for
+ * the wrapper's own renew paths; per-instance so a re-initialize wraps too. */
+function wrapManagerSignin(manager) {
+  if (manager.__signinWrapped) return manager;
+  manager.__rawSigninSilent = manager.signinSilent.bind(manager);
+  manager.signinSilent = (...args) => signinSilent(...args);
+  manager.__signinWrapped = true;
+  return manager;
 }
 
 /**
@@ -203,7 +223,7 @@ async function renewViaLease(manager, startedAt) {
  * @returns {Promise<Object|null>} Existing user or null
  */
 async function initialize() {
-  userManager = new UserManager(oidcConfig);
+  userManager = wrapManagerSignin(new UserManager(oidcConfig));
 
   // Bounded-renew state (round 17, #80353; reset widened round 18, #80469)
   let consecutiveRenewFailures = 0;
@@ -274,7 +294,7 @@ async function initialize() {
  */
 function getUserManager() {
   if (!userManager) {
-    userManager = new UserManager(oidcConfig);
+    userManager = wrapManagerSignin(new UserManager(oidcConfig));
   }
   return userManager;
 }

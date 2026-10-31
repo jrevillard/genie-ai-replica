@@ -1398,6 +1398,30 @@ class FileController {
         });
       }
 
+      // IDEMPOTENT PER (repo_id, bundle_version) (!622 round 21c, #80943):
+      // an interrupted publish that died between the zip store and the
+      // registry's bundles[] merge leaves a zip no registry entry references;
+      // the retry re-exported version N and APPENDED a second entry — and
+      // bundleProtectedIds makes the orphan undeletable. When this exact
+      // version already has a stored zip, return IT instead of minting a
+      // duplicate file (bundleProtectedIds still protects the reuse — the
+      // bundle is the same corpus fingerprint).
+      if (repo_id && value.bundle_version != null) {
+        const existing = await fileService.findBundleByRepoVersion(repo_id, value.bundle_version);
+        if (existing) {
+          logger.info('ingest-bundle: reuse existing bundle for (repo_id, bundle_version)', {
+            repo_id,
+            bundle_version: value.bundle_version,
+            existing_file_id: existing.file_id
+          });
+          return res.status(200).json({
+            ...existing,
+            reused: true,
+            message: `bundle for version ${value.bundle_version} already stored — returning the existing file`
+          });
+        }
+      }
+
       // Decode base64 → buffer
       const buffer = Buffer.from(bundle, 'base64');
 

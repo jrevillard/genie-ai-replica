@@ -117,10 +117,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // The in-flight hierarchy fetch. It runs ONCE: every button is checked
   // against the resolver it builds, and a tap must not start a second one.
   Future<void>? _enTreeFuture;
-  // The id of the Quick Help button whose scope is active — the IDENTITY
-  // the conversation carries, so a reopened conversation can be re-scoped
-  // by the button (a Quick Help tag is the button id, never a label: a
-  // sidebar selection and a button can carry the same label).
+  // The identity of the Quick Help button whose scope is active — what
+  // the conversation tag carries (`id || title`, the web's serviceKey
+  // rule), so a reopened conversation can be re-scoped by it (a tag is
+  // never a LABEL: a sidebar selection and a button can carry the same
+  // label). The restore resolves buttons by id, so only an id-tagged
+  // conversation reinstalls the button's scope; a title tag falls to the
+  // sidebar branch and refuses the follow-up visibly instead.
   String? _activeQuickHelpButtonId;
   // The scope state of the ACTIVE Quick Help button against the live
   // hierarchy (stateFor's map): a restored button whose declared labels
@@ -1328,7 +1331,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _scopeEpoch++;
     _restoredTags = null;
     _activeServiceLabels = declaredLabels;
-    _activeQuickHelpButtonId = quickHelpFieldOf(button, 'id');
+    // The conversation tag carries the button's IDENTITY — `id || title`
+    // (quickHelpButtonIdentity), the web's serviceKey rule. An id-only
+    // identity left an id-less card's conversation without a Quick Help
+    // tag, and the restore answered from the whole corpus.
+    _activeQuickHelpButtonId = quickHelpButtonIdentity(button);
     _activeQuickHelpScope = _scopeResolver?.stateFor(button);
   }
 

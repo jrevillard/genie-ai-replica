@@ -320,6 +320,35 @@ void main() {
       expect(scope.serviceLabelsEn, ['Births']);
     });
 
+    test(
+      'an id-less button conversation travels as its title tag, and the restore refuses it',
+      () {
+        // The press of an id-less scoped card writes its TITLE as the tag
+        // (the web's identity rule, #1194) — but the restore resolves
+        // BUTTONS by id only, on both platforms (the web's own lookup is
+        // `candidate.id === tag`). A title tag is therefore not a Quick
+        // Help scope on restore: it is a tag the live hierarchy cannot
+        // name, the count remembers it, and the send guard refuses the
+        // follow-up — a VISIBLE refusal, never the silent widening of a
+        // scope-less restore the pre-fix mobile saved.
+        final idless = [
+          {
+            'resolvedTitle': 'Civil registry help',
+            'category': '2',
+            'serviceLabels': ['Births'],
+          },
+        ];
+        final scope = convResolver(
+          idless,
+        ).resolve(tags: ['Civil registry help'], categoryKey: '2');
+
+        expect(scope.quickHelpButtonId, isNull);
+        expect(scope.sidebarTagCount, 1);
+        expect(scope.sidebarLabelsEn, isEmpty);
+        expect(scope.serviceLabelsEn, isEmpty);
+      },
+    );
+
     test('a button that names its category by ENGLISH resolves to the key', () {
       // The configuration names the category; the conversation's edge
       // speaks the hierarchy's own key — the one the backend writes as
@@ -1386,6 +1415,44 @@ void main() {
       ];
 
       expect(quickHelpButtonById(buttons, 'crops'), isNull);
+    });
+  });
+
+  /// The identity a conversation tag carries for a button — the web's
+  /// `serviceKey` rule (`button.id || title`): the id when the config
+  /// declares one, the title when it does not (#1194).
+  group('quickHelpButtonIdentity', () {
+    test('the id wins when the config declares one', () {
+      expect(
+        quickHelpButtonIdentity({
+          'id': 'civil',
+          'resolvedTitle': 'Civil Registry',
+        }),
+        'civil',
+      );
+    });
+
+    test('an id-less button is identified by its title', () {
+      // A scoped card can be declared without an id (a hand-edited
+      // deployment configuration): its identity — what the conversation
+      // tag carries — is its title, exactly as the web's serviceKey is.
+      // An EMPTY id is no id (the file's own rule), not a title override.
+      const titleOnly = {'resolvedTitle': 'Civil Registry'};
+      expect(quickHelpButtonIdentity(titleOnly), 'Civil Registry');
+      expect(
+        quickHelpButtonIdentity({'id': null, ...titleOnly}),
+        'Civil Registry',
+      );
+      expect(
+        quickHelpButtonIdentity({'id': '', ...titleOnly}),
+        'Civil Registry',
+      );
+    });
+
+    test('a button with neither id nor title has no identity', () {
+      expect(quickHelpButtonIdentity({}), isNull);
+      expect(quickHelpButtonIdentity({'id': '', 'resolvedTitle': ''}), isNull);
+      expect(quickHelpButtonIdentity(null), isNull);
     });
   });
 

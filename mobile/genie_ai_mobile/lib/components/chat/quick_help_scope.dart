@@ -209,6 +209,27 @@ Map<String, dynamic>? quickHelpButtonById(
   return null;
 }
 
+/// The identity a conversation tag carries for [button] — the web's
+/// `serviceKey` rule (`button.id || title`): the id when the
+/// configuration declares one, the button's own title when it does not.
+/// Null when neither exists.
+///
+/// The identity must never be the id ALONE: a scoped card can be declared
+/// without an id (a hand-edited deployment configuration — no shipped
+/// configuration carries one), and an id-only identity then leaves the
+/// saved conversation without a Quick Help tag. The restore would answer
+/// every follow-up from the whole corpus while the user believed the
+/// scope survived. Carrying the title — what the web saves — tags the
+/// conversation; the restore resolves buttons by id only, on both
+/// platforms, so the title tag is refused visibly there instead of
+/// silently widening.
+String? quickHelpButtonIdentity(Map<String, dynamic>? button) {
+  if (button == null) return null;
+  final id = quickHelpFieldOf(button, 'id');
+  if (id != null && id.isNotEmpty) return id;
+  return quickHelpTitleOf(button);
+}
+
 /// Whether a locale-marker state is a DRIFT: the consumer's per-locale
 /// data (the Quick Help buttons, the sidebar scope's title) was last
 /// resolved under [loadedLocale] and the app has moved to
@@ -261,14 +282,17 @@ String? quickHelpTitleOf(Map<String, dynamic>? button) {
 }
 
 /// The title of the ACTIVE Quick Help scope, re-resolved from the button
-/// list by its id — the mobile twin of the web's quickHelpTitleFor.
+/// list by its identity — the mobile twin of the web's quickHelpTitleFor.
 ///
 /// A locale switch re-resolves the buttons (a load in the new locale) and
-/// the context bar's title must follow: the scope's identity is the button
-/// id, not the title it was pressed under. A button the config no longer
-/// declares, or a null or EMPTY id (empty declares nothing — the file's
-/// own scope rule — and a sidebar scope has no id at all), resolves to
-/// null so the caller keeps the title it already has.
+/// the context bar's title must follow: the scope's identity is the
+/// button's (`id || title`), never the title it was pressed under — for an
+/// id'd button. A lookup that names no button (the config no longer
+/// declares the id, the active scope carries a TITLE tag the id-keyed
+/// lookup cannot match, or the id is null or EMPTY — empty declares
+/// nothing, the file's own scope rule, and a sidebar scope has no id at
+/// all) resolves to null so the caller keeps the title it already has —
+/// the same fallback the web's own re-title takes.
 String? activeQuickHelpTitleFor(
   List<Map<String, dynamic>> buttons,
   String? activeQuickHelpButtonId,

@@ -2685,6 +2685,25 @@ class TestQueryTranslationStatus:
         assert mock_client.call_count == 2
 
     @pytest.mark.asyncio
+    @pytest.mark.asyncio
+    async def test_a_rate_limited_count_does_not_disable_the_count(self):
+        """429 is transient by definition: a rate-limited count is retried
+        on the next request, never latched for the process life."""
+        limited = AsyncMock()
+        req = httpx.Request("POST", "http://translation.test/tokenize")
+        limited.post.side_effect = httpx.HTTPStatusError(
+            "rate limited", request=req, response=httpx.Response(429, request=req)
+        )
+        limited.__aenter__ = AsyncMock(return_value=limited)
+        limited.__aexit__ = AsyncMock(return_value=False)
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=limited) as mock_client,
+            patch("chatqna.genieai_chatqna.logger"),
+        ):
+            assert await chatqna_module._count_translation_tokens({"prompt": "x"}) is None
+            assert await chatqna_module._count_translation_tokens({"prompt": "x"}) is None
+        assert mock_client.call_count == 2
+
     async def test_a_missing_tokenize_route_disables_the_count(self):
         """A missing /tokenize route is permanent: the count is not
         attempted again, and the degradation is warned once."""

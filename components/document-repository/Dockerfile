@@ -65,8 +65,7 @@ RUN chmod +x clamav-node.sh
 # The clamd `User clamav` self-drop is disabled above: as non-root the daemon
 # keeps the invoking uid, and mixing the clamav package user (104) with the
 # node user (1000) over the same directories would fight over ownership.
-RUN mkdir -p uploads \
-    && mkdir -p /var/lib/clamav /var/log/clamav /run/clamav \
+RUN mkdir -p uploads /var/lib/clamav /var/log/clamav /run/clamav \
     && chown -R node:node uploads /var/lib/clamav /var/log/clamav /run/clamav
 
 # Expose ports

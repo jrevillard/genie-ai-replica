@@ -779,10 +779,9 @@ describe('File Routes Integration', () => {
       expect(res.body.success).toBe(false);
       // The file must NOT be marked 'Ingestion Error': the ingest is running,
       // and a poisoned file is never re-claimed by the ingestion worker.
-      expect(metadataService.updateMetadata).not.toHaveBeenCalledWith(
-        'file-abc123',
-        expect.objectContaining({ dataprep: expect.objectContaining({ status: 'Ingestion Error' }) })
-      );
+      // "No write at all" is the property — a differently-shaped failure write
+      // would slip past the weaker form.
+      expect(metadataService.updateMetadata).not.toHaveBeenCalled();
       // The duplicate attempt is recorded, so the operator reading the log
       // sees why nothing happened — and sees no false ERROR.
       expect(fileService.addIngestionLog).toHaveBeenCalledWith(

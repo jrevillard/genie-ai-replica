@@ -222,17 +222,26 @@ const scheduleCrawlSchema = Joi.object({
 // file and writes its own final status — so doc-repo must not turn it into a
 // file failure.
 //
-// The 409 status alone is not the signal: only the guard's own conflict is,
-// and it names the file it is about ("An ingest task for fileId 'X' is already
-// running"). Matching on the fileId we submitted identifies THAT file's live
-// ingest without depending on the wording of the message, and leaves any
-// other 409 — a real conflict — on the error path.
+// The 409 status alone is not the signal: only the guard's own conflict is.
+// The guard names the file it is about ("An ingest task for fileId 'X' is
+// already running"), so the check is on BOTH halves — the id must be the one
+// we submitted, compared EXACTLY (a substring match would swallow a conflict
+// about a different file whose id merely contains ours), and the message must
+// carry the guard's meaning (a conflict about our file that says something
+// else is a real conflict). Any other 409 stays on the error path.
+//
+// If dataprep ever rewords the message, this stops matching and the file
+// falls back to the failure path — the pre-fix behaviour, which is visible in
+// the ingestion log. That direction is deliberate: a reword must not turn a
+// real conflict into a silent success.
 function isIngestAlreadyRunning(err, fileId) {
   const response = err && err.response;
   if (!response || response.status !== 409) return false;
   const data = response.data || {};
   const detail = String(data.detail || data.message || '');
-  return Boolean(fileId) && detail.includes(fileId);
+  const named = detail.match(/fileId\s+'?([^'\s]+)'?/);
+  if (!named || !fileId || named[1] !== String(fileId)) return false;
+  return /already running/i.test(detail);
 }
 
 class FileController {
@@ -1249,14 +1258,22 @@ class FileController {
       // final status, so marking it 'Ingestion Error' here poisoned a healthy
       // ingest and left a false permanent ERROR record in the ingestion log.
       // The status stays untouched — a second writer would race the live task.
+      //
+      // EXCEPT after a degraded clear: that path already retracted the file's
+      // chunks and zeroed its count BEFORE this POST, so the file is damaged
+      // whatever dataprep answers — the failure path is the honest report.
       const busy = err && err.response && err.response.status === 429;
-      const alreadyRunning = isIngestAlreadyRunning(err, file.file_id);
+      const alreadyRunning = !clearedPreviously && isIngestAlreadyRunning(err, file.file_id);
       if (!busy && !alreadyRunning) {
         const detail =
           (err.response && err.response.data && (err.response.data.detail || err.response.data.message)) || err.message;
         await this._markIngestFailure(fileId, file, `dataprep call failed: ${detail}`);
       } else if (alreadyRunning) {
-        await this._logIngestAlreadyRunning(fileId);
+        await this._logIngestAlreadyRunning(fileId, err);
+        // The route maps this error to 409. It reads the flag rather than
+        // re-deriving the decision from its own copy of the id, so the two
+        // can never disagree about one event.
+        err.ingestAlreadyRunning = true;
       }
       throw err;
     }
@@ -1308,12 +1325,14 @@ class FileController {
   }
 
   /** Record an ignored duplicate ingest request (dataprep 409). The file status is NOT touched. */
-  async _logIngestAlreadyRunning(fileId) {
+  async _logIngestAlreadyRunning(fileId, err) {
+    const detail =
+      (err && err.response && err.response.data && (err.response.data.detail || err.response.data.message)) || '';
     try {
       await fileService.addIngestionLog(fileId, {
         level: 'INFO',
         stage: 'dataprep',
-        message: 'Ingest request ignored: an ingest for this file is already running.'
+        message: `Duplicate ingest request ignored (dataprep 409): ${detail}`.slice(0, 500)
       });
     } catch (logErr) {
       logger.warn(`Failed to write ingestion log for ${fileId}: ${logErr.message}`);
@@ -1473,8 +1492,9 @@ class FileController {
       // A 409 from dataprep is its idempotency guard: an ingest for THIS file
       // is already running, so the duplicate request conflicts with a live
       // ingest. 409 Conflict says that; a 500 would report a healthy ingest
-      // as a server failure.
-      if (isIngestAlreadyRunning(error, req.params.fileId)) {
+      // as a server failure. The flag is set by _ingestFileById, which owns
+      // the decision — re-deriving it here could disagree with it.
+      if (error.ingestAlreadyRunning) {
         return res.status(409).json({
           success: false,
           error: 'Conflict',

@@ -6,13 +6,9 @@ import 'package:genie_ai_mobile/config/keycloak_config.dart';
 /// The insecure-release half of the flavor contract.
 ///
 /// `getConfig()` refuses, in a release compilation, any configuration with
-/// `allowInsecureConnections` on — today the `dev` and `e2e` flavors, which
-/// keep the flag on for local development. A release build resolving one of
-/// them is either broken (localhost endpoints) or — with `DEV_SERVER`
-/// repointed — a working app that accepts any certificate. Profile builds
-/// are exempt (the exemption is stated at the guard, in
-/// `lib/config/keycloak_config.dart`): they never leave the developer's
-/// machine.
+/// `allowInsecureConnections` on — today the `dev` and `e2e` flavors. The
+/// rationale and the profile exemption are stated at the guard, in
+/// `lib/config/keycloak_config.dart`.
 ///
 /// FLAVOR is a compile-time constant, so each case below executes under
 /// exactly one compile-time combination and skips under every other. No CI
@@ -32,7 +28,6 @@ import 'package:genie_ai_mobile/config/keycloak_config.dart';
 /// In a normal debug run every test skips itself.
 void main() {
   const flavor = String.fromEnvironment('FLAVOR');
-  const release = kReleaseMode;
 
   for (final insecureFlavor in const ['dev', 'e2e']) {
     test(
@@ -40,7 +35,7 @@ void main() {
       () {
         expect(() => getConfig(), throwsA(isA<FlavorConfigError>()));
       },
-      skip: !release
+      skip: !kReleaseMode
           ? 'this case needs a release compilation: run this file with '
                 '--dart-define=dart.vm.product=true '
                 '--dart-define=FLAVOR=$insecureFlavor'
@@ -56,7 +51,7 @@ void main() {
       expect(getConfig(), isA<KeycloakConfig>());
       expect(getConfig().allowInsecureConnections, isFalse);
     },
-    skip: !release
+    skip: !kReleaseMode
         ? 'this case needs a release compilation: run this file with '
               '--dart-define=dart.vm.product=true --dart-define=FLAVOR=staging'
         : flavor != 'staging'

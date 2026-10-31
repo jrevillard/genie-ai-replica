@@ -611,6 +611,18 @@ def _translation_base_cap(text: str, ceiling: int = TRANSLATION_BASE_CEILING) ->
     return min(max(len(text) // 2, 512), ceiling)
 
 
+def _completion_truncated(choice: dict) -> bool:
+    """True when the server cut the completion off at max_tokens.
+
+    One decision for every translation path: a cut-off completion is not a
+    translation, whatever the payload shape. The paths refuse it
+    differently — the history path falls back to the source history, the
+    chunk path raises so the answer is not spliced half-translated — but
+    they must agree on what counts as truncated.
+    """
+    return choice.get("finish_reason") == "length"
+
+
 def _get_max_model_len() -> int:
     """Return the usable LLM context window in tokens, in three tiers.
 
@@ -3663,27 +3675,29 @@ class ChatQnAService:
             f"<end_of_turn>\n<start_of_turn>model\n"
         )
 
-    def _translation_output_cap(self, flattened_history_string: str) -> int | None:
+    def _translation_output_cap(self, flattened_history_string: str, window: int | None) -> int | None:
         """Completion cap for a history-translation payload, either shape
         (TranslateGemma completions or generic chat completions).
 
         Roughly half the input (512 floor). When the translation window is
-        discovered, the ceiling is the room the window leaves beside the
-        prompt estimate (chars / chars-per-token ratio), so prompt and
-        completion stay inside the window together. A history whose estimate
-        exceeds that allowance yields None — the completion would be shorter
-        than what there is to translate — and the caller skips the
-        translation, sending the history as-is.
+        known, the ceiling is the room the window leaves beside the prompt
+        estimate (chars / chars-per-token ratio), so prompt and completion
+        stay inside the window together. A history whose estimate exceeds
+        that allowance yields None — the completion would be shorter than
+        what there is to translate — and the caller skips the translation,
+        sending the history as-is.
+
+        Without a window there is no window-safe cap to send: the fixed
+        ceiling applies, and the caller decides whether to send it at all
+        (the TranslateGemma payload has always carried one; the generic
+        payload sends one only when the window is known).
         """
-        window = _get_translation_window()
+        if not window:
+            return _translation_base_cap(flattened_history_string, ceiling=TRANSLATION_BASE_CEILING)
         prompt_token_estimate = len(flattened_history_string) // TRANSLATION_CHARS_PER_TOKEN
-        ceiling = (
-            max(1, window - TRANSLATION_PROMPT_OVERHEAD_TOKENS - prompt_token_estimate)
-            if window
-            else TRANSLATION_BASE_CEILING
-        )
+        ceiling = max(1, window - TRANSLATION_PROMPT_OVERHEAD_TOKENS - prompt_token_estimate)
         cap = _translation_base_cap(flattened_history_string, ceiling=ceiling)
-        if window and cap < prompt_token_estimate:
+        if cap < prompt_token_estimate:
             return None
         return cap
 
@@ -3827,8 +3841,10 @@ class ChatQnAService:
         translategemma = _is_translategemma(translation_model_id)
         # The completion budget is decided for BOTH payload shapes: the same
         # window-derived cap, so the completion length is never the server's
-        # default sampling budget.
-        output_cap = self._translation_output_cap(flattened_history_string)
+        # default sampling budget. The window is read once, here, so the cap
+        # and the decision to send it cannot disagree.
+        window = _get_translation_window()
+        output_cap = self._translation_output_cap(flattened_history_string, window)
         if output_cap is None:
             logger.warning(
                 "Translation window too tight to translate the history meaningfully; returning it untranslated"
@@ -3861,8 +3877,14 @@ class ChatQnAService:
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0,
                 "stream": False,
-                "max_tokens": output_cap,
             }
+            if window:
+                # Without a discovered window there is no window-safe budget
+                # to send: an explicit cap could exceed the model's window
+                # and the server would reject the whole request. The
+                # server's default — the room left in the window — is the
+                # only safe choice then.
+                payload["max_tokens"] = output_cap
             url = TRANSLATION_LLM_URL
 
         if logflag:
@@ -3879,7 +3901,7 @@ class ChatQnAService:
                 response.raise_for_status()
                 response_data = response.json()
                 choice = response_data["choices"][0]
-                if choice.get("finish_reason") == "length":
+                if _completion_truncated(choice):
                     # The completion hit max_tokens: the translation is cut
                     # off, not finished. Embedding the cut-off text would
                     # put a half-translated history into the retrieval
@@ -3888,8 +3910,8 @@ class ChatQnAService:
                     # rejects it the same way.
                     logger.error("Translation model hit max_tokens; treating the history translation as failed.")
                     return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
-                translated_blob = choice["text"] if translategemma else choice["message"]["content"]
-                translated_blob = translated_blob.strip()
+                content = choice.get("text") if translategemma else (choice.get("message") or {}).get("content")
+                translated_blob = (content or "").strip()
                 if not translated_blob:
                     # A 200 with an empty completion is a failure, not a
                     # translation: the chunk translator refuses it for the
@@ -4104,8 +4126,13 @@ class ChatQnAService:
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0,
                 "stream": False,
-                "max_tokens": _translation_base_cap(text),
             }
+            # No explicit completion budget on this path: it knows no window,
+            # and a cap sized on the source is either too tight for a
+            # script-expansive target (the translation gets cut off) or too
+            # large for the model's window (the server rejects the request).
+            # The server's default — the room left in the window — fits
+            # both; a cut-off completion is refused below.
             url = TRANSLATION_LLM_URL
 
         if logflag:
@@ -4121,7 +4148,8 @@ class ChatQnAService:
                 response.raise_for_status()
                 response_data = response.json()
                 choice = response_data["choices"][0]
-                translated = choice["text"].strip() if translategemma else choice["message"]["content"].strip()
+                content = choice.get("text") if translategemma else (choice.get("message") or {}).get("content")
+                translated = (content or "").strip()
         except Exception as e:
             # Fail-loud on vLLM context overflow: silently returning the
             # original English text breaks the multilingual UX (#829). Classify
@@ -4143,7 +4171,7 @@ class ChatQnAService:
             logger.warning(f"Failed to translate chunk: {type(e).__name__}: {e}")
             raise TranslationFailedError(f"translation chunk failed: {type(e).__name__}: {str(e)[:200]}") from e
 
-        if choice.get("finish_reason") == "length":
+        if _completion_truncated(choice):
             # The completion hit max_tokens: the translation is cut off, not
             # finished. Spliced into the answer it would read as a section
             # that just stops — the same defect the history path refuses —

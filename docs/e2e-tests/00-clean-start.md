@@ -60,6 +60,11 @@ DEPLOY_OPEA=0
 ### 0.3 Deploy Stack
 
 ```bash
+# data/database_backups must pre-exist: its bind is create_host_path:false
+# (#1227), so a missing directory fails the backend loudly instead of docker
+# silently creating it root-owned.
+mkdir -p data/database_backups
+
 docker compose up -d
 ```
 

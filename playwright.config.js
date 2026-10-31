@@ -26,6 +26,15 @@ module.exports = defineConfig({
     ignoreHTTPSErrors: true,
     bypassCSP: true,
     actionTimeout: 15000,
+    // HOST_RESOLVER_RULES pins the suite's hostname to a concrete
+    // address for the whole run — a kubectl port-forward under the
+    // suite's own load dies mid-run (listener alive, tunnel dead) and
+    // every later goto times out against networkidle. The k8s dev
+    // cluster serves the edge on its nodePort; resolve the name there
+    // and nothing between the browser and Envoy can break.
+    launchOptions: process.env.HOST_RESOLVER_RULES
+      ? { args: [`--host-resolver-rules=${process.env.HOST_RESOLVER_RULES}`] }
+      : {},
   },
   projects: [
     {

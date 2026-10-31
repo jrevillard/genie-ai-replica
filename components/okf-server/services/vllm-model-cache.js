@@ -152,6 +152,12 @@ function ttlSeconds() {
   return value;
 }
 
+/** Fresh vs stale for a cached id — ONE home for the boundary: the serve
+ * path and the serving_stale warn must never disagree on it. */
+function cacheEntryIsFresh(ts) {
+  return Date.now() - ts < ttlSeconds() * 1000;
+}
+
 function probeTimeoutMs() {
   // Strict float (the Python twin's positive_float_env): '10abc' is NOT 10 —
   // it is a malformed value and falls back to the default. A different rule
@@ -270,7 +276,7 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
   const modelsUrl = openAiModelsUrl(base);
   const cacheKey = `${modelsUrl}|${credentialHash(apiKey)}`;
   const entry = _cache.get(cacheKey);
-  if (entry && Date.now() - entry.ts < ttlSeconds() * 1000) return entry.id;
+  if (entry && cacheEntryIsFresh(entry.ts)) return entry.id;
 
   // Concurrent callers share ONE probe — per probe BUDGET and probe CLASS:
   // the first caller's budget must not narrow a concurrent caller's probe
@@ -329,8 +335,11 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
         // flooding. Re-read the cache first: a concurrent probe of the other
         // class may have refreshed the id while this one was failing — then
         // a fresh id serves, nothing is degraded, and the line would lie.
-        const servingNow = _cache.get(cacheKey);
-        if (servingNow && Date.now() - servingNow.ts >= ttlSeconds() * 1000) {
+        // And when the entry was EVICTED mid-flight, the captured one is
+        // what this caller was served — expired by construction (a fresh
+        // entry returned early), so the warn still fires.
+        const servingNow = _cache.get(cacheKey) || entry;
+        if (servingNow && !cacheEntryIsFresh(servingNow.ts)) {
           logger.warn('vllm_model_cache.serving_stale', {
             url: modelsUrl,
             stale_id: servingNow.id,

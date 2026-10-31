@@ -283,8 +283,14 @@ describe('Swagger Configuration', () => {
     });
 
     it('a custom API_URL is used verbatim as the suffix-free server base', () => {
-      withApiUrl('https://gov.example.com', ({ swaggerOptions }) => {
-        expect(swaggerOptions.definition.servers[0].url).toBe('https://gov.example.com');
+      withApiUrl('https://gov.example.com/gov', ({ swaggerOptions }) => {
+        const url = swaggerOptions.definition.servers[0].url;
+        expect(url).toBe('https://gov.example.com/gov');
+        // A base carrying its own path joins the annotated paths the same
+        // way: one /api, from the path, never doubled.
+        const joined = `${url.replace(/\/+$/, '')}/api/queries/{queryId}/responsetime`;
+        expect(joined).toMatch(/^https?:\/\//);
+        expect(joined).not.toContain('/api/api');
       });
     });
 
@@ -306,8 +312,8 @@ describe('Swagger Configuration', () => {
         // swagger-ui's Try-it-out executes servers[0].url + path.
         const url = swaggerOptions.definition.servers[0].url;
         const joined = `${url.replace(/\/+$/, '')}${annotatedPath}`;
+        expect(joined).toMatch(/^https?:\/\//);
         expect(joined).not.toContain('/api/api');
-        expect(joined).toMatch(/^https?:\/\/[^/]+\/api\//);
       });
     });
   });

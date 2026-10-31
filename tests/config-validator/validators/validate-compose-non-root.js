@@ -255,7 +255,7 @@ function validateComposeNonRoot(composeText) {
       // Only items under `cap_add:` are capabilities the anchor GRANTS —
       // the anchor also carries `cap_drop: [ALL]`, whose ALL would poison
       // the CHOWN invariant check if it leaked into the same list.
-      if (/^ {2}[\w-]+:\s*(\[.*\]\s*)?$/.test(line)) {
+      if (/^ {2}[\w-]+:\s*(\[.*\]\s*)?(?:#.*)?$/.test(line)) {
         anchorKey = line.match(/^ {2}([\w-]+):/)[1];
         continue;
       }
@@ -264,11 +264,11 @@ function validateComposeNonRoot(composeText) {
         anchorDefaults.capAdds.push(cap[1]);
         continue;
       }
-      const restart = line.match(/^ {2}restart:\s*['"]?([\w:-]+)['"]?\s*$/);
+      const restart = line.match(/^ {2}restart:\s*['"]?([\w:-]+)['"]?\s*(?:#.*)?$/);
       if (restart) anchorDefaults.restart = restart[1];
       const anchorAttempts = line.match(/^ {6}max_attempts:\s*(\d+)\s*$/);
       if (anchorAttempts) anchorDefaults.maxAttempts = anchorAttempts[1];
-      if (/^ {4}restart_policy:\s*$/.test(line)) {
+      if (/^ {4}restart_policy:\s*(?:#.*)?$/.test(line)) {
         inAnchorPolicy = true;
         continue;
       }
@@ -349,7 +349,7 @@ function validateComposeNonRoot(composeText) {
       currentRestart = restartMatch[1];
       continue;
     }
-    if (/^ {4}cap_add:\s*$/.test(line)) {
+    if (/^ {4}cap_add:\s*(?:#.*)?$/.test(line)) {
       inCapAdds = true;
       capAddsSeen = true;
       continue;
@@ -373,13 +373,13 @@ function validateComposeNonRoot(composeText) {
         continue;
       }
     }
-    if (/^ {4}deploy:\s*$/.test(line)) {
+    if (/^ {4}deploy:\s*(?:#.*)?$/.test(line)) {
       inDeploy = true;
       localDeploySeen = true;
       continue;
     }
     if (inDeploy) {
-      if (/^ {6}restart_policy:\s*$/.test(line)) {
+      if (/^ {6}restart_policy:\s*(?:#.*)?$/.test(line)) {
         inRestartPolicy = true;
         continue;
       }
@@ -420,7 +420,7 @@ function validateComposeNonRoot(composeText) {
     }
 
     // `volumes:` — collect host binds with their create_host_path opt-out
-    if (/^ {4}volumes:\s*$/.test(line)) {
+    if (/^ {4}volumes:\s*(?:#.*)?$/.test(line)) {
       inVolumes = true;
       continue;
     }
@@ -434,6 +434,24 @@ function validateComposeNonRoot(composeText) {
         entryType = null;
         entryTypeExplicit = false;
         deferredSource = null;
+        continue;
+      }
+      // flow style: - {type: bind, source: ./data/x, target: /x, ...} —
+      // one-line entry, same contract; create_host_path can only appear
+      // inline inside the braces
+      const flowEntry = line.match(/^ {6}-\s*\{(.*)\}\s*(?:#.*)?$/);
+      if (flowEntry) {
+        const body = flowEntry[1];
+        const ft = body.match(/type:\s*['"]?(\w+)/);
+        const fsrc = body.match(/source:\s*['"]?([^,'"}]+)/);
+        if (ft && ft[1] === 'bind' && fsrc) {
+          const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
+          binds.push({
+            path: fsrc[1].trim(),
+            createHostPathFalse: /create_host_path:\s*false/.test(body),
+            shortSyntax: false
+          });
+        }
         continue;
       }
       if (/^ {6}-\s/.test(line)) {

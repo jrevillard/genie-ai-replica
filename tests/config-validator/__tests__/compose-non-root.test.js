@@ -548,6 +548,48 @@ describe('compose non-root contract (#1227)', () => {
     expect(v3.some((v) => v.includes('backend-init') && v.includes('CHOWN'))).toBe(true);
   });
 
+  test('mutations: commented invariant keys, flow volume entries', () => {
+    // A commented restart line must not fall back to the anchor's bounded
+    // values — 'restart: always # self-heal' on a chown-init is a
+    // permanent root container.
+    const commentedRestart = composeText.replaceAll('restart: "on-failure:3"', 'restart: always # self-heal');
+    expect(commentedRestart).not.toBe(composeText);
+    const { violations: v1 } = validateComposeNonRoot(commentedRestart);
+    expect(v1.some((v) => v.includes('victorialogs-init') && v.includes('one-shot'))).toBe(true);
+
+    // A commented volumes: key must not disable bind collection — the
+    // data-dir bind behind it stays enforced.
+    const commentedVolumes = composeText.replace(
+      '    volumes:\n      # Long syntax + create_host_path:false (#1227): docker silently creates',
+      '    volumes: # gateway logs\n      # Long syntax + create_host_path:false (#1227): docker silently creates'
+    );
+    expect(commentedVolumes).not.toBe(composeText);
+    // replaceAll: the file carries several opt-outs (frontend/keycloak
+    // config binds sit OUTSIDE the data-dir scope — flipping those is a
+    // no-op) — the backend's data-dir bind must trip by name
+    const flipped = commentedVolumes.replaceAll('create_host_path: false', 'create_host_path: true');
+    const { violations: v2 } = validateComposeNonRoot(flipped);
+    expect(v2.some((v) => v.includes('backend') && v.includes('create_host_path: false'))).toBe(true);
+
+    // Flow-style entries parse like block entries.
+    const flow = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes:',
+      '      - {type: bind, source: ./data/logs/kong, target: /var/log/kong}',
+      ''
+    ].join('\n');
+    const { violations: v3 } = validateComposeNonRoot(flow);
+    expect(v3.some((v) => v.includes('kong') && v.includes('create_host_path: false'))).toBe(true);
+
+    const flowOpted = flow.replace(
+      '{type: bind, source: ./data/logs/kong, target: /var/log/kong}',
+      '{type: bind, source: ./data/logs/kong, target: /var/log/kong, bind: {create_host_path: false}}'
+    );
+    expect(validateComposeNonRoot(flowOpted).violations).toEqual([]);
+  });
+
   test('allowlist entries reference services that exist in the compose file', () => {
     // A renamed or removed service would leave a stale allowlist entry that
     // enforces nothing — dead enforcement data. Uses the validator's OWN

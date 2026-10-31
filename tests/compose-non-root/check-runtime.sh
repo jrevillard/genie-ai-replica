@@ -80,13 +80,29 @@ SELF_DROPPING=' postgres redis-cache '
 while IFS= read -r container; do
   service="${container#"$PROJECT"-}"; service="${service#"${PROJECT}_"}"
   # compose names the container <project>-postgres-1, swarm
-  # <stack>_postgres.1.<id> — take the SERVICE segment (before the
-  # first -<digits> / . task suffix) and match it EXACTLY, so
-  # postgres-init (a one-shot root init) is never exempted
+  # <stack>_postgres.1.<id> — the reduction is SHAPE-EXACT: a swarm task
+  # is <svc>.<digits>.<id> and a compose container is <svc>-<digits>.
+  # Anything else (dotted service names like postgres.2-1, or a name
+  # ending in -init-1) never reduces, so it can never be exempted by
+  # accident.
+  svc=""
   case "$service" in
-    *.*) svc="${service%%.*}";;   # swarm: postgres.1.<id>
-    *)    svc="${service%-[0-9]*}";; # compose: postgres-1
+    .*) ;;
+    *.*)
+      rest="${service#*.}"
+      idx="${rest%%.*}"
+      case "$idx" in
+        '' | *[!0-9]*) ;;  # not <digits> → not a swarm task suffix
+        *) svc="${service%%.*}" ;;
+      esac ;;
   esac
+  if [ -z "$svc" ]; then
+    tail="${service##*-}"
+    case "$tail" in
+      '' | *[!0-9]*) ;;  # not -<digits> → not a compose suffix
+      *) svc="${service%-$tail}" ;;
+    esac
+  fi
   case "$SELF_DROPPING" in
     *" $svc "*)
       echo "  (self-dropping service $svc: server runs as its package user; transient root healthcheck execs skipped)"

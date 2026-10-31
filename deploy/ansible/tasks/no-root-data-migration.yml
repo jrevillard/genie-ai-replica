@@ -25,20 +25,6 @@
     path: "{{ deploy_dir }}/{{ data_dir }}/logs"
   register: _logs_dir
 
-- name: Resolve the play identity's numeric uid/gid
-  # The handover below chowns NUMERICALLY: guessing "<user>:<user>"
-  # breaks where the primary group differs from the username (and
-  # renders empty where ansible_user is undefined) — id(1) under the
-  # play's identity is the truth.
-  ansible.builtin.command: id -u
-  register: _mig_uid
-  changed_when: false
-
-- name: Resolve the play identity's numeric gid
-  ansible.builtin.command: id -g
-  register: _mig_gid
-  changed_when: false
-
 - name: Detect root-era leftovers under the log directory
   # Runs only when the directory exists. The task below CHOWNS only what
   # this probe finds: ROOT-owned paths (what the docker daemon created
@@ -54,21 +40,22 @@
   failed_when: false
   changed_when: false
 
-- name: Hand the root-era log-directory leftovers to the ansible user (#1227)
+- name: Hand the root-era log-directory leftovers to the backend uid (#1227)
   # CHOWN, never delete: the root-era paths are exactly what the no-root
   # runtime gate forbids, but deleting them would also destroy
   # operator-owned files nested inside a root-owned parent (a bare-docker
-  # root-era auto-created the whole data/logs/kong chain). Handing the
-  # root-owned paths to the ansible user clears the contract with zero
-  # destruction — old log files stay on disk for forensics. become_user:
-  # root — the paths ARE root-owned. Best-effort: a batch flush
-  # mid-traversal on a large tree can make find exit 1 — whatever
+  # root-era auto-created the whole data/logs/kong chain). The target is
+  # the backend uid 1000 CONVENTION, never the play identity — under the
+  # swarm_workers play the identity IS root, and chowning to 0:0 would
+  # leave the tree root-owned forever (a no-op reporting changed).
+  # become_user: root — the paths ARE root-owned. Best-effort: a batch
+  # flush mid-traversal on a large tree can make find exit 1 — whatever
   # survived is flagged by the runtime gate on the next run.
   become: true
   become_user: root
   ansible.builtin.command: >-
     find {{ deploy_dir }}/{{ data_dir }}/logs -uid 0
-    -exec chown -h -f "{{ _mig_uid.stdout }}:{{ _mig_gid.stdout }}" {} +
+    -exec chown -h -f 1000:1000 {} +
   when: _logs_dir.stat.exists and (_logs_root_owned.stdout | length > 0 or _logs_root_owned.rc != 0)
   changed_when: true
   failed_when: false
@@ -89,23 +76,29 @@
     owner: "1000"
     group: "1000"
 
-- name: Detect root-era files in the backend backup directory
-  # The migration chowns ONLY the root-owned leftovers (the root-era
-  # daemon's files), never the whole tree: dumps an operator or restore
-  # tool placed under another uid keep their ownership, and the walk
-  # runs once (after it, the probe is empty and the task skips).
+- name: Detect non-backend-owned files in the backup directory
+  # The probe matches EVERY uid != 1000, not just root: the manager play's
+  # earlier "Fix ownership to ansible_user" recursion re-labels root-era
+  # dumps BEFORE this migration runs, so a uid-0-only probe would never
+  # fire on the manager path (dead code by pre-emption). This directory is
+  # the backend's dump target — the backend (uid 1000) must own every file
+  # in it, and anything else is either root-era or mis-owned.
   ansible.builtin.command: >-
-    find {{ deploy_dir }}/{{ data_dir }}/database_backups -uid 0 -print -quit
-  register: _backup_root_owned
+    find {{ deploy_dir }}/{{ data_dir }}/database_backups ! -uid 1000 -print -quit
+  register: _backup_misowned
   failed_when: false
   changed_when: false
 
-- name: Hand the root-era backup files to the backend uid (#1227)
-  # Targeted -exec chown touches exactly the root-owned paths.
+- name: Hand the backup directory to the backend uid (#1227)
+  # Targeted -exec chown touches exactly the mis-owned paths. Best-effort
+  # like its logs sibling: a transient find/chown error (EIO mid-traversal,
+  # vanished path between probe and exec) must not abort the deploy play —
+  # whatever survived is flagged by the runtime gate on the next run.
   become: true
   become_user: root
   ansible.builtin.command: >-
-    find {{ deploy_dir }}/{{ data_dir }}/database_backups -uid 0
+    find {{ deploy_dir }}/{{ data_dir }}/database_backups ! -uid 1000
     -exec chown -h 1000:1000 {} +
-  when: _backup_root_owned.stdout | length > 0 or _backup_root_owned.rc != 0
+  when: _backup_misowned.stdout | length > 0 or _backup_misowned.rc != 0
   changed_when: true
+  failed_when: false

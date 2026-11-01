@@ -211,7 +211,7 @@ class AnalyticsApi {
   /// Parameters:
   ///
   /// * [EventRequest] eventRequest (required):
-  Future<Event?> apiAnalyticsEventsPost(EventRequest eventRequest,) async {
+  Future<EventCreated?> apiAnalyticsEventsPost(EventRequest eventRequest,) async {
     final response = await apiAnalyticsEventsPostWithHttpInfo(eventRequest,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
@@ -220,7 +220,7 @@ class AnalyticsApi {
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'Event',) as Event;
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'EventCreated',) as EventCreated;
     
     }
     return null;

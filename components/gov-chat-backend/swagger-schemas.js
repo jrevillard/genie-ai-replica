@@ -16,9 +16,9 @@ module.exports = {
       eventData: { type: 'object', description: 'Additional event data' }
     }
   },
-  // The persisted ArangoDB event document (GET /api/analytics/events items,
-  // save metadata shape aside). The request payload arrives as `data`
-  // (stored by the service from the wire's `eventData`).
+  // The persisted ArangoDB event document (GET /api/analytics/events items).
+  // The request payload arrives as `data` (stored by the service from the
+  // wire's `eventData`).
   Event: {
     type: 'object',
     properties: {
@@ -29,6 +29,17 @@ module.exports = {
       _id: { type: 'string' },
       _rev: { type: 'string' },
       data: { type: 'object', description: 'Additional event data' }
+    }
+  },
+  // What POST /api/analytics/events actually answers: the storage metadata
+  // returned by the ArangoDB save (the full persisted document is never in
+  // that response body).
+  EventCreated: {
+    type: 'object',
+    properties: {
+      _id: { type: 'string' },
+      _key: { type: 'string' },
+      _rev: { type: 'string' }
     }
   },
   Analytics: {

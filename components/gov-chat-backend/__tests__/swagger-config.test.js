@@ -273,8 +273,13 @@ describe('Swagger Configuration', () => {
       expect('eventData' in event.properties).toBe(false);
     });
 
-    it('keeps Event as the response shape of both events endpoints', () => {
-      expect(eventsPost.responses['201'].content['application/json'].schema.$ref).toBe('#/components/schemas/Event');
+    it('documents the 201 as the save metadata and the GET list as stored Event documents', () => {
+      // trackEvent returns the arangojs save() result ({_id, _key, _rev}) —
+      // the full persisted document is never in the 201 body — while GET
+      // /events returns the stored documents themselves.
+      expect(eventsPost.responses['201'].content['application/json'].schema.$ref).toBe(
+        '#/components/schemas/EventCreated'
+      );
       expect(
         spec.paths['/api/analytics/events'].get.responses['200'].content['application/json'].schema.items.$ref
       ).toBe('#/components/schemas/Event');

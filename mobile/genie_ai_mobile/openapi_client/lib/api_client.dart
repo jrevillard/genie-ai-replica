@@ -366,6 +366,8 @@ class ApiClient {
           return ConversationStatsMessagesByType.fromJson(value);
         case 'Event':
           return Event.fromJson(value);
+        case 'EventCreated':
+          return EventCreated.fromJson(value);
         case 'EventRequest':
           return EventRequest.fromJson(value);
         case 'Folder':

@@ -265,7 +265,7 @@ module.exports = (analyticsService) => {
      *         content:
      *           application/json:
      *             schema:
-     *               $ref: '#/components/schemas/Event'
+     *               $ref: '#/components/schemas/EventCreated'
      *       400:
      *         description: Missing required fields
      *       500:

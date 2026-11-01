@@ -239,6 +239,7 @@ Class | Method | HTTP request | Description
  - [ConversationStatsConversationsByCategoryInner](doc//ConversationStatsConversationsByCategoryInner.md)
  - [ConversationStatsMessagesByType](doc//ConversationStatsMessagesByType.md)
  - [Event](doc//Event.md)
+ - [EventCreated](doc//EventCreated.md)
  - [EventRequest](doc//EventRequest.md)
  - [Folder](doc//Folder.md)
  - [FolderListResponse](doc//FolderListResponse.md)

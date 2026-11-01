@@ -100,6 +100,7 @@ doc/ConversationStatsMessagesByType.md
 doc/CurrentUserApi.md
 doc/DatabaseOperationsApi.md
 doc/Event.md
+doc/EventCreated.md
 doc/EventRequest.md
 doc/Folder.md
 doc/FolderListResponse.md
@@ -230,6 +231,7 @@ lib/model/conversation_stats.dart
 lib/model/conversation_stats_conversations_by_category_inner.dart
 lib/model/conversation_stats_messages_by_type.dart
 lib/model/event.dart
+lib/model/event_created.dart
 lib/model/event_request.dart
 lib/model/folder.dart
 lib/model/folder_list_response.dart
@@ -340,6 +342,7 @@ test/conversation_stats_test.dart
 test/conversation_test.dart
 test/current_user_api_test.dart
 test/database_operations_api_test.dart
+test/event_created_test.dart
 test/event_request_test.dart
 test/event_test.dart
 test/folder_list_response_test.dart

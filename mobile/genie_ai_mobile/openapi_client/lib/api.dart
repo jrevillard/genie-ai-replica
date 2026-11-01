@@ -132,6 +132,7 @@ part 'model/conversation_stats.dart';
 part 'model/conversation_stats_conversations_by_category_inner.dart';
 part 'model/conversation_stats_messages_by_type.dart';
 part 'model/event.dart';
+part 'model/event_created.dart';
 part 'model/event_request.dart';
 part 'model/folder.dart';
 part 'model/folder_list_response.dart';

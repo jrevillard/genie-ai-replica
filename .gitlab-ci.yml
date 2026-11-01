@@ -469,6 +469,7 @@ workflow:
       # Failure verdicts log the response body they saw, except the
       # token-mint drift case: its body IS the token, never logged.
       for i in 1 2 3 4 5; do
+        rm -f /tmp/ropc-probe-body.json
         ROPC_STATUS=$(curl -sk --max-time 15 -o /tmp/ropc-probe-body.json -w "%{http_code}" -X POST \
           "${KC_URL}/realms/genie/protocol/openid-connect/token" \
           -d "client_id=genie-app" -d "grant_type=password" \
@@ -504,7 +505,7 @@ workflow:
             # No exit here: GitLab concatenates the script items into one
             # shell, so ANY exit would skip the suites — and an exit 0 would
             # end the job green with zero tests run. Fall through instead.
-            echo "ROPC refusal verified: genie-app rejects direct access grants (HTTP ${ROPC_STATUS} ${ROPC_ERROR})"
+            echo "ROPC refusal verified at the token endpoint (HTTP ${ROPC_STATUS} ${ROPC_ERROR}) — direct access grants rejected"
           elif [ "$ROPC_ERROR" = "invalid_grant" ]; then
             echo "ERROR: genie realm ROPC posture drifted (HTTP ${ROPC_STATUS}, error 'invalid_grant') — credential validation only runs when the direct-access grant was accepted; directAccessGrantsEnabled must stay false on genie-app; body: ${ROPC_BODY:-none}"
             exit 1

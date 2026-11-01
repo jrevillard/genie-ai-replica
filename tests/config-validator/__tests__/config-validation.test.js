@@ -2296,6 +2296,25 @@ describe('e2e merge-train changes filters (#1264)', () => {
     }
   });
 
+  // Stack-input entries the jobs deploy or consume from this checkout — the
+  // compose file, the env template, the Keycloak tree (whose realm yaml the
+  // ROPC-refusal probe asserts through the rebuilt keycloak-config image)
+  // and the collector config. Not derivable from the Playwright invocation;
+  // a cleanup pruning one of them re-silences the train trigger silently.
+  const STACK_INPUT_PATHS = [
+    'docker-compose.yaml',
+    'env',
+    'configs/keycloak/**/*',
+    'configs/otel/otel-collector-config.yaml'
+  ];
+
+  test('stack-input entries are listed in the shared anchor', () => {
+    const anchorPaths = filters.get(ANCHOR);
+    for (const required of STACK_INPUT_PATHS) {
+      expect(anchorPaths).toContain(required);
+    }
+  });
+
   test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {
     // The invariant exists because of this hard needs — pin it too.
     expect(sectionOf('e2e:playwright')).toContain('needs: [e2e:integration]');

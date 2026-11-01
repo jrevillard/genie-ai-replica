@@ -1700,6 +1700,17 @@ void main() {
         'Card',
       );
     });
+
+    test('a truthy BOOL id is a real id in the web tag form', () {
+      // The scalar guard admits bools: `true || title` on the web is
+      // the raw value, and JavaScript serializes it as 'true' — the tag
+      // both platforms must write. Dropping bool from the guard's
+      // scalar set would silently turn this into a title identity.
+      expect(
+        quickHelpButtonIdentity({'id': true, 'resolvedTitle': 'C'}),
+        'true',
+      );
+    });
   });
 
   /// The config-side parse of a Quick Help button — the shape the shipped

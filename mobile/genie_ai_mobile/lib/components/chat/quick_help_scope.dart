@@ -188,7 +188,9 @@ double quickHelpGridAspectRatio(Map<String, dynamic> layout) {
 /// same saved conversation would carry a different scope on the two
 /// platforms. Two ids differing only in JSON TYPE (5 vs '5') are where
 /// the web's raw compare and this normalized key part ways — a tracked
-/// divergence of the string-tag contract, not a rule of this file. A
+/// divergence of the string-tag contract, not a rule of this file: the
+/// card count diverges, and the first-wins restore index then maps the
+/// shared key to the OTHER card than the web's lookup resolves. A
 /// card with NO id is kept, and two id-less cards sharing a title stay
 /// two cards — they then write the SAME conversation tag, exactly as the
 /// web does.
@@ -478,11 +480,12 @@ String? quickHelpCategoryOf(Map<String, dynamic> button) =>
 /// Dart form stands. Two further bands stay unmatched BY DECODE, not
 /// by this form: an integer literal above 2^53 decodes to an imprecise
 /// double on the web but to the exact int64 here (the two platforms
-/// then disagree about the value itself), and a double ≥ 2^63 clips
-/// differently again — a configuration with an id that large is not
-/// one the platforms can agree on by serialization; the durable answer
-/// is normalizing the tag at the save/restore boundary on both
-/// platforms, tracked beside the numeric-tag contract.
+/// then disagree about the value itself — a web-saved conversation
+/// carries the imprecise tag and misses this platform's index), and a
+/// double ≥ 2^63 clips differently again — a configuration with an id
+/// that large is not one the platforms can agree on by serialization;
+/// the durable answer is normalizing the tag at the save/restore
+/// boundary on both platforms, tracked beside the numeric-tag contract.
 String? _jsTagForm(dynamic raw) {
   if (raw == null) return null;
   if (raw is double &&

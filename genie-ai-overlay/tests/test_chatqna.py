@@ -2965,7 +2965,6 @@ class TestQueryTranslationStatus:
         not an accident of a loose comparison."""
         svc = create_chatqna_service()
         mock_client = self._mock_client(content="USER: what is X?")
-        mock_client.post.return_value.json.return_value = {"choices": [{"message": {"content": "USER: what is X?"}}]}
         stack = self._translation_patches(mock_client, translategemma=False)
         stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=None))
         with stack:
@@ -3017,9 +3016,13 @@ class TestQueryTranslationStatus:
         ceiling is reported as the fallback it is, never as a translation."""
         svc = create_chatqna_service()
         history = [{"role": "user", "content": "A" * 30000}]
-        mock_client = self._mock_client(content="USER: AAAA")
+        # The mock's completion echoes a string that is NOT a prefix of the
+        # flattened source: the assertions must be able to tell the model's
+        # cut-off blob from the source fallback (the regression the
+        # docstring claims to pin).
+        mock_client = self._mock_client(content="TRADUCCION-CORTADA")
         mock_client.post.return_value.json.return_value = {
-            "choices": [{"message": {"content": "USER: AAAA"}, "finish_reason": "length"}]
+            "choices": [{"message": {"content": "TRADUCCION-CORTADA"}, "finish_reason": "length"}]
         }
         stack = self._translation_patches(mock_client, translategemma=False)
         stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=None))

@@ -484,6 +484,10 @@ workflow:
       ROPC_TOKEN=${ROPC_FIELDS##* }
       ROPC_BODY=$(head -c 200 /tmp/ropc-probe-body.json 2>/dev/null || true)
       rm -f /tmp/ropc-probe-body.json
+      ropc_gateway_fail() {
+        echo "ERROR: unexpected HTTP ${ROPC_STATUS} with a non-Keycloak body from the genie token endpoint — not a posture verdict; check gateway routing (nginx/Kong); body: ${ROPC_BODY:-none}"
+        exit 1
+      }
       case "$ROPC_STATUS" in
         429)
           echo "ERROR: token endpoint rate-limited the probe (HTTP 429) — not a posture verdict; check gateway rate limiting; body: ${ROPC_BODY:-none}"
@@ -497,54 +501,19 @@ workflow:
             echo "ERROR: unexpected error '${ROPC_ERROR}' from the genie token endpoint (HTTP ${ROPC_STATUS}) — not a recognized refusal verdict; body: ${ROPC_BODY:-none}"
             exit 1
           else
-            echo "ERROR: unexpected HTTP ${ROPC_STATUS} with a non-Keycloak body from the genie token endpoint — not a posture verdict; check gateway routing (nginx/Kong); body: ${ROPC_BODY:-none}"
-            exit 1
+            ropc_gateway_fail
           fi
           ;;
         2[0-9][0-9]|3[0-9][0-9])
           if [ "$ROPC_TOKEN" = "yes" ]; then
             echo "ERROR: genie realm ROPC posture drifted: token endpoint returned HTTP ${ROPC_STATUS} with an access token for a direct-access grant — directAccessGrantsEnabled must stay false on genie-app"
           else
-            echo "ERROR: unexpected HTTP ${ROPC_STATUS} with a non-Keycloak body from the genie token endpoint — not a posture verdict; check gateway routing (nginx/Kong); body: ${ROPC_BODY:-none}"
+            ropc_gateway_fail
           fi
           exit 1
           ;;
         *)
           echo "ERROR: could not get a verdict from the genie token endpoint after 5 attempts (HTTP ${ROPC_STATUS:-none}) — transport or gateway failure, not a posture result"
-          exit 1
-          ;;
-      esac
-      done
-      ROPC_FIELDS=$(python3 -c "import sys,json; d=json.load(open('/tmp/ropc-probe-body.json')); print(d.get('error',''), 'yes' if d.get('access_token') else 'no')" 2>/dev/null || true)
-      ROPC_ERROR=${ROPC_FIELDS%% *}
-      ROPC_TOKEN=${ROPC_FIELDS##* }
-      rm -f /tmp/ropc-probe-body.json
-      case "$ROPC_STATUS" in
-        429)
-          echo "ERROR: token endpoint rate-limited the probe (HTTP 429) — not a posture verdict; check gateway rate limiting"
-          exit 1
-          ;;
-        4[0-9][0-9])
-          if [ "$ROPC_ERROR" = "unauthorized_client" ] || [ "$ROPC_ERROR" = "unsupported_grant_type" ]; then
-            echo "ROPC refusal verified: genie-app rejects direct access grants (HTTP ${ROPC_STATUS} ${ROPC_ERROR})"
-          elif [ -n "$ROPC_ERROR" ]; then
-            echo "ERROR: genie realm ROPC posture drifted (HTTP ${ROPC_STATUS}, error '${ROPC_ERROR}') — directAccessGrantsEnabled must stay false on genie-app"
-            exit 1
-          else
-            echo "ERROR: unexpected HTTP ${ROPC_STATUS} with a non-Keycloak body from the genie token endpoint — not a posture verdict; check gateway routing (nginx/Kong)"
-            exit 1
-          fi
-          ;;
-        2[0-9][0-9]|3[0-9][0-9])
-          if [ "$ROPC_TOKEN" = "yes" ]; then
-            echo "ERROR: genie realm ROPC posture drifted: token endpoint returned HTTP ${ROPC_STATUS} with an access token for a direct-access grant — directAccessGrantsEnabled must stay false on genie-app"
-          else
-            echo "ERROR: unexpected HTTP ${ROPC_STATUS} with a non-Keycloak body from the genie token endpoint — not a posture verdict; check gateway routing (nginx/Kong)"
-          fi
-          exit 1
-          ;;
-        *)
-          echo "ERROR: could not get a verdict from the genie token endpoint after 3 attempts (HTTP ${ROPC_STATUS:-none}) — transport or gateway failure, not a posture result"
           exit 1
           ;;
       esac
@@ -3162,10 +3131,11 @@ test:flutter:
 #     configs/keycloak/themes/ and configs/otel/otel-collector-config.yaml
 #     straight from this checkout (the frontend's public/config checkout
 #     mount is already covered by the components/gov-chat-frontend glob).
-#   - configs/keycloak/genie-realm.yaml is the one baked-in image input
-#     listed here: build:keycloak-config copies it into the candidate image
-#     and the ROPC-refusal probe in .e2e_web_base asserts its runtime
-#     behaviour, so a realm-posture change must instantiate the e2e jobs.
+#   - the configs/keycloak/ tree: its themes/ subtree is bind-mounted into
+#     the stack, and genie-realm.yaml plus the import entrypoint are baked
+#     into the keycloak-config candidate image — the ROPC-refusal probe
+#     in .e2e_web_base asserts the realm's runtime behaviour, so any
+#     change in the tree must instantiate the e2e jobs.
 # tests/e2e/okf/ is deliberately NOT listed: the OKF specs are not executed
 # until MR2 wires them into the script (see .e2e_web_base script comment),
 # and listing unexecuted paths only buys 30-minute train jobs that test
@@ -3185,8 +3155,7 @@ test:flutter:
   - package-lock.json
   - docker-compose.yaml
   - env
-  - configs/keycloak/themes/**/*
-  - configs/keycloak/genie-realm.yaml
+  - configs/keycloak/**/*
   - configs/otel/otel-collector-config.yaml
   - .gitlab-ci.yml
 

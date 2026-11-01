@@ -551,6 +551,18 @@ describe('compose non-root contract (#1227)', () => {
     expect(vHome.some((v) => v.includes('backend') && v.includes('deployment-authored'))).toBe(true);
   });
 
+  test('mutations: a lone-genieai merge earns no base-anchor credit', () => {
+    // \*chown-init is a PREFIX of \*chown-init-genieai: a merge spelling
+    // that lists ONLY the extension inherits NOTHING from the base anchor
+    // (no caps, no busybox image, no bounded restart) — crediting it via
+    // the prefix would pass a root, uncapped, unbounded init.
+    const lone = composeText.replaceAll('<<: [*chown-init-genieai, *chown-init]', '<<: [*chown-init-genieai]');
+    expect(lone).not.toBe(composeText);
+    const { violations } = validateComposeNonRoot(lone);
+    expect(violations.some((v) => v.includes('cap_drop: [ALL]'))).toBe(true);
+    expect(violations.some((v) => v.includes('CHOWN'))).toBe(true);
+  });
+
   test('mutations: the placement anchor carries the same one-shot policy', () => {
     // The sequence merge gives x-chown-init-genieai's deploy: WHOLE to the
     // four constrained inits — a drift in the extension anchor's own
@@ -572,6 +584,14 @@ describe('compose non-root contract (#1227)', () => {
     expect(attemptsStripped).not.toBe(composeText);
     const { violations: v2 } = validateComposeNonRoot(attemptsStripped);
     expect(v2.some((v) => v.includes('x-chown-init-genieai') && v.includes('max_attempts bound'))).toBe(true);
+
+    // PIN the merge ORDER: YAML sequence merges give EARLIER maps
+    // precedence — [*chown-init, *chown-init-genieai] would silently
+    // discard the placement (the outer anchor's deploy wins whole) while
+    // looking symmetrical.
+    // 4 service merges (+1 mention in the extension anchor's comment)
+    expect((composeText.match(/<<: \[\*chown-init-genieai, \*chown-init\]/g) ?? []).length).toBeGreaterThanOrEqual(4);
+    expect(composeText).not.toContain('<<: [*chown-init,');
 
     const modeFlip = composeText.replace(
       '  x-chown-init-genieai: &chown-init-genieai\n    deploy:\n      mode: global',
@@ -928,8 +948,8 @@ describe('compose non-root contract (#1227)', () => {
     // An EXPLICIT cap_add: [] replaces the anchor's list (YAML merge
     // semantics) — the CHOWN invariant must trip, not inherit.
     const emptyCaps = composeText.replace(
-      '    <<: [*chown-init, *chown-init-genieai]\n',
-      '    <<: [*chown-init, *chown-init-genieai]\n    cap_add: []\n'
+      '    <<: [*chown-init-genieai, *chown-init]\n',
+      '    <<: [*chown-init-genieai, *chown-init]\n    cap_add: []\n'
     );
     expect(emptyCaps).not.toBe(composeText);
     const { violations: v3 } = validateComposeNonRoot(emptyCaps);
@@ -982,8 +1002,8 @@ describe('compose non-root contract (#1227)', () => {
     // A SERVICE-LOCAL commented restart hides behind the anchor's bounded
     // values (the r19 mutation covered the anchor line only).
     const localCommented = composeText.replace(
-      '    <<: [*chown-init, *chown-init-genieai]\n',
-      '    <<: [*chown-init, *chown-init-genieai]\n    restart: always # self-heal\n'
+      '    <<: [*chown-init-genieai, *chown-init]\n',
+      '    <<: [*chown-init-genieai, *chown-init]\n    restart: always # self-heal\n'
     );
     expect(localCommented).not.toBe(composeText);
     const { violations: v1 } = validateComposeNonRoot(localCommented);

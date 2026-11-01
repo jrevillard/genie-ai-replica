@@ -432,9 +432,11 @@
         path: "{{ item }}"
         state: directory
         mode: '0755'
+      # data_dir_resolved is ALWAYS absolute (group_vars joins the
+      # absolute deploy_dir) — no ternary here: its else branch would
+      # relpath a relative path against an absolute start and throw.
       loop:
-        - "{{ data_dir_resolved if data_dir_resolved is match('/')
-             else (deploy_dir ~ '/' ~ (data_dir_resolved | relpath(deploy_dir))) }}/huggingface"
+        - "{{ data_dir_resolved }}/huggingface"
         - "{{ deploy_dir }}/secrets/ssl"
 
     # no-root data-dir migration (#1227) — the tasks live in

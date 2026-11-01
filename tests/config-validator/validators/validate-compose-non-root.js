@@ -85,6 +85,12 @@ function validateComposeNonRoot(composeText) {
   const serviceBinds = {}; // service -> [{path, createHostPath}]
 
   const flush = () => {
+    // wholesale re-indent trap (see the saw* declarations)
+    if (inServices && !sawTwoSpaceService && sawDeepServiceKey) {
+      violations.push(
+        'services: no service key sits at 2-space indent while deeper keys exist — the block was re-indented and the line parser enforced nothing in it'
+      );
+    }
     // the last volumes entry of the file never sees a new-entry line or a
     // block close — claim it here
     claimDeferred();
@@ -403,6 +409,8 @@ function validateComposeNonRoot(composeText) {
   let entryTypeExplicit = false; // type: seen in this entry (vs the untyped volume default)
   let deferredSource = null; // source: seen while entryType is still the untyped default
   let inFlowVolumes = false; // a multi-line flow-sequence volumes list is open
+  let sawTwoSpaceService = false;
+  let sawDeepServiceKey = false;
   let flowBuffer = '';
   // An UNCLAIMED deferred source (an untyped long-syntax entry) is a
   // fail-open drop — current compose-go rejects the spelling outright, but
@@ -430,6 +438,19 @@ function validateComposeNonRoot(composeText) {
     }
     if (!inServices) continue;
 
+    // a service key at any indent other than 2 spaces escapes every
+    // body matcher below (they are fixed-indent by design) — the
+    // realistic escape is a WHOLESALE re-indent (formatter or hand edit
+    // moving the whole services block), detected at flush: services
+    // present, no 2-space key anywhere, deeper bare keys exist → the
+    // file is malformed and nothing in it was enforced.
+    if (/^ {2}["']?[\w.-]+["']?:\s*(?:\{.*|#.*)?$/.test(line)) {
+      sawTwoSpaceService = true;
+    }
+    if (/^ {3,}["']?[\w.-]+["']?:\s*(?:\{.*|#.*)?$/.test(line)) {
+      sawDeepServiceKey = true;
+    }
+
     // a service key may carry a trailing comment or a flow-map body —
     // every other spelling class here tolerates comments; a bare-key-only
     // match silently exempted such a service from EVERY check (fail-open)
@@ -455,7 +476,12 @@ function validateComposeNonRoot(composeText) {
     // `<<: [*chown-init, *chown-init-genieai]` merges the SAME policy (the
     // placement extension only adds deploy.placement and restates the
     // identical deploy values), so it earns the same credit.
-    if (/^ {4}<<:\s*\[?\*chown-init\b/.test(line)) {
+    // (?![\w-]): a LONE *chown-init-genieai merge inherits NOTHING from
+    // the base anchor — crediting it via the chown-init prefix would let a
+    // root, uncapped, unbounded init pass every invariant
+    // bare form or anywhere inside the bracket list — a lookahead after
+    // the first *chown-init would die on [*chown-init-genieai, ...]
+    if (/^ {4}<<:\s*(?:\*chown-init(?![\w-])|\[[^\]]*\*chown-init(?![\w-])[^\]]*\])/.test(line)) {
       anchorMerged = true;
       continue;
     }
@@ -874,7 +900,10 @@ function collectServiceNames(composeText) {
   const names = new Set();
   let inServices = false;
   for (const line of composeText.split('\n')) {
-    if (/^[a-z][\w.-]*:\s*$/.test(line)) {
+    // the trigger regex is IDENTICAL to the main parser's — a dotted
+    // top-level key would flip one scanner into services: scope while
+    // the other stayed out
+    if (/^[a-z][\w-]*:\s*$/.test(line)) {
       inServices = line.trim() === 'services:';
     } else if (inServices) {
       // same comment/flow tolerance as the main parser's service

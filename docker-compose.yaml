@@ -180,11 +180,11 @@ x-chown-init: &chown-init
       delay: 30s
       max_attempts: 60
 
-  # Placement-scoped extension merged BEHIND x-chown-init by the four
-  # constrained inits via `<<: [*chown-init, *chown-init-genieai]` — in a
-  # YAML sequence merge the LAST map's deploy: wins whole, so this carries
-  # the full race-sized policy plus the genieai constraint. One copy, or
-  # the four bounded policies drift.
+  # Placement-scoped extension merged AHEAD of x-chown-init by the four
+  # constrained inits via `<<: [*chown-init-genieai, *chown-init]` — in a
+  # YAML sequence merge EARLIER maps take precedence, so THIS map's
+  # deploy: (mode + the race-sized policy + the genieai constraint) wins
+  # whole. One copy, or the four bounded policies drift.
   x-chown-init-genieai: &chown-init-genieai
     deploy:
       mode: global
@@ -1288,10 +1288,10 @@ services:
     # Same node set as the follow-up service's own placement constraint
     # (see the x-chown-init-genieai anchor): without it the global init
     # also runs on gateway/gpu nodes the service can never land on,
-    # chowning volumes nothing there will read. Sequence merge: the LAST
-    # map's deploy: wins whole — the race-sized policy travels with the
-    # placement.
-    <<: [*chown-init, *chown-init-genieai]
+    # chowning volumes nothing there will read. Sequence merge: EARLIER
+    # maps win — this anchor's deploy: (policy + placement) shadows the
+    # outer anchor's.
+    <<: [*chown-init-genieai, *chown-init]
     # PER-VOLUME guard: the loop probes each volume independently, so a
     # root-era file in ONE volume heals only that volume — an operator
     # recovering one volume with `docker volume rm` leaves the other's
@@ -1331,10 +1331,10 @@ services:
     # Same node set as the follow-up service's own placement constraint
     # (see the x-chown-init-genieai anchor): without it the global init
     # also runs on gateway/gpu nodes the service can never land on,
-    # chowning volumes nothing there will read. Sequence merge: the LAST
-    # map's deploy: wins whole — the race-sized policy travels with the
-    # placement.
-    <<: [*chown-init, *chown-init-genieai]
+    # chowning volumes nothing there will read. Sequence merge: EARLIER
+    # maps win — this anchor's deploy: (policy + placement) shadows the
+    # outer anchor's.
+    <<: [*chown-init-genieai, *chown-init]
     # PROBE form (no marker — see backend-init).
     command: ["sh", "-c", "find /app/uploads ! -user 1000 -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /app/uploads ! -user 1000 -exec chown -h 1000:1000 {} + || exit 9; fi; find /app/uploads ! -user 1000 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
     volumes:
@@ -1499,10 +1499,10 @@ services:
     # Same node set as the follow-up service's own placement constraint
     # (see the x-chown-init-genieai anchor): without it the global init
     # also runs on gateway/gpu nodes the service can never land on,
-    # chowning volumes nothing there will read. Sequence merge: the LAST
-    # map's deploy: wins whole — the race-sized policy travels with the
-    # placement.
-    <<: [*chown-init, *chown-init-genieai]
+    # chowning volumes nothing there will read. Sequence merge: EARLIER
+    # maps win — this anchor's deploy: (policy + placement) shadows the
+    # outer anchor's.
+    <<: [*chown-init-genieai, *chown-init]
     # PER-VOLUME guard (same doctrine as backend-init): the loop probes
     # each volume independently — a root-era file in one volume heals
     # only that volume. Every find's exit status is enforced (see
@@ -2871,10 +2871,10 @@ services:
     # Same node set as the follow-up service's own placement constraint
     # (see the x-chown-init-genieai anchor): without it the global init
     # also runs on gateway/gpu nodes the service can never land on,
-    # chowning volumes nothing there will read. Sequence merge: the LAST
-    # map's deploy: wins whole — the race-sized policy travels with the
-    # placement.
-    <<: [*chown-init, *chown-init-genieai]
+    # chowning volumes nothing there will read. Sequence merge: EARLIER
+    # maps win — this anchor's deploy: (policy + placement) shadows the
+    # outer anchor's.
+    <<: [*chown-init-genieai, *chown-init]
     # PROBE form (no marker — see backend-init).
     command: ["sh", "-c", "find /var/lib/victoria-logs ! -user 65534 -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /var/lib/victoria-logs ! -user 65534 -exec chown -h 65534:65534 {} + || exit 9; fi; find /var/lib/victoria-logs ! -user 65534 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
     volumes:

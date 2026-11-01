@@ -84,12 +84,15 @@ fi
 # containers, so a service that failed at create time (a bind-source
 # error — the exact failure mode the create_host_path guards produce)
 # was silently never inspected while the rest of the stack passed.
-# Exited one-shots stay excluded (status=created + status=running only).
+# `restarting` is included too: the EACCES crash loop a botched no-root
+# upgrade produces sits between restart attempts, and a vacuous skip is
+# exactly what the exit-code doctrine forbids. Exited one-shots stay
+# excluded (created + restarting + running only).
 containers=$(
   {
-    docker ps -a --filter "status=created" --filter "status=running" \
+    docker ps -a --filter "status=created" --filter "status=restarting" --filter "status=running" \
       --filter "label=com.docker.compose.project=$PROJECT" --format '{{.Names}}'
-    docker ps -a --filter "status=created" --filter "status=running" \
+    docker ps -a --filter "status=created" --filter "status=restarting" --filter "status=running" \
       --filter "label=com.docker.stack.namespace=$PROJECT" --format '{{.Names}}'
   } | sort -u
 )
@@ -110,10 +113,11 @@ while IFS= read -r container; do
   service="${container#"$PROJECT"-}"; service="${service#"${PROJECT}_"}"
   # compose names the container <project>-postgres-1, swarm
   # <stack>_postgres.1.<id> — the reduction is SHAPE-EXACT: a swarm task
-  # is <svc>.<digits>.<id> and a compose container is <svc>-<digits>.
-  # Anything else (dotted service names like postgres.2-1, or a name
-  # ending in -init-1) never reduces, so it can never be exempted by
-  # accident.
+  # is <svc>.<digits>.<id> and a compose container is <svc>-<digits> (an
+  # init container DOES reduce: backend-init-1 → backend-init — the
+  # property that keeps that safe is that no reduced init name is in
+  # SELF_DROPPING). A dotted swarm name like postgres.2-1 never reduces,
+  # so it can never be exempted by accident.
   svc=""
   case "$service" in
     .*) ;;

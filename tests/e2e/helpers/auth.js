@@ -94,13 +94,23 @@ async function getAdminToken(adminPassword) {
  * @param {string} username - Keycloak username
  * @param {string} password - User password
  * @param {object} [options] - Optional overrides
- * @param {string} [options.realm='genie'] - Keycloak realm (must be ROPC-enabled)
+ * @param {string} [options.realm='genie'] - Keycloak realm (must be ROPC-enabled;
+ *        the primary realm throws immediately — see the guard below)
  * @param {string} [options.clientId='genie-app'] - Keycloak client ID
  * @returns {Promise<string>} Access token string
  */
 async function getUserToken(username, password, options = {}) {
   const realm = options.realm || 'genie';
   const clientId = options.clientId || 'genie-app';
+
+  if (realm === 'genie') {
+    throw new Error(
+      "getUserToken: realm 'genie' refuses ROPC by design — mint a " +
+        'primary-realm token with getSessionTokenViaUI, or pass ' +
+        '{ realm: <test-realm> } for a test-only realm provisioned with ' +
+        'enableDirectAccessGrants'
+    );
+  }
 
   const body = new URLSearchParams({
     client_id: clientId,

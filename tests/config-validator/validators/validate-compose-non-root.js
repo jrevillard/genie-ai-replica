@@ -316,12 +316,14 @@ function validateComposeNonRoot(composeText) {
     // record so its one-shot invariants can be policed directly.
     const genieaiPolicy = { mode: null, condition: null, maxAttempts: null };
     let genieaiSeen = false; // the anchor DECL exists (mode may be absent)
+    let chownSeen = false;
     const policyOf = () => (anchorName === 'x-chown-init-genieai' ? genieaiPolicy : anchorDefaults);
     for (const line of lines) {
       const anchorDecl = line.match(/^\s*(x-chown-init(?:-genieai)?):\s*&/);
       if (anchorDecl) {
         anchorName = anchorDecl[1];
         if (anchorName === 'x-chown-init-genieai') genieaiSeen = true;
+        else chownSeen = true;
         continue;
       }
       if (!anchorName) continue;
@@ -393,6 +395,16 @@ function validateComposeNonRoot(composeText) {
           'x-chown-init-genieai: the merged placement anchor must keep restart_policy.condition: on-failure with a max_attempts bound'
         );
       }
+    }
+    // same direct policing for the BASE anchor: deleting its whole
+    // restart_policy block leaves condition/maxAttempts null and the
+    // per-service checks treated null as safe — a persistently failing
+    // root init on swarm would then restart forever (default condition
+    // "any"), the exact state ONE_SHOT_ROOT_INIT forbids
+    if (chownSeen && (anchorDefaults.condition !== 'on-failure' || anchorDefaults.maxAttempts === null)) {
+      violations.push(
+        'x-chown-init: the merged anchor must keep restart_policy.condition: on-failure with a max_attempts bound'
+      );
     }
   }
   let anchorMerged = false;
@@ -470,7 +482,7 @@ function validateComposeNonRoot(composeText) {
     // The body's user: pin is parsed (a compliant flow service otherwise
     // reported 'no user: declared'); the REST of a flow-map body is
     // line-parser-unreachable (extracted finding #1274).
-    const serviceMatch = line.match(/^ {2}["']?([\w.-]+)["']?:\s*(?:\{(.*)\}|#.*)?$/);
+    const serviceMatch = line.match(/^ {2}["']?([\w.-]+)["']?:\s*(?:\{(.*)\}|&(?:[\w-]+\s*)?(?:#.*)?|#.*)?$/);
     if (serviceMatch) {
       flush();
       currentService = serviceMatch[1];
@@ -945,9 +957,9 @@ function collectServiceNames(composeText) {
     ) {
       inServices = /^services:\s*(?:#.*)?$/.test(line.trim()) || /^"services":/.test(line.trim());
     } else if (inServices) {
-      // same comment/flow tolerance as the main parser's service
+      // same comment/flow/anchor tolerance as the main parser's service
       // detector — the two notions of "a service exists" must stay one
-      const m = line.match(/^ {2}["']?([\w.-]+)["']?:\s*(?:\{.*|#.*)?$/);
+      const m = line.match(/^ {2}["']?([\w.-]+)["']?:\s*(?:\{.*|&(?:[\w-]+\s*)?(?:#.*)?|#.*)?$/);
       if (m) names.add(m[1]);
     }
   }

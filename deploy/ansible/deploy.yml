@@ -423,6 +423,21 @@
         label: "{{ item.item }}"
       when: not (self_signed_certs | default(false) | bool)
 
+    - name: Hand the data directory itself to ansible_user (depth 0, #1227)
+      # The payload passes exclude the data tree DELIBERATELY; the deleted
+      # recurse:true chowns were however the only step re-owning a
+      # ROOT-ERA data/ directory, and without this task the huggingface
+      # creation below died EACCES on exactly the upgrades this MR
+      # migrates. Depth 0 only — nothing recurses INTO the tree: its
+      # contents stay the migration's business.
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ data_dir_resolved }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0755'
+
     - name: Create required directories
       # huggingface resolves through data_dir_resolved (the ONE formula):
       # a raw {{ data_dir }} join builds /opt/genieai//srv/... junk for an

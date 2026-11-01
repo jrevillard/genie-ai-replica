@@ -551,6 +551,38 @@ describe('compose non-root contract (#1227)', () => {
     expect(vHome.some((v) => v.includes('backend') && v.includes('deployment-authored'))).toBe(true);
   });
 
+  test('mutations: base-anchor policy deletion and anchored service keys', () => {
+    // DELETING the base anchor's whole restart_policy block left
+    // condition/maxAttempts null and the per-service checks treated null
+    // as safe — otel-collector-init would restart forever on swarm
+    // (default condition "any") behind a green gate. The BASE anchor is
+    // policed directly, same as the placement extension.
+    const policyDeleted = composeText
+      .replace(
+        "    restart_policy:\n      # bounded self-heal (the one-shot rule's blessed form): a transient",
+        '    # restart_policy deleted'
+      )
+      .replace(/      condition: on-failure\n      delay: 30s\n      max_attempts: 60\n\nservices:/, '\nservices:');
+    expect(policyDeleted).not.toBe(composeText);
+    const { violations: v1 } = validateComposeNonRoot(policyDeleted);
+    expect(v1.some((v) => v.includes('x-chown-init:') && v.includes('max_attempts bound'))).toBe(true);
+
+    // a trailing YAML anchor on a service key (backend: &backend) is the
+    // same spelling class as comments/flow bodies — without tolerance the
+    // anchored service's body attributed to the PREVIOUS service
+    // (innocent neighbor charged, backend skipped).
+    const anchored = [
+      'services:',
+      '  frontend:',
+      '    user: "101:101"',
+      '  backend: &backend',
+      '    user: root',
+      ''
+    ].join('\n');
+    const { violations: v2 } = validateComposeNonRoot(anchored);
+    expect(v2.some((v) => v.includes('backend') && v.includes('is root'))).toBe(true);
+  });
+
   test('mutations: a lone-genieai merge earns no base-anchor credit', () => {
     // \*chown-init is a PREFIX of \*chown-init-genieai: a merge spelling
     // that lists ONLY the extension inherits NOTHING from the base anchor

@@ -2955,22 +2955,24 @@ class TestQueryTranslationStatus:
         assert text == "USER: what is X?"
         assert status == "translated"
 
-    @pytest.mark.asyncio
-    async def test_a_missing_finish_reason_is_not_a_truncation(self):
-        """The truncation check is an exact match on the protocol's value —
-        the same contract ``test_a_max_tokens_finish_reason_is_not_a_truncation``
-        pins for a wrong value: a 200 whose choice carries no finish_reason
-        field at all is trusted likewise. The seam talks to vLLM, which
-        always sets the field; the exact match is the documented contract,
-        not an accident of a loose comparison."""
-        svc = create_chatqna_service()
-        mock_client = self._mock_client(content="USER: what is X?")
-        stack = self._translation_patches(mock_client, translategemma=False)
-        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=None))
-        with stack:
-            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
-        assert text == "USER: what is X?"
-        assert status == "translated"
+    @pytest.mark.parametrize(
+        "finish_reason, truncated",
+        [
+            pytest.param("length", True, id="length-is-the-protocol-value"),
+            pytest.param("stop", False, id="a-complete-completion"),
+            pytest.param("max_tokens", False, id="the-request-field-name-is-not-a-reason"),
+            pytest.param(None, False, id="an-explicit-null"),
+            pytest.param("missing", False, id="an-absent-field"),
+        ],
+    )
+    def test_the_truncation_check_is_an_exact_match_on_the_protocol_value(self, finish_reason, truncated):
+        """The truncation decision is an exact match on ``"length"`` — not a
+        loose comparison a missing or differently-valued field could trip.
+        The seam talks to vLLM, which always sets the field; the exact match
+        is the documented contract, and this pin is what a flip to a
+        fail-closed comparison would break."""
+        choice = {} if finish_reason == "missing" else {"finish_reason": finish_reason}
+        assert chatqna_module._completion_truncated(choice) is truncated
 
     async def test_a_generic_payload_cap_is_clamped_to_the_discovered_window(self):
         """The generic payload's cap is clamped so the measured prompt plus
@@ -3020,7 +3022,7 @@ class TestQueryTranslationStatus:
         # flattened source: the assertions must be able to tell the model's
         # cut-off blob from the source fallback (the regression the
         # docstring claims to pin).
-        mock_client = self._mock_client(content="TRADUCCION-CORTADA")
+        mock_client = self._mock_client()
         mock_client.post.return_value.json.return_value = {
             "choices": [{"message": {"content": "TRADUCCION-CORTADA"}, "finish_reason": "length"}]
         }

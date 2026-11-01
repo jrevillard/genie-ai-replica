@@ -124,7 +124,7 @@ async function getUserToken(username, password, options = {}) {
     password,
   }).toString();
 
-  const res = await request('POST', `/auth/realms/${realm}/protocol/openid-connect/token`, {
+  const res = await request('POST', `/auth/realms/${encodeURIComponent(realm)}/protocol/openid-connect/token`, {
     body,
     contentType: 'application/x-www-form-urlencoded',
   });

@@ -2347,9 +2347,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
 
   // The default-branch and release rules carry the same paths list (for
   // pending-<sha> images and release builds); adjacency above pins the
-  // merge_request_event branch, the count here keeps the other two honest.
-  // Exactly 3: one occurrence per rule branch — a compensating duplicate
-  // must not mask a branch that lost the entry.
+  // merge_request_event branch, the exact count here covers the other two
+  // in the current layout: it fails uncompensated losses and forces a
+  // conscious test update when the branch structure changes. It cannot see
+  // a compensating duplicate inside a single rule's list — that needs the
+  // parse-level linting tracked in #1306.
   test.each(['build:keycloak-config', 'scan:keycloak-config', 'promote:keycloak-config'])(
     '%s carries the keycloak glob in all three rule branches',
     (job) => {

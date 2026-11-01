@@ -724,7 +724,15 @@ describe('cross-tab renew lease (#80800)', () => {
     });
     try {
       const holderUser = createMockUser({ access_token: 'holder-finished-token' });
-      window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now(), user: holderUser }));
+      // Stamp the publication 5 s AHEAD of the wall clock: the adoption gate
+      // is `entry.at >= startedAt`, and seeding at exactly Date.now() races
+      // the call's own startedAt capture by a millisecond (CI-only flake —
+      // locally the same tick won). A future stamp is always admissible to
+      // the gate and to the TTL cleanup.
+      window.localStorage.setItem(
+        USER_KEY,
+        JSON.stringify({ at: Date.now() + 5000, user: holderUser })
+      );
       mockGetUser.mockResolvedValue(null);
       mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-fresh-grant' }));
       const user = await keycloakAuthService.signinSilent();

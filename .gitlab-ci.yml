@@ -500,6 +500,10 @@ workflow:
         exit 1
       }
       case "$ROPC_STATUS" in
+        408|425)
+          echo "ERROR: the token endpoint timed out repeatedly (HTTP ${ROPC_STATUS} after 5 attempts) — not a posture verdict; check the Keycloak upstream health"
+          exit 1
+          ;;
         429)
           echo "ERROR: token endpoint rate-limited the probe (HTTP 429) — not a posture verdict; check gateway rate limiting; body: ${ROPC_BODY:-none}"
           exit 1
@@ -541,7 +545,7 @@ workflow:
           exit 1
           ;;
         *)
-          echo "ERROR: could not get a verdict from the genie token endpoint after 5 attempts (HTTP ${ROPC_STATUS:-none}) — transport or gateway failure, not a posture result; last body: ${ROPC_BODY:-none}"
+          echo "ERROR: could not get a verdict from the genie token endpoint (HTTP ${ROPC_STATUS:-none}) — transport or gateway failure, not a posture result; last body: ${ROPC_BODY:-none}"
           exit 1
           ;;
       esac

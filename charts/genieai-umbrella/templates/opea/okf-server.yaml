@@ -151,7 +151,7 @@ wins over a derived row of the same name. */ -}}
     )
 -}}
 {{- $valsServices := $vals.services | default dict -}}
-{{- $_ := set $valsServices "okf-server" $svcVals -}}
+{{- $_ := set $valsServices "okf-server" (mergeOverwrite $svcVals (index $valsServices "okf-server" | default dict)) -}}
 {{- $_ := set $vals "services" $valsServices -}}
 {{- $ctx := dict "name" "okf-server" "component" "okf-server" "Values" $vals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}

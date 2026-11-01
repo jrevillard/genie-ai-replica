@@ -20,7 +20,7 @@ Compose service carries two tuning knobs and a readiness endpoint. */ -}}
     )
 -}}
 {{- $valsServices := $vals.services | default dict -}}
-{{- $_ := set $valsServices "pii-service" $svcVals -}}
+{{- $_ := set $valsServices "pii-service" (mergeOverwrite $svcVals (index $valsServices "pii-service" | default dict)) -}}
 {{- $_ := set $vals "services" $valsServices -}}
 {{- $ctx := dict "name" "pii-service" "component" "pii-service" "Values" $vals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}

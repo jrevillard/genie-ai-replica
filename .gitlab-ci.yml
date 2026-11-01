@@ -503,8 +503,8 @@ workflow:
       # A truncated 200 token response can land in the body of a transport
       # failure, and JSON member order is not guaranteed — a body from a
       # 2xx answer is withheld outright, and any other body carrying a
-      # minted token member alongside it. Error pages that merely mention
-      # the words keep their evidence.
+      # minted token member within the captured 200 bytes. Error pages
+      # that merely mention the words keep their evidence.
       ROPC_BODY=$(head -c 200 /tmp/ropc-probe-body.json 2>/dev/null || true)
       case "$ROPC_BODY" in
         *'"access_token"'*) ROPC_BODY="<token response withheld>" ;;
@@ -522,7 +522,7 @@ workflow:
             echo "ERROR: token endpoint rate-limited the probe (HTTP 429) — not a posture verdict; check gateway rate limiting; body: ${ROPC_BODY:-none}"
             ;;
           *)
-            echo "ERROR: no usable answer from the genie token endpoint in 5 attempts (last HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC:-0}, last non-retryable HTTP ${ROPC_LAST_ANSWERED:-none}) — transport, gateway or upstream failure, not a posture result; last body: ${ROPC_BODY:-none}"
+            echo "ERROR: no usable answer from the genie token endpoint in 5 attempts (last HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC:-0}, last retried HTTP ${ROPC_LAST_ANSWERED:-none}) — transport, gateway or upstream failure, not a posture result; last body: ${ROPC_BODY:-none}"
             ;;
         esac
         exit 1
@@ -583,7 +583,7 @@ workflow:
           # answers set ROPC_ANSWERED, and 4xx/2xx-3xx cover that space. If
           # a future edit to the loop's answered logic widens it, this arm
           # turns the silent-skip class into a loud failure.
-          echo "ERROR: the probe reached an unclassified state (HTTP ${ROPC_STATUS:-none}) — failing loudly rather than passing without a verdict"
+          echo "ERROR: the probe reached an unclassified state (HTTP ${ROPC_STATUS:-none}) — failing loudly rather than passing without a verdict; body: ${ROPC_BODY:-none}"
           exit 1
           ;;
       esac

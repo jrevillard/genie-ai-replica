@@ -2350,8 +2350,8 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // merge_request_event branch, the exact count here covers the other two
   // in the current layout: it fails uncompensated losses and forces a
   // conscious test update when the branch structure changes. It cannot see
-  // a compensating duplicate inside a single rule's list — that needs the
-  // parse-level linting tracked in #1306.
+  // a compensating duplicate inside a single rule's list — closing that
+  // needs parse-level linting of the inline paths form.
   test.each(['build:keycloak-config', 'scan:keycloak-config', 'promote:keycloak-config'])(
     '%s carries the keycloak glob in all three rule branches',
     (job) => {

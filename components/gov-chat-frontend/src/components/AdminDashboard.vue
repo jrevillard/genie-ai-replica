@@ -2958,10 +2958,11 @@ export default {
 
     async saveHierarchyItem() {
       // --- 1. VALIDATION ---
-      const validTranslations = this.hierarchyForm.translations.filter((t) => t.lang && t.text.trim());
-      const langCodes = validTranslations.map((t) => t.lang);
+      const validTranslations = this.hierarchyForm.translations.filter((t) => t.lang.trim() && t.text.trim());
+      const langCodes = validTranslations.map((t) => t.lang.trim().toLowerCase());
 
-      // Check for duplicate languages
+      // Check for duplicate languages (case-insensitive — the backend
+      // uppercases the code, so 'fr' and 'FR' would collide on one row)
       if (new Set(langCodes).size !== langCodes.length) {
         this.showNotification(
           // MODIFIED: Use new i18n key
@@ -2980,7 +2981,10 @@ export default {
       // the {lang, text} read shape.
       const payload = {
         nameEN: this.hierarchyForm.nameEN,
-        translations: validTranslations.map(({ lang, text }) => ({ languageCode: lang, translation: text }))
+        translations: validTranslations.map(({ lang, text }) => ({
+          languageCode: lang.trim(),
+          translation: text.trim()
+        }))
       };
 
       this.isLoading = true;
@@ -3006,6 +3010,8 @@ export default {
         this.closeHierarchyForm(); // Close form on success
 
         // --- 4. REFRESH DATA ---
+        // loadKnowledgeHierarchy handles its own errors (accurate load-error
+        // toast), so a refresh failure never surfaces as a save failure.
         await this.loadKnowledgeHierarchy(); // Refresh the admin dashboard tree
         eventBus.$emit('knowledge-hierarchy-updated'); // Emit global event for other components
       } catch (error) {

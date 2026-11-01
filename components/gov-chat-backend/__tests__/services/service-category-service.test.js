@@ -224,18 +224,43 @@ describe('ServiceCategoryService', () => {
     it('should warn and skip entries that use the read shape {lang, text}', async () => {
       mockDb.query.mockResolvedValue(createMockCursor([]));
 
+      await expect(
+        service.updateServiceWithTranslations('svc-1', {
+          nameEN: 'Updated',
+          translations: [{ lang: 'fr', text: 'Mis a jour' }]
+        })
+      ).rejects.toThrow('unexpected shape');
+
+      // no mutation at all: the EN upsert and the REMOVE must not run
+      expect(mockServiceTranslations.save).not.toHaveBeenCalled();
+      expect(mockDb.query).not.toHaveBeenCalled();
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+
+    it('should reject a null translation entry before mutating anything', async () => {
+      await expect(
+        service.updateServiceWithTranslations('svc-1', {
+          nameEN: 'Updated',
+          translations: [{ languageCode: 'fr', translation: 'a' }, null]
+        })
+      ).rejects.toThrow('unexpected shape');
+      expect(mockServiceTranslations.save).not.toHaveBeenCalled();
+      expect(mockDb.query).not.toHaveBeenCalled();
+    });
+
+    it('should accept valid entries and trim the language code', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+
       const result = await service.updateServiceWithTranslations('svc-1', {
         nameEN: 'Updated',
-        translations: [{ lang: 'fr', text: 'Mis a jour' }]
+        translations: [{ languageCode: ' fr ', translation: 'Mis a jour' }]
       });
 
       expect(result.status).toBe('updated');
-      expect(mockServiceTranslations.save).not.toHaveBeenCalledWith(
-        expect.objectContaining({ translation: 'Mis a jour' }),
+      expect(mockServiceTranslations.save).toHaveBeenCalledWith(
+        expect.objectContaining({ _key: 'svc-1_FR', languageCode: 'FR', translation: 'Mis a jour' }),
         expect.anything()
       );
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unexpected shape'));
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('svc-1'));
     });
 
     it('should throw when service does not exist', async () => {
@@ -468,21 +493,18 @@ describe('ServiceCategoryService', () => {
       );
     });
 
-    it('should warn and skip entries that use the read shape {lang, text}', async () => {
+    it('should reject entries that use the read shape {lang, text} before mutating', async () => {
       mockDb.query.mockResolvedValue(createMockCursor([]));
 
-      const result = await service.updateCategoryWithTranslations('cat-1', {
-        nameEN: 'Updated',
-        translations: [{ lang: 'fr', text: 'Mis a jour' }]
-      });
+      await expect(
+        service.updateCategoryWithTranslations('cat-1', {
+          nameEN: 'Updated',
+          translations: [{ lang: 'fr', text: 'Mis a jour' }]
+        })
+      ).rejects.toThrow('unexpected shape');
 
-      expect(result.status).toBe('updated');
-      expect(mockServiceCategoryTranslations.save).not.toHaveBeenCalledWith(
-        expect.objectContaining({ translation: 'Mis a jour' }),
-        expect.anything()
-      );
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unexpected shape'));
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('cat-1'));
+      expect(mockServiceCategoryTranslations.save).not.toHaveBeenCalled();
+      expect(mockDb.query).not.toHaveBeenCalled();
     });
   });
 

@@ -394,6 +394,59 @@ describe('PUT /api/service-categories/services/:serviceId (AC17)', () => {
 });
 
 // ============================================================
+// ValidationError from the service layer is a client mistake —
+// write handlers must answer 400, not 500.
+// ============================================================
+describe('write handlers map ValidationError to 400', () => {
+  // { method, path, serviceKey } for each write handler that can reject
+  // with a ValidationError raised on its payload.
+  const cases = [
+    { verb: 'post', path: '/api/service-categories', serviceKey: 'createCategory', body: { nameEN: 'X' } },
+    {
+      verb: 'put',
+      path: '/api/service-categories/cat-1',
+      serviceKey: 'updateCategoryWithTranslations',
+      body: { nameEN: 'X' }
+    },
+    {
+      verb: 'post',
+      path: '/api/service-categories/cat-1/services',
+      serviceKey: 'createServiceWithTranslations',
+      body: { nameEN: 'X' }
+    },
+    {
+      verb: 'put',
+      path: '/api/service-categories/services/svc-1',
+      serviceKey: 'updateServiceWithTranslations',
+      body: { nameEN: 'X' }
+    }
+  ];
+
+  cases.forEach(({ verb, path, serviceKey, body }) => {
+    it(`${verb.toUpperCase()} ${path} returns 400 on ValidationError`, async () => {
+      // The service layer throws a real ValidationError; the route checks
+      // the class identity with instanceof.
+      const { ValidationError } = require('../../middleware/errors');
+      serviceCategoryService[serviceKey].mockRejectedValue(new ValidationError('nameEN is required'));
+
+      const response = await request(app)[verb](path).set('Authorization', `Bearer ${validToken}`).send(body);
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: 'nameEN is required' });
+    });
+  });
+
+  it('PUT /api/service-categories/cat-1 still returns 500 for non-validation errors', async () => {
+    serviceCategoryService.updateCategoryWithTranslations.mockRejectedValue(new Error('boom'));
+
+    const response = await authPut('/api/service-categories/cat-1', { nameEN: 'X' });
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ message: 'boom' });
+  });
+});
+
+// ============================================================
 // AC21: POST /api/service-categories/:categoryId/services
 // ============================================================
 describe('POST /api/service-categories/:categoryId/services (AC21)', () => {

@@ -668,6 +668,81 @@ describe('AdminDashboard', () => {
         translations: [{ languageCode: 'fr', translation: 'Déclaration fiscale' }]
       });
     });
+
+    it('trims whitespace from lang and text in the payload', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      const treeMock = require('../../services/serviceTreeService');
+      treeMock.updateService.mockClear();
+
+      wrapper.vm.hierarchyForm = {
+        visible: true,
+        mode: 'editService',
+        title: 'Edit Service',
+        _key: 'svc-1',
+        nameEN: 'Tax Filing',
+        translations: [{ lang: ' fr ', text: '  Déclaration fiscale  ' }],
+        parentId: null
+      };
+
+      await wrapper.vm.saveHierarchyItem();
+
+      expect(treeMock.updateService).toHaveBeenCalledWith('svc-1', {
+        nameEN: 'Tax Filing',
+        translations: [{ languageCode: 'fr', translation: 'Déclaration fiscale' }]
+      });
+    });
+
+    it('rejects duplicates that differ only in case ("fr" vs "FR")', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      const treeMock = require('../../services/serviceTreeService');
+      treeMock.updateService.mockClear();
+      mockEventBusEmit.mockClear();
+
+      wrapper.vm.hierarchyForm = {
+        visible: true,
+        mode: 'editService',
+        title: 'Edit Service',
+        _key: 'svc-1',
+        nameEN: 'Tax Filing',
+        translations: [
+          { lang: 'fr', text: 'A' },
+          { lang: 'FR', text: 'B' }
+        ],
+        parentId: null
+      };
+
+      await wrapper.vm.saveHierarchyItem();
+
+      expect(treeMock.updateService).not.toHaveBeenCalled();
+      expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
+    });
+
+    it('never reports a save failure when the post-save refresh fails', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      const treeMock = require('../../services/serviceTreeService');
+      treeMock.updateService.mockClear();
+      treeMock.getAdminCategories.mockRejectedValueOnce(new Error('refresh blip'));
+      mockEventBusEmit.mockClear();
+
+      wrapper.vm.hierarchyForm = {
+        visible: true,
+        mode: 'editService',
+        title: 'Edit Service',
+        _key: 'svc-1',
+        nameEN: 'Tax Filing',
+        translations: [{ lang: 'fr', text: 'Déclaration fiscale' }],
+        parentId: null
+      };
+
+      await wrapper.vm.saveHierarchyItem();
+
+      // The save succeeded: the success toast is shown and the misleading
+      // save-error toast never appears (the refresh reports its own
+      // accurate load-error toast instead).
+      const emissions = mockEventBusEmit.mock.calls.filter((c) => c[0] === 'notification:show');
+      expect(emissions.some(([, p]) => p.type === 'success')).toBe(true);
+      expect(emissions.some(([, p]) => p.message === 'Failed to save hierarchy item.')).toBe(false);
+    });
   });
 
   // -----------------------------------------------------------------------

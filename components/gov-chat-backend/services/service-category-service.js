@@ -319,12 +319,43 @@ class ServiceCategoryService {
    * @param {Object} payload - The service data { nameEN, translations }.
    * @returns {Promise<Object>} The result of the update operation.
    */
+  /**
+   * Validates the translations array of a write payload BEFORE any mutation.
+   * The update paths are delete-then-rebuild: a malformed entry that only
+   * surfaces mid-loop would leave the old translations deleted, so the whole
+   * array is checked up front and bad entries reject the request.
+   * @param {*} translations - The payload translations array (optional).
+   */
+  _validateTranslationsPayload(translations) {
+    if (translations === undefined || translations === null) {
+      return;
+    }
+    if (!Array.isArray(translations)) {
+      throw new ValidationError('translations must be an array of {languageCode, translation}');
+    }
+    for (let i = 0; i < translations.length; i++) {
+      const trans = translations[i];
+      const keys = trans && typeof trans === 'object' ? Object.keys(trans).join(',') : typeof trans;
+      if (
+        !trans ||
+        typeof trans !== 'object' ||
+        !String(trans.languageCode || '').trim() ||
+        !String(trans.translation || '').trim()
+      ) {
+        throw new ValidationError(
+          `Translation entry ${i} has an unexpected shape (expected {languageCode, translation}, got keys: ${keys})`
+        );
+      }
+    }
+  }
+
   async updateServiceWithTranslations(serviceKey, payload) {
     await this.init();
     try {
       if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
         throw new ValidationError('nameEN is required and must be a non-empty string');
       }
+      this._validateTranslationsPayload(payload.translations);
       logger.info(`Updating service ${serviceKey} with name "${payload.nameEN}"`);
 
       // 1. Ensure the service exists (this will throw an error if not found)
@@ -355,23 +386,17 @@ class ServiceCategoryService {
 
       if (payload.translations && Array.isArray(payload.translations)) {
         for (const trans of payload.translations) {
-          if (trans.languageCode && trans.translation) {
-            const transLocale = String(trans.languageCode).toUpperCase();
-            const translationDoc = {
-              _key: `${serviceKey}_${transLocale}`,
-              serviceId: serviceKey,
-              languageCode: transLocale,
-              translation: trans.translation,
-              isActive: true,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            };
-            await this.serviceTranslations.save(translationDoc, { overwrite: true });
-          } else {
-            logger.warn(
-              `Skipping translation with unexpected shape for service ${serviceKey} (expected {languageCode, translation}, got keys: ${Object.keys(trans).join(',')})`
-            );
-          }
+          const transLocale = String(trans.languageCode).trim().toUpperCase();
+          const translationDoc = {
+            _key: `${serviceKey}_${transLocale}`,
+            serviceId: serviceKey,
+            languageCode: transLocale,
+            translation: trans.translation.trim(),
+            isActive: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          await this.serviceTranslations.save(translationDoc, { overwrite: true });
         }
         logger.info(`Processed ${payload.translations.length} additional translations for service ${serviceKey}`);
       }
@@ -872,6 +897,7 @@ class ServiceCategoryService {
       if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
         throw new ValidationError('nameEN is required and must be a non-empty string');
       }
+      this._validateTranslationsPayload(payload.translations);
       logger.info(`Updating category ${categoryKey} with name "${payload.nameEN}"`);
 
       // 1. Update the main category document (if there are fields to update, otherwise this can be skipped)
@@ -904,23 +930,17 @@ class ServiceCategoryService {
       `);
 
         for (const trans of payload.translations) {
-          if (trans.languageCode && trans.translation) {
-            const transLocale = String(trans.languageCode).toUpperCase();
-            const translationDoc = {
-              _key: `${categoryKey}_${transLocale}`,
-              serviceCategoryId: categoryKey,
-              languageCode: transLocale,
-              translation: trans.translation,
-              isActive: true,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            };
-            await this.serviceCategoryTranslations.save(translationDoc, { overwrite: true });
-          } else {
-            logger.warn(
-              `Skipping translation with unexpected shape for category ${categoryKey} (expected {languageCode, translation}, got keys: ${Object.keys(trans).join(',')})`
-            );
-          }
+          const transLocale = String(trans.languageCode).trim().toUpperCase();
+          const translationDoc = {
+            _key: `${categoryKey}_${transLocale}`,
+            serviceCategoryId: categoryKey,
+            languageCode: transLocale,
+            translation: trans.translation.trim(),
+            isActive: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          await this.serviceCategoryTranslations.save(translationDoc, { overwrite: true });
         }
         logger.info(`Processed ${payload.translations.length} additional translations for category ${categoryKey}`);
       }

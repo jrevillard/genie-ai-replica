@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
+const { ValidationError } = require('../middleware/errors');
 const { logger } = require('../shared-lib');
 
 module.exports = (serviceCategoryService) => {
@@ -387,6 +388,9 @@ module.exports = (serviceCategoryService) => {
       res.status(201).json(result);
     } catch (error) {
       logger.error(`Error creating category: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      if (error instanceof ValidationError) {
+        return res.status(400).json({ message: error.message });
+      }
       res.status(500).json({ message: error.message });
     }
   });
@@ -578,6 +582,9 @@ module.exports = (serviceCategoryService) => {
         stack: error.stack,
         durationMs: Date.now() - start
       });
+      if (error instanceof ValidationError) {
+        return res.status(400).json({ message: error.message });
+      }
       res.status(500).json({ message: error.message });
     }
   });
@@ -639,6 +646,9 @@ module.exports = (serviceCategoryService) => {
         stack: error.stack,
         durationMs: Date.now() - start
       });
+      if (error instanceof ValidationError) {
+        return res.status(400).json({ message: error.message });
+      }
       res.status(500).json({ message: error.message });
     }
   });
@@ -700,6 +710,9 @@ module.exports = (serviceCategoryService) => {
         stack: error.stack,
         durationMs: Date.now() - start
       });
+      if (error instanceof ValidationError) {
+        return res.status(400).json({ message: error.message });
+      }
       res.status(500).json({ message: error.message });
     }
   });

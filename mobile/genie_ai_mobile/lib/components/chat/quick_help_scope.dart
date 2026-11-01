@@ -69,7 +69,11 @@ Map<String, dynamic> parseQuickHelpButton(
   final action = configMapOf(btn['action']);
 
   return {
-    'id': btn['id']?.toString(),
+    // The id is kept RAW: the presence rule (quickHelpIdOf, the web's
+    // `button.id || title`) reads the value's truthiness, which a
+    // stringified '0' would erase (#1244). Every read still goes
+    // through quickHelpFieldOf / quickHelpIdOf, which stringify.
+    'id': btn['id'],
     'category': btn['category']?.toString(),
     'serviceLabels': quickHelpServiceLabelsOf(btn),
     'iconAsset': iconAsset,
@@ -185,8 +189,8 @@ List<Map<String, dynamic>> dedupeQuickHelpButtons(
   final seen = <String>{};
   final unique = <Map<String, dynamic>>[];
   for (final button in buttons) {
-    final id = quickHelpFieldOf(button, 'id');
-    if (id == null || id.isEmpty || seen.add(id)) {
+    final id = quickHelpIdOf(button);
+    if (id == null || seen.add(id)) {
       unique.add(button);
     }
   }
@@ -232,9 +236,7 @@ Map<String, dynamic>? quickHelpButtonById(
 /// same tag.
 String? quickHelpButtonIdentity(Map<String, dynamic>? button) {
   if (button == null) return null;
-  final id = quickHelpFieldOf(button, 'id');
-  if (configTruthy(id)) return id;
-  return quickHelpTitleOf(button);
+  return quickHelpIdOf(button) ?? quickHelpTitleOf(button);
 }
 
 /// Whether a locale-marker state is a DRIFT: the consumer's per-locale
@@ -448,11 +450,26 @@ bool restoredScopeTitleFollowsLocale({
 }
 
 /// The button's [key] as a string — ONE read of the id and the category,
-/// whatever shape the value carries: the parse normalizes them, a
-/// hand-built map need not, and a numeric id must degrade to its string
-/// form rather than throw.
+/// whatever shape the value carries: a hand-built map need not carry
+/// strings, and a numeric id must degrade to its string form rather
+/// than throw. (The parse keeps the id RAW — the truthiness rule below
+/// reads it — and pre-stringifies the category, an equality-only read.)
 String? quickHelpFieldOf(Map<String, dynamic> button, String key) =>
     button[key]?.toString();
+
+/// The button's id as the TAG carries it — the string form of the id,
+/// null when the configuration declares NO id. The presence rule is the
+/// web's own (`button.id || title`): the RAW value's JavaScript
+/// truthiness decides, read BEFORE any stringification — a falsy JSON
+/// id (`0`, `false`, a hand-edited configuration; none shipped) is no
+/// id, and its stringified `'0'` must not resurrect it (#1244). Every
+/// rule that decides whether an id EXISTS reads this one — the
+/// identity, the dedupe, the restore index — while the equality reads
+/// keep quickHelpFieldOf (a string compare, no truthiness).
+String? quickHelpIdOf(Map<String, dynamic>? button) {
+  final raw = button?['id'];
+  return configTruthy(raw) ? raw.toString() : null;
+}
 
 /// Whether the card DECLARES a scope — a category the hierarchy names, or
 /// labels it carries. ONE rule, read by the grid's unavailable verdict and
@@ -785,8 +802,8 @@ class ConversationScopeResolver {
   ) {
     final byId = <String, Map<String, dynamic>>{};
     for (final button in buttons) {
-      final id = quickHelpFieldOf(button, 'id');
-      if (id == null || id.isEmpty) continue;
+      final id = quickHelpIdOf(button);
+      if (id == null) continue;
       if (byId.containsKey(id)) continue;
       byId[id] = button;
     }

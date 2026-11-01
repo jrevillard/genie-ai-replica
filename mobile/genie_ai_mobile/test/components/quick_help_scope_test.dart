@@ -350,6 +350,70 @@ void main() {
       },
     );
 
+    test('a legacy falsy-id tag restores as a sidebar tag, like the web', () {
+      // The web's restore lookup (`candidate.id === tag`) cannot match a
+      // raw 0 against the string '0', so a tag '0' falls to the SIDEBAR
+      // branch there. The restore index must skip falsy raw ids for the
+      // same verdict — an index that kept '0' would reinstate a Quick
+      // Help scope the web refuses (#1244).
+      final falsy = [
+        {
+          'id': 0,
+          'resolvedTitle': 'Civil registry help',
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final scope = convResolver(falsy).resolve(tags: ['0'], categoryKey: '2');
+
+      expect(scope.quickHelpButtonId, isNull);
+      expect(scope.sidebarTagCount, 1);
+      expect(scope.serviceLabelsEn, isEmpty);
+    });
+
+    test('a web-saved numeric id tag restores the scope', () {
+      // The web saves the RAW JSON id (tags: [5]); the mobile's tag list
+      // is string-typed and the index keys the stringified id — the
+      // scope restores here even though the web's own strict `===`
+      // cannot match the mobile's string tag back (the one-way break of
+      // the same root cause, tracked separately).
+      final numeric = [
+        {
+          'id': 5,
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final scope = convResolver(numeric).resolve(tags: [5], categoryKey: '2');
+
+      expect(scope.quickHelpButtonId, '5');
+      expect(scope.serviceLabelsEn, ['Births']);
+    });
+
+    test(
+      'a web-saved title tag (a falsy-id card) restores as a sidebar tag',
+      () {
+        // The web saves the TITLE for a falsy-id card (serviceKey:
+        // `button.id || title`). Neither platform's restore matches a
+        // title to a button: the tag falls to the sidebar branch on both,
+        // and the unnamed-tag count refuses the follow-up on both.
+        final falsy = [
+          {
+            'id': 0,
+            'resolvedTitle': 'Civil registry help',
+            'category': '2',
+            'serviceLabels': ['Births'],
+          },
+        ];
+        final scope = convResolver(
+          falsy,
+        ).resolve(tags: ['Civil registry help'], categoryKey: '2');
+
+        expect(scope.quickHelpButtonId, isNull);
+        expect(scope.sidebarTagCount, 1);
+      },
+    );
+
     test('a button that names its category by ENGLISH resolves to the key', () {
       // The configuration names the category; the conversation's edge
       // speaks the hierarchy's own key — the one the backend writes as
@@ -1120,6 +1184,42 @@ void main() {
       expect(dedupeQuickHelpButtons([idless]), [idless]);
     });
 
+    test('a FALSY raw id dedupes nothing — the web keeps every such card', () {
+      // The web's load filter skips the dedupe for a falsy id
+      // (`if (!button.id) return true`): 0 and false are NO id there, so
+      // two id-0 cards stay two cards. Deduping on the stringified form
+      // would drop the second and give the platforms a different card
+      // count for the same file (#1244).
+      final zero = {
+        'id': 0,
+        'serviceLabels': ['Births'],
+      };
+      final zeroAgain = {
+        'id': 0,
+        'serviceLabels': ['No Such Service'],
+      };
+
+      expect(dedupeQuickHelpButtons([zero, zeroAgain]), [zero, zeroAgain]);
+    });
+
+    test('a numeric id dedupes by its string form', () {
+      // The PRESENCE rule tests the raw value (5 is truthy); the
+      // equality compares the string forms the tags carry.
+      final first = {
+        'id': 5,
+        'serviceLabels': ['Births'],
+      };
+      final second = {
+        'id': 5,
+        'serviceLabels': ['No Such Service'],
+      };
+
+      final unique = dedupeQuickHelpButtons([first, second]);
+
+      expect(unique, hasLength(1));
+      expect(unique.single, same(first));
+    });
+
     test('distinct ids are all kept', () {
       final a = {'id': 'a'};
       final b = {'id': 'b'};
@@ -1512,6 +1612,28 @@ void main() {
       expect(quickHelpButtonIdentity({'id': '', 'resolvedTitle': ''}), isNull);
       expect(quickHelpButtonIdentity(null), isNull);
     });
+
+    test('a FALSY raw id is no id — the title identifies, as on the web', () {
+      // The web's serviceKey rule (`button.id || title`) tests the RAW
+      // value's JavaScript truthiness BEFORE any stringification. A
+      // stringified-first read turns 0 into '0' — a truthy non-empty
+      // string — and the two platforms would then save DIFFERENT tags
+      // for the same card (#1244). A string '0' or a numeric 5 IS a
+      // real id (truthy raw values).
+      expect(
+        quickHelpButtonIdentity({'id': 0, 'resolvedTitle': 'Card'}),
+        'Card',
+      );
+      expect(
+        quickHelpButtonIdentity({'id': false, 'resolvedTitle': 'Card'}),
+        'Card',
+      );
+      expect(
+        quickHelpButtonIdentity({'id': '0', 'resolvedTitle': 'Card'}),
+        '0',
+      );
+      expect(quickHelpButtonIdentity({'id': 5, 'resolvedTitle': 'Card'}), '5');
+    });
   });
 
   /// The config-side parse of a Quick Help button — the shape the shipped
@@ -1541,6 +1663,19 @@ void main() {
         expect(parsed['iconAsset'], 'assets/config/quickhelp/just-chat.svg');
       },
     );
+
+    test('the id is kept RAW — the truthiness read precedes any string', () {
+      // The identity rule (the web's `id || title`) must see the JSON
+      // value the configuration wrote: a parse that stringifies first
+      // turns 0 into '0' and loses the falsiness the rule reads
+      // (#1244). The end-to-end half proves the REAL pipeline — parse
+      // then identity — carries the title the web carries for this
+      // card, not the stringified '0'.
+      final parsed = parseQuickHelpButton({...shippedButton, 'id': 0}, 'en');
+
+      expect(parsed['id'], 0);
+      expect(quickHelpButtonIdentity(parsed), 'Just Chat');
+    });
 
     test('a falsy value in the active locale falls through to English', () {
       final parsed = parseQuickHelpButton({

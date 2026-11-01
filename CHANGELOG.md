@@ -18,7 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+<<<<<<< HEAD
 - **The API documentation's Try-it-out no longer sends every request to a doubled `/api/api/...` path.** The API docs page served by the backend described its server address as ending in `/api` while every documented path already starts with `/api`, so executing a request from the page built URLs like `.../api/api/queries` and returned 404. The documented server address no longer carries the `/api` ending. A deployment setting `API_URL` (never documented, and set by no shipped configuration) must give the base address without the `/api` ending — a value ending in `/api` produced the same doubled URLs before this change. (#1222, !669)
+- **A Quick Help card whose JSON `id` is falsy (`0`, `false`) now carries the same conversation tag on mobile as on the web.** The web's identity rule (`button.id || title`) tests the raw value's truthiness, so a falsy id means the card is tagged by its **title**; the mobile parse stringified the id first, so `0` became the truthy string `'0'` and the two platforms saved different tags for the same card — a conversation saved on one could not be restored on the other, in both directions. The mobile now reads the id's truthiness from the raw JSON value (hand-edited configurations only; no shipped configuration declares such an id). **Behaviour change on upgrade:** conversations saved by a previous mobile build with a `'0'`/`'false'` tag now restore as an unnamed sidebar scope that refuses the follow-up visibly, instead of restoring the card's scope — the same verdict the web has always given that tag. (#1244, !672)
 
 - **A chat message longer than the whole translation budget no longer empties
   the retrieval query.** When a conversation's newest message alone exceeded

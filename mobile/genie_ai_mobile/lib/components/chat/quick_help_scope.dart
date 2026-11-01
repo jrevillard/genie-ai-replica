@@ -71,8 +71,8 @@ Map<String, dynamic> parseQuickHelpButton(
   return {
     // The id is kept RAW: the presence rule (quickHelpIdOf, the web's
     // `button.id || title`) reads the value's truthiness, which a
-    // stringified '0' would erase (#1244). Every read still goes
-    // through quickHelpFieldOf / quickHelpIdOf, which stringify.
+    // stringified '0' would erase. Every read still goes through
+    // quickHelpFieldOf / quickHelpIdOf, which stringify.
     'id': btn['id'],
     'category': btn['category']?.toString(),
     'serviceLabels': quickHelpServiceLabelsOf(btn),
@@ -462,10 +462,10 @@ String? quickHelpFieldOf(Map<String, dynamic> button, String key) =>
 /// web's own (`button.id || title`): the RAW value's JavaScript
 /// truthiness decides, read BEFORE any stringification — a falsy JSON
 /// id (`0`, `false`, a hand-edited configuration; none shipped) is no
-/// id, and its stringified `'0'` must not resurrect it (#1244). Every
-/// rule that decides whether an id EXISTS reads this one — the
-/// identity, the dedupe, the restore index — while the equality reads
-/// keep quickHelpFieldOf (a string compare, no truthiness).
+/// id, and its stringified `'0'` must not resurrect it. Every rule
+/// that decides whether an id EXISTS reads this one — the identity,
+/// the dedupe, the restore index — while the equality reads keep
+/// quickHelpFieldOf (a string compare, no truthiness).
 String? quickHelpIdOf(Map<String, dynamic>? button) {
   final raw = button?['id'];
   return configTruthy(raw) ? raw.toString() : null;

@@ -239,13 +239,14 @@ reason: torch==2.13.0 at dataprep/requirements-cpu.txt:5660, retriever:5503, rer
 status: done 2026-08-13
 resolution: genie-ai-overlay/retriever/requirements-cpu.txt:1, reranker:1, dataprep:1 — torch==2.13.0 consistent in all 3 CPU locks
 
-### DW-25: components/gov-chat-backend/.gitlab-ci.yml still carries the retired verify:dataprep-lock job against the deleted requirements.lock (root .gitlab-ci.yml is the active config; the backend copy is never
+### DW-25: components/gov-chat-backend/.gitlab-ci.yml still carries the retired verify:dataprep-lock job against the deleted requirements.lock (root .gitlab-ci.yml is the active config; the backend copy is never read by GitLab)
 origin: spec-deferred f908048420c5
 location: components/gov-chat-backend/.gitlab-ci.yml:2290
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: components/gov-chat-backend/.gitlab-ci.yml:2290-2337 references requirements.lock, dataprep/scripts/*, make lock-dataprep — all retired by 2.2 — but GitLab reads only the root .gitlab-ci.yml (no include of the backend copy), so it is dead config. The AC3/Verification grep is scoped to genie-ai-overlay/ and misses it. Pre-existing, surfaced by the retirement; a CI-hygiene pass should delete or sync it.
-status: open
+status: done 2026-11-01
+resolution: the whole backend pipeline copy deleted by issue #1266 (MR !677) — verified inert first (empty ci_config_path, no include/trigger anywhere); the verify:dataprep-lock job it cited had already been pruned from the copy by 087f69e71
 
 ### DW-26: dataprep's default DOCLING_DEVICE=cuda is unsupported by the CUDA-less python:3.11-slim image; a default-config ingest needs DOCLING_DEVICE=cpu set.
 origin: spec-deferred 809b6335b547

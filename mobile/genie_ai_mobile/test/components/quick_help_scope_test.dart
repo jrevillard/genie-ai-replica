@@ -481,6 +481,42 @@ void main() {
       },
     );
 
+    test(
+      'two categories sharing a key: the FIRST claims it even with an empty nameEN',
+      () {
+        // The EN-label index is FIRST-wins, full stop: a first entry
+        // whose nameEN is present-but-empty (a real missing translation)
+        // claims the key and leaves it unnameable — a later duplicate
+        // with a real nameEN does not take the key back. The display-name
+        // index shares the walk and the rule.
+        final duplicated = <dynamic>[
+          {'catKey': '2', 'nameEN': ''},
+          {'catKey': '2', 'nameEN': 'Second'},
+        ];
+        final resolver = QuickHelpScopeResolver(duplicated);
+
+        expect(resolver.categoryEnLabel('2'), isNull);
+      },
+    );
+
+    test(
+      'the display index: a later duplicate claims the key the empty first skipped',
+      () {
+        // The display indexes SKIP an entry with no display name, so a
+        // later duplicate CAN claim the key the first one left — the
+        // mirror image of the EN-label index's first-claim rule above.
+        // The wire stays positional; the display shows whatever name the
+        // tree can produce for the key.
+        final duplicated = <dynamic>[
+          {'catKey': '2', 'name': ''},
+          {'catKey': '2', 'name': 'Segundo'},
+        ];
+        final resolver = QuickHelpScopeResolver(duplicated);
+
+        expect(resolver.categoryDisplayName('2'), 'Segundo');
+      },
+    );
+
     test('a LEGACY category.<id> tag restores the category, not a refusal', () {
       // Conversations saved before the redesign carry 'category.<id>' —
       // the old restore's spelling for a category-only scope. The web
@@ -1824,6 +1860,143 @@ void main() {
         {'nameEN': 'Births', 'name': 'Nacimientos'},
       ];
       expect(localizedDisplayNamesOf(tree)['Births'], 'Nacimientos');
+    });
+  });
+
+  group('localizedCategoryDisplayNamesOf', () {
+    test('maps every category by its key to its display name', () {
+      final tree = <dynamic>[
+        {
+          'catKey': '2',
+          'name': 'Registro Civil',
+          'nameEN': 'Civil Registry',
+          'children': [
+            {'name': 'Nacimientos', 'nameEN': 'Births'},
+          ],
+        },
+      ];
+      expect(localizedCategoryDisplayNamesOf(tree), {'2': 'Registro Civil'});
+    });
+
+    test('the label field is the display name when the tree carries one', () {
+      final tree = <dynamic>[
+        {
+          'catKey': '2',
+          'label': 'Registro Civil',
+          'name': 'legacy-name',
+          'nameEN': 'Civil Registry',
+        },
+      ];
+      expect(localizedCategoryDisplayNamesOf(tree)['2'], 'Registro Civil');
+    });
+
+    test('a service row names no category', () {
+      // The tree's children are services: their `_key` is a service key,
+      // never a category key — a service must not be reachable through
+      // the category read.
+      final tree = <dynamic>[
+        {
+          'catKey': '2',
+          'name': 'Registro Civil',
+          'nameEN': 'Civil Registry',
+          'children': [
+            {'_key': 'svc-1', 'name': 'Nacimientos', 'nameEN': 'Births'},
+          ],
+        },
+      ];
+      expect(
+        localizedCategoryDisplayNamesOf(tree).containsKey('svc-1'),
+        isFalse,
+      );
+    });
+
+    test('the first category wins when two share a key', () {
+      final tree = <dynamic>[
+        {'catKey': '2', 'name': 'Primero', 'nameEN': 'Civil Registry'},
+        {'catKey': '2', 'name': 'Segundo', 'nameEN': 'Civil Registry'},
+      ];
+      expect(localizedCategoryDisplayNamesOf(tree)['2'], 'Primero');
+    });
+
+    test('a category with no display name is skipped', () {
+      final tree = <dynamic>[
+        {'catKey': '2', 'name': null},
+        {'catKey': '2'},
+      ];
+      expect(localizedCategoryDisplayNamesOf(tree), isEmpty);
+    });
+
+    test('a category with no key is skipped', () {
+      final tree = <dynamic>[
+        {'name': 'Sin clave'},
+        {'catKey': '', 'name': 'Sin clave'},
+      ];
+      expect(localizedCategoryDisplayNamesOf(tree), isEmpty);
+    });
+
+    test('a non-map entry is skipped', () {
+      final tree = <dynamic>[
+        'stray',
+        {'catKey': '2', 'name': 'Registro Civil'},
+      ];
+      expect(localizedCategoryDisplayNamesOf(tree)['2'], 'Registro Civil');
+    });
+  });
+
+  group('restoredScopeTitleFollowsLocale', () {
+    test('a restored scope with a category key follows the locale', () {
+      expect(
+        restoredScopeTitleFollowsLocale(
+          fromSelection: false,
+          activeIdentity: null,
+          categoryKey: '2',
+        ),
+        isTrue,
+      );
+    });
+
+    test('a live selection is the join rule, not this one', () {
+      expect(
+        restoredScopeTitleFollowsLocale(
+          fromSelection: true,
+          activeIdentity: null,
+          categoryKey: '2',
+        ),
+        isFalse,
+      );
+    });
+
+    test('a Quick Help scope is re-titled by the config, by id', () {
+      expect(
+        restoredScopeTitleFollowsLocale(
+          fromSelection: false,
+          activeIdentity: 'births-id',
+          categoryKey: '2',
+        ),
+        isFalse,
+      );
+    });
+
+    test('no category names nothing', () {
+      expect(
+        restoredScopeTitleFollowsLocale(
+          fromSelection: false,
+          activeIdentity: null,
+          categoryKey: null,
+        ),
+        isFalse,
+      );
+    });
+
+    test('an empty category key names nothing', () {
+      expect(
+        restoredScopeTitleFollowsLocale(
+          fromSelection: false,
+          activeIdentity: null,
+          categoryKey: '',
+        ),
+        isFalse,
+      );
     });
   });
 

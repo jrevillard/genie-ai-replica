@@ -409,6 +409,44 @@ String? sidebarScopeTitleFor(
   return names.join(', ');
 }
 
+/// The localized DISPLAY name of every CATEGORY the [tree] carries, by its
+/// category key — the identity a saved conversation's edge names the
+/// category by. The tree is the locale-localized hierarchy fetch (the same
+/// endpoint the sidebar panel renders): `label` is the localized display
+/// text, `name` its fallback. The first category wins when two share a
+/// key. The map feeds DISPLAY only — it never reaches the filter wire,
+/// which speaks the stored ENGLISH labels.
+///
+/// This is the catKey-keyed read beside [localizedDisplayNamesOf]'s
+/// ENGLISH-label one: a category can lack an ENGLISH translation (its
+/// `nameEN` is null and the label-keyed map skips it) while its key still
+/// addresses it, and the restored scope's title is re-named through the
+/// key, never through a name.
+Map<String, String> localizedCategoryDisplayNamesOf(List<dynamic> tree) =>
+    QuickHelpScopeResolver._indexByCatKey(tree, (entry) {
+      final display = entry['label'] ?? entry['name'];
+      return (display is String && display.isNotEmpty) ? display : null;
+    });
+
+/// Whether a RESTORED scope's context-bar title follows the locale.
+///
+/// A restored scope's title is the CATEGORY its conversation's edge names,
+/// and the ENGLISH hierarchy the scope was resolved against can only name
+/// it in English — the localized tree re-names it, by the category key the
+/// edge carries. A live selection names its join of service labels instead
+/// ([sidebarTitleFollowsLocale]), and an active BUTTON scope is re-titled
+/// from the configuration by its id — neither is this category read.
+bool restoredScopeTitleFollowsLocale({
+  required bool fromSelection,
+  required String? activeIdentity,
+  required String? categoryKey,
+}) {
+  return !fromSelection &&
+      activeIdentity == null &&
+      categoryKey != null &&
+      categoryKey.isNotEmpty;
+}
+
 /// The button's [key] as a string — ONE read of the id and the category,
 /// whatever shape the value carries: the parse normalizes them, a
 /// hand-built map need not, and a numeric id must degrade to its string
@@ -459,7 +497,7 @@ class QuickHelpScopeResolver {
       _categoryLabelsEn = _indexByCatKey(enTree, _enOf),
       _categoryNames = _indexByCatKey(enTree, (entry) {
         final name = entry['name'];
-        return (name is String && name.isNotEmpty) ? name : '';
+        return (name is String && name.isNotEmpty) ? name : null;
       });
 
   /// The scope state of a button whose hierarchy has not loaded yet: it
@@ -504,12 +542,25 @@ class QuickHelpScopeResolver {
     _categoryLabelsEn,
   );
 
-  /// Categories by key, FIRST-wins, each mapped by [valueOf]. The one
-  /// walk behind the two key indexes (the EN-label index and the
-  /// display-name index) — a skip rule added to one belongs to both.
+  /// Categories by key, first-claim, each mapped by [valueOf]; a null
+  /// [valueOf] result skips the entry instead of claiming the key. The
+  /// one walk behind the three key indexes (the EN-label index, the
+  /// display-name index, and the localized-display read). The walk owns
+  /// the KEY mechanics — extraction, the non-Map skip, first-claim — but
+  /// the VALUE rule is each index's own, and the two differ on purpose:
+  /// the EN-label index never skips a claimed entry ([_enOf] returns ''
+  /// for a present-but-empty nameEN, never null — wire ownership is
+  /// positional: the FIRST entry is the category, and its missing
+  /// translation leaves it unnameable; a later duplicate does not take
+  /// the key back), while the display indexes skip empty values — a
+  /// display the tree cannot produce must not claim the key and must
+  /// not blank a title that is already right. Both rules are pinned by
+  /// unit tests; a duplicate catKey can therefore name and address
+  /// different entries, which is the data error speaking, not the
+  /// indexes disagreeing.
   static Map<String, String> _indexByCatKey(
     List<dynamic> enTree,
-    String Function(Map entry) valueOf,
+    String? Function(Map entry) valueOf,
   ) {
     final byKey = <String, String>{};
     for (final entry in enTree) {
@@ -517,7 +568,9 @@ class QuickHelpScopeResolver {
       final key = entry['catKey']?.toString();
       if (key == null || key.isEmpty) continue;
       if (byKey.containsKey(key)) continue;
-      byKey[key] = valueOf(entry);
+      final value = valueOf(entry);
+      if (value == null) continue;
+      byKey[key] = value;
     }
     return byKey;
   }

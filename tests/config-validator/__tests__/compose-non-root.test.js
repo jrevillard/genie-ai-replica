@@ -654,6 +654,54 @@ describe('compose non-root contract (#1227)', () => {
     expect(validateComposeNonRoot(literalShort).violations).toEqual([]);
   });
 
+  test('mutations: block-scalar sources and parent-escape data segments', () => {
+    // A folded/literal block-scalar source (`source: >-`, value on the
+    // NEXT line) is unreachable for a line parser — the conservative
+    // unknown-location doctrine resolves it to the data dir so the bind
+    // still demands the opt-out instead of silently skipping the rule.
+    const blockScalar = [
+      'services:',
+      '  backend:',
+      '    user: "1000:1000"',
+      '    volumes:',
+      '      - type: bind',
+      '        source: >-',
+      '          ./data/database_backups',
+      '        target: /app/database_backups',
+      ''
+    ].join('\n');
+    const { violations: v1 } = validateComposeNonRoot(blockScalar);
+    expect(v1.some((v) => v.includes('backend') && v.includes('create_host_path'))).toBe(true);
+
+    const blockScalarOpted = blockScalar.replace(
+      '        target: /app/database_backups',
+      '        target: /app/database_backups\n        bind: {create_host_path: false}'
+    );
+    expect(validateComposeNonRoot(blockScalarOpted).violations).toEqual([]);
+
+    // a relative PARENT-ESCAPE with a /data/ segment is data-shaped —
+    // compose still root-creates the missing source (relative to the
+    // project dir's parent), so the long-syntax form demands the opt-out
+    // exactly like its short-syntax sibling
+    const parentEscape = [
+      'services:',
+      '  backend:',
+      '    user: "1000:1000"',
+      '    volumes:',
+      '      - type: bind',
+      '        source: ../shared/data/backups',
+      '        target: /app/backups',
+      ''
+    ].join('\n');
+    const { violations: v2 } = validateComposeNonRoot(parentEscape);
+    expect(v2.some((v) => v.includes('backend') && v.includes('sits under the data directory'))).toBe(true);
+
+    // a relative path WITHOUT a data segment and without a template stays
+    // out (pre-existing host-relative path, same doctrine as absolute)
+    const parentPlain = parentEscape.replace('../shared/data/backups', '../shared/backups');
+    expect(validateComposeNonRoot(parentPlain).violations).toEqual([]);
+  });
+
   test('mutations: a 6-space mode: after the deploy block is not deploy state', () => {
     // The deploy block's open state must not outlive its indentation: a
     // later 6-space mode:/restart_policy: under a DIFFERENT parent key

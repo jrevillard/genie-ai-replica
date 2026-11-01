@@ -10,12 +10,12 @@
 # the runtime gate prunes it from its sweep (not a bind source), and it
 # can be removed at will.
 # data_dir / deploy_dir come from group_vars; both plays run these with
-# the same variable surface. NOTE on privilege surfaces: the backup DETECT
-# task carries its OWN become_user: root (an unprivileged find exits
-# nonzero on a 0700 uid-1000 subdir — EACCES the chown cannot fix — which
-# would churn the handover 'changed' forever), and the handover tasks
-# escalate for the same reason. There is no unprivileged surface left in
-# this file by design.
+# the same variable surface. NOTE on privilege surfaces: every task here
+# escalates to root — an unprivileged find exits nonzero on a 0700
+# uid-1000 subdir (EACCES the chown cannot fix, which would churn the
+# handover 'changed' forever), and a foreign-uid chown is EPERM for the
+# play's unprivileged ansible_user. There is no unprivileged surface left
+# in this file by design.
 
 - name: Resolve the effective data directory (#1227)
   # env.j2 ships DATA_DIR VERBATIM when the inventory overrides data_dir
@@ -34,7 +34,7 @@
 
 - name: Create the backend backup directory as the backend uid (#1227)
   # Pinned to the backend uid AT CREATION: a fresh dir left
-  # ansible_user-owned would never pass the migration probe below, and
+  # ansible_user-owned would never pass the handover probe below, and
   # the uid-1000 backend would get EACCES on its own dumps. Escalate to
   # root — a foreign-uid chown (or a dir pre-existing root-owned from a
   # bare-docker root-era install) is EPERM for the play's unprivileged
@@ -48,48 +48,23 @@
     owner: "1000"
     group: "1000"
 
-- name: Detect non-backend-owned files in the backup directory
+- name: Hand the backup directory to the backend uid (#1227)
   # The probe matches EVERY uid != 1000, not just root: the manager play's
-  # "Fix ownership to ansible_user" recursions re-label the deploy payload
-  # around this import, so a uid-0-only probe would never fire on the
-  # manager path (dead code by pre-emption). This directory is the
-  # backend's dump target — the backend (uid 1000) must own every file in
-  # it, and anything else is either root-era or mis-owned. (The deploy
+  # payload-ownership pass (tasks/payload-ownership-pass.yml) re-labels the
+  # deploy payload around this import, so a uid-0-only probe would never
+  # fire on the manager path (dead code by pre-emption). This directory is
+  # the backend's dump target — the backend (uid 1000) must own every file
+  # in it, and anything else is either root-era or mis-owned. (The deploy
   # recursions exclude data/ entirely, so on converged deployments this
   # probe is empty and the handover skips — the tasks converge instead of
   # churning every deploy.)
-  # Escalated (root): an unprivileged probe exits nonzero on a 0700
-  # subdirectory the backend legitimately owns — EACCES the chown cannot
-  # fix — which would churn the handover 'changed' on every deploy with
-  # nothing to heal. Under root the only rc != 0 is a vanished path,
-  # guarded by the create task above.
-  become: true
-  become_user: root
-  ansible.builtin.command: >-
-    find "{{ _no_root_data_dir }}/database_backups" ! -uid 1000 -print -quit
-  register: _backup_misowned
-  failed_when: false
-  changed_when: false
-
-- name: Hand the backup directory to the backend uid (#1227)
-  # Targeted -exec chown touches exactly the mis-owned paths. Best-effort:
-  # a transient find/chown error (EIO mid-traversal, vanished path between
-  # probe and exec) must not abort the deploy play — whatever survived is
-  # flagged by the runtime gate on the next run.
-  become: true
-  become_user: root
-  ansible.builtin.command: >-
-    find "{{ _no_root_data_dir }}/database_backups" ! -uid 1000
-    -exec chown -h 1000:1000 {} +
-  register: _backup_heal
-  when: _backup_misowned.stdout | length > 0 or _backup_misowned.rc != 0
-  changed_when: _backup_heal.rc | default(0) == 0
-  failed_when: false
-
-- name: Warn if the backup handover did not complete
-  ansible.builtin.debug:
-    msg: >-
-      WARNING (#1227): the backup-dir handover failed (rc={{ _backup_heal.rc | default('n/a') }});
-      mis-owned paths remain under {{ _no_root_data_dir }}/database_backups —
-      the runtime gate will flag them.
-  when: _backup_heal.rc | default(0) != 0
+  # The probe/heal/warn skeleton itself lives ONCE in
+  # tasks/ownership-probe-heal.yml; only the commands differ here.
+  ansible.builtin.import_tasks: tasks/ownership-probe-heal.yml
+  vars:
+    _trio_probe_cmd: >-
+      find "{{ _no_root_data_dir }}/database_backups" ! -uid 1000 -print -quit
+    _trio_heal_cmd: >-
+      find "{{ _no_root_data_dir }}/database_backups" ! -uid 1000
+      -exec chown -h 1000:1000 {} +
+    _trio_label: backup-dir handover

@@ -217,13 +217,19 @@
     # the heal only runs when the probe found a mis-owned depth-1 child —
     # a converged tree reports ok instead of churning `changed` on every
     # deploy, and the change signal stays meaningful.
+    # The data tree is excluded UNCONDITIONALLY — an absolute data_dir can
+    # still live INSIDE deploy_dir (data_dir: /opt/genieai/data), and
+    # dropping the exclusion there would chown -R the whole tree (backend
+    # dump dir, huggingface caches) to ansible_user, transiently revoking
+    # the uid-1000 ownership the migration just handed over.
+    _fix_payload_data_path: "{{ ((deploy_dir ~ '/' ~ data_dir) if not (data_dir is match('/')) else data_dir) | regex_replace('/+$', '') | normpath }}"
     _fix_payload_probe_cmd: >-
       find "{{ deploy_dir }}" -mindepth 1 -maxdepth 1
-      {{ ('! -path "' ~ ((deploy_dir ~ '/' ~ data_dir) | regex_replace('/+$', '') | normpath) ~ '"') if not (data_dir is match('/')) else '' }}
+      ! -path "{{ _fix_payload_data_path }}"
       ! -uid {{ ansible_user_uid }} -print -quit
     _fix_payload_ownership_cmd: >-
       find "{{ deploy_dir }}" -mindepth 1 -maxdepth 1
-      {{ ('! -path "' ~ ((deploy_dir ~ '/' ~ data_dir) | regex_replace('/+$', '') | normpath) ~ '"') if not (data_dir is match('/')) else '' }}
+      ! -path "{{ _fix_payload_data_path }}"
       -exec chown -R -h {{ ansible_user }}:{{ ansible_user }} {} +
   tasks:
     # Images come from GitLab registry; only compose + configs needed on target.

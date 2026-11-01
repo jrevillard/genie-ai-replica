@@ -162,7 +162,10 @@ function validateComposeNonRoot(composeText) {
           // missing there is still created root-owned by the daemon.
           const templated = /\$\{?\w/.test(b.path);
           const absoluteDataPath = (resolved.startsWith('/') || resolved.startsWith('~/')) && (dataShaped || templated);
-          if (b.shortSyntax ? !(dataShaped || templated) : !underDataDir && !absoluteDataPath && !templated) {
+          const authoredLocation = templated || resolved.startsWith('/') || resolved.startsWith('~/');
+          if (
+            b.shortSyntax ? !(dataShaped || templated) : !(underDataDir || absoluteDataPath || templated || dataShaped)
+          ) {
             continue;
           }
           if (b.shortSyntax) {
@@ -173,7 +176,7 @@ function validateComposeNonRoot(composeText) {
                 : `${currentService}: host bind "${b.path}" sits under the data directory in short syntax, ` +
                     'which cannot carry `create_host_path: false` — use long syntax or a named volume'
             );
-          } else if (!b.createHostPathFalse && !underDataDir) {
+          } else if (!b.createHostPathFalse && authoredLocation && !underDataDir) {
             violations.push(
               `${currentService}: host bind "${b.path}" is a deployment-authored location (templated ` +
                 'or ~-rooted) without `create_host_path: false` — docker creates a missing source as root-owned'
@@ -614,7 +617,13 @@ function validateComposeNonRoot(composeText) {
         // source: can also be the entry's FIRST key (- source: X ...) —
         // same deferral as the 8-space spelling below
         const dashSrc = line.match(/^ {6,}-\s*source:\s*(?:"([^"]*)"|'([^']*)'|(\S+))/);
-        if (dashSrc && !entryTypeExplicit) deferredSource = dashSrc[1] ?? dashSrc[2] ?? dashSrc[3];
+        if (dashSrc && !entryTypeExplicit) {
+          const dashVal = dashSrc[1] ?? dashSrc[2] ?? dashSrc[3];
+          // block-scalar indicator → the value lives on the next line and
+          // is unreachable: same conservative './data' resolution as the
+          // 8-space spelling below
+          deferredSource = /^[>|](?:[+-]|\d|$)/.test(dashVal) ? './data' : dashVal;
+        }
         // no continue: the same line may be a short-syntax bind
       }
       // long syntax:
@@ -647,7 +656,14 @@ function validateComposeNonRoot(composeText) {
         continue;
       }
       const srcMatch = line.match(/^ {8,}source:\s*(?:"([^"]*)"|'([^']*)'|(\S+))\s*(?:#.*)?$/);
-      const srcVal = srcMatch ? (srcMatch[1] ?? srcMatch[2] ?? srcMatch[3]) : null;
+      let srcVal = srcMatch ? (srcMatch[1] ?? srcMatch[2] ?? srcMatch[3]) : null;
+      if (srcVal && /^[>|](?:[+-]|\d|$)/.test(srcVal)) {
+        // folded/literal block scalar (`source: >-`, value on the NEXT
+        // line): the value is unreachable for a line parser — resolve to
+        // the data dir conservatively, so the bind still demands the
+        // opt-out instead of silently skipping the rule
+        srcVal = './data';
+      }
       if (srcMatch) {
         if (entryTypeExplicit && entryType === 'volume') {
           // an EXPLICIT type: volume names a NAMED volume — not a host

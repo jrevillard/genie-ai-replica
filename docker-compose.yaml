@@ -130,12 +130,14 @@ x-chown-init: &chown-init
     - no-new-privileges:true
   logging: *fluent-logging
   image: busybox:1.38.0
-  # NO networks key: the sweep performs no network I/O, and an overlay
-  # attach is pure dependency cost (a failed/slow network create on a node
-  # surfaces as an 'init failed' that looks like a chown failure). On the
-  # swarm front-end a stack service joins ONLY the networks it declares —
-  # the init runs network-less; compose falls back to the project default
-  # network, which changes nothing for a chown-only container.
+  # NO networks key: the sweep performs no network I/O. Without a declared
+  # network the init attaches the platform DEFAULT (compose: the project's
+  # default network; stack deploy: the stack's default overlay) instead of
+  # PINNING the named genieai_network overlay — a slow or failed
+  # genieai_network create on a node can no longer surface as an init
+  # failure that looks like a chown failure. The default attach itself is
+  # unavoidable without front-end-specific specs and is irrelevant to a
+  # chown-only one-shot.
   # bounded self-heal on the compose front-end (deploy.restart_policy below
   # covers swarm): a transient init failure retries instead of stranding
   # the dependent services on a failed one-shot. The one-shot rule treats

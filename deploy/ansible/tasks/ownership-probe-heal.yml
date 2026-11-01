@@ -1,0 +1,39 @@
+---
+# ownership-probe-heal (#1227) — the ONE probe/heal/warn skeleton shared by
+# tasks/no-root-data-migration.yml (backup-dir handover) and
+# tasks/payload-ownership-pass.yml (deploy payload relabel). The behavioral
+# contract lives here exactly once: probe best-effort (failed_when: false),
+# heal gated on the freshest probe (non-empty stdout OR a probe error),
+# heal best-effort with honest changed_when, warn on failure. The callers
+# supply the three parameters:
+#
+#   _trio_probe_cmd — the probe command (find ... -print -quit shape)
+#   _trio_heal_cmd  — the targeted chown command
+#   _trio_label     — a noun for the WARNING message ("backup-dir handover",
+#                     "payload heal")
+
+- name: Detect mis-owned paths
+  become_user: root
+  ansible.builtin.command: "{{ _trio_probe_cmd }}"
+  register: _trio_probe
+  changed_when: false
+  failed_when: false
+
+- name: Heal the mis-owned paths (best-effort)
+  # A transient find/chown error (EIO mid-traversal, vanished path between
+  # probe and exec) must not abort the deploy play — whatever survived is
+  # flagged by the runtime gate, and the next deploy re-probes.
+  become_user: root
+  ansible.builtin.command: "{{ _trio_heal_cmd }}"
+  when: _trio_probe.stdout | length > 0 or _trio_probe.rc != 0
+  register: _trio_heal
+  changed_when: _trio_heal.rc | default(0) == 0
+  failed_when: false
+
+- name: Warn if the heal did not complete
+  ansible.builtin.debug:
+    msg: >-
+      WARNING (#1227): the {{ _trio_label }} failed (rc={{ _trio_heal.rc |
+      default('n/a') }}) — mis-owned paths remain; the next deploy
+      re-probes and the runtime gate will flag survivors.
+  when: _trio_heal.rc | default(0) != 0

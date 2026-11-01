@@ -2324,9 +2324,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
   });
 
   // The e2e stack pulls the keycloak-config candidate image whose build job
-  // bakes the realm (and the import entrypoint); if that build stops
-  // instantiating on the tree, a realm-only MR trains against a stale image
-  // and the probe asserts the wrong realm. The inline `paths: [...]` form is
+  // bakes the realm (and the import entrypoint); if a tree change stops
+  // instantiating the build, the train's candidate tag does not exist: the
+  // compose pull swallows the missing manifest (|| true) and `up --no-build`
+  // then fails hard — a red train whose cause (a missing tag, not a broken
+  // realm) is hard to attribute. The inline `paths: [...]` form is
   // opaque to the line parser, so pin the merge_request_event rule — the
   // branch that instantiates the job on merge trains — by adjacency: its
   // paths list sits immediately above the compare_to line. scan:keycloak-config

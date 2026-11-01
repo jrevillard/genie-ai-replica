@@ -43,7 +43,8 @@ echo "==> Generating OpenAPI spec from backend source..."
 # present or future — can reach the committed artifacts from the invoking
 # shell. Same backend sources always regenerate byte-identical artifacts.
 # Linux/macOS only: env -i strips what node.exe needs on Windows.
-(cd "$BACKEND_DIR" && env -i PATH="$PATH" HOME="${HOME:-/tmp}" API_URL=https://localhost PORT=3000 \
+(cd "$BACKEND_DIR" && env -i PATH="${PATH:-/usr/local/bin:/usr/bin:/bin}" HOME="${HOME:-/tmp}" \
+  API_URL=https://localhost \
   KEYCLOAK_URL=https://keycloak.example.com/auth KEYCLOAK_REALM=genie node -e "
 const assert = require('assert');
 const swaggerJsdoc = require('swagger-jsdoc');
@@ -56,12 +57,16 @@ const spec = swaggerJsdoc({
   definition: require('./swagger-definition'),
   apis: ['./routes/*.js']
 });
-// Pin-survival checks: a pin assignment dropped from the env -i line shows
-// up here as an 'undefined' interpolation. The envelope's URL construction
-// is asserted by the backend suite, not re-encoded here.
+// Sanity checks: a broken apis glob yields a spec with zero paths, and a
+// pin assignment dropped from the env -i line shows up as an 'undefined'
+// interpolation. The envelope's URL construction is asserted by the
+// backend suite, not re-encoded here.
+assert.ok(Object.keys(spec.paths ?? {}).length > 0,
+  'the generated spec has no paths — the apis glob matched nothing.');
 assert.ok((spec.servers ?? []).some((s) => s?.url === 'https://localhost'),
-  'no server entry carries the API_URL pin value — a pin assignment is'
-  + ' missing from the env -i line above.');
+  'no server entry carries the API_URL pin value — either a pin assignment'
+  + ' is missing from the env -i line above, or swagger-definition.js'
+  + ' changed how it builds the servers list.');
 const flow = spec.components?.securitySchemes?.KeycloakOAuth2?.flows?.authorizationCode;
 for (const [label, url] of [
   ['authorizationUrl', flow?.authorizationUrl],

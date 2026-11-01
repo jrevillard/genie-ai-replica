@@ -481,7 +481,7 @@ workflow:
         case "$ROPC_STATUS" in
           5[0-9][0-9]|429|408|425|000|"")
             echo "ROPC probe attempt ${i}/5: no usable answer from the token endpoint (HTTP ${ROPC_STATUS:-none})"
-            [ "$i" -lt 5 ] && sleep 5 ;;
+            { [ "$i" -lt 5 ] && sleep 5; } || true ;;
           *) break ;;
         esac
       done
@@ -521,6 +521,10 @@ workflow:
           fi
           ;;
         2[0-9][0-9]|3[0-9][0-9])
+          # Deliberately retained even though the bogus credentials make it
+          # unreachable today: a Keycloak that ever authenticates before the
+          # direct-grants gate lands here, and without this branch a minted
+          # token would be misreported as a transport failure.
           if [ "$ROPC_TOKEN" = "yes" ]; then
             echo "ERROR: genie realm ROPC posture drifted: token endpoint returned HTTP ${ROPC_STATUS} with an access token for a direct-access grant — directAccessGrantsEnabled must stay false on genie-app"
           else

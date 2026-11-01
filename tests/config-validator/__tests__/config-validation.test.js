@@ -2323,9 +2323,14 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // bakes the realm (and the import entrypoint); if that build stops
   // instantiating on the tree, a realm-only MR trains against a stale image
   // and the probe asserts the wrong realm. The build job's inline
-  // `paths: [...]` form is opaque to the line parser, so pin it textually.
-  test('build:keycloak-config still triggers on the keycloak tree', () => {
-    expect(sectionOf('build:keycloak-config')).toContain('"configs/keycloak/**/*"');
+  // `paths: [...]` form is opaque to the line parser, so pin it textually —
+  // and per rule branch: sectionOf concatenates them, so a single toContain
+  // stays green when only the merge_request_event rule (the branch that
+  // instantiates the build on trains) loses the glob. All three branches
+  // (merge_request_event, default branch, release) carry it deliberately.
+  test('build:keycloak-config still triggers on the keycloak tree in every rule branch', () => {
+    const count = (sectionOf('build:keycloak-config').match(/"configs\/keycloak\/\*\*\/\*"/g) || []).length;
+    expect(count).toBeGreaterThanOrEqual(3);
   });
 
   test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {

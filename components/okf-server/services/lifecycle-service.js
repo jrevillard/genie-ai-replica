@@ -935,15 +935,22 @@ async function transition(repoId, action, actor, opts = {}) {
       // was dead (and encoded a different predicate than the gate's).
       // Deletion kills the dead-arm mutant with it; the single-listing
       // property is owned by the state machine + the doc-repo's reuse.
+      // ROUND 25 (review 83373): the 4 identity fields were inlined TWICE
+      // (the bundles[] entry and the legacy single slot) — one literal, so
+      // a future field rename cannot drift between the two representations
+      // of one publish identity.
+      const bundleIdentity = {
+        file_id: bundle.file_id || null,
+        file_name: bundle.file_name,
+        bundle_version: bundle.bundle_version,
+        stored_at: bundle.stored_at
+      };
       await db.collection(REPOS).update(repoId, {
         lifecycle_state: spec.to,
         bundles: [
           ...prevBundles,
           {
-            file_id: bundle.file_id || null,
-            file_name: bundle.file_name,
-            bundle_version: bundle.bundle_version,
-            stored_at: bundle.stored_at,
+            ...bundleIdentity,
             ingest_status: null,
             concepts_indexed: 0,
             concepts_failed: 0,
@@ -952,12 +959,7 @@ async function transition(repoId, action, actor, opts = {}) {
         ],
         // Keep the legacy single-slot field populated too — the worker's
         // getBundleFileId + the ingest guard at :532 read repo.bundle.file_id.
-        bundle: {
-          file_id: bundle.file_id || null,
-          file_name: bundle.file_name,
-          bundle_version: bundle.bundle_version,
-          stored_at: bundle.stored_at
-        },
+        bundle: bundleIdentity,
         ingested_at: null, // the NEW version is not serving until ingested
         ingested_version: null,
         rag_drain_active: false, // the drain served its purpose — the mint guaranteed all-indexed

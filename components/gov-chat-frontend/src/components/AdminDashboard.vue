@@ -2173,15 +2173,17 @@ export default {
     okfGateTitle() {
       if (this.okfRepoGate.reasonKey) return this.translate(this.okfRepoGate.reasonKey, '');
       if (this.okfRepoGate.warnKey)
-        // ROUND 23 (review 82678): the .replace('{n}', …) form never rendered
-        // — translate's raw-lookup returns the locale string WITH {n} only
-        // when nothing interpolates it, but the compiled path (and the
-        // fixture's own i18n) resolves {n} as a NAMED slot and blanks it on
-        // empty params. Feed the count through the compiled path as the
-        // named param instead.
-        return this.translate(this.okfRepoGate.warnKey, '', {
-          n: String(this.okfRepoGate.servingCount)
-        });
+        // ROUND 25 CORRECTION (review 83379): round 23's named-param call
+        // REGRESSED this tooltip. There are TWO servingWarn keys — the
+        // import-dialog one (:2508, plain {n}) and this GATE leaf, stored
+        // BRACE-ESCAPED ({'{'}n{'}'}) in all 14 locales and pinned that way
+        // by localeConsistency's DYNAMIC_COMPILED_KEYS since round 16. On an
+        // escaped leaf the compiled path renders the LITERAL text {n} — so
+        // the original .replace form was correct all along, and the named
+        // param fills nothing (named interpolation never touches the
+        // escaped-literal rendering), leaking "{n}" in every locale. Back to
+        // .replace — one regime, the leaf's pinned contract unchanged.
+        return this.translate(this.okfRepoGate.warnKey, '').replace('{n}', String(this.okfRepoGate.servingCount));
       return '';
     }
   },

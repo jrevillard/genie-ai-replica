@@ -16,6 +16,7 @@ shipped patterns are conservative placeholders validated per deployment.
 import json
 import logging
 import os
+import re
 import threading
 
 from fastapi import FastAPI, HTTPException
@@ -104,6 +105,12 @@ def _load_national_id_overrides() -> dict[str, list[dict]]:
     # LIST of {name, regex, score} dicts — create_analyzer iterates
     # `Pattern(name=p["name"], ...)` and a dict-shaped or string-shaped
     # value raised TypeError/Value there, taking the worker down at import.
+    # Regex compile-check (round 25, review 83381): presidio's Pattern()
+    # stores the string uncompiled and `re` compiles at FIRST ANALYZE, so a
+    # shape-valid entry with an invalid regex ("([unclosed") produced
+    # re.error on EVERY scan (500 per scan → the fail-closed client blocked
+    # every publish gate) — without any import-time alarm. Compile here and
+    # drop the bad entry loudly, like every other bad shape.
     valid: dict[str, list[dict]] = {}
     for key, patterns in parsed.items():
         if not isinstance(patterns, list) or not all(
@@ -120,7 +127,33 @@ def _load_national_id_overrides() -> dict[str, list[dict]]:
                 flush=True,
             )
             continue
-        valid[key] = patterns
+        compiled: list[dict] = []
+        for p in patterns:
+            try:
+                re.compile(p["regex"])
+            except re.error as exc:
+                print(
+                    "CRITICAL: OKF_PII_NATIONAL_ID_PATTERNS["
+                    + str(key)
+                    + "] entry '"
+                    + str(p.get("name"))
+                    + "' carries an invalid regex ("
+                    + str(exc)
+                    + ") — dropping that entry and using the built-in "
+                    "national-ID registry for it.",
+                    flush=True,
+                )
+                continue
+            compiled.append(p)
+        if not compiled:
+            print(
+                "CRITICAL: OKF_PII_NATIONAL_ID_PATTERNS[" + str(key) + "] has no valid "
+                "entries left — ignoring that key and using the built-in "
+                "national-ID registry for it.",
+                flush=True,
+            )
+            continue
+        valid[key] = compiled
     return valid
 
 

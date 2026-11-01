@@ -2513,21 +2513,41 @@ describe('AdminDashboard', () => {
       });
     });
 
-    it('gate title renders the servingWarn text with the count substituted', async () => {
-      const wrapper = createAdminDashboardWrapper();
+    it('gate title renders the servingWarn count through a real vue-i18n instance (escaped leaf, .replace regime)', async () => {
+      // ROUND 25 CORRECTION (review 83379/83383): the previous pin stubbed
+      // translate with its own template + its own .replace — it mirrored
+      // NEITHER real path and could not see the round-23 regression. The
+      // real regime: the GATE leaf okf.docs.gate.servingWarn is stored
+      // BRACE-ESCAPED in the shipped catalogue (pinned by
+      // localeConsistency's DYNAMIC_COMPILED_KEYS), so the compiled path
+      // renders the LITERAL text {n} and the component's .replace fills it.
+      // Drive the REAL vue-i18n + REAL en.js leaf (the :1804 pattern) and
+      // assert the rendered title — a named-param call would leak a literal
+      // "{n}" and fail this test, as it did in the shipped regression.
+      const { createI18n } = require('vue-i18n');
+      const en = require('../../i18n/locales/en.js').default;
+      const i18n = createI18n({
+        legacy: true,
+        locale: 'en',
+        fallbackLocale: 'en',
+        messages: { en }
+      });
+      const wrapper = createAdminDashboardWrapper(
+        {},
+        {
+          $i18n: {
+            locale: 'en',
+            t: (...args) => i18n.global.t(...args)
+          }
+        }
+      );
       await wrapper.setData({
         documents: [doc('f1', 'Ingested')],
         selectedDocuments: ['f1']
       });
-      // ROUND 23 (review 82678): the count rides the NAMED-param path —
-      // translate(key, '', { n }) — because the compiled i18n path blanks
-      // {n} on empty params and a .replace on the already-blanked string
-      // found nothing. The stub mirrors the mixin's interpolateNamed.
-      wrapper.vm.translate = (key, fallback, named) => {
-        const out = key === 'okf.docs.gate.servingWarn' ? '{n} docs still serve' : key;
-        return out.replace('{n}', named && named.n !== undefined ? named.n : '{n}');
-      };
-      expect(wrapper.vm.okfGateTitle).toBe('1 docs still serve');
+      const title = wrapper.vm.okfGateTitle;
+      expect(title).toContain('1 selected document(s) still serve');
+      expect(title).not.toContain('{n}');
     });
 
     it('onCreateOkfRepoFromSelection maps the pick by file_id, never the Arango _key (#78640)', async () => {

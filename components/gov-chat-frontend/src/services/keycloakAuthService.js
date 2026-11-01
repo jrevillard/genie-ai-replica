@@ -117,21 +117,28 @@ function publishRenewedUser(user) {
   }
 }
 
+/** One guarded wipe of the publication — round 25 (review): the same 4-line
+ * try/removeItem was hand-rolled at three sites (logout + twice in
+ * clearStaleRenewPublication); kept-in-sync-by-discipline twins drift. */
+function clearRenewPublication() {
+  try {
+    window.localStorage.removeItem(RENEW_USER_KEY);
+  } catch {
+    /* best-effort */
+  }
+}
+
 function clearStaleRenewPublication() {
   try {
     const raw = window.localStorage.getItem(RENEW_USER_KEY);
     if (!raw) return;
     const entry = JSON.parse(raw);
     if (entry && typeof entry.at === 'number' && Date.now() - entry.at > RENEW_LEASE_TTL_MS) {
-      window.localStorage.removeItem(RENEW_USER_KEY);
+      clearRenewPublication();
     }
   } catch {
     /* a corrupt entry is worse than a stale one — drop it */
-    try {
-      window.localStorage.removeItem(RENEW_USER_KEY);
-    } catch {
-      /* nothing more to do */
-    }
+    clearRenewPublication();
   }
 }
 
@@ -217,6 +224,14 @@ async function renewViaWebLock(manager, startedAt) {
 /** FALLBACK for engines without Web Locks: the settle-window localStorage
  * lease (see acquireRenewLease) + the same publication handoff. */
 async function renewViaLease(manager, startedAt) {
+  // ROUND 25 (review, twin-miss): the 81377 ordering fix landed on the
+  // Web-Locks path only. The same scenario kills here: the holder finished
+  // and released → the lease is FREE → acquiring first succeeds immediately
+  // and skips the publication-consulting loop entirely → a fresh grant runs
+  // on this tab's rotated-away refresh token. Read the publication BEFORE
+  // the first lease claim, exactly like renewViaWebLock.
+  const adoptedFirst = readPublishedRenew(startedAt);
+  if (adoptedFirst) return adoptPublishedUser(manager, adoptedFirst);
   let held = await acquireRenewLease();
   while (!held) {
     if (Date.now() - startedAt > RENEW_LEASE_TTL_MS + RENEW_WAIT_POLL_MS) {
@@ -259,6 +274,21 @@ function wrapManagerSignin(manager) {
   return manager;
 }
 
+/** ROUND 25 (review): the guarded release of both subscription handles was a
+ * verbatim 8-line copy shared by initialize()'s re-init path and logout() —
+ * the same commit's reserve()/assertFree() fix (82698) documents why
+ * kept-in-sync-by-discipline twins drift. One helper, one call per site. */
+function releaseManagerEvents() {
+  if (unsubscribeUserLoaded) {
+    unsubscribeUserLoaded();
+    unsubscribeUserLoaded = null;
+  }
+  if (unsubscribeSilentRenewError) {
+    unsubscribeSilentRenewError();
+    unsubscribeSilentRenewError = null;
+  }
+}
+
 /**
  * Initialize the OIDC service — creates UserManager, checks for existing session,
  * and registers silent renew event listeners.
@@ -270,14 +300,7 @@ async function initialize() {
   // overwritten without being called, so every re-init leaked a full set of
   // addUserLoaded/addSilentRenewError listeners on a manager nothing else
   // references. Release them before replacing the manager.
-  if (unsubscribeUserLoaded) {
-    unsubscribeUserLoaded();
-    unsubscribeUserLoaded = null;
-  }
-  if (unsubscribeSilentRenewError) {
-    unsubscribeSilentRenewError();
-    unsubscribeSilentRenewError = null;
-  }
+  releaseManagerEvents();
   userManager = wrapManagerSignin(new UserManager(oidcConfig));
 
   // Bounded-renew state (round 17, #80353; reset widened round 18, #80469)
@@ -388,20 +411,8 @@ async function logout() {
   // The publication carries full minted tokens — a logout must not leave
   // one on disk (round 23 retention fix; the TTL cleanup misses a fresh
   // publication, which a logout is exactly the wrong place to keep).
-  try {
-    window.localStorage.removeItem(RENEW_USER_KEY);
-  } catch {
-    /* best-effort */
-  }
-  // Remove event listeners before clearing state
-  if (unsubscribeUserLoaded) {
-    unsubscribeUserLoaded();
-    unsubscribeUserLoaded = null;
-  }
-  if (unsubscribeSilentRenewError) {
-    unsubscribeSilentRenewError();
-    unsubscribeSilentRenewError = null;
-  }
+  clearRenewPublication();
+  releaseManagerEvents();
 
   const manager = getUserManager();
   // Capture id_token before removeUser() clears stored user —

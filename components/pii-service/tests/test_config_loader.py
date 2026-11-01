@@ -56,6 +56,54 @@ def test_valid_override_still_applies(monkeypatch):
         assert set(module.NATIONAL_ID_PATTERNS) >= _DEFAULT_KEYS
 
 
+def test_dict_shaped_value_degrades_with_alarm(monkeypatch, capfd):
+    # ROUND 25 (review 83387): the value-shape validation (81379) had no
+    # killing test — a dict-shaped VALUE (valid JSON, right key, hostile
+    # shape) passed all four earlier cases. Reverting the validation to a
+    # bare `return parsed` must fail HERE: the key degrades to the built-in
+    # registry and the CRITICAL alarm fires at import.
+    override = '{"XX_NATIONAL_ID": {"name": "xx", "regex": "1", "score": 0.4}}'
+    with _module_with_env(monkeypatch, override) as module:
+        assert "XX_NATIONAL_ID" not in module.NATIONAL_ID_PATTERNS
+        assert set(module.NATIONAL_ID_PATTERNS) >= _DEFAULT_KEYS
+        out = capfd.readouterr().out
+        assert "CRITICAL" in out
+        assert "XX_NATIONAL_ID" in out
+
+
+def test_invalid_regex_entry_dropped_with_alarm(monkeypatch, capfd):
+    # ROUND 25 (review 83381): a shape-valid entry carrying an uncompilable
+    # regex used to pass the loader and explode re.error at FIRST ANALYZE —
+    # 500 per scan through the fail-closed client. The loader must
+    # compile-check and drop the entry loudly at import. A VALID sibling
+    # entry in the same key survives.
+    override = (
+        '{"XX_NATIONAL_ID": ['
+        '{"name": "bad", "regex": "([unclosed", "score": 0.4},'
+        '{"name": "good", "regex": "\\\\d{4}", "score": 0.4}'
+        "]}"
+    )
+    with _module_with_env(monkeypatch, override) as module:
+        patterns = module.NATIONAL_ID_PATTERNS["XX_NATIONAL_ID"]
+        assert [p["name"] for p in patterns] == ["good"]
+        out = capfd.readouterr().out
+        assert "CRITICAL" in out
+        assert "invalid regex" in out
+
+
+def test_all_entries_invalid_drops_whole_key_with_alarm(monkeypatch, capfd):
+    # The degenerate sibling of the compile-check: every entry bad → the key
+    # must not survive as an EMPTY list (an empty recognizer pattern list is
+    # a silent no-op override) — the whole key degrades with the alarm.
+    override = '{"XX_NATIONAL_ID": [{"name": "bad", "regex": "([unclosed", "score": 0.4}]}'
+    with _module_with_env(monkeypatch, override) as module:
+        assert "XX_NATIONAL_ID" not in module.NATIONAL_ID_PATTERNS
+        assert set(module.NATIONAL_ID_PATTERNS) >= _DEFAULT_KEYS
+        out = capfd.readouterr().out
+        assert "CRITICAL" in out
+        assert "no valid entries" in out
+
+
 def test_defaults_registry_shape_is_untouched():
     # The score invariant the module's own docstring demands: every shipped
     # score >= DEFAULT_SCORE_THRESHOLD (0.35) or the recognizer never fires.

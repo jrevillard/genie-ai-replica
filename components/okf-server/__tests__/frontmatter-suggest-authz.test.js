@@ -24,16 +24,16 @@ describe('frontmatter/suggest routes carry per-repo authz (#80772, review 81272)
   test.each(['/repos/:id/frontmatter/suggest', '/repos/:id/frontmatter/suggest/jobs/:jobId'])(
     '%s is guarded by requireRepoScope(id, admin)',
     (routePath) => {
-      const escaped = routePath.replace(/\//g, '/');
-      expect(src).toMatch(new RegExp(`router\\.(?:post|get)\\('${escaped}', requireRepoScope\\('id', 'admin'\\)`));
+      // ROUND 25 (review 83374): `/` needs no escaping in a RegExp string
+      // body — the old replace(/\//g, '/') was a no-op dressed as escaping.
+      expect(src).toMatch(new RegExp(`router\\.(?:post|get)\\('${routePath}', requireRepoScope\\('id', 'admin'\\)`));
     }
   );
 
   test.each(['/repos/:id/frontmatter/suggest', '/repos/:id/frontmatter/suggest/jobs/:jobId'])(
     '%s has no global-admin spelling left',
     (routePath) => {
-      const escaped = routePath.replace(/\//g, '/');
-      expect(src).not.toMatch(new RegExp(`router\\.(?:post|get)\\('${escaped}', requireScope\\('admin'\\)`));
+      expect(src).not.toMatch(new RegExp(`router\\.(?:post|get)\\('${routePath}', requireScope\\('admin'\\)`));
     }
   );
 });

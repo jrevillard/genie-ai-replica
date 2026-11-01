@@ -472,19 +472,28 @@ workflow:
       # from posture verdicts — none of them masquerades as a posture answer.
       # Failure verdicts log the response body they saw, except the
       # token-mint drift case: its body IS the token, never logged.
+      ROPC_ANSWERED=""
       for i in 1 2 3 4 5; do
         rm -f /tmp/ropc-probe-body.json
+        ROPC_CURL_RC=0
         ROPC_STATUS=$(curl -sk --max-time 15 -o /tmp/ropc-probe-body.json -w "%{http_code}" -X POST \
           "${KC_URL}/realms/genie/protocol/openid-connect/token" \
           -d "client_id=genie-app" -d "grant_type=password" \
-          -d "username=ropc-probe-no-such-user" -d "password=ropc-probe-bogus-credentials") || true
+          -d "username=ropc-probe-no-such-user" -d "password=ropc-probe-bogus-credentials") || ROPC_CURL_RC=$?
         case "$ROPC_STATUS" in
-          5[0-9][0-9]|429|408|425|000|"")
-            echo "ROPC probe attempt ${i}/5: no usable answer from the token endpoint (HTTP ${ROPC_STATUS:-none})"
-            { [ "$i" -lt 5 ] && sleep 5; } || true ;;
-          *) break ;;
+          # A definitive status with a clean curl exit classifies immediately;
+          # a non-zero exit (timeout after headers, reset mid-body) means the
+          # answer was truncated — retry it like the other transport faults.
+          [234][0-9][0-9])
+            if [ "$ROPC_CURL_RC" -eq 0 ]; then ROPC_ANSWERED=1; break; fi ;;
         esac
+        echo "ROPC probe attempt ${i}/5: no usable answer from the token endpoint (HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC})"
+        { [ "$i" -lt 5 ] && sleep 5; } || true
       done
+      if [ -z "$ROPC_ANSWERED" ]; then
+        echo "ERROR: no usable answer from the genie token endpoint in 5 attempts (last HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC:-0}) — transport or gateway failure, not a posture result; last body: ${ROPC_BODY:-none}"
+        exit 1
+      fi
       ROPC_FIELDS=$(python3 -c "import sys,json; d=json.load(open('/tmp/ropc-probe-body.json')); print(d.get('error','') + '|' + ('yes' if d.get('access_token') else 'no'))" 2>/dev/null || true)
       ROPC_ERROR=${ROPC_FIELDS%|*}
       ROPC_TOKEN=${ROPC_FIELDS#*|}
@@ -501,7 +510,7 @@ workflow:
       }
       case "$ROPC_STATUS" in
         408|425)
-          echo "ERROR: the token endpoint timed out repeatedly (HTTP ${ROPC_STATUS} after 5 attempts) — not a posture verdict; check the Keycloak upstream health"
+          echo "ERROR: the token endpoint kept failing with transport-level HTTP ${ROPC_STATUS} — not a posture verdict; check the Keycloak upstream health"
           exit 1
           ;;
         429)
@@ -545,7 +554,7 @@ workflow:
           exit 1
           ;;
         *)
-          echo "ERROR: could not get a verdict from the genie token endpoint (HTTP ${ROPC_STATUS:-none}) — transport or gateway failure, not a posture result; last body: ${ROPC_BODY:-none}"
+          echo "ERROR: unexpected status from the genie token endpoint (HTTP ${ROPC_STATUS:-none}) — not a posture result; last body: ${ROPC_BODY:-none}"
           exit 1
           ;;
       esac

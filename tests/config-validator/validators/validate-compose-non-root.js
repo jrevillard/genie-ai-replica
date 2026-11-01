@@ -169,7 +169,12 @@ function validateComposeNonRoot(composeText) {
           const absoluteDataPath = (resolved.startsWith('/') || resolved.startsWith('~/')) && (dataShaped || templated);
           const authoredLocation = templated || resolved.startsWith('/') || resolved.startsWith('~/');
           if (
-            b.shortSyntax ? !(dataShaped || templated) : !(underDataDir || absoluteDataPath || templated || dataShaped)
+            // a literal HOME-ROOTED source (~/genie/x, no data segment) is
+            // deployment-authored too: whose home it lands in depends on who
+            // invokes compose, so no checkout can claim it pre-exists
+            b.shortSyntax
+              ? !(dataShaped || templated)
+              : !(underDataDir || absoluteDataPath || templated || dataShaped || resolved.startsWith('~/'))
           ) {
             continue;
           }
@@ -297,17 +302,23 @@ function validateComposeNonRoot(composeText) {
   // see the invariants it carries (cap_add, restart, restart_policy).
   const anchorDefaults = { capAdds: [], capDrops: [], restart: null, condition: null, maxAttempts: null, mode: null };
   {
-    let inAnchor = false;
+    let anchorName = null; // which extension anchor is being scanned
     let inAnchorPolicy = false;
     let anchorKey = null; // which 2-space key the current 4-space list belongs to
+    // The placement extension's deploy: is what the sequence-merged inits
+    // actually inherit (last map wins whole) — its policy needs its own
+    // record so its one-shot invariants can be policed directly.
+    const genieaiPolicy = { mode: null, condition: null, maxAttempts: null };
+    const policyOf = () => (anchorName === 'x-chown-init-genieai' ? genieaiPolicy : anchorDefaults);
     for (const line of lines) {
-      if (/^x-chown-init:/.test(line)) {
-        inAnchor = true;
+      const anchorDecl = line.match(/^\s*(x-chown-init(?:-genieai)?):\s*&/);
+      if (anchorDecl) {
+        anchorName = anchorDecl[1];
         continue;
       }
-      if (!inAnchor) continue;
+      if (!anchorName) continue;
       if (/^[a-z][\w-]*:\s*$/.test(line) && !line.startsWith(' ')) {
-        inAnchor = false;
+        anchorName = null;
         continue;
       }
       // Anchor cap lists are kept SEPARATE: `cap_add:` items are the
@@ -329,27 +340,55 @@ function validateComposeNonRoot(composeText) {
         continue;
       }
       const restart = line.match(/^ {2}restart:\s*['"]?([\w:-]+)['"]?\s*(?:#.*)?$/);
-      if (restart) anchorDefaults.restart = restart[1];
-      const anchorAttempts = line.match(/^ {6}max_attempts:\s*(\d+)\s*$/);
-      if (anchorAttempts) anchorDefaults.maxAttempts = anchorAttempts[1];
-      if (/^ {4}restart_policy:\s*(?:#.*)?$/.test(line)) {
+      if (restart && anchorName === 'x-chown-init') anchorDefaults.restart = restart[1];
+      const nested = anchorName === 'x-chown-init-genieai'; // policy lives under its deploy:
+      const anchorAttempts = line.match(nested ? /^ {8}max_attempts:\s*(\d+)\s*$/ : /^ {6}max_attempts:\s*(\d+)\s*$/);
+      if (anchorAttempts) policyOf().maxAttempts = anchorAttempts[1];
+      if (line.match(nested ? /^ {6}restart_policy:/ : /^ {4}restart_policy:/)) {
         inAnchorPolicy = true;
         continue;
       }
-      const anchorMode = line.match(/^ {4}mode:\s*['"]?(\w+)['"]?\s*(?:#.*)?$/);
+      const anchorMode = line.match(
+        nested ? /^ {6}mode:\s*['"]?(\w+)['"]?\s*(?:#.*)?$/ : /^ {4}mode:\s*['"]?(\w+)['"]?\s*(?:#.*)?$/
+      );
       if (anchorMode) {
-        anchorDefaults.mode = anchorMode[1];
+        policyOf().mode = anchorMode[1];
         continue;
       }
       if (inAnchorPolicy) {
-        if (!/^ {6}/.test(line)) {
+        if (!line.match(nested ? /^ {8}/ : /^ {6}/)) {
           inAnchorPolicy = false;
         } else {
-          const cond = line.match(/^ {6}condition:\s*['"]?([\w-]+)['"]?\s*(?:#.*)?$/);
-          if (cond) anchorDefaults.condition = cond[1];
+          const cond = line.match(
+            nested
+              ? /^ {8}condition:\s*['"]?([\w-]+)['"]?\s*(?:#.*)?$/
+              : /^ {6}condition:\s*['"]?([\w-]+)['"]?\s*(?:#.*)?$/
+          );
+          if (cond) policyOf().condition = cond[1];
           continue;
         }
       }
+    }
+    // Policing the placement extension's OWN policy: the sequence merge
+    // gives its deploy: whole to the four constrained inits, so a drift
+    // here (condition any, unbounded attempts, mode dropped) would turn
+    // them into unbounded root restart loops while the outer anchor's
+    // copy still looked pristine.
+    if (genieaiPolicy.mode !== null && genieaiPolicy.mode !== 'global') {
+      violations.push('x-chown-init-genieai: the merged placement anchor must keep deploy.mode: global');
+    }
+    if (genieaiPolicy.condition !== null && genieaiPolicy.condition !== 'on-failure') {
+      violations.push(
+        'x-chown-init-genieai: the merged placement anchor must keep restart_policy.condition: on-failure'
+      );
+    }
+    if (
+      genieaiPolicy.mode !== null &&
+      (genieaiPolicy.condition !== 'on-failure' || genieaiPolicy.maxAttempts === null)
+    ) {
+      violations.push(
+        'x-chown-init-genieai: the merged placement anchor must keep restart_policy.condition: on-failure with a max_attempts bound'
+      );
     }
   }
   let anchorMerged = false;

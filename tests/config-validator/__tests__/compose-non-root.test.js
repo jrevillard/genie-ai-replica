@@ -539,6 +539,47 @@ describe('compose non-root contract (#1227)', () => {
       'source: /srv/preexisting/backups'
     );
     expect(validateComposeNonRoot(literalHomePlain).violations).toEqual([]);
+
+    // a LITERAL home-rooted source with NO data segment is still
+    // deployment-authored: whose home it lands in depends on who invokes
+    // compose — no checkout can claim it pre-exists
+    const literalHomeNoData = templatedHome.replace(
+      'source: ${DATA_DIR:-~/genie}/database_backups',
+      'source: ~/genie/database_backups'
+    );
+    const { violations: vHome } = validateComposeNonRoot(literalHomeNoData);
+    expect(vHome.some((v) => v.includes('backend') && v.includes('deployment-authored'))).toBe(true);
+  });
+
+  test('mutations: the placement anchor carries the same one-shot policy', () => {
+    // The sequence merge gives x-chown-init-genieai's deploy: WHOLE to the
+    // four constrained inits — a drift in the extension anchor's own
+    // policy (condition flip, bound stripped, mode dropped) turns them
+    // into unbounded root restart loops while the OUTER anchor's copy
+    // still looks pristine. The extension anchor is policed directly.
+    const conditionFlip = composeText.replace(
+      '          - node.labels.genieai == true\n      restart_policy:\n        condition: on-failure',
+      '          - node.labels.genieai == true\n      restart_policy:\n        condition: any'
+    );
+    expect(conditionFlip).not.toBe(composeText);
+    const { violations: v1 } = validateComposeNonRoot(conditionFlip);
+    expect(v1.some((v) => v.includes('x-chown-init-genieai') && v.includes('condition: on-failure'))).toBe(true);
+
+    const attemptsStripped = composeText.replace(
+      '      restart_policy:\n        condition: on-failure\n        delay: 30s\n        max_attempts: 60\n\nservices:',
+      '      restart_policy:\n        condition: on-failure\n        delay: 30s\n\nservices:'
+    );
+    expect(attemptsStripped).not.toBe(composeText);
+    const { violations: v2 } = validateComposeNonRoot(attemptsStripped);
+    expect(v2.some((v) => v.includes('x-chown-init-genieai') && v.includes('max_attempts bound'))).toBe(true);
+
+    const modeFlip = composeText.replace(
+      '  x-chown-init-genieai: &chown-init-genieai\n    deploy:\n      mode: global',
+      '  x-chown-init-genieai: &chown-init-genieai\n    deploy:\n      mode: replicated'
+    );
+    expect(modeFlip).not.toBe(composeText);
+    const { violations: v3 } = validateComposeNonRoot(modeFlip);
+    expect(v3.some((v) => v.includes('x-chown-init-genieai') && v.includes('mode: global'))).toBe(true);
   });
 
   test('mutations: templated relative defaults and quoted sources with spaces', () => {

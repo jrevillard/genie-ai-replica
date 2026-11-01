@@ -28,10 +28,11 @@ test.describe('Admin route authorization', () => {
     // mount never fires the call, the test fails on the count, not on
     // tiles that render from their defaults.
     let healthCalls = 0;
+    let probe = null;
     await page.route('**/api/admin/system-health', async (route) => {
       healthCalls++;
       const response = await route.fetch();
-      expect(response.status()).toBe(200);
+      probe = { status: response.status(), body: await response.json().catch(() => ({})) };
       await route.fulfill({ response });
     });
 
@@ -42,7 +43,12 @@ test.describe('Admin route authorization', () => {
     // deployment-specific, the wiring is asserted in data-wiring.spec.js).
     await expect(page.locator('.stat-card .stat-value')).toHaveCount(4);
     await expect(page.locator('[data-test-id="nav-admin-button"]')).toBeEnabled();
+    // Assert the probe's outcome IN the test body: an expect inside a
+    // route handler only surfaces as an unhandled rejection and can
+    // outlive the test's await chain.
     expect(healthCalls).toBeGreaterThanOrEqual(1);
+    expect(probe).not.toBeNull();
+    expect(probe.status).toBe(200);
   });
 
   test('non-admin session is refused by the backend and the navbar', async ({ page }) => {
@@ -52,12 +58,11 @@ test.describe('Admin route authorization', () => {
     // must answer 403 FORBIDDEN (counter guards against a vacuous pass —
     // see the admin test).
     let healthCalls = 0;
+    let probe = null;
     await page.route('**/api/admin/system-health', async (route) => {
       healthCalls++;
       const response = await route.fetch();
-      expect(response.status()).toBe(403);
-      const body = await response.json();
-      expect(body.error).toBe('FORBIDDEN');
+      probe = { status: response.status(), body: await response.json().catch(() => ({})) };
       await route.fulfill({ response });
     });
 
@@ -69,6 +74,9 @@ test.describe('Admin route authorization', () => {
     // deliberately, not silently.
     await expect(page.locator('[data-test-id="admin-dashboard"]')).toBeVisible();
     expect(healthCalls).toBeGreaterThanOrEqual(1);
+    expect(probe).not.toBeNull();
+    expect(probe.status).toBe(403);
+    expect(probe.body.error).toBe('FORBIDDEN');
 
     // The navbar admin entry is disabled without the role — the visible
     // half of the refusal (the mobile twin carries its own anchor).

@@ -31,8 +31,10 @@ async function createUser(adminToken, realm, userData) {
     throw new Error(`Failed to create user ${username}: ${userRes.status} ${JSON.stringify(userRes.data)}`);
   }
 
-  // Get user ID from location header or search
-  const searchRes = await request('GET', `/auth/admin/realms/${realm}/users?username=${username}`, {
+  // Get user ID from location header or search. exact=true: ?username= is
+  // a prefix search otherwise — a stray testadmin2 would misdirect the
+  // role assignment to data[0].
+  const searchRes = await request('GET', `/auth/admin/realms/${realm}/users?username=${username}&exact=true`, {
     headers: { Authorization: `Bearer ${adminToken}` },
   });
 

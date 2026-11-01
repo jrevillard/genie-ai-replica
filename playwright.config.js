@@ -26,9 +26,9 @@ module.exports = defineConfig({
     ignoreHTTPSErrors: true,
     bypassCSP: true,
     actionTimeout: 15000,
-    // Container runtimes without the user-namespace sandbox (the local
-    // k3s-validation environment) cannot launch Chromium without this;
-    // no-op where the sandbox works.
+    // The flag disables Chromium's user-namespace sandbox unconditionally:
+    // required in container runtimes without it (the local k3s-validation
+    // environment), harmless-but-present where the sandbox would work.
     launchOptions: { args: ['--no-sandbox'] },
   },
   projects: [

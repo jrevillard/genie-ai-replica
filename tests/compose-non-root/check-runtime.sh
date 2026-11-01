@@ -218,13 +218,20 @@ if [ ! -d "$DATA_DIR" ]; then
   violations=$((violations + 1))
 else
   find_err=$(mktemp)
-  rootowned=$(find "$DATA_DIR" -mindepth 1 \( -path "$DATA_DIR/huggingface" -o -path "$DATA_DIR/logs" \) -prune -o -uid 0 -print 2>"$find_err")
+  find_out=$(mktemp)
+  find "$DATA_DIR" -mindepth 1 \( -path "$DATA_DIR/huggingface" -o -path "$DATA_DIR/logs" \) -prune -o -uid 0 -print >"$find_out" 2>"$find_err"
+  find_rc=$?
+  if [ $find_rc -ne 0 ]; then
+    echo "FIND FAILED in $DATA_DIR (rc=$find_rc — the sweep did not complete; the unchecked remainder is not a pass)"
+    violations=$((violations + 1))
+  fi
+  rootowned=$(cat "$find_out")
   if [ -s "$find_err" ]; then
     echo "FIND ERRORS while sweeping $DATA_DIR (untraversable paths are NOT checked):"
     sed 's/^/  /' "$find_err"
     violations=$((violations + 1))
   fi
-  rm -f "$find_err"
+  rm -f "$find_err" "$find_out"
   if [ -n "$rootowned" ]; then
     echo "ROOT-OWNED paths under $DATA_DIR:"
     echo "$rootowned" | sed 's/^/  /'

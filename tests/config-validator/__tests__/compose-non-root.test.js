@@ -551,6 +551,17 @@ describe('compose non-root contract (#1227)', () => {
     expect(vHome.some((v) => v.includes('backend') && v.includes('deployment-authored'))).toBe(true);
   });
 
+  test('mutations: flow-form cap lists on the base anchor keep the defaults', () => {
+    // A formatter reformat of the anchor's cap lists to flow style must
+    // not empty anchorDefaults — every merged init would false-red on
+    // the CHOWN/cap_drop invariants with zero behavioral change.
+    const flowCaps = composeText
+      .replace('  cap_drop:\n    - ALL\n  cap_add:\n', '  cap_drop: [ALL]\n  cap_add: [CHOWN, DAC_OVERRIDE]\n')
+      .replace(/    # CHOWN \(the chown itself\)[\s\S]*?- DAC_OVERRIDE\n/, '');
+    expect(flowCaps).not.toBe(composeText);
+    expect(validateComposeNonRoot(flowCaps).violations).toEqual([]);
+  });
+
   test('mutations: base-anchor policy deletion and anchored service keys', () => {
     // DELETING the base anchor's whole restart_policy block left
     // condition/maxAttempts null and the per-service checks treated null

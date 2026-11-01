@@ -27,7 +27,11 @@
   ansible.builtin.command: "{{ _trio_heal_cmd }}"
   when: _trio_probe.stdout | length > 0 or _trio_probe.rc != 0
   register: _trio_heal
-  changed_when: _trio_heal.rc | default(0) == 0
+  # changed_when: true (not rc==0): a PARTIAL heal (earlier chown batches
+  # applied, then rc!=0) mutated the tree — reporting unchanged there hid
+  # real host mutation behind a clean deploy summary. The task only runs
+  # behind a positive probe, so running = at least attempted mutation.
+  changed_when: true
   failed_when: false
 
 - name: Warn if the heal did not complete

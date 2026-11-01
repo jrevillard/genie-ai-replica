@@ -230,10 +230,12 @@
     # would flip the TLS key to ansible_user on every deploy — a permanent
     # probe hit, and a transient window where gid-101 nginx cannot read the
     # key.
+    # The probe is RECURSIVE (pruned, no -maxdepth): a heal that died
+    # midway left depth-1 dirs correct with root-owned DEEP paths a
+    # depth-1 probe could never re-detect.
     _fix_payload_probe_cmd: >-
-      find "{{ deploy_dir }}" -mindepth 1 -maxdepth 1
-      ! -path "{{ _fix_payload_data_path }}"
-      ! -name secrets
+      find "{{ deploy_dir }}" -mindepth 1
+      \( -path "{{ _fix_payload_data_path }}" -o -name secrets \) -prune -o
       ! -uid {{ ansible_user_uid }} -print -quit
     _fix_payload_ownership_cmd: >-
       find "{{ deploy_dir }}" -mindepth 1 -maxdepth 1
@@ -436,7 +438,8 @@
         state: directory
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
-        mode: '0755'
+        # NO mode: key — the operator's 0700/0750 hardening of the data
+        # dir must survive every deploy (ownership only, never widened).
 
     - name: Create required directories
       # huggingface resolves through data_dir_resolved (the ONE formula):

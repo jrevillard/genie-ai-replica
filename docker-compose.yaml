@@ -175,7 +175,12 @@ x-chown-init: &chown-init
       # service burned its whole restart budget. Same upgrade-race sizing
       # as the compose restart above: the old root-era container writes
       # into the volume while the init sweeps, and an exhausted task is
-      # never re-run by swarm.
+      # never re-run by swarm. HONEST LIMIT: on a continuously-written
+      # volume (victorialogs ingest, otel-queue) the old container only
+      # stops AFTER the init completes — a busy ingest can keep the
+      # verify tripping. If the budget exhausts, quiesce the writer and
+      # retry: `docker compose stop victorialogs otel-collector` (or
+      # `docker service update --force <stack>_<init>` on swarm).
       condition: on-failure
       delay: 30s
       max_attempts: 60

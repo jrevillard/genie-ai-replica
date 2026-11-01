@@ -335,8 +335,25 @@ function validateComposeNonRoot(composeText) {
       // capabilities the anchor GRANTS; `cap_drop: [ALL]` items feed the
       // capDrops invariant (an ALL that leaked into capAdds would poison
       // the CHOWN membership check).
-      if (/^ {2}[\w-]+:\s*(\[.*\]\s*)?(?:#.*)?$/.test(line)) {
-        anchorKey = line.match(/^ {2}([\w-]+):/)[1];
+      const anchorKeyLine = line.match(/^ {2}([\w-]+):\s*(?:\[([^\]]*)\]\s*)?(?:#.*)?$/);
+      if (anchorKeyLine) {
+        anchorKey = anchorKeyLine[1];
+        // flow-form cap lists on the anchor: the same spelling the
+        // service-level parser accepts — route the bracket payload to
+        // the right defaults list
+        if (anchorKeyLine[2] !== undefined) {
+          const target =
+            anchorKey === 'cap_add'
+              ? anchorDefaults.capAdds
+              : anchorKey === 'cap_drop'
+                ? anchorDefaults.capDrops
+                : null;
+          if (target) {
+            for (const c of anchorKeyLine[2].split(',')) {
+              if (c.trim()) target.push(c.trim());
+            }
+          }
+        }
         continue;
       }
       const cap = anchorKey === 'cap_add' ? line.match(/^ {4}-\s*([A-Z_]+)\s*(?:#.*)?$/) : null;

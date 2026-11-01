@@ -393,10 +393,13 @@ workflow:
       KC_PWD="${KEYCLOAK_ADMIN_PASSWORD}"
       ADMIN_TOKEN=""
       CLIENT_FOUND=""
+      TOKEN_STATUS=""
       for i in $(seq 1 90); do
         if [ -z "$ADMIN_TOKEN" ]; then
-          ADMIN_TOKEN=$(curl -sk -X POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
-            -d "client_id=admin-cli" -d "username=admin" -d "password=${KC_PWD}" -d "grant_type=password" \
+          TOKEN_RESP=$(curl -sk -w '\n%{http_code}' -X POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
+            -d "client_id=admin-cli" -d "username=admin" -d "password=${KC_PWD}" -d "grant_type=password" || true)
+          TOKEN_STATUS=$(printf '%s' "$TOKEN_RESP" | tail -n1)
+          ADMIN_TOKEN=$(printf '%s' "$TOKEN_RESP" | sed '$d' \
             | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('access_token',''))" 2>/dev/null)
         fi
         if [ -n "$ADMIN_TOKEN" ]; then
@@ -408,9 +411,18 @@ workflow:
           echo "Keycloak ready (iteration ${i}/90) — genie-app client visible"
           break
         fi
-        echo "Waiting for Keycloak via nginx/Kong... ($i/90)"
+        if [ -n "$ADMIN_TOKEN" ]; then
+          echo "Waiting for Keycloak via nginx/Kong... ($i/90)"
+        else
+          echo "Waiting for Keycloak via nginx/Kong... ($i/90) — admin token not obtained (HTTP ${TOKEN_STATUS:-none})"
+        fi
         sleep 2
       done
+      if [ -z "$ADMIN_TOKEN" ]; then
+        echo "ERROR: master admin token never obtained via nginx/Kong after 180s (last token call: HTTP ${TOKEN_STATUS:-none})."
+        echo "This is a token-acquisition failure, not a genie-app client problem — check KEYCLOAK_ADMIN_PASSWORD and master-realm reachability."
+        exit 1
+      fi
       if [ -z "$CLIENT_FOUND" ]; then
         echo "ERROR: genie-app client not found via nginx/Kong after 180s"
         exit 1

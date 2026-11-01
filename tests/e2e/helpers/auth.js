@@ -84,6 +84,11 @@ async function getAdminToken(adminPassword) {
   return res.data.access_token;
 }
 
+// Remediation hint shared by the two getUserToken guards below.
+const ROPC_REALM_HINT =
+  'pass { realm: <test-realm> } for a test-only realm provisioned with ' +
+  'enableDirectAccessGrants';
+
 /**
  * Get a user token via ROPC (Resource Owner Password Credentials).
  *
@@ -94,30 +99,23 @@ async function getAdminToken(adminPassword) {
  * @param {string} username - Keycloak username
  * @param {string} password - User password
  * @param {object} [options] - Optional overrides
- * @param {string} options.realm - Keycloak realm; REQUIRED and must be a
- *        ROPC-enabled test realm — a missing realm or the primary `genie`
- *        realm throws immediately (see the guards below)
+ * @param {string} options.realm - Keycloak realm (REQUIRED, ROPC-enabled)
  * @param {string} [options.clientId='genie-app'] - Keycloak client ID
  * @returns {Promise<string>} Access token string
  */
 async function getUserToken(username, password, options = {}) {
   const realm = options.realm;
-  const clientId = options.clientId || 'genie-app';
 
   if (!realm) {
-    throw new Error(
-      'getUserToken: realm is required — pass { realm: <test-realm> } ' +
-        'for a test-only realm provisioned with enableDirectAccessGrants'
-    );
+    throw new Error(`getUserToken: realm is required — ${ROPC_REALM_HINT}`);
   }
   if (realm === 'genie') {
     throw new Error(
-      "getUserToken: realm 'genie' refuses ROPC by design — mint a " +
-        'primary-realm token with getSessionTokenViaUI, or pass ' +
-        '{ realm: <test-realm> } for a test-only realm provisioned with ' +
-        'enableDirectAccessGrants'
+      `getUserToken: realm 'genie' refuses ROPC by design — mint a ` +
+        `primary-realm token with getSessionTokenViaUI, or ${ROPC_REALM_HINT}`
     );
   }
+  const clientId = options.clientId || 'genie-app';
 
   const body = new URLSearchParams({
     client_id: clientId,

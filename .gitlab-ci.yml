@@ -459,14 +459,15 @@ workflow:
       else
         echo "WARNING: Could not assign admin role (admin role not found). Document tests may fail."
       fi
-      # The committed realm refuses direct access grants — assert it. Keycloak
-      # answers unauthorized_client BEFORE credential validation when the
-      # client has directAccessGrantsEnabled: false, so a minted token means
-      # the posture drifted; unsupported_grant_type counts as a refusal too
-      # (the grant is unusable either way). Transport failures, 5xx and 429
-      # retry; transport, gateway and rate-limit verdicts stay distinct from
-      # posture verdicts — none of them masquerades as a posture answer, and
-      # every non-verdict failure logs the response body it saw.
+      # The realm's web client must refuse direct access grants — assert it
+      # for genie-app. Keycloak answers unauthorized_client BEFORE credential
+      # validation when directAccessGrantsEnabled is false, so a minted token
+      # means the posture drifted; unsupported_grant_type counts as a refusal
+      # too (the grant is unusable either way). Transport failures, 5xx and
+      # 429 retry; transport, gateway and rate-limit verdicts stay distinct
+      # from posture verdicts — none of them masquerades as a posture answer.
+      # Failure verdicts log the response body they saw, except the
+      # token-mint drift case: its body IS the token, never logged.
       for i in 1 2 3 4 5; do
         ROPC_STATUS=$(curl -sk --max-time 15 -o /tmp/ropc-probe-body.json -w "%{http_code}" -X POST \
           "${KC_URL}/realms/genie/protocol/openid-connect/token" \
@@ -496,11 +497,11 @@ workflow:
         4[0-9][0-9])
           if [ "$ROPC_ERROR" = "unauthorized_client" ] || [ "$ROPC_ERROR" = "unsupported_grant_type" ]; then
             # No exit here: GitLab concatenates the script items into one
-            # shell, so exiting on the healthy path would end the whole job
-            # "successfully" with zero tests run. Fall through to the suites.
+            # shell, so ANY exit would skip the suites — and an exit 0 would
+            # end the job green with zero tests run. Fall through instead.
             echo "ROPC refusal verified: genie-app rejects direct access grants (HTTP ${ROPC_STATUS} ${ROPC_ERROR})"
           elif [ "$ROPC_ERROR" = "invalid_grant" ]; then
-            echo "ERROR: genie realm ROPC posture drifted (HTTP ${ROPC_STATUS}, error 'invalid_grant') — credential validation only runs when the direct-access grant was accepted; directAccessGrantsEnabled must stay false on genie-app"
+            echo "ERROR: genie realm ROPC posture drifted (HTTP ${ROPC_STATUS}, error 'invalid_grant') — credential validation only runs when the direct-access grant was accepted; directAccessGrantsEnabled must stay false on genie-app; body: ${ROPC_BODY:-none}"
             exit 1
           elif [ -n "$ROPC_ERROR" ]; then
             echo "ERROR: unexpected error '${ROPC_ERROR}' from the genie token endpoint (HTTP ${ROPC_STATUS}) — not a recognized refusal verdict; body: ${ROPC_BODY:-none}"
@@ -518,7 +519,7 @@ workflow:
           exit 1
           ;;
         *)
-          echo "ERROR: could not get a verdict from the genie token endpoint after 5 attempts (HTTP ${ROPC_STATUS:-none}) — transport or gateway failure, not a posture result"
+          echo "ERROR: could not get a verdict from the genie token endpoint after 5 attempts (HTTP ${ROPC_STATUS:-none}) — transport or gateway failure, not a posture result; last body: ${ROPC_BODY:-none}"
           exit 1
           ;;
       esac

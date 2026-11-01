@@ -82,16 +82,12 @@ void main() {
     addTearDown(tester.view.reset);
   }
 
-  Future<void> pumpChat(WidgetTester tester, _TreeMockClient mock) {
-    return pumpChatBot(tester, mock);
-  }
-
   testWidgets(
     'a broken card leaves the grid and presents its diagnosis with real height',
     (tester) async {
       usePhoneSurface(tester);
       mockChatbotConfigAsset(tester, mixedConfig);
-      await pumpChat(tester, _TreeMockClient(tree));
+      await pumpChatBot(tester, _TreeMockClient(tree));
 
       // The title-missing card is broken: its caption names the config
       // defect. The healthy card is not broken and carries no caption.
@@ -135,7 +131,7 @@ void main() {
       mockChatbotConfigAsset(tester, pairConfig);
       // A tree the fetch refuses: every scope is unverifiable, every
       // card broken.
-      await pumpChat(tester, _TreeMockClient(tree, categoriesStatus: 500));
+      await pumpChatBot(tester, _TreeMockClient(tree, categoriesStatus: 500));
 
       final caption = find.textContaining('hierarchy could not be loaded');
       expect(caption, findsNWidgets(2));
@@ -163,7 +159,7 @@ void main() {
       // fontScale = fontSize / 50 → 100 renders text at 2.0×.
       ThemeManager().setFontSize(100.0);
       mockChatbotConfigAsset(tester, pairConfig);
-      await pumpChat(tester, _TreeMockClient(tree, categoriesStatus: 500));
+      await pumpChatBot(tester, _TreeMockClient(tree, categoriesStatus: 500));
 
       final caption = find.textContaining('hierarchy could not be loaded');
       expect(caption, findsNWidgets(2));
@@ -186,7 +182,7 @@ void main() {
     // throw a RenderFlex overflow.
     ThemeManager().setFontSize(150.0);
     mockChatbotConfigAsset(tester, singleConfig);
-    await pumpChat(tester, _TreeMockClient(tree));
+    await pumpChatBot(tester, _TreeMockClient(tree));
 
     // The build survived: no overflow exception surfaced.
     expect(tester.takeException(), isNull);

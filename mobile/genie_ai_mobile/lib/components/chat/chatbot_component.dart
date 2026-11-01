@@ -1534,6 +1534,26 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     );
   }
 
+  /// The container a Quick Help card renders in — the tile's and the
+  /// broken row's shared chrome, differing only in border colour.
+  Widget _quickHelpCardShell({
+    required Color borderColor,
+    required AppTokens tokens,
+    EdgeInsetsGeometry? margin,
+    required Widget child,
+  }) {
+    return Container(
+      margin: margin,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        borderRadius: BorderRadius.circular(DsRadii.lg),
+        border: Border.all(color: borderColor),
+      ),
+      child: child,
+    );
+  }
+
   /// The full-width row a BROKEN Quick Help card renders as, above the
   /// healthy grid: the card's diagnosis at natural height. A broken
   /// card cannot be used, so the row carries no gesture; its border
@@ -1545,15 +1565,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     required ThemeData theme,
     required AppTokens tokens,
   }) {
-    final String translatedTitle = quickHelpTitleOf(button) ?? '';
-    return Container(
+    return _quickHelpCardShell(
+      borderColor: tokens.danger,
       margin: const EdgeInsets.only(bottom: quickHelpGridSpacing),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: tokens.surface,
-        borderRadius: BorderRadius.circular(DsRadii.lg),
-        border: Border.all(color: tokens.danger),
-      ),
+      tokens: tokens,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1561,18 +1576,21 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           _quickHelpCardHeader(
             broken: true,
             iconAsset: button['iconAsset']?.toString() ?? '',
-            title: translatedTitle,
+            title: quickHelpTitleOf(button) ?? '',
             theme: theme,
             tokens: tokens,
           ),
-          // No line cap: the row's height follows the text, so the
-          // diagnosis stays whole where the fixed-aspect tile clipped
-          // it mid-glyph — at any font scale.
+          // The caption's conditions are the broken verdict's OWN
+          // predicates (quickHelpTitleMissing, quickHelpScopeBroken) —
+          // a refusal the verdict gains cannot leave this caption
+          // silent. No line cap: the row's height follows the text,
+          // so the diagnosis stays whole where the fixed-aspect tile
+          // clipped it mid-glyph — at any font scale.
           Text(
             [
-              if (translatedTitle.isEmpty) tr('chatbot.quickHelpTitleMissing'),
-              if (scope['broken'] as bool? ?? false)
-                _quickHelpErrorCaption(scope),
+              if (quickHelpTitleMissing(button))
+                tr('chatbot.quickHelpTitleMissing'),
+              if (quickHelpScopeBroken(scope)) _quickHelpErrorCaption(scope),
             ].join(' '),
             style: theme.textTheme.bodySmall?.copyWith(
               fontSize: tokens.textXs,
@@ -2512,22 +2530,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                         // ratio gives its diagnosis caption a box
                         // smaller than one line of text. The healthy
                         // cards keep the compact grid.
-                        final brokenCards =
-                            <(Map<String, dynamic>, Map<String, dynamic>)>[];
-                        final healthyButtons = <Map<String, dynamic>>[];
-                        for (final button in _quickHelpButtons) {
-                          final scope = _treeUnavailable
+                        final (:broken, :healthy) = quickHelpPartitionButtons(
+                          _quickHelpButtons,
+                          (button) => _treeUnavailable
                               ? QuickHelpScopeResolver.unavailableScopeFor(
                                   button,
                                 )
                               : (_scopeResolver?.stateFor(button) ??
-                                    QuickHelpScopeResolver.pending);
-                          if (quickHelpCardBroken(button, scope)) {
-                            brokenCards.add((button, scope));
-                          } else {
-                            healthyButtons.add(button);
-                          }
-                        }
+                                    QuickHelpScopeResolver.pending),
+                        );
 
                         // ONE scroll view for rows and grid: an outage
                         // breaks EVERY card, and a column of full-width
@@ -2537,7 +2548,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              for (final (button, scope) in brokenCards)
+                              for (final (button, scope) in broken)
                                 _quickHelpBrokenCard(
                                   button: button,
                                   scope: scope,
@@ -2554,9 +2565,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                       mainAxisSpacing: quickHelpGridSpacing,
                                       crossAxisSpacing: quickHelpGridSpacing,
                                     ),
-                                itemCount: healthyButtons.length,
+                                itemCount: healthy.length,
                                 itemBuilder: (context, index) {
-                                  final button = healthyButtons[index];
+                                  final button = healthy[index];
                                   final String translatedTitle =
                                       quickHelpTitleOf(button) ?? '';
                                   final String iconAsset =
@@ -2569,20 +2580,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                         DsRadii.lg,
                                       ),
                                       onTap: () => _quickHelpPressed(button),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 8,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: tokens.surface,
-                                          borderRadius: BorderRadius.circular(
-                                            DsRadii.lg,
-                                          ),
-                                          border: Border.all(
-                                            color: tokens.borderLight,
-                                          ),
-                                        ),
+                                      child: _quickHelpCardShell(
+                                        borderColor: tokens.borderLight,
+                                        tokens: tokens,
                                         child: Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,

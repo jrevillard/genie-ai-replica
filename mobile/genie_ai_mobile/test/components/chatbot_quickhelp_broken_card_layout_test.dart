@@ -1,20 +1,11 @@
-import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
-import 'package:genie_ai_mobile/providers/api_providers.dart';
-import 'package:genie_ai_mobile/services/fallback_localizations.dart';
-import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:http/http.dart' as http;
-import 'package:openapi/api.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../helpers/theme_helper.dart';
+import '../helpers/chatbot_harness.dart';
 
 // The LAYOUT of the Quick Help failure presentation (issue #1224). The
 // grid tile's height is the delegate's childAspectRatio (default 3.5 —
@@ -33,20 +24,9 @@ import '../helpers/theme_helper.dart';
 // themes are verified by a human on a device — the mobile Visual
 // Fidelity rule; no widget harness asserts them here.
 void main() {
-  final tree = <dynamic>[
-    {
-      'catKey': '2',
-      'name': 'Civil Registry',
-      'nameEN': 'Civil Registry',
-      'children': [
-        {'_key': 'svc-1', 'name': 'Births', 'nameEN': 'Births'},
-      ],
-    },
-  ];
-
-  // One healthy card: an id'd scoped card whose title resolves under
-  // every scenario's locale. A second with a DIFFERENT id — the load
-  // dedupes on the id, so two same-id cards are one card.
+  // The healthy cards: id'd scoped cards whose titles resolve under
+  // every scenario's locale. DISTINCT ids — the load dedupes on the
+  // id, so two same-id cards are one card.
   final healthyCard = <String, dynamic>{
     'id': 'births-id',
     'title': {'en': 'Births Card'},
@@ -71,79 +51,28 @@ void main() {
     'serviceLabels': ['Births'],
   };
 
-  setUp(() {
-    resetThemeManager();
-  });
-
-  tearDown(() {
-    // The font scale is a singleton read (tokens.textXs) — a test that
-    // raised it must not name the next test's mount.
-    resetThemeManager();
-    // The locale is a singleton: a test that switched it must not name
-    // the next test's mount.
-    I18nService().changeLanguage('en');
-    // The asset mock must not outlive its test — neither the handler
-    // (a later test would read the mutated config through it) nor the
-    // bundle's CACHE of the mutated bytes (a later test reading the
-    // real asset would get a cache hit serving them).
-    TestWidgetsFlutterBinding.instance.defaultBinaryMessenger
-        .setMockMessageHandler('flutter/assets', null);
-    rootBundle.evict('assets/config/genie-ai-config.json');
-  });
-
-  // The REAL bundled configuration (read OUTSIDE the widget test's fake
-  // async — an asset load awaited inside testWidgets never completes),
-  // with the buttons replaced by the cards each scenario needs.
-  // Encoded ONCE per scenario: the mock serves the same bytes for every
-  // request.
-  Future<Uint8List> configWithButtons(
-    List<Map<String, dynamic>> buttons,
-  ) async {
-    final raw = await rootBundle.loadString(
-      'assets/config/genie-ai-config.json',
-    );
-    final config = jsonDecode(raw) as Map<String, dynamic>;
-    final configButtons =
-        config['features']['chat']['quickHelp']['buttons'] as List<dynamic>;
-    configButtons
-      ..clear()
-      ..addAll(buttons);
-    return Uint8List.fromList(utf8.encode(jsonEncode(config)));
-  }
+  final tree = quickHelpTreeFixture();
 
   late Uint8List mixedConfig;
   late Uint8List pairConfig;
   late Uint8List singleConfig;
 
   setUpAll(() async {
-    // ThemeManager persists every set through the shared_preferences
-    // plugin; without an in-memory mock the unhandled MissingPluginException
-    // of a previous test's persist lands on the NEXT test ("failed after
-    // it had already completed").
-    SharedPreferences.setMockInitialValues(<String, Object>{});
-    mixedConfig = await configWithButtons([healthyCard, emptyTitleCard]);
-    pairConfig = await configWithButtons([healthyCard, healthyCard2]);
-    singleConfig = await configWithButtons([healthyCard]);
+    mixedConfig = await chatbotConfigBytesWithButtons([
+      healthyCard,
+      emptyTitleCard,
+    ]);
+    pairConfig = await chatbotConfigBytesWithButtons([
+      healthyCard,
+      healthyCard2,
+    ]);
+    singleConfig = await chatbotConfigBytesWithButtons([healthyCard]);
   });
 
-  /// Serves the prepared configuration over the asset bundle's RAW
-  /// messenger (a ByteData key in, a ByteData asset out — a
-  /// MethodChannel mock never sees it). Every other key returns null,
-  /// which degrades a card icon to its neutral fallback instead of
-  /// failing the test. The bundle CACHES asset reads, so the eviction
-  /// is what makes the mock visible.
-  void mockConfigAsset(WidgetTester tester, Uint8List configBytes) {
-    tester.binding.defaultBinaryMessenger.setMockMessageHandler(
-      'flutter/assets',
-      (ByteData? message) async {
-        if (message == null) return null;
-        final key = utf8.decode(message.buffer.asUint8List());
-        if (key != 'assets/config/genie-ai-config.json') return null;
-        return ByteData.sublistView(configBytes);
-      },
-    );
-    rootBundle.evict('assets/config/genie-ai-config.json');
-  }
+  // The harness state is BOTH the mount's initialization (a fresh
+  // singleton has no tokens) and the previous test's teardown.
+  setUp(resetChatbotTestState);
+  tearDown(resetChatbotTestState);
 
   /// The phone-sized surface: at the desktop-sized default the tiles
   /// are wide enough to hide the defect the issue reports.
@@ -153,51 +82,15 @@ void main() {
     addTearDown(tester.view.reset);
   }
 
-  Future<void> pumpChat(WidgetTester tester, _TreeMockClient mock) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          serviceCategoriesApiProvider.overrideWithValue(
-            ServiceCategoriesApi(ApiClient()..client = mock),
-          ),
-          chatHistoryApiProvider.overrideWithValue(
-            ChatHistoryApi(ApiClient()..client = mock),
-          ),
-        ],
-        child: AnimatedBuilder(
-          animation: I18nService(),
-          builder: (context, _) => MaterialApp(
-            // The app's OWN ThemeData, not Material's defaults — a
-            // widget under a plain MaterialApp resolves text themes the
-            // shipped theme does not carry (the trap the mobile Visual
-            // Fidelity rule names).
-            theme: ThemeManager().lightTheme,
-            locale: I18nService().currentLocale,
-            supportedLocales: const [Locale('en')],
-            localizationsDelegates: const [
-              FallbackMaterialLocalizationsDelegate(),
-              FallbackWidgetsLocalizationsDelegate(),
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            home: Scaffold(
-              body: ChatBotComponent(
-                userId: 'user-1',
-                onRefreshSidebar: () {},
-                onRelatedDocumentsUpdate: (_) {},
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
+  Future<void> pumpChat(WidgetTester tester, _TreeMockClient mock) {
+    return pumpChatBot(tester, mock);
   }
 
   testWidgets(
     'a broken card leaves the grid and presents its diagnosis with real height',
     (tester) async {
       usePhoneSurface(tester);
-      mockConfigAsset(tester, mixedConfig);
+      mockChatbotConfigAsset(tester, mixedConfig);
       await pumpChat(tester, _TreeMockClient(tree));
 
       // The title-missing card is broken: its caption names the config
@@ -239,7 +132,7 @@ void main() {
     'when the hierarchy is out, every card is broken and no diagnosis sits in the grid',
     (tester) async {
       usePhoneSurface(tester);
-      mockConfigAsset(tester, pairConfig);
+      mockChatbotConfigAsset(tester, pairConfig);
       // A tree the fetch refuses: every scope is unverifiable, every
       // card broken.
       await pumpChat(tester, _TreeMockClient(tree, categoriesStatus: 500));
@@ -269,7 +162,7 @@ void main() {
       usePhoneSurface(tester);
       // fontScale = fontSize / 50 → 100 renders text at 2.0×.
       ThemeManager().setFontSize(100.0);
-      mockConfigAsset(tester, pairConfig);
+      mockChatbotConfigAsset(tester, pairConfig);
       await pumpChat(tester, _TreeMockClient(tree, categoriesStatus: 500));
 
       final caption = find.textContaining('hierarchy could not be loaded');
@@ -292,7 +185,7 @@ void main() {
     // tile when it is not a flex child — the tile's build must not
     // throw a RenderFlex overflow.
     ThemeManager().setFontSize(150.0);
-    mockConfigAsset(tester, singleConfig);
+    mockChatbotConfigAsset(tester, singleConfig);
     await pumpChat(tester, _TreeMockClient(tree));
 
     // The build survived: no overflow exception surfaced.
@@ -320,17 +213,8 @@ class _TreeMockClient extends http.BaseClient {
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final path = request.url.path;
     if (path.contains('/api/service-categories/categories')) {
-      return _json(tree, categoriesStatus);
+      return httpResponseJson(tree, categoriesStatus);
     }
-    return _json(<String, dynamic>{}, 404);
-  }
-
-  http.StreamedResponse _json(Object? body, int status) {
-    final bytes = utf8.encode(jsonEncode(body));
-    return http.StreamedResponse(
-      http.ByteStream.fromBytes(bytes),
-      status,
-      headers: {'content-type': 'application/json'},
-    );
+    return httpResponseJson(<String, dynamic>{}, 404);
   }
 }

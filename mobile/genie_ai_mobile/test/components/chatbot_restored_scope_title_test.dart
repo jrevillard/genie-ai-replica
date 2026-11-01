@@ -3,17 +3,12 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
-import 'package:genie_ai_mobile/providers/api_providers.dart';
-import 'package:genie_ai_mobile/services/fallback_localizations.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:http/http.dart' as http;
-import 'package:openapi/api.dart';
 
-import '../helpers/theme_helper.dart';
+import '../helpers/chatbot_harness.dart';
 
 // A RESTORED sidebar scope's context-bar title. The restore resolves the
 // scope against the ENGLISH hierarchy (the wire's vocabulary), so the
@@ -59,9 +54,7 @@ void main() {
     },
   ];
 
-  setUp(() {
-    resetThemeManager();
-  });
+  setUp(resetChatbotTestState);
 
   // The REAL bundled configuration, with the buttons replaced by the
   // card the button-scope test restores. Encoded ONCE: the mock serves
@@ -75,16 +68,7 @@ void main() {
   bool failConfigLoads = false;
 
   setUpAll(() async {
-    final raw = await rootBundle.loadString(
-      'assets/config/genie-ai-config.json',
-    );
-    final config = jsonDecode(raw) as Map<String, dynamic>;
-    final buttons =
-        config['features']['chat']['quickHelp']['buttons'] as List<dynamic>;
-    buttons
-      ..clear()
-      ..addAll(cards);
-    configBytes = Uint8List.fromList(utf8.encode(jsonEncode(config)));
+    configBytes = await chatbotConfigBytesWithButtons(cards);
   });
 
   /// Serves the prepared configuration over the asset bundle's RAW
@@ -138,54 +122,20 @@ void main() {
     WidgetTester tester,
     _RestoredScopeMockClient mock, {
     GlobalKey<ChatBotComponentState>? chatKey,
-  }) async {
+  }) {
+    // The CURRENT test's mock — the tearDown releases its held responses
+    // even when an assertion failed before the test could.
     activeMock = mock;
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          serviceCategoriesApiProvider.overrideWithValue(
-            ServiceCategoriesApi(ApiClient()..client = mock),
-          ),
-          chatHistoryApiProvider.overrideWithValue(
-            ChatHistoryApi(ApiClient()..client = mock),
-          ),
-        ],
-        child: AnimatedBuilder(
-          animation: I18nService(),
-          builder: (context, _) => MaterialApp(
-            locale: I18nService().currentLocale,
-            supportedLocales: const [Locale('en'), Locale('es'), Locale('fr')],
-            localizationsDelegates: const [
-              FallbackMaterialLocalizationsDelegate(),
-              FallbackWidgetsLocalizationsDelegate(),
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            home: Scaffold(
-              body: ChatBotComponent(
-                key: chatKey,
-                userId: 'user-1',
-                onRefreshSidebar: () {},
-                onRelatedDocumentsUpdate: (_) {},
-              ),
-            ),
-          ),
-        ),
-      ),
+    return pumpChatBot(
+      tester,
+      mock,
+      chatKey: chatKey,
+      supportedLocales: const [Locale('en'), Locale('es'), Locale('fr')],
     );
-    await tester.pumpAndSettle();
   }
 
   tearDown(() {
-    // The locale is a singleton: a test that switched it must not name
-    // the next test's mount.
-    I18nService().changeLanguage('en');
-    // The asset mock must not outlive its test — neither the handler
-    // (a later test would read the mutated config through it) nor the
-    // bundle's CACHE of the mutated bytes (a later test reading the
-    // real asset would get a cache hit serving them).
-    TestWidgetsFlutterBinding.instance.defaultBinaryMessenger
-        .setMockMessageHandler('flutter/assets', null);
-    rootBundle.evict('assets/config/genie-ai-config.json');
+    resetChatbotTestState();
     // A test that FAILED while a response was still held must not take
     // the held fetches to its grave: an in-flight future never settles,
     // the next pumpAndSettle hangs, and the one-line assertion failure
@@ -641,7 +591,7 @@ class _RestoredScopeMockClient extends http.BaseClient {
       requestsByLocale[locale] = (requestsByLocale[locale] ?? 0) + 1;
       final failFirst = failFirstCounts[locale];
       if (failFirst != null && (requestsByLocale[locale] ?? 0) <= failFirst) {
-        return _json(<String, dynamic>{}, 500);
+        return httpResponseJson(<String, dynamic>{}, 500);
       }
       final holdFrom = holdFromCounts[locale];
       if (holdFrom != null && (requestsByLocale[locale] ?? 0) >= holdFrom) {
@@ -649,13 +599,15 @@ class _RestoredScopeMockClient extends http.BaseClient {
         _held.add((locale: locale, completer: completer));
         return completer.future;
       }
-      return _json(treesByLocale[locale] ?? [], 200);
+      return httpResponseJson(treesByLocale[locale] ?? [], 200);
     }
     if (request.method == 'GET' && path.contains('/api/chat/conversations/')) {
       final id = path.split('/api/chat/conversations/').last;
       final conversation = conversationsById[id];
-      if (conversation == null) return _json(<String, dynamic>{}, 404);
-      return _json(<String, dynamic>{
+      if (conversation == null) {
+        return httpResponseJson(<String, dynamic>{}, 404);
+      }
+      return httpResponseJson(<String, dynamic>{
         '_key': id,
         'title': 'Saved conversation',
         'categoryId': conversation.categoryId,
@@ -663,7 +615,7 @@ class _RestoredScopeMockClient extends http.BaseClient {
         'messages': <dynamic>[],
       }, 200);
     }
-    return _json(<String, dynamic>{}, 404);
+    return httpResponseJson(<String, dynamic>{}, 404);
   }
 
   /// Releases every held response, in arrival order.
@@ -671,16 +623,9 @@ class _RestoredScopeMockClient extends http.BaseClient {
     final held = List.of(_held);
     _held.clear();
     for (final entry in held) {
-      entry.completer.complete(_json(treesByLocale[entry.locale] ?? [], 200));
+      entry.completer.complete(
+        httpResponseJson(treesByLocale[entry.locale] ?? [], 200),
+      );
     }
-  }
-
-  http.StreamedResponse _json(Object? body, int status) {
-    final bytes = utf8.encode(jsonEncode(body));
-    return http.StreamedResponse(
-      http.ByteStream.fromBytes(bytes),
-      status,
-      headers: {'content-type': 'application/json'},
-    );
   }
 }

@@ -1,18 +1,12 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
-import 'package:genie_ai_mobile/providers/api_providers.dart';
-import 'package:genie_ai_mobile/services/fallback_localizations.dart';
-import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:http/http.dart' as http;
-import 'package:openapi/api.dart';
 
-import '../helpers/theme_helper.dart';
+import '../helpers/chatbot_harness.dart';
 
 // The Quick Help conversation tag, as a card press writes it into a
 // SAVED conversation. The tag carries the button's identity —
@@ -24,16 +18,7 @@ import '../helpers/theme_helper.dart';
 // requests the saves send), so the test covers the whole user path:
 // tap, install, save.
 void main() {
-  final tree = <dynamic>[
-    {
-      'catKey': '2',
-      'name': 'Civil Registry',
-      'nameEN': 'Civil Registry',
-      'children': [
-        {'_key': 'svc-1', 'name': 'Births', 'nameEN': 'Births'},
-      ],
-    },
-  ];
+  final tree = quickHelpTreeFixture();
 
   // The two cards the test taps: an id-less scoped one and an id'd one,
   // neither carrying an action, so a press installs the scope without
@@ -52,99 +37,24 @@ void main() {
     },
   ];
 
-  setUp(() {
-    resetThemeManager();
-  });
+  setUp(resetChatbotTestState);
+  tearDown(resetChatbotTestState);
 
-  tearDown(() {
-    // The locale is a singleton: a test that switched it must not name
-    // the next test's mount.
-    I18nService().changeLanguage('en');
-    // The asset mock must not outlive its test — neither the handler
-    // (a later test would read the mutated config through it) nor the
-    // bundle's CACHE of the mutated bytes (a later test reading the
-    // real asset would get a cache hit serving them).
-    TestWidgetsFlutterBinding.instance.defaultBinaryMessenger
-        .setMockMessageHandler('flutter/assets', null);
-    rootBundle.evict('assets/config/genie-ai-config.json');
-  });
-
-  // The REAL bundled configuration (read OUTSIDE the widget test's fake
-  // async — an asset load awaited inside testWidgets never completes),
-  // with the buttons replaced by the cards the test taps. Encoded ONCE:
-  // the mock serves the same bytes for every request.
+  // The REAL bundled configuration, with the buttons replaced by the
+  // cards the test taps. Encoded ONCE: the mock serves the same bytes
+  // for every request.
   late Uint8List configBytes;
 
   setUpAll(() async {
-    final raw = await rootBundle.loadString(
-      'assets/config/genie-ai-config.json',
-    );
-    final config = jsonDecode(raw) as Map<String, dynamic>;
-    final buttons =
-        config['features']['chat']['quickHelp']['buttons'] as List<dynamic>;
-    buttons
-      ..clear()
-      ..addAll(twoCards);
-    configBytes = Uint8List.fromList(utf8.encode(jsonEncode(config)));
+    configBytes = await chatbotConfigBytesWithButtons(twoCards);
   });
-
-  /// Serves the prepared configuration over the asset bundle's RAW
-  /// messenger (a ByteData key in, a ByteData asset out — a
-  /// MethodChannel mock never sees it). Every other key returns null,
-  /// which degrades a card icon to its neutral fallback instead of
-  /// failing the test. The bundle CACHES asset reads (the setUpAll read
-  /// primed it), so the eviction is what makes the mock visible.
-  void mockConfigAsset(WidgetTester tester) {
-    tester.binding.defaultBinaryMessenger.setMockMessageHandler(
-      'flutter/assets',
-      (ByteData? message) async {
-        if (message == null) return null;
-        final key = utf8.decode(message.buffer.asUint8List());
-        if (key != 'assets/config/genie-ai-config.json') return null;
-        return ByteData.sublistView(configBytes);
-      },
-    );
-    rootBundle.evict('assets/config/genie-ai-config.json');
-  }
 
   Future<void> pumpChat(
     WidgetTester tester,
     _ConversationMockClient mock, {
     GlobalKey<ChatBotComponentState>? chatKey,
-  }) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          serviceCategoriesApiProvider.overrideWithValue(
-            ServiceCategoriesApi(ApiClient()..client = mock),
-          ),
-          chatHistoryApiProvider.overrideWithValue(
-            ChatHistoryApi(ApiClient()..client = mock),
-          ),
-        ],
-        child: AnimatedBuilder(
-          animation: I18nService(),
-          builder: (context, _) => MaterialApp(
-            locale: I18nService().currentLocale,
-            supportedLocales: const [Locale('en')],
-            localizationsDelegates: const [
-              FallbackMaterialLocalizationsDelegate(),
-              FallbackWidgetsLocalizationsDelegate(),
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            home: Scaffold(
-              body: ChatBotComponent(
-                key: chatKey,
-                userId: 'user-1',
-                onRefreshSidebar: () {},
-                onRelatedDocumentsUpdate: (_) {},
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
+  }) {
+    return pumpChatBot(tester, mock, chatKey: chatKey);
   }
 
   testWidgets('a card press tags the saved conversation with its identity', (
@@ -152,7 +62,7 @@ void main() {
   ) async {
     final mock = _ConversationMockClient(tree);
     final chatKey = GlobalKey<ChatBotComponentState>();
-    mockConfigAsset(tester);
+    mockChatbotConfigAsset(tester, configBytes);
     await pumpChat(tester, mock, chatKey: chatKey);
 
     // The id-less card: the tag is its TITLE — what the fix exists for.
@@ -195,16 +105,16 @@ class _ConversationMockClient extends http.BaseClient {
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final path = request.url.path;
     if (path.contains('/api/service-categories/categories')) {
-      return _json(tree, 200);
+      return httpResponseJson(tree, 200);
     }
     if (request.method == 'POST' && path.endsWith('/api/chat/conversations')) {
       _capture(request);
-      return _json(<String, dynamic>{'_key': 'conv-1'}, 201);
+      return httpResponseJson(<String, dynamic>{'_key': 'conv-1'}, 201);
     }
     if (request.method == 'POST' && path.contains('/messages')) {
-      return _json(<String, dynamic>{}, 201);
+      return httpResponseJson(<String, dynamic>{}, 201);
     }
-    return _json(<String, dynamic>{}, 404);
+    return httpResponseJson(<String, dynamic>{}, 404);
   }
 
   void _capture(http.BaseRequest request) {
@@ -212,14 +122,5 @@ class _ConversationMockClient extends http.BaseClient {
         jsonDecode((request as http.Request).body) as Map<String, dynamic>;
     conversationTags.add(body['tags'] as List<dynamic>? ?? <dynamic>[]);
     categoryIds.add(body['categoryId']);
-  }
-
-  http.StreamedResponse _json(Object? body, int status) {
-    final bytes = utf8.encode(jsonEncode(body));
-    return http.StreamedResponse(
-      http.ByteStream.fromBytes(bytes),
-      status,
-      headers: {'content-type': 'application/json'},
-    );
   }
 }

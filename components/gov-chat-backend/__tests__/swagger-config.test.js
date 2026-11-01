@@ -2,8 +2,9 @@
 
 require('./setup-env');
 
-// Mock only the infrastructure dependencies — no need to mock swagger-jsdoc
-// or swagger-ui-express because we test the exported config objects directly.
+// Mock only the infrastructure dependencies. swagger-jsdoc is NOT mocked —
+// the spec-building tests below run it for real; swagger-ui-express is
+// untouched because we test the exported config objects directly.
 
 jest.mock(
   '../shared-lib',
@@ -104,8 +105,40 @@ afterAll(() => {
 });
 
 // Access the exported config objects directly — no capture mocking needed
-const swaggerJsdoc = require('swagger-jsdoc');
 const { swaggerOptions, swaggerUiSetupOptions } = require('../index');
+
+// Build the merged spec the way the runtime does. This suite mocks fs and
+// path (index.js's uploads-dir probe); the spec build needs the real ones.
+// The mocks are put back in a finally so the file's other tests keep
+// seeing them.
+const buildSpecWithRealFs = (options) => {
+  // Resolve swagger-jsdoc through the current module registry: after
+  // withApiUrl's resetModules a fresh instance is returned whose internal
+  // glob holds the same fresh fs mock patched below; without a reset the
+  // cached instance's glob holds the file-level fs mock, which is the one
+  // patched. Either way glob reads real fs at call time.
+  const fs = require('fs');
+  const registrySwaggerJsdoc = require('swagger-jsdoc');
+  const path = require('path');
+  const mockedFs = { ...fs };
+  const mockedPath = { ...path };
+  Object.assign(fs, jest.requireActual('fs'));
+  Object.assign(path, jest.requireActual('path'));
+  try {
+    // The runtime object's apis glob is relative to the backend dir;
+    // anchor it to this file so the test does not depend on the
+    // directory jest was invoked from.
+    return registrySwaggerJsdoc({
+      ...options,
+      apis: [path.join(__dirname, '..', 'routes', '*.js')]
+    });
+  } finally {
+    for (const key of Object.keys(fs)) delete fs[key];
+    Object.assign(fs, mockedFs);
+    for (const key of Object.keys(path)) delete path[key];
+    Object.assign(path, mockedPath);
+  }
+};
 
 describe('Swagger Configuration', () => {
   describe('Security Scheme (Task 1)', () => {
@@ -188,29 +221,7 @@ describe('Swagger Configuration', () => {
       // once: !609 referenced CategoryTree without defining it. Build the
       // merged spec exactly as the runtime does and assert every local
       // schema $ref resolves.
-      const fs = require('fs');
-      const path = require('path');
-      const mockedFs = { ...fs };
-      const mockedPath = { ...path };
-      // This suite mocks fs (index.js's uploads-dir probe) and path; the
-      // spec build needs the real ones. Restore, build, put the mocks back.
-      Object.assign(fs, jest.requireActual('fs'));
-      Object.assign(path, jest.requireActual('path'));
-      let spec;
-      try {
-        // The runtime object's apis glob is relative to the backend dir;
-        // anchor it to this file so the test does not depend on the
-        // directory jest was invoked from.
-        spec = swaggerJsdoc({
-          ...swaggerOptions,
-          apis: [path.join(__dirname, '..', 'routes', '*.js')]
-        });
-      } finally {
-        for (const key of Object.keys(fs)) delete fs[key];
-        Object.assign(fs, mockedFs);
-        for (const key of Object.keys(path)) delete path[key];
-        Object.assign(path, mockedPath);
-      }
+      const spec = buildSpecWithRealFs(swaggerOptions);
       const defined = new Set(Object.keys(spec.components?.schemas || {}));
       const refs = new Set();
       const walk = (node) => {
@@ -231,6 +242,79 @@ describe('Swagger Configuration', () => {
       expect(refs.size).toBeGreaterThan(0);
       const dangling = [...refs].filter((name) => !defined.has(name));
       expect(dangling).toEqual([]);
+    });
+  });
+
+  describe('Server URL vs annotated paths', () => {
+    // The exported swaggerOptions capture process.env.API_URL at module
+    // load. These tests re-require index.js with API_URL pinned (unset or
+    // custom) so the assertions hold no matter what the invoking shell has
+    // exported.
+    const withApiUrl = (apiUrl, fn) => {
+      const setApiUrl = (value) => {
+        if (value === undefined) {
+          delete process.env.API_URL;
+        } else {
+          process.env.API_URL = value;
+        }
+      };
+      const previous = process.env.API_URL;
+      const previousHandlers = process.listeners('unhandledRejection');
+      setApiUrl(apiUrl);
+      try {
+        jest.resetModules();
+        return fn(require('../index'));
+      } finally {
+        jest.resetModules();
+        // Every index.js evaluation registers another module-level
+        // unhandledRejection handler (which calls process.exit) — restore
+        // the count the file started with.
+        process.removeAllListeners('unhandledRejection');
+        previousHandlers.forEach((handler) => process.on('unhandledRejection', handler));
+        setApiUrl(previous);
+      }
+    };
+
+    it('default server URL carries no /api suffix (annotated paths already start with /api)', () => {
+      withApiUrl(undefined, ({ swaggerOptions }) => {
+        const url = swaggerOptions.definition.servers[0].url;
+        expect(url).not.toMatch(/\/api\/?$/);
+      });
+    });
+
+    it('a custom API_URL is used verbatim as the suffix-free server base', () => {
+      withApiUrl('https://gov.example.com/gov', ({ swaggerOptions }) => {
+        const url = swaggerOptions.definition.servers[0].url;
+        expect(url).toBe('https://gov.example.com/gov');
+        // A base carrying its own path joins the annotated paths the same
+        // way: one /api, from the path, never doubled.
+        const joined = `${url.replace(/\/+$/, '')}/api/queries/{queryId}/responsetime`;
+        expect(joined).toMatch(/^https?:\/\//);
+        expect(joined).not.toContain('/api/api');
+      });
+    });
+
+    it('server URL joined with an annotated path resolves to a single /api segment', () => {
+      withApiUrl(undefined, ({ swaggerOptions }) => {
+        const spec = buildSpecWithRealFs(swaggerOptions);
+
+        // A route the app actually serves, as declared in query-routes.js.
+        const annotatedPath = '/api/queries/{queryId}/responsetime';
+        expect(spec.paths).toHaveProperty(annotatedPath);
+        // The other half of the join invariant below: every annotated path
+        // starts with /api. An annotation without the prefix (a natural
+        // copy of the router's own mount-relative path) would make
+        // Try-it-out drop /api for that route.
+        for (const specPath of Object.keys(spec.paths)) {
+          expect(specPath).toMatch(/^\/api\//);
+        }
+
+        // swagger-ui's Try-it-out executes servers[0].url + path.
+        const url = swaggerOptions.definition.servers[0].url;
+        const joined = `${url.replace(/\/+$/, '')}${annotatedPath}`;
+        expect(joined).toMatch(/^https?:\/\//);
+        expect(joined).not.toContain('/api/api');
+      });
     });
   });
 });

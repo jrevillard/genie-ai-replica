@@ -43,13 +43,17 @@ contractual evidence — a fresh clone does not carry them.)
   green, 8 red, all eight classified spec-vs-frontend drift with the
   evidence recorded in the pre-merge gate below. The suite is no
   longer Compose-only.
-- **The branch was rebased onto `main` again (540 commits, clean)** —
-  main's six new commits had left the branch's app-file copies stale
-  (i18n locales, admin components), which read as a 1139-line
-  regression in the app diff; the replay erased it. The app-code diff
-  vs `main` is empty. Rebase trap noted: the vendored `charts/*.tgz`
-  (untracked) block the replay — move them aside first, regenerate
-  with `helm dependency update` after.
+- **The branch was rebased onto `main` again (58 new commits, 545 replayed)** —
+  one conflict: `main`'s merge-train e2e trigger filters (#1264) and this
+  branch's chart jobs had both grown at the same anchor in
+  `.gitlab-ci.yml` — both-added, resolved by keeping both blocks (the
+  merge-train anchor and all five chart jobs survived, 100 jobs parse).
+  The app-code diff vs `main` is empty; the full local gate suite is
+  green (values-surface 343, parity floor 323 on the OPEA+OKF render,
+  NP crosscheck 26 flows on the four renders, schema-bools 52,
+  clearable-blocks, instance-count, lint strict). Rebase trap noted:
+  the vendored `charts/*.tgz` (untracked) block the replay — move them
+  aside first, regenerate with `helm dependency update` after.
 - **OPEA service resources are values-sized (0.2.140)** — the nine
   OPEA templates built their service dict wholesale, so no environment
   could size chatqna/dataprep/reranker/embedding/translation from

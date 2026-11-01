@@ -50,6 +50,35 @@
     # NO mode: key — the operator's 0700/0750 hardening of the data
     # dir must survive every deploy (ownership only, never widened).
 
+- name: Hand the data directory's intermediate ancestors to ansible_user (depth 0, #1227)
+  # For a nested override (data_dir: /opt/genieai/state/data) the chain
+  # between deploy_dir and the data dir (state/) needs the same depth-0
+  # handover: a FRESH deploy creates the ancestors with the leaf's owner
+  # anyway (see above), but a ROOT-ERA existing ancestor would stay
+  # root-owned forever — the payload probe/heal prunes the whole ancestor
+  # chain (the heal must not chown -R across the data handover), so
+  # depth-0 here is the ONLY layer that can re-own an existing ancestor.
+  # KNOWN ENFORCEMENT GAP, accepted: sibling content a previous era left
+  # UNDER an ancestor (deploy_dir/state/other) is never probed, healed or
+  # swept — the ancestor's own ownership is enforced here, its other
+  # children are the operator's tree.
+  # The range covers only INTERMEDIATE prefixes (idx 0..len-2): the last
+  # prefix IS the data dir, already handed over above; for a top-level
+  # data dir the range is empty. (Same prefix formula as the manager
+  # play's prune-chain builder — keep the two in step.)
+  become: true
+  become_user: root
+  ansible.builtin.file:
+    path: "{{ deploy_dir ~ '/' ~ (_rel_parts[0:idx + 1] | join('/')) }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  vars:
+    _rel_parts: "{{ (data_dir_resolved | relpath(deploy_dir)) | split('/') | list }}"
+  loop: "{{ range(0, _rel_parts | length - 1) | list }}"
+  loop_control:
+    index_var: idx
+
 - name: Create the backend backup directory as the backend uid (#1227)
   # Pinned to the backend uid AT CREATION: a fresh dir left
   # ansible_user-owned would never pass the handover probe below, and

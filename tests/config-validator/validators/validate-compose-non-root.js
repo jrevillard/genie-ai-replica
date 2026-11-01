@@ -528,8 +528,22 @@ function validateComposeNonRoot(composeText) {
       currentService = serviceMatch[1];
       const svcBody = serviceMatch[2];
       if (svcBody !== undefined) {
-        const fu = svcBody.match(/\buser:\s*['"]?([^,}]+)['"]?/);
-        if (fu) currentUser = fu[1].trim();
+        const fu = svcBody.match(/\buser:\s*([^,}]+)/);
+        if (fu) {
+          // strip a MATCHING quote pair — the earlier ['"]?...['"]? capture
+          // kept the closing quote, so {user: "root"} captured `root"` and
+          // BOTH root tests (=== 'root', Number()) failed open (verified).
+          const unquoted = fu[1].trim().replace(/^(['"])([\s\S]*)\1$/, '$2');
+          if (unquoted.startsWith('*')) {
+            // a YAML alias cannot be resolved by a line parser: fail LOUD
+            // (the conservative-resolution doctrine) instead of reading the
+            // alias name as a literal uid that is neither root nor 0.
+            // currentUser stays null, so the must-pin rule fires too.
+            violations.push(`${currentService}: flow user: is a YAML alias (${unquoted}) — inline a literal uid:uid`);
+          } else {
+            currentUser = unquoted;
+          }
+        }
       }
       serviceBinds[currentService] = [];
       anchorMerged = false;
@@ -703,6 +717,17 @@ function validateComposeNonRoot(composeText) {
     // `volumes:` — collect host binds with their create_host_path opt-out
     if (/^ {4}volumes:\s*(?:#.*)?$/.test(line)) {
       inVolumes = true;
+      continue;
+    }
+    // a WHOLE-LIST YAML alias matches neither the block key above nor the
+    // flow collectors below — the service would report zero binds and zero
+    // violations while carrying every bind the anchor holds (fail-open).
+    // Conservative resolution: demand the list inline. NO flush() here:
+    // the violation names the CURRENT service (a flush would null it).
+    if (/^ {4}volumes:\s*\*[\w-]+\s*(?:#.*)?$/.test(line)) {
+      violations.push(
+        `${currentService}: volumes: is a YAML alias — a line parser cannot resolve the anchor; inline the list so the binds stay enforced`
+      );
       continue;
     }
     // flow LIST: volumes: [ "host:/container", {type: bind, source: ...} ] —

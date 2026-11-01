@@ -245,11 +245,11 @@
     # would never fire) while looking converged. Verified against real
     # find on the fix branch (the pruned dirs' contents stay unvisited).
     _fix_payload_probe_cmd: >-
-      find "{{ deploy_dir }}" -mindepth 1
+      find "{{ deploy_dir_resolved }}" -mindepth 1
       {{ _fix_payload_prune_expr }}
       -o ( ! -uid {{ ansible_user_uid }} -print -quit )
     _fix_payload_ownership_cmd: >-
-      find "{{ deploy_dir }}" -mindepth 1 -maxdepth 1
+      find "{{ deploy_dir_resolved }}" -mindepth 1 -maxdepth 1
       {{ _fix_payload_prune_expr }}
       -o -exec chown -R -h {{ ansible_user }}:{{ ansible_user }} {} +
   tasks:
@@ -272,10 +272,14 @@
       # already emits the full dir as its final element). An undefined
       # var here must be a LOUD template error instead.
       ansible.builtin.set_fact:
+        # deploy_dir_resolved (group_vars), NOT raw deploy_dir: a
+        # trailing-slash override would embed '/opt/genieai//data' into the
+        # -path patterns, which find never matches — both prunes would die
+        # silently (verified by execution).
         _fix_payload_data_chain: >-
-          {{ _fix_payload_data_chain + [deploy_dir ~ '/' ~ ((data_dir_resolved | relpath(deploy_dir)) | split('/') | list)[0:idx + 1] | join('/')] }}
+          {{ _fix_payload_data_chain + [deploy_dir_resolved ~ '/' ~ ((data_dir_resolved | relpath(deploy_dir_resolved)) | split('/') | list)[0:idx + 1] | join('/')] }}
       vars:
-        _rel_parts: "{{ (data_dir_resolved | relpath(deploy_dir)) | split('/') | list }}"
+        _rel_parts: "{{ (data_dir_resolved | relpath(deploy_dir_resolved)) | split('/') | list }}"
       loop: "{{ range(1, _rel_parts | length + 1) | list }}"
       loop_control:
         index_var: idx
@@ -296,7 +300,7 @@
         # argv token (find: "paths must precede expression") — proven by
         # rendering the builder and tokenizing the output.
         _fix_payload_prune_expr: >-
-          {{ ' ( ' ~ (_fix_payload_data_chain | map('regex_replace', '^(.+)$', '-path "\1"') | join(' -o ')) ~ ' -o -path "' ~ deploy_dir ~ '/secrets" ) -prune' }}
+          {{ ' ( ' ~ (_fix_payload_data_chain | map('regex_replace', '^(.+)$', '-path "\1"') | join(' -o ')) ~ ' -o -path "' ~ deploy_dir_resolved ~ '/secrets" ) -prune' }}
 
     - name: Define deploy files
       ansible.builtin.set_fact:

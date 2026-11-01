@@ -16,6 +16,13 @@ data_dir: ./data
 # tasks/no-root-data-migration.yml for the three-context reasoning).
 data_dir_resolved: "{{ ((deploy_dir ~ '/' ~ data_dir) if not (data_dir is match('/')) else data_dir) | regex_replace('/+$', '') | normpath }}"
 
+# deploy_dir with the same normalization the data-dir formula applies to
+# its join: a trailing-slash inventory override (deploy_dir: /opt/genieai/)
+# must not leak into the payload prune builder — '-path /opt/genieai//data'
+# never matches in find (verified by execution) and BOTH payload exclusions
+# (the data chain and secrets/) die silently on every deploy.
+deploy_dir_resolved: "{{ deploy_dir | regex_replace('/+$', '') | normpath }}"
+
 # Runtime theme config directory on the host, bind-mounted read-only into the
 # frontend and Keycloak containers. Promoted to group_vars so both the
 # config_bootstrap role AND the deploy play (which renders env.j2) see the same

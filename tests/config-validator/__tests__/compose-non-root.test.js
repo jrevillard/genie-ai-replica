@@ -696,6 +696,29 @@ describe('compose non-root contract (#1227)', () => {
     const flowUser = ['services:', '  backend: {user: "1000:1000"}', ''].join('\n');
     expect(validateComposeNonRoot(flowUser).violations).toEqual([]);
 
+    // QUOTED root pins in a flow body must still trip: the capture strips
+    // a matching quote pair — {user: "root"} once captured `root"` (closing
+    // quote kept) and BOTH root tests failed open. Number spellings too.
+    const quotedRoot = validateComposeNonRoot(['services:', '  kong: {user: "root"}', ''].join('\n'));
+    expect(quotedRoot.violations.some((v) => v.includes('kong') && v.includes('is root'))).toBe(true);
+    const quotedZero = validateComposeNonRoot(['services:', '  kong: {user: "0"}', ''].join('\n'));
+    expect(quotedZero.violations.some((v) => v.includes('kong') && v.includes('is root'))).toBe(true);
+
+    // an UNRESOLVABLE YAML alias fails loud (conservative resolution): a
+    // line parser cannot know *admin resolves to root — reading the alias
+    // name as a literal uid is fail-open.
+    const aliasUser = validateComposeNonRoot(['services:', '  kong: {user: *admin}', ''].join('\n'));
+    expect(aliasUser.violations.some((v) => v.includes('kong') && v.includes('YAML alias'))).toBe(true);
+
+    // a WHOLE-LIST volumes alias drops every bind from enforcement (neither
+    // the block collector nor the flow collectors match) — demand it inline.
+    const aliasVolumes = validateComposeNonRoot(
+      ['services:', '  backend:', '    user: "1000:1000"', '    volumes: *binds', ''].join('\n')
+    );
+    expect(aliasVolumes.violations.some((v) => v.includes('backend') && v.includes('volumes: is a YAML alias'))).toBe(
+      true
+    );
+
     // the flow deploy is still a SHALLOW replace: dropping mode from it
     // must trip, exactly like the block form
     const flowModeDrop = composeText.replace(

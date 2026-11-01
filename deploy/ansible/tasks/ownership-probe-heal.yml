@@ -27,11 +27,14 @@
   ansible.builtin.command: "{{ _trio_heal_cmd }}"
   when: _trio_probe.stdout | length > 0 or _trio_probe.rc != 0
   register: _trio_heal
-  # changed_when: true (not rc==0): a PARTIAL heal (earlier chown batches
-  # applied, then rc!=0) mutated the tree — reporting unchanged there hid
-  # real host mutation behind a clean deploy summary. The task only runs
-  # behind a positive probe, so running = at least attempted mutation.
-  changed_when: true
+  # changed = the PROBE saw something (stdout non-empty): that is the only
+  # case where the heal has real work. The other trigger, a probe rc!=0
+  # with EMPTY stdout (transient find error), re-runs the heal defensively
+  # but the re-run matches nothing and mutates nothing — reporting
+  # `changed` there inverted the change signal on exactly the flaky-I/O
+  # path. A PARTIAL heal (probe hits, chown dies mid-batch) still reports
+  # changed: the tree WAS mutated before the failure.
+  changed_when: _trio_probe.stdout | length > 0
   failed_when: false
 
 - name: Warn if the heal did not complete

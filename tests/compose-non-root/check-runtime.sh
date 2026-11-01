@@ -38,6 +38,16 @@ if [ $# -lt 1 ]; then
 fi
 PROJECT="$1"
 DATA_DIR="${2:-${DATA_DIR:-./data}}"
+# Trailing-slash callers ("./data/", "./data//") must be stripped BEFORE
+# the symlink test: POSIX dereferences a trailing slash, so [ -L "./data/" ]
+# is FALSE for a symlink (verified) and resolution would be skipped — the
+# sweep below would then lstat only the link inode and pass vacuously.
+# The strip also unbreaks the -path prune pattern (./data//huggingface
+# never matches) — strip ALL trailing slashes (the root "/" itself is not
+# a data dir spelling this gate accepts).
+while [ "$DATA_DIR" != "${DATA_DIR%/}" ] && [ "$DATA_DIR" != "/" ]; do
+  DATA_DIR="${DATA_DIR%/}"
+done
 # A symlinked data dir (ln -s /srv/genie-data data — common when /opt is
 # small) makes GNU find inspect only the symlink inode: a silently
 # vacuous sweep. Resolve to the real directory and say so.
@@ -45,14 +55,6 @@ if [ -L "$DATA_DIR" ]; then
   echo "NOTE: data dir $DATA_DIR is a symlink — resolving to $(readlink -f "$DATA_DIR")"
   DATA_DIR="$(readlink -f "$DATA_DIR")"
 fi
-
-# Trailing-slash callers ("./data/", "./data//") would break the -path
-# prune pattern below (./data//huggingface never matches) and silently
-# sweep the excluded GPU cache — strip ALL trailing slashes (the root "/"
-# itself is not a data dir spelling this gate accepts).
-while [ "$DATA_DIR" != "${DATA_DIR%/}" ] && [ "$DATA_DIR" != "/" ]; do
-  DATA_DIR="${DATA_DIR%/}"
-done
 if [ -z "$DATA_DIR" ] || [ "$DATA_DIR" = "/" ]; then
   echo "usage: DATA_DIR must be the stack's data directory — '/' would sweep"
   echo "the whole host filesystem (and would never be the data dir)."

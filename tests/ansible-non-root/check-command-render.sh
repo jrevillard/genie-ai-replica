@@ -66,7 +66,12 @@ cat > "$TMP/render.yml" <<YAML
   connection: local
   gather_facts: false
   vars:
-    deploy_dir: $TMP/opt/genieai
+    # deploy_dir carries a TRAILING SLASH on purpose: if a builder ever
+    # regresses to the raw var (instead of deploy_dir_resolved), the
+    # rendered -path patterns embed '//' and the detection sweep below
+    # goes red. The resolved var is the normalized one the builders use.
+    deploy_dir: $TMP/opt/genieai/
+    deploy_dir_resolved: $TMP/opt/genieai
     data_dir_resolved: $TMP/opt/genieai/data
     ansible_user: rendercheck
     ansible_user_uid: "12345"
@@ -155,6 +160,9 @@ grep -q '_trio_probe_cmd' "$TMP/trio.frag" ||
 FORMULA_LINE=$(grep -E '^data_dir_resolved:' deploy/ansible/group_vars/all.yml) ||
   fail "could not extract data_dir_resolved formula from group_vars/all.yml"
 
+DDEP_FORMULA_LINE=$(grep -E '^deploy_dir_resolved:' deploy/ansible/group_vars/all.yml) ||
+  fail "could not extract deploy_dir_resolved formula from group_vars/all.yml"
+
 mkdir -p "$TMP/backups/data/database_backups"
 echo x > "$TMP/backups/data/database_backups/WOULD-BE-HEALED"
 echo x > "$TMP/backups/data/database_backups/KEEPME"
@@ -170,6 +178,7 @@ cat > "$TMP/render2.yml" <<YAML
     # trips on an undefined data_dir during task-arg finalization)
     data_dir: "./data"
     $FORMULA_LINE
+    $DDEP_FORMULA_LINE
 $(cat "$TMP/trio.frag")
   tasks:
     - name: Persist the trio commands
@@ -185,9 +194,17 @@ $(cat "$TMP/trio.frag")
         - {name: _resolved_relative, data_dir: "./data"}
         - {name: _resolved_absolute, data_dir: /srv/genieai-data}
         - {name: _resolved_trailing, data_dir: "/srv/genieai-data/"}
+    - name: Resolve the deploy_dir formula for each spelling
+      ansible.builtin.set_fact:
+        "{{ item.name }}": "{{ deploy_dir_resolved }}"
+      vars:
+        deploy_dir: "{{ item.deploy_dir }}"
+      loop:
+        - {name: _dresolved_clean, deploy_dir: /opt/genieai}
+        - {name: _dresolved_trailing, deploy_dir: "/opt/genieai/"}
     - name: Persist the resolved spellings
       ansible.builtin.copy:
-        content: "{{ _resolved_relative }}\n{{ _resolved_absolute }}\n{{ _resolved_trailing }}\n"
+        content: "{{ _resolved_relative }}\n{{ _resolved_absolute }}\n{{ _resolved_trailing }}\n{{ _dresolved_clean }}\n{{ _dresolved_trailing }}\n"
         dest: $TMP/resolved.txt
 YAML
 
@@ -201,11 +218,13 @@ tmp = sys.argv[1]
 probe_s, heal_s = open(os.path.join(tmp, "trio-rendered.txt")).read().splitlines()[:2]
 resolved = open(os.path.join(tmp, "resolved.txt")).read().splitlines()
 
-expected = [os.path.join(tmp, "backups") + "/data", "/srv/genieai-data", "/srv/genieai-data"]
+expected = [os.path.join(tmp, "backups") + "/data", "/srv/genieai-data", "/srv/genieai-data",
+            "/opt/genieai", "/opt/genieai"]
 for got, want, spelling in zip(resolved, expected,
-                               ("./data", "absolute", "trailing slash")):
+                               ("./data", "absolute", "trailing slash",
+                                "deploy_dir clean", "deploy_dir trailing slash")):
     if got != want:
-        print(f"data_dir_resolved[{spelling}]: rendered {got!r}, expected {want!r}",
+        print(f"formula[{spelling}]: rendered {got!r}, expected {want!r}",
               file=sys.stderr); sys.exit(1)
 
 for label, cmd, needs in (("trio probe", probe_s, ("-H", "-uid", "1000", "-print", "-quit")),
@@ -226,5 +245,5 @@ for label, cmd, needs in (("trio probe", probe_s, ("-H", "-uid", "1000", "-print
               f"err={r.stderr.strip()[:120]!r}", file=sys.stderr); sys.exit(1)
 
 print(f"OK: trio commands and data_dir_resolved formula render, tokenize and execute "
-      f"(probe hit={probe_s and 'WOULD-BE-HEALED'}; 3 formula spellings exact)")
+      f"(probe hit={probe_s and 'WOULD-BE-HEALED'}; 5 formula spellings exact)")
 PYEOF

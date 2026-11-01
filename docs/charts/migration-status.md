@@ -54,11 +54,14 @@ contractual evidence — a fresh clone does not carry them.)
   OPEA templates built their service dict wholesale, so no environment
   could size chatqna/dataprep/reranker/embedding/translation from
   values. Each injection point now merges the template defaults under
-  the operator's `services.<name>` block (deep merge: an override
-  carries only the keys it names, the template keeps the rest —
-  defaults render byte-identical, and a `requests.memory: 4Gi`
-  override lands while sibling services stay untouched; mutation-
-  proven). The translation template, hand-rendered outside the
+  the operator's `services.<name>` block — maps deep-merge key by key
+  (an override carries only the keys it names, the template keeps the
+  rest: a `requests.memory: 4Gi` override lands while sibling services
+  stay untouched; mutation-proven), but LIST values are the exception:
+  `services.<name>.env` replaces the template-built rows whole, so
+  per-variable env goes through `opea.<svc>.env`. Defaults render
+  value-identical — the hand-rendered translation template restyles
+  its resources flow→block with identical values. The translation template, hand-rendered outside the
   factory, reads `services.translation.resources` the same way. From
   the deploy repo's forge-review issue (#1 there).
 - **The post-OKF review round (0.2.139)** — an adversarial pass over

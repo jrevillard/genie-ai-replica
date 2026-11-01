@@ -380,7 +380,11 @@
                         </div>
                       </div>
                       <div class="form-actions">
-                        <DsButton variant="primary" :disabled="!hierarchyForm.nameEN" @click="saveHierarchyItem">
+                        <DsButton
+                          variant="primary"
+                          :disabled="!hierarchyForm.nameEN || isLoading || isTranslationsLoading"
+                          @click="saveHierarchyItem"
+                        >
                           {{ translate('admin.buttons.save', 'Save') }}
                         </DsButton>
                         <DsButton variant="secondary" @click="cancelHierarchyForm">
@@ -2985,10 +2989,10 @@ export default {
       }
 
       // --- 2. PREPARE PAYLOAD ---
-      // Null-safe: a legacy item without an EN translation loads nameEN as
-      // null; the empty string lets the backend answer its 400 cleanly.
+      // Type-safe like the rows above: a legacy doc can hold a non-string
+      // nameEN; the empty string lets the backend answer its 400 cleanly.
       const payload = {
-        nameEN: (this.hierarchyForm.nameEN ?? '').trim(),
+        nameEN: typeof this.hierarchyForm.nameEN === 'string' ? this.hierarchyForm.nameEN.trim() : '',
         translations: rows
       };
 

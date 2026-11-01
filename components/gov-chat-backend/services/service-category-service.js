@@ -276,10 +276,9 @@ class ServiceCategoryService {
       // Validate before any write: a rejected payload must not leave a
       // half-created service (or its category edge) behind. The parent
       // category must exist too — the edge save would otherwise fail after
-      // the service document was already written.
-      if (!(await this.categoryExists(categoryKey))) {
-        throw new NotFoundError(`Category ${categoryKey} not found`);
-      }
+      // the service document was already written. Direct document read (not
+      // categoryExists) so a DB outage surfaces as 5xx, not a fake 404.
+      await this._documentOr404(this.serviceCategories, categoryKey, 'Category');
       this._validateTranslationsPayload(payload.translations);
       logger.info(`Creating service "${payload.nameEN}" under category ${categoryKey}`);
 
@@ -412,7 +411,7 @@ class ServiceCategoryService {
       }
       // Existence first: an unknown id must answer 404 even when the
       // payload is also malformed. Validation still runs before any write.
-      await this.services.document(serviceKey);
+      await this._documentOr404(this.services, serviceKey, 'Service');
       this._validateTranslationsPayload(payload.translations);
       const nameEN = payload.nameEN.trim();
       logger.info(`Updating service ${serviceKey} with name "${nameEN}"`);
@@ -455,6 +454,26 @@ class ServiceCategoryService {
       return { _key: serviceKey, status: 'updated' };
     } catch (error) {
       logger.error(`Error updating service ${serviceKey}: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
+  }
+
+  /**
+   * Loads a document, converting an arangojs not-found error (which carries
+   * `code: 404` but no HTTP statusCode, so the global error middleware would
+   * answer 500) into a typed NotFoundError. Non-404 errors propagate.
+   * @param {Object} collection - The ArangoDB collection handle.
+   * @param {String} key - The document _key.
+   * @param {String} label - Resource label for the error message.
+   * @returns {Promise<Object>} The document.
+   */
+  async _documentOr404(collection, key, label) {
+    try {
+      return await collection.document(key);
+    } catch (error) {
+      if (error.code === 404) {
+        throw new NotFoundError(`${label} ${key} not found`);
+      }
       throw error;
     }
   }
@@ -953,7 +972,7 @@ class ServiceCategoryService {
       }
       // Existence first: an unknown id must answer 404 even when the
       // payload is also malformed. Validation still runs before any write.
-      await this.serviceCategories.document(categoryKey);
+      await this._documentOr404(this.serviceCategories, categoryKey, 'Category');
       this._validateTranslationsPayload(payload.translations);
       const nameEN = payload.nameEN.trim();
       logger.info(`Updating category ${categoryKey} with name "${nameEN}"`);

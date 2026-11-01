@@ -245,8 +245,10 @@ describe('GET /api/service-categories/:categoryId/translations (AC13)', () => {
 });
 
 describe('GET /api/service-categories/services/:serviceId/translations (AC13)', () => {
-  it('should return 200 with service translations', async () => {
-    const translations = [{ languageCode: 'FR', translation: 'Vaccination' }];
+  it('should return 200 with the service translations read shape {lang, text}', async () => {
+    // The real service projects {lang (lowercased), text} — not the write
+    // shape {languageCode, translation}.
+    const translations = [{ lang: 'fr', text: 'Vaccination' }];
     serviceCategoryService.getServiceTranslations.mockResolvedValue(translations);
 
     const response = await authGet('/api/service-categories/services/svc-1/translations');

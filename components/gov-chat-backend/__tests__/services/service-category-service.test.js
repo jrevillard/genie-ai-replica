@@ -27,12 +27,14 @@ jest.mock('../../middleware/errors', () => ({
     constructor(msg) {
       super(msg);
       this.name = 'NotFoundError';
+      this.statusCode = 404;
     }
   },
   ValidationError: class ValidationError extends Error {
     constructor(msg) {
       super(msg);
       this.name = 'ValidationError';
+      this.statusCode = 400;
     }
   }
 }));
@@ -213,16 +215,29 @@ describe('ServiceCategoryService', () => {
       expect(mockCategoryServices.save).not.toHaveBeenCalled();
     });
 
-    it('rejects a nonexistent parent category before saving anything', async () => {
-      mockServices.document.mockRejectedValue(Object.assign(new Error('not found'), { code: 404 }));
-      // categoryExists walks the serviceCategories collection
-      mockServiceCategories.document.mockRejectedValue(Object.assign(new Error('not found'), { code: 404 }));
-
-      await expect(service.createServiceWithTranslations('ghost-cat', { nameEN: 'New Service' })).rejects.toThrow(
-        'not found'
+    it('rejects a nonexistent parent category with a typed 404 before saving anything', async () => {
+      mockServiceCategories.document.mockRejectedValue(
+        Object.assign(new Error('document not found'), { code: 404, errorNum: 1202 })
       );
+
+      try {
+        await service.createServiceWithTranslations('ghost-cat', { nameEN: 'New Service' });
+        throw new Error('should have thrown');
+      } catch (e) {
+        expect(e.name).toBe('NotFoundError');
+        expect(e.statusCode).toBe(404);
+      }
       expect(mockServices.save).not.toHaveBeenCalled();
       expect(mockCategoryServices.save).not.toHaveBeenCalled();
+    });
+
+    it('rethrows non-404 parent-check errors instead of misreporting a 404', async () => {
+      mockServiceCategories.document.mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), { code: 503 }));
+
+      await expect(service.createServiceWithTranslations('cat-1', { nameEN: 'New Service' })).rejects.toThrow(
+        'ECONNREFUSED'
+      );
+      expect(mockServices.save).not.toHaveBeenCalled();
     });
   });
 
@@ -304,6 +319,19 @@ describe('ServiceCategoryService', () => {
       mockServices.document.mockRejectedValue(new Error('Not found'));
 
       await expect(service.updateServiceWithTranslations('missing', { nameEN: 'Test' })).rejects.toThrow('Not found');
+    });
+
+    it('maps an arangojs 404 (error.code, no statusCode) to a typed NotFoundError', async () => {
+      const arangoErr = Object.assign(new Error('document not found'), { code: 404, errorNum: 1202 });
+      mockServices.document.mockRejectedValue(arangoErr);
+
+      try {
+        await service.updateServiceWithTranslations('missing', { nameEN: 'Test' });
+        throw new Error('should have thrown');
+      } catch (e) {
+        expect(e.name).toBe('NotFoundError');
+        expect(e.statusCode).toBe(404);
+      }
     });
 
     it('answers 404-class existence before payload validation', async () => {

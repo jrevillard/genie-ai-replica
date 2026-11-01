@@ -42,7 +42,7 @@ byte-identical to one without it. */ -}}
 cleared `services` map has nothing to mutate, and `set` on a nil map
 crashes the template engine. */ -}}
 {{- $valsServices := $vals.services | default dict -}}
-{{- $_ := set $valsServices "embedding" $svcVals -}}
+{{- $_ := set $valsServices "embedding" (mergeOverwrite $svcVals (index $valsServices "embedding" | default dict)) -}}
 {{- $_ := set $vals "services" $valsServices -}}
 {{- $ctx := dict "name" "embedding" "component" "embedding" "Values" $vals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}

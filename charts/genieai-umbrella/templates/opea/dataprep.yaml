@@ -176,7 +176,7 @@ operator's value wins over a derived row of the same name. */ -}}
 cleared `services` map has nothing to mutate, and `set` on a nil map
 crashes the template engine. */ -}}
 {{- $valsServices := $vals.services | default dict -}}
-{{- $_ := set $valsServices "dataprep" $svcVals -}}
+{{- $_ := set $valsServices "dataprep" (mergeOverwrite $svcVals (index $valsServices "dataprep" | default dict)) -}}
 {{- $_ := set $vals "services" $valsServices -}}
 {{- $ctx := dict "name" "dataprep" "component" "dataprep" "Values" $vals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}

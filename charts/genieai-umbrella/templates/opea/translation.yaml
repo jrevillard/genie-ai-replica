@@ -74,9 +74,9 @@ spec:
               value: {{ include "genieai-umbrella.observabilityEnabledFlag" . | quote }}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: {{ include "genieai-umbrella.otlpEndpoint" . }}
+          {{- $tRes := mergeOverwrite (dict "requests" (dict "cpu" "200m" "memory" "256Mi") "limits" (dict "cpu" "2" "memory" "2Gi")) (index (index (.Values.services | default dict) "translation" | default dict) "resources" | default dict) }}
           resources:
-            requests: { cpu: 200m, memory: 256Mi }
-            limits: { cpu: 2, memory: 2Gi }
+            {{- toYaml $tRes | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

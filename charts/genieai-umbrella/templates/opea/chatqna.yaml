@@ -164,7 +164,7 @@ chart correct until that lands. */ -}}
 cleared `services` map has nothing to mutate, and `set` on a nil map
 crashes the template engine. */ -}}
 {{- $valsServices := $vals.services | default dict -}}
-{{- $_ := set $valsServices "chatqna" $svcVals -}}
+{{- $_ := set $valsServices "chatqna" (mergeOverwrite $svcVals (index $valsServices "chatqna" | default dict)) -}}
 {{- $_ := set $vals "services" $valsServices -}}
 {{- $ctx := dict "name" "chatqna" "component" "chatqna" "Values" $vals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}

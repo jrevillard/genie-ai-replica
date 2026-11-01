@@ -410,6 +410,9 @@ workflow:
             -d "client_id=admin-cli" -d "username=admin" \
             --data-urlencode "password=${KC_PWD}" -d "grant_type=password" || true)
           TOKEN_STATUS=$(printf '%s' "$TOKEN_RESP" | tail -n1)
+          # If curl died before emitting the -w trailer, the last line is body
+          # text — only an all-digit status is a usable signal.
+          case "$TOKEN_STATUS" in ''|*[!0-9]*) TOKEN_STATUS="" ;; esac
           ADMIN_TOKEN=$(printf '%s' "$TOKEN_RESP" | sed '$d' \
             | python3 -c "import sys,json; d=json.load(sys.stdin); t=d.get('access_token'); print(t if isinstance(t, str) and t else '')" 2>/dev/null || true)
         fi
@@ -417,6 +420,7 @@ workflow:
           CLIENT_RESP=$(curl -sk --connect-timeout 5 --max-time 15 -w '\n%{http_code}' "${KC_URL}/admin/realms/genie/clients?clientId=genie-app" \
             -H "Authorization: Bearer $ADMIN_TOKEN" || true)
           CLIENT_STATUS=$(printf '%s' "$CLIENT_RESP" | tail -n1)
+          case "$CLIENT_STATUS" in ''|*[!0-9]*) CLIENT_STATUS="" ;; esac
           CLIENT_FOUND=$(printf '%s' "$CLIENT_RESP" | sed '$d' \
             | python3 -c "import sys,json; d=json.load(sys.stdin); print('yes' if isinstance(d, list) and d else '')" 2>/dev/null || true)
         fi
@@ -442,6 +446,9 @@ workflow:
             ;;
           404|3*|5*)
             echo "The auth path answered with a server or routing error (HTTP ${TOKEN_STATUS}) — check the Keycloak container health and the nginx/Kong routing; the credentials are not the first suspect."
+            ;;
+          429)
+            echo "The auth path is rate-limiting or has locked the admin account after repeated attempts (HTTP 429) — check nginx/Kong throttling settings and the Keycloak brute-force protector."
             ;;
           *)
             echo "This is a token-acquisition failure, not a genie-app client problem — check KEYCLOAK_ADMIN_PASSWORD and master-realm reachability."

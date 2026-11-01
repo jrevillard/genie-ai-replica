@@ -2252,7 +2252,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // below from the same snapshot, so the executed paths a test asserts can
     // never be computed from a different invocation than the consumed ones.
     EXECUTED_GLOBS = executedPaths();
-    EXECUTED_SPECS = specFilesUnderExecuted();
+    EXECUTED_SPECS = specFilesUnderExecuted(EXECUTED_GLOBS);
     DERIVED_CONSUMED = deriveConsumedPaths(
       EXECUTED_SPECS.map((file) => ({
         file,
@@ -2301,10 +2301,10 @@ describe('e2e merge-train changes filters (#1264)', () => {
 
   // Consumed at runtime by the executed specs but not visible on the
   // invocation line: helpers are imported, fixtures are uploaded/read by the
-  // documents specs (#1283). Like executedPaths above, the consumed list is
-  // derived from the specs themselves — a hand-written copy would inherit the
-  // same drift this guard exists to catch (a new shared directory imported by
-  // an executed spec would escape the anchor until someone edits a list).
+  // documents specs. Like executedPaths above, the consumed list is derived
+  // from the specs themselves — a hand-written copy would inherit the same
+  // drift this guard exists to catch (a new shared directory imported by an
+  // executed spec would escape the anchor until someone edits a list).
   // Two consumption shapes exist in the tree: relative require/import
   // specifiers (the helpers) and path.join(__dirname, ...) segment chains
   // (the fixtures dir). Anything else a spec consumes is not derived.
@@ -2353,9 +2353,13 @@ describe('e2e merge-train changes filters (#1264)', () => {
   const deriveConsumedPaths = (specFiles) => {
     // Specifier quotes are unenforced in tests/e2e (no ESLint config covers
     // the tree), so both quote styles are consumed; the backreference keeps
-    // the quotes paired.
-    const specifierRe = /(?:require\(\s*|from\s+|import\(\s*)(['"])(\.[^'"]*)\1/g;
-    const joinRe = /path\.(?:join|resolve)\(__dirname((?:\s*,\s*'[^']*')+)\)/g;
+    // the quotes paired. `import ... from`, dynamic import() and bare
+    // side-effect imports all land in the same alternation.
+    const specifierRe = /(?:require\(\s*|from\s+|import\(\s*|import\s+)(['"])(\.[^'"]*)\1/g;
+    // Same shape tolerance for __dirname chains: either quote style, any
+    // spacing. A join carrying a non-literal argument is not matched at all
+    // (tracked in #1325); an inline comment inside the call likewise.
+    const joinRe = /path\.(?:join|resolve)\(\s*__dirname((?:\s*,\s*(['"])[^'"]*\2)+)\s*\)/g;
     const globs = new Set();
     for (const { file, source } of specFiles) {
       const dir = path.posix.dirname(file);
@@ -2364,7 +2368,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
         if (resolved) globs.add(toAnchorPath(resolved, false));
       }
       for (const match of source.matchAll(joinRe)) {
-        const segments = [...match[1].matchAll(/'([^']*)'/g)].map((m) => m[1]);
+        const segments = [...match[1].matchAll(/(['"])([^'"]*)\1/g)].map((m) => m[2]);
         const resolved = path.posix.normalize(path.posix.join(dir, ...segments));
         const st = statInTree(resolved);
         if (!st) continue;
@@ -2377,15 +2381,15 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // The spec files the invocation executes: real files under the executed
   // globs (a `X/**/*` glob narrows to the `X/` subtree — with a real
   // directory boundary, a sibling `X-v2/` is not covered — an exact entry
-  // stays exact). Playwright's default testMatch runs *.spec.js AND *.test.js
-  // (the config test below pins that the config still leaves the default in
-  // place), so both count as executed.
-  const specFilesUnderExecuted = () =>
+  // stays exact). Playwright's default testMatch runs the .js/.ts/.mjs/.cjs
+  // spellings of *.spec and *.test (the config test pins that the default
+  // is still in force), so all of them count as executed.
+  const specFilesUnderExecuted = (executedGlobs) =>
     scanTargets(
       fs
         .readdirSync(path.join(ROOT, TESTS_E2E_ROOT), { recursive: true })
         .map((f) => `${TESTS_E2E_ROOT}/${f.split(path.sep).join('/')}`),
-      executedPaths()
+      executedGlobs
     );
 
   // Pure selection of the executed files from a directory listing — the
@@ -2393,7 +2397,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // listings, the real-tree pin above anchors them to the actual invocation.
   const scanTargets = (files, executedGlobs) =>
     files
-      .filter((f) => f.endsWith('.spec.js') || f.endsWith('.test.js'))
+      .filter((f) => /\.(spec|test)\.[cm]?[jt]sx?$/.test(f))
       .filter((f) => executedGlobs.some((g) => (g.endsWith('/**/*') ? f.startsWith(`${g.slice(0, -5)}/`) : f === g)));
 
   test('executed and consumed paths are listed in the shared anchor', () => {
@@ -2423,13 +2427,16 @@ describe('e2e merge-train changes filters (#1264)', () => {
     expect(DERIVED_CONSUMED).toEqual(['tests/e2e/fixtures/**/*', 'tests/e2e/helpers/**/*']);
   });
 
-  // The derivation assumes Playwright's default testMatch (*.spec.js and
-  // *.test.js). If the config ever pins its own testMatch, the scan set
-  // silently diverges from what actually executes — the same hand-copied
-  // drift this guard exists to catch, in its own input. Pin the assumption
-  // so a testMatch introduction fails here first, loudly.
-  test('playwright.config.js pins no testMatch of its own', () => {
-    expect(fs.readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8')).not.toMatch(/testMatch/);
+  // The derivation assumes Playwright's default testMatch (which shapes
+  // execute) and relies on testDir pointing at the tree the invocation
+  // targets. If the config ever pins its own testMatch or moves testDir,
+  // the scan set silently diverges from what actually executes — the same
+  // hand-copied drift this guard exists to catch, in its own input. Pin
+  // both so an override fails here first, loudly.
+  test('playwright.config.js keeps the defaults the derivation assumes', () => {
+    const config = fs.readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8');
+    expect(config).not.toMatch(/testMatch/);
+    expect(config).toMatch(/testDir:\s*'\.\/tests\/e2e'/);
   });
 
   describe('consumed-path derivation units', () => {
@@ -2442,6 +2449,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
         expect(scanTargets(['tests/e2e/chatbot/x.test.js', 'tests/e2e/chatbot/x.js'], GLOBS)).toEqual([
           'tests/e2e/chatbot/x.test.js'
         ]);
+      });
+
+      test('every extension of the default testMatch executes', () => {
+        const listing = ['tests/e2e/chatbot/x.spec.ts', 'tests/e2e/chatbot/x.test.mjs', 'tests/e2e/chatbot/x.spec.cjs'];
+        expect(scanTargets(listing, GLOBS)).toEqual(listing);
       });
 
       test('a sibling directory beyond the glob boundary is not executed', () => {
@@ -2473,6 +2485,12 @@ describe('e2e merge-train changes filters (#1264)', () => {
       ).toEqual(['tests/e2e/fixtures/**/*']);
     });
 
+    test('a join with space after the paren and double-quoted segments still matches', () => {
+      expect(
+        deriveFrom('tests/e2e/documents/x.spec.js', 'const d = path.join( __dirname, "..", "fixtures" );')
+      ).toEqual(['tests/e2e/fixtures/**/*']);
+    });
+
     test('a file directly under tests/e2e maps to its exact path', () => {
       expect(
         deriveFrom('tests/e2e/documents/x.spec.js', "const t = require('../theme-runtime-config.spec.js');")
@@ -2486,6 +2504,12 @@ describe('e2e merge-train changes filters (#1264)', () => {
 
     test('double-quoted specifiers are consumed too', () => {
       expect(deriveFrom('tests/e2e/chatbot/x.spec.js', 'const h = require("../helpers/auth");')).toEqual([
+        'tests/e2e/helpers/**/*'
+      ]);
+    });
+
+    test('a side-effect import is consumed too', () => {
+      expect(deriveFrom('tests/e2e/chatbot/x.spec.js', "import '../helpers/auth';")).toEqual([
         'tests/e2e/helpers/**/*'
       ]);
     });

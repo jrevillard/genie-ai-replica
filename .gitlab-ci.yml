@@ -511,7 +511,15 @@ workflow:
             # end the job green with zero tests run. Fall through instead.
             echo "ROPC refusal verified at the token endpoint (HTTP ${ROPC_STATUS} ${ROPC_ERROR}) — direct access grants rejected"
           elif [ "$ROPC_ERROR" = "invalid_grant" ]; then
+            # Verified on Keycloak 26.7: the direct-grants gate runs before
+            # credential validation, so invalid_grant here means the grant
+            # was accepted and the credentials rejected — i.e. drift. If a
+            # Keycloak upgrade ever reverses that order, a healthy realm
+            # answers invalid_grant too and this verdict misfires.
             echo "ERROR: genie realm ROPC posture drifted (HTTP ${ROPC_STATUS}, error 'invalid_grant') — credential validation only runs when the direct-access grant was accepted; directAccessGrantsEnabled must stay false on genie-app; body: ${ROPC_BODY:-none}"
+            exit 1
+          elif [ "$ROPC_ERROR" = "invalid_client" ]; then
+            echo "ERROR: client authentication failed (HTTP ${ROPC_STATUS} invalid_client) — is genie-app still a public client? Check publicClient/KEYCLOAK_CLIENT_SECRET; body: ${ROPC_BODY:-none}"
             exit 1
           elif [ -n "$ROPC_ERROR" ]; then
             echo "ERROR: unexpected error '${ROPC_ERROR}' from the genie token endpoint (HTTP ${ROPC_STATUS}) — not a recognized refusal verdict; body: ${ROPC_BODY:-none}"

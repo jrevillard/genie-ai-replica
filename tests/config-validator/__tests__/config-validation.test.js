@@ -2296,12 +2296,16 @@ describe('e2e merge-train changes filters (#1264)', () => {
     }
   });
 
-  // Stack-input entries the jobs deploy or consume from this checkout — the
-  // compose file, the env template, the Keycloak tree (whose realm yaml the
-  // ROPC-refusal probe asserts through the rebuilt keycloak-config image)
-  // and the collector config. Not derivable from the Playwright invocation;
-  // a cleanup pruning one of them re-silences the train trigger silently.
+  // Entries the jobs deploy or consume from this checkout — the component
+  // trees the stack runs, the compose file, the env template, the Keycloak
+  // tree (see the anchor bullet in .gitlab-ci.yml for the baked/bind-mount
+  // split) and the collector config. Not derivable from the Playwright
+  // invocation; a cleanup pruning one of them re-silences the train trigger
+  // silently.
   const STACK_INPUT_PATHS = [
+    'components/gov-chat-frontend/**/*',
+    'components/gov-chat-backend/**/*',
+    'components/document-repository/**/*',
     '.gitlab-ci.yml',
     'playwright.config.js',
     'package.json',
@@ -2323,14 +2327,16 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // bakes the realm (and the import entrypoint); if that build stops
   // instantiating on the tree, a realm-only MR trains against a stale image
   // and the probe asserts the wrong realm. The build job's inline
-  // `paths: [...]` form is opaque to the line parser, so pin it textually —
-  // and per rule branch: sectionOf concatenates them, so a single toContain
-  // stays green when only the merge_request_event rule (the branch that
-  // instantiates the build on trains) loses the glob. All three branches
-  // (merge_request_event, default branch, release) carry it deliberately.
-  test('build:keycloak-config still triggers on the keycloak tree in every rule branch', () => {
-    const count = (sectionOf('build:keycloak-config').match(/"configs\/keycloak\/\*\*\/\*"/g) || []).length;
-    expect(count).toBeGreaterThanOrEqual(3);
+  // `paths: [...]` form is opaque to the line parser, so pin the
+  // merge_request_event rule — the branch that instantiates the build on
+  // merge trains — by adjacency: its paths list sits immediately above the
+  // compare_to line.
+  test('build:keycloak-config merge_request_event rule still triggers on the keycloak tree', () => {
+    const lines = sectionOf('build:keycloak-config').split('\n');
+    const compareTo = lines.findIndex((l) => l.includes('compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME'));
+    expect(compareTo).toBeGreaterThan(0);
+    const adjacent = lines.slice(Math.max(0, compareTo - 2), compareTo + 1).join('\n');
+    expect(adjacent).toContain('"configs/keycloak/**/*"');
   });
 
   test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {

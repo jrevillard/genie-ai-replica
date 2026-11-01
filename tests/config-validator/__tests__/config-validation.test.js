@@ -2346,13 +2346,23 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // The default-branch and release rules carry the same paths list (for
   // pending-<sha> images and release builds); adjacency above pins the
   // merge_request_event branch, the count here keeps the other two honest.
+  // Exactly 3: one occurrence per rule branch — a compensating duplicate
+  // must not mask a branch that lost the entry.
   test.each(['build:keycloak-config', 'scan:keycloak-config', 'promote:keycloak-config'])(
     '%s carries the keycloak glob in all three rule branches',
     (job) => {
       const count = (sectionOf(job).match(/"configs\/keycloak\/\*\*\/\*"/g) || []).length;
-      expect(count).toBeGreaterThanOrEqual(3);
+      expect(count).toBe(3);
     }
   );
+
+  // The widened keycloak trigger exists to feed the ROPC-refusal probe in
+  // .e2e_web_base; if the probe block is ever deleted the trigger loses its
+  // justification — pin the probe's presence so the pair cannot drift apart
+  // silently.
+  test('the ROPC-refusal probe is present in .e2e_web_base', () => {
+    expect(sectionOf('.e2e_web_base')).toContain('ROPC refusal verified');
+  });
 
   test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {
     // The invariant exists because of this hard needs — pin it too.

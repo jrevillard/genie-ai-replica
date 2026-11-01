@@ -479,9 +479,9 @@ workflow:
           *) break ;;
         esac
       done
-      ROPC_FIELDS=$(python3 -c "import sys,json; d=json.load(open('/tmp/ropc-probe-body.json')); print(d.get('error',''), 'yes' if d.get('access_token') else 'no')" 2>/dev/null || true)
-      ROPC_ERROR=${ROPC_FIELDS%% *}
-      ROPC_TOKEN=${ROPC_FIELDS##* }
+      ROPC_FIELDS=$(python3 -c "import sys,json; d=json.load(open('/tmp/ropc-probe-body.json')); print(d.get('error','') + '|' + ('yes' if d.get('access_token') else 'no'))" 2>/dev/null || true)
+      ROPC_ERROR=${ROPC_FIELDS%|*}
+      ROPC_TOKEN=${ROPC_FIELDS#*|}
       ROPC_BODY=$(head -c 200 /tmp/ropc-probe-body.json 2>/dev/null || true)
       rm -f /tmp/ropc-probe-body.json
       ropc_gateway_fail() {
@@ -495,8 +495,13 @@ workflow:
           ;;
         4[0-9][0-9])
           if [ "$ROPC_ERROR" = "unauthorized_client" ] || [ "$ROPC_ERROR" = "unsupported_grant_type" ]; then
+            # No exit here: GitLab concatenates the script items into one
+            # shell, so exiting on the healthy path would end the whole job
+            # "successfully" with zero tests run. Fall through to the suites.
             echo "ROPC refusal verified: genie-app rejects direct access grants (HTTP ${ROPC_STATUS} ${ROPC_ERROR})"
-            exit 0
+          elif [ "$ROPC_ERROR" = "invalid_grant" ]; then
+            echo "ERROR: genie realm ROPC posture drifted (HTTP ${ROPC_STATUS}, error 'invalid_grant') — credential validation only runs when the direct-access grant was accepted; directAccessGrantsEnabled must stay false on genie-app"
+            exit 1
           elif [ -n "$ROPC_ERROR" ]; then
             echo "ERROR: unexpected error '${ROPC_ERROR}' from the genie token endpoint (HTTP ${ROPC_STATUS}) — not a recognized refusal verdict; body: ${ROPC_BODY:-none}"
             exit 1

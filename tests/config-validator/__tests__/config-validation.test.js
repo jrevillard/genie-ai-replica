@@ -2311,9 +2311,9 @@ describe('e2e merge-train changes filters (#1264)', () => {
 
   // Anchor-style entry covering a resolved path: a file directly under
   // tests/e2e is listed exactly (the anchor lists such files verbatim),
-  // anything deeper becomes its directory glob.
+  // anything deeper becomes its directory glob. Both callers pre-filter to
+  // strict descendants of tests/e2e, so the root itself never reaches here.
   const toAnchorPath = (resolvedPath, isDir) => {
-    if (resolvedPath === TESTS_E2E_ROOT) return null;
     if (isDir) return `${resolvedPath}/**/*`;
     const dir = path.posix.dirname(resolvedPath);
     return dir === TESTS_E2E_ROOT ? resolvedPath : `${dir}/**/*`;
@@ -2325,13 +2325,16 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // inside tests/e2e to something that exists on disk — the regexes
   // over-capture (comments, dead references) and the filesystem arbitrates.
   const deriveConsumedPaths = (specFiles) => {
-    const specifierRe = /(?:require\(\s*|from\s+|import\(\s*)'(\.[^']*)'/g;
+    // Specifier quotes are unenforced in tests/e2e (no ESLint config covers
+    // the tree), so both quote styles are consumed; the backreference keeps
+    // the quotes paired.
+    const specifierRe = /(?:require\(\s*|from\s+|import\(\s*)(['"])(\.[^'"]*)\1/g;
     const joinRe = /path\.(?:join|resolve)\(__dirname((?:\s*,\s*'[^']*')+)\)/g;
     const globs = new Set();
     for (const { file, source } of specFiles) {
       const dir = path.posix.dirname(file);
       for (const match of source.matchAll(specifierRe)) {
-        const resolved = resolveSpecifier(dir, match[1]);
+        const resolved = resolveSpecifier(dir, match[2]);
         if (resolved) globs.add(toAnchorPath(resolved, false));
       }
       for (const match of source.matchAll(joinRe)) {
@@ -2340,22 +2343,32 @@ describe('e2e merge-train changes filters (#1264)', () => {
         if (!resolved.startsWith(`${TESTS_E2E_ROOT}/`)) continue;
         const abs = path.join(ROOT, resolved);
         if (!fs.existsSync(abs)) continue;
-        const anchorPath = toAnchorPath(resolved, fs.statSync(abs).isDirectory());
-        if (anchorPath) globs.add(anchorPath);
+        globs.add(toAnchorPath(resolved, fs.statSync(abs).isDirectory()));
       }
     }
     return [...globs].sort();
   };
 
   // The spec files the invocation executes: real files under the executed
-  // globs (a `X/**/*` glob narrows to the `X/` subtree, an exact entry stays
-  // exact).
+  // globs (a `X/**/*` glob narrows to the `X/` subtree — with a real
+  // directory boundary, a sibling `X-v2/` is not covered — an exact entry
+  // stays exact). Playwright's default testMatch runs *.spec.js AND *.test.js
+  // (playwright.config.js sets only testDir), so both count as executed.
   const specFilesUnderExecuted = (executedGlobs) =>
-    fs
-      .readdirSync(path.join(ROOT, TESTS_E2E_ROOT), { recursive: true })
-      .map((f) => `${TESTS_E2E_ROOT}/${f.split(path.sep).join('/')}`)
-      .filter((f) => f.endsWith('.spec.js'))
-      .filter((f) => executedGlobs.some((g) => (g.endsWith('/**/*') ? f.startsWith(g.slice(0, -5)) : f === g)));
+    scanTargets(
+      fs
+        .readdirSync(path.join(ROOT, TESTS_E2E_ROOT), { recursive: true })
+        .map((f) => `${TESTS_E2E_ROOT}/${f.split(path.sep).join('/')}`),
+      executedGlobs
+    );
+
+  // Pure selection of the executed files from a directory listing — the
+  // units below pin the boundary and the testMatch shapes on synthetic
+  // listings, the real-tree pin above anchors them to the actual invocation.
+  const scanTargets = (files, executedGlobs) =>
+    files
+      .filter((f) => f.endsWith('.spec.js') || f.endsWith('.test.js'))
+      .filter((f) => executedGlobs.some((g) => (g.endsWith('/**/*') ? f.startsWith(`${g.slice(0, -5)}/`) : f === g)));
 
   const derivedConsumedPaths = () =>
     deriveConsumedPaths(
@@ -2395,6 +2408,20 @@ describe('e2e merge-train changes filters (#1264)', () => {
   describe('consumed-path derivation units', () => {
     const deriveFrom = (file, source) => deriveConsumedPaths([{ file, source }]);
 
+    describe('scan-target selection', () => {
+      const GLOBS = ['tests/e2e/chatbot/**/*', 'tests/e2e/theme-runtime-config.spec.js'];
+
+      test('a .test.js file executes under the default testMatch too', () => {
+        expect(scanTargets(['tests/e2e/chatbot/x.test.js', 'tests/e2e/chatbot/x.js'], GLOBS)).toEqual([
+          'tests/e2e/chatbot/x.test.js'
+        ]);
+      });
+
+      test('a sibling directory beyond the glob boundary is not executed', () => {
+        expect(scanTargets(['tests/e2e/chatbot-v2/x.spec.js', 'tests/e2e/chatbotless.spec.js'], GLOBS)).toEqual([]);
+      });
+    });
+
     test('a relative require maps to its directory glob', () => {
       expect(deriveFrom('tests/e2e/chatbot/x.spec.js', "const h = require('../helpers/auth');")).toEqual([
         'tests/e2e/helpers/**/*'
@@ -2428,6 +2455,12 @@ describe('e2e merge-train changes filters (#1264)', () => {
     test('ESM import and dynamic import specifiers are consumed too', () => {
       const source = "import x from '../helpers/auth';\nconst y = import('../helpers/locale');";
       expect(deriveFrom('tests/e2e/chatbot/x.spec.js', source)).toEqual(['tests/e2e/helpers/**/*']);
+    });
+
+    test('double-quoted specifiers are consumed too', () => {
+      expect(deriveFrom('tests/e2e/chatbot/x.spec.js', 'const h = require("../helpers/auth");')).toEqual([
+        'tests/e2e/helpers/**/*'
+      ]);
     });
 
     test('specifiers that leave tests/e2e or do not exist are dropped', () => {

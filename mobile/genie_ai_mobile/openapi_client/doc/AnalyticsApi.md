@@ -112,7 +112,7 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **apiAnalyticsEventsPost**
-> Event apiAnalyticsEventsPost(apiAnalyticsEventsPostRequest)
+> Event apiAnalyticsEventsPost(eventRequest)
 
 Track an event
 
@@ -123,10 +123,10 @@ Records a user event for analytics
 import 'package:openapi/api.dart';
 
 final api_instance = AnalyticsApi();
-final apiAnalyticsEventsPostRequest = ApiAnalyticsEventsPostRequest(); // ApiAnalyticsEventsPostRequest | 
+final eventRequest = EventRequest(); // EventRequest | 
 
 try {
-    final result = api_instance.apiAnalyticsEventsPost(apiAnalyticsEventsPostRequest);
+    final result = api_instance.apiAnalyticsEventsPost(eventRequest);
     print(result);
 } catch (e) {
     print('Exception when calling AnalyticsApi->apiAnalyticsEventsPost: $e\n');
@@ -137,7 +137,7 @@ try {
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **apiAnalyticsEventsPostRequest** | [**ApiAnalyticsEventsPostRequest**](ApiAnalyticsEventsPostRequest.md)|  | 
+ **eventRequest** | [**EventRequest**](EventRequest.md)|  | 
 
 ### Return type
 

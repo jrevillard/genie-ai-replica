@@ -1,4 +1,4 @@
-# openapi.model.ApiAnalyticsEventsPostRequest
+# openapi.model.EventRequest
 
 ## Load the model package
 ```dart

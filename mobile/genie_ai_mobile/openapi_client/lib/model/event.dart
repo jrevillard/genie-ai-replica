@@ -16,7 +16,6 @@ class Event {
     this.key,
     this.userId,
     this.eventType,
-    this.eventData,
     this.timestamp,
     this.id,
     this.rev,
@@ -49,15 +48,6 @@ class Event {
   /// Consider adding a "default:" property in the specification file to hide this note.
   ///
   String? eventType;
-
-  /// Additional event data
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
-  Object? eventData;
 
   /// Event timestamp
   ///
@@ -98,7 +88,6 @@ class Event {
     other.key == key &&
     other.userId == userId &&
     other.eventType == eventType &&
-    other.eventData == eventData &&
     other.timestamp == timestamp &&
     other.id == id &&
     other.rev == rev &&
@@ -110,14 +99,13 @@ class Event {
     (key == null ? 0 : key!.hashCode) +
     (userId == null ? 0 : userId!.hashCode) +
     (eventType == null ? 0 : eventType!.hashCode) +
-    (eventData == null ? 0 : eventData!.hashCode) +
     (timestamp == null ? 0 : timestamp!.hashCode) +
     (id == null ? 0 : id!.hashCode) +
     (rev == null ? 0 : rev!.hashCode) +
     (data == null ? 0 : data!.hashCode);
 
   @override
-  String toString() => 'Event[key=$key, userId=$userId, eventType=$eventType, eventData=$eventData, timestamp=$timestamp, id=$id, rev=$rev, data=$data]';
+  String toString() => 'Event[key=$key, userId=$userId, eventType=$eventType, timestamp=$timestamp, id=$id, rev=$rev, data=$data]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -135,11 +123,6 @@ class Event {
       json[r'eventType'] = this.eventType;
     } else {
       json[r'eventType'] = null;
-    }
-    if (this.eventData != null) {
-      json[r'eventData'] = this.eventData;
-    } else {
-      json[r'eventData'] = null;
     }
     if (this.timestamp != null) {
       json[r'timestamp'] = this.timestamp!.toUtc().toIso8601String();
@@ -182,7 +165,6 @@ class Event {
         key: mapValueOfType<String>(json, r'_key'),
         userId: mapValueOfType<String>(json, r'userId'),
         eventType: mapValueOfType<String>(json, r'eventType'),
-        eventData: mapValueOfType<Object>(json, r'eventData'),
         timestamp: mapDateTime(json, r'timestamp', r''),
         id: mapValueOfType<String>(json, r'_id'),
         rev: mapValueOfType<String>(json, r'_rev'),

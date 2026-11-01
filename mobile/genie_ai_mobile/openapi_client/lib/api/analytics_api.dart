@@ -178,13 +178,13 @@ class AnalyticsApi {
   ///
   /// Parameters:
   ///
-  /// * [ApiAnalyticsEventsPostRequest] apiAnalyticsEventsPostRequest (required):
-  Future<Response> apiAnalyticsEventsPostWithHttpInfo(ApiAnalyticsEventsPostRequest apiAnalyticsEventsPostRequest,) async {
+  /// * [EventRequest] eventRequest (required):
+  Future<Response> apiAnalyticsEventsPostWithHttpInfo(EventRequest eventRequest,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/analytics/events';
 
     // ignore: prefer_final_locals
-    Object? postBody = apiAnalyticsEventsPostRequest;
+    Object? postBody = eventRequest;
 
     final queryParams = <QueryParam>[];
     final headerParams = <String, String>{};
@@ -210,9 +210,9 @@ class AnalyticsApi {
   ///
   /// Parameters:
   ///
-  /// * [ApiAnalyticsEventsPostRequest] apiAnalyticsEventsPostRequest (required):
-  Future<Event?> apiAnalyticsEventsPost(ApiAnalyticsEventsPostRequest apiAnalyticsEventsPostRequest,) async {
-    final response = await apiAnalyticsEventsPostWithHttpInfo(apiAnalyticsEventsPostRequest,);
+  /// * [EventRequest] eventRequest (required):
+  Future<Event?> apiAnalyticsEventsPost(EventRequest eventRequest,) async {
+    final response = await apiAnalyticsEventsPostWithHttpInfo(eventRequest,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }

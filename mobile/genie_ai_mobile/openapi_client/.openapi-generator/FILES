@@ -31,7 +31,6 @@ doc/ApiAnalyticsDashboardGet200ResponseFeedback.md
 doc/ApiAnalyticsDashboardGet200ResponseQueries.md
 doc/ApiAnalyticsDashboardGet200ResponseTopQueriesInner.md
 doc/ApiAnalyticsDashboardGet200ResponseUsers.md
-doc/ApiAnalyticsEventsPostRequest.md
 doc/ApiAnalyticsMetricMetricGet200Response.md
 doc/ApiAnalyticsSatisfactionGaugeGet200Response.md
 doc/ApiAnalyticsSatisfactionGaugeGet200ResponseHistoricalDataInner.md
@@ -101,6 +100,7 @@ doc/ConversationStatsMessagesByType.md
 doc/CurrentUserApi.md
 doc/DatabaseOperationsApi.md
 doc/Event.md
+doc/EventRequest.md
 doc/Folder.md
 doc/FolderListResponse.md
 doc/Message.md
@@ -165,7 +165,6 @@ lib/model/api_analytics_dashboard_get200_response_feedback.dart
 lib/model/api_analytics_dashboard_get200_response_queries.dart
 lib/model/api_analytics_dashboard_get200_response_top_queries_inner.dart
 lib/model/api_analytics_dashboard_get200_response_users.dart
-lib/model/api_analytics_events_post_request.dart
 lib/model/api_analytics_metric_metric_get200_response.dart
 lib/model/api_analytics_satisfaction_gauge_get200_response.dart
 lib/model/api_analytics_satisfaction_gauge_get200_response_historical_data_inner.dart
@@ -231,6 +230,7 @@ lib/model/conversation_stats.dart
 lib/model/conversation_stats_conversations_by_category_inner.dart
 lib/model/conversation_stats_messages_by_type.dart
 lib/model/event.dart
+lib/model/event_request.dart
 lib/model/folder.dart
 lib/model/folder_list_response.dart
 lib/model/message.dart
@@ -272,7 +272,6 @@ test/api_analytics_dashboard_get200_response_queries_test.dart
 test/api_analytics_dashboard_get200_response_test.dart
 test/api_analytics_dashboard_get200_response_top_queries_inner_test.dart
 test/api_analytics_dashboard_get200_response_users_test.dart
-test/api_analytics_events_post_request_test.dart
 test/api_analytics_metric_metric_get200_response_test.dart
 test/api_analytics_satisfaction_gauge_get200_response_historical_data_inner_test.dart
 test/api_analytics_satisfaction_gauge_get200_response_test.dart
@@ -341,6 +340,7 @@ test/conversation_stats_test.dart
 test/conversation_test.dart
 test/current_user_api_test.dart
 test/database_operations_api_test.dart
+test/event_request_test.dart
 test/event_test.dart
 test/folder_list_response_test.dart
 test/folder_test.dart

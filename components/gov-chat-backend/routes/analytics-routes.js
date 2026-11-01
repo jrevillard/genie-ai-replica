@@ -258,16 +258,7 @@ module.exports = (analyticsService) => {
      *       content:
      *         application/json:
      *           schema:
-     *             type: object
-     *             required:
-     *               - eventType
-     *             properties:
-     *               eventType:
-     *                 type: string
-     *                 description: Type of event (e.g., pageView, buttonClick)
-     *               eventData:
-     *                 type: object
-     *                 description: Additional event data
+     *             $ref: '#/components/schemas/EventRequest'
      *     responses:
      *       201:
      *         description: Event tracked successfully

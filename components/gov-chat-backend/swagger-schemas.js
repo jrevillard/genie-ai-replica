@@ -1,17 +1,30 @@
 // Shared OpenAPI component schemas — the single source of truth for the
 // components.schemas section of the runtime spec. Some are $ref'd from the
-// route annotations (Analytics, CategoryTree, Event, QueryContext); the rest
-// document the runtime contract in swagger-ui. Consumed by index.js (the
-// runtime swagger spec) and by scripts/generate-api-client.sh (the mobile
-// client generation spec), so both specs carry the same schemas.
+// route annotations (Analytics, CategoryTree, Event, EventRequest,
+// QueryContext); the rest document the runtime contract in swagger-ui.
+// Consumed by index.js (the runtime swagger spec) and by
+// scripts/generate-api-client.sh (the mobile client generation spec), so
+// both specs carry the same schemas.
 module.exports = {
+  // The POST /api/analytics/events request wire — the route reads exactly
+  // these two fields; `timestamp` is server-set and not read from the wire.
+  EventRequest: {
+    type: 'object',
+    required: ['eventType'],
+    properties: {
+      eventType: { type: 'string', description: 'Type of event (e.g., pageView, buttonClick)' },
+      eventData: { type: 'object', description: 'Additional event data' }
+    }
+  },
+  // The persisted ArangoDB event document (GET /api/analytics/events items,
+  // save metadata shape aside). The request payload arrives as `data`
+  // (stored by the service from the wire's `eventData`).
   Event: {
     type: 'object',
     properties: {
       _key: { type: 'string', description: 'Unique identifier' },
       userId: { type: 'string', description: 'ID of the user' },
       eventType: { type: 'string', description: 'Type of event (e.g., pageView, buttonClick)' },
-      eventData: { type: 'object', description: 'Additional event data' },
       timestamp: { type: 'string', format: 'date-time', description: 'Event timestamp' },
       _id: { type: 'string' },
       _rev: { type: 'string' },

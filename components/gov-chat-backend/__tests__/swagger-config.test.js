@@ -245,6 +245,42 @@ describe('Swagger Configuration', () => {
     });
   });
 
+  describe('Event contract split (request wire vs stored document)', () => {
+    // The route destructures exactly eventType + eventData from the wire
+    // (timestamp is server-set) and the service stores the payload under
+    // `data`, so EventRequest documents the request wire and Event stays
+    // the stored ArangoDB document shape. A shared schema carrying both
+    // spellings made `eventData` vs `data` ambiguous to client authors —
+    // sending `data` was silently dropped (stored as {}).
+    const spec = buildSpecWithRealFs(swaggerOptions);
+    const eventsPost = spec.paths['/api/analytics/events'].post;
+
+    it('annotates the POST request body with EventRequest, not Event', () => {
+      expect(eventsPost.requestBody.content['application/json'].schema).toEqual({
+        $ref: '#/components/schemas/EventRequest'
+      });
+    });
+
+    it('EventRequest carries the request wire: eventType required, eventData, no stored fields', () => {
+      const eventRequest = spec.components.schemas.EventRequest;
+      expect(eventRequest.required).toEqual(['eventType']);
+      expect(Object.keys(eventRequest.properties).sort()).toEqual(['eventData', 'eventType']);
+    });
+
+    it('Event carries the stored shape: data, no request-wire eventData', () => {
+      const event = spec.components.schemas.Event;
+      expect('data' in event.properties).toBe(true);
+      expect('eventData' in event.properties).toBe(false);
+    });
+
+    it('keeps Event as the response shape of both events endpoints', () => {
+      expect(eventsPost.responses['201'].content['application/json'].schema.$ref).toBe('#/components/schemas/Event');
+      expect(
+        spec.paths['/api/analytics/events'].get.responses['200'].content['application/json'].schema.items.$ref
+      ).toBe('#/components/schemas/Event');
+    });
+  });
+
   describe('Server URL vs annotated paths', () => {
     // The exported swaggerOptions capture process.env.API_URL at module
     // load. These tests re-require index.js with API_URL pinned (unset or

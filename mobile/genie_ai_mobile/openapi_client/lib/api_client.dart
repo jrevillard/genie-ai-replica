@@ -236,8 +236,6 @@ class ApiClient {
           return ApiAnalyticsDashboardGet200ResponseTopQueriesInner.fromJson(value);
         case 'ApiAnalyticsDashboardGet200ResponseUsers':
           return ApiAnalyticsDashboardGet200ResponseUsers.fromJson(value);
-        case 'ApiAnalyticsEventsPostRequest':
-          return ApiAnalyticsEventsPostRequest.fromJson(value);
         case 'ApiAnalyticsMetricMetricGet200Response':
           return ApiAnalyticsMetricMetricGet200Response.fromJson(value);
         case 'ApiAnalyticsSatisfactionGaugeGet200Response':
@@ -368,6 +366,8 @@ class ApiClient {
           return ConversationStatsMessagesByType.fromJson(value);
         case 'Event':
           return Event.fromJson(value);
+        case 'EventRequest':
+          return EventRequest.fromJson(value);
         case 'Folder':
           return Folder.fromJson(value);
         case 'FolderListResponse':

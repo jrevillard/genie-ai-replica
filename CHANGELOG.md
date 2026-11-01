@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The documented `Event` contract no longer conflates the request wire with the stored document.** The shared `Event` schema described both the POST `/api/analytics/events` request body (`eventType` + `eventData` — the only fields the route reads) and the persisted ArangoDB document (`_id` / `_rev` / `data` — the service stores the payload under `data`), with `eventData` and `data` carrying the same description; a client author could not tell which spelling the wire wanted, and a request sending `data` was silently stored as `{}`. The contract is now split: a dedicated `EventRequest` schema (required `eventType`, optional `eventData`) annotates the request body, and `Event` keeps only the stored document shape. The runtime behavior is unchanged — the route still reads exactly `eventType` + `eventData` and the service still stores `data: eventData`. The generated Dart client was regenerated accordingly: the `Event` model drops the request-only `eventData` property, and the generated `ApiAnalyticsEventsPostRequest` model becomes `EventRequest`. (#1223)
+
 ### Fixed
 
 - **The API documentation's Try-it-out no longer sends every request to a doubled `/api/api/...` path.** The API docs page served by the backend described its server address as ending in `/api` while every documented path already starts with `/api`, so executing a request from the page built URLs like `.../api/api/queries` and returned 404. The documented server address no longer carries the `/api` ending. A deployment setting `API_URL` (never documented, and set by no shipped configuration) must give the base address without the `/api` ending — a value ending in `/api` produced the same doubled URLs before this change. (#1222, !669)

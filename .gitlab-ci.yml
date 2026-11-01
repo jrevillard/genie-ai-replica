@@ -479,7 +479,7 @@ workflow:
           -d "client_id=genie-app" -d "grant_type=password" \
           -d "username=ropc-probe-no-such-user" -d "password=ropc-probe-bogus-credentials") || true
         case "$ROPC_STATUS" in
-          5[0-9][0-9]|429|000|"")
+          5[0-9][0-9]|429|408|425|000|"")
             echo "ROPC probe attempt ${i}/5: no usable answer from the token endpoint (HTTP ${ROPC_STATUS:-none})"
             [ "$i" -lt 5 ] && sleep 5 ;;
           *) break ;;

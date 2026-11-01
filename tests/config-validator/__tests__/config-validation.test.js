@@ -2319,6 +2319,15 @@ describe('e2e merge-train changes filters (#1264)', () => {
     }
   });
 
+  // The e2e stack pulls the keycloak-config candidate image whose build job
+  // bakes the realm (and the import entrypoint); if that build stops
+  // instantiating on the tree, a realm-only MR trains against a stale image
+  // and the probe asserts the wrong realm. The build job's inline
+  // `paths: [...]` form is opaque to the line parser, so pin it textually.
+  test('build:keycloak-config still triggers on the keycloak tree', () => {
+    expect(sectionOf('build:keycloak-config')).toContain('"configs/keycloak/**/*"');
+  });
+
   test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {
     // The invariant exists because of this hard needs — pin it too.
     expect(sectionOf('e2e:playwright')).toContain('needs: [e2e:integration]');

@@ -3952,16 +3952,17 @@ class ChatQnAService:
         Returns:
             ``(text, status)``. The text is safe to hand to the embedder:
             the translated English history, or — when the translation could
-            not run — the flattened source-language history. The one
-            exception is a history whose newest message alone exceeds the
-            whole budget: there is no source text to fall back to, so the
-            text is empty and the retrieval query is empty with it. The
+            not run — the flattened source-language history. A history whose
+            newest message alone exceeds the whole budget is no exception:
+            the newest message's tail is kept (truncated to the budget), so
+            the query carries the end of the turn instead of an empty
+            string; the only empty text is an empty history. The
             status tells the caller which one it was:
             ``"translated"`` when the history came back in English,
             ``"fallback_timeout"`` when the translation service timed out,
             and ``"fallback_error"`` when it failed or refused for any other
-            reason (window too tight, unreadable language map, nothing fit
-            the budget, blank input, empty completion). The history is normalized for the
+            reason (window too tight, unreadable language map, blank input,
+            empty completion, an empty history). The history is normalized for the
             retriever and never shown to the user, so the turn is not failed
             on a fallback — but the fallback is never silent: the caller
             stamps the status on the ``chatqna.orchestrate`` span and into
@@ -3979,6 +3980,7 @@ class ChatQnAService:
             max_translation_chars = _get_max_translation_chars()
             current_chars = 0
             messages_to_process = []
+            newest_truncated = False
             if logflag:
                 logger.debug(f"Processing translation for history with {len(history)} messages.")
 
@@ -3991,23 +3993,41 @@ class ChatQnAService:
                 # reads it.
                 message_chars = len(message.get("content", ""))
                 if current_chars + message_chars + TRANSLATION_MSG_OVERHEAD_CHARS > max_translation_chars:
+                    if not messages_to_process:
+                        # Even the newest message exceeds the whole budget:
+                        # keep its tail instead of dropping it, so the
+                        # retrieval query carries the end of the turn (its
+                        # newest text) instead of an empty string. The
+                        # message dict is copied: the request's history must
+                        # stay untouched.
+                        tail_chars = max_translation_chars - TRANSLATION_MSG_OVERHEAD_CHARS
+                        content = message.get("content", "")[-tail_chars:] if tail_chars > 0 else ""
+                        messages_to_process.append({**message, "content": content})
+                        newest_truncated = True
                     break
                 messages_to_process.append(message)
                 current_chars += message_chars + TRANSLATION_MSG_OVERHEAD_CHARS
             messages_to_process.reverse()
             dropped_messages = len(history) - len(messages_to_process)
-            if dropped_messages:
+            if newest_truncated or dropped_messages:
                 history_truncation_total.add(1, {"path": "translation"})
+            if dropped_messages:
                 logger.warning(
                     "Chat history truncated for translation: budget_chars=%s kept_messages=%s dropped_messages=%s",
                     max_translation_chars,
                     len(messages_to_process),
                     dropped_messages,
                 )
+            if newest_truncated:
+                logger.warning(
+                    "Newest history message exceeds the translation budget (budget_chars=%s); "
+                    "keeping its last %s characters.",
+                    max_translation_chars,
+                    len(messages_to_process[-1].get("content", "")),
+                )
             if not messages_to_process:
-                # Even the newest message exceeds the whole budget: nothing to
-                # translate — sending an empty prompt would only harvest the
-                # model's junk reply as chat history.
+                # An empty history: nothing to translate, nothing to keep —
+                # the caller's regex finds no user message in an empty blob.
                 return "", QUERY_TRANSLATION_FALLBACK_ERROR
 
             flattened_history_string = _flatten_history_string(messages_to_process)

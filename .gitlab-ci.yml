@@ -504,12 +504,12 @@ workflow:
           exit 1
         fi
       }
-      create_testuser
-      if [ "$CREATE_STATUS" != "201" ] && [ "$CREATE_STATUS" != "409" ]; then
-        echo "ERROR: testuser creation failed (HTTP ${CREATE_STATUS:-<none>})"
+      die_bad_create() {
+        echo "ERROR: testuser creation failed (HTTP $(http_label "$CREATE_STATUS"))"
         echo "response body: ${CREATE_BODY}"
         exit 1
-      fi
+      }
+      create_testuser
       if [ "$CREATE_STATUS" = "409" ]; then
         # A 409 is not done: the existing account can hold any state from an
         # older fixture revision — disabled, unverified email, a lingering
@@ -524,22 +524,24 @@ workflow:
         DEL_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X DELETE "${KC_URL}/admin/realms/genie/users/${USER_ID}" \
           -H "Authorization: Bearer $ADMIN_TOKEN" || true)
         DEL_STATUS=$(printf '%s' "$DEL_RESP" | tail -n1)
+        DEL_BODY=$(printf '%s' "$DEL_RESP" | sed '$d' | head -c 200)
         if [ "$DEL_STATUS" != "204" ]; then
           echo "ERROR: cannot delete the stale testuser (HTTP $(http_label "$DEL_STATUS")) — delete the account manually and re-run the job"
+          echo "response body: ${DEL_BODY}"
           exit 1
         fi
         create_testuser
         if [ "$CREATE_STATUS" != "201" ]; then
-          echo "ERROR: testuser recreation after delete failed (HTTP $(http_label "$CREATE_STATUS"))"
-          echo "response body: ${CREATE_BODY}"
-          exit 1
+          die_bad_create
         fi
-        require_testuser_id
-        echo "testuser recreated (fixture state enforced)"
+        VERDICT="testuser recreated (fixture state enforced)"
+      elif [ "$CREATE_STATUS" != "201" ]; then
+        die_bad_create
       else
-        require_testuser_id
-        echo "testuser created"
+        VERDICT="testuser created"
       fi
+      require_testuser_id
+      echo "$VERDICT"
       # Assign admin realm role to test user (required for document upload/delete)
       ADMIN_ROLE=$(curl -sk "${KC_URL}/admin/realms/genie/roles" \
         -H "Authorization: Bearer $ADMIN_TOKEN" \

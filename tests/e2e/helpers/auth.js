@@ -84,6 +84,11 @@ async function getAdminToken(adminPassword) {
   return res.data.access_token;
 }
 
+// Remediation hint shared by the two getUserToken guards below.
+const ROPC_REALM_HINT =
+  'pass { realm: <test-realm> } for a test-only realm provisioned with ' +
+  'enableDirectAccessGrants';
+
 /**
  * Get a user token via ROPC (Resource Owner Password Credentials).
  *
@@ -94,12 +99,22 @@ async function getAdminToken(adminPassword) {
  * @param {string} username - Keycloak username
  * @param {string} password - User password
  * @param {object} [options] - Optional overrides
- * @param {string} [options.realm='genie'] - Keycloak realm (must be ROPC-enabled)
+ * @param {string} options.realm - Keycloak realm (REQUIRED, ROPC-enabled)
  * @param {string} [options.clientId='genie-app'] - Keycloak client ID
  * @returns {Promise<string>} Access token string
  */
 async function getUserToken(username, password, options = {}) {
-  const realm = options.realm || 'genie';
+  const realm = options.realm;
+
+  if (!realm) {
+    throw new Error(`getUserToken: realm is required — ${ROPC_REALM_HINT}`);
+  }
+  if (realm === 'genie') {
+    throw new Error(
+      `getUserToken: realm 'genie' refuses ROPC by design — mint a ` +
+        `primary-realm token with getSessionTokenViaUI, or ${ROPC_REALM_HINT}`
+    );
+  }
   const clientId = options.clientId || 'genie-app';
 
   const body = new URLSearchParams({
@@ -109,7 +124,7 @@ async function getUserToken(username, password, options = {}) {
     password,
   }).toString();
 
-  const res = await request('POST', `/auth/realms/${realm}/protocol/openid-connect/token`, {
+  const res = await request('POST', `/auth/realms/${encodeURIComponent(realm)}/protocol/openid-connect/token`, {
     body,
     contentType: 'application/x-www-form-urlencoded',
   });

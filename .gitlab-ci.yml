@@ -464,7 +464,7 @@ workflow:
     # https://localhost while CI serves E2E_BASE_URL=https://nginx, and they
     # need an OKF-enabled deployment (OKF_ENABLED=1). Including them here
     # guaranteed three red specs on every merge train.
-    - BASE_URL="${E2E_BASE_URL}" npx playwright test tests/e2e/chatbot/ tests/e2e/documents/ tests/e2e/theme-runtime-config.spec.js --project=chromium
+    - BASE_URL="${E2E_BASE_URL}" npx playwright test tests/e2e/chatbot/ tests/e2e/documents/ tests/e2e/theme-runtime-config.spec.js tests/e2e/helpers/ --project=chromium
   after_script:
     - mkdir -p e2e-logs
     - docker compose -p "ci-${CI_PIPELINE_ID}" logs > e2e-logs/docker-compose.log 2>&1 || true

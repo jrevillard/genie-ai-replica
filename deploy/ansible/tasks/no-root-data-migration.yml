@@ -56,9 +56,16 @@
   # tasks/ownership-probe-heal.yml; only the commands differ here.
   ansible.builtin.import_tasks: tasks/ownership-probe-heal.yml
   vars:
+    # -H: the data dir is commonly a SYMLINK (a small /opt pointing at a
+    # bigger volume — check-runtime.sh documents and resolves the same
+    # layout); without it find lstats the symlink inode only, the probe
+    # sees nothing, and the root-era tree at the target stays invisible
+    # while the runtime gate (which readlink -f's the path) keeps failing
+    # red with no playbook rerun able to green it. Symlinks INSIDE the
+    # tree are still not followed (-H follows only the starting path).
     _trio_probe_cmd: >-
-      find "{{ data_dir_resolved }}/database_backups" ! -uid 1000 -print -quit
+      find -H "{{ data_dir_resolved }}/database_backups" ! -uid 1000 -print -quit
     _trio_heal_cmd: >-
-      find "{{ data_dir_resolved }}/database_backups" ! -uid 1000
+      find -H "{{ data_dir_resolved }}/database_backups" ! -uid 1000
       -exec chown -h 1000:1000 {} +
     _trio_label: backup-dir handover

@@ -118,8 +118,10 @@ while IFS= read -r container; do
   # is <svc>.<digits>.<id> and a compose container is <svc>-<digits> (an
   # init container DOES reduce: backend-init-1 → backend-init — the
   # property that keeps that safe is that no reduced init name is in
-  # SELF_DROPPING). A dotted swarm name like postgres.2-1 never reduces,
-  # so it can never be exempted by accident.
+  # SELF_DROPPING). A dotted swarm-style name like postgres.2-1 falls
+  # through to the dash fallback and reduces to a PREFIX (postgres.2) —
+  # the safety property is not that such names never reduce, it is that
+  # no reduced name collides with the two entries SELF_DROPPING lists.
   svc=""
   case "$service" in
     .*) ;;

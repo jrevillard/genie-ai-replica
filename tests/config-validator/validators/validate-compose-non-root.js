@@ -431,9 +431,22 @@ function validateComposeNonRoot(composeText) {
     const trimmed = line.trim();
     if (trimmed.startsWith('#') || trimmed === '') continue;
 
-    if ((line.match(/^[a-z][\w-]*:\s*$/) || line.match(/^["'][\w.-]+["']:\s*$/)) && !line.startsWith(' ')) {
+    if (
+      (line.match(/^[a-z][\w-]*:\s*(?:#.*)?$/) || line.match(/^["'][\w.-]+["']:\s*(?:#.*)?$/)) &&
+      !line.startsWith(' ')
+    ) {
       flush();
-      inServices = trimmed === 'services:';
+      // a trailing comment or a quoted key is the same section header —
+      // an unterminated spelling here left the WHOLE file unenforced
+      // (vacuous green) or, for the top-level volumes: block, turned its
+      // keys into userless 'services' (loud false positives)
+      inServices = /^services:\s*(?:#.*)?$/.test(trimmed) || /^"services":/.test(trimmed);
+      continue;
+    }
+    // reserved top-level keys end the services scope
+    if (/^ {2}(volumes|networks|configs|secrets):/.test(line)) {
+      flush();
+      inServices = false;
       continue;
     }
     if (!inServices) continue;
@@ -906,8 +919,11 @@ function collectServiceNames(composeText) {
     // top-level key — the main parser EXITS services: scope on a quoted
     // top-level key, so the collector must exit too or its name-set
     // diverges)
-    if ((line.match(/^[a-z][\w-]*:\s*$/) || line.match(/^["'][\w.-]+["']:\s*$/)) && !line.startsWith(' ')) {
-      inServices = line.trim() === 'services:';
+    if (
+      (line.match(/^[a-z][\w-]*:\s*(?:#.*)?$/) || line.match(/^["'][\w.-]+["']:\s*(?:#.*)?$/)) &&
+      !line.startsWith(' ')
+    ) {
+      inServices = /^services:\s*(?:#.*)?$/.test(line.trim()) || /^"services":/.test(line.trim());
     } else if (inServices) {
       // same comment/flow tolerance as the main parser's service
       // detector — the two notions of "a service exists" must stay one

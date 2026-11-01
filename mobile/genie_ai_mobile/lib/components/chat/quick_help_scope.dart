@@ -78,7 +78,7 @@ Map<String, dynamic> parseQuickHelpButton(
     // resolves: a numeric reference carries JavaScript's serialization
     // ('5', not Dart's '5.0'), or the hierarchy lookup misses and only
     // the mobile renders the card broken.
-    'category': btn['category'] == null ? null : _jsTagForm(btn['category']),
+    'category': _jsTagForm(btn['category']),
     'serviceLabels': quickHelpServiceLabelsOf(btn),
     'iconAsset': iconAsset,
     'resolvedTitle': resolveConfigText(btn['title'], locale),
@@ -456,29 +456,30 @@ bool restoredScopeTitleFollowsLocale({
       categoryKey.isNotEmpty;
 }
 
-/// The button's [key] as a plain string — the CATEGORY read. A
-/// hand-built map need not carry strings, and a numeric value must
-/// degrade to its string form rather than throw. NOT an id read: the
-/// id's presence rule lives in quickHelpIdOf (raw truthiness + the
-/// web's serialization), and every id consumer reads that one.
-String? quickHelpFieldOf(Map<String, dynamic> button, String key) =>
-    button[key]?.toString();
+/// The button's category as a plain string. A hand-built map need not
+/// carry strings, and a numeric value must degrade to its string form
+/// rather than throw. The ID has its own read — quickHelpIdOf (raw
+/// truthiness + the web's serialization); every id consumer reads that
+/// one.
+String? quickHelpCategoryOf(Map<String, dynamic> button) =>
+    button['category']?.toString();
 
 /// The number as JAVASCRIPT serializes it — the form the web writes
-/// into a saved tag or a category reference. Dart's double toString
-/// differs in the plain range (it appends '.0': 5.0 → '5.0', JS: '5');
-/// the exponential range (≥ 1e21) already matches. An integral value
-/// inside the int64 range converts exactly; OUTSIDE it (an integral
-/// double ≥ 2^63 but < 1e21) the Dart form stands. Two further bands
-/// stay unmatched BY DECODE, not by this form: an integer literal
-/// above 2^53 decodes to an imprecise double on the web but to the
-/// exact int64 here (the two platforms then disagree about the value
-/// itself), and a double ≥ 2^63 clips differently again — a
-/// configuration with an id that large is not one the platforms can
-/// agree on by serialization; the durable answer is normalizing the
-/// tag at the save/restore boundary on both platforms, tracked beside
-/// the numeric-tag contract.
-String _jsTagForm(dynamic raw) {
+/// into a saved tag or a category reference; null for a null input.
+/// Dart's double toString differs in the plain range (it appends
+/// '.0': 5.0 → '5.0', JS: '5'); the exponential range (≥ 1e21)
+/// already matches. An integral value inside the int64 range converts
+/// exactly; OUTSIDE it (an integral double ≥ 2^63 but < 1e21) the
+/// Dart form stands. Two further bands stay unmatched BY DECODE, not
+/// by this form: an integer literal above 2^53 decodes to an imprecise
+/// double on the web but to the exact int64 here (the two platforms
+/// then disagree about the value itself), and a double ≥ 2^63 clips
+/// differently again — a configuration with an id that large is not
+/// one the platforms can agree on by serialization; the durable answer
+/// is normalizing the tag at the save/restore boundary on both
+/// platforms, tracked beside the numeric-tag contract.
+String? _jsTagForm(dynamic raw) {
+  if (raw == null) return null;
   if (raw is double &&
       raw.isFinite &&
       raw == raw.truncateToDouble() &&
@@ -513,7 +514,7 @@ String? quickHelpIdOf(Map<String, dynamic>? button) {
 /// labels it carries. ONE rule, read by the grid's unavailable verdict and
 /// by the press path.
 bool quickHelpDeclaresScope(Map<String, dynamic> button) {
-  return declaresCategoryScope(quickHelpFieldOf(button, 'category')) ||
+  return declaresCategoryScope(quickHelpCategoryOf(button)) ||
       quickHelpServiceLabelsOf(button).isNotEmpty;
 }
 
@@ -709,7 +710,7 @@ class QuickHelpScopeResolver {
         .where((l) => !_enLabels.contains(l))
         .toList();
 
-    final category = quickHelpFieldOf(button, 'category');
+    final category = quickHelpCategoryOf(button);
     // The category is usable only when the hierarchy names it in
     // ENGLISH: that spelling is the wire. A category the hierarchy does
     // not carry, and a category it carries without an EN translation,
@@ -731,7 +732,7 @@ class QuickHelpScopeResolver {
   /// carries it, or the entity has no EN translation (it cannot be filtered
   /// on at all).
   String? categoryLabelEn(Map<String, dynamic> button) =>
-      categoryEnLabel(quickHelpFieldOf(button, 'category'));
+      categoryEnLabel(quickHelpCategoryOf(button));
 
   /// The ENGLISH label of the category the [reference] names. Null when
   /// the hierarchy does not carry it, or carries it without an EN
@@ -894,7 +895,7 @@ class ConversationScopeResolver {
     for (final tag in tagList) {
       final button = _buttons[tag];
       if (button == null) continue;
-      final category = quickHelpFieldOf(button, 'category');
+      final category = quickHelpCategoryOf(button);
       final buttonLabels = quickHelpServiceLabelsOf(button);
       // A legacy conversation can carry SEVERAL button ids: the web
       // restores every chip and sends the union of their labels. Every
@@ -1068,7 +1069,7 @@ bool quickHelpScopeIsNameable(
   Map<String, dynamic> button,
   QuickHelpScopeResolver? resolver,
 ) {
-  final category = quickHelpFieldOf(button, 'category');
+  final category = quickHelpCategoryOf(button);
   // An id that declares NO category scope (empty, or the 'general'
   // placeholder) is how a selection is cleared — the hierarchy has
   // nothing to deny. declaresCategoryScope is the ONE predicate.

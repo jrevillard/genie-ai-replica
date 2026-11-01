@@ -2469,16 +2469,12 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // targets. If the config ever pins its own testMatch or moves testDir,
   // the scan set silently diverges from what actually executes — the same
   // hand-copied drift this guard exists to catch, in its own input. Pin
-  // both (on code text only — inline and whole-line // comments naming
-  // the keys must not fail the pin) so an override fails here first,
-  // loudly.
+  // both (on comment-free code text — no comment form naming the keys may
+  // fail the pin) so an override fails here first, loudly.
   test('playwright.config.js keeps the defaults the derivation assumes', () => {
-    const config = fs
-      .readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8')
-      .split('\n')
-      .filter((line) => !line.trimStart().startsWith('//'))
-      .map((line) => line.replace(/\s+\/\/.*$/, ''))
-      .join('\n');
+    const config = stripJsComments(fs.readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8').split('\n')).join(
+      '\n'
+    );
     // testMatch and testIgnore must not appear at all (both would change
     // which files execute), and testDir must appear exactly once — a
     // second, project-level testDir would execute a different file set
@@ -2524,24 +2520,61 @@ describe('e2e merge-train changes filters (#1264)', () => {
         ])
       ).toEqual(['  script: npx playwright test tests/e2e/', '  VERSION="${CI_COMMIT_TAG#v}"']);
     });
+
+    test('stripJsComments erases whole-line, inline and block comments', () => {
+      expect(
+        stripJsComments([
+          '// whole-line comment',
+          "testDir: './tests/e2e', // inline tail",
+          '/* single-line block: testMatch */',
+          'const x = 1; /* multi',
+          'line block */ const y = 2;'
+        ])
+      ).toEqual(["testDir: './tests/e2e',", '', 'const x = 1; ', ' const y = 2;']);
+    });
   });
 
   describe('anchor coverage', () => {
-    const ANCHOR = ['tests/e2e/fixtures/**/*', 'tests/e2e/theme-runtime-config.spec.js'];
+    const ANCHOR_ROWS = ['tests/e2e/fixtures/**/*', 'tests/e2e/theme-runtime-config.spec.js'];
 
     test('an exact anchor entry covers verbatim and deeper paths alike', () => {
-      expect(isCovered(ANCHOR, 'tests/e2e/fixtures/**/*')).toBe(true);
-      expect(isCovered(ANCHOR, 'tests/e2e/fixtures/http/**/*')).toBe(true);
-      expect(isCovered(ANCHOR, 'tests/e2e/fixtures/http/seed.json')).toBe(true);
-      expect(isCovered(ANCHOR, 'tests/e2e/theme-runtime-config.spec.js')).toBe(true);
+      expect(isCovered(ANCHOR_ROWS, 'tests/e2e/fixtures/**/*')).toBe(true);
+      expect(isCovered(ANCHOR_ROWS, 'tests/e2e/fixtures/http/**/*')).toBe(true);
+      expect(isCovered(ANCHOR_ROWS, 'tests/e2e/fixtures/http/seed.json')).toBe(true);
+      expect(isCovered(ANCHOR_ROWS, 'tests/e2e/theme-runtime-config.spec.js')).toBe(true);
     });
 
     test('a sibling or unrelated path is not covered', () => {
-      expect(isCovered(ANCHOR, 'tests/e2e/helpers/**/*')).toBe(false);
-      expect(isCovered(ANCHOR, 'tests/e2e/fixtures-backup/**/*')).toBe(false);
-      expect(isCovered(ANCHOR, 'tests/e2e/theme-runtime-config.spec.js.bak')).toBe(false);
+      expect(isCovered(ANCHOR_ROWS, 'tests/e2e/helpers/**/*')).toBe(false);
+      expect(isCovered(ANCHOR_ROWS, 'tests/e2e/fixtures-backup/**/*')).toBe(false);
+      expect(isCovered(ANCHOR_ROWS, 'tests/e2e/theme-runtime-config.spec.js.bak')).toBe(false);
     });
   });
+
+  // JS-flavored comment stripping for playwright.config.js: whole-line //
+  // comments, inline // tails, and /* */ block spans. The // erase is
+  // naive (a URL in a string is truncated too) — the config pin only
+  // searches for config keys, so truncation cannot fabricate a match.
+  const stripJsComments = (lines) => {
+    let inBlock = false;
+    return lines
+      .filter((line) => !line.trimStart().startsWith('//'))
+      .map((line) => {
+        if (inBlock) {
+          const end = line.indexOf('*/');
+          if (end === -1) return '';
+          line = line.slice(end + 2);
+          inBlock = false;
+        }
+        const open = line.indexOf('/*');
+        if (open !== -1) {
+          const close = line.indexOf('*/', open);
+          line = close === -1 ? line.slice(0, open) : line.slice(0, open) + line.slice(close + 2);
+          if (close === -1) inBlock = true;
+        }
+        return line.replace(/\s+\/\/.*$/, '');
+      });
+  };
 
   describe('consumed-path derivation units', () => {
     const deriveFrom = (file, source) => deriveConsumedPaths([{ file, source }]);
@@ -2688,11 +2721,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
     expect(section).toMatch(/^\s*extends: \.e2e_web_base\s*$/m);
     expect(section).not.toMatch(/^\s*extends:\s*\[/m);
     // The derivation reads the invocation from .e2e_web_base only — a
-    // consuming job overriding script with its own playwright invocation
-    // would execute targets nothing derived. An override REQUIRES a script
-    // key, so pin the key's absence: artifact paths or prose naming
-    // playwright stay legal, a second invocation cannot exist.
-    expect(section).not.toMatch(/^\s*script:/m);
+    // consuming job running its own playwright invocation (in any of the
+    // three script phases) would execute targets nothing derived. Pin all
+    // three keys' absence: artifact paths or prose naming playwright stay
+    // legal, a second invocation cannot exist.
+    expect(section).not.toMatch(/^\s*(?:script|before_script|after_script):/m);
   });
 
   test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {
@@ -2731,6 +2764,15 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // Neither half of the split may reach the shared anchor: an alias entry
     // is invisible to the section checks above.
     expect(filters.get(ANCHOR)).not.toContain('mobile/genie_ai_mobile/**/*');
+  });
+
+  // The anchor comment in .gitlab-ci.yml says the okf exclusion is enforced
+  // here: the okf specs are not executed by the train invocation, so the
+  // anchor must not cover them — neither as an explicit okf glob nor via a
+  // widening rewrite like tests/e2e/**/* that would silently re-include
+  // every excluded directory.
+  test('the anchor does not cover the excluded okf specs', () => {
+    expect(isCovered(filters.get(ANCHOR), 'tests/e2e/okf/**/*')).toBe(false);
   });
 });
 

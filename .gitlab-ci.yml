@@ -433,7 +433,11 @@ workflow:
       done
       if [ -z "$ADMIN_TOKEN" ]; then
         echo "ERROR: master admin token never obtained via nginx/Kong after 180s (last token call: HTTP $(http_label "$TOKEN_STATUS"))."
-        echo "This is a token-acquisition failure, not a genie-app client problem — check KEYCLOAK_ADMIN_PASSWORD and master-realm reachability."
+        if [ "$TOKEN_STATUS" = "200" ]; then
+          echo "The endpoint answered HTTP 200 but the body contained no usable access_token — check for a proxy/SSO interception page in front of ${KC_URL}."
+        else
+          echo "This is a token-acquisition failure, not a genie-app client problem — check KEYCLOAK_ADMIN_PASSWORD and master-realm reachability."
+        fi
         exit 1
       fi
       if [ -z "$CLIENT_FOUND" ]; then

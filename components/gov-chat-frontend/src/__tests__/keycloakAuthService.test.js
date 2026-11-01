@@ -729,10 +729,7 @@ describe('cross-tab renew lease (#80800)', () => {
       // the call's own startedAt capture by a millisecond (CI-only flake —
       // locally the same tick won). A future stamp is always admissible to
       // the gate and to the TTL cleanup.
-      window.localStorage.setItem(
-        USER_KEY,
-        JSON.stringify({ at: Date.now() + 5000, user: holderUser })
-      );
+      window.localStorage.setItem(USER_KEY, JSON.stringify({ at: Date.now() + 5000, user: holderUser }));
       mockGetUser.mockResolvedValue(null);
       mockSigninSilent.mockResolvedValue(createMockUser({ access_token: 'my-own-fresh-grant' }));
       const user = await keycloakAuthService.signinSilent();

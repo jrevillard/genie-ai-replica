@@ -435,6 +435,8 @@ workflow:
         echo "ERROR: master admin token never obtained via nginx/Kong after 180s (last token call: HTTP $(http_label "$TOKEN_STATUS"))."
         if [ "$TOKEN_STATUS" = "200" ]; then
           echo "The endpoint answered HTTP 200 but the body contained no usable access_token — check for a proxy/SSO interception page in front of ${KC_URL}."
+        elif [ "$TOKEN_STATUS" = "000" ] || [ -z "$TOKEN_STATUS" ]; then
+          echo "No HTTP answer from the auth path — check the Keycloak container and nginx/Kong routing first (credentials cannot be the cause when no response arrived)."
         else
           echo "This is a token-acquisition failure, not a genie-app client problem — check KEYCLOAK_ADMIN_PASSWORD and master-realm reachability."
         fi

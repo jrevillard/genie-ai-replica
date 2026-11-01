@@ -580,6 +580,44 @@ describe('compose non-root contract (#1227)', () => {
     expect(modeFlip).not.toBe(composeText);
     const { violations: v3 } = validateComposeNonRoot(modeFlip);
     expect(v3.some((v) => v.includes('x-chown-init-genieai') && v.includes('mode: global'))).toBe(true);
+
+    // DELETING the mode line leaves all three policy fields null — the
+    // invariants key on the anchor DECL, not on field presence
+    const modeDeleted = composeText.replace(
+      '  x-chown-init-genieai: &chown-init-genieai\n    deploy:\n      mode: global\n      placement:',
+      '  x-chown-init-genieai: &chown-init-genieai\n    deploy:\n      placement:'
+    );
+    expect(modeDeleted).not.toBe(composeText);
+    const { violations: v4 } = validateComposeNonRoot(modeDeleted);
+    expect(v4.some((v) => v.includes('x-chown-init-genieai') && v.includes('mode: global'))).toBe(true);
+  });
+
+  test('mutations: a reflowed multi-line flow-sequence volumes list stays enforced', () => {
+    // A formatter is enough to reflow a flow-sequence volumes list across
+    // lines — legal YAML whose single-line regex match would drop every
+    // bind in it from enforcement.
+    const wrapped = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes: [',
+      '      "${DATA_DIR:-./data}/logs/kong:/var/log/kong"',
+      '    ]',
+      ''
+    ].join('\n');
+    const { violations: v1 } = validateComposeNonRoot(wrapped);
+    expect(v1.some((v) => v.includes('kong') && v.includes('templated but in short syntax'))).toBe(true);
+
+    const wrappedOpted = [
+      'services:',
+      '  backend:',
+      '    user: "1000:1000"',
+      '    volumes: [',
+      '      {type: bind, source: ./data/database_backups, target: /app/database_backups, bind: {create_host_path: false}}',
+      '    ]',
+      ''
+    ].join('\n');
+    expect(validateComposeNonRoot(wrappedOpted).violations).toEqual([]);
   });
 
   test('mutations: templated relative defaults and quoted sources with spaces', () => {
@@ -819,6 +857,22 @@ describe('compose non-root contract (#1227)', () => {
     // line parser cannot reach (extracted finding #1274)
     const flowBody = ['services:', '  kong: {user: root}', ''].join('\n');
     expect(collectServiceNames(flowBody).has('kong')).toBe(true);
+  });
+
+  test("the runtime gate's exemption shapes match the compose healthchecks", () => {
+    // The self-dropping filter's regexes hardcode the pg_isready / redis
+    // healthcheck ARGV spellings — if a healthcheck is reformatted (a
+    // CMD-SHELL switch, a requote), the regex stops matching the
+    // sub-second execs and every converged run reports a phantom
+    // 'ROOT PROCESS in ...-postgres'. Pin the coupling: the compose
+    // healthcheck tokens must exist in BOTH sides.
+    const compose = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'docker-compose.yaml'), 'utf-8');
+    const shell = fs.readFileSync(path.join(__dirname, '..', '..', 'compose-non-root', 'check-runtime.sh'), 'utf-8');
+    expect(compose).toMatch(/test:\s*\["CMD",\s*"pg_isready"/);
+    expect(compose).toMatch(/test:\s*\["CMD",\s*"sh",\s*"-c",\s*"test[^\n]*redis-cli ping/);
+    for (const token of ['pg_isready', '/bin/sh', 'redis-cli']) {
+      expect(shell).toContain(token);
+    }
   });
 
   test("the runtime gate's SELF_DROPPING list matches the validator's allowlist", () => {

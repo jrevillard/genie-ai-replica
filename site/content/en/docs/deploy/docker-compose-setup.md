@@ -41,8 +41,10 @@ sudo chgrp 101 secrets/ssl/server.key && sudo chmod 0640 secrets/ssl/server.key
 ```
 
 (A root-owned 0600 key crash-loops nginx with a misleading openssl
-error; the Ansible path normalizes this itself, and the certbot
-entrypoint normalizes an existing pair at startup on the compose path.)
+error; the Ansible path normalizes this itself, and on the compose path
+the certbot entrypoint normalizes an existing pair at startup — but
+certbot only runs with the `letsencrypt` profile, so without it apply
+the `chgrp 101` command above yourself.)
 
 The key is readable by numeric group 101 (the nginx image's uid/gid —
 fixed upstream). On the HOST, check no untrusted account holds primary

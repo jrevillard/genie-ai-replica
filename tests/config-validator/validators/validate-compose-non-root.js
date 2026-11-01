@@ -309,11 +309,13 @@ function validateComposeNonRoot(composeText) {
     // actually inherit (last map wins whole) — its policy needs its own
     // record so its one-shot invariants can be policed directly.
     const genieaiPolicy = { mode: null, condition: null, maxAttempts: null };
+    let genieaiSeen = false; // the anchor DECL exists (mode may be absent)
     const policyOf = () => (anchorName === 'x-chown-init-genieai' ? genieaiPolicy : anchorDefaults);
     for (const line of lines) {
       const anchorDecl = line.match(/^\s*(x-chown-init(?:-genieai)?):\s*&/);
       if (anchorDecl) {
         anchorName = anchorDecl[1];
+        if (anchorName === 'x-chown-init-genieai') genieaiSeen = true;
         continue;
       }
       if (!anchorName) continue;
@@ -371,24 +373,20 @@ function validateComposeNonRoot(composeText) {
     }
     // Policing the placement extension's OWN policy: the sequence merge
     // gives its deploy: whole to the four constrained inits, so a drift
-    // here (condition any, unbounded attempts, mode dropped) would turn
-    // them into unbounded root restart loops while the outer anchor's
-    // copy still looked pristine.
-    if (genieaiPolicy.mode !== null && genieaiPolicy.mode !== 'global') {
-      violations.push('x-chown-init-genieai: the merged placement anchor must keep deploy.mode: global');
-    }
-    if (genieaiPolicy.condition !== null && genieaiPolicy.condition !== 'on-failure') {
-      violations.push(
-        'x-chown-init-genieai: the merged placement anchor must keep restart_policy.condition: on-failure'
-      );
-    }
-    if (
-      genieaiPolicy.mode !== null &&
-      (genieaiPolicy.condition !== 'on-failure' || genieaiPolicy.maxAttempts === null)
-    ) {
-      violations.push(
-        'x-chown-init-genieai: the merged placement anchor must keep restart_policy.condition: on-failure with a max_attempts bound'
-      );
+    // here (condition any, bound stripped, mode dropped or deleted)
+    // turns them into unbounded root restart loops or single-node chowns
+    // while the OUTER anchor's copy still looks pristine. Keyed on the
+    // anchor DECL: deleting the mode line leaves all three fields null
+    // and field-presence guards would silently pass.
+    if (genieaiSeen) {
+      if (genieaiPolicy.mode !== 'global') {
+        violations.push('x-chown-init-genieai: the merged placement anchor must keep deploy.mode: global');
+      }
+      if (genieaiPolicy.condition !== 'on-failure' || genieaiPolicy.maxAttempts === null) {
+        violations.push(
+          'x-chown-init-genieai: the merged placement anchor must keep restart_policy.condition: on-failure with a max_attempts bound'
+        );
+      }
     }
   }
   let anchorMerged = false;
@@ -404,6 +402,8 @@ function validateComposeNonRoot(composeText) {
   let entryType = null; // long-syntax entry type: 'bind' | 'volume'
   let entryTypeExplicit = false; // type: seen in this entry (vs the untyped volume default)
   let deferredSource = null; // source: seen while entryType is still the untyped default
+  let inFlowVolumes = false; // a multi-line flow-sequence volumes list is open
+  let flowBuffer = '';
   // An UNCLAIMED deferred source (an untyped long-syntax entry) is a
   // fail-open drop — current compose-go rejects the spelling outright, but
   // older builds within the documented floor infer the mount type from the
@@ -596,10 +596,30 @@ function validateComposeNonRoot(composeText) {
     // same contract per entry, collected without opening the block scope.
     // Items split nesting-aware (splitFlowItems) so `${VAR:-default}`
     // braces and quoted commas stay inside one item.
+    // a flow-sequence volumes list carries the same contract per entry
+    // whether it sits on ONE line or is REFLOWED across lines (formatter
+    // output): the closed single-line form processes directly, an open
+    // `[` accumulates until the closing bracket instead of dropping the
+    // whole list (and every bind in it) from enforcement
     const volumesFlow = line.match(/^ {4}volumes:\s*\[(.*)\]\s*(?:#.*)?$/);
+    const volumesFlowOpen = line.match(/^ {4}volumes:\s*\[(.*)$/);
+    let flowSource = null;
     if (volumesFlow) {
+      flowSource = volumesFlow[1];
+    } else if (volumesFlowOpen) {
+      inFlowVolumes = true;
+      flowBuffer = volumesFlowOpen[1];
+      continue;
+    }
+    if (inFlowVolumes) {
+      flowBuffer += `\n${line}`;
+      if (!line.includes(']')) continue;
+      inFlowVolumes = false;
+      flowSource = flowBuffer.slice(0, flowBuffer.lastIndexOf(']'));
+    }
+    if (flowSource !== null) {
       const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
-      for (const entry of splitFlowItems(volumesFlow[1])) {
+      for (const entry of splitFlowItems(flowSource)) {
         const inner = entry.replace(/^[{'"]+|[}'"]+$/g, '');
         const ft = inner.match(/type:\s*['"]?(\w+)/);
         // `}` stays IN the match: truncating at the closing brace of

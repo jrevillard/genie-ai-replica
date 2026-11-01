@@ -424,16 +424,18 @@
       when: not (self_signed_certs | default(false) | bool)
 
     - name: Create required directories
+      # huggingface resolves through data_dir_resolved (the ONE formula):
+      # a raw {{ data_dir }} join builds /opt/genieai//srv/... junk for an
+      # absolute override and leaves the real bind source for docker to
+      # root-create on the TEI node.
       ansible.builtin.file:
-        path: "{{ deploy_dir }}/{{ item }}"
+        path: "{{ item }}"
         state: directory
         mode: '0755'
       loop:
-        # data/logs/kong was removed with #1227: Kong logs to stdout (the
-        # fluentd driver ships them) and the directory's only effect was a
-        # root-owned leftover under the data dir.
-        - "{{ data_dir }}/huggingface"
-        - secrets/ssl
+        - "{{ data_dir_resolved if data_dir_resolved is match('/')
+             else (deploy_dir ~ '/' ~ (data_dir_resolved | relpath(deploy_dir))) }}/huggingface"
+        - "{{ deploy_dir }}/secrets/ssl"
 
     # no-root data-dir migration (#1227) — the tasks live in
     # tasks/no-root-data-migration.yml, shared VERBATIM with the
@@ -457,6 +459,19 @@
     # materialize on the node the service lands on.
     - name: Run the no-root data-dir migration tasks
       ansible.builtin.import_tasks: tasks/no-root-data-migration.yml
+
+    - name: Pre-create the huggingface cache bind source on workers (#1227)
+      # data/huggingface is ALSO a bind source (${DATA_DIR}/huggingface:/data
+      # for the TEI model cache) — without this task a GPU-labeled worker
+      # that is not a manager lets swarmkit silently create it root-owned
+      # on first up, the exact defect this play exists to prevent. The TEI
+      # images are profile-gated root users (documented out of the no-root
+      # contract), so a root-owned 0755 cache dir is their correct state.
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ data_dir_resolved }}/huggingface"
+        state: directory
+        mode: '0755'
 
 - name: GENIE.AI - Copy SSL certificates
   hosts: swarm_managers

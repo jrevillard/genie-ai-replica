@@ -80,10 +80,17 @@ if ! docker ps >/dev/null 2>&1; then
   echo "project-name problem."
   exit 3
 fi
+# -a WITH a status filter: plain `docker ps` omits `created`-state
+# containers, so a service that failed at create time (a bind-source
+# error — the exact failure mode the create_host_path guards produce)
+# was silently never inspected while the rest of the stack passed.
+# Exited one-shots stay excluded (status=created + status=running only).
 containers=$(
   {
-    docker ps --filter "label=com.docker.compose.project=$PROJECT" --format '{{.Names}}'
-    docker ps --filter "label=com.docker.stack.namespace=$PROJECT" --format '{{.Names}}'
+    docker ps -a --filter "status=created" --filter "status=running" \
+      --filter "label=com.docker.compose.project=$PROJECT" --format '{{.Names}}'
+    docker ps -a --filter "status=created" --filter "status=running" \
+      --filter "label=com.docker.stack.namespace=$PROJECT" --format '{{.Names}}'
   } | sort -u
 )
 if [ -z "$containers" ]; then

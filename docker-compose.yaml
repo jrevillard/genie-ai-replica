@@ -1307,7 +1307,10 @@ services:
     # sweep under a permanent skip" — on a live root-era upgrade the old
     # container keeps writing while the init chowns, and such a file would
     # never be healed. Same doctrine as the Ansible migration tasks: find
-    # -user root, targeted -h chown, verify, exit nonzero if anything
+    # ! -user <target uid> (OWNERSHIP-TOTAL: a third-uid leftover — a
+    # manual recovery chown, uid drift from an older image — strands the
+    # service in an EACCES restart loop behind a green init), targeted -h
+    # chown, verify, exit nonzero if anything
     # survived (a failed init is VISIBLE and retried by the bounded
     # policy; the next deploy heals the rest).
     # Every find runs with its EXIT STATUS checked (probe and verify both
@@ -1316,7 +1319,7 @@ services:
     # bounded policy), never a masked "nothing root-owned" behind a
     # discarded rc. DAC_OVERRIDE covers EACCES traversal; I/O errors
     # surface as failures.
-    command: ["sh", "-c", "for d in /app/data /app/Uploads; do find \"$$d\" -user root -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find \"$$d\" -user root -exec chown -h 1000:1000 {} + || exit 9; fi; find \"$$d\" -user root -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; done"]
+    command: ["sh", "-c", "for d in /app/data /app/Uploads; do find \"$$d\" ! -user 1000 -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find \"$$d\" ! -user 1000 -exec chown -h 1000:1000 {} + || exit 9; fi; find \"$$d\" ! -user 1000 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; done"]
     volumes:
       - backend_data:/app/data
       - backend_uploads:/app/Uploads
@@ -1333,7 +1336,7 @@ services:
     # placement.
     <<: [*chown-init, *chown-init-genieai]
     # PROBE form (no marker — see backend-init).
-    command: ["sh", "-c", "find /app/uploads -user root -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /app/uploads -user root -exec chown -h 1000:1000 {} + || exit 9; fi; find /app/uploads -user root -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
+    command: ["sh", "-c", "find /app/uploads ! -user 1000 -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /app/uploads ! -user 1000 -exec chown -h 1000:1000 {} + || exit 9; fi; find /app/uploads ! -user 1000 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
     volumes:
       - doc_repo_uploads:/app/uploads
 
@@ -1506,7 +1509,7 @@ services:
     # backend-init).
     # PROBE form (no marker — see backend-init): targeted -h chown of
     # whatever is root-owned, then verify.
-    command: ["sh", "-c", "for d in /var/lib/arangodb3 /var/lib/arangodb3-apps; do find \"$$d\" -user root -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find \"$$d\" -user root -exec chown -h 999:999 {} + || exit 9; fi; find \"$$d\" -user root -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; done"]
+    command: ["sh", "-c", "for d in /var/lib/arangodb3 /var/lib/arangodb3-apps; do find \"$$d\" ! -user 999 -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find \"$$d\" ! -user 999 -exec chown -h 999:999 {} + || exit 9; fi; find \"$$d\" ! -user 999 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; done"]
     volumes:
       - arango_data:/var/lib/arangodb3
       - arango_apps:/var/lib/arangodb3-apps
@@ -2752,13 +2755,11 @@ services:
     # (CHOWN + traversal DAC_OVERRIDE caps, one-shot on both front-ends, global mode
     # so the chown has run on every node the collector can land on).
     <<: *chown-init
-    # PROBE form (no marker — see backend-init) with a WIDER predicate
-    # than the other four inits: otel's init REPLACED a working
-    # unconditional `chown -R 10001:10001` (the queue volume's ownership
-    # contract was always "everything is 10001"), so its probe heals files
-    # owned by ANY wrong uid, not just root — a third-uid leftover (manual
-    # recovery chown, uid drift from an older image) would otherwise
-    # strand the collector in an EACCES restart loop behind a green init.
+    # PROBE form (no marker — see backend-init), OWNERSHIP-TOTAL like
+    # every chown-init: otel's init REPLACED a working unconditional
+    # `chown -R 10001:10001` — the queue volume's contract was always
+    # "everything is 10001", and a third-uid leftover would strand the
+    # collector in an EACCES restart loop behind a green init.
     command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && find /var/lib/otelcol ! -user 10001 -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /var/lib/otelcol ! -user 10001 -exec chown -h 10001:10001 {} + || exit 9; fi; find /var/lib/otelcol ! -user 10001 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
     volumes:
       - otel-queue:/var/lib/otelcol
@@ -2875,7 +2876,7 @@ services:
     # placement.
     <<: [*chown-init, *chown-init-genieai]
     # PROBE form (no marker — see backend-init).
-    command: ["sh", "-c", "find /var/lib/victoria-logs -user root -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /var/lib/victoria-logs -user root -exec chown -h 65534:65534 {} + || exit 9; fi; find /var/lib/victoria-logs -user root -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
+    command: ["sh", "-c", "find /var/lib/victoria-logs ! -user 65534 -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /var/lib/victoria-logs ! -user 65534 -exec chown -h 65534:65534 {} + || exit 9; fi; find /var/lib/victoria-logs ! -user 65534 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
     volumes:
       - vlogs-data:/var/lib/victoria-logs
 

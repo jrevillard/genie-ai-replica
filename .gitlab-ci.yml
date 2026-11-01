@@ -411,7 +411,7 @@ workflow:
             --data-urlencode "password=${KC_PWD}" -d "grant_type=password" || true)
           TOKEN_STATUS=$(printf '%s' "$TOKEN_RESP" | tail -n1)
           ADMIN_TOKEN=$(printf '%s' "$TOKEN_RESP" | sed '$d' \
-            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('access_token',''))" 2>/dev/null)
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('access_token',''))" 2>/dev/null || true)
         fi
         if [ -n "$ADMIN_TOKEN" ]; then
           CLIENT_RESP=$(curl -sk -w '\n%{http_code}' "${KC_URL}/admin/realms/genie/clients?clientId=genie-app" \

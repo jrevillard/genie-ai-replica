@@ -26,6 +26,30 @@
 # expand it at all, and compose would expand it as the invoking
 # ansible_user. Spell the override absolute.
 
+- name: Hand the data directory itself to ansible_user (depth 0, #1227)
+  # Runs BEFORE the backup-dir creation below on BOTH placements, and it
+  # must: the file module applies the leaf's owner to every MISSING
+  # PARENT it creates (verified in the module source — each created level
+  # gets set_fs_attributes_if_different with the same args), so without
+  # this task a worker whose data/ tree does not exist yet would get the
+  # data dir itself created uid-1000-owned by the backup-dir task — a
+  # different doctrine than the manager's ansible_user-owned data root.
+  # The manager play also runs the create-dirs step before this import;
+  # there this task is the (idempotent) re-own of a possibly root-created
+  # tree — the payload passes exclude the data tree DELIBERATELY, and the
+  # deleted recurse:true chowns were otherwise the only step re-owning a
+  # ROOT-ERA data/ directory. Depth 0 only — nothing recurses INTO the
+  # tree: its contents stay the migration's business.
+  become: true
+  become_user: root
+  ansible.builtin.file:
+    path: "{{ data_dir_resolved }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    # NO mode: key — the operator's 0700/0750 hardening of the data
+    # dir must survive every deploy (ownership only, never widened).
+
 - name: Create the backend backup directory as the backend uid (#1227)
   # Pinned to the backend uid AT CREATION: a fresh dir left
   # ansible_user-owned would never pass the handover probe below, and

@@ -313,8 +313,9 @@ function validateComposeNonRoot(composeText) {
     let inAnchorDeploy = false; // inside the anchor's deploy: block
     let anchorKey = null; // which 2-space key the current 4-space list belongs to
     // The placement extension's deploy: is what the sequence-merged inits
-    // actually inherit (last map wins whole) — its policy needs its own
-    // record so its one-shot invariants can be policed directly.
+    // actually inherit (the EARLIER map in the merge sequence wins whole)
+    // — its policy needs its own record so its one-shot invariants can be
+    // policed directly.
     const genieaiPolicy = { mode: null, condition: null, maxAttempts: null };
     let genieaiSeen = false; // the anchor DECL exists (mode may be absent)
     let chownSeen = false;
@@ -377,18 +378,14 @@ function validateComposeNonRoot(composeText) {
       }
       const restart = line.match(/^ {2}restart:\s*['"]?([\w:-]+)['"]?\s*(?:#.*)?$/);
       if (restart && anchorName === 'x-chown-init') anchorDefaults.restart = restart[1];
-      const nested = anchorName === 'x-chown-init-genieai'; // policy lives under its deploy:
       // block-state gating, the same hijack doctrine the service-level
       // parser enforces: mode only under deploy:, condition/max_attempts
       // only under restart_policy:
-      const dInd = nested ? 4 : 2; // the anchor's deploy: key indent
-      // the OUTER anchor's 2-space deploy: is armed by the anchorKey
-      // handler above; the nested extension's 4-space deploy: arms here
-      // (the 2-space handler cannot see it)
-      if (!inAnchorDeploy && nested && line.match(/^ {4}deploy:(?:\s.*)?$/)) {
-        inAnchorDeploy = true;
-        continue;
-      }
+      // BOTH anchors are TOP-LEVEL siblings (the placement extension is
+      // declared ahead of the base map): their deploy: keys share the
+      // same 2-space indent, so one dInd serves both and the 2-space
+      // anchorKey handler above arms deploy: for either.
+      const dInd = 2; // the anchor's deploy: key indent
       if (inAnchorDeploy && !line.match(new RegExp(`^ {${dInd + 2}}`)) && line.trim() !== '') {
         inAnchorDeploy = false;
         inAnchorPolicy = false;

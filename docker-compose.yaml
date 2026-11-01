@@ -185,21 +185,26 @@ x-chown-init: &chown-init
       delay: 30s
       max_attempts: 60
 
-  # Placement-scoped extension merged AHEAD of x-chown-init by the four
-  # constrained inits via `<<: [*chown-init-genieai, *chown-init]` — in a
-  # YAML sequence merge EARLIER maps take precedence, so THIS map's
-  # deploy: (mode + the race-sized policy + the genieai constraint) wins
-  # whole. One copy, or the four bounded policies drift.
-  x-chown-init-genieai: &chown-init-genieai
-    deploy:
-      mode: global
-      placement:
-        constraints:
-          - node.labels.genieai == true
-      restart_policy:
-        condition: on-failure
-        delay: 30s
-        max_attempts: 60
+# Placement-scoped extension merged AHEAD of x-chown-init by the four
+# constrained inits via `<<: [*chown-init-genieai, *chown-init]` — in a
+# YAML sequence merge EARLIER maps take precedence, so THIS map's
+# deploy: (mode + the race-sized policy + the genieai constraint) wins
+# whole. One copy, or the four bounded policies drift.
+# Declared as a TOP-LEVEL sibling, NOT nested inside x-chown-init: a
+# nested anchor still leaves its key in the parent map, and every service
+# merging *chown-init would inherit a stray `x-chown-init-genieai:`
+# service-level key in the resolved config (docker compose config proves
+# it) — dead data on five service specs.
+x-chown-init-genieai: &chown-init-genieai
+  deploy:
+    mode: global
+    placement:
+      constraints:
+        - node.labels.genieai == true
+    restart_policy:
+      condition: on-failure
+      delay: 30s
+      max_attempts: 60
 
 services:
 

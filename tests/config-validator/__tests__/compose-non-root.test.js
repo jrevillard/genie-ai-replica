@@ -639,16 +639,16 @@ describe('compose non-root contract (#1227)', () => {
     // into unbounded root restart loops while the OUTER anchor's copy
     // still looks pristine. The extension anchor is policed directly.
     const conditionFlip = composeText.replace(
-      '          - node.labels.genieai == true\n      restart_policy:\n        condition: on-failure',
-      '          - node.labels.genieai == true\n      restart_policy:\n        condition: any'
+      '        - node.labels.genieai == true\n    restart_policy:\n      condition: on-failure',
+      '        - node.labels.genieai == true\n    restart_policy:\n      condition: any'
     );
     expect(conditionFlip).not.toBe(composeText);
     const { violations: v1 } = validateComposeNonRoot(conditionFlip);
     expect(v1.some((v) => v.includes('x-chown-init-genieai') && v.includes('condition: on-failure'))).toBe(true);
 
     const attemptsStripped = composeText.replace(
-      '          - node.labels.genieai == true\n      restart_policy:\n        condition: on-failure\n        delay: 30s\n        max_attempts: 60',
-      '          - node.labels.genieai == true\n      restart_policy:\n        condition: on-failure\n        delay: 30s'
+      '        - node.labels.genieai == true\n    restart_policy:\n      condition: on-failure\n      delay: 30s\n      max_attempts: 60',
+      '        - node.labels.genieai == true\n    restart_policy:\n      condition: on-failure\n      delay: 30s'
     );
     expect(attemptsStripped).not.toBe(composeText);
     const { violations: v2 } = validateComposeNonRoot(attemptsStripped);
@@ -663,8 +663,8 @@ describe('compose non-root contract (#1227)', () => {
     expect(composeText).not.toContain('<<: [*chown-init,');
 
     const modeFlip = composeText.replace(
-      '  x-chown-init-genieai: &chown-init-genieai\n    deploy:\n      mode: global',
-      '  x-chown-init-genieai: &chown-init-genieai\n    deploy:\n      mode: replicated'
+      'x-chown-init-genieai: &chown-init-genieai\n  deploy:\n    mode: global',
+      'x-chown-init-genieai: &chown-init-genieai\n  deploy:\n    mode: replicated'
     );
     expect(modeFlip).not.toBe(composeText);
     const { violations: v3 } = validateComposeNonRoot(modeFlip);
@@ -673,8 +673,8 @@ describe('compose non-root contract (#1227)', () => {
     // DELETING the mode line leaves all three policy fields null — the
     // invariants key on the anchor DECL, not on field presence
     const modeDeleted = composeText.replace(
-      '  x-chown-init-genieai: &chown-init-genieai\n    deploy:\n      mode: global\n      placement:',
-      '  x-chown-init-genieai: &chown-init-genieai\n    deploy:\n      placement:'
+      'x-chown-init-genieai: &chown-init-genieai\n  deploy:\n    mode: global\n    placement:',
+      'x-chown-init-genieai: &chown-init-genieai\n  deploy:\n    placement:'
     );
     expect(modeDeleted).not.toBe(composeText);
     const { violations: v4 } = validateComposeNonRoot(modeDeleted);

@@ -265,9 +265,15 @@
       # [deploy_dir/state, deploy_dir/state/data]; for an override OUTSIDE
       # deploy_dir the intermediate spellings never match real children
       # and prune to a harmless no-op.
+      # NO default() on the accumulator: the play var is initialized []
+      # in this play's vars, so a default would be dead code — and if the
+      # initializer were ever removed, a default([data_dir_resolved])
+      # seed would silently build [data_dir, …, data_dir] (the loop
+      # already emits the full dir as its final element). An undefined
+      # var here must be a LOUD template error instead.
       ansible.builtin.set_fact:
         _fix_payload_data_chain: >-
-          {{ _fix_payload_data_chain | default([data_dir_resolved]) + [deploy_dir ~ '/' ~ ((data_dir_resolved | relpath(deploy_dir)) | split('/') | list)[0:idx + 1] | join('/')] }}
+          {{ _fix_payload_data_chain + [deploy_dir ~ '/' ~ ((data_dir_resolved | relpath(deploy_dir)) | split('/') | list)[0:idx + 1] | join('/')] }}
       vars:
         _rel_parts: "{{ (data_dir_resolved | relpath(deploy_dir)) | split('/') | list }}"
       loop: "{{ range(1, _rel_parts | length + 1) | list }}"
@@ -463,22 +469,6 @@
       loop_control:
         label: "{{ item.item }}"
       when: not (self_signed_certs | default(false) | bool)
-
-    - name: Hand the data directory itself to ansible_user (depth 0, #1227)
-      # The payload passes exclude the data tree DELIBERATELY; the deleted
-      # recurse:true chowns were however the only step re-owning a
-      # ROOT-ERA data/ directory, and without this task the huggingface
-      # creation below died EACCES on exactly the upgrades this MR
-      # migrates. Depth 0 only — nothing recurses INTO the tree: its
-      # contents stay the migration's business.
-      become_user: root
-      ansible.builtin.file:
-        path: "{{ data_dir_resolved }}"
-        state: directory
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        # NO mode: key — the operator's 0700/0750 hardening of the data
-        # dir must survive every deploy (ownership only, never widened).
 
     - name: Create required directories
       # huggingface resolves through data_dir_resolved (the ONE formula):

@@ -37,25 +37,49 @@ cd "$PROJECT_ROOT"
 IGNORE_CONTENT="$(cat "$IGNORE_FILE")"
 
 echo "==> Generating OpenAPI spec from backend source..."
-(cd "$BACKEND_DIR" && node -e "
+# The spec extraction runs under env -i: the node process sees only the pin
+# list below plus PATH/HOME for tooling (the envelope reads neither), so no
+# env read anywhere in the envelope or the transitive swagger-schemas.js —
+# present or future — can reach the committed artifacts from the invoking
+# shell. Same backend sources always regenerate byte-identical artifacts.
+# Linux/macOS only: env -i strips what node.exe needs on Windows.
+(cd "$BACKEND_DIR" && env -i PATH="${PATH:-/usr/local/bin:/usr/bin:/bin}" HOME="${HOME:-/tmp}" \
+  API_URL=https://localhost \
+  KEYCLOAK_URL=https://keycloak.example.com/auth KEYCLOAK_REALM=genie node -e "
+const assert = require('assert');
 const swaggerJsdoc = require('swagger-jsdoc');
+// The same envelope module the runtime requires (components/gov-chat-backend/
+// index.js). The pinned placeholder values land in the committed artifacts'
+// cosmetics (ApiClient's basePath default, README server/OAuth URLs); the
+// endpoint paths are env-independent, and the app overrides basePath at
+// runtime. KEYCLOAK_URL mirrors __tests__/setup-env.js's placeholder spelling.
 const spec = swaggerJsdoc({
-  definition: {
-    openapi: '3.0.0',
-    info: {
-      title: 'Government Services API',
-      version: '1.0.0',
-      description: 'API documentation for Government Services microservices'
-    },
-    servers: [{ url: 'https://localhost', description: 'Default' }],
-    components: { schemas: require('./swagger-schemas') }
-  },
+  definition: require('./swagger-definition'),
   apis: ['./routes/*.js']
 });
+// Sanity checks: a broken apis glob yields a spec with zero paths, and a
+// pin assignment dropped from the env -i line shows up as an 'undefined'
+// interpolation. The envelope's URL construction is asserted by the
+// backend suite, not re-encoded here.
+assert.ok(Object.keys(spec.paths ?? {}).length > 0,
+  'the generated spec has no paths — the apis glob matched nothing.');
+assert.ok((spec.servers ?? []).some((s) => s?.url === 'https://localhost'),
+  'no server entry carries the API_URL pin value — either a pin assignment'
+  + ' is missing from the env -i line above, or swagger-definition.js'
+  + ' changed how it builds the servers list.');
+const flow = spec.components?.securitySchemes?.KeycloakOAuth2?.flows?.authorizationCode;
+for (const [label, url] of [
+  ['authorizationUrl', flow?.authorizationUrl],
+  ['tokenUrl', flow?.tokenUrl]
+]) {
+  assert.ok(typeof url === 'string' && !url.includes('undefined'),
+    label + ' is not a concrete URL — the KEYCLOAK_URL/KEYCLOAK_REALM pins'
+    + ' are missing from the env -i line above.');
+}
 require('fs').writeFileSync('$SPEC_FILE', JSON.stringify(spec, null, 2));
 const count = Object.keys(spec.paths).length;
 console.log('Generated ' + count + ' endpoints');
-") || { echo "ERROR: Failed to generate spec. Run 'npm install' in $BACKEND_DIR"; exit 1; }
+") || { echo "ERROR: Failed to generate the OpenAPI spec (see the node error above;"; echo "       for module-not-found errors, run 'npm install' in $BACKEND_DIR)"; exit 1; }
 
 # generate_client <output-dir> — run the generator into the given directory.
 # Single definition so the generate and --check paths cannot drift apart.

@@ -106,6 +106,9 @@ afterAll(() => {
 
 // Access the exported config objects directly — no capture mocking needed
 const { swaggerOptions, swaggerUiSetupOptions } = require('../index');
+// File-scope binding: survives jest.resetModules() re-evaluations, so the
+// identity assert below holds regardless of test order.
+const sharedDefinition = require('../swagger-definition');
 
 // Build the merged spec the way the runtime does. This suite mocks fs and
 // path (index.js's uploads-dir probe); the spec build needs the real ones.
@@ -147,6 +150,14 @@ const buildSpecWithRealFs = (options) => {
 const mergedSpec = buildSpecWithRealFs(swaggerOptions);
 
 describe('Swagger Configuration', () => {
+  describe('Shared envelope module', () => {
+    // index.js must expose the shared module object, not an inlined copy —
+    // one envelope for the served spec and the generated client.
+    it('exposes the shared swagger-definition module as the runtime envelope', () => {
+      expect(swaggerOptions.definition).toBe(sharedDefinition);
+    });
+  });
+
   describe('Security Scheme (Task 1)', () => {
     it('should contain KeycloakOAuth2 security scheme (NOT bearerAuth)', () => {
       const schemes = swaggerOptions.definition.components.securitySchemes;

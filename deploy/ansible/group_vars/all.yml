@@ -8,6 +8,13 @@
 # =============================================================================
 deploy_dir: /opt/genieai
 data_dir: ./data
+# The effective data directory, resolved ONCE for every consumer (the
+# payload-ownership pass, the no-root migration): an absolute inventory
+# override passes through, a relative one joins deploy_dir; trailing
+# slashes are stripped and the path normalized so all consumers compare
+# the same spelling. A `~`-rooted override is unsupported (see
+# tasks/no-root-data-migration.yml for the three-context reasoning).
+data_dir_resolved: "{{ ((deploy_dir ~ '/' ~ data_dir) if not (data_dir is match('/')) else data_dir) | regex_replace('/+$', '') | normpath }}"
 
 # Runtime theme config directory on the host, bind-mounted read-only into the
 # frontend and Keycloak containers. Promoted to group_vars so both the

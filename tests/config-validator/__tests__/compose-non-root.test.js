@@ -161,12 +161,14 @@ describe('compose non-root contract (#1227)', () => {
     // (the one-shot rule's blessed self-healing form). Stripping the bound
     // turns every anchor-merged init into an UNBOUNDED restart loop of a
     // failing root container (swarm restarts forever without a bound). Each
-    // must trip by name — arango-vector-db-init asserted as the canary.
+    // must trip by name — otel-collector-init asserted as the canary (it
+    // is the one init still judged on the ANCHOR's policy since the
+    // placement fix gave the other four service-local deploys).
     const unbounded = composeText.replace('\n      max_attempts: 60\n', '\n');
     expect(unbounded).not.toBe(composeText);
     const { violations } = validateComposeNonRoot(unbounded);
     expect(
-      violations.some((v) => v.includes('arango-vector-db-init') && v.includes('on-failure without max_attempts'))
+      violations.some((v) => v.includes('otel-collector-init') && v.includes('on-failure without max_attempts'))
     ).toBe(true);
 
     // Negative control: an EXPLICIT bound satisfies the rule — the gate
@@ -357,12 +359,12 @@ describe('compose non-root contract (#1227)', () => {
     // the old gate still credited them — now the local-only view applies
     // and the absent condition reads as swarm's default "any".
     const localDeploy = composeText.replace(
-      '  backend-init:\n    <<: *chown-init\n',
-      '  backend-init:\n    <<: *chown-init\n    deploy:\n      placement:\n        constraints:\n          - node.labels.genieai == true\n'
+      '    # so the chown has run on every node the collector can land on).\n    <<: *chown-init\n',
+      '  otel-collector-init:\n    <<: *chown-init\n    deploy:\n      placement:\n        constraints:\n          - node.labels.genieai == true\n'
     );
     expect(localDeploy).not.toBe(composeText);
     const { violations: v2 } = validateComposeNonRoot(localDeploy);
-    expect(v2.some((v) => v.includes('backend-init') && v.includes('one-shot'))).toBe(true);
+    expect(v2.some((v) => v.includes('otel-collector-init') && v.includes('one-shot'))).toBe(true);
   });
 
   test('mutations: absolute resolved sources cannot escape the data-dir rule', () => {
@@ -706,13 +708,12 @@ describe('compose non-root contract (#1227)', () => {
     // The deploy block's open state must not outlive its indentation: a
     // later 6-space mode:/restart_policy: under a DIFFERENT parent key
     // (labels: here) would be credited to the service's deploy invariants
-    // and overwrite the real mode. Injected into backend-init (an
-    // allowlisted one-shot with a local deploy) so the invariant check
-    // actually judges it.
+    // and overwrite the real mode. Injected into otel-collector-init (an
+    // allowlisted one-shot judged on the anchor) with a local deploy of
+    // its own, so the invariant check actually judges the hijack.
     const hijacked = composeText.replace(
-      '  backend-init:\n    <<: *chown-init\n',
-      '  backend-init:\n' +
-        '    <<: *chown-init\n' +
+      '    # so the chown has run on every node the collector can land on).\n    <<: *chown-init\n',
+      '    # so the chown has run on every node the collector can land on).\n    <<: *chown-init\n' +
         '    deploy:\n' +
         '      mode: global\n' +
         '      restart_policy:\n' +
@@ -921,31 +922,31 @@ describe('compose non-root contract (#1227)', () => {
     // A flow-form deploy: replaces the anchor's map — the mode/one-shot
     // invariants must be judged on the local shape (absent → default).
     const flowDeploy = composeText.replace(
-      '  backend-init:\n    <<: *chown-init\n',
-      '  backend-init:\n    <<: *chown-init\n    deploy: {mode: replicated}\n'
+      '    # so the chown has run on every node the collector can land on).\n    <<: *chown-init\n',
+      '  otel-collector-init:\n    <<: *chown-init\n    deploy: {mode: replicated}\n'
     );
     expect(flowDeploy).not.toBe(composeText);
     const { violations: v2 } = validateComposeNonRoot(flowDeploy);
-    expect(v2.some((v) => v.includes('backend-init') && v.includes('one-shot'))).toBe(true);
-    expect(v2.some((v) => v.includes('backend-init') && v.includes('mode: global'))).toBe(true);
+    expect(v2.some((v) => v.includes('otel-collector-init') && v.includes('one-shot'))).toBe(true);
+    expect(v2.some((v) => v.includes('otel-collector-init') && v.includes('mode: global'))).toBe(true);
 
     // A local deploy restating the bounded policy but DROPPING
     // mode: global strands the per-node chown guarantee — must trip.
     const modeDrop = composeText.replace(
-      '  backend-init:\n    <<: *chown-init\n',
-      '  backend-init:\n    <<: *chown-init\n    deploy:\n      restart_policy:\n        condition: on-failure\n        max_attempts: 3\n'
+      '    # so the chown has run on every node the collector can land on).\n    <<: *chown-init\n',
+      '  otel-collector-init:\n    <<: *chown-init\n    deploy:\n      restart_policy:\n        condition: on-failure\n        max_attempts: 3\n'
     );
     const { violations: v3 } = validateComposeNonRoot(modeDrop);
-    expect(v3.some((v) => v.includes('backend-init') && v.includes('mode: global'))).toBe(true);
+    expect(v3.some((v) => v.includes('otel-collector-init') && v.includes('mode: global'))).toBe(true);
 
     // An allowlisted one-shot may pin user: root EXPLICITLY — the doctrine
     // is "root ON PURPOSE"; the blanket root check must not fire on it.
     const explicitRootInit = composeText.replace(
-      '  backend-init:\n    <<: *chown-init\n',
-      '  backend-init:\n    <<: *chown-init\n    user: root\n'
+      '    # so the chown has run on every node the collector can land on).\n    <<: *chown-init\n',
+      '  otel-collector-init:\n    <<: *chown-init\n    user: root\n'
     );
     const { violations: v4 } = validateComposeNonRoot(explicitRootInit);
-    expect(v4.filter((v) => v.includes('backend-init') && v.includes('is root'))).toEqual([]);
+    expect(v4.filter((v) => v.includes('otel-collector-init') && v.includes('is root'))).toEqual([]);
 
     // ...while the same pin on a REGULAR service still trips.
     const explicitRootSvc = ['services:', '  backend:', '    user: root', ''].join('\n');
@@ -956,9 +957,11 @@ describe('compose non-root contract (#1227)', () => {
   test('mutations: anchor mode flip and re-indented bind cannot slip past the gate', () => {
     // The anchor's OWN mode: global is parsed, not hardcoded — flipping it
     // trips every merged init (the per-node chown guarantee is doctrine).
-    const modeFlip = composeText.replace('    mode: global', '    mode: replicated');
+    const modeFlip = composeText.replaceAll('    mode: global', '    mode: replicated');
     expect(modeFlip).not.toBe(composeText);
     const { violations: v1 } = validateComposeNonRoot(modeFlip);
+    // anchor + the four placement-constrained local deploys — every
+    // one-shot init must trip
     expect(v1.filter((v) => v.includes('mode: global')).length).toBeGreaterThanOrEqual(5);
 
     // A deeper-indented long-syntax bind is still collected (same class

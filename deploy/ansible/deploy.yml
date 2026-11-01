@@ -221,8 +221,9 @@
     # still live INSIDE deploy_dir (data_dir: /opt/genieai/data), and
     # dropping the exclusion there would chown -R the whole tree (backend
     # dump dir, huggingface caches) to ansible_user, transiently revoking
-    # the uid-1000 ownership the migration just handed over.
-    _fix_payload_data_path: "{{ ((deploy_dir ~ '/' ~ data_dir) if not (data_dir is match('/')) else data_dir) | regex_replace('/+$', '') | normpath }}"
+    # the uid-1000 ownership the migration just handed over. The resolved
+    # spelling comes from group_vars (ONE formula for every consumer).
+    _fix_payload_data_path: "{{ data_dir_resolved }}"
     _fix_payload_probe_cmd: >-
       find "{{ deploy_dir }}" -mindepth 1 -maxdepth 1
       ! -path "{{ _fix_payload_data_path }}"

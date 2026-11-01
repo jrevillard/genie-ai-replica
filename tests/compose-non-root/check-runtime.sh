@@ -126,9 +126,15 @@ while IFS= read -r container; do
     esac
   fi
   self_dropping=0
-  case "$SELF_DROPPING" in
-    *" $svc "*) self_dropping=1 ;;
-  esac
+  # The empty-svc guard is load-bearing: with svc unset the pattern
+  # becomes *" "* which matches any SELF_DROPPING value carrying two
+  # consecutive spaces — an unreduced name must take the plain any-uid-0
+  # check, never the healthcheck-shape exemption.
+  if [ -n "$svc" ]; then
+    case "$SELF_DROPPING" in
+      *" $svc "*) self_dropping=1 ;;
+    esac
+  fi
   if [ "$self_dropping" -eq 1 ]; then
     # The server drops to its package user; the transient healthcheck execs
     # (pg_isready / redis-cli, sub-second, run as the container's root

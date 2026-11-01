@@ -8,12 +8,14 @@ RUN apk add --no-cache openssl gettext
 # config, certificates) to the nginx user (uid 101) the container runs as.
 COPY nginx-rootless.conf /etc/nginx/nginx.conf
 # The stock package ships a conf.d/default.conf (listen 80, stock welcome
-# page) that the entrypoint used to overwrite at runtime; the render now
-# goes to /tmp/rendered-default.conf, so the stock file is deleted —
-# otherwise the edge would serve a third listener on :80 (and crash-loop on
+# page). nginx-rootless.conf deliberately includes NO conf.d/* glob — the
+# rendered server block is staged at /tmp/rendered-default.conf and the
+# main config references it by absolute path — so the stock file is
+# already unreachable; the rm below is belt-and-braces so a future conf.d
+# include cannot resurrect a root-era :80 listener (and crash-loop on
 # runtimes that keep the unprivileged-port floor). The certs directory is
-# the one path the entrypoint writes that the image owns as root; the nginx
-# temp paths live under /tmp, which the runtime creates itself.
+# the one path the entrypoint writes that the image owns as root; the
+# nginx temp paths live under /tmp, which the runtime creates itself.
 RUN rm -f /etc/nginx/conf.d/default.conf \
     && mkdir -p /etc/nginx/certs \
     && chown -R 101:101 /etc/nginx/certs

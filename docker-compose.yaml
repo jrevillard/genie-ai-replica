@@ -155,10 +155,15 @@ x-chown-init: &chown-init
   deploy:
     # mode: global (the otel-collector-init precedent): named volumes are
     # node-local and swarm ignores depends_on, so a per-node init is the
-    # only way to guarantee the chown ran on WHATEVER node the follow-up
-    # service lands on — including a swarm with more than one
+    # only way to guarantee the chown ran on every node the follow-up
+    # service can land on — including a swarm with more than one
     # genieai-labeled node. Compose mode ignores this and runs the init
-    # once.
+    # once. Services whose follow-up is CONSTRAINED to
+    # node.labels.genieai == true restate that constraint in a local
+    # deploy: (shallow-replacing this map — mode and the bounded policy
+    # go with it) so the init skips nodes the service can never land on;
+    # otel-collector-init alone stays unconstrained, because
+    # otel-collector itself is global on every node.
     mode: global
     restart_policy:
       # bounded self-heal (the one-shot rule's blessed form): a transient
@@ -1263,6 +1268,21 @@ services:
   # backend_uploads, which the now non-root backend could no longer write.
   backend-init:
     <<: *chown-init
+    # Same node set as the follow-up service's own placement
+    # constraint: without it the global init also runs on
+    # gateway/gpu nodes the service can never land on, chowning
+    # volumes nothing there will read. A service-local deploy:
+    # shallow-replaces the anchor's whole deploy map — mode and the
+    # race-sized bounded policy are restated verbatim.
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+        max_attempts: 60
     # PER-VOLUME guard: the loop probes each volume independently, so a
     # root-era file in ONE volume heals only that volume — an operator
     # recovering one volume with `docker volume rm` leaves the other's
@@ -1297,6 +1317,21 @@ services:
   # non-root document-repository would get EACCES on every upload.
   document-repository-init:
     <<: *chown-init
+    # Same node set as the follow-up service's own placement
+    # constraint: without it the global init also runs on
+    # gateway/gpu nodes the service can never land on, chowning
+    # volumes nothing there will read. A service-local deploy:
+    # shallow-replaces the anchor's whole deploy map — mode and the
+    # race-sized bounded policy are restated verbatim.
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+        max_attempts: 60
     # PROBE form (no marker — see backend-init).
     command: ["sh", "-c", "find /app/uploads -user root -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /app/uploads -user root -exec chown -h 1000:1000 {} + || exit 9; fi; find /app/uploads -user root -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
     volumes:
@@ -1459,6 +1494,21 @@ services:
   # <stack>_<init>` (swarm).
   arango-vector-db-init:
     <<: *chown-init
+    # Same node set as the follow-up service's own placement
+    # constraint: without it the global init also runs on
+    # gateway/gpu nodes the service can never land on, chowning
+    # volumes nothing there will read. A service-local deploy:
+    # shallow-replaces the anchor's whole deploy map — mode and the
+    # race-sized bounded policy are restated verbatim.
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+        max_attempts: 60
     # PER-VOLUME guard (same doctrine as backend-init): the loop probes
     # each volume independently — a root-era file in one volume heals
     # only that volume. Every find's exit status is enforced (see
@@ -2827,6 +2877,21 @@ services:
   # writes nothing outside the named volume - see the no-root contract test.
   victorialogs-init:
     <<: *chown-init
+    # Same node set as the follow-up service's own placement
+    # constraint: without it the global init also runs on
+    # gateway/gpu nodes the service can never land on, chowning
+    # volumes nothing there will read. A service-local deploy:
+    # shallow-replaces the anchor's whole deploy map — mode and the
+    # race-sized bounded policy are restated verbatim.
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+        max_attempts: 60
     # PROBE form (no marker — see backend-init).
     command: ["sh", "-c", "find /var/lib/victoria-logs -user root -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /var/lib/victoria-logs -user root -exec chown -h 65534:65534 {} + || exit 9; fi; find /var/lib/victoria-logs -user root -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
     volumes:

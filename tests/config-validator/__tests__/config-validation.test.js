@@ -2302,10 +2302,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
         .filter((arg) => arg.startsWith('tests/e2e'))
         .map((arg) => (arg.endsWith('/') ? `${arg}**/*` : arg))
     );
-    // Set equality, order-free: reordering the invocation's arguments is
-    // semantically identical for Playwright and must not red the guard,
-    // while an added or removed target still fails here.
-    expect([...targets].sort()).toEqual([
+    // Set equality, order- and repetition-free: reordering the invocation's
+    // arguments, or repeating one, is semantically identical for Playwright
+    // and must not red the guard, while an added or removed target still
+    // fails here.
+    expect([...new Set(targets)].sort()).toEqual([
       'tests/e2e/chatbot/**/*',
       'tests/e2e/documents/**/*',
       'tests/e2e/helpers/**/*',
@@ -2375,7 +2376,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // the backreference; require( takes spaced and .resolve spellings and
     // import( the spaced one; `from`, dynamic import() and bare
     // side-effect imports land in the same alternation.
-    const specifierRe = /(?:(?:require(?:\.resolve)?|import)\s*\(\s*|from\s+|import\s+)(['"`])(\.[^'"`]*)\1/g;
+    const specifierRe = /(?:(?:require(?:\.resolve)?|import)\s*\(\s*|\bfrom\s*|import\s+)(['"`])(\.[^'"`]*)\1/g;
     // Same shape tolerance as the specifiers for __dirname chains: all
     // three quote styles, any spacing. A join carrying a non-literal
     // argument is not matched at all (tracked in #1325); an inline comment
@@ -2506,8 +2507,8 @@ describe('e2e merge-train changes filters (#1264)', () => {
   describe('consumed-path derivation units', () => {
     const deriveFrom = (file, source) => deriveConsumedPaths([{ file, source }]);
 
-    // One row per specifier spelling the scanner tolerates; the tolerance
-    // grew one review round at a time, the table keeps the next one a row.
+    // One row per specifier spelling the scanner accepts; the next accepted
+    // spelling is a row here, not a new test.
     test.each([
       ['plain require', "const h = require('../helpers/auth');"],
       ['double-quoted require', 'const h = require("../helpers/auth");'],
@@ -2517,7 +2518,8 @@ describe('e2e merge-train changes filters (#1264)', () => {
       ['ESM from-import', "import x from '../helpers/auth';"],
       ['dynamic import', "const y = import('../helpers/auth');"],
       ['spaced dynamic import', "const y = await import ('../helpers/auth');"],
-      ['side-effect import', "import '../helpers/auth';"]
+      ['side-effect import', "import '../helpers/auth';"],
+      ['no-space re-export from', "export { x } from'../helpers/auth';"]
     ])('consumes the %s shape', (_name, source) => {
       expect(deriveFrom('tests/e2e/chatbot/x.spec.js', source)).toEqual(['tests/e2e/helpers/**/*']);
     });

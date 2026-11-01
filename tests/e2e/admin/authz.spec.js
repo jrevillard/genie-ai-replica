@@ -23,8 +23,13 @@ test.describe('Admin route authorization', () => {
     await loginViaUI(page, TEST_ADMIN_USER);
 
     // Probe the real backend with the admin's session before navigating:
-    // requireAdmin must let an admin-role JWT through.
+    // requireAdmin must let an admin-role JWT through. The counter keeps
+    // the status assertion from passing vacuously — if the dashboard
+    // mount never fires the call, the test fails on the count, not on
+    // tiles that render from their defaults.
+    let healthCalls = 0;
     await page.route('**/api/admin/system-health', async (route) => {
+      healthCalls++;
       const response = await route.fetch();
       expect(response.status()).toBe(200);
       await route.fulfill({ response });
@@ -37,14 +42,18 @@ test.describe('Admin route authorization', () => {
     // deployment-specific, the wiring is asserted in data-wiring.spec.js).
     await expect(page.locator('.stat-card .stat-value')).toHaveCount(4);
     await expect(page.locator('[data-test-id="nav-admin-button"]')).toBeEnabled();
+    expect(healthCalls).toBeGreaterThanOrEqual(1);
   });
 
   test('non-admin session is refused by the backend and the navbar', async ({ page }) => {
     await loginViaUI(page, TEST_PLAIN_USER);
 
     // Probe the real backend with the plain user's session: requireAdmin
-    // must answer 403 FORBIDDEN.
+    // must answer 403 FORBIDDEN (counter guards against a vacuous pass —
+    // see the admin test).
+    let healthCalls = 0;
     await page.route('**/api/admin/system-health', async (route) => {
+      healthCalls++;
       const response = await route.fetch();
       expect(response.status()).toBe(403);
       const body = await response.json();
@@ -59,6 +68,7 @@ test.describe('Admin route authorization', () => {
     // frontend ever grows a role gate, this assertion is the one to update
     // deliberately, not silently.
     await expect(page.locator('[data-test-id="admin-dashboard"]')).toBeVisible();
+    expect(healthCalls).toBeGreaterThanOrEqual(1);
 
     // The navbar admin entry is disabled without the role — the visible
     // half of the refusal (the mobile twin carries its own anchor).

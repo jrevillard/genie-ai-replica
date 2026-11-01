@@ -22,8 +22,13 @@ test.describe('Admin logs view', () => {
    */
   async function loginAdminWithSummary(page, summaryPayload) {
     await loginViaUI(page, TEST_ADMIN_USER);
-    await page.route('**/api/admin/logs/summary*', (route) =>
-      route.fulfill({
+    // Counter guards the assertions below against a vacuous pass: the
+    // empty-summary row renders whenever the component state is empty,
+    // so the tests must prove the summary call actually happened.
+    page._summaryCalls = 0;
+    await page.route('**/api/admin/logs/summary*', (route) => {
+      page._summaryCalls++;
+      return route.fulfill({
         status: 200,
         contentType: 'application/json',
         // The wire contract is FLAT — LogsService returns
@@ -38,8 +43,8 @@ test.describe('Admin logs view', () => {
           date: new Date().toISOString().split('T')[0],
           degraded: false,
         }),
-      }),
-    );
+      });
+    });
     await page.goto(`${BASE_URL}/admin`, { waitUntil: 'networkidle' });
     // The DsTabs control renders the tab as a button (the sidebar nav
     // entries are links, so the role separates the two).
@@ -62,6 +67,7 @@ test.describe('Admin logs view', () => {
     const arangoRow = page.locator('.log-summary-table tr', { hasText: 'wired-arangodb' });
     await expect(arangoRow).toBeVisible();
     await expect(arangoRow.locator('.log-count')).toHaveText('7');
+    expect(page._summaryCalls).toBeGreaterThanOrEqual(1);
   });
 
   test('an empty summary renders the explicit empty row', async ({ page }) => {
@@ -69,5 +75,6 @@ test.describe('Admin logs view', () => {
 
     await expect(page.locator('.log-summary-table .empty-logs')).toBeVisible();
     await expect(page.locator('.log-summary-table .log-count')).toHaveCount(0);
+    expect(page._summaryCalls).toBeGreaterThanOrEqual(1);
   });
 });

@@ -9,6 +9,22 @@ import 'package:genie_ai_mobile/providers/api_providers.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 
+// The category's identity key — the tree's catKey, falling back through
+// the legacy spellings to the category's position. ONE copy of the chain:
+// the highlight map's category space and the rendered tree's must agree.
+String _categoryKeyOf(Map<dynamic, dynamic> category, int fallbackIndex) =>
+    (category['catKey'] ?? category['key'] ?? category['id'] ?? fallbackIndex)
+        .toString();
+
+// The child's localized display text, or null when this locale names
+// nothing for it (the render hides such a row). A non-Map child — a
+// legacy tree whose children are plain strings — reads as its string.
+String? _childDisplayOf(dynamic child) {
+  if (child is! Map) return child?.toString();
+  final display = child['label'] ?? child['name'];
+  return (display is String && display.isNotEmpty) ? display : null;
+}
+
 class ServiceTreePanel extends ConsumerStatefulWidget {
   final String locale;
   final Function(Map<String, dynamic> selection) onSelectionChange;
@@ -82,6 +98,12 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
   Future<void> _loadCategories() async {
     final currentLocale = I18nService().currentLocale.languageCode;
     final seq = ++_categoryLoadSeq;
+    // The response-time half of the supersession guard: true when the
+    // locale moved on while THIS fetch was in flight. It covers the
+    // window BEFORE the newer fetch is even scheduled (the reload runs
+    // on the next frame); the sequence check covers every fetch after it.
+    bool localeSuperseded() =>
+        I18nService().currentLocale.languageCode != currentLocale;
 
     setState(() {
       _isLoading = true;
@@ -100,13 +122,8 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
           .apiServiceCategoriesCategoriesGetWithHttpInfo(locale: currentLocale);
 
       // A locale switch while this fetch was in flight: this response
-      // names a locale the UI has left, whatever it carries. The CURRENT-
-      // locale check covers the window BEFORE the newer fetch is even
-      // scheduled (the reload runs on the next frame); the sequence check
-      // covers every fetch after it.
-      final bool localeSuperseded =
-          I18nService().currentLocale.languageCode != currentLocale;
-      if (!mounted || seq != _categoryLoadSeq || localeSuperseded) return;
+      // names a locale the UI has left, whatever it carries.
+      if (!mounted || seq != _categoryLoadSeq || localeSuperseded()) return;
 
       if (response.statusCode == 200) {
         final categories = jsonDecode(response.body) as List<dynamic>;
@@ -129,11 +146,7 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     } catch (e) {
       // Same guards on the failure path: a superseded fetch's error must
       // not paint over the newer locale's tree or kill its spinner.
-      if (!mounted ||
-          seq != _categoryLoadSeq ||
-          I18nService().currentLocale.languageCode != currentLocale) {
-        return;
-      }
+      if (!mounted || seq != _categoryLoadSeq || localeSuperseded()) return;
       setState(() {
         _errorMessage = tr("userProfile.errors.loadingFailed");
         _isLoading = false;
@@ -176,12 +189,11 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     for (var i = 0; i < _nodes.length; i++) {
       final category = _nodes[i];
       if (category is! Map) continue;
-      final catKey =
-          (category['catKey'] ?? category['key'] ?? category['id'] ?? i)
-              .toString();
+      final catKey = _categoryKeyOf(category, i);
       final en = category['nameEN'];
-      if (en is String && en.isNotEmpty)
+      if (en is String && en.isNotEmpty) {
         catNameEn.putIfAbsent(catKey, () => en);
+      }
 
       final byKey = <String, ({String name, int index})>{};
       final byEn = <String, ({String name, int index})>{};
@@ -192,8 +204,8 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
         for (var j = 0; j < children.length; j++) {
           final child = children[j];
           if (child is! Map) continue;
-          final display = child['label'] ?? child['name'];
-          if (display is! String || display.isEmpty) continue;
+          final display = _childDisplayOf(child);
+          if (display == null) continue;
           final key = (child['_key'] ?? '').toString();
           if (key.isNotEmpty) {
             byKey.putIfAbsent(key, () => (name: display, index: j));
@@ -241,10 +253,10 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     // indices; a category with a row the tree no longer names keeps its
     // previous map — a half-rebuilt map would highlight rows the user
     // did not pick.
-    for (final entry in realignedHighlights.entries) {
-      if (unresolvedCategories.contains(entry.key)) continue;
-      _selectedNodes[entry.key] = entry.value;
-    }
+    realignedHighlights.removeWhere(
+      (catKey, _) => unresolvedCategories.contains(catKey),
+    );
+    _selectedNodes.addAll(realignedHighlights);
   }
 
   void _onSearchChanged(String query) {
@@ -287,7 +299,7 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
       // category. An empty id (a tree that predates the field) falls
       // through to the label rules below.
       serviceId = (serviceItem['_key'] ?? "").toString();
-      serviceName = serviceItem['label'] ?? serviceItem['name'] ?? "Unknown";
+      serviceName = _childDisplayOf(serviceItem) ?? "Unknown";
       final en = serviceItem['nameEN'];
       serviceEn = (en is String) ? en : "";
     } else {
@@ -537,9 +549,7 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     // Safe Property Access
     final String catLabel =
         category['label'] ?? category['name'] ?? "Unknown Category";
-    final String catKey =
-        (category['catKey'] ?? category['key'] ?? category['id'] ?? index)
-            .toString();
+    final String catKey = _categoryKeyOf(category, index);
     final List children = category['children'] ?? [];
 
     // Filter Children based on Search Query
@@ -560,7 +570,7 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
 
       String name;
       if (child is Map) {
-        name = (child['label'] ?? child['name'] ?? "").toString();
+        name = _childDisplayOf(child) ?? "";
       } else {
         name = child.toString();
       }
@@ -620,8 +630,7 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     // Normalize Data (String vs Map)
     String serviceName;
     if (serviceItem is Map) {
-      serviceName =
-          serviceItem['label'] ?? serviceItem['name'] ?? "Unknown Service";
+      serviceName = _childDisplayOf(serviceItem) ?? "Unknown Service";
     } else {
       serviceName = serviceItem.toString();
     }

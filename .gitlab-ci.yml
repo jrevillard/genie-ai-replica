@@ -495,8 +495,6 @@ workflow:
           [234][0-9][0-9])
             ROPC_LAST_DEF="$ROPC_STATUS"
             if [ "$ROPC_CURL_RC" -eq 0 ]; then ROPC_ANSWERED=1; break; fi ;;
-          [234][0-9][0-9])
-            if [ "$ROPC_CURL_RC" -eq 0 ]; then ROPC_ANSWERED=1; break; fi ;;
         esac
         echo "ROPC probe attempt ${i}/5: no usable answer from the token endpoint (HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC})"
         { [ "$i" -lt 5 ] && sleep 5; } || true
@@ -581,6 +579,10 @@ workflow:
           exit 1
           ;;
         *)
+          # Drift protection, not a live path: only clean-exit 2xx-4xx
+          # answers set ROPC_ANSWERED, and 4xx/2xx-3xx cover that space. If
+          # a future edit to the loop's answered logic widens it, this arm
+          # turns the silent-skip class into a loud failure.
           echo "ERROR: the probe reached an unclassified state (HTTP ${ROPC_STATUS:-none}) — failing loudly rather than passing without a verdict"
           exit 1
           ;;

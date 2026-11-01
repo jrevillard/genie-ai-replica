@@ -11,7 +11,7 @@
 part of openapi.api;
 
 class ApiClient {
-  ApiClient({this.basePath = 'http://localhost', this.authentication,});
+  ApiClient({this.basePath = 'https://localhost', this.authentication,});
 
   final String basePath;
   final Authentication? authentication;

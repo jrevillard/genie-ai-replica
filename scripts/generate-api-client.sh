@@ -37,16 +37,26 @@ cd "$PROJECT_ROOT"
 IGNORE_CONTENT="$(cat "$IGNORE_FILE")"
 
 echo "==> Generating OpenAPI spec from backend source..."
-(cd "$BACKEND_DIR" && API_URL=http://localhost PORT=3000 \
+(cd "$BACKEND_DIR" && API_URL=https://localhost PORT=3000 \
   KEYCLOAK_URL=https://keycloak.example.com KEYCLOAK_REALM=genie node -e "
+const assert = require('assert');
 const swaggerJsdoc = require('swagger-jsdoc');
+// The same envelope module the runtime requires (components/gov-chat-backend/
+// index.js). The envelope reads env at require time; the values pinned on the
+// command line keep generation deterministic — the same backend sources always
+// regenerate byte-identical artifacts, whatever the invoking shell exports.
+// They are placeholders that land in the committed artifacts' cosmetics
+// (ApiClient's basePath default, README server/OAuth URLs); the endpoint paths
+// are env-independent, and the app overrides basePath at runtime.
+const PINNED = ['API_URL', 'PORT', 'KEYCLOAK_URL', 'KEYCLOAK_REALM'];
+const envReads = [...require('fs').readFileSync('./swagger-definition.js', 'utf8')
+  .matchAll(/process\.env\.([A-Z0-9_]+)/g)].map((m) => m[1]);
+const unpinned = [...new Set(envReads)].filter((name) => !PINNED.includes(name));
+assert.ok(unpinned.length === 0,
+  'swagger-definition.js reads env vars the generation pin block does not set: '
+  + unpinned.join(', ')
+  + ' — pin them above or the committed client becomes env-dependent again.');
 const spec = swaggerJsdoc({
-  // The same envelope module the runtime requires (components/gov-chat-backend/
-  // index.js). The envelope reads env at require time; the values pinned above
-  // keep generation deterministic — the same backend sources always regenerate
-  // byte-identical artifacts. They land only in doc cosmetics (ApiClient's
-  // basePath default, README server/OAuth URLs — all runtime-overridden or
-  // placeholder), never in the generated endpoint paths.
   definition: require('./swagger-definition'),
   apis: ['./routes/*.js']
 });

@@ -2240,60 +2240,404 @@ describe('e2e merge-train changes filters (#1264)', () => {
   const E2E_JOBS = ['e2e:integration', 'e2e:playwright'];
   let content;
   let filters;
+  let EXECUTED_GLOBS;
+  let EXECUTED_SPECS;
+  let DERIVED_CONSUMED;
 
   beforeAll(() => {
     content = fs.readFileSync(ciFile, 'utf-8');
     filters = parseGitlabCiJobChanges(ciFile, [ANCHOR, ...E2E_JOBS]);
+    // One snapshot: every assertion below reads the same parse/walk/spec
+    // reads, so executed and consumed paths can never come from different
+    // invocations of the pipeline.
+    EXECUTED_GLOBS = executedPaths();
+    EXECUTED_SPECS = specFilesUnderExecuted(EXECUTED_GLOBS);
+    DERIVED_CONSUMED = deriveConsumedPaths(
+      EXECUTED_SPECS.map((file) => ({
+        file,
+        source: fs.readFileSync(path.join(ROOT, file), 'utf-8')
+      }))
+    );
   });
+
+  // Comments are stripped entirely — whole-line ones and inline ` #...`
+  // tails: they are layout, not configuration, and must not leak literals
+  // (a path, a condition, a tool name) into the assertions below. The
+  // inline rule is safe for the sections this suite reads today; it is NOT
+  // file-wide — a line like `echo "Add a ## [v1] section"` (config:changelog
+  // carries one) would truncate, so a future section pin on such a job
+  // needs a quote-aware strip first.
+  const stripComments = (lines) =>
+    lines.filter((line) => !line.trimStart().startsWith('#')).map((line) => line.replace(/\s+#.*$/, ''));
 
   // Section of the file from a top-level key to the next one. The boundary
   // matches a top-level KEY line only — a column-0 comment inside the job
-  // body is valid YAML there and must not truncate the section. Comment
-  // lines are stripped entirely: they are layout, not configuration, and
-  // must not leak literals (a path, a condition) into the assertions below.
+  // body is valid YAML there and must not truncate the section.
   const sectionOf = (job) => {
     const start = content.indexOf(`\n${job}:`);
     expect(start).toBeGreaterThan(-1);
     const rest = content.slice(start + 1);
     const end = rest.search(/\n[\w:.-]+:(\s|$)/);
     const section = end === -1 ? rest : rest.slice(0, end + 1);
-    return section
-      .split('\n')
-      .filter((line) => !line.trimStart().startsWith('#'))
-      .join('\n');
+    return stripComments(section.split('\n')).join('\n');
   };
 
-  // Executed paths are derived from the `npx playwright test` invocation in
-  // .e2e_web_base rather than copied into a second hand-maintained list — a
-  // hardcoded list would inherit the same drift this guard exists to catch.
-  // The derivation is anchored to that base's section so a second invocation
-  // added elsewhere in the file cannot silently redirect it.
+  // Executed paths are derived from the `npx playwright test` invocation
+  // line(s) in .e2e_web_base rather than copied into a second hand-maintained
+  // list — a hardcoded list would inherit the same drift this guard exists to
+  // catch. The derivation is anchored to that base's section so an invocation
+  // added elsewhere in the file cannot silently redirect it, and it consumes
+  // EVERY invocation the base carries (a second script line's targets reach
+  // the anchor check instead of silently escaping it). The npx spelling is
+  // the contract: a first invocation in another spelling fails loudly below,
+  // and script text that merely MENTIONS the invocation (an echo, say) is
+  // captured too — loud, conservative over-capture.
   const executedPaths = () => {
-    const invocation = sectionOf('.e2e_web_base').match(/npx playwright test ([^\n]+)/);
-    expect(invocation).not.toBeNull();
-    const targets = invocation[1]
-      .split(/\s+/)
-      .filter((arg) => arg.startsWith('tests/e2e'))
-      .map((arg) => (arg.endsWith('/') ? `${arg}**/*` : arg));
+    const invocations = sectionOf('.e2e_web_base').match(/npx playwright test ([^\n]+)/g) || [];
+    expect(invocations.length).toBeGreaterThan(0);
+    let targets = invocations.flatMap((line) =>
+      line
+        .replace(/^npx playwright test /, '')
+        .split(/\s+/)
+        .filter((arg) => arg.startsWith('tests/e2e'))
+        .map((arg) => (arg.endsWith('/') ? `${arg}**/*` : arg))
+    );
+    // Set equality, order- and repetition-free: reordering the invocation's
+    // arguments, or repeating one, is semantically identical for Playwright
+    // and must not red the guard, while an added or removed target still
+    // fails here. The canonical (deduplicated, sorted) form is what the pin
+    // validates AND what every consumer downstream receives.
+    targets = [...new Set(targets)].sort();
     expect(targets).toEqual([
       'tests/e2e/chatbot/**/*',
       'tests/e2e/documents/**/*',
-      'tests/e2e/theme-runtime-config.spec.js',
-      'tests/e2e/helpers/**/*'
+      'tests/e2e/helpers/**/*',
+      'tests/e2e/theme-runtime-config.spec.js'
     ]);
     return targets;
   };
 
   // Consumed at runtime by the executed specs but not visible on the
   // invocation line: helpers are imported, fixtures are uploaded/read by the
-  // documents specs.
-  const CONSUMED_PATHS = ['tests/e2e/helpers/**/*', 'tests/e2e/fixtures/**/*'];
+  // documents specs. Like executedPaths above, the consumed list is derived
+  // from the specs themselves — a hand-written copy would inherit the same
+  // drift this guard exists to catch (a new shared directory imported by an
+  // executed spec would escape the anchor until someone edits a list).
+  // Two consumption shapes exist in the tree: relative require/import
+  // specifiers (the helpers) and path.join(__dirname, ...) segment chains
+  // (the fixtures dir). Anything else a spec consumes is not derived —
+  // including joins anchored on __filename or import.meta.url and a join
+  // resolving to the tests/e2e root itself; none exist in the tree.
+  const TESTS_E2E_ROOT = 'tests/e2e';
 
-  test('executed and consumed paths are listed in the shared anchor', () => {
-    const anchorPaths = filters.get(ANCHOR);
-    for (const required of [...executedPaths(), ...CONSUMED_PATHS]) {
-      expect(anchorPaths).toContain(required);
+  // Containment + existence in one place: both derivation shapes drop
+  // anything that leaves tests/e2e (a traversal, a cross-tree import) or
+  // does not exist on disk — the regexes over-capture and the filesystem
+  // arbitrates. Returns the stat or null.
+  const statInTree = (candidate) => {
+    if (!candidate.startsWith(`${TESTS_E2E_ROOT}/`)) return null;
+    try {
+      return fs.statSync(path.join(ROOT, candidate));
+    } catch {
+      return null;
     }
+  };
+
+  // Resolve a specifier the way Node does for these CJS specs: as-is, or
+  // with .js appended — first existing file wins. (Every relative import
+  // in the tree targets a flat .js file; a directory-index import or an
+  // extensionless .json/.node require gets its rule added when one
+  // appears — a resolver branch nothing on disk exercises cannot be
+  // pinned and stays out.)
+  const resolveSpecifier = (fromDir, specifier) => {
+    const base = path.posix.normalize(path.posix.join(fromDir, specifier));
+    for (const candidate of [base, `${base}.js`]) {
+      if (statInTree(candidate)?.isFile()) return candidate;
+    }
+    return null;
+  };
+
+  // Anchor-style entry covering a resolved path: a file directly under
+  // tests/e2e is listed exactly (the anchor lists such files verbatim),
+  // anything deeper becomes its directory glob. Both callers pre-filter to
+  // strict descendants of tests/e2e, so the root itself never reaches here.
+  const toAnchorPath = (resolvedPath, isDir) => {
+    if (isDir) return `${resolvedPath}/**/*`;
+    const dir = path.posix.dirname(resolvedPath);
+    return dir === TESTS_E2E_ROOT ? resolvedPath : `${dir}/**/*`;
+  };
+
+  // Anchor coverage is prefix-based, not verbatim: `X/**/*` covers any
+  // deeper glob or file — the anchor lists a directory once, while the
+  // derivation may resolve a path nested inside it. Exact entries cover
+  // themselves only.
+  const isCovered = (anchorPaths, entry) =>
+    anchorPaths.some((p) => p === entry || (p.endsWith('/**/*') && entry.startsWith(`${p.slice(0, -5)}/`)));
+
+  // Extract the consumed paths from spec sources: relative require/import
+  // specifiers and path.join(__dirname, ...) / path.resolve(__dirname, ...)
+  // string-literal segment chains. Candidates are dropped unless they resolve
+  // inside tests/e2e to something that exists on disk — the regexes
+  // over-capture (comments naming real files, dead references) and the
+  // filesystem arbitrates. Over-capture is the conservative direction for a
+  // trigger guard: more anchor coverage, never a silent loss of coverage,
+  // and it fails the exact pin loudly. Computed (interpolated) arguments are
+  // the non-literal family tracked in #1325 — they drop silently.
+  const deriveConsumedPaths = (specFiles) => {
+    // Specifier shapes consumed — quotes are unenforced in tests/e2e (no
+    // ESLint config covers the tree), so all three quote styles pair via
+    // the backreference; require( takes spaced and .resolve spellings and
+    // import( the spaced one; `from`, dynamic import() and bare
+    // side-effect imports land in the same alternation.
+    const specifierRe = /(?:(?:require(?:\.resolve)?)\s*\(\s*|\bimport\s*\(?\s*|\bfrom\s*)(['"`])(\.[^'"`]*)\1/g;
+    // Same shape tolerance as the specifiers for __dirname chains: all
+    // three quote styles, any spacing. A join carrying a non-literal
+    // argument is not matched at all (tracked in #1325); an inline comment
+    // inside the call likewise. Chains anchored on __filename or
+    // import.meta.url are not derived — no spec uses them; they belong to
+    // the same documented-limits family, not to #1325's computed-argument
+    // case.
+    const joinRe = /path\.(?:join|resolve)\(\s*__dirname((?:\s*,\s*(['"`])[^'"`]*\2)+)\s*\)/g;
+    const globs = new Set();
+    for (const { file, source } of specFiles) {
+      const dir = path.posix.dirname(file);
+      for (const match of source.matchAll(specifierRe)) {
+        const resolved = resolveSpecifier(dir, match[2]);
+        if (resolved) globs.add(toAnchorPath(resolved, false));
+      }
+      for (const match of source.matchAll(joinRe)) {
+        const segments = [...match[1].matchAll(/(['"`])([^'"`]*)\1/g)].map((m) => m[2]);
+        const resolved = path.posix.normalize(path.posix.join(dir, ...segments));
+        const st = statInTree(resolved);
+        if (!st) continue;
+        globs.add(toAnchorPath(resolved, st.isDirectory()));
+      }
+    }
+    return [...globs].sort();
+  };
+
+  // The spec files the invocation executes: real files under the executed
+  // globs (a `X/**/*` glob narrows to the `X/` subtree — with a real
+  // directory boundary, a sibling `X-v2/` is not covered — an exact entry
+  // stays exact). Playwright's default testMatch runs the .js/.jsx/.ts/.tsx
+  // spellings of *.spec and *.test, with optional .mjs/.cjs module
+  // suffixes (the config test pins that the default is still in force), so
+  // all of them count as executed.
+  const specFilesUnderExecuted = (executedGlobs) =>
+    scanTargets(
+      fs
+        .readdirSync(path.join(ROOT, TESTS_E2E_ROOT), { recursive: true })
+        .map((f) => `${TESTS_E2E_ROOT}/${f.split(path.sep).join('/')}`),
+      executedGlobs
+    );
+
+  // Pure selection of the executed files from a directory listing — the
+  // units below pin the boundary and the testMatch shapes on synthetic
+  // listings, the real-tree pin above anchors them to the actual invocation.
+  const scanTargets = (files, executedGlobs) =>
+    files.filter((f) => /\.(spec|test)\.[cm]?[jt]sx?$/.test(f)).filter((f) => isCovered(executedGlobs, f));
+
+  test('executed and consumed paths are covered by the shared anchor', () => {
+    const anchorPaths = filters.get(ANCHOR);
+    const uncovered = [...EXECUTED_GLOBS, ...DERIVED_CONSUMED].filter((p) => !isCovered(anchorPaths, p));
+    // The diff names every uncovered path, not just the first.
+    expect(uncovered).toEqual([]);
+  });
+
+  test('derivation scans exactly the spec files the invocation executes', () => {
+    expect([...EXECUTED_SPECS].sort()).toEqual([
+      'tests/e2e/chatbot/conversation-history.spec.js',
+      'tests/e2e/chatbot/error-handling.spec.js',
+      'tests/e2e/chatbot/quick-help-scope.spec.js',
+      'tests/e2e/chatbot/send-message-and-stream.spec.js',
+      'tests/e2e/documents/search.spec.js',
+      'tests/e2e/documents/upload.spec.js',
+      'tests/e2e/helpers/auth.spec.js',
+      'tests/e2e/theme-runtime-config.spec.js'
+    ]);
+  });
+
+  // Exact pin — the mutation gate for the derivation itself: a scanner branch
+  // that stops matching (a require shape, the fixtures path.join) fails here
+  // before it can silently shrink what the anchor check above covers.
+  test('consumed paths derived from the executed specs are the expected set', () => {
+    expect(DERIVED_CONSUMED).toEqual(['tests/e2e/fixtures/**/*', 'tests/e2e/helpers/**/*']);
+  });
+
+  // The derivation assumes Playwright's default testMatch (which shapes
+  // execute) and relies on testDir pointing at the tree the invocation
+  // targets. If the config ever pins its own testMatch or moves testDir,
+  // the scan set silently diverges from what actually executes — the same
+  // hand-copied drift this guard exists to catch, in its own input. Pin
+  // both (on comment-free code text — no comment form naming the keys may
+  // fail the pin) so an override fails here first, loudly.
+  test('playwright.config.js keeps the defaults the derivation assumes', () => {
+    const config = stripJsComments(fs.readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8').split('\n')).join(
+      '\n'
+    );
+    // testMatch and testIgnore must not appear at all (both would change
+    // which files execute), and testDir must appear exactly once — a
+    // second, project-level testDir would execute a different file set
+    // than the invocation's targets name.
+    expect(config).not.toMatch(/testMatch/);
+    expect(config).not.toMatch(/testIgnore/);
+    expect((config.match(/testDir/g) || []).length).toBe(1);
+    expect(config).toMatch(/testDir:\s*'\.\/tests\/e2e'/);
+  });
+
+  describe('scan-target selection', () => {
+    const GLOBS = ['tests/e2e/chatbot/**/*', 'tests/e2e/theme-runtime-config.spec.js'];
+
+    test('a .test.js file executes under the default testMatch too', () => {
+      expect(scanTargets(['tests/e2e/chatbot/x.test.js', 'tests/e2e/chatbot/x.js'], GLOBS)).toEqual([
+        'tests/e2e/chatbot/x.test.js'
+      ]);
+    });
+
+    test('every extension of the default testMatch executes', () => {
+      const listing = [
+        'tests/e2e/chatbot/x.spec.ts',
+        'tests/e2e/chatbot/x.test.mjs',
+        'tests/e2e/chatbot/x.spec.cjs',
+        'tests/e2e/chatbot/x.spec.tsx',
+        'tests/e2e/chatbot/x.test.jsx'
+      ];
+      expect(scanTargets(listing, GLOBS)).toEqual(listing);
+    });
+
+    test('a sibling directory beyond the glob boundary is not executed', () => {
+      expect(scanTargets(['tests/e2e/chatbot-v2/x.spec.js', 'tests/e2e/chatbotless.spec.js'], GLOBS)).toEqual([]);
+    });
+  });
+
+  describe('comment stripping', () => {
+    test('whole-line comments and inline tails are stripped, code text survives', () => {
+      expect(
+        stripComments([
+          '  # whole-line comment stays out',
+          '  script: npx playwright test tests/e2e/ # historical: npx playwright test tests/e2e/okf/',
+          '  VERSION="${CI_COMMIT_TAG#v}"'
+        ])
+      ).toEqual(['  script: npx playwright test tests/e2e/', '  VERSION="${CI_COMMIT_TAG#v}"']);
+    });
+
+    test('stripJsComments erases whole-line, inline and block comments', () => {
+      expect(
+        stripJsComments([
+          '// whole-line comment',
+          "testDir: './tests/e2e', // inline tail",
+          '/* single-line block: testMatch */',
+          'const x = 1; /* multi',
+          'line block */ const y = 2;'
+        ])
+      ).toEqual(["testDir: './tests/e2e',", '', 'const x = 1; ', ' const y = 2;']);
+    });
+  });
+
+  describe('anchor coverage', () => {
+    const ANCHOR_ROWS = ['tests/e2e/fixtures/**/*', 'tests/e2e/theme-runtime-config.spec.js'];
+
+    test('an exact anchor entry covers verbatim and deeper paths alike', () => {
+      expect(isCovered(ANCHOR_ROWS, 'tests/e2e/fixtures/**/*')).toBe(true);
+      expect(isCovered(ANCHOR_ROWS, 'tests/e2e/fixtures/http/**/*')).toBe(true);
+      expect(isCovered(ANCHOR_ROWS, 'tests/e2e/fixtures/http/seed.json')).toBe(true);
+      expect(isCovered(ANCHOR_ROWS, 'tests/e2e/theme-runtime-config.spec.js')).toBe(true);
+    });
+
+    test('a sibling or unrelated path is not covered', () => {
+      expect(isCovered(ANCHOR_ROWS, 'tests/e2e/helpers/**/*')).toBe(false);
+      expect(isCovered(ANCHOR_ROWS, 'tests/e2e/fixtures-backup/**/*')).toBe(false);
+      expect(isCovered(ANCHOR_ROWS, 'tests/e2e/theme-runtime-config.spec.js.bak')).toBe(false);
+    });
+  });
+
+  // JS-flavored comment stripping for playwright.config.js: whole-line //
+  // comments, inline // tails, and /* */ block spans. The // erase is
+  // naive (a URL in a string is truncated too) — the config pin only
+  // searches for config keys, so truncation cannot fabricate a match.
+  const stripJsComments = (lines) => {
+    let inBlock = false;
+    return lines
+      .filter((line) => !line.trimStart().startsWith('//'))
+      .map((line) => {
+        if (inBlock) {
+          const end = line.indexOf('*/');
+          if (end === -1) return '';
+          line = line.slice(end + 2);
+          inBlock = false;
+        }
+        const open = line.indexOf('/*');
+        if (open !== -1) {
+          const close = line.indexOf('*/', open);
+          line = close === -1 ? line.slice(0, open) : line.slice(0, open) + line.slice(close + 2);
+          if (close === -1) inBlock = true;
+        }
+        return line.replace(/\s+\/\/.*$/, '');
+      });
+  };
+
+  describe('consumed-path derivation units', () => {
+    const deriveFrom = (file, source) => deriveConsumedPaths([{ file, source }]);
+
+    // One row per specifier spelling the scanner accepts; the next accepted
+    // spelling is a row here, not a new test.
+    test.each([
+      ['plain require', "const h = require('../helpers/auth');"],
+      ['double-quoted require', 'const h = require("../helpers/auth");'],
+      ['backtick require', 'const h = require(`../helpers/auth`);'],
+      ['spaced require', "const h = require ('../helpers/auth');"],
+      ['require.resolve', "const b = require.resolve('../helpers/auth');"],
+      ['ESM from-import', "import x from '../helpers/auth';"],
+      ['dynamic import', "const y = import('../helpers/auth');"],
+      ['spaced dynamic import', "const y = await import ('../helpers/auth');"],
+      ['side-effect import', "import '../helpers/auth';"],
+      ['no-space side-effect import', "import'../helpers/auth';"],
+      ['no-space re-export from', "export { x } from'../helpers/auth';"]
+    ])('consumes the %s shape', (_name, source) => {
+      expect(deriveFrom('tests/e2e/chatbot/x.spec.js', source)).toEqual(['tests/e2e/helpers/**/*']);
+    });
+
+    test('an extensionless same-dir require resolves through the .js rule', () => {
+      expect(deriveFrom('tests/e2e/helpers/auth.spec.js', "const a = require('./auth');")).toEqual([
+        'tests/e2e/helpers/**/*'
+      ]);
+    });
+
+    test('a path.join(__dirname, ...) chain maps to the referenced directory', () => {
+      expect(
+        deriveFrom('tests/e2e/documents/upload.spec.js', "const d = path.join(__dirname, '..', 'fixtures');")
+      ).toEqual(['tests/e2e/fixtures/**/*']);
+    });
+
+    test('path.resolve is treated like path.join', () => {
+      expect(
+        deriveFrom('tests/e2e/documents/x.spec.js', "const d = path.resolve(__dirname, '..', 'fixtures');")
+      ).toEqual(['tests/e2e/fixtures/**/*']);
+    });
+
+    test('a join with space after the paren, double quotes or backticks still matches', () => {
+      expect(
+        deriveFrom('tests/e2e/documents/x.spec.js', 'const d = path.join( __dirname, "..", `fixtures` );')
+      ).toEqual(['tests/e2e/fixtures/**/*']);
+    });
+
+    test('a file directly under tests/e2e maps to its exact path', () => {
+      expect(
+        deriveFrom('tests/e2e/documents/x.spec.js', "const t = require('../theme-runtime-config.spec.js');")
+      ).toEqual(['tests/e2e/theme-runtime-config.spec.js']);
+    });
+
+    test('specifiers that leave tests/e2e or do not exist are dropped', () => {
+      const source = [
+        "const p = require('../../../tests/config-validator/package.json');", // exists, outside tests/e2e
+        "const g = require('../../../etc/passwd');", // traversal
+        "const m = require('path');", // builtin
+        "const n = require('../helpers/no-such-helper');", // nonexistent
+        "const j = path.join(__dirname, '..', '..', 'config-validator');", // join, outside tests/e2e
+        "// const c = require('../helpers/also-missing');" // dead reference
+      ].join('\n');
+      expect(deriveFrom('tests/e2e/documents/x.spec.js', source)).toEqual([]);
+    });
   });
 
   // Entries the jobs deploy or consume from this checkout — the component
@@ -2369,12 +2713,20 @@ describe('e2e merge-train changes filters (#1264)', () => {
     expect(sectionOf('.e2e_web_base')).toContain('ROPC refusal verified');
   });
 
-  test.each(['e2e:playwright', 'scheduled:e2e-web'])(
-    '%s still extends the base that carries the probe',
-    (job) => {
-      expect(sectionOf(job)).toContain('extends: .e2e_web_base');
-    }
-  );
+  test.each(['e2e:playwright', 'scheduled:e2e-web'])('%s still extends the base that carries the probe', (job) => {
+    const section = sectionOf(job);
+    // Scalar extends, exactly — an extends CHAIN ([.e2e_web_base, .other])
+    // could pull a script: from another hidden job, executing targets the
+    // derivation (anchored to .e2e_web_base) never sees.
+    expect(section).toMatch(/^\s*extends: \.e2e_web_base\s*$/m);
+    expect(section).not.toMatch(/^\s*extends:\s*\[/m);
+    // The derivation reads the invocation from .e2e_web_base only — a
+    // consuming job running its own playwright invocation (in any of the
+    // three script phases) would execute targets nothing derived. Pin all
+    // three keys' absence: artifact paths or prose naming playwright stay
+    // legal, a second invocation cannot exist.
+    expect(section).not.toMatch(/^\s*(?:script|before_script|after_script):/m);
+  });
 
   test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {
     // The invariant exists because of this hard needs — pin it too.
@@ -2412,6 +2764,15 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // Neither half of the split may reach the shared anchor: an alias entry
     // is invisible to the section checks above.
     expect(filters.get(ANCHOR)).not.toContain('mobile/genie_ai_mobile/**/*');
+  });
+
+  // The anchor comment in .gitlab-ci.yml says the okf exclusion is enforced
+  // here: the okf specs are not executed by the train invocation, so the
+  // anchor must not cover them — neither as an explicit okf glob nor via a
+  // widening rewrite like tests/e2e/**/* that would silently re-include
+  // every excluded directory.
+  test('the anchor does not cover the excluded okf specs', () => {
+    expect(isCovered(filters.get(ANCHOR), 'tests/e2e/okf/**/*')).toBe(false);
   });
 });
 

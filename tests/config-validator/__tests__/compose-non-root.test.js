@@ -205,7 +205,7 @@ describe('compose non-root contract (#1227)', () => {
   });
 
   test('mutations: error/alt variable forms cannot escape the data-dir rule', () => {
-    // \${VAR:?err}, \${VAR?err} and \${VAR:+alt} are legal compose —
+    // ${VAR:?err}, ${VAR?err} and ${VAR:+alt} are legal compose —
     // resolved CONSERVATIVELY like every other unknown-location spelling.
     for (const form of ['${DATA_DIR:?missing}', '${DATA_DIR?missing}', '${DATA_DIR:+/srv/alt}']) {
       const text = [
@@ -485,6 +485,58 @@ describe('compose non-root contract (#1227)', () => {
       ''
     ].join('\n');
     expect(validateComposeNonRoot(literalAbsolute).violations).toEqual([]);
+  });
+
+  test('mutations: home-rooted (~) bind sources stay under the rule', () => {
+    // compose expands `~` to the invoking user's home; a source missing
+    // there is created root-owned by the daemon — the same defect class
+    // as an absolute path. A home-ROOTED source therefore counts like an
+    // absolute one: templated or data-shaped forms are flagged without
+    // the opt-out, while a pre-existing literal absolute (no data
+    // segment, no template) stays out.
+    const templatedHome = [
+      'services:',
+      '  backend:',
+      '    user: "1000:1000"',
+      '    volumes:',
+      '      - type: bind',
+      '        source: ${DATA_DIR:-~/genie}/database_backups',
+      '        target: /app/database_backups',
+      ''
+    ].join('\n');
+    const { violations: v1 } = validateComposeNonRoot(templatedHome);
+    expect(v1.some((v) => v.includes('backend') && v.includes('deployment-authored'))).toBe(true);
+
+    const templatedHomeOpted = templatedHome.replace(
+      '        target: /app/database_backups',
+      '        target: /app/database_backups\n        bind: {create_host_path: false}'
+    );
+    expect(validateComposeNonRoot(templatedHomeOpted).violations).toEqual([]);
+
+    const literalHomeData = templatedHome.replace(
+      'source: ${DATA_DIR:-~/genie}/database_backups',
+      'source: ~/data/database_backups'
+    );
+    const { violations: v2 } = validateComposeNonRoot(literalHomeData);
+    expect(v2.some((v) => v.includes('backend') && v.includes('deployment-authored'))).toBe(true);
+
+    const shortHomeData = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes: ["~/data/logs/kong:/var/log/kong"]',
+      ''
+    ].join('\n');
+    const { violations: v3 } = validateComposeNonRoot(shortHomeData);
+    expect(v3.some((v) => v.includes('kong') && v.includes('short syntax'))).toBe(true);
+
+    // negative control: a literal absolute WITHOUT a data segment or
+    // template is a pre-existing host path — skipped for the right reason
+    const literalHomePlain = templatedHome.replace(
+      'source: ${DATA_DIR:-~/genie}/database_backups',
+      'source: /srv/preexisting/backups'
+    );
+    expect(validateComposeNonRoot(literalHomePlain).violations).toEqual([]);
   });
 
   test("the runtime gate's SELF_DROPPING list matches the validator's allowlist", () => {

@@ -12,6 +12,12 @@
 # Usage: tests/compose-non-root/check-runtime.sh <compose-project> [data_dir]
 # Env:   DATA_DIR overrides ./data default when data_dir arg is omitted.
 #
+# PRECONDITION — run as root or as the owner of the data directory: the
+# sweeps in rules 2-3 traverse the live tree, and an unprivileged run over
+# a legitimate 0700 uid-1000 tree (the backend's own backup artifacts)
+# turns find's EACCES into a violation group — a phantom, not a contract
+# break. An untraversable ROOT-owned path is still reported either way.
+#
 # Exit 0 = contract holds; 1 = violations listed; 2 = VACUOUS RUN (no
 # container matched the project name — nothing was inspected, never read
 # it as OK); 3 = docker daemon unreachable; 4 = usage error. One-shot init

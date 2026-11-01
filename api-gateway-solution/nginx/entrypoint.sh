@@ -132,11 +132,20 @@ while true; do
         # must NOT kill PID 1 under set -e — keep serving the old certs.
         if [ -f "${VOLUME_CERT_PATH}/server.crt" ] && [ -f "${VOLUME_CERT_PATH}/server.key" ]; then
             if check_certs_readable; then
-                cp "${VOLUME_CERT_PATH}/server.crt" "${CERT_PATH}/server.crt"
-                cp "${VOLUME_CERT_PATH}/server.key" "${CERT_PATH}/server.key"
-                chmod 644 "${CERT_PATH}/server.crt"
-                chmod 600 "${CERT_PATH}/server.key"
-                echo "Certificates updated from volume mount"
+                # The copy itself is guarded too: a failed cp/chmod
+                # (ENOSPC, EIO writing into /etc/nginx/certs) must keep
+                # PID 1 alive on the loaded certificates, same as an
+                # unreadable rotated key. A partial copy leaves a
+                # mismatched pair — nginx refuses the reload and keeps
+                # serving what it already has.
+                if cp "${VOLUME_CERT_PATH}/server.crt" "${CERT_PATH}/server.crt" \
+                    && cp "${VOLUME_CERT_PATH}/server.key" "${CERT_PATH}/server.key" \
+                    && chmod 644 "${CERT_PATH}/server.crt" \
+                    && chmod 600 "${CERT_PATH}/server.key"; then
+                    echo "Certificates updated from volume mount"
+                else
+                    echo "WARNING: certificate copy failed, keeping current certificates"
+                fi
             else
                 echo "WARNING: rotated certificate unreadable, keeping current certificates"
             fi

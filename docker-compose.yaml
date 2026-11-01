@@ -1246,17 +1246,17 @@ services:
   # backend_uploads, which the now non-root backend could no longer write.
   backend-init:
     <<: *chown-init
-    # PER-VOLUME guard: an AND-ed pair would re-chown BOTH volumes
-    # wholesale whenever EITHER marker is missing (e.g. an operator
-    # recovered one volume with `docker volume rm`) — re-flipping uids an
-    # operator deliberately restored. Same targeted-chown doctrine the
+    # PER-VOLUME guard: the loop probes each volume independently, so a
+    # root-era file in ONE volume heals only that volume — an operator
+    # recovering one volume with `docker volume rm` leaves the other's
+    # ownership state untouched. Same targeted-chown doctrine the
     # Ansible migration tasks state.
-    # Exit-status honesty: the two volume guards are && - grouped, so a
-    # FAILED first chown (EIO, ENOENT mid-traversal) fails the whole init
-    # instead of being masked by the second statement's status — a masked
-    # failure exited 0, passed service_completed_successfully, and left
-    # the backend starting against a partially root-owned volume with no
-    # marker and nothing to ever retry the chown.
+    # Exit-status honesty: every find (probe and verify) has its exit
+    # status enforced (|| exit 9), so a FAILED chown (EIO, ENOENT
+    # mid-traversal) fails the whole init instead of being masked — a
+    # masked failure exited 0, passed service_completed_successfully, and
+    # left the backend starting against a partially root-owned volume
+    # with nothing to ever retry the chown.
     # PROBE form (no marker): "a marker strands files written after the
     # sweep under a permanent skip" — on a live root-era upgrade the old
     # container keeps writing while the init chowns, and such a file would
@@ -1442,9 +1442,10 @@ services:
   # <stack>_<init>` (swarm).
   arango-vector-db-init:
     <<: *chown-init
-    # PER-VOLUME guard (same doctrine as backend-init): a missing marker
-    # re-chowns only ITS volume, never both. && - grouped: a failed first
-    # chown fails the init (see backend-init) instead of being masked.
+    # PER-VOLUME guard (same doctrine as backend-init): the loop probes
+    # each volume independently — a root-era file in one volume heals
+    # only that volume. Every find's exit status is enforced (see
+    # backend-init).
     # PROBE form (no marker — see backend-init): targeted -h chown of
     # whatever is root-owned, then verify.
     command: ["sh", "-c", "for d in /var/lib/arangodb3 /var/lib/arangodb3-apps; do find \"$$d\" -user root -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find \"$$d\" -user root -exec chown -h 999:999 {} + || exit 9; fi; find \"$$d\" -user root -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; done"]

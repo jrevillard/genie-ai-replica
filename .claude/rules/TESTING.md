@@ -133,9 +133,14 @@ the always-on services, and profile-gated ones (opea/gpu-models/
 observability/okf — e.g. grafana, victoriametrics) intentionally run
 their upstream images' root users, so a stack started with
 `--profile observability` trips rule 1 by design.
-**Run it ON EVERY NODE of a multi-node swarm** — rule 2 sweeps the
-invoking host's data dir only, and bind sources materialize per node:
-a manager-side run passes while a worker keeps a root-owned tree.
+**Run it ON EVERY NODE of a multi-node swarm** — `docker ps` is
+daemon-local (cluster task views are `docker stack ps`/`docker service
+ps`), so each run's rule 1 sees only that node's containers, and rule 2
+sweeps the invoking host's data dir only — bind sources materialize per
+node: a manager-side run passes while a worker keeps a root-owned tree.
+**Run it as root or as the owner of the data directory** — the rules 2-3
+sweeps traverse the live tree; an unprivileged run over a legitimate
+0700 uid-1000 tree turns find's EACCES into a phantom violation.
 The static half runs in CI
 (`tests/config-validator` jest suite); this runtime half has no CI job —
 run it after any change to `docker-compose.yaml` service identities,

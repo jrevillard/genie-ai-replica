@@ -154,9 +154,11 @@ function validateComposeNonRoot(composeText) {
           // pre-exists on every host — create_host_path is irrelevant on
           // it. A TEMPLATED absolute (${VAR:-/srv/genie}/...) is a
           // deployment-authored location whose default can point anywhere:
-          // that one stays under the rule.
+          // that one stays under the rule. Same for a HOME-ROOTED source:
+          // compose expands `~` to the invoking user's home, and a source
+          // missing there is still created root-owned by the daemon.
           const templated = /\$\{?\w/.test(b.path);
-          const absoluteDataPath = resolved.startsWith('/') && (dataShaped || templated);
+          const absoluteDataPath = (resolved.startsWith('/') || resolved.startsWith('~/')) && (dataShaped || templated);
           if (b.shortSyntax ? !dataShaped : !underDataDir && !absoluteDataPath) {
             continue;
           }
@@ -164,6 +166,11 @@ function validateComposeNonRoot(composeText) {
             violations.push(
               `${currentService}: host bind "${b.path}" sits under the data directory in short syntax, ` +
                 'which cannot carry `create_host_path: false` — use long syntax or a named volume'
+            );
+          } else if (!b.createHostPathFalse && !underDataDir) {
+            violations.push(
+              `${currentService}: host bind "${b.path}" is a deployment-authored location (templated ` +
+                'or ~-rooted) without `create_host_path: false` — docker creates a missing source as root-owned'
             );
           } else if (!b.createHostPathFalse) {
             violations.push(

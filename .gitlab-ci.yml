@@ -3096,7 +3096,7 @@ test:flutter:
   - configs/otel/otel-collector-config.yaml
   - .gitlab-ci.yml
 
-# Patrol E2E tests — DinD emulator (shared with scheduled:e2e-mobile)
+# Integration E2E — compose stack from candidate images (merge trains)
 # Rules union: the two rules below trigger e2e:integration on the shared
 # filter PLUS the integration-only mobile entry. The web suite does not test
 # the mobile app, so e2e:playwright deliberately does not run on mobile-only
@@ -3242,9 +3242,8 @@ config:validate:
   extends: .node_base
   stage: config
   # Self-contained env-coverage checks (npm test on the checkout) — no
-  # upstream artifacts needed. Same rationale as verify:dataprep-lock:
-  # the default artifact coupling made this job 403-flake with the
-  # 2026-09-02/03 instance artifact-download problem.
+  # upstream artifacts needed: the default artifact coupling made this
+  # job 403-flake with the 2026-09-02/03 instance artifact-download problem.
   dependencies: []
   before_script:
     - cd tests/config-validator && npm ci

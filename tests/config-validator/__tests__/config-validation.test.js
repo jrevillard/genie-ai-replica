@@ -2332,7 +2332,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // paths list sits immediately above the compare_to line. scan:keycloak-config
   // carries the identical rules and gates the promote chain, so it is pinned
   // the same way.
-  test.each(['build:keycloak-config', 'scan:keycloak-config'])(
+  test.each(['build:keycloak-config', 'scan:keycloak-config', 'promote:keycloak-config'])(
     '%s merge_request_event rule still triggers on the keycloak tree',
     (job) => {
       const lines = sectionOf(job).split('\n');
@@ -2346,7 +2346,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // The default-branch and release rules carry the same paths list (for
   // pending-<sha> images and release builds); adjacency above pins the
   // merge_request_event branch, the count here keeps the other two honest.
-  test.each(['build:keycloak-config', 'scan:keycloak-config'])(
+  test.each(['build:keycloak-config', 'scan:keycloak-config', 'promote:keycloak-config'])(
     '%s carries the keycloak glob in all three rule branches',
     (job) => {
       const count = (sectionOf(job).match(/"configs\/keycloak\/\*\*\/\*"/g) || []).length;

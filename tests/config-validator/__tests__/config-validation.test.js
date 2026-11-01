@@ -2295,7 +2295,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
   const executedPaths = () => {
     const invocations = sectionOf('.e2e_web_base').match(/npx playwright test ([^\n]+)/g) || [];
     expect(invocations.length).toBeGreaterThan(0);
-    const targets = invocations.flatMap((line) =>
+    let targets = invocations.flatMap((line) =>
       line
         .replace(/^npx playwright test /, '')
         .split(/\s+/)
@@ -2305,8 +2305,10 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // Set equality, order- and repetition-free: reordering the invocation's
     // arguments, or repeating one, is semantically identical for Playwright
     // and must not red the guard, while an added or removed target still
-    // fails here.
-    expect([...new Set(targets)].sort()).toEqual([
+    // fails here. The canonical (deduplicated, sorted) form is what the pin
+    // validates AND what every consumer downstream receives.
+    targets = [...new Set(targets)].sort();
+    expect(targets).toEqual([
       'tests/e2e/chatbot/**/*',
       'tests/e2e/documents/**/*',
       'tests/e2e/helpers/**/*',
@@ -2323,7 +2325,9 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // executed spec would escape the anchor until someone edits a list).
   // Two consumption shapes exist in the tree: relative require/import
   // specifiers (the helpers) and path.join(__dirname, ...) segment chains
-  // (the fixtures dir). Anything else a spec consumes is not derived.
+  // (the fixtures dir). Anything else a spec consumes is not derived —
+  // including joins anchored on __filename or import.meta.url and a join
+  // resolving to the tests/e2e root itself; none exist in the tree.
   const TESTS_E2E_ROOT = 'tests/e2e';
 
   // Containment + existence in one place: both derivation shapes drop
@@ -2340,9 +2344,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
   };
 
   // Resolve a specifier the way Node does for these CJS specs: as-is, or
-  // with .js appended — first existing file wins. (Every relative import in
-  // the tree targets a flat .js file; a directory-index import gets this
-  // rule added when one appears.)
+  // with .js appended — first existing file wins. (Every relative import
+  // in the tree targets a flat .js file; a directory-index import or an
+  // extensionless .json/.node require gets its rule added when one
+  // appears — a resolver branch nothing on disk exercises cannot be
+  // pinned and stays out.)
   const resolveSpecifier = (fromDir, specifier) => {
     const base = path.posix.normalize(path.posix.join(fromDir, specifier));
     for (const candidate of [base, `${base}.js`]) {
@@ -2383,7 +2389,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // the backreference; require( takes spaced and .resolve spellings and
     // import( the spaced one; `from`, dynamic import() and bare
     // side-effect imports land in the same alternation.
-    const specifierRe = /(?:(?:require(?:\.resolve)?|import)\s*\(\s*|\bfrom\s*|import\s+)(['"`])(\.[^'"`]*)\1/g;
+    const specifierRe = /(?:(?:require(?:\.resolve)?)\s*\(\s*|\bimport\s*\(?\s*|\bfrom\s*)(['"`])(\.[^'"`]*)\1/g;
     // Same shape tolerance as the specifiers for __dirname chains: all
     // three quote styles, any spacing. A join carrying a non-literal
     // argument is not matched at all (tracked in #1325); an inline comment
@@ -2429,15 +2435,13 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // units below pin the boundary and the testMatch shapes on synthetic
   // listings, the real-tree pin above anchors them to the actual invocation.
   const scanTargets = (files, executedGlobs) =>
-    files
-      .filter((f) => /\.(spec|test)\.[cm]?[jt]sx?$/.test(f))
-      .filter((f) => executedGlobs.some((g) => (g.endsWith('/**/*') ? f.startsWith(`${g.slice(0, -5)}/`) : f === g)));
+    files.filter((f) => /\.(spec|test)\.[cm]?[jt]sx?$/.test(f)).filter((f) => isCovered(executedGlobs, f));
 
   test('executed and consumed paths are covered by the shared anchor', () => {
     const anchorPaths = filters.get(ANCHOR);
-    for (const required of [...EXECUTED_GLOBS, ...DERIVED_CONSUMED]) {
-      expect(isCovered(anchorPaths, required)).toBe(true);
-    }
+    const uncovered = [...EXECUTED_GLOBS, ...DERIVED_CONSUMED].filter((p) => !isCovered(anchorPaths, p));
+    // The diff names every uncovered path, not just the first.
+    expect(uncovered).toEqual([]);
   });
 
   test('derivation scans exactly the spec files the invocation executes', () => {
@@ -2475,7 +2479,13 @@ describe('e2e merge-train changes filters (#1264)', () => {
       .filter((line) => !line.trimStart().startsWith('//'))
       .map((line) => line.replace(/\s+\/\/.*$/, ''))
       .join('\n');
+    // testMatch and testIgnore must not appear at all (both would change
+    // which files execute), and testDir must appear exactly once — a
+    // second, project-level testDir would execute a different file set
+    // than the invocation's targets name.
     expect(config).not.toMatch(/testMatch/);
+    expect(config).not.toMatch(/testIgnore/);
+    expect((config.match(/testDir/g) || []).length).toBe(1);
     expect(config).toMatch(/testDir:\s*'\.\/tests\/e2e'/);
   });
 
@@ -2548,6 +2558,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
       ['dynamic import', "const y = import('../helpers/auth');"],
       ['spaced dynamic import', "const y = await import ('../helpers/auth');"],
       ['side-effect import', "import '../helpers/auth';"],
+      ['no-space side-effect import', "import'../helpers/auth';"],
       ['no-space re-export from', "export { x } from'../helpers/auth';"]
     ])('consumes the %s shape', (_name, source) => {
       expect(deriveFrom('tests/e2e/chatbot/x.spec.js', source)).toEqual(['tests/e2e/helpers/**/*']);
@@ -2671,13 +2682,16 @@ describe('e2e merge-train changes filters (#1264)', () => {
 
   test.each(['e2e:playwright', 'scheduled:e2e-web'])('%s still extends the base that carries the probe', (job) => {
     const section = sectionOf(job);
-    expect(section).toContain('extends: .e2e_web_base');
+    // Scalar extends, exactly — an extends CHAIN ([.e2e_web_base, .other])
+    // could pull a script: from another hidden job, executing targets the
+    // derivation (anchored to .e2e_web_base) never sees.
+    expect(section).toMatch(/^\s*extends: \.e2e_web_base\s*$/m);
+    expect(section).not.toMatch(/^\s*extends:\s*\[/m);
     // The derivation reads the invocation from .e2e_web_base only — a
     // consuming job overriding script with its own playwright invocation
     // would execute targets nothing derived. An override REQUIRES a script
     // key, so pin the key's absence: artifact paths or prose naming
-    // playwright stay legal, a second invocation cannot exist. The job's
-    // own key line is exempt — extends is not script.
+    // playwright stay legal, a second invocation cannot exist.
     expect(section).not.toMatch(/^\s*script:/m);
   });
 

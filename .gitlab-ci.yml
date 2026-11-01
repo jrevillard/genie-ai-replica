@@ -590,38 +590,20 @@ workflow:
       # testadmin (admin realm role) + testplain (no roles) for the admin
       # surface specs: tests/e2e/admin/ needs an admin login (testadmin)
       # and a role-less login (testplain — requireAdmin must answer 403).
-      # Same create-first/409-tolerated shape as testuser above.
-      create_e2e_user() {
-        CREATE_RESP=$(curl -sk -w '\n%{http_code}' -X POST "${KC_URL}/admin/realms/genie/users" \
-          -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-          -d "{\"username\":\"$1\",\"email\":\"$2\",\"emailVerified\":true,\"firstName\":\"Test\",\"lastName\":\"$3\",\"enabled\":true,\"credentials\":[{\"type\":\"password\",\"value\":\"$4\",\"temporary\":false}]}" || true)
-        CREATE_STATUS=$(printf '%s' "$CREATE_RESP" | tail -n1)
-        if [ "$CREATE_STATUS" != "201" ] && [ "$CREATE_STATUS" != "409" ]; then
-          echo "ERROR: $1 creation failed (HTTP ${CREATE_STATUS:-<none>})"
-          exit 1
-        fi
-        echo "$1 ready (HTTP ${CREATE_STATUS})"
-      }
-      create_e2e_user testadmin testadmin@e2e.test Admin 'TestAdmin123!'
-      create_e2e_user testplain testplain@e2e.test Plain 'TestPlain123!'
-      ADMIN_ROLE=$(curl -sk "${KC_URL}/admin/realms/genie/roles" \
-        -H "Authorization: Bearer $ADMIN_TOKEN" \
-        | python3 -c "import sys,json; roles=[r for r in json.load(sys.stdin) if r['name']=='admin']; print(roles[0]['id'] if roles else '')" || true)
-      if [ -n "$ADMIN_ROLE" ]; then
-        TESTADMIN_ID=$(curl -sk "${KC_URL}/admin/realms/genie/users?username=testadmin&exact=true" \
-          -H "Authorization: Bearer $ADMIN_TOKEN" \
-          | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id']) if isinstance(d,list) and d and isinstance(d[0],dict) and 'id' in d[0] else None" 2>/dev/null || true)
-        if [ -n "$TESTADMIN_ID" ]; then
-          curl -sk -X POST "${KC_URL}/admin/realms/genie/users/${TESTADMIN_ID}/role-mappings/realm" \
-            -H "Authorization: Bearer $ADMIN_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "[{\"id\":\"${ADMIN_ROLE}\",\"name\":\"admin\"}]" && echo "Assigned admin role to testadmin" || echo "WARNING: testadmin role assignment failed"
-        else
-          echo "WARNING: could not resolve testadmin id for role assignment"
-        fi
-      else
-        echo "WARNING: Could not assign admin role to testadmin (admin role not found). Admin specs may fail."
-      fi
+      # Same createUser helper the compose venue uses
+      # (tests/e2e/helpers/keycloak-admin.js — 201/409 tolerance, exact id
+      # lookup, realmRoles assignment); testuser above keeps its admin
+      # role for the document tests.
+      - BASE_URL="${E2E_BASE_URL}" node -e "
+          const { getAdminToken } = require('./tests/e2e/helpers/auth');
+          const { createUser } = require('./tests/e2e/helpers/keycloak-admin');
+          (async () => {
+            const token = await getAdminToken();
+            await createUser(token, 'genie', { username: 'testadmin', email: 'testadmin@e2e.test', firstName: 'Test', lastName: 'Admin', password: 'TestAdmin123!', realmRoles: ['admin'] });
+            await createUser(token, 'genie', { username: 'testplain', email: 'testplain@e2e.test', firstName: 'Test', lastName: 'Plain', password: 'TestPlain123!' });
+            console.log('testadmin + testplain ready');
+          })().catch((e) => { console.error(e.message); process.exit(1); });
+        "
     # tests/e2e/okf/ stays OUT until MR2 lands: the OKF Studio UI those specs
     # drive ships in MR 2 (this train is MR1, dark), they hardcode
     # https://localhost while CI serves E2E_BASE_URL=https://nginx, and they

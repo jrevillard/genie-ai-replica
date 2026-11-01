@@ -44,23 +44,19 @@ test.describe('Admin overview failure states', () => {
   test('recovers on the next successful load after a 503', async ({ page }) => {
     await loginViaUI(page, TEST_ADMIN_USER);
 
-    // First load fails, the reload after unroute goes through to the
-    // real backend (route.fallback passthrough).
-    let attemptCount = 0;
-    await page.route('**/api/admin/system-health', (route) => {
-      attemptCount++;
-      if (attemptCount === 1) {
-        return route.fulfill({
-          status: 503,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            error: 'SERVICE_UNAVAILABLE',
-            message: 'Temporarily unavailable',
-          }),
-        });
-      }
-      return route.fallback();
-    });
+    // First load fails; the reload after unroute goes through to the
+    // real backend. The overview fires exactly one system-health call
+    // per mount, so no attempt counting is needed.
+    await page.route('**/api/admin/system-health', (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: 'SERVICE_UNAVAILABLE',
+          message: 'Temporarily unavailable',
+        }),
+      }),
+    );
 
     await page.goto(`${BASE_URL}/admin`, { waitUntil: 'networkidle' });
     await expect(page.locator('.notification.error')).toBeVisible();

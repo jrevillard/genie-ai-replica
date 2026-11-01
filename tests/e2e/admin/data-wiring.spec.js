@@ -12,6 +12,17 @@ const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('../helpers/chatbot');
  * value in the mocked payload (or break the component's assignment) and
  * the exact-text assertions below fail.
  */
+// The injected metric values — they collide with none of the
+// component's uninitialized defaults (99.98 / 245 / 0.05 / 0), so
+// seeing them on screen can only mean the API response drove the
+// render. Single source: a mutation-gate edit changes them once.
+const METRICS = {
+  systemUptime: 87.65,
+  avgResponseTime: 321,
+  errorRate: 2.5,
+  monthlyActiveUsers: 1234,
+};
+
 test.describe('Admin overview data wiring', () => {
   test.setTimeout(120000);
   // Pin the locale: monthlyActiveUsers renders through
@@ -33,12 +44,7 @@ test.describe('Admin overview data wiring', () => {
 
   test('stat tiles render the system-health payload values', async ({ page }) => {
     await loginWithWiredPayload(page, {
-      metrics: {
-        systemUptime: 87.65,
-        avgResponseTime: 321,
-        errorRate: 2.5,
-        monthlyActiveUsers: 1234,
-      },
+      metrics: METRICS,
       healthServices: [],
       resourceUsage: {},
     });
@@ -54,12 +60,7 @@ test.describe('Admin overview data wiring', () => {
 
   test('health services and resource usage render from the payload', async ({ page }) => {
     await loginWithWiredPayload(page, {
-      metrics: {
-        systemUptime: 87.65,
-        avgResponseTime: 321,
-        errorRate: 2.5,
-        monthlyActiveUsers: 1234,
-      },
+      metrics: METRICS,
       healthServices: [
         { id: 'wiredAlpha', name: 'Wired Service Alpha', status: 'healthy' },
         { id: 'wiredBeta', name: 'Wired Service Beta', status: 'down' },
@@ -77,13 +78,13 @@ test.describe('Admin overview data wiring', () => {
     await expect(beta).toBeVisible();
     await expect(beta).toHaveClass(/status-down/);
 
-    // Resource rows: canonical ids map to i18n labels; the value and
-    // the % width of the bar come straight from the payload.
-    const cpu = page.locator('.usage-item', { hasText: 'CPU Usage' });
+    // Resource rows: the row anchor is the canonical resource id (the
+    // label itself is i18n); value and bar width come from the payload.
+    const cpu = page.locator('[data-test-id="usage-cpu"]');
     await expect(cpu.locator('.usage-value')).toHaveText('42%');
     await expect(cpu.locator('.usage-fill')).toHaveAttribute('style', /width: 42%/);
 
-    const memory = page.locator('.usage-item', { hasText: 'Memory Usage' });
+    const memory = page.locator('[data-test-id="usage-memory"]');
     await expect(memory.locator('.usage-value')).toHaveText('67%');
   });
 });

@@ -207,7 +207,12 @@
                   </div>
 
                   <div class="resource-usage">
-                    <div v-for="resource in resourceUsage" :key="resource.id" class="usage-item">
+                    <div
+                      v-for="resource in resourceUsage"
+                      :key="resource.id"
+                      class="usage-item"
+                      :data-test-id="`usage-${resource.id}`"
+                    >
                       <div class="usage-header">
                         <div class="usage-label">{{ resource.label }}</div>
                         <div class="usage-value">{{ resource.value }}%</div>

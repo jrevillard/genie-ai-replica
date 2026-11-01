@@ -1,0 +1,722 @@
+// Copyright (C) 2026 International Telecommunication Union (ITU)
+// SPDX-License-Identifier: Apache-2.0
+// Unit tests for the OKF Node model-id discovery helper — the mirror of
+// genie-ai-overlay/core/model_cache.py (!631 policy): env pin wins →
+// GET {base}/v1/models discovery (TTL cache, stale-serve on probe failure)
+// → loud ModelDiscoveryError. axios is mocked; every probe contract
+// (URL rule, auth header, timeout, cache windows) is asserted directly.
+
+jest.mock('axios');
+jest.mock('../shared-lib/logger', () => ({
+  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
+}));
+
+const axios = require('axios');
+const { logger } = require('../shared-lib/logger');
+const cache = require('../services/vllm-model-cache');
+const { isolateVllmEnv } = require('./vllm-env-helper');
+
+const ENV_KEYS = [
+  'VLLM_LLM_MODEL_ID',
+  'VLLM_MODEL_ID',
+  'VLLM_API_KEY',
+  'VLLM_ENDPOINT',
+  'MODEL_DETECT_TTL',
+  'MODEL_PROBE_TIMEOUT_SECONDS'
+];
+
+function modelsPayload(id, extra = {}) {
+  return { data: { data: [{ id, ...extra }] } };
+}
+
+function mockProbeSuccess(id) {
+  axios.get = jest.fn().mockResolvedValue(modelsPayload(id));
+}
+
+isolateVllmEnv(ENV_KEYS);
+
+beforeEach(() => {
+  cache.clearModelCache();
+  axios.get = jest.fn();
+  jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
+describe('env pin precedence (deployer override)', () => {
+  test('resolveVllmModelId returns VLLM_MODEL_ID without probing', async () => {
+    process.env.VLLM_MODEL_ID = 'pinned/model';
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).resolves.toBe('pinned/model');
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  test('resolveVllmModelId prefers VLLM_LLM_MODEL_ID over VLLM_MODEL_ID', async () => {
+    process.env.VLLM_LLM_MODEL_ID = 'llm-spelling';
+    process.env.VLLM_MODEL_ID = 'plain-spelling';
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).resolves.toBe('llm-spelling');
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  test('whitespace-only pin is treated as unset', async () => {
+    process.env.VLLM_MODEL_ID = '   ';
+    mockProbeSuccess('served/model');
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).resolves.toBe('served/model');
+  });
+});
+
+describe('discovery probe', () => {
+  test('bare host gets /v1/models appended', async () => {
+    mockProbeSuccess('served/model');
+    await cache.resolveVllmModelId('http://vllm:8000');
+    expect(axios.get).toHaveBeenCalledWith('http://vllm:8000/v1/models', expect.anything());
+  });
+
+  test('versioned base keeps its segment and takes /models (no /v1/v1)', async () => {
+    mockProbeSuccess('served/model');
+    await cache.resolveVllmModelId('https://gpu.example.com/llm/v1');
+    expect(axios.get).toHaveBeenCalledWith('https://gpu.example.com/llm/v1/models', expect.anything());
+  });
+
+  test('sends Authorization Bearer when VLLM_API_KEY is set', async () => {
+    process.env.VLLM_API_KEY = 'sk-secret';
+    mockProbeSuccess('served/model');
+    await cache.resolveVllmModelId('http://vllm:8000');
+    expect(axios.get).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ headers: { Authorization: 'Bearer sk-secret' } })
+    );
+  });
+
+  test('sends no Authorization header without VLLM_API_KEY', async () => {
+    mockProbeSuccess('served/model');
+    await cache.resolveVllmModelId('http://vllm:8000');
+    const opts = axios.get.mock.calls[0][1];
+    expect(opts.headers).toEqual({});
+  });
+
+  test('default probe timeout is 10s, overridable via MODEL_PROBE_TIMEOUT_SECONDS', async () => {
+    mockProbeSuccess('served/model');
+    await cache.resolveVllmModelId('http://vllm:8000');
+    expect(axios.get.mock.calls[0][1].timeout).toBe(10000);
+
+    cache.clearModelCache();
+    process.env.MODEL_PROBE_TIMEOUT_SECONDS = '2.5';
+    await cache.resolveVllmModelId('http://vllm:8000');
+    expect(axios.get.mock.calls[1][1].timeout).toBe(2500);
+  });
+
+  test('accepts a string-only model list entry', async () => {
+    axios.get = jest.fn().mockResolvedValue({ data: { data: ['served/as-string'] } });
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).resolves.toBe('served/as-string');
+  });
+});
+
+describe('TTL cache', () => {
+  test('two calls within the TTL trigger a single probe', async () => {
+    mockProbeSuccess('served/model');
+    await cache.resolveVllmModelId('http://vllm:8000');
+    Date.now.mockReturnValue(1_000_000 + 59_000);
+    await cache.resolveVllmModelId('http://vllm:8000');
+    expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('expired entry is re-probed', async () => {
+    mockProbeSuccess('served/model');
+    await cache.resolveVllmModelId('http://vllm:8000');
+    Date.now.mockReturnValue(1_000_000 + 61_000);
+    axios.get = jest.fn().mockResolvedValue(modelsPayload('served/model-v2'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).resolves.toBe('served/model-v2');
+    expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('MODEL_DETECT_TTL overrides the window', async () => {
+    process.env.MODEL_DETECT_TTL = '1';
+    mockProbeSuccess('served/model');
+    await cache.resolveVllmModelId('http://vllm:8000');
+    Date.now.mockReturnValue(1_000_000 + 2_000);
+    await cache.resolveVllmModelId('http://vllm:8000');
+    expect(axios.get).toHaveBeenCalledTimes(2);
+  });
+
+  test('a fractional TTL falls back to the default (the Python twin raises on it)', async () => {
+    // int('0.5') raises ValueError in Python → the twin keeps its 60 s
+    // window. A truncated 0 would disable the cache here (a probe per call).
+    process.env.MODEL_DETECT_TTL = '0.5';
+    mockProbeSuccess('served/model');
+    await cache.resolveVllmModelId('http://vllm:8000');
+    Date.now.mockReturnValue(1_000_000 + 30_000);
+    await cache.resolveVllmModelId('http://vllm:8000');
+    expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('failed probe serves the stale cached id instead of throwing', async () => {
+    mockProbeSuccess('served/model');
+    await cache.resolveVllmModelId('http://vllm:8000');
+    Date.now.mockReturnValue(1_000_000 + 61_000);
+    axios.get = jest.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+    // Mirror of model_cache.py: stale is better than broken — model_id
+    // consumers keep retrying (no negative cache, #1127 stays deferred).
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).resolves.toBe('served/model');
+    // The degradation is VISIBLE: one serving_stale line per failure
+    // window — the provenance fields keep naming the stale id, and an
+    // operator must be able to tell that apart from a healthy answer.
+    const warns = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.serving_stale');
+    expect(warns).toHaveLength(1);
+    expect(warns[0][1]).toMatchObject({ stale_id: 'served/model' });
+  });
+
+  test('the stale id survives the FAILED probe — the next caller still gets it', async () => {
+    mockProbeSuccess('served/model');
+    await cache.resolveVllmModelId('http://vllm:8000');
+    Date.now.mockReturnValue(1_000_000 + 61_000);
+    axios.get = jest.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).resolves.toBe('served/model');
+    // The call AFTER the failure must NOT throw: the last known id is still
+    // known and still served (the Python twin never prunes it either).
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).resolves.toBe('served/model');
+  });
+
+  test('the cache is bounded — an ancient entry is evicted (the map never grows without bound)', async () => {
+    // A long-lived okf-server sees one base per model config it ever had:
+    // the map must not grow forever. The bound is by COUNT, never by age —
+    // an entry that is merely old still holds the last known model id.
+    mockProbeSuccess('served/model');
+    await cache.resolveVllmModelId('http://vllm:8000/base-0');
+    for (let i = 1; i <= 200; i += 1) {
+      await cache.resolveVllmModelId(`http://vllm:8000/base-${i}`);
+    }
+    expect(axios.get).toHaveBeenCalledTimes(201);
+    // The first entry is long gone → its next call probes again.
+    axios.get.mockClear();
+    await cache.resolveVllmModelId('http://vllm:8000/base-0');
+    expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('a FOREIGN base with no key of its own is probed WITHOUT the deployment bearer', async () => {
+    // The deployment bearer may only travel to the deployment endpoint: a
+    // base the caller did not name it for gets no credential.
+    process.env.VLLM_API_KEY = 'deployment-secret';
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/model' }] } });
+    await cache.resolveDeploymentModel({ baseUrl: 'https://frontier.example/v1', apiKey: '' });
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://frontier.example/v1/models',
+      expect.objectContaining({ headers: {} })
+    );
+  });
+
+  test('a short-budget failure does not lock out a caller with a longer budget', async () => {
+    // The best-effort summary leg probes for 1 s; a tagging call may wait
+    // 10 s. The 1 s failure must not lock the tagging call out for the
+    // whole cool-down window — it would have answered.
+    axios.get.mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }));
+    await expect(cache.resolveVllmModelId('http://vllm:8000', { timeoutMs: 1000 })).rejects.toMatchObject({
+      name: 'ModelDiscoveryError'
+    });
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/model' }] } });
+    await expect(cache.resolveVllmModelId('http://vllm:8000', { timeoutMs: 10000 })).resolves.toBe('served/model');
+  });
+
+  test('a concurrent caller with an ample budget keeps its own probe', async () => {
+    // The tight-budget caller (the best-effort summary leg) must not narrow
+    // the probe of a concurrent caller that has room for a full one.
+    process.env.MODEL_PROBE_TIMEOUT_SECONDS = '30000';
+    const timeouts = [];
+    axios.get = jest.fn().mockImplementation((url, opts) => {
+      timeouts.push(opts.timeout);
+      return Promise.resolve(modelsPayload('served/model'));
+    });
+    await Promise.all([
+      cache.resolveVllmModelId('http://vllm:8000', { timeoutMs: 1000 }),
+      cache.resolveVllmModelId('http://vllm:8000', { timeoutMs: 30000 })
+    ]);
+    expect(Math.max(...timeouts)).toBe(30000);
+  });
+});
+
+describe('failure semantics', () => {
+  test('resolveVllmModelId throws ModelDiscoveryError when nothing answers and no pin', async () => {
+    axios.get = jest.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({
+      name: 'ModelDiscoveryError',
+      message: expect.stringContaining('http://vllm:8000/v1/models')
+    });
+  });
+
+  test('resolveVllmModelId throws on empty endpoint and no pin', async () => {
+    await expect(cache.resolveVllmModelId('')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  test('an empty model list counts as a failed probe', async () => {
+    axios.get = jest.fn().mockResolvedValue({ data: { data: [] } });
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
+  });
+
+  test('requireServedModelId ignores the pin and demands a served id', async () => {
+    process.env.VLLM_MODEL_ID = 'pinned/model';
+    mockProbeSuccess('actually-served/model');
+    await expect(cache.requireServedModelId('http://vllm:8000')).resolves.toBe('actually-served/model');
+    expect(axios.get).toHaveBeenCalled();
+  });
+});
+
+describe('pin handling and the base rule', () => {
+  test('whitespace-only VLLM_LLM_MODEL_ID does not shadow a valid VLLM_MODEL_ID', async () => {
+    process.env.VLLM_LLM_MODEL_ID = '   ';
+    process.env.VLLM_MODEL_ID = 'real/model';
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).resolves.toBe('real/model');
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  test('a per-call apiKey overrides the env key on the probe', async () => {
+    process.env.VLLM_API_KEY = 'env-key';
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    await cache.requireServedModelId('https://frontier.example/v1', { apiKey: 'fk-3' });
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://frontier.example/v1/models',
+      expect.objectContaining({ headers: { Authorization: 'Bearer fk-3' } })
+    );
+  });
+
+  test('requireServedModelId error does not suggest the pin (the pin is ignored by design)', async () => {
+    axios.get.mockRejectedValue(new Error('401'));
+    await expect(cache.requireServedModelId('http://vllm:8000')).rejects.toThrow(/must answer the model-id probe/);
+  });
+
+  test('deploymentVllmBase mirrors the chat-path host rule: env endpoint, else the compose service', () => {
+    expect(cache.deploymentVllmBase()).toBe('http://vllm:8000');
+    process.env.VLLM_ENDPOINT = 'https://gpu.example.com/llm';
+    expect(cache.deploymentVllmBase()).toBe('https://gpu.example.com/llm');
+  });
+});
+
+describe('credential scoping (no deployment-key leak)', () => {
+  beforeEach(() => {
+    logger.warn.mockClear();
+  });
+
+  test('requireServedModelId NEVER falls back to the env key (foreign base — no deployment-key leak)', async () => {
+    process.env.VLLM_API_KEY = 'deployment-secret';
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    await cache.requireServedModelId('https://foreign.example/v1');
+    expect(axios.get.mock.calls[0][1].headers).toEqual({}); // no Authorization, ever
+  });
+
+  test('requireServedModelId authenticates when an explicit key is given', async () => {
+    process.env.VLLM_API_KEY = 'deployment-secret';
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    await cache.requireServedModelId('https://foreign.example/v1', { apiKey: 'fk-own' });
+    expect(axios.get.mock.calls[0][1].headers).toEqual({ Authorization: 'Bearer fk-own' });
+  });
+
+  test('resolveVllmModelId (deployment base) still falls back to the env key', async () => {
+    process.env.VLLM_API_KEY = 'deployment-secret';
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    await cache.resolveVllmModelId('http://vllm:8000');
+    expect(axios.get.mock.calls[0][1].headers).toEqual({ Authorization: 'Bearer deployment-secret' });
+  });
+
+  test('a multi-model endpoint keeps the first entry but WARNS (gateway ambiguity is operator-visible)', async () => {
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'gateway/first' }, { id: 'gateway/embed' }] } });
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).resolves.toBe('gateway/first');
+    expect(logger.warn).toHaveBeenCalledWith(
+      'vllm_model_cache.multi_model_endpoint',
+      expect.objectContaining({ n: 2, chosen: 'gateway/first' })
+    );
+  });
+});
+
+describe('credential-scoped cache keys and the soft deployment label', () => {
+  test('cache entries are keyed by base AND key — different credentials never share a resolution', async () => {
+    axios.get
+      .mockResolvedValueOnce({ data: { data: [{ id: 'gateway/gpt-x' }] } })
+      .mockResolvedValueOnce({ data: { data: [{ id: 'gateway/claude-y' }] } });
+    await expect(cache.requireServedModelId('https://gw.example/v1', { apiKey: 'fk-A' })).resolves.toBe(
+      'gateway/gpt-x'
+    );
+    // Same base, different key: the fk-A entry must NOT be served.
+    await expect(cache.requireServedModelId('https://gw.example/v1', { apiKey: 'fk-B' })).resolves.toBe(
+      'gateway/claude-y'
+    );
+    expect(axios.get).toHaveBeenCalledTimes(2);
+  });
+
+  test('deploymentServedModelId probes the deployment base WITH the deployment key', async () => {
+    process.env.VLLM_API_KEY = 'deployment-secret';
+    axios.get.mockResolvedValue(modelsPayload('served/deployed-8b'));
+    await expect(cache.deploymentServedModelId()).resolves.toBe('served/deployed-8b');
+    expect(axios.get).toHaveBeenCalledWith(
+      'http://vllm:8000/v1/models',
+      expect.objectContaining({ headers: { Authorization: 'Bearer deployment-secret' } })
+    );
+  });
+
+  test('deploymentServedModelId is soft: null when nothing answers, never throws', async () => {
+    axios.get.mockRejectedValue(new Error('401'));
+    await expect(cache.deploymentServedModelId()).resolves.toBeNull();
+  });
+});
+
+describe('soft probe failures stay quiet (provenance labels are best-effort)', () => {
+  beforeEach(() => {
+    logger.warn.mockClear();
+  });
+
+  const warnsOf = (event) => logger.warn.mock.calls.filter((c) => c[0] === event);
+
+  const http401 = () => Object.assign(new Error('401'), { response: { status: 401 } });
+
+  // Hold a quiet probe in flight against a failure it will release later —
+  // the race choreography several tests share (never-settling axios call,
+  // microtask flushes to let the probe start, manual release). The flush
+  // loop is bounded: the probe starts within a few ticks today; if a future
+  // edit adds awaits before the axios call, the loop fails fast instead of
+  // leaking an undefined release into the test.
+  async function holdQuietProbeFailing() {
+    let release;
+    axios.get.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          release = () => reject(http401());
+        })
+    );
+    const soft = cache.servedModelId('http://vllm:8000'); // quiet probe, held in flight
+    for (let i = 0; i < 10 && !release; i += 1) {
+      await Promise.resolve();
+    }
+    if (!release) throw new Error('the quiet probe never reached axios.get');
+    return { soft, release: () => release() };
+  }
+
+  test('servedModelId emits no probe_failed warn — the label stays null, quietly', async () => {
+    axios.get.mockRejectedValue(new Error('connect ECONNREFUSED'));
+    await expect(cache.servedModelId('http://gpu.example/v1', { apiKey: 'fk' })).resolves.toBeNull();
+    expect(warnsOf('vllm_model_cache.probe_failed')).toHaveLength(0);
+  });
+
+  test('deploymentServedModelId is quiet the same way', async () => {
+    process.env.VLLM_API_KEY = 'deployment-secret';
+    axios.get.mockRejectedValue(new Error('connect ECONNREFUSED'));
+    await expect(cache.deploymentServedModelId()).resolves.toBeNull();
+    expect(warnsOf('vllm_model_cache.probe_failed')).toHaveLength(0);
+  });
+
+  test('a HARD probe failure keeps the loud probe_failed warn', async () => {
+    axios.get.mockRejectedValue(new Error('connect ECONNREFUSED'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({
+      name: 'ModelDiscoveryError'
+    });
+    const warns = warnsOf('vllm_model_cache.probe_failed');
+    expect(warns).toHaveLength(1);
+    expect(warns[0][1]).toMatchObject({ url: 'http://vllm:8000/v1/models', error: 'connect ECONNREFUSED' });
+  });
+
+  test('serving_stale still fires on the soft path when a warm cache degrades', async () => {
+    mockProbeSuccess('served/model');
+    await cache.servedModelId('http://vllm:8000');
+    Date.now.mockReturnValue(1_000_000 + 61_000);
+    axios.get.mockRejectedValue(new Error('connect ECONNREFUSED'));
+    // Stale beats broken on the soft path too — the label names the last
+    // known id, and the degradation stays visible via serving_stale alone.
+    await expect(cache.servedModelId('http://vllm:8000')).resolves.toBe('served/model');
+    expect(warnsOf('vllm_model_cache.serving_stale')).toHaveLength(1);
+    expect(warnsOf('vllm_model_cache.probe_failed')).toHaveLength(0);
+  });
+
+  test('a soft failure does not silence the hard path — the loud caller probes and warns on its own', async () => {
+    // The quiet probe's cool-down stub must not mute the hard path: the
+    // probe_failed warn is the hard paths' PRIMARY failure signal.
+    axios.get.mockRejectedValue(http401());
+    await expect(cache.servedModelId('http://vllm:8000')).resolves.toBeNull();
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({
+      name: 'ModelDiscoveryError'
+    });
+    expect(warnsOf('vllm_model_cache.probe_failed')).toHaveLength(1);
+    expect(axios.get).toHaveBeenCalledTimes(2); // the hard path probed FOR ITSELF
+  });
+
+  test('a hard failure does not make the soft path noisier — the quiet caller probes in silence', async () => {
+    axios.get.mockRejectedValue(http401());
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({
+      name: 'ModelDiscoveryError'
+    });
+    await expect(cache.servedModelId('http://vllm:8000')).resolves.toBeNull();
+    expect(warnsOf('vllm_model_cache.probe_failed')).toHaveLength(1); // the hard failure only
+    expect(axios.get).toHaveBeenCalledTimes(2);
+  });
+
+  test('a hard caller never joins a quiet probe — its failure path stays loud', async () => {
+    axios.get.mockImplementationOnce(() => new Promise(() => {})); // quiet probe, never settles
+    cache.servedModelId('http://vllm:8000'); // starts the shared-class probe, stays in flight
+    await Promise.resolve(); // let the quiet probe start
+    axios.get.mockRejectedValueOnce(http401());
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({
+      name: 'ModelDiscoveryError'
+    });
+    expect(warnsOf('vllm_model_cache.probe_failed')).toHaveLength(1);
+    expect(axios.get).toHaveBeenCalledTimes(2); // the hard caller owned its probe
+  });
+
+  test('a refresh mid-failure serves the caller the fresh id and keeps the warn silent', async () => {
+    mockProbeSuccess('stale/model');
+    await cache.servedModelId('http://vllm:8000');
+    Date.now.mockReturnValue(1_000_000 + 61_000); // the entry expires
+    const { soft, release } = await holdQuietProbeFailing();
+    // A loud probe (its own window) succeeds while the quiet one is still
+    // failing — the fresh id is what the cache holds when the quiet probe
+    // settles, so THAT is what this caller is served too.
+    axios.get.mockResolvedValue(modelsPayload('fresh/model'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000', { timeoutMs: 30000 })).resolves.toBe('fresh/model');
+    release();
+    await expect(soft).resolves.toBe('fresh/model');
+    expect(warnsOf('vllm_model_cache.probe_failed')).toHaveLength(0);
+    expect(warnsOf('vllm_model_cache.serving_stale')).toHaveLength(0);
+  });
+
+  test('serving_stale and the served id never disagree (short-TTL refresh race)', async () => {
+    process.env.MODEL_DETECT_TTL = '1';
+    mockProbeSuccess('stale/model');
+    await cache.servedModelId('http://vllm:8000'); // entry ts = t0
+    Date.now.mockReturnValue(1_000_000 + 61_000); // expired (TTL 1 s)
+    const { soft, release } = await holdQuietProbeFailing();
+    axios.get.mockResolvedValue(modelsPayload('model-v2'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000', { timeoutMs: 30000 })).resolves.toBe('model-v2');
+    // The refreshed id expires too before the quiet probe settles: an
+    // EXPIRED id is what serves, and the warn must name exactly that id.
+    Date.now.mockReturnValue(1_000_000 + 62_500);
+    release();
+    await expect(soft).resolves.toBe('model-v2');
+    const stale = warnsOf('vllm_model_cache.serving_stale');
+    expect(stale).toHaveLength(1);
+    expect(stale[0][1]).toMatchObject({ stale_id: 'model-v2' });
+  });
+
+  test('one serving_stale line per probe class per window — the served calls stay silent', async () => {
+    mockProbeSuccess('served/model');
+    await cache.servedModelId('http://vllm:8000');
+    Date.now.mockReturnValue(1_000_000 + 61_000);
+    axios.get.mockRejectedValue(http401());
+    await expect(cache.servedModelId('http://vllm:8000')).resolves.toBe('served/model'); // settle: warns once
+    // Every further call inside the negative window is served the stale id
+    // by the stub in silence — the warn is the settle event's, never the
+    // served call's (per-concept curation loops must not flood VL).
+    await expect(cache.servedModelId('http://vllm:8000')).resolves.toBe('served/model');
+    await expect(cache.servedModelId('http://vllm:8000')).resolves.toBe('served/model');
+    expect(warnsOf('vllm_model_cache.serving_stale')).toHaveLength(1);
+    expect(axios.get).toHaveBeenCalledTimes(2); // warmup + the one failing probe
+  });
+
+  test('serving_stale still fires when the stale entry was evicted before the probe settled', async () => {
+    mockProbeSuccess('stale/model');
+    await cache.servedModelId('http://vllm:8000');
+    Date.now.mockReturnValue(1_000_000 + 61_000); // the entry expires
+    const { soft, release } = await holdQuietProbeFailing();
+    // 64 other bases fill the count-bounded map — the held entry (oldest)
+    // is evicted while the quiet probe is still failing. This caller is
+    // STILL served the captured stale id, so the degradation is real and
+    // must stay visible.
+    for (let i = 0; i < 64; i += 1) {
+      await cache.resolveVllmModelId(`http://vllm:8000/base-${i}`);
+    }
+    release();
+    await expect(soft).resolves.toBe('stale/model'); // stale > broken, unchanged
+    const stale = warnsOf('vllm_model_cache.serving_stale');
+    expect(stale).toHaveLength(1);
+    expect(stale[0][1]).toMatchObject({ stale_id: 'stale/model' });
+  });
+
+  test('a same-class caller joining a failing shared probe is served the stale id too', async () => {
+    mockProbeSuccess('served/model');
+    await cache.servedModelId('http://vllm:8000');
+    Date.now.mockReturnValue(1_000_000 + 61_000); // the entry expires
+    const { release } = await holdQuietProbeFailing();
+    // A second soft caller joins the SAME in-flight probe while it is
+    // failing: one settlement, one answer — the joiner is served the stale
+    // id exactly like the creator, and ONE warn covers the window.
+    const joiner = cache.servedModelId('http://vllm:8000');
+    release();
+    await expect(joiner).resolves.toBe('served/model');
+    expect(warnsOf('vllm_model_cache.serving_stale')).toHaveLength(1);
+  });
+});
+
+describe('negative window, shared probes, sameOrigin', () => {
+  test('a FAILED probe is remembered for the negative window — no re-probe per call', async () => {
+    axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
+    // Second call inside the negative window must NOT hit the network again.
+    // The STORED failure is sanitized: the axios cause (the request
+    // config, Authorization header included) must not sit in the stub for
+    // the container's lifetime — the message keeps the actionable detail.
+    const repeat = await cache.resolveVllmModelId('http://vllm:8000').catch((e) => e);
+    expect(repeat.name).toBe('ModelDiscoveryError');
+    expect(repeat.message).toMatch(/ECONNREFUSED/);
+    expect(repeat.cause).toBeUndefined();
+    expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('concurrent callers share ONE probe (in-flight de-duplication)', async () => {
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    const [a, b, c] = await Promise.all([
+      cache.resolveVllmModelId('http://vllm:8000'),
+      cache.resolveVllmModelId('http://vllm:8000'),
+      cache.resolveVllmModelId('http://vllm:8000')
+    ]);
+    expect([a, b, c]).toEqual(['served/model', 'served/model', 'served/model']);
+    expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('a malformed base warns ONCE per pair — per-concept loops must not flood VL', () => {
+    cache.sameOrigin('gpu-host-without-scheme', 'http://vllm:8000');
+    cache.sameOrigin('gpu-host-without-scheme', 'http://vllm:8000');
+    cache.sameOrigin('gpu-host-without-scheme', 'http://vllm:8000');
+    const calls = logger.warn.mock.calls.filter((c) => c[0] === 'vllm_model_cache.malformed_base');
+    expect(calls).toHaveLength(1);
+  });
+
+  test('sameOrigin: same host+port is one endpoint, a different host is not', () => {
+    expect(cache.sameOrigin('http://vllm:8000', 'http://vllm:8000')).toBe(true);
+    expect(cache.sameOrigin('http://vllm:8000/v1', 'http://vllm:8000')).toBe(true);
+    expect(cache.sameOrigin('https://gpu.example/llm', 'https://gpu.example/llm/v1')).toBe(true);
+    expect(cache.sameOrigin('https://attacker.example/v1', 'http://vllm:8000')).toBe(false);
+    expect(cache.sameOrigin('http://vllm:8000', 'http://vllm:9000')).toBe(false);
+  });
+});
+
+describe('probe timeout ceiling', () => {
+  test('the probe timeout never exceeds MODEL_PROBE_TIMEOUT_SECONDS, even with a larger call budget', async () => {
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    await cache.getServedModelId('http://vllm:8000', { timeoutMs: 60000 });
+    expect(axios.get.mock.calls[0][1].timeout).toBe(10000);
+  });
+
+  test('a SMALLER call budget tightens the probe timeout', async () => {
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    await cache.getServedModelId('http://vllm:8000', { timeoutMs: 2500 });
+    expect(axios.get.mock.calls[0][1].timeout).toBe(2500);
+  });
+});
+
+describe('sameOrigin tenant paths and the cool-down window', () => {
+  test('sameOrigin: path-scoped tenants on one host are NOT the same endpoint', () => {
+    expect(cache.sameOrigin('http://gpu:8000/tenant-a', 'http://gpu:8000/tenant-b')).toBe(false);
+    expect(cache.sameOrigin('http://gpu:8000/llm', 'http://gpu:8000/llm/v1')).toBe(true);
+    expect(cache.sameOrigin('http://gpu:8000/llm', 'http://gpu:8000/other')).toBe(false);
+  });
+
+  test('the discovery error is structured: 503 + a machine-readable code', async () => {
+    axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({
+      name: 'ModelDiscoveryError',
+      status: 503,
+      code: 'MODEL_DISCOVERY_FAILED'
+    });
+  });
+
+  test('two spellings of one base share ONE cache entry (one probe, one window)', async () => {
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    await cache.getServedModelId('http://vllm:8000');
+    await cache.getServedModelId('http://vllm:8000/v1');
+    expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('the failed-probe cool-down is short (a blip does not become a minute of failures)', async () => {
+    axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
+    Date.now.mockReturnValue(1_000_000 + 11_000); // past the 10 s cool-down
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
+    expect(axios.get).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('probe retry classification and sameOrigin edges', () => {
+  test('the probe retries a transient failure once', async () => {
+    axios.get
+      .mockRejectedValueOnce(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }))
+      .mockResolvedValueOnce(modelsPayload('served/model'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).resolves.toBe('served/model');
+    expect(axios.get).toHaveBeenCalledTimes(2);
+  });
+
+  test('a permanent failure is NOT retried', async () => {
+    axios.get.mockRejectedValue(new Error('ECONNREFUSED'));
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
+    expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('sameOrigin: a CHILD path of the deployment path is a DIFFERENT endpoint', () => {
+    // …/llm/tenant-b is a tenant UNDER the deployment path, not the
+    // deployment's own endpoint: it must never receive the deployment
+    // bearer or the deployment's model name.
+    expect(cache.sameOrigin('https://gpu:443/llm/tenant-b', 'https://gpu:443/llm')).toBe(false);
+    // The OpenAI-compatible version prefix IS the same server.
+    expect(cache.sameOrigin('https://gpu:443/llm/v1', 'https://gpu:443/llm')).toBe(true);
+  });
+
+  test('sameOrigin: a path-less base matches a version prefix, never an arbitrary path', () => {
+    expect(cache.sameOrigin('http://vllm:8000', 'http://vllm:8000/v1')).toBe(true);
+    expect(cache.sameOrigin('http://vllm:8000', 'http://vllm:8000/tenant-b')).toBe(false);
+    expect(cache.sameOrigin('http://gpu:8000/llm', 'http://gpu:8000/llm/v1')).toBe(true);
+  });
+});
+
+describe('call budgets and the actionable failure', () => {
+  test('a missing or invalid call budget never yields a NaN timeout (an unbounded request would hang)', async () => {
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'served/model' }] } });
+    const res = await cache.resolveDeploymentModel({ baseUrl: 'http://vllm:8000' });
+    expect(Number.isFinite(res.remainingMs)).toBe(true);
+    expect(res.remainingMs).toBeGreaterThan(0);
+    // An invalid PROBE budget must not reach the probe either: a negative
+    // deadline would fail the probe before it ever left the process.
+    cache.clearModelCache();
+    const res2 = await cache.resolveDeploymentModel({
+      baseUrl: 'http://vllm:8000',
+      budgetMs: 5000,
+      probeBudgetMs: -1
+    });
+    expect(Number.isFinite(res2.remainingMs)).toBe(true);
+    expect(res2.remainingMs).toBeGreaterThan(0);
+  });
+
+  test('the discovery error names the CAUSE, not just the URL', async () => {
+    axios.get.mockRejectedValue(
+      Object.assign(new Error('Request failed with status code 401'), { response: { status: 401 } })
+    );
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toThrow(/401/);
+  });
+
+  test('a refused connection is retried (the chat path retries it too)', async () => {
+    axios.get.mockRejectedValue(
+      Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:8000'), { code: 'ECONNREFUSED' })
+    );
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({
+      name: 'ModelDiscoveryError'
+    });
+    expect(axios.get).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('probe deadline and timeout parsing', () => {
+  test('the probe timeout bounds the WHOLE probe — a retry gets the remaining time, not a fresh budget', async () => {
+    // A real clock: the deadline shrinks with the elapsed time (the file's
+    // default Date.now mock freezes it).
+    Date.now.mockRestore();
+    const timeouts = [];
+    axios.get.mockImplementation((url, opts) => {
+      timeouts.push(opts.timeout);
+      return Promise.reject(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }));
+    });
+    await expect(cache.resolveVllmModelId('http://vllm:8000')).rejects.toMatchObject({ name: 'ModelDiscoveryError' });
+    expect(timeouts.length).toBeGreaterThanOrEqual(2);
+    expect(timeouts[1]).toBeLessThan(timeouts[0]);
+  });
+
+  test('a malformed probe timeout falls back to the default (the Python twin rejects it too)', async () => {
+    process.env.MODEL_PROBE_TIMEOUT_SECONDS = '10abc';
+    axios.get.mockResolvedValue(modelsPayload('served/model'));
+    await cache.getServedModelId('http://vllm:8000');
+    expect(axios.get.mock.calls[0][1].timeout).toBe(10000);
+  });
+});

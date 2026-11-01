@@ -39,14 +39,20 @@ def _workable_contextual_window(monkeypatch):
     """A window the doc-context derivation can fit inside (merged from
     feat/okf-server 2026-10-21).
 
-    The branch derives the document-context budget from VLLM_MAX_MODEL_LEN,
-    clamping to a 2048-token fallback when unset — and 2048 cannot fit the
-    per-chunk output reservation (512 x batch 4), so every real-contextualization
-    test below would be gated out at the derivation with
-    DEGRADED_WINDOW_TOO_SMALL before the phase logic it exists to test runs.
-    Give the derivation a default-profile window instead.
+    The derivation uses the serving model's window, discovered at runtime from
+    VLLM_ENDPOINT (issue #1182; was the VLLM_MAX_MODEL_LEN env) — fail-closed
+    to a 2048-token fallback when discovery has no answer, and 2048 cannot fit
+    the per-chunk output reservation (512 x batch 4), so every
+    real-contextualization test below would be gated out at the derivation
+    with DEGRADED_WINDOW_TOO_SMALL before the phase logic it exists to test
+    runs. Stub the discovery seam (dataprep's from-import binding) with a
+    default-profile window instead.
     """
-    monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "65536")
+    monkeypatch.setattr(dataprep, "get_max_model_len", lambda _url, _ttl=None: 65536)
+    # The model id comes from the same probe; stubbing it too keeps the suite
+    # from making real outbound HTTP calls (a probe that answers, or hangs,
+    # would decide what these tests measure).
+    monkeypatch.setattr(dataprep, "get_model_id", lambda _url, _ttl=None: "test-model")
 
 
 async def _noop_log(*_args, **_kwargs):

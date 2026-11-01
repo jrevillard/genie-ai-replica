@@ -68,13 +68,21 @@ variables:
   #   site/content/en/docs/mobile/mobile-deployment-guide.md (§ Build) — and
   #   getConfig() fails at startup in a release or profile build made without
   #   the define (#1099), so the missing-define fallback cannot reach a
-  #   release artifact any more. (An explicit FLAVOR=dev release still runs
-  #   devConfig — a developer's --release run against the local stack — and
-  #   build-release.ps1 refuses dev/e2e on the artifact path.)
+  #   release artifact any more. An explicit FLAVOR=dev release fails at
+  #   startup too — getConfig() refuses any configuration with
+  #   allowInsecureConnections on in a release artifact (#1099), and
+  #   build-release.ps1 refuses dev/e2e on the artifact path as well.
   # - genie-ai-overlay/contracts/: real-comps contract tests (test code, NOT shipped in image)
   # - **/scripts/**: dev/migration scripts NOT shipped in container. We list specific
   #   sub-patterns (rather than the broad **/scripts/) so the production entrypoint
   #   `components/document-repository/scripts/clamav-node.sh` stays scanned.
+  # - scripts/okf-testing-lab/**: RAGAS testing-lab CLI helpers, run by hand —
+  #   NOT shipped in a container. CAVEAT (review 2026-10-29): two of these
+  #   modules are REQUIRED by CI-run okf-server Jest suites since commit
+  #   c40e9ea03 (ragas-compare-runs.js, ragas-regenerate-entry.js), so their
+  #   SAST findings are invisible by construction — and any future lab helper
+  #   a test needs lands in the same blind spot. Moving the shared helpers to
+  #   a scanned location belongs to the post-train slimming pass.
   # - **/seed-*.js: synthetic data generators, never executed at runtime
   # - **/__tests__/, **/__mocks__/, **/tests/, **/coverage/: test code + generated reports
   # - .claude/**: Claude Code agent skills, hooks, BMAD orchestration YAML. Not
@@ -102,6 +110,7 @@ variables:
     **/seed-*.js,
     **/scripts/seed-*.js,
     **/scripts/migrations/**,
+    scripts/okf-testing-lab/**,
     **/scripts/new-schema-scripts/**,
     **/__tests__/**,
     **/__mocks__/**,
@@ -375,12 +384,15 @@ workflow:
         fi
       done
     - |
-      # ROPC setup (required by conversation-history tests via getUserToken)
+      # Keycloak readiness wait + test-user provisioning. The Playwright suites
+      # log in through the browser (loginViaUI) and reuse the session token —
+      # no suite run by this job mints ROPC tokens, and the committed realm
+      # refuses direct access grants by design.
       # All requests go through nginx/Kong — same path as production traffic.
       KC_URL="${E2E_BASE_URL}/auth"
       KC_PWD="${KEYCLOAK_ADMIN_PASSWORD}"
       ADMIN_TOKEN=""
-      CLIENT_UUID=""
+      CLIENT_FOUND=""
       for i in $(seq 1 90); do
         if [ -z "$ADMIN_TOKEN" ]; then
           ADMIN_TOKEN=$(curl -sk -X POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
@@ -388,72 +400,200 @@ workflow:
             | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('access_token',''))" 2>/dev/null)
         fi
         if [ -n "$ADMIN_TOKEN" ]; then
-          CLIENT_UUID=$(curl -sk "${KC_URL}/admin/realms/genie/clients?clientId=genie-app" \
+          CLIENT_FOUND=$(curl -sk "${KC_URL}/admin/realms/genie/clients?clientId=genie-app" \
             -H "Authorization: Bearer $ADMIN_TOKEN" \
-            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id']) if d else ''" 2>/dev/null || true)
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print('yes' if isinstance(d, list) and d else '')" 2>/dev/null || true)
         fi
-        if [ -n "$CLIENT_UUID" ]; then
-          echo "Keycloak ready after ${i}s — client UUID: ${CLIENT_UUID}"
+        if [ -n "$CLIENT_FOUND" ]; then
+          echo "Keycloak ready (iteration ${i}/90) — genie-app client visible"
           break
         fi
         echo "Waiting for Keycloak via nginx/Kong... ($i/90)"
         sleep 2
       done
-      if [ -z "$CLIENT_UUID" ]; then
+      if [ -z "$CLIENT_FOUND" ]; then
         echo "ERROR: genie-app client not found via nginx/Kong after 180s"
         exit 1
       fi
-      curl -sk -X PUT "${KC_URL}/admin/realms/genie/clients/${CLIENT_UUID}" \
+      # Create test user for E2E tests (required by loginViaUI).
+      # Create-first: HTTP 201 = created, 409 = already exists (the body names
+      # the conflict — username or email). exact=true on the lookup: ?username=
+      # is a prefix search otherwise — a stray testuser2 would misdirect it.
+      testuser_id() {
+        USERS_JSON=$(curl -sk "${KC_URL}/admin/realms/genie/users?username=testuser&exact=true" \
+          -H "Authorization: Bearer $ADMIN_TOKEN" || true)
+        USER_ID=$(printf '%s' "$USERS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id']) if isinstance(d,list) and d and isinstance(d[0],dict) and 'id' in d[0] and d[0]['id'] else None" 2>/dev/null || true)
+      }
+      CREATE_RESP=$(curl -sk -w '\n%{http_code}' -X POST "${KC_URL}/admin/realms/genie/users" \
         -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-        -d '{"directAccessGrantsEnabled": true}'
-      echo "ROPC enabled for genie-app client"
-      # Create test user for E2E tests (required by loginViaUI and getUserToken)
-      EXISTING=$(curl -sk "${KC_URL}/admin/realms/genie/users?username=testuser" \
-        -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null)
-      if [ "${EXISTING:-0}" -eq 0 ]; then
-        CREATE_STATUS=$(curl -sk -o /dev/null -w "%{http_code}" -X POST "${KC_URL}/admin/realms/genie/users" \
-          -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-          -d '{"username":"testuser","email":"testuser@e2e.test","emailVerified":true,"firstName":"Test","lastName":"User","enabled":true,"credentials":[{"type":"password","value":"TestPass123!","temporary":false}]}')
-        if [ "$CREATE_STATUS" -ne 201 ]; then
-          echo "ERROR: testuser creation failed (HTTP $CREATE_STATUS)"
-          exit 1
-        fi
-        echo "testuser created (HTTP $CREATE_STATUS)"
+        -d '{"username":"testuser","email":"testuser@e2e.test","emailVerified":true,"firstName":"Test","lastName":"User","enabled":true,"credentials":[{"type":"password","value":"TestPass123!","temporary":false}]}' || true)
+      CREATE_STATUS=$(printf '%s' "$CREATE_RESP" | tail -n1)
+      CREATE_BODY=$(printf '%s' "$CREATE_RESP" | sed '$d' | head -c 200)
+      if [ "$CREATE_STATUS" != "201" ] && [ "$CREATE_STATUS" != "409" ]; then
+        echo "ERROR: testuser creation failed (HTTP ${CREATE_STATUS:-<none>})"
+        echo "response body: ${CREATE_BODY}"
+        exit 1
+      fi
+      if [ "$CREATE_STATUS" = "409" ]; then
+        echo "testuser already exists (create returned 409): ${CREATE_BODY}"
       else
-        echo "testuser already exists"
+        echo "testuser created"
+      fi
+      testuser_id
+      if [ -z "$USER_ID" ]; then
+        echo "ERROR: cannot resolve testuser id (last users answer: $(printf '%s' "${USERS_JSON:-}" | head -c 200))"
+        if [ "$CREATE_STATUS" = "409" ]; then
+          echo "HINT: the 409 above may be an email conflict — another user owns testuser@e2e.test."
+        fi
+        exit 1
       fi
       # Assign admin realm role to test user (required for document upload/delete)
-      USER_ID=$(curl -sk "${KC_URL}/admin/realms/genie/users?username=testuser" \
-        -H "Authorization: Bearer $ADMIN_TOKEN" \
-        | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])" || true)
       ADMIN_ROLE=$(curl -sk "${KC_URL}/admin/realms/genie/roles" \
         -H "Authorization: Bearer $ADMIN_TOKEN" \
         | python3 -c "import sys,json; roles=[r for r in json.load(sys.stdin) if r['name']=='admin']; print(roles[0]['id'] if roles else '')" || true)
-      if [ -n "$ADMIN_ROLE" ] && [ -n "$USER_ID" ]; then
+      if [ -n "$ADMIN_ROLE" ]; then
         curl -sk -X POST "${KC_URL}/admin/realms/genie/users/${USER_ID}/role-mappings/realm" \
           -H "Authorization: Bearer $ADMIN_TOKEN" \
           -H "Content-Type: application/json" \
           -d "[{\"id\":\"${ADMIN_ROLE}\",\"name\":\"admin\"}]" && echo "Assigned admin role to testuser" || echo "WARNING: admin role assignment failed"
       else
-        echo "WARNING: Could not assign admin role (role or user not found). Document tests may fail."
+        echo "WARNING: Could not assign admin role (admin role not found). Document tests may fail."
       fi
-      # Save vars for cleanup in after_script
-      echo "E2E_BASE_URL=${E2E_BASE_URL}" > .e2e-ropc-env
-      echo "ADMIN_TOKEN=${ADMIN_TOKEN}" >> .e2e-ropc-env
-      echo "CLIENT_UUID=${CLIENT_UUID}" >> .e2e-ropc-env
-    - BASE_URL="${E2E_BASE_URL}" npx playwright test tests/e2e/chatbot/ tests/e2e/documents/ tests/e2e/okf/ tests/e2e/theme-runtime-config.spec.js --project=chromium
+      # The realm's web client must refuse direct access grants — assert it
+      # for genie-app. The credentials are deliberately bogus: the refusal
+      # verdict precedes credential validation, so it is unaffected, and a
+      # drifted realm can never mint a live token through the probe (it
+      # answers invalid_grant instead, classified as drift below).
+      # Only unauthorized_client greens the probe: it is the one answer
+      # that proves the direct-grants gate was consulted for THIS client.
+      # Grant-level denials (unsupported_grant_type, access_denied) cannot
+      # distinguish a refused grant from a malformed request — a probe that
+      # mis-sends its own grant_type would otherwise self-certify any
+      # realm — so they fail as unrecognized, loudly, with the body.
+      # Keycloak answers unauthorized_client BEFORE credential validation
+      # when directAccessGrantsEnabled is false, so a minted token means the
+      # posture drifted. Transport failures, 5xx and 429 retry; transport,
+      # gateway and rate-limit verdicts stay distinct from posture verdicts
+      # — none of them masquerades as a posture answer.
+      # Failure verdicts log the response body they saw, except the
+      # token-mint drift case: its body IS the token, never logged.
+      ROPC_ANSWERED=""
+      ROPC_LAST_ANSWERED=""
+      for i in 1 2 3 4 5; do
+        rm -f /tmp/ropc-probe-body.json
+        ROPC_CURL_RC=0
+        ROPC_STATUS=$(curl -sk --max-time 15 -o /tmp/ropc-probe-body.json -w "%{http_code}" -X POST \
+          "${KC_URL}/realms/genie/protocol/openid-connect/token" \
+          -d "client_id=genie-app" -d "grant_type=password" \
+          -d "username=ropc-probe-no-such-user" -d "password=ropc-probe-bogus-credentials") || ROPC_CURL_RC=$?
+        case "$ROPC_STATUS" in
+          # Transient statuses retry even with a clean curl exit; any other
+          # definitive status with a clean exit classifies immediately, and
+          # a non-zero exit (timeout after headers, reset mid-body) means
+          # the answer was truncated — retry it like the other faults.
+          408|425|429) ;;
+          [234][0-9][0-9])
+            ROPC_LAST_ANSWERED="$ROPC_STATUS"
+            if [ "$ROPC_CURL_RC" -eq 0 ]; then ROPC_ANSWERED=1; break; fi ;;
+          [56][0-9][0-9]) ROPC_LAST_ANSWERED="$ROPC_STATUS" ;;
+        esac
+        echo "ROPC probe attempt ${i}/5: no usable answer from the token endpoint (HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC})"
+        { [ "$i" -lt 5 ] && sleep 5; } || true
+      done
+      # A truncated 200 token response can land in the body of a transport
+      # failure, and JSON member order is not guaranteed — a body from a
+      # 2xx answer is withheld outright, and any other body carrying a
+      # minted token member within the captured 200 bytes. Error pages
+      # that merely mention the words keep their evidence.
+      ROPC_BODY=$(head -c 200 /tmp/ropc-probe-body.json 2>/dev/null || true)
+      case "$ROPC_BODY" in
+        *'"access_token"'*) ROPC_BODY="<token response withheld>" ;;
+      esac
+      case "$ROPC_STATUS" in
+        2[0-9][0-9]) ROPC_BODY="<token response withheld>" ;;
+      esac
+      if [ -z "$ROPC_ANSWERED" ]; then
+        rm -f /tmp/ropc-probe-body.json
+        case "$ROPC_STATUS" in
+          408|425)
+            echo "ERROR: the token endpoint kept failing with transport-level HTTP ${ROPC_STATUS} — not a posture verdict; check the Keycloak upstream health; body: ${ROPC_BODY:-none}"
+            ;;
+          429)
+            echo "ERROR: token endpoint rate-limited the probe (HTTP 429) — not a posture verdict; check gateway rate limiting; body: ${ROPC_BODY:-none}"
+            ;;
+          *)
+            echo "ERROR: no usable answer from the genie token endpoint in 5 attempts (last HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC:-0}, last retried HTTP ${ROPC_LAST_ANSWERED:-none}) — transport, gateway or upstream failure, not a posture result; last body: ${ROPC_BODY:-none}"
+            ;;
+        esac
+        exit 1
+      fi
+      ROPC_FIELDS=$(python3 -c "import sys,json; d=json.load(open('/tmp/ropc-probe-body.json')); print(d.get('error','') + '|' + ('yes' if d.get('access_token') else 'no'))" 2>/dev/null || true)
+      ROPC_ERROR=${ROPC_FIELDS%|*}
+      ROPC_TOKEN=${ROPC_FIELDS#*|}
+      rm -f /tmp/ropc-probe-body.json
+      ropc_gateway_fail() {
+        echo "ERROR: unexpected HTTP ${ROPC_STATUS} from the genie token endpoint whose answer carried no recognizable Keycloak error — not a posture verdict; check gateway routing (nginx/Kong) or the realm import; body: ${ROPC_BODY:-none}"
+        exit 1
+      }
+      case "$ROPC_STATUS" in
+        # Only a clean-exit 2xx-4xx answer reaches this point (exhausted
+        # retries exited above), so the transport/rate-limit verdicts live
+        # in the exhausted path, not here.
+        4[0-9][0-9])
+          if [ "$ROPC_ERROR" = "unauthorized_client" ]; then
+            # No exit here: GitLab concatenates the script items into one
+            # shell, so ANY exit would skip the suites — and an exit 0 would
+            # end the job green with zero tests run. Fall through instead.
+            echo "ROPC refusal verified at the token endpoint (HTTP ${ROPC_STATUS} ${ROPC_ERROR}) — direct access grants rejected"
+          elif [ "$ROPC_ERROR" = "invalid_grant" ]; then
+            # Verified on Keycloak 26.7: the direct-grants gate runs before
+            # credential validation, so invalid_grant here means the grant
+            # was accepted and the credentials rejected — i.e. drift. If a
+            # Keycloak upgrade ever reverses that order, a healthy realm
+            # answers invalid_grant too and this verdict misfires.
+            echo "ERROR: genie realm ROPC posture drifted (HTTP ${ROPC_STATUS}, error 'invalid_grant') — credential validation only runs when the direct-access grant was accepted; directAccessGrantsEnabled must stay false on genie-app; body: ${ROPC_BODY:-none}"
+            exit 1
+          elif [ "$ROPC_ERROR" = "invalid_client" ]; then
+            echo "ERROR: client authentication failed (HTTP ${ROPC_STATUS} invalid_client) — is genie-app still a public client? Check publicClient/KEYCLOAK_CLIENT_SECRET; body: ${ROPC_BODY:-none}"
+            exit 1
+          elif [ -n "$ROPC_ERROR" ]; then
+            echo "ERROR: unexpected error '${ROPC_ERROR}' from the genie token endpoint (HTTP ${ROPC_STATUS}) — not a recognized refusal verdict; body: ${ROPC_BODY:-none}"
+            exit 1
+          else
+            ropc_gateway_fail
+          fi
+          ;;
+        2[0-9][0-9]|3[0-9][0-9])
+          # Deliberately retained even though the fixed bogus credentials
+          # make it unreachable through credential-checked flows (an
+          # authenticate-before-gate ordering flip answers invalid_grant
+          # above): this branch covers a Keycloak that mints WITHOUT
+          # validating credentials at all — a broken authenticator or a
+          # realm import that skips the credential step. Without it, a
+          # minted token would be misreported as a transport failure.
+          if [ "$ROPC_TOKEN" = "yes" ]; then
+            echo "ERROR: genie realm ROPC posture drifted: token endpoint returned HTTP ${ROPC_STATUS} with an access token for a direct-access grant — directAccessGrantsEnabled must stay false on genie-app"
+          else
+            ropc_gateway_fail
+          fi
+          exit 1
+          ;;
+        *)
+          # Drift protection, not a live path: only clean-exit 2xx-4xx
+          # answers set ROPC_ANSWERED, and 4xx/2xx-3xx cover that space. If
+          # a future edit to the loop's answered logic widens it, this arm
+          # turns the silent-skip class into a loud failure.
+          echo "ERROR: the probe reached an unclassified state (HTTP ${ROPC_STATUS:-none}) — failing loudly rather than passing without a verdict; body: ${ROPC_BODY:-none}"
+          exit 1
+          ;;
+      esac
+    # tests/e2e/okf/ stays OUT until MR2 lands: the OKF Studio UI those specs
+    # drive ships in MR 2 (this train is MR1, dark), they hardcode
+    # https://localhost while CI serves E2E_BASE_URL=https://nginx, and they
+    # need an OKF-enabled deployment (OKF_ENABLED=1). Including them here
+    # guaranteed three red specs on every merge train.
+    - BASE_URL="${E2E_BASE_URL}" npx playwright test tests/e2e/chatbot/ tests/e2e/documents/ tests/e2e/theme-runtime-config.spec.js tests/e2e/helpers/ --project=chromium
   after_script:
-    - |
-      # ROPC cleanup - CRITICAL: always revert, even on test failure
-      if [ -f .e2e-ropc-env ]; then
-        . ./.e2e-ropc-env
-        KC_URL="${E2E_BASE_URL}/auth"
-        curl -sk -X PUT "${KC_URL}/admin/realms/genie/clients/${CLIENT_UUID}" \
-          -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-          -d '{"directAccessGrantsEnabled": false}' 2>/dev/null && echo "ROPC disabled" || echo "WARNING: ROPC cleanup failed"
-        rm -f .e2e-ropc-env
-      fi
-
     - mkdir -p e2e-logs
     - docker compose -p "ci-${CI_PIPELINE_ID}" logs > e2e-logs/docker-compose.log 2>&1 || true
   artifacts:
@@ -585,6 +725,17 @@ container_scanning:
     paths:
       - gl-container-scanning-report.json
       - "**/gl-sbom-*.cdx.json"
+
+# The chatqna image consumes the language registry from the backend tree
+# (COPY in Dockerfile-chatqna_genie-ai), so a registry-only change must
+# rebuild it like a chatqna change. build-patches/ is named by FILE, not by
+# directory: the image runs exactly two scripts from there (the off-loop
+# patcher and install_site_startup.sh), and a directory glob would also
+# rebuild this image for dataprep-only patcher edits. tracing.py is COPYed
+# into the image too and carries the entrypoint-wired access-log
+# middleware, so it is a chatqna source like core/**.
+.chatqna_server_source_changes: &chatqna_server_source_changes
+  [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/tracing.py", "genie-ai-overlay/build-patches/comps_llm_stream_offloop_patch.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml" ]
 
 .build_template: &build_template
   stage: build
@@ -890,23 +1041,30 @@ contract:chatqna-server:
     # docker-cp's `contracts/` into the container. With no conftest present the
     # inventory is empty, every real comps module reads as a "missing stub", and
     # the test fails for a reason that has nothing to do with the image.
-    CONTRACT_TEST_PATTERN: "test_contract_orchestrator_wire.py test_contract_nfrp_budgets.py::test_wire_latency_within_budget"
+    CONTRACT_TEST_PATTERN: "test_contract_orchestrator_wire.py test_contract_llm_stream_offloop.py test_contract_nfrp_budgets.py::test_wire_latency_within_budget"
   rules:
+    # The monthly forced rebuild is the event most likely to shift the base
+    # image or the comps layout the /home/user/comps import path rests on —
+    # the contract lane must run then, not only on path-matching MRs.
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    # One source of truth for the paths: the same anchor the build job uses,
+    # so a path addition cannot drift between "rebuild the image" and "run
+    # the contract lane" again (configs/ssl/**/* already did).
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        paths: *chatqna_server_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        paths: *chatqna_server_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        paths: *chatqna_server_source_changes
 
 # Pure contract tests — repo-side, no built image needed (run in a plain venv).
 # These validate the harness logic + telemetry assertions against the repo's
@@ -1689,14 +1847,14 @@ build:chatqna-server:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *chatqna_server_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *chatqna_server_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *chatqna_server_source_changes
 
 scan:chatqna-server:
   <<: *scan_template
@@ -1713,14 +1871,14 @@ scan:chatqna-server:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *chatqna_server_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *chatqna_server_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *chatqna_server_source_changes
 
 promote:chatqna-server:
   <<: *promote_template
@@ -1738,14 +1896,14 @@ promote:chatqna-server:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *chatqna_server_source_changes
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *chatqna_server_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: *chatqna_server_source_changes
 
 # genie-ai-dataprep-arango
 build:dataprep-arango:
@@ -3021,7 +3179,62 @@ test:flutter:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
-# Patrol E2E tests — DinD emulator (shared with scheduled:e2e-mobile)
+# --- Merge-train e2e trigger filters (#1264) ---
+# One shared changes: filter for the two merge-train e2e jobs, as a hidden
+# anchor — same idiom as .chatqna_server_source_changes above — so a path
+# addition cannot drift between e2e:playwright and its needs-partner
+# e2e:integration: both jobs alias this one list, which makes the subset
+# relation GitLab requires for a hard `needs` (a train whose paths
+# instantiate e2e:playwright must also instantiate e2e:integration, or
+# pipeline creation fails and the whole train goes red) hold by
+# construction. Every DIRECT input the jobs execute or consume must be
+# listed here, or e2e silently skips on the train (image-source inputs —
+# the trees compiled into the pulled candidate images — are a deliberate
+# exception, tracked in #1283):
+#   - e2e:playwright runs tests/e2e/chatbot/, tests/e2e/documents/ and
+#     tests/e2e/theme-runtime-config.spec.js; it reads tests/e2e/helpers/
+#     and tests/e2e/fixtures/ at runtime, and is installed/configured from
+#     package.json, package-lock.json and playwright.config.js (see
+#     .e2e_web_base before_script + cache keys).
+#   - e2e:integration deploys the stack from docker-compose.yaml seeded by
+#     the env template (cp env .env); the stack also bind-mounts
+#     configs/keycloak/themes/ and configs/otel/otel-collector-config.yaml
+#     straight from this checkout (the frontend's public/config checkout
+#     mount is already covered by the components/gov-chat-frontend glob).
+#   - the rest of the configs/keycloak/ tree: genie-realm.yaml and the
+#     import entrypoint are baked into the keycloak-config candidate image
+#     (its themes/ subtree is the bind-mount covered by the bullet above) —
+#     the ROPC-refusal probe in .e2e_web_base asserts the realm's runtime
+#     behaviour, so any change in the tree must instantiate the e2e jobs.
+# tests/e2e/okf/ is deliberately NOT listed: the OKF specs are not executed
+# until MR2 wires them into the script (see .e2e_web_base script comment),
+# and listing unexecuted paths only buys 30-minute train jobs that test
+# nothing about the change — re-add the entry in MR2. Enforced by
+# tests/config-validator.
+.e2e_merge_train_changes: &e2e_merge_train_changes
+  - components/gov-chat-frontend/**/*
+  - components/gov-chat-backend/**/*
+  - components/document-repository/**/*
+  - tests/e2e/chatbot/**/*
+  - tests/e2e/documents/**/*
+  - tests/e2e/helpers/**/*
+  - tests/e2e/fixtures/**/*
+  - tests/e2e/theme-runtime-config.spec.js
+  - playwright.config.js
+  - package.json
+  - package-lock.json
+  - docker-compose.yaml
+  - env
+  - configs/keycloak/**/*
+  - configs/otel/otel-collector-config.yaml
+  - .gitlab-ci.yml
+
+# Integration E2E — compose stack from candidate images (merge trains)
+# Rules union: the two rules below trigger e2e:integration on the shared
+# filter PLUS the integration-only mobile entry. The web suite does not test
+# the mobile app, so e2e:playwright deliberately does not run on mobile-only
+# trains — its single alias rule cannot match there, and its hard needs can
+# never dangle.
 e2e:integration:
   extends: .e2e_integration_base
   stage: e2e
@@ -3032,10 +3245,9 @@ e2e:integration:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
       changes:
         - mobile/genie_ai_mobile/**/*
-        - tests/e2e/chatbot/**/*
-        - components/gov-chat-frontend/**/*
-        - components/gov-chat-backend/**/*
-        - .gitlab-ci.yml
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
+      changes:
+        paths: *e2e_merge_train_changes
 
 # Playwright E2E — runs on merge trains
 e2e:playwright:
@@ -3046,13 +3258,7 @@ e2e:playwright:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
       changes:
-        - tests/e2e/chatbot/**/*
-        - tests/e2e/documents/**/*
-        - tests/e2e/okf/**/*
-        - components/gov-chat-frontend/**/*
-        - components/gov-chat-backend/**/*
-        - components/document-repository/**/*
-        - .gitlab-ci.yml
+        paths: *e2e_merge_train_changes
 
 # --- Configuration validation ---
 
@@ -3169,9 +3375,8 @@ config:validate:
   extends: .node_base
   stage: config
   # Self-contained env-coverage checks (npm test on the checkout) — no
-  # upstream artifacts needed. Same rationale as verify:dataprep-lock:
-  # the default artifact coupling made this job 403-flake with the
-  # 2026-09-02/03 instance artifact-download problem.
+  # upstream artifacts needed: the default artifact coupling made this
+  # job 403-flake with the 2026-09-02/03 instance artifact-download problem.
   dependencies: []
   before_script:
     - cd tests/config-validator && npm ci

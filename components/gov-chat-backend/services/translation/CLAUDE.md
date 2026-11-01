@@ -96,4 +96,4 @@ enables the cache; the key prefix is always `translation:`.
 | `translation-cache-key.js` | `translationCacheKey` + `TRANSLATION_LOGIC_VERSION`. |
 | `stream-boundary.js` | Streaming unit boundary detection (used by `routes/query-routes.js`). |
 | `gpu-translate-backend.js` / `cpu-translate-backend.js` | Translation backends (vLLM / NLLB). |
-| `language-maps/` | Per-model language code maps. |
+| `language-maps/` | Per-model language code maps, derived from `language-registry.json` — the single source of the supported languages (canonical code, name, script, per-model codes), shared with the chatqna service. |

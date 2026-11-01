@@ -14,7 +14,9 @@
     "format:py:check": "ruff format --check genie-ai-overlay/",
     "lint:dart": "cd mobile/genie_ai_mobile && flutter analyze",
     "format:dart": "cd mobile/genie_ai_mobile && dart format .",
-    "format:dart:check": "cd mobile/genie_ai_mobile && dart format --set-exit-if-changed ."
+    "format:dart:check": "cd mobile/genie_ai_mobile && dart format --set-exit-if-changed .",
+    "api-client:check": "bash scripts/generate-api-client.sh --check",
+    "api-client:generate": "bash scripts/generate-api-client.sh"
   },
   "devDependencies": {
     "@playwright/test": "^1.51.0",

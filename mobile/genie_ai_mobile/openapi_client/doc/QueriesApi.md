@@ -18,6 +18,7 @@ Method | HTTP request | Description
 [**apiQueriesQueryIdGet**](QueriesApi.md#apiqueriesqueryidget) | **GET** /api/queries/{queryId} | Get query by ID
 [**apiQueriesQueryIdLinkMessageIdPost**](QueriesApi.md#apiqueriesqueryidlinkmessageidpost) | **POST** /api/queries/{queryId}/link/{messageId} | Link query to message
 [**apiQueriesQueryIdResponsetimePatch**](QueriesApi.md#apiqueriesqueryidresponsetimepatch) | **PATCH** /api/queries/{queryId}/responsetime | Update query response time
+[**apiQueriesStreamPost**](QueriesApi.md#apiqueriesstreampost) | **POST** /api/queries/stream | Stream a query response via SSE
 
 
 # **apiQueriesGet**
@@ -30,6 +31,8 @@ Searches queries based on various criteria with pagination
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = QueriesApi();
 final limit = 56; // int | Number of queries per page
@@ -70,7 +73,7 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -89,6 +92,8 @@ Creates a new query and records it in analytics. Supports single-message or full
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = QueriesApi();
 final apiQueriesPostRequest = ApiQueriesPostRequest(); // ApiQueriesPostRequest | 
@@ -113,7 +118,7 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -132,6 +137,8 @@ Marks a query as answered and updates response time
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = QueriesApi();
 final queryId = queryId_example; // String | ID of the query to update.
@@ -158,7 +165,7 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -177,6 +184,8 @@ Creates a new conversation based on an existing query
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = QueriesApi();
 final queryId = queryId_example; // String | Query ID
@@ -203,7 +212,7 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -222,6 +231,8 @@ Retrieves all conversations associated with a specific query
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = QueriesApi();
 final queryId = queryId_example; // String | Query ID
@@ -246,7 +257,7 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -265,6 +276,8 @@ Adds user feedback to a query and records it in analytics
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = QueriesApi();
 final queryId = queryId_example; // String | Query ID
@@ -291,7 +304,7 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -310,6 +323,8 @@ Retrieves a query by its unique identifier
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = QueriesApi();
 final queryId = queryId_example; // String | Query ID
@@ -334,7 +349,7 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -353,6 +368,8 @@ Creates a link between a query and an existing message
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = QueriesApi();
 final queryId = queryId_example; // String | Query ID
@@ -381,7 +398,7 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -400,6 +417,8 @@ Updates the response time of a specific query.
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = QueriesApi();
 final queryId = queryId_example; // String | ID of the query to update.
@@ -426,12 +445,57 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
  - **Content-Type**: application/json
  - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **apiQueriesStreamPost**
+> String apiQueriesStreamPost(apiQueriesStreamPostRequest)
+
+Stream a query response via SSE
+
+Creates a query and streams the LLM response as SSE events. Events: chunk, metadata, translation, done, error. 
+
+### Example
+```dart
+import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+
+final api_instance = QueriesApi();
+final apiQueriesStreamPostRequest = ApiQueriesStreamPostRequest(); // ApiQueriesStreamPostRequest | 
+
+try {
+    final result = api_instance.apiQueriesStreamPost(apiQueriesStreamPostRequest);
+    print(result);
+} catch (e) {
+    print('Exception when calling QueriesApi->apiQueriesStreamPost: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **apiQueriesStreamPostRequest** | [**ApiQueriesStreamPostRequest**](ApiQueriesStreamPostRequest.md)|  | 
+
+### Return type
+
+**String**
+
+### Authorization
+
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: text/event-stream, application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 

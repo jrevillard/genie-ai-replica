@@ -15,6 +15,10 @@ section: "architecture"
 3. [Trust Boundaries & Security Architecture](/docs/architecture/trust-boundaries/) —
    Authentication, JWT validation, JWKS caching, gateway header chain, and the
    security threat model.
+4. [Multilingual Architecture: the English Single Source of Truth](/docs/architecture/multilingual-ssot/) —
+   Why every pipeline stage operates in English, where translation happens
+   (corpus preprocessing, query normalization, response rendering), and why
+   the BM25 analyzer must stay English.
 
 ## Related
 

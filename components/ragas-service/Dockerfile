@@ -21,6 +21,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py ragas_engine.py xlsx_io.py ./
 
+# Run as an unprivileged user (kics Missing User Instruction — the sibling
+# okf-server/pii-service images do the same; stateless CPU sidecar).
+RUN useradd --system --create-home --uid 10001 okf && chown -R okf:okf /app
+USER okf
+
 EXPOSE 8090
 
 # /ready verifies the app (imports + client construction) so a broken

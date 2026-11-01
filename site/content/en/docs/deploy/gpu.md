@@ -103,9 +103,9 @@ docker stack deploy -c docker-compose.resolved.yaml genieai
 
 | Variable | RTX 6000 value (`env.rtx6000`) | Source file |
 |---|---|---|
-| `VLLM_GPU_UTILIZATION` | `0.6` | env.rtx6000 (overrides compose default 0.55) |
-| `VLLM_MAX_MODEL_LEN` | `4096` | env.rtx6000 (overrides compose default 65536) |
-| `VLLM_MAX_NUM_SEQS` | `1024` | env.rtx6000 (overrides compose default 16) |
+| `VLLM_GPU_UTILIZATION` | `0.55` | env.rtx6000 (overrides compose default 0.55) |
+| `VLLM_MAX_MODEL_LEN` | `65536` | env.rtx6000 (overrides compose default 65536) |
+| `VLLM_MAX_NUM_SEQS` | `16` | env.rtx6000 (overrides compose default 16) |
 | `VLLM_TRANSLATION_GPU_UTILIZATION` | `0.4` | env.rtx6000 (overrides compose default 0.3) |
 | `VLLM_TRANSLATION_MAX_MODEL_LEN` | `8192` | env.rtx6000 (overrides compose default 2048) |
 | `VLLM_TRANSLATION_MAX_NUM_SEQS` | `32` | env.rtx6000 (overrides compose default 16) |

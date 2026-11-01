@@ -59,6 +59,9 @@ the step-by-step commands an AI agent needs to execute a release.
    - Ensure all entries from step 2 are included
    - Add fresh empty `[Unreleased]` section
    - Update reference links at bottom
+   - Add a `docs/UPGRADE.md` section when the release ships breaking
+     changes — one migration entry per breaking change
+     (see the release checklist in `docs/RELEASE.md`)
    - Commit + push (via MR if required)
 
 5. **Create release branch:**
@@ -114,6 +117,8 @@ git tag vX.Y.Z && git push origin vX.Y.Z
 - **Tags always `v` prefix** — `v2.1.0` not `2.1.0`
 - **One `release/X.Y` per MINOR series** — all PATCH tags on same branch
 - **Changelog entry required for every tag** — CI validates (`config:changelog` job)
+- **`docs/UPGRADE.md` required for breaking changes** — update it in the same
+  MR as the changelog; one migration section per breaking change
 - **Pre-release tags skip `latest`** — `v2.1.0-alpha.1` does not update `latest`
 
 ## Reference

@@ -46,6 +46,7 @@
 
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
+const { isArangoNotFound } = require('./arango-errors');
 const { withSpan } = require('../shared-lib/tracing');
 const auditService = require('./audit-service');
 
@@ -199,7 +200,7 @@ async function renameGraph(repo, fromGraph, toGraph, { allowDropTarget = false }
     try {
       await db.graph(fromGraph).drop({ dropCollections: false });
     } catch (err) {
-      if (!isNotFound(err))
+      if (!isArangoNotFound(err))
         logger.warn('Graph rename: FROM definition drop failed (continuing)', {
           repo_id: repo.repo_id,
           fromGraph,
@@ -271,7 +272,7 @@ async function renameGraph(repo, fromGraph, toGraph, { allowDropTarget = false }
         }
       );
     } catch (err) {
-      if (isNotFound(err)) continue; // the edge collection may not exist yet (fresh graph)
+      if (isArangoNotFound(err)) continue; // the edge collection may not exist yet (fresh graph)
       logger.error('Graph rename: edge endpoint rewrite failed', {
         repo_id: repo.repo_id,
         edge: `${toGraph}${edgeSuffix}`,
@@ -290,16 +291,6 @@ async function renameGraph(repo, fromGraph, toGraph, { allowDropTarget = false }
   }
 
   return { renamed, skipped, dropped_target: droppedTarget };
-}
-
-function isNotFound(err) {
-  return (
-    err &&
-    (err.code === 404 ||
-      err.errorNum === 1204 ||
-      err.statusCode === 404 ||
-      /not found|no match/i.test(String(err.message || '')))
-  );
 }
 
 /**
@@ -327,7 +318,7 @@ async function dropServingGraph(graphName) {
     await db.route(`_api/gharial/${encodeURIComponent(graphName)}?dropCollections=true`).delete();
     return { dropped: true };
   } catch (err) {
-    if (isNotFound(err)) return { dropped: false };
+    if (isArangoNotFound(err)) return { dropped: false };
     throw err;
   }
 }

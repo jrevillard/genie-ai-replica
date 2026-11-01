@@ -74,7 +74,6 @@ let mockConversationFiles;
 let mockFolders;
 let mockUserFolders;
 let mockFolderConversations;
-let mockAnalyticsService;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -121,16 +120,10 @@ beforeEach(() => {
   const { dbService } = require('../../shared-lib');
   dbService.getConnection.mockResolvedValue(mockDb);
 
-  mockAnalyticsService = {
-    recordQuery: jest.fn().mockResolvedValue({}),
-    trackEvent: jest.fn().mockResolvedValue({})
-  };
-
   jest.isolateModules(() => {
     chatHistoryService = require('../../services/chat-history-service');
   });
   chatHistoryService.initialized = false;
-  chatHistoryService.setAnalyticsService(mockAnalyticsService);
 });
 
 describe('ChatHistoryService', () => {
@@ -157,14 +150,6 @@ describe('ChatHistoryService', () => {
       await chatHistoryService.init();
       const { dbService: ds } = require('../../shared-lib');
       expect(ds.getConnection).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('setAnalyticsService', () => {
-    it('should set analytics service', () => {
-      const svc = { recordQuery: jest.fn() };
-      chatHistoryService.setAnalyticsService(svc);
-      expect(chatHistoryService.analyticsService).toBe(svc);
     });
   });
 

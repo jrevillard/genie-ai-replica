@@ -47,6 +47,7 @@
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
+const { isArangoNotFound } = require('./arango-errors');
 const { DateTime } = require('luxon');
 const auditService = require('./audit-service');
 const versionService = require('./version-service');
@@ -168,6 +169,10 @@ async function sourcesBusyBlocker(repo) {
   if (sources.length === 0) return null;
   const { authedAxios } = require('./service-token');
   const docRepoConfig = require('../config');
+  // Shared doc-repo envelope unwrap — lazy like every HTTP dep here (a
+  // top-level producer-service require drags the ingest/pii client chain into
+  // partial-mock test contexts that do not carry its config).
+  const { docRepoFileOf } = require('./producer-service');
   const serving = [];
   for (const s of sources) {
     if (!s || !s.file_id) continue;
@@ -177,10 +182,10 @@ async function sourcesBusyBlocker(repo) {
         { timeout: 5000 }
       );
       // doc-repo envelopes vary ({file}, {data: {file}}, {data}) — unwrap all
-      // shapes so the gate sees the REAL dataprep.status (a misread would
-      // silently fail-open the SOURCES_NOT_RETRACTED gate).
-      const rd = res.data || {};
-      const f = rd.file || (rd.data && rd.data.file) || rd.data || rd || {};
+      // shapes (producer-service.docRepoFileOf) so the gate sees the REAL
+      // dataprep.status (a misread would silently fail-open the
+      // SOURCES_NOT_RETRACTED gate).
+      const f = docRepoFileOf(res);
       if (f.is_bundle === true) continue; // defensive: a bundle is never a source doc
       const status = String((f.dataprep && f.dataprep.status) || '')
         .toLowerCase()
@@ -220,7 +225,7 @@ async function loadRepo(db, repoId) {
   try {
     repo = await db.collection(REPOS).document(repoId);
   } catch (err) {
-    if (!(err && (err.code === 404 || err.errorNum === 1204 || err.statusCode === 404))) throw err;
+    if (!isArangoNotFound(err)) throw err;
   }
   if (!repo || repo.deleted_at) {
     throw new LifecycleError('REPO_NOT_FOUND', `Repository ${repoId} not found`, 404);

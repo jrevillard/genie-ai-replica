@@ -184,6 +184,26 @@ followed by an `INFO`-level entry (`"Cleanup complete. Document state set to Kil
 After a kill, the document is not retrievable and
 its chunks may be partially present — retract it before re-uploading.
 
+## Stuck documents recover themselves after a dataprep restart
+
+If the ingestion service restarts (deployment, crash, manual recreation) while
+a document is being ingested, the document would stay in `Ingesting` forever —
+the UI keeps the Ingest button disabled and Kill reports no active task.
+
+Since the startup-recovery feature, the ingestion service heals this itself at
+boot: it asks the document repository to release every `Ingesting` row back to
+`Pending` and writes a `WARN`-level ingestion-log entry per released document
+(`"Ingestion interrupted: the ingestion service restarted..."`). After a
+dataprep restart, an `Ingesting` document that flips to `Pending` on its own is
+this mechanism at work — simply ingest it again from the UI.
+
+Two cases are deliberately out of its scope: bundle-zip documents (the OKF
+server owns their state) and OKF concepts (reclaimed by the OKF worker's own
+timeout mechanism). A document still stuck in `Ingesting` after a dataprep
+restart with no recovery log entry means the recovery could not reach the
+document repository — check the dataprep boot logs for
+`[ recovery ]` entries.
+
 ## Recommended cadence
 
 - **Review failed ingestions** regularly — a silent `Ingestion Error` document

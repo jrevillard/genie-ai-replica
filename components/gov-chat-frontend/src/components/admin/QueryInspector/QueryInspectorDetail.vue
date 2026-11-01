@@ -32,7 +32,7 @@
           >
           <span
             ><strong>{{ translate('admin.queryInspector.mode', 'Mode') }}:</strong>
-            {{ query.contextOption || 'N/A' }}</span
+            {{ query.contextOption || translate('admin.queryInspector.notAvailable', 'N/A') }}</span
           >
         </div>
         <div class="qi-detail__box">{{ query.text }}</div>
@@ -52,12 +52,12 @@
           </p>
           <p>
             <strong>{{ translate('admin.queryInspector.category', 'Requested Category') }}:</strong>
-            {{ query.context?.categoryLabel || 'None' }}
+            {{ query.context?.categoryLabel || translate('admin.queryInspector.none', 'None') }}
           </p>
           <p>
             <strong>{{ translate('admin.queryInspector.serviceLabels', 'Requested Service Labels') }}:</strong>
             <span v-if="query.context?.serviceLabels?.length">{{ query.context.serviceLabels.join(', ') }}</span>
-            <span v-else class="qi-detail__muted">None</span>
+            <span v-else class="qi-detail__muted">{{ translate('admin.queryInspector.none', 'None') }}</span>
           </p>
           <p v-if="query.context?.language">
             <strong>{{ translate('admin.queryInspector.language', 'Language') }}:</strong> {{ query.context.language }}
@@ -140,7 +140,7 @@
           </span>
         </template>
         <div class="qi-detail__box qi-detail__box--response">
-          {{ query.response || 'No response recorded' }}
+          {{ query.response || translate('admin.queryInspector.noResponseRecorded', 'No response recorded') }}
         </div>
         <div class="qi-detail__meta" style="margin-top: var(--space-sm)">
           <span>
@@ -151,7 +151,7 @@
             >
               {{ formatConfidence(query.metadata.confidence_score) }}
             </DsPill>
-            <span v-else class="qi-detail__muted">N/A</span>
+            <span v-else class="qi-detail__muted">{{ translate('admin.queryInspector.notAvailable', 'N/A') }}</span>
           </span>
           <span v-if="query.metadata?.retrieval_confidence_score != null">
             <strong>{{ translate('admin.queryInspector.retrievalConfidenceScore', 'Retrieval Confidence') }}:</strong>
@@ -167,7 +167,9 @@
             >
               {{ formatConfidence(query.metadata.self_confidence) }}
             </DsPill>
-            <span v-else class="qi-detail__muted">N/A (no sentinel)</span>
+            <span v-else class="qi-detail__muted">{{
+              translate('admin.queryInspector.notAvailableNoSentinel', 'N/A (no sentinel)')
+            }}</span>
           </span>
         </div>
       </DsCard>
@@ -270,14 +272,16 @@ export default {
       const text = scopeDisplayText(this.query, this.translate('admin.queryInspector.unfiltered', 'Unfiltered'));
       return text === null ? this.translate('admin.queryInspector.scopeNotRecorded', 'Not recorded') : text;
     },
-    translate(key, fallback) {
-      return this.$parent?.translate?.(key, fallback) ?? fallback;
+    translate(key, fallback, named) {
+      return this.$parent?.translate?.(key, fallback, named) ?? fallback;
     },
     formatTime(ts) {
-      return ts ? new Date(ts).toLocaleString() : 'N/A';
+      return ts ? new Date(ts).toLocaleString() : this.translate('admin.queryInspector.notAvailable', 'N/A');
     },
     formatConfidence(score) {
-      return score != null ? (score * 100).toFixed(1) + '%' : 'N/A';
+      return score != null
+        ? (score * 100).toFixed(1) + '%'
+        : this.translate('admin.queryInspector.notAvailable', 'N/A');
     },
     confidenceVariant(score) {
       if (score >= 0.8) return 'success';
@@ -290,9 +294,9 @@ export default {
       return 'danger';
     },
     feedbackLabel(rating) {
-      if (rating >= 4) return 'Positive';
-      if (rating >= 3) return 'Neutral';
-      return 'Negative';
+      if (rating >= 4) return this.translate('admin.queryInspector.feedbackPositive', 'Positive');
+      if (rating >= 3) return this.translate('admin.queryInspector.feedbackNeutral', 'Neutral');
+      return this.translate('admin.queryInspector.feedbackNegative', 'Negative');
     }
   }
 };

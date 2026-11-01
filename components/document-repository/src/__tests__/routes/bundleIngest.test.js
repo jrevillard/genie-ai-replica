@@ -200,6 +200,27 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
     expect(fileService.uploadBundle).toHaveBeenCalledTimes(1);
   });
 
+  // Trailing-slash spelling (review 2026-10-29 round 3): Express non-strict
+  // routing serves `/ingest-bundle/` through the SAME route, but the app-level
+  // body-parser exemption compared req.path exactly — the big body fell to
+  // the 10mb global parser and died with 413.
+  it('should accept the trailing-slash spelling above the default 10mb cap too', async () => {
+    fileService.uploadBundle.mockResolvedValue({
+      file_id: 'slash-bundle-id',
+      file_name: 'big-repo-v1.zip',
+      storage_path: '/uploads/slash-bundle-id.zip'
+    });
+
+    const bigBody = {
+      ...validBody,
+      bundle: Buffer.alloc(11 * 1024 * 1024, 65).toString('base64') // ~14.7 MB of base64
+    };
+    const res = await request(app).post('/api/files/ingest-bundle/').send(bigBody);
+
+    expect(res.status).toBe(202);
+    expect(fileService.uploadBundle).toHaveBeenCalledTimes(1);
+  });
+
   it('should return 400 when graph_name does not match OKF_{repo_id}', async () => {
     const res = await request(app).post('/api/files/ingest-bundle').send({
       bundle: validBody.bundle,
@@ -243,6 +264,29 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
     expect(res.status).toBe(202);
     expect(res.body.graph_name).toBe('OKF_drain-probe_v1');
     expect(fileService.uploadBundle).toHaveBeenCalledTimes(1);
+  });
+
+  // repo_id contract relaxed to GET /api/files' shape (review 2026-10-29
+  // round 3): repository ids are not guaranteed UUID-shaped — the smoke uses
+  // short test IDs and some integration paths pass prefixed IDs. Only the
+  // SHAPE relaxed; the field stays required.
+  it('should ACCEPT a non-UUID repo_id (relaxed to the getFiles contract)', async () => {
+    fileService.uploadBundle.mockResolvedValue({
+      file_id: 'relaxed-repo-file-id',
+      file_name: 'concept.md',
+      storage_path: '/uploads/relaxed-repo-file-id.md'
+    });
+
+    const res = await request(app).post('/api/files/ingest-bundle').send({
+      bundle: validBody.bundle,
+      graph_name: 'OKF_repo-smoke-1_v1',
+      repo_id: 'repo-smoke-1', // short non-UUID id — was Joi.string().uuid()
+      originalFileName: 'concept.md'
+    });
+
+    expect(res.status).toBe(202);
+    const callArgs = fileService.uploadBundle.mock.calls[0][1];
+    expect(callArgs.repo_id).toBe('repo-smoke-1');
   });
 
   it('should still reject a legacy-format graph_name that does not own repo_id', async () => {
@@ -340,6 +384,33 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
     expect(res.status).toBe(202);
     await new Promise((resolve) => setImmediate(resolve));
     ingestSpy.mockRestore();
+  });
+
+  it('logs a duplicate kick (dataprep 409) at info, not as a failed ingestion', async () => {
+    // The bundle is already being ingested by the running task — that is not
+    // a failure, and the container log must not carry the same false ERROR
+    // the ingestion log no longer carries.
+    const { logger } = require('../../../shared-lib');
+    logger.info.mockClear();
+    logger.error.mockClear();
+
+    fileService.uploadBundle.mockResolvedValue({
+      file_id: 'duplicate-file-id',
+      file_name: 'concept.md',
+      storage_path: '/uploads/duplicate-file-id.md'
+    });
+    const duplicate = new Error('Request failed with status code 409');
+    duplicate.ingestAlreadyRunning = true;
+    const ingestSpy = jest.spyOn(fileController, '_ingestFileById').mockRejectedValue(duplicate);
+
+    const res = await request(app).post('/api/files/ingest-bundle').send(validBody);
+
+    expect(res.status).toBe(202);
+    await new Promise((resolve) => setImmediate(resolve));
+    ingestSpy.mockRestore();
+
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('duplicate-file-id'));
   });
 
   it('is_bundle=true stores the ZIP as a file doc at 201, NO dataprep kick (Story 2.9.5-amend)', async () => {

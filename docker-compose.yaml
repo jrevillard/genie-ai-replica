@@ -553,9 +553,13 @@ services:
       # not the internal Docker URL, so the issuer matches the JWT's iss claim.
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       # Split-URL OIDC: KEYCLOAK_PUBLIC_URL aliases the browser-facing issuer to
-      # the same JWKS when discovery is fetched via a different (internal) URL.
-      # No-op when unset (cloud) — mirrors the okf-server block.
+      # the same JWKS when discovery is fetched via a different (internal) URL;
+      # KEYCLOAK_JWKS_URL pins the JWKS fetch host; KEYCLOAK_BROWSER_ISSUER adds
+      # a second accepted issuer alongside it. No-op when unset (cloud) —
+      # mirrors the okf-server block.
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
+      - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
+      - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
       - KEYCLOAK_REALM=${KEYCLOAK_REALM:-genie}
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       # Additional Keycloak realms for multi-realm token validation (JSON map: {"realm":"client-id"})
@@ -580,7 +584,8 @@ services:
       # GPU translation endpoint is mandatory or one candidate among two. Without
       # it the backend cannot tell a remote GPU node from the in-cluster worker,
       # and would quietly fall back to CPU whenever a configured endpoint stops
-      # answering. chatqna, retriever and dataprep already receive it.
+      # answering. The backend is its only reader: the Python services discover
+      # their model id and endpoints at runtime.
       - GPU_NODE_HOST=${GPU_NODE_HOST:-}
       # Backend preference. `auto` (default) probes once and commits; `cpu` and
       # `gpu` skip the probe. Ignored when a GPU API is configured — see above.
@@ -668,6 +673,10 @@ services:
     # surfaces. Same variable gates all four (env template documents it).
     profiles: ["okf"]
     logging: *fluent-logging
+    # Harden: no privilege escalation from the container — the file's
+    # convention (37 existing services set it; kics Security Opt Not Set).
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       keycloak-config:
         condition: service_healthy
@@ -695,9 +704,13 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       - SERVICE_NAME=genie-okf-server
       - NODE_ENV=production
-      # Split-URL OIDC: KEYCLOAK_PUBLIC_URL aliases the browser-facing issuer to the same JWKS.
-      # No-op in cloud (equals KEYCLOAK_URL); active where internal/public issuers differ (local build).
+      # Split-URL OIDC: KEYCLOAK_PUBLIC_URL aliases the browser-facing issuer to the same JWKS;
+      # KEYCLOAK_JWKS_URL pins the JWKS fetch host; KEYCLOAK_BROWSER_ISSUER adds a second accepted
+      # issuer alongside it. No-op in cloud (equals KEYCLOAK_URL); active where internal/public
+      # issuers differ (local build).
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
+      - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
+      - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
       # Service-account mints (okf-server → doc-repo/dataprep) are server-to-server:
       # prefer the container-reachable INTERNAL Keycloak; the browser-facing public
       # alias stays only a late fallback. Mirrors the dataprep block.
@@ -711,7 +724,11 @@ services:
       # it every default-judged run recorded judge {model: null} while the
       # sidecar judged with the env model (2026-10-21 review F10).
       - RAGAS_JUDGE_BASE_URL=${RAGAS_JUDGE_BASE_URL:-http://vllm:8000/v1}
-      - RAGAS_JUDGE_MODEL=${RAGAS_JUDGE_MODEL:-${VLLM_LLM_MODEL_ID:-}}
+      # NO model default here: the deployment's model name must never be
+      # sent to a judge base that serves another model. Unset = the served
+      # model is DISCOVERED on the judge base (the !631 policy); the pin
+      # applies only when the judge base IS the deployment endpoint (#1181).
+      - RAGAS_JUDGE_MODEL=${RAGAS_JUDGE_MODEL:-}
       # ArangoDB — same database as the graphs (ADR-okf-018); direct arangojs, no ORM.
       - ARANGO_URL=${ARANGO_URL:-http://arango-vector-db:8529}
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
@@ -755,9 +772,12 @@ services:
       # its deep chunks embedded against a description of its start (the
       # Contextual Retrieval document context is truncated to the same budget),
       # so imports split such a document rather than storing it degraded.
-      # The default is sized for the 65536-token compose window (~250k chars);
-      # it must track VLLM_MAX_MODEL_LEN, which dataprep derives the matching
-      # budget from. AC8 in tests/config-validator keeps the two in step.
+      # The default is sized for the 65536-token compose window (~250k chars).
+      # It is a STATIC literal, while dataprep's document-context budget now
+      # follows the window the endpoint serves at runtime (discovered at
+      # VLLM_ENDPOINT) — so the two must be kept in step BY HAND when the
+      # served window changes. AC8 in tests/config-validator only checks that
+      # compose and env.j2 agree on the literal.
       - OKF_MAX_CONCEPT_DOC_CHARS=${OKF_MAX_CONCEPT_DOC_CHARS:-250000}
       # Lane cool-down after a dataprep 429 (slot busy): without it a saturated
       # queue hot-loops at ~1 claim/sec (incident 2026-09-28 — 434 rows bouncing
@@ -769,8 +789,29 @@ services:
       # a deployment opts IN by setting VLLM_ENDPOINT + VLLM_API_KEY and a
       # guided-JSON-capable chat model (VLLM_LLM_MODEL_ID preferred).
       - VLLM_ENDPOINT=${VLLM_ENDPOINT:-}
-      - VLLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-${VLLM_MODEL_ID:-}}
+      # The pin spellings pass through RAW — envPin() (vllm-model-cache.js)
+      # owns the precedence (VLLM_LLM_MODEL_ID first). A raw VLLM_MODEL_ID
+      # is the escape hatch for a deployment whose OKF legs talk to ANOTHER
+      # server (a proxy whose /v1/models is not readable): it wins only
+      # while VLLM_LLM_MODEL_ID is unset and must name a model the CALLED
+      # endpoint serves (#1181).
+      - VLLM_MODEL_ID=${VLLM_MODEL_ID:-}
+      # The LLM spelling reaches okf-server too (#1181): the serve-mode
+      # fidelity label mirrors chatqna's pin precedence, and chatqna only
+      # ever receives THIS spelling.
+      - VLLM_LLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-}
       - VLLM_API_KEY=${VLLM_API_KEY:-}
+      # Discovery knobs (#1181) — the same names and defaults as the OPEA
+      # blocks, so one .env line tunes both worlds. The TTL is the model-id
+      # cache window; the probe timeout bounds the /v1/models probe (raise
+      # it when vLLM is still loading weights — see the dataprep block).
+      - MODEL_DETECT_TTL=${MODEL_DETECT_TTL:-60}
+      - MODEL_PROBE_TIMEOUT_SECONDS=${MODEL_PROBE_TIMEOUT_SECONDS:-10}
+      # Judge key: EXPLICIT only (no VLLM_API_KEY default here — the
+      # deployment bearer must not be manufactured for a judge base the
+      # operator may point anywhere; the service only sends it when the
+      # judge base IS the deployment endpoint).
+      - RAGAS_JUDGE_API_KEY=${RAGAS_JUDGE_API_KEY:-}
       # Model-endpoint externalization (David 2026-10-08: all OKF env vars
       # live in .env with documented defaults — compose is only the pipe).
       # TEI embed base for tag embedding + vectorized-head build + the
@@ -930,7 +971,6 @@ services:
       - OKF_RETRIEVAL_CANDIDATE_CAP_GLOBAL=${OKF_RETRIEVAL_CANDIDATE_CAP_GLOBAL:-200}
       # --- frontmatter (frontmatter-service / retrieval-config-service) ---
       - OKF_FRONTMATTER_VALIDATE_BATCH_SIZE=${OKF_FRONTMATTER_VALIDATE_BATCH_SIZE:-4}
-      - OKF_FRONTMATTER_SUMMARY_TTL_MS=${OKF_FRONTMATTER_SUMMARY_TTL_MS:-60000}
       # --- ingest settle lease (lifecycle-service) ---
       - OKF_SETTLE_LEASE_MS=${OKF_SETTLE_LEASE_MS:-600000}
     networks:
@@ -949,6 +989,9 @@ services:
     # OKF feature flag: parked with the okf-server (see okf-server block).
     profiles: ["okf"]
     logging: *fluent-logging
+    # Harden: no privilege escalation (same convention; kics Security Opt Not Set).
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
     environment:
       # uvicorn worker processes (GIL-bound NER needs processes, not threads;
@@ -998,6 +1041,10 @@ services:
     # OKF feature flag: parked with the okf-server (see okf-server block).
     profiles: ["okf"]
     logging: *fluent-logging
+    # Harden: no privilege escalation from the container — the file's
+    # convention (kics Security Opt Not Set).
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
     environment:
       # Shared secret with okf-server (fail-closed when unset). Defaults to
@@ -1110,8 +1157,12 @@ services:
       - ARANGO_URL=http://arango-vector-db:8529
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       # Split-URL OIDC: KEYCLOAK_PUBLIC_URL overrides the expected issuer when
-      # JWKS is fetched via a different (internal) URL. No-op when unset (cloud).
+      # JWKS is fetched via a different (internal) URL; KEYCLOAK_JWKS_URL pins
+      # the JWKS fetch host; KEYCLOAK_BROWSER_ISSUER adds another accepted
+      # issuer alongside it. No-op when unset (cloud).
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
+      - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-}
+      - KEYCLOAK_BROWSER_ISSUER=${KEYCLOAK_BROWSER_ISSUER:-}
       - KC_REALM=${KEYCLOAK_REALM:-genie}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -1264,7 +1315,7 @@ services:
     logging: *fluent-logging
     profiles: [gpu-models]
     restart: unless-stopped
-    image: vllm/vllm-openai:v0.10.0
+    image: vllm/vllm-openai:v0.29.0
     # Swarm: internal only - access via Kong or docker exec
     # ports:
     #   - "${LLM_SERVER_PORT:-8000}:8000"
@@ -1273,7 +1324,7 @@ services:
       --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}
       --served-model-name ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
       --max_model_len ${VLLM_MAX_MODEL_LEN:-65536}
-      --max_num_seqs ${VLLM_MAX_NUM_SEQS:-64}
+      --max_num_seqs ${VLLM_MAX_NUM_SEQS:-16}
       --dtype=${VLLM_DTYPE:-half}
       --enforce-eager
     environment:
@@ -1347,7 +1398,7 @@ services:
     logging: *fluent-logging
     profiles: [gpu-models]
     restart: unless-stopped
-    image: vllm/vllm-openai:v0.10.0
+    image: vllm/vllm-openai:v0.29.0
     # Internal only
     # ports:
     #   - "${VLLM_TRANSLATION_SERVICE_PORT:-9031}:${VLLM_TRANSLATION_SERVICE_PORT:-9031}"
@@ -1653,7 +1704,16 @@ services:
     #   - "5000:5000"
     environment:
       DATAPREP_COMPONENT_NAME: GENIE_DATAPREP_ARANGODB
-      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      # Empty by default: the served model id is DISCOVERED per ingestion job.
+      # Services start immediately. Branches while vLLM is still loading:
+      # - unpinned, never-probed service: the job FAILS LOUDLY and is rolled
+      #   back ("Ingestion Error") — the exception is a stale cached id from
+      #   an earlier successful probe, which then degrades instead;
+      # - pinned: the job survives on degraded file-level labels, and graph
+      #   extraction fails silently — the document stores NO retrievable
+      #   chunks ("Ingested with Warnings"). Neither outcome is re-computed
+      #   later. Wait for vLLM health before bulk ingesting.
+      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-}
       VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://vllm:8000}
       # Two names, two consumers, and they are NOT the same knob.
       #
@@ -1669,11 +1729,12 @@ services:
       # Single attempt, no retry: 300 s is what aiohttp applied anyway.
       MODEL_AUTH_TIMEOUT_SECONDS: ${MODEL_AUTH_TIMEOUT_SECONDS:-300}
       MODEL_CONNECT_TIMEOUT_SECONDS: ${MODEL_CONNECT_TIMEOUT_SECONDS:-30}
-      # The model-id probe behind the TTL cache. Degrades to the configured
-      # model id, so 10 s suits a warm endpoint — but a vLLM still loading
-      # weights answers in minutes, and the fallback then silently picks the
-      # configured id instead of the served one.
+      # The model-id probe behind the TTL cache. 10 s suits a warm endpoint —
+      # a vLLM still loading weights answers in minutes, and jobs running in
+      # that window fail their LLM step loudly (labeling falls back to
+      # file-level labels; there is no configured-id fallback anymore).
       MODEL_PROBE_TIMEOUT_SECONDS: ${MODEL_PROBE_TIMEOUT_SECONDS:-10}
+      MODEL_DETECT_TTL: ${MODEL_DETECT_TTL:-60}
       #
       # VLLM_TIMEOUT is deliberately NOT injected here, even though the vendored
       # comps reads it: OpeaArangoDataprep builds its LLMGraphTransformer with
@@ -1689,7 +1750,6 @@ services:
       # before this policy, and the right value for a phase with no degradation
       # path. Binding it differently needs a patch to the vendored source,
       # tracked in genie-ai-overlay/OVERRIDES.yaml, not a compose line.
-      GPU_NODE_HOST: ${GPU_NODE_HOST:-}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
       ARANGO_URL: http://arango-vector-db:8529
@@ -1697,6 +1757,21 @@ services:
       ARANGO_GRAPH_NAME: ${ARANGO_GRAPH_NAME:-GRAPH}
       ARANGO_USERNAME: ${ARANGO_USERNAME:-root}
       ARANGO_PASSWORD: ${ARANGO_PASSWORD}
+      # IVF lists probed per vector query — sets `defaultNProbe` on the
+      # `vector_index` this service maintains (recreated on drift at the next
+      # ingest). Default 1 = the legacy langchain-arangodb behavior. Only
+      # read by the ANN query path: with the default
+      # RETRIEVER_ARANGO_USE_APPROX_SEARCH=false, exact search ignores it —
+      # raising this without approx search costs a full index rebuild for a
+      # no-op.
+      RETRIEVER_ARANGO_NPROBE: ${RETRIEVER_ARANGO_NPROBE:-1}
+      # Index shape this service maintains via ensure_vector_index(): metric
+      # and nLists of the `vector_index` (recreated on drift at the next
+      # ingest). Must match the retriever-side values — a mismatch makes the
+      # drift check drop the operator-tuned index and recreate it at these
+      # defaults on every ingest.
+      RETRIEVER_ARANGO_DISTANCE_STRATEGY: ${RETRIEVER_ARANGO_DISTANCE_STRATEGY:-COSINE}
+      RETRIEVER_ARANGO_NUM_CENTROIDS: ${RETRIEVER_ARANGO_NUM_CENTROIDS:-1}
       DOCUMENT_REPOSITORY_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
       # Story 4.8-amend: content-only chunking — OKF concept completion callbacks
@@ -1726,6 +1801,14 @@ services:
       # 1 = the historical single-flight. Pair with okf-server's
       # OKF_INGEST_CONCURRENCY drain lanes.
       DATAPREP_INGEST_CONCURRENCY: ${DATAPREP_INGEST_CONCURRENCY:-1}
+      # STUCK-INGEST RECOVERY: the boot-time release of rows left 'Ingesting'
+      # by a previous crash. A doc-repo unreachable longer than
+      # attempts × seconds skips the recovery until the NEXT dataprep
+      # restart — raise the window when doc-repo boots slower than that.
+      # 0 attempts = recovery DISABLED (rows stay stuck until the next
+      # restart with a fresh setting).
+      DATAPREP_RECOVERY_MAX_ATTEMPTS: ${DATAPREP_RECOVERY_MAX_ATTEMPTS:-30}
+      DATAPREP_RECOVERY_RETRY_SECONDS: ${DATAPREP_RECOVERY_RETRY_SECONDS:-10}
       # REMOTE-LLM RESILIENCE (David, 2026-09-09): the remote vLLM gateway
       # throws transient 502/503/504 storms — dataprep absorbs them with a
       # per-call retry ladder + shared storm cool-down + one failed-batch
@@ -1751,16 +1834,17 @@ services:
       LABEL_SELECTOR_SYSTEM_PROMPT: ${LABEL_SELECTOR_SYSTEM_PROMPT:-}
       CONTEXTUAL_RETRIEVAL_ENABLED: ${CONTEXTUAL_RETRIEVAL_ENABLED:-true}
       DATAPREP_CONTEXTUAL_MODEL: ${DATAPREP_CONTEXTUAL_MODEL:-}
-      # 0 = derive from VLLM_MAX_MODEL_LEN (see genieai_dataprep_arangodb.py).
-      # The old literal default of 6000 was sized for the T4 profile's
-      # 2048-token window and applied to every deployment, including the
-      # default 65536-token one where it used ~4% of the available window.
+      # 0 = derive from the serving model's window, discovered at runtime from
+      # VLLM_ENDPOINT (see genieai_dataprep_arangodb.py). The old literal
+      # default of 6000 was sized for the T4 profile's 2048-token window and
+      # applied to every deployment, including the default 65536-token one
+      # where it used ~4% of the available window.
       DATAPREP_CONTEXTUAL_DOC_BUDGET: ${DATAPREP_CONTEXTUAL_DOC_BUDGET:-0}
+      # 0 = discover the served window at runtime. >0 = the deployer states
+      # the window the endpoint serves — the only lever on a strict
+      # OpenAI-compatible provider (its /v1/models carries no max_model_len).
+      DATAPREP_MAX_MODEL_LEN: ${DATAPREP_MAX_MODEL_LEN:-0}
       DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL: ${DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL:-100000}
-      # Read by dataprep to size the doc-context budget above. Only the vLLM
-      # service's command interpolation used this before, so dataprep could not
-      # derive anything and every profile inherited the fixed literal.
-      VLLM_MAX_MODEL_LEN: ${VLLM_MAX_MODEL_LEN:-65536}
       DATAPREP_CONTEXTUAL_MAX_TOKENS: ${DATAPREP_CONTEXTUAL_MAX_TOKENS:-512}
       CONTEXTUAL_RETRIEVAL_PROMPT: ${CONTEXTUAL_RETRIEVAL_PROMPT:-}
       # Log level threshold for the OTel Python LoggingHandler installed in
@@ -1893,7 +1977,7 @@ services:
       RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH: ${RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH:-2}
       RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED: ${RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED:-5}
       RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD: ${RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD:-0.7}
-      RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES: ${RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES:-1}
+      RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES: ${RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES:-10}
       # 1-8g-l — traversal bounds: skip the graph traversal above this many
       # <GRAPH>_LINKS_TO edges (the fused vector results stand alone) and cap
       # per-hop edge visits inside the AQL. Live: Indonesia History (1.05M
@@ -1902,6 +1986,11 @@ services:
       RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE: ${RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE:-2000}
       # AI services endpoints
       VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://vllm:8000}
+      # Empty by default: the summarizer's model id is DISCOVERED per call.
+      # With RETRIEVER_SUMMARIZER_ENABLED=false (the shipped default) the
+      # service starts immediately with summarization disabled. Set
+      # VLLM_LLM_MODEL_ID to pin a name and skip discovery.
+      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
       HF_TOKEN: ${VLLM_API_KEY:-}
       VLLM_API_KEY: ${VLLM_API_KEY:-}
@@ -1910,7 +1999,6 @@ services:
       ENABLE_OBSERVABILITY: ${ENABLE_OBSERVABILITY:-0}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
 
-      GPU_NODE_HOST: ${GPU_NODE_HOST:-}
       # Shared model-endpoint HTTP budgets (core/model_http_policy.py).
       # Only the shared name is injected here. VLLM_TIMEOUT is the retriever's
       # historical alias for the same budget (config.py resolves one to the
@@ -1921,6 +2009,7 @@ services:
       # image.
       MODEL_LLM_TIMEOUT_SECONDS: ${MODEL_LLM_TIMEOUT_SECONDS:-180}
       MODEL_PROBE_TIMEOUT_SECONDS: ${MODEL_PROBE_TIMEOUT_SECONDS:-10}
+      MODEL_DETECT_TTL: ${MODEL_DETECT_TTL:-60}
       MODEL_LLM_MAX_RETRIES: ${MODEL_LLM_MAX_RETRIES:-2}
       MODEL_EMBEDDING_TIMEOUT_SECONDS: ${MODEL_EMBEDDING_TIMEOUT_SECONDS:-600}
       # 600 is a NEW ceiling, not the openai default kept — langchain-openai
@@ -1979,9 +2068,11 @@ services:
       MODEL_CONTROL_PLANE_TIMEOUT_SECONDS: ${MODEL_CONTROL_PLANE_TIMEOUT_SECONDS:-30}
       MODEL_CONNECT_TIMEOUT_SECONDS: ${MODEL_CONNECT_TIMEOUT_SECONDS:-30}
       # The model-id probe behind the TTL cache, shared with the retriever and
-      # dataprep. Same knob, same 10 s: a failure degrades to the configured
-      # model id rather than propagating.
+      # dataprep (same knob, same 10 s; the failure consequences differ — see
+      # their blocks). Here, with no pinned name, a probe failure propagates:
+      # the request fails closed (503) until the endpoint answers.
       MODEL_PROBE_TIMEOUT_SECONDS: ${MODEL_PROBE_TIMEOUT_SECONDS:-10}
+      MODEL_DETECT_TTL: ${MODEL_DETECT_TTL:-60}
       MEGA_SERVICE_HOST_IP: chatqna-xeon-backend-server
       LOG_LEVEL: ${LOG_LEVEL:-info}
       EMBEDDING_SERVER_HOST_IP: embedding
@@ -2019,7 +2110,10 @@ services:
       LLM_SERVER_PORT: 8000
       VLLM_LLM_ENDPOINT: ${VLLM_ENDPOINT:-}
       VLLM_TRANSLATION_ENDPOINT: ${VLLM_TRANSLATION_ENDPOINT:-}
-      GPU_NODE_HOST: ${GPU_NODE_HOST:-}
+      # Escape hatch for endpoints whose /v1/models is unreachable while
+      # generation works (ACL'd proxies): empty by default, so discovery
+      # stays the source of truth; a pinned name bypasses the probe.
+      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-}
       GUARDRAIL_SERVICE_HOST_IP: guardrail
       GUARDRAIL_SERVICE_PORT: 9090
       TRANSLATION_SERVICE_HOST_IP: vllm-translation-guardrail

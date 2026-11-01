@@ -5,7 +5,6 @@ import contextlib
 import copy
 import json
 from datetime import date
-from enum import Enum
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -28,16 +27,18 @@ from chatqna.genieai_chatqna import (
     align_outputs,
 )
 from core import embedding_query_prefix as core_query_prefix
+from tests.conftest import FakeServiceType, create_mock_service_node
 
 
-# ---------------------------------------------------------------------------
-# FakeServiceType — real enum for align_inputs/align_outputs comparisons
-# ---------------------------------------------------------------------------
-class FakeServiceType(Enum):
-    EMBEDDING = "embedding"
-    RETRIEVER = "retriever"
-    RERANK = "rerank"
-    LLM = "llm"
+@pytest.fixture(autouse=True)
+def _translation_count_capability_available():
+    """The translation server's counting capability is module state: every
+    test starts with the count available, so a test that makes the server
+    unable to count does not leak that into the next one."""
+    original = chatqna_module._TRANSLATION_COUNT_UNAVAILABLE
+    chatqna_module._TRANSLATION_COUNT_UNAVAILABLE = False
+    yield
+    chatqna_module._TRANSLATION_COUNT_UNAVAILABLE = original
 
 
 # ---------------------------------------------------------------------------
@@ -142,13 +143,6 @@ def create_mock_runtime_graph(downstream_nodes=None):
     graph = MagicMock()
     graph.downstream.return_value = downstream_nodes or []
     return graph
-
-
-def create_mock_service_node(service_type_value):
-    """Create a mock service node with a real service_type attribute."""
-    node = MagicMock()
-    node.service_type = service_type_value
-    return node
 
 
 def create_mock_tokenizer(token_counts):
@@ -597,14 +591,14 @@ class TestAlignInputs:
 
     # --- LLM ---
     class TestLlmInput:
-        def test_constructs_system_and_user_messages(self):
+        def test_constructs_system_and_user_messages(self, count_patch):
             self_mock = MagicMock()
             self_mock.services = {"llm_node": create_mock_service_node(FakeServiceType.LLM)}
             llm_params = {"max_tokens": 1024, "top_p": 0.9}
             inputs = {"inputs": "context text", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=create_mock_tokenizer({})),
+                count_patch(create_mock_tokenizer({})),
             ):
                 result = align_inputs(self_mock, inputs, "llm_node", MagicMock(), llm_params)
             assert "messages" in result
@@ -612,7 +606,7 @@ class TestAlignInputs:
             assert result["messages"][1]["role"] == "user"
             assert result["max_tokens"] == 1024
 
-        def test_token_limit_truncation(self):
+        def test_token_limit_truncation(self, count_patch):
             self_mock = MagicMock()
             self_mock.services = {"llm_node": create_mock_service_node(FakeServiceType.LLM)}
             llm_params = {"max_tokens": 1024, "top_p": 0.9}
@@ -627,8 +621,7 @@ class TestAlignInputs:
             mock_tok = create_mock_tokenizer({"system": 200, "USER": 100})
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=mock_tok),
-                patch("chatqna.genieai_chatqna._GPU_NODE_HOST", ""),
+                count_patch(mock_tok),
                 patch("chatqna.genieai_chatqna.MAX_MODEL_LEN_TEXTGEN", 600),
             ):
                 result = align_inputs(
@@ -645,7 +638,7 @@ class TestAlignInputs:
             assert "msg1" not in user_msg  # truncated away
             assert "rag prompt" in user_msg  # content preserved
 
-        def test_history_survives_prompt_that_fits_discovered_window(self):
+        def test_history_survives_prompt_that_fits_discovered_window(self, count_patch):
             """Prompt (~8k tokens) + answer fit the real 65536-token window discovered
             from /v1/models → the guard must not touch the chat history.
 
@@ -663,7 +656,7 @@ class TestAlignInputs:
             models_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 65536}]}
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=counting_tok),
+                count_patch(counting_tok),
                 patch("chatqna.genieai_chatqna._LLM_DISCOVERY_ENDPOINT", "https://gpu-host/llm"),
                 patch("httpx.get", return_value=models_resp),
             ):
@@ -674,7 +667,7 @@ class TestAlignInputs:
             assert "HISTTOK" in user_msg  # history intact
             assert "RAGTOK" in user_msg  # KB content preserved
 
-        def test_history_wiped_only_when_budget_truly_exhausted_and_reported(self):
+        def test_history_wiped_only_when_budget_truly_exhausted_and_reported(self, count_patch):
             """When prompt+answer genuinely exhaust the window, history is dropped —
             and the drop is reported through the truncation counter."""
             self_mock = MagicMock()
@@ -688,7 +681,7 @@ class TestAlignInputs:
             models_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 65536}]}
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=counting_tok),
+                count_patch(counting_tok),
                 patch("chatqna.genieai_chatqna._LLM_DISCOVERY_ENDPOINT", "https://gpu-host/llm"),
                 patch("httpx.get", return_value=models_resp),
                 patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
@@ -703,7 +696,7 @@ class TestAlignInputs:
             # Counts stay in the warning log; metric attributes stay low-cardinality.
             assert mock_counter.add.call_args.args[1] == {"path": "generation"}
 
-        def test_no_truncation_no_truncation_metric(self):
+        def test_no_truncation_no_truncation_metric(self, count_patch):
             """A prompt well inside the window never increments the truncation counter."""
             self_mock = MagicMock()
             self_mock.services = {"llm_node": create_mock_service_node(FakeServiceType.LLM)}
@@ -713,7 +706,7 @@ class TestAlignInputs:
             mock_tok = create_mock_tokenizer({"rag prompt": 100})
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=mock_tok),
+                count_patch(mock_tok),
                 patch("chatqna.genieai_chatqna._LLM_DISCOVERY_ENDPOINT", "https://gpu-host/llm"),
                 patch(
                     "httpx.get", return_value=MagicMock(json=lambda: {"data": [{"id": "m", "max_model_len": 65536}]})
@@ -727,7 +720,7 @@ class TestAlignInputs:
             assert "msg1" in user_msg
             mock_counter.add.assert_not_called()
 
-        def test_large_system_prompt_shrinks_history_budget(self):
+        def test_large_system_prompt_shrinks_history_budget(self, count_patch):
             """The system prompt consumes the history budget: with a 1000-token
             system prompt the oldest segment no longer fits and is dropped."""
 
@@ -749,8 +742,7 @@ class TestAlignInputs:
             # kept all three.
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_Tok()),
-                patch("chatqna.genieai_chatqna._GPU_NODE_HOST", ""),
+                count_patch(_Tok()),
                 patch("chatqna.genieai_chatqna.CHATQNA_SYSTEM_PROMPT", "SYSTOK"),
                 patch("chatqna.genieai_chatqna.MAX_MODEL_LEN_TEXTGEN", 4096),
                 patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
@@ -764,7 +756,7 @@ class TestAlignInputs:
             assert "HISTTOK-old" not in user_msg  # oldest dropped
             assert mock_counter.add.call_args.args[1] == {"path": "generation"}
 
-        def test_system_and_content_alone_over_window_wipes_history(self):
+        def test_system_and_content_alone_over_window_wipes_history(self, count_patch):
             """System prompt + RAG content alone overflow the window: the history
             budget goes negative and every segment is dropped and reported."""
 
@@ -784,8 +776,7 @@ class TestAlignInputs:
             # budget = 4096 − 3000 − 1024 − 500 − 200 < 0 → wipe.
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_Tok()),
-                patch("chatqna.genieai_chatqna._GPU_NODE_HOST", ""),
+                count_patch(_Tok()),
                 patch("chatqna.genieai_chatqna.CHATQNA_SYSTEM_PROMPT", "SYSTOK SYSTOK SYSTOK"),
                 patch("chatqna.genieai_chatqna.MAX_MODEL_LEN_TEXTGEN", 4096),
                 patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
@@ -798,7 +789,7 @@ class TestAlignInputs:
             assert "RAGTOK" in user_msg  # KB content preserved
             assert mock_counter.add.call_args.args[1] == {"path": "generation"}
 
-        def test_empty_history_never_reports_truncation(self):
+        def test_empty_history_never_reports_truncation(self, count_patch):
             """First turn (no history) with an overflowing prompt: nothing can be
             dropped, so no warning and no counter event."""
 
@@ -813,8 +804,7 @@ class TestAlignInputs:
 
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-                patch("chatqna.genieai_chatqna.get_tokenizer", return_value=_Tok()),
-                patch("chatqna.genieai_chatqna._GPU_NODE_HOST", ""),
+                count_patch(_Tok()),
                 patch("chatqna.genieai_chatqna.CHATQNA_SYSTEM_PROMPT", "SYSTOK SYSTOK SYSTOK"),
                 patch("chatqna.genieai_chatqna.MAX_MODEL_LEN_TEXTGEN", 4096),
                 patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
@@ -899,7 +889,7 @@ class TestAlignInputsBundledDict:
 
             mock_contract = sys.modules["core.label_contract"]
             mock_contract.encode.return_value = "chunk::graphs:GRAPH,OKF_a_v1::sticky:OKF_a_v1"
-            result = align_inputs(
+            align_inputs(
                 self_mock,
                 inputs,
                 "retriever_node",
@@ -912,7 +902,8 @@ class TestAlignInputsBundledDict:
                     }
                 },
             )
-        assert result["search_start"] == "chunk::graphs:GRAPH,OKF_a_v1::sticky:OKF_a_v1"
+        # The encoded-string echo of mock_contract.encode.return_value proves
+        # nothing (the mock supplies it); the kwarg plumbing is the contract.
         mock_contract.encode.assert_called_once_with(
             "chunk", labels=[], graphs=["GRAPH", "OKF_a_v1"], sticky=["OKF_a_v1"]
         )
@@ -932,7 +923,7 @@ class TestAlignInputsBundledDict:
 
             mock_contract = sys.modules["core.label_contract"]
             mock_contract.encode.return_value = "chunk::graphs:GRAPH,OKF_a_v1"
-            result = align_inputs(
+            align_inputs(
                 self_mock,
                 inputs,
                 "retriever_node",
@@ -940,8 +931,36 @@ class TestAlignInputsBundledDict:
                 llm_params,
                 genie_params={"retrieval_context": {"authorized_graph_names": ["GRAPH", "OKF_a_v1"]}},
             )
-        assert result["search_start"] == "chunk::graphs:GRAPH,OKF_a_v1"
         mock_contract.encode.assert_called_once_with("chunk", labels=[], graphs=["GRAPH", "OKF_a_v1"])
+
+    def test_retriever_carrier_sticky_only_encodes(self):
+        """DW-430 (review 2026-10-29 round 3): a sticky-only carrier — sticky
+        set, labels/graphs/no_legacy all empty — must reach encode with the
+        ::sticky: segment. The dispatch previously matched NEITHER branch, so
+        the continuity set was silently dropped from search_start (only the
+        retriever-side sticky⊆authorized invariant saved it from fanning
+        out)."""
+        self_mock = MagicMock()
+        self_mock.services = {"retriever_node": create_mock_service_node(FakeServiceType.RETRIEVER)}
+        llm_params = {}
+        inputs = {"text": "query", "search_start": "chunk"}
+        with (
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+            patch.dict("sys.modules", {"core.label_contract": MagicMock()}),
+        ):
+            import sys
+
+            mock_contract = sys.modules["core.label_contract"]
+            mock_contract.encode.return_value = "chunk::sticky:OKF_a_v1"
+            align_inputs(
+                self_mock,
+                inputs,
+                "retriever_node",
+                MagicMock(),
+                llm_params,
+                genie_params={"retrieval_context": {"sticky_graph_names": ["OKF_a_v1"]}},
+            )
+        mock_contract.encode.assert_called_once_with("chunk", labels=[], graphs=[], sticky=["OKF_a_v1"])
 
     def test_rerank_extracts_reranker_parameters_from_dict(self):
         """RERANK branch reads reranker_parameters from genie_params dict."""
@@ -970,9 +989,8 @@ class TestAlignInputsBundledDict:
         inputs = {"inputs": "rag prompt", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
         with (
             patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-            patch("chatqna.genieai_chatqna.get_tokenizer") as mock_tokenizer,
+            patch("chatqna.genieai_chatqna._count_tokens", return_value=0),
         ):
-            mock_tokenizer.return_value.encode.return_value = []
             result = align_inputs(
                 self_mock,
                 inputs,
@@ -991,10 +1009,9 @@ class TestAlignInputsBundledDict:
         inputs = {"inputs": "rag prompt", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
         with (
             patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-            patch("chatqna.genieai_chatqna.get_tokenizer") as mock_tokenizer,
+            patch("chatqna.genieai_chatqna._count_tokens", return_value=0),
             patch("chatqna.genieai_chatqna.UserContextBuilder") as mock_builder,
         ):
-            mock_tokenizer.return_value.encode.return_value = []
             mock_builder.return_value.build_user_context_string.return_value = "user context"
             result = align_inputs(
                 self_mock,
@@ -1014,9 +1031,8 @@ class TestAlignInputsBundledDict:
         inputs = {"inputs": "rag prompt", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
         with (
             patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
-            patch("chatqna.genieai_chatqna.get_tokenizer") as mock_tokenizer,
+            patch("chatqna.genieai_chatqna._count_tokens", return_value=0),
         ):
-            mock_tokenizer.return_value.encode.return_value = []
             result = align_inputs(
                 self_mock,
                 inputs,
@@ -1900,14 +1916,11 @@ class TestTranslationHelpers:
         assert "Hello" in prompt
         assert "French" in prompt
 
-    def test_read_language_codes_success(self, tmp_path):
-        lang_file = tmp_path / "codes.json"
-        lang_file.write_text('{"en": "English", "fr": "French"}')
-        result = chatqna_module._read_language_codes(str(lang_file))
-        assert result == {"en": "English", "fr": "French"}
-
-    def test_read_language_codes_file_error(self):
-        result = chatqna_module._read_language_codes("/nonexistent/path.json")
+    def test_read_language_registry_file_error(self):
+        # The well-formed/ malformed parse cases live with the language
+        # boundary suite (TestLanguageMapShape); this pins the missing-file
+        # path it does not cover.
+        result = chatqna_module._read_language_registry("/nonexistent/path.json")
         assert result == {}
 
     def test_split_text_into_chunks_short_text(self):
@@ -2033,9 +2046,10 @@ class TestTranslationHelpers:
 
     @pytest.mark.asyncio
     async def test_translategemma_output_cap_fits_discovered_window(self):
-        """The TranslateGemma payload's max_tokens is clamped so prompt estimate +
-        completion cannot exceed the discovered window (else vLLM rejects the
-        whole request and the history goes back untranslated)."""
+        """The TranslateGemma payload's max_tokens is measured against the
+        discovered window, so prompt + completion cannot exceed it (else the
+        server rejects the whole request and the history goes back
+        untranslated)."""
         svc = create_chatqna_service()
         history = [
             {"role": "user", "content": "A" * 4000},
@@ -2058,21 +2072,21 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://localhost/v1/completions"),
             patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
             patch("httpx.get", return_value=models_resp),
+            patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=2676),
         ):
             await svc._get_translated_history_string(history)
 
         payload = mock_client.post.call_args.kwargs["json"]
-        # Both messages survive the char-budget filter (8028 ≤ 8448). Flattened
-        # prompt ≈ 8028 chars → ~2676 tokens at 3 chars/token; the output cap is
-        # clamped to 6144 − 512 (prompt wrapper) − 2676 = 2956, below the len//2
-        # base ceiling that would overflow a 6144-token window.
-        assert payload["max_tokens"] == 2956
+        # The completion cap is MEASURED: the translation server counts the
+        # prompt at 2676 tokens, so the room the 6144-token window leaves is
+        # 6144 − 2676 − 128 (safety) = 3340, and the translation needs less.
+        assert payload["max_tokens"] == 3340
 
     @pytest.mark.asyncio
     async def test_small_window_still_translates_tiny_history(self):
         """A tiny history on a small (1024-token) window fits comfortably: the
-        cap is clamped to the room left (1024 − 512 − ~109 = ~147) and the
-        translation RUNS — the old fixed 512-token floor disabled it forever."""
+        measured cap is the room left (1024 − 109 − 128 = 787) bounded by what
+        the translation needs (4 × 109 + 256 = 692), and the translation RUNS."""
         svc = create_chatqna_service()
         history = [
             {"role": "user", "content": "A" * 150},
@@ -2096,22 +2110,64 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://localhost/v1/completions"),
             patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
             patch("httpx.get", return_value=models_resp),
+            patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=109),
         ):
             result = await svc._get_translated_history_string(history)
 
-        assert result == "Translated"
+        assert result == ("Translated", "translated")
         payload = mock_client.post.call_args.kwargs["json"]
-        # flattened ≈ 328 chars → ~109 prompt tokens; base cap floor 512
-        # clamped to the room left: 1024 − 512 − 109 = 403
-        assert payload["max_tokens"] == 403
+        # The server counts the prompt at 109 tokens: the room left is
+        # 1024 − 109 − 128 = 787, the translation needs 4 × 109 + 256 = 692,
+        # so the need is the binding bound.
+        assert payload["max_tokens"] == 692
 
     @pytest.mark.asyncio
-    async def test_translation_skipped_when_budget_fits_no_message(self):
-        """A budget smaller than the newest message drops everything: no empty
-        prompt is sent to the translation model (its junk reply would become
-        the next prompt's chat history) — the result is an empty history."""
+    async def test_newest_message_over_budget_keeps_tail(self):
+        """A budget smaller than the newest message keeps the message's TAIL
+        instead of dropping it: the tail is the newest text of the turn, so
+        the retrieval query carries it (translated) rather than nothing."""
         svc = create_chatqna_service()
-        history = [{"role": "user", "content": "X" * 600}]
+        newest = "A" * 550 + "TAILTEXT"
+        history = [{"role": "user", "content": newest}]
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"choices": [{"message": {"content": "Translated history"}}]}
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+            patch("chatqna.genieai_chatqna.MAX_TRANSLATION_CHARS", 70),
+            patch("chatqna.genieai_chatqna.history_truncation_total") as mock_counter,
+        ):
+            result = await svc._get_translated_history_string(history)
+
+        # The message went to translation, so the query is its translated
+        # tail — not an empty string.
+        assert result == ("Translated history", "translated")
+        sent_prompt = mock_client.post.call_args.kwargs["json"]["messages"][0]["content"]
+        tail_chars = 70 - chatqna_module.TRANSLATION_MSG_OVERHEAD_CHARS
+        assert sent_prompt.endswith(f"HISTORY:\nUSER: {newest[-tail_chars:]}")
+        # Truncated, not passed through whole: the full message would still
+        # end with the tail.
+        assert "A" * (tail_chars + 1) not in sent_prompt
+        # The truncation is observable on the same channel as the
+        # older-message drops.
+        mock_counter.add.assert_called_once_with(1, {"path": "translation"})
+
+    @pytest.mark.asyncio
+    async def test_degenerate_budget_still_yields_nonempty_query(self):
+        """A budget smaller than one message's overhead cannot keep any
+        content: the query still never goes out empty — the flattened (blank)
+        message is reported as a fallback, exactly like an all-blank
+        history."""
+        svc = create_chatqna_service()
+        history = [{"role": "user", "content": "Y" * 600}]
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=MagicMock())
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -2121,16 +2177,16 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
             patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
-            patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation"),
-            patch("httpx.get", return_value=MagicMock(json=lambda: {"data": [{"id": "m", "max_model_len": 768}]})),
+            patch("chatqna.genieai_chatqna.MAX_TRANSLATION_CHARS", 1),
         ):
             result = await svc._get_translated_history_string(history)
 
-        assert result == ""  # nothing survived the budget: empty history, no junk
+        assert result[0] != ""  # the embedder is never fed an empty query
+        assert result[1] == "fallback_error"  # nothing translatable: flagged fallback
         mock_client.post.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_translate_text_chunk_translategemma_format(self):
+    async def test_translate_chunk_in_language_translategemma_format(self):
         svc = create_chatqna_service()
         mock_response = MagicMock()
         mock_response.json.return_value = {"choices": [{"text": "Bonjour"}]}
@@ -2147,11 +2203,11 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://localhost/v1/completions"),
             patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "translategemma-test"),
         ):
-            result = await svc._translate_text_chunk("Hello", "fr")
+            result = await svc._translate_chunk_in_language("Hello", "fr", "French")
         assert result == "Bonjour"
 
     @pytest.mark.asyncio
-    async def test_translate_text_chunk_generic_format(self):
+    async def test_translate_chunk_in_language_generic_format(self):
         svc = create_chatqna_service()
         mock_response = MagicMock()
         mock_response.json.return_value = {"choices": [{"message": {"content": "Hola"}}]}
@@ -2167,34 +2223,135 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
             patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
+            patch("chatqna.genieai_chatqna._get_translation_window", return_value=2048),
+            patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=20),
         ):
-            result = await svc._translate_text_chunk("Hello", "es")
+            result = await svc._translate_chunk_in_language("Hello", "es", "Spanish")
         assert result == "Hola"
+        # The chunk payload carries the measured cap too: the prompt costs 20
+        # tokens, so the room the 2048-token window leaves is 2048 − 20 − 128
+        # = 1900, and the translation needs 4 × 20 + 256 = 336.
+        assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 336
 
     @pytest.mark.asyncio
-    async def test_translate_text_chunk_error_returns_original(self):
+    async def test_a_long_chunk_without_a_window_is_refused_when_cut(self):
+        """The long-chunk scenario end to end: no discovered window, a
+        15k-char chunk — the degraded estimate exceeds the ceiling, so the
+        request goes out bounded by the ceiling, not by the raw estimate,
+        and a completion the server cut off at it is refused, never spliced
+        into the answer."""
         svc = create_chatqna_service()
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"choices": [{"message": {"content": "Traduit"}, "finish_reason": "length"}]}
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
         with (
-            patch("chatqna.genieai_chatqna.httpx.AsyncClient", side_effect=Exception("Connection error")),
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
             patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+            patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
+            patch("chatqna.genieai_chatqna._get_translation_window", return_value=None),
+            pytest.raises(chatqna_module.TranslationFailedError, match="max_tokens"),
         ):
-            result = await svc._translate_text_chunk("Original text", "fr")
-        assert result == "Original text"
+            await svc._translate_chunk_in_language("x" * 15000, "fr", "French")
+        # The estimate (~7.5k tokens — the full prompt, template included,
+        # halved) exceeds the ceiling: the cap that went out is the ceiling
+        # itself.
+        assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == chatqna_module.TRANSLATION_BASE_CEILING
 
     @pytest.mark.asyncio
-    async def test_translate_text_chunk_timeout_returns_original(self):
+    async def test_a_long_chunk_cap_comes_from_the_window_not_the_fixed_ceiling(self):
+        """For a long chunk the cap is the room the window leaves beside the
+        measured prompt — the same window-derived ceiling the history path
+        carries — not the degraded estimate's fixed ceiling."""
         svc = create_chatqna_service()
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"choices": [{"message": {"content": "Hola"}}]}
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
         with (
-            patch("chatqna.genieai_chatqna.httpx.AsyncClient", side_effect=TimeoutError("Request timed out")),
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
             patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+            patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
+            patch("chatqna.genieai_chatqna._get_translation_window", return_value=4096),
+            patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=3000),
         ):
-            result = await svc._translate_text_chunk("Original text", "fr")
-        assert result == "Original text"
+            await svc._translate_chunk_in_language("A" * 9000, "es", "Spanish")
+        # The measured prompt (3000 tokens) leaves 4096 − 3000 − 128 = 968
+        # tokens of room — far under the fixed ceiling the degraded
+        # estimate would have sent.
+        assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 968
 
     @pytest.mark.asyncio
-    async def test_translate_text_chunk_context_overflow_raises_typed(self):
+    @pytest.mark.parametrize(
+        "completions",
+        [
+            pytest.param(True, id="translategemma"),
+            pytest.param(False, id="generic"),
+        ],
+    )
+    async def test_translate_chunk_in_language_refuses_a_truncated_completion(self, completions):
+        """A chunk completion cut off at max_tokens is not a translation:
+        spliced into the answer it would read as a translation missing its
+        tail. Both payload shapes refuse it (the answer path fails loudly,
+        the single-message history path maps the raise to fallback_error)."""
+        from chatqna.genieai_chatqna import TranslationFailedError
+
+        svc = create_chatqna_service()
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        if completions:
+            mock_response.json.return_value = {"choices": [{"text": "Bonjo", "finish_reason": "length"}]}
+        else:
+            mock_response.json.return_value = {"choices": [{"message": {"content": "Hola"}, "finish_reason": "length"}]}
+        mock_response.raise_for_status = MagicMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=completions),
+            patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://localhost/v1/completions"),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+            patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
+            pytest.raises(TranslationFailedError),
+        ):
+            await svc._translate_chunk_in_language("Hello", "es", "Spanish")
+
+    @pytest.mark.asyncio
+    async def test_translate_chunk_in_language_refuses_a_truncated_completion_without_content(self):
+        """A server that cuts the completion off before any token comes back
+        reports a null content: the refusal must name the truncation, not
+        crash on the null content."""
+        from chatqna.genieai_chatqna import TranslationFailedError
+
+        svc = create_chatqna_service()
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"choices": [{"message": {"content": None}, "finish_reason": "length"}]}
+        mock_response.raise_for_status = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+            pytest.raises(TranslationFailedError, match="max_tokens"),
+        ):
+            await svc._translate_chunk_in_language("Hello", "es", "Spanish")
+
+    @pytest.mark.asyncio
+    async def test_translate_chunk_in_language_context_overflow_raises_typed(self):
         """vLLM context overflow on translation raises TranslationInputTooLongError
         instead of silently returning the English source (multilingual UX issue #829)."""
         from chatqna.genieai_chatqna import TranslationInputTooLongError
@@ -2212,10 +2369,10 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
             pytest.raises(TranslationInputTooLongError),
         ):
-            await svc._translate_text_chunk("x" * 10000, "fr")
+            await svc._translate_chunk_in_language("x" * 10000, "fr", "French")
 
     @pytest.mark.asyncio
-    async def test_translate_text_chunk_classifier_matches_live_httpx_shape(self):
+    async def test_translate_chunk_in_language_classifier_matches_live_httpx_shape(self):
         """Reviewer Finding 1+2 regression: production exception is `httpx.HTTPStatusError`
         whose `str()` is JUST the status phrase — the body lives on `.response.text`.
         The classifier must read the body, not just `str(exc)`. Construct a real
@@ -2261,7 +2418,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
             pytest.raises(TranslationInputTooLongError),
         ):
-            await svc._translate_text_chunk("x" * 10000, "fr")
+            await svc._translate_chunk_in_language("x" * 10000, "fr", "French")
 
     @pytest.mark.asyncio
     async def test_finalize_llm_response_propagates_translation_overflow(self):
@@ -2309,6 +2466,706 @@ class TestTranslationHelpers:
         # The language is resolved once for the whole document: every chunk is
         # written in the language the map named.
         assert languages == {("fr", "French")}
+
+
+class TestQueryTranslationStatus:
+    """`_get_translated_history_string` must report what the embedder received.
+
+    The history translation is normalized for the retriever and never shown to
+    the user, so a failed translation falls back to the flattened source text
+    instead of failing the turn — but a fallback the caller cannot distinguish
+    from a translation degrades retrieval silently (the untranslated source is
+    embedded into an English space). The status says which one it was.
+    """
+
+    @staticmethod
+    def _mock_client(side_effect=None, content="Translated history", completions=False):
+        mock_response = MagicMock()
+        if completions:
+            mock_response.json.return_value = {"choices": [{"text": content}]}
+        else:
+            mock_response.json.return_value = {"choices": [{"message": {"content": content}}]}
+        mock_response.raise_for_status = MagicMock()
+        mock_client = AsyncMock()
+        if side_effect is not None:
+            mock_client.post = AsyncMock(side_effect=side_effect)
+        else:
+            mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        return mock_client
+
+    SPANISH_HISTORY = [{"role": "user", "content": "qué es X?"}]
+
+    def _translation_patches(self, mock_client, translategemma=False):
+        # ExitStack: `with` takes no star-unpacking, and the patches live in a
+        # helper so each test states only what it varies. Both endpoint
+        # constants are patched, to distinct sentinels, so a test asserting
+        # the posted URL also pins which branch built the payload. Window
+        # derivation stays per-test (the live discovery probe and a patched
+        # window are different mechanisms).
+        stack = contextlib.ExitStack()
+        for p in (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=translategemma),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://chat-llm.test/v1/chat/completions"),
+            patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://completions.test/v1/completions"),
+        ):
+            stack.enter_context(p)
+        return stack
+
+    @pytest.mark.asyncio
+    async def test_a_translated_history_reports_translated(self):
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="USER: what is X?")
+        with self._translation_patches(mock_client):
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: what is X?"
+        assert status == "translated"
+
+    @pytest.mark.parametrize(
+        "timeout",
+        [
+            pytest.param("httpx", id="httpx_timeout"),
+            pytest.param("builtin", id="builtin_timeout"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_a_timeout_reports_fallback_timeout_and_returns_the_source(self, timeout):
+        """The issue's headline path: the translation service times out, the
+        flattened Spanish history goes to the embedder, and the caller can
+        tell it from a translation. Both timeout flavours count."""
+        import httpx
+
+        svc = create_chatqna_service()
+        error = httpx.TimeoutException("timed out") if timeout == "httpx" else TimeoutError("timed out")
+        mock_client = self._mock_client(side_effect=error)
+        with self._translation_patches(mock_client):
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: qué es X?"  # the flattened, UNTRANSLATED source
+        assert status == "fallback_timeout"
+
+    @pytest.mark.asyncio
+    async def test_a_generic_error_reports_fallback_error_and_returns_the_source(self):
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(side_effect=RuntimeError("the model is unreachable"))
+        with self._translation_patches(mock_client):
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: qué es X?"
+        assert status == "fallback_error"
+
+    @pytest.mark.asyncio
+    async def test_a_single_message_failure_reports_fallback_error(self):
+        """Single-message mode must not report `translated` for a swallowed
+        failure: it goes through the chunk translator, which raises, and the
+        source text is the fallback. Drives the real translator under a
+        mocked transport, so a drift at the wrap site fails this test."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(side_effect=RuntimeError("the model is unreachable"))
+        with self._translation_patches(mock_client):
+            text, status = await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
+        assert text == "¿qué es X?"
+        assert status == "fallback_error"
+
+    @pytest.mark.asyncio
+    async def test_a_single_message_timeout_reports_fallback_timeout(self):
+        """The real chain: the chunk translator raises the typed
+        TranslationTimeoutError on a timeout, and the history path keeps its
+        own status. Drives the real translator under a mocked transport, so
+        a drift at the wrap site fails this test."""
+        import httpx
+
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(side_effect=httpx.TimeoutException("timed out"))
+        with self._translation_patches(mock_client):
+            text, status = await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
+        assert text == "¿qué es X?"
+        assert status == "fallback_timeout"
+
+    @pytest.mark.asyncio
+    async def test_a_builtin_timeout_reports_fallback_timeout(self):
+        """A timeout that is not httpx's own class (a socket-level or
+        wait_for timeout) is still a timeout: the vocabulary separates 'the
+        service was slow' from 'the service broke'."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(side_effect=TimeoutError("timed out"))
+        with self._translation_patches(mock_client):
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: qué es X?"
+        assert status == "fallback_timeout"
+
+    @pytest.mark.asyncio
+    async def test_an_empty_completion_reports_fallback_error(self):
+        """A 200 with an empty completion is not a translation: an empty
+        history would blank the retrieval query, and the status must not
+        claim `translated`."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="   ")
+        with self._translation_patches(mock_client):
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: qué es X?"
+        assert status == "fallback_error"
+
+    @pytest.mark.asyncio
+    async def test_a_single_message_success_reports_translated(self):
+        svc = create_chatqna_service()
+
+        async def translate(text, canonical_code, target_lang, **_kwargs):
+            return "what is X?"
+
+        svc._translate_chunk_in_language = translate
+        text, status = await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
+        assert text == "what is X?"
+        assert status == "translated"
+
+    @pytest.mark.asyncio
+    async def test_an_empty_single_message_is_refused_not_translated(self):
+        """A blank history sent to the model would only harvest its junk
+        reply as the embedded query (the chunk translator's empty check
+        passes for a whitespace input): the empty-history refusal applies
+        to the string shape too."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="JUNK-FROM-EMPTY-PROMPT")
+        with self._translation_patches(mock_client):
+            text, status = await svc._get_translated_history_string("  ", source_lang_code="es")
+        assert text == "  "  # nothing to translate: the blank comes back
+        assert status == "fallback_error"
+        mock_client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_blank_list_messages_are_refused_not_translated(self):
+        """The same refusal on the list shape: whitespace-only messages fit
+        the budget (blank content still counts chars) and would otherwise
+        come back as the model's junk reply reported as a translation."""
+        svc = create_chatqna_service()
+        history = [
+            {"role": "user", "content": "   "},
+            {"role": "assistant", "content": "\n"},
+        ]
+        mock_client = self._mock_client(content="JUNK-FROM-EMPTY-PROMPT")
+        with self._translation_patches(mock_client):
+            text, status = await svc._get_translated_history_string(history)
+        assert text == "USER:     |<-MSG->| ASSISTANT: \n"  # the flattened blanks
+        assert status == "fallback_error"
+        mock_client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_the_completion_cap_is_the_room_the_window_leaves_beside_the_prompt(self):
+        """The cap is measured: the room the window leaves beside the prompt
+        the translation server counted."""
+        with patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=1000):
+            assert await chatqna_module._translation_completion_cap("prompt", {"prompt": "prompt"}, 4096) == 2968
+
+    @pytest.mark.asyncio
+    async def test_the_completion_cap_is_bounded_by_what_the_translation_needs(self):
+        """A big window must not invite an unbounded completion: the cap is
+        also bounded by what the translation needs (4x the prompt tokens
+        plus a margin)."""
+        with patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=100):
+            assert await chatqna_module._translation_completion_cap("prompt", {"prompt": "prompt"}, 65536) == 656
+
+    @pytest.mark.asyncio
+    async def test_the_degraded_bound_applies_without_a_window_or_a_count(self):
+        """Without a window, or without a count, the completion falls back to
+        the degraded estimate: a bound is better than the server's default,
+        which would let the completion run to the whole window."""
+        assert await chatqna_module._translation_completion_cap("prompt", {"prompt": "prompt"}, None) == 512
+        with patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=None):
+            assert await chatqna_module._translation_completion_cap("prompt", {"prompt": "prompt"}, 4096) == 512
+
+    @pytest.mark.asyncio
+    async def test_the_degraded_bound_is_clamped_by_the_window(self):
+        """The degraded estimate cannot exceed the window: a long prompt on
+        a small window is bounded by the room, not by the estimate."""
+        with patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=None):
+            # 4000 chars → the estimate is 2000 tokens, but the 2048-token
+            # window leaves only 2048 − 128 = 1920.
+            cap = await chatqna_module._translation_completion_cap("A" * 4000, {"prompt": "x"}, 2048)
+        assert cap == 1920
+
+    async def test_a_prompt_that_leaves_too_little_room_is_refused(self):
+        """The prompt leaves less room than a translation needs: the server
+        would cut the completion off, so the translation is refused up
+        front, with the reason named."""
+        from chatqna.genieai_chatqna import TranslationInputTooLongError
+
+        with (
+            patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=2000),
+            pytest.raises(TranslationInputTooLongError),
+        ):
+            await chatqna_module._translation_completion_cap("prompt", {"prompt": "prompt"}, 1024)
+
+    @pytest.mark.asyncio
+    async def test_a_prompt_that_leaves_a_little_room_is_refused(self):
+        """A prompt that leaves a sliver of room (under the minimum output
+        budget) is refused: the completion would be cut off, and the guard
+        would refuse it anyway."""
+        from chatqna.genieai_chatqna import TranslationInputTooLongError
+
+        with (
+            patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=1000),
+            pytest.raises(TranslationInputTooLongError),
+        ):
+            # 1228 − 1000 − 128 = 100 tokens of room: under the floor.
+            await chatqna_module._translation_completion_cap("prompt", {"prompt": "prompt"}, 1228)
+
+    async def test_the_translation_count_asks_the_translation_server(self):
+        """The count comes from the translation server — the model that will
+        translate the prompt — carrying the prompt as it will be sent."""
+        resp = MagicMock()
+        resp.json.return_value = {"count": 42}
+        resp.raise_for_status = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.post.return_value = resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
+            patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "http://translation.test"),
+        ):
+            assert await chatqna_module._count_translation_tokens({"prompt": "hello", "model": "tg-test"}) == 42
+        assert mock_client.post.call_args.args[0] == "http://translation.test/tokenize"
+        assert mock_client.post.call_args.kwargs["json"] == {"prompt": "hello", "model": "tg-test"}
+
+    @pytest.mark.asyncio
+    async def test_the_generic_shape_counts_the_payload_as_it_will_be_sent(self):
+        """The chat shape counts its MESSAGES, so the count covers the chat
+        template the server wraps them in."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="USER: what is X?")
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=2048))
+        with (
+            patch(
+                "chatqna.genieai_chatqna._count_translation_tokens",
+                new=AsyncMock(return_value=100),
+            ) as mock_count,
+            stack,
+        ):
+            await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        body = mock_count.call_args.args[0]
+        assert list(body) == ["messages"]
+        assert body["messages"] == mock_client.post.call_args.kwargs["json"]["messages"]
+
+    async def test_a_translation_server_that_cannot_count_leaves_the_budget_to_the_server(self):
+        """The count is best-effort: it sizes the budget, and a budget must
+        never decide whether the translation happens. A server that cannot
+        count leaves the completion to the degraded estimate."""
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock(side_effect=RuntimeError("no /tokenize here"))
+        mock_client = AsyncMock()
+        mock_client.post.return_value = resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        with patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client):
+            assert await chatqna_module._count_translation_tokens({"prompt": "hello"}) is None
+
+    @pytest.mark.asyncio
+    async def test_a_transient_count_failure_does_not_disable_the_count(self):
+        """An unreachable endpoint is transient: the next request counts
+        again instead of latching the degradation for the process life."""
+        failing = AsyncMock()
+        failing.post.side_effect = httpx.ConnectTimeout("network partition")
+        failing.__aenter__ = AsyncMock(return_value=failing)
+        failing.__aexit__ = AsyncMock(return_value=False)
+        working = AsyncMock()
+        resp = MagicMock()
+        resp.json.return_value = {"count": 7}
+        resp.raise_for_status = MagicMock()
+        working.post.return_value = resp
+        working.__aenter__ = AsyncMock(return_value=working)
+        working.__aexit__ = AsyncMock(return_value=False)
+        with patch("chatqna.genieai_chatqna.httpx.AsyncClient", side_effect=[failing, working]) as mock_client:
+            assert await chatqna_module._count_translation_tokens({"prompt": "x"}) is None
+            assert await chatqna_module._count_translation_tokens({"prompt": "x"}) == 7
+        assert mock_client.call_count == 2
+
+    @pytest.mark.asyncio
+    @pytest.mark.asyncio
+    async def test_a_rate_limited_count_does_not_disable_the_count(self):
+        """429 is transient by definition: a rate-limited count is retried
+        on the next request, never latched for the process life."""
+        limited = AsyncMock()
+        req = httpx.Request("POST", "http://translation.test/tokenize")
+        limited.post.side_effect = httpx.HTTPStatusError(
+            "rate limited", request=req, response=httpx.Response(429, request=req)
+        )
+        limited.__aenter__ = AsyncMock(return_value=limited)
+        limited.__aexit__ = AsyncMock(return_value=False)
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=limited) as mock_client,
+            patch("chatqna.genieai_chatqna.logger"),
+        ):
+            assert await chatqna_module._count_translation_tokens({"prompt": "x"}) is None
+            assert await chatqna_module._count_translation_tokens({"prompt": "x"}) is None
+        assert mock_client.call_count == 2
+
+    async def test_a_missing_tokenize_route_disables_the_count(self):
+        """A missing /tokenize route is permanent: the count is not
+        attempted again, and the degradation is warned once."""
+        failing = AsyncMock()
+        req = httpx.Request("POST", "http://translation.test/tokenize")
+        failing.post.side_effect = httpx.HTTPStatusError(
+            "not found", request=req, response=httpx.Response(404, request=req)
+        )
+        failing.__aenter__ = AsyncMock(return_value=failing)
+        failing.__aexit__ = AsyncMock(return_value=False)
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=failing) as mock_client,
+            patch("chatqna.genieai_chatqna.logger") as mock_logger,
+        ):
+            assert await chatqna_module._count_translation_tokens({"prompt": "x"}) is None
+            assert await chatqna_module._count_translation_tokens({"prompt": "x"}) is None
+        assert mock_client.call_count == 1
+        logged = " ".join(str(c) for c in mock_logger.warning.call_args_list)
+        assert "rejected the prompt count" in logged
+        assert any(c.args and c.args[-1] == 404 for c in mock_logger.warning.call_args_list)
+
+    async def test_a_long_history_is_translated_inside_the_discovered_window(self):
+        """A long history still goes out as a translation request, with a
+        measured cap: the room the window leaves beside the prompt, bounded
+        by what the translation needs."""
+        svc = create_chatqna_service()
+        history = [{"role": "user", "content": "A" * 13000}]
+        mock_client = self._mock_client(content="USER: AAAA", completions=True)
+        models_resp = MagicMock()
+        models_resp.json.return_value = {"data": [{"id": "gemma", "max_model_len": 65536}]}
+        stack = self._translation_patches(mock_client, translategemma=True)
+        stack.enter_context(
+            patch("chatqna.genieai_chatqna._TRANSLATION_DISCOVERY_ENDPOINT", "https://gpu-host/translation")
+        )
+        stack.enter_context(patch("httpx.get", return_value=models_resp))
+        stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=4335))
+        with stack:
+            text, status = await svc._get_translated_history_string(history)
+        assert status == "translated"
+        # The completions payload goes to the completions endpoint: vLLM
+        # cannot route the TranslateGemma template through chat completions.
+        assert mock_client.post.call_args.args[0] == "http://completions.test/v1/completions"
+        # The measured prompt (4335 tokens) leaves 65536 − 4335 − 128 = 61073
+        # tokens of room; the translation needs 4 × 4335 + 256 = 17596, so
+        # the need is the binding bound.
+        assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 17596
+        assert text == "USER: AAAA"
+
+    @pytest.mark.asyncio
+    async def test_a_history_in_a_window_too_tight_is_still_refused_and_named(self):
+        """A window that cannot hold the prompt plus a full-length
+        translation still refuses at the caller: the history goes out
+        untranslated and the status names it — scaling the ceiling must not
+        turn a genuinely tight window into a doomed request."""
+        svc = create_chatqna_service()
+        history = [{"role": "user", "content": "A" * 13000}]
+        mock_client = self._mock_client()
+        stack = self._translation_patches(mock_client, translategemma=True)
+        # The server counts the prompt at 9000 tokens: the 9000-token window
+        # has no room left beside it, so the translation is refused before
+        # the request goes out. The char budget is patched wide so the
+        # history reaches the cap guard instead of being dropped by the
+        # budget loop.
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=9000))
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=20000))
+        stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=9000))
+        with stack:
+            text, status = await svc._get_translated_history_string(history)
+        assert text.startswith("USER: AAAA")  # untranslated
+        assert status == "fallback_error"
+        mock_client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_truncated_completion_is_refused_not_translated(self):
+        """A completion cut off at max_tokens (finish_reason "length") is not
+        a translation: embedding the cut-off text would put a half-
+        translated history into the retrieval space under a success
+        status."""
+        svc = create_chatqna_service()
+        history = [{"role": "user", "content": "A" * 13000}]
+        mock_client = self._mock_client(content="USER: AAAA", completions=True)
+        mock_client.post.return_value.json.return_value = {
+            "choices": [{"text": "USER: AAAA", "finish_reason": "length"}]
+        }
+        stack = self._translation_patches(mock_client, translategemma=True)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=65536))
+        with stack:
+            text, status = await svc._get_translated_history_string(history)
+        assert text.startswith("USER: AAAA")  # untranslated
+        assert status == "fallback_error"
+
+    @pytest.mark.asyncio
+    async def test_a_generic_payload_carries_the_window_derived_budget(self):
+        """The generic (chat-completions) branch — the shape the shipped
+        default model takes — sizes its completion too: an explicit
+        max_tokens measured against the window the model serves, so the
+        completion length is a decision instead of the server's default
+        sampling budget."""
+        svc = create_chatqna_service()
+        history = [{"role": "user", "content": "A" * 13000}]
+        mock_client = self._mock_client(content="USER: AAAA")
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=65536))
+        # The char budget is patched wide so the history reaches the cap
+        # guard instead of being dropped by the budget loop (an exported
+        # MAX_TRANSLATION_CHARS would otherwise shrink the budget).
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=20000))
+        stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=4335))
+        with stack:
+            text, status = await svc._get_translated_history_string(history)
+        assert status == "translated"
+        # The chat payload goes to the chat-completions endpoint.
+        assert mock_client.post.call_args.args[0] == "http://chat-llm.test/v1/chat/completions"
+        # The measured prompt (4335 tokens) leaves 65536 − 4335 − 128 = 61073
+        # tokens of room; the translation needs 4 × 4335 + 256 = 17596.
+        assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 17596
+        assert text == "USER: AAAA"
+
+    @pytest.mark.asyncio
+    async def test_a_generic_truncated_completion_is_refused_not_translated(self):
+        """The generic branch reads finish_reason too: a completion cut off
+        by the server (finish_reason "length") is not a translation — the
+        same refusal the TranslateGemma branch makes."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="USER: what is")
+        mock_client.post.return_value.json.return_value = {
+            "choices": [{"message": {"content": "USER: what is"}, "finish_reason": "length"}]
+        }
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=None))
+        with stack:
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: qué es X?"  # untranslated
+        assert status == "fallback_error"
+
+    @pytest.mark.asyncio
+    async def test_a_max_tokens_finish_reason_is_not_a_truncation(self):
+        """Only the protocol's truncation value counts: "max_tokens" is the
+        request field's name, not a finish_reason. A complete completion
+        that carries it is a translation, not a refusal."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="USER: what is X?")
+        mock_client.post.return_value.json.return_value = {
+            "choices": [{"message": {"content": "USER: what is X?"}, "finish_reason": "max_tokens"}]
+        }
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=None))
+        with stack:
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: what is X?"
+        assert status == "translated"
+
+    @pytest.mark.parametrize(
+        "finish_reason, truncated",
+        [
+            pytest.param("length", True, id="length-is-the-protocol-value"),
+            pytest.param("stop", False, id="a-complete-completion"),
+            pytest.param("max_tokens", False, id="the-request-field-name-is-not-a-reason"),
+            pytest.param(None, False, id="an-explicit-null"),
+            pytest.param("missing", False, id="an-absent-field"),
+        ],
+    )
+    def test_the_truncation_check_is_an_exact_match_on_the_protocol_value(self, finish_reason, truncated):
+        """The truncation decision is an exact match on ``"length"`` — not a
+        loose comparison a missing or differently-valued field could trip.
+        The seam talks to vLLM, which always sets the field; the exact match
+        is the documented contract, and this pin is what a flip to a
+        fail-closed comparison would break."""
+        choice = {} if finish_reason == "missing" else {"finish_reason": finish_reason}
+        assert chatqna_module._completion_truncated(choice) is truncated
+
+    @pytest.mark.asyncio
+    async def test_a_choice_without_a_finish_reason_is_translated_end_to_end(self):
+        """The absent-field half of the exact-match contract, wired through
+        the seam (the table above owns the decision): a 200 whose choice
+        carries no finish_reason at all comes back as a translation — the
+        seam must READ the field tolerantly, not crash a good completion
+        into the fallback."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="USER: what is X?")
+        mock_client.post.return_value.json.return_value = {"choices": [{"message": {"content": "USER: what is X?"}}]}
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=None))
+        with stack:
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: what is X?"
+        assert status == "translated"
+
+    async def test_a_generic_payload_cap_is_clamped_to_the_discovered_window(self):
+        """The generic payload's cap is clamped so the measured prompt plus
+        the completion cannot exceed the discovered window (else the server
+        rejects the whole request and the history goes back untranslated)."""
+        svc = create_chatqna_service()
+        history = [
+            {"role": "user", "content": "A" * 4000},
+            {"role": "assistant", "content": "B" * 4000},
+        ]
+        mock_client = self._mock_client(content="Translated")
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=6144))
+        stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=2676))
+        with stack:
+            text, status = await svc._get_translated_history_string(history)
+        assert status == "translated"
+        # The measured prompt (2676 tokens) leaves 6144 − 2676 − 128 = 3340
+        # tokens of room, and the translation needs less than that.
+        assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 3340
+
+    @pytest.mark.asyncio
+    async def test_a_generic_payload_without_a_discovered_window_falls_back_to_the_degraded_bound(self):
+        """Without a discovered window the completion cannot be measured:
+        the payload carries the degraded estimate, which bounds the
+        completion instead of leaving it to the server's default."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="USER: what is X?")
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=None))
+        with stack:
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert status == "translated"
+        assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == 512
+        assert text == "USER: what is X?"
+
+    @pytest.mark.asyncio
+    async def test_a_long_history_without_a_window_is_refused_when_cut(self):
+        """The long-history scenario end to end: a deployer raises
+        MAX_TRANSLATION_CHARS on an endpoint without window discovery, a
+        30k-char history is admitted, and the degraded ceiling — not the
+        raw estimate — bounds the completion. A completion cut at that
+        ceiling is reported as the fallback it is, never as a translation."""
+        svc = create_chatqna_service()
+        history = [{"role": "user", "content": "A" * 30000}]
+        # The mock's completion echoes a string that is NOT a prefix of the
+        # flattened source: the assertions must be able to tell the model's
+        # cut-off blob from the source fallback (the regression the
+        # docstring claims to pin).
+        mock_client = self._mock_client()
+        mock_client.post.return_value.json.return_value = {
+            "choices": [{"message": {"content": "TRADUCCION-CORTADA"}, "finish_reason": "length"}]
+        }
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=None))
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=30000))
+        with stack:
+            text, status = await svc._get_translated_history_string(history)
+        assert text.startswith("USER: AAAA")  # untranslated
+        assert status == "fallback_error"
+        # The estimate (~15k tokens — the full prompt, template included,
+        # halved) exceeds the ceiling: the cap that went out is the ceiling
+        # itself.
+        assert mock_client.post.call_args.kwargs["json"]["max_tokens"] == chatqna_module.TRANSLATION_BASE_CEILING
+
+    async def test_a_generic_history_in_a_window_too_tight_is_refused_and_named(self):
+        """A window that cannot hold the prompt plus a full-length
+        translation refuses before the request goes out — the guard covers
+        the generic shape too."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="USER: what is X?")
+        stack = self._translation_patches(mock_client, translategemma=False)
+        # The prompt the server counts does not fit the 256-token window.
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=256))
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=20000))
+        stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=300))
+        with stack:
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: qué es X?"  # untranslated
+        assert status == "fallback_error"
+        mock_client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_dense_script_history_gets_a_cap_that_fits_the_window(self):
+        """A dense script (CJK ~1 token/char) is where a char/token guess
+        breaks: the cap is measured, so the request still fits the window
+        and the completion still covers the English rendering."""
+        svc = create_chatqna_service()
+        history = [{"role": "user", "content": "汉" * 1000}]
+        mock_client = self._mock_client(content="USER: translated")
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=2048))
+        # The translation server counts 1000 dense characters as 1000
+        # tokens — three times what a chars/3 estimate would say.
+        stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=1000))
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_max_translation_chars", return_value=20000))
+        with stack:
+            text, status = await svc._get_translated_history_string(history)
+        assert status == "translated"
+        cap = mock_client.post.call_args.kwargs["json"]["max_tokens"]
+        # The prompt plus the cap fit the window…
+        assert 1000 + cap <= 2048
+        # …and the cap still covers what the English rendering needs
+        # (~900 tokens for 1000 dense characters).
+        assert cap >= 900
+
+    @pytest.mark.asyncio
+    async def test_a_truncated_completion_with_no_content_is_named_as_truncated(self):
+        """A server that cuts the completion off before any token comes
+        back reports finish_reason "length" with a null content: the
+        truncation is the cause, and the refusal must name it instead of
+        crashing on the null content."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client()
+        mock_client.post.return_value.json.return_value = {
+            "choices": [{"message": {"content": None}, "finish_reason": "length"}]
+        }
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=None))
+        mock_logger = MagicMock()
+        stack.enter_context(patch("chatqna.genieai_chatqna.logger", mock_logger))
+        with stack:
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: qué es X?"  # untranslated
+        assert status == "fallback_error"
+        logged = " ".join(str(call) for call in mock_logger.error.call_args_list)
+        assert "hit max_tokens" in logged
+        assert "NoneType" not in logged
+
+    @pytest.mark.asyncio
+    async def test_a_single_message_truncated_completion_reports_fallback_error(self):
+        """Single-message mode goes through the chunk translator, whose
+        truncation refusal raises: the history path keeps its own contract
+        and reports the source text under fallback_error — never the
+        cut-off completion under `translated`."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client(content="what is")
+        mock_client.post.return_value.json.return_value = {
+            "choices": [{"message": {"content": "what is"}, "finish_reason": "length"}]
+        }
+        with self._translation_patches(mock_client, translategemma=False):
+            text, status = await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
+        assert text == "¿qué es X?"  # the source, not the cut-off completion
+        assert status == "fallback_error"
+
+    @pytest.mark.asyncio
+    async def test_a_single_message_that_does_not_fit_the_window_reports_fallback_error(self):
+        """A single-message history that does not fit the translation
+        window is refused like the list shape: the source text comes back
+        under fallback_error, not as an unhandled failure."""
+        svc = create_chatqna_service()
+        mock_client = self._mock_client()
+        stack = self._translation_patches(mock_client, translategemma=False)
+        stack.enter_context(patch("chatqna.genieai_chatqna._get_translation_window", return_value=2048))
+        stack.enter_context(patch("chatqna.genieai_chatqna._count_translation_tokens", return_value=4000))
+        with stack:
+            text, status = await svc._get_translated_history_string("¿qué es X?", source_lang_code="es")
+        assert text == "¿qué es X?"
+        assert status == "fallback_error"
+
+    async def test_a_map_without_english_reports_fallback_error(self):
+        svc = create_chatqna_service()
+        stack = self._translation_patches(self._mock_client())
+        stack.enter_context(patch("chatqna.genieai_chatqna.language_codes_map", return_value={}))
+        with stack:
+            text, status = await svc._get_translated_history_string(self.SPANISH_HISTORY)
+        assert text == "USER: qué es X?"
+        assert status == "fallback_error"
+
+    @pytest.mark.asyncio
+    async def test_a_message_without_content_does_not_crash_the_budget_loop(self):
+        """Request validation permits a message with no content key; the
+        budget loop must read it as empty, not raise."""
+        svc = create_chatqna_service()
+        history = [{"role": "user", "content": "qué es X?"}, {"role": "assistant"}]
+        with self._translation_patches(self._mock_client(content="USER: what is X?")):
+            text, status = await svc._get_translated_history_string(history)
+        assert text == "USER: what is X?"
+        assert status == "translated"
 
 
 # ===========================================================================
@@ -2489,13 +3346,23 @@ class TestAssembleSourceDocuments:
     as not grounded (LLM-generated) and no documents are shown."""
 
     @staticmethod
-    def _result_dict(rerank_verdict=None, retrieved_docs=None, file_id_pairs=None, with_reranker=True):
+    def _result_dict(
+        rerank_verdict=None,
+        retrieved_docs=None,
+        file_id_pairs=None,
+        with_reranker=True,
+        provenance_by_doc=None,
+    ):
         rd = {
             "retriever_service": {
                 "retrieved_docs": retrieved_docs or [],
                 "file_id_pairs": file_id_pairs or {},
             }
         }
+        if provenance_by_doc:
+            # Story 1.1 per-hit provenance as align_outputs preserves it
+            # (graph_name/repo_id/concept_id keyed by orchestrator doc id).
+            rd["retriever_service"]["provenance_by_doc"] = provenance_by_doc
         if with_reranker:
             # align_outputs (RERANK branch) stores the verdict under "retrieved_docs"
             # (with id + reranker score reconstructed), NOT under "reranked_docs".
@@ -2536,8 +3403,8 @@ class TestAssembleSourceDocuments:
         (a fake 'error' doc / forced 0.0 in the aggregate) stays dead: no
         synthetic document, no zero injected."""
         svc = create_chatqna_service()
-        # f1 metadata resolves; f2 metadata fetch fails (returns None) — the
-        # OKF-concept shape.
+        # f1 metadata resolves; f2 metadata fetch fails (returns None) — but f2
+        # carries OKF_ provenance, so the fallback gate admits it.
         svc.fetch_file_metadata = AsyncMock(side_effect=[{"labels": ["Beekeeping"], "file_name": "bee.pdf"}, None])
         result_dict = self._result_dict(
             rerank_verdict=[
@@ -2546,6 +3413,7 @@ class TestAssembleSourceDocuments:
             ],
             retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
             file_id_pairs={"d1": "f1", "d2": "f2"},
+            provenance_by_doc={"d2": {"graph_name": "OKF_demo_v1", "repo_id": "demo", "concept_id": "f2"}},
         )
         docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t")
         # Both surfaced: f1 enriched from doc-repo, f2 as an OKF concept source.
@@ -2583,25 +3451,61 @@ class TestAssembleSourceDocuments:
         assert grounded is True
 
     @pytest.mark.asyncio
-    async def test_all_metadata_fail_surfaces_okf_concept_sources(self):
-        """Story 1.1: when EVERY metadata lookup fails (doc-repo outage, or all
-        hits are OKF concept chunks), the reranker's verdict still surfaces —
-        each doc as an OKF concept source with its real score. Grounding is NOT
-        forced False anymore: the answer IS backed by retrieved documents; only
-        the doc-repo enrichment (labels/filename/url) is absent. The old
-        not-grounded edge case remains reachable via an empty reranker verdict
-        (display_docs empty → is_grounded False at the top)."""
+    async def test_metadata_outage_on_legacy_hit_surfaces_nothing_and_not_grounded(self):
+        """The doc-repo OUTAGE guard: a failed metadata lookup on a LEGACY hit
+        (provenance without the OKF_ prefix — or no provenance at all) surfaces
+        NO source, contributes no confidence, and grounds False. The 1.1
+        revision deleted this contract by surfacing every miss as a fabricated
+        okf-concept source; the OKF_ provenance gate (review 2026-10-29)
+        restores it — fetch_file_metadata returns None for BOTH the by-design
+        OKF-concept 404 AND a network outage, and only provenance can tell
+        them apart."""
         svc = create_chatqna_service()
-        svc.fetch_file_metadata = AsyncMock(return_value=None)  # every lookup fails
+        svc.fetch_file_metadata = AsyncMock(return_value=None)  # doc-repo outage
+        # Case 1: a legacy graph name in provenance.
+        result_dict = self._result_dict(
+            rerank_verdict=[{"id": "d1", "text": "hives", "score": 0.95}],
+            retrieved_docs=[{"id": "d1", "text": "hives"}],
+            file_id_pairs={"d1": "f1"},
+            provenance_by_doc={"d1": {"graph_name": "GRAPH", "repo_id": "legacy"}},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t")
+        assert docs == []
+        assert confidence == 0.0
+        assert grounded is False
+        # Case 2: no provenance at all (payload predates Story 1.0 attribution).
         result_dict = self._result_dict(
             rerank_verdict=[{"id": "d1", "text": "hives", "score": 0.95}],
             retrieved_docs=[{"id": "d1", "text": "hives"}],
             file_id_pairs={"d1": "f1"},
         )
         docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t")
+        assert docs == []
+        assert confidence == 0.0
+        assert grounded is False
+
+    @pytest.mark.asyncio
+    async def test_all_metadata_fail_surfaces_okf_concept_sources(self):
+        """Story 1.1: when every metadata lookup fails because every hit IS an
+        OKF concept chunk (provenance graph_name carries the OKF_ prefix — they
+        resolve in okf-server, not doc-repository, so the fetch 404s BY
+        DESIGN), each doc still surfaces from its in-payload provenance with
+        its real score and grounding stays True. The outage guard must not eat
+        OKF ground truth either."""
+        svc = create_chatqna_service()
+        svc.fetch_file_metadata = AsyncMock(return_value=None)  # every lookup 404s by design
+        result_dict = self._result_dict(
+            rerank_verdict=[{"id": "d1", "text": "hives", "score": 0.95}],
+            retrieved_docs=[{"id": "d1", "text": "hives"}],
+            file_id_pairs={"d1": "f1"},
+            provenance_by_doc={"d1": {"graph_name": "OKF_demo_v1", "repo_id": "demo", "concept_id": "f1"}},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t")
         assert [d["document_id"] for d in docs] == ["f1"]
         assert docs[0]["source"] == "okf-concept"
         assert docs[0]["concept_id"] == "f1"
+        assert docs[0]["graph_name"] == "OKF_demo_v1"
+        assert docs[0]["repo_id"] == "demo"
         assert confidence == 0.95
         assert grounded is True
 
@@ -2613,7 +3517,7 @@ class TestAssembleSourceDocuments:
         Story 1.1 the failed-metadata doc IS surfaced (OKF concept source), so
         the duplicate hits the normal dedup branch rather than re-failing."""
         svc = create_chatqna_service()
-        svc.fetch_file_metadata = AsyncMock(return_value=None)  # all lookups fail
+        svc.fetch_file_metadata = AsyncMock(return_value=None)  # all lookups 404 by design (OKF concepts)
         result_dict = self._result_dict(
             rerank_verdict=[
                 {"id": "d1", "text": "hives", "score": 0.95},
@@ -2621,6 +3525,10 @@ class TestAssembleSourceDocuments:
             ],
             retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
             file_id_pairs={"d1": "f1", "d2": "f1"},
+            provenance_by_doc={
+                "d1": {"graph_name": "OKF_demo_v1", "repo_id": "demo", "concept_id": "f1"},
+                "d2": {"graph_name": "OKF_demo_v1", "repo_id": "demo", "concept_id": "f1"},
+            },
         )
         docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t")
         assert [d["document_id"] for d in docs] == ["f1"]  # deduped to one
@@ -2646,6 +3554,49 @@ class TestAssembleSourceDocuments:
         # One source row (deduped), but both scores count toward confidence.
         assert [d["document_id"] for d in docs] == ["f1"]
         assert 0.90 < confidence < 0.95  # rank-weighted over [0.95, 0.90]
+        assert grounded is True
+
+    @pytest.mark.asyncio
+    async def test_duplicate_chunk_text_merges_into_benchmark_context(self):
+        """Benchmark opt-in (include_contexts): a duplicate chunk's text must
+        land on the surviving doc's context — appended to it — instead of
+        being dropped with the duplicate row, or the evaluator scores
+        context_recall against fewer contexts than the model actually saw
+        (review 2026-10-29 round 3)."""
+        svc = create_chatqna_service()
+        svc.fetch_file_metadata = AsyncMock(return_value={"labels": ["X"], "file_name": "a.pdf"})
+        result_dict = self._result_dict(
+            rerank_verdict=[
+                {"id": "d1", "text": "hives", "score": 0.95},
+                {"id": "d2", "text": "honey", "score": 0.90},  # same file f1
+            ],
+            retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
+            file_id_pairs={"d1": "f1", "d2": "f1"},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t", include_contexts=True)
+        assert [d["document_id"] for d in docs] == ["f1"]
+        assert docs[0]["text"] == "hives\nhoney"
+        assert grounded is True
+
+    @pytest.mark.asyncio
+    async def test_duplicate_chunk_text_survives_when_surviving_doc_has_no_text(self):
+        """The residual drop (review 2026-10-29 round 3): when the FIRST
+        chunk's text is absent from the verdict (text_by_doc has no entry for
+        it), the surviving doc surfaces without a text key — the duplicate's
+        text must still be attached, not silently discarded."""
+        svc = create_chatqna_service()
+        svc.fetch_file_metadata = AsyncMock(return_value={"labels": ["X"], "file_name": "a.pdf"})
+        result_dict = self._result_dict(
+            rerank_verdict=[
+                {"id": "d1", "score": 0.95},  # first chunk: no text in the verdict
+                {"id": "d2", "text": "honey", "score": 0.90},  # same file f1
+            ],
+            retrieved_docs=[{"id": "d1"}, {"id": "d2", "text": "honey"}],
+            file_id_pairs={"d1": "f1", "d2": "f1"},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t", include_contexts=True)
+        assert [d["document_id"] for d in docs] == ["f1"]
+        assert docs[0]["text"] == "honey"
         assert grounded is True
 
     @pytest.mark.asyncio
@@ -2745,6 +3696,20 @@ class TestStreamWithMetadata:
         assert '"source_documents": []' in joined
 
     @pytest.mark.asyncio
+    async def test_query_translation_status_reaches_the_metadata_event(self):
+        """The streamed metadata frame carries the query-translation status
+        handle_request resolved, so a streamed answer is no blinder than a
+        JSON one."""
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body(["data: b'Hi'\n\n", "data: [DONE]\n\n"])
+        out = await self._drain(
+            svc._stream_with_metadata(body, {}, token="t", query_translation_status="fallback_timeout")
+        )
+        joined = "".join(out)
+        assert '"query_translation_status": "fallback_timeout"' in joined
+
+    @pytest.mark.asyncio
     async def test_usage_only_frame_never_leaks(self):
         """vLLM's terminal usage-only chunk (choices:[] + usage) is transport
         metadata the orchestrator forwards like a token. Live 2026-10-23: the
@@ -2757,10 +3722,14 @@ class TestStreamWithMetadata:
             '{"id":"chatcmpl-x","object":"chat.completion.chunk","created":1,'
             '"model":"m","choices":[],"usage":{"prompt_tokens":1,"total_tokens":2}}'
         )
+        # The keyless twin (review 2026-10-29 round 3): usage OBJECT, no
+        # choices key at all — must drop the same way.
+        keyless_usage_frame = '{"id":"chatcmpl-x","usage":{"prompt_tokens":1,"total_tokens":2}}'
         body = self._make_body(
             [
                 "data: b'Real answer text.'\n\n",
                 f"data: b'{usage_frame}'\n\n",
+                f"data: b'{keyless_usage_frame}'\n\n",
                 "data: [DONE]\n\n",
             ]
         )
@@ -2780,6 +3749,13 @@ class TestStreamWithMetadata:
         assert _is_usage_only_frame("plain answer text") is False
         assert _is_usage_only_frame("{broken json") is False
         assert _is_usage_only_frame("") is False
+        # Keyless terminal frame (review 2026-10-29 round 3): some vLLM builds
+        # end with a usage OBJECT and NO choices key at all — usage-only too,
+        # or the raw JSON leaks into the answer text.
+        assert _is_usage_only_frame('{"id":"x","usage":{"total_tokens":2}}') is True
+        # The tightening holds: a usage STRING with no choices key is answer
+        # content (a model asked for JSON can return {"usage": "5 kWh"}).
+        assert _is_usage_only_frame('{"usage":"5 kWh"}') is False
 
     async def test_the_derived_outcome_reaches_the_metadata_event(self):
         """The outcome handle_request derived (for the metric) must land in
@@ -3745,6 +4721,155 @@ class TestAbstentionDefault:
 
 
 # ===========================================================================
+# Query-translation status on the response and the orchestrate span
+# ===========================================================================
+async def _full_flow_payload(svc, *, stream, language="es", history_status=None, messages=None):
+    """Drive handle_request end to end with the history translation mocked.
+
+    `history_status` is the (text, status) tuple the history-translation
+    helper reports; None leaves the real helper in place (used by the
+    passthrough cases, which never reach it). `messages` overrides the
+    request's message list; None keeps the Spanish-query default.
+    """
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+
+    async def fake_schedule(**_kwargs):
+        return (
+            {
+                "retriever": {"retrieved_docs": []},
+                "rerank": {"retrieved_docs": []},
+                "llm": {"text": "English answer"},
+            },
+            None,
+        )
+
+    svc.megaservice.schedule = fake_schedule
+    if history_status is not None:
+        svc._get_translated_history_string = AsyncMock(return_value=history_status)
+
+    async def fake_translate(text, iso_code, **_kwargs):
+        return f"[{iso_code}]{text}"
+
+    svc._translate_with_chunking = fake_translate
+
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=messages or [{"role": "user", "content": "qué es X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    patches = [
+        patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+        patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+        patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+        _patched_chat_request(stream=stream, language=language, **({"messages": messages} if messages else {})),
+    ]
+    with contextlib.ExitStack() as stack:
+        for p in patches:
+            stack.enter_context(p)
+        return await svc.handle_request(req)
+
+
+@pytest.mark.asyncio
+async def test_a_fallback_query_translation_is_flagged_in_the_response_metadata():
+    """The caller of a chat turn has to be able to tell an English embedding
+    query from a Spanish one: a timeout fallback is flagged, not silent."""
+    svc = create_chatqna_service()
+    payload = await _full_flow_payload(svc, stream=False, history_status=("USER: qué es X?", "fallback_timeout"))
+    assert payload["metadata"]["query_translation_status"] == "fallback_timeout"
+
+
+@pytest.mark.asyncio
+async def test_a_translated_query_is_flagged_in_the_response_metadata():
+    svc = create_chatqna_service()
+    payload = await _full_flow_payload(svc, stream=False, history_status=("USER: what is X?", "translated"))
+    assert payload["metadata"]["query_translation_status"] == "translated"
+
+
+@pytest.mark.asyncio
+async def test_an_english_query_reports_passthrough_english():
+    """No translation asked for is a status too: 'no source language' must be
+    distinguishable from 'translated'."""
+    svc = create_chatqna_service()
+    payload = await _full_flow_payload(svc, stream=False, language="en")
+    assert payload["metadata"]["query_translation_status"] == "passthrough_english"
+
+
+@pytest.mark.asyncio
+async def test_an_undetectable_query_reports_passthrough_unknown_language():
+    """A query whose language nobody could name is embedded as-is too — but
+    it must not be reported as if it were English (detection-healthy
+    passthrough), or the runbook filter misses exactly these turns."""
+    svc = create_chatqna_service()
+    payload = await _full_flow_payload(svc, stream=False, language=None, messages=[{"role": "user", "content": ""}])
+    assert payload["metadata"]["query_translation_status"] == "passthrough_unknown_language"
+
+
+@pytest.mark.asyncio
+async def test_a_refused_language_with_nothing_to_detect_reports_unknown_not_english():
+    """A refused request code falls back to 'EN' for the ANSWER side; the
+    query status must not inherit that fabrication: nobody ever established
+    the query was English."""
+    svc = create_chatqna_service()
+    payload = await _full_flow_payload(svc, stream=False, language="xx", messages=[{"role": "user", "content": ""}])
+    assert payload["metadata"]["query_translation_status"] == "passthrough_unknown_language"
+
+
+@pytest.mark.asyncio
+async def test_a_detected_english_query_reports_passthrough_english():
+    """No language declared, detection concludes English: the query IS
+    English, so the status must say so — not 'unknown', which would flag
+    every ordinary English turn."""
+    svc = create_chatqna_service()
+    with patch("chatqna.genieai_chatqna.detect", return_value="en"):
+        payload = await _full_flow_payload(
+            svc, stream=False, language=None, messages=[{"role": "user", "content": "what is X?"}]
+        )
+    assert payload["metadata"]["query_translation_status"] == "passthrough_english"
+
+
+@pytest.mark.asyncio
+async def test_a_crashed_detection_reports_unknown_not_english():
+    """A detection that crashes leaves the answer side on its English
+    fallback; the query status must not inherit that fabrication."""
+    svc = create_chatqna_service()
+    with patch("chatqna.genieai_chatqna.detect", side_effect=RuntimeError("detector exploded")):
+        payload = await _full_flow_payload(
+            svc, stream=False, language=None, messages=[{"role": "user", "content": "what is X?"}]
+        )
+    assert payload["metadata"]["query_translation_status"] == "passthrough_unknown_language"
+
+
+@pytest.mark.asyncio
+async def test_a_whitespace_declared_language_is_no_establishment():
+    """A blank language value resolves to 'no language asked for'; if the
+    detection then crashes, the fabricated English fallback must not be
+    read as an established English declaration."""
+    svc = create_chatqna_service()
+    with patch("chatqna.genieai_chatqna.detect", side_effect=RuntimeError("detector exploded")):
+        payload = await _full_flow_payload(
+            svc, stream=False, language="  ", messages=[{"role": "user", "content": "what is X?"}]
+        )
+    assert payload["metadata"]["query_translation_status"] == "passthrough_unknown_language"
+
+
+@pytest.mark.asyncio
+async def test_the_query_translation_status_reaches_the_orchestrate_span(captured_spans):
+    """The span attribute is the operator's answer to 'why is retrieval bad
+    on this Spanish query' — it must carry what the embedder actually got,
+    and only values the shared vocabulary names."""
+    svc = create_chatqna_service()
+    payload = await _full_flow_payload(svc, stream=False, history_status=("USER: qué es X?", "fallback_timeout"))
+    assert payload["metadata"]["query_translation_status"] == "fallback_timeout"
+    (orchestrate,) = captured_spans("chatqna.orchestrate")
+    from core.span_attrs import ATTRIBUTE_NAMES as A
+    from core.span_attrs import QUERY_TRANSLATION_STATUSES
+
+    status = orchestrate.attributes[A["rag_translation_query_status"]]
+    assert status == "fallback_timeout"
+    assert status in QUERY_TRANSLATION_STATUSES
+
+
+# ===========================================================================
 # Test reranker input-too-long abstention (422 body through align_outputs)
 # ===========================================================================
 # The 422 body the reranker microservice returns for oversized input. OPEA
@@ -3889,7 +5014,7 @@ async def test_non_streaming_answer_reports_that_it_was_translated():
     svc.megaservice.schedule = fake_schedule
     # The history is normalized to English for the retriever: that translation
     # is not the answer's translation, and it is not what this contract is about.
-    svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
+    svc._get_translated_history_string = AsyncMock(return_value=("USER: what is X?", "translated"))
 
     async def fake_translate(text, iso_code, **_kwargs):
         return f"[{iso_code}]{text}"
@@ -3948,7 +5073,7 @@ async def test_non_streaming_abstention_follows_the_retrieval(nodes, expect_reas
         return ({**nodes, "llm": {"text": "I cannot answer that"}}, None)
 
     svc.megaservice.schedule = fake_schedule
-    svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
+    svc._get_translated_history_string = AsyncMock(return_value=("USER: what is X?", "translated"))
 
     req = create_mock_request(
         data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
@@ -3980,7 +5105,7 @@ async def test_a_malformed_retriever_output_is_not_reported_as_an_abstention():
         return ({"retriever": {"error": "shape changed"}, "llm": {"text": "an answer"}}, None)
 
     svc.megaservice.schedule = fake_schedule
-    svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
+    svc._get_translated_history_string = AsyncMock(return_value=("USER: what is X?", "translated"))
 
     req = create_mock_request(
         data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
@@ -4014,7 +5139,7 @@ async def test_the_metadata_carries_the_labels_the_retrieval_filtered_on():
         )
 
     svc.megaservice.schedule = fake_schedule
-    svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
+    svc._get_translated_history_string = AsyncMock(return_value=("USER: what is X?", "translated"))
 
     context = MagicMock()
     context.model_dump.return_value = {"categoryLabel": "Taxes & Revenue", "serviceLabels": ["Tax Payment"]}
@@ -4049,7 +5174,7 @@ async def test_an_unfiltered_query_carries_no_filter_labels():
         )
 
     svc.megaservice.schedule = fake_schedule
-    svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
+    svc._get_translated_history_string = AsyncMock(return_value=("USER: what is X?", "translated"))
 
     req = create_mock_request(
         data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
@@ -4082,7 +5207,7 @@ async def test_the_abstention_flag_follows_the_abstention_enforcement(monkeypatc
         return ({"retriever": {"retrieved_docs": [], "file_id_pairs": {}}, "llm": {"text": "Here is an answer"}}, None)
 
     svc.megaservice.schedule = fake_schedule
-    svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
+    svc._get_translated_history_string = AsyncMock(return_value=("USER: what is X?", "translated"))
 
     req = create_mock_request(
         data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
@@ -4136,7 +5261,7 @@ async def test_the_metric_counts_the_abstentions_it_reports(monkeypatch, retriev
         )
 
     svc.megaservice.schedule = fake_schedule
-    svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
+    svc._get_translated_history_string = AsyncMock(return_value=("USER: what is X?", "translated"))
 
     req = create_mock_request(
         data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
@@ -4175,7 +5300,7 @@ async def test_non_streaming_answer_reports_a_refused_language():
         )
 
     svc.megaservice.schedule = fake_schedule
-    svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
+    svc._get_translated_history_string = AsyncMock(return_value=("USER: what is X?", "translated"))
 
     async def fake_translate(text, iso_code, **_kwargs):
         raise AssertionError("a refused language must not reach the translator")
@@ -4261,7 +5386,7 @@ async def test_a_streamed_turn_reports_the_abstention_the_metric_counts():
         )
 
     svc.megaservice.schedule = fake_schedule
-    svc._get_translated_history_string = AsyncMock(return_value="USER: what is X?")
+    svc._get_translated_history_string = AsyncMock(return_value=("USER: what is X?", "translated"))
 
     req = create_mock_request(
         data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
@@ -4272,7 +5397,9 @@ async def test_a_streamed_turn_reports_the_abstention_the_metric_counts():
         patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
         patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
         patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
-        _patched_chat_request(stream=True),
+        # language="en" pins the passthrough: langdetect on a short string is
+        # not deterministic, and this test is about the abstention flag.
+        _patched_chat_request(stream=True, language="en"),
     ):
         resp = await svc.handle_request(req)
 
@@ -4281,6 +5408,9 @@ async def test_a_streamed_turn_reports_the_abstention_the_metric_counts():
     metadata_events = [json.loads(e[len("data: ") :]) for e in events if e.startswith("data: {")]
     assert metadata_events[0]["abstained"] is True
     assert metadata_events[0]["abstention_reason"] == "no_documents_retrieved"
+    # An English query never reaches the history translator: the abstention
+    # metadata still says so, rather than omitting the field.
+    assert metadata_events[0]["query_translation_status"] == "passthrough_english"
 
 
 def _fake_parms(**_kwargs):
@@ -4352,6 +5482,125 @@ async def test_reranker_input_too_long_defensive_chain_walk():
 
 
 @pytest.mark.asyncio
+async def test_tokenize_failure_mid_truncation_loop_fails_the_request_503(monkeypatch):
+    """Composition: the REAL ``_count_tokens`` (only httpx is mocked) runs
+    inside ``align_inputs``' truncation loop and dies on a history-segment
+    count, with one segment already accepted.
+
+    The loop tests fake the counter and the counter tests run standalone, so
+    before this test nothing pinned what a mid-loop transport failure does to
+    the request. The contract: the request fails with the classified 503
+    (``llm_unavailable``), the transport error rides as ``__cause__``, and no
+    partially truncated history escapes as a response.
+    """
+    chatqna_module._count_static_tokens.cache_clear()
+
+    recorded = []
+
+    class _Counter:
+        def add(self, amount, attributes):
+            recorded.append(attributes)
+
+    monkeypatch.setattr(chatqna_module, "chat_requests_total", _Counter())
+    truncation_counter = MagicMock()
+    monkeypatch.setattr(chatqna_module, "history_truncation_total", truncation_counter)
+
+    svc = create_chatqna_service()
+    svc.user_profile_client = MagicMock()
+    svc.user_profile_client.get_user_profile = AsyncMock(return_value={})
+    svc.services = {"llm_node": create_mock_service_node(FakeServiceType.LLM)}
+
+    async def fake_history(history, source_lang_code="en"):
+        blob = "USER: HISTTOK-1 |<-MSG->| USER: HISTTOK-2 |<-MSG->| USER: HISTTOK-3 |<-MSG->| USER: HISTTOK-4"
+        return (blob, "translated")
+
+    svc._get_translated_history_string = fake_history
+
+    tokenize_calls = []
+
+    def fake_post(url, headers=None, json=None, timeout=None, verify=None):
+        prompt = json["prompt"]
+        tokenize_calls.append(prompt)
+        # The user content carries the whole history, so a segment prompt is
+        # recognised by the absence of the RAG text, not by the marker alone.
+        if "HISTTOK-3" in prompt and "RAGTOK" not in prompt:
+            raise httpx.ConnectError("vLLM died mid-loop")
+        if "RAGTOK" in prompt:
+            # 100 per RAGTOK occurrence, 510 per history segment carried in
+            # the same prompt, +10 base (mirrors _counting_tokenizer).
+            count = 100 * prompt.count("RAGTOK") + 10 + 510 * prompt.count("HISTTOK-")
+        elif "HISTTOK" in prompt:
+            count = 510
+        else:
+            count = 10  # the bare system prompt
+        return MagicMock(json=lambda: {"count": count})
+
+    async def fake_schedule(initial_inputs=None, llm_parameters=None, genie_params=None, **_kw):
+        # comps calls align_inputs for every node inside schedule() and returns
+        # (result_dict, runtime_graph); this stub replays that call shape for
+        # the LLM node. The propagation it models is UNWRAPPED: the vendored
+        # comps orchestrator is known to wrap some node exceptions (the
+        # reranker's HTTPException — see handle_request's chain walk), and if
+        # it wraps align_inputs errors the same way, production would classify
+        # differently from this pin — unobservable from this suite.
+        return (
+            align_inputs(
+                svc,
+                {"inputs": "RAGTOK" * 5, "stream": False, "frequency_penalty": 0.0, "temperature": 0.7},
+                "llm_node",
+                MagicMock(),
+                {"max_tokens": 256, "top_p": 0.9},
+                full_chat_history_string=genie_params["full_chat_history_string"],
+            ),
+            MagicMock(),
+        )
+
+    svc.megaservice.schedule = fake_schedule
+
+    models_resp = MagicMock()
+    models_resp.json.return_value = {"data": [{"id": "m", "max_model_len": 2048}]}
+    req = create_mock_request(
+        data=create_mock_chat_request_data(messages=[{"role": "user", "content": "what is X?"}]),
+        headers={"Authorization": "Bearer dummy.jwt.token"},
+    )
+    # The lru_cache cleanup runs in a teardown, not a trailing line: this is
+    # the one test that runs the REAL ``_count_static_tokens`` against a
+    # mocked transport, and a cached system-prompt count left behind by an
+    # assertion failure would hand the next real-counter test a number its
+    # own mocks never produced — two failures where there is one.
+    try:
+        with (
+            patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value={"sub": "test-user"})),
+            patch.object(chatqna_module, "GenieaiRetrieverParms", _fake_parms),
+            patch.object(chatqna_module, "GenieaiRerankerParms", _fake_parms),
+            _patched_chat_request(stream=False, max_tokens=256),
+            patch.object(chatqna_module, "detect", return_value="fr"),
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+            patch("httpx.post", side_effect=fake_post),
+            patch("httpx.get", return_value=models_resp),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await svc.handle_request(req)
+
+        assert exc_info.value.status_code == 503
+        assert exc_info.value.detail == "llm_unavailable"
+        # The classified 503 wraps the transport error that killed the loop.
+        assert isinstance(exc_info.value.__cause__, httpx.HTTPError)
+        # Died INSIDE the truncation loop: system prompt, user content and
+        # skeleton were counted first; HISTTOK-4 was accepted; HISTTOK-3's call
+        # is the one that failed.
+        assert len(tokenize_calls) == 5
+        assert "HISTTOK-4" in tokenize_calls[3]
+        assert "HISTTOK-3" in tokenize_calls[4]
+        # No partial-history response escaped: the loop never reached its
+        # bookkeeping, and the request exited through the classified error branch.
+        truncation_counter.add.assert_not_called()
+        assert recorded[-1]["error"] == "true"
+    finally:
+        chatqna_module._count_static_tokens.cache_clear()
+
+
+@pytest.mark.asyncio
 async def test_a_refused_language_leaves_the_answer_in_english_and_still_normalizes_the_history():
     """A language the map does not know says nothing about the language the
     user writes in.
@@ -4369,7 +5618,7 @@ async def test_a_refused_language_leaves_the_answer_in_english_and_still_normali
 
     async def fake_history(history, source_lang_code="en"):
         history_calls.append(source_lang_code)
-        return "USER: qu'est-ce que X ?"
+        return ("USER: qu'est-ce que X ?", "translated")
 
     svc._get_translated_history_string = fake_history
 
@@ -4422,7 +5671,7 @@ async def test_a_refused_language_with_an_undetectable_source_still_normalizes_t
 
     async def fake_history(history, source_lang_code="en"):
         history_calls.append(source_lang_code)
-        return "USER: qu'est-ce que X ?"
+        return ("USER: qu'est-ce que X ?", "translated")
 
     svc._get_translated_history_string = fake_history
 
@@ -4479,7 +5728,7 @@ async def test_a_detected_language_the_models_do_not_cover_still_normalizes_the_
 
     async def fake_history(history, source_lang_code="en"):
         history_calls.append(source_lang_code)
-        return "USER: qu'est-ce que X ?"
+        return ("USER: qu'est-ce que X ?", "translated")
 
     svc._get_translated_history_string = fake_history
 
@@ -4532,7 +5781,7 @@ async def test_a_refused_language_with_a_failing_detection_leaves_the_history_al
 
     async def fake_history(history, source_lang_code="en"):
         history_calls.append(source_lang_code)
-        return "USER: qu'est-ce que X ?"
+        return ("USER: qu'est-ce que X ?", "translated")
 
     svc._get_translated_history_string = fake_history
 

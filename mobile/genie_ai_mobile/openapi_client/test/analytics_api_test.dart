@@ -39,17 +39,8 @@ void main() {
     //
     // Records a user event for analytics
     //
-    //Future<Event> apiAnalyticsEventsPost(ApiAnalyticsEventsPostRequest apiAnalyticsEventsPostRequest) async
+    //Future<EventCreated> apiAnalyticsEventsPost(EventRequest eventRequest) async
     test('test apiAnalyticsEventsPost', () async {
-      // TODO
-    });
-
-    // Get general analytics
-    //
-    // Retrieves general analytics data with optional filters and date range
-    //
-    //Future<ApiAnalyticsGet200Response> apiAnalyticsGet({ DateTime startDate, DateTime endDate, String filters, String locale }) async
-    test('test apiAnalyticsGet', () async {
       // TODO
     });
 

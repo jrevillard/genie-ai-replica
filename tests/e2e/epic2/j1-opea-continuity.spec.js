@@ -1,11 +1,17 @@
 const { test, expect } = require('@playwright/test');
-const { getUserToken, request: authRequest } = require('../helpers/auth');
+const { getSessionTokenViaUI, request: authRequest, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 
 test.describe('Phase J: OPEA Continuity', () => {
+  // See SESSION_MINT_TIMEOUT_MS: describe.configure covers the tests,
+  // the in-hook test.setTimeout covers beforeAll (hooks read the
+  // project timeout, not the suite timeout).
+  test.describe.configure({ timeout: SESSION_MINT_TIMEOUT_MS });
+
   let userToken;
 
-  test.beforeAll(async () => {
-    userToken = await getUserToken('testuser', 'TestPass123!');
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
+    userToken = await getSessionTokenViaUI({ browser });
   });
 
   test('J.1 — OPEA callback returns sanitized profile via Bearer token', async () => {

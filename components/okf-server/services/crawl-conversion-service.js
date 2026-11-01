@@ -32,6 +32,7 @@ const readline = require('readline');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { isArangoNotFound } = require('./arango-errors');
 const config = require('../config');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
@@ -177,7 +178,11 @@ async function stampSourceDocument(repoId, { file_id, url, crawl_job_id }) {
     const res = await authedAxios.get(`${config.documentRepository.url}/api/files/${encodeURIComponent(file_id)}`, {
       timeout: 10000
     });
-    const f = (res.data && (res.data.file || res.data)) || {};
+    // Shared doc-repo envelope unwrap ({file} | {data: {file}} | {data}) —
+    // the previous two-shape unwrap silently degraded {data: {file}} to
+    // id-only stamping. Lazy require: producer-service loads this module.
+    const { docRepoFileOf } = require('./producer-service');
+    const f = docRepoFileOf(res);
     const db = await getDb();
     // The metadata size doubles as the cap/mode-A guard + progress total
     // (/download streams chunked with no content-length).
@@ -512,7 +517,7 @@ async function runConversion(job) {
     try {
       repo = await db.collection(COLLECTION).document(repo_id);
     } catch (err) {
-      if (!(err && (err.code === 404 || err.errorNum === 1204 || err.statusCode === 404))) throw err;
+      if (!isArangoNotFound(err)) throw err;
     }
     if (!repo || repo.deleted_at) {
       const e = new Error('repository ' + repo_id + ' was deleted mid-conversion — terminating the import');
@@ -638,10 +643,9 @@ async function runConversion(job) {
 
       const pageMap = new Map(); // normalized crawl url -> concept path
       let mapIndex = 0;
-      await iteratePages(tmpPath, ({ url, body }) => {
+      await iteratePages(tmpPath, ({ url }) => {
         mapIndex += 1;
         if (url) pageMap.set(crawlUrlKey(url), conceptPathForUrl(url, mapIndex));
-        if (body.length === 0) return; // never (iterator skips empties)
       });
 
       let pending = []; // concepts awaiting a batch flush

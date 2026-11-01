@@ -1,4 +1,4 @@
-const fs = require('fs');
+const { readFileOrThrow } = require('./parse-env-template');
 
 /**
  * Extract environment variable references from docker-compose.yaml using regex.
@@ -22,12 +22,7 @@ const fs = require('fs');
  * @returns {Array<{ name: string, default: string|null, hasDefault: boolean, raw: string }>}
  */
 function parseComposeEnvVars(filePath) {
-  let content;
-  try {
-    content = fs.readFileSync(filePath, 'utf-8');
-  } catch (err) {
-    throw new Error(`Failed to read docker-compose file: ${filePath}`, { cause: err });
-  }
+  const content = readFileOrThrow(filePath, 'docker-compose file');
   // Filter out comment lines to avoid false positives from documentation text
   const codeLines = content
     .split('\n')
@@ -150,12 +145,7 @@ function crossReference(composeVars, envParsed) {
  * @returns {Array<{ service: string|null, image: string, isVariableRef: boolean }>}
  */
 function parseComposeImages(filePath) {
-  let content;
-  try {
-    content = fs.readFileSync(filePath, 'utf-8');
-  } catch (err) {
-    throw new Error(`Failed to read compose file: ${filePath}`, { cause: err });
-  }
+  const content = readFileOrThrow(filePath, 'compose file');
 
   const lines = content.split('\n');
   const results = [];
@@ -217,12 +207,7 @@ function parseComposeImages(filePath) {
  * @returns {Array<{ name: string, image: string }>}
  */
 function parseAnsibleImages(filePath) {
-  let content;
-  try {
-    content = fs.readFileSync(filePath, 'utf-8');
-  } catch (err) {
-    throw new Error(`Failed to read Ansible file: ${filePath}`, { cause: err });
-  }
+  const content = readFileOrThrow(filePath, 'Ansible file');
 
   const results = [];
   for (const line of content.split('\n')) {
@@ -253,12 +238,7 @@ function parseAnsibleImages(filePath) {
  * @returns {Array<{ job: string|null, image: string }>}
  */
 function parseGitlabCiImages(filePath) {
-  let content;
-  try {
-    content = fs.readFileSync(filePath, 'utf-8');
-  } catch (err) {
-    throw new Error(`Failed to read GitLab CI file: ${filePath}`, { cause: err });
-  }
+  const content = readFileOrThrow(filePath, 'GitLab CI file');
 
   const lines = content.split('\n');
   const results = [];
@@ -290,12 +270,84 @@ function parseGitlabCiImages(filePath) {
   return results;
 }
 
+/**
+ * Extract the `rules[].changes` path filters of named jobs from a
+ * .gitlab-ci.yml file.
+ *
+ * Line-based, like parseGitlabCiImages: a top-level key at indent 0 starts a
+ * job; inside a wanted job, a `changes:` key starts a filter and the
+ * ` - <path>` lines indented at or deeper than that key are its entries. A
+ * sibling key or the next rule's `- if:` list item sits shallower than the
+ * key and ends the block; every `changes:` block of a wanted job is unioned.
+ * Hidden anchor keys (`.name: &name`) hold their list directly under the key
+ * and parse the same way. `changes: {paths: *alias}` blocks are opaque to
+ * line parsing (the alias is never expanded) and yield no entries —
+ * assert the alias reference textually instead. Entries are expected
+ * unquoted (house style); a quoted path containing ' #' would truncate at
+ * the hash. Assumes the plain-list form
+ * otherwise (no inline `paths:`/`compare_to:` lists).
+ *
+ * @param {string} filePath - Path to a .gitlab-ci.yml file
+ * @param {string[]} jobNames - Top-level job keys to extract (e.g. ['e2e:integration'])
+ * @returns {Map<string, string[]>} job name → changes paths (missing job → empty list)
+ */
+function parseGitlabCiJobChanges(filePath, jobNames) {
+  const content = readFileOrThrow(filePath, 'GitLab CI file');
+
+  const wanted = new Set(jobNames);
+  const result = new Map(jobNames.map((name) => [name, []]));
+  let currentJob = null;
+  // Indent of the list-owning key (`changes:` or a hidden anchor); null =
+  // not inside a filter block. Entries sit at or deeper than the key's
+  // indent — both sequence forms are valid YAML.
+  let listIndent = null;
+
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed === '' || trimmed.startsWith('#')) continue;
+    const indent = line.length - line.trimStart().length;
+
+    // Top-level key (indent 0) — starts a job (or ends the previous one).
+    // Exception: an entry of a hidden anchor whose sequence sits at indent 0
+    // (valid YAML) would otherwise be mistaken for a top-level key line.
+    if (indent === 0 && !(listIndent === 0 && /^-\s+/.test(trimmed))) {
+      const jobMatch = trimmed.match(/^([\w:.-]+):\s*(?:&[\w-]+)?\s*(?:#.*)?$/);
+      currentJob = jobMatch ? jobMatch[1] : null;
+      listIndent = jobMatch && currentJob.startsWith('.') ? 0 : null;
+      continue;
+    }
+
+    if (!wanted.has(currentJob)) continue;
+
+    if (listIndent !== null) {
+      const entryMatch = trimmed.match(/^-\s+(.+)$/);
+      // A block sequence may sit deeper than its key or at the same indent —
+      // both are valid YAML for a `changes:` filter; the next rule's `- if:`
+      // item is always shallower and ends the block.
+      if (entryMatch && indent >= listIndent) {
+        result.get(currentJob).push(
+          entryMatch[1]
+            .replace(/\s+#.*$/, '')
+            .replace(/^['"]|['"]$/g, '')
+            .trim()
+        );
+      } else {
+        listIndent = null;
+      }
+    } else if (/^changes:\s*(?:#.*)?$/.test(trimmed)) {
+      listIndent = indent;
+    }
+  }
+  return result;
+}
+
 module.exports = {
   parseComposeEnvVars,
   crossReference,
   parseComposeImages,
   parseAnsibleImages,
   parseGitlabCiImages,
+  parseGitlabCiJobChanges,
   parseComposeServiceContracts
 };
 
@@ -332,12 +384,7 @@ module.exports = {
  * @returns {Array<{ service: string, profiles: string[], replicas: string|null, replicasLine: number|null, envVars: string[] }>}
  */
 function parseComposeServiceContracts(filePath) {
-  let content;
-  try {
-    content = fs.readFileSync(filePath, 'utf-8');
-  } catch (err) {
-    throw new Error(`Failed to read docker-compose file: ${filePath}`, { cause: err });
-  }
+  const content = readFileOrThrow(filePath, 'docker-compose file');
 
   const lines = content.split('\n');
   const contracts = [];

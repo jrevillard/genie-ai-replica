@@ -1,6 +1,6 @@
 const https = require('https');
-
-const BASE_URL = process.env.BASE_URL || 'https://localhost';
+const { chromium } = require('@playwright/test');
+const { loginViaUI, TEST_USER, BASE_URL } = require('./chatbot');
 
 /**
  * Make an HTTPS request ignoring self-signed certificate errors.
@@ -37,6 +37,13 @@ function request(method, path, options = {}) {
     });
 
     req.on('error', reject);
+
+    // https.request's timeout option only starts the clock — without a
+    // handler the stalled socket is never destroyed and the promise
+    // hangs past the 30s budget.
+    req.on('timeout', () => {
+      req.destroy(new Error(`Request timed out after ${reqOptions.timeout}ms: ${method} ${path}`));
+    });
 
     if (options.body) {
       const bodyStr = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
@@ -77,17 +84,37 @@ async function getAdminToken(adminPassword) {
   return res.data.access_token;
 }
 
+// Remediation hint shared by the two getUserToken guards below.
+const ROPC_REALM_HINT =
+  'pass { realm: <test-realm> } for a test-only realm provisioned with ' +
+  'enableDirectAccessGrants';
+
 /**
  * Get a user token via ROPC (Resource Owner Password Credentials).
+ *
+ * Only works on realms whose client has directAccessGrantsEnabled —
+ * i.e. test-only realms like `genie2` whose spec provisions the grant
+ * (see enableDirectAccessGrants). The primary `genie` realm refuses
+ * ROPC by design; use getSessionTokenViaUI there.
  * @param {string} username - Keycloak username
  * @param {string} password - User password
  * @param {object} [options] - Optional overrides
- * @param {string} [options.realm='genie'] - Keycloak realm
+ * @param {string} options.realm - Keycloak realm (REQUIRED, ROPC-enabled)
  * @param {string} [options.clientId='genie-app'] - Keycloak client ID
  * @returns {Promise<string>} Access token string
  */
 async function getUserToken(username, password, options = {}) {
-  const realm = options.realm || 'genie';
+  const realm = options.realm;
+
+  if (!realm) {
+    throw new Error(`getUserToken: realm is required — ${ROPC_REALM_HINT}`);
+  }
+  if (realm === 'genie') {
+    throw new Error(
+      `getUserToken: realm 'genie' refuses ROPC by design — mint a ` +
+        `primary-realm token with getSessionTokenViaUI, or ${ROPC_REALM_HINT}`
+    );
+  }
   const clientId = options.clientId || 'genie-app';
 
   const body = new URLSearchParams({
@@ -97,7 +124,7 @@ async function getUserToken(username, password, options = {}) {
     password,
   }).toString();
 
-  const res = await request('POST', `/auth/realms/${realm}/protocol/openid-connect/token`, {
+  const res = await request('POST', `/auth/realms/${encodeURIComponent(realm)}/protocol/openid-connect/token`, {
     body,
     contentType: 'application/x-www-form-urlencoded',
   });
@@ -106,6 +133,71 @@ async function getUserToken(username, password, options = {}) {
     throw new Error(`Failed to get user token: ${res.status} ${JSON.stringify(res.data)}`);
   }
   return res.data.access_token;
+}
+
+/**
+ * Read the access token held by a page's own login session.
+ *
+ * Direct access grants (ROPC) are disabled on the realm by design, so a
+ * spec that already logged in through the browser must reuse that
+ * session's token instead of minting a second one with getUserToken.
+ * oidc-client-ts persists its user under a `oidc.user:` key in
+ * sessionStorage on this app.
+ * @param {import('@playwright/test').Page} page - A logged-in page
+ * @returns {Promise<string>} Access token string
+ * @throws {Error} When the page session carries no token (not logged in)
+ */
+async function getSessionToken(page) {
+  const token = await page.evaluate(() => {
+    const key = Object.keys(sessionStorage).find((k) => k.startsWith('oidc.user:'));
+    if (!key) return null;
+    try {
+      const user = JSON.parse(sessionStorage.getItem(key));
+      return user?.access_token || null;
+    } catch {
+      return null;
+    }
+  });
+
+  if (!token) {
+    throw new Error('No access token in the page session — the page is not logged in');
+  }
+  return token;
+}
+
+// Ceiling for suites that mint session tokens through a browser login:
+// on a stalled stack one login cycle costs ≈135s (two attempts of 30s
+// navigation + 15s redirect wait + retry budget), and a beforeAll can
+// stack admin-API requests (each at the 30s request cap) on top of it.
+// Apply with test.describe.configure({ timeout: ... }) for the tests
+// and test.setTimeout(...) inside beforeAll — hooks read the project
+// timeout, not the suite timeout.
+const SESSION_MINT_TIMEOUT_MS = 360000;
+
+/**
+ * Log in through the UI in a throwaway session and return that session's
+ * access token — the cleanup paths' replacement for minting a token with
+ * ROPC, which the realm refuses by design.
+ * @param {object} [options]
+ * @param {import('@playwright/test').Browser} [options.browser] - Reuse this
+ *        browser; launches a throwaway chromium when omitted.
+ * @param {{username: string, password: string}} [options.user] - Defaults to
+ *        TEST_USER.
+ * @returns {Promise<string>} Access token string
+ */
+async function getSessionTokenViaUI({ browser, user } = {}) {
+  let ownBrowser = null;
+  let context = null;
+  try {
+    ownBrowser = browser ? null : await chromium.launch();
+    context = await (browser || ownBrowser).newContext({ ignoreHTTPSErrors: true });
+    const page = await context.newPage();
+    await loginViaUI(page, user || TEST_USER);
+    return await getSessionToken(page);
+  } finally {
+    if (ownBrowser) await ownBrowser.close();
+    else if (context) await context.close();
+  }
 }
 
 /**
@@ -129,4 +221,12 @@ function parseJwtClaims(token) {
   }
 }
 
-module.exports = { getAdminToken, getUserToken, parseJwtClaims, request };
+module.exports = {
+  getAdminToken,
+  getUserToken,
+  getSessionToken,
+  getSessionTokenViaUI,
+  parseJwtClaims,
+  request,
+  SESSION_MINT_TIMEOUT_MS,
+};

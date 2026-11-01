@@ -223,6 +223,24 @@ class TestCondenseQueryCall:
         assert captured["headers"]["Authorization"] == "Bearer test-key"
 
     @pytest.mark.asyncio
+    async def test_model_discovery_failure_is_classified_503(self):
+        """No discovered model id → the SAME fail-closed 503 envelope as any
+        other condense failure (the payload build lives inside the classified
+        try; a raw ModelDiscoveryError must not escape as an unclassified
+        500 that bypasses the caller's metrics)."""
+        from core.model_cache import ModelDiscoveryError
+
+        svc = create_chatqna_service()
+
+        with (
+            patch.object(chatqna_module, "_get_llm_model", side_effect=ModelDiscoveryError("no id")),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await svc._condense_query("USER: bean?", "maize instead")
+
+        assert exc_info.value.status_code == 503
+
+    @pytest.mark.asyncio
     async def test_system_prompt_env_override_reaches_payload(self):
         """MULTI_TURN_CONDENSE_SYSTEM_PROMPT (two-tier priority, same contract
         as CHATQNA_SYSTEM_PROMPT): a set value drives the rewrite call's
@@ -388,7 +406,8 @@ class TestHandleRequestCondenseWiring:
     ):
         svc = create_chatqna_service()
         svc.megaservice.schedule = AsyncMock(return_value=({"llm": {"text": "ok"}}, {}))
-        svc._get_translated_history_string = AsyncMock(return_value=history_blob)
+        # (text, status): the status reports what the embedder was fed.
+        svc._get_translated_history_string = AsyncMock(return_value=(history_blob, "translated"))
         svc._finalize_llm_response = AsyncMock(return_value=("ok", None, None))
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.5, True))
         return svc

@@ -419,7 +419,7 @@ defaults.
 | `RERANKER_SCORE_TEMPERATURE` | number | no | `1.0` | Score temperature for calibration |
 | `LLM_SERVER_HOST_IP` | string | no | `vllm` | vLLM hostname |
 | `LLM_SERVER_PORT` | number | no | `8000` | vLLM port |
-| `VLLM_LLM_MODEL_ID` | string | no | `meta-llama/Meta-Llama-3.1-8B-Instruct` | Main LLM model |
+| `VLLM_LLM_MODEL_ID` | string | no | `meta-llama/Meta-Llama-3.1-8B-Instruct` | Model the vLLM container serves. The chat/ingest services discover it automatically — set only to pin a name. |
 | `VLLM_TRANSLATION_MODEL_ID` | string | no | `google/gemma-3-4b-it` | Translation LLM model |
 | `VLLM_TRANSLATION_SERVICE_PORT` | number | no | `9031` | Translation service port |
 | `GUARDRAIL_SERVICE_HOST_IP` | string | no | `guardrail` | Guardrail hostname |
@@ -459,15 +459,15 @@ defaults.
 | `CONTENT_EXTRACTION_METHOD` | enum | no | `docling` (compose) / `opea` (Python code) | `opea` or `docling` (compose wins at runtime; set in `.env` to override) |
 | `LABEL_SELECTOR_SYSTEM_PROMPT` | string | no | (built-in) | LLM labeling rules |
 | `CONTEXTUAL_RETRIEVAL_ENABLED` | bool | no | `true` | Prepend LLM doc-context prefix to each chunk |
-| `CONTEXTUAL_STRATEGY` | enum | no | `per_chunk` | `per_chunk` (one call per batch, section-tailored) or `doc_level` (one call per document, same context on every chunk). Compose and code agree on `per_chunk`; set in `.env` to override |
+| `CONTEXTUAL_STRATEGY` | enum | no | `doc_level` | `per_chunk` or `doc_level` (compose default `doc_level`; Python code default `per_chunk` — compose wins at runtime; set in `.env` to override) |
 | `CONTEXTUAL_RETRIEVAL_PROMPT` | string | no | (built-in) | Per-chunk context prompt (`{document_context}` placeholder) |
 | `MULTI_TURN_BLEND_ENABLED` | bool | no | `false` | Multi-turn vector-space blending |
 | `MULTI_TURN_BLEND_ALPHA` | number | no | `0.7` | Query weight α in `V = α·EQ + (1-α)·EH` |
 | `MULTI_TURN_HISTORY_TURNS` | number | no | `1` | Prior turns blended into history embedding |
-| `DATAPREP_CONTEXTUAL_MODEL` | string | no | (empty) | Model for context generation (empty = auto-detect the served model); must support guided JSON |
-| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | number | no | `0` (= derived) | Max chars of document text placed in the context LLM's system prompt. `0` derives it from `VLLM_MAX_MODEL_LEN`, so one setting is correct on any GPU; `>0` pins a value, `<0` disables contextualization. Sibling `_DOC_LEVEL` variant defaults to `100000`. **Do not copy this from another deployment** — a budget sized for a large GPU overflows a small one and the calls fall back to raw chunks silently. See [Contextual Retrieval]({{< relref "/docs/rag-pipeline/contextual-retrieval" >}}) |
-| `DATAPREP_CONTEXTUAL_MAX_TOKENS` | number | no | `512` | Max output tokens **per chunk in the batch** for context-gen LLM (was 200, truncated under load). A batch of 4 reserves 4× this. |
-| `VLLM_MAX_MODEL_LEN` | number | no | `65536` (`env.t4` 2048, `env.rtx6000` 4096) | Served model's context window. The budget above is derived from it, and it must reach the dataprep container for that to work. |
+| `DATAPREP_CONTEXTUAL_MODEL` | string | no | (empty) | Model for context generation (empty = `VLLM_LLM_MODEL_ID`); must support guided JSON |
+| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | number | no | `0` | Max chars of doc text fed to the context LLM. `0` = derived from the context window the endpoint actually serves (discovered at runtime from `VLLM_ENDPOINT`); `>0` sets a maximum the served window still caps; `<0` disables contextualization for the document (the sibling `_DOC_LEVEL` variant is a maximum defaulting to `100000`) |
+| `DATAPREP_MAX_MODEL_LEN` | number | no | `0` | The context window (tokens) dataprep sizes document contexts against. `0` = discovered at runtime from `VLLM_ENDPOINT`; `>0` states the window the endpoint serves — the only lever on a provider whose `/v1/models` carries no `max_model_len` |
+| `DATAPREP_CONTEXTUAL_MAX_TOKENS` | number | no | `512` | Max output tokens for context-gen LLM (was 200, truncated under load) |
 
 #### Retriever
 
@@ -482,8 +482,9 @@ defaults.
 | `RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED` | number | no | `5` (compose) / `3` (Python code) | Max items returned by traversal — compose wins at runtime |
 | `RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD` | number | no | `0.7` (compose) / `0.5` (Python code) | Min score to keep traversal results — compose wins at runtime |
 | `RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES` | number | no | `10` (compose) / `1` (Python code) | Concurrent traversal batches — compose wins at runtime |
-| `RETRIEVER_ARANGO_DISTANCE_STRATEGY` | string | no | `COSINE` | Distance metric for vector search |
-| `RETRIEVER_ARANGO_NUM_CENTROIDS` | number | no | `1` | Vector-search centroids |
+| `RETRIEVER_ARANGO_DISTANCE_STRATEGY` | string | no | `COSINE` | Distance metric for vector search (`metric` of the `vector_index` dataprep maintains — the index is recreated on drift at the next ingest) |
+| `RETRIEVER_ARANGO_NUM_CENTROIDS` | number | no | `1` | Vector-search centroids (`nLists` of the `vector_index` dataprep maintains — the index is recreated on drift at the next ingest) |
+| `RETRIEVER_ARANGO_NPROBE` | number | no | `1` | IVF lists probed per vector query (`defaultNProbe` on the vector index; raised values trade latency for recall — the index is recreated on drift at the next ingest). Only read by the ANN query path: with the default `RETRIEVER_ARANGO_USE_APPROX_SEARCH=false`, exact search ignores it |
 | `RETRIEVER_ARANGO_USE_APPROX_SEARCH` | bool | no | `false` | Use ANN search |
 | `RETRIEVER_ARANGO_K` | number | no | `20` | Top chunks returned to reranker |
 | `RETRIEVER_ARANGO_FETCH_K` | number | no | `30` | Candidate chunks scored before filtering |

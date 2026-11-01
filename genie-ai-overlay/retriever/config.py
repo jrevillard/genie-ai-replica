@@ -80,7 +80,6 @@ TGI_LLM_ENDPOINT_KEY = os.getenv("TGI_LLM_ENDPOINT_KEY", "fake")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 OPENAI_LLM_MODEL = os.getenv("OPENAI_LLM_MODEL", "gpt-4o")
-LLM_MODEL_ID = os.getenv("LLM_MODEL_ID", "meta-llama/Meta-Llama-3.1-8B-Instruct")
 MAX_OUTPUT_TOKENS = os.getenv("MAX_OUTPUT_TOKENS", "1024")
 
 
@@ -256,13 +255,23 @@ HYBRID_RRF_K = int(os.getenv("RETRIEVER_HYBRID_RRF_K", "60"))
 HYBRID_BM25_CANDIDATES = int(os.getenv("RETRIEVER_HYBRID_BM25_CANDIDATES", "50"))
 HYBRID_DENSE_WEIGHT = float(os.getenv("RETRIEVER_HYBRID_DENSE_WEIGHT", "1.0"))
 HYBRID_LEXICAL_WEIGHT = float(os.getenv("RETRIEVER_HYBRID_LEXICAL_WEIGHT", "1.0"))
+# The BM25 analyzer must speak the corpus language. The corpus is English by
+# construction — operator preprocessing plus the document-repository ingest
+# gate (DOCUMENT_INGESTION_LANGUAGE, default 'en') — so leave text_en alone
+# unless the ingest gate moves WITH it. _ensure_bm25_view only creates the
+# ArangoSearch view when absent: changing this env var alone never updates an
+# existing view (delete the view and let the service recreate it). Rationale
+# and probes: site/content/en/docs/architecture/multilingual-ssot.md
 HYBRID_BM25_ANALYZER = os.getenv("RETRIEVER_HYBRID_BM25_ANALYZER", "text_en")
 
 # Story 1.1/1.4/1.5 (ADR-039 D4/D5/D8) — multi-graph fan-out governance.
 # The retriever reads `_encoded_graph_names` from the search_start carrier
-# (Story 1.0b / core/label_contract.py). When the carrier carries ≥2 graphs,
-# the retriever engages the additive fan-out path; with 0 or 1 graphs the
-# original single-graph path runs unchanged (D8: legacy byte-identical).
+# (Story 1.0b / core/label_contract.py). The carrier carries ≥1 graph
+# (`_fanout_should_engage`) and the fan-out engages: per-leg timeout, the
+# dedicated extraction pool, fusion. Only the EMPTY carrier keeps the
+# original single-graph path (D8: legacy byte-identical against
+# ARANGO_GRAPH_NAME) — a single-graph okf_only carrier is deliberately
+# fan-out-managed.
 # The chat-side resolver sets per-request overrides via kwargs (Story 1.2).
 # Defaults preserve legacy behavior — fan-out is opt-in via RETRIEVER_FANOUT_ENABLED.
 FANOUT_ENABLED = os.getenv("RETRIEVER_FANOUT_ENABLED", "true").lower() == "true"
@@ -368,7 +377,6 @@ from core.embedding_query_prefix import (  # noqa: F401  re-exported for backwar
 # VLLM configuration
 VLLM_API_KEY = os.getenv("VLLM_API_KEY", "EMPTY")
 VLLM_ENDPOINT = os.getenv("VLLM_ENDPOINT")
-VLLM_MODEL_ID = os.getenv("VLLM_MODEL_ID", "ibm-granite/granite-3.3-2b-instruct")
 VLLM_MAX_NEW_TOKENS = os.getenv("VLLM_MAX_NEW_TOKENS", 512)
 VLLM_TOP_P = os.getenv("VLLM_TOP_P", 0.9)
 VLLM_TEMPERATURE = os.getenv("VLLM_TEMPERATURE", 0.8)

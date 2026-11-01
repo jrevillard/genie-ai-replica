@@ -13,14 +13,7 @@
 // the shared vocabulary and assert every consumer reads it rather than
 // restating it, so the next edit cannot silently fork a sixth copy.
 
-const {
-  CONTENT_TYPES,
-  RESERVED_INDEX_TYPES,
-  ALL_TYPES,
-  STATUS_VALUES,
-  isKnownType,
-  isReservedType
-} = require('../services/okf-vocabulary');
+const { CONTENT_TYPES, RESERVED_INDEX_TYPES, ALL_TYPES, STATUS_VALUES } = require('../services/okf-vocabulary');
 
 const { planAutocorrectForConcept } = require('../services/concept-meta-service');
 
@@ -34,14 +27,13 @@ describe('okf-vocabulary', () => {
     expect(ALL_TYPES).toEqual([...CONTENT_TYPES, ...RESERVED_INDEX_TYPES]);
     for (const t of RESERVED_INDEX_TYPES) {
       expect(CONTENT_TYPES).not.toContain(t);
-      expect(isReservedType(t)).toBe(true);
-      expect(isKnownType(t)).toBe(true);
+      expect(ALL_TYPES).toContain(t);
     }
   });
 
-  test('an unknown type is neither known nor reserved', () => {
-    expect(isKnownType('nonsense')).toBe(false);
-    expect(isReservedType('nonsense')).toBe(false);
+  test('an unknown type is in neither array', () => {
+    expect(ALL_TYPES).not.toContain('nonsense');
+    expect(RESERVED_INDEX_TYPES).not.toContain('nonsense');
   });
 
   describe('autocorrect on the reserved index (the !1077 case)', () => {

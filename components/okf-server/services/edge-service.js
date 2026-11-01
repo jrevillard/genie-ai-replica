@@ -23,6 +23,7 @@ const { createHash } = require('node:crypto');
 const { DateTime } = require('luxon');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
+const { isArangoNotFound } = require('./arango-errors');
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
 const auditService = require('./audit-service');
@@ -39,7 +40,7 @@ async function graphNameForRepo(db, repo_id) {
   try {
     repo = await db.collection('okf_repositories').document(repo_id);
   } catch (err) {
-    if (!(err && (err.code === 404 || err.errorNum === 1204 || err.statusCode === 404))) throw err;
+    if (!isArangoNotFound(err)) throw err;
   }
   return repo ? workingGraphName(repo) : `OKF_${repo_id}`;
 }

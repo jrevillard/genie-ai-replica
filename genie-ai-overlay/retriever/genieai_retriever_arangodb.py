@@ -3,6 +3,8 @@
 
 import asyncio
 import contextlib
+import contextvars
+import functools
 import inspect
 import json
 import math
@@ -25,7 +27,7 @@ from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from core.label_contract import build_filter_labels
-from core.model_cache import get_model_id
+from core.model_cache import ModelDiscoveryError, resolve_model_id
 from core.model_http_policy import LLM_MAX_RETRIES, SUMMARIZER_TIMEOUT_SECONDS, http_timeout
 from core.span_attrs import ATTRIBUTE_NAMES as A
 from core.span_attrs import QUERY_ID_KEY, label_digest, query_id_from_baggage
@@ -58,6 +60,7 @@ from .config import (
     ARANGO_USERNAME,
     EMBEDDING_TIMEOUT,
     FANOUT_CANDIDATE_CAP_GLOBAL,
+    FANOUT_CANDIDATE_CAP_PER_GRAPH,
     FANOUT_ENABLED,
     FANOUT_MAX_GRAPHS,
     FANOUT_PER_GRAPH_TIMEOUT_MS,
@@ -92,7 +95,6 @@ from .config import (
     VLLM_API_KEY,
     VLLM_ENDPOINT,
     VLLM_MAX_NEW_TOKENS,
-    VLLM_MODEL_ID,
     VLLM_TEMPERATURE,
     VLLM_TIMEOUT,
     VLLM_TOP_P,
@@ -104,6 +106,36 @@ from .config import (
 # bounded traversal — an overrun there must never consume the whole leg
 # timeout, which used to discard the leg's already-fused vector documents).
 TRAVERSAL_BUDGET_RESERVE_S = 0.75
+
+# DW-424 (review 2026-10-29 round 3): a timed-out fan-out leg is ABANDONED
+# (Decision E) — the awaiting task returns [] but its worker thread keeps
+# running up to ~90s. On the shared default executor (max_workers =
+# min(32, cpu+4)) a timeout storm starved every other to_thread user in the
+# process. Retrieval-leg work (the leg runner + the routing probes) therefore
+# runs on this dedicated bounded pool: abandonment costs retrieval capacity
+# only, never the process-wide default pool.
+# Sized to the ADMISSION CONTROL, not the core count: legs are gated by
+# asyncio.Semaphore(FANOUT_MAX_GRAPHS), and a leg's 8s deadline starts when
+# _invoke_leg creates its task — BEFORE the queued job gets a thread. A pool
+# smaller than the semaphore let an admitted leg burn its whole budget in the
+# queue (DW-424 abandonment holds a thread ~90s) and return zero-hit without
+# its extraction ever running — silent recall loss. The leg work is I/O-bound
+# (AQL/HTTP); the extra idle threads are cheap.
+_EXTRACTION_POOL = ThreadPoolExecutor(
+    max_workers=max(FANOUT_MAX_GRAPHS, min(8, os.cpu_count() or 4)), thread_name_prefix="okf-extract"
+)
+
+
+async def _to_thread_on_pool(func, /, *args, **kwargs):
+    """`asyncio.to_thread` routed to `_EXTRACTION_POOL` (DW-424).
+
+    asyncio.to_thread takes no executor argument (through py3.12), so this
+    replicates its exact semantics — contextvars copied, kwargs forwarded —
+    over ``loop.run_in_executor(_EXTRACTION_POOL, ...)``.
+    """
+    loop = asyncio.get_running_loop()
+    ctx = contextvars.copy_context()
+    return await loop.run_in_executor(_EXTRACTION_POOL, functools.partial(ctx.run, func, *args, **kwargs))
 
 
 # Defining a custom data subclass
@@ -561,9 +593,9 @@ class GenieaiArangoRetriever(OpeaComponent):
     def _initialize_llm(self):
         """Initialize the language model for summarization if enabled.
 
-        When GPU_NODE_HOST is set, auto-detects the vLLM model (with TTL cache,
-        see core/model_cache.py) instead of using the config default VLLM_MODEL_ID.
-        Falls back to the config default on any probe failure.
+        The VLLM_MODEL_ID env wins as-is; without it, the model id is
+        discovered at VLLM_ENDPOINT (with TTL cache, see core/model_cache.py)
+        and fails loudly when nothing answers — never a compiled-in default.
         """
         with background_span("retriever.initialize_llm"):
             if OPENAI_API_KEY and OPENAI_CHAT_ENABLED:
@@ -611,33 +643,26 @@ class GenieaiArangoRetriever(OpeaComponent):
                         timeout=http_timeout(SUMMARIZER_TIMEOUT_SECONDS),
                     )
                     self._llm_model_id = OPENAI_CHAT_MODEL
+                    self._llm_backend = "openai"
                 except openai.AuthenticationError:
                     logger.error("OpenAI API Key is invalid.")
                 except Exception as e:
                     logger.error(f"An error occurred while verifying the API Key: {e}")
 
             elif VLLM_ENDPOINT:
-                self._llm_model_id = self._resolve_vllm_model_id()
-                self.llm = self._create_vllm_client(self._llm_model_id)
+                self._init_vllm_summarizer(self._resolve_vllm_model_id())
             else:
                 raise HTTPException(
                     status_code=400, detail="No LLM environment variables are set, cannot generate graphs."
                 )
 
     def _resolve_vllm_model_id(self) -> str:
-        """Return the vLLM model ID for summarization.
-
-        Auto-detects (TTL-cached) from the remote vLLM when GPU_NODE_HOST is set;
-        otherwise returns the VLLM_MODEL_ID env/config default.
+        """Return the vLLM model ID for summarization (env wins, else the
+        discovered id — see core.model_cache.resolve_model_id).
 
         Logging is deferred to _get_llm() which logs only on model change.
         """
-        if os.getenv("GPU_NODE_HOST") and VLLM_ENDPOINT:
-            detected = get_model_id(VLLM_ENDPOINT)
-            if detected:
-                os.environ["VLLM_MODEL_ID"] = detected
-                return detected
-        return os.getenv("VLLM_MODEL_ID", VLLM_MODEL_ID)
+        return resolve_model_id(VLLM_ENDPOINT)
 
     def _create_vllm_client(self, model_id: str) -> ChatOpenAI:
         """Create a ChatOpenAI client targeting the vLLM endpoint."""
@@ -666,13 +691,35 @@ class GenieaiArangoRetriever(OpeaComponent):
         model baked into the current client (e.g. the GPU node changed models), the
         ChatOpenAI client is recreated.
         """
-        if VLLM_ENDPOINT and os.getenv("GPU_NODE_HOST"):
+        # One resolution, one degradation policy: a failed probe DEGRADES the
+        # auxiliary summarizer (None → the caller skips summarization);
+        # retrieval itself must never fail for it. The OpenAI-configured
+        # client (different endpoint, different id) survives untouched.
+        if not VLLM_ENDPOINT:
+            return getattr(self, "llm", None)
+        if getattr(self, "_llm_backend", None) != "vllm" and getattr(self, "llm", None) is not None:
+            # OpenAI-configured client: different endpoint, different id —
+            # untouched, and never probed.
+            return self.llm
+        try:
             current_id = self._resolve_vllm_model_id()
-            if current_id != getattr(self, "_llm_model_id", None):
-                logger.info(f"Summarizer model changed: {self._llm_model_id} -> {current_id}, recreating client")
-                self._llm_model_id = current_id
-                self.llm = self._create_vllm_client(current_id)
-        return self.llm
+        except ModelDiscoveryError:
+            logger.warning("Summarizer model id undiscovered — skipping summarization this call")
+            return None
+        if getattr(self, "_llm_backend", None) == "vllm" and current_id != getattr(self, "_llm_model_id", None):
+            logger.info(f"Summarizer model changed: {self._llm_model_id} -> {current_id}, recreating client")
+            self._init_vllm_summarizer(current_id)
+        elif getattr(self, "llm", None) is None:
+            # OpenAI init failed at boot (transient key/probe error leaves llm
+            # unset): degrade to the vLLM summarizer instead of AttributeError-
+            # ing on every retrieve.
+            self._init_vllm_summarizer(current_id)
+        return getattr(self, "llm", None)
+
+    def _init_vllm_summarizer(self, model_id: str) -> None:
+        self._llm_model_id = model_id
+        self._llm_backend = "vllm"
+        self.llm = self._create_vllm_client(model_id)
 
     def _initialize_client(self):
         """Initialize the ArangoDB connection."""
@@ -1204,6 +1251,11 @@ class GenieaiArangoRetriever(OpeaComponent):
 
             _search_start_raw = str(input_dict.get("search_start", "chunk"))
             _base_mode, _encoded_labels, _encoded_graphs = decode(_search_start_raw)
+            # Raw carrier stashed BEFORE the restore: invoke_fanout decodes the
+            # ::sticky: segment from THIS key — reading search_start after the
+            # restore below would always see the bare mode and drop the
+            # conversation's continuity set (review 2026-10-29, round 3).
+            input_dict["_search_start_raw"] = _search_start_raw
             input_dict["search_start"] = _base_mode  # restore base mode
             if _encoded_labels:
                 input_dict["_encoded_filter_labels"] = _encoded_labels
@@ -1326,6 +1378,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         query: str,
         start_time: float,
         span,
+        legacy_unbounded: bool = False,
     ) -> list:
         """Run the full extraction body (vector search → BM25 hybrid →
         traversal → final response assembly) against a SPECIFIC graph.
@@ -1448,23 +1501,35 @@ class GenieaiArangoRetriever(OpeaComponent):
             # Retrieve Embedding Dimension #
             ################################
 
-            random_doc = collection.random()
-            random_doc_id = random_doc["_id"]
-            sample_embedding = random_doc.get(ARANGO_EMBEDDING_FIELD)
+            if isinstance(embedding, (list, tuple)) and len(embedding) > 0:
+                # The query embedding is already in scope — derive the dimension
+                # from it and skip the collection.random() probe entirely (the
+                # probe reads an arbitrary document on every request otherwise).
+                dimension = len(embedding)
+                logger.debug(
+                    f"Embedding dimension derived from the query embedding — dimension={dimension}, "
+                    f"collection={collection_name}"
+                )
+            else:
+                # Legacy no-embedding path: probe a stored document to learn the
+                # collection's embedding dimension.
+                random_doc = collection.random()
+                random_doc_id = random_doc["_id"]
+                sample_embedding = random_doc.get(ARANGO_EMBEDDING_FIELD)
 
-            if not sample_embedding:
-                logger.error(f"Document '{random_doc_id}' is missing field '{ARANGO_EMBEDDING_FIELD}'.")
-                return []
+                if not sample_embedding:
+                    logger.error(f"Document '{random_doc_id}' is missing field '{ARANGO_EMBEDDING_FIELD}'.")
+                    return []
 
-            if not isinstance(sample_embedding, list):
-                logger.error(f"Document '{random_doc_id}' has a non-list embedding field, found {type(embedding)}.")
-                return []
+                if not isinstance(sample_embedding, list):
+                    logger.error(f"Document '{random_doc_id}' has a non-list embedding field, found {type(embedding)}.")
+                    return []
 
-            dimension = len(sample_embedding)
+                dimension = len(sample_embedding)
 
-            if dimension == 0:
-                logger.error(f"Document '{random_doc_id}' has an empty embedding field.")
-                return []
+                if dimension == 0:
+                    logger.error(f"Document '{random_doc_id}' has an empty embedding field.")
+                    return []
 
             if OPENAI_API_KEY and OPENAI_EMBED_MODEL and OPENAI_EMBED_ENABLED:
                 # OpenAI embeddings are not contrastive / instruction-tuned —
@@ -1760,12 +1825,22 @@ class GenieaiArangoRetriever(OpeaComponent):
                 #       overrun CONTINUES without enrichment instead of
                 #       poisoning the leg.
                 keys = [r["doc"].id for r in search_res]
-                elapsed_s = time.time() - start_time
-                budget_s = FANOUT_PER_GRAPH_TIMEOUT_MS / 1000.0 - elapsed_s - TRAVERSAL_BUDGET_RESERVE_S
+                if legacy_unbounded:
+                    # D8 byte-identical tail: the LEGACY single-graph path
+                    # predates the fan-out bounds and must not inherit them —
+                    # a dark-mode citizen query against a large legacy corpus
+                    # would silently lose graph enrichment to a per-leg budget
+                    # that was never its contract (review 2026-10-29). The
+                    # size gate + sub-budget are a fan-out PER-LEG contract.
+                    skip_reason = None
+                    budget_s = None
+                else:
+                    elapsed_s = time.time() - start_time
+                    budget_s = FANOUT_PER_GRAPH_TIMEOUT_MS / 1000.0 - elapsed_s - TRAVERSAL_BUDGET_RESERVE_S
+                    skip_reason = self._traversal_skip_reason(
+                        graph_name=graph_name, vector_db=vector_db, elapsed_s=elapsed_s, budget_s=budget_s
+                    )
                 neighborhoods = None
-                skip_reason = self._traversal_skip_reason(
-                    graph_name=graph_name, vector_db=vector_db, elapsed_s=elapsed_s, budget_s=budget_s
-                )
                 if skip_reason:
                     logger.info(
                         f"Fan-out traversal skipped — graph={graph_name}: {skip_reason}; "
@@ -1773,6 +1848,12 @@ class GenieaiArangoRetriever(OpeaComponent):
                     )
                 else:
                     try:
+                        # DW-424: deliberately NOT _EXTRACTION_POOL. This runs
+                        # on the running loop's default executor — a per-leg
+                        # loop here (the legacy path's main loop runs it to
+                        # completion, no abandonment) — and nesting it on the
+                        # bounded pool would let concurrent leg threads crowd
+                        # traversals out (enrichment lost to the budget).
                         neighborhoods = await asyncio.wait_for(
                             asyncio.to_thread(
                                 self.fetch_neighborhoods,
@@ -2055,6 +2136,7 @@ async def _legacy_single_graph_or_refuse(self, *, input_dict, input, query, star
         query=query,
         start_time=start_time,
         span=span,
+        legacy_unbounded=True,  # D8: the legacy tail keeps its pre-fan-out behavior
     )
     # Story 1.0 provenance contract — "EVERY retrieval hit must carry
     # graph_name, repo_id, concept_id". The fan-out path attaches at fusion;
@@ -2190,7 +2272,9 @@ async def _invoke_leg(self, graph_name, input_dict, input, query):
     # under a 2000ms timeout). Run the coroutine on its OWN thread/loop so the
     # main loop stays responsive; on timeout the awaiting task returns at the
     # deadline and the worker thread is abandoned in the background (its result
-    # is discarded — the leg counts as zero-hit per Decision E).
+    # is discarded — the leg counts as zero-hit per Decision E). DW-424: the
+    # abandoned thread occupies the dedicated extraction pool, NOT the shared
+    # default executor it starved under a timeout storm.
     coro = self._extract_for_graph(
         graph_name=graph_name,
         input_dict=input_dict,
@@ -2199,7 +2283,7 @@ async def _invoke_leg(self, graph_name, input_dict, input, query):
         start_time=time.time(),
         span=span,
     )
-    leg_task = asyncio.create_task(asyncio.to_thread(asyncio.run, coro))
+    leg_task = asyncio.create_task(_to_thread_on_pool(asyncio.run, coro))
     done, pending = await asyncio.wait({leg_task}, timeout=FANOUT_PER_GRAPH_TIMEOUT_MS / 1000.0)
     if pending:
         logger.info(
@@ -2213,6 +2297,18 @@ async def _invoke_leg(self, graph_name, input_dict, input, query):
         f"Fan-out leg done — graph_name={graph_name}, "
         f"hits={len(result or [])}, elapsed={time.time() - leg_started:.2f}s"
     )
+    # Story 1.5 (ADR-039 D4): tiered option-(d) caps — pre-cap this leg's
+    # candidate list per graph BEFORE cross-graph fusion (Level-2). Without
+    # the per-graph tier one large graph floods fusion up to the global cap
+    # and crowds every other graph out (the config knob existed but was wired
+    # nowhere — review 2026-10-29 round 3). The global cap still applies
+    # afterwards, in invoke_fanout's target_k.
+    if result and len(result) > FANOUT_CANDIDATE_CAP_PER_GRAPH:
+        logger.info(
+            f"Fan-out leg candidates pre-capped per graph — graph_name={graph_name}, "
+            f"{len(result)} -> {FANOUT_CANDIDATE_CAP_PER_GRAPH}"
+        )
+        result = result[:FANOUT_CANDIDATE_CAP_PER_GRAPH]
     return result
 
 
@@ -2262,15 +2358,20 @@ async def _route_graphs(self, encoded_graph_names, query_embedding):
                 self.db.aql.execute(
                     "FOR r IN okf_repositories FILTER r.deleted_at == null "
                     "FILTER r.ingested_graph_name != null FILTER r.head != null "
+                    "FILTER r.ingested_graph_name IN @okf_graphs "
                     "RETURN {g: r.ingested_graph_name, v: r.head.vector, "
                     "fv: (r.head.per_field || {}).forbidden || null, "
                     "fvs: (r.head.per_field || {}).forbidden_vectors || [], "
-                    "dim: r.head.dim, model: r.head.model}"
+                    "dim: r.head.dim, model: r.head.model}",
+                    bind_vars={"okf_graphs": sorted(okf_graphs)},
                 )
             )
             qdim = len(query_embedding)
             for row in head_rows:
                 g, v = row.get("g"), row.get("v")
+                # The IN @okf_graphs bind above is the transfer-volume fix
+                # (the server only ships authorized repos' heads); this
+                # Python-side check stays as belt-and-braces defence in depth.
                 if g not in okf_graphs or not isinstance(v, (list, tuple)) or len(v) != qdim:
                     continue
                 hmodel = row.get("model") or ""
@@ -2356,7 +2457,14 @@ async def _route_graphs(self, encoded_graph_names, query_embedding):
             f"LET s = APPROX_NEAR_COSINE(doc.{ARANGO_EMBEDDING_FIELD}, @emb) "
             "SORT s DESC LIMIT @k RETURN s"
         )
-        rows = self.db.aql.execute(aql, bind_vars={"emb": query_embedding, "k": ROUTE_TOP_K})
+        # The AQL client is SYNCHRONOUS — awaiting it inline in an async def
+        # would serialize the whole _probe_batch fan-out on the event loop and
+        # let asyncio.wait's timeout fire only BETWEEN probes, never during
+        # one (the exact defect _invoke_leg documents fixing for the legs).
+        # The query runs on a worker thread so the probes genuinely race.
+        # DW-424: on the dedicated extraction pool, not the shared default
+        # executor (the same pool abandoned legs occupy).
+        rows = await _to_thread_on_pool(self.db.aql.execute, aql, bind_vars={"emb": query_embedding, "k": ROUTE_TOP_K})
         return graph_name, list(rows)
 
     async def _probe_batch(graphs):
@@ -2437,7 +2545,10 @@ async def _route_graphs(self, encoded_graph_names, query_embedding):
 async def invoke_fanout(self, input, input_dict, encoded_graph_names):
     """Additive multi-graph fan-out orchestrator (Story 1.1/1.4/1.5).
 
-    Called when `_encoded_graph_names` carries ≥2 graphs. Runs the legacy
+    Called when `_encoded_graph_names` carries ≥1 graph (the engagement
+    predicate, `_fanout_should_engage` — only the EMPTY carrier takes the
+    legacy single-graph path; a single-graph OKF carrier deliberately runs
+    through here too). Runs the legacy
     extraction ONCE per authorized graph (Decision B: full extraction —
     vector + BM25 hybrid + traversal + response, per leg) and fuses via
     2-level cross-graph RRF (Level-2 only; Level-1 is per-leg). Per-leg
@@ -2468,7 +2579,10 @@ async def invoke_fanout(self, input, input_dict, encoded_graph_names):
 
     search_set = list(encoded_graph_names)
     query_embedding = input.embedding if isinstance(input.embedding, list) and input.embedding else None
-    _sticky = decode_sticky(str(input_dict.get("search_start") or ""))
+    # The sticky segment lives on the RAW carrier — invoke() stashes it as
+    # _search_start_raw before restoring search_start to the base mode; direct
+    # callers (tests, the framework path) may still carry it on search_start.
+    _sticky = decode_sticky(str(input_dict.get("_search_start_raw") or input_dict.get("search_start") or ""))
     span.set_attribute("rag.route.sticky", ",".join(_sticky))
     if not ROUTE_ENABLED:
         logger.info("Graph routing disabled (RETRIEVER_ROUTE_ENABLED=false) — full carrier fan-out")

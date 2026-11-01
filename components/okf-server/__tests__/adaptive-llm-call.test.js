@@ -193,7 +193,7 @@ describe('adaptiveChatCompletion', () => {
     const body = { model: 'm', messages: [], max_tokens: MAX_TOKENS_CEILING };
     const r = await adaptiveChatCompletion({ url: ENDPOINT, headers: HEADERS, body, timeoutMs: 300000 });
     expect(axios.post).toHaveBeenCalledTimes(1); // already at the ceiling — another rung is a runaway
-    expect(body.max_tokens).toBe(MAX_TOKENS_CEILING);
+    expect(body.max_tokens).toBe(32768); // the ceiling VALUE pinned — a silent ceiling change must fail here
     expect(lastCall()[2].timeout).toBe(300000); // the clock is never raised without a retry
     expect(r.data.choices[0].finish_reason).toBe('length'); // honest: still starved at ceiling
   });

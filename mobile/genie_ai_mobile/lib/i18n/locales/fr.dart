@@ -1051,6 +1051,8 @@ const Map<String, dynamic> frLocale = {
         "Problème de configuration : le label « {labels} » n'existe plus dans la hiérarchie de connaissances. Ce bouton est inutilisable tant que sa configuration n'est pas mise à jour.",
     "quickHelpCategoryGone":
         "Problème de configuration : la catégorie de ce bouton n'existe plus dans la hiérarchie de connaissances. Ce bouton est inutilisable tant que sa configuration n'est pas mise à jour.",
+    "quickHelpTitleMissing":
+        "Problème de configuration : ce bouton n'a pas de titre dans cette langue. Ce bouton est inutilisable tant que sa configuration n'est pas mise à jour.",
     "quickHelpScopeUnavailable":
         "Problème de configuration : la hiérarchie de connaissances n'a pas pu être chargée, le périmètre de ce bouton ne peut donc pas être vérifié. Ce bouton est inutilisable tant que la hiérarchie n'est pas disponible.",
     "scopeNotNameable":

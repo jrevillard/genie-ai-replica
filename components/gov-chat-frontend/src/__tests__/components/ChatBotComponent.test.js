@@ -134,6 +134,7 @@ jest.mock('jspdf', () => {
   }));
 });
 jest.mock('@lucide/vue', () => ({
+  AlertTriangle: { template: '<svg />' },
   Brain: { template: '<svg />' },
   Loader2: { template: '<svg />' },
   Plus: { template: '<svg />' },
@@ -204,12 +205,16 @@ async function createChatBotWrapperAsync(tree, storeOverrides = {}) {
   return wrapper;
 }
 
-function createChatBotWrapper(storeOverrides = {}, { rehydrate = false } = {}) {
+function createChatBotWrapper(storeOverrides = {}, { rehydrate = false, renderStubDefaultSlot = false } = {}) {
   const store = createChatBotStore(storeOverrides);
   if (rehydrate) rehydrateConversation(store.state.conversation);
   return mount(ChatBotComponent, {
     global: {
       plugins: [store],
+      // The stubs render no slot content by default, so what a card holds
+      // is invisible to the tests. A test that reads what a card SHOWS
+      // asks for the slot.
+      renderStubDefaultSlot,
       mocks: {
         $t: (key) => key,
         // Reactive, so a test can switch the locale the way the app does and
@@ -241,6 +246,28 @@ function createChatBotWrapper(storeOverrides = {}, { rehydrate = false } = {}) {
         FileText: true
       }
     }
+  });
+}
+
+// Mount with a configuration whose Quick Help buttons are [buttons]. The
+// config-loader mock is module-level, and clearAllMocks() does not reset an
+// implementation — resetQuickHelpButtons() restores the empty-button default
+// afterwards (from the describes' afterEach), so the rest of the suite is
+// unaffected. [options] is passed through to createChatBotWrapper.
+async function mountWithButtons(buttons, options = {}) {
+  const configLoader = require('../../config-loader');
+  configLoader.default.mockResolvedValue({
+    features: { chat: { quickHelp: { buttons } } }
+  });
+  const wrapper = createChatBotWrapper({}, options);
+  await flushPromises();
+  return wrapper;
+}
+
+function resetQuickHelpButtons() {
+  const configLoader = require('../../config-loader');
+  configLoader.default.mockResolvedValue({
+    features: { chat: { quickHelp: { buttons: [] } } }
   });
 }
 
@@ -1526,6 +1553,138 @@ describe('ChatBotComponent', () => {
       // loaded, 'Tomato' is a tag and nothing more — it is not turned into
       // a filter label the hierarchy cannot vouch for.
       expect(vm.selectedContextItems[0].serviceKey).toBeNull();
+    });
+
+    describe('a falsy JSON id — the cross-platform identity contract (#1244)', () => {
+      // A hand-edited configuration can declare `"id": 0` or `false`.
+      // The web's identity rule (`button.id || title`) tests the RAW
+      // value's truthiness; the mobile must read the same rule, or the
+      // two platforms save different tags for the same card and no
+      // cross-platform restore matches. These tests pin the WEB half of
+      // the contract (the mobile's live beside the mobile identity
+      // rules); the web's own behaviour here is unchanged.
+      const falsyIdConfig = {
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [{ id: 0, title: 'Card Zero', category: '1', serviceLabels: ['Tomato'] }]
+            }
+          }
+        }
+      };
+
+      it('saves the TITLE as the identity — the raw id is falsy', async () => {
+        const loadConfig = require('../../config-loader').default;
+        loadConfig.mockResolvedValue(falsyIdConfig);
+
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+        await vm.loadQuickHelpButtons();
+
+        expect(vm.quickHelpButtons[0].serviceKey).toBe('Card Zero');
+        // The id itself stays RAW: the restore compares it with ===.
+        expect(vm.quickHelpButtons[0].id).toBe(0);
+      });
+
+      it('does not match a mobile-saved "0" tag — it restores as an unnamed sidebar tag', async () => {
+        const loadConfig = require('../../config-loader').default;
+        loadConfig.mockResolvedValue(falsyIdConfig);
+
+        mockLiveTree([]);
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+        await vm.loadQuickHelpButtons();
+
+        const chatHistoryService = require('../../services/chatHistoryService');
+        chatHistoryService.getConversation.mockResolvedValueOnce({
+          _key: 'c1',
+          title: 'Saved chat',
+          messages: [],
+          tags: ['0']
+        });
+
+        await vm.loadExistingConversation('c1');
+
+        // The strict `candidate.id === tag` cannot match a raw 0 against
+        // the string '0': the tag falls to the sidebar branch, the
+        // unnamed-tag count refuses the send. The mobile's restore index
+        // skips falsy raw ids and reaches the SAME verdict.
+        expect(vm.selectedContextItems.length).toBe(1);
+        expect(vm.selectedContextItems[0].source).not.toBe('quickHelp');
+        expect(vm.selectedContextItems[0].unresolved).toBe(true);
+      });
+
+      it('restores the title tag a falsy-id card saves as a sidebar tag, not a card', async () => {
+        // The title is what BOTH platforms now save for a falsy-id card.
+        // Neither restore matches a title to a button (the lookup is
+        // id-only): the tag falls to the sidebar branch on both, and —
+        // the title naming no tree entity — refuses the send on both.
+        const loadConfig = require('../../config-loader').default;
+        loadConfig.mockResolvedValue(falsyIdConfig);
+
+        mockLiveTree([]);
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+        await vm.loadQuickHelpButtons();
+
+        const chatHistoryService = require('../../services/chatHistoryService');
+        chatHistoryService.getConversation.mockResolvedValueOnce({
+          _key: 'c1',
+          title: 'Saved chat',
+          messages: [],
+          tags: ['Card Zero']
+        });
+
+        await vm.loadExistingConversation('c1');
+
+        expect(vm.selectedContextItems.length).toBe(1);
+        expect(vm.selectedContextItems[0].source).not.toBe('quickHelp');
+        expect(vm.selectedContextItems[0].unresolved).toBe(true);
+      });
+
+      it('saves and restores a numeric id RAW — in its own JSON type only', async () => {
+        const loadConfig = require('../../config-loader').default;
+        loadConfig.mockResolvedValue({
+          features: {
+            chat: {
+              quickHelp: {
+                buttons: [{ id: 5, title: 'Five', category: '1', serviceLabels: ['Tomato'] }]
+              }
+            }
+          }
+        });
+
+        mockLiveTree([]);
+        const wrapper = createChatBotWrapper();
+        const vm = wrapper.vm;
+        await vm.loadQuickHelpButtons();
+
+        // The identity is the RAW number — not a stringified '5'.
+        expect(vm.quickHelpButtons[0].serviceKey).toBe(5);
+
+        const chatHistoryService = require('../../services/chatHistoryService');
+        // The web's own tag (the raw number) restores.
+        chatHistoryService.getConversation.mockResolvedValueOnce({
+          _key: 'c1',
+          title: 'Saved chat',
+          messages: [],
+          tags: [5]
+        });
+        await vm.loadExistingConversation('c1');
+        expect(vm.selectedContextItems[0].source).toBe('quickHelp');
+
+        // The mobile's stringified tag cannot — the one-way break of the
+        // same root cause, tracked separately from #1244: a mobile-saved
+        // numeric-id conversation restores unscoped here.
+        chatHistoryService.getConversation.mockResolvedValueOnce({
+          _key: 'c2',
+          title: 'Saved chat 2',
+          messages: [],
+          tags: ['5']
+        });
+        await vm.loadExistingConversation('c2');
+        expect(vm.selectedContextItems[0].source).not.toBe('quickHelp');
+      });
     });
 
     it('restores a sidebar scope as its EN label when the tree confirms it', async () => {
@@ -4929,8 +5088,6 @@ describe('ChatBotComponent', () => {
   });
 
   describe('quick-help card tint', () => {
-    const configLoader = require('../../config-loader');
-
     const tintedButton = {
       id: 'identity-civil',
       title: { en: 'Apply for ID' },
@@ -4950,23 +5107,7 @@ describe('ChatBotComponent', () => {
       category: null
     };
 
-    const mountWithButtons = async (buttons) => {
-      configLoader.default.mockResolvedValue({
-        features: { chat: { quickHelp: { buttons } } }
-      });
-      const wrapper = createChatBotWrapper();
-      await flushPromises();
-      return wrapper;
-    };
-
-    afterEach(() => {
-      // The config-loader mock is module-level, and clearAllMocks() does
-      // not reset an implementation — restore the empty-button default so
-      // the rest of the suite is unaffected.
-      configLoader.default.mockResolvedValue({
-        features: { chat: { quickHelp: { buttons: [] } } }
-      });
-    });
+    afterEach(resetQuickHelpButtons);
 
     it('exposes the button tint as custom properties', () => {
       const wrapper = createChatBotWrapper();
@@ -5470,5 +5611,117 @@ describe('Quick Help category reference', () => {
 
     const button = wrapper.vm.quickHelpButtons.find((b) => b.id === 'civil');
     expect(button.category).toBe('2');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A Quick Help card with NO TITLE
+//
+// The configuration's title resolves to nothing (an absent title, an empty
+// locale map, or a map whose every entry is empty). The card then carries no
+// label — and the press gate refuses it (selectQuickHelpOption's first rule:
+// no service, no selection), so the tap did nothing at all: no caption, no
+// toast, no state change. A card that LOOKS alive and swallows the press.
+//
+// The mobile twin fixed the same shape with quickHelpCardBroken —
+// the DISPLAY twin of the press gate: every press refusal has a face. The web
+// renders the card as the broken card it is, with the caption naming the
+// missing title.
+// ---------------------------------------------------------------------------
+describe('Quick Help card with no title', () => {
+  // A card whose title resolves to nothing: the locale map's every entry
+  // is empty, so resolveConfigText finds nothing to show.
+  const titleLessButton = {
+    id: 'title-less',
+    title: { en: '' },
+    icon: { type: 'file', value: '/config/quickhelp/just-chat.svg' },
+    category: null,
+    styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
+  };
+
+  const titledButton = {
+    id: 'titled',
+    title: { en: 'A titled card' },
+    icon: { type: 'file', value: '/config/quickhelp/just-chat.svg' },
+    category: null,
+    styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
+  };
+
+  afterEach(resetQuickHelpButtons);
+
+  it('maps a title that resolves to nothing onto an empty label', async () => {
+    const wrapper = await mountWithButtons([titleLessButton]);
+
+    const button = wrapper.vm.quickHelpButtons.find((b) => b.id === 'title-less');
+    expect(button.service).toBe('');
+  });
+
+  it('marks the card broken, the way a broken scope does', async () => {
+    const wrapper = await mountWithButtons([titleLessButton]);
+    const vm = wrapper.vm;
+
+    const button = vm.quickHelpButtons.find((b) => b.id === 'title-less');
+    // The card's own verdict: the scope is fine, the TITLE is not, and
+    // the card is broken all the same — it is the display twin of the
+    // press refusal.
+    expect(vm.quickHelpScopeState(button).broken).toBe(false);
+    expect(vm.quickHelpCardBroken(button)).toBe(true);
+  });
+
+  it('leaves a card with a title alone', async () => {
+    const wrapper = await mountWithButtons([titledButton]);
+    const vm = wrapper.vm;
+
+    const button = vm.quickHelpButtons.find((b) => b.id === 'titled');
+    expect(vm.quickHelpCardBroken(button)).toBe(false);
+  });
+
+  it('names the missing title in the caption', async () => {
+    const en = require('../../i18n/locales/en').default;
+    const wrapper = createChatBotWrapperWithI18n({ en });
+    const vm = wrapper.vm;
+    mockLiveTree([]);
+    vm.serviceCategories = [];
+    vm.serviceCategoriesStatus = 'loaded';
+
+    const button = {
+      id: 'title-less',
+      service: '',
+      serviceLabels: [],
+      category: null,
+      icon: 'x'
+    };
+
+    // The caption IS the locale's own text for the missing title — the
+    // expectation reads the same locale file the app translates from, so
+    // a copy reword keeps this green while a dropped clause (an empty
+    // caption) or a dropped key (the raw key coming back) goes red. The
+    // text ships in all 14 locales.
+    expect(vm.quickHelpCardCaption(button)).toBe(en.chatbot.quickHelpTitleMissing);
+  });
+
+  it('shows the caption and the error icon on the card', async () => {
+    const wrapper = await mountWithButtons([titleLessButton], { renderStubDefaultSlot: true });
+    await wrapper.vm.$nextTick();
+
+    // The card renders as the broken card: the error class, the warning
+    // icon and the caption that says why.
+    const card = wrapper.find('.quick-help-item');
+    expect(card.classes()).toContain('config-error');
+    expect(wrapper.find('.config-error-icon').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="quick-help-error-caption"]').exists()).toBe(true);
+  });
+
+  it('sends no query when the card is pressed', async () => {
+    const wrapper = await mountWithButtons([titleLessButton]);
+    const vm = wrapper.vm;
+
+    const button = vm.quickHelpButtons.find((b) => b.id === 'title-less');
+    await vm.selectQuickHelpOption(button);
+
+    // The press installs nothing and sends nothing — the caption on the
+    // card is what the user reads.
+    expect(mockSubmitQueryStream).not.toHaveBeenCalled();
+    expect(vm.selectedContextItems).toHaveLength(0);
   });
 });

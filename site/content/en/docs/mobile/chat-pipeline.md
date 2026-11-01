@@ -91,7 +91,7 @@ The dialog body emits `{ rating, thumbFeedback, skinTone, text, messageId }` via
 
 ## 5. Quick Help overlay
 
-The Quick Help overlay loads on first launch and after a fresh conversation. It surfaces contextual buttons sourced from `assets/config/quickhelp/` (loaded by `GenieAIConfig` at startup). The JSON shape per button:
+The Quick Help overlay loads on first launch and after a fresh conversation. It surfaces contextual buttons read from `assets/config/genie-ai-config.json` — the chatbot component's own load parses that file's `features.chat.quickHelp` section (`GenieAIConfig` reads the same file's `app` section, which carries the app title and icon). The card icons come from the bundled `assets/config/quickhelp/` directory. The JSON shape per button:
 
 ```json
 {
@@ -102,14 +102,14 @@ The Quick Help overlay loads on first launch and after a fresh conversation. It 
 }
 ```
 
-A button may also carry an `action` object with `visibleText` and `hiddenPrompt` keys (each a locale-keyed map of strings). When `action` is present, `chatbot_component.dart:739-740` (inside `_quickHelpPressed`, starting at line 737) reads `button['action']['visibleText']` to prefill the chat input and `button['action']['hiddenPrompt']` to seed the LLM's hidden prompt — these fields are optional and only present when the button's prompt needs to differ from its visible label.
+A button may also carry an `action` object with `visibleText` and `hiddenPrompt` keys (each a locale-keyed map of strings). The configuration is parsed once, in `chatbot_component.dart`'s Quick Help load, through `parseQuickHelpButton` in `lib/components/chat/quick_help_scope.dart`: the action's texts are resolved there, under the load's locale, into the button's `resolvedVisibleText` and `resolvedHiddenPrompt`. The press path reads those two resolved values and never touches the raw `action` map again: the visible text becomes the user's message in the chat and the hidden prompt is what the assistant receives. These fields are optional and only present when the button's prompt needs to differ from its visible label.
 
 A `category` names the category the button scopes to: the category's **English name** (`nameEN`, as `GET /api/service-categories/categories` publishes it) — the same spelling the retriever filters on, and the one a deployment can write down without reading the database. The hierarchy's own `catKey` is still accepted, for configurations written before that spelling was adopted. A category the live hierarchy does not carry renders as an error card and sends nothing.
 
 User flow:
 
 1. Overlay appears above the chat input.
-2. User taps a button → the chat is **prefilled** with `action.visibleText` (or `title` when `action` is absent), and the LLM hidden prompt is set from `action.hiddenPrompt` when present.
+2. User taps a button → the chat sends `action.visibleText` as the user's message and the assistant receives `action.hiddenPrompt`. A card that declares no hidden prompt opens the chat with its scope in place and leaves the question to the user — it never sends an empty one.
 3. The overlay auto-hides after first interaction (or via the explicit dismiss control).
 
 ### Authoring Quick Help buttons
@@ -118,7 +118,8 @@ User flow:
 |------|---------|
 | `assets/config/quickhelp/<icon>.svg` | Button icon (SVG) |
 | `assets/config/genie-ai-config.json` | List of Quick Help buttons — `id`, `title` (locale-keyed), `icon` (file path), optional `category` and `action` |
-| `lib/services/genie_ai_config.dart` | Loads and parses the JSON at startup |
+| `lib/components/chat/quick_help_scope.dart` | Parses the Quick Help section (`parseQuickHelpConfig` / `parseQuickHelpButton`) — the identity, the title, the icon, the labels and the scope rules |
+| `lib/services/genie_ai_config.dart` | Loads the same JSON at startup for the `app` section (title and icon) |
 
 ## 6. Conversation management
 

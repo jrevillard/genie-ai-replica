@@ -20,16 +20,11 @@ const { aql } = require('arangojs');
 const dbService = require('../shared-lib/db-connection-service');
 const auditService = require('./audit-service');
 const { logger } = require('../shared-lib/logger');
+const { isArangoNotFound } = require('./arango-errors');
 const { withSpan } = require('../shared-lib/tracing');
 const { workingGraphName, slugFor } = require('./graph-lifecycle-service');
 
 const GRAPH_SUFFIXES = ['_SOURCE', '_ENTITY', '_HAS_SOURCE', '_LINKS_TO'];
-const NOT_FOUND = (err) =>
-  err &&
-  (err.code === 404 ||
-    err.errorNum === 1204 ||
-    err.statusCode === 404 ||
-    /not found|no match/i.test(String(err.message || '')));
 
 /**
  * D-C (#981, David's Stage-1 ruling): drop the repo's per-repo GRAPHS ONLY —
@@ -46,7 +41,7 @@ async function dropRepoGraphsForRepo(repo_id) {
   try {
     repo = await db.collection('okf_repositories').document(repo_id);
   } catch (err) {
-    if (!NOT_FOUND(err)) throw err;
+    if (!isArangoNotFound(err)) throw err;
   }
   const candidates = new Set();
   if (repo && repo.graph_name && String(repo.graph_name).startsWith('OKF_')) {
@@ -108,7 +103,7 @@ async function dropRepoGraphsForRepo(repo_id) {
       await db.route(`_api/gharial/${encodeURIComponent(graph)}?dropCollections=true`).delete();
       dropped.push(`${graph} (graph definition + member collections, cascade)`);
     } catch (err) {
-      if (!NOT_FOUND(err)) {
+      if (!isArangoNotFound(err)) {
         logger.warn('Graph teardown: graph cascade drop failed', { repo_id, graph, error: err.message });
       }
     }
@@ -119,7 +114,7 @@ async function dropRepoGraphsForRepo(repo_id) {
         await db.collection(name).drop();
         dropped.push(name);
       } catch (err) {
-        if (!NOT_FOUND(err)) {
+        if (!isArangoNotFound(err)) {
           logger.warn('Graph teardown: collection drop failed', { repo_id, name, error: err.message });
         }
       }
@@ -157,7 +152,7 @@ async function retractRepoGraph(repo_id, actor) {
     try {
       repo = await db.collection('okf_repositories').document(repo_id);
     } catch (err) {
-      if (!NOT_FOUND(err)) throw err;
+      if (!isArangoNotFound(err)) throw err;
     }
     const candidates = new Set();
     if (repo && repo.graph_name && String(repo.graph_name).startsWith('OKF_')) {
@@ -193,7 +188,7 @@ async function retractRepoGraph(repo_id, actor) {
         await db.route(`_api/gharial/${encodeURIComponent(graph)}?dropCollections=true`).delete();
         dropped.push(`${graph} (graph definition + member collections, cascade)`);
       } catch (err) {
-        if (!NOT_FOUND(err)) {
+        if (!isArangoNotFound(err)) {
           logger.warn('Graph retract: graph cascade drop failed', { repo_id, graph, error: err.message });
         }
       }
@@ -205,7 +200,7 @@ async function retractRepoGraph(repo_id, actor) {
           await db.collection(name).drop();
           dropped.push(name);
         } catch (err) {
-          if (!NOT_FOUND(err)) {
+          if (!isArangoNotFound(err)) {
             logger.warn('Graph retract: collection drop failed', { repo_id, name, error: err.message });
           }
         }

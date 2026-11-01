@@ -22,6 +22,7 @@ endpoints; capability minimums live in the spec's model-requirements.md.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import logging
 import os
 import threading
@@ -53,7 +54,11 @@ async def auth_middleware(request: Request, call_next):
         return await call_next(request)
     expected = _secret()
     provided = request.headers.get("x-ragas-secret", "")
-    if not expected or provided != expected:
+    # Timing-safe compare (review 2026-10-29 round 3): a plain `!=` leaks the
+    # secret's bytes one guess at a time. compare_digest handles the length
+    # mismatch itself (False, no exception); bytes are compared, so both sides
+    # are encoded first (str inputs must be ASCII-only).
+    if not expected or not hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8")):
         # Fail-closed: unset server secret rejects; wrong client secret rejects.
         return JSONResponse(
             status_code=503,

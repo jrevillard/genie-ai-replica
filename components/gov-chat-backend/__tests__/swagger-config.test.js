@@ -2,8 +2,9 @@
 
 require('./setup-env');
 
-// Mock only the infrastructure dependencies — no need to mock swagger-jsdoc
-// or swagger-ui-express because we test the exported config objects directly.
+// Mock only the infrastructure dependencies. swagger-jsdoc is NOT mocked —
+// the spec-building tests below run it for real; swagger-ui-express is
+// untouched because we test the exported config objects directly.
 
 jest.mock(
   '../shared-lib',
@@ -105,8 +106,58 @@ afterAll(() => {
 
 // Access the exported config objects directly — no capture mocking needed
 const { swaggerOptions, swaggerUiSetupOptions } = require('../index');
+// File-scope binding: survives jest.resetModules() re-evaluations, so the
+// identity assert below holds regardless of test order.
+const sharedDefinition = require('../swagger-definition');
+
+// Build the merged spec the way the runtime does. This suite mocks fs and
+// path (index.js's uploads-dir probe); the spec build needs the real ones.
+// The mocks are put back in a finally so the file's other tests keep
+// seeing them.
+const buildSpecWithRealFs = (options) => {
+  // Resolve swagger-jsdoc through the current module registry: after
+  // withApiUrl's resetModules a fresh instance is returned whose internal
+  // glob holds the same fresh fs mock patched below; without a reset the
+  // cached instance's glob holds the file-level fs mock, which is the one
+  // patched. Either way glob reads real fs at call time.
+  const fs = require('fs');
+  const registrySwaggerJsdoc = require('swagger-jsdoc');
+  const path = require('path');
+  const mockedFs = { ...fs };
+  const mockedPath = { ...path };
+  Object.assign(fs, jest.requireActual('fs'));
+  Object.assign(path, jest.requireActual('path'));
+  try {
+    // The runtime object's apis glob is relative to the backend dir;
+    // anchor it to this file so the test does not depend on the
+    // directory jest was invoked from.
+    return registrySwaggerJsdoc({
+      ...options,
+      apis: [path.join(__dirname, '..', 'routes', '*.js')]
+    });
+  } finally {
+    for (const key of Object.keys(fs)) delete fs[key];
+    Object.assign(fs, mockedFs);
+    for (const key of Object.keys(path)) delete path[key];
+    Object.assign(path, mockedPath);
+  }
+};
+
+// One spec build shared by every describe that reads the same merged spec
+// (the route annotations and the shared schemas do not change between
+// tests). The Server URL describe below cannot use it: it re-requires
+// index.js after jest.resetModules and builds its own.
+const mergedSpec = buildSpecWithRealFs(swaggerOptions);
 
 describe('Swagger Configuration', () => {
+  describe('Shared envelope module', () => {
+    // index.js must expose the shared module object, not an inlined copy —
+    // one envelope for the served spec and the generated client.
+    it('exposes the shared swagger-definition module as the runtime envelope', () => {
+      expect(swaggerOptions.definition).toBe(sharedDefinition);
+    });
+  });
+
   describe('Security Scheme (Task 1)', () => {
     it('should contain KeycloakOAuth2 security scheme (NOT bearerAuth)', () => {
       const schemes = swaggerOptions.definition.components.securitySchemes;
@@ -179,6 +230,154 @@ describe('Swagger Configuration', () => {
     it('should generate the Swagger spec without errors', () => {
       expect(swaggerOptions).toBeDefined();
       expect(swaggerOptions.definition.openapi).toBe('3.0.0');
+    });
+
+    it('should resolve every $ref in the route annotations to a defined schema', () => {
+      // A $ref to an undefined schema is silent at runtime — swagger-ui
+      // loses the model and the client generator drops it. This shipped
+      // once: !609 referenced CategoryTree without defining it. Build the
+      // merged spec exactly as the runtime does and assert every local
+      // schema $ref resolves.
+      const spec = mergedSpec;
+      const defined = new Set(Object.keys(spec.components?.schemas || {}));
+      const refs = new Set();
+      const walk = (node) => {
+        if (!node || typeof node !== 'object') return;
+        if (Array.isArray(node)) {
+          node.forEach(walk);
+          return;
+        }
+        for (const [key, value] of Object.entries(node)) {
+          if (key === '$ref' && typeof value === 'string' && value.startsWith('#/components/schemas/')) {
+            refs.add(value.replace('#/components/schemas/', ''));
+          } else {
+            walk(value);
+          }
+        }
+      };
+      walk(spec);
+      expect(refs.size).toBeGreaterThan(0);
+      const dangling = [...refs].filter((name) => !defined.has(name));
+      expect(dangling).toEqual([]);
+    });
+  });
+
+  describe('Event contract split (request wire vs stored document)', () => {
+    // The route destructures exactly eventType + eventData from the wire
+    // (timestamp is server-set) and the service stores the payload under
+    // `data`, so EventRequest documents the request wire and Event stays
+    // the stored ArangoDB document shape. A shared schema carrying both
+    // spellings made `eventData` vs `data` ambiguous to client authors —
+    // sending `data` was silently dropped (stored as {}).
+    const spec = mergedSpec;
+    const eventsOps = spec.paths['/api/analytics/events'];
+
+    it('annotates the POST request body with EventRequest, not Event', () => {
+      expect(eventsOps.post.requestBody.content['application/json'].schema).toEqual({
+        $ref: '#/components/schemas/EventRequest'
+      });
+    });
+
+    it('EventRequest carries the request wire: eventType required, eventData, no stored fields', () => {
+      const eventRequest = spec.components.schemas.EventRequest;
+      expect(eventRequest.required).toEqual(['eventType']);
+      expect(Object.keys(eventRequest.properties).sort()).toEqual(['eventData', 'eventType']);
+      // Mirrors the runtime truthiness check: an empty eventType is
+      // refused with 400.
+      expect(eventRequest.properties.eventType.minLength).toBe(1);
+    });
+
+    it('Event carries the stored shape: data, no request-wire eventData', () => {
+      const event = spec.components.schemas.Event;
+      expect('data' in event.properties).toBe(true);
+      expect('eventData' in event.properties).toBe(false);
+    });
+
+    it('documents the 201 as the save metadata and the GET list as stored Event documents', () => {
+      // trackEvent returns the arangojs save() result ({_id, _key, _rev}) —
+      // the full persisted document is never in the 201 body — while GET
+      // /events returns the stored documents themselves.
+      expect(eventsOps.post.responses['201'].content['application/json'].schema.$ref).toBe(
+        '#/components/schemas/EventCreated'
+      );
+      expect(eventsOps.get.responses['200'].content['application/json'].schema.items.$ref).toBe(
+        '#/components/schemas/Event'
+      );
+      // A successful save always carries all three keys.
+      expect(spec.components.schemas.EventCreated.required).toEqual(['_id', '_key', '_rev']);
+    });
+  });
+
+  describe('Server URL vs annotated paths', () => {
+    // The exported swaggerOptions capture process.env.API_URL at module
+    // load. These tests re-require index.js with API_URL pinned (unset or
+    // custom) so the assertions hold no matter what the invoking shell has
+    // exported.
+    const withApiUrl = (apiUrl, fn) => {
+      const setApiUrl = (value) => {
+        if (value === undefined) {
+          delete process.env.API_URL;
+        } else {
+          process.env.API_URL = value;
+        }
+      };
+      const previous = process.env.API_URL;
+      const previousHandlers = process.listeners('unhandledRejection');
+      setApiUrl(apiUrl);
+      try {
+        jest.resetModules();
+        return fn(require('../index'));
+      } finally {
+        jest.resetModules();
+        // Every index.js evaluation registers another module-level
+        // unhandledRejection handler (which calls process.exit) — restore
+        // the count the file started with.
+        process.removeAllListeners('unhandledRejection');
+        previousHandlers.forEach((handler) => process.on('unhandledRejection', handler));
+        setApiUrl(previous);
+      }
+    };
+
+    it('default server URL carries no /api suffix (annotated paths already start with /api)', () => {
+      withApiUrl(undefined, ({ swaggerOptions }) => {
+        const url = swaggerOptions.definition.servers[0].url;
+        expect(url).not.toMatch(/\/api\/?$/);
+      });
+    });
+
+    it('a custom API_URL is used verbatim as the suffix-free server base', () => {
+      withApiUrl('https://gov.example.com/gov', ({ swaggerOptions }) => {
+        const url = swaggerOptions.definition.servers[0].url;
+        expect(url).toBe('https://gov.example.com/gov');
+        // A base carrying its own path joins the annotated paths the same
+        // way: one /api, from the path, never doubled.
+        const joined = `${url.replace(/\/+$/, '')}/api/queries/{queryId}/responsetime`;
+        expect(joined).toMatch(/^https?:\/\//);
+        expect(joined).not.toContain('/api/api');
+      });
+    });
+
+    it('server URL joined with an annotated path resolves to a single /api segment', () => {
+      withApiUrl(undefined, ({ swaggerOptions }) => {
+        const spec = buildSpecWithRealFs(swaggerOptions);
+
+        // A route the app actually serves, as declared in query-routes.js.
+        const annotatedPath = '/api/queries/{queryId}/responsetime';
+        expect(spec.paths).toHaveProperty(annotatedPath);
+        // The other half of the join invariant below: every annotated path
+        // starts with /api. An annotation without the prefix (a natural
+        // copy of the router's own mount-relative path) would make
+        // Try-it-out drop /api for that route.
+        for (const specPath of Object.keys(spec.paths)) {
+          expect(specPath).toMatch(/^\/api\//);
+        }
+
+        // swagger-ui's Try-it-out executes servers[0].url + path.
+        const url = swaggerOptions.definition.servers[0].url;
+        const joined = `${url.replace(/\/+$/, '')}${annotatedPath}`;
+        expect(joined).toMatch(/^https?:\/\//);
+        expect(joined).not.toContain('/api/api');
+      });
     });
   });
 });

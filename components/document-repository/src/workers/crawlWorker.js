@@ -28,10 +28,13 @@ const REQUIRED_LANG = (appConfig.upload?.requiredIngestionLanguage || 'en').toLo
 const UPLOAD_DIR = path.join(__dirname, '..', '..', appConfig.upload.uploadDir || 'uploads');
 const KILL_WATCH_INTERVAL_MS = appConfig.crawler?.killWatchIntervalMs || 2000;
 
-// Definitive arangojs not-found (ArangoError 404 / 1202 "document not found").
-// Distinct from transient connection errors, which must keep failing open.
-const isDocumentNotFound = (e) =>
-  !!e && (e.statusCode === 404 || e.errorNum === 1202 || /not found/i.test(e.message || ''));
+// Definitive document absence, by the CANONICAL classifier (shared/lib's
+// _isExpectedAbsence: ArangoError 1202/1204, or the exact cursor 'no match'
+// message) plus the arangojs HTTP 404 shape. The old /not found/i message
+// test ALSO matched a MISSING COLLECTION (errorNum 1203, "collection or view
+// not found") — an infrastructure fault that must fail open, not abort
+// in-flight crawls (review 2026-10-29).
+const isDocumentNotFound = (e) => !!e && (dbService._isExpectedAbsence(e) || e.statusCode === 404);
 
 // --- THREAD POOL SETUP ---
 const NUM_CPUS = os.cpus().length;

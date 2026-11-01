@@ -58,21 +58,9 @@ const ALL_TYPES = [...CONTENT_TYPES, ...RESERVED_INDEX_TYPES];
  */
 const STATUS_VALUES = ['draft', 'stable', 'deprecated'];
 
-/** True when `type` is a value the product itself produces. */
-function isKnownType(type) {
-  return ALL_TYPES.includes(type);
-}
-
-/** True when `type` is author-reserved (the index) rather than a content type. */
-function isReservedType(type) {
-  return RESERVED_INDEX_TYPES.includes(type);
-}
-
 module.exports = {
   CONTENT_TYPES,
   RESERVED_INDEX_TYPES,
   ALL_TYPES,
-  STATUS_VALUES,
-  isKnownType,
-  isReservedType
+  STATUS_VALUES
 };

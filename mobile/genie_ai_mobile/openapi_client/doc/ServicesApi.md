@@ -15,7 +15,7 @@ Method | HTTP request | Description
 
 
 # **apiServicesCategoriesCategoryIdGet**
-> ApiServicesCategoriesGet200ResponseInner apiServicesCategoriesCategoryIdGet(categoryId, locale)
+> ApiServicesCategoriesCategoryIdGet200Response apiServicesCategoriesCategoryIdGet(categoryId, locale)
 
 Get category with services
 
@@ -24,6 +24,8 @@ Retrieves a specific service category with its associated services
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = ServicesApi();
 final categoryId = categoryId_example; // String | Category ID
@@ -46,11 +48,11 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**ApiServicesCategoriesGet200ResponseInner**](ApiServicesCategoriesGet200ResponseInner.md)
+[**ApiServicesCategoriesCategoryIdGet200Response**](ApiServicesCategoriesCategoryIdGet200Response.md)
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -60,7 +62,7 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **apiServicesCategoriesGet**
-> List<ApiServicesCategoriesGet200ResponseInner> apiServicesCategoriesGet(locale)
+> List<CategoryTree> apiServicesCategoriesGet(locale)
 
 Get all categories with services
 
@@ -69,6 +71,8 @@ Retrieves all service categories with their associated services
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = ServicesApi();
 final locale = locale_example; // String | Language locale for category and service names
@@ -89,11 +93,11 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**List<ApiServicesCategoriesGet200ResponseInner>**](ApiServicesCategoriesGet200ResponseInner.md)
+[**List<CategoryTree>**](CategoryTree.md)
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -112,6 +116,8 @@ Searches for categories and services based on a query string
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = ServicesApi();
 final query = query_example; // String | Search query
@@ -138,7 +144,7 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 

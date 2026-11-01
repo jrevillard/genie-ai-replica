@@ -38,11 +38,13 @@
 'use strict';
 
 const { logger } = require('../shared-lib/logger');
+const { isArangoNotFound } = require('./arango-errors');
 const { withSpan } = require('../shared-lib/tracing');
 const { createHash } = require('node:crypto');
 const dbService = require('../shared-lib/db-connection-service');
 
 const frontmatterService = require('./frontmatter-service');
+const modelCache = require('./vllm-model-cache');
 const repositoryService = require('./repository-service');
 const headTestService = require('./head-test-service');
 const modelConfigService = require('./model-config-service');
@@ -288,6 +290,12 @@ function ragasSecret() {
  * RAGAS_UNAVAILABLE (503) — the panel says so honestly; nothing hangs.
  */
 async function sidecar(path, { method = 'POST', json, body, contentType, timeoutMs } = {}) {
+  // Egress guard (review 2026-10-29): `path` is a hard-coded constant at
+  // every call site — reject anything that could turn the fixed-base
+  // concatenation into an arbitrary URL, so a future caller cannot.
+  if (typeof path !== 'string' || path.includes('://')) {
+    throw new Error(`ragas sidecar: rejected non-relative path: ${String(path).slice(0, 80)}`);
+  }
   const headers = { 'X-RAGAS-Secret': ragasSecret() };
   let payload;
   if (json !== undefined) {
@@ -1005,20 +1013,43 @@ async function generateAnswer(query, contexts) {
  * "glm-5.3-flash" while the answers came from the deployment chat model.
  * The record must say what answered.
  *
- * The deployment model is read from the env: the containers carry
- * VLLM_MODEL_ID, and VLLM_LLM_MODEL_ID is the deployment's other spelling
- * of the same knob (8-7 found the two names out of step). */
+ * The deployment model resolves under the !631 policy (see the inline
+ * note at deploymentChat below): pin > /v1/models discovery. */
 async function answerFidelity(opts = {}) {
-  const deploymentChat = () => ({
+  // The LABEL probe's deadline (both branches): a provenance label must not
+  // add a probe timeout to every benchmark run start — a slow endpoint
+  // leaves the label null rather than delaying the run.
+  const SOFT_PROBE_BUDGET_MS = 2000;
+  const deploymentChat = async () => ({
     source: 'deployment-chat',
     config: null,
-    model: process.env.VLLM_LLM_MODEL_ID || process.env.VLLM_MODEL_ID || null
+    // The model CHATQNA would answer with — its compose pin maps ONLY the
+    // VLLM_LLM_MODEL_ID spelling (chatqna never receives the raw spelling;
+    // okf-server does, but this label must mirror chatqna, not okf), else
+    // it discovers the served id. The okf-side fused pin must not name the
+    // serve-mode model.
+    model:
+      modelCache.envPinLLMSpelling() ||
+      (await modelCache.deploymentServedModelId({ timeoutMs: SOFT_PROBE_BUDGET_MS })) ||
+      null
   });
   if (opts.serveMode) return deploymentChat();
   try {
     const ovr = await modelConfigService.resolveModelOverride({ service: 'ragas_answers' });
     if (ovr && ovr.provider === 'openai') {
-      return { source: 'config', config: ovr.config_name, model: ovr.model };
+      // A config that names NO model leaves the id to DISCOVERY — the served
+      // model answers. The record must name what answered (the same rule
+      // the serve-mode branch follows), not null.
+      const model =
+        ovr.model ||
+        (await modelCache.servedModelId(ovr.base_url, {
+          // The config's own credential for its own base; the deployment
+          // bearer only when the base IS the deployment endpoint.
+          apiKey: modelCache.credentialForBase(ovr.base_url, ovr.api_key),
+          timeoutMs: SOFT_PROBE_BUDGET_MS
+        })) ||
+        null;
+      return { source: 'config', config: ovr.config_name, model };
     }
   } catch {
     /* resolution failure — the deployment answerer applies */
@@ -1033,7 +1064,7 @@ function loadDoc(db, key, code, what) {
     .collection(COLLECTION)
     .document(key)
     .catch((e) => {
-      if (e && (e.code === 404 || e.statusCode === 404 || /not found/i.test(e.message || ''))) {
+      if (isArangoNotFound(e)) {
         // `what` already names the key (every call site passes it), so the
         // key is NOT appended again — the old message read "run rrX for suite
         // rsY rrX not found" (David saw it in the console, 2026-10-25).
@@ -5043,5 +5074,8 @@ module.exports = {
   // Exported so the summary's population rule (in-scope rows only) and its
   // four buckets can be pinned by a test: the panel used to derive them
   // itself, across two populations, and misreported which rows failed.
-  summarizeRun
+  summarizeRun,
+  // Exported so the sidecar()'s egress guard (review 2026-10-29 wave 2) can
+  // be pinned by a test — a malicious path must be rejected before any fetch.
+  sidecar
 };

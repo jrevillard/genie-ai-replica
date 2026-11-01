@@ -1,20 +1,27 @@
-// The scope of a Quick Help button, checked against the live EN hierarchy.
+import 'package:flutter/foundation.dart' show listEquals;
+import 'package:genie_ai_mobile/utils/config_resolver.dart';
+
+// The Quick Help rules, on both sides of the button: the SCOPE it claims
+// against the live EN hierarchy, and the CONFIG shape it is parsed from.
 //
-// English is the SSOT of the filter wire: the corpus's chunk_labels carry the
-// EN translation, so a declared label the hierarchy no longer carries can
-// never match a chunk, and a category that is gone leaves the button with no
-// scope at all. A broken button is a VISIBLE failure — error state, caption,
-// no query — never a silently reduced one.
+// Scope. English is the SSOT of the filter wire: the corpus's chunk_labels
+// carry the EN translation, so a declared label the hierarchy no longer
+// carries can never match a chunk, and a category that is gone leaves the
+// button with no scope at all. A broken button is a VISIBLE failure — error
+// state, caption, no query — never a silently reduced one. The resolver
+// indexes the tree ONCE: the label vocabulary and the category keys are
+// walked a single time, then every button is checked against the index —
+// never against the tree itself.
 //
-// The resolver indexes the tree ONCE: the label vocabulary and the category
-// keys are walked a single time, then every button is checked against the
-// index — never against the tree itself.
-//
-// The CONFIG-side rules of a Quick Help button live here too: its identity
-// (its id), the title it displays, and when the loaded buttons must
-// re-resolve for a new locale. They are the same kind of rule — one copy,
-// read by every path — and they belong to the button, not to the widget
-// that shows it.
+// Config. The CONFIG-side rules live here too, because the widget that
+// shows a button must not be the only place they are read: the section
+// parse (the guarded descent, the hidden filter, the per-entry skip, the
+// button parse, the first-wins dedupe), the button's identity (its id
+// when it declares one, its title when it does not), the
+// title it displays, when the loaded buttons must re-resolve for a new
+// locale, and the grid's layout values. They are the same kind of rule —
+// one copy, read by every path — and they belong to the button, not to the
+// widget that shows it.
 
 /// Whether [id] names a category scope at all. An EMPTY id declares
 /// nothing (it is how a selection is cleared), and 'general' is the
@@ -26,22 +33,175 @@ bool declaresCategoryScope(String? id) {
   return id != null && id.isNotEmpty && id != 'general';
 }
 
+/// The loaded shape of one Quick Help button, parsed from its config
+/// entry [btn] under [locale].
+///
+/// The shipped configurations declare the button's texts at the TOP
+/// level: `title` is a locale map (resolved here, once, like the
+/// welcome message), `icon` is an object whose `value` is a served
+/// path whose basename names the bundled asset, and `action` carries
+/// the visible and hidden texts. A button with no icon — or a
+/// malformed one — carries NO asset: the card renders its neutral
+/// help icon, the way the web renders an empty image. A bare STRING
+/// where the label array belongs is wrapped as ONE label — the
+/// wire's own bare-string rule.
+Map<String, dynamic> parseQuickHelpButton(
+  Map<String, dynamic> btn,
+  String locale,
+) {
+  // One malformed value degrades ONE card, never the whole load. A
+  // non-map icon or action is the config-typo class the bare-string
+  // label rule answers. A NON-MAP ENTRY (a stray string) is not a card
+  // at all and stays dropped — the web keeps it as a blank card that
+  // does nothing, so the two platforms show a different card count for
+  // a malformed file. A parsed-but-TITLE-LESS entry IS kept: the web
+  // renders the same blank card and refuses its press.
+  final iconMap = configMapOf(btn['icon']);
+  // The served path's BASENAME names the bundled asset. A NON-STRING
+  // value, or one with no basename, names nothing — no asset, not a
+  // garbage path the card cannot load.
+  final dynamic rawIconValue = iconMap['value'];
+  final iconFile = rawIconValue is String ? rawIconValue.split('/').last : '';
+  final String iconAsset = iconFile.isNotEmpty
+      ? 'assets/config/quickhelp/$iconFile'
+      : '';
+
+  final action = configMapOf(btn['action']);
+
+  return {
+    // The id is kept RAW: the presence rule (quickHelpIdOf, the web's
+    // `button.id || title`) reads the value's truthiness, which a
+    // stringified '0' would erase. Every id read goes through
+    // quickHelpIdOf, which stringifies in the web's own form.
+    'id': btn['id'],
+    // The category is an EQUALITY read — but against the form the WEB
+    // resolves: a numeric reference carries JavaScript's serialization
+    // ('5', not Dart's '5.0'), or the hierarchy lookup misses and only
+    // the mobile renders the card broken.
+    'category': _jsTagForm(btn['category']),
+    'serviceLabels': quickHelpServiceLabelsOf(btn),
+    'iconAsset': iconAsset,
+    'resolvedTitle': resolveConfigText(btn['title'], locale),
+    'resolvedVisibleText': resolveConfigText(action['visibleText'], locale),
+    'resolvedHiddenPrompt': resolveConfigText(action['hiddenPrompt'], locale),
+  };
+}
+
+/// The Quick Help section of a runtime configuration, parsed under
+/// [locale]: the grid layout and the loaded buttons. One resolve pass,
+/// the way the web runs it — the descent to `features.chat.quickHelp`
+/// guarded container by container, hidden cards dropped, malformed
+/// entries skipped, every button parsed, duplicates resolved FIRST-wins.
+/// The section rules live here so the widget keeps only cache, mount
+/// and state.
+(Map<String, dynamic>, List<Map<String, dynamic>>) parseQuickHelpConfig(
+  Map<String, dynamic> config,
+  String locale,
+) {
+  final quickHelp = configSectionOf(config, [...chatConfigPath, 'quickHelp']);
+  final layout = configMapOf(quickHelp['layout']);
+
+  final buttons = <Map<String, dynamic>>[];
+  final rawButtons = quickHelp['buttons'];
+  if (rawButtons is List) {
+    for (final entry in rawButtons) {
+      if (entry is! Map<String, dynamic>) continue;
+      // The web filters on JS truthiness (`!button.hidden`): a
+      // truthy value of any type hides the card on both platforms.
+      if (configTruthy(entry['hidden'])) continue;
+      buttons.add(parseQuickHelpButton(entry, locale));
+    }
+  }
+  return (layout, dedupeQuickHelpButtons(buttons));
+}
+
+/// The card's declared English KB labels, as strings — the ONE rule and
+/// the ONE read of a button's label list. The parse stores what this
+/// returns; every scope rule (the grid verdict, the unavailable caption,
+/// the restore union, the press filter) reads it, so the rule cannot
+/// drift between the copies.
+///
+/// A bare STRING where the array belongs is ONE label — the wire's own
+/// rule. A stored string list is handed back as-is (the grid reads this
+/// per frame); any other list is stringified, so a card never silently
+/// loses its scope.
+List<String> quickHelpServiceLabelsOf(Map<String, dynamic> button) {
+  final labels = button['serviceLabels'];
+  if (labels is List<String>) return labels;
+  if (labels is List) return labels.map((label) => label.toString()).toList();
+  if (labels is String && labels.isNotEmpty) return [labels];
+  return const <String>[];
+}
+
+/// The spacing between the grid's columns — the delegate's own
+/// crossAxisSpacing and the column bound's denominator are ONE value.
+const double quickHelpGridSpacing = 10;
+
+/// The grid's column count, from the config's `layout` block, bounded
+/// by [maxWidth] (the width the grid is given). A malformed value — a
+/// non-number, a non-positive or non-finite count (a JSON `1e400`
+/// decodes to an infinite double) — degrades to 2, and a count wider
+/// than the grid is bounded by the width, so neither throws inside the
+/// build nor trips the grid delegate's assertions.
+///
+/// The WEB never reads this field: its grid is CSS auto-fit (a 217px
+/// card minimum, up to 4 columns). No shipped configuration sets a
+/// count, so the platforms' default layouts differ — mobile's fixed 2,
+/// the web's responsive — an accepted divergence, not a shared
+/// contract.
+int quickHelpGridColumns(
+  Map<String, dynamic> layout, {
+  double maxWidth = double.infinity,
+}) {
+  final raw = layout['columns'];
+  final int parsed = raw is num && raw.isFinite && raw.toInt() >= 1
+      ? raw.toInt()
+      : 2;
+  if (!maxWidth.isFinite) return parsed;
+  // The bound delivers ONE guarantee: the delegate never lays out a
+  // NEGATIVE-extent child (a debug assertion, garbage in release) —
+  // count and width must leave room for the spacing between the
+  // columns. An absurd-but-bounded count still yields sub-pixel tiles;
+  // a readable-minimum policy is a layout decision no shipped
+  // configuration needs (none sets a count).
+  int byWidth = (maxWidth ~/ quickHelpGridSpacing).toInt();
+  if (byWidth < 1) byWidth = 1;
+  return parsed.clamp(1, byWidth);
+}
+
+/// The grid's card aspect ratio, from the config's `layout` block. A
+/// malformed value — a non-number, a non-positive or non-finite ratio —
+/// degrades to 3.5, for the same reason the column count does.
+double quickHelpGridAspectRatio(Map<String, dynamic> layout) {
+  final raw = layout['childAspectRatio'];
+  return raw is num && raw.isFinite && raw > 0 ? raw.toDouble() : 3.5;
+}
+
 /// The loaded Quick Help buttons, with a duplicated id keeping only the
 /// FIRST entry.
 ///
-/// The id is the button's IDENTITY: the conversation tag carries it, the
-/// restore resolves it, the grid's verdict keys on it. Two cards with one
-/// id cannot both be honoured — the web keeps the first and drops the
-/// duplicate at load, so the mobile must too, or the same saved
-/// conversation would carry a different scope on the two platforms.
+/// The dedupe keys on the ID (quickHelpIdOf) — the same normalized form
+/// the web's raw strict compare produces for every id shape a config can
+/// write unambiguously — not on the identity (quickHelpButtonIdentity):
+/// two cards with one id cannot both be honoured, and the web keeps the
+/// first and drops the duplicate at load, so the mobile must too, or the
+/// same saved conversation would carry a different scope on the two
+/// platforms. Two ids differing only in JSON TYPE (5 vs '5') are where
+/// the web's raw compare and this normalized key part ways — a tracked
+/// divergence of the string-tag contract, not a rule of this file: the
+/// card count diverges, and the first-wins restore index then maps the
+/// shared key to the OTHER card than the web's lookup resolves. A
+/// card with NO id is kept, and two id-less cards sharing a title stay
+/// two cards — they then write the SAME conversation tag, exactly as the
+/// web does.
 List<Map<String, dynamic>> dedupeQuickHelpButtons(
   List<Map<String, dynamic>> buttons,
 ) {
   final seen = <String>{};
   final unique = <Map<String, dynamic>>[];
   for (final button in buttons) {
-    final id = button['id']?.toString();
-    if (id == null || id.isEmpty || seen.add(id)) {
+    final id = quickHelpIdOf(button);
+    if (id == null || seen.add(id)) {
       unique.add(button);
     }
   }
@@ -52,19 +212,76 @@ List<Map<String, dynamic>> dedupeQuickHelpButtons(
 /// it. The chatbot's two reads of a button by id — the restore path and
 /// the locale re-title — share this one lookup, so a change to the
 /// matching rule (trimming ids, a new id shape) cannot drift between
-/// them. (ConversationScopeResolver keeps its OWN first-wins index in
-/// _indexButtons — a different rule over a different structure.)
+/// them. The key is the SAME normalized form the restore index
+/// (_indexButtons) and the identity read, so a tag the index matched is
+/// a tag this lookup can resolve. (ConversationScopeResolver keeps its
+/// OWN first-wins index in _indexButtons — a different structure over
+/// the same key.)
 Map<String, dynamic>? quickHelpButtonById(
   List<Map<String, dynamic>> buttons,
   String? id,
 ) {
-  if (id == null || id.isEmpty) return null;
+  // Null names NO lookup (the tag list omits a null); '' needs no
+  // guard — quickHelpIdOf can never produce it, so the loop cannot
+  // match one.
+  if (id == null) return null;
   for (final button in buttons) {
-    if (button['id']?.toString() == id) {
+    if (quickHelpIdOf(button) == id) {
       return button;
     }
   }
   return null;
+}
+
+/// The identity a conversation tag carries for [button] — the web's
+/// `serviceKey` rule (`button.id || title`): the id when the
+/// configuration declares one, the button's own title when it does not.
+/// Null when neither exists. Like every rule here, it reads the PARSED
+/// button (the [quickHelpTitleOf] shape the load produces).
+///
+/// The identity must never be the id ALONE: a scoped card can be declared
+/// without an id (a hand-edited deployment configuration — no shipped
+/// configuration carries one), and an id-only identity then leaves the
+/// saved conversation without a Quick Help tag. The restore would answer
+/// every follow-up from the whole corpus while the user believed the
+/// scope survived. Carrying the title — what the web saves — tags the
+/// conversation; the restore resolves buttons by id only, on both
+/// platforms, so the title tag falls to the SIDEBAR branch there: the
+/// hierarchy refuses to name it (a visible refusal, the module's rule)
+/// unless the title happens to be one of its ENGLISH labels, in which case
+/// it replays as that sidebar label — the web's own behaviour for the
+/// same tag.
+///
+/// One collision the title fallback opens and the string-tag contract
+/// cannot close: a falsy-id card whose TITLE equals another card's
+/// non-string id ('5' vs 5) writes a tag the restore index resolves to
+/// the OTHER card, where the web's raw strict lookup refuses it. The
+/// same tracked divergence as the JSON type-mix (the restore speaks
+/// string tags here, raw values on the web) — not a rule this file can
+/// settle.
+String? quickHelpButtonIdentity(Map<String, dynamic>? button) {
+  if (button == null) return null;
+  return quickHelpIdOf(button) ?? quickHelpTitleOf(button);
+}
+
+/// Whether a locale-marker state is a DRIFT: the consumer's per-locale
+/// data (the Quick Help buttons, the sidebar scope's title) was last
+/// resolved under [loadedLocale] and the app has moved to
+/// [currentLocale].
+///
+/// One rule for every locale-marked reload in the chatbot — the buttons'
+/// and the title's markers must not disagree about what a drift is. A
+/// null [loadedLocale] names the consumer's own before-the-first-mark
+/// state, and whether that counts as a drift is the CALLER's fact — the
+/// buttons' first load is still in flight then (a re-entry must not
+/// start a second parse), while the title has nothing installed yet (the
+/// marker is consumed all the same, or the next locale change would go
+/// unseen). The wrappers below attach those stories.
+bool isLocaleDrift({
+  required String? loadedLocale,
+  required String currentLocale,
+}) {
+  return loadedLocale != null && loadedLocale != currentLocale;
 }
 
 /// Whether the Quick Help buttons must re-resolve for [currentLocale].
@@ -80,36 +297,250 @@ bool shouldReloadQuickHelpButtons({
   required String? loadedLocale,
   required String currentLocale,
 }) {
-  return loadedLocale != null && loadedLocale != currentLocale;
+  return isLocaleDrift(
+    loadedLocale: loadedLocale,
+    currentLocale: currentLocale,
+  );
 }
 
 /// The title [button] carries, or null when it carries no title.
 ///
 /// An EMPTY title is no title: a config card with a blank title text
 /// must not blank the context bar — the caller keeps the name it has
-/// (the saved category name on a restore, the caller's fallback on a
-/// press). One rule for every path that shows a Quick Help title.
+/// (the saved category name on a restore). One rule for every path that
+/// shows a Quick Help title. A PRESS never reaches the install with an
+/// empty title: the press gate (quickHelpPressable) refuses it first.
 String? quickHelpTitleOf(Map<String, dynamic>? button) {
   final title = button?['resolvedTitle']?.toString() ?? '';
   return title.isNotEmpty ? title : null;
 }
 
 /// The title of the ACTIVE Quick Help scope, re-resolved from the button
-/// list by its id — the mobile twin of the web's quickHelpTitleFor.
+/// list — the mobile twin of the web's quickHelpTitleFor.
 ///
-/// A locale switch re-resolves the buttons (a load in the new locale) and
-/// the context bar's title must follow: the scope's identity is the button
-/// id, not the title it was pressed under. A button the config no longer
-/// declares, or a null or EMPTY id (empty declares nothing — the file's
-/// own scope rule — and a sidebar scope has no id at all), resolves to
-/// null so the caller keeps the title it already has.
+/// The lookup is ID-keyed (quickHelpButtonById): only an id'd button's
+/// scope follows a locale switch, because a locale switch re-resolves the
+/// buttons and the bar must read the new language's title for the SAME
+/// button. An active identity the lookup cannot match — a TITLE (an
+/// id-less card's identity, see quickHelpButtonIdentity), an id the
+/// config no longer declares, or null/EMPTY (empty declares nothing, the
+/// file's own scope rule, and a sidebar scope has no id at all) —
+/// resolves to null so the caller keeps the title it already has: for a
+/// title identity that is the title it was pressed under. (The web's own
+/// re-title does NOT keep it: its `b.id === item.id` matches an undefined
+/// id against the FIRST id-less button and re-titles from that — a
+/// web-side slip the mobile does not copy.)
 String? activeQuickHelpTitleFor(
   List<Map<String, dynamic>> buttons,
-  String? activeQuickHelpButtonId,
+  String? activeQuickHelpIdentity,
 ) {
   return quickHelpTitleOf(
-    quickHelpButtonById(buttons, activeQuickHelpButtonId),
+    quickHelpButtonById(buttons, activeQuickHelpIdentity),
   );
+}
+
+/// Whether a sidebar scope's context-bar title can be re-titled from a
+/// localized tree at all.
+///
+/// The title of a LIVE selection is the joined localized names of the
+/// picked services, and every pick that carries an ENGLISH label
+/// ([serviceLabelsEn]) can be re-named from the tree. A pick without a
+/// label ([serviceCount] above the label count) has no identity to
+/// re-name — a partial join would silently drop it from the visible
+/// scope. The `serviceCount > 0` clause restates the flag's own meaning
+/// ([fromSelection] is count > 0 by its only writer) and is kept
+/// deliberately: this predicate is a standalone contract, not a shadow
+/// of the writer. A restored scope keeps the rule it was resolved under
+/// (the category name the conversation's edge names), and an active
+/// BUTTON scope is re-titled from the config by its id — neither is this
+/// selection's join.
+bool sidebarTitleFollowsLocale({
+  required bool fromSelection,
+  required String? activeIdentity,
+  required int serviceCount,
+  required List<String> serviceLabelsEn,
+}) {
+  return fromSelection &&
+      activeIdentity == null &&
+      serviceCount > 0 &&
+      serviceLabelsEn.length == serviceCount;
+}
+
+/// Whether the sidebar-title fetch's captured scope state is STILL the
+/// scope installed: the same ENGLISH labels AND the same count (a pick
+/// without a label changes the count but not the labels — committing
+/// the join over it would show a scope narrower than the one the query
+/// filters on), still a live selection ([fromSelection]), still not a
+/// button scope. A restore or a press mid-flight owns the title then,
+/// and the fetched names are dropped however well the rest matches.
+bool sidebarTitleCaptureMatchesSelection({
+  required List<String> capturedLabels,
+  required int capturedCount,
+  required List<String> labels,
+  required int count,
+  required bool fromSelection,
+  required String? activeIdentity,
+}) {
+  return listEquals(capturedLabels, labels) &&
+      capturedCount == count &&
+      fromSelection &&
+      activeIdentity == null;
+}
+
+/// The localized DISPLAY name of every entity the [tree] carries, by its
+/// ENGLISH label — the identity a sidebar selection stores. The tree is
+/// the locale-localized hierarchy fetch (the same endpoint the sidebar
+/// panel renders): `label` is the localized display text, `name` its
+/// fallback, and `nameEN` the identity. The first entity wins when two
+/// share an ENGLISH label. The map feeds DISPLAY only — it never reaches
+/// the filter wire, which speaks the stored ENGLISH labels themselves.
+Map<String, String> localizedDisplayNamesOf(List<dynamic> tree) {
+  final byEn = <String, String>{};
+  void visit(List<dynamic> entries) {
+    for (final entry in entries) {
+      if (entry is! Map) continue;
+      final en = entry['nameEN'];
+      final display = entry['label'] ?? entry['name'];
+      if (en is String &&
+          en.isNotEmpty &&
+          display is String &&
+          display.isNotEmpty) {
+        byEn.putIfAbsent(en, () => display);
+      }
+      final children = entry['children'];
+      if (children is List) visit(children);
+    }
+  }
+
+  visit(tree);
+  return byEn;
+}
+
+/// The re-titled context-bar text for a sidebar selection whose ENGLISH
+/// labels are [labelsEn], named from [displayNames] — the same joined
+/// shape the panel installed the title with. Null when the title must
+/// stay as it is: a label the localized tree does not carry, or names
+/// with an empty display, cannot be re-titled, and a PARTIAL join would
+/// show a scope narrower than the one the query filters on.
+String? sidebarScopeTitleFor(
+  List<String> labelsEn,
+  Map<String, String> displayNames,
+) {
+  if (labelsEn.isEmpty) return null;
+  final names = <String>[];
+  for (final label in labelsEn) {
+    final name = displayNames[label];
+    if (name == null || name.isEmpty) return null;
+    names.add(name);
+  }
+  return names.join(', ');
+}
+
+/// The localized DISPLAY name of every CATEGORY the [tree] carries, by its
+/// category key — the identity a saved conversation's edge names the
+/// category by. The tree is the locale-localized hierarchy fetch (the same
+/// endpoint the sidebar panel renders): `label` is the localized display
+/// text, `name` its fallback. The first category wins when two share a
+/// key. The map feeds DISPLAY only — it never reaches the filter wire,
+/// which speaks the stored ENGLISH labels.
+///
+/// This is the catKey-keyed read beside [localizedDisplayNamesOf]'s
+/// ENGLISH-label one: a category can lack an ENGLISH translation (its
+/// `nameEN` is null and the label-keyed map skips it) while its key still
+/// addresses it, and the restored scope's title is re-named through the
+/// key, never through a name.
+Map<String, String> localizedCategoryDisplayNamesOf(List<dynamic> tree) =>
+    QuickHelpScopeResolver._indexByCatKey(tree, (entry) {
+      final display = entry['label'] ?? entry['name'];
+      return (display is String && display.isNotEmpty) ? display : null;
+    });
+
+/// Whether a RESTORED scope's context-bar title follows the locale.
+///
+/// A restored scope's title is the CATEGORY its conversation's edge names,
+/// and the ENGLISH hierarchy the scope was resolved against can only name
+/// it in English — the localized tree re-names it, by the category key the
+/// edge carries. A live selection names its join of service labels instead
+/// ([sidebarTitleFollowsLocale]), and an active BUTTON scope is re-titled
+/// from the configuration by its id — neither is this category read.
+bool restoredScopeTitleFollowsLocale({
+  required bool fromSelection,
+  required String? activeIdentity,
+  required String? categoryKey,
+}) {
+  return !fromSelection &&
+      activeIdentity == null &&
+      categoryKey != null &&
+      categoryKey.isNotEmpty;
+}
+
+/// The button's category as a plain string — in the form the web
+/// resolves, so a hand-built map with a numeric category reads the same
+/// value the parse stored. The ID has its own read — quickHelpIdOf
+/// (raw truthiness + the web's serialization); every id consumer reads
+/// that one.
+String? quickHelpCategoryOf(Map<String, dynamic> button) =>
+    _jsTagForm(button['category']);
+
+/// The number as JAVASCRIPT serializes it — the form the web writes
+/// into a saved tag or a category reference; null for a null input.
+/// Dart's double toString differs from JS's Number.toString in TWO
+/// ways for the values the two platforms hold in common: an integral
+/// double in the plain range (below 1e21) gets a '.0' suffix (5.0 →
+/// '5.0', JS: '5'), and a negative zero prints '-0' where JS writes
+/// '0' — both normalized here (the digits themselves are identical at
+/// every magnitude: the int64 conversion is exact below 2^63; above it
+/// the plain-digit form is written straight from the double, which is
+/// what JS prints too). The exponential range (≥ 1e21) already matches
+/// unstripped. The band that stays unmatched is BY DECODE, not by this
+/// form: an integer LITERAL above 2^53 decodes to an imprecise double
+/// on the web but to the exact int64 here — the two platforms then
+/// disagree about the value itself, and a web-saved conversation
+/// carries the imprecise tag and misses this platform's index. A
+/// configuration with an id that large is not one the platforms can
+/// agree on at all; the durable answer is normalizing the tag at the
+/// save/restore boundary on both platforms, tracked beside the
+/// numeric-tag contract.
+String? _jsTagForm(dynamic raw) {
+  if (raw == null) return null;
+  if (raw is double && raw.isFinite && raw == raw.truncateToDouble()) {
+    // JS String(-0) is '0' — Dart prints '-0'.
+    if (raw == 0) return '0';
+    final plain = raw.toString();
+    // ≥ 1e21 prints exponential ('1e+21', matching JS, no suffix to
+    // strip); below it an integral double ends in '.0'.
+    return plain.endsWith('.0') ? plain.substring(0, plain.length - 2) : plain;
+  }
+  return raw.toString();
+}
+
+/// The button's id as the TAG carries it — the string form of the id,
+/// null when the configuration declares NO id. The presence rule is the
+/// web's own (`button.id || title`): the RAW value's JavaScript
+/// truthiness decides, read BEFORE any stringification — a falsy JSON
+/// id (`0`, `false`, a hand-edited configuration; none shipped) is no
+/// id, and its stringified `'0'` must not resurrect it. Every rule
+/// that decides whether an id EXISTS reads this one — the identity,
+/// the dedupe, the restore index, the by-id lookups.
+String? quickHelpIdOf(Map<String, dynamic>? button) {
+  final raw = button?['id'];
+  if (!configTruthy(raw)) return null;
+  // A non-scalar id (an array, an object) is no identity: the web saves
+  // the LIVE value, which its own restore can never match again after
+  // the JSON round trip, while a stringified form ('[]') would restore
+  // on this platform alone — the platforms would disagree about the
+  // same saved conversation. Falling to the title (the rule below)
+  // converges every save direction on the sidebar branch, on both.
+  if (raw is! String && raw is! num && raw is! bool) return null;
+  return _jsTagForm(raw);
+}
+
+/// Whether the card DECLARES a scope — a category the hierarchy names, or
+/// labels it carries. ONE rule, read by the grid's unavailable verdict and
+/// by the press path.
+bool quickHelpDeclaresScope(Map<String, dynamic> button) {
+  return declaresCategoryScope(quickHelpCategoryOf(button)) ||
+      quickHelpServiceLabelsOf(button).isNotEmpty;
 }
 
 /// Checks Quick Help buttons against the live hierarchy.
@@ -147,7 +578,7 @@ class QuickHelpScopeResolver {
       _categoryLabelsEn = _indexByCatKey(enTree, _enOf),
       _categoryNames = _indexByCatKey(enTree, (entry) {
         final name = entry['name'];
-        return (name is String && name.isNotEmpty) ? name : '';
+        return (name is String && name.isNotEmpty) ? name : null;
       });
 
   /// The scope state of a button whose hierarchy has not loaded yet: it
@@ -166,14 +597,11 @@ class QuickHelpScopeResolver {
   /// reachable when the hierarchy is down. Every card that DOES declare a
   /// scope cannot be verified, so it says so.
   static Map<String, dynamic> unavailableScopeFor(Map<String, dynamic> button) {
-    final category = button['category']?.toString();
-    final labels =
-        (button['serviceLabels'] as List<dynamic>?) ?? const <dynamic>[];
     // 'general' is the placeholder a category-less selection is stored
     // under: it names no category, and every rule treats it as NO scope —
     // this one included, or a category-less card would look healthy in
     // the grid and be refused at send time.
-    final declaresScope = declaresCategoryScope(category) || labels.isNotEmpty;
+    final declaresScope = quickHelpDeclaresScope(button);
     return {
       'broken': declaresScope,
       'unavailable': declaresScope,
@@ -195,20 +623,39 @@ class QuickHelpScopeResolver {
     _categoryLabelsEn,
   );
 
-  /// Categories by key, FIRST-wins, each mapped by [valueOf]. The one
-  /// walk behind the two key indexes (the EN-label index and the
-  /// display-name index) — a skip rule added to one belongs to both.
+  /// Categories by key, first-claim, each mapped by [valueOf]; a null
+  /// [valueOf] result skips the entry instead of claiming the key. The
+  /// one walk behind the three key indexes (the EN-label index, the
+  /// display-name index, and the localized-display read). The walk owns
+  /// the KEY mechanics — extraction, the non-Map skip, first-claim — but
+  /// the VALUE rule is each index's own, and the two differ on purpose:
+  /// the EN-label index never skips a claimed entry ([_enOf] returns ''
+  /// for a present-but-empty nameEN, never null — wire ownership is
+  /// positional: the FIRST entry is the category, and its missing
+  /// translation leaves it unnameable; a later duplicate does not take
+  /// the key back), while the display indexes skip empty values — a
+  /// display the tree cannot produce must not claim the key and must
+  /// not blank a title that is already right. Both rules are pinned by
+  /// unit tests; a duplicate catKey can therefore name and address
+  /// different entries, which is the data error speaking, not the
+  /// indexes disagreeing.
   static Map<String, String> _indexByCatKey(
     List<dynamic> enTree,
-    String Function(Map entry) valueOf,
+    String? Function(Map entry) valueOf,
   ) {
     final byKey = <String, String>{};
     for (final entry in enTree) {
       if (entry is! Map) continue;
-      final key = entry['catKey']?.toString();
+      // The index speaks the form the config references resolve in (the
+      // web's serialization, _jsTagForm): a numeric catKey must index as
+      // the reference reads, or only this platform would render the card
+      // broken.
+      final key = _jsTagForm(entry['catKey']);
       if (key == null || key.isEmpty) continue;
       if (byKey.containsKey(key)) continue;
-      byKey[key] = valueOf(entry);
+      final value = valueOf(entry);
+      if (value == null) continue;
+      byKey[key] = value;
     }
     return byKey;
   }
@@ -287,15 +734,12 @@ class QuickHelpScopeResolver {
 
   /// The scope state of [button] against the live tree.
   Map<String, dynamic> stateFor(Map<String, dynamic> button) {
-    final declared =
-        (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
-            .map((e) => e.toString())
-            .toList();
+    final declared = quickHelpServiceLabelsOf(button);
     final missingLabels = declared
         .where((l) => !_enLabels.contains(l))
         .toList();
 
-    final category = button['category']?.toString();
+    final category = quickHelpCategoryOf(button);
     // The category is usable only when the hierarchy names it in
     // ENGLISH: that spelling is the wire. A category the hierarchy does
     // not carry, and a category it carries without an EN translation,
@@ -317,7 +761,7 @@ class QuickHelpScopeResolver {
   /// carries it, or the entity has no EN translation (it cannot be filtered
   /// on at all).
   String? categoryLabelEn(Map<String, dynamic> button) =>
-      categoryEnLabel(button['category']?.toString());
+      categoryEnLabel(quickHelpCategoryOf(button));
 
   /// The ENGLISH label of the category the [reference] names. Null when
   /// the hierarchy does not carry it, or carries it without an EN
@@ -401,11 +845,12 @@ class ConversationScope {
 /// and the Quick Help buttons.
 ///
 /// A conversation carries the scope it was asked in: the Quick Help button
-/// that produced it — by its id, the button's identity — or the ENGLISH
-/// labels of the sidebar scope it was narrowed by. The scope is only
-/// usable when the live hierarchy can still NAME it: a scope that cannot
-/// be named leaves the query unscoped, and an unscoped query answers from
-/// the whole corpus.
+/// that produced it — a Quick Help tag is the button ID (quickHelpButtonIdentity
+/// may carry a title for an id-less card, and the resolver matches IDS only,
+/// exactly as the web's own restore does) — or the ENGLISH labels of the
+/// sidebar scope it was narrowed by. The scope is only usable when the live
+/// hierarchy can still NAME it: a scope that cannot be named leaves the
+/// query unscoped, and an unscoped query answers from the whole corpus.
 class ConversationScopeResolver {
   ConversationScopeResolver({
     required QuickHelpScopeResolver hierarchy,
@@ -415,18 +860,22 @@ class ConversationScopeResolver {
 
   /// The buttons by id, FIRST-wins.
   ///
-  /// A configuration error can give two cards the same id. The web keeps
-  /// the FIRST — its verdict map and its restore lookup are both
-  /// first-wins — so the mobile must too, or the same saved conversation
-  /// restores a DIFFERENT scope on the two platforms. A map literal would
-  /// keep the LAST: the later key overwrites the earlier one.
+  /// A configuration error can give two cards the same id. The web's
+  /// restore lookup (`find` over its button list) resolves the FIRST,
+  /// so the mobile index must keep the first too, or the same saved
+  /// conversation restores a DIFFERENT scope on the two platforms. (The
+  /// web's verdict map is written with `map.set` — last-wins — but its
+  /// input is the already-deduped button list, so no duplicate reaches
+  /// either consumer; the dedupe at load is where the FIRST rule is
+  /// actually enforced. A map literal here would keep the LAST: the
+  /// later key overwrites the earlier one.)
   static Map<String, Map<String, dynamic>> _indexButtons(
     List<Map<String, dynamic>> buttons,
   ) {
     final byId = <String, Map<String, dynamic>>{};
     for (final button in buttons) {
-      final id = button['id']?.toString();
-      if (id == null || id.isEmpty) continue;
+      final id = quickHelpIdOf(button);
+      if (id == null) continue;
       if (byId.containsKey(id)) continue;
       byId[id] = button;
     }
@@ -475,11 +924,8 @@ class ConversationScopeResolver {
     for (final tag in tagList) {
       final button = _buttons[tag];
       if (button == null) continue;
-      final category = button['category']?.toString();
-      final buttonLabels =
-          (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
-              .map((label) => label.toString())
-              .toList();
+      final category = quickHelpCategoryOf(button);
+      final buttonLabels = quickHelpServiceLabelsOf(button);
       // A legacy conversation can carry SEVERAL button ids: the web
       // restores every chip and sends the union of their labels. Every
       // other button tag is CONSUMED here (counted as a sidebar tag, it
@@ -490,9 +936,7 @@ class ConversationScopeResolver {
           .toList();
       final labels = [
         ...buttonLabels,
-        for (final other in otherButtons)
-          ...(other['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
-              .map((label) => label.toString()),
+        for (final other in otherButtons) ...quickHelpServiceLabelsOf(other),
       ];
       // A LEGACY 'category.<id>' tag beside the button named the same
       // category the button declares (the old web wrote the pair): it is
@@ -608,6 +1052,42 @@ bool shouldReResolveRestoredScope({
   return (restoredTags?.isNotEmpty ?? false) || restoredCategoryKey != null;
 }
 
+/// Whether a tap on the card may proceed at all — the three refusals the
+/// web's selectQuickHelpOption applies before any branch, ONE predicate:
+/// a broken scope is a visible failure the tap must not send, a scope
+/// the tree cannot EN-name would leave the filter unnamed, and a
+/// title-less card would install a scope under a blank context bar.
+///
+/// The broken verdict needs a RESOLVER: with the hierarchy unavailable,
+/// the grid's own scope state (the unavailable caption and the disabled
+/// tap) covers the outage before this predicate is ever reached.
+bool quickHelpPressable(
+  Map<String, dynamic> button,
+  QuickHelpScopeResolver? resolver,
+) {
+  return (resolver?.stateFor(button)['broken'] as bool?) != true &&
+      quickHelpScopeIsNameable(button, resolver) &&
+      quickHelpTitleOf(button) != null;
+}
+
+/// Whether the card must render as the visible failure — the grid's
+/// DISPLAY twin of the press gate (quickHelpPressable): every press
+/// refusal has a face. The scope verdict alone misses the title gate:
+/// a card with no title looks pressable — an icon, an enabled ripple —
+/// while the tap refuses itself silently, so the card renders broken
+/// (danger border, caption, no tap) instead.
+///
+/// The title is a CONFIG fact, judged without the hierarchy: it holds
+/// while the tree is pending or down, and [scope]'s own verdict decides
+/// the rest exactly as the grid reads it today.
+bool quickHelpCardBroken(
+  Map<String, dynamic> button,
+  Map<String, dynamic> scope,
+) {
+  return (scope['broken'] as bool? ?? false) ||
+      quickHelpTitleOf(button) == null;
+}
+
 /// Whether the button's scope can be put on the wire.
 ///
 /// The config names the category; the wire needs its ENGLISH label, and
@@ -618,7 +1098,7 @@ bool quickHelpScopeIsNameable(
   Map<String, dynamic> button,
   QuickHelpScopeResolver? resolver,
 ) {
-  final category = button['category']?.toString();
+  final category = quickHelpCategoryOf(button);
   // An id that declares NO category scope (empty, or the 'general'
   // placeholder) is how a selection is cleared — the hierarchy has
   // nothing to deny. declaresCategoryScope is the ONE predicate.
@@ -679,13 +1159,13 @@ List<String> mergeServiceLabels(List<String> active, List<String> sidebar) => [
   ...sidebar,
 ];
 
-/// The tags a conversation carries: the Quick Help button's id — its
-/// identity — and, BESIDE it, the ENGLISH labels of the sidebar scope
-/// that was selected with it. The web writes one tag per context item; a
-/// conversation carrying both scopes must carry both tags, or the sidebar
-/// one is lost on the next restore. A conversation that carries no scope
-/// carries no tags.
+/// The tags a conversation carries: the Quick Help button's identity —
+/// `id || title` (quickHelpButtonIdentity) — and, BESIDE it, the ENGLISH
+/// labels of the sidebar scope that was selected with it. The web writes
+/// one tag per context item; a conversation carrying both scopes must
+/// carry both tags, or the sidebar one is lost on the next restore. A
+/// conversation that carries no scope carries no tags.
 List<String> conversationScopeTags({
-  String? quickHelpButtonId,
+  String? quickHelpIdentity,
   List<String> sidebarServiceLabels = const <String>[],
-}) => [?quickHelpButtonId, ...sidebarServiceLabels];
+}) => [?quickHelpIdentity, ...sidebarServiceLabels];

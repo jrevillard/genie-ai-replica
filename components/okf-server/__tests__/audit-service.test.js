@@ -47,10 +47,11 @@ describe('audit-service (okf_audit_logs)', () => {
     expect(rows[0].ts).toBeTruthy(); // the date+time of the action
   });
 
-  test('listRepoLogs returns the repo rows newest-first (KEEP projects UI fields)', async () => {
-    // The mock's query is a stub — program it to return an ordered page the way
-    // the real SORT ts DESC would. The contract pinned here: repo_id binding +
-    // the projected field set the Logs viewer renders.
+  test('listRepoLogs binds repo_id + limit and projects the UI field set', async () => {
+    // The mock's query is a stub — an ordered fixture only proves pass-through,
+    // so ordering itself is NOT asserted here; the real contract is the AQL:
+    // repo_id binding + limit + SORT ts DESC + the projected field set the
+    // Logs viewer renders (internals projected away).
     mockDb.query.mockResolvedValueOnce({
       all: async () => [
         {
@@ -71,8 +72,6 @@ describe('audit-service (okf_audit_logs)', () => {
     });
     const rows = await listRepoLogs('r-1', { limit: 50 });
     expect(rows).toHaveLength(2);
-    expect(rows[0].ts).toBe('2026-08-31T10:00:00Z'); // newest first
-    expect(rows[0]).toHaveProperty('description');
     expect(rows[0]).not.toHaveProperty('_key'); // internals projected away
     const [aqlText, bind] = mockDb.query.mock.calls[0];
     expect(aqlText).toContain('okf_audit_logs');

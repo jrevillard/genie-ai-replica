@@ -74,8 +74,12 @@ COPY --from=opea_example_base /src/ChatQnA/ /app/ChatQnA/
 COPY --chmod=0755 genie-ai-overlay/chatqna/entrypoint.sh /app/ChatQnA/entrypoint.sh
 
 # Step C: Install dependencies
-# Install extra dependencies from our original Dockerfile_genieai
-RUN pip install --no-cache-dir langdetect transformers "python-jose[cryptography]" \
+# Install extra dependencies from our original Dockerfile_genieai.
+# No transformers: token counting calls the vLLM /tokenize endpoint, and
+# neither this service's code nor the vendored comps modules it imports
+# (cores/mega — the transformers imports live in comps finetuning/xtune,
+# never imported here) use it. Verified against the pinned OPEA v1.5 trees.
+RUN pip install --no-cache-dir langdetect "python-jose[cryptography]" \
     "opentelemetry-api>=1.22" "opentelemetry-sdk>=1.22" \
     "opentelemetry-instrumentation-fastapi>=0.43b0" \
     "opentelemetry-instrumentation-httpx>=0.43b0" \
@@ -116,12 +120,29 @@ RUN cp /home/user/comps/cores/proto/api_protocol.py /app/api_protocol.py && \
 COPY genie-ai-overlay/core/genieai_api_protocol.py /home/user/comps/cores/proto/genieai_api_protocol.py
 COPY genie-ai-overlay/core/constants.py /home/user/comps/cores/mega/constants.py
 
+# Patch the vendored comps orchestrator: the streaming LLM POST must run off
+# the event loop (asyncio.to_thread), or the loop stays pinned until vLLM
+# returns first headers and /health cannot answer during a query — the HTTP
+# liveness probe killed the pod mid-stream (see build-patches/
+# comps_llm_stream_offloop_patch.py and OVERRIDES.yaml).
+# FAIL-LOUD BY DESIGN. The patcher aborts the BUILD if it cannot find the
+# lines it expects, rather than silently shipping an image that still blocks.
+# The script stays in the image at a stable path: the in-image contract lane
+# imports it for the patch-shape constants (one source of truth), the same
+# way install_site_startup.sh persists at /app.
+COPY genie-ai-overlay/build-patches/comps_llm_stream_offloop_patch.py /app/build-patches/comps_llm_stream_offloop_patch.py
+RUN python /app/build-patches/comps_llm_stream_offloop_patch.py
+
 # This copies your main script
 COPY genie-ai-overlay/chatqna/genieai_chatqna.py /app/ChatQnA/genieai_chatqna.py
 COPY genie-ai-overlay/chatqna/keycloak_token_validator.py /app/ChatQnA/keycloak_token_validator.py
 COPY genie-ai-overlay/chatqna/metrics.py /app/ChatQnA/metrics.py
-COPY genie-ai-overlay/chatqna/language_codes.json /app/ChatQnA/language_codes.json
-COPY genie-ai-overlay/chatqna/language_scripts.json /app/ChatQnA/language_scripts.json
+# The language registry is the single source of the supported languages,
+# shared with the backend's language maps. In the source tree the chatqna
+# directory reaches it through a symlink (language-registry.json); the image
+# gets a real COPY of the file it points at, so the runtime default of
+# LANGUAGE_REGISTRY_FILEPATH (next to the module) resolves.
+COPY components/gov-chat-backend/services/translation/language-maps/language-registry.json /app/ChatQnA/language-registry.json
 
 # Step E: Ensure all application files are owned by user
 RUN chown -R user:user /app

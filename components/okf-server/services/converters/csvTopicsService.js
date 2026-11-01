@@ -86,7 +86,11 @@ async function deriveTopics({ columns, fileName, opts = {} } = {}) {
   // name 'http://vllm:8000' when VLLM_ENDPOINT is unset. Honouring that
   // fallback here would route an import at whatever GPU happens to be local —
   // forbidden. An unset endpoint means "no engine", not "the local one".
-  if (!process.env.VLLM_ENDPOINT) {
+  // The gate is the shared helper — one owner, so a future change to the
+  // opt-in semantics cannot drift this leg from the other three. Lazy
+  // require for the same reason as the chat client below: the converter
+  // stays pure for its unit tests.
+  if (!require('../vllm-model-cache').optedInVllmBase()) {
     logger.warn('CSV topics: VLLM_ENDPOINT not set — engine not configured, using filename slug', { fileName });
     return { ...fallback, source: 'fallback-no-endpoint' };
   }

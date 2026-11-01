@@ -21,6 +21,9 @@ describe('service-token (client_credentials, cached, single-flight)', () => {
     require('../services/service-token')._resetForTesting();
     process.env.KC_OKF_SERVER_CLIENT_ID = 'okf-server';
     process.env.KC_OKF_SERVER_CLIENT_SECRET = 'test-secret';
+    // The authedAxios egress allowlist validates origins against the SAME
+    // env the config module reads — the tests' http://docrepo URLs need it.
+    process.env.DOCUMENT_REPOSITORY_URL = 'http://docrepo';
     delete process.env.KEYCLOAK_INTERNAL_URL;
     delete process.env.KEYCLOAK_PUBLIC_URL;
     delete process.env.KEYCLOAK_URL;
@@ -158,5 +161,35 @@ describe('service-token (client_credentials, cached, single-flight)', () => {
     });
     // exactly one mint + one attempt
     expect(axios.post).toHaveBeenCalledTimes(2);
+  });
+
+  test('egress guard: a non-docrepo URL is rejected BEFORE any request or mint (review 2026-10-29 wave 2)', async () => {
+    // Link-local metadata address — the canonical SSRF target. The allowlist
+    // must refuse it at the choke point, with no HTTP attempt and no
+    // service-account mint fired for a call that can never be made.
+    await expect(authedAxios.get('http://169.254.169.254/latest/meta-data')).rejects.toThrow(
+      /not the configured document repository/
+    );
+    expect(axios.get).not.toHaveBeenCalled();
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  test('egress fallback: with DOCUMENT_REPOSITORY_URL unset the allowlist reads config.documentRepository.url', async () => {
+    // The fallback literal was once duplicated here and in config.js — a config
+    // default edit would have left this allowlist comparing against the stale
+    // literal and fail-closed every okf-server → doc-repo call. The fallback
+    // now comes FROM config; pin that the config default is accepted (and a
+    // stray origin still is not) on a config instance loaded without the env
+    // var (config.js snapshots process.env at require time, hence resetModules).
+    delete process.env.DOCUMENT_REPOSITORY_URL;
+    jest.resetModules();
+    const freshAxios = require('axios');
+    freshAxios.post.mockResolvedValue({ data: { access_token: 'tok-cfg', expires_in: 3600 } });
+    freshAxios.get.mockResolvedValue({ status: 200, data: {} });
+    const { authedAxios: freshAuthed } = require('../services/service-token');
+    await expect(freshAuthed.get('http://document-repository:3001/api/files/x')).resolves.toBeDefined();
+    await expect(freshAuthed.get('http://169.254.169.254/latest/meta-data')).rejects.toThrow(
+      /not the configured document repository/
+    );
   });
 });

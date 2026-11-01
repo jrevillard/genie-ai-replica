@@ -70,7 +70,7 @@ class ServicesApi {
   ///
   /// * [String] locale:
   ///   Language locale for category and service names
-  Future<ApiServicesCategoriesGet200ResponseInner?> apiServicesCategoriesCategoryIdGet(String categoryId, { String? locale, }) async {
+  Future<ApiServicesCategoriesCategoryIdGet200Response?> apiServicesCategoriesCategoryIdGet(String categoryId, { String? locale, }) async {
     final response = await apiServicesCategoriesCategoryIdGetWithHttpInfo(categoryId,  locale: locale, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
@@ -79,7 +79,7 @@ class ServicesApi {
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ApiServicesCategoriesGet200ResponseInner',) as ApiServicesCategoriesGet200ResponseInner;
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ApiServicesCategoriesCategoryIdGet200Response',) as ApiServicesCategoriesCategoryIdGet200Response;
     
     }
     return null;
@@ -132,7 +132,7 @@ class ServicesApi {
   ///
   /// * [String] locale:
   ///   Language locale for category and service names
-  Future<List<ApiServicesCategoriesGet200ResponseInner>?> apiServicesCategoriesGet({ String? locale, }) async {
+  Future<List<CategoryTree>?> apiServicesCategoriesGet({ String? locale, }) async {
     final response = await apiServicesCategoriesGetWithHttpInfo( locale: locale, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
@@ -142,8 +142,8 @@ class ServicesApi {
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
       final responseBody = await _decodeBodyBytes(response);
-      return (await apiClient.deserializeAsync(responseBody, 'List<ApiServicesCategoriesGet200ResponseInner>') as List)
-        .cast<ApiServicesCategoriesGet200ResponseInner>()
+      return (await apiClient.deserializeAsync(responseBody, 'List<CategoryTree>') as List)
+        .cast<CategoryTree>()
         .toList(growable: false);
 
     }

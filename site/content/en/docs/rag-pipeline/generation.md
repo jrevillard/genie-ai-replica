@@ -21,22 +21,24 @@ the response stream.
 
 ## LLM defaults
 
-The default model in docker-compose is **`meta-llama/Meta-Llama-3.1-8B-Instruct`**
-(set via `VLLM_LLM_MODEL_ID`, `docker-compose.yaml:1179`). The
+The model the vLLM container serves defaults to
+**`meta-llama/Meta-Llama-3.1-8B-Instruct`**
+(`--served-model-name ${VLLM_LLM_MODEL_ID:-…}`, `docker-compose.yaml:820`). The
 **recommended and validated** model is **`ibm-granite/granite-4.1-8b`**
 because it supports the OpenAI-compatible guided JSON
 (`response_format={"type":"json_object"}`) that dataprep needs for
 labelling — without guided JSON, labels fall back to per-chunk markdown
-parsing (slower, lower quality). The in-code fallback
-(`genieai_chatqna.py:148`) is `ibm-granite/granite-3.3-2b-instruct`,
-reached only when neither `VLLM_LLM_MODEL_ID` nor the legacy
-`LLM_MODEL` env var is set.
+parsing (slower, lower quality). There is **no in-code fallback model
+name**: chatqna discovers whatever model the LLM endpoint actually serves
+(`/v1/models`, TTL-cached) and fails the request loudly when nothing
+answers — a hardcoded name would be rejected by vLLM's model-name
+validation. The legacy `LLM_MODEL` env var is no longer read.
 
 | Source | Variable | Default | Reachable? |
 |---|---|---|---|
-| Docker compose (production) | `VLLM_LLM_MODEL_ID` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | Yes — set by `docker-compose.yaml:1179`. |
+| vLLM container | `VLLM_LLM_MODEL_ID` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | The model vLLM loads and serves. |
 | Recommended validated | `VLLM_LLM_MODEL_ID` override | `ibm-granite/granite-4.1-8b` | Override in `.env` to switch. |
-| In-code fallback | `LLM_MODEL` (legacy) | `ibm-granite/granite-3.3-2b-instruct` | Only if `VLLM_LLM_MODEL_ID` and `LLM_MODEL` are both unset. |
+| Discovery (chatqna, retriever summarizer, dataprep labelling/graph) | the endpoint's `/v1/models` | whatever is served | Always-on; `VLLM_MODEL_ID` (empty by default) pins a name and skips the probe. |
 
 All are served by vLLM (OpenAI-compatible API).
 
@@ -125,15 +127,19 @@ falls back to the reranker-aggregated score otherwise.
 For multilingual deployments, the streamed English answer can be
 translated into the user's UI language by a dedicated translation model
 served by `vllm-translation-guardrail`. The default model is
-**`google/gemma-3-4b-it`** (`docker-compose.yaml:557`, configured via
+**`google/gemma-3-4b-it`** (`docker-compose.yaml:580`, configured via
 `VLLM_TRANSLATION_MODEL_ID`). Two optional alternatives commented in
 the `env` template are `google/translategemma-4b-it` and
 `google/translategemma-12b-it`.
 
-**Supported language codes** are defined in
-`components/gov-chat-frontend/src/i18n/locales/` (the same whitelist the UI
-uses): `ar, bn, de, en, es, fr, id, man, pt, ru, st, sw, th, zh`
-(Mandinka uses the `man` code only; there is no separate `mnk` file).
+**Supported language codes** come from two places: the UI's own locale
+whitelist (`components/gov-chat-frontend/src/i18n/locales/`) — `ar, bn, de,
+en, es, fr, id, man, pt, ru, st, sw, th, zh` (Mandinka uses the `man` code
+only; there is no separate `mnk` file) — and the translation models'
+registry (`language-registry.json`), which decides what the translator
+itself accepts. A language the registry does not cover is refused, not
+guessed; see
+[Multilingual Architecture]({{< relref "/docs/architecture/multilingual-ssot" >}}).
 
 Two modes:
 
@@ -163,15 +169,17 @@ For model trade-offs see
 ## Multilingual chat history
 
 When the UI locale differs from English (or when `original_language` is
-falsy in the request body, triggering auto-detection), the backend
+falsy in the request body, triggering auto-detection), ChatQnA
 **translates prior-turn user and assistant messages to English** before
-they reach ChatQnA. This keeps the `bge-large-en-v1.5` embedding space
+the pipeline runs. This keeps the `bge-large-en-v1.5` embedding space
 consistent regardless of UI language and feeds the
 [multi-turn blending]({{< relref "multi-turn-retrieval" >}}) embedding
-only when `MULTI_TURN_BLEND_ENABLED=true`.
+only when `MULTI_TURN_BLEND_ENABLED=true`. See
+[Multilingual Architecture]({{< relref "/docs/architecture/multilingual-ssot" >}})
+for the full query-side picture.
 
-The translation cost is one translation call per prior turn at request
-time. Disable by serving English-only.
+The translation cost is one translation call per request for the whole
+budget-capped history. Disable by serving English-only.
 
 ## User profile enrichment
 

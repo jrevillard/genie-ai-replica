@@ -154,6 +154,58 @@ wired.
   > unset. Compose always overrides these (`0.2`, `0.75`) when the service is
   > deployed with the standard environment block — tune `.env`, not the code.
 
+### Non-English queries retrieve badly (translation service degraded)
+
+When a chat is submitted in a non-English language, chatqna translates the
+conversation history to English before embedding (the corpus is English). If
+the translation microservice is timing out or failing, the turn **does not
+fail**: the untranslated source-language query is embedded into the English
+space instead, and retrieval quality silently degrades for as long as the
+service is degraded.
+
+The fallback is observable in two places:
+
+- **Response metadata**: every chat response (JSON and streamed metadata
+  event) carries `query_translation_status`:
+  - `translated` — the query was translated to English before embedding;
+  - `passthrough_english` — the query was established English: the client
+    declared it (declaration is trusted, not corroborated against the
+    content — a Spanish query submitted with `language: "en"` is embedded
+    as Spanish and still shows this value) or detection concluded it;
+  - `passthrough_unknown_language` — no language was established for the
+    query: detection failed, or it produced nothing to work with (which
+    includes a client language code the map refuses, when there is no
+    text to detect from); the query was embedded as-is, language unknown;
+  - `fallback_timeout` — the translation service timed out; the
+    **untranslated** query was embedded;
+  - `fallback_error` — the translation failed or was refused for any other
+    reason (including an empty completion); the untranslated query was
+    embedded. One sub-case differs: a history whose newest message alone
+    exceeds the whole translation budget falls back to an **empty** query —
+    nothing was embedded, guaranteed zero recall.
+- **Trace attribute**: the same status is stamped as
+  `rag.translation.query_status` on the `chatqna.orchestrate` span, so a
+  degraded period can be found in the Trace explorer by filtering for
+  anything other than `translated` / `passthrough_english`.
+
+To diagnose a degraded period:
+
+```bash
+# Is the translation service up? (the history/query translation model runs in
+# its own vLLM service, separate from the chat-generation one)
+docker service ls | grep -E 'vllm|translation'
+docker service logs genieai_vllm-translation-guardrail --since 15m | grep -iE 'error|timeout'
+```
+
+- `fallback_timeout` spikes with a healthy container usually mean the
+  translation model is overloaded (shared GPU, long histories) — check
+  `TRANSLATION_SERVICE_TIMEOUT` and GPU contention.
+- `fallback_error` with the language-map warning (`The language map does not
+  know English`) points at the language registry file, not the model.
+- The failure window self-heals when the translation service recovers; past
+  turns are not re-translated (the embedding already happened on the
+  untranslated query).
+
 ### Gateway errors (502 / 504)
 
 - A 502/504 means Kong could not reach an upstream service.

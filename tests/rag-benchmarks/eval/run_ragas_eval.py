@@ -134,10 +134,8 @@ if ChatOpenAI is not None:
             For ``llm_output`` (token usage etc.), sum numeric fields across
             the n calls and let the first call's value win for non-numeric
             fields — an honest total RAGAS / observability can consume
-            without undercounting by N×.
-            WARNING: bool is an int in Python — a ``True`` flag would sum
-            to N. Keep flags string-typed in llm_output (tests use a
-            string sentinel for exactly this reason).
+            without undercounting by N×. Bools are excluded from the sum
+            (bool is an int in Python — a ``True`` flag would sum to N).
 
             CRITICAL — GENERATIONS NESTING IS VERSION-DEPENDENT:
             langchain-core <1.x nests per input (``list[list[ChatGeneration]]``);
@@ -171,8 +169,17 @@ if ChatOpenAI is not None:
                 for k, v in info.items():
                     if k in seen_keys:
                         prev = merged_output[k]
-                        if isinstance(prev, (int, float)) and isinstance(
+                        both_num = isinstance(prev, (int, float)) and isinstance(
                             v, (int, float)
+                        )
+                        # bool is an int in Python — a ``True`` flag would sum
+                        # to N. The sidecar port (ragas_engine.py) excludes
+                        # bools from the sum; this harness copy matches it
+                        # (parity pinned by test_fanout_parity.py).
+                        if (
+                            both_num
+                            and not isinstance(prev, bool)
+                            and not isinstance(v, bool)
                         ):
                             merged_output[k] = prev + v
                         # Non-numeric on a duplicate key: keep the first

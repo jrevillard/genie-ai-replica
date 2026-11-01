@@ -193,7 +193,7 @@ describe('keycloak-auth-middleware', () => {
         'valid-token',
         expect.anything(),
         expect.objectContaining({
-          issuer: 'https://localhost/auth/realms/genie',
+          issuer: ['https://localhost/auth/realms/genie'], // array — the middleware validates against the base+alias issuer set
           requiredClaims: ['iss', 'exp']
         })
       );
@@ -364,7 +364,7 @@ describe('keycloak-auth-middleware issuer override', () => {
     expect(localJose.jwtVerify).toHaveBeenCalledWith(
       'edge-token',
       expect.anything(),
-      expect.objectContaining({ issuer: 'https://genie.example.org/auth/realms/genie' })
+      expect.objectContaining({ issuer: ['https://genie.example.org/auth/realms/genie'] })
     );
     expect(localJose.createRemoteJWKSet.mock.calls[0][0].toString()).toContain('keycloak.genieai.svc.cluster.local');
   });

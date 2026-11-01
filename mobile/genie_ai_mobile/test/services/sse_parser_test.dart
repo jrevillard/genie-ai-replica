@@ -97,6 +97,26 @@ void main() {
       expect(meta.isGrounded, isFalse);
     });
 
+    test('parses query_translation_status in metadata event', () {
+      // What the query-translation step fed the embedder (issue #1026): the
+      // streamed path rebuilds the metadata map, so the field has to be
+      // carried here for streamed and non-streamed turns to agree.
+      final events = parser.parseChunk(
+        'data: {"type":"metadata","source_documents":[],"confidence_score":0.9,'
+        '"query_translation_status":"fallback_timeout"}\n\n',
+      );
+      final meta = events[0] as SseMetadataEvent;
+      expect(meta.queryTranslationStatus, 'fallback_timeout');
+    });
+
+    test('leaves query_translation_status null when absent', () {
+      final events = parser.parseChunk(
+        'data: {"type":"metadata","source_documents":[],"confidence_score":0.9}\n\n',
+      );
+      final meta = events[0] as SseMetadataEvent;
+      expect(meta.queryTranslationStatus, isNull);
+    });
+
     test('parses translation event', () {
       final events = parser.parseChunk(
         'data: {"type":"translation","content":"Bonjour"}\n\n',

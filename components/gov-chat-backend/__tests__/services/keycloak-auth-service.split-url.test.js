@@ -31,6 +31,11 @@ const DISCOVERY = {
   jwks_uri: 'http://kong:8000/auth/realms/genie/protocol/openid-connect/certs'
 };
 
+const PARTNER_DISCOVERY = {
+  issuer: 'http://kong:8000/auth/realms/partner',
+  jwks_uri: 'http://kong:8000/auth/realms/partner/protocol/openid-connect/certs'
+};
+
 const REAL_FETCH = global.fetch;
 
 function loadService(publicUrl) {
@@ -83,5 +88,55 @@ describe('keycloak-auth-service — KEYCLOAK_PUBLIC_URL split-URL alias', () => 
 
     // Same issuer — exactly one entry, no duplicate alias.
     expect(svc._getJwksCache('http://kong:8000/auth/realms/genie')).toBeDefined();
+  });
+
+  test('multi-realm: initAllRealms keeps the PRIMARY realm public-issuer alias on the primary JWKS', async () => {
+    // The clobber (review 2026-10-29): the partner realm's init used to
+    // register https://localhost/auth/realms/genie — KEYCLOAK_PUBLIC_URL plus
+    // the MODULE-level KEYCLOAK_REALM — onto the partner JWKS, so every
+    // primary-realm browser token carrying the public issuer verified against
+    // the wrong realm's keys. KEYCLOAK_ADDITIONAL_REALMS is read at module
+    // load, hence the resetModules inside loadService after setting it.
+    // initAllRealms is not exported — verifyToken is the public entry that
+    // drives it (ensureInitialized → initAllRealms).
+    process.env.KEYCLOAK_ADDITIONAL_REALMS = '["partner"]';
+    try {
+      const svc = loadService('https://localhost/auth');
+      global.fetch = jest.fn((url) =>
+        Promise.resolve({
+          ok: true,
+          json: async () => (String(url).includes('/realms/partner/') ? PARTNER_DISCOVERY : DISCOVERY)
+        })
+      );
+      const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+      const token = `${b64({ alg: 'RS256' })}.${b64({
+        iss: DISCOVERY.issuer,
+        sub: 'user-1',
+        exp: Math.floor(Date.now() / 1000) + 3600
+      })}.sig`;
+      mockJwtVerify.mockResolvedValue({
+        payload: { iss: DISCOVERY.issuer, sub: 'user-1' },
+        protectedHeader: { alg: 'RS256' }
+      });
+
+      await svc.verifyToken(token);
+
+      const primaryInternal = svc._getJwksCache(DISCOVERY.issuer);
+      const partnerInternal = svc._getJwksCache(PARTNER_DISCOVERY.issuer);
+      const primaryPublicAlias = svc._getJwksCache('https://localhost/auth/realms/genie');
+      const partnerPublicAlias = svc._getJwksCache('https://localhost/auth/realms/partner');
+
+      expect(primaryInternal).toBeDefined();
+      expect(partnerInternal).toBeDefined();
+      expect(partnerInternal).not.toBe(primaryInternal);
+      // The primary alias survives pointing at the PRIMARY realm's own JWKS
+      // (pre-fix this resolved to the PARTNER realm's cache).
+      expect(primaryPublicAlias).toBe(primaryInternal);
+      // The alias is the primary realm's by definition — the partner init
+      // registers no public-issuer alias of its own.
+      expect(partnerPublicAlias).toBeUndefined();
+    } finally {
+      delete process.env.KEYCLOAK_ADDITIONAL_REALMS;
+    }
   });
 });

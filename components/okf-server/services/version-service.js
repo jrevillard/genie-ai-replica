@@ -21,6 +21,7 @@ const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
 const auditService = require('./audit-service');
+const backingFileService = require('./backing-file-service');
 const conceptMetaService = require('./concept-meta-service');
 
 const VERSIONS = 'okf_versions';
@@ -48,7 +49,7 @@ class VersionError extends Error {
   }
 }
 
-const { isArangoNotFound } = require('./arango-errors');
+const { isArangoNotFound, isArangoUniqueViolation } = require('./arango-errors');
 const { createHash } = require('node:crypto');
 
 /**
@@ -96,9 +97,6 @@ async function fingerprintOfCurrentVersion(repoId) {
     return null; // never versioned yet — nothing to compare against
   }
 }
-const isUniqueViolation = (err) =>
-  err && (err.errorNum === 1210 || err.errorNum === 1185 || err.code === 409 || err.statusCode === 409);
-const isNotFound = (err) => isArangoNotFound(err); // structural ONLY — never message-regex (outages must not mask as 404)
 
 let _db = null;
 async function getDb() {
@@ -204,7 +202,7 @@ async function mintVersion(repo_id, opts = {}, actor) {
     try {
       repo = await db.collection(REPOS).document(repo_id);
     } catch (err) {
-      if (!isNotFound(err)) throw err;
+      if (!isArangoNotFound(err)) throw err;
     }
     if (!repo || repo.deleted_at) {
       recordOp('mint', 'not_found');
@@ -229,6 +227,8 @@ async function mintVersion(repo_id, opts = {}, actor) {
     // Stale-Pending bundle reconcile (legacy single-file repos): a Pending zip
     // with an empty queue is a stale marker — reconcile best-effort and
     // proceed. (Pre-ingest repos have no Pending zips by construction.)
+    // Delegated to backingFileService.markIngested — the same flip the settle
+    // path uses (same condition, same endpoint, non-fatal); one definition.
     const drainInFlight = async (aql) => (await (await db.query(aql, { repo_id })).all()).length > 0;
     if (
       await drainInFlight(
@@ -236,21 +236,11 @@ async function mintVersion(repo_id, opts = {}, actor) {
       )
     ) {
       try {
-        const { authedAxios } = require('./service-token');
-        const config = require('../config');
-        const resp = await authedAxios.get(
-          `${config.documentRepository.url}/api/files?repo_id=${encodeURIComponent(repo_id)}&is_bundle=true&limit=20`
-        );
-        const body = (resp && resp.data) || {};
-        const items = Array.isArray(body) ? body : body.data || body.items || [];
-        for (const f of items.filter((x) => x && x.file_id && x.dataprep && x.dataprep.status === 'Pending')) {
-          await authedAxios.patch(
-            `${config.documentRepository.url}/api/files/${encodeURIComponent(f.file_id)}/status`,
-            { dataprep: { status: 'Ingested' } },
-            { timeout: 10000 }
-          );
-        }
-        logger.info('Stale Pending bundle zip(s) reconciled to Ingested at mint', { repo_id, count: items.length });
+        const res = await backingFileService.markIngested(repo_id);
+        logger.info('Stale Pending bundle zip(s) reconciled to Ingested at mint', {
+          repo_id,
+          count: res.marked.length
+        });
       } catch (err) {
         logger.warn('Stale Pending bundle reconcile failed (non-fatal)', { repo_id, error: err.message });
       }
@@ -383,7 +373,7 @@ async function mintVersion(repo_id, opts = {}, actor) {
       try {
         await db.collection(VERSIONS).save(manifest);
       } catch (err) {
-        if (!isUniqueViolation(err)) {
+        if (!isArangoUniqueViolation(err)) {
           recordOp('mint', 'error');
           logger.error('Version manifest insert failed', { repo_id, bundle_version: nextVersion, error: err.message });
           throw err;
@@ -499,7 +489,7 @@ async function getVersion(repo_id, bundle_version) {
   try {
     return await db.collection(VERSIONS).document(`${repo_id}_${bundle_version}`);
   } catch (err) {
-    if (!isNotFound(err)) throw err;
+    if (!isArangoNotFound(err)) throw err;
     throw new VersionError('VERSION_NOT_FOUND', `Version ${bundle_version} not found for ${repo_id}`, 404);
   }
 }
@@ -536,7 +526,7 @@ async function linkBundleToVersion(repo_id, bundle_version, bundleInfo) {
     .collection(VERSIONS)
     .update(`${repo_id}_${bundle_version}`, patch)
     .catch((err) => {
-      if (!isNotFound(err)) throw err;
+      if (!isArangoNotFound(err)) throw err;
       // Manifest may not exist yet if export ran before mint (shouldn't, but
       // be defensive — link is best-effort and the bundle still exists in doc-repo)
       logger.warn('linkBundleToVersion: manifest not found (best-effort)', {
@@ -577,7 +567,7 @@ async function updateVersionIngestStatus(repo_id, bundle_version, outcome) {
     .collection(VERSIONS)
     .update(`${repo_id}_${bundle_version}`, patch)
     .catch((err) => {
-      if (!isNotFound(err)) throw err;
+      if (!isArangoNotFound(err)) throw err;
       logger.warn('updateVersionIngestStatus: manifest not found (best-effort)', {
         repo_id,
         bundle_version,

@@ -47,63 +47,70 @@ void main() {
 
     // Debug logs for yesterday to diagnose issues
     //
-    //Future apiAdminLogsDebugYesterdayGet() async
+    //Future<ApiAdminLogsDebugYesterdayGet200Response> apiAdminLogsDebugYesterdayGet() async
     test('test apiAdminLogsDebugYesterdayGet', () async {
       // TODO
     });
 
     // Get system logs
     //
-    //Future apiAdminLogsGet({ int limit, String level, String service }) async
+    //Future<ApiAdminLogsGet200Response> apiAdminLogsGet({ int limit, String level, String service }) async
     test('test apiAdminLogsGet', () async {
-      // TODO
-    });
-
-    // Trigger log rollover
-    //
-    //Future apiAdminLogsRolloverPost() async
-    test('test apiAdminLogsRolloverPost', () async {
       // TODO
     });
 
     // Search logs with filtering
     //
-    //Future apiAdminLogsSearchGet({ String term, String level, String service, String dateRange, String startDate, String endDate }) async
+    //Future<ApiAdminLogsGet200Response> apiAdminLogsSearchGet({ String term, String level, String service, String dateRange, String startDate, String endDate }) async
     test('test apiAdminLogsSearchGet', () async {
       // TODO
     });
 
     // Get logs summary by type and service
     //
-    //Future apiAdminLogsSummaryGet({ String date, String level }) async
+    //Future<ApiAdminLogsSummaryGet200Response> apiAdminLogsSummaryGet({ String date, String level }) async
     test('test apiAdminLogsSummaryGet', () async {
+      // TODO
+    });
+
+    // Get recent queries for admin inspection (Query Inspector)
+    //
+    //Future apiAdminQueriesInspectGet({ int limit, int offset, String userId, String searchText, String startDate, String endDate, num minConfidence, num maxConfidence }) async
+    test('test apiAdminQueriesInspectGet', () async {
+      // TODO
+    });
+
+    // Get full query details for admin inspection
+    //
+    //Future apiAdminQueriesInspectQueryIdGet(String queryId) async
+    test('test apiAdminQueriesInspectQueryIdGet', () async {
       // TODO
     });
 
     // Retrieve the last security scan details
     //
-    //Future apiAdminSecurityLastScanGet() async
+    //Future<ApiAdminSecurityLastScanGet200Response> apiAdminSecurityLastScanGet() async
     test('test apiAdminSecurityLastScanGet', () async {
       // TODO
     });
 
     // Get security metrics
     //
-    //Future apiAdminSecurityMetricsGet() async
+    //Future<ApiAdminSecurityMetricsGet200Response> apiAdminSecurityMetricsGet() async
     test('test apiAdminSecurityMetricsGet', () async {
       // TODO
     });
 
     // Run security scan
     //
-    //Future apiAdminSecurityScanPost() async
+    //Future<ApiAdminSecurityScanPost200Response> apiAdminSecurityScanPost() async
     test('test apiAdminSecurityScanPost', () async {
       // TODO
     });
 
     // Get system health metrics
     //
-    //Future apiAdminSystemHealthGet() async
+    //Future<ApiAdminSystemHealthGet200Response> apiAdminSystemHealthGet() async
     test('test apiAdminSystemHealthGet', () async {
       // TODO
     });

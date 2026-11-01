@@ -514,40 +514,6 @@ class AnalyticsService {
       throw error; // No fallback to force real data
     }
   }
-
-  /**
-   * Record a query in analytics
-   * @param {Object} queryDoc - Query document
-   * @returns {Promise<Object>} The created analytics record
-   */
-  async recordQuery(queryDoc) {
-    try {
-      const response = await httpService.post(`${this.baseUrl}/analytics/query`, queryDoc);
-      return response.data;
-    } catch (error) {
-      console.error('Error recording query in analytics:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Record feedback in analytics
-   * @param {String} queryId - Query ID
-   * @param {Object} feedback - Feedback data
-   * @returns {Promise<Object>} The created analytics record
-   */
-  async recordFeedback(queryId, feedback) {
-    try {
-      const response = await httpService.post(`${this.baseUrl}/analytics/feedback`, {
-        queryId,
-        feedback
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error recording feedback in analytics:', error);
-      throw error;
-    }
-  }
 }
 
 export default new AnalyticsService();

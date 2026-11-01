@@ -8,6 +8,7 @@ import 'package:openapi/api.dart';
 ## Properties
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
+**key** | **String** | Unique identifier | [optional] 
 **email** | **String** | User's email address | [optional] 
 **createdAt** | [**DateTime**](DateTime.md) | Account creation timestamp | [optional] 
 **updatedAt** | [**DateTime**](DateTime.md) | Last update timestamp | [optional] 

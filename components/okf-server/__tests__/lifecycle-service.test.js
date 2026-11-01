@@ -258,8 +258,11 @@ describe('lifecycle transitions — the machine, exhaustively', () => {
 
   test('INVALID_TRANSITION carries STRUCTURED details (wizard renders only valid actions — David, 2026-09-04)', async () => {
     seedRepo({ lifecycle_state: 'review' });
-    await lifecycleService.transition(REPO, 'submit', {}).catch((e) => {
-      expect(e.details).toEqual({ current_state: 'review', allowed: ['draft', 'register', 'validate', 'retracted'] });
+    // rejects.toMatchObject — a .catch() body would silently never run if the
+    // transition stopped rejecting on this path (the exact regression this
+    // test exists to catch), so the assertion must own the rejection itself.
+    await expect(lifecycleService.transition(REPO, 'submit', {})).rejects.toMatchObject({
+      details: { current_state: 'review', allowed: ['draft', 'register', 'validate', 'retracted'] }
     });
   });
 

@@ -490,6 +490,50 @@ def test_build_llm_judge_override_base_gets_the_version_segment_rule(monkeypatch
     assert captured["base_url"] == "https://api.z.ai/api/coding/paas/v4"
 
 
+def test_build_llm_judge_clients_honor_ragas_verify_ssl(monkeypatch, engine_env):
+    """review 2026-10-29 round 3: the judge's httpx clients hardcoded
+    verify=False while the embeddings clients honored RAGAS_VERIFY_SSL — a
+    hardened deployment silently judged over an unverified TLS channel.
+    verify must come from the same switch; the 300 s timeout stays."""
+    import httpx
+
+    captured = {}
+    real_client, real_async_client = httpx.Client, httpx.AsyncClient
+
+    def fake_client(**kwargs):
+        captured["sync"] = kwargs
+        return real_client(**kwargs)
+
+    def fake_async_client(**kwargs):
+        captured["async"] = kwargs
+        return real_async_client(**kwargs)
+
+    class _FakeChatOpenAI:
+        def __init__(self, **kwargs):
+            pass
+
+    import langchain_openai as lco
+
+    monkeypatch.setattr(lco, "ChatOpenAI", _FakeChatOpenAI)
+    monkeypatch.setattr(httpx, "Client", fake_client)
+    monkeypatch.setattr(httpx, "AsyncClient", fake_async_client)
+
+    judge = {"provider": "openai", "base_url": "http://vllm:8000", "model": "m", "api_key": "k"}
+
+    monkeypatch.delenv("RAGAS_VERIFY_SSL", raising=False)
+    ragas_engine.build_llm(temperature=0.0, judge=judge)
+    assert captured["sync"]["verify"] is False
+    assert captured["async"]["verify"] is False
+    assert captured["sync"]["timeout"] == 300
+    assert captured["async"]["timeout"] == 300
+
+    # the hardened deployment actually verifies
+    monkeypatch.setenv("RAGAS_VERIFY_SSL", "1")
+    ragas_engine.build_llm(temperature=0.0, judge=judge)
+    assert captured["sync"]["verify"] is True
+    assert captured["async"]["verify"] is True
+
+
 def test_caching_wrapper_serves_hits_without_calling_the_judge(tmp_path, monkeypatch):
     """The cache exists because repeat generations re-paid the whole KG
     phase: 5 questions over 2 small repos = ~211 transform calls ≈ 8 min
@@ -1535,6 +1579,36 @@ def test_resolve_metrics_drops_embedding_metrics_without_embedder(monkeypatch, e
     assert set(dropped) == {"answer_relevancy", "answer_similarity"}
 
 
+def test_resolve_metrics_honors_the_per_request_embed_override(monkeypatch, engine_env):
+    """review 2026-10-29 round 3: the embedder check consulted the env-only
+    build_embeddings() — with RAGAS_EMBED_MODEL unset it dropped
+    answer_relevancy/correctness/similarity even though the caller
+    (evaluate_samples) had built a working embedder via
+    build_embeddings(embed=...). The override must flow through so the
+    wanted set matches what the run actually uses."""
+    import ragas_engine
+
+    monkeypatch.delenv("RAGAS_EMBED_MODEL")
+    # env-only: no embedder -> embedding metrics drop (the existing contract)
+    metrics, dropped = ragas_engine.resolve_metrics(["faithfulness", "answer_relevancy"])
+    assert [m.name for m in metrics] == ["faithfulness"]
+    assert dropped == ["answer_relevancy"]
+
+    # the SAME wanted set survives when the caller supplies an embed override
+    seen = {}
+
+    def fake_build(embed=None):
+        seen["embed"] = embed
+        return object() if embed else None
+
+    monkeypatch.setattr(ragas_engine, "build_embeddings", fake_build)
+    override = {"base_url": "http://embed.example", "model": "embed-model"}
+    metrics, dropped = ragas_engine.resolve_metrics(["faithfulness", "answer_relevancy"], embed=override)
+    assert [m.name for m in metrics] == ["faithfulness", "answer_relevancy"]
+    assert dropped == []
+    assert seen["embed"] == override
+
+
 def test_resolve_metrics_rejects_unknown(engine_env):
     import ragas_engine
 
@@ -1650,7 +1724,7 @@ def test_evaluate_batches_rows_and_reports_progress(monkeypatch, engine_env):
         )
 
     monkeypatch.setattr(ragas_mod, "evaluate", fake_evaluate)
-    monkeypatch.setattr(ragas_engine, "resolve_metrics", lambda metrics: ([_M()], []))
+    monkeypatch.setattr(ragas_engine, "resolve_metrics", lambda metrics, embed=None: ([_M()], []))
 
     ticks = []
 
@@ -1702,7 +1776,7 @@ def test_evaluate_reports_the_judge_that_actually_scored(monkeypatch, engine_env
         return _Result([{"user_input": s.user_input, "faithfulness": 1.0} for s in dataset.samples])
 
     monkeypatch.setattr(ragas_mod, "evaluate", fake_evaluate)
-    monkeypatch.setattr(ragas_engine, "resolve_metrics", lambda metrics: ([_M()], []))
+    monkeypatch.setattr(ragas_engine, "resolve_metrics", lambda metrics, embed=None: ([_M()], []))
 
     samples = [{"user_input": "q", "response": "a", "reference": "r", "retrieved_contexts": ["c"]}]
 
@@ -1769,7 +1843,9 @@ def test_evaluate_maps_parameterized_metric_columns(monkeypatch, engine_env):
 
     monkeypatch.setattr(ragas_mod, "evaluate", fake_evaluate)
     monkeypatch.setattr(
-        ragas_engine, "resolve_metrics", lambda metrics: ([_M("factual_correctness"), _M("noise_sensitivity")], [])
+        ragas_engine,
+        "resolve_metrics",
+        lambda metrics, embed=None: ([_M("factual_correctness"), _M("noise_sensitivity")], []),
     )
 
     samples = [{"user_input": "q0", "response": "a", "reference": "r", "retrieved_contexts": ["c"]}]
@@ -1826,7 +1902,7 @@ def test_evaluate_cancel_between_batches(monkeypatch, engine_env):
         )
 
     monkeypatch.setattr(ragas_mod, "evaluate", fake_evaluate)
-    monkeypatch.setattr(ragas_engine, "resolve_metrics", lambda metrics: ([_M()], []))
+    monkeypatch.setattr(ragas_engine, "resolve_metrics", lambda metrics, embed=None: ([_M()], []))
 
     samples = [
         {"user_input": f"q{i}", "response": "a", "reference": "r", "retrieved_contexts": ["c"]} for i in range(4)
@@ -1992,6 +2068,57 @@ def test_the_scoring_call_timeout_is_configurable_and_bounded(monkeypatch):
     # the floor is 30 s — a zero budget would fail every call
     monkeypatch.setenv("RAGAS_EVAL_TIMEOUT_SECONDS", "0")
     assert ragas_engine._eval_timeout_seconds() == 30
+
+
+def test_evaluate_samples_timeout_zero_falls_through_to_the_env_knob(monkeypatch, engine_env):
+    """review 2026-10-29 round 3: the documented timeout_s=0 sentinel ("0 =
+    let the deployment decide") was coerced to 600 by the caller's
+    `timeout_s or 600` — RAGAS_EVAL_TIMEOUT_SECONDS was never consulted. 0
+    must reach the env-knob path; an explicit per-request value still wins."""
+    import asyncio
+
+    import ragas as ragas_mod
+
+    import ragas_engine
+
+    monkeypatch.setattr(ragas_engine, "build_llm", lambda **kwargs: object())
+    monkeypatch.setattr(ragas_engine, "build_embeddings", lambda embed=None: object())
+
+    class _M:
+        name = "faithfulness"
+
+    class _Frame:
+        def __init__(self, rows):
+            self._rows = rows
+            self.columns = list(rows[0].keys()) if rows else []
+
+        def iterrows(self):
+            return iter(enumerate(self._rows))
+
+    class _Result:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def to_pandas(self):
+            return _Frame(self._rows)
+
+    seen = {}
+
+    def fake_evaluate(dataset, metrics, llm, embeddings, run_config, show_progress, raise_exceptions):
+        seen["timeout"] = run_config.timeout
+        return _Result([{"user_input": s.user_input, "faithfulness": 1.0} for s in dataset.samples])
+
+    monkeypatch.setattr(ragas_mod, "evaluate", fake_evaluate)
+    monkeypatch.setattr(ragas_engine, "resolve_metrics", lambda metrics, embed=None: ([_M()], []))
+
+    samples = [{"user_input": "q", "response": "a", "reference": "r", "retrieved_contexts": ["c"]}]
+
+    monkeypatch.setenv("RAGAS_EVAL_TIMEOUT_SECONDS", "180")
+    asyncio.run(ragas_engine.evaluate_samples(samples, ["faithfulness"], timeout_s=0))
+    assert seen["timeout"] == 180  # the sentinel consults the deployment knob
+
+    asyncio.run(ragas_engine.evaluate_samples(samples, ["faithfulness"], timeout_s=90))
+    assert seen["timeout"] == 90  # an explicit per-request value still wins
 
 
 def test_a_degraded_node_is_excluded_instead_of_killing_the_relationship_phase():

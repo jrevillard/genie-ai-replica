@@ -6,6 +6,9 @@
 // delete them; Admin / steward roles get an explicit 403 BUNDLE_PROTECTED.
 // This test file locks down that contract for both single-file DELETE and
 // batch DELETE, and verifies the okf-service account is NOT blocked.
+// DW-426 (review 2026-10-29 round 3): bundleProtectedIds answers from ONE
+// IN-list AQL now, so the mocks program dbService.getConnection's query
+// instead of per-file metadataService.getMetadataById.
 
 'use strict';
 
@@ -67,9 +70,14 @@ jest.mock('../../services/fileService', () => ({
   getIngestionLogs: jest.fn()
 }));
 
-// NOTE: fileService/metadataService are required INSIDE the tests after
-// jest.resetModules() + doMock — top-level requires here would be stale
+// NOTE: fileService and the shared-lib mock are required INSIDE the tests
+// after jest.resetModules() + doMock — top-level requires here would be stale
 // (and ESLint-dead) because each beforeEach rebuilds the module registry.
+
+// Builds a db mock whose single AQL query returns `ids` as the protected set.
+const makeProtectedDb = (ids) => ({
+  query: jest.fn().mockResolvedValue({ all: jest.fn().mockResolvedValue(ids) })
+});
 
 const mockAdminAuth = () => {
   jest.doMock('../../middlewares/keycloak-auth-middleware', makeAuthMock(['Admin']));
@@ -89,6 +97,8 @@ describe('WS2: Bundle zip delete protection', () => {
   });
 
   describe('DELETE /api/files/:fileId (Admin caller)', () => {
+    let protectedDb;
+
     beforeEach(() => {
       mockAdminAuth();
       // rebuild app + fileService mock with the Admin-auth middleware
@@ -108,13 +118,9 @@ describe('WS2: Bundle zip delete protection', () => {
         addIngestionLog: jest.fn(),
         getIngestionLogs: jest.fn()
       }));
-      jest.doMock('../../services/metadataService', () => ({
-        addMetadata: jest.fn(),
-        searchMetadata: jest.fn(),
-        getMetadataById: jest.fn().mockResolvedValue({ file_id: 'bundle1', is_bundle: true }),
-        deleteMetadata: jest.fn(),
-        updateMetadata: jest.fn()
-      }));
+      const { dbService } = require('../../../shared-lib');
+      protectedDb = makeProtectedDb(['bundle1']);
+      dbService.getConnection.mockResolvedValue(protectedDb);
       app = require('../../app');
     });
 
@@ -126,17 +132,32 @@ describe('WS2: Bundle zip delete protection', () => {
       const res = await request(app).delete('/api/files/bundle1');
       expect(res.status).toBe(403);
       expect(res.body.code).toBe('BUNDLE_PROTECTED');
+      // DW-426: the protection set comes from the single IN-list query
+      expect(protectedDb.query).toHaveBeenCalledWith(expect.stringContaining('is_bundle == true'), {
+        ids: ['bundle1']
+      });
     });
 
     test('Admin caller deleting a NON-bundle → 200 (no protection)', async () => {
-      // Override getMetadataById to return a non-bundle
-      const meta = require('../../services/metadataService');
-      meta.getMetadataById.mockResolvedValueOnce({ file_id: 'doc1', is_bundle: false });
+      // Override the AQL result to an empty protected set
+      protectedDb.query.mockResolvedValue({ all: jest.fn().mockResolvedValue([]) });
       const fs = require('../../services/fileService');
       fs.deleteFile.mockResolvedValueOnce(true);
 
       const res = await request(app).delete('/api/files/doc1');
       expect(res.status).toBe(200);
+    });
+
+    test('A metadata transport error degrades to "no protected ids" → delete proceeds', async () => {
+      // Swallow-and-fall-through semantics: a DB hiccup must NOT 403 the delete
+      const { dbService } = require('../../../shared-lib');
+      dbService.getConnection.mockRejectedValue(new Error('arangodb unreachable'));
+      const fs = require('../../services/fileService');
+      fs.deleteFile.mockResolvedValueOnce(true);
+
+      const res = await request(app).delete('/api/files/bundle1');
+      expect(res.status).toBe(200);
+      expect(fs.deleteFile).toHaveBeenCalledWith('bundle1');
     });
   });
 
@@ -159,13 +180,6 @@ describe('WS2: Bundle zip delete protection', () => {
         addIngestionLog: jest.fn(),
         getIngestionLogs: jest.fn()
       }));
-      jest.doMock('../../services/metadataService', () => ({
-        addMetadata: jest.fn(),
-        searchMetadata: jest.fn(),
-        getMetadataById: jest.fn().mockResolvedValue({ file_id: 'bundle2', is_bundle: true }),
-        deleteMetadata: jest.fn(),
-        updateMetadata: jest.fn()
-      }));
       app = require('../../app');
     });
 
@@ -180,6 +194,8 @@ describe('WS2: Bundle zip delete protection', () => {
   });
 
   describe('POST /api/files (batch delete with bundle in list, Admin caller)', () => {
+    let protectedDb;
+
     beforeEach(() => {
       mockAdminAuth();
       jest.doMock('../../services/fileService', () => ({
@@ -198,16 +214,9 @@ describe('WS2: Bundle zip delete protection', () => {
         addIngestionLog: jest.fn(),
         getIngestionLogs: jest.fn()
       }));
-      jest.doMock('../../services/metadataService', () => ({
-        addMetadata: jest.fn(),
-        searchMetadata: jest.fn(),
-        getMetadataById: jest.fn().mockImplementation(async (fileId) => {
-          if (fileId === 'bundleInBatch') return { file_id: fileId, is_bundle: true };
-          return { file_id: fileId, is_bundle: false };
-        }),
-        deleteMetadata: jest.fn(),
-        updateMetadata: jest.fn()
-      }));
+      const { dbService } = require('../../../shared-lib');
+      protectedDb = makeProtectedDb(['bundleInBatch']);
+      dbService.getConnection.mockResolvedValue(protectedDb);
       app = require('../../app');
     });
 
@@ -221,9 +230,14 @@ describe('WS2: Bundle zip delete protection', () => {
         .send({ fileIds: ['docInBatch', 'bundleInBatch'] });
       expect(res.status).toBe(403);
       expect(res.body.code).toBe('BUNDLE_PROTECTED');
+      // ONE query for the whole batch (DW-426), carrying every requested id
+      expect(protectedDb.query).toHaveBeenCalledWith(expect.stringContaining('is_bundle == true'), {
+        ids: ['docInBatch', 'bundleInBatch']
+      });
     });
 
     test('Admin caller batch-deleting NON-bundles → 200', async () => {
+      protectedDb.query.mockResolvedValue({ all: jest.fn().mockResolvedValue([]) });
       const fs = require('../../services/fileService');
       fs.deleteFile.mockResolvedValue(true);
       const res = await request(app)

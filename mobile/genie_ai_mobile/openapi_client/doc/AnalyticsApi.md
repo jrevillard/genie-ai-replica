@@ -12,7 +12,6 @@ Method | HTTP request | Description
 [**apiAnalyticsDashboardGet**](AnalyticsApi.md#apianalyticsdashboardget) | **GET** /api/analytics/dashboard | Get dashboard analytics
 [**apiAnalyticsEventsGet**](AnalyticsApi.md#apianalyticseventsget) | **GET** /api/analytics/events | Get events records
 [**apiAnalyticsEventsPost**](AnalyticsApi.md#apianalyticseventspost) | **POST** /api/analytics/events | Track an event
-[**apiAnalyticsGet**](AnalyticsApi.md#apianalyticsget) | **GET** /api/analytics | Get general analytics
 [**apiAnalyticsMetricMetricGet**](AnalyticsApi.md#apianalyticsmetricmetricget) | **GET** /api/analytics/metric/{metric} | Get specific metric data
 [**apiAnalyticsRecordsGet**](AnalyticsApi.md#apianalyticsrecordsget) | **GET** /api/analytics/records | Get analytics records
 [**apiAnalyticsSatisfactionGaugeGet**](AnalyticsApi.md#apianalyticssatisfactiongaugeget) | **GET** /api/analytics/satisfaction/gauge | Get satisfaction gauge data
@@ -30,6 +29,8 @@ Retrieves analytics data for the dashboard within a date range
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AnalyticsApi();
 final startDate = 2013-10-20; // DateTime | Start date (YYYY-MM-DD)
@@ -58,7 +59,7 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -77,6 +78,8 @@ Retrieves event records with pagination
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AnalyticsApi();
 final limit = 56; // int | Maximum number of results to return
@@ -103,7 +106,7 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -113,7 +116,7 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **apiAnalyticsEventsPost**
-> Event apiAnalyticsEventsPost(apiAnalyticsEventsPostRequest)
+> EventCreated apiAnalyticsEventsPost(eventRequest)
 
 Track an event
 
@@ -122,12 +125,14 @@ Records a user event for analytics
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AnalyticsApi();
-final apiAnalyticsEventsPostRequest = ApiAnalyticsEventsPostRequest(); // ApiAnalyticsEventsPostRequest | 
+final eventRequest = EventRequest(); // EventRequest | 
 
 try {
-    final result = api_instance.apiAnalyticsEventsPost(apiAnalyticsEventsPostRequest);
+    final result = api_instance.apiAnalyticsEventsPost(eventRequest);
     print(result);
 } catch (e) {
     print('Exception when calling AnalyticsApi->apiAnalyticsEventsPost: $e\n');
@@ -138,68 +143,19 @@ try {
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **apiAnalyticsEventsPostRequest** | [**ApiAnalyticsEventsPostRequest**](ApiAnalyticsEventsPostRequest.md)|  | 
+ **eventRequest** | [**EventRequest**](EventRequest.md)|  | 
 
 ### Return type
 
-[**Event**](Event.md)
+[**EventCreated**](EventCreated.md)
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
  - **Content-Type**: application/json
- - **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-# **apiAnalyticsGet**
-> ApiAnalyticsGet200Response apiAnalyticsGet(startDate, endDate, filters, locale)
-
-Get general analytics
-
-Retrieves general analytics data with optional filters and date range
-
-### Example
-```dart
-import 'package:openapi/api.dart';
-
-final api_instance = AnalyticsApi();
-final startDate = 2013-10-20T19:20:30+01:00; // DateTime | Start date (ISO format)
-final endDate = 2013-10-20T19:20:30+01:00; // DateTime | End date (ISO format)
-final filters = filters_example; // String | JSON string of filter criteria
-final locale = locale_example; // String | Language locale for category names (e.g. en, fr, sw, ar, id, es, etc.)
-
-try {
-    final result = api_instance.apiAnalyticsGet(startDate, endDate, filters, locale);
-    print(result);
-} catch (e) {
-    print('Exception when calling AnalyticsApi->apiAnalyticsGet: $e\n');
-}
-```
-
-### Parameters
-
-Name | Type | Description  | Notes
-------------- | ------------- | ------------- | -------------
- **startDate** | **DateTime**| Start date (ISO format) | [optional] 
- **endDate** | **DateTime**| End date (ISO format) | [optional] 
- **filters** | **String**| JSON string of filter criteria | [optional] 
- **locale** | **String**| Language locale for category names (e.g. en, fr, sw, ar, id, es, etc.) | [optional] [default to 'en']
-
-### Return type
-
-[**ApiAnalyticsGet200Response**](ApiAnalyticsGet200Response.md)
-
-### Authorization
-
-No authorization required
-
-### HTTP request headers
-
- - **Content-Type**: Not defined
  - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
@@ -214,6 +170,8 @@ Retrieves data for a specific analytics metric
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AnalyticsApi();
 final metric = metric_example; // String | Metric name
@@ -242,7 +200,7 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -261,6 +219,8 @@ Retrieves analytics records with pagination
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AnalyticsApi();
 final limit = 56; // int | Maximum number of results to return
@@ -287,7 +247,7 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -306,6 +266,8 @@ Retrieves satisfaction percentage data for the gauge visualization
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AnalyticsApi();
 final startDate = 2013-10-20T19:20:30+01:00; // DateTime | Start date (ISO format)
@@ -334,7 +296,7 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -353,6 +315,8 @@ Retrieves satisfaction percentage data by knowledge area over time
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AnalyticsApi();
 final startDate = 2013-10-20T19:20:30+01:00; // DateTime | Start date (ISO format)
@@ -381,7 +345,7 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -400,6 +364,8 @@ Retrieves time series data for a specific metric, interval, and date range
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AnalyticsApi();
 final metricType = metricType_example; // String | Metric type name (e.g., queries, users)
@@ -430,7 +396,7 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 

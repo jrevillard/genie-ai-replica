@@ -21,7 +21,7 @@ void main() {
     //
     // Retrieves a specific service category with its associated services
     //
-    //Future<ApiServiceCategoriesCategoriesGet200ResponseInner> apiServiceCategoriesCategoriesCategoryIdGet(String categoryId, { String locale }) async
+    //Future<ApiServiceCategoriesCategoriesCategoryIdGet200Response> apiServiceCategoriesCategoriesCategoryIdGet(String categoryId, { String locale }) async
     test('test apiServiceCategoriesCategoriesCategoryIdGet', () async {
       // TODO
     });
@@ -30,7 +30,7 @@ void main() {
     //
     // Retrieves all categories with their associated services as objects (including keys)
     //
-    //Future apiServiceCategoriesCategoriesDetailedGet({ String locale }) async
+    //Future<List<CategoryTree>> apiServiceCategoriesCategoriesDetailedGet({ String locale }) async
     test('test apiServiceCategoriesCategoriesDetailedGet', () async {
       // TODO
     });
@@ -39,7 +39,7 @@ void main() {
     //
     // Retrieves all service categories with their associated services
     //
-    //Future<List<ApiServiceCategoriesCategoriesGet200ResponseInner>> apiServiceCategoriesCategoriesGet({ String locale }) async
+    //Future<List<CategoryTree>> apiServiceCategoriesCategoriesGet({ String locale }) async
     test('test apiServiceCategoriesCategoriesGet', () async {
       // TODO
     });
@@ -77,15 +77,6 @@ void main() {
     //
     //Future<List<ApiServiceCategoriesCategoryIdTranslationsGet200ResponseInner>> apiServiceCategoriesCategoryIdTranslationsGet(String categoryId) async
     test('test apiServiceCategoriesCategoryIdTranslationsGet', () async {
-      // TODO
-    });
-
-    // Initialize default categories
-    //
-    // Initializes the system with default categories and services
-    //
-    //Future<ApiServiceCategoriesInitPost200Response> apiServiceCategoriesInitPost() async
-    test('test apiServiceCategoriesInitPost', () async {
       // TODO
     });
 

@@ -80,6 +80,15 @@ def _judge_base_url() -> str:
     return (os.getenv("RAGAS_JUDGE_BASE_URL") or "").rstrip("/")
 
 
+def _tls_verify_enabled() -> bool:
+    """True when RAGAS_VERIFY_SSL opts the deployment into strict verification.
+
+    The single source of the TLS decision: the embeddings clients below AND
+    the judge clients (review 2026-10-29 round 3 — the judge hardcoded
+    verify=False and ignored the knob)."""
+    return (os.getenv("RAGAS_VERIFY_SSL") or "0").strip().lower() in ("1", "true", "yes", "on")
+
+
 def _tls_client_kwargs() -> dict[str, Any]:
     """httpx client kwargs for the OpenAI-dialect EMBEDDINGS clients.
 
@@ -93,7 +102,7 @@ def _tls_client_kwargs() -> dict[str, Any]:
     deployments."""
     import httpx
 
-    if (os.getenv("RAGAS_VERIFY_SSL") or "0").strip().lower() in ("1", "true", "yes", "on"):
+    if _tls_verify_enabled():
         return {}
     return {
         "http_client": httpx.Client(verify=False, timeout=300),
@@ -926,8 +935,12 @@ def build_llm(
     # FAILED -> OpenAIConnectionError). 300s request timeout: long local
     # judge calls can take 60-120s; the httpx default (5s read) killed
     # 12/360 jobs in the harness's 2026-10-07 run.
-    sync_client = httpx.Client(verify=False, timeout=300)
-    async_client = httpx.AsyncClient(verify=False, timeout=300)
+    # verify honors the SAME RAGAS_VERIFY_SSL switch as the embeddings
+    # clients (_tls_verify_enabled): insecure by default (the sovereign
+    # endpoints present self-signed certs), strict only when the deployment
+    # opts in (review 2026-10-29 round 3).
+    sync_client = httpx.Client(verify=_tls_verify_enabled(), timeout=300)
+    async_client = httpx.AsyncClient(verify=_tls_verify_enabled(), timeout=300)
     kwargs: dict[str, Any] = {}
     max_tokens = int(os.getenv("RAGAS_JUDGE_MAX_TOKENS") or "0")
     if max_tokens <= 0 and provider == "anthropic":
@@ -972,7 +985,10 @@ class _TeiEmbeddings:
             f"{self.url}/embed",
             json={"inputs": texts, "truncate": True},
             headers=headers,
-            verify=False,
+            # Same knob as the OpenAI-dialect embeddings + judge clients — a
+            # hardened deployment (RAGAS_VERIFY_SSL=1) must not keep a
+            # verify=False hole on the TEI leg (review 2026-10-29 round 3).
+            verify=_tls_verify_enabled(),
             timeout=120,
         )
         resp.raise_for_status()
@@ -1095,17 +1111,21 @@ _EMBEDDING_METRICS = {"answer_relevancy", "answer_correctness", "answer_similari
 _REFERENCE_CONTEXT_METRICS: set[str] = set()  # reserved: non-LLM context metrics
 
 
-def resolve_metrics(wanted: list[str] | None) -> tuple[list[Any], list[str]]:
+def resolve_metrics(wanted: list[str] | None, embed: dict | None = None) -> tuple[list[Any], list[str]]:
     """Map requested keys to metric instances. Unknown keys raise. Returns
     (metrics, dropped) — dropped names the metrics removed because the
-    embedder is not configured."""
+    embedder is not configured. embed: the same per-request embed override
+    the evaluation itself builds with (review 2026-10-29 round 3 — without
+    it the check consulted the env-only embedder and dropped
+    embedding-dependent metrics even though the caller supplied a working
+    one)."""
     reg = metric_registry()
     keys = list(wanted) if wanted else list(_DEFAULT_METRICS_TUPLE)
     unknown = [k for k in keys if k not in reg]
     if unknown:
         raise ValueError(f"unknown metrics: {', '.join(unknown)}; available: {', '.join(sorted(reg))}")
     dropped: list[str] = []
-    if build_embeddings() is None:
+    if build_embeddings(embed=embed) is None:
         dropped = [k for k in keys if k in _EMBEDDING_METRICS]
         if dropped:
             logger.warning("RAGAS_EMBED_MODEL unset — dropping embedding-dependent metrics: %s", ", ".join(dropped))
@@ -1944,14 +1964,16 @@ async def evaluate_samples(
     are its own, never a generation's (2026-10-26)."""
     # 0 = "not specified by the caller" -> the environment decides
     # (RAGAS_EVAL_TIMEOUT_SECONDS), falling back to 10 minutes. An explicit
-    # per-request value always wins.
-    timeout_s = _eval_timeout_seconds(timeout_s or 600)
+    # per-request value always wins. `is not None` (not truthiness) so the
+    # documented timeout_s=0 sentinel reaches the env-knob path instead of
+    # coercing to 600 (review 2026-10-29 round 3).
+    timeout_s = _eval_timeout_seconds(timeout_s if timeout_s is not None else 600)
     from ragas import EvaluationDataset, evaluate
     from ragas.run_config import RunConfig
 
     if progress:
         progress("scoring")
-    metric_instances, dropped = resolve_metrics(metrics)
+    metric_instances, dropped = resolve_metrics(metrics, embed=embed)
     if not metric_instances:
         raise RuntimeError("no metrics available (embedder unconfigured and only embedding metrics requested?)")
 

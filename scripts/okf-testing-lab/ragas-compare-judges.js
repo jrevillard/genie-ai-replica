@@ -32,6 +32,7 @@ function reqJson(method, url, body) {
         method,
         headers: {
           'Content-Type': 'application/json',
+          // The sidecar's fail-closed service-to-service gate (app.py:49).
           'x-ragas-secret': process.env.RAGAS_INTERNAL_SECRET || process.env.OKF_INTERNAL_SECRET || ''
         }
       },

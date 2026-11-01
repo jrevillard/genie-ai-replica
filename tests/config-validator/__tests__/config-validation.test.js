@@ -10,6 +10,7 @@ const {
   parseComposeImages,
   parseAnsibleImages,
   parseGitlabCiImages,
+  parseGitlabCiJobChanges,
   parseComposeServiceContracts
 } = require('../validators/parse-compose');
 const { parseEnvTemplateImageVars } = require('../validators/parse-env-template');
@@ -521,14 +522,12 @@ describe('Configuration Validation Suite', () => {
       /^(OKF_|TEI_EMBED_HOST|EMBEDDING_MODEL_ID|VLLM_ENDPOINT|VLLM_MODEL_ID|VLLM_API_KEY|DATAPREP_URL)/.test(v)
     );
 
-    // The compose VLLM_MODEL_ID entry interpolates VLLM_LLM_MODEL_ID first
-    // (`${VLLM_LLM_MODEL_ID:-${VLLM_MODEL_ID:-}}`) — an env.j2 emission of
-    // the primary alias satisfies the parity for the container-side name.
-    const ANSIBLE_ALIAS = { VLLM_MODEL_ID: 'VLLM_LLM_MODEL_ID' };
-
     test('every OKF compose var is emitted by env.j2', () => {
       expect(PARITY_VARS.length).toBeGreaterThanOrEqual(15); // guard: block actually parsed
-      const missing = PARITY_VARS.filter((v) => !ansibleVars[v] && !ansibleVars[ANSIBLE_ALIAS[v]]);
+      // VLLM_MODEL_ID passes through RAW in the okf-server block (envPin()
+      // in the service owns the precedence) — env.j2 emits it guarded
+      // (vllm_model_id), so the parity holds on both paths.
+      const missing = PARITY_VARS.filter((v) => !ansibleVars[v]);
       expect(missing).toEqual([]);
     });
 
@@ -567,29 +566,53 @@ describe('Configuration Validation Suite', () => {
     //
     // These are CODE defaults (PII_SERVICE_URL/PII_TIMEOUT_MS/PII_RETRIES are
     // not in the compose okf-server block), so parity here means "ansible
-    // emits them with the code's own default", not "compose agrees".
-    const PII_CODE_DEFAULTS = {
-      // 4 since !1080, matching the uvicorn --workers default in
-      // components/pii-service/Dockerfile. This map is a HAND-MAINTAINED MIRROR
-      // of the code's own defaults — the same "the same fact stated in two
-      // places" shape as BUG-11/12/15 — so it is the 4th copy to move when the
-      // default moves: Dockerfile CMD, compose, env.j2, and here. The assertion
-      // below is what makes forgetting one of them loud instead of silent.
-      PII_WEB_CONCURRENCY: '4',
-      PII_REGION_MAX_CHARS: '50000',
-      PII_CONCEPT_RETRY_PAUSE_MS: '8000',
-      PII_SERVICE_URL: 'http://pii-service:8000',
-      PII_TIMEOUT_MS: '10000',
-      PII_RETRIES: '2'
+    // emits them with the code's own default", not "compose agrees". The code
+    // side is PARSED FROM SOURCE — the Dockerfile CMD, the sidecar's app.py
+    // getenv and okf-server's config/pii-service reads — not mirrored by hand
+    // (a hand mirror stays green while env.j2 silently diverges from real
+    // behaviour, exactly half the drift this check exists to catch).
+    const piiCodeDefaults = () => {
+      const repo = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
+      const dockerfile = repo('components/pii-service/Dockerfile');
+      const appPy = repo('components/pii-service/app.py');
+      const okfConfig = repo('components/okf-server/config.js');
+      const okfPii = repo('components/okf-server/services/pii-service.js');
+      const out = {};
+
+      // ${PII_WEB_CONCURRENCY:-4} in the Dockerfile CMD (uvicorn --workers)
+      const workers = dockerfile.match(/\$\{PII_WEB_CONCURRENCY:-(\d+)\}/);
+      if (!workers) throw new Error('PII_WEB_CONCURRENCY default not found in pii-service Dockerfile CMD');
+      out.PII_WEB_CONCURRENCY = workers[1];
+
+      // os.getenv("PII_REGION_MAX_CHARS", "50000") in the sidecar
+      const region = appPy.match(/os\.getenv\(["']PII_REGION_MAX_CHARS["'],\s*["'](\d+)["']\)/);
+      if (!region) throw new Error('PII_REGION_MAX_CHARS default not found in pii-service app.py');
+      out.PII_REGION_MAX_CHARS = region[1];
+
+      // process.env.PII_CONCEPT_RETRY_PAUSE_MS) || 8000 in okf-server
+      const pause = okfPii.match(/PII_CONCEPT_RETRY_PAUSE_MS\)\s*\|\|\s*(\d+)/);
+      if (!pause) throw new Error('PII_CONCEPT_RETRY_PAUSE_MS default not found in okf-server pii-service.js');
+      out.PII_CONCEPT_RETRY_PAUSE_MS = pause[1];
+
+      // okf-server/config.js: url || '...', parseInt(env || '...', 10)
+      const url = okfConfig.match(/PII_SERVICE_URL\s*\|\|\s*'([^']+)'/);
+      const timeout = okfConfig.match(/PII_TIMEOUT_MS\s*\|\|\s*'(\d+)'/);
+      const retries = okfConfig.match(/PII_RETRIES\s*\|\|\s*'(\d+)'/);
+      if (!url || !timeout || !retries)
+        throw new Error('PII_SERVICE_URL/PII_TIMEOUT_MS/PII_RETRIES defaults not found in okf-server config.js');
+      out.PII_SERVICE_URL = url[1];
+      out.PII_TIMEOUT_MS = timeout[1];
+      out.PII_RETRIES = retries[1];
+      return out;
     };
 
     test('ansible env.j2 emits every PII var the cloud deployment needs', () => {
-      const missing = Object.keys(PII_CODE_DEFAULTS).filter((v) => !ansibleVars[v]);
+      const missing = Object.keys(piiCodeDefaults()).filter((v) => !ansibleVars[v]);
       expect(missing).toEqual([]);
     });
 
-    test('ansible PII defaults match the values the code itself defaults to', () => {
-      const mismatches = Object.entries(PII_CODE_DEFAULTS)
+    test('ansible PII defaults match the values the code itself defaults to (parsed from source)', () => {
+      const mismatches = Object.entries(piiCodeDefaults())
         .filter(([v, expected]) => ansibleVars[v] && ansibleVars[v].default !== expected)
         .map(([v, expected]) => v + ': ansible=' + ansibleVars[v].default + ' code=' + expected);
       expect(mismatches).toEqual([]);
@@ -1032,8 +1055,9 @@ describe('Configuration Validation Suite', () => {
   // family sat outside the gate, and env.j2's `{% if %}` guards meant the vars
   // carried no literal default for the comparison to read.
   //
-  // The budget is now derived from VLLM_MAX_MODEL_LEN, which makes agreement
-  // between these surfaces load-bearing rather than cosmetic.
+  // The budget is now derived from the serving model's discovered window,
+  // which makes agreement between these surfaces load-bearing rather than
+  // cosmetic.
   describe('AC8: Contextual Retrieval defaults agree across compose and ansible', () => {
     const composeLines = fs.readFileSync(COMPOSE_FILE, 'utf8').split(/\r?\n/);
     const blockStart = composeLines.findIndex((l) => /^  dataprep-arango-service:/.test(l));
@@ -1053,6 +1077,7 @@ describe('Configuration Validation Suite', () => {
     const FAMILY = [
       'DATAPREP_CONTEXTUAL_DOC_BUDGET',
       'DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL',
+      'DATAPREP_MAX_MODEL_LEN',
       'DATAPREP_CONTEXTUAL_MAX_TOKENS',
       'CONTEXTUAL_STRATEGY',
       'CONTEXTUAL_RETRIEVAL_ENABLED',
@@ -1084,9 +1109,10 @@ describe('Configuration Validation Suite', () => {
     });
 
     test('the doc-context budget is derived, not a fixed literal', () => {
-      // 0 = derive from VLLM_MAX_MODEL_LEN. A non-zero compose default would
-      // silently reinstate the one-number-for-every-hardware bug, because
-      // compose ALWAYS injects the variable — so "unset" never reaches Python.
+      // 0 = derive from the serving model's discovered window. A non-zero
+      // compose default would silently reinstate the one-number-for-every-
+      // hardware bug, because compose ALWAYS injects the variable — so
+      // "unset" never reaches Python.
       expect(composeDefaults.DATAPREP_CONTEXTUAL_DOC_BUDGET).toBe('0');
     });
 
@@ -1104,9 +1130,11 @@ describe('Configuration Validation Suite', () => {
 
     test('the concept-document ceiling agrees across compose and env.j2', () => {
       // okf-server splits a concept document above this; dataprep truncates the
-      // document context above the budget derived from VLLM_MAX_MODEL_LEN. If
-      // these two drift apart the corpus silently degrades again — documents get
-      // stored that will be truncated, or split that did not need it.
+      // document context above the budget it derives from the window the
+      // endpoint serves at runtime. The two are NOT derived from one source —
+      // this one is a literal — so the invariant "they stay in step" is the
+      // operator's to keep by hand. What this test CAN assert is that both
+      // deployment surfaces state the same literal.
       const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
       const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
       const m = okfBlock.match(/- OKF_MAX_CONCEPT_DOC_CHARS=\$\{OKF_MAX_CONCEPT_DOC_CHARS:-(\d+)\}/);
@@ -2194,5 +2222,319 @@ describe('Configuration Validation Suite', () => {
         }
       });
     });
+  });
+});
+
+// --- e2e merge-train changes filters (#1264) ---
+// e2e:playwright hard-needs e2e:integration on merge trains: a train whose
+// paths instantiate e2e:playwright must also instantiate its needs-partner,
+// or GitLab fails pipeline creation and the whole train goes red. The CI file
+// makes that hold structurally — both jobs alias one hidden anchor
+// (.e2e_merge_train_changes) — so this guard pins the alias wiring and the
+// anchor contents instead of re-deriving a subset relation. Every path the
+// jobs execute or consume must be in the anchor, or e2e silently skips on
+// the train.
+describe('e2e merge-train changes filters (#1264)', () => {
+  const ciFile = path.join(ROOT, '.gitlab-ci.yml');
+  const ANCHOR = '.e2e_merge_train_changes';
+  const E2E_JOBS = ['e2e:integration', 'e2e:playwright'];
+  let content;
+  let filters;
+
+  beforeAll(() => {
+    content = fs.readFileSync(ciFile, 'utf-8');
+    filters = parseGitlabCiJobChanges(ciFile, [ANCHOR, ...E2E_JOBS]);
+  });
+
+  // Section of the file from a top-level key to the next one. The boundary
+  // matches a top-level KEY line only — a column-0 comment inside the job
+  // body is valid YAML there and must not truncate the section. Comment
+  // lines are stripped entirely: they are layout, not configuration, and
+  // must not leak literals (a path, a condition) into the assertions below.
+  const sectionOf = (job) => {
+    const start = content.indexOf(`\n${job}:`);
+    expect(start).toBeGreaterThan(-1);
+    const rest = content.slice(start + 1);
+    const end = rest.search(/\n[\w:.-]+:(\s|$)/);
+    const section = end === -1 ? rest : rest.slice(0, end + 1);
+    return section
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('#'))
+      .join('\n');
+  };
+
+  // Executed paths are derived from the `npx playwright test` invocation in
+  // .e2e_web_base rather than copied into a second hand-maintained list — a
+  // hardcoded list would inherit the same drift this guard exists to catch.
+  // The derivation is anchored to that base's section so a second invocation
+  // added elsewhere in the file cannot silently redirect it.
+  const executedPaths = () => {
+    const invocation = sectionOf('.e2e_web_base').match(/npx playwright test ([^\n]+)/);
+    expect(invocation).not.toBeNull();
+    const targets = invocation[1]
+      .split(/\s+/)
+      .filter((arg) => arg.startsWith('tests/e2e'))
+      .map((arg) => (arg.endsWith('/') ? `${arg}**/*` : arg));
+    expect(targets).toEqual([
+      'tests/e2e/chatbot/**/*',
+      'tests/e2e/documents/**/*',
+      'tests/e2e/theme-runtime-config.spec.js',
+      'tests/e2e/helpers/**/*'
+    ]);
+    return targets;
+  };
+
+  // Consumed at runtime by the executed specs but not visible on the
+  // invocation line: helpers are imported, fixtures are uploaded/read by the
+  // documents specs.
+  const CONSUMED_PATHS = ['tests/e2e/helpers/**/*', 'tests/e2e/fixtures/**/*'];
+
+  test('executed and consumed paths are listed in the shared anchor', () => {
+    const anchorPaths = filters.get(ANCHOR);
+    for (const required of [...executedPaths(), ...CONSUMED_PATHS]) {
+      expect(anchorPaths).toContain(required);
+    }
+  });
+
+  // Entries the jobs deploy or consume from this checkout — the component
+  // trees the stack runs, the compose file, the env template, the Keycloak
+  // tree (see the anchor bullet in .gitlab-ci.yml for the baked/bind-mount
+  // split) and the collector config. Not derivable from the Playwright
+  // invocation; a cleanup pruning one of them re-silences the train trigger
+  // silently.
+  const STACK_INPUT_PATHS = [
+    'components/gov-chat-frontend/**/*',
+    'components/gov-chat-backend/**/*',
+    'components/document-repository/**/*',
+    '.gitlab-ci.yml',
+    'playwright.config.js',
+    'package.json',
+    'package-lock.json',
+    'docker-compose.yaml',
+    'env',
+    'configs/keycloak/**/*',
+    'configs/otel/otel-collector-config.yaml'
+  ];
+
+  test('stack-input entries are listed in the shared anchor', () => {
+    const anchorPaths = filters.get(ANCHOR);
+    for (const required of STACK_INPUT_PATHS) {
+      expect(anchorPaths).toContain(required);
+    }
+  });
+
+  // The e2e stack pulls the keycloak-config candidate image whose build job
+  // bakes the realm (and the import entrypoint); if a tree change stops
+  // instantiating the build, the train's candidate tag does not exist: the
+  // compose pull swallows the missing manifest (|| true) and `up --no-build`
+  // then fails hard — a red train whose cause (a missing tag, not a broken
+  // realm) is hard to attribute. The inline `paths: [...]` form is
+  // opaque to the line parser, so pin the merge_request_event rule — the
+  // branch that instantiates the job on merge trains — by adjacency: its
+  // paths list sits immediately above the compare_to line. scan:keycloak-config
+  // carries the identical rules and gates the promote chain, so it is pinned
+  // the same way.
+  test.each(['build:keycloak-config', 'scan:keycloak-config', 'promote:keycloak-config'])(
+    '%s merge_request_event rule still triggers on the keycloak tree',
+    (job) => {
+      const lines = sectionOf(job).split('\n');
+      const compareTo = lines.findIndex((l) => l.includes('compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME'));
+      expect(compareTo).toBeGreaterThan(0);
+      const adjacent = lines.slice(Math.max(0, compareTo - 2), compareTo + 1).join('\n');
+      expect(adjacent).toContain('"configs/keycloak/**/*"');
+    }
+  );
+
+  // The default-branch and release rules carry the same paths list (for
+  // pending-<sha> images and release builds); adjacency above pins the
+  // merge_request_event branch, the exact count here covers the other two
+  // in the current layout: it fails uncompensated losses and forces a
+  // conscious test update when the branch structure changes. It cannot see
+  // a compensating duplicate inside a single rule's list — closing that
+  // needs parse-level linting of the inline paths form.
+  test.each(['build:keycloak-config', 'scan:keycloak-config', 'promote:keycloak-config'])(
+    '%s carries the keycloak glob in all three rule branches',
+    (job) => {
+      const count = (sectionOf(job).match(/"configs\/keycloak\/\*\*\/\*"/g) || []).length;
+      expect(count).toBe(3);
+    }
+  );
+
+  // The widened keycloak trigger exists to feed the ROPC-refusal probe in
+  // .e2e_web_base; if the probe block is ever deleted the trigger loses its
+  // justification — pin the probe's presence so the pair cannot drift apart
+  // silently. Both consuming jobs must still extend that base, or the probe
+  // survives as dead text while nothing runs it.
+  test('the ROPC-refusal probe is present in .e2e_web_base', () => {
+    expect(sectionOf('.e2e_web_base')).toContain('ROPC refusal verified');
+  });
+
+  test.each(['e2e:playwright', 'scheduled:e2e-web'])(
+    '%s still extends the base that carries the probe',
+    (job) => {
+      expect(sectionOf(job)).toContain('extends: .e2e_web_base');
+    }
+  );
+
+  test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {
+    // The invariant exists because of this hard needs — pin it too.
+    expect(sectionOf('e2e:playwright')).toContain('needs: [e2e:integration]');
+    for (const job of E2E_JOBS) {
+      expect(sectionOf(job)).toContain('paths: *e2e_merge_train_changes');
+    }
+    // The line parser cannot see through the alias; an empty parse proves
+    // e2e:playwright carries no block-form changes: entries beside it. Any
+    // rewrite that drops the alias text fails the toContain above, so flow
+    // or list-item rewrites are caught either way.
+    expect(filters.get('e2e:playwright')).toEqual([]);
+  });
+
+  test('every rule carries the merge-train condition', () => {
+    // Broadening e2e:playwright's rule to all merge_request_event pipelines
+    // would dangle its hard needs on every ordinary MR pipeline and fail
+    // pipeline creation repo-wide; e2e:integration's two rules must stay
+    // scoped the same way. The FULL condition is pinned — dropping either
+    // half re-scopes the rule — and the RULE COUNTS are pinned, so an extra
+    // broadened rule cannot be appended beside the alias (every rule starts
+    // with a `- if:` list item).
+    const trainCondition =
+      '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"';
+    const ruleCount = (section) => section.split('\n').filter((line) => line.trimStart().startsWith('- if:')).length;
+    expect(ruleCount(sectionOf('e2e:playwright'))).toBe(1);
+    expect(ruleCount(sectionOf('e2e:integration'))).toBe(2);
+    expect(sectionOf('e2e:playwright').split(trainCondition).length - 1).toBe(1);
+    expect(sectionOf('e2e:integration').split(trainCondition).length - 1).toBe(2);
+  });
+
+  test('mobile stays integration-only', () => {
+    expect(filters.get('e2e:integration')).toEqual(['mobile/genie_ai_mobile/**/*']);
+    expect(sectionOf('e2e:playwright')).not.toContain('mobile/');
+    // Neither half of the split may reach the shared anchor: an alias entry
+    // is invisible to the section checks above.
+    expect(filters.get(ANCHOR)).not.toContain('mobile/genie_ai_mobile/**/*');
+  });
+});
+
+// --- parseGitlabCiJobChanges: block scoping ---
+describe('parseGitlabCiJobChanges', () => {
+  const tempDirs = [];
+  const writeTempCi = (lines) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-job-changes-'));
+    tempDirs.push(dir);
+    const file = path.join(dir, '.gitlab-ci.yml');
+    fs.writeFileSync(file, lines.join('\n') + '\n');
+    return file;
+  };
+
+  afterEach(() => {
+    for (const dir of tempDirs.splice(0)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('entries are scoped to their changes: block — the next rule is not swallowed', () => {
+    const file = writeTempCi([
+      'job-a:',
+      '  rules:',
+      '    - if: \'$CI_PIPELINE_SOURCE == "merge_request_event"\'',
+      '      changes:',
+      '        - tests/e2e/chatbot/**/*',
+      '    - if: \'$CI_PIPELINE_SOURCE == "web"\'',
+      '      when: manual',
+      '',
+      'job-b:',
+      '  rules:',
+      '    - if: \'$CI_PIPELINE_SOURCE == "merge_request_event"\'',
+      '      changes:',
+      '        - tests/e2e/chatbot/**/*'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['job-a', 'job-b']);
+    expect(parsed.get('job-a')).toEqual(['tests/e2e/chatbot/**/*']);
+    expect(parsed.get('job-b')).toEqual(['tests/e2e/chatbot/**/*']);
+  });
+
+  test('inline comments are stripped from entries', () => {
+    const file = writeTempCi([
+      'job-a:',
+      '  rules:',
+      "    - if: '$X'",
+      '      changes:',
+      '        - tests/x/**/*  # not executed yet (wired by a later MR)'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['job-a']);
+    expect(parsed.get('job-a')).toEqual(['tests/x/**/*']);
+  });
+
+  test('a changes: key carrying a trailing comment still starts a block', () => {
+    const file = writeTempCi([
+      'job-a:',
+      '  rules:',
+      "    - if: '$X'",
+      '      changes:  # why these paths',
+      '        - tests/a/**/*'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['job-a']);
+    expect(parsed.get('job-a')).toEqual(['tests/a/**/*']);
+  });
+
+  test('a same-indent sequence is a valid changes: block', () => {
+    const file = writeTempCi([
+      'job-a:',
+      '  rules:',
+      "    - if: '$X'",
+      '      changes:',
+      '      - tests/a/**/*',
+      '      - tests/b/**/*  # trailing comment',
+      "    - if: '$Y'",
+      '      when: manual'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['job-a']);
+    expect(parsed.get('job-a')).toEqual(['tests/a/**/*', 'tests/b/**/*']);
+  });
+
+  test('hidden anchor keys parse their direct list; aliases stay opaque', () => {
+    const file = writeTempCi([
+      '.shared_changes: &shared_changes',
+      '  - tests/a/**/*',
+      '  - tests/b/**/*  # trailing comment',
+      '',
+      'job-a:',
+      '  rules:',
+      "    - if: '$X'",
+      '      changes:',
+      '        paths: *shared_changes'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['.shared_changes', 'job-a']);
+    expect(parsed.get('.shared_changes')).toEqual(['tests/a/**/*', 'tests/b/**/*']);
+    expect(parsed.get('job-a')).toEqual([]);
+  });
+
+  test('a hidden anchor whose sequence sits at indent 0 still parses', () => {
+    const file = writeTempCi([
+      '.shared_changes: &shared_changes',
+      '- tests/a/**/*',
+      '- tests/b/**/*',
+      '',
+      'job-a:',
+      '  rules:',
+      "    - if: '$X'",
+      '      changes:',
+      '        paths: *shared_changes'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['.shared_changes', 'job-a']);
+    expect(parsed.get('.shared_changes')).toEqual(['tests/a/**/*', 'tests/b/**/*']);
+    expect(parsed.get('job-a')).toEqual([]);
+  });
+
+  test('a job key carrying a trailing comment is still recognized', () => {
+    const file = writeTempCi([
+      'job-a:  # annotated key',
+      '  rules:',
+      "    - if: '$X'",
+      '      changes:',
+      '        - tests/a/**/*'
+    ]);
+    const parsed = parseGitlabCiJobChanges(file, ['job-a']);
+    expect(parsed.get('job-a')).toEqual(['tests/a/**/*']);
   });
 });

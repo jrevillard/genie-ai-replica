@@ -12,6 +12,7 @@ import os
 import re
 import time
 from datetime import date, datetime
+from functools import lru_cache
 from urllib.parse import urlparse
 
 from metrics import (
@@ -23,15 +24,40 @@ from metrics import (
 
 from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
 from core.label_contract import build_filter_labels, encode_filter_labels
-from core.model_cache import get_max_model_len, get_model_id
-from core.model_http_policy import AIOHTTP_CONNECT_TIMEOUT_SECONDS, CONTROL_PLANE_TIMEOUT_SECONDS
-from core.span_attrs import ATTRIBUTE_NAMES, QUERY_ID_KEY, query_id_from_baggage
+from core.model_cache import (
+    MAX_SANE_MODEL_WINDOW_TOKENS,
+    ModelDiscoveryError,
+    TokenCountError,
+    coerce_int,
+    discover_model_id,
+    get_max_model_len,
+    get_model_id,
+    resolve_model_id,
+)
+from core.model_http_policy import (
+    AIOHTTP_CONNECT_TIMEOUT_SECONDS,
+    CONTROL_PLANE_TIMEOUT_SECONDS,
+    PROBE_TIMEOUT_SECONDS,
+    endpoint_auth_headers,
+    endpoint_verify,
+)
+from core.span_attrs import (
+    ATTRIBUTE_NAMES,
+    QUERY_ID_KEY,
+    QUERY_TRANSLATION_FALLBACK_ERROR,
+    QUERY_TRANSLATION_FALLBACK_TIMEOUT,
+    QUERY_TRANSLATION_PASSTHROUGH_ENGLISH,
+    QUERY_TRANSLATION_PASSTHROUGH_UNKNOWN,
+    QUERY_TRANSLATION_TRANSLATED,
+    query_id_from_baggage,
+)
 from tracing import (
     get_tracer,
     install_uvicorn_access_logging,
     setup_json_logging,
     setup_trace_logging,
     setup_tracing,
+    with_span,
 )
 
 setup_tracing("genieai-chatqna")
@@ -55,7 +81,6 @@ from fastapi import HTTPException, Request
 from fastapi.responses import StreamingResponse
 from keycloak_token_validator import JwksUnavailableError, validate_token
 from langdetect import detect
-from transformers import AutoTokenizer
 
 logger = CustomLogger("GENIE.AI_CHATQNA")
 setup_trace_logging("GENIE.AI_CHATQNA")
@@ -151,6 +176,18 @@ class TranslationFailedError(RuntimeError):
     keeps the English answer and reports ``"failed"``, while the history path
     — a text that is normalized for the retriever and never shown — falls back
     to the English source.
+    """
+
+
+class TranslationTimeoutError(TranslationFailedError):
+    """A translation chunk timed out waiting for the model.
+
+    A subtype, not a separate family: every ``except TranslationFailedError``
+    keeps working, while the history path — which reports whether the
+    translation service was slow or broken — classifies the timeout by
+    ``isinstance`` instead of unwrapping ``__cause__``. The answer path
+    reports only ``"failed"``, so the chunking gather folds the subtype back
+    into the base class; only the history path splits it.
     """
 
 
@@ -497,53 +534,49 @@ if _VLLM_LLM_ENDPOINT:
     LLM_SERVER_ENDPOINT_PREFIX = _parsed.path.rstrip("/") or ""
 else:
     LLM_SERVER_ENDPOINT_PREFIX = ""
-LLM_MODEL = os.getenv("LLM_MODEL", "ibm-granite/granite-3.3-2b-instruct")
 
-# Endpoint the context-window discovery probes: the remote GPU node when
-# configured, otherwise the compose-internal vLLM (LLM_SERVER_HOST_IP:PORT —
-# chatqna already talks to it for generation). Probing is always on; when the
-# endpoint is unreachable the getters fall back to the configured constants.
+# Endpoint the model-id and context-window discovery probes: the remote GPU
+# node when configured, otherwise the compose-internal vLLM
+# (LLM_SERVER_HOST_IP:PORT — chatqna already talks to it for generation).
+# Probing is always on; the model-id getter fails loudly when nothing
+# answers, the window getters fall back to the configured constants.
 _LLM_DISCOVERY_ENDPOINT = _VLLM_LLM_ENDPOINT or f"http://{LLM_SERVER_HOST_IP}:{LLM_SERVER_PORT}"
-
-# Auto-detect remote vLLM models with TTL caching (see core/model_cache.py).
-# GPU_NODE_HOST gates this: local GPU deployments keep their explicit config
-# (VLLM_ENDPOINT has a compose default http://vllm:8000). See issue #758.
-_GPU_NODE_HOST = os.getenv("GPU_NODE_HOST", "")
 
 
 def _get_llm_model() -> str:
-    """Return the LLM model ID.
+    """Return the model ID served at ``_LLM_DISCOVERY_ENDPOINT``.
 
-    Auto-detects from remote vLLM (with TTL cache) when GPU_NODE_HOST is set;
-    otherwise returns the LLM_MODEL env/config default.
+    Standing invariants: the chatqna image bakes no HuggingFace cache and
+    the deployment grants no hub egress, so the endpoint itself is the only
+    trustworthy source for the name; and every payload sent to it
+    (generation, condense, tokenize) must carry the discovered id because
+    vLLM validates the model name and 404s unknown ones. The VLLM_MODEL_ID
+    env (core.model_cache.resolve_model_id) is the deployer's escape hatch
+    for endpoints whose /v1/models is unreachable while generation works.
     """
-    if _GPU_NODE_HOST and _VLLM_LLM_ENDPOINT:
-        detected = get_model_id(_VLLM_LLM_ENDPOINT)
-        if detected:
-            return detected
-    return LLM_MODEL
+    return resolve_model_id(_LLM_DISCOVERY_ENDPOINT)
 
 
-def _get_translation_model_id() -> str:
-    """Return the translation model ID.
+def _get_translation_model_id() -> str | None:
+    """Return the translation model ID: the explicit VLLM_TRANSLATION_MODEL_ID
+    env when the deployer set it, otherwise the id discovered at
+    ``_TRANSLATION_DISCOVERY_ENDPOINT`` — None when neither answers.
 
-    Auto-detects from remote vLLM (with TTL cache) when GPU_NODE_HOST is set;
-    otherwise returns the TRANSLATION_MODEL_ID env/config default.
+    None is a valid state: the generic translation path sends no model name;
+    only the TranslateGemma completions payloads need one.
     """
-    if _GPU_NODE_HOST and _VLLM_TRANSLATION_ENDPOINT:
-        detected = get_model_id(_VLLM_TRANSLATION_ENDPOINT)
-        if detected:
-            return detected
-    return TRANSLATION_MODEL_ID
+    return TRANSLATION_MODEL_ID or get_model_id(_TRANSLATION_DISCOVERY_ENDPOINT)
 
 
-def _is_translategemma() -> bool:
+def _is_translategemma(translation_model_id: str | None) -> bool:
     """True when the active translation model is TranslateGemma.
 
     TranslateGemma uses the completions API with a pre-formatted prompt;
-    other models use the chat completions API.
+    other models use the chat completions API. Callers pass the id they
+    already resolved, so one read decides the payload AND the response
+    parse (a second read would re-probe and could disagree).
     """
-    return "translategemma" in _get_translation_model_id().lower()
+    return bool(translation_model_id) and "translategemma" in translation_model_id.lower()
 
 
 # Window discovery shares the model-id cache entry, so the MODEL_DETECT_TTL
@@ -562,11 +595,204 @@ def _build_user_content(user_context_string: str, history_string: str, rag_augme
     )
 
 
+# Translation completion budget. The cap is MEASURED, not guessed: the
+# prompt's tokens come from the translation server's own tokenizer, because
+# a char/token ratio is wrong for dense scripts (CJK runs ~1 token/char,
+# Latin ~4) — and a wrong estimate either overflows the window (the server
+# rejects the request) or truncates the translation.
+# The constants mirror the backend translation path's rule
+# (components/gov-chat-backend/services/translation/gpu-translate-backend.js):
+# the same safety margin, the same refusal floor, the same need bound.
+TRANSLATION_COMPLETION_SAFETY_TOKENS = 128
+# A prompt that leaves less room than this cannot produce a translation:
+# the completion would be cut off, and the guard would refuse it. Refused
+# up front, with the reason named.
+TRANSLATION_COMPLETION_MIN_ROOM = 256
+# What a translation needs: the backend translation path sizes the same
+# request at 4x the input tokens plus a margin (the target script can cost
+# more tokens than the source), and that bound keeps a big window from
+# inviting an unbounded completion.
+TRANSLATION_COMPLETION_NEEDED_MULTIPLIER = 4
+TRANSLATION_COMPLETION_NEEDED_MARGIN = 256
+# Set when the translation server REJECTS the prompt count (a client-error
+# status: no route, or a route that cannot take this payload shape) — the
+# gap is permanent, so the count is not attempted again and the degraded
+# estimate bounds the completion. Transient failures (an unreachable
+# endpoint, a timeout, a rate limit) do NOT latch: the next request counts
+# again.
+_TRANSLATION_COUNT_UNAVAILABLE = False
+# The ceiling a translation request falls back to when the completion
+# cannot be MEASURED (no window, or a server that cannot count): roughly
+# half the input, bounded. It is an estimate — the degraded path only — but
+# it is a bound: without it the server's default would let the completion
+# run to the whole window.
+TRANSLATION_BASE_CEILING = 4096
+
+
 def _translation_base_cap(text: str) -> int:
     """Base completion cap for a translation request: roughly half the input
-    size, bounded to a floor that keeps short inputs translatable and a
-    ceiling that keeps long ones bounded. Shared by every translation path."""
-    return min(max(len(text) // 2, 512), 4096)
+    size, with a 512 floor that keeps short inputs translatable and a
+    ceiling that keeps long ones bounded. The DEGRADED bound — used when
+    the completion cannot be measured."""
+    return min(max(len(text) // 2, 512), TRANSLATION_BASE_CEILING)
+
+
+async def _translation_completion_cap(prompt: str, count_body: dict, window: int | None) -> int:
+    """Completion cap for a translation request.
+
+    The cap is the room the window leaves beside the MEASURED prompt (the
+    translation server's own token count of the payload as it will be
+    sent), bounded by what the translation needs (4x the prompt tokens plus
+    a margin — the rule the backend translation path uses). The room is
+    what the server would grant anyway; stating it explicitly bounds the
+    completion instead of leaving it to the server's default.
+
+    When the completion cannot be measured — no window, or a server that
+    cannot count — the degraded estimate bounds it instead (see
+    ``_translation_base_cap``): a bound is better than the server's
+    default, which would let the completion run to the whole window.
+
+    Args:
+        prompt: the request's prompt text (the estimate's input).
+        count_body: the payload's prompt half, as it will be sent
+            (``{"messages": [...]}`` or ``{"prompt": "..."}``), so the count
+            covers the chat template the server applies.
+        window: the translation model's window, or None when unknown.
+
+    Raises:
+        TranslationInputTooLongError: the prompt leaves too little room in
+        the window for a translation. The server would reject the request
+        (or cut the completion off); the callers refuse the translation
+        instead, with the reason named.
+    """
+    if not window:
+        return _translation_base_cap(prompt)
+    prompt_tokens = await _count_translation_tokens(count_body)
+    if prompt_tokens is None:
+        # Degraded: the estimate bounds the completion, clamped by the
+        # window so the request cannot overflow it.
+        return min(_translation_base_cap(prompt), max(1, window - TRANSLATION_COMPLETION_SAFETY_TOKENS))
+    room = window - prompt_tokens - TRANSLATION_COMPLETION_SAFETY_TOKENS
+    if room < TRANSLATION_COMPLETION_MIN_ROOM:
+        raise TranslationInputTooLongError(
+            f"translation prompt ({prompt_tokens} tokens) leaves {room} of {window} tokens, "
+            "too little for a translation"
+        )
+    needed = TRANSLATION_COMPLETION_NEEDED_MULTIPLIER * prompt_tokens + TRANSLATION_COMPLETION_NEEDED_MARGIN
+    return min(room, needed)
+
+
+def _translation_payload(prompt: str, translategemma: bool, model_id: str | None) -> tuple[dict, str, dict]:
+    """The request shape for one translation prompt: the payload, the endpoint
+    it goes to, and the prompt half the token count must measure.
+
+    The count body is the payload's prompt half AS IT WILL BE SENT, so the
+    count covers what the server will tokenize (the chat template included).
+    """
+    if translategemma:
+        # The completions API takes a pre-formatted prompt (vLLM v0.10.0
+        # cannot pass structured content through chat completions to
+        # TranslateGemma's template).
+        payload = {
+            "model": model_id,
+            "prompt": prompt,
+            "temperature": 0.0,
+            "repetition_penalty": 1.2,
+        }
+        return payload, TRANSLATION_COMPLETIONS_URL, {"prompt": prompt, "model": model_id}
+    payload = {
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0,
+        "stream": False,
+    }
+    return payload, TRANSLATION_LLM_URL, {"messages": payload["messages"]}
+
+
+async def _translate_prompt(prompt: str, translategemma: bool, model_id: str | None) -> str:
+    """Translate one prompt and return the translated text.
+
+    The one seam behind both translation paths (the history and the chunk):
+    the completion budget is measured against the window the translation
+    model serves, the request goes out with that budget, and a completion
+    the server cut off is refused — so the budget, the request and the
+    refusal live in one place.
+
+    Raises:
+        TranslationTimeoutError: the service did not answer in time.
+        TranslationFailedError: the service failed, or answered with a
+            completion it cut off.
+        TranslationInputTooLongError: the prompt does not fit the window.
+    """
+    payload, url, count_body = _translation_payload(prompt, translategemma, model_id)
+    payload["max_tokens"] = await _translation_completion_cap(prompt, count_body, _get_translation_window())
+    if logflag:
+        logger.debug(
+            f"Payload for translation service ({'TranslateGemma' if translategemma else 'generic'}): {payload}"
+        )
+    try:
+        async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT, verify=endpoint_verify()) as client:
+            response = await client.post(
+                url,
+                json=payload,
+                headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+            )
+            response.raise_for_status()
+            choice = response.json()["choices"][0]
+            content = _choice_content(choice, translategemma)
+    except Exception as e:
+        # Fail-loud on vLLM context overflow: silently returning the
+        # original English text breaks the multilingual UX (#829). Classify
+        # by the HTTP body / error text and raise TranslationInputTooLongError
+        # so the route layer maps this to a 422 the BFF can surface.
+        from dataprep.genieai_dataprep_arangodb import _is_vllm_input_overflow
+
+        if _is_vllm_input_overflow(e):
+            raise TranslationInputTooLongError(
+                f"translation request exceeds the translation window: {type(e).__name__}: {str(e)[:200]}"
+            ) from e
+        if isinstance(e, (httpx.TimeoutException, TimeoutError)):
+            # One typed subtype: the answer path still sees a
+            # TranslationFailedError, while the history path reports
+            # "the service was slow" without unwrapping __cause__. The
+            # handlers log the failure — one line per event.
+            raise TranslationTimeoutError(f"translation timed out: {type(e).__name__}: {str(e)[:200]}") from e
+        raise TranslationFailedError(f"translation failed: {type(e).__name__}: {str(e)[:200]}") from e
+
+    if _completion_truncated(choice):
+        # The completion hit max_tokens: the translation is cut off, not
+        # finished. Embedding the cut-off text would put a half-translated
+        # history into the retrieval space under a success status — the same
+        # defect as an empty completion, and the backend translation path
+        # rejects it the same way.
+        logger.error("Translation model hit max_tokens; treating the translation as failed.")
+        raise TranslationFailedError("translation model hit max_tokens: the translation is cut off")
+    return content
+
+
+def _completion_truncated(choice: dict) -> bool:
+    """True when the server cut the completion off at max_tokens.
+
+    One decision for every translation path: a cut-off completion is not a
+    translation, whatever the payload shape. The paths refuse it
+    differently — the history path falls back to the source history, the
+    chunk path raises so the answer is not spliced half-translated — but
+    they must agree on what counts as truncated.
+
+    ``length`` is the OpenAI name for the condition.
+    """
+    return choice.get("finish_reason") == "length"
+
+
+def _choice_content(choice: dict, completions: bool) -> str:
+    """The text of a completion, whatever payload shape carries it.
+
+    The chat shape nests it under ``message.content``, the completions
+    shape under ``text``; a server that cut the completion off before any
+    token can leave the content null. The read never raises: a missing or
+    null content is an empty completion, which the callers already refuse.
+    """
+    raw = choice.get("text") if completions else (choice.get("message") or {}).get("content")
+    return (raw or "").strip()
 
 
 def _get_max_model_len() -> int:
@@ -622,10 +848,31 @@ def _get_max_translation_chars() -> int:
     return max(budget, 1)
 
 
-# Translation budget derivation from the discovered window. The completion
-# reserve assumes the translated output is roughly the size of the input (the
-# TranslateGemma payload also caps max_tokens near half the window).
+# Translation INPUT budget derivation from the discovered window: how many
+# characters of history may be forwarded to the translation model. The
+# char/token ratio is an estimate (dense scripts run ~1 token/char, Latin
+# ~4), so a deployment serving a dense script lowers the ratio with
+# MAX_TRANSLATION_CHARS. The completion budget is measured separately (see
+# TRANSLATION_COMPLETION_SAFETY_TOKENS).
 TRANSLATION_PROMPT_OVERHEAD_TOKENS = 512
+
+
+def _flatten_history_string(history: list) -> str:
+    """Flatten the chat history into the role-tagged string every consumer
+    shares: the translation prompt (and its untranslated fallback), and the
+    passthrough flatten when the history is already in English. One recipe,
+    so a translated and a passthrough history for the same messages differ
+    only in the words, never in the format. A message with no role key
+    flattens as ``UNKNOWN:`` and a message with no content key flattens as
+    an empty content."""
+    parts = []
+    for message in history:
+        role = message.get("role", "unknown").upper()
+        content = message.get("content", "")
+        parts.append(f"{role}: {content}")
+    return " |<-MSG->| ".join(parts)
+
+
 TRANSLATION_CHARS_PER_TOKEN = 3  # conservative: Spanish runs ~4-5 chars/token
 # Rough per-message overhead in the flattened history ("USER: " / "ASSISTANT: "
 # prefixes plus the " |<-MSG->| " separator) — the char budget counts content
@@ -652,13 +899,19 @@ RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.9))  # if RERANKI
 
 DOC_REPO_URL = os.getenv("DOC_REPO_URL", "http://localhost:3001")  # Document repository URL
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000")  # Backend service URL
-# The language map is the whitelist every caller-supplied language is checked
-# against, so it is resolved next to this module rather than against the
-# working directory: a service started from another directory must not
+# The language registry is the single source of the supported languages: each
+# entry carries the canonical code, the display name and the script. It lives
+# with the backend's language maps
+# (components/gov-chat-backend/services/translation/language-maps/
+# language-registry.json) and reaches this directory as a symlink in the
+# source tree and a COPY in the image, so the two runtimes cannot list
+# different languages. It is the whitelist every caller-supplied language is
+# checked against, so it is resolved next to this module rather than against
+# the working directory: a service started from another directory must not
 # silently end up with an empty map (which would refuse every language).
-LANGUAGE_CODES_FILEPATH = os.getenv(
-    "LANGUAGE_CODES_FILEPATH",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "language_codes.json"),
+LANGUAGE_REGISTRY_FILEPATH = os.getenv(
+    "LANGUAGE_REGISTRY_FILEPATH",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "language-registry.json"),
 )
 # How long an unreadable language map is remembered as unreadable. The map is
 # consulted on every request and on every translated chunk: re-reading (and
@@ -676,14 +929,11 @@ LANGUAGE_MAP_RETRY_SECONDS = 60.0
 # later change to the call site.
 HISTORY_TRANSLATION_TARGET = "en"
 
-# The script each language is written in (ISO 15924). The translation prompt
-# has to agree with the target: asking for the Latin alphabet of a language
-# written in Devanagari makes the model answer in the wrong script. Read
-# next to the language map, from the same directory, for the same reason.
-LANGUAGE_SCRIPTS_FILEPATH = os.getenv(
-    "LANGUAGE_SCRIPTS_FILEPATH",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "language_scripts.json"),
-)
+
+# The script each language is written in (ISO 15924) comes from the same
+# registry entry as its name. The translation prompt has to agree with the
+# target: asking for the Latin alphabet of a language written in Devanagari
+# makes the model answer in the wrong script.
 
 # The script names the prompt uses. A script that is not listed is named by
 # its code, which is still an unambiguous script tag.
@@ -795,120 +1045,117 @@ def _language_display(raw_language) -> str:
     return printable or "<empty>"
 
 
-# The language map (code → name), and the moment it was read. Module level
-# because the prompt-building hooks have no access to the service instance.
+# The language registry (code -> name + script), the moment it was read, and
+# the two projections the prompts consume. Module level because the
+# prompt-building hooks have no access to the service instance. One read
+# fills all three, so the name and the script of a language can never come
+# from two different generations of the file, and the projections are never
+# rebuilt per call.
+_LANGUAGE_REGISTRY_CACHE: dict | None = None
+_LANGUAGE_REGISTRY_CACHE_AT: float | None = None
 _LANGUAGE_CODES_CACHE: dict | None = None
-_LANGUAGE_CODES_CACHE_AT: float | None = None
-
-# The language -> script table, and the moment it was read. Module level for
-# the same reason as the language map above.
 _LANGUAGE_SCRIPTS_CACHE: dict | None = None
-_LANGUAGE_SCRIPTS_CACHE_AT: float | None = None
 
 
-def _read_language_table(filepath: str, label: str) -> dict:
-    """Read a language table from disk. An unreadable table reads as empty.
+def _read_language_registry(filepath: str) -> dict:
+    """Read the languages of the registry from disk. An unreadable registry
+    reads as empty.
 
-    A table is a whitelist of language codes, so a file that holds something
-    else is not a table: a list of two-letter strings reads as {"e": "n", ...},
-    and a map of objects answers every lookup with a dictionary. Both would
-    be accepted as languages nobody configured, so a file that is not a map
-    of strings is treated as unreadable. An empty table is unreadable too:
-    it refuses every language without saying why.
+    The registry is a whitelist of language codes, so a file that holds
+    something else is not a registry: a list of two-letter strings reads as
+    {"e": "n", ...}, and the flat code-to-name map this registry replaced
+    answers every script lookup with a string. Both would be accepted as
+    languages nobody configured, so a file whose entries do not each carry a
+    non-empty name and a non-empty script is treated as unreadable. An empty
+    registry is unreadable too: it refuses every language without saying why.
     """
     try:
         with open(filepath, encoding="utf-8") as file:
             loaded = json.load(file)
     except Exception as e:
-        logger.error(f"Error loading {label} from {filepath}: {e}")
+        logger.error(f"Error loading the language registry from {filepath}: {e}")
         return {}
-    if not isinstance(loaded, dict) or not all(
-        isinstance(code, str) and isinstance(value, str) for code, value in loaded.items()
+    languages = loaded.get("languages") if isinstance(loaded, dict) else None
+    if not isinstance(languages, dict) or not all(
+        isinstance(code, str)
+        and isinstance(entry, dict)
+        and isinstance(entry.get("name"), str)
+        and entry["name"]
+        and isinstance(entry.get("script"), str)
+        and entry["script"]
+        for code, entry in languages.items()
     ):
-        logger.error(f"The {label} file {filepath} is not a map of strings — ignoring it.")
+        logger.error(f"The language registry file {filepath} is not a map of named, scripted languages — ignoring it.")
         return {}
-    if not loaded:
-        logger.error(f"The {label} file {filepath} is empty — ignoring it.")
+    if not languages:
+        logger.error(f"The language registry file {filepath} is empty — ignoring it.")
         return {}
-    return loaded
+    return languages
 
 
-def _read_language_codes(filepath: str) -> dict:
-    """The language map (code → name). An unreadable map reads as empty."""
-    return _read_language_table(filepath, "language codes")
+def _load_language_registry() -> None:
+    """Fill the registry cache and its two projections, at most once per
+    retry window.
+
+    The maps are consulted on every request and again for every translated
+    chunk, so reading and parsing the file each time is pure overhead. A
+    registry that could not be read is remembered only for
+    LANGUAGE_MAP_RETRY_SECONDS: a transient read failure must not disable
+    translation for the lifetime of the process, but it must not re-read
+    (and re-log) the file on every chunk either. An unreadable registry
+    fills every cache as empty — an empty map means every language is
+    unknown, and an empty script table means the prompt carries no script
+    clause rather than a wrong one.
+
+    The retry read is a blocking read of a small file, at most once a minute,
+    and only for as long as the file stays unreadable.
+    """
+    global _LANGUAGE_REGISTRY_CACHE, _LANGUAGE_REGISTRY_CACHE_AT
+    global _LANGUAGE_CODES_CACHE, _LANGUAGE_SCRIPTS_CACHE
+
+    if _LANGUAGE_REGISTRY_CACHE:
+        return
+    now = time.monotonic()
+    if _LANGUAGE_REGISTRY_CACHE_AT is not None and now - _LANGUAGE_REGISTRY_CACHE_AT < LANGUAGE_MAP_RETRY_SECONDS:
+        # The last read failed and the retry window has not elapsed yet.
+        return
+    loaded = _read_language_registry(LANGUAGE_REGISTRY_FILEPATH)
+    # The projections are published before the guard and the timestamp that
+    # send readers away: a reader that takes the early return must never
+    # still see them unset.
+    _LANGUAGE_CODES_CACHE = {code: language["name"] for code, language in loaded.items()}
+    _LANGUAGE_SCRIPTS_CACHE = {code: language["script"] for code, language in loaded.items()}
+    _LANGUAGE_REGISTRY_CACHE_AT = now
+    _LANGUAGE_REGISTRY_CACHE = loaded
 
 
-def _read_language_scripts(filepath: str) -> dict:
-    """The language -> script table. An unreadable table reads as empty,
-    which leaves the translation prompt without a script clause."""
-    return _read_language_table(filepath, "language scripts")
+def language_codes_map() -> dict:
+    """The language map (code → name), read once and cached.
+
+    The map is never None: an unreadable registry is an empty map, and an
+    empty map means every language is unknown.
+
+    The returned map is a copy. The cache is the whitelist every request is
+    checked against, and a caller that mutated the map it got back would
+    rewrite that whitelist for the whole process.
+    """
+    _load_language_registry()
+    return dict(_LANGUAGE_CODES_CACHE)
 
 
 def language_scripts_map() -> dict:
     """The language -> script table, read once and cached.
 
     The table decides whether the translation prompt asks for the right
-    ALPHABET, so it is read on first use and kept. A table that could not be
-    read is remembered only for LANGUAGE_MAP_RETRY_SECONDS, exactly like the
-    language map: a transient read failure must not leave every prompt
-    without its script clause for the lifetime of the process, but it must
-    not re-read (and re-log) the file on every chunk either.
-
-    The table is never None: an unreadable table is an empty table, and an
-    empty table means the prompt carries no script clause rather than a wrong
-    one.
+    ALPHABET. It is never None: an unreadable registry is an empty table,
+    and an empty table means the prompt carries no script clause rather than
+    a wrong one.
 
     The returned table is a copy, like the language map: a caller that
     mutated it would change the script every later prompt asks for.
     """
-    global _LANGUAGE_SCRIPTS_CACHE, _LANGUAGE_SCRIPTS_CACHE_AT
-
-    cached = _LANGUAGE_SCRIPTS_CACHE
-    if cached:
-        return dict(cached)
-    now = time.monotonic()
-    if _LANGUAGE_SCRIPTS_CACHE_AT is not None and now - _LANGUAGE_SCRIPTS_CACHE_AT < LANGUAGE_MAP_RETRY_SECONDS:
-        # The last read failed and the retry window has not elapsed yet.
-        return {}
-    loaded = _read_language_scripts(LANGUAGE_SCRIPTS_FILEPATH)
-    _LANGUAGE_SCRIPTS_CACHE = loaded
-    _LANGUAGE_SCRIPTS_CACHE_AT = now
-    return dict(loaded)
-
-
-def language_codes_map() -> dict:
-    """The language map (code → name), read once and cached.
-
-    The map is consulted on every request and again for every translated
-    chunk, so reading and parsing the file each time is pure overhead. A map
-    that could not be read is remembered only for
-    LANGUAGE_MAP_RETRY_SECONDS: a transient read failure must not disable
-    translation for the lifetime of the process, but it must not re-read
-    (and re-log) the file on every chunk either.
-
-    The map is never None: an unreadable map is an empty map, and an empty
-    map means every language is unknown.
-
-    The returned map is a copy. The cache is the whitelist every request is
-    checked against, and a caller that mutated the map it got back would
-    rewrite that whitelist for the whole process.
-
-    The retry read is a blocking read of a small file, at most once a minute,
-    and only for as long as the file stays unreadable.
-    """
-    global _LANGUAGE_CODES_CACHE, _LANGUAGE_CODES_CACHE_AT
-
-    cached = _LANGUAGE_CODES_CACHE
-    if cached:
-        return dict(cached)
-    now = time.monotonic()
-    if _LANGUAGE_CODES_CACHE_AT is not None and now - _LANGUAGE_CODES_CACHE_AT < LANGUAGE_MAP_RETRY_SECONDS:
-        # The last read failed and the retry window has not elapsed yet.
-        return {}
-    loaded = _read_language_codes(LANGUAGE_CODES_FILEPATH)
-    _LANGUAGE_CODES_CACHE = loaded
-    _LANGUAGE_CODES_CACHE_AT = now
-    return dict(loaded)
+    _load_language_registry()
+    return dict(_LANGUAGE_SCRIPTS_CACHE)
 
 
 # Fallback context window for the LLM, used when runtime discovery from the
@@ -1214,7 +1461,21 @@ def _is_usage_only_frame(content: str) -> bool:
         obj = json.loads(stripped)
     except (ValueError, TypeError):
         return False
-    return isinstance(obj, dict) and "usage" in obj and not obj.get("choices")
+    # The REAL terminal frame is exact: `"choices": []` present-and-empty, and
+    # `usage` an OBJECT of token counts. The old shape check ("usage" merely
+    # PRESENT, choices merely falsy) swallowed legitimate answers — a model
+    # asked for JSON can return {"usage": "5 kWh", ...}: a usage STRING with
+    # no choices key at all (review 2026-10-29).
+    # That tightening stays — the usage STRING case is still answer content —
+    # but some vLLM builds end the stream with a keyless frame: a usage OBJECT
+    # and NO ``choices`` key at all. That shape is transport metadata too
+    # (review 2026-10-29 round 3), so it is recognized alongside the
+    # choices==[] frame; any PRESENT choices key must still be exactly [].
+    return (
+        isinstance(obj, dict)
+        and isinstance(obj.get("usage"), dict)
+        and (obj.get("choices") == [] or "choices" not in obj)
+    )
 
 
 def _stream_answer_text(json_data: object) -> str | None:
@@ -1881,20 +2142,161 @@ class UserContextBuilder:
 
 
 ##################################################################################################################################
-# TOKENIZER
+# TOKEN COUNTING
 ##################################################################################################################################
-TOKENIZER = None
 
 
-def get_tokenizer():
-    global TOKENIZER
-    if TOKENIZER is None:
-        TOKENIZER = AutoTokenizer.from_pretrained(
-            _get_llm_model(),
-            use_fast=True,
-            # local_files_only=True
+def _parse_tokenize_count(payload) -> int:
+    """The token count out of a ``/tokenize`` payload.
+
+    vLLM returns both the token list and a precomputed "count"; prefer the
+    scalar, fall back to the list length for servers that omit it. A proxy
+    may serialize the count as a digit string (the same coercion stance as
+    the window value); anything non-integral is malformed.
+    """
+    if not isinstance(payload, dict):
+        raise TokenCountError(f"/tokenize returned a non-object payload: {payload!r}")
+    raw = payload.get("count")
+    if raw is None:
+        tokens = payload.get("tokens")
+        if not isinstance(tokens, list):
+            raise TokenCountError(f"/tokenize payload has neither a count nor a token list: {payload!r}")
+        count = len(tokens)
+    else:
+        # A proxy may serialize count as a digit string (same coercion stance
+        # as the window value); anything non-integral is malformed.
+        count = coerce_int(raw)
+        if count is None:
+            raise TokenCountError(f"/tokenize count is not an integer: {raw!r}")
+    if count < 0:
+        # 0 is an honest count for an empty piece; a negative count is a lie
+        # that would silently defeat the overflow guard.
+        raise TokenCountError(f"/tokenize count is negative: {raw!r}")
+    if count > MAX_SANE_MODEL_WINDOW_TOKENS:
+        # Same sanity bound as the window value: a number this large is a
+        # broken proxy, and it would wipe the history budget outright.
+        raise TokenCountError(f"/tokenize count is absurdly large: {raw!r}")
+    return count
+
+
+@lru_cache(maxsize=4)
+def _count_static_tokens(text: str) -> int:
+    """Memoized ``_count_tokens`` for request-invariant text (the system
+    prompt takes at most two values per process). A cache hit skips the HTTP
+    round-trip entirely; the bounded size keeps it from growing."""
+    return _count_tokens(text)
+
+
+def _count_tokens(text: str) -> int:
+    """Count tokens with the LLM server's ``/tokenize`` endpoint.
+
+    The server that serves generation tokenizes with the deployed model's
+    REAL tokenizer — the counts the context-window budget needs, for
+    whatever model is deployed, with no local tokenizer download: the
+    image bakes no HuggingFace cache and the deployment grants no
+    huggingface.co egress, so a local ``AutoTokenizer`` can only fail.
+
+    Same client shape as the model-id probe (core/model_http_policy.py:
+    shared ``Bearer VLLM_API_KEY`` headers and TLS-verify flag): sync httpx,
+    PROBE timeout budget. The URL derives from
+    the same base the generation call and the probe use
+    (``_LLM_DISCOVERY_ENDPOINT``), so external (``VLLM_LLM_ENDPOINT``,
+    possibly a tunnel with a path prefix) and in-cluster
+    (``http://vllm:8000``) resolve identically.
+
+    Failures are loud and on purpose: the budget math below runs on these
+    counts, so an unknown model name (vLLM validates it), an unreachable
+    endpoint, or a malformed count payload must abort the request rather
+    than silently corrupt the history truncation — the same reasoning that
+    keeps the model-id probe from guessing.
+    """
+    url = f"{_LLM_DISCOVERY_ENDPOINT}/tokenize"
+    headers = endpoint_auth_headers()
+    verify = endpoint_verify()
+    with with_span(
+        "chatqna.count_tokens",
+        attributes={ATTRIBUTE_NAMES["llm_endpoint"]: url},
+    ) as span:
+        resp = httpx.post(
+            url,
+            headers=headers,
+            json={"model": _get_llm_model(), "prompt": text},
+            timeout=PROBE_TIMEOUT_SECONDS,
+            verify=verify,
         )
-    return TOKENIZER
+        resp.raise_for_status()
+        count = _parse_tokenize_count(resp.json())
+        span.set_attribute(ATTRIBUTE_NAMES["token_count"], count)
+        return count
+
+
+async def _count_translation_tokens(count_body: dict) -> int | None:
+    """Count a translation request's prompt tokens with the TRANSLATION
+    server's own tokenizer (vLLM ``/tokenize``).
+
+    The count is measured because a client's own char/token ratio is a
+    guess: dense scripts (CJK) run ~1 token/char, Latin ~4, so a budget
+    computed from a ratio either overflows the window (the server rejects
+    the request) or truncates the translation. The translation server
+    tokenizes with the model that will translate — so the count is the
+    model's own.
+
+    ``count_body`` is the payload's prompt half, AS IT WILL BE SENT:
+    ``{"messages": [...]}`` for the chat-completions shape (the server
+    applies the chat template, so the count covers it) or
+    ``{"prompt": "...", "model": ...}`` for the completions shape. The
+    model name is the one the request carries, so the count matches the
+    request exactly: the TranslateGemma payload names its model, the
+    generic one does not (the server then answers with its default model,
+    exactly as the translation request does).
+
+    Best-effort by contract: when the server cannot count, None comes back
+    and the caller sizes the completion with the degraded estimate instead
+    of refusing the translation — a count failure never stops a
+    translation. (The MEASURED count, once it exists, feeds the budget that
+    may refuse a prompt that cannot fit the window — that refusal is the
+    caller's decision, not this helper's.)
+    """
+    global _TRANSLATION_COUNT_UNAVAILABLE
+    if _TRANSLATION_COUNT_UNAVAILABLE:
+        # The server could not count once: the gap is permanent.
+        return None
+    # The count presents the SAME credentials the translation request it
+    # sizes presents (Bearer OPENAI_API_KEY): same server, same auth.
+    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
+    verify = endpoint_verify()
+    body = dict(count_body)
+    url = f"{_TRANSLATION_DISCOVERY_ENDPOINT}/tokenize"
+    try:
+        with with_span(
+            "chatqna.translation_count_tokens",
+            attributes={ATTRIBUTE_NAMES["llm_endpoint"]: url},
+        ) as span:
+            async with httpx.AsyncClient(timeout=PROBE_TIMEOUT_SECONDS, verify=verify) as client:
+                resp = await client.post(url, headers=headers, json=body)
+            resp.raise_for_status()
+            count = _parse_tokenize_count(resp.json())
+            span.set_attribute(ATTRIBUTE_NAMES["token_count"], count)
+            return count
+    except httpx.HTTPStatusError as e:
+        # A client-error status is a permanent capability gap (no route, or
+        # a route that rejects this payload shape): the count is not
+        # attempted again, and the failure is warned once. Rate limiting is
+        # transient, and so is everything below 400 — the next request
+        # counts again instead of latching the degradation.
+        if 400 <= e.response.status_code < 500 and e.response.status_code != 429:
+            _TRANSLATION_COUNT_UNAVAILABLE = True
+            logger.warning(
+                "Translation server rejected the prompt count (%s); "
+                "the completion falls back to the degraded estimate.",
+                e.response.status_code,
+            )
+        else:
+            logger.debug("Translation prompt could not be counted (%s)", e)
+        return None
+    except Exception as e:
+        logger.debug("Translation prompt could not be counted (%s: %s)", type(e).__name__, e)
+        return None
 
 
 ##################################################################################################################################
@@ -2030,7 +2432,10 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
 
             _base_mode = inputs.get("search_start", "chunk")
             inputs["search_start"] = encode_filter_labels(_base_mode, _filter_labels)
-        elif _filter_labels or _graph_names or _exclude_legacy:
+        # DW-430 (review 2026-10-29 round 3): a sticky-only carrier (sticky
+        # set, labels/graphs/no_legacy all falsy) must still encode — the
+        # sticky⊆authorized invariant alone does not put the set on the wire.
+        elif _filter_labels or _graph_names or _exclude_legacy or _sticky_graph_names:
             from core.label_contract import encode
 
             _base_mode = inputs.get("search_start", "chunk")
@@ -2117,15 +2522,14 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # FIX: Separate system and user content for proper chat template handling
         user_content = _build_user_content(user_context_string, translated_history_string, rag_augmented_prompt)
 
-        tokenizer = get_tokenizer()
         max_model_tokens = _get_max_model_len()
         max_answer_tokens = _resolve_answer_budget_tokens(llm_parameters_dict.get("max_tokens"))
         # Count tokens part by part: the pieces feed the history budget below,
-        # so encoding them separately costs nothing extra on overflow requests.
-        # The 200-token buffer absorbs the ±1 boundary tokens the combined
-        # encode would merge.
-        system_tokens = len(tokenizer.encode(system_instructions))
-        user_content_tokens = len(tokenizer.encode(user_content))
+        # so counting them separately costs nothing extra on overflow requests.
+        # The 200-token buffer absorbs the ±1 boundary tokens a combined count
+        # would merge.
+        system_tokens = _count_static_tokens(system_instructions)
+        user_content_tokens = _count_tokens(user_content)
         full_prompt_tokens = system_tokens + user_content_tokens
         _active_span = otel_trace.get_current_span()
         _set_attributes(
@@ -2145,7 +2549,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             # what is finally sent. Segment separators (" |<-MSG->| ") are not
             # counted individually (~1-2 tokens per segment, absorbed by the
             # buffer).
-            skeleton_tokens = len(tokenizer.encode(_build_user_content(user_context_string, "", rag_augmented_prompt)))
+            skeleton_tokens = _count_tokens(_build_user_content(user_context_string, "", rag_augmented_prompt))
 
             max_history_tokens = max_model_tokens - system_tokens - max_answer_tokens - skeleton_tokens - 200
             # Split the history into segments (empty history = nothing to drop)
@@ -2154,7 +2558,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             current_tokens = 0
             # Start from most recent messages
             for segment in reversed(history_segments):
-                segment_tokens = len(tokenizer.encode(segment))
+                segment_tokens = _count_tokens(segment)
                 if current_tokens + segment_tokens > max_history_tokens:
                     break
                 truncated_history.insert(0, segment)  # Maintain order
@@ -2866,7 +3270,7 @@ class ChatQnAService:
                     logger.error(
                         "Language map is empty or unreadable — every language is unknown, "
                         "so translation is refused and the answer is returned in English. "
-                        "Check that language_codes.json is readable at the configured path."
+                        "Check that the language registry is readable at the configured path."
                     )
                 final_text_response = llm_response
                 translation_status = "refused"
@@ -3013,8 +3417,13 @@ class ChatQnAService:
                     dup_text = text_by_doc.get(doc_id_by_orchestrator)
                     if dup_text:
                         for existing in source_documents_formatted:
-                            if existing.get("document_id") == file_id and "text" in existing:
-                                existing["text"] = f"{existing['text']}\n{dup_text}"
+                            if existing.get("document_id") == file_id:
+                                # Merge into the surviving doc's context; when the
+                                # surviving doc has no text yet (its own chunk
+                                # carried none in the verdict), the duplicate's
+                                # text must still land — not be dropped (review
+                                # 2026-10-29 round 3).
+                                existing["text"] = f"{existing['text']}\n{dup_text}" if "text" in existing else dup_text
                                 break
                 continue
 
@@ -3062,7 +3471,24 @@ class ChatQnAService:
                     # instead — no okf-server call (chatqna stays a service
                     # consumer; the BFF is the trusted side). Doc-repo files
                     # keep the enriched path above verbatim.
+                    #
+                    # The fallback is gated on the hit actually being
+                    # OKF-sourced (provenance graph_name carries the OKF_
+                    # prefix — the legacy tail attaches the legacy graph name,
+                    # and a failed doc-repo fetch on a LEGACY hit is a
+                    # transient outage or a deleted file, exactly what the D1
+                    # rule refuses to fabricate a source for). Without the
+                    # gate, one doc-repo 500 on a pure-legacy path invented an
+                    # "okf-concept" source from nothing (review 2026-10-29).
                     prov = provenance_by_doc.get(doc_id_by_orchestrator, {})
+                    prov_graph = str(prov.get("graph_name") or "")
+                    if not prov_graph.startswith("OKF_"):
+                        logger.info(
+                            f"doc-repo metadata absent for file ID {file_id} — provenance "
+                            f"graph is not an OKF graph ({prov_graph or 'none'}); the D1 rule "
+                            f"applies: no source surfaced, no confidence poison"
+                        )
+                        continue
                     logger.info(
                         f"doc-repo metadata absent for file ID {file_id} — surfacing "
                         f"as OKF concept source (graph_name={prov.get('graph_name', 'n/a')}, "
@@ -3137,8 +3563,17 @@ class ChatQnAService:
         abstained=False,
         abstention_reason=None,
         include_contexts: bool = False,
+        query_translation_status: str | None = None,
     ):
         """Forward the LLM token stream, then append a `metadata` SSE event.
+
+        ``query_translation_status`` carries what the history translator fed
+        the embedder (``translated`` / ``passthrough_english`` /
+        ``passthrough_unknown_language`` / ``fallback_timeout`` /
+        ``fallback_error``): a streamed answer must be as observable as a
+        JSON one about the language its retrieval query was really in. It is
+        stamped on ``chatqna.orchestrate`` as well, so the trace and the
+        payload cannot disagree.
 
         ``abstained`` / ``abstention_reason`` carry the outcome handle_request
         already derived for the request metric, so the counter and this
@@ -3277,6 +3712,10 @@ class ChatQnAService:
             "confidence_score": _cs,
             "is_grounded": is_grounded,
         }
+        if query_translation_status is not None:
+            # Always set by handle_request (every turn knows what its embedder
+            # was fed); omitted only when the helper is driven standalone.
+            metadata["query_translation_status"] = query_translation_status
         if abstained:
             _mark_abstention(metadata, abstention_reason)
         if LLM_SELF_CONFIDENCE_ENABLED:
@@ -3488,28 +3927,9 @@ class ChatQnAService:
             f"<end_of_turn>\n<start_of_turn>model\n"
         )
 
-    def _translation_output_cap(self, flattened_history_string: str) -> int | None:
-        """Completion cap for the TranslateGemma payload.
-
-        Base ceiling is len//2 (bounded 512..4096). When the translation window
-        is discovered, the cap is clamped so the prompt estimate (chars /
-        chars-per-token ratio) plus the completion stays inside the window —
-        otherwise vLLM rejects the whole request and the history goes back
-        untranslated. Returns None when the clamped cap drops below the
-        estimated input size (the completion would be shorter than what there
-        is to translate); the caller should skip the translation and send the
-        history as-is.
-        """
-        cap = _translation_base_cap(flattened_history_string)
-        window = _get_translation_window()
-        if window:
-            prompt_token_estimate = len(flattened_history_string) // TRANSLATION_CHARS_PER_TOKEN
-            cap = min(cap, max(1, window - TRANSLATION_PROMPT_OVERHEAD_TOKENS - prompt_token_estimate))
-            if cap < prompt_token_estimate:
-                return None
-        return cap
-
-    async def _get_translated_history_string(self, history: list, source_lang_code: str = "en") -> str:
+    async def _get_translated_history_string(
+        self, history: list | str, source_lang_code: str = "en"
+    ) -> tuple[str, str]:
         """
         A helper that:
         1. Truncates history to stay within a token limit.
@@ -3528,6 +3948,30 @@ class ChatQnAService:
         The name the prompt carries comes from the language map, so a caller
         cannot put free text in the prompt, and a map that does not know
         English leaves the history as it is.
+
+        Returns:
+            ``(text, status)``. The text is safe to hand to the embedder:
+            the translated English history, or — when the translation could
+            not run — the flattened source-language history. A history whose
+            newest message alone exceeds the whole budget is no exception:
+            the newest message's tail is kept (truncated to the budget), so
+            the query carries the end of the turn instead of an empty
+            string; the only empty text is an empty history. The
+            status tells the caller which one it was:
+            ``"translated"`` when the history came back in English,
+            ``"fallback_timeout"`` when the translation service timed out,
+            and ``"fallback_error"`` when it failed or refused for any other
+            reason (window too tight, unreadable language map, blank input,
+            empty completion, an empty history). The history is normalized for the
+            retriever and never shown to the user, so the turn is not failed
+            on a fallback — but the fallback is never silent: the caller
+            stamps the status on the ``chatqna.orchestrate`` span and into
+            the response metadata, so a degraded translation service is
+            visible where the retrieval quality it degrades is diagnosed.
+            The passthrough cases never reach this method: the caller
+            classifies them itself (``"passthrough_english"`` when the
+            history is established English, ``"passthrough_unknown_language"``
+            when no language could be established for it).
         """
         # Single-message mode sends history as a plain string
         if isinstance(history, str):
@@ -3536,40 +3980,65 @@ class ChatQnAService:
             max_translation_chars = _get_max_translation_chars()
             current_chars = 0
             messages_to_process = []
+            newest_truncated = False
             if logflag:
                 logger.debug(f"Processing translation for history with {len(history)} messages.")
 
             for message in reversed(history):
                 if logflag:
                     logger.debug(f"Examining message: {message}")
-                message_chars = len(message["content"])
+                # .get, not [:]: request validation permits a message with no
+                # content key, and a malformed message must not crash the
+                # turn — it counts as empty, exactly as the flatten below
+                # reads it.
+                message_chars = len(message.get("content", ""))
                 if current_chars + message_chars + TRANSLATION_MSG_OVERHEAD_CHARS > max_translation_chars:
+                    if not messages_to_process:
+                        # Even the newest message exceeds the whole budget:
+                        # keep its tail instead of dropping it, so the
+                        # retrieval query carries the end of the turn (its
+                        # newest text) instead of an empty string. The
+                        # message dict is copied: the request's history must
+                        # stay untouched.
+                        tail_chars = max_translation_chars - TRANSLATION_MSG_OVERHEAD_CHARS
+                        content = message.get("content", "")[-tail_chars:] if tail_chars > 0 else ""
+                        messages_to_process.append({**message, "content": content})
+                        newest_truncated = True
                     break
                 messages_to_process.append(message)
                 current_chars += message_chars + TRANSLATION_MSG_OVERHEAD_CHARS
             messages_to_process.reverse()
             dropped_messages = len(history) - len(messages_to_process)
-            if dropped_messages:
+            if newest_truncated or dropped_messages:
                 history_truncation_total.add(1, {"path": "translation"})
+            if dropped_messages:
                 logger.warning(
                     "Chat history truncated for translation: budget_chars=%s kept_messages=%s dropped_messages=%s",
                     max_translation_chars,
                     len(messages_to_process),
                     dropped_messages,
                 )
+            if newest_truncated:
+                logger.warning(
+                    "Newest history message exceeds the translation budget (budget_chars=%s); "
+                    "keeping its last %s characters.",
+                    max_translation_chars,
+                    len(messages_to_process[-1].get("content", "")),
+                )
             if not messages_to_process:
-                # Even the newest message exceeds the whole budget: nothing to
-                # translate — sending an empty prompt would only harvest the
-                # model's junk reply as chat history.
-                return ""
+                # An empty history: nothing to translate, nothing to keep —
+                # the caller's regex finds no user message in an empty blob.
+                return "", QUERY_TRANSLATION_FALLBACK_ERROR
 
-            flattened_history_parts = []
-            for message in messages_to_process:
-                role = message.get("role", "unknown").upper()
-                content = message.get("content", "")
-                flattened_history_parts.append(f"{role}: {content}")
-
-            flattened_history_string = " |<-MSG->| ".join(flattened_history_parts)
+            flattened_history_string = _flatten_history_string(messages_to_process)
+            if not any(message.get("content", "").strip() for message in messages_to_process):
+                # A history of blank messages would only harvest the model's
+                # junk reply as the embedded query, and there is no content
+                # to translate. The flattened string alone cannot be checked:
+                # the role prefixes make it non-blank even when every message
+                # is blank.
+                logger.warning("History translation asked for blank messages; reporting it as a fallback.")
+                return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
 
         # The target steers the prompt, so it is resolved against the language
         # map — ONCE, for both shapes of the history. The target is English:
@@ -3580,75 +4049,91 @@ class ChatQnAService:
         target_name = language_codes.get(canonical_target)
         if target_name is None:
             logger.warning("The language map does not know English — refusing to translate the history.")
-            return flattened_history_string
+            return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
 
-        # Single-message mode sends history as a plain string — translate it
+        # Single-message mode sends history as a plain string — translate it.
+        # The chunk translator is bypassed on purpose: it swallows a failed
+        # chunk into the source text, and this caller has to know the
+        # translation did not happen (it reports the status, unlike the
+        # answer path where the swallowed fallback is the contract). The
+        # chunk translator classifies its failures into typed exceptions, so
+        # the split here is isinstance-only. A prompt that does not fit the
+        # translation window is refused here too (it falls back like the
+        # list shape): the history path has no 422 contract — it is a text
+        # normalized for the retriever, never shown — so the refusal is
+        # reported, not raised.
         if isinstance(history, str):
-            return await self._translate_text_chunk(history, canonical_target, source_lang_code=source_lang_code)
+            if not history.strip():
+                # An empty prompt would only harvest the model's junk reply
+                # as the embedded query, and there is nothing to translate.
+                logger.warning("History translation asked for an empty message; reporting it as a fallback.")
+                return history, QUERY_TRANSLATION_FALLBACK_ERROR
+            try:
+                return (
+                    await self._translate_chunk_in_language(
+                        history, canonical_target, target_name, source_lang_code=source_lang_code
+                    ),
+                    QUERY_TRANSLATION_TRANSLATED,
+                )
+            except TranslationTimeoutError as e:
+                # The seam raises the typed error without logging; this
+                # handler's line is the one that names the timeout.
+                logger.warning(f"History translation timed out: {e}")
+                return history, QUERY_TRANSLATION_FALLBACK_TIMEOUT
+            except TranslationInputTooLongError as e:
+                # The prompt does not fit the translation window: the
+                # history goes back untranslated, exactly as the list
+                # shape reports it. The condition is named in the log; the
+                # status is the observable.
+                logger.warning(f"History translation refused: {e}")
+                return history, QUERY_TRANSLATION_FALLBACK_ERROR
+            except TranslationFailedError as e:
+                logger.error(f"History translation failed: {e}")
+                return history, QUERY_TRANSLATION_FALLBACK_ERROR
 
-        # Build payload based on model type
-        if _is_translategemma():
-            # Use completions API with pre-formatted prompt (vLLM v0.10.0 cannot
-            # pass structured content through chat completions to TranslateGemma's template)
+        # One derivation per call: the payload, the log line and the response
+        # parse must branch on the SAME decision (and the same id).
+        translation_model_id = _get_translation_model_id()
+        translategemma = _is_translategemma(translation_model_id)
+        if translategemma:
             prompt = self._build_translategemma_prompt(
                 text=flattened_history_string,
                 source_lang_code=source_lang_code,
                 target_lang_code=canonical_target,
             )
-            output_cap = self._translation_output_cap(flattened_history_string)
-            if output_cap is None:
-                logger.warning(
-                    "Translation window too tight to translate the history meaningfully; returning it untranslated"
-                )
-                return flattened_history_string
-            payload = {
-                "model": _get_translation_model_id(),
-                "prompt": prompt,
-                "temperature": 0.0,
-                "max_tokens": output_cap,
-                "repetition_penalty": 1.2,
-            }
-            url = TRANSLATION_COMPLETIONS_URL
         else:
             prompt = (
                 f"Translate the following chat history to {target_name}. "
                 f"Preserve the role markers (e.g., 'USER:', 'ASSISTANT:')."
                 f"\n\nHISTORY:\n{flattened_history_string}"
             )
-            payload = {"messages": [{"role": "user", "content": prompt}], "temperature": 0, "stream": False}
-            url = TRANSLATION_LLM_URL
-
-        if logflag:
-            svc = "TranslateGemma" if _is_translategemma() else "generic"
-            logger.debug(f"Payload for translation service ({svc}): {payload}")
 
         try:
-            async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:
-                response = await client.post(
-                    url,
-                    json=payload,
-                    headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
-                )
-                response.raise_for_status()
-                response_data = response.json()
-                if _is_translategemma():
-                    translated_blob = response_data["choices"][0]["text"]
-                else:
-                    translated_blob = response_data["choices"][0]["message"]["content"]
-                if logflag:
-                    logger.debug(f"Translated chat history: {translated_blob.strip()}")
-                return translated_blob.strip()
-
-        except httpx.TimeoutException as e:
+            translated_blob = await _translate_prompt(prompt, translategemma, translation_model_id)
+        except TranslationTimeoutError as e:
             logger.error(
                 f"History translation timeout after "
                 f"{TRANSLATION_SERVICE_TIMEOUT} seconds. Returning history "
                 f"in original language. Error: {e}"
             )
-            return flattened_history_string
-        except Exception as e:
-            logger.error(f"Translation error: {e}")
-            return flattened_history_string
+            return flattened_history_string, QUERY_TRANSLATION_FALLBACK_TIMEOUT
+        except TranslationInputTooLongError as e:
+            logger.warning(f"History translation refused: {e}")
+            return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
+        except TranslationFailedError as e:
+            logger.error(f"History translation failed: {e}")
+            return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
+
+        if not translated_blob:
+            # A 200 with an empty completion is a failure, not a
+            # translation: the chunk translator refuses it for the same
+            # reason (an empty history would silently blank the retrieval
+            # query), and the fallback status says so.
+            logger.error("Translation model returned an empty history translation; using the source.")
+            return flattened_history_string, QUERY_TRANSLATION_FALLBACK_ERROR
+        if logflag:
+            logger.debug(f"Translated chat history: {translated_blob}")
+        return translated_blob, QUERY_TRANSLATION_TRANSLATED
 
     async def _condense_query(self, history_text: str, last_message: str) -> str:
         """Rewrite a follow-up into a standalone retrieval query (issue #1091).
@@ -3665,21 +4150,26 @@ class ChatQnAService:
             f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions"
         )
         system_prompt = os.getenv("MULTI_TURN_CONDENSE_SYSTEM_PROMPT", "").strip() or _CONDENSE_SYSTEM_PROMPT
-        payload = {
-            "model": _get_llm_model(),
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": _build_condense_user_content(history_text, last_message)},
-            ],
-            "temperature": 0.0,
-            "max_tokens": _CONDENSE_MAX_TOKENS,
-            "response_format": {"type": "json_object"},
-            "stream": False,
-        }
         tracer = get_tracer("chatqna.query_condense")
         _start = time.monotonic()
         with tracer.start_as_current_span("chatqna.query_condense") as span:
             try:
+                # Inside the classified try: building the payload calls
+                # _get_llm_model(), which raises ModelDiscoveryError when the
+                # endpoint answers nothing — that must surface as the same
+                # fail-closed 503 as every other condense failure, not as an
+                # unclassified 500 that bypasses the caller's metrics.
+                payload = {
+                    "model": _get_llm_model(),
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": _build_condense_user_content(history_text, last_message)},
+                    ],
+                    "temperature": 0.0,
+                    "max_tokens": _CONDENSE_MAX_TOKENS,
+                    "response_format": {"type": "json_object"},
+                    "stream": False,
+                }
                 async with httpx.AsyncClient(timeout=_CONDENSE_TIMEOUT_SECONDS) as client:
                     response = await client.post(
                         url, json=payload, headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}
@@ -3709,12 +4199,15 @@ class ChatQnAService:
                 span.set_attribute("genie.condense.completion_tokens", usage.get("completion_tokens", 0))
                 logger.debug(f"Condense rewrite ok: {standalone_query}")
                 return standalone_query
-            except (CondenseError, httpx.TimeoutException, httpx.HTTPError) as e:
-                reason = (
-                    e.reason
-                    if isinstance(e, CondenseError)
-                    else ("timeout" if isinstance(e, httpx.TimeoutException) else "http_error")
-                )
+            except (CondenseError, ModelDiscoveryError, httpx.TimeoutException, httpx.HTTPError) as e:
+                if isinstance(e, CondenseError):
+                    reason = e.reason
+                elif isinstance(e, ModelDiscoveryError):
+                    reason = "model_discovery"
+                elif isinstance(e, httpx.TimeoutException):
+                    reason = "timeout"
+                else:
+                    reason = "http_error"
                 _condense_span_attrs(span, "failed", round((time.monotonic() - _start) * 1000))
                 logger.warning(f"Condense rewrite failed ({reason}): {type(e).__name__}: {e}")
                 _raise_condense_503(reason, e)
@@ -3771,45 +4264,6 @@ class ChatQnAService:
 
         return chunks
 
-    async def _translate_text_chunk(self, text: str, iso_code: str, source_lang_code: str = "en") -> str:
-        """Translate a single chunk of text.
-
-        Automatically uses TranslateGemma completions API (with pre-formatted prompt)
-        or generic chat completions format based on the configured VLLM_TRANSLATION_MODEL_ID.
-
-        Response-side fail-loud: when the translation service returns a 400
-        with a context-overflow marker, raise ``TranslationInputTooLongError``
-        instead of silently returning the English source text (issue #829).
-
-        Args:
-            text: Text to translate.
-            iso_code: Target ISO language code (e.g. "st"). The language name
-                the prompt carries comes from the language map, never from the
-                caller.
-            source_lang_code: Source ISO language code (e.g. "en"). Defaults to "en".
-        """
-        # Last hop before the prompt: the language name and the code that go
-        # into it are taken from the language map, so no caller-supplied text
-        # can reach the translation model. An unknown code is refused and the
-        # source text is returned untranslated.
-        language_codes = language_codes_map()
-        canonical_code, target_lang = _canonical_target_language(iso_code, language_codes)
-        if canonical_code is None:
-            return text
-
-        try:
-            return await self._translate_chunk_in_language(
-                text,
-                canonical_code,
-                target_lang,
-                source_lang_code=source_lang_code,
-            )
-        except TranslationFailedError:
-            # This text is normalized for the retriever, not shown to the
-            # user: an untranslated history is a worse answer than a wrong
-            # one, and the answer the user reads is unaffected by it.
-            return text
-
     async def _translate_chunk_in_language(
         self,
         text: str,
@@ -3837,21 +4291,17 @@ class ChatQnAService:
             target_lang: The language name the map gives for that code.
             source_lang_code: Source ISO language code (e.g. "en"). Defaults to "en".
         """
-        if _is_translategemma():
+        # One derivation per call: the payload, the log line and the response
+        # parse all branch on this single read.
+        translation_model_id = _get_translation_model_id()
+        translategemma = _is_translategemma(translation_model_id)
+        if translategemma:
             target_lang_code = canonical_code
             prompt = self._build_translategemma_prompt(
                 text=text,
                 source_lang_code=source_lang_code,
                 target_lang_code=target_lang_code,
             )
-            payload = {
-                "model": _get_translation_model_id(),
-                "prompt": prompt,
-                "temperature": 0.0,
-                "max_tokens": _translation_base_cap(text),
-                "repetition_penalty": 1.2,
-            }
-            url = TRANSLATION_COMPLETIONS_URL
         else:
             language_notes = {
                 "Sesotho": "NOTE: Sesotho is spoken in Lesotho and South Africa. It is NOT Afrikaans.",
@@ -3865,39 +4315,7 @@ class ChatQnAService:
                 f"Only output the translated text, nothing else."
                 f"\n\nText: {text}\n\nTranslation:"
             )
-            payload = {"messages": [{"role": "user", "content": prompt}], "temperature": 0, "stream": False}
-            url = TRANSLATION_LLM_URL
-
-        if logflag:
-            logger.debug(f"Translation payload ({'TranslateGemma' if _is_translategemma() else 'generic'}): {payload}")
-
-        try:
-            async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:
-                response = await client.post(
-                    url,
-                    json=payload,
-                    headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
-                )
-                response.raise_for_status()
-                response_data = response.json()
-                if _is_translategemma():
-                    translated = response_data["choices"][0]["text"].strip()
-                else:
-                    translated = response_data["choices"][0]["message"]["content"].strip()
-        except Exception as e:
-            # Fail-loud on vLLM context overflow: silently returning the
-            # original English text breaks the multilingual UX (#829). Classify
-            # by the HTTP body / error text and raise TranslationInputTooLongError
-            # so the route layer maps this to a 422 the BFF can surface.
-            from dataprep.genieai_dataprep_arangodb import _is_vllm_input_overflow
-
-            if _is_vllm_input_overflow(e):
-                logger.warning(f"Translation context overflow: {type(e).__name__}: {str(e)[:200]}")
-                raise TranslationInputTooLongError(
-                    f"translation chunk exceeds VLLM_TRANSLATION_MAX_MODEL_LEN: {type(e).__name__}: {str(e)[:200]}"
-                ) from e
-            logger.warning(f"Failed to translate chunk: {type(e).__name__}: {e}")
-            raise TranslationFailedError(f"translation chunk failed: {type(e).__name__}: {str(e)[:200]}") from e
+        translated = await _translate_prompt(prompt, translategemma, translation_model_id)
 
         if not translated and text.strip():
             # The model answered with nothing. The chunk would join the answer
@@ -4136,22 +4554,44 @@ class ChatQnAService:
         history_language = detected_language or original_language
 
         translated_history_string = ""
+        # What the embedder will be fed: a translated query, the English
+        # source passed through, or — when the history translator fell back —
+        # the untranslated source language. The fallback does not fail the
+        # turn (the history is normalized for the retriever, never shown),
+        # but it is never silent: this status is stamped on the
+        # chatqna.orchestrate span and into the response metadata, so a
+        # degraded translation microservice shows up where the retrieval
+        # quality it degrades is diagnosed (issue #1026).
+        query_translation_status = None
         if history_language and history_language.strip() != "EN":
             if logflag:
                 logger.debug(
                     f"Original language detected: {history_language}. Proceeding with translation of chat history."
                 )
-            translated_history_string = await self._get_translated_history_string(
+            translated_history_string, query_translation_status = await self._get_translated_history_string(
                 full_chat_history, source_lang_code=history_language.lower()
             )
         else:
+            # A passthrough is only "English" when something actually
+            # established English: the request named it (and the code was
+            # not refused), or detection concluded it. A fabricated fallback
+            # — no language given and none detected, a crashed detection, a
+            # refused request code — is reported as unknown, so the runbook
+            # filter cannot mistake an arbitrary-language query for an
+            # English one.
+            english_established = detected_language == "EN" or (
+                original_language == "EN" and not language_refused and bool(raw_language and raw_language.strip())
+            )
+            query_translation_status = (
+                QUERY_TRANSLATION_PASSTHROUGH_ENGLISH if english_established else QUERY_TRANSLATION_PASSTHROUGH_UNKNOWN
+            )
             # Already English, or no source language to translate from:
-            # flatten without translation.
+            # flatten without translation. Same recipe as the translator's
+            # flatten, so the two differ only in the words.
             if isinstance(full_chat_history, str):
                 translated_history_string = full_chat_history
             else:
-                parts = [f"{msg.get('role', '').upper()}: {msg.get('content', '')}" for msg in full_chat_history]
-                translated_history_string = " |<-MSG->| ".join(parts)
+                translated_history_string = _flatten_history_string(full_chat_history)
 
         if logflag:
             logger.debug(f"Translated History String: {translated_history_string}")
@@ -4335,7 +4775,10 @@ class ChatQnAService:
             if _query_id:
                 span.set_attribute(QUERY_ID_KEY, _query_id)
             span.set_attribute("rag.query_length", len(last_translated_message_content))
-            span.set_attribute("rag.model_id", _get_llm_model())
+            # Telemetry only — the loud model-id gate lives in the payload
+            # sites (generation, condense, tokenize); the attribute records
+            # what discovery knows, never aborts the request.
+            span.set_attribute("rag.model_id", discover_model_id(_LLM_DISCOVERY_ENDPOINT) or "undiscovered")
             # What this request actually blended, and the answer reserve it is
             # budgeted against. The token estimate and the history counts are
             # written by align_inputs, which is the only site that measures
@@ -4343,6 +4786,11 @@ class ChatQnAService:
             # agree (same TTL-cached discovery), and the copy here survives a
             # request that dies before the LLM node runs.
             _set_attributes(span, _blend_attributes(_blend_enabled, _blend_alpha, _blend_turns))
+            # What the embedder was fed for this query (translated English or
+            # an untranslated fallback): the retrieval-quality question "was
+            # this Spanish query embedded as Spanish?" is answerable from the
+            # trace alone.
+            span.set_attribute(ATTRIBUTE_NAMES["rag_translation_query_status"], query_translation_status)
             _set_attributes(
                 span,
                 _prompt_budget_attributes(
@@ -4485,6 +4933,9 @@ class ChatQnAService:
                     "retrieval_confidence_score": 0.0,
                     "confidence_score": 0.0,
                     "is_grounded": False,
+                    # Same contract as the normal paths: what the embedder was
+                    # fed for this query.
+                    "query_translation_status": query_translation_status,
                 }
                 _mark_abstention(metadata, "reranker_input_too_long")
                 if chat_request.stream:
@@ -4561,14 +5012,18 @@ class ChatQnAService:
             except Exception as e:
                 from opentelemetry.trace import StatusCode
 
-                # Record error metric
+                # Record error metric (shared by every failure family)
                 _err_duration = time.time() - _rag_start
                 _err_attrs = _chat_attrs("false", "true")
                 chat_requests_total.add(1, _err_attrs)
                 chat_rag_duration_seconds.record(_err_duration, _err_attrs)
-
                 span.set_status(StatusCode.ERROR)
                 span.record_exception(e)
+                # Same fail-closed contract as the condense path: a request
+                # that cannot reach, name or count against its LLM is
+                # "LLM unavailable" (503), not a bug (500).
+                if isinstance(e, (ModelDiscoveryError, TokenCountError, httpx.HTTPError)):
+                    raise HTTPException(status_code=503, detail="llm_unavailable") from e
                 raise
 
         if logflag:
@@ -4593,6 +5048,7 @@ class ChatQnAService:
                         abstained=_abstained,
                         abstention_reason=_abstention_reason,
                         include_contexts=bool(getattr(chat_request, "include_contexts", False)),
+                        query_translation_status=query_translation_status,
                     ),
                     media_type="text/event-stream",
                 )
@@ -4673,6 +5129,12 @@ class ChatQnAService:
             # generated from the LLM's parametric knowledge (false). Frontend uses
             # this to flag responses that have no document basis.
             "is_grounded": is_grounded,
+            # What the history translator fed the embedder: "translated",
+            # "passthrough_english", "passthrough_unknown_language",
+            # "fallback_timeout" or "fallback_error". Distinct from
+            # translation_status above, which describes the ANSWER's
+            # translation; this one describes the QUERY's.
+            "query_translation_status": query_translation_status,
         }
         # `_abstained` was computed in the schedule block above (it also drove
         # the metric), so the metric and this metadata cannot come from

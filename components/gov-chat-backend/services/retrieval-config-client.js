@@ -31,26 +31,29 @@
 
 const axios = require('axios');
 const nodeCrypto = require('crypto');
-const { logger } = require('../shared-lib');
+const { logger, parsePositiveInt } = require('../shared-lib');
 
 /**
  * Local positive-int env parse (self-contained — no shared-lib symbol touched
- * at module load). A PRESENT-but-invalid or below-min value logs a WARN naming
- * the variable, the offending value and the applied fallback — an operator
- * typo must be visible, never silently swallowed. An UNSET variable falls back
- * silently (the default is the normal configuration, not a misconfiguration).
+ * at module load). Warn contract: the WARN fires ONLY when a PROVIDED,
+ * non-empty value fails to parse or sits below `min` — that is an operator
+ * typo and must be visible, never silently swallowed. Two shapes stay silent:
+ * a provided value equal to the fallback (a VALID configuration — matching
+ * the default is not a misconfiguration) and an empty string (indistinguishable
+ * from unset, which is also silent).
  */
 function envPositiveInt(varName, rawValue, fallback, min) {
-  const n = Number.parseInt(rawValue, 10);
-  if (Number.isNaN(n) || n < min) {
-    if (rawValue !== undefined && rawValue !== null) {
-      logger.warn('RetrievalConfigClient.invalid_env_int', {
-        variable: varName,
-        value: String(rawValue),
-        applied_fallback: fallback
-      });
-    }
-    return fallback;
+  // Wraps shared-lib's parsePositiveInt (one env-int policy in the repo —
+  // review 2026-10-29); the warn-on-misconfiguration behaviour stays local.
+  const n = parsePositiveInt(rawValue, fallback, { min });
+  const provided = rawValue !== undefined && rawValue !== null && rawValue !== '';
+  const parsed = Number.parseInt(rawValue, 10);
+  if (provided && (Number.isNaN(parsed) || parsed < min)) {
+    logger.warn('RetrievalConfigClient.invalid_env_int', {
+      variable: varName,
+      value: String(rawValue),
+      applied_fallback: fallback
+    });
   }
   return n;
 }
@@ -80,7 +83,13 @@ const REQUEST_TIMEOUT_MS = envPositiveInt(
  * legacy answer with no attempt and no noise. Read once at module load,
  * like the other constants.
  */
-const OKF_ENABLED = (process.env.OKF_ENABLED ?? '1').trim() === '1';
+// Dark-launch polarity (review 2026-10-29): DISABLED when unset. The
+// dark-launch guarantee previously lived only in docker-compose's
+// `${OKF_ENABLED:-0}` — any non-compose run (local `npm start`, a container
+// whose env entry was dropped) silently flipped to enabled and burned a 3s
+// connection attempt per TTL window against a parked okf-server. The flag is
+// now stated once in compose and defaults to parked everywhere.
+const OKF_ENABLED = (process.env.OKF_ENABLED ?? '0').trim() === '1';
 
 /** The fail-closed default: legacy mode, fan-out never engaged. */
 function legacyDefaultConfig() {
@@ -129,7 +138,8 @@ function decodeJwtPayload(bearerHeader) {
 /**
  * Parse `okf:{tenant}:{repo}:{read|admin}` scopes from a JWT payload — the
  * SAME semantics as components/okf-server middleware/auth.js parseOkfScopes
- * (okf_scopes claim, array or space-joined, then the standard scope claim;
+ * (okf_scopes claim, array or space-joined, then the standard scope claim,
+ * then realm ROLE NAMES that ARE scope strings — Story 6-1c group grants;
  * okf:-prefixed entries only; duplicates removed).
  */
 function parseOkfScopes(payload) {
@@ -152,6 +162,15 @@ function parseOkfScopes(payload) {
   }
   if (typeof p.scope === 'string') {
     p.scope.split(/\s+/).forEach(push);
+  }
+  // Source 3 (Story 6-1c, DW-428, review 2026-10-29 round 3): realm ROLE
+  // NAMES that ARE scope strings. The okf-server copy folds
+  // `realm_access.roles` in — a user granted a scope-shaped role directly or
+  // through a GROUP carries it there — so this copy must see the same set.
+  // Missing it keyed a role-granted caller as `@no-scopes`, colliding with
+  // every scope-less caller on the shared authz cache entry.
+  if (p.realm_access && Array.isArray(p.realm_access.roles)) {
+    p.realm_access.roles.forEach(push);
   }
   return out;
 }
@@ -201,6 +220,12 @@ function pruneCache(window) {
 }
 
 async function fetchUpstream(path, bearerHeader, correlationId) {
+  // Egress guard (review 2026-10-29): `path` is a hard-coded constant at
+  // every call site today — reject anything that could turn the fixed-base
+  // concatenation into an arbitrary URL, so a future caller cannot.
+  if (typeof path !== 'string' || path.includes('://')) {
+    throw new Error(`retrieval-config-client: rejected non-relative path: ${String(path).slice(0, 80)}`);
+  }
   const started = Date.now();
   const res = await axios.get(`${OKF_SERVER_URL}${path}`, {
     headers: { Authorization: bearerHeader },
@@ -368,6 +393,7 @@ module.exports = {
     parseOkfScopes,
     decodeJwtPayload,
     currentWindow,
+    fetchUpstream, // exposed so the egress guard (wave 2) can be pinned by a test
     OKF_SERVER_URL,
     RETRIEVAL_CONFIG_TTL_MS,
     REQUEST_TIMEOUT_MS

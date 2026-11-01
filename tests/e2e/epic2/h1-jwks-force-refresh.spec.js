@@ -1,14 +1,20 @@
 const { test, expect } = require('@playwright/test');
-const { getAdminToken, getUserToken, request: authRequest, parseJwtClaims } = require('../helpers/auth');
+const { getAdminToken, getSessionTokenViaUI, request: authRequest, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { rotateRealmKeys } = require('../helpers/keycloak-admin');
 
 test.describe('Phase H: JWKS Force-Refresh', () => {
+  // See SESSION_MINT_TIMEOUT_MS: describe.configure covers the tests,
+  // the in-hook test.setTimeout covers beforeAll (hooks read the
+  // project timeout, not the suite timeout).
+  test.describe.configure({ timeout: SESSION_MINT_TIMEOUT_MS });
+
   let adminToken;
   let userToken;
 
-  test.beforeAll(async () => {
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
     adminToken = await getAdminToken();
-    userToken = await getUserToken('testuser', 'TestPass123!');
+    userToken = await getSessionTokenViaUI({ browser });
   });
 
   test('H.1 — valid token passes with cached JWKS', async () => {

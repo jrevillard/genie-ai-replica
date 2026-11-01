@@ -176,7 +176,16 @@ keycloak_theme: genie
 #   contextual_retrieval_enabled: false   # true (default). false is a true no-op
 #   dataprep_contextual_model: ""         # empty = auto-detect the served model;
 #                                         #   must support guided JSON (response_format=json_object)
-#   dataprep_contextual_doc_budget: 0     # 0 (default) = DERIVED from vllm_max_model_len.
+#   dataprep_max_model_len: 0             # 0 (default) = discover the served context window at
+#                                         #   runtime (from VLLM_ENDPOINT). Set >0 to state the
+#                                         #   window the endpoint serves — the only lever on a
+#                                         #   strict OpenAI-compatible provider (its /v1/models
+#                                         #   carries no max_model_len) and the way to state the
+#                                         #   window of a dataprep_contextual_model that is not
+#                                         #   the model the endpoint lists first.
+#   dataprep_contextual_doc_budget: 0     # 0 (default) = DERIVED from the window the endpoint
+#                                         #   SERVES, discovered at runtime from VLLM_ENDPOINT.
+#                                         #   (vllm_max_model_len is the vLLM-side knob only.)
 #                                         #   The context call carries the system prompt +
 #                                         #   document context + the batch's chunk text and
 #                                         #   reserves max_tokens per chunk in the batch; all of
@@ -251,6 +260,11 @@ keycloak_theme: genie
 #                                         #   not seconds — and the fallback then
 #                                         #   silently picks the wrong id.
 #                                         #   Raise it on a remote GPU node.
+#   model_detect_ttl: 60                  # TTL of the /v1/models model-id
+#                                         #   cache (seconds) — shared by the
+#                                         #   Python services and the OKF Node
+#                                         #   services. Lower = fresher model
+#                                         #   ids, more probes.
 #   model_rerank_timeout_seconds: 300     # TEI rerank — no fallback path, so a
 #                                         #   tighter budget turns slow successes
 #                                         #   into 500s on the chat request
@@ -310,9 +324,18 @@ tei_reranker_image: ghcr.io/huggingface/text-embeddings-inference:1.9.3
 docling_serve_image: ghcr.io/docling-project/docling-serve:v1.21.0
 nginx_image: nginx:1.28-alpine
 
-vllm_llm_model_id: ibm-granite/granite-4.1-8b
+# Leave vllm_llm_model_id UNDEFINED for auto-discovery (recommended): the
+# services discover whatever model the LLM endpoint serves at /v1/models.
+# CAUTION: with the var undefined, the GPU overlay starts the vLLM
+# container on its OWN template default, ibm-granite/granite-3.3-2b-instruct
+# (docker-compose.gpu.yaml.j2) — a different, smaller model than the
+# previously shipped group_vars default (granite-4.1-8b). Set the var to
+# pin a name (it must match what the GPU actually serves, or every LLM
+# call 404s).
+# vllm_llm_model_id: ibm-granite/granite-4.1-8b
 vllm_translation_model_id: google/gemma-3-4b-it
 embedding_model_id: BAAI/bge-large-en-v1.5
+#   (empty = reuse the discovered LLM model, see vllm_llm_model_id above)
 # Per-deployer query-instruction overrides for contrastive / instruction-tuned
 # embedding models (issue #1035). Built-in table covers BAAI/bge en+zh-v1.5,
 # hkunlp/instructor, and nomic-ai/nomic-embed. Use this var to:

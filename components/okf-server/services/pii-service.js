@@ -418,8 +418,8 @@ function subtractAccepted(occurrences, accepted) {
   // accepted items GREEN: suppression drops them from the OUTSTANDING count and
   // never hides the record of the decision.
   if (accepted.some((a) => a && a.action === ACCEPT_ALL_FINDINGS)) return [];
-  const keys = new Set(accepted.map((a) => [a.where, a.type, a.before].join(' ')));
-  return (occurrences || []).filter((o) => !keys.has([o.where, o.type, o.excerpt && o.excerpt.hit].join(' ')));
+  const keys = new Set(accepted.map((a) => [a.where, a.type, a.before].join('\u0000')));
+  return (occurrences || []).filter((o) => !keys.has([o.where, o.type, o.excerpt && o.excerpt.hit].join('\u0000')));
 }
 
 /** The concept's persisted remediation ledger (empty when absent). */

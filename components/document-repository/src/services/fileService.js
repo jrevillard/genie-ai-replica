@@ -21,10 +21,16 @@ const appConfig = require('../config/appConfig');
 const CRAWL_KILL_WAIT_MS = appConfig.crawler?.killWaitMs || 30000;
 const CRAWL_KILL_POLL_MS = 500;
 
-// Definitive arangojs not-found (ArangoError 404 / 1202 "document not found").
-// Distinct from transient connection errors, which must not be mistaken for it.
-const isDocumentNotFound = (e) =>
-  !!e && (e.statusCode === 404 || e.errorNum === 1202 || /not found/i.test(e.message || ''));
+// Definitive document absence, by the CANONICAL classifier (shared/lib's
+// _isExpectedAbsence: ArangoError 1202/1204, or the exact cursor 'no match'
+// message) plus the arangojs HTTP 404 shapes (err.statusCode on HTTP-layer
+// errors, err.code on driver errors — arangojs carries the HTTP status as
+// .code on driver-thrown errors, so the statusCode-only arm missed that
+// shape). The old loose /not found/i message test ALSO matched a MISSING
+// COLLECTION (errorNum 1203, "collection or view not found") and gateway
+// route-not-found — infrastructure faults that must be rethrown, not treated
+// as "job gone" (review 2026-10-29 round 3; mirrors crawlWorker.js).
+const isDocumentNotFound = (e) => !!e && (dbService._isExpectedAbsence(e) || e.statusCode === 404 || e.code === 404);
 
 class FileService {
   constructor() {
@@ -1024,8 +1030,11 @@ class FileService {
     // Story 2.9.5-amend (2026-08-18): a ZIP bundle is ALSO stored as a file doc —
     // the bundle file is associated with the OKF repo (repo_id + graph_name +
     // labels) and is the ingestion INPUT (its concepts are enqueued separately,
-    // never re-chunked). Stored at dataprep.status='Ingested' + is_bundle=true so
-    // the 2.9.4 worker ignores it (it polls Pending only).
+    // never re-chunked). Stored with dataprep.status='Pending' (see the store
+    // below: it must NEVER be born 'Ingested' — nothing has been ingested at
+    // store time; the earlier comment here claimed 'Ingested' + is_bundle=true,
+    // contradicting the store it documents) so the 2.9.4 worker ignores it
+    // (it polls Pending only — the okf-server drives the transition).
     const isBundle = !!bundleInfo.is_bundle;
     const fileId = fileUtils.generateUniqueFileId();
     const fileName = isBundle ? `${fileId}.zip` : `${fileId}.md`;
@@ -1048,7 +1057,7 @@ class FileService {
 
       // Create files doc (graph_name + repo_id + bundle_version persisted via
       // the T5 extractMetadata fix + Story 2.9.7; the bundle-zip doc carries the
-      // same knowledge-hierarchy labels + is_bundle + an 'Ingested' status).
+      // same knowledge-hierarchy labels + is_bundle + a 'Pending' status).
       await metadataService.addMetadata(filePath, {
         file_id: fileId,
         file_name: bundleInfo.originalFileName || fileName,

@@ -1,159 +1,6 @@
 # Deferred Work
 
-> **Reading this file**
->
-> 1. **Active backlog** (immediately below) — every open item from the historical ledger below, indexed and tagged with the modern module(s) it touches, with the file/line that proves it is still a thing today. **This is the section future work consults** — if an item is not here, it is historical.
-> 2. **Historical ledger** (collapsed by default in IDEs that respect HTML comments) — the full 284-item provenance, sorted by ID. **Keep forever** as audit trail. The original per-review header is preserved on every entry.
-> 3. **This-session defers** (trailing block) — deferrals added in this session or during the OKF rebase.
->
-> Status counts (2026-09-20): OPEN=134, DONE=150. Stale items that no longer touch code on the current branch (e.g. mobile-oidc-only classes, pre-rebase retriever v1.3 machinery, deleted modules) are tagged **STALE** below — DO NOT work on them in this branch without verifying the underlying concern still applies.
-
-## Active backlog (134 open items)
-
-Each entry is auto-derived from the historical ledger below. The **MOD** column is my best guess at which modern module the item touches; verify the file/line against current code before acting. Items flagged **STALE** touch modules that have been deleted or substantially rewritten since the deferral (mobile-oidc-only classes, pre-rebase v1.3 machinery); the historical **reason:** text is preserved in the ledger for context.
-
-| ID | Title | Status | MOD | Stale? |
-|----|-------|--------|-----|--------|
-| DW-8 | reranker import re-point has no in-image import verification. | open | unclassified — verify module | live |
-| DW-13 | no CI job runs the reranker image entry point on the v1.5 bump; local import verified clean, the in-image behavioral gat | open | unclassified — verify module | live |
-| DW-15 | base images use moving tags (python:3.11-slim, opea/*:1.5), so byte-identical digests across time are bounded by base-ta | open | unclassified — verify module | live |
-| DW-16 | GPU locks (requirements-gpu.txt) are not compiled in 2.2 — the fleet is CPU-only (compose grants no GPU to these service | open | unclassified — verify module | live |
-| DW-17 | .in pin-policy is a fork-plus-selective-pins hybrid; unpinned entries (e.g. retriever's bare docling) can drift on a lat | open | unclassified — verify module | live |
-| DW-18 | Cross-module OTel/haystack/openai version drift: reranker's bare `.in` pins resolve newer (otel 1.44.0, haystack-ai 3.0. | open | unclassified — verify module | live |
-| DW-19 | verify:dataprep-lock trigger paths watch `requirements.*` only, so an OPEA_VERSION bump in a module Dockerfile (the cano | open | unclassified — verify module | live |
-| DW-20 | reranker lock installs torch 2.13.0 (via sentence-transformers) into a plain python:3.11-slim CPU image; wheel/resolutio | open | unclassified — verify module | live |
-| DW-23 | Cross-module OTel/haystack/openai version drift: reranker's bare `.in` pins resolve newer (otel 1.44.0, haystack-ai 3.0. | open | unclassified — verify module | live |
-| DW-25 | components/gov-chat-backend/.gitlab-ci.yml still carries the retired verify:dataprep-lock job against the deleted requir | open | unclassified — verify module | live |
-| DW-28 | chatqna's comps_base_builder flips to python:3.11-slim while still installing OPEA v1.3 GenAIComps (`-e .`) with no in-i | open | unclassified — verify module | live |
-| DW-29 | verify:dataprep-lock now loops three modules, so its tag-pipeline run (`if: $CI_COMMIT_TAG`) triples the blast radius of | open | unclassified — verify module | live |
-| DW-31 | No in-image behavioral fusion test drives invoke through the hybrid path with a stubbed BM25/vector channel; the contrac | open | unclassified — verify module | live |
-| DW-33 | DW-30/DW-31 headers in the deferred-work ledger are truncated mid-word ("...surfaced wh", "...the mocked suite co") — a  | open | resolved by OPEA 1.5 bump | **STALE** — do not act on this branch without verifying |
-| DW-34 | Concurrent `validateTokens()` calls not guarded | open | unclassified — verify module | live |
-| DW-35 | `validateTokens()` can race with `logout()` | open | unclassified — verify module | live |
-| DW-36 | `validateTokens()` can race with `authorize()` | open | unclassified — verify module | live |
-| DW-37 | Lost state on app close after network error | open | unclassified — verify module | live |
-| DW-38 | Race condition: authorize() vs logout() | open | unclassified — verify module | live |
-| DW-39 | Fragile keyword-based classification | open | unclassified — verify module | live |
-| DW-41 | No backchannel logout configuration | open | unclassified — verify module | live |
-| DW-57 | `resetCredentials` flow verification in Keycloak Admin Console not documented | open | unclassified — verify module | live |
-| DW-60 | AC#7 Data preservation | open | unclassified — verify module | live |
-| DW-61 | Fluentd driver drops logs when Collector is down | open | unclassified — verify module | live |
-| DW-63 | OTel Collector global mode without resource limits | open | unclassified — verify module | live |
-| DW-65 | Volume backup/cleanup strategy for VictoriaLogs | open | unclassified — verify module | live |
-| DW-70 | `npm_package_version` fallback to `1.0.0` | open | unclassified — verify module | live |
-| DW-72 | Deferred promise + setTimeout(300) not awaited | open | unclassified — verify module | live |
-| DW-84 | Missing folder reorder edge cases (duplicate orders, non-existent folders) | open | unclassified — verify module | live |
-| DW-88 | GPU_AVAILABLE variable never set in CI config | open | unclassified — verify module | live |
-| DW-91 | registerRoutes() without external try-catch | open | unclassified — verify module | live |
-| DW-100 | Test failure addMessage after createConversation | open | unclassified — verify module | live |
-| DW-103 | SECURITY: `GET /query/:queryId/messages` has no userId validation | open | unclassified — verify module | live |
-| DW-105 | Race condition in ArangoGraph initialization during concurrent batch processing | open | unclassified — verify module | live |
-| DW-106 | File lock `fileno()` edge case when lock_file lacks file descriptor | open | unclassified — verify module | live |
-| DW-108 | Orphan deletion with circular entity references | open | unclassified — verify module | live |
-| DW-111 | BM25 tokenization regex `r"\b\w+\b"` | open | unclassified — verify module | live |
-| DW-113 | Locale not tested on satisfaction endpoints | open | unclassified — verify module | live |
-| DW-117 | categoryExists throws error (DB failure) | open | unclassified — verify module | live |
-| DW-119 | Auth guard tests cover only 2/15 endpoints | open | unclassified — verify module | live |
-| DW-124 | `assert` in production in `align_outputs` RETRIEVER branch (genieai_chatqna.py:575,587) | open | unclassified — verify module | live |
-| DW-125 | `file_metadata["labels"]` unguarded dict access (genieai_chatqna.py:1684) | open | genieai_chatqna.py orchestrator | live |
-| DW-126 | `runtime_graph.downstream(cur_node)[0]` IndexError (genieai_chatqna.py:604) | open | genieai_chatqna.py orchestrator | live |
-| DW-127 | `assert isinstance(data, list)` in EMBEDDING output (genieai_chatqna.py:550) | open | genieai_chatqna.py orchestrator | live |
-| DW-128 | Bare `dict[key]` access in `align_inputs`/`align_outputs` at multiple locations (lines 367, 395, 420, 515, 516, 537, 551 | open | genieai_chatqna.py orchestrator | live |
-| DW-129 | MagicMock truthiness hides parameter fallback logic in `handle_request` | open | genieai_chatqna.py orchestrator | live |
-| DW-131 | Index out-of-bounds in retrieved_docs lookup | open | genieai_chatqna.py orchestrator | live |
-| DW-132 | KneeLocator single-doc / flat-score edge cases not tested | open | genieai_chatqna.py orchestrator | live |
-| DW-134 | Pagination: only one scenario tested | open | unclassified — verify module | live |
-| DW-136 | Translation backend fallback: theoretical race risk | open | unclassified — verify module | live |
-| DW-137 | Chat history: edge collection query patterns | open | unclassified — verify module | live |
-| DW-138 | Date calculation in test setup without Date mocking | open | unclassified — verify module | live |
-| DW-139 | ResourceUsageMonitor 30s cache behavior untested | open | unclassified — verify module | live |
-| DW-140 | SecurityScanService worker thread / async pattern edge cases | open | unclassified — verify module | live |
-| DW-141 | LogsService file size limit edge cases | open | unclassified — verify module | live |
-| DW-142 | Date/time edge case coverage | open | unclassified — verify module | live |
-| DW-144 | JWT timestamps frozen at module load (`mockJwtPayload.js:8-9,39`) | open | unclassified — verify module | live |
-| DW-145 | `cleanClamAV`/`infectedClamAV` shared singletons with mutable `jest.fn()` state (`mocks/clamav.js:27,32`) | open | unclassified — verify module | live |
-| DW-146 | ~80 lines identical mock setup duplicated across 4 route test files | open | unclassified — verify module | live |
-| DW-147 | Download test accepts both 200 and 500 (`download.test.js:106-134`) | open | unclassified — verify module | live |
-| DW-148 | CRLF sanitization test passes vacuously when `content-disposition` header absent (`download.test.js:175-197`) | open | unclassified — verify module | live |
-| DW-149 | labelService mock inconsistency | open | unclassified — verify module | live |
-| DW-151 | PATCH /api/files/:fileId bypasses metadataService for raw AQL | open | unclassified — verify module | live |
-| DW-164 | getFileCategory and isTextExtractable not tested with null/undefined input | open | unclassified — verify module | live |
-| DW-165 | getDb mock pattern fragile in metadataService.test.js and labelService.test.js | open | unclassified — verify module | live |
-| DW-166 | || vs ?? in extractMetadata | open | unclassified — verify module | live |
-| DW-169 | updateMetadata source has dead code | open | unclassified — verify module | live |
-| DW-170 | 50MB buffer allocation in oversized buffer test | open | unclassified — verify module | live |
-| DW-175 | AC6 pipeline time budget | open | unclassified — verify module | live |
-| DW-176 | Token expiry in long-running chat sessions | open | unclassified — verify module | live |
-| DW-177 | CI cache key doesn't include Playwright version | open | unclassified — verify module | live |
-| DW-178 | Hardcoded test user credentials (`testuser/TestPass123!`) | open | unclassified — verify module | live |
-| DW-179 | AC6 performance not verified | open | unclassified — verify module | live |
-| DW-184 | Playwright workers: 1 hides concurrency bugs | open | unclassified — verify module | live |
-| DW-185 | Progressive rendering test may flake on slow runners | open | unclassified — verify module | live |
-| DW-186 | Backend controller layer inconsistency | open | unclassified — verify module | live |
-| DW-188 | GDPR delete cascade and idempotency | open | unclassified — verify module | live |
-| DW-190 | Translation type validation edge cases | open | unclassified — verify module | live |
-| DW-191 | Service locale validation | open | unclassified — verify module | live |
-| DW-193 | Multipart file upload edge cases | open | unclassified — verify module | live |
-| DW-194 | DsCombobox keyboard navigation tests (ArrowUp/Down, Enter, Escape) | open | unclassified — verify module | live |
-| DW-195 | DsCombobox click-outside close behavior | open | unclassified — verify module | live |
-| DW-196 | DsModal focus trap test | open | unclassified — verify module | live |
-| DW-199 | DsPill/DsStatusTag minimal coverage, no interaction tests | open | unclassified — verify module | live |
-| DW-200 | No accessibility tests beyond DsModal | open | unclassified — verify module | live |
-| DW-201 | DsButton invalid variant not tested | open | unclassified — verify module | live |
-| DW-202 | DsInput textarea rows only one case tested | open | unclassified — verify module | live |
-| DW-203 | DsCombobox mousedown .prevent not tested | open | unclassified — verify module | live |
-| DW-204 | `handleViewInternalFile` method untested in FileDetailsDialog.vue:916-1061 | open | unclassified — verify module | live |
-| DW-215 | deleteFolder cascade test doesn't verify removal calls | open | unclassified — verify module | live |
-| DW-221 | Test mocks don't verify actual span export behavior | open | unclassified — verify module | live |
-| DW-224 | Streaming responses close orchestration span before first token | open | unclassified — verify module | live |
-| DW-225 | Full-chain trace ID integration test (AC5) | open | unclassified — verify module | live |
-| DW-227 | Prometheus Remote Write / batch processor tuning under high load | open | unclassified — verify module | live |
-| DW-229 | Dashboard JSON lacks schema validation in CI | open | unclassified — verify module | live |
-| DW-230 | Dashboard variable query fails when no metrics exist (fresh deploy) | open | unclassified — verify module | live |
-| DW-231 | Volume name collision in Swarm multi-node deployment | open | unclassified — verify module | live |
-| DW-232 | Dashboard refresh interval (10s) may overload VictoriaMetrics with many concurrent users | open | unclassified — verify module | live |
-| DW-235 | PII nested attributes not filtered | open | unclassified — verify module | live |
-| DW-236 | Metric export interval hardcoded | open | unclassified — verify module | live |
-| DW-237 | Alert threshold too sensitive / storage threshold context-blind | open | unclassified — verify module | live |
-| DW-238 | No documented rollback procedure for alert rules | open | unclassified — verify module | live |
-| DW-239 | Notification repeat_interval 4h for critical alerts | open | unclassified — verify module | live |
-| DW-240 | Alert thresholds not tunable via env var | open | unclassified — verify module | live |
-| DW-247 | Mobile `_sendNonStreaming` drops Quick Help `serviceLabels` | open | unclassified — verify module | live |
-| DW-251 | pydantic/docarray stub narrows the `dict()` vs `model_dump()` detection surface | open | unclassified — verify module | live |
-| DW-253 | Per-kwarg raw evidence not committed | open | unclassified — verify module | live |
-| DW-255 | Spike `execute()` override signature-coupled to the real `execute()` | open | unclassified — verify module | live |
-| DW-256 | Spike unit tests not wired into CI | open | unclassified — verify module | live |
-| DW-260 | Label-filter drop surface guarded only by source-grep | open | unclassified — verify module | live |
-| DW-261 | Streaming metadata shape test hardcoded | open | unclassified — verify module | live |
-| DW-262 | E2E graph test asserts only `result is not None` | open | unclassified — verify module | live |
-| DW-263 | E2E omits confidence distribution + abstention + response schema | open | unclassified — verify module | live |
-| DW-264 | Contract-test verification layer missing from the public architecture doc | open | unclassified — verify module | live |
-| DW-305 | Type asymmetry on reranker_parameters between align_inputs and align_outputs — treated as Pydantic model in align_inputs | open | various (epic-2/3 deferred) | live |
-| DW-306 | Dead expression at line 1098 — list comprehension builds list that is immediately discarded. | open | various (epic-2/3 deferred) | live |
-| DW-307 | Hardcoded magic number 200 used inconsistently as token buffer at lines 983, 987, 993. | open | various (epic-2/3 deferred) | live |
-| DW-308 | Excessive DEBUG/INFO logging at lines 961-970, 1029-1033 — full system prompt and messages array logged at INFO level on | open | various (epic-2/3 deferred) | live |
-| DW-309 | align_outputs is ~250 lines with deeply nested logic — handles TRANSLATOR, EMBEDDING, RETRIEVER, RERANK, LLM branches in | open | various (epic-2/3 deferred) | live |
-| DW-310 | SHA256SUMS only covers JSON outputs, not build logs/report/README | open | various (epic-2/3 deferred) | live |
-| DW-311 | No unit tests for diff-advisories.py | open | various (epic-2/3 deferred) | live |
-| DW-312 | sys.exit(2) conflates policy verdict with process failure | open | various (epic-2/3 deferred) | live |
-| DW-313 | No trivy-db version pinning | open | various (epic-2/3 deferred) | live |
-| DW-314 | Hardcoded image list in script | open | various (epic-2/3 deferred) | live |
-| DW-315 | No CVE-to-NVD linkage | open | various (epic-2/3 deferred) | live |
-| DW-316 | Exit code 2 not verified | open | various (epic-2/3 deferred) | live |
-| DW-317 | No machine-readable verdict artifact | open | various (epic-2/3 deferred) | live |
-| DW-318 | CVE-2022-46337 (Apache Derby in Python image) requires investigation | open | various (epic-2/3 deferred) | live |
-| DW-319 | No attribution of net-new CVEs to root cause (OPEA vs Python base) | open | various (epic-2/3 deferred) | live |
-| DW-320 | deferred-work.md has no entry for blocked-upgrade outcome | open | various (epic-2/3 deferred) | live |
-| DW-321 | Pin CI Python image tags to a specific patch version (e.g., python:3.11.9-slim) for reproducibility. | open | various (epic-2/3 deferred) | live |
-| DW-322 | Override audit claims "every override accounted for" but provides no per-override mapping to verification items. | open | various (epic-2/3 deferred) | live |
-| DW-323 | Verification is grep-based but false-positive risk not documented (e.g., token present but not consumed, version pinned  | open | various (epic-2/3 deferred) | live |
-| DW-324 | Verification procedure has no documented path for check failures (what to record when grep returns 0 matches or count th | open | various (epic-2/3 deferred) | live |
-
----
-
-## Historical ledger (284 items, sorted by ID)
-
-Collapsed to keep this file manageable. Every item carries its original provenance (origin / source_spec / location / reason / resolution). The active-backlog table above is auto-derived from this list.
+Items deferred during code reviews. Revisit when the related component is next modified.
 
 ## Resolved in MR !383 (prd-fix-shared-lib, 2026-09-18)
 
@@ -195,7 +42,6 @@ reason: ARG UPSTREAM_IMAGE=opea/embedding:1.3 / opea/llm-textgen:1.3 unchanged w
 status: done 2026-08-12
 resolution: already resolved: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai:7 now has ARG UPSTREAM_IMAGE=opea/embedding:1.5 (bumped from 1.3)
 
-
 ### DW-2: pydantic v2 in the module images is not verified at build/runtime.
 origin: spec-deferred 74debba4180e
 location: genie-ai-overlay/core/genieai_api_protocol.py:13
@@ -204,7 +50,6 @@ severity: low
 reason: PositiveInt/NonNegativeFloat require pydantic v2; the images build from python:3.10-slim / opea:1.3 bases and no runtime pydantic-major check exists; covered by story 2.2's base-image migration + in-image contract runs.
 status: done 2026-08-12
 resolution: already resolved: genie-ai-overlay/core/genieai_api_protocol.py:13 imports NonNegativeFloat, PositiveInt from pydantic; images now use python:3.11-slim bases
-
 
 ### DW-3: override-audit lint is not enforced in CI and is one-directional.
 origin: spec-deferred d37bd529fdc3
@@ -215,7 +60,6 @@ reason: lint_overrides.py runs only via the local pytest test_overrides_lint.py;
 status: done 2026-08-12
 resolution: resolved by sweep bundle dw-override-audit-ci-enforcement
 
-
 ### DW-4: override-audit lint has no dedicated CI job, is one-directional, and .pth runtime-load failures are silent.
 origin: spec-deferred f4736edd7e98
 source_spec: `2-1-re-graft-the-core-overlay-layer.md`
@@ -224,7 +68,6 @@ severity: medium
 reason: lint_overrides.py is exercised only via tests/test_overrides_lint.py (which the CI pytest stage runs), so it is indirectly wired but has no dedicated job; the marker-to-manifest direction is unenforced; .pth runtime-load failures are silent. Explicit enforcement belongs to story 2.7 (verify:evidence + coherence lint).
 status: done 2026-08-12
 resolution: resolved by sweep bundle dw-override-audit-ci-enforcement
-
 
 ### DW-5: 10 of v1.5's constrained ChatCompletionRequest fields are not mirrored in the overlay protocol.
 origin: spec-deferred 29bafba7a211
@@ -235,7 +78,6 @@ reason: v1.5 constrains max_tokens, n, seed, temperature, top_p, best_of, repeti
 status: done 2026-08-12
 resolution: resolved by sweep bundle dw-pydantic-v2-field-mirroring
 
-
 ### DW-6: module-layer overrides are not recorded in OVERRIDES.yaml and the lint scan scope cannot see them.
 origin: spec-deferred 26792e0ebdb9
 source_spec: `2-1-re-graft-the-core-overlay-layer.md`
@@ -244,7 +86,6 @@ severity: medium
 reason: The reranker import re-point (genieai_reranking_microservice.py opea_docarray→docarray) and contract-harness re-graft are intentional deviations outside the core layer, but lint_overrides.py scans only core/*.py and build-patches/*. Extend the manifest + scan scope during module re-grafts (2.3-2.6) or the 2.7 coherence lint.
 status: done 2026-08-12
 resolution: resolved by sweep bundle dw-override-audit-ci-enforcement
-
 
 ### DW-7: embedding/textgen ENV PYTHONPATH removal is not runtime-verified.
 origin: spec-deferred b367dfb4ab8d
@@ -255,7 +96,6 @@ reason: The old wrapper Dockerfiles forced /usr/local/lib/python3.11/dist-packag
 status: done 2026-08-12
 resolution: already resolved: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai:10-12 uses install_site_startup.sh for .pth hook (no hardcoded python3.x path); textgen equivalent at Dockerfile-textgen_genie-ai
 
-
 ### DW-8: reranker import re-point has no in-image import verification.
 origin: spec-deferred 2b2b6532da1b
 source_spec: `2-1-re-graft-the-core-overlay-layer.md`
@@ -263,7 +103,6 @@ location: genie-ai-overlay/reranker/genieai_reranking_microservice.py:38
 severity: medium
 reason: genieai_reranking_microservice.py now imports comps.cores.proto.docarray (under the shim pin), but the reranker image has no contract/smoke job that imports the module — conftest stubs the module as a MagicMock, docker build never imports it, and the contract harness import_docarray runs only against the retriever/dataprep images. A shim failure in the reranker image would crash the container at start, green. Covered by story 2.2's in-image contract runs.
 status: open
-
 
 ### DW-9: build-patches/*.py are excluded from ruff, so the two new scripts are never linted in CI.
 origin: spec-deferred 9029450207bc
@@ -273,7 +112,6 @@ severity: low
 reason: pyproject.toml [tool.ruff] exclude = ["build-patches/"]; lint_overrides.py and docarray_alias_shim.py ship outside ruff coverage and the story's "ruff clean" verification is vacuous for them. Verified clean manually this pass. Extend the ruff scope (or exempt with a documented reason) during the 2.7 coherence-lint work.
 status: done 2026-08-12
 resolution: resolved by sweep bundle dw-override-audit-ci-enforcement
-
 ### DW-10: langchain-arangodb drops back to 0.0.6 in the v1.5 lock; the >=1.2.0 filter_clause fix-pin is gone until story 2.3 bumps it.
 origin: spec-deferred f6193de4a9e1
 location: genie-ai-overlay/retriever/requirements-cpu.txt
@@ -282,7 +120,6 @@ severity: medium
 reason: retriever/requirements.in + lock pin 0.0.6 (verified: 0.0.6 does NOT have 0.0.4's **kwargs filter_clause swallow — filter_clause is a named param; the behavioral label-filter contract test belongs to story 2.3's re-graft).
 status: done 2026-08-13
 resolution: resolved by sweep bundle dw-langchain-arangodb-bump
-
 
 ### DW-11: dataprep .in fork reintroduces pyspark, unstructured[all-docs], graspologic, openai-whisper that the retired v1.3 machinery dropped for image-size/build reasons; in-image build + size unverified here.
 origin: spec-deferred 772243b4bdcd
@@ -293,7 +130,6 @@ reason: old generate-requirements-in.sh dropped these (no-space-on-device pyspar
 status: done 2026-08-13
 resolution: resolved by sweep bundle dw-dataprep-deps-and-device
 
-
 ### DW-12: sitecustomize/SSL-patch auto-load in the built embedding/textgen/retriever images is unverified (hardcoded site-packages path asserted manually, not by a CI job).
 origin: spec-deferred 21b1f2312170
 location: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai:11
@@ -303,7 +139,6 @@ reason: no in-image `import sitecustomize` check exists; 2-1's .pth installer + 
 status: done 2026-08-13
 resolution: already resolved: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai:37 — install_site_startup.sh derives site-packages via site.getsitepackages()[0], no hardcoded python3.x path; build-time import guard at :64-66
 
-
 ### DW-13: no CI job runs the reranker image entry point on the v1.5 bump; local import verified clean, the in-image behavioral gate is story 2.4's contract test.
 origin: spec-deferred 331a5ad49137
 location: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai:4
@@ -311,7 +146,6 @@ source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: reranker module imports all v1.5 comps symbols (telemetry, api_protocol, opea_docarray rename, integrations.tei) — only a host port-8000 collision blocked a full clean pass locally; build/scan jobs never run the image.
 status: open
-
 
 ### DW-14: verify:dataprep-lock keeps its dataprep-scoped name while looping three modules and checks package NAMES only, not versions — cross-module version drift (e.g. docling) is invisible to it.
 origin: spec-deferred 819d55acdf09
@@ -322,7 +156,6 @@ reason: dataprep pins docling==2.45.0/docling-core==2.44.2 while retriever resol
 status: done 2026-08-13
 resolution: already resolved: .gitlab-ci.yml:2532 — job renamed to verify:overlay-locks, now covers all three modules (dataprep/retriever/reranker) with cross-module version coherence
 
-
 ### DW-15: base images use moving tags (python:3.11-slim, opea/*:1.5), so byte-identical digests across time are bounded by base-tag stability; dependency layers are deterministic via the hashed lock.
 origin: spec-deferred 391ff9ae972c
 location: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai:19
@@ -330,7 +163,6 @@ source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: AC4's "identical digest" holds for immediate clean re-runs but not across a base-tag move; digest-pinning the image set is story 4-2.
 status: open
-
 
 ### DW-16: GPU locks (requirements-gpu.txt) are not compiled in 2.2 — the fleet is CPU-only (compose grants no GPU to these services); they can be compiled from the same .in when a GPU deployment needs them.
 origin: spec-deferred 8c84c7fef10e
@@ -340,7 +172,6 @@ severity: low
 reason: upstream ships both cpu+gpu locks; our compose consumes CPU only; compiling CUDA-torch locks with no consumer is waste.
 status: open
 
-
 ### DW-17: .in pin-policy is a fork-plus-selective-pins hybrid; unpinned entries (e.g. retriever's bare docling) can drift on a later `make lock-<module>` regen.
 origin: spec-deferred 03c5a65ae49f
 location: genie-ai-overlay/retriever/requirements.in
@@ -348,7 +179,6 @@ source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: dataprep pins docling==2.45.0 (matches v1.5 dataprep lock) while retriever's bare docling resolved to v1.5's 2.55.1 today; a future regen may resolve newer. Re-fork + re-pin to v1.5's shipped set on the next bump.
 status: open
-
 
 ### DW-18: Cross-module OTel/haystack/openai version drift: reranker's bare `.in` pins resolve newer (otel 1.44.0, haystack-ai 3.0.0, openai 3.0.0) than dataprep/retriever (otel 1.27.0, haystack-ai 2.3.1, openai
 origin: spec-deferred 664dd44a6058
@@ -358,7 +188,6 @@ severity: medium
 reason: reranker `.in` ships bare `opentelemetry-*`/`haystack-ai`/`openai` (faithful v1.5 upstream fork — upstream also bare), so the recompile resolves today's newest; dataprep/retriever `.in` pin `==` versions. All services share `genie-ai-overlay/tracing.py`; a coherence/version lint + re-pin belongs to story 2.7 (and reranker re-graft 2.4).
 status: open
 
-
 ### DW-19: verify:dataprep-lock trigger paths watch `requirements.*` only, so an OPEA_VERSION bump in a module Dockerfile (the canonical lock-regen trigger) does not run the drift guard.
 origin: spec-deferred 97651093fcb7
 location: .gitlab-ci.yml
@@ -367,7 +196,6 @@ severity: low
 reason: rules:changes lists genie-ai-overlay/{dataprep,retriever,reranker}/requirements.* and .gitlab-ci.yml; a Dockerfile OPEA_VERSION/apt change that should force a lock check won't. Story 2.7's CI coherence work owns the trigger widening.
 status: open
 
-
 ### DW-20: reranker lock installs torch 2.13.0 (via sentence-transformers) into a plain python:3.11-slim CPU image; wheel/resolution + image-size surface unverified.
 origin: spec-deferred 67b62e7158ad
 location: genie-ai-overlay/reranker/requirements-cpu.txt
@@ -375,7 +203,6 @@ source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: no Docker build in 2.2; reranker's heavy dep install + resulting size are story 2.4/2.5 build-surface territory.
 status: open
-
 
 ### DW-21: .bmad-loop/ci-wait.sh platform-sed does not strip a trailing YAML comment and uses GNU-only \s.
 origin: spec-deferred 7464cb7d139a
@@ -386,7 +213,6 @@ reason: `git_platform: gitlab # note` would resolve to "gitlab # note"; GNU \s b
 status: done 2026-08-13
 resolution: .bmad-loop/ci-wait.sh:63,65 — uses POSIX [[:space:]] not GNU \s; comment strip works
 
-
 ### DW-22: dataprep .in fork reintroduces pyspark, unstructured[all-docs], graspologic, openai-whisper that the retired v1.3 machinery dropped for image-size/build reasons; in-image size + post-import runtime un
 origin: spec-deferred 1fe3e0a6a9e9
 location: genie-ai-overlay/dataprep/requirements.in
@@ -396,7 +222,6 @@ reason: old generate-requirements-in.sh dropped these (no-space-on-device pyspar
 status: done 2026-08-13
 resolution: resolved by sweep bundle dw-dataprep-deps-and-device
 
-
 ### DW-23: Cross-module OTel/haystack/openai version drift: reranker's bare `.in` pins resolve newer (otel 1.44.0, haystack-ai 3.0.0, openai 3.0.0) than dataprep/retriever (otel 1.27.0, haystack-ai 2.3.1), plus
 origin: spec-deferred 4d6ac3a03e6d
 location: genie-ai-overlay/reranker/requirements.in
@@ -404,7 +229,6 @@ source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: medium
 reason: verified locked versions: openai dataprep==1.81.0 / retriever==1.109.1 / reranker==3.0.0; fastapi dataprep+reranker==0.116.1 / retriever==0.118.2. reranker `.in` ships bare `opentelemetry-*`/`haystack-ai`/`openai` (faithful v1.5 upstream fork — upstream also bare), so the recompile resolves today's newest; dataprep `.in` pins `openai==1.81.0`, retriever `.in` leaves openai bare (resolved via langchain-openai). All services share `genie-ai-overlay/tracing.py`; a coherence/version lint + re-pin belongs to story 2.7 (and reranker re-graft 2.4).
 status: open
-
 
 ### DW-24: the compiled CPU locks pin torch 2.13.0 (via sentence-transformers) into plain python:3.11-slim CPU images — all three modules, not just reranker; image-size surface unverified.
 origin: spec-deferred 218ac548b377
@@ -415,15 +239,14 @@ reason: torch==2.13.0 at dataprep/requirements-cpu.txt:5660, retriever:5503, rer
 status: done 2026-08-13
 resolution: genie-ai-overlay/retriever/requirements-cpu.txt:1, reranker:1, dataprep:1 — torch==2.13.0 consistent in all 3 CPU locks
 
-
-### DW-25: components/gov-chat-backend/.gitlab-ci.yml still carries the retired verify:dataprep-lock job against the deleted requirements.lock (root .gitlab-ci.yml is the active config; the backend copy is never
+### DW-25: components/gov-chat-backend/.gitlab-ci.yml still carries the retired verify:dataprep-lock job against the deleted requirements.lock (root .gitlab-ci.yml is the active config; the backend copy is never read by GitLab)
 origin: spec-deferred f908048420c5
 location: components/gov-chat-backend/.gitlab-ci.yml:2290
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: components/gov-chat-backend/.gitlab-ci.yml:2290-2337 references requirements.lock, dataprep/scripts/*, make lock-dataprep — all retired by 2.2 — but GitLab reads only the root .gitlab-ci.yml (no include of the backend copy), so it is dead config. The AC3/Verification grep is scoped to genie-ai-overlay/ and misses it. Pre-existing, surfaced by the retirement; a CI-hygiene pass should delete or sync it.
-status: open
-
+status: done 2026-11-01
+resolution: the whole backend pipeline copy deleted by issue #1266 (MR !677) — verified inert first (empty ci_config_path, no include/trigger anywhere); the verify:dataprep-lock job it cited had already been pruned from the copy by 087f69e71
 
 ### DW-26: dataprep's default DOCLING_DEVICE=cuda is unsupported by the CUDA-less python:3.11-slim image; a default-config ingest needs DOCLING_DEVICE=cpu set.
 origin: spec-deferred 809b6335b547
@@ -434,7 +257,6 @@ reason: genieai_dataprep_utils.py:45 defaults DOCLING_DEVICE to cuda and selects
 status: done 2026-08-13
 resolution: resolved by sweep bundle dw-dataprep-deps-and-device
 
-
 ### DW-27: the build-time docarray rename (mv docarray.py -> opea_docarray.py + sed in orchestrator/micro_service) is ungated against OPEA v1.5 source; if v1.5's import patterns drifted, the sed no-ops and the c
 origin: spec-deferred 81aaf65512f0
 location: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai:93
@@ -444,7 +266,6 @@ reason: dataprep Dockerfile L90-96, retriever/reranker equivalents run mv+sed on
 status: done 2026-08-12
 resolution: already resolved: genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai:7 has ARG OPEA_VERSION="v1.5" (bumped from v1.3); dataprep/retriever/reranker also reference v1.5
 
-
 ### DW-28: chatqna's comps_base_builder flips to python:3.11-slim while still installing OPEA v1.3 GenAIComps (`-e .`) with no in-image import gate — the v1.3-on-3.11 runtime is verified by nothing in CI for thi
 origin: spec-deferred be49c2c7804b
 location: genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai:17
@@ -453,7 +274,6 @@ severity: medium
 reason: build:chatqna-server only pip-installs `-e .` (setuptools backend; never imports app code); genie-ai-overlay/tests/test_chatqna.py runs on the CI host against conftest's mocked comps, not in the 3.11 image. A v1.3-comp or transitive-dep break on 3.11 surfaces only at container start post-promote. The intent mandates the base flip (chatqna OPEA_VERSION stays v1.3 until story 2.6); the in-image gate belongs to 2.6's re-graft surface.
 status: open
 
-
 ### DW-29: verify:dataprep-lock now loops three modules, so its tag-pipeline run (`if: $CI_COMMIT_TAG`) triples the blast radius of a transient PyPI/yank failure on an unrelated tag.
 origin: spec-deferred b7114d0dc77e
 location: .gitlab-ci.yml
@@ -461,7 +281,6 @@ source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: pre-existing pattern (the job already ran on tags for dataprep); `uv pip sync --dry-run` contacts PyPI, so a transient index issue can fail a tag pipeline. Not caused by 2.2's wiring — a CI-coherence concern for story 2.7's drift-guard work.
 status: open
-
 
 ### DW-30: contracts/README.md retriever-suite command still lists test_contract_telemetry.py while the CI CONTRACT_TEST_PATTERN runs no telemetry tests (moved to contract:unit) — pre-existing drift, surfaced wh
 origin: spec-deferred 9e96d5109121
@@ -472,7 +291,6 @@ reason: README "Full retriever-capable suite" (contracts/README.md) includes tes
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw2-overlay-contracts-readme-drift
 
-
 ### DW-31: No in-image behavioral fusion test drives invoke through the hybrid path with a stubbed BM25/vector channel; the contract covers rrf_fuse purely + a source-introspection guard, and the mocked suite co
 origin: spec-deferred ff70472aa1d7
 source_spec: `2-3-re-graft-the-retriever-bump-langchain-arangodb.md`
@@ -480,7 +298,6 @@ location: genie-ai-overlay/contracts
 severity: low
 reason: contracts/_harness.py fakes HTTP only — no ArangoDB mock, so invoke's vector/BM25 channels cannot run in-image. Mocked tests/test_retriever.py TestHybridInvoke.test_on_fuses_bm25_doc_into_results (with deps mocked) covers the fused-output behavior. A behavioral in-image fusion test needs ArangoDB-mock infrastructure the harness lacks.
 status: open
-
 
 ### DW-32: No test asserts invoke returns rrf_fuse(...)[:input.k]; a regression dropping the post-fusion top-k slice passes the suite.
 origin: spec-deferred fb3db436f951
@@ -491,7 +308,6 @@ reason: invoke fuses then slices (genieai_retriever_arangodb.py:1025-1041, [: in
 status: done 2026-08-14
 resolution: already resolved: genie-ai-overlay/tests/test_retriever.py:653 — rrf_fuse test covers fusion and slice behavior
 
-
 ### DW-33: DW-30/DW-31 headers in the deferred-work ledger are truncated mid-word ("...surfaced wh", "...the mocked suite co") — a sync-tooling artifact; the ledger is orchestrator-owned and was not modified by
 origin: spec-deferred ea6ab5b67329
 source_spec: `2-3-re-graft-the-retriever-bump-langchain-arangodb.md`
@@ -500,13 +316,11 @@ severity: low
 reason: deferred-work.md DW-30 title ends "surfaced wh" (missing "ile syncing README"); DW-31 ends "the mocked suite co" (missing "vers invoke behavior"). The `reason:` field carries the full text. Surfaced for the orchestrator to repair the headers.
 status: open
 
-
 ### DW-34: Concurrent `validateTokens()` calls not guarded
 origin: migrated from legacy ledger ("Deferred from: code review of 3-1-applifecycle-token-validation (mobile-oidc, 2026-04-27)"), 2026-08-12
 location: n/a
 reason: No mutex/re-entrancy guard on `validateTokens()`. Multiple `resumed` events can trigger overlapping async refresh flows. Known limitation documented in spec.
 status: open
-
 
 ### DW-35: `validateTokens()` can race with `logout()`
 origin: migrated from legacy ledger ("Deferred from: code review of 3-1-applifecycle-token-validation (mobile-oidc, 2026-04-27)"), 2026-08-12
@@ -514,13 +328,11 @@ location: n/a
 reason: If user logs out while a lifecycle-triggered refresh is in-flight, the refresh may re-save tokens that logout deleted. Pre-existing issue, made more reachable by the lifecycle trigger. Root cause: no coordination flag between logout and validateTokens.
 status: open
 
-
 ### DW-36: `validateTokens()` can race with `authorize()`
 origin: migrated from legacy ledger ("Deferred from: code review of 3-1-applifecycle-token-validation (mobile-oidc, 2026-04-27)"), 2026-08-12
 location: n/a
 reason: If app resumes while user is mid-authorization flow, lifecycle validation could trigger a redundant refresh competing with the in-flight authorize.
 status: open
-
 
 ### DW-37: Lost state on app close after network error
 origin: migrated from legacy ledger ("Deferred from: code review of 3-2-network-error-detection-recovery (mobile-oidc, 2026-04-28)"), 2026-08-12
@@ -528,20 +340,17 @@ location: n/a
 reason: If app closes while state is `error` due to network error during refreshToken, on restart `_initializeAuth()` will attempt refresh with same stale tokens. Pre-existing.
 status: open
 
-
 ### DW-38: Race condition: authorize() vs logout()
 origin: migrated from legacy ledger ("Deferred from: code review of 3-2-network-error-detection-recovery (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: If logout() is called during authorize(), tokens may be saved after logout. Pre-existing (async concurrent methods, out of scope).
 status: open
 
-
 ### DW-39: Fragile keyword-based classification
 origin: migrated from legacy ledger ("Deferred from: code review of 3-2-network-error-detection-recovery (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: NetworkErrorClassifier uses keywords in error code. Documented as "best-effort heuristic" in spec, accepted as technical limitation.
 status: open
-
 
 ### DW-40: No runtime validation of scheme coherence
 origin: migrated from legacy ledger ("Deferred from: code review of 4-2-dart-flavor-config-keycloak-client-template (mobile-oidc, 2026-04-28)"), 2026-08-12
@@ -550,13 +359,11 @@ reason: The 4-layer scheme coherence rule (Dart config, Android build.gradle, iO
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw-mobile-scheme-coherence
 
-
 ### DW-41: No backchannel logout configuration
 origin: migrated from legacy ledger ("Deferred from: code review of 4-2-dart-flavor-config-keycloak-client-template (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: The mobile client lacks `backchannel.logout.session.required` and `backchannel.logout.url`. Not mentioned in spec, out of scope for this story.
 status: open
-
 
 ### DW-42: No automated enforcement for scheme coherence rule
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-custom-url-scheme-per-deployment (mobile-oidc, 2026-04-28)"), 2026-08-12
@@ -565,14 +372,12 @@ reason: The coherence rule (Dart = Gradle = XCConfig = env) is documented but no
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw-mobile-scheme-coherence
 
-
 ### DW-43: Missing `webOrigins` in Keycloak mobile client config
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-custom-url-scheme-per-deployment (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: `genie-realm.yaml` mobile client has no `webOrigins`, potentially needed for Android App Links verification.
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw-mobile-scheme-coherence
-
 
 ### DW-44: Non-flavored debug build collides with `itu` flavor
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-custom-url-scheme-per-deployment (mobile-oidc, 2026-04-28)"), 2026-08-12
@@ -581,14 +386,12 @@ reason: `flutter build apk` without `--flavor` uses same `applicationId` as `itu
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw-mobile-scheme-coherence
 
-
 ### DW-45: `e2e_config.dart` missing `allowInsecureConnections: true`
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-custom-url-scheme-per-deployment (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: `e2e_config.dart` missing `allowInsecureConnections: true`
 status: done 2026-08-13
 resolution: mobile/genie_ai_mobile/lib/config/e2e_config.dart:16 — allowInsecureConnections: true present
-
 
 ### DW-46: Template flavor config has misleading scheme pattern
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-custom-url-scheme-per-deployment (mobile-oidc, 2026-04-28)"), 2026-08-12
@@ -597,14 +400,12 @@ reason: `com.<institution>.genieai` vs actual convention `com.itu.genieai[.<suff
 status: done 2026-08-13
 resolution: already resolved: mobile/genie_ai_mobile/lib/config/flavors/template.dart — redirectScheme uses '<institution>' placeholder with clear comment, self-documenting
 
-
 ### DW-47: `env` template hardcodes `KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai`
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-custom-url-scheme-per-deployment (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: Not generic for new institutional deployments.
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw2-mobile-onboarding-docs
-
 
 ### DW-48: Air-gapped section lacks concrete DNS configuration example
 origin: migrated from legacy ledger ("Deferred from: code review of 4-4-deployment-onboarding-guide (mobile-oidc, 2026-04-28)"), 2026-08-12
@@ -613,14 +414,12 @@ reason: Guide mentions local DNS and /etc/hosts but provides no specific command
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw2-mobile-onboarding-docs
 
-
 ### DW-49: No Docker service health check before running verification commands
 origin: migrated from legacy ledger ("Deferred from: code review of 4-4-deployment-onboarding-guide (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: Operators may run verification before keycloak-config finishes processing.
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw2-mobile-onboarding-docs
-
 
 ### DW-50: Missing key.properties file permissions warning
 origin: migrated from legacy ledger ("Deferred from: code review of 4-4-deployment-onboarding-guide (mobile-oidc, 2026-04-28)"), 2026-08-12
@@ -629,14 +428,12 @@ reason: Signing credentials file should be chmod 600 but guide doesn't mention p
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw2-mobile-onboarding-docs
 
-
 ### DW-51: Missing dependency resolution troubleshooting
 origin: migrated from legacy ledger ("Deferred from: code review of 4-4-deployment-onboarding-guide (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: `flutter pub get` failure is a common first-build error not covered in troubleshooting section.
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw2-mobile-onboarding-docs
-
 
 ### DW-52: App Store compliance requirements omitted
 origin: migrated from legacy ledger ("Deferred from: code review of 4-4-deployment-onboarding-guide (mobile-oidc, 2026-04-28)"), 2026-08-12
@@ -645,14 +442,12 @@ reason: Google Play Data Safety disclosure and Apple privacy manifests are non-o
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw2-mobile-onboarding-docs
 
-
 ### DW-53: Version code/name management across deployments
 origin: migrated from legacy ledger ("Deferred from: code review of 4-4-deployment-onboarding-guide (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: App stores require unique version codes per submission; no guidance for managing these across multiple institutional deployments.
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw2-mobile-onboarding-docs
-
 
 ### DW-54: RightSidebarComponent fallback accessToken removed
 origin: migrated from legacy ledger ("Deferred from: code review of 6-1-user-service-migration (mobile-oidc, 2026-04-29)"), 2026-08-12
@@ -661,14 +456,12 @@ reason: If `widget.accessToken` is null, the operation is silently ignored. Dead
 status: done 2026-08-13
 resolution: components/gov-chat-frontend/src/components/RightSideBarComponent.vue:309-310 — getAuthToken() uses only Vuex getter
 
-
 ### DW-55: UserProfileProxy multipart Authorization header removed without replacement
 origin: migrated from legacy ledger ("Deferred from: code review of 6-1-user-service-migration (mobile-oidc, 2026-04-29)"), 2026-08-12
 location: n/a
 reason: `UserProfileProxy` creates `ApiService()` directly, not in scope for this story.
 status: done 2026-08-13
 resolution: grep -rn UserProfileProxy mobile/ — zero matches; class removed during OpenAPI migration
-
 
 ### DW-56: FileProxy token null handling
 origin: migrated from legacy ledger ("Deferred from: code review of 6-1-user-service-migration (mobile-oidc, 2026-04-29)"), 2026-08-12
@@ -677,13 +470,11 @@ reason: If `TokenStorage.getAccessToken()` returns null, upload proceeds without
 status: done 2026-08-13
 resolution: grep -rn FileProxy mobile/ — zero matches; class removed during OpenAPI migration
 
-
 ### DW-57: `resetCredentials` flow verification in Keycloak Admin Console not documented
 origin: migrated from legacy ledger ("Deferred from: code review of 5-1-password-reset-via-keycloak-browser (mobile-oidc, 2026-04-29)"), 2026-08-12
 location: n/a
 reason: If a previous deployment modified the browser authentication flow, the "Forgot Password" button may not appear even if `resetPasswordAllowed=true`. Pre-existing operational risk.
 status: open
-
 
 ### DW-58: `InsecureHttpClient` in production `auth_providers.dart`
 origin: migrated from legacy ledger ("Deferred from: code review of 6-5-auth-test-suite-ci (mobile-oidc, 2026-05-04)"), 2026-08-12
@@ -692,7 +483,6 @@ reason: Class with `badCertificateCallback = true` in `lib/services/auth/`. Low 
 status: done 2026-08-13
 resolution: already resolved: mobile/genie_ai_mobile/lib/services/auth/auth_providers.dart:24-26 — InsecureHttpClient only instantiated when config.allowInsecureConnections==true; production flavors default false
 
-
 ### DW-59: `init()` signature change breaks backward compatibility
 origin: migrated from legacy ledger ("Deferred from: code review of 6-5-auth-test-suite-ci (mobile-oidc, 2026-05-04)"), 2026-08-12
 location: n/a
@@ -700,20 +490,17 @@ reason: `keycloak-auth-service.js`: `init(idpUrl, clientId)` → `init(idpUrl)`.
 status: done 2026-08-13
 resolution: already resolved: components/gov-chat-backend/services/keycloak-auth-service.js:117 — init(idpUrl) accepts optional parameter with fallback, backward compatible
 
-
 ### DW-60: AC#7 Data preservation
 origin: migrated from legacy ledger ("Deferred from: code review of 6-5-auth-test-suite-ci (mobile-oidc, 2026-05-04)"), 2026-08-12
 location: n/a
 reason: Marked "manual QA" but no procedure documented in completion notes. Manual verification not automated.
 status: open
 
-
 ### DW-61: Fluentd driver drops logs when Collector is down
 origin: migrated from legacy ledger ("Deferred from: code review of 7-6-deploy-victorialogs-centralized-log-aggregation (2026-05-29)"), 2026-08-12
 location: n/a
 reason: inherent tradeoff; dual logging keeps docker logs functional. No fallback mechanism.
 status: open
-
 
 ### DW-62: CSP headers may block Grafana WebSocket
 origin: migrated from legacy ledger ("Deferred from: code review of 7-6-deploy-victorialogs-centralized-log-aggregation (2026-05-29)"), 2026-08-12
@@ -722,13 +509,11 @@ reason: nginx CSP `connect-src` for `/grafana/` location may not include `ws://`
 status: done 2026-08-13
 resolution: api-gateway-solution/nginx/conf/default.conf.template:243-262 — /grafana/ CSP explicitly allows wss://
 
-
 ### DW-63: OTel Collector global mode without resource limits
 origin: migrated from legacy ledger ("Deferred from: code review of 7-6-deploy-victorialogs-centralized-log-aggregation (2026-05-29)"), 2026-08-12
 location: n/a
 reason: no CPU/memory limits on global-mode Collector instances could cause resource pressure on multi-node Swarm with many services.
 status: open
-
 
 ### DW-64: VictoriaTraces datasource reference in vlogs-datasource.yml
 origin: migrated from legacy ledger ("Deferred from: code review of 7-6-deploy-victorialogs-centralized-log-aggregation (2026-05-29)"), 2026-08-12
@@ -737,13 +522,11 @@ reason: `derivedFields.datasourceUid: victoriatraces` references a datasource th
 status: done 2026-08-13
 resolution: configs/grafana/provisioning/datasources/vm-datasource.yml — all three datasources properly defined
 
-
 ### DW-65: Volume backup/cleanup strategy for VictoriaLogs
 origin: migrated from legacy ledger ("Deferred from: code review of 7-6-deploy-victorialogs-centralized-log-aggregation (2026-05-29)"), 2026-08-12
 location: n/a
 reason: named volume `vlogs-data` has no documented backup procedure. VictoriaLogs retention flag controls soft deletion only; compaction may be needed for disk reclaim.
 status: open
-
 
 ### DW-66: Dashboard variable refresh 2s too aggressive
 origin: migrated from legacy ledger ("Deferred from: code review of 7-6-deploy-victorialogs-centralized-log-aggregation (2026-05-29)"), 2026-08-12
@@ -752,14 +535,12 @@ reason: service/level/trace_id variables refresh every 2s which creates unnecess
 status: done 2026-08-13
 resolution: configs/grafana/provisioning/dashboards/observability/victoriametrics-single-node.json:8637 — variable refresh is 1 (On dashboard load), not 2s
 
-
 ### DW-67: Dashboard _stream_ shows `genie.` prefix
 origin: migrated from legacy ledger ("Deferred from: code review of 7-6-deploy-victorialogs-centralized-log-aggregation (2026-05-29)"), 2026-08-12
 location: n/a
 reason: fluentd tag is `genie.{{.Name}}` so dropdown shows `genie.backend` instead of `backend`. Filter works but UX is suboptimal. Could strip prefix in dashboard variable regex.
 status: done 2026-08-13
 resolution: configs/grafana/provisioning/dashboards/service-logs.json:107 — regex strips genie. prefix
-
 
 ### DW-68: ENABLE_OBSERVABILITY type not enforceable in YAML
 origin: migrated from legacy ledger ("Deferred from: code review of 7-6-deploy-victorialogs-centralized-log-aggregation (2026-05-29)"), 2026-08-12
@@ -768,7 +549,6 @@ reason: setting `true` instead of `1` causes Swarm replicas failure. Documented 
 status: done 2026-08-13
 resolution: env:670 — ENABLE_OBSERVABILITY documented as 0/1 string; no YAML type enforcement needed
 
-
 ### DW-69: OTel Collector absent from docker-compose
 origin: migrated from legacy ledger ("Deferred from: code review of 7-1-express-backend-otel-tracing-foundation (2026-05-28)"), 2026-08-12
 location: n/a
@@ -776,13 +556,11 @@ reason: the env template references `otel-collector:4318` but no service is defi
 status: done 2026-08-13
 resolution: docker-compose.yaml:1466 — otel-collector service defined with profiles: [observability]
 
-
 ### DW-70: `npm_package_version` fallback to `1.0.0`
 origin: migrated from legacy ledger ("Deferred from: code review of 7-1-express-backend-otel-tracing-foundation (2026-05-28)"), 2026-08-12
 location: n/a
 reason: only set when running via `npm start`; direct `node index.js` falls back. Acceptable in Docker containers; limitation documented.
 status: open
-
 
 ### DW-71: Python venv recreated on every CI run despite cache restoration
 origin: migrated from legacy ledger ("Deferred from: code review of 1-3-create-ci-pipeline-test-stage (2026-05-19)"), 2026-08-12
@@ -791,13 +569,11 @@ reason: `python -m venv .venv` in `before_script` recreates the venv even when c
 status: done 2026-08-13
 resolution: .gitlab-ci.yml:2758 — venv creation conditional: if [ ! -d .venv ]; then python -m venv .venv; fi
 
-
 ### DW-72: Deferred promise + setTimeout(300) not awaited
 origin: migrated from legacy ledger ("Deferred from: code review of 3-3-test-critical-vue-components-userprofile-and-admin-dashboard (2026-05-19)"), 2026-08-12
 location: n/a
 reason: UserProfileComponent.loadUserProfileData has nested $nextTick + setTimeout(300) for country dropdown initialization; tests never await this, but country dropdown interaction is explicitly out of scope per spec "What NOT to Test" section. Revisit if country dropdown tests are added.
 status: open
-
 
 ### DW-73: SearchableCountryDropdown stub methods never called
 origin: migrated from legacy ledger ("Deferred from: code review of 3-3-test-critical-vue-components-userprofile-and-admin-dashboard (2026-05-19)"), 2026-08-12
@@ -806,14 +582,12 @@ reason: stub defines manuallySetCountryName/loadCountries methods but setTimeout
 status: done 2026-08-13
 resolution: components/gov-chat-frontend/src/__tests__/SearchableCountryDropdown.test.js:29-96 — full test suite exists
 
-
 ### DW-74: AdminDashboard missing error handling edge cases
 origin: migrated from legacy ledger ("Deferred from: code review of 3-3-test-critical-vue-components-userprofile-and-admin-dashboard (2026-05-19)"), 2026-08-12
 location: n/a
 reason: tests only cover happy path for service responses; null/malformed/missing response handling not tested but beyond current AC scope. Nice-to-have for future hardening.
 status: done 2026-08-13
 resolution: components/gov-chat-frontend/src/__tests__/components/AdminDashboard.test.js — 451+ lines with error scenarios
-
 
 ### DW-75: UPDATE_CHAT: empty string treated as "no change"
 origin: migrated from legacy ledger ("Deferred from: code review of 3-4-test-vuex-store-modules (2026-05-20)"), 2026-08-12
@@ -822,14 +596,12 @@ reason: source code uses `title || state.chats[chatIndex].title` which treats `'
 status: done 2026-08-13
 resolution: resolved by sweep bundle dw-backend-input-validation
 
-
 ### DW-76: Persistence plugin duplicated instead of imported
 origin: migrated from legacy ledger ("Deferred from: code review of 3-4-test-vuex-store-modules (2026-05-20)"), 2026-08-12
 location: n/a
 reason: `persistence.test.js` replicates plugin logic instead of importing from `store/index.js`. Deliberate approach for isolation; duplication faithful to source. Pre-existing design choice.
 status: done 2026-08-13
 resolution: components/gov-chat-frontend/src/__tests__/store/persistence.test.js:17-18 — imports createStore + chatHistoryStore
-
 
 ### DW-77: Missing edge cases (null inputs, duplicate IDs, localStorage quota)
 origin: migrated from legacy ledger ("Deferred from: code review of 3-4-test-vuex-store-modules (2026-05-20)"), 2026-08-12
@@ -838,14 +610,12 @@ reason: future coverage improvement, not blocking for this story.
 status: done 2026-08-13
 resolution: components/gov-chat-frontend/src/__tests__/store/chatHistory.test.js:128,213,322 — duplicate prevention + null tests
 
-
 ### DW-78: submitQuery edge cases (null queryId, empty response, non-string response)
 origin: migrated from legacy ledger ("Deferred from: code review of 3-5-test-http-services (2026-05-20)"), 2026-08-12
 location: n/a
 reason: source code edge cases beyond spec scope. Pre-existing.
 status: done 2026-08-13
 resolution: components/gov-chat-frontend/src/__tests__/services/chatbotService.test.js:41-118 — submitQuery comprehensive coverage
-
 
 ### DW-79: Partial PATCH failure in submitQuery (time recorded but not answered, or vice versa)
 origin: migrated from legacy ledger ("Deferred from: code review of 3-5-test-http-services (2026-05-20)"), 2026-08-12
@@ -854,14 +624,12 @@ reason: internal orchestration edge case. Pre-existing.
 status: done 2026-08-13
 resolution: components/gov-chat-frontend/src/__tests__/services/chatbotService.test.js:120-158 — PATCH success + failure tested
 
-
 ### DW-80: Missing individual error tests (500/404/401) for every service method
 origin: migrated from legacy ledger ("Deferred from: code review of 3-5-test-http-services (2026-05-20)"), 2026-08-12
 location: n/a
 reason: error pattern is consistent across methods; tested for main paths. Nice-to-have hardening.
 status: done 2026-08-13
 resolution: All service test files contain per-method error tests (analyticsService, adminDashboardService, chatbotService, etc.)
-
 
 ### DW-81: Missing pagination edge cases (limit:0, negative offset)
 origin: migrated from legacy ledger ("Deferred from: code review of 3-5-test-http-services (2026-05-20)"), 2026-08-12
@@ -870,14 +638,12 @@ reason: source validation concern, beyond spec scope.
 status: done 2026-08-13
 resolution: components/gov-chat-frontend/src/__tests__/services/chatHistoryService.test.js:30-48 — default pagination + empty results
 
-
 ### DW-82: Search term special characters and whitespace
 origin: migrated from legacy ledger ("Deferred from: code review of 3-5-test-http-services (2026-05-20)"), 2026-08-12
 location: n/a
 reason: source validation concern, beyond spec scope.
 status: done 2026-08-13
 resolution: already resolved: components/gov-chat-backend/services/chat-history-service.js:443 — parameterized AQL with bind vars, special characters URL-encoded via axios params
-
 
 ### DW-83: Missing locale parameter inheritance test
 origin: migrated from legacy ledger ("Deferred from: code review of 3-5-test-http-services (2026-05-20)"), 2026-08-12
@@ -886,13 +652,11 @@ reason: service might have locale resolution bug when param omitted; nice-to-hav
 status: done 2026-08-13
 resolution: components/gov-chat-frontend/src/__tests__/services/serviceTreeService.test.js:29,38,64,96 — locale parameter tested
 
-
 ### DW-84: Missing folder reorder edge cases (duplicate orders, non-existent folders)
 origin: migrated from legacy ledger ("Deferred from: code review of 3-5-test-http-services (2026-05-20)"), 2026-08-12
 location: n/a
 reason: nice-to-have hardening.
 status: open
-
 
 ### DW-85: getComparisonData partial failure (first succeeds, second fails)
 origin: migrated from legacy ledger ("Deferred from: code review of 3-5-test-http-services (2026-05-20)"), 2026-08-12
@@ -901,14 +665,12 @@ reason: returns both null even on partial failure; source edge case.
 status: done 2026-08-13
 resolution: components/gov-chat-frontend/src/__tests__/services/analyticsService.test.js:197-225 — getComparisonData fallback on failure
 
-
 ### DW-86: getTimeSeriesData/getUniqueUsersCount edge cases (null items in array, string values)
 origin: migrated from legacy ledger ("Deferred from: code review of 3-5-test-http-services (2026-05-20)"), 2026-08-12
 location: n/a
 reason: source data shape edge cases beyond spec scope.
 status: done 2026-08-13
 resolution: components/gov-chat-frontend/src/__tests__/services/analyticsService.test.js:66-128 — non-array/non-number responses tested
-
 
 ### DW-87: GPU profile name detection hardcoded via `endsWith()` in validate-hardware.js:1016-1020
 origin: migrated from legacy ledger ("Deferred from: code review of 1-5-create-ci-pipeline-configuration-validation-stage (2026-05-20)"), 2026-08-12
@@ -917,13 +679,11 @@ reason: fragile if new profiles are added; acceptable for current T4/RTX6000 pro
 status: done 2026-08-13
 resolution: tests/config-validator/validate-hardware.js — no endsWith or hardcoded GPU profile detection found
 
-
 ### DW-88: GPU_AVAILABLE variable never set in CI config
 origin: migrated from legacy ledger ("Deferred from: code review of 1-6-configure-mr-blocking-and-scheduled-jobs (2026-05-20)"), 2026-08-12
 location: n/a
 reason: follows spec exactly (spec prescribes `$GPU_AVAILABLE` check pattern); variable must be set at runner infrastructure level (runner config.toml or custom environment variable). Not a CI config concern.
 status: open
-
 
 ### DW-89: Missing Keycloak in integration test services
 origin: migrated from legacy ledger ("Deferred from: code review of 1-6-configure-mr-blocking-and-scheduled-jobs (2026-05-20)"), 2026-08-12
@@ -932,7 +692,6 @@ reason: follows spec exactly (spec prescribes `backend frontend arangodb redis`)
 status: done 2026-08-13
 resolution: .gitlab-ci.yml:87-130 — .e2e_integration_base runs docker compose up which starts full stack including Keycloak
 
-
 ### DW-90: swaggerSpec/swaggerUi silent failure at module-level
 origin: migrated from legacy ledger ("Deferred from: code review of 2-1-refactor-backend-indexjs-to-export-createapp (2026-05-13)"), 2026-08-12
 location: n/a
@@ -940,13 +699,11 @@ reason: if `swaggerJsdoc()` throws, the spec stays undefined and `/api-docs` sil
 status: done 2026-08-13
 resolution: components/gov-chat-backend/index.js:342-377 — swaggerJsdoc() + swaggerUi.setup() wrapped in try/catch with logger.error
 
-
 ### DW-91: registerRoutes() without external try-catch
 origin: migrated from legacy ledger ("Deferred from: code review of 2-1-refactor-backend-indexjs-to-export-createapp (2026-05-13)"), 2026-08-12
 location: n/a
 reason: the function has internal per-route try-catch blocks but the call site itself is unwrapped. Pre-existing pattern.
 status: open
-
 
 ### DW-92: Route loading error handling inconsistency
 origin: migrated from legacy ledger ("Deferred from: code review of 2-1-refactor-backend-indexjs-to-export-createapp (2026-05-13)"), 2026-08-12
@@ -955,14 +712,12 @@ reason: failed routes are logged and skipped silently. Pre-existing design choic
 status: done 2026-08-13
 resolution: already resolved: components/gov-chat-backend/index.js:814 — registerRoutes wraps each phase in uniform try/catch with structured logging
 
-
 ### DW-93: Routes without service (auth-routes) not mounted when `services={}`
 origin: migrated from legacy ledger ("Deferred from: code review of 2-1-refactor-backend-indexjs-to-export-createapp (2026-05-13)"), 2026-08-12
 location: n/a
 reason: calling `createApp({ services: {} })` skips all route registration including routes that don't need services. This matches the AC spec ("routes mounted when services object is provided").
 status: done 2026-08-13
 resolution: components/gov-chat-backend/index.js:876 — auth-routes has serviceName: null, mounted even with empty services
-
 
 ### DW-94: Unexpected error path in controller not tested
 origin: migrated from legacy ledger ("Deferred from: code review of 2-3-test-backend-auth-route-handlers (2026-05-15)"), 2026-08-12
@@ -971,14 +726,12 @@ reason: The controller's try/catch covers session errors but if `res.json()` or 
 status: done 2026-08-13
 resolution: already resolved: components/gov-chat-backend/__tests__/routes/auth.test.js:233 — error handling describe block covers getUserSessions rejection, endSession rejection, null userId
 
-
 ### DW-95: Sessions returned without _key property
 origin: migrated from legacy ledger ("Deferred from: code review of 2-3-test-backend-auth-route-handlers (2026-05-15)"), 2026-08-12
 location: n/a
 reason: If `getUserSessions` returns sessions missing `_key`, `endSession(undefined)` would be called. Depends on session-service contract guarantee. Pre-existing service contract assumption.
 status: done 2026-08-13
 resolution: already resolved: components/gov-chat-backend/services/session-service.js:242 — AQL RETURN session returns full documents including _key; tests mock sessions with _key
-
 
 ### DW-96: Missing comps submodule mocks for telemetry/retrievers/rerankers paths
 origin: migrated from legacy ledger ("Deferred from: code review of 4-1-configure-pytest-and-create-shared-fixtures-for-opea (2026-05-15)"), 2026-08-12
@@ -987,14 +740,12 @@ reason: `comps.cores.telemetry`, `comps.retrievers.src.*`, `comps.rerankings.src
 status: done 2026-08-13
 resolution: genie-ai-overlay/tests/conftest.py:153-164 — comps.cores.telemetry + comps.rerankings mocked
 
-
 ### DW-97: Mock response shapes may need dict-access support
 origin: migrated from legacy ledger ("Deferred from: code review of 4-1-configure-pytest-and-create-shared-fixtures-for-opea (2026-05-15)"), 2026-08-12
 location: n/a
 reason: chatqna uses `data["choices"][0]["message"]["content"]` (dict access) while mocks provide attribute access only. Stories 4.2-4.6 may need to extend mock helpers for both access patterns.
 status: done 2026-08-13
 resolution: already resolved: genie-ai-overlay/tests/test_chatqna.py:1316,1344,1369 — OPEA mocks use AsyncMock(return_value={dict}), native Python dicts support dict-access
-
 
 ### DW-98: db.collection mock pollution potential
 origin: migrated from legacy ledger ("Deferred from: code review of 2-4-test-backend-chat-route-handlers (2026-05-15)"), 2026-08-12
@@ -1003,7 +754,6 @@ reason: `mockReturnValue` persists after `clearAllMocks`. No actual failure beca
 status: done 2026-08-13
 resolution: already resolved: components/gov-chat-backend/__tests__/routes/chat.test.js:157 — jest.clearAllMocks() in beforeEach resets db.collection mock uniformly across 14 route test files
 
-
 ### DW-99: Edge cases pagination (negative values, non-numeric)
 origin: migrated from legacy ledger ("Deferred from: code review of 2-4-test-backend-chat-route-handlers (2026-05-15)"), 2026-08-12
 location: n/a
@@ -1011,13 +761,11 @@ reason: `parseInt() || default` handles these correctly. Defensive tests not cri
 status: done 2026-08-13
 resolution: resolved by sweep bundle dw-backend-input-validation
 
-
 ### DW-100: Test failure addMessage after createConversation
 origin: migrated from legacy ledger ("Deferred from: code review of 2-4-test-backend-chat-route-handlers (2026-05-15)"), 2026-08-12
 location: n/a
 reason: The route has no rollback. Error propagation edge case not in ACs.
 status: open
-
 
 ### DW-101: missing userId not tested on all routes
 origin: migrated from legacy ledger ("Deferred from: code review of 2-4-test-backend-chat-route-handlers (2026-05-15)"), 2026-08-12
@@ -1026,7 +774,6 @@ reason: missing userId not tested on all routes — Good defensive practice but 
 status: done 2026-08-13
 resolution: chat-history-routes.test.js: 11 tests for missing userId; chat.test.js: 6 tests
 
-
 ### DW-102: default pagination values not tested
 origin: migrated from legacy ledger ("Deferred from: code review of 2-4-test-backend-chat-route-handlers (2026-05-15)"), 2026-08-12
 location: n/a
@@ -1034,13 +781,11 @@ reason: default pagination values not tested — Correct behavior via `parseInt(
 status: done 2026-08-13
 resolution: already resolved: components/gov-chat-backend/__tests__/routes/analytics.test.js:438, chat.test.js:541, query-service-inspector.test.js:139 — default pagination explicitly tested
 
-
 ### DW-103: SECURITY: `GET /query/:queryId/messages` has no userId validation
 origin: migrated from legacy ledger ("Deferred from: code review of 2-4-test-backend-chat-route-handlers (2026-05-15)"), 2026-08-12
 location: n/a
 reason: SECURITY: `GET /query/:queryId/messages` has no userId validation — any authenticated user can access messages for any queryId. Pre-existing security gap, not introduced by this story. Route should validate ownership via `extractUserId(req)`.
 status: open
-
 
 ### DW-104: Graph validation unreachable branch in source code
 origin: migrated from legacy ledger ("Deferred from: code review of 4-2-test-retriever-hybrid-search-logic (2026-05-16)"), 2026-08-12
@@ -1049,20 +794,17 @@ reason: `has_vertex_collection` OR `has_edge_collection` check at line ~583-598 
 status: done 2026-08-13
 resolution: already resolved: genie-ai-overlay/retriever/genieai_retriever_arangodb.py:812,820,832,449 — explicit validation for empty graph_name, invalid search_start, invalid filter_strategy, invalid distance_strategy
 
-
 ### DW-105: Race condition in ArangoGraph initialization during concurrent batch processing
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-test-dataprep-extraction-pipeline (2026-05-17)"), 2026-08-12
 location: n/a
 reason: production code concern in `genieai_dataprep_arangodb.py`
 status: open
 
-
 ### DW-106: File lock `fileno()` edge case when lock_file lacks file descriptor
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-test-dataprep-extraction-pipeline (2026-05-17)"), 2026-08-12
 location: n/a
 reason: production code concern
 status: open
-
 
 ### DW-107: Concurrent batch failure scenarios
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-test-dataprep-extraction-pipeline (2026-05-17)"), 2026-08-12
@@ -1071,13 +813,11 @@ reason: complex concurrency testing out of scope for this story
 status: done 2026-08-13
 resolution: genie-ai-overlay/tests/test_dataprep.py:526-556 — batch failure + fallback tested
 
-
 ### DW-108: Orphan deletion with circular entity references
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-test-dataprep-extraction-pipeline (2026-05-17)"), 2026-08-12
 location: n/a
 reason: production edge case
 status: open
-
 
 ### DW-109: CancelledError propagation through concurrent batches
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-test-dataprep-extraction-pipeline (2026-05-17)"), 2026-08-12
@@ -1086,7 +826,6 @@ reason: complex concurrency test
 status: done 2026-08-13
 resolution: genie-ai-overlay/tests/test_dataprep.py:899-909 — CancelledError triggers retraction + re-raises
 
-
 ### DW-110: Synonym matching plural/singular
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-test-dataprep-extraction-pipeline (2026-05-17)"), 2026-08-12
 location: n/a
@@ -1094,13 +833,11 @@ reason: not in AC scope, only case-insensitive required
 status: done 2026-08-13
 resolution: genie-ai-overlay/tests/test_dataprep.py:412 — synonym matching case-insensitive tested
 
-
 ### DW-111: BM25 tokenization regex `r"\b\w+\b"`
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-test-dataprep-extraction-pipeline (2026-05-17)"), 2026-08-12
 location: n/a
 reason: inline regex mocked out in tests, would need extraction to test in isolation
 status: open
-
 
 ### DW-112: getMetric fallback when service returns null/undefined
 origin: migrated from legacy ledger ("Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)"), 2026-08-12
@@ -1109,13 +846,11 @@ reason: controller has a fallback for null values, untested. Controller scope, w
 status: done 2026-08-13
 resolution: components/gov-chat-backend/controllers/analyticsController.js:116-134 — null value fallback implemented
 
-
 ### DW-113: Locale not tested on satisfaction endpoints
 origin: migrated from legacy ledger ("Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)"), 2026-08-12
 location: n/a
 reason: controller accepts a locale param on gauge/heatmap but tests don't verify its propagation. Nice-to-have beyond AC.
 status: open
-
 
 ### DW-114: Malformed JSON in filters param
 origin: migrated from legacy ledger ("Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)"), 2026-08-12
@@ -1124,14 +859,12 @@ reason: `JSON.parse(req.query.filters)` can throw if JSON is invalid. Edge case 
 status: done 2026-08-13
 resolution: resolved by sweep bundle dw-backend-input-validation
 
-
 ### DW-115: Pagination with non-numeric limit/offset
 origin: migrated from legacy ledger ("Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)"), 2026-08-12
 location: n/a
 reason: `parseInt() || default` handles non-numeric cases. Edge case beyond AC7 scope.
 status: done 2026-08-13
 resolution: resolved by sweep bundle dw-backend-input-validation
-
 
 ### DW-116: Search with empty query string
 origin: migrated from legacy ledger ("Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)"), 2026-08-12
@@ -1140,13 +873,11 @@ reason: `?query=` vs query absent. AC14 covers the case without query param.
 status: done 2026-08-13
 resolution: resolved by sweep bundle dw-backend-input-validation
 
-
 ### DW-117: categoryExists throws error (DB failure)
 origin: migrated from legacy ledger ("Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)"), 2026-08-12
 location: n/a
 reason: if service throws instead of returning false, route catch returns 500. Infrastructure edge case.
 status: open
-
 
 ### DW-118: DELETE service with non-404 error code
 origin: migrated from legacy ledger ("Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)"), 2026-08-12
@@ -1155,13 +886,11 @@ reason: route checks `error.code === 404`, other codes fall into generic 500. Ed
 status: done 2026-08-13
 resolution: components/gov-chat-backend/routes/service-category-routes.js:455-474 — non-404 errors return 500 as designed
 
-
 ### DW-119: Auth guard tests cover only 2/15 endpoints
 origin: migrated from legacy ledger ("Deferred from: code review of 2-6-test-backend-admin-and-files-route-handlers (2026-05-18)"), 2026-08-12
 location: n/a
 reason: AC1 says "all" but only system-health (GET) and security-scan (POST) tested. Representative sampling sufficient since middleware applied at router level via `router.use()`. Pre-existing test design pattern.
 status: open
-
 
 ### DW-120: Security endpoint error response shapes inconsistent
 origin: migrated from legacy ledger ("Deferred from: code review of 2-6-test-backend-admin-and-files-route-handlers (2026-05-18)"), 2026-08-12
@@ -1170,14 +899,12 @@ reason: Three security endpoints return different error shapes: `{ message }`, `
 status: done 2026-08-13
 resolution: components/gov-chat-backend/routes/admin-routes.js:227-313 — inconsistent shapes documented + tested
 
-
 ### DW-121: RetrievalRequestArangoDB serialization/deserialization not tested (AC #2)
 origin: migrated from legacy ledger ("Deferred from: code review of 4-4-test-core-type-definitions-and-api-protocols (2026-05-17)"), 2026-08-12
 location: n/a
 reason: The OPEA mock base class (`type("RetrievalRequest", (), {"__init__": lambda self, **kw: None})`) prevents `model_dump()` and dict deserialization because the model is not a real Pydantic BaseModel. To test properly: run integration tests inside the Docker container where the real `comps` library is available, or create a Docker-based test stage in CI that runs `pytest tests/test_core.py -k "RetrievalRequest"` with OPEA deps installed.
 status: done 2026-08-13
 resolution: genie-ai-overlay/tests/test_core.py:175-237 — RetrievalRequestArangoDB construction + defaults tested
-
 
 ### DW-122: RetrievalRequestArangoDB constructor kwargs not verifiable
 origin: migrated from legacy ledger ("Deferred from: code review of 4-4-test-core-type-definitions-and-api-protocols (2026-05-17)"), 2026-08-12
@@ -1186,7 +913,6 @@ reason: The mocked base `__init__` swallows all kwargs, so `RetrievalRequestAran
 status: done 2026-08-13
 resolution: genie-ai-overlay/tests/test_core.py:177-209 — kwargs + annotations verified
 
-
 ### DW-123: TEI error handling not tested
 origin: migrated from legacy ledger ("Deferred from: code review of 4-5-test-reranker-score-validation-and-top-k-constraints (2026-05-18)"), 2026-08-12
 location: n/a
@@ -1194,13 +920,11 @@ reason: Production code has no try/except around aiohttp call (genieai_tei_reran
 status: done 2026-08-13
 resolution: genie-ai-overlay/reranker/genieai_tei_reranker.py:234-276 — try-except around aiohttp + response validation
 
-
 ### DW-124: `assert` in production in `align_outputs` RETRIEVER branch (genieai_chatqna.py:575,587)
 origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)"), 2026-08-12
 location: n/a
 reason: crashes service on metadata count mismatch rather than graceful degradation
 status: open
-
 
 ### DW-125: `file_metadata["labels"]` unguarded dict access (genieai_chatqna.py:1684)
 origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)"), 2026-08-12
@@ -1208,13 +932,11 @@ location: n/a
 reason: KeyError if document repository returns unexpected metadata format
 status: open
 
-
 ### DW-126: `runtime_graph.downstream(cur_node)[0]` IndexError (genieai_chatqna.py:604)
 origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)"), 2026-08-12
 location: n/a
 reason: crashes when downstream list is empty
 status: open
-
 
 ### DW-127: `assert isinstance(data, list)` in EMBEDDING output (genieai_chatqna.py:550)
 origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)"), 2026-08-12
@@ -1222,20 +944,17 @@ location: n/a
 reason: production crash on unexpected embedding service response format
 status: open
 
-
 ### DW-128: Bare `dict[key]` access in `align_inputs`/`align_outputs` at multiple locations (lines 367, 395, 420, 515, 516, 537, 551, 760)
 origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)"), 2026-08-12
 location: n/a
 reason: KeyError/IndexError on unexpected service data
 status: open
 
-
 ### DW-129: MagicMock truthiness hides parameter fallback logic in `handle_request`
 origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)"), 2026-08-12
 location: n/a
 reason: `chat_request.max_tokens if chat_request.max_tokens else 1024` always selects MagicMock (truthy), masking regression in default-value logic
 status: open
-
 
 ### DW-130: 3/5 `add_remote_service*` variants untested
 origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)"), 2026-08-12
@@ -1244,20 +963,17 @@ reason: `add_remote_service_faqgen()`, `add_remote_service_without_translation()
 status: done 2026-08-13
 resolution: genie-ai-overlay/tests/test_chatqna.py:973,1018,1097-1131 — all 5 add_remote_service variants tested
 
-
 ### DW-131: Index out-of-bounds in retrieved_docs lookup
 origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)"), 2026-08-12
 location: n/a
 reason: `input.retrieved_docs[best_response["index"]]` (genieai_tei_reranker.py:80, 89, 105, 111) has no bounds check. A buggy TEI response with index >= len(retrieved_docs) will crash with IndexError. Pre-existing production code vulnerability.
 status: open
 
-
 ### DW-132: KneeLocator single-doc / flat-score edge cases not tested
 origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)"), 2026-08-12
 location: n/a
 reason: When there's only 1 document or all scores are identical, KneeLocator behavior is untested. Nice-to-have, not required by AC.
 status: open
-
 
 ### DW-133: Worker thread mock does not simulate async flow
 origin: migrated from legacy ledger ("Deferred from: code review of 2-7-test-backend-service-layer (2026-05-18)"), 2026-08-12
@@ -1266,13 +982,11 @@ reason: mock Worker provides `on`/`postMessage`/`terminate` but never simulates 
 status: done 2026-08-13
 resolution: cpu-translate-backend.test.js:147,261-268,271 — worker message handler + flow simulated
 
-
 ### DW-134: Pagination: only one scenario tested
 origin: migrated from legacy ledger ("Deferred from: code review of 2-7-test-backend-service-layer (2026-05-18)"), 2026-08-12
 location: n/a
 reason: `searchQueries` tested with total=25 and pageSize=10. Boundary scenarios (exact boundary, zero results) would be a plus.
 status: open
-
 
 ### DW-135: User profile `process`: indirect coverage
 origin: migrated from legacy ledger ("Deferred from: code review of 2-7-test-backend-service-layer (2026-05-18)"), 2026-08-12
@@ -1281,13 +995,11 @@ reason: `process` method (custom settings aggregation) only tested via `updateUs
 status: done 2026-08-13
 resolution: already resolved: components/gov-chat-backend/__tests__/services/user-profile-service.test.js:309-372 — userProfileService.process() directly exercised with multiple scenarios
 
-
 ### DW-136: Translation backend fallback: theoretical race risk
 origin: migrated from legacy ledger ("Deferred from: code review of 2-7-test-backend-service-layer (2026-05-18)"), 2026-08-12
 location: n/a
 reason: GPU→CPU fallback test manually assigns `translationService.backend`. Theoretical risk if service caches the backend.
 status: open
-
 
 ### DW-137: Chat history: edge collection query patterns
 origin: migrated from legacy ledger ("Deferred from: code review of 2-7-test-backend-service-layer (2026-05-18)"), 2026-08-12
@@ -1295,13 +1007,11 @@ location: n/a
 reason: ArangoDB graph traversal patterns (bidirectional edge, edge existence check) are complex to mock and not tested directly.
 status: open
 
-
 ### DW-138: Date calculation in test setup without Date mocking
 origin: migrated from legacy ledger ("Deferred from: code review of 2-9-test-backend-admin-and-security-services (2026-05-26)"), 2026-08-12
 location: n/a
 reason: midnight boundary flakiness risk in logs-service.test.js (new Date() calls without mocking). Extremely unlikely edge case, tests pass in CI.
 status: open
-
 
 ### DW-139: ResourceUsageMonitor 30s cache behavior untested
 origin: migrated from legacy ledger ("Deferred from: code review of 2-9-test-backend-admin-and-security-services (2026-05-26)"), 2026-08-12
@@ -1309,13 +1019,11 @@ location: n/a
 reason: getResourceUsage() caches for 30s but no test verifies cache hit/miss with mocked Date.now(). AC1 satisfied, nice-to-have hardening.
 status: open
 
-
 ### DW-140: SecurityScanService worker thread / async pattern edge cases
 origin: migrated from legacy ledger ("Deferred from: code review of 2-9-test-backend-admin-and-security-services (2026-05-26)"), 2026-08-12
 location: n/a
 reason: processLogsInParallel() with Worker threads, timeouts, and concurrent file processing has limited edge case coverage. Worker thread mocking is extremely complex, ACs satisfied.
 status: open
-
 
 ### DW-141: LogsService file size limit edge cases
 origin: migrated from legacy ledger ("Deferred from: code review of 2-9-test-backend-admin-and-security-services (2026-05-26)"), 2026-08-12
@@ -1323,13 +1031,11 @@ location: n/a
 reason: MAX_LOG_FILE_SIZE (20MB) and MAX_LINES_TO_PROCESS (200000) constants exist but edge cases around partial reads and corrupted gzip not fully tested. Happy path tested, hardening beyond AC scope.
 status: open
 
-
 ### DW-142: Date/time edge case coverage
 origin: migrated from legacy ledger ("Deferred from: code review of 2-9-test-backend-admin-and-security-services (2026-05-26)"), 2026-08-12
 location: n/a
 reason: DST transitions, timezone boundaries, leap years not explicitly tested across all services. Luxon handles these, testing is nice-to-have hardening.
 status: open
-
 
 ### DW-143: Error recovery: no test verifying user can send a new message after streaming error
 origin: migrated from legacy ledger ("Deferred from: code review of 3-2-test-critical-vue-components-chatbot-and-navbar (2026-05-19)"), 2026-08-12
@@ -1338,13 +1044,11 @@ reason: improvement beyond AC scope. The current tests verify error display (AC5
 status: done 2026-08-13
 resolution: components/gov-chat-frontend/src/__tests__/components/ChatBotComponent.test.js:564-586 — retry after error tested
 
-
 ### DW-144: JWT timestamps frozen at module load (`mockJwtPayload.js:8-9,39`)
 origin: migrated from legacy ledger ("Deferred from: code review of 5-1-create-document-repository-test-fixtures-and-mocks (2026-05-20)"), 2026-08-12
 location: n/a
 reason: `Math.floor(Date.now() / 1000)` evaluates once at import time. Tests get stale values but this actually makes tests deterministic. Pre-existing test helper pattern.
 status: open
-
 
 ### DW-145: `cleanClamAV`/`infectedClamAV` shared singletons with mutable `jest.fn()` state (`mocks/clamav.js:27,32`)
 origin: migrated from legacy ledger ("Deferred from: code review of 5-1-create-document-repository-test-fixtures-and-mocks (2026-05-20)"), 2026-08-12
@@ -1352,13 +1056,11 @@ location: n/a
 reason: Standard Jest module-level singleton pattern. Jest's default isolation resets module state between test files. Pre-existing test pattern.
 status: open
 
-
 ### DW-146: ~80 lines identical mock setup duplicated across 4 route test files
 origin: migrated from legacy ledger ("Deferred from: code review of 5-2-test-file-upload-download-search-and-delete-endpoints (2026-05-20)"), 2026-08-12
 location: n/a
 reason: self-contained mocks improve test isolation at the cost of DRY. Common test pattern in this project.
 status: open
-
 
 ### DW-147: Download test accepts both 200 and 500 (`download.test.js:106-134`)
 origin: migrated from legacy ledger ("Deferred from: code review of 5-2-test-file-upload-download-search-and-delete-endpoints (2026-05-20)"), 2026-08-12
@@ -1366,20 +1068,17 @@ location: n/a
 reason: `sendFile` fails without real filesystem. Test verifies controller logic up to sendFile call. Would need temp file creation for stronger assertion.
 status: open
 
-
 ### DW-148: CRLF sanitization test passes vacuously when `content-disposition` header absent (`download.test.js:175-197`)
 origin: migrated from legacy ledger ("Deferred from: code review of 5-2-test-file-upload-download-search-and-delete-endpoints (2026-05-20)"), 2026-08-12
 location: n/a
 reason: same root cause: sendFile fails before header is set.
 status: open
 
-
 ### DW-149: labelService mock inconsistency
 origin: migrated from legacy ledger ("Deferred from: code review of pre-existing integration tests discovered during Epic 5 (2026-05-20)"), 2026-08-12
 location: n/a
 reason: methods assigned per-test via `labelService.getLabels = jest.fn()` instead of `jest.mock()` factory like all other services. Pre-existing test design pattern in `labelRoutes.test.js`.
 status: open
-
 
 ### DW-150: GET label by ID "not found" returns 500
 origin: migrated from legacy ledger ("Deferred from: code review of pre-existing integration tests discovered during Epic 5 (2026-05-20)"), 2026-08-12
@@ -1388,13 +1087,11 @@ reason: production controller wraps all errors in generic 500. Test correctly do
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw3-doc-repo-label-error-handling
 
-
 ### DW-151: PATCH /api/files/:fileId bypasses metadataService for raw AQL
 origin: migrated from legacy ledger ("Deferred from: code review of pre-existing integration tests discovered during Epic 5 (2026-05-20)"), 2026-08-12
 location: n/a
 reason: production code design choice where controller queries DB directly. Pre-existing.
 status: open
-
 
 ### DW-152: DELETE label "has children" returns 500 instead of 409
 origin: migrated from legacy ledger ("Deferred from: code review of pre-existing integration tests discovered during Epic 5 (2026-05-20)"), 2026-08-12
@@ -1403,14 +1100,12 @@ reason: production controller returns generic 500 for all service errors. Test c
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw3-doc-repo-label-error-handling
 
-
 ### DW-153: GET related labels mock response shape mismatch
 origin: migrated from legacy ledger ("Deferred from: code review of pre-existing integration tests discovered during Epic 5 (2026-05-20)"), 2026-08-12
 location: n/a
 reason: mock returns flat array `[{_key, name}]` but real service may return structured objects. Mock reflects minimum needed for route test (`labelRoutes.test.js:213-221`).
 status: done 2026-08-13
 resolution: already resolved: components/document-repository/src/services/labelService.js:226-246 returns {label,parent,children}; __tests__/services/labelService.test.js:391-431 uses matching shape
-
 
 ### DW-154: Six untested public methods
 origin: migrated from legacy ledger ("Deferred from: code review of 5-3-test-file-service-business-logic (2026-05-20)"), 2026-08-12
@@ -1419,14 +1114,12 @@ reason: `uploadLink`, `getCrawlMetrics`, `updateCrawlMetrics`, `addCrawlLog`, `g
 status: done 2026-08-13
 resolution: fileRoutes.test.js:270-281 — uploadLink tested; fileController.test.js:277-293 — deleteIngestionLogs tested
 
-
 ### DW-155: Empty string bypass in delete
 origin: migrated from legacy ledger ("Deferred from: code review of 5-3-test-file-service-business-logic (2026-05-20)"), 2026-08-12
 location: n/a
 reason: `storage_path: ""` is falsy so `storagePath && fs.promises.unlink` skips cleanup silently. Pre-existing production behavior.
 status: done 2026-08-13
 resolution: already resolved: components/document-repository/src/services/fileService.js:696 — const filePath = file.storage_path || path.join(...); empty string falsy, falls back to constructed path
-
 
 ### DW-156: Missing status default
 origin: migrated from legacy ledger ("Deferred from: code review of 5-3-test-file-service-business-logic (2026-05-20)"), 2026-08-12
@@ -1435,14 +1128,12 @@ reason: upload test expects `dataprep.status = 'Pending'` but doesn't verify the
 status: done 2026-08-13
 resolution: already resolved: components/document-repository/src/services/metadataService.js:34-38 — extractMetadata sets dataprep.status:'Pending' explicitly; fileService.js:243-247 also sets default
 
-
 ### DW-157: AC5 (ingestion triggers) NOT SATISFIED
 origin: migrated from legacy ledger ("Deferred from: code review of 5-3-test-file-service-business-logic (2026-05-20)"), 2026-08-12
 location: n/a
 reason: no test verifies dataprep pipeline trigger after upload. fileService sets `dataprep.status = 'Pending'` but doesn't trigger pipeline; trigger happens at different layer. AC wording ambiguous.
 status: done 2026-08-13
 resolution: fileRoutes.test.js:644-676 — ingestion trigger + dataprep call tested
-
 
 ### DW-158: AC4 (delete cleanup) gap
 origin: migrated from legacy ledger ("Deferred from: code review of 5-3-test-file-service-business-logic (2026-05-20)"), 2026-08-12
@@ -1451,14 +1142,12 @@ reason: delete test verifies metadata removal and unlink but not underlying AQL 
 status: done 2026-08-13
 resolution: already resolved: components/document-repository/src/services/fileService.js:720-727 — deleteFile issues explicit AQL REMOVE for crawl_job, crawl_log, crawl_metrics, ingestion_log
 
-
 ### DW-159: Silent partial success on upload
 origin: migrated from legacy ledger ("Deferred from: code review of 5-3-test-file-service-business-logic (2026-05-20)"), 2026-08-12
 location: n/a
 reason: if metadata save succeeds but file write fails, uploaded file remains as orphan. Pre-existing production gap.
 status: done 2026-08-13
 resolution: already resolved: components/document-repository/src/services/fileService.js:218-256 — uploadFile writes file FIRST (line 220), then metadata (line 251); catch unlinks file (line 255)
-
 
 ### DW-160: File type validation tests in security.test.js are tautological
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
@@ -1467,14 +1156,12 @@ reason: validateFileType is fully mocked; tests assert only mock return value. R
 status: done 2026-08-13
 resolution: components/document-repository/src/__tests__/middleware/security.test.js:140-233 — 7 real test cases with magic bytes
 
-
 ### DW-161: Auth middleware success path untested
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
 location: n/a
 reason: no test verifies successful JWT verification populating req.user. mapRole, authorizeRole, isPublicRoute (for paths other than /health) also untested. Missing error paths: empty Bearer token, azp validation, JWTClaimValidationFailed, getJWKS 503.
 status: done 2026-08-13
 resolution: keycloak-auth-middleware.test.js:175 — valid token + admin role success path tested
-
 
 ### DW-162: securityService.initialize()/ensureInitialized() untested
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
@@ -1483,7 +1170,6 @@ reason: ClamAV init path has zero coverage. All scanBuffer tests bypass init by 
 status: done 2026-08-13
 resolution: securityService.test.js:28-91 — initialize() + ensureInitialized() describe blocks
 
-
 ### DW-163: validateFileType has zero real test coverage
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
 location: n/a
@@ -1491,13 +1177,11 @@ reason: mimeTypeValidator.test.js covers helpers only, not the main function per
 status: done 2026-08-13
 resolution: middleware/security.test.js:140-233 — 7 real test cases for validateFileType
 
-
 ### DW-164: getFileCategory and isTextExtractable not tested with null/undefined input
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
 location: n/a
 reason: will throw on mimeType.includes(). Missing application/msword test for isTextExtractable.
 status: open
-
 
 ### DW-165: getDb mock pattern fragile in metadataService.test.js and labelService.test.js
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
@@ -1505,13 +1189,11 @@ location: n/a
 reason: jest.fn() replacement instead of jest.spyOn prevents automatic restoration. Pre-existing test design pattern.
 status: open
 
-
 ### DW-166: || vs ?? in extractMetadata
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
 location: n/a
 reason: source uses fileInfo.file_size || stats.size treating file_size: 0 as falsy. Same for file_hash: '' and publish: 0. Source code design decision.
 status: open
-
 
 ### DW-167: labelService.test.js missing mocks for shared-lib and appConfig
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
@@ -1520,7 +1202,6 @@ reason: relies on moduleNameMapper and real config loading. Pre-existing test de
 status: done 2026-08-13
 resolution: jest.config.js:41-43 — moduleNameMapper maps shared-lib to mock; getDb override intentional
 
-
 ### DW-168: deleteLabel missing error path for non-existent label
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
 location: n/a
@@ -1528,13 +1209,11 @@ reason: remove() can throw ArangoDB 1202. getRelatedLabels also missing error pa
 status: done 2026-08-13
 resolution: labelService.test.js:355-367 — throw if label has child labels tested
 
-
 ### DW-169: updateMetadata source has dead code
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
 location: n/a
 reason: 'labels' branch in field filter can never execute since 'labels' is not in allowedFields. Pre-existing source code concern.
 status: open
-
 
 ### DW-170: 50MB buffer allocation in oversized buffer test
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
@@ -1542,14 +1221,12 @@ location: n/a
 reason: slow and memory-intensive. Pre-existing test design.
 status: open
 
-
 ### DW-171: AC6 (EICAR fixture from Story 5.1 mocks) NOT SATISFIED
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
 location: n/a
 reason: shared mocks imported but unused; each test creates inline mocks instead. AC2 PARTIALLY SATISFIED due to tautological mocking.
 status: done 2026-08-13
 resolution: components/document-repository/src/__tests__/middleware/security.test.js:57-67,83-102 — EICAR buffer + fixture tests
-
 
 ### DW-172: BUILD API enabled in socket proxy (`docker_socket_proxy_build: "1"`)
 origin: migrated from legacy ledger ("Deferred from: code review of 1-6-configure-mr-blocking-and-scheduled-jobs round 2 (2026-05-21)"), 2026-08-12
@@ -1559,7 +1236,6 @@ status: done 2026-08-13
 resolution: closed by human decision: Accept current security posture, document risk in deployment guide
 decision: 2026-08-13 Keep BUILD API enabled — Accept current security posture, document risk in deployment guide
 
-
 ### DW-173: Flutter SDK cache key lacks OS/architecture component
 origin: migrated from legacy ledger ("Deferred from: code review of 1-7-configure-ci-caching-and-path-based-triggers (2026-05-21)"), 2026-08-12
 location: n/a
@@ -1568,7 +1244,6 @@ status: done 2026-08-13
 resolution: closed by human decision: Accept risk — all current runners are same architecture, cross-arch corruption unlikely
 decision: 2026-08-13 Keep current cache key — Accept risk — all current runners are same architecture, cross-arch corruption unlikely
 
-
 ### DW-174: Patrol E2E cache fallback_keys inheritance
 origin: migrated from legacy ledger ("Deferred from: code review of 1-7-configure-ci-caching-and-path-based-triggers (2026-05-21)"), 2026-08-12
 location: n/a
@@ -1576,13 +1251,11 @@ reason: `patrol:e2e` job may override `.flutter_base` cache block instead of ext
 status: done 2026-08-13
 resolution: .gitlab-ci.yml:208,220-234 — .e2e_mobile_base extends .flutter_base, inherits fallback_keys
 
-
 ### DW-175: AC6 pipeline time budget
 origin: migrated from legacy ledger ("Deferred from: code review of 1-7-configure-ci-caching-and-path-based-triggers (2026-05-21)"), 2026-08-12
 location: n/a
 reason: NFR can only be verified at runtime with actual CI execution. Estimated 4-5 min, well within 10 min budget. No code change needed.
 status: open
-
 
 ### DW-176: Token expiry in long-running chat sessions
 origin: migrated from legacy ledger ("Deferred from: code review of 1-8-e2e-playwright-tests-for-chatbot-interaction-flows (2026-05-21)"), 2026-08-12
@@ -1590,13 +1263,11 @@ location: n/a
 reason: tests run up to 120s but don't handle token expiration mid-stream. Architectural concern beyond E2E test scope; would require Keycloak token refresh in test helpers.
 status: open
 
-
 ### DW-177: CI cache key doesn't include Playwright version
 origin: migrated from legacy ledger ("Deferred from: code review of 1-8-e2e-playwright-tests-for-chatbot-interaction-flows (2026-05-21)"), 2026-08-12
 location: n/a
 reason: cache uses only `package-lock.json` prefix, same pattern as story 1.7. If Playwright version changes, cached browsers may be incompatible. Follows established project pattern.
 status: open
-
 
 ### DW-178: Hardcoded test user credentials (`testuser/TestPass123!`)
 origin: migrated from legacy ledger ("Deferred from: code review of 1-8-e2e-playwright-tests-for-chatbot-interaction-flows (2026-05-21)"), 2026-08-12
@@ -1604,13 +1275,11 @@ location: n/a
 reason: follows existing E2E pattern across all epic1/epic2/epic3 tests. Should come from env vars for multi-environment support but consistent with project convention.
 status: open
 
-
 ### DW-179: AC6 performance not verified
 origin: migrated from legacy ledger ("Deferred from: code review of 1-8-e2e-playwright-tests-for-chatbot-interaction-flows (2026-05-21)"), 2026-08-12
 location: n/a
 reason: requires running the full suite against deployed stack. 30m timeout is set in CI config but actual execution time can't be verified from diff alone.
 status: open
-
 
 ### DW-180: ADB Keepalive race condition in patrol-wrapper.sh
 origin: migrated from legacy ledger ("Deferred from: code review round 2 of 1-8-e2e-playwright-tests-for-chatbot-interaction-flows (2026-05-23)"), 2026-08-12
@@ -1619,14 +1288,12 @@ reason: Phase 1/Phase 2 race on APK file detection. Pre-existing mobile infrastr
 status: done 2026-08-13
 resolution: mobile/genie_ai_mobile/patrol-wrapper.sh:426-468 — two-phase keepalive with cycle tracking
 
-
 ### DW-181: socat process not killed on error
 origin: migrated from legacy ledger ("Deferred from: code review round 2 of 1-8-e2e-playwright-tests-for-chatbot-interaction-flows (2026-05-23)"), 2026-08-12
 location: n/a
 reason: background process leak in mobile E2E CI section. Pre-existing.
 status: done 2026-08-13
 resolution: patrol-wrapper.sh — no socat usage; replaced by native ADB keepalive
-
 
 ### DW-182: Fix loop potential infinite loop in patrol-wrapper.sh
 origin: migrated from legacy ledger ("Deferred from: code review round 2 of 1-8-e2e-playwright-tests-for-chatbot-interaction-flows (2026-05-23)"), 2026-08-12
@@ -1635,7 +1302,6 @@ reason: no absolute timeout on test_bundle.dart wait. Pre-existing mobile infras
 status: done 2026-08-13
 resolution: patrol-wrapper.sh:398 — bounded loop: for i in $(seq 1 600)
 
-
 ### DW-183: Environment variable validation missing in patrol-wrapper.sh
 origin: migrated from legacy ledger ("Deferred from: code review round 2 of 1-8-e2e-playwright-tests-for-chatbot-interaction-flows (2026-05-23)"), 2026-08-12
 location: n/a
@@ -1643,20 +1309,17 @@ reason: no validation of empty KC_PWD. Pre-existing mobile infrastructure.
 status: done 2026-08-13
 resolution: patrol-wrapper.sh:20-28 — validates KEYCLOAK_ADMIN_PASSWORD, exits if missing
 
-
 ### DW-184: Playwright workers: 1 hides concurrency bugs
 origin: migrated from legacy ledger ("Deferred from: code review round 2 of 1-8-e2e-playwright-tests-for-chatbot-interaction-flows (2026-05-23)"), 2026-08-12
 location: n/a
 reason: intentional trade-off for CI stability, serial execution prevents resource contention.
 status: open
 
-
 ### DW-185: Progressive rendering test may flake on slow runners
 origin: migrated from legacy ledger ("Deferred from: code review round 2 of 1-8-e2e-playwright-tests-for-chatbot-interaction-flows (2026-05-23)"), 2026-08-12
 location: n/a
 reason: 5×1s polling window adequate for Docker network but could miss progressive rendering on very slow backends. Passes in CI (1.0m total).
 status: open
-
 
 ### DW-186: Backend controller layer inconsistency
 origin: migrated from legacy ledger ("Deferred from: story 2-10 checklist review — architecture inconsistency (2026-05-26)"), 2026-08-12
@@ -1665,7 +1328,6 @@ reason: 2 of 12 route files use the Controller → Service pattern (`auth-routes
 status: open
 decision: 2026-08-13 Standardize to Controller→Service — Refactor all 10 direct-call routes to use Controller→Service pattern for consistency; large refactor touching 10 route files + creating 10 new controllers
 
-
 ### DW-187: SSE streaming complex error paths untested
 origin: migrated from legacy ledger ("Deferred from: code review of story 2-10 (2026-05-26)"), 2026-08-12
 location: n/a
@@ -1673,13 +1335,11 @@ reason: query-routes.js has extensive error handling (metadata failures, transla
 status: done 2026-08-13
 resolution: query-routes.test.js:270,290,440,481 — stream error, SSE events, translation failure, paragraph break
 
-
 ### DW-188: GDPR delete cascade and idempotency
 origin: migrated from legacy ledger ("Deferred from: code review of story 2-10 (2026-05-26)"), 2026-08-12
 location: n/a
 reason: DELETE /api/me test verifies keycloakProxyService.deleteUser is called but doesn't test cascade cleanup (ArangoDB data, analytics) or idempotency (double-delete). GDPR compliance testing should be a dedicated story.
 status: open
-
 
 ### DW-189: Auth middleware edge cases in route tests
 origin: migrated from legacy ledger ("Deferred from: code review of story 2-10 (2026-05-26)"), 2026-08-12
@@ -1688,20 +1348,17 @@ reason: routes check req.user?.iss_sub but tests always mock req.user in beforeE
 status: done 2026-08-13
 resolution: database-operations-routes.test.js:126,135 — 401/403 middleware tests; auth.test.js:100-141 — token edge cases
 
-
 ### DW-190: Translation type validation edge cases
 origin: migrated from legacy ledger ("Deferred from: code review of story 2-10 (2026-05-26)"), 2026-08-12
 location: n/a
 reason: empty array for texts[] and empty string for markdown beyond spec AC4 scope.
 status: open
 
-
 ### DW-191: Service locale validation
 origin: migrated from legacy ledger ("Deferred from: code review of story 2-10 (2026-05-26)"), 2026-08-12
 location: n/a
 reason: routes accept any locale without validation. Invalid locales passed to service layer is a service-layer testing concern.
 status: open
-
 
 ### DW-192: Query parameter parseInt edge cases
 origin: migrated from legacy ledger ("Deferred from: code review of story 2-10 (2026-05-26)"), 2026-08-12
@@ -1710,13 +1367,11 @@ reason: GET / uses parseInt() for limit/offset without NaN/negative validation. 
 status: done 2026-08-13
 resolution: resolved by sweep bundle dw-backend-input-validation
 
-
 ### DW-193: Multipart file upload edge cases
 origin: migrated from legacy ledger ("Deferred from: code review of story 2-10 (2026-05-26)"), 2026-08-12
 location: n/a
 reason: PUT /api/me uses multer with size limits; tests don't cover oversized files, multiple files, invalid types. Multer config testing beyond route scope.
 status: open
-
 
 ### DW-194: DsCombobox keyboard navigation tests (ArrowUp/Down, Enter, Escape)
 origin: migrated from legacy ledger ("Deferred from: code review of 3-7-test-frontend-design-system-components (2026-05-26)"), 2026-08-12
@@ -1724,20 +1379,17 @@ location: n/a
 reason: complex interaction testing beyond basic unit scope
 status: open
 
-
 ### DW-195: DsCombobox click-outside close behavior
 origin: migrated from legacy ledger ("Deferred from: code review of 3-7-test-frontend-design-system-components (2026-05-26)"), 2026-08-12
 location: n/a
 reason: requires attachTo + event simulation
 status: open
 
-
 ### DW-196: DsModal focus trap test
 origin: migrated from legacy ledger ("Deferred from: code review of 3-7-test-frontend-design-system-components (2026-05-26)"), 2026-08-12
 location: n/a
 reason: JSDOM lacks focus management
 status: open
-
 
 ### DW-197: DsModal scrollable body overflow-y test
 origin: migrated from legacy ledger ("Deferred from: code review of 3-7-test-frontend-design-system-components (2026-05-26)"), 2026-08-12
@@ -1746,7 +1398,6 @@ reason: JSDOM CSS limitation
 status: done 2026-08-13
 resolution: DsModal.test.js:71,77,149-161 — scrollable class + body overflow management tested
 
-
 ### DW-198: DsModal close-on-Escape keydown test
 origin: migrated from legacy ledger ("Deferred from: code review of 3-7-test-frontend-design-system-components (2026-05-26)"), 2026-08-12
 location: n/a
@@ -1754,13 +1405,11 @@ reason: event listener lifecycle complexity
 status: done 2026-08-13
 resolution: DsModal.test.js:113,115 — emits close on Escape keydown tested
 
-
 ### DW-199: DsPill/DsStatusTag minimal coverage, no interaction tests
 origin: migrated from legacy ledger ("Deferred from: code review of 3-7-test-frontend-design-system-components (2026-05-26)"), 2026-08-12
 location: n/a
 reason: pre-existing, AC only requires variants+slots
 status: open
-
 
 ### DW-200: No accessibility tests beyond DsModal
 origin: migrated from legacy ledger ("Deferred from: code review of 3-7-test-frontend-design-system-components (2026-05-26)"), 2026-08-12
@@ -1768,13 +1417,11 @@ location: n/a
 reason: pre-existing, broader concern beyond this story scope
 status: open
 
-
 ### DW-201: DsButton invalid variant not tested
 origin: migrated from legacy ledger ("Deferred from: code review of 3-7-test-frontend-design-system-components (2026-05-26)"), 2026-08-12
 location: n/a
 reason: pre-existing, validator warning not in AC
 status: open
-
 
 ### DW-202: DsInput textarea rows only one case tested
 origin: migrated from legacy ledger ("Deferred from: code review of 3-7-test-frontend-design-system-components (2026-05-26)"), 2026-08-12
@@ -1782,20 +1429,17 @@ location: n/a
 reason: pre-existing, single case sufficient for AC
 status: open
 
-
 ### DW-203: DsCombobox mousedown .prevent not tested
 origin: migrated from legacy ledger ("Deferred from: code review of 3-7-test-frontend-design-system-components (2026-05-26)"), 2026-08-12
 location: n/a
 reason: pre-existing, JSDOM limitation
 status: open
 
-
 ### DW-204: `handleViewInternalFile` method untested in FileDetailsDialog.vue:916-1061
 origin: migrated from legacy ledger ("Deferred from: code review of story 3-8 (2026-05-27)"), 2026-08-12
 location: n/a
 reason: requires XHR/Blob/new-window mocking beyond JSDOM capabilities, coverage targets met
 status: open
-
 
 ### DW-205: AppAuth interface-only tests
 origin: migrated from legacy ledger ("Deferred from: code review of 1-10-test-flutter-service-layer (2026-05-26)"), 2026-08-12
@@ -1804,14 +1448,12 @@ reason: FlutterAppAuth requires platform channels; only interface contract verif
 status: done 2026-08-13
 resolution: mobile/genie_ai_mobile/test/services/auth/app_auth_test.dart:7,22-23 — interface + adapter tests
 
-
 ### DW-206: ConnectivityService concurrent state changes untested
 origin: migrated from legacy ledger ("Deferred from: code review of 1-10-test-flutter-service-layer (2026-05-26)"), 2026-08-12
 location: n/a
 reason: `_isChecking` guard exists but concurrent async testing is complex; better suited for integration tests. [connectivity_service_test.dart]
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw2-mobile-service-test-gaps
-
 
 ### DW-207: NotificationService stream controller lifecycle
 origin: migrated from legacy ledger ("Deferred from: code review of 1-10-test-flutter-service-layer (2026-05-26)"), 2026-08-12
@@ -1820,14 +1462,12 @@ reason: `_controller` never closed; service design issue beyond test scope. [not
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw2-mobile-service-test-gaps
 
-
 ### DW-208: ConnectivityService dispose/timer cleanup untested
 origin: migrated from legacy ledger ("Deferred from: code review of 1-10-test-flutter-service-layer (2026-05-26)"), 2026-08-12
 location: n/a
 reason: Timer cancellation and stream closing after dispose requires platform-dependent testing. [connectivity_service_test.dart]
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw2-mobile-service-test-gaps
-
 
 ### DW-209: Connectivity checker periodic testing + DNS timeout
 origin: migrated from legacy ledger ("Deferred from: code review of 1-10-test-flutter-service-layer (2026-05-26)"), 2026-08-12
@@ -1836,14 +1476,12 @@ reason: Periodic checks and DNS timeout scenarios require `connectivity_plus` pl
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw2-mobile-service-test-gaps
 
-
 ### DW-210: AppTokens malformed config edge cases
 origin: migrated from legacy ledger ("Deferred from: code review of 1-11-test-flutter-design-system-and-core-components (2026-05-27)"), 2026-08-12
 location: n/a
 reason: Tests don't verify behavior with null config, wrong-type values (e.g., `theme: "string"` instead of map), or missing nested keys. `fromConfig()` uses `as Map<String, dynamic>?` casts which could throw on malformed input. Beyond current AC8 scope, deferred to hardening pass.
 status: done 2026-08-14
 resolution: resolved by sweep bundle dw2-mobile-service-test-gaps
-
 
 ### DW-211: I18nService translate fallback not tested
 origin: migrated from legacy ledger ("Deferred from: code review of 1-11-test-flutter-design-system-and-core-components (2026-05-27)"), 2026-08-12
@@ -1852,14 +1490,12 @@ reason: `tr()` fallback returns the key itself when no translation exists (line 
 status: done 2026-08-13
 resolution: mobile/genie_ai_mobile/test/services/i18n_service_test.dart:76-126 — fallback tests for nonexistent keys
 
-
 ### DW-212: ColorUtils.withAlpha boundary values
 origin: migrated from legacy ledger ("Deferred from: code review of 1-11-test-flutter-design-system-and-core-components (2026-05-27)"), 2026-08-12
 location: n/a
 reason: Only 0.5 and 1.0 alpha values tested; missing 0.0 (fully transparent), negative values, and values > 1.0 to verify clamping. Minor, beyond AC7 scope.
 status: done 2026-08-13
 resolution: mobile/genie_ai_mobile/test/design_system/tokens/color_utils_test.dart:125-143 — withAlpha 0.0, 0.5, 1.0 tested
-
 
 ### DW-213: Route tests check only HTTP status, not error response body structure
 origin: migrated from legacy ledger ("Deferred from: code review of 2-11-test-backend-chat-history-completion-and-database-operations (2026-05-27)"), 2026-08-12
@@ -1868,7 +1504,6 @@ reason: pre-existing test pattern across suite, nice-to-have hardening
 status: done 2026-08-13
 resolution: Multiple route tests verify service calls + response bodies (query-routes.test.js:943, service-routes.test.js:169)
 
-
 ### DW-214: Weather service tests use hardcoded 2026 dates in mock data
 origin: migrated from legacy ledger ("Deferred from: code review of 2-11-test-backend-chat-history-completion-and-database-operations (2026-05-27)"), 2026-08-12
 location: n/a
@@ -1876,13 +1511,11 @@ reason: mock data processed as-is by code, no runtime date validation concern
 status: done 2026-08-13
 resolution: weather-routes.test.js — no 2026 dates found; mock service returns canned data
 
-
 ### DW-215: deleteFolder cascade test doesn't verify removal calls
 origin: migrated from legacy ledger ("Deferred from: code review of 2-11-test-backend-chat-history-completion-and-database-operations (2026-05-27)"), 2026-08-12
 location: n/a
 reason: test verifies no-throw but not specific side effects
 status: open
-
 
 ### DW-216: Service category test relies on implementation-specific default name 'Category 1'
 origin: migrated from legacy ledger ("Deferred from: code review of 2-11-test-backend-chat-history-completion-and-database-operations (2026-05-27)"), 2026-08-12
@@ -1891,14 +1524,12 @@ reason: fragile to implementation changes in category naming logic
 status: done 2026-08-13
 resolution: categories.test.js — tests use explicit names, no implementation-specific defaults
 
-
 ### DW-217: Weather service missing coordinate boundary tests (±90, ±180)
 origin: migrated from legacy ledger ("Deferred from: code review of 2-11-test-backend-chat-history-completion-and-database-operations (2026-05-27)"), 2026-08-12
 location: n/a
 reason: one out-of-bounds case tested, exact boundary values untested
 status: done 2026-08-13
 resolution: weather-routes.test.js:152-158,181-212 — boundary values + out-of-range + invalid types tested
-
 
 ### DW-218: Test isolation: process.exit mock in global scope
 origin: migrated from legacy ledger ("Deferred from: code review of 2-11-test-backend-chat-history-completion-and-database-operations (2026-05-27)"), 2026-08-12
@@ -1907,14 +1538,12 @@ reason: pre-existing test infrastructure pattern in chat-history-service tests
 status: done 2026-08-13
 resolution: chat-history-routes.test.js:97-102 — process.exit mock scoped in beforeAll/afterAll
 
-
 ### DW-219: key-handler edge cases (Unicode, 254-char boundary) not exhaustive despite 100% coverage
 origin: migrated from legacy ledger ("Deferred from: code review of 2-11-test-backend-chat-history-completion-and-database-operations (2026-05-27)"), 2026-08-12
 location: n/a
 reason: additional edge case hardening
 status: done 2026-08-13
 resolution: key-handler.test.js — 32 test cases covering unicode, emoji, special chars, long keys
-
 
 ### DW-220: TEI embedding calls from Retriever lack trace propagation
 origin: migrated from legacy ledger ("Deferred from: code review of 7-2-opea-services-otel-tracing-chatqna-retriever (2026-05-28)"), 2026-08-12
@@ -1923,13 +1552,11 @@ reason: OPEA framework internal HTTP client not instrumented; httpx auto-instrum
 status: done 2026-08-13
 resolution: already resolved: genie-ai-overlay/tracing.py — FastAPI instrumentation auto-instruments httpx; TEI embedding calls from Retriever now traced via auto-instrumentation
 
-
 ### DW-221: Test mocks don't verify actual span export behavior
 origin: migrated from legacy ledger ("Deferred from: code review of 7-2-opea-services-otel-tracing-chatqna-retriever (2026-05-28)"), 2026-08-12
 location: n/a
 reason: unit tests mock OTLPSpanExporter at class level, giving false confidence in URL construction. Testing philosophy concern; integration test with real collector would be separate effort.
 status: open
-
 
 ### DW-222: OTLP URL double `/v1/traces` if operator sets wrong env var
 origin: migrated from legacy ledger ("Deferred from: code review of 7-2-opea-services-otel-tracing-chatqna-retriever (2026-05-28)"), 2026-08-12
@@ -1938,7 +1565,6 @@ reason: `rstrip('/')` handles trailing slash but not duplicate path. Operator er
 status: done 2026-08-13
 resolution: genie-ai-overlay/tracing.py:144 — rstrip('/') before appending /v1/traces prevents double-slash
 
-
 ### DW-223: Chunk count stays 0 if OPEA response format changes
 origin: migrated from legacy ledger ("Deferred from: code review of 7-2-opea-services-otel-tracing-chatqna-retriever (2026-05-28)"), 2026-08-12
 location: n/a
@@ -1946,20 +1572,17 @@ reason: telemetry robustness concern, not functional. Fallback to 0 is safe.
 status: done 2026-08-13
 resolution: genie-ai-overlay/chatqna/genieai_chatqna.py:430-442 — _count_final_chunks() handles dict + object forms
 
-
 ### DW-224: Streaming responses close orchestration span before first token
 origin: migrated from legacy ledger ("Deferred from: code review of 7-2-opea-services-otel-tracing-chatqna-retriever (2026-05-28)"), 2026-08-12
 location: n/a
 reason: known limitation of current span model. Streaming trace correlation would need a different span architecture (event-based spans).
 status: open
 
-
 ### DW-225: Full-chain trace ID integration test (AC5)
 origin: migrated from legacy ledger ("Deferred from: code review of 7-4-end-to-end-trace-propagation-and-log-correlation (2026-05-29)"), 2026-08-12
 location: n/a
 reason: requires running services (Backend → ChatQnA → Retriever → Reranker → LLM) to verify a single trace_id propagates across the entire chain. Unit tests verify individual service propagation; end-to-end integration testing deferred to a dedicated observability integration test story.
 status: open
-
 
 ### DW-226: Dashboard metric names may not match OTel→Prometheus conversion
 origin: migrated from legacy ledger ("Deferred from: code review of 7-5-deploy-observability-stack-collector-victoriametrics-grafana (2026-05-29)"), 2026-08-12
@@ -1968,13 +1591,11 @@ reason: `http_server_duration_*` in dashboards should match OTel→Prometheus re
 status: done 2026-08-13
 resolution: Dashboard metric names match OTel→Prometheus conversion (genie.ai/chat/request → genie_ai_chat_request_total)
 
-
 ### DW-227: Prometheus Remote Write / batch processor tuning under high load
 origin: migrated from legacy ledger ("Deferred from: code review of 7-5-deploy-observability-stack-collector-victoriametrics-grafana (2026-05-29)"), 2026-08-12
 location: n/a
 reason: out of MVP scope per spec ("basic batch processor only"). Revisit if Collector OOM or data loss observed in production.
 status: open
-
 
 ### DW-228: No volume backup/retention policy documentation
 origin: migrated from legacy ledger ("Deferred from: code review of 7-5-deploy-observability-stack-collector-victoriametrics-grafana (2026-05-29)"), 2026-08-12
@@ -1983,13 +1604,11 @@ reason: `vm-data` and `grafana-data` volumes lack backup procedures. Operational
 status: done 2026-08-13
 resolution: site/content/en/docs/operations/backup-restore.md:11-66 — ArangoDB backup documented; overview.md:66 — VictoriaLogs retention
 
-
 ### DW-229: Dashboard JSON lacks schema validation in CI
 origin: migrated from legacy ledger ("Deferred from: code review of 7-5-deploy-observability-stack-collector-victoriametrics-grafana (2026-05-29)"), 2026-08-12
 location: n/a
 reason: complex manually-created JSON files not validated against Grafana schema. Pre-commit hook or CI step would catch malformed dashboards before deploy.
 status: open
-
 
 ### DW-230: Dashboard variable query fails when no metrics exist (fresh deploy)
 origin: migrated from legacy ledger ("Deferred from: code review of 7-5-deploy-observability-stack-collector-victoriametrics-grafana (2026-05-29)"), 2026-08-12
@@ -1997,20 +1616,17 @@ location: n/a
 reason: `label_values(http_server_duration_count, service_name)` returns error before first request. Expected Grafana behavior, resolves once traffic flows.
 status: open
 
-
 ### DW-231: Volume name collision in Swarm multi-node deployment
 origin: migrated from legacy ledger ("Deferred from: code review of 7-5-deploy-observability-stack-collector-victoriametrics-grafana (2026-05-29)"), 2026-08-12
 location: n/a
 reason: named volumes `vm-data`/`grafana-data` have no node placement constraints. Spec is single-node; multi-node would need volume driver or placement constraints.
 status: open
 
-
 ### DW-232: Dashboard refresh interval (10s) may overload VictoriaMetrics with many concurrent users
 origin: migrated from legacy ledger ("Deferred from: code review of 7-5-deploy-observability-stack-collector-victoriametrics-grafana (2026-05-29)"), 2026-08-12
 location: n/a
 reason: low risk for MVP single-team usage. Consider increasing to 30s for production.
 status: open
-
 
 ### DW-233: Missing depends_on for Grafana→VictoriaMetrics in compose mode
 origin: migrated from legacy ledger ("Deferred from: code review of 7-5-deploy-observability-stack-collector-victoriametrics-grafana (2026-05-29)"), 2026-08-12
@@ -2019,7 +1635,6 @@ reason: nice-to-have startup ordering; services work without it. Swarm ignores d
 status: done 2026-08-13
 resolution: docker-compose.yaml:1625-1631 — Grafana depends_on victoriametrics/victorialogs/victoriatraces with healthcheck
 
-
 ### DW-234: OTel Collector logging exporter generates high stdout volume under load
 origin: migrated from legacy ledger ("Deferred from: code review of 7-5-deploy-observability-stack-collector-victoriametrics-grafana (2026-05-29)"), 2026-08-12
 location: n/a
@@ -2027,13 +1642,11 @@ reason: `loglevel: info` intentional per spec (Option A MVP: traces logged to st
 status: done 2026-08-13
 resolution: configs/otel/otel-collector-config.yaml — no logging exporter in any pipeline; only prometheusremotewrite + otlp_http
 
-
 ### DW-235: PII nested attributes not filtered
 origin: migrated from legacy ledger ("Deferred from: code review of 7-8-instrument-application-metrics (2026-06-04)"), 2026-08-12
 location: n/a
 reason: Current sanitization only matches exact top-level keys (e.g., `user_id`). Nested keys like `user.email` pass through. Not a risk with current code (flat attrs only) but worth hardening if attribute shapes change.
 status: open
-
 
 ### DW-236: Metric export interval hardcoded
 origin: migrated from legacy ledger ("Deferred from: code review of 7-8-instrument-application-metrics (2026-06-04)"), 2026-08-12
@@ -2041,13 +1654,11 @@ location: n/a
 reason: `export_interval_millis=15_000` in tracing.py is not configurable. Reasonable default, but should be tunable via env var for different deployment scenarios.
 status: open
 
-
 ### DW-237: Alert threshold too sensitive / storage threshold context-blind
 origin: migrated from legacy ledger ("Deferred from: code review of 7-11-observability-slos (2026-06-08)"), 2026-08-12
 location: n/a
 reason: Hardcoded 1GB and 0.5 rows/sec thresholds not configurable per deployment.
 status: open
-
 
 ### DW-238: No documented rollback procedure for alert rules
 origin: migrated from legacy ledger ("Deferred from: code review of 7-11-observability-slos (2026-06-08)"), 2026-08-12
@@ -2055,13 +1666,11 @@ location: n/a
 reason: No emergency rollback docs if bad alert rules deployed.
 status: open
 
-
 ### DW-239: Notification repeat_interval 4h for critical alerts
 origin: migrated from legacy ledger ("Deferred from: code review of 7-11-observability-slos (2026-06-08)"), 2026-08-12
 location: n/a
 reason: May be too slow for collector-down response.
 status: open
-
 
 ### DW-240: Alert thresholds not tunable via env var
 origin: migrated from legacy ledger ("Deferred from: code review of 7-11-observability-slos (2026-06-08)"), 2026-08-12
@@ -2069,14 +1678,12 @@ location: n/a
 reason: Magic numbers hardcoded in alert rules.
 status: open
 
-
 ### DW-241: Part B
 origin: migrated from legacy ledger ("Deferred from: multi-goal split of spec-contextual-retrieval (2026-06-26)"), 2026-08-12
 location: n/a
 reason: Part A (`spec-contextual-retrieval`, dataprep) stores per-chunk contextualized text in vertex `text`. Part B consumes it: (1) create an ArangoSearch BM25 view over `{GRAPH}_SOURCE.text` at retriever init (`_initialize_client`, ~line 170) — no BM25 view exists today (vector ANN view auto-created by `langchain_arangodb.ArangoVector` only); (2) add a BM25 query path via `self.db.aql.execute()` with ArangoSearch `BM25()` (pattern: file_id AQL at retriever ~line 803); (3) Reciprocal Rank Fusion (RRF) of dense (vector ANN, existing `ArangoVector.asimilarity_search_with_relevance_scores` ~line 778) and sparse (BM25) candidates, inserted after vector `search_res` (~line 787) and before graph traversal (~line 818), in `invoke()` `genie-ai-overlay/retriever/genieai_retriever_arangodb.py`; (4) gated by `HYBRID_BM25_ENABLED` (default off) + knobs `BM25_TOP_K`, `RRF_K=60`, `RRF_DENSE_WEIGHT`, `RRF_SPARSE_WEIGHT` in `genie-ai-overlay/retriever/config.py` after line 221. Text field const `ARANGO_TEXT_FIELD="text"` (line 75). Reranker untouched (separate microservice; receives fused list via retriever microservice wrapper, ~line 114-147). Tests: `test_retriever.py` `TestInvoke` pattern; mock `db.aql.execute` (existing pattern ~line 293) + `ArangoVector`. Independent of A but compounds: with A's contextualized `text` → "contextual BM25" (full SOTA). Works standalone as raw-text BM25 hybrid. Research: `_bmad-output/planning-artifacts/research/deep-research-labeling-retrieval-report.md`.
 status: done 2026-08-13
 resolution: genie-ai-overlay/retriever/genieai_retriever_arangodb.py:43-48,137,296 — HYBRID_BM25 + rrf_fuse + _ensure_bm25_view implemented
-
 
 ### DW-242: OPEA bump v1.3 -> v1.4+ retires most of the issue-834 machinery
 origin: migrated from legacy ledger ("Deferred from: MR !231 dependency-lock introduction (2026-07-03)"), 2026-08-12
@@ -2094,14 +1701,12 @@ reason: The lock + pin + CI gates added by MR !231 exist BECAUSE OPEA v1.3 ships
 status: done 2026-08-13
 resolution: genie-ai-overlay/dataprep/requirements-cpu.txt exists; docling-core==2.44.2 pinned; generate-requirements-in.sh removed
 
-
 ### DW-243: Dockerfile requirements-patch rewrite (mandatory on bump)
 origin: migrated from legacy ledger ("Deferred from: MR !231 dependency-lock introduction (2026-07-03)"), 2026-08-12
 location: n/a
 reason: `ARG REQ_PATH=/app/comps/dataprep/src/requirements.txt` and the sed/`fix_dependencies.sh` blocks target a file that no longer exists in v1.4. Rewrite to target `requirements-cpu.txt` (and adjust pins: `pyspark==4.0.0`, `pathway` line is dead, `unstructured[all-docs]` sed is a no-op). See the v1.3->v1.4 audit in MR !231 description.
 status: done 2026-08-13
 resolution: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai:73-74 — COPY requirements-cpu.txt + pip install --require-hashes
-
 
 ### DW-244: `fix_dependencies.sh` is shared by reranker + retriever
 origin: migrated from legacy ledger ("Deferred from: MR !231 dependency-lock introduction (2026-07-03)"), 2026-08-12
@@ -2110,14 +1715,12 @@ reason: Do NOT delete it in the dataprep-only bump; only the dataprep Dockerfile
 status: done 2026-08-13
 resolution: fix_dependencies.sh does not exist; reranker/retriever Dockerfiles use own requirements-cpu.txt
 
-
 ### DW-245: Apply the lock pattern to retriever/reranker
 origin: migrated from legacy ledger ("Deferred from: MR !231 dependency-lock introduction (2026-07-03)"), 2026-08-12
 location: n/a
 reason: They use `python:*-slim` (modern pip) so they don't hit issue #834, but the same determinism + SBOM story applies. Out of scope for #834; pick up when those images next change.
 status: done 2026-08-13
 resolution: genie-ai-overlay/retriever/requirements-cpu.txt + reranker/requirements-cpu.txt exist with --require-hashes
-
 
 ### DW-246: Localized `categoryLabel` breaks AND-strategy retriever deployments
 origin: migrated from legacy ledger ("Deferred from: spec-quick-help-service-labels adversarial review (2026-07-07)"), 2026-08-12
@@ -2126,13 +1729,11 @@ reason: chatqna now applies `categoryLabel` (singular) as a retriever filter (th
 status: done 2026-08-13
 resolution: ChatBotComponent.vue:516-534 — getCategoryLabelById() returns category.name; line 550 guards Category \d+ regex
 
-
 ### DW-247: Mobile `_sendNonStreaming` drops Quick Help `serviceLabels`
 origin: migrated from legacy ledger ("Deferred from: spec-quick-help-service-labels adversarial review (2026-07-07)"), 2026-08-12
 location: n/a
 reason: `_sendStreaming` was updated to send `_activeServiceLabels` in the context block, but `_sendNonStreaming` (used when `streamBaseUrl` not provided) builds `ApiQueriesPostRequest(categoryId: _selectedCategoryId)` with no context field — Quick Help labels silently dropped. Also no `_activeServiceLabels` reset on non-streaming success/error. Fix: add `context.serviceLabels` to the non-streaming request (requires OpenAPI spec extension) OR document Quick Help as streaming-only. Low severity — streaming is the default path.
 status: open
-
 
 ### DW-248: Missing FE tests for G1 (sidebar serviceKey) and R3 (mismatch warning emission)
 origin: migrated from legacy ledger ("Deferred from: spec-quick-help-service-labels adversarial review (2026-07-07)"), 2026-08-12
@@ -2141,14 +1742,12 @@ reason: spec T14 lists these; code is correct but tests not added. Add: (1) `han
 status: done 2026-08-13
 resolution: ChatBotComponent.test.js:1060-1064,829,1075 — getCategoryLabelById null + Category 123 guard tested
 
-
 ### DW-249: `graph`/`model_pins` hand-authored in gold `_meta`, no cross-check vs live stack
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-1-lock-the-v1-3-rag-parity-baseline (2026-08-10)"), 2026-08-12
 location: n/a
 reason: `build_artifact` reads `graph` and `model_pins` straight from gold `_meta` (driver-produced for regenerability, but the values are hand-entered). No verification against the resolved live env, so a stale/wrong pin is committed as authoritative config. By-design + documented risk; revisit when pins go stale. Files: `tests/rag-benchmarks/capture_baseline.py:726-736`, `tests/rag-benchmarks/eval/gold_dataset.json` (`_meta`).
 status: done 2026-08-13
 resolution: tests/rag-benchmarks/eval/gold_dataset.json:_meta.model_pins exists; capture_baseline.py:720-736 records config_snapshot
-
 
 ### DW-250: RAG-confidence regression probe not defined (AC:6)
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-1-lock-the-v1-3-rag-parity-baseline (2026-08-10)"), 2026-08-12
@@ -2157,13 +1756,11 @@ reason: gold `_meta.probes` covers label-filter, abstention, multi-category but 
 status: done 2026-08-13
 resolution: tests/rag-benchmarks/eval/gold_dataset.json:_meta.probes has label_filter, abstention, multi_category
 
-
 ### DW-251: pydantic/docarray stub narrows the `dict()` vs `model_dump()` detection surface
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-3-run-the-schedule-kwargs-forwarding-spike-blocking-gate (2026-08-11)"), 2026-08-12
 location: n/a
 reason: the spec named `llm_parameters.dict()` vs `.model_dump()` (Pydantic v1/v2 semantics) as a 1.4→1.5 subtlety the spike "could catch", but `install_stubs()` replaces pydantic with a fake `BaseModel.dict()` so that path is never exercised against real pydantic. Documented in the impl plan; revisit when Story 2.6 rebase lands. Files: `tests/spike-schedule-kwargs/prove_kwargs_forwarding.py:212-244`.
 status: open
-
 
 ### DW-252: Idempotency pinned to tag, not the recorded commit
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-3-run-the-schedule-kwargs-forwarding-spike-blocking-gate (2026-08-11)"), 2026-08-12
@@ -2172,13 +1769,11 @@ reason: `git clone --depth 1 --branch <tag>` re-resolves the tag each run; the r
 status: done 2026-08-13
 resolution: tests/spike-schedule-kwargs/prove_kwargs_forwarding.py:356-367,430 — resolved_commit recorded via git rev-parse HEAD
 
-
 ### DW-253: Per-kwarg raw evidence not committed
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-3-run-the-schedule-kwargs-forwarding-spike-blocking-gate (2026-08-11)"), 2026-08-12
 location: n/a
 reason: the decision log records the aggregate "6/6 (align_inputs + execute)"; the per-kwarg × per-hook PASS/FAIL table and exact values live only in the explicitly-transient `/tmp/spike-outcome.json`. AC3/AC5 reproducibility caveat (spec-sanctioned transient). Files: `schedule-kwargs-spike.md:25`.
 status: open
-
 
 ### DW-254: Stub/package leak into global sys.modules, no cleanup
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-3-run-the-schedule-kwargs-forwarding-spike-blocking-gate (2026-08-11)"), 2026-08-12
@@ -2187,20 +1782,17 @@ reason: `install_stubs()`/`load_orchestrator()` permanently mutate sys.modules (
 status: done 2026-08-13
 resolution: already resolved: tests/spike-schedule-kwargs/prove_kwargs_forwarding.py — sys.modules cleanup exists after stub installation
 
-
 ### DW-255: Spike `execute()` override signature-coupled to the real `execute()`
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-3-run-the-schedule-kwargs-forwarding-spike-blocking-gate (2026-08-11)"), 2026-08-12
 location: n/a
 reason: a future upstream rename/reorder of `execute()` positional params silently shifts an argument into `**kwargs` (polluting the capture) or mis-forwards to `super()`, so the harness "passes" while testing the wrong hop. Inherent to the subclass approach; re-verify against the clone during Story 2.6. Files: `tests/spike-schedule-kwargs/prove_kwargs_forwarding.py:280-302`.
 status: open
 
-
 ### DW-256: Spike unit tests not wired into CI
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-3-run-the-schedule-kwargs-forwarding-spike-blocking-gate (2026-08-11)"), 2026-08-12
 location: n/a
 reason: `tests/spike-schedule-kwargs/` has no pytest config/job; the 9 tests (using `tmp_path`/`monkeypatch`) run only via manual `cd tests/spike-schedule-kwargs && pytest`. AC5 reproducibility unenforced; a harness regression would go uncaught by CI. Revisit when Story 2.6 reuses the harness.
 status: open
-
 
 ### DW-257: Test-stub faqgen LLM gains `api_key=OPENAI_API_KEY` (absent pre-cleanup)
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-4-land-the-pre-rebase-cleanup-as-its-own-v1-3-commit (2026-08-11)"), 2026-08-12
@@ -2209,14 +1801,12 @@ reason: the consolidated `_build_rag_graph` in `tests/testing_genieai_chatqna.py
 status: done 2026-08-13
 resolution: already resolved: tests/testing_genieai_chatqna.py — faqgen stub LLM no longer references OPENAI_API_KEY unconditionally
 
-
 ### DW-258: Test-stub faqgen endpoint bare `/v1/faqgen` vs prod prefixed
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-4-land-the-pre-rebase-cleanup-as-its-own-v1-3-commit (2026-08-11)"), 2026-08-12
 location: n/a
 reason: prod passes `f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/faqgen"`, the stub passes bare `"/v1/faqgen"`; when `VLLM_LLM_ENDPOINT` sets a non-empty prefix the stub's graph no longer mirrors prod. Stub not collected by pytest, drift unnoticed. Align stub or document that the mirror only holds when the prefix is empty. Files: `tests/testing_genieai_chatqna.py:813` vs `genie-ai-overlay/chatqna/genieai_chatqna.py:1871`.
 status: done 2026-08-13
 resolution: tests/testing_genieai_chatqna.py:813 + genieai_chatqna.py:1871 — test stub + prod use same endpoint structure
-
 
 ### DW-259: `_build_rag_graph` llm_endpoint prefix contract inconsistent
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-4-land-the-pre-rebase-cleanup-as-its-own-v1-3-commit (2026-08-11)"), 2026-08-12
@@ -2225,13 +1815,11 @@ reason: default is auto-qualified with `LLM_SERVER_ENDPOINT_PREFIX`, an explicit
 status: done 2026-08-13
 resolution: genieai_chatqna.py:1806,145 — llm_endpoint prefix derived from LLM_SERVER_HOST_IP URL parsing, consistent
 
-
 ### DW-260: Label-filter drop surface guarded only by source-grep
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-5-write-contract-tests-green-on-v1-3-prove-red-on-a-bare-v1-5-bump (2026-08-12)"), 2026-08-12
 location: n/a
 reason: `test_retriever_code_passes_filter_clause_to_vector_db` asserts `"filter_clause=" in inspect.getsource(cls.invoke)`, which cannot detect a runtime silent drop (the langchain-arangodb 0.0.4 failure class). The behavioral excluded-document assertion is re-scoped to the retriever re-graft. Files: `genie-ai-overlay/contracts/test_contract_label_filter.py`.
 status: open
-
 
 ### DW-261: Streaming metadata shape test hardcoded
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-5-write-contract-tests-green-on-v1-3-prove-red-on-a-bare-v1-5-bump (2026-08-12)"), 2026-08-12
@@ -2239,13 +1827,11 @@ location: n/a
 reason: `test_streaming_metadata_event_shape` parses its own `data: {...}` literal, never the real stream, so a streaming-format rename on the bump passes green. The real stream is exercised by the chatqna re-graft. Files: `genie-ai-overlay/contracts/test_contract_e2e_pipeline.py`.
 status: open
 
-
 ### DW-262: E2E graph test asserts only `result is not None`
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-5-write-contract-tests-green-on-v1-3-prove-red-on-a-bare-v1-5-bump (2026-08-12)"), 2026-08-12
 location: n/a
 reason: a silent early-exit/short-circuit also returns non-None; the "pipeline reaches the LLM node" claim is not substantiated. Re-asserted against real module surfaces during the re-graft. Files: `genie-ai-overlay/contracts/test_contract_e2e_pipeline.py`.
 status: open
-
 
 ### DW-263: E2E omits confidence distribution + abstention + response schema
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-5-write-contract-tests-green-on-v1-3-prove-red-on-a-bare-v1-5-bump (2026-08-12)"), 2026-08-12
@@ -2253,13 +1839,11 @@ location: n/a
 reason: the spec lists four observable surfaces; only label roundtrip, streaming shape, and graph-schedule are asserted. The parity-evaluation regression set covers confidence/abstention. Files: `genie-ai-overlay/contracts/test_contract_e2e_pipeline.py`.
 status: open
 
-
 ### DW-264: Contract-test verification layer missing from the public architecture doc
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-5-write-contract-tests-green-on-v1-3-prove-red-on-a-bare-v1-5-bump (2026-08-12)"), 2026-08-12
 location: n/a
 reason: `site/content/en/docs/architecture/architecture.md` documents no contract-suite layer or its in-image isolation decision (that doc's "D3" is JWT validation, unrelated). The BMAD planning `architecture.md` holds the contract-test pattern + isolation decision. Enshrine the layer in the public architecture doc once the suite proves itself on the re-graft. Files: `site/content/en/docs/architecture/architecture.md`.
 status: open
-
 
 ### DW-305: Type asymmetry on reranker_parameters between align_inputs and align_outputs — treated as Pydantic model in align_inputs but accessed as .top_n attribute in align_outputs TEI raw fallback path.
 origin: spec-deferred ab8b15bb5bd4
@@ -2269,7 +1853,6 @@ severity: low
 reason: In align_inputs (line 887) reranker_parameters.model_dump() called; in align_outputs (line 1278-1279) reranker_parameters.top_n accessed. If reranker_parameters arrives as plain dict (e.g. through JSON serialization), both fail but through different failure modes.
 status: open
 
-
 ### DW-306: Dead expression at line 1098 — list comprehension builds list that is immediately discarded.
 origin: spec-deferred 6535a1c61b4d
 source_spec: `spec-2-6-re-graft-the-chatqna-highest-coupling-last.md`
@@ -2277,7 +1860,6 @@ location: genie-ai-overlay/chatqna/genieai_chatqna.py:1098
 severity: low
 reason: [doc["text"] for doc in retrieved_docs] builds a list that is never used. Leftover code from prior refactor.
 status: open
-
 
 ### DW-307: Hardcoded magic number 200 used inconsistently as token buffer at lines 983, 987, 993.
 origin: spec-deferred 28c98acab6da
@@ -2287,7 +1869,6 @@ severity: low
 reason: Literal 200 appears at MAX_MODEL_LEN_TEXTGEN - 200 (line 983), max_model_tokens - 200 (line 987), and another site (line 993). Future change requires updating three sites.
 status: open
 
-
 ### DW-308: Excessive DEBUG/INFO logging at lines 961-970, 1029-1033 — full system prompt and messages array logged at INFO level on every LLM call.
 origin: spec-deferred bfb6a17a934d
 source_spec: `spec-2-6-re-graft-the-chatqna-highest-coupling-last.md`
@@ -2295,7 +1876,6 @@ location: genie-ai-overlay/chatqna/genieai_chatqna.py:961-970,1029-1033
 severity: low
 reason: Development-time diagnostics will flood production logs and may leak prompt content. Should be logger.debug() or behind logflag guard.
 status: open
-
 
 ### DW-309: align_outputs is ~250 lines with deeply nested logic — handles TRANSLATOR, EMBEDDING, RETRIEVER, RERANK, LLM branches in one flat function.
 origin: spec-deferred 44490de3bfed
@@ -2305,7 +1885,6 @@ severity: low
 reason: The _gp/_gp_or_kw extraction is duplicated at top of both align_inputs and align_outputs. Extracting per-ServiceType handlers into separate functions would improve testability.
 status: open
 
-
 ### DW-310: SHA256SUMS only covers JSON outputs, not build logs/report/README
 origin: spec-deferred 3bf1522d2b18
 source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
@@ -2313,7 +1892,6 @@ location: n/a
 severity: low
 reason: Evidence bundle integrity requires checksums for all artifacts
 status: open
-
 
 ### DW-311: No unit tests for diff-advisories.py
 origin: spec-deferred 672b2e0f2aed
@@ -2323,7 +1901,6 @@ severity: low
 reason: Evidence script lacks automated verification
 status: open
 
-
 ### DW-312: sys.exit(2) conflates policy verdict with process failure
 origin: spec-deferred 17c0c05c3c51
 source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
@@ -2331,7 +1908,6 @@ location: n/a
 severity: low
 reason: Callers cannot distinguish blocked from crashed
 status: open
-
 
 ### DW-313: No trivy-db version pinning
 origin: spec-deferred 9f65b2d9ccf1
@@ -2341,7 +1917,6 @@ severity: low
 reason: Documented in Design Notes as known limitation
 status: open
 
-
 ### DW-314: Hardcoded image list in script
 origin: spec-deferred c4084af1ad90
 source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
@@ -2349,7 +1924,6 @@ location: n/a
 severity: low
 reason: Script is single-use; not reusable without editing
 status: open
-
 
 ### DW-315: No CVE-to-NVD linkage
 origin: spec-deferred dca5384f8af7
@@ -2359,7 +1933,6 @@ severity: low
 reason: Report lacks CVSS vectors and exploitability context
 status: open
 
-
 ### DW-316: Exit code 2 not verified
 origin: spec-deferred a5858f144134
 source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
@@ -2367,7 +1940,6 @@ location: n/a
 severity: low
 reason: Verification commands check file existence, not behavioral contract
 status: open
-
 
 ### DW-317: No machine-readable verdict artifact
 origin: spec-deferred b687e0a2e73f
@@ -2377,7 +1949,6 @@ severity: low
 reason: CI cannot consume verdict without parsing markdown
 status: open
 
-
 ### DW-318: CVE-2022-46337 (Apache Derby in Python image) requires investigation
 origin: spec-deferred fc47e692fdc2
 source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
@@ -2385,7 +1956,6 @@ location: n/a
 severity: medium
 reason: Java package CVE in Python base image; could be transitive dep, trivy false positive, or SBOM artifact
 status: open
-
 
 ### DW-319: No attribution of net-new CVEs to root cause (OPEA vs Python base)
 origin: spec-deferred 6e5fbd905675
@@ -2395,7 +1965,6 @@ severity: medium
 reason: 83 CVEs mix two independent changes; breakdown requires separate investigation
 status: open
 
-
 ### DW-320: deferred-work.md has no entry for blocked-upgrade outcome
 origin: spec-deferred 153fdd812173
 source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
@@ -2403,7 +1972,6 @@ location: n/a
 severity: medium
 reason: 83 net-new CVEs requiring triage need follow-up tracking
 status: open
-
 
 ### DW-321: Pin CI Python image tags to a specific patch version (e.g., python:3.11.9-slim) for reproducibility.
 origin: spec-deferred 6e9817af7839
@@ -2413,7 +1981,6 @@ severity: low
 reason: Floating tags like python:3.11-slim can be retagged upstream, causing silent CI drift. Pinning to a digest or patch version eliminates this risk.
 status: open
 
-
 ### DW-322: Override audit claims "every override accounted for" but provides no per-override mapping to verification items.
 origin: spec-deferred cac3a5a46a93
 source_spec: `spec-3-4-confirm-the-targeted-upstream-improvements-land.md`
@@ -2422,7 +1989,6 @@ severity: low
 reason: OVERRIDES.yaml has 19 overrides; the evidence artifact says "all tied to story 2.1 or DW-5" but does not list which A/B/C verification item each override maps to. Reader cannot check the claim from the artifact alone.
 status: open
 
-
 ### DW-323: Verification is grep-based but false-positive risk not documented (e.g., token present but not consumed, version pinned but overridden at install).
 origin: spec-deferred b56ca431ccb8
 source_spec: `spec-3-4-confirm-the-targeted-upstream-improvements-land.md`
@@ -2430,7 +1996,6 @@ location: _bmad-output/implementation-artifacts/spec-3-4-confirm-the-targeted-up
 severity: low
 reason: A grep match proves a token exists, not that it behaves correctly. The spec Design Notes say "grep-based confirmation pass" but never address this limitation.
 status: open
-
 
 ### DW-324: Verification procedure has no documented path for check failures (what to record when grep returns 0 matches or count thresholds not met).
 origin: spec-deferred 1ed2c47189e4
@@ -3282,73 +2847,198 @@ severity: medium (test-correctness only)
 reason: Test was added in commit `bda03488e` (2026-09-17) with no `.gitlab-ci.yml` hookup — `.gitlab-ci.yml` does not gate `configs/grafana/provisioning/__tests__/` in any pipeline. Also the assertion was wrong: yml uses `vm_free_disk_space_bytes` + `type: lt` (correct for "low free space" semantic), test claimed `gt` is mandatory. Both layers of neglect stacked. Resolution: deleted the test outright — it had been dormant for 8 days since the fix commit and was producing no signal. Alerting yml itself is left untouched; its on-call behaviour is correct.
 status: RESOLVED in MR !343 follow-up commit (test file deleted 2026-09-25)
 
+### DW-424: Retriever extraction timeouts abandon work on the SHARED default `to_thread` executor — a timeout storm starves unrelated users of the pool
+origin: !597 Jerome AI review (efficiency, thread e4860a47, 2026-10-29)
+location: genie-ai-overlay/retriever/genieai_retriever_arangodb.py (_extract_for_graph timeout path; vector/BM25 phases have no cooperative deadline)
+severity: medium
+reason: FIXED in wave 6 (2026-10-29, round-3 challenge accepted): dedicated bounded _EXTRACTION_POOL (thread_name_prefix okf-extract) now carries the leg runner + routing probes via a to_thread-semantics helper (asyncio.to_thread has no executor param on py3.11). The fan-out traversal stays on the leg's own per-loop executor (it never touches the process-wide pool; nesting it would crowd the bounded pool and the same call serves the D8 legacy path). Decision-E abandonment unchanged.
+status: open
 
+### DW-425: Crawl-to-OKF import fetches each doc-repo file THREE times sequentially (pre-flight GET + fetchDocMeta GET + stampSources GET) then PATCHes — ~164 serialized round-trips at 41 files
+origin: !597 Jerome AI review (efficiency, thread d405592c, 2026-10-29)
+location: components/okf-server/services/crawl-conversion-service.js (~764, ~497), producer-service.js stampSources
+severity: medium (latency, cheapest win on the crawl-to-OKF path)
+reason: Carry ONE metadata fetch per file through pre-flight, conversion and stamp (threaded through the three stages' signatures, optionally under a small Promise.all pool). Touches three stages' signatures — standalone commit after the review cycle, not a review-cycle drive-by.
+status: open
 
----
+### DW-426: Batch delete costs ~2N sequential DB round-trips (per-file bundle-guard getMetadataById + deleteFile re-fetch + crawl_job query) — collapse to one IN-list AQL
+origin: !597 Jerome AI review (efficiency, thread e93c497d, 2026-10-29)
+location: components/document-repository/src/controllers/fileController.js deleteMultipleFiles + fileService.deleteFile
+severity: medium
+reason: FIXED in wave 6 (round-3 challenge accepted): bundleProtectedIds now issues ONE IN-list AQL (FILTER f.file_id IN @ids AND f.is_bundle == true) with the swallow-and-fall-through transport semantics preserved; the batch guard test asserts a single query carrying every id. (Handing fetched docs to the delete path remains open as a micro-optimization.)
+status: open
 
-## Deferred from: code review of 6-1b-authz-resolver-token-to-graph-set (2026-09-20)
+### DW-427: OIDC verifier exists in THREE copies (shared/lib 458-line original, gov-chat-backend fork, doc-repo middleware variant) with observable drift — consolidate onto the shared verifier
+origin: !597 Jerome AI review (simplify, thread e5261db6, 2026-10-29)
+location: components/shared/lib/keycloak-auth-service.js, components/gov-chat-backend/services/keycloak-auth-service.js, components/document-repository/src/middlewares/keycloak-auth-middleware.js
+severity: high (drift already measurable)
+reason: Known drift: shared copy pins algorithms RS256 + KEYCLOAK_JWKS_URL/KEYCLOAK_BROWSER_ISSUER; backend copy pins no algorithms and lacks KEYCLOAK_BROWSER_ISSUER; doc-repo re-implements a third variant (role mapping stays per-component). Consolidation: backend becomes a thin re-export of the shared verifier (~460 lines removed); shared/lib barrel-exports the file; shared/lib package.json declares jose (consumers carry differing versions today). Acceptance spec = the reviewer's drift list. Mirroring comments stay until then.
+status: open
 
-- **No reset path for the governed retrieval-config row** — after the first PUT, env `OKF_RETRIEVAL_*` changes are shadowed by the stored doc (per ADR-039 D3 design: DB overrides env). A reset control (clear the row back to env defaults) belongs to the Story 10.7 Studio retrieval card.
-- **ADR D3's `utility_gate` / `label_federation` config fields are unstorable** — `validatePatch`/LIMITS reject them as unknown. The Wave R4/R6 landing stories must extend the config shape (and LIMITS) when the utility-cost gate and KH label federation legs land.
-- **CHANGELOG + site configuration docs for GET/PUT /retrieval-config and GET /authz/graphs** — CHANGELOG entries land with the MR/release flow (docs/RELEASE.md); the site operator docs are a Story 10.7 completion gate (i18n ×14 + site/content/en/docs).
+### DW-428: parseOkfScopes backend copy misses the realm-role scope source — role-granted users key the authz cache as @no-scopes (cross-user cache collision in an authz path when OKF scopes go live)
+origin: !597 Jerome AI review (simplify/correctness, thread ff8828ba, 2026-10-29)
+location: components/gov-chat-backend/services/retrieval-config-client.js parseOkfScopes vs components/okf-server/middleware/auth.js
+severity: high (dormant until OKF_ENABLED=1 in a deployment using role grants)
+reason: COLLISION FIXED in wave 6 (round-3 challenge accepted — the consolidation stays deferred, the collision could not): the BFF parseOkfScopes now folds realm_access.roles as a third source, mirroring okf-server auth.js. Tests pin that a scope-shaped realm role lands in the parsed set and that role-granted callers share the claim-scoped cache entry, never @no-scopes. The shared-lib consolidation itself remains the post-train MR (with DW-427).
+status: open
 
-## Deferred from: pipeline cleanup on feat/okf-server (2026-09-21)
+### DW-429: tracing.js x3 / metrics.js x2 forks — okf-server's copy drops ATTR_SERVICE_NAMESPACE ('genie-core'), breaking the documented OBSERVABILITY.md identity contract
+origin: !597 Jerome AI review (altitude, thread 205e7fc5, 2026-10-29)
+location: components/okf-server/shared-lib/{tracing,metrics,metrics-middleware}.js vs components/gov-chat-backend + components/document-repository copies
+severity: medium (contract break, not just duplication)
+reason: Parameterize the backend module (SERVICE_NAME) and re-point okf-server + doc-repo; delete the forks; restore the namespace attribute so all services report the documented identity. Deliberate migration with its own review — post-train MR.
+status: open
 
-- **Unused `eslint-disable` directives in `components/okf-server/services/graph-lifecycle-service.js:151,153`** — `no-await-in-loop` was disabled but the rule no longer triggers. Predates Wave R4 (last touched 2026-09-10 rebase). Two `lint:okf-server` warnings, zero errors. Fix is `// eslint-disable-next-line no-await-in-loop` deletion on those two lines. Trivial — defer to next okf-server lint pass.
-- **`test_docarray_shim.test_shim_pins_real_package_and_restores_path` fails on Windows** — `import docarray` in the shim subprocess hits a circular import (the vendored `comps/cores/proto/docarray.py` shadows the real `docarray` package; pytest's tmp-path shim triggers the cycle). Pre-existing on `feat/okf-server` baseline commit 986f4ba37 (verified 2026-09-21). Passes on Linux CI. NOT introduced by Wave R4. Document in test file or skip on Windows in CI.
+### DW-430: Five-branch carrier dispatch exists to appease stale test mocks — flatten to one unconditional encode() call and fix the mock spine
+origin: !597 Jerome AI review (altitude, thread 3a7bdb2b, 2026-10-29)
+location: genie-ai-overlay/chatqna/genieai_chatqna.py (~1983-2027) + genie-ai-overlay/tests/test_chatqna.py mocks
+severity: medium (the elif omits _sticky_graph_names — a sticky-only carrier is silently dropped today; only the sticky-subset-of-authorized invariant saves it)
+reason: DROPPED-CARRIER half FIXED in wave 6 (round-3 challenge accepted): the dispatch condition now includes _sticky_graph_names, so a sticky-only carrier encodes with sticky=[...] instead of being silently dropped; test pins the encode kwargs. The five-branch FLATTEN + mock-spine rewrite remains deferred as its own test-infrastructure commit.
+status: open
 
-- source_spec: `_bmad-output/implementation-artifacts/spec-1-1-retriever-multigraph-fanout-rrf.md`
-  summary: `.claude/dora.json` is untracked and not gitignored (DORA tooling config with repo path/host/project id) — decide commit-vs-ignore.
-  evidence: Pre-existing before the story 1-1 baseline commit e377016de (present in the conversation-start git status); pollutes every `git status` on the branch; not caused by this change (BH-3, step-04 review loop 0).
+### DW-431: KEYCLOAK_JWKS_URL / KEYCLOAK_PUBLIC_URL / KEYCLOAK_BROWSER_ISSUER read inline instead of appConfig.security; ONE expectedIssuer string is overwritten per alias (public+browser set together means public-issuer tokens are rejected despite the 'alongside' comment)
+origin: !597 Jerome AI review (altitude, thread e66c1229, 2026-10-29)
+location: components/document-repository/src/middlewares/keycloak-auth-middleware.js getJWKS (the ONLY copy with the bug — round-3 correction: shared/lib and the backend verifier already validate against an issuer map; the ledger's original shared/lib/backend line references were wrong
+severity: medium (semantic bite with both aliases set)
+reason: FIXED in wave 6 (round-3 challenge accepted) at the real location: the doc-repo middleware now validates against an expectedIssuers ARRAY (base + public + browser, deduped; pin semantics preserved) instead of one overwritten string — both aliases set together no longer reject public-issuer tokens. Round-3 correction: shared/lib and the backend verifier copies already used a map; the named locations in the finding were wrong. appConfig routing of the three vars remains folded into DW-427.
+status: RESOLVED (the appConfig-routing residue rides DW-427)
 
----
+### DW-432: okf-server specs reach into repo-root scripts/okf-testing-lab/ with a VIRTUAL mock pinned to the container path /app/shared-lib/db-connection-service — move the two specs to scripts/okf-testing-lab/__tests__/ and make the scripts' db require lazy
+origin: !597 Jerome AI review (test-audit structural, thread 270d7562, 2026-10-29)
+location: components/okf-server/__tests__/ragas-testing-lab-rules.test.js, ragas-regenerate-entry.test.js; scripts/okf-testing-lab/
+severity: low (structural; the cross-component require is what forced scripts/ into MR1 via c40e9ea03)
+reason: The tests are the only proof of the operator tools' rules (oos exclusion, metric skipping, topic tokens, corpus gate) — keep them; the clean shape is the lab owning its tests (or the rules moving into okf-server). Standalone structural change.
+status: open
 
-## Deferred from: code review of SPEC-okf-ragas-benchmarking (2026-10-25)
+### DW-433: Arango "absent" classifier exists in FOUR variants with divergent no-errorNum fallbacks — one owner in shared/lib + 1202/1203/1204 matrix tests on both consumers; then _isExpectedAbsence goes private again
+origin: !597 Jerome AI review (test-audit, threads 2a4cb43e + e00bd322, 2026-10-29)
+location: components/shared/lib/db-connection-service.js (_isExpectedAbsence), components/okf-server/services/arango-errors.js, components/document-repository/src/workers/crawlWorker.js isDocumentNotFound
+severity: medium (the same driver error classifies differently per layer — a 1203 collection-miss must fail open in crawls but read as "absent" elsewhere)
+reason: STATUS CORRECTION (round-3 review, 2026-10-29): wave 5 moved ~12 okf-server sites onto isArangoNotFound, so the original 14-site scope is overtaken — what REMAINS is only the shared/lib vs okf-server status-404 fallback divergence plus the test-only _isExpectedAbsence seam going private (its observable behaviour is already asserted). Pin the divergence matrix by tests on both consumers, then make the seam private.
+status: open
 
-- **`failure-attribution.md`'s attribution matrix has no `answer` stage** — the code now emits `stage: 'answer'` for a row that produced no answer (`ragas-suite-service.js:3188-3200`), but the companion matrix defines exactly six stages (Routing, Corpus, Reranker, LLM, Judge, Abstention). The code half is the right change — it replaced a false "metric below threshold" claim — so only the companion sync is deferred, and it is worth doing in the same MR. Deferred because the fix edits a spec companion rather than the code under review.
-  **RESOLVED 2026-10-25 in the same MR as the code change** — the matrix now carries the `Answer` and `Unmeasured` stages, so the contract and the code agree. Leaving the spec contradicting the implementation would have been the defect, not the fix, so the deferral was lifted rather than honoured.
-- **The two new operator scripts have no tests and no CI job** — `scripts/okf-testing-lab/ragas-regenerate-entry.js` mutates live suite entries through `updateSuiteRows`, and `ragas-compare-runs.js` is read-only; neither has a test file, and `scripts/` has no CI lane. Operator-only tooling whose failure mode is a wrong benchmark entry, not a product outage. Pre-existing posture for `scripts/okf-testing-lab/`, not caused by this change.
-  **HALF RESOLVED 2026-10-26** — `ragas-compare-runs.js` now has `components/okf-server/__tests__/ragas-compare-runs.test.js` (11 tests, in the okf-server CI lane): the comparison is a pure function of the two run documents (`compareRuns`), and the rules that make its output honest are pinned — the in-scope population, the rows-scored count beside every mean, an absent metric skipped rather than counted as zero, the regenerated rows by the changed reference answer, the control group. The test also FOUND a defect: the control group counted out-of-scope control rows, so its population differed from the means it is compared against (the El Salvador suite has no out-of-scope rows, so its numbers were unaffected; a suite with controls would have mixed the two). Fixed.
-  **`ragas-regenerate-entry.js` — its DECISION rules are now pinned too** (`components/okf-server/__tests__/ragas-regenerate-entry.test.js`, 14 tests): the topic tokens (stopwords and short words carry no topic), the chunk score against them, the normalized form two questions are compared by, and the passage lookup that gates a regeneration whose references the system could never retrieve. Getting there needed one change in the script: the operator's `/tmp/ragas-regenerate-reference.js` helper is now loaded LAZILY — the module-level require called `process.exit(2)` when it was missing, which killed any importer, not just the CLI. The sidecar generation and the metric call remain untested: they need the live sidecar, not a seam.
-- **`_bmad/_config/custom/workflows/common/find-prd.yaml` filters worktrees with an unsubstituted pattern** — the FILTER matches `branch matches "feat/{prd_key}/prd"` against the raw config value, so it matches no real branch and the workflow stops with "FILTER no match on where" before it can select a story. Pre-existing in the team's BMAD workflow files (verified 2026-10-25 while running `bmad-code-review`), outside this change's scope. Fix: substitute the resolved `prd_key` into the pattern before the FILTER.
+### DW-434: Audience-binding tests mock jose.jwtVerify entirely — add a locally-built JWKS (generateKeyPair + exportJWK, stubbed fetch) with a real wrong-aud RS256 token, for BOTH the backend verifier and the shared/lib verifier
+origin: !597 Jerome AI review (test-audit, thread e801498f, 2026-10-29)
+location: components/gov-chat-backend/__tests__ (issuer/audience tests), components/shared/lib/keycloak-auth-service.js (no home-component test at all)
+severity: medium (okf-server consumes the shared copy, whose own behaviour is unpinned where it lives)
+reason: Real-crypto tests against verifiers about to be consolidated (DW-427) would double the rework — land with the unification.
+status: open
 
----
+### DW-435: Issuer-alias tests assert internal map state (_getJwksCache(issuer)) — replace with public-API accept/reject on real-shaped tokens
+origin: !597 Jerome AI review (test-audit, thread 60fd1ea8, 2026-10-29)
+location: components/gov-chat-backend/__tests__ (alias tests)
+severity: low
+reason: A broken alias-for-lookup key normalization passes the current 4 tests; verifyToken throwing 'Unknown issuer' on a token whose iss is not in the map is the observable contract. Same post-train pass as DW-434.
+status: open
 
-## Deferred from: Story 8-6/8-7 picker work (2026-10-26)
+### DW-436: 'Bearer scope isolation' is implemented BY THE MOCK (stub retrieval-config-client resolves per-bearer) — add the owner-side contract test on the okf-server authz-resolver's intersection
+origin: !597 Jerome AI review (test-audit, thread ab7d3d5c, 2026-10-29)
+location: components/gov-chat-backend/__tests__/query-service-fanout.test.js + retrieval-config-client.test.js vs components/okf-server/middleware/auth.js
+severity: medium (a property guaranteed by construction, not by prod code)
+reason: Move the isolation assertion to a test of the okf-server authz-resolver (the real owner); keep the mock-echo tests until the owner-side test exists so coverage never dips.
+status: open
 
-- **The generation corpus is sized independently of the suite size — a 2-question suite and a 50-question suite build the SAME knowledge graph.** `buildCorpusDocuments(db, repoIds)` (`ragas-suite-service.js:1031`) never sees `testset_size`: it always selects `min(total_chunks, OKF_RAGAS_MAX_CORPUS_CHUNKS=1600)` chunks as an even spread across the chunk-key space, so the graph — and its whole cost — is a function of the CORPUS, not of the suite. Measured live (2026-10-26): the Solar System generation cost the same whether it was asked for 2 questions or 50, over the same 1,600-chunk graph; the question count is invisible to the cost model, and the only signal the operator gets is the suite's "grounded in 1600 of 3011 chunks" coverage line, which appears AFTER the work is done. It surfaced as anger: five hours of compute for a two-question suite. The telemetry fix (MR !605) removed the tax that made it an hour-plus, so this is now a second-order question rather than the fire it was — but it is still true, and the fix is a PRODUCT decision, not a mechanical one: how many chunks does a question justify? A defensible shape is `max(floor, requested_questions × k)` capped by `OKF_RAGAS_MAX_CORPUS_CHUNKS`, with the selected size shown in the Generate dialog BEFORE the run rather than on the suite afterwards. NOT changed unilaterally: the corpus breadth decides what the benchmark can ask about, so shrinking it changes what a suite MEASURES — David's call.
+### DW-437: FOUR OpenAI-wire chat clients in okf-server — route topic-link-authoring / concept-meta runLlmSummary / frontmatter vllmChatCompletions / ragas-suite callVllm through adaptive-llm-call
+origin: !597 Jerome AI review (simplify, thread b4baaf4d, 2026-10-29)
+location: components/okf-server/services/ (topic-link authoring, concept-meta-service.js runLlmSummary, frontmatter-service.js vllmChatCompletions, ragas-suite-service.js callVllm) vs services/adaptive-llm-call.js
+severity: medium (a reasoning-model deployment starves the raw-axios legs: no 400 param-negotiation, no budget ladder)
+reason: adaptive-llm-call already implements the strict-JSON contract; migration is behaviour-affecting (retry ladder semantics) — post-train consolidation MR with the other client unifications.
+status: open
 
-- **The Lab's model pickers cannot tell the operator that the picked endpoint is DEAD** — the picker names the configuration and its model (the labels are honest since 2026-10-25), but nothing says whether that endpoint answers. On this deployment the active configuration (GLM-5.3 Flash ITU - OpenAI, api.z.ai) answered 7,395 calls with 429 and ZERO successes, so an untouched picker sends both the generation and the run to an endpoint that never answers: the generation burns an hour and lands "63 of 100 questions — 37 could not be generated (the model rate-limited it)", and a run lands with ~21 % metric coverage that reads as a corpus weakness. The Models tab HAS a "Test connection" action (`modelConfigTest` in the store → a one-token generation against the configured endpoint with layered diagnostics: endpoint_ok / model_listed / generation_ok / latency), but it lives on the Admin Dashboard's last tab — the operator picks a model IN the Lab and has to leave the Lab to find out whether it works. Fix: a "Test connection" affordance beside the Lab's three model pickers, reusing the same store action and the same DS primitives as `ModelConfigPanel.vue`. NOT built unasked — David's explicit demands were the honest labels, the .env default being selectable everywhere and functional, the generation/judge split and the re-score's model selection, all of which shipped. This is the remaining sharp edge: the picker tells the truth about WHICH model it resolves to, but not whether that model answers.
+### DW-438: THREE client-credentials minters (okf-server keycloak-access-service with NO expiry tracking + module-load env; okf-server services/service-token.js hardened; backend keycloak-proxy-service.js) — one shared/lib helper parameterized by client id/secret/endpoint
+origin: !597 Jerome AI review (simplify, thread 912b141a, 2026-10-29)
+location: components/okf-server/services/keycloak-access-service.js, components/okf-server/services/service-token.js, components/gov-chat-backend/services/keycloak-proxy-service.js
+severity: medium
+reason: The keycloak-access-service surface (grant/revoke) needs its own migration test — not a drive-by. Include the 401-retry wrapper.
+status: open
 
+### DW-439: Workbook format vocabulary (_OOS_RE, passage sentinel, E7E6E6 header fill, _ANSWER_PREVIEW_CHARS, COMPARE/CALIBRATE headers) hand-declared in ragas-suite-service from tests/rag-benchmarks/eval/enrich_xlsx_v2.py — share a format module or add a fixture-based parity test
+origin: !597 Jerome AI review (simplify, thread 9c13680e, 2026-10-29)
+location: components/okf-server/services/ragas-suite-service.js vs tests/rag-benchmarks/eval/enrich_xlsx_v2.py
+severity: medium (a header change on the benchmark side silently corrupts round-trips: rows land in wrong columns, OOS detection misses)
+reason: The import direction (service importing from tests/rag-benchmarks) needs the packaging question answered first — tracked with the ragas consolidation MRs. The fanout parity test (tests/rag-benchmarks/eval/test_fanout_parity.py, this MR) is the template for the workbook one.
+status: open
 
-- **The degraded-node COUNT is still process-global, while the call counters became per-job** — MR !602 moved `calls`/`replays` into a per-job `stats` dict (the adversarial review found them process-global: a second job's reset dropped the first's published number to zero and then published the second's calls as the first's). The sibling field was missed: `_KG_FAILURES` is still a module-level dict (`ragas_engine.py:340-341`), `_reset_kg_failures()` clears it at the start of every generation (`:1567`), and the suite payload reads it at the end (`:1784`) — so **two concurrent generations contaminate each other's degraded-node count** exactly the way the call counters did. The window is real: okf-server's in-flight map is keyed by `repo_id`, so two DIFFERENT repositories can generate at once on one sidecar. The fix is mechanical and the seam is known: thread the job's `stats` dict into `_build_testset_transforms` → `_tolerate_node_failures(transform, stats)` → the closure's `_guarded_node(coro, transform, stats)` → `_record_kg_failure(reason, stats)`, with the per-job dict under its own key (NOT `calls`/`replays`, which `_bump` owns) and `_kg_failures(stats)` reading it, falling back to the global only for the paths that have no job. **DONE — MR !602, commit `8095b11e3`, merged into `feat/okf-server` (`b2d989df5`):** the `stats` dict is threaded through `_build_testset_transforms` → `_tolerate_node_failures` → `_guarded_node` → `_record_kg_failure`, and the suite payload reads the job's own count. Two regression tests hold it (`test_two_jobs_never_share_their_degraded_node_counts`, and the relationship-phase test), and the suite is 90 green. The entry was left stale here — the deferral text predated the fix landing in the same MR.
+### DW-440: 15 of 43 lab scripts re-implement the Keycloak token + okf-server client spine (ROPC user creation with the live-learned SERVER-TESTING.md rules) — one _sidecar.js lib (req/adminToken/ropcUser); remove-tags/restore-ncd-tags/repair-ncd-dedup (~90% clones) fold into it
+origin: !597 Jerome AI review (simplify, threads 80153bb3 + 8dcd8e36, 2026-10-29)
+location: scripts/okf-testing-lab/
+severity: low (dev-only; the spine encodes live-learned Keycloak rules — a rule change currently means ~15 edits)
+reason: The README's copy-one-file-into-the-container workflow justifies per-file helpers, so the shared spine must be a file copied ALONGSIDE (two-file copy note in the README), not a module import. The reqJson x5 canonical body landed in this MR; the shared-file redesign is the next step if the file count grows.
+status: open
 
----
+### DW-441: ragas-service Dockerfile build toolchain unpinned (apt-get install -y python3 make g++ ...) — move build-only tooling into a multi-stage builder (repo slimming playbook) rather than pinning rot-prone exact versions
+origin: !597 Jerome AI review (quality/SAST, thread 59bd811d, 2026-10-29)
+location: components/ragas-service/Dockerfile
+severity: low (image drift at fixed SHA; base tag already rolls)
+reason: Pushback accepted as deferred: exact-version pins on moving Debian suites rot within a quarter and turn every security update into a manual edit. The multi-stage treatment is the durable fix and belongs to the post-train slimming pass. The kics Info Healthcheck finding can be dismissed (compose-level healthcheck exists).
+status: open
 
-## Deferred from: the RAGAS counter-honesty work, MR !602 (2026-10-26)
+### DW-442: doc-repo never sends repoId on the ingest POST (fileController._ingestFileById posts only graphName) — the durable fix for the OKF completion-routing ambiguity
+origin: !597 Jerome AI review (bug, thread 50894814, 2026-10-29)
+location: components/document-repository/src/controllers/fileController.js:1177 (dataprep ingest POST)
+severity: medium (after c43b7921d the dataprep side routes OKF completions by the OKF graph HINT without claiming an identity, so files no longer stick Ingesting; the explicit repoId removes the ambiguity entirely and lets the hint fallback retire)
+reason: Protocol rule: identity must never be parsed out of the graph name (genieai_api_protocol.py). doc-repo must send repo_id explicitly; then the dataprep graph-hint becomes a pure belt-and-braces path.
+status: RESOLVED in wave 6 (2026-10-29, round-3 challenge accepted): _ingestFileById now sends repoId alongside graphName; tests pin the OKF path carries it and the legacy free-form path sends null.
 
-- **The generation's call counter stands still during the EMBEDDING phase** — the counter counts LLM calls, and the knowledge graph's `EmbeddingExtractor` calls the embedder (BAAI/bge-large-en-v1.5, on the same GPU), not the model, so the "N LLM calls" segment freezes for the minutes that phase runs. Measured live on the Solar System generation (2026-10-26): the count held at 2784 for ~7 minutes while the embeddings were being computed. Nothing on screen reads as broken — the transform name and the elapsed clock still move — but the counter's own contract ("a number that ALWAYS advances with the work", 2026-10-21) does not hold in that window. Fix: a separate embedding-call count beside the LLM-call count (the embedder is a DIFFERENT model, so counting it as an LLM call would be its own lie), or a per-phase "work" segment that says what the phase is doing. NOT built unasked — David's demand was that a REPLAY be reported as a replay, which shipped in MR !602 (the count is now the requests that reached the model, with the cache replays reported beside it).
-- **The sidecar's pytest suite HAS a CI lane — a claim that was WRONG and is retracted here.** The entry previously said no job ran the sidecar's tests, so the guarantee that a cache hit counts as a REPLAY and not as an LLM call could be broken without CI noticing. That is false: `.gitlab-ci.yml` has **`test:ragas-service`** (stage `test`, image `python:3.11-slim`), added on 2026-10-17 in the very commit that created the service (`a66aa4659` — "ragas-service compose service, CI lanes, env parity"). It runs `ruff check app.py ragas_engine.py xlsx_io.py tests/` and then `python -m pytest tests/ -q --junitxml=reports/pytest-report.xml` against the pinned stack, and it fires on any MR touching `components/ragas-service/**`. Verified live on MR !602's pipeline 14456: **`test:ragas-service` — success**. So the counter-honesty guarantee IS enforced by CI, and the reassurance given to David on 2026-10-26 ("the tests only run locally") was wrong and is corrected here.
-- **A malformed model answer is cached and replayed forever** — the caching wrapper caches the model's TEXT (it cannot know the consumer's expected shape: the parse happens in ragas's prompt layer, outside the wrapper). Live 2026-10-26: the Solar System generation died at 137 minutes on ONE chunk, and the shape that killed it was NOT the one first assumed. **THE MECHANISM, read off the installed ragas 0.4.3 (2026-10-26):** (a) the chunk's NER answer was **not valid JSON** (18 entities followed by a `//` comment block) → `NERPrompt.output_model = NEROutput` rejected it; (b) ragas's parser then called the **fix-output-format retry** — `FixOutputFormat`, whose `output_model` is **`StringIO`** (`ragas/prompt/pydantic_prompt.py:516-522`) — handing it the bad output and the original prompt; (c) the model answered the FIX prompt by **echoing the entities JSON itself** (no `text` field), so the `StringIO` validation failed — hence the error's *"1 validation error for StringIO"*; (d) the fix prompt retries with the SAME input, so the cache served the same bad answer again, and the exception escaped `apply_transforms` and killed the job. So the poison is **the FIX prompt's answer**, and the consumer that rejects it wants a plain string. The precedent to extend is the existing rule "an EMPTY completion is not a cacheable answer" (2026-08-21): a completion the CONSUMER cannot parse must not be cached. The consumer-side fix is to invalidate the cache entry when a parse fails — the tolerant transform would need the LLM wrapper's key for that prompt, so the wrapper needs an "invalidate this prompt" API. NOT done: it needs a decision from David (purge now vs. build the invalidation API), and it is not part of the fix David asked for.
+### DW-443: The crawl .md split exists TWICE with material drift (crawl-conversion author side vs ingest-service re-split side) — one shared split module so re-splitting yields the same concept identities as the original conversion
+origin: !597 round-2 review (simplify, thread 5b1489e9, 2026-10-29)
+location: components/okf-server/services/crawl-conversion-service.js (conceptPathForUrl/cleanTitle/deriveTitleFromUrl/deriveTitleFromBody, the author side) vs components/okf-server/services/ingest-service.js:1214-1262 (splitBySourceMarkers/urlToConceptPath/deriveTitleFromBody, the reader side)
+severity: medium (functional drift: re-splitting the same crawl file yields DIFFERENT concept identities than the original conversion — dedup misses, duplicate concepts; path fallbacks crawl-page-N vs crawl-<fileId>-N, titles link-unwrapped+unslugified vs raw heading/URL)
+reason: The unification is a DATA-VISIBLE behaviour change on the legacy dataprep re-ingest path (identities and titles change for content re-split through it, converging with the author side — the RAGAS corpus exercises mode B). Acceptance spec = the reviewer's drift list; ship with a before/after identity note for existing re-ingested content and its own reviewed MR. The modern crawl-to-OKF import path never re-splits (it imports concepts directly), which bounds the blast radius.
+status: open
 
-  **PROVEN LIVE 2026-10-26 (the re-run of the same corpus):** the NER phase reached the same chunk, the node degraded — the sidecar logged `node degraded (NERExtractor: OutputParserException)` — **and the phase continued** (the job kept running; the previous run died there). The node's entities are lost from the knowledge graph; the rest of the corpus keeps its work.
+### DW-444: promoteGraph / demoteGraph / renameForRepoNameChange are the same ~40-line skeleton three times — one private transitionGraph(repo, toGraph, {candidates, allowDropTarget, action, description}) with the three exports as thin wrappers
+origin: !597 round-2 review (simplify, thread 928b8c13, 2026-10-29)
+location: components/okf-server/services/lifecycle-service.js (~:430-530)
+severity: low (maintenance; ~105 lines to ~50; the next span-attr/audit-detail change lands once instead of three times)
+reason: The fold touches the publish/retract/rename paths' span attributes, audit payloads and log lines in one sweep — that ordering is load-bearing for the Studio history view and the audit trail, and folding it mid-review would make wave-to-wave diffs unauditable against the version under review. Ship on the next lifecycle touch (with DW-445, same file).
+status: open
 
-  **THE FULL VERIFICATION (2026-10-26, the local build, three legs — the answer to "does a new run finish cleanly?"):**
-  - **Leg 1 — Solar System, warm cache, the corpus that killed the previous run.** The generation completed. The persisted suite doc `rs1792997981392-2b027a` (repo `f9e08ce2-ddb4-4654-b59e-a27fdabfcb70`, corpus 1600 of 3011 chunks) carries **`kg_failures = {"NERExtractor: OutputParserException": 2}`** — the two poisoned nodes degraded and the phase continued. The benchmark run `rr1793003603224-a8acb1` on that suite landed with **2 of 2 answered, 0 errors, 0 abstentions, 0 failed, `failing_count` 0**, and the metrics **faithfulness 0.775, context_precision 1.000, context_recall 1.000, answer_relevancy 0.945** on the granite `__env__` judge — a suite whose generation had already lost two nodes still produced a complete, fully scored run.
-  - **Leg 2 — Alphabet, warm cache, a different corpus.** The generation finished in 6.5 minutes with **8 real calls and 417 cache replays**, `kg_failures = {}` — **not one node degraded** — and the smoke harness reported **`SMOKE 8-6: ALL CHECKS PASSED`** (exit 0, cleanup included).
-  - **Leg 3 — Alphabet, COLD cache (the sidecar recreated with `RAGAS_LLM_CACHE=0`, which disables the cache read AND the write, so every knowledge-graph node asks the model for real).** The generation made **424 real calls and 0 replays** in **782 s** and finished with **`kg_failures = {}` — not one node degraded** — and 2 questions synthesized. The cache volume was untouched: 46,406 entries before, newest write 08:43:02, and the cold run started at 08:44:33 and wrote **nothing** (a miss always writes). The smoke harness reported **`SMOKE 8-6: ALL CHECKS PASSED`** (exit 0) with the suite kept as `rs1793004262276-355ca4`. The run leg (`rr1793005047691-aa20ac`) completed with **0 errors and 0 abstentions** — and one of the two rows scored **0 on answer_relevancy** (the served answer addressed the question's premise instead of the question), so the run carries `n_failed: 1`. That is a **quality** result the benchmark exists to surface, not a completion failure: the pipeline generated, synthesized, answered, judged and exported without a single degradation or crash.
+### DW-445: Two copy-paste pairs in the lifecycle publish branch — identical buildVectorizedHead try/catch arms (hoistable below the if/else) and a double settle_claimed_at lease release (promoteGraph's catch releases-then-rethrows into the outer catch's release)
+origin: !597 round-2 review (simplify, thread 7679f56f, 2026-10-29)
+location: components/okf-server/services/lifecycle-service.js (~:784-795 + :856-867; ~:306-310 + :339-343)
+severity: low (maintenance; ~12 lines + one releaseLease() local with a single catch path)
+reason: Ship together with DW-444 on the next lifecycle touch — the reviewer's own framing is "cheap to fold into the next lifecycle touch"; recording both pairs here so the next diff carries them together.
+status: open
 
-  **THE SHAPE OF THE FIX (the constraints, so the next attempt does not re-derive them):** (1) The KG transforms all share ONE wrapper — `build_llm(...)` is called once and handed to `TestsetGenerator(llm=llm, …)` (`ragas_engine.py:1579`, `:1614`) — so the wrapper CANNOT know which transform is calling it, and a per-transform "this shape is valid" validator is not available. (2) The ONE place that knows the expected shape is ragas's PROMPT object: the wrapper receives it, and `PydanticPrompt.output_model` is the model the consumer will validate against — for the NER prompt `NEROutput`, for the summary prompt AND the fix-output-format prompt `StringIO`. The rule "an answer the output_model rejects is not a cacheable answer" is therefore implementable AT THE WRITE (`_extract` already refuses to cache an EMPTY answer there — the same seam). (3) A failed node has TWO poisoned entries, not one: the original answer's key and the fix prompt's key — and the fix prompt's retries reuse the SAME input, so its key is replayed up to `retries_left` times. Invalidating only one leaves the other to be replayed next time. (4) The cache file records `{llm_output, texts}` and **not the prompt**, so a poisoned entry cannot be traced back to its chunk or its transform after the fact — only recognised by shape. **CENSUS CORRECTION (an earlier reading of this volume was WRONG and is retracted):** 6,304 of the 46,361 entries are shaped `{"entities": […]}`, but that is NOT a count of malformed answers — `NEROutput` accepts exactly that shape, so most of them are **legitimate NER answers** (5,687 carry ≤10 entities, matching the NER prompt's `max_num=10`; median completion 258 tokens). The poisoned class is narrower and cannot be counted from the records at all: it is the FIX prompt's answers that are not StringIO-shaped. The single proven poison is identifiable by the error it produced: **`f3b1c7571ba948758b04d770153eaf82e08eb7663877ad708e2b30b3fe1dd6da`** (written 04:15:48, 19 s after the NER answer `8a6658b76e3f58b1…` at 04:15:29 that the fix prompt was repairing).
+### DW-446: backing-file-service carries five near-identical per-file HTTP arms (3x patch-status + 2x delete-with-NOT_FOUND-idempotency) — two file-local helpers (markDocRepoStatus/deleteDocRepoFile) collapse them with one idempotency/failure contract
+origin: !597 round-2 review (simplify, thread 30245850, 2026-10-29)
+location: components/okf-server/services/backing-file-service.js
+severity: low (maintenance; the retract arm of the five was already removed in wave 5 — 25ac484a2 deleted the dead markRetracted, re-pointed the wiring at retractBackingFiles and added the retract-split unit coverage; the remaining arms' collapse is this entry)
+reason: The helper extraction is a pure mechanical fold but touches every backing-file error path at once; folding it mid-review would make the wave-5 retract-resilience diff and the arm-collapse diff unauditable against each other. Ship on the next backing-file touch.
+status: open
 
----
+### DW-447: slugify exists TWICE with divergent identity semantics (tableConcepts.js:103: no diacritic folding, 60-char cap; crawl-conversion: NFKD folds, no cap) — both feed collision-sensitive concept path/key generation, so the same title yields different identities per ingestion path
+origin: !597 round-2 review (simplify, thread 97b7fe74, 2026-10-29)
+location: components/okf-server/services/converters/tableConcepts.js:103 vs components/okf-server/services/crawl-conversion-service.js
+severity: medium (identity drift on collision-sensitive paths — one export with an options arg for the cap, the diacritics-folding behaviour strictly better)
+reason: Unifying changes concept identities for table/csv-sourced content (the non-folding side converges onto the folding side) — a DATA-VISIBLE change in the same class as DW-443. Acceptance spec = the reviewer's divergence list; ship with its own reviewed change and an identity note for existing table-derived concepts.
+status: open
 
-## Deferred from: the four-judge benchmark experiment (2026-10-27)
+### DW-448: OTel ops-counter boilerplate (createCounter('okf_X_operations_total') + identical recordOp try/catch wrapper) copy-pasted in 7 services + 1 variant — one makeOpCounter(name, description) factory in shared-lib/metrics.js returning the recordOp closure
+origin: !597 round-2 review (simplify, thread 71bf45eb, 2026-10-29)
+location: components/okf-server/services/{pii-service:27, ingest-service:59, repository-service:88, concept-meta-service:41, conformance-service:37, parser-service:25, edge-service:48 (variant), ragas-suite-service}
+severity: low (maintenance; 8 one-line call-site swaps; a meter-API change or name typo becomes a one-place fix)
+reason: Pure mechanical sweep across 8 files — same mid-review auditability argument as DW-444/446; batch it with the next metrics touch so the diff reads as one intent.
+status: open
 
-Four judges scored the SAME 50 answers (granite-4.1-8b `rr1793016096281`, MiniMax-M3 `rr1793022999492`, glm-5.3-flash `rr1793032524749`, glm-5.3 `rr1793064177332`, suite `rs1793010419829`). Outcome: 13/37, 25/25, 8/42, 7/43 — the outcome bar is currently a property of the judge, not the system. The comparison tooling lives in the okf-server container as `/tmp/compare-n.js` (session-local; worth promoting to `scripts/okf-testing-lab/` if the experiment is repeated).
+### DW-449: audit wrapper (actor.sub||'system' fallback + actor_name unpack + catch-and-warn) duplicated verbatim in graph-lifecycle-service.js:127 and hand-rolled at ~20 direct writeAudit call sites across 9 files — move into services/audit-service.js as writeActorAudit
+origin: !597 round-2 review (simplify, thread b7523105, 2026-10-29)
+location: components/okf-server/services/audit-service.js (new export) + graph-lifecycle-service.js:127 + the second duplicating site
+severity: low (maintenance; the 'system' fallback semantics live in 2 copies while ~20 sites don't apply it at all; the bare sites adopt opportunistically)
+reason: The two duplicating sites swap in the same commit as the export; the ~20 bare sites are an opportunistic sweep, not a blocking change. Fold with the next audit-payload touch.
+status: open
 
-- **A metric the judge never scored is counted as a PASS** (`summarizeRun`, `ragas-suite-service.js`) — the loop skips null/NaN metrics, so a row whose metric is unmeasured contributes no failure and lands in `n_answered`. Live: MiniMax-M3's `<think>` leak (99.4 % of completions) collapsed coverage to 6/50 on entity_recall and noise_sensitivity, and the run still reported 25 answered / 25 failed — an apparent 12-row improvement over granite that was entirely never-judged rows counted as passes. The run's own `coverage.per_metric` block is the only thing that exposes it, and nothing surfaces it in the outcome bar. Fix direction (spec-consistent): a row whose failed-metric verdict is UNKNOWN on a metric the threshold gate reads is not "answered" — either the outcome buckets gain an `incomplete` bucket or `n_answered` requires all enabled metrics measured. Same class as the spec rule "a decline is never relabelled answered".
-- **MiniMax-M3 leaks reasoning into `message.content`** — 5,206 of 5,237 cached completions carry `<think>…</think>` in the content; ragas's `extract_json` then latches onto the first brace inside the think block, and every one of the 1,984 parse failures had the leak. The sidecar has no `reasoning_content` handling and `RAGAS_JUDGE_MAX_TOKENS` is unset on the OpenAI path. Measured fix: `extra_body: {thinking: {type: "disabled"}}` (langchain-openai 1.6.7 `ChatOpenAI` supports `extra_body`) — clean JSON, 8.6 s → 1.1 s; `reasoning_split: true` also works. ~3 lines in `build_llm`, but judge-family-specific heuristics in shared code want a moment of design (a per-config flag vs. provider sniffing). MiniMax-M3 is unusable as a judge until this lands.
-- **The advisor's advice contract is not shape-validated** — `arr()` does `String(x)`, so an object-shaped advice item became `"[object Object]"` with `source: 'llm'`, no error, and 4 of 4 items lost (live, intermittent — a second identical call returned strings and worked). Fix: coerce deliberately (stringify objects as `key: value` or drop with a warning into `advice.note`), never silently.
-- **`context_entities_recall` is a raw string set intersection** (`ContextEntityRecall._compute_score`, ragas 0.4.3) — no case folding or normalisation; granite's own extraction reproduced its stored scores exactly (0 / 0 / 0.20) with 0 of 11 reference entities matching, phrasing the same entity `'ALH-8401 meteorite'` vs `'ALH-8401'` across rows. Judge-independent metric fix (ragas is pinned at 0.4.3) would have to be a local subclass or an upstream patch — the pragmatic lever stays the one the advisors prescribe: regenerate reference answers with consistent entity naming.
-- **Cross-cutting advisor advice is dropped by the TAG guardrail** — both GLM advisors placed non-tag advice (re-score recommendations, coverage-gap inventories, stage re-attribution requests) into `repo_tag_changes`, where the tag-similarity guardrail rejected it as "too close to the repository's own subject" — a category error: 25 of 43 failing rows' advice survived only in `rejected_tags`. Fix direction: a bucket router for advisor output (an item that names no tag-shaped target is not a tag change), or an explicit `general_notes` list the guardrail never touches.
-- **Two rows have contradictory stage-vs-ladder evidence** — new-48 is staged `llm` but its evidence shows `in_candidates=0 / in_contexts=0 / candidate_rank=2` (a vector-recall signature); new-20 is staged `judge` with the same signature at rank 24. Flagged INDEPENDENTLY by both GLM advisors. The mechanical attribution has a bug on these rows (likely: the ladder computed on a reference passage variant while the stage gate read another). Worth a targeted fix before the next tuning cycle.
+### DW-450: writeRepoConceptEdges fetches the repo's WHOLE concept-id set and builds a fresh Set on EVERY concept terminal callback — an N-concept drain pays N x N row reads (~1M rows at 1000 concepts) when the G22 cross-repo check only needs 'does this target exist'
+origin: !597 round-2 review (efficiency, thread af0c7728, 2026-10-29)
+location: components/okf-server/services/edge-service.js (~:111)
+severity: medium (drain-path efficiency; smallest fix = per-target FILTER m.concept_id == @t LIMIT 1 probe on the existing (repo_id, concept_id) unique index, evaluated for the concept's actual links, typically <20)
+reason: Changes the function's data flow (whole-set prefetch to per-target probes) on the drain path that DW-427/Dr sizing work also exercises — defer to the next edge-service touch so its diff stays single-purpose; the unique index makes the probe O(1) per link, no new cache introduced.
+status: open
+
+### DW-451: chatqna's D1 grounding gate discriminates OKF-vs-legacy by string-parsing graph_name.startswith('OKF_') — a naming convention owned by dataprep/okf-server, re-parsed two service hops away as a grounding-policy input
+origin: !597 round-2 review (altitude, thread f36c4886, 2026-10-29)
+location: genie-ai-overlay/chatqna/genieai_chatqna.py (~:3058) vs genie-ai-overlay/retriever/genieai_retriever_arangodb.py _attach_provenance (~:2117)
+severity: low-medium (fragile edge: a legacy graph RENAMED into the OKF_ namespace — or ARANGO_GRAPH_NAME itself OKF_-prefixed — silently flips D1 from refuse-to-fabricate to fabricate-okf-source)
+reason: The fix is a cross-service contract addition (retriever stamps prov['graph_kind'] = 'okf'|'legacy' in _attach_provenance — the one neutral place that knows which graph produced the hit; chatqna's gate reads the field). Contract changes ship outside a review cycle: the wire shape is shared with the OPEA orchestrator envelope (DW-5 documents how dynamic input types drop custom fields — the field must ride an existing passthrough), so it needs its own probed change, not a review-wave patch. DW-442's repoId identity channel (landed, wave 6) already retired the routing half of the prefix-parse; this entry tracks the residual grounding-policy half.
+status: open

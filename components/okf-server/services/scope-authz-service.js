@@ -80,11 +80,6 @@ function currentScopeMode() {
   return 'closed'; // explicit garbage — restrictive, never silent-open
 }
 
-/** True when the read side authorizes zero-effective-scope callers for all serving repos. */
-function isScopeModeOpen() {
-  return currentScopeMode() === 'open';
-}
-
 /**
  * @param {string[]} okfScopes
  * @param {boolean} isSuperAdmin
@@ -147,6 +142,5 @@ module.exports = {
   deriveScopeAuthz,
   deriveReadAuthz,
   currentScopeMode,
-  isScopeModeOpen,
   hasAnyScopeEntry
 };

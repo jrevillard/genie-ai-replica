@@ -15,9 +15,10 @@ Method | HTTP request | Description
 [**apiAdminDiagnosticsPost**](AdminApi.md#apiadmindiagnosticspost) | **POST** /api/admin/diagnostics | Run system diagnostics
 [**apiAdminLogsDebugYesterdayGet**](AdminApi.md#apiadminlogsdebugyesterdayget) | **GET** /api/admin/logs/debug-yesterday | Debug logs for yesterday to diagnose issues
 [**apiAdminLogsGet**](AdminApi.md#apiadminlogsget) | **GET** /api/admin/logs | Get system logs
-[**apiAdminLogsRolloverPost**](AdminApi.md#apiadminlogsrolloverpost) | **POST** /api/admin/logs/rollover | Trigger log rollover
 [**apiAdminLogsSearchGet**](AdminApi.md#apiadminlogssearchget) | **GET** /api/admin/logs/search | Search logs with filtering
 [**apiAdminLogsSummaryGet**](AdminApi.md#apiadminlogssummaryget) | **GET** /api/admin/logs/summary | Get logs summary by type and service
+[**apiAdminQueriesInspectGet**](AdminApi.md#apiadminqueriesinspectget) | **GET** /api/admin/queries/inspect | Get recent queries for admin inspection (Query Inspector)
+[**apiAdminQueriesInspectQueryIdGet**](AdminApi.md#apiadminqueriesinspectqueryidget) | **GET** /api/admin/queries/inspect/{queryId} | Get full query details for admin inspection
 [**apiAdminSecurityLastScanGet**](AdminApi.md#apiadminsecuritylastscanget) | **GET** /api/admin/security/last-scan | Retrieve the last security scan details
 [**apiAdminSecurityMetricsGet**](AdminApi.md#apiadminsecuritymetricsget) | **GET** /api/admin/security-metrics | Get security metrics
 [**apiAdminSecurityScanPost**](AdminApi.md#apiadminsecurityscanpost) | **POST** /api/admin/security-scan | Run security scan
@@ -34,6 +35,8 @@ Backup database
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AdminApi();
 
@@ -53,7 +56,7 @@ void (empty response body)
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -70,6 +73,8 @@ Optimize database
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AdminApi();
 
@@ -89,7 +94,7 @@ void (empty response body)
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -106,6 +111,8 @@ Get database statistics
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AdminApi();
 
@@ -125,7 +132,7 @@ void (empty response body)
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -142,6 +149,8 @@ Run system diagnostics
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AdminApi();
 
@@ -161,7 +170,7 @@ void (empty response body)
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -171,18 +180,21 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **apiAdminLogsDebugYesterdayGet**
-> apiAdminLogsDebugYesterdayGet()
+> ApiAdminLogsDebugYesterdayGet200Response apiAdminLogsDebugYesterdayGet()
 
 Debug logs for yesterday to diagnose issues
 
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AdminApi();
 
 try {
-    api_instance.apiAdminLogsDebugYesterdayGet();
+    final result = api_instance.apiAdminLogsDebugYesterdayGet();
+    print(result);
 } catch (e) {
     print('Exception when calling AdminApi->apiAdminLogsDebugYesterdayGet: $e\n');
 }
@@ -193,35 +205,38 @@ This endpoint does not need any parameter.
 
 ### Return type
 
-void (empty response body)
+[**ApiAdminLogsDebugYesterdayGet200Response**](ApiAdminLogsDebugYesterdayGet200Response.md)
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
  - **Content-Type**: Not defined
- - **Accept**: Not defined
+ - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **apiAdminLogsGet**
-> apiAdminLogsGet(limit, level, service)
+> ApiAdminLogsGet200Response apiAdminLogsGet(limit, level, service)
 
 Get system logs
 
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AdminApi();
 final limit = 56; // int | Maximum number of logs to return
-final level = level_example; // String | Filter logs by level (INFO, WARNING, ERROR)
+final level = level_example; // String | Filter logs by level. WARN/WARNING are synonyms (normalized to WARN before the VL query). The query is a single-value severity_text:<canonical> clause; ERROR matches only ERROR, FATAL only FATAL. Use /logs/summary for the sibling view.
 final service = service_example; // String | Filter logs by service name
 
 try {
-    api_instance.apiAdminLogsGet(limit, level, service);
+    final result = api_instance.apiAdminLogsGet(limit, level, service);
+    print(result);
 } catch (e) {
     print('Exception when calling AdminApi->apiAdminLogsGet: $e\n');
 }
@@ -232,79 +247,46 @@ try {
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **limit** | **int**| Maximum number of logs to return | [optional] 
- **level** | **String**| Filter logs by level (INFO, WARNING, ERROR) | [optional] 
+ **level** | **String**| Filter logs by level. WARN/WARNING are synonyms (normalized to WARN before the VL query). The query is a single-value severity_text:<canonical> clause; ERROR matches only ERROR, FATAL only FATAL. Use /logs/summary for the sibling view. | [optional] 
  **service** | **String**| Filter logs by service name | [optional] 
 
 ### Return type
 
-void (empty response body)
+[**ApiAdminLogsGet200Response**](ApiAdminLogsGet200Response.md)
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
  - **Content-Type**: Not defined
- - **Accept**: Not defined
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-# **apiAdminLogsRolloverPost**
-> apiAdminLogsRolloverPost()
-
-Trigger log rollover
-
-### Example
-```dart
-import 'package:openapi/api.dart';
-
-final api_instance = AdminApi();
-
-try {
-    api_instance.apiAdminLogsRolloverPost();
-} catch (e) {
-    print('Exception when calling AdminApi->apiAdminLogsRolloverPost: $e\n');
-}
-```
-
-### Parameters
-This endpoint does not need any parameter.
-
-### Return type
-
-void (empty response body)
-
-### Authorization
-
-No authorization required
-
-### HTTP request headers
-
- - **Content-Type**: Not defined
- - **Accept**: Not defined
+ - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **apiAdminLogsSearchGet**
-> apiAdminLogsSearchGet(term, level, service, dateRange, startDate, endDate)
+> ApiAdminLogsGet200Response apiAdminLogsSearchGet(term, level, service, dateRange, startDate, endDate)
 
 Search logs with filtering
 
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AdminApi();
 final term = term_example; // String | Search term
-final level = level_example; // String | Filter by log level
+final level = level_example; // String | Filter by log level. WARN/WARNING are synonyms (normalized to WARN before the VL query). The query is a single-value severity_text:<canonical> clause; ERROR matches only ERROR, FATAL only FATAL. Use /logs/summary for the sibling view. The VL query uses the unquoted severity_text:<level> form. getLogsInRange is the only endpoint that uses the quoted form — these endpoints differ in shape.
 final service = service_example; // String | Filter by service name
 final dateRange = dateRange_example; // String | Date range preset
 final startDate = startDate_example; // String | Custom start date (YYYY-MM-DD)
 final endDate = endDate_example; // String | Custom end date (YYYY-MM-DD)
 
 try {
-    api_instance.apiAdminLogsSearchGet(term, level, service, dateRange, startDate, endDate);
+    final result = api_instance.apiAdminLogsSearchGet(term, level, service, dateRange, startDate, endDate);
+    print(result);
 } catch (e) {
     print('Exception when calling AdminApi->apiAdminLogsSearchGet: $e\n');
 }
@@ -315,7 +297,7 @@ try {
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **term** | **String**| Search term | [optional] 
- **level** | **String**| Filter by log level | [optional] 
+ **level** | **String**| Filter by log level. WARN/WARNING are synonyms (normalized to WARN before the VL query). The query is a single-value severity_text:<canonical> clause; ERROR matches only ERROR, FATAL only FATAL. Use /logs/summary for the sibling view. The VL query uses the unquoted severity_text:<level> form. getLogsInRange is the only endpoint that uses the quoted form — these endpoints differ in shape. | [optional] 
  **service** | **String**| Filter by service name | [optional] 
  **dateRange** | **String**| Date range preset | [optional] 
  **startDate** | **String**| Custom start date (YYYY-MM-DD) | [optional] 
@@ -323,34 +305,37 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-void (empty response body)
+[**ApiAdminLogsGet200Response**](ApiAdminLogsGet200Response.md)
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
  - **Content-Type**: Not defined
- - **Accept**: Not defined
+ - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **apiAdminLogsSummaryGet**
-> apiAdminLogsSummaryGet(date, level)
+> ApiAdminLogsSummaryGet200Response apiAdminLogsSummaryGet(date, level)
 
 Get logs summary by type and service
 
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AdminApi();
 final date = date_example; // String | Date for which to get logs (YYYY-MM-DD)
-final level = level_example; // String | Filter by log level
+final level = level_example; // String | Filter by log level. WARNING normalizes to WARN and is accepted; the canonical bucket keys are ERROR / WARN. WARN and WARNING are synonyms; ERROR and FATAL are siblings. The VL query OR-joins the synonyms internally. Any value outside the allowlist is rejected with 400 invalid_filter.
 
 try {
-    api_instance.apiAdminLogsSummaryGet(date, level);
+    final result = api_instance.apiAdminLogsSummaryGet(date, level);
+    print(result);
 } catch (e) {
     print('Exception when calling AdminApi->apiAdminLogsSummaryGet: $e\n');
 }
@@ -361,7 +346,63 @@ try {
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **date** | **String**| Date for which to get logs (YYYY-MM-DD) | [optional] 
- **level** | **String**| Filter by log level | [optional] 
+ **level** | **String**| Filter by log level. WARNING normalizes to WARN and is accepted; the canonical bucket keys are ERROR / WARN. WARN and WARNING are synonyms; ERROR and FATAL are siblings. The VL query OR-joins the synonyms internally. Any value outside the allowlist is rejected with 400 invalid_filter. | [optional] 
+
+### Return type
+
+[**ApiAdminLogsSummaryGet200Response**](ApiAdminLogsSummaryGet200Response.md)
+
+### Authorization
+
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **apiAdminQueriesInspectGet**
+> apiAdminQueriesInspectGet(limit, offset, userId, searchText, startDate, endDate, minConfidence, maxConfidence)
+
+Get recent queries for admin inspection (Query Inspector)
+
+### Example
+```dart
+import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+
+final api_instance = AdminApi();
+final limit = 56; // int | Maximum number of queries to return (default 50)
+final offset = 56; // int | Offset for pagination
+final userId = userId_example; // String | Filter by user ID
+final searchText = searchText_example; // String | Search in query text
+final startDate = startDate_example; // String | Filter from date (ISO string)
+final endDate = endDate_example; // String | Filter to date (ISO string)
+final minConfidence = 8.14; // num | Minimum confidence score (0-1)
+final maxConfidence = 8.14; // num | Maximum confidence score (0-1)
+
+try {
+    api_instance.apiAdminQueriesInspectGet(limit, offset, userId, searchText, startDate, endDate, minConfidence, maxConfidence);
+} catch (e) {
+    print('Exception when calling AdminApi->apiAdminQueriesInspectGet: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **limit** | **int**| Maximum number of queries to return (default 50) | [optional] 
+ **offset** | **int**| Offset for pagination | [optional] 
+ **userId** | **String**| Filter by user ID | [optional] 
+ **searchText** | **String**| Search in query text | [optional] 
+ **startDate** | **String**| Filter from date (ISO string) | [optional] 
+ **endDate** | **String**| Filter to date (ISO string) | [optional] 
+ **minConfidence** | **num**| Minimum confidence score (0-1) | [optional] 
+ **maxConfidence** | **num**| Maximum confidence score (0-1) | [optional] 
 
 ### Return type
 
@@ -369,7 +410,7 @@ void (empty response body)
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -378,19 +419,64 @@ No authorization required
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
+# **apiAdminQueriesInspectQueryIdGet**
+> apiAdminQueriesInspectQueryIdGet(queryId)
+
+Get full query details for admin inspection
+
+### Example
+```dart
+import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
+
+final api_instance = AdminApi();
+final queryId = queryId_example; // String | The query ID to inspect
+
+try {
+    api_instance.apiAdminQueriesInspectQueryIdGet(queryId);
+} catch (e) {
+    print('Exception when calling AdminApi->apiAdminQueriesInspectQueryIdGet: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **queryId** | **String**| The query ID to inspect | 
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
 # **apiAdminSecurityLastScanGet**
-> apiAdminSecurityLastScanGet()
+> ApiAdminSecurityLastScanGet200Response apiAdminSecurityLastScanGet()
 
 Retrieve the last security scan details
 
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AdminApi();
 
 try {
-    api_instance.apiAdminSecurityLastScanGet();
+    final result = api_instance.apiAdminSecurityLastScanGet();
+    print(result);
 } catch (e) {
     print('Exception when calling AdminApi->apiAdminSecurityLastScanGet: $e\n');
 }
@@ -401,32 +487,35 @@ This endpoint does not need any parameter.
 
 ### Return type
 
-void (empty response body)
+[**ApiAdminSecurityLastScanGet200Response**](ApiAdminSecurityLastScanGet200Response.md)
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
  - **Content-Type**: Not defined
- - **Accept**: Not defined
+ - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **apiAdminSecurityMetricsGet**
-> apiAdminSecurityMetricsGet()
+> ApiAdminSecurityMetricsGet200Response apiAdminSecurityMetricsGet()
 
 Get security metrics
 
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AdminApi();
 
 try {
-    api_instance.apiAdminSecurityMetricsGet();
+    final result = api_instance.apiAdminSecurityMetricsGet();
+    print(result);
 } catch (e) {
     print('Exception when calling AdminApi->apiAdminSecurityMetricsGet: $e\n');
 }
@@ -437,32 +526,35 @@ This endpoint does not need any parameter.
 
 ### Return type
 
-void (empty response body)
+[**ApiAdminSecurityMetricsGet200Response**](ApiAdminSecurityMetricsGet200Response.md)
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
  - **Content-Type**: Not defined
- - **Accept**: Not defined
+ - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **apiAdminSecurityScanPost**
-> apiAdminSecurityScanPost()
+> ApiAdminSecurityScanPost200Response apiAdminSecurityScanPost()
 
 Run security scan
 
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AdminApi();
 
 try {
-    api_instance.apiAdminSecurityScanPost();
+    final result = api_instance.apiAdminSecurityScanPost();
+    print(result);
 } catch (e) {
     print('Exception when calling AdminApi->apiAdminSecurityScanPost: $e\n');
 }
@@ -473,32 +565,35 @@ This endpoint does not need any parameter.
 
 ### Return type
 
-void (empty response body)
+[**ApiAdminSecurityScanPost200Response**](ApiAdminSecurityScanPost200Response.md)
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
  - **Content-Type**: Not defined
- - **Accept**: Not defined
+ - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **apiAdminSystemHealthGet**
-> apiAdminSystemHealthGet()
+> ApiAdminSystemHealthGet200Response apiAdminSystemHealthGet()
 
 Get system health metrics
 
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AdminApi();
 
 try {
-    api_instance.apiAdminSystemHealthGet();
+    final result = api_instance.apiAdminSystemHealthGet();
+    print(result);
 } catch (e) {
     print('Exception when calling AdminApi->apiAdminSystemHealthGet: $e\n');
 }
@@ -509,16 +604,16 @@ This endpoint does not need any parameter.
 
 ### Return type
 
-void (empty response body)
+[**ApiAdminSystemHealthGet200Response**](ApiAdminSystemHealthGet200Response.md)
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
  - **Content-Type**: Not defined
- - **Accept**: Not defined
+ - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
@@ -530,6 +625,8 @@ Get user statistics
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AdminApi();
 
@@ -549,7 +646,7 @@ void (empty response body)
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 
@@ -566,10 +663,12 @@ Search users with filtering
 ### Example
 ```dart
 import 'package:openapi/api.dart';
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AdminApi();
 final term = term_example; // String | Search term
-final field = field_example; // String | Field to search (all, name, email, role)
+final field = field_example; // String | Field to search (all, name, email, role, exactEmail — matches the full email literally)
 final limit = 56; // int | Maximum number of users to return
 final offset = 56; // int | Offset for pagination
 
@@ -585,7 +684,7 @@ try {
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **term** | **String**| Search term | [optional] 
- **field** | **String**| Field to search (all, name, email, role) | [optional] 
+ **field** | **String**| Field to search (all, name, email, role, exactEmail — matches the full email literally) | [optional] 
  **limit** | **int**| Maximum number of users to return | [optional] 
  **offset** | **int**| Offset for pagination | [optional] 
 
@@ -595,7 +694,7 @@ void (empty response body)
 
 ### Authorization
 
-No authorization required
+[KeycloakOAuth2](../README.md#KeycloakOAuth2)
 
 ### HTTP request headers
 

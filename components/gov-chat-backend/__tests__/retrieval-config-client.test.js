@@ -12,6 +12,9 @@ jest.mock('dotenv', () => ({ config: jest.fn() }));
 jest.mock(
   '../shared-lib',
   () => ({
+    // The client destructures parsePositiveInt from the barrel — the mock
+    // carries the real (pure) function like the shared mock file does.
+    ...require('./mocks/shared-lib'),
     logger: {
       info: jest.fn(),
       error: jest.fn(),
@@ -80,6 +83,10 @@ beforeEach(() => {
   jest.resetModules();
   nowMs = 1_000_000;
   jest.spyOn(Date, 'now').mockImplementation(() => nowMs);
+  // Dark-launch polarity (review 2026-10-29): unset now means PARKED. These
+  // suites exercise the ENABLED paths, so state the precondition — the flag
+  // is read once at module load, before the require below.
+  process.env.OKF_ENABLED = '1';
   // Required AFTER resetModules so the test's axios binding is the same
   // instance the freshly-loaded client module captured.
   client = require('../services/retrieval-config-client');
@@ -290,6 +297,45 @@ describe('retrieval-config-client (Story 1.1)', () => {
     expect(first.engaged).toBe(true);
   });
 
+  // DW-428 (review 2026-10-29 round 3): the okf-server parser folds realm
+  // ROLE NAMES that ARE scopes into the scope set (Story 6-1c group grants —
+  // a user whose only path to the role is group membership carries it in
+  // realm_access.roles). The BFF copy must see the same set, or a
+  // role-granted caller keys the shared authz cache as `@no-scopes`,
+  // colliding with every scope-less caller.
+  it('parseOkfScopes: a scope-shaped realm role lands in the parsed set', () => {
+    expect(
+      client._internals.parseOkfScopes({
+        okf_scopes: [],
+        realm_access: { roles: ['default-roles-genie', 'offline_access', 'okf:t:c:read'] }
+      })
+    ).toEqual(['okf:t:c:read']);
+  });
+
+  it('role-granted scopes share the claim-scoped cache entry and never the @no-scopes one', async () => {
+    axios.get.mockReturnValue(okfGetResponse(HYBRID_CONFIG));
+
+    const byClaim = makeBearer(['okf:t:a:read'], []);
+    const byRole = makeBearer([], ['okf:t:a:read']);
+    const noScopes = makeBearer([], []);
+
+    await client.getRetrievalConfig(byClaim);
+    await client.getRetrievalConfig(byRole); // same effective scopes → cache hit
+    await client.getRetrievalConfig(noScopes); // distinct key — no cross-user bleed
+
+    expect(axios.get).toHaveBeenCalledTimes(2);
+  });
+
+  // Egress guard (review 2026-10-29 wave 2): fetchUpstream takes a fixed-base
+  // relative path — an absolute URL (the canonical SSRF target: the
+  // link-local metadata address) must be rejected before any HTTP attempt.
+  it('fetchUpstream rejects a non-relative path before any HTTP attempt', async () => {
+    await expect(
+      client._internals.fetchUpstream('http://169.254.169.254/latest/meta-data', 'Bearer x')
+    ).rejects.toThrow(/rejected non-relative path/);
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
   // OKF feature flag (2026-10-21, merge prep): OKF_ENABLED=0 parks the OKF
   // stack — the client resolves the legacy default DIRECTLY, no connection
   // attempt, no warn noise. With the okf-server parked every caller would
@@ -312,6 +358,67 @@ describe('retrieval-config-client (Story 1.1)', () => {
       } finally {
         delete process.env.OKF_ENABLED;
       }
+    });
+  });
+
+  // invalid_env_int warn contract (review 2026-10-29): the warn fires ONLY
+  // when a PROVIDED, non-empty value misparses or sits below min. A provided
+  // value equal to its fallback is a VALID configuration (never warned) and
+  // an empty string is indistinguishable from unset (also silent). The parse
+  // runs at module load, so each case reloads the client under its env.
+  describe('envPositiveInt invalid_env_int warn contract', () => {
+    const VAR = 'OKF_RETRIEVAL_CONFIG_TIMEOUT_MS';
+
+    // The timeout constant derives from this variable at module load
+    // (fallback 3000, min 100) — reload per case and read both the resolved
+    // value and the freshly-bound mocked logger.
+    function loadWith(value) {
+      if (value === undefined) delete process.env[VAR];
+      else process.env[VAR] = value;
+      jest.resetModules();
+      const loaded = require('../services/retrieval-config-client');
+      const { logger: caseLogger } = require('../shared-lib');
+      return { loaded, caseLogger };
+    }
+
+    afterEach(() => {
+      delete process.env[VAR];
+    });
+
+    it('valid value equal to the fallback: NO warn (valid configuration, not a misconfiguration)', () => {
+      const { loaded, caseLogger } = loadWith('3000');
+
+      expect(loaded._internals.REQUEST_TIMEOUT_MS).toBe(3000);
+      expect(caseLogger.warn).not.toHaveBeenCalledWith('RetrievalConfigClient.invalid_env_int', expect.anything());
+    });
+
+    it('empty string: NO warn (indistinguishable from unset)', () => {
+      const { loaded, caseLogger } = loadWith('');
+
+      expect(loaded._internals.REQUEST_TIMEOUT_MS).toBe(3000);
+      expect(caseLogger.warn).not.toHaveBeenCalledWith('RetrievalConfigClient.invalid_env_int', expect.anything());
+    });
+
+    it('unparseable value: warn names the variable, the offending value and the applied fallback', () => {
+      const { loaded, caseLogger } = loadWith('abc');
+
+      expect(loaded._internals.REQUEST_TIMEOUT_MS).toBe(3000);
+      expect(caseLogger.warn).toHaveBeenCalledWith('RetrievalConfigClient.invalid_env_int', {
+        variable: VAR,
+        value: 'abc',
+        applied_fallback: 3000
+      });
+    });
+
+    it('value below min: warn (the applied fallback must stay visible to ops)', () => {
+      const { loaded, caseLogger } = loadWith('50');
+
+      expect(loaded._internals.REQUEST_TIMEOUT_MS).toBe(3000);
+      expect(caseLogger.warn).toHaveBeenCalledWith('RetrievalConfigClient.invalid_env_int', {
+        variable: VAR,
+        value: '50',
+        applied_fallback: 3000
+      });
     });
   });
 });

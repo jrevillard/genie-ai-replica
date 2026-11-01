@@ -25,7 +25,7 @@ class ApiServiceCategoriesPostRequest {
   ///
   String? nameEN;
 
-  List<Object> translations;
+  List<ApiServiceCategoriesPostRequestTranslationsInner> translations;
 
   @override
   bool operator ==(Object other) => identical(this, other) || other is ApiServiceCategoriesPostRequest &&
@@ -68,9 +68,7 @@ class ApiServiceCategoriesPostRequest {
 
       return ApiServiceCategoriesPostRequest(
         nameEN: mapValueOfType<String>(json, r'nameEN'),
-        translations: json[r'translations'] is Iterable
-            ? (json[r'translations'] as Iterable).cast<Object>().toList(growable: false)
-            : const [],
+        translations: ApiServiceCategoriesPostRequestTranslationsInner.listFromJson(json[r'translations']),
       );
     }
     return null;

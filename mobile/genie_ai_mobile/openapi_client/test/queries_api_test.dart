@@ -98,5 +98,14 @@ void main() {
       // TODO
     });
 
+    // Stream a query response via SSE
+    //
+    // Creates a query and streams the LLM response as SSE events. Events: chunk, metadata, translation, done, error. 
+    //
+    //Future<String> apiQueriesStreamPost(ApiQueriesStreamPostRequest apiQueriesStreamPostRequest) async
+    test('test apiQueriesStreamPost', () async {
+      // TODO
+    });
+
   });
 }

@@ -9,6 +9,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
 import 'package:genie_ai_mobile/components/chat/chat_response_feedback_dialog.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
+import 'package:genie_ai_mobile/design_system/tokens/app_tokens.dart';
 import 'package:genie_ai_mobile/design_system/tokens/color_utils.dart';
 import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
@@ -28,6 +29,18 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:genie_ai_mobile/utils/config_resolver.dart';
 
 import 'quick_help_scope.dart';
+
+/// The identity of the restored scope whose title the context bar
+/// carries: the raw source (the conversation's category id, the Quick
+/// Help button id) plus the category key the localized tree re-names
+/// the title by. ONE spelling — the fetch's stale-response capture and
+/// the "title source moved" guard must compare the same shape, and a
+/// structurally-identical record would unify silently.
+typedef _RestoredTitleSource = ({
+  String? categoryId,
+  String? buttonId,
+  String? key,
+});
 
 class ChatBotComponent extends ConsumerStatefulWidget {
   final String userId;
@@ -58,6 +71,12 @@ class ChatBotComponent extends ConsumerStatefulWidget {
 }
 
 class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
+  // The bound every hierarchy fetch (the EN tree, the localized title
+  // tree) rides under: the generated client carries no timeout of its
+  // own, and a request that never answers must land in the FAILED state
+  // the captions describe, not wedge the scope.
+  static const Duration _treeFetchTimeout = Duration(seconds: 15);
+
   // Conversation State
   String? _currentConversationId;
   String _conversationTitle = "New Chat";
@@ -110,11 +129,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // The in-flight hierarchy fetch. It runs ONCE: every button is checked
   // against the resolver it builds, and a tap must not start a second one.
   Future<void>? _enTreeFuture;
-  // The id of the Quick Help button whose scope is active — the IDENTITY
-  // the conversation carries, so a reopened conversation can be re-scoped
-  // by the button (a Quick Help tag is the button id, never a label: a
-  // sidebar selection and a button can carry the same label).
-  String? _activeQuickHelpButtonId;
+  // The identity of the Quick Help button whose scope is active — the
+  // value the conversation tag carries (quickHelpButtonIdentity: the
+  // web's serviceKey rule). A tag is never a LABEL: a sidebar selection
+  // and a button can carry the same label. The restore resolves buttons
+  // by id, so a title identity still travels with the conversation but
+  // never reinstalls the button's scope — it falls to the sidebar branch,
+  // as the web's own restore does for the same tag.
+  String? _activeQuickHelpIdentity;
   // The scope state of the ACTIVE Quick Help button against the live
   // hierarchy (stateFor's map): a restored button whose declared labels
   // or category left the hierarchy refuses the follow-up, with a caption
@@ -164,6 +186,40 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   //          the pre-fix code used), not to every dependency change —
   //          a keyboard opening must not re-read the asset.
   String? _quickHelpButtonsLocale;
+
+  // The locale the sidebar scope's title was last re-fetched under — the
+  // drift marker the same way _quickHelpButtonsLocale is one, scoped to
+  // its own fetch. A null marker names the state before any fetch: a
+  // title the selection itself installed is current, and the first
+  // dependency change must not start one. The fetch's completion guard
+  // reads it as its staleness fact: a response whose captured locale no
+  // longer matches the marker is a stale one (a newer drift started a
+  // newer fetch), and its names — of the locale the UI has left — are
+  // dropped. Same-locale responses are interchangeable: each carries the
+  // join the current inputs produce.
+  String? _sidebarTitleLocale;
+  // Whether the active scope was installed by a LIVE sidebar selection —
+  // the only scope whose context-bar title is the joined localized names
+  // a localized tree can re-name. A restore or a button press installs a
+  // title from another source (the conversation's edge, the button id)
+  // and unsets it; the scope clears unset it through
+  // _clearQuickHelpScopeFields.
+  bool _sidebarTitleIsSelection = false;
+
+  // The identity of the RESTORED scope whose title the context bar
+  // carries: the raw source (the conversation's category, the button)
+  // plus the category KEY the localized tree re-names the title by —
+  // the ENGLISH hierarchy the scope was resolved against can only name
+  // it in English. The record is what "the title source moved" reads:
+  // comparing the RAW source (not the derived key alone) keeps two
+  // different scopes the hierarchy cannot key distinct, and the key
+  // inside it keeps a same-category scope whose key the recovering
+  // hierarchy only now supplies distinct from its unnamed self. Null
+  // when the title is something else: a live selection's join of
+  // service names, a Quick Help button's title (the config reload
+  // re-resolves that one by id), a scope-less restore, or no scope at
+  // all.
+  _RestoredTitleSource? _restoredTitleSource;
 
   bool get _hasUnsavedChanges {
     if (_currentConversationId == null) {
@@ -227,29 +283,78 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _startQuickHelpConfigReload();
     }
 
-    // Check for language changes and update welcome message
-    final String newWelcomeMessage = _getConfigWelcomeMessage();
-
-    if (_welcomeMessage != newWelcomeMessage) {
-      // If the first message is the welcome message, update it in the UI
-      if (_messages.isNotEmpty &&
-          _messages.first['role'] == 'assistant' &&
-          _messages.first['content'] == _welcomeMessage) {
-        setState(() {
-          _messages.first['content'] = newWelcomeMessage;
-        });
-      }
-      _welcomeMessage = newWelcomeMessage;
+    // A sidebar scope's context-bar title is the JOIN of the localized
+    // service names the panel installed it with — a locale switch leaves
+    // those names in the language they were picked under, while the web
+    // re-maps its chips from the per-locale tree it re-fetches. A RESTORED
+    // scope's title is the category its conversation's edge names, which
+    // the ENGLISH hierarchy the restore resolved against can only name in
+    // English. A drift re-fetches the hierarchy in the CURRENT locale —
+    // display only, the wire keeps the stored ENGLISH labels — and
+    // re-titles the bar from it, whichever of the two sources the active
+    // title has. The marker is consumed by every dependency change,
+    // whether or not a title is re-fetched: the FIRST marking is not a
+    // drift (the title the selection installed is current), and a marker
+    // left behind would hide the NEXT switch. A failed fetch marked its
+    // locale — the retry is scoped to the next one.
+    final bool titleDrift = isLocaleDrift(
+      loadedLocale: _sidebarTitleLocale,
+      currentLocale: _currentLocale,
+    );
+    _sidebarTitleLocale = _currentLocale;
+    if (titleDrift &&
+        (sidebarTitleFollowsLocale(
+              fromSelection: _sidebarTitleIsSelection,
+              activeIdentity: _activeQuickHelpIdentity,
+              serviceCount: _sidebarServiceCount,
+              serviceLabelsEn: _sidebarServiceLabelsEn,
+            ) ||
+            restoredScopeTitleFollowsLocale(
+              fromSelection: _sidebarTitleIsSelection,
+              activeIdentity: _activeQuickHelpIdentity,
+              categoryKey: _restoredTitleSource?.key,
+            ))) {
+      _fetchSidebarTitleTree();
     }
+
+    // Check for language changes and update welcome message
+    _refreshWelcomeMessage();
   }
 
   String _getConfigWelcomeMessage() {
-    final welcomeConfig =
-        _cachedConfig?['features']?['chat']?['welcomeMessage'];
-    if (welcomeConfig != null) {
-      return resolveConfigText(welcomeConfig, _currentLocale);
+    // The rule lives in the config layer, where it is unit-tested: a
+    // configuration that declares no usable message leaves the built-in
+    // greeting in place.
+    final resolved = resolveWelcomeMessage(
+      _cachedConfig ?? const {},
+      _currentLocale,
+    );
+    return resolved ?? tr('chatbot.welcomeMessage');
+  }
+
+  /// Recomputes the welcome message under the CURRENT config and locale.
+  ///
+  /// The config load is asynchronous: the first render ran before the
+  /// config was cached, and the load's completion — not only a locale
+  /// switch — must land the configured message (the web is config-ready
+  /// at mount). The FIELD always follows, so a New Chat opened after the
+  /// load seeds the configured text; the VISIBLE bubble follows only
+  /// while NO conversation is open — the first bubble of a restored
+  /// conversation is history, not the welcome slot.
+  void _refreshWelcomeMessage() {
+    final String newWelcomeMessage = _getConfigWelcomeMessage();
+    if (_welcomeMessage == newWelcomeMessage) {
+      return;
     }
-    return tr('chatbot.welcomeMessage');
+    if (_currentConversationId == null &&
+        _messages.isNotEmpty &&
+        _messages.first['role'] == 'assistant' &&
+        _messages.first['content'] == _welcomeMessage) {
+      setState(() {
+        _messages.first['content'] = newWelcomeMessage;
+      });
+    }
+    _welcomeMessage = newWelcomeMessage;
   }
 
   /// The Quick Help configuration load, once started. A restore that
@@ -311,76 +416,23 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // Cache the config for later use
       _cachedConfig = config;
 
-      final Map<String, dynamic> quickHelpConfig =
-          config['features']?['chat']?['quickHelp'] ?? {};
+      // The config just landed: the welcome message it declares lands
+      // NOW - before the Quick Help section is parsed, so a malformed
+      // button cannot keep the greeting stale.
+      _refreshWelcomeMessage();
+
+      // The section pipeline — descent, container guards, hidden filter,
+      // per-entry skip, button parse, dedupe — runs beside the other
+      // config rules, where it is unit-tested; the widget keeps only
+      // cache, mount and state.
+      final (layout, buttons) = parseQuickHelpConfig(config, _currentLocale);
 
       setState(() {
-        _quickHelpLayout = quickHelpConfig['layout'] ?? {};
-      });
-
-      final List<dynamic> buttonsJson = quickHelpConfig['buttons'] ?? [];
-      final List<Map<String, dynamic>> loadedButtons = [];
-
-      for (var btn in buttonsJson) {
-        // Skip hidden buttons (no matching corpus content).
-        if (btn['hidden'] == true) {
-          continue;
-        }
-        // Safe parsing: use map access with defaults to prevent null crashes
-        final appearance = btn['appearance'] as Map<String, dynamic>?;
-        final iconMap = appearance?['icon'] as Map<String, dynamic>?;
-        final iconPath = iconMap?['value']?.toString() ?? '';
-
-        final String localIconAsset = iconPath.isNotEmpty
-            ? 'assets/config/quickhelp/${iconPath.split('/').last}'
-            : 'assets/config/quickhelp/default.svg';
-
-        // Resolve text with locale maps
-        final resolvedTitle = resolveConfigText(btn['title'], _currentLocale);
-        final action = btn['action'] as Map<String, dynamic>?;
-        final resolvedVisibleText = resolveConfigText(
-          action?['visibleText'],
-          _currentLocale,
-        );
-        final resolvedHiddenPrompt = resolveConfigText(
-          action?['hiddenPrompt'],
-          _currentLocale,
-        );
-
-        // Explicit English KB labels for the retriever filter. A bare
-        // STRING where the array belongs is the config typo the web half
-        // wraps as ONE label — the wire's own bare-string rule — and the
-        // parse must agree: the hard cast made the WHOLE config load
-        // throw (Quick Help dead for the session) while the web filtered
-        // correctly on the same file.
-        final dynamic rawServiceLabels = btn['serviceLabels'];
-        final List<dynamic> serviceLabels;
-        if (rawServiceLabels is List<dynamic>) {
-          serviceLabels = rawServiceLabels;
-        } else if (rawServiceLabels is String && rawServiceLabels.isNotEmpty) {
-          serviceLabels = [rawServiceLabels];
-        } else {
-          serviceLabels = const <dynamic>[];
-        }
-
-        loadedButtons.add({
-          'id': btn['id'],
-          'category': btn['category'],
-          'serviceLabels': serviceLabels,
-          'action': action ?? {},
-          'appearance': appearance ?? {},
-          'iconAsset': localIconAsset,
-          'resolvedTitle': resolvedTitle,
-          'resolvedVisibleText': resolvedVisibleText,
-          'resolvedHiddenPrompt': resolvedHiddenPrompt,
-        });
-      }
-
-      setState(() {
+        _quickHelpLayout = layout;
         // The id is the button's IDENTITY. Two cards sharing one is a
         // configuration error: the FIRST wins and the duplicate never
         // becomes a card — the same rule the web applies at its own load.
-        _quickHelpButtons = dedupeQuickHelpButtons(loadedButtons);
+        _quickHelpButtons = buttons;
         // The locale these titles were resolved under — the drift marker
         // didChangeDependencies reloads on.
         _quickHelpButtonsLocale = _currentLocale;
@@ -397,7 +449,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         // id and keeps its own name.
         final activeTitle = activeQuickHelpTitleFor(
           _quickHelpButtons,
-          _activeQuickHelpButtonId,
+          _activeQuickHelpIdentity,
         );
         if (activeTitle != null) {
           _selectedCategoryName = activeTitle;
@@ -459,13 +511,50 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   /// the restore and by the hierarchy-retry re-resolve — the SAME
   /// mapping, never two copies of it.
   void _applyRestoredScope(ConversationScope scope) {
+    // The title source the scope carried BEFORE this apply: the
+    // hierarchy-retry re-resolve re-applies the SAME scope, and
+    // re-installing its title would clobber the localized name a drift
+    // fetch committed. The install below happens only when the source
+    // moved.
+    final previousSource = _restoredTitleSource;
     _selectedCategoryId = scope.categoryId;
     _selectedCategoryNameEn = scope.categoryNameEn ?? '';
-    // The resolver's tree is the ENGLISH one (the wire's
-    // vocabulary): its display name is English too. A Quick Help
-    // scope shows the button's own localized title — the same thing
-    // the press and the web show. (A sidebar scope still shows the
-    // EN name: the localized tree lives in the panel, not here.)
+    // A restored scope's title comes from the conversation's edge and the
+    // button list, not from a live selection's join.
+    _sidebarTitleIsSelection = false;
+    // A SIDEBAR scope's title is the CATEGORY the conversation's edge
+    // names, and the ENGLISH tree the resolver reads can only name it in
+    // English. The category KEY is what the localized tree re-names it by
+    // — on the restore below and on every locale switch — resolved
+    // through the same hierarchy that named the scope, so the re-title
+    // names the entity the installed title names. A Quick Help scope's
+    // title is its BUTTON's own localized title — the same thing the
+    // press and the web show — and the config reload re-resolves it by
+    // id, never through the category. The key is recorded exactly when
+    // the hierarchy NAMES the category on the wire — the same predicate
+    // (the nameEN lookup) the scope's own health check applies: an entry
+    // the EN tree can filter on but not display still records its key,
+    // and the localized fetch may name it where the ENGLISH tree could
+    // not. The SOURCE is recorded for every scope that DECLARES one —
+    // an unkeyable category still owns the bar until another scope
+    // replaces it, and a BUTTON scope always records its source (the
+    // moved guard must see the button appear or vanish), whatever its
+    // effective category. A BUTTON-LESS restore of 'general' (the
+    // no-scope placeholder) records nothing: it names no category whose
+    // title could move.
+    final String? restoredKey =
+        scope.quickHelpButtonId == null && scope.categoryNameEn != null
+        ? _scopeResolver?.categoryIdFor(scope.categoryId)
+        : null;
+    _restoredTitleSource =
+        scope.quickHelpButtonId != null ||
+            declaresCategoryScope(scope.categoryId)
+        ? (
+            categoryId: scope.categoryId,
+            buttonId: scope.quickHelpButtonId,
+            key: restoredKey,
+          )
+        : null;
     // The button the conversation's tag names — ONE lookup (the same
     // shared one the locale re-title reads), and both reads below
     // (the title, the outage state) resolve the same entity.
@@ -475,10 +564,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     );
     // An EMPTY title is no title (the same rule the locale re-title
     // applies): the saved category name is the fallback, never a blank
-    // context bar.
-    _selectedCategoryName =
-        quickHelpTitleOf(button) ?? scope.categoryName ?? '';
-    _activeQuickHelpButtonId = scope.quickHelpButtonId;
+    // context bar. The install happens only when the title source MOVED —
+    // the first apply, a category the recovering tree now names, a button
+    // the configuration swapped. An unchanged source's title is whatever
+    // is installed — possibly the localized name a drift fetch just
+    // committed — and re-installing the resolver's ENGLISH spelling over
+    // it would clobber the bar and force a repair fetch on every switch.
+    // A button whose TEXT the config changed is re-titled by the reload's
+    // own id lookup right after this re-apply.
+    final bool titleSourceMoved = previousSource != _restoredTitleSource;
+    if (titleSourceMoved) {
+      _selectedCategoryName =
+          quickHelpTitleOf(button) ?? scope.categoryName ?? '';
+    }
+    _activeQuickHelpIdentity = scope.quickHelpButtonId;
     // During a hierarchy OUTAGE the resolver was built over an
     // empty tree: every declared label reads as missing, and the
     // refusal would name a configuration problem that may not exist.
@@ -506,6 +605,18 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // the hierarchy no longer carries is dropped from the labels, and
     // the send guard refuses it instead of letting it vanish.
     _sidebarServiceCount = scope.sidebarTagCount;
+    // The title just (re-)installed names the category in ENGLISH (the
+    // resolver's tree is the wire's vocabulary). The localized tree
+    // re-names it in the UI's language — the same re-title a locale
+    // switch performs. For an English UI the ENGLISH tree IS the
+    // localized one: the fetch would answer with the name the bar
+    // already shows. An unchanged source re-applied by the re-resolve
+    // keeps its installed title and starts no fetch of its own.
+    if (titleSourceMoved &&
+        _restoredTitleSource?.key != null &&
+        _currentLocale != 'en') {
+      _fetchSidebarTitleTree();
+    }
   }
 
   /// Re-resolves the RESTORE's scope against whichever source just
@@ -543,7 +654,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // the captions describe.
       final response = await categoriesApi
           .apiServiceCategoriesCategoriesGetWithHttpInfo(locale: 'en')
-          .timeout(const Duration(seconds: 15));
+          .timeout(_treeFetchTimeout);
       if (!mounted) return;
       if (response.statusCode == 200) {
         final tree = jsonDecode(response.body) as List<dynamic>;
@@ -576,6 +687,74 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     });
   }
 
+  /// The DISPLAY-only localized hierarchy fetch behind the sidebar
+  /// scope's locale re-title. The EN tree above stays the wire's
+  /// vocabulary; this one only names what the user reads.
+  Future<void> _fetchSidebarTitleTree() async {
+    // The scope the title will be rebuilt for, captured now: a fetch is
+    // only allowed to re-title THE SELECTION it was started for. A
+    // selection that changes while the fetch is in flight installs its
+    // OWN localized names, and this response — of the locale the UI may
+    // have left — must not overwrite them. A RESTORED scope's title is
+    // captured the same way, as the source record whose key the
+    // conversation's edge carries.
+    final List<String> labels = List<String>.of(_sidebarServiceLabelsEn);
+    final int serviceCount = _sidebarServiceCount;
+    final _RestoredTitleSource? restoredSource = _restoredTitleSource;
+    final String locale = _currentLocale;
+    try {
+      final categoriesApi = ref.read(serviceCategoriesApiProvider);
+      final response = await categoriesApi
+          .apiServiceCategoriesCategoriesGetWithHttpInfo(locale: locale)
+          .timeout(_treeFetchTimeout);
+      // A newer drift superseded this fetch, or the widget left.
+      if (!mounted || locale != _sidebarTitleLocale) return;
+      if (response.statusCode != 200) return;
+      final tree = jsonDecode(response.body) as List<dynamic>;
+      // A restored scope's title is its CATEGORY's display name, read by
+      // the key the conversation's edge carries. The scope must still be
+      // the one the fetch was started for: a live selection, a button
+      // press or another restore since the fetch started cleared or
+      // replaced the source, and the comparison alone drops the response.
+      // All-or-nothing, the live join's own rule: the tree must name the
+      // category, or the title the restore installed stands.
+      if (restoredSource != null) {
+        if (_restoredTitleSource != restoredSource) return;
+        final String? categoryTitle = localizedCategoryDisplayNamesOf(
+          tree,
+        )[restoredSource.key];
+        if (categoryTitle == null) return;
+        setState(() {
+          _selectedCategoryName = categoryTitle;
+        });
+        return;
+      }
+      // The scope the fetch was started for must still be the scope
+      // installed — the capture rule lives beside the other sidebar
+      // rules, where it is clause-tested.
+      if (!sidebarTitleCaptureMatchesSelection(
+        capturedLabels: labels,
+        capturedCount: serviceCount,
+        labels: _sidebarServiceLabelsEn,
+        count: _sidebarServiceCount,
+        fromSelection: _sidebarTitleIsSelection,
+        activeIdentity: _activeQuickHelpIdentity,
+      )) {
+        return;
+      }
+      final title = sidebarScopeTitleFor(labels, localizedDisplayNamesOf(tree));
+      // The tree names every stored label, or the title stays as it is —
+      // a partial join would show a scope narrower than the one the
+      // query filters on.
+      if (title == null) return;
+      setState(() {
+        _selectedCategoryName = title;
+      });
+    } catch (e) {
+      debugPrint("[CHATBOT] Localized tree fetch failed: $e");
+    }
+  }
+
   String _quickHelpErrorCaption(Map<String, dynamic> scope) {
     if (scope['unavailable'] as bool? ?? false) {
       return tr('chatbot.quickHelpScopeUnavailable');
@@ -604,17 +783,22 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     int serviceCount = 0,
   }) {
     setState(() {
+      // A sidebar selection REPLACES the Quick Help scope: the two are
+      // alternative ways of scoping the same query.
+      _clearQuickHelpScopeFields();
       _selectedCategoryId = categoryId;
       _selectedCategoryName = categoryName;
       _selectedCategoryNameEn = categoryNameEn;
+      // A LIVE selection installs this title (a non-empty serviceCount —
+      // the clear's empty payload is not one): it is the one shape a
+      // localized tree can re-name on a locale switch. The write lands
+      // AFTER the clear, whose own rule unsets the flag.
+      _sidebarTitleIsSelection = serviceCount > 0;
       _sidebarServiceLabelsEn = serviceLabelsEn;
       // How many services the selection named, beside the labels that
       // carry an EN translation. The send guard refuses when a picked
       // one contributed no label (its scope cannot be named).
       _sidebarServiceCount = serviceCount;
-      // A sidebar selection REPLACES the Quick Help scope: the two are
-      // alternative ways of scoping the same query.
-      _clearQuickHelpScopeFields();
     });
   }
 
@@ -656,7 +840,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       final chatHistoryApi = ref.read(chatHistoryApiProvider);
       final res = await chatHistoryApi
           .apiChatConversationsConversationIdGetWithHttpInfo(cleanId);
-
       if (res.statusCode != 200) {
         throw Exception("Failed to load conversation: ${res.statusCode}");
       }
@@ -917,6 +1100,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     List<dynamic>? sources;
     double? confidence;
     bool? isGrounded;
+    // What the query-translation step fed the embedder for this answer (the
+    // non-streaming path keeps the whole metadata map; this path rebuilds
+    // it, so the field is carried here for the two to agree).
+    String? streamQueryTranslationStatus;
     // Whether the backend could not translate the answer into the requested
     // language. The answer that arrives is then the English original, and the
     // user has to be told — an English answer presented as a translated one
@@ -988,10 +1175,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     :final sourceDocuments,
                     :final confidenceScore,
                     isGrounded: final grounded,
+                    :final queryTranslationStatus,
                   ):
                     sources = sourceDocuments;
                     confidence = confidenceScore;
                     isGrounded = grounded;
+                    streamQueryTranslationStatus = queryTranslationStatus;
                   case SseTranslationEvent(:final content):
                     accumulatedContent = content;
                     setState(() {
@@ -1019,10 +1208,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     :final sourceDocuments,
                     :final confidenceScore,
                     isGrounded: final grounded,
+                    :final queryTranslationStatus,
                   ):
                     sources = sourceDocuments;
                     confidence = confidenceScore;
                     isGrounded = grounded;
+                    streamQueryTranslationStatus = queryTranslationStatus;
                   case SseTranslationEvent(:final content):
                     accumulatedContent = content;
                   case SseErrorEvent(:final message):
@@ -1045,6 +1236,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     'sources': sources,
                     'confidence_score': confidence,
                     'is_grounded': isGrounded,
+                    'query_translation_status': streamQueryTranslationStatus,
                   }..removeWhere((key, value) => value == null);
                 });
               }
@@ -1127,7 +1319,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             .toList(),
         // The language the user reads. Without it the backend answers in
         // English, whatever the interface language is.
-        context: ApiQueriesPostRequestContext(
+        context: QueryContext(
           language: I18nService().currentLocale.languageCode.toUpperCase(),
         ),
         categoryId: _selectedCategoryId,
@@ -1226,28 +1418,32 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   }
 
   // Installs a pressed Quick Help card as THE scope. ONE copy of the
-  // field list for the press paths (the scoped no-prompt card and the
-  // dual-prompt card differ only in the display-name fallback); the
-  // caller owns its own setState.
-  void _installQuickHelpScopeFields(
-    Map<String, dynamic> button, {
-    required String nameFallback,
-  }) {
-    final declaredLabels =
-        (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
-            .map((label) => label.toString())
-            .toList();
+  // field list for the press paths; the caller owns its own setState.
+  void _installQuickHelpScopeFields(Map<String, dynamic> button) {
+    // A card with no title installs NOTHING: the context bar would go
+    // blank. The press gate refuses such a card before it gets here —
+    // this is the callee's own guarantee, not the caller's.
+    final name = quickHelpTitleOf(button);
+    if (name == null) return;
+    // A COPY: the conversation's filter labels live as long as the
+    // scope, and the card's own list must not be aliased by them (an
+    // in-place edit would rewrite the card's scope verdict).
+    final declaredLabels = List<String>.of(quickHelpServiceLabelsOf(button));
     _showQuickHelpOverlay = false;
     // The configuration names its category; the hierarchy's own key is
     // what the conversation's edge speaks.
-    final categoryRef = button['category']?.toString();
+    final categoryRef = quickHelpCategoryOf(button);
     _selectedCategoryId =
         _scopeResolver?.categoryIdFor(categoryRef) ?? categoryRef;
     _selectedCategoryNameEn = _scopeResolver?.categoryLabelEn(button) ?? '';
-    // An EMPTY title is no title (the same rule the locale re-title and
-    // the restore apply): the caller's fallback name shows, never a
-    // blank context bar.
-    _selectedCategoryName = quickHelpTitleOf(button) ?? nameFallback;
+    // The context bar carries the card's TITLE — the same name the
+    // web's chip shows.
+    _selectedCategoryName = name;
+    // A button press is not a live selection: the title is the button's,
+    // re-titled by the config reload on a locale switch. The restored
+    // category title left with the scope it belonged to.
+    _sidebarTitleIsSelection = false;
+    _restoredTitleSource = null;
     _sidebarServiceLabelsEn = [];
     // A mode switch clears the sidebar count: the send guard would read a
     // count that remembers services that are no longer selected.
@@ -1255,55 +1451,91 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _scopeEpoch++;
     _restoredTags = null;
     _activeServiceLabels = declaredLabels;
-    _activeQuickHelpButtonId = button['id']?.toString();
+    // The conversation tag carries the button's IDENTITY — never the id
+    // alone: see quickHelpButtonIdentity.
+    _activeQuickHelpIdentity = quickHelpButtonIdentity(button);
     _activeQuickHelpScope = _scopeResolver?.stateFor(button);
   }
 
   // Clears the Quick Help half of the scope. ONE field list for the three
   // clears (a new chat, a sidebar pick, a scope-less card press): an
   // eleventh scope field must be remembered here once, not three times.
+  // The sidebar-title flag belongs here too — a clear is never a live
+  // selection, whatever shape of clear it is.
   void _clearQuickHelpScopeFields() {
     _scopeEpoch++;
     _restoredTags = null;
-    _activeQuickHelpButtonId = null;
+    _activeQuickHelpIdentity = null;
     _activeQuickHelpScope = null;
     _activeServiceLabels = const [];
+    _sidebarTitleIsSelection = false;
+    // The restored scope's category title left with the scope: whatever
+    // replaces it names itself.
+    _restoredTitleSource = null;
+  }
+
+  /// The icon a Quick Help card shows: the warning of a broken scope,
+  /// the card's own bundled asset, or the neutral help icon (no asset at
+  /// all, an asset still loading, or an asset the flavour did not
+  /// bundle). ONE copy of the neutral icon, built only where it is used.
+  Widget _quickHelpCardIcon({
+    required bool broken,
+    required String iconAsset,
+    required AppTokens tokens,
+  }) {
+    if (broken) {
+      return Icon(Icons.warning_amber_rounded, size: 18, color: tokens.danger);
+    }
+    Widget neutralIcon() =>
+        Icon(Icons.help_outline, size: 18, color: tokens.accent);
+    if (iconAsset.isEmpty) return neutralIcon();
+    return SvgPicture.asset(
+      iconAsset,
+      width: 18,
+      height: 18,
+      placeholderBuilder: (_) => neutralIcon(),
+      // A well-formed path that names an asset the flavour did not
+      // bundle degrades to the same neutral icon, instead of an empty
+      // slot.
+      errorBuilder: (_, _, _) => neutralIcon(),
+    );
   }
 
   void _quickHelpPressed(Map<String, dynamic> button) {
-    // A broken scope is a VISIBLE failure: the overlay caption names the
-    // configuration problem. Never a query with a silently reduced scope.
-    if ((_scopeResolver?.stateFor(button)['broken'] as bool?) ?? false) {
+    // One predicate for the three press refusals — a broken scope (a
+    // VISIBLE failure: the overlay caption names the problem), a scope
+    // the tree cannot EN-name, a card with no title — the same gates the
+    // web's selectQuickHelpOption applies before any branch.
+    if (!quickHelpPressable(button, _scopeResolver)) {
       return;
     }
-    // The config names the category; the wire needs its ENGLISH label, and
-    // only the live tree can say it. A tree that did not load cannot name
-    // the scope — and a query without it would answer from the whole corpus.
-    if (!quickHelpScopeIsNameable(button, _scopeResolver)) {
-      return;
-    }
-    final Map<String, dynamic> action = button['action'] ?? {};
-    final String visibleTextKey = action['visibleText']?.toString() ?? '';
-    final String hiddenPromptKey = action['hiddenPrompt']?.toString() ?? '';
+    // The parse resolved the action texts under the load's locale (the
+    // same values the web resolves at map time); the gates read the
+    // RESOLVED strings — the raw config values are locale maps, whose
+    // string form is never empty.
+    final String visibleText = button['resolvedVisibleText']?.toString() ?? '';
+    final String hiddenPrompt =
+        button['resolvedHiddenPrompt']?.toString() ?? '';
 
-    // If both are empty AND the card declares NO scope, just enter Chat
-    // Mode: close overlay, clear all label filters so the retriever sees
-    // all documents, focus input. A card that DECLARES a scope but has
-    // no prompts is still a scoped card — the web installs the same
-    // card's labels without asking for a prompt, and wiping the scope
-    // here sent the question over the whole corpus while the card
-    // promised its declared one.
-    final declaredLabels =
-        (button['serviceLabels'] as List<dynamic>? ?? const <dynamic>[])
-            .map((label) => label.toString())
-            .toList();
-    final declaresScope =
-        declaresCategoryScope(button['category']?.toString()) ||
-        declaredLabels.isNotEmpty;
-    if (visibleTextKey.isEmpty && hiddenPromptKey.isEmpty) {
+    // ONE scope rule, shared with the grid's unavailable verdict.
+    final declaresScope = quickHelpDeclaresScope(button);
+
+    // The AUTO-SEND is armed only when BOTH texts resolved: a card with
+    // a visible text but no hidden prompt would wire an EMPTY question
+    // to the LLM while the bubble showed the visible text, and a card
+    // with a hidden prompt but no visible text would ask the send guard
+    // to bounce it after the overlay already closed. Net rule on the
+    // web too: it arms on the hidden prompt but its sendMessage bounces
+    // the empty composer (it also honours a legacy i18n-KEY shape the
+    // mobile bundle never carries).
+    if (hiddenPrompt.isEmpty || visibleText.isEmpty) {
+      // A card that DECLARES a scope but has no hidden prompt is still a
+      // scoped card — the web installs the same card's labels without
+      // asking for a prompt, and wiping the scope here sent the question
+      // over the whole corpus while the card promised its declared one.
       if (declaresScope) {
         setState(() {
-          _installQuickHelpScopeFields(button, nameFallback: '');
+          _installQuickHelpScopeFields(button);
         });
         _inputFocusNode.requestFocus();
         return;
@@ -1326,19 +1558,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       return;
     }
 
-    // Use pre-resolved values from button map with i18n fallback
-    final String visibleText =
-        button['resolvedVisibleText'] ??
-        (visibleTextKey.isNotEmpty ? tr(visibleTextKey) : '');
-    // If hiddenPromptKey is empty, fallback to visible text
-    final String hiddenPrompt =
-        button['resolvedHiddenPrompt'] ??
-        (hiddenPromptKey.isNotEmpty ? tr(hiddenPromptKey) : visibleText);
-
     // The card's declared English KB labels become the retriever filter —
     // the helper installs them; _sendStreaming reads them off the scope.
     setState(() {
-      _installQuickHelpScopeFields(button, nameFallback: visibleText);
+      _installQuickHelpScopeFields(button);
     });
 
     // Send using the 2-prompt system
@@ -1395,7 +1618,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // ===========================================================================
   /// The scope of the conversation, as the web writes it.
   List<String> _contextTags() => conversationScopeTags(
-    quickHelpButtonId: _activeQuickHelpButtonId,
+    quickHelpIdentity: _activeQuickHelpIdentity,
     sidebarServiceLabels: _sidebarServiceLabelsEn,
   );
 
@@ -2186,31 +2409,30 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
-                        final int crossAxisCount =
-                            _quickHelpLayout['columns'] as int? ?? 2;
-                        final double aspectRatio =
-                            (_quickHelpLayout['childAspectRatio'] as num?)
-                                ?.toDouble() ??
-                            3.5;
+                        // The layout reads degrade to the defaults for
+                        // any malformed value — one copy beside the other
+                        // config rules (see quick_help_scope.dart).
+                        final int crossAxisCount = quickHelpGridColumns(
+                          _quickHelpLayout,
+                          maxWidth: constraints.maxWidth,
+                        );
+                        final double aspectRatio = quickHelpGridAspectRatio(
+                          _quickHelpLayout,
+                        );
 
                         return GridView.builder(
                           gridDelegate:
                               SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: crossAxisCount,
                                 childAspectRatio: aspectRatio,
-                                mainAxisSpacing: 10,
-                                crossAxisSpacing: 10,
+                                mainAxisSpacing: quickHelpGridSpacing,
+                                crossAxisSpacing: quickHelpGridSpacing,
                               ),
                           itemCount: _quickHelpButtons.length,
                           itemBuilder: (context, index) {
                             final button = _quickHelpButtons[index];
-                            final labelMap =
-                                button['appearance']?['label']
-                                    as Map<String, dynamic>? ??
-                                {};
-                            final String titleKey =
-                                labelMap['text']?.toString() ?? '';
-                            final String translatedTitle = tr(titleKey);
+                            final String translatedTitle =
+                                quickHelpTitleOf(button) ?? '';
                             final String iconAsset =
                                 button['iconAsset']?.toString() ?? '';
                             final scope = _treeUnavailable
@@ -2219,15 +2441,26 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                   )
                                 : (_scopeResolver?.stateFor(button) ??
                                       QuickHelpScopeResolver.pending);
-                            final broken = scope['broken'] as bool;
+                            // The caption below names WHICH failure the
+                            // card carries. Its conditions read these two
+                            // hoisted facts; the verdict derives its own
+                            // copy through the same predicates
+                            // (quickHelpTitleOf, the scope's 'broken')
+                            // — keep the three in step.
+                            final bool scopeBroken =
+                                scope['broken'] as bool? ?? false;
+                            final bool titleMissing = translatedTitle.isEmpty;
+                            final broken = quickHelpCardBroken(button, scope);
 
                             return Material(
                               color: Colors.transparent,
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(DsRadii.lg),
-                                // A broken scope is a VISIBLE failure: the
-                                // caption below names the configuration
-                                // problem, and the tap sends nothing.
+                                // A card the tap would silently refuse —
+                                // a broken scope, or one with no title —
+                                // is a VISIBLE failure: the caption below
+                                // names the configuration problem, and
+                                // the tap sends nothing.
                                 onTap: broken
                                     ? null
                                     : () => _quickHelpPressed(button),
@@ -2253,23 +2486,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                     children: [
                                       Row(
                                         children: [
-                                          broken
-                                              ? Icon(
-                                                  Icons.warning_amber_rounded,
-                                                  size: 18,
-                                                  color: tokens.danger,
-                                                )
-                                              : SvgPicture.asset(
-                                                  iconAsset,
-                                                  width: 18,
-                                                  height: 18,
-                                                  placeholderBuilder: (_) =>
-                                                      Icon(
-                                                        Icons.help_outline,
-                                                        size: 20,
-                                                        color: tokens.accent,
-                                                      ),
-                                                ),
+                                          // ONE copy of the neutral help
+                                          // icon: the no-icon card, the
+                                          // loading placeholder and the
+                                          // failed asset all degrade to
+                                          // it.
+                                          _quickHelpCardIcon(
+                                            broken: broken,
+                                            iconAsset: iconAsset,
+                                            tokens: tokens,
+                                          ),
                                           const SizedBox(width: 12),
                                           Expanded(
                                             child: Text(
@@ -2287,13 +2513,47 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                         ],
                                       ),
                                       if (broken)
-                                        Text(
-                                          _quickHelpErrorCaption(scope),
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(
-                                                fontSize: tokens.textXs,
-                                                color: tokens.danger,
-                                              ),
+                                        Flexible(
+                                          // The tile's height is the
+                                          // grid's aspect ratio — the
+                                          // caption can never grow it —
+                                          // so a long caption (the
+                                          // outage text, two joined
+                                          // defects) must clamp instead
+                                          // of overflowing the tile. The
+                                          // clamp covers the caption
+                                          // only: at an extreme
+                                          // accessibility font scale the
+                                          // icon row alone can outgrow
+                                          // the tile, the grid's own
+                                          // fixed-aspect property long
+                                          // before this caption.
+                                          child: Text(
+                                            // The missing-title text
+                                            // first: the clamp below
+                                            // truncates what does not
+                                            // fit, and the config
+                                            // defect is the diagnosis
+                                            // that outlives a hierarchy
+                                            // outage (the outage text
+                                            // describes a state that
+                                            // recovery ends).
+                                            [
+                                              if (titleMissing)
+                                                tr(
+                                                  'chatbot.quickHelpTitleMissing',
+                                                ),
+                                              if (scopeBroken)
+                                                _quickHelpErrorCaption(scope),
+                                            ].join(' '),
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                                  fontSize: tokens.textXs,
+                                                  color: tokens.danger,
+                                                ),
+                                            maxLines: 3,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
                                     ],
                                   ),

@@ -20,6 +20,7 @@
 
 const { aql } = require('arangojs');
 const matter = require('gray-matter');
+const { parsePositiveInt } = require('../shared-lib/validation-utils');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
@@ -179,14 +180,14 @@ function reapGraceMs() {
 
 /** NaN-safe env int (the 2.9.1 maxConceptsFromEnv lesson). For the GRACE
  * variable 0 is a legitimate value (sweep immediately / test) — use
- * safeIntOrZero for it (review fix P10: a 0 was silently replaced by 1h). */
+ * safeIntOrZero for it (review fix P10: a 0 was silently replaced by 1h).
+ * Both wrap shared-lib's parsePositiveInt — one env-int policy in the repo,
+ * not a fourth (review 2026-10-29). */
 function safeInt(name, fallback) {
-  const parsed = parseInt(process.env[name] || '', 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  return parsePositiveInt(process.env[name], fallback, { min: 1 });
 }
 function safeIntOrZero(name, fallback) {
-  const parsed = parseInt(process.env[name] || '', 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+  return parsePositiveInt(process.env[name], fallback, { min: 0 });
 }
 
 async function getDb() {
@@ -1488,6 +1489,7 @@ function start() {
     logger.info('Ingest worker DISABLED (OKF_INGEST_WORKER_ENABLED=false)');
     return;
   }
+  _stopping = false;
   const lanes = laneCount();
   logger.info('Ingest worker starting', {
     interval_ms: intervalMs(),
@@ -1537,8 +1539,13 @@ function start() {
         // clause orders by updated_at ASC).
       } finally {
         if (lanesBusyCounter) lanesBusyCounter.add(-1);
-        const i = _drainTimers.indexOf(poll);
-        _drainTimers[i >= 0 ? i : _drainTimers.length] = setTimeout(poll, intervalMs());
+        // stop() must be terminal: an in-flight cycle that settles AFTER
+        // stop() never re-arms its lane (otherwise stop leaks one more
+        // cycle and one more timer).
+        if (!_stopping) {
+          const i = _drainTimers.indexOf(poll);
+          _drainTimers[i >= 0 ? i : _drainTimers.length] = setTimeout(poll, intervalMs());
+        }
       }
     };
     poll();
@@ -1559,7 +1566,7 @@ function start() {
       logger.error('Ingest worker sweep error', { error: err.message });
     } finally {
       _sweeping = false;
-      _sweepTimer = setTimeout(sweep, sweepIntervalMs());
+      if (!_stopping) _sweepTimer = setTimeout(sweep, sweepIntervalMs());
     }
   };
   _sweepTimer = setTimeout(sweep, sweepIntervalMs());
@@ -1571,7 +1578,12 @@ function start() {
   });
 }
 
+// True between stop() and the next start(): in-flight cycles check it so
+// stop() is terminal (no re-arm-after-stop timers).
+let _stopping = false;
+
 function stop() {
+  _stopping = true;
   for (const t of _drainTimers || []) clearTimeout(t);
   _drainTimers = [];
   if (_sweepTimer) clearTimeout(_sweepTimer);

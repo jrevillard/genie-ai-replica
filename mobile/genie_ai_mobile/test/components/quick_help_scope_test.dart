@@ -57,6 +57,30 @@ void main() {
       expect(resolver.stateFor(button)['broken'], isFalse);
     });
 
+    test(
+      'a numeric catKey indexes in the form the config reference resolves',
+      () {
+        // Both sides of the lookup must speak ONE form: the config's
+        // numeric category reference carries the web's serialization
+        // ('5'), so a hierarchy catKey that decoded as an integral
+        // double must index as '5' too — the Dart form ('5.0') would
+        // miss it and only the mobile would render the card broken.
+        final floatTree = <dynamic>[
+          {
+            'catKey': 5.0,
+            'name': 'Cinco',
+            'nameEN': 'Five',
+            'children': <dynamic>[],
+          },
+        ];
+        final floatResolver = QuickHelpScopeResolver(floatTree);
+        final button = {'id': 'x', 'category': 5.0};
+
+        expect(floatResolver.stateFor(button)['broken'], isFalse);
+        expect(floatResolver.categoryLabelEn(button), 'Five');
+      },
+    );
+
     test('an empty hierarchy says every scoped category is missing', () {
       // A hierarchy that LOADED and carries nothing is not a hierarchy
       // that knows nothing: every category a button names is absent
@@ -320,6 +344,186 @@ void main() {
       expect(scope.serviceLabelsEn, ['Births']);
     });
 
+    test(
+      'an id-less button conversation travels as its title tag, and the restore refuses it',
+      () {
+        // The press of an id-less scoped card writes its TITLE as the tag
+        // (the web's identity rule, #1194) — but the restore resolves
+        // BUTTONS by id only, on both platforms (the web's own lookup is
+        // `candidate.id === tag`). A title tag is therefore not a Quick
+        // Help scope on restore: it is a tag the live hierarchy cannot
+        // name, the count remembers it, and the send guard refuses the
+        // follow-up — a VISIBLE refusal. (An identity-keyed index here
+        // would reinstate the scope instead — the silent widening a
+        // scope-less restore gives, diverging from the web.)
+        final idless = [
+          {
+            'resolvedTitle': 'Civil registry help',
+            'category': '2',
+            'serviceLabels': ['Births'],
+          },
+        ];
+        final scope = convResolver(
+          idless,
+        ).resolve(tags: ['Civil registry help'], categoryKey: '2');
+
+        expect(scope.quickHelpButtonId, isNull);
+        expect(scope.sidebarTagCount, 1);
+        expect(scope.sidebarLabelsEn, isEmpty);
+        expect(scope.serviceLabelsEn, isEmpty);
+      },
+    );
+
+    test('a legacy falsy-id tag restores as a sidebar tag, like the web', () {
+      // The web's restore lookup (`candidate.id === tag`) cannot match a
+      // raw 0 against the string '0', so a tag '0' falls to the SIDEBAR
+      // branch there. The restore index must skip falsy raw ids for the
+      // same verdict — an index that kept '0' would reinstate a Quick
+      // Help scope the web refuses (#1244).
+      final falsy = [
+        {
+          'id': 0,
+          'resolvedTitle': 'Civil registry help',
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final scope = convResolver(falsy).resolve(tags: ['0'], categoryKey: '2');
+
+      expect(scope.quickHelpButtonId, isNull);
+      expect(scope.sidebarTagCount, 1);
+      expect(scope.serviceLabelsEn, isEmpty);
+    });
+
+    test('the legacy false and float tags refuse like the 0 tag does', () {
+      // The changelog's upgrade promise names all three legacy tag
+      // shapes a previous build could save: '0', 'false' (the bool id)
+      // and '5.0' (the id written as a JSON float, keyed '5' now). Each
+      // must fall to the sidebar branch, or a dropped guard resurrects
+      // a restore the web refuses — with every test green but this one.
+      final falseId = [
+        {
+          'id': false,
+          'resolvedTitle': 'Civil registry help',
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final falseScope = convResolver(
+        falseId,
+      ).resolve(tags: ['false'], categoryKey: '2');
+      expect(falseScope.quickHelpButtonId, isNull);
+      expect(falseScope.sidebarTagCount, 1);
+
+      final floatId = [
+        {
+          'id': 5.0,
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final floatScope = convResolver(
+        floatId,
+      ).resolve(tags: ['5.0'], categoryKey: '2');
+      expect(floatScope.quickHelpButtonId, isNull);
+      expect(floatScope.sidebarTagCount, 1);
+      expect(floatScope.serviceLabelsEn, isEmpty);
+    });
+
+    test('a web-saved numeric id tag restores the scope', () {
+      // The web saves the RAW JSON id (tags: [5]); the mobile's tag list
+      // is string-typed and the index keys the stringified id — the
+      // scope restores here even though the web's own strict `===`
+      // cannot match the mobile's string tag back (the one-way break of
+      // the same root cause, tracked separately).
+      final numeric = [
+        {
+          'id': 5,
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final scope = convResolver(numeric).resolve(tags: [5], categoryKey: '2');
+
+      expect(scope.quickHelpButtonId, '5');
+      expect(scope.serviceLabelsEn, ['Births']);
+    });
+
+    test('a web-saved tag restores against a FLOAT-id card', () {
+      // The config wrote 5.0; the web's JSON tag is 5, the mobile's
+      // decode produces the double 5.0. The index key must be the JS
+      // serialization ('5'), not Dart's ('5.0'), or the same saved
+      // conversation restores on the web and refuses here.
+      final floatId = [
+        {
+          'id': 5.0,
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final scope = convResolver(floatId).resolve(tags: [5], categoryKey: '2');
+
+      expect(scope.quickHelpButtonId, '5');
+      expect(scope.serviceLabelsEn, ['Births']);
+    });
+
+    test('a bool-id card and a string-0 card restore at the boundary too', () {
+      // The restore boundary pins, beside the identity unit tests: a
+      // bool id indexes and restores as 'true' (dropping bool from the
+      // scalar set would silently title-identity the card), and a
+      // STRING '0' id stays a real id (configTruthy must not leak it
+      // into the falsy set).
+      final boolId = [
+        {
+          'id': true,
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final boolScope = convResolver(
+        boolId,
+      ).resolve(tags: ['true'], categoryKey: '2');
+      expect(boolScope.quickHelpButtonId, 'true');
+      expect(boolScope.serviceLabelsEn, ['Births']);
+
+      final stringZero = [
+        {
+          'id': '0',
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final zeroScope = convResolver(
+        stringZero,
+      ).resolve(tags: ['0'], categoryKey: '2');
+      expect(zeroScope.quickHelpButtonId, '0');
+      expect(zeroScope.serviceLabelsEn, ['Births']);
+    });
+
+    test(
+      'a web-saved title tag (a falsy-id card) restores as a sidebar tag',
+      () {
+        // The web saves the TITLE for a falsy-id card (serviceKey:
+        // `button.id || title`). Neither platform's restore matches a
+        // title to a button: the tag falls to the sidebar branch on both,
+        // and the unnamed-tag count refuses the follow-up on both.
+        final falsy = [
+          {
+            'id': 0,
+            'resolvedTitle': 'Civil registry help',
+            'category': '2',
+            'serviceLabels': ['Births'],
+          },
+        ];
+        final scope = convResolver(
+          falsy,
+        ).resolve(tags: ['Civil registry help'], categoryKey: '2');
+
+        expect(scope.quickHelpButtonId, isNull);
+        expect(scope.sidebarTagCount, 1);
+      },
+    );
+
     test('a button that names its category by ENGLISH resolves to the key', () {
       // The configuration names the category; the conversation's edge
       // speaks the hierarchy's own key — the one the backend writes as
@@ -448,6 +652,42 @@ void main() {
           })['broken'],
           isFalse,
         );
+      },
+    );
+
+    test(
+      'two categories sharing a key: the FIRST claims it even with an empty nameEN',
+      () {
+        // The EN-label index is FIRST-wins, full stop: a first entry
+        // whose nameEN is present-but-empty (a real missing translation)
+        // claims the key and leaves it unnameable — a later duplicate
+        // with a real nameEN does not take the key back. The display-name
+        // index shares the walk and the rule.
+        final duplicated = <dynamic>[
+          {'catKey': '2', 'nameEN': ''},
+          {'catKey': '2', 'nameEN': 'Second'},
+        ];
+        final resolver = QuickHelpScopeResolver(duplicated);
+
+        expect(resolver.categoryEnLabel('2'), isNull);
+      },
+    );
+
+    test(
+      'the display index: a later duplicate claims the key the empty first skipped',
+      () {
+        // The display indexes SKIP an entry with no display name, so a
+        // later duplicate CAN claim the key the first one left — the
+        // mirror image of the EN-label index's first-claim rule above.
+        // The wire stays positional; the display shows whatever name the
+        // tree can produce for the key.
+        final duplicated = <dynamic>[
+          {'catKey': '2', 'name': ''},
+          {'catKey': '2', 'name': 'Segundo'},
+        ];
+        final resolver = QuickHelpScopeResolver(duplicated);
+
+        expect(resolver.categoryDisplayName('2'), 'Segundo');
       },
     );
 
@@ -1006,7 +1246,7 @@ void main() {
       // next restore.
       expect(
         conversationScopeTags(
-          quickHelpButtonId: 'civil',
+          quickHelpIdentity: 'civil',
           sidebarServiceLabels: ['Births'],
         ),
         ['civil', 'Births'],
@@ -1054,6 +1294,42 @@ void main() {
       expect(dedupeQuickHelpButtons([idless]), [idless]);
     });
 
+    test('a FALSY raw id dedupes nothing — the web keeps every such card', () {
+      // The web's load filter skips the dedupe for a falsy id
+      // (`if (!button.id) return true`): 0 and false are NO id there, so
+      // two id-0 cards stay two cards. Deduping on the stringified form
+      // would drop the second and give the platforms a different card
+      // count for the same file (#1244).
+      final zero = {
+        'id': 0,
+        'serviceLabels': ['Births'],
+      };
+      final zeroAgain = {
+        'id': 0,
+        'serviceLabels': ['No Such Service'],
+      };
+
+      expect(dedupeQuickHelpButtons([zero, zeroAgain]), [zero, zeroAgain]);
+    });
+
+    test('a numeric id dedupes by its string form', () {
+      // The PRESENCE rule tests the raw value (5 is truthy); the
+      // equality compares the string forms the tags carry.
+      final first = {
+        'id': 5,
+        'serviceLabels': ['Births'],
+      };
+      final second = {
+        'id': 5,
+        'serviceLabels': ['No Such Service'],
+      };
+
+      final unique = dedupeQuickHelpButtons([first, second]);
+
+      expect(unique, hasLength(1));
+      expect(unique.single, same(first));
+    });
+
     test('distinct ids are all kept', () {
       final a = {'id': 'a'};
       final b = {'id': 'b'};
@@ -1064,7 +1340,8 @@ void main() {
 
   /// A locale switch reloads the buttons with the new locale's titles: the
   /// context bar's title of an ACTIVE Quick Help scope must follow, and it
-  /// follows by IDENTITY (the button id), never by the pressed title.
+  /// follows by the button ID for an id'd button; a TITLE identity (an
+  /// id-less card's) matches nothing and keeps the pressed title.
   group('activeQuickHelpTitleFor', () {
     test('returns the reloaded button title for the active id', () {
       // The button was pressed under 'en' ('Births'); the reload carried
@@ -1076,6 +1353,38 @@ void main() {
 
       expect(activeQuickHelpTitleFor(buttons, 'births'), 'Naissances');
     });
+
+    test('the re-title lookup reads the id the SAME rule the index keys', () {
+      // The restore index normalizes the id (a JSON 5.0 becomes '5'),
+      // matched the tag, and set the active identity '5' — the re-title
+      // lookup must read the same normalized form, or the bar falls
+      // back to the saved category name instead of the button title.
+      final buttons = [
+        {'id': 5.0, 'resolvedTitle': 'Naissances'},
+      ];
+
+      expect(activeQuickHelpTitleFor(buttons, '5'), 'Naissances');
+    });
+
+    test(
+      'a TITLE identity (an id-less card) matches no button and keeps the pressed title',
+      () {
+        // The re-title lookup is ID-keyed (quickHelpButtonById): an
+        // id-less card's identity is its title, and no button's ID equals
+        // it — the caller keeps the title the card was pressed under.
+        // (The web's own re-title does NOT keep it: b.id === item.id
+        // matches an undefined id against the FIRST id-less button and
+        // re-titles from that — a web-side slip the mobile does not
+        // copy.) A lookup that matched on IDENTITY instead would re-title
+        // the bar from another card on every locale switch.
+        final buttons = [
+          {'id': 'births', 'resolvedTitle': 'Naissances'},
+          {'resolvedTitle': 'Registry Card'},
+        ];
+
+        expect(activeQuickHelpTitleFor(buttons, 'Registry Card'), isNull);
+      },
+    );
 
     test('a null active id (sidebar scope or none) resolves nothing', () {
       final buttons = [
@@ -1146,20 +1455,6 @@ void main() {
         isFalse,
       );
     });
-
-    test('a failed load marks the locale it failed under', () {
-      // The retry is scoped to a LOCALE change — the trigger the pre-fix
-      // code used. A keyboard opening (a dependency change under the
-      // same locale) must not re-read the asset.
-      expect(
-        shouldReloadQuickHelpButtons(loadedLocale: 'en', currentLocale: 'en'),
-        isFalse,
-      );
-      expect(
-        shouldReloadQuickHelpButtons(loadedLocale: 'en', currentLocale: 'fr'),
-        isTrue,
-      );
-    });
   });
 
   /// One rule for every path that shows a Quick Help title: an EMPTY
@@ -1179,6 +1474,199 @@ void main() {
     test('a card without a title has no title', () {
       expect(quickHelpTitleOf({'id': 'births'}), isNull);
       expect(quickHelpTitleOf(null), isNull);
+    });
+  });
+
+  /// The press refusals — the three gates the web's
+  /// selectQuickHelpOption applies before any branch, as ONE predicate:
+  /// a broken scope, a scope the tree cannot EN-name, a card with no
+  /// title. The tap sends nothing and installs nothing.
+  group('quickHelpPressable', () {
+    test('a healthy card with a title is pressable', () {
+      final button = {
+        'id': 'civil',
+        'resolvedTitle': 'Civil Registry',
+        'serviceLabels': ['Births'],
+        'category': '2',
+      };
+
+      expect(quickHelpPressable(button, resolver), isTrue);
+    });
+
+    test('a broken scope refuses the press', () {
+      final button = {
+        'id': 'civil',
+        'resolvedTitle': 'Civil Registry',
+        'serviceLabels': ['Registration'],
+        'category': '2',
+      };
+
+      expect(quickHelpPressable(button, resolver), isFalse);
+    });
+
+    test('a card with no title refuses the press', () {
+      final button = {'id': 'blank', 'resolvedTitle': '', 'category': null};
+
+      expect(quickHelpPressable(button, resolver), isFalse);
+    });
+
+    test('a scoped card with no hierarchy resolver refuses the press', () {
+      // The one case where the nameable gate is not implied by the
+      // broken gate: no resolver, no stateFor, no broken verdict —
+      // the wire would carry a scope nothing could EN-name.
+      final button = {
+        'id': 'civil',
+        'resolvedTitle': 'Civil Registry',
+        'category': '2',
+      };
+
+      expect(quickHelpPressable(button, null), isFalse);
+    });
+  });
+
+  /// The grid's DISPLAY verdict — the twin of the press gate
+  /// (quickHelpPressable): every press refusal must have a face, so a
+  /// card the tap would silently refuse renders as the visible failure
+  /// (danger border, caption, no tap). The title gate is the one
+  /// refusal the scope verdict does not carry: a title-less card looks
+  /// pressable — an icon, an enabled ripple — while the tap does
+  /// nothing.
+  group('quickHelpCardBroken', () {
+    final titled = {
+      'id': 'civil',
+      'resolvedTitle': 'Civil Registry',
+      'serviceLabels': ['Births'],
+      'category': '2',
+    };
+    final titleless = {'id': 'blank', 'resolvedTitle': '', 'category': null};
+
+    test('a healthy card with a title is not broken', () {
+      expect(quickHelpCardBroken(titled, resolver.stateFor(titled)), isFalse);
+    });
+
+    test('a broken scope renders broken', () {
+      // The titled card, with the one field that breaks the scope changed.
+      final button = {
+        ...titled,
+        'serviceLabels': ['Registration'],
+      };
+
+      expect(quickHelpCardBroken(button, resolver.stateFor(button)), isTrue);
+    });
+
+    test('a card with no title renders broken — the silent dead tap', () {
+      // The scope is healthy and the hierarchy is up: the ONLY defect
+      // is the missing title, and the press gate refuses the tap with
+      // no feedback at all.
+      expect(
+        quickHelpCardBroken(titleless, resolver.stateFor(titleless)),
+        isTrue,
+      );
+    });
+
+    test('a title-less card stays broken while the hierarchy is pending', () {
+      // The title is a CONFIG fact: it needs no hierarchy to be judged.
+      expect(
+        quickHelpCardBroken(titleless, QuickHelpScopeResolver.pending),
+        isTrue,
+      );
+    });
+
+    test('a titled scope-less card stays healthy while the tree is down', () {
+      // unavailableScopeFor marks only the cards that DECLARE a scope;
+      // the "just chat" card keeps its title and must not wear the
+      // failure state of an outage it does not suffer.
+      final justChat = {
+        'id': 'just-chat',
+        'resolvedTitle': 'Just chat',
+        'serviceLabels': <dynamic>[],
+        'category': 'general',
+      };
+
+      expect(
+        quickHelpCardBroken(
+          justChat,
+          QuickHelpScopeResolver.unavailableScopeFor(justChat),
+        ),
+        isFalse,
+      );
+    });
+
+    test('a title-less card is broken even when the outage broke nothing', () {
+      // The outage and the missing title are independent failures:
+      // unavailableScopeFor leaves a scope-less card healthy, the
+      // title gate must still fire.
+      expect(
+        quickHelpCardBroken(
+          titleless,
+          QuickHelpScopeResolver.unavailableScopeFor(titleless),
+        ),
+        isTrue,
+      );
+    });
+  });
+
+  /// The declared labels of a LOADED button - the parse normalizes them
+  /// (a bare string is wrapped as ONE label there), so this reader
+  /// returns what the card carries.
+  group('quickHelpServiceLabelsOf', () {
+    test('a card carries its declared labels', () {
+      final button = {
+        'serviceLabels': ['Births', 'Weddings'],
+      };
+
+      expect(quickHelpServiceLabelsOf(button), ['Births', 'Weddings']);
+    });
+
+    test('a list of anything else is stringified, never dropped', () {
+      final button = {
+        'serviceLabels': <dynamic>['Births', 3],
+      };
+
+      expect(quickHelpServiceLabelsOf(button), ['Births', '3']);
+    });
+
+    test('a card that declares none carries none', () {
+      expect(quickHelpServiceLabelsOf({'id': 'chat'}), isEmpty);
+    });
+  });
+
+  /// Whether a card DECLARES a scope — a category the hierarchy names,
+  /// or labels it carries. ONE rule, read by the grid's unavailable
+  /// verdict and by the press path.
+  group('quickHelpDeclaresScope', () {
+    test('a card with a category declares a scope', () {
+      expect(quickHelpDeclaresScope({'id': 'civil', 'category': '2'}), isTrue);
+    });
+
+    test('a card with labels declares a scope', () {
+      expect(
+        quickHelpDeclaresScope({
+          'id': 'civil',
+          'category': null,
+          'serviceLabels': <String>['Births'],
+        }),
+        isTrue,
+      );
+    });
+
+    test('a card with neither declares no scope', () {
+      expect(quickHelpDeclaresScope({'id': 'chat'}), isFalse);
+      expect(
+        quickHelpDeclaresScope({
+          'id': 'chat',
+          'category': null,
+          'serviceLabels': <String>[],
+        }),
+        isFalse,
+      );
+    });
+
+    test("the 'general' placeholder declares no scope", () {
+      expect(
+        quickHelpDeclaresScope({'id': 'chat', 'category': 'general'}),
+        isFalse,
+      );
     });
   });
 
@@ -1207,6 +1695,825 @@ void main() {
       ];
 
       expect(quickHelpButtonById(buttons, 'crops'), isNull);
+    });
+  });
+
+  /// The identity a conversation tag carries for a button — the web's
+  /// `serviceKey` rule (`button.id || title`): the id when the config
+  /// declares one, the title when it does not (#1194).
+  group('quickHelpButtonIdentity', () {
+    test('the id wins when the config declares one', () {
+      expect(
+        quickHelpButtonIdentity({
+          'id': 'civil',
+          'resolvedTitle': 'Civil Registry',
+        }),
+        'civil',
+      );
+    });
+
+    test('an id-less button is identified by its title', () {
+      // A scoped card can be declared without an id (a hand-edited
+      // deployment configuration): its identity — what the conversation
+      // tag carries — is its title, exactly as the web's serviceKey is.
+      // An EMPTY id is no id (the file's own rule), not a title override.
+      const titleOnly = {'resolvedTitle': 'Civil Registry'};
+      expect(quickHelpButtonIdentity(titleOnly), 'Civil Registry');
+      expect(
+        quickHelpButtonIdentity({'id': null, ...titleOnly}),
+        'Civil Registry',
+      );
+      expect(
+        quickHelpButtonIdentity({'id': '', ...titleOnly}),
+        'Civil Registry',
+      );
+    });
+
+    test('a button with neither id nor title has no identity', () {
+      expect(quickHelpButtonIdentity({}), isNull);
+      expect(quickHelpButtonIdentity({'id': '', 'resolvedTitle': ''}), isNull);
+      expect(quickHelpButtonIdentity(null), isNull);
+    });
+
+    test('a FALSY raw id is no id — the title identifies, as on the web', () {
+      // The web's serviceKey rule (`button.id || title`) tests the RAW
+      // value's JavaScript truthiness BEFORE any stringification. A
+      // stringified-first read turns 0 into '0' — a truthy non-empty
+      // string — and the two platforms would then save DIFFERENT tags
+      // for the same card (#1244). A string '0' or a numeric 5 IS a
+      // real id (truthy raw values).
+      expect(
+        quickHelpButtonIdentity({'id': 0, 'resolvedTitle': 'Card'}),
+        'Card',
+      );
+      expect(
+        quickHelpButtonIdentity({'id': false, 'resolvedTitle': 'Card'}),
+        'Card',
+      );
+      expect(
+        quickHelpButtonIdentity({'id': '0', 'resolvedTitle': 'Card'}),
+        '0',
+      );
+      expect(quickHelpButtonIdentity({'id': 5, 'resolvedTitle': 'Card'}), '5');
+    });
+
+    test('a numeric id carries the tag form JavaScript serializes', () {
+      // The web saves the id as JSON — a JS number serializes 5.0 as 5.
+      // Dart's double toString would give '5.0', and the web-saved tag
+      // ('5') would miss the restore index. The integral form is the
+      // tag form, whatever the JSON decode produced. The exponential
+      // range (≥ 1e21) is where Dart's own form already matches JS.
+      expect(quickHelpButtonIdentity({'id': 5.0, 'resolvedTitle': 'C'}), '5');
+      expect(quickHelpButtonIdentity({'id': 5, 'resolvedTitle': 'C'}), '5');
+      expect(
+        quickHelpButtonIdentity({'id': 1e18, 'resolvedTitle': 'C'}),
+        '1000000000000000000',
+      );
+      expect(
+        quickHelpButtonIdentity({'id': 1e21, 'resolvedTitle': 'C'}),
+        '1e+21',
+      );
+      // Above the int64 range both platforms still hold the SAME double
+      // when the configuration wrote a JSON float — only Dart's '.0'
+      // suffix diverges, and the plain-digit form is what JavaScript
+      // serializes.
+      expect(
+        quickHelpButtonIdentity({'id': 1e19, 'resolvedTitle': 'C'}),
+        '10000000000000000000',
+      );
+      // The negative branch of the same strip: the sign stays, the
+      // suffix goes.
+      expect(quickHelpButtonIdentity({'id': -5.0, 'resolvedTitle': 'C'}), '-5');
+    });
+
+    test('a NON-SCALAR id is no identity — the title carries the card', () {
+      // An array or object id cannot be a portable identity: the web
+      // saves the LIVE value (an object), which its own restore can
+      // never match again after the JSON round trip, while a Dart
+      // stringification would produce a tag ('[]') the mobile alone
+      // would restore — the platforms would disagree about the same
+      // saved conversation. Falling to the TITLE converges every save
+      // direction on the sidebar branch, on both platforms.
+      expect(
+        quickHelpButtonIdentity({'id': [], 'resolvedTitle': 'Card'}),
+        'Card',
+      );
+      expect(
+        quickHelpButtonIdentity({'id': {}, 'resolvedTitle': 'Card'}),
+        'Card',
+      );
+    });
+
+    test('a truthy BOOL id is a real id in the web tag form', () {
+      // The scalar guard admits bools: `true || title` on the web is
+      // the raw value, and JavaScript serializes it as 'true' — the tag
+      // both platforms must write. Dropping bool from the guard's
+      // scalar set would silently turn this into a title identity.
+      expect(
+        quickHelpButtonIdentity({'id': true, 'resolvedTitle': 'C'}),
+        'true',
+      );
+    });
+  });
+
+  /// The config-side parse of a Quick Help button — the shape the shipped
+  /// configurations declare: a top-level `title` locale map, a top-level
+  /// `icon` object and an optional `action`. The grid card's label and the
+  /// card icon are the two reads that drifted to a non-existent
+  /// `appearance` block; the parse is where the shipped shape is read.
+  ///
+  /// One malformed value degrades ONE card (no asset, an empty text),
+  /// never the whole load — the same isolation the web applies to the
+  /// same file.
+  group('parseQuickHelpButton', () {
+    final shippedButton = {
+      'id': 'just-chat',
+      'title': {'en': 'Just Chat', 'fr': 'Discuter'},
+      'icon': {'type': 'file', 'value': '/config/quickhelp/just-chat.svg'},
+      'category': null,
+    };
+
+    test(
+      'a shipped button resolves its title locale map and its icon basename',
+      () {
+        final parsed = parseQuickHelpButton(shippedButton, 'en');
+
+        expect(parsed['id'], 'just-chat');
+        expect(parsed['resolvedTitle'], 'Just Chat');
+        expect(parsed['iconAsset'], 'assets/config/quickhelp/just-chat.svg');
+      },
+    );
+
+    test('a numeric category carries the form the web resolves', () {
+      // The web resolves a numeric category reference with
+      // String(reference): a JSON 5.0 becomes '5' and matches the
+      // hierarchy's catKey. Dart's toString would give '5.0', the
+      // hierarchy lookup would miss, and only the mobile would render
+      // the card broken.
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'category': 5.0,
+      }, 'en');
+
+      expect(parsed['category'], '5');
+    });
+
+    test('a negative-zero category serializes as JavaScript writes it', () {
+      // String(-0) in JavaScript is '0'; Dart's toString gives '-0' —
+      // the hierarchy lookup would miss where the web's matches. (The
+      // ID path never sees it: -0.0 is falsy there, on both platforms.)
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'category': -0.0,
+      }, 'en');
+
+      expect(parsed['category'], '0');
+    });
+
+    test('the id is kept RAW — the truthiness read precedes any string', () {
+      // The identity rule (the web's `id || title`) must see the JSON
+      // value the configuration wrote: a parse that stringifies first
+      // turns 0 into '0' and loses the falsiness the rule reads
+      // (#1244). The end-to-end half proves the REAL pipeline — parse
+      // then identity — carries the title the web carries for this
+      // card, not the stringified '0'.
+      final parsed = parseQuickHelpButton({...shippedButton, 'id': 0}, 'en');
+
+      expect(parsed['id'], 0);
+      expect(quickHelpButtonIdentity(parsed), 'Just Chat');
+    });
+
+    test('a falsy value in the active locale falls through to English', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'title': {'es': 0, 'en': 'Apply for ID'},
+      }, 'es');
+
+      expect(parsed['resolvedTitle'], 'Apply for ID');
+    });
+
+    test('a title missing the active locale falls back to English', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'title': {'en': 'Just Chat'},
+      }, 'fr');
+
+      expect(parsed['resolvedTitle'], 'Just Chat');
+    });
+
+    test('a button with no icon carries no asset', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'icon': null,
+      }, 'en');
+
+      expect(parsed['iconAsset'], '');
+    });
+
+    test('a malformed icon (a bare string) carries no asset', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'icon': '/config/quickhelp/just-chat.svg',
+      }, 'en');
+
+      expect(parsed['iconAsset'], '');
+    });
+
+    test('a malformed action (a bare string) carries no action texts', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'action': 'ask',
+      }, 'en');
+
+      expect(parsed['resolvedVisibleText'], '');
+      expect(parsed['resolvedHiddenPrompt'], '');
+    });
+
+    test('an empty string in the active locale falls through to English', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'title': {'en': 'Apply for ID', 'es': ''},
+      }, 'es');
+
+      expect(parsed['resolvedTitle'], 'Apply for ID');
+    });
+
+    test('an empty title locale map resolves to no text', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'title': {},
+      }, 'en');
+
+      expect(parsed['resolvedTitle'], '');
+    });
+
+    test('an icon value with no basename carries no asset', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'icon': {'type': 'file', 'value': '/config/quickhelp/'},
+      }, 'en');
+
+      expect(parsed['iconAsset'], '');
+    });
+
+    test('a bare-string serviceLabel is wrapped as ONE label', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'serviceLabels': 'Births',
+      }, 'en');
+
+      expect(parsed['serviceLabels'], ['Births']);
+    });
+
+    test('the label list is stored as strings, ready for the wire', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'serviceLabels': ['Births', 'Weddings'],
+      }, 'en');
+
+      final labels = parsed['serviceLabels'];
+      expect(labels, isA<List<String>>());
+    });
+
+    test('the action texts resolve their locale maps', () {
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'action': {
+          'visibleText': {'en': 'Ask about IDs', 'fr': 'Demander une CNI'},
+          'hiddenPrompt': {'en': 'prompt-en'},
+        },
+      }, 'fr');
+
+      expect(parsed['resolvedVisibleText'], 'Demander une CNI');
+      expect(parsed['resolvedHiddenPrompt'], 'prompt-en');
+    });
+  });
+
+  /// The grid layout the config's `layout` block declares. A malformed
+  /// value (a string, a non-positive count, a non-finite number) degrades
+  /// to the default instead of throwing inside the build.
+  group('quickHelpGridColumns', () {
+    test('an integer count is used as-is', () {
+      expect(quickHelpGridColumns({'columns': 3}), 3);
+    });
+
+    test('a JSON float count is truncated to an integer', () {
+      expect(quickHelpGridColumns({'columns': 2.0}), 2);
+    });
+
+    test('a string, a non-positive or a non-finite count degrades to 2', () {
+      expect(quickHelpGridColumns({'columns': '2'}), 2);
+      expect(quickHelpGridColumns({'columns': 0}), 2);
+      expect(quickHelpGridColumns({'columns': double.infinity}), 2);
+      expect(quickHelpGridColumns({'columns': double.nan}), 2);
+    });
+
+    test('a missing count degrades to 2', () {
+      expect(quickHelpGridColumns({}), 2);
+    });
+
+    test('a count wider than the grid is bounded by the width', () {
+      // 500 columns on a 328px grid: the cap is width/10 = 32 — the
+      // highest count whose columns still have a positive extent beside
+      // the 10px spacing (32 columns leave 18px for the tiles).
+      expect(quickHelpGridColumns({'columns': 500}, maxWidth: 328), 32);
+      expect(quickHelpGridColumns({'columns': 3}, maxWidth: 328), 3);
+      expect(quickHelpGridColumns({'columns': 500}, maxWidth: 25), 2);
+    });
+
+    test('a width without room for two columns degrades to one', () {
+      // A negative or sub-spacing width cannot be produced by the
+      // widget's BoxConstraints, but the helper is public: its own
+      // contract (never throw) must hold for any width.
+      expect(quickHelpGridColumns({'columns': 3}, maxWidth: -50), 1);
+      expect(quickHelpGridColumns({'columns': 3}, maxWidth: 0), 1);
+    });
+
+    test('an unbounded width keeps the parsed count', () {
+      expect(quickHelpGridColumns({'columns': 4}), 4);
+    });
+  });
+
+  /// The section-level pipeline: the descent to `features.chat.quickHelp`,
+  /// the container guards, the hidden filter, the per-entry skip, the
+  /// button parse and the first-wins dedupe — the same resolve pass the
+  /// web runs, so the widget keeps only cache, mount and state.
+  group('parseQuickHelpConfig', () {
+    const justChat = {
+      'id': 'just-chat',
+      'title': {'en': 'Just Chat', 'fr': 'Discuter'},
+      'icon': {'type': 'file', 'value': '/config/quickhelp/just-chat.svg'},
+      'category': null,
+    };
+    final section = {
+      'features': {
+        'chat': {
+          'quickHelp': {
+            'layout': {'columns': 3},
+            'buttons': [
+              justChat,
+              {
+                'id': 'dup',
+                'title': {'en': 'Second'},
+              },
+              {
+                'id': 'dup',
+                'title': {'en': 'Dropped'},
+              },
+              {
+                'id': 'gone',
+                'title': {'en': 'Hidden'},
+                'hidden': true,
+              },
+              'a stray string',
+            ],
+          },
+        },
+      },
+    };
+
+    test(
+      'parses the section: buttons in order, first of a duplicate id wins',
+      () {
+        final (layout, buttons) = parseQuickHelpConfig(section, 'en');
+
+        expect(layout, {'columns': 3});
+        expect(buttons.map((b) => b['id']), ['just-chat', 'dup']);
+        expect(buttons[0]['resolvedTitle'], 'Just Chat');
+      },
+    );
+
+    test('a hidden card is dropped, string-typed flag included', () {
+      final (layout, buttons) = parseQuickHelpConfig({
+        'features': {
+          'chat': {
+            'quickHelp': {
+              'buttons': [
+                {
+                  'id': 'gone',
+                  'title': {'en': 'Hidden'},
+                  'hidden': 'true',
+                },
+              ],
+            },
+          },
+        },
+      }, 'en');
+
+      expect(buttons, isEmpty);
+    });
+
+    test('a missing or malformed container degrades to the empty section', () {
+      for (final config in <Map<String, dynamic>>[
+        {},
+        {'features': 'oops'},
+        {
+          'features': {
+            'chat': {
+              'quickHelp': {'layout': 'wide', 'buttons': {}},
+            },
+          },
+        },
+      ]) {
+        final (layout, buttons) = parseQuickHelpConfig(config, 'en');
+        expect(layout, isEmpty);
+        expect(buttons, isEmpty);
+      }
+    });
+  });
+
+  group('quickHelpGridAspectRatio', () {
+    test('a positive ratio is used as-is', () {
+      expect(quickHelpGridAspectRatio({'childAspectRatio': 3.5}), 3.5);
+    });
+
+    test('a non-positive or non-finite ratio degrades to 3.5', () {
+      expect(quickHelpGridAspectRatio({'childAspectRatio': 0}), 3.5);
+      expect(quickHelpGridAspectRatio({'childAspectRatio': -1}), 3.5);
+      expect(
+        quickHelpGridAspectRatio({'childAspectRatio': double.infinity}),
+        3.5,
+      );
+    });
+
+    test('a missing ratio degrades to 3.5', () {
+      expect(quickHelpGridAspectRatio({}), 3.5);
+    });
+  });
+
+  group('localizedDisplayNamesOf', () {
+    test('maps every entity by its ENGLISH label to its display name', () {
+      final tree = <dynamic>[
+        {
+          'catKey': '2',
+          'name': 'Registro Civil',
+          'nameEN': 'Civil Registry',
+          'children': [
+            {'name': 'Nacimientos', 'nameEN': 'Births'},
+          ],
+        },
+      ];
+      expect(localizedDisplayNamesOf(tree), {
+        'Civil Registry': 'Registro Civil',
+        'Births': 'Nacimientos',
+      });
+    });
+
+    test('the label field is the display name when the tree carries one', () {
+      final tree = <dynamic>[
+        {
+          'catKey': '2',
+          'label': 'Registro Civil',
+          'name': 'legacy-name',
+          'nameEN': 'Civil Registry',
+        },
+      ];
+      expect(localizedDisplayNamesOf(tree)['Civil Registry'], 'Registro Civil');
+    });
+
+    test('the first entity wins when two share an ENGLISH label', () {
+      final tree = <dynamic>[
+        {'catKey': '2', 'name': 'Primero', 'nameEN': 'Civil Registry'},
+        {'catKey': '3', 'name': 'Segundo', 'nameEN': 'Civil Registry'},
+      ];
+      expect(localizedDisplayNamesOf(tree)['Civil Registry'], 'Primero');
+    });
+
+    test('an entity with no ENGLISH label is skipped', () {
+      final tree = <dynamic>[
+        {'name': 'Sin etiqueta'},
+        {'nameEN': null, 'name': 'Sin etiqueta'},
+      ];
+      expect(localizedDisplayNamesOf(tree), isEmpty);
+    });
+
+    test('an entity with no display name is skipped', () {
+      final tree = <dynamic>[
+        {'nameEN': 'Births', 'name': null},
+        {'nameEN': 'Births'},
+      ];
+      expect(localizedDisplayNamesOf(tree), isEmpty);
+    });
+
+    test('a non-map entry is skipped', () {
+      final tree = <dynamic>[
+        'stray',
+        {'nameEN': 'Births', 'name': 'Nacimientos'},
+      ];
+      expect(localizedDisplayNamesOf(tree)['Births'], 'Nacimientos');
+    });
+  });
+
+  group('localizedCategoryDisplayNamesOf', () {
+    test('maps every category by its key to its display name', () {
+      final tree = <dynamic>[
+        {
+          'catKey': '2',
+          'name': 'Registro Civil',
+          'nameEN': 'Civil Registry',
+          'children': [
+            {'name': 'Nacimientos', 'nameEN': 'Births'},
+          ],
+        },
+      ];
+      expect(localizedCategoryDisplayNamesOf(tree), {'2': 'Registro Civil'});
+    });
+
+    test('the label field is the display name when the tree carries one', () {
+      final tree = <dynamic>[
+        {
+          'catKey': '2',
+          'label': 'Registro Civil',
+          'name': 'legacy-name',
+          'nameEN': 'Civil Registry',
+        },
+      ];
+      expect(localizedCategoryDisplayNamesOf(tree)['2'], 'Registro Civil');
+    });
+
+    test('a service row names no category', () {
+      // The tree's children are services: their `_key` is a service key,
+      // never a category key — a service must not be reachable through
+      // the category read.
+      final tree = <dynamic>[
+        {
+          'catKey': '2',
+          'name': 'Registro Civil',
+          'nameEN': 'Civil Registry',
+          'children': [
+            {'_key': 'svc-1', 'name': 'Nacimientos', 'nameEN': 'Births'},
+          ],
+        },
+      ];
+      expect(
+        localizedCategoryDisplayNamesOf(tree).containsKey('svc-1'),
+        isFalse,
+      );
+    });
+
+    test('the first category wins when two share a key', () {
+      final tree = <dynamic>[
+        {'catKey': '2', 'name': 'Primero', 'nameEN': 'Civil Registry'},
+        {'catKey': '2', 'name': 'Segundo', 'nameEN': 'Civil Registry'},
+      ];
+      expect(localizedCategoryDisplayNamesOf(tree)['2'], 'Primero');
+    });
+
+    test('a category with no display name is skipped', () {
+      final tree = <dynamic>[
+        {'catKey': '2', 'name': null},
+        {'catKey': '2'},
+      ];
+      expect(localizedCategoryDisplayNamesOf(tree), isEmpty);
+    });
+
+    test('a category with no key is skipped', () {
+      final tree = <dynamic>[
+        {'name': 'Sin clave'},
+        {'catKey': '', 'name': 'Sin clave'},
+      ];
+      expect(localizedCategoryDisplayNamesOf(tree), isEmpty);
+    });
+
+    test('a non-map entry is skipped', () {
+      final tree = <dynamic>[
+        'stray',
+        {'catKey': '2', 'name': 'Registro Civil'},
+      ];
+      expect(localizedCategoryDisplayNamesOf(tree)['2'], 'Registro Civil');
+    });
+  });
+
+  group('restoredScopeTitleFollowsLocale', () {
+    test('a restored scope with a category key follows the locale', () {
+      expect(
+        restoredScopeTitleFollowsLocale(
+          fromSelection: false,
+          activeIdentity: null,
+          categoryKey: '2',
+        ),
+        isTrue,
+      );
+    });
+
+    test('a live selection is the join rule, not this one', () {
+      expect(
+        restoredScopeTitleFollowsLocale(
+          fromSelection: true,
+          activeIdentity: null,
+          categoryKey: '2',
+        ),
+        isFalse,
+      );
+    });
+
+    test('a Quick Help scope is re-titled by the config, by id', () {
+      expect(
+        restoredScopeTitleFollowsLocale(
+          fromSelection: false,
+          activeIdentity: 'births-id',
+          categoryKey: '2',
+        ),
+        isFalse,
+      );
+    });
+
+    test('no category names nothing', () {
+      expect(
+        restoredScopeTitleFollowsLocale(
+          fromSelection: false,
+          activeIdentity: null,
+          categoryKey: null,
+        ),
+        isFalse,
+      );
+    });
+
+    test('an empty category key names nothing', () {
+      expect(
+        restoredScopeTitleFollowsLocale(
+          fromSelection: false,
+          activeIdentity: null,
+          categoryKey: '',
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('sidebarScopeTitleFor', () {
+    test('joins the localized names in the stored label order', () {
+      expect(
+        sidebarScopeTitleFor(
+          ['Births', 'Marriages'],
+          {'Births': 'Nacimientos', 'Marriages': 'Matrimonios'},
+        ),
+        'Nacimientos, Matrimonios',
+      );
+    });
+
+    test('a single label joins without a separator', () {
+      expect(
+        sidebarScopeTitleFor(['Births'], {'Births': 'Nacimientos'}),
+        'Nacimientos',
+      );
+    });
+
+    test('null when a stored label is missing from the localized tree', () {
+      expect(
+        sidebarScopeTitleFor(['Births', 'Gone'], {'Births': 'Nacimientos'}),
+        isNull,
+      );
+    });
+
+    test('null when the localized display is empty', () {
+      expect(sidebarScopeTitleFor(['Births'], {'Births': ''}), isNull);
+    });
+
+    test('null for an empty label list', () {
+      expect(
+        sidebarScopeTitleFor(const <String>[], {'Births': 'Nacimientos'}),
+        isNull,
+      );
+    });
+  });
+
+  group('sidebarTitleCaptureMatchesSelection', () {
+    final labels = ['Births'];
+    test('the identical selection still matches', () {
+      expect(
+        sidebarTitleCaptureMatchesSelection(
+          capturedLabels: labels,
+          capturedCount: 1,
+          labels: ['Births'],
+          count: 1,
+          fromSelection: true,
+          activeIdentity: null,
+        ),
+        isTrue,
+      );
+    });
+
+    test('a changed label list does not match', () {
+      expect(
+        sidebarTitleCaptureMatchesSelection(
+          capturedLabels: labels,
+          capturedCount: 1,
+          labels: ['Marriages'],
+          count: 1,
+          fromSelection: true,
+          activeIdentity: null,
+        ),
+        isFalse,
+      );
+    });
+
+    test('a grown count does not match even when the labels do', () {
+      // The unnamed pick: the labels list is untouched but the scope
+      // grew — the join would show a scope narrower than the query's.
+      expect(
+        sidebarTitleCaptureMatchesSelection(
+          capturedLabels: labels,
+          capturedCount: 1,
+          labels: ['Births'],
+          count: 2,
+          fromSelection: true,
+          activeIdentity: null,
+        ),
+        isFalse,
+      );
+    });
+
+    test('a restored scope does not match', () {
+      // A restore mid-flight carries the SAME labels and count the fetch
+      // captured — only the live-selection flag tells the two apart.
+      expect(
+        sidebarTitleCaptureMatchesSelection(
+          capturedLabels: labels,
+          capturedCount: 1,
+          labels: ['Births'],
+          count: 1,
+          fromSelection: false,
+          activeIdentity: null,
+        ),
+        isFalse,
+      );
+    });
+
+    test('a button scope does not match', () {
+      expect(
+        sidebarTitleCaptureMatchesSelection(
+          capturedLabels: labels,
+          capturedCount: 1,
+          labels: ['Births'],
+          count: 1,
+          fromSelection: true,
+          activeIdentity: 'btn-1',
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('sidebarTitleFollowsLocale', () {
+    test('a live selection whose every pick carries a label follows', () {
+      expect(
+        sidebarTitleFollowsLocale(
+          fromSelection: true,
+          activeIdentity: null,
+          serviceCount: 2,
+          serviceLabelsEn: const ['Births', 'Marriages'],
+        ),
+        isTrue,
+      );
+    });
+
+    test('a restored scope does not follow', () {
+      expect(
+        sidebarTitleFollowsLocale(
+          fromSelection: false,
+          activeIdentity: null,
+          serviceCount: 1,
+          serviceLabelsEn: const ['Births'],
+        ),
+        isFalse,
+      );
+    });
+
+    test('an active button scope does not follow', () {
+      expect(
+        sidebarTitleFollowsLocale(
+          fromSelection: true,
+          activeIdentity: 'btn-1',
+          serviceCount: 1,
+          serviceLabelsEn: const ['Births'],
+        ),
+        isFalse,
+      );
+    });
+
+    test('a selection with an unnamed pick does not follow', () {
+      expect(
+        sidebarTitleFollowsLocale(
+          fromSelection: true,
+          activeIdentity: null,
+          serviceCount: 2,
+          serviceLabelsEn: const ['Births'],
+        ),
+        isFalse,
+      );
+    });
+
+    test('no selection does not follow', () {
+      expect(
+        sidebarTitleFollowsLocale(
+          fromSelection: true,
+          activeIdentity: null,
+          serviceCount: 0,
+          serviceLabelsEn: const <String>[],
+        ),
+        isFalse,
+      );
     });
   });
 }

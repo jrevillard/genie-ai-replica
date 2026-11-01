@@ -4,7 +4,7 @@ const config = require('../config/appConfig');
 const Joi = require('joi');
 const path = require('path');
 const fs = require('fs').promises;
-const { logger } = require('../../shared-lib');
+const { logger, dbService } = require('../../shared-lib');
 const archiver = require('archiver');
 const axios = require('axios');
 
@@ -77,6 +77,49 @@ const batchFileIdsSchema = Joi.object({
 const singleIngestSchema = Joi.object({
   chunkOverlap: Joi.number().integer().min(0).max(1000).allow(null).optional()
 });
+
+// Body of the dataprep startup recovery (#610): the caller's still-live task
+// ids, excluded from the release so a retry landing after the service started
+// serving cannot flip an ingest that is actually running. Optional/empty by
+// default (nothing to exclude at a cold boot). Unknown keys are ALLOWED: a
+// 400 here would fail fast as a permanent rejection on the dataprep side and
+// silently disable the self-healing until the next restart — a future caller
+// adding a field must degrade, not die.
+const recoverStuckSchema = Joi.object({
+  excludeFileIds: Joi.array().items(Joi.string().min(1)).max(10000).default([])
+}).unknown(true);
+
+// WS2 (David, 2026-09-25): bundle zips (is_bundle=true) are OKF per-version
+// ingestion artifacts — they live forever, governed by the OKF lifecycle
+// (supersede/superseded by minting a new version), not by doc-repo's
+// document management tab. Only the okf-service service account may delete
+// them; every other caller gets a 403 with code=BUNDLE_PROTECTED so the UI
+// can hide the action entirely. Live-caught 2026-09-25: all 4 ingested
+// repos' bundle zips were deleted by the hourly ingest sweep because this
+// protection did not exist; without it the entire ingest pipeline loses
+// the per-version trace. One guard serves BOTH delete handlers so the
+// policy is single-sourced — a handler renders only its own message.
+const isOkfServiceCaller = (req) => {
+  const callerRoles = req.user && Array.isArray(req.user.roles) ? req.user.roles : [];
+  return callerRoles.some((r) => String(r).toLowerCase() === 'okf-service');
+};
+
+// DW-426 (review 2026-10-29 round 3): ONE IN-list AQL replaces the per-file
+// getMetadataById loop (~N round-trips → 1).
+const bundleProtectedIds = async (fileIds) => {
+  try {
+    const db = await dbService.getConnection('files');
+    const cursor = await db.query('FOR f IN files FILTER f.file_id IN @ids AND f.is_bundle == true RETURN f.file_id', {
+      ids: fileIds
+    });
+    return await cursor.all();
+  } catch {
+    // metadata lookup failed — degrade to "no protected ids" exactly as the
+    // per-file loop did (the delete path itself surfaces any actual error
+    // from the deletion)
+    return [];
+  }
+};
 
 // Schema for file upload validation
 const uploadSchema = Joi.object({
@@ -173,6 +216,43 @@ const scheduleCrawlSchema = Joi.object({
   }).optional()
 });
 
+// The reason a dataprep call failed, as dataprep reported it: the response
+// body's `detail` (or `message`), falling back to the error's own message.
+// ONE extraction for every caller — three copies of this chain had already
+// drifted apart, and a drift here blinds the ingestion log exactly when it
+// matters.
+function errorDetail(err) {
+  const data = err && err.response && err.response.data;
+  return String((data && (data.detail || data.message)) || (err && err.message) || '');
+}
+
+// Dataprep's ingest IDEMPOTENCY GUARD answers HTTP 409 when an ingest task
+// for the SAME fileId is already in flight (genieai_dataprep_microservice.py).
+// That is a SUCCESS signal for the running ingest — the live task owns the
+// file and writes its own final status — so doc-repo must not turn it into a
+// file failure.
+//
+// The 409 status alone is not the signal: only the guard's own conflict is.
+// The guard names the file it is about ("An ingest task for fileId 'X' is
+// already running"), so the check is on BOTH halves — the id must be the one
+// we submitted, compared EXACTLY (a substring match would swallow a conflict
+// about a different file whose id merely contains ours), and the message must
+// carry the guard's meaning (a conflict about our file that says something
+// else is a real conflict). Any other 409 stays on the error path.
+//
+// If dataprep ever rewords the message, this stops matching and the file
+// falls back to the failure path — the pre-fix behaviour, which is visible in
+// the ingestion log. That direction is deliberate: a reword must not turn a
+// real conflict into a silent success.
+function isIngestAlreadyRunning(err, fileId) {
+  const response = err && err.response;
+  if (!response || response.status !== 409) return false;
+  const detail = errorDetail(err);
+  const named = detail.match(/fileId\s+'?([^'\s]+)'?/);
+  if (!named || !fileId || named[1] !== String(fileId)) return false;
+  return /already running/i.test(detail);
+}
+
 class FileController {
   constructor() {
     // Bind methods to preserve 'this' context
@@ -201,6 +281,7 @@ class FileController {
     this.bundleIngest = this.bundleIngest.bind(this);
     this._markIngestFailure = this._markIngestFailure.bind(this);
     this.killIngestion = this.killIngestion.bind(this);
+    this.recoverStuckIngests = this.recoverStuckIngests.bind(this);
 
     // --- CRAWLER BINDS ---
     this.scheduleSiteCrawl = this.scheduleSiteCrawl.bind(this);
@@ -725,27 +806,13 @@ class FileController {
         });
       }
 
-      // WS2 (David, 2026-09-25): bundle zips (is_bundle=true) are OKF
-      // per-version ingestion artifacts — they live forever, governed by
-      // the OKF lifecycle (supersede/superseded by minting a new version),
-      // not by doc-repo's document management tab. Only the okf-service
-      // service account may delete them; Admin / steward roles get a
-      // explicit 403 with code=BUNDLE_PROTECTED so the UI can hide the
-      // action entirely. Live-caught 2026-09-25: all 4 ingested repos'
-      // bundle zips were deleted by the hourly ingest sweep because this
-      // protection did not exist; without it the entire ingest pipeline
-      // loses the per-version trace.
-      const callerRoles = req.user && Array.isArray(req.user.roles) ? req.user.roles : [];
-      const isOkfService = callerRoles.some((r) => String(r).toLowerCase() === 'okf-service');
-      if (!isOkfService) {
-        let meta = null;
-        try {
-          meta = await metadataService.getMetadataById(fileId);
-        } catch {
-          // metadata fetch failed — fall through (the existing delete handler
-          // will surface any actual error from the deletion path itself)
-        }
-        if (meta && meta.is_bundle === true) {
+      // WS2 (David, 2026-09-25): bundle zips are OKF per-version ingestion
+      // artifacts (see bundleProtectedIds). Only the okf-service account may
+      // delete them; every other caller gets an explicit 403 with
+      // code=BUNDLE_PROTECTED so the UI can hide the action entirely.
+      if (!isOkfServiceCaller(req)) {
+        const [protectedId] = await bundleProtectedIds([fileId]);
+        if (protectedId) {
           return res.status(403).json({
             success: false,
             code: 'BUNDLE_PROTECTED',
@@ -818,24 +885,15 @@ class FileController {
       // a single bundle in the batch fails the WHOLE batch with 403 so
       // the UI can surface the error clearly (partial-deletion is worse
       // than no-deletion for the bundle semantics).
-      const callerRoles = req.user && Array.isArray(req.user.roles) ? req.user.roles : [];
-      const isOkfService = callerRoles.some((r) => String(r).toLowerCase() === 'okf-service');
-      if (!isOkfService) {
-        for (const fileId of fileIds) {
-          let meta = null;
-          try {
-            meta = await metadataService.getMetadataById(fileId);
-          } catch {
-            // metadata fetch failed — fall through
-          }
-          if (meta && meta.is_bundle === true) {
-            return res.status(403).json({
-              success: false,
-              code: 'BUNDLE_PROTECTED',
-              error: 'Bundle zips are managed by the OKF lifecycle and cannot be deleted from document management',
-              message: `Bundle zip "${fileId}" is owned by the OKF repository lifecycle. Delete is only allowed via the okf-service account.`
-            });
-          }
+      if (!isOkfServiceCaller(req)) {
+        const protectedIds = await bundleProtectedIds(fileIds);
+        if (protectedIds.length > 0) {
+          return res.status(403).json({
+            success: false,
+            code: 'BUNDLE_PROTECTED',
+            error: 'Bundle zips are managed by the OKF lifecycle and cannot be deleted from document management',
+            message: `Bundle zip "${protectedIds[0]}" is owned by the OKF repository lifecycle. Delete is only allowed via the okf-service account.`
+          });
         }
       }
 
@@ -1182,6 +1240,10 @@ class FileController {
         storagePath: file.storage_path,
         fileBase64: base64String,
         graphName: file.graph_name || null,
+        // DW-442 (review 2026-10-29 round 3): name the repo explicitly —
+        // dataprep's OKF completion routing accepts and prefers an explicit
+        // repo id over guessing it from the graph name.
+        repoId: file.repo_id || null,
         // Story 2.9.7: chunk-doc version stamping (null = unminted legacy).
         bundleVersion: file.bundle_version != null ? file.bundle_version : null,
         // Optional per-request override; dataprep falls back to env DATAPREP_CHUNK_OVERLAP when omitted.
@@ -1199,11 +1261,30 @@ class FileController {
       // failure — marking the file 'Ingestion Error' poisons it permanently
       // (the 2.9.4 worker backs off and retries, but a poisoned file is never
       // Pending again — live-caught run 9). Leave it Pending; rethrow the 429.
+      //
+      // EXCEPT a 409 too: dataprep's idempotency guard means an ingest for THIS
+      // file is already running. The live task owns the file and writes its own
+      // final status, so marking it 'Ingestion Error' here poisoned a healthy
+      // ingest and left a false permanent ERROR record in the ingestion log.
+      // The status stays untouched — a second writer would race the live task.
+      //
+      // EXCEPT after a degraded clear: that path already retracted the file's
+      // chunks and zeroed its count BEFORE this POST, so the file is damaged
+      // whatever dataprep answers — the failure path is the honest report.
       const busy = err && err.response && err.response.status === 429;
-      if (!busy) {
-        const detail =
-          (err.response && err.response.data && (err.response.data.detail || err.response.data.message)) || err.message;
-        await this._markIngestFailure(fileId, file, `dataprep call failed: ${detail}`);
+      const alreadyRunning = !clearedPreviously && isIngestAlreadyRunning(err, file.file_id);
+      if (alreadyRunning) {
+        await this._writeIngestionLog(
+          fileId,
+          'INFO',
+          `Duplicate ingest request ignored (dataprep 409): ${errorDetail(err)}`
+        );
+        // The route maps this error to 409. It reads the flag rather than
+        // re-deriving the decision from its own copy of the id, so the two
+        // can never disagree about one event.
+        err.ingestAlreadyRunning = true;
+      } else if (!busy) {
+        await this._markIngestFailure(fileId, file, `dataprep call failed: ${errorDetail(err)}`);
       }
       throw err;
     }
@@ -1242,16 +1323,21 @@ class FileController {
     } catch (metaErr) {
       logger.error(`Failed to mark file ${fileId} as Ingestion Error: ${metaErr.message}`);
     }
+    await this._writeIngestionLog(fileId, 'ERROR', detail);
+    logger.error(`Ingest failed for ${fileId}: ${detail}`);
+  }
+
+  /** Write one ingestion-log row. A log-write failure never masks the ingest outcome. */
+  async _writeIngestionLog(fileId, level, message) {
     try {
       await fileService.addIngestionLog(fileId, {
-        level: 'ERROR',
+        level,
         stage: 'dataprep',
-        message: String(detail).slice(0, 500)
+        message: String(message).slice(0, 500)
       });
     } catch (logErr) {
       logger.error(`Failed to write ingestion log for ${fileId}: ${logErr.message}`);
     }
-    logger.error(`Ingest failed for ${fileId}: ${detail}`);
   }
 
   // --- OKF Bundle Ingest (Story 2.5) ---
@@ -1278,7 +1364,12 @@ class FileController {
         graph_name: Joi.string()
           .pattern(/^OKF_[a-z0-9-]+(_v[0-9]+)?$/)
           .required(),
-        repo_id: Joi.string().uuid().required(),
+        // Relaxed to the same shape GET /api/files validates (getFilesSchema
+        // above): repository ids are not guaranteed UUID-shaped — the smoke
+        // uses short test IDs and some integration paths pass prefixed IDs.
+        // The route is authenticated + role-gated, so the shape carries no
+        // security weight (review 2026-10-29 round 3; was .uuid()).
+        repo_id: Joi.string().min(1).max(256).required(),
         originalFileName: Joi.string().allow('').optional(),
         // Selected knowledge-hierarchy labels ride on the files doc (same as
         // the single-upload path) and flow to dataprep as file_labels, where
@@ -1349,6 +1440,16 @@ class FileController {
       if (!value.defer_kick && !value.is_bundle) {
         setImmediate(() => {
           this._ingestFileById(result.file_id).catch((ingestErr) => {
+            // A duplicate kick (dataprep's 409 idempotency guard) is not a
+            // failure: the bundle is already being ingested. Logging it as an
+            // error would put the same false ERROR into the log stream that
+            // the ingestion log no longer carries.
+            if (ingestErr.ingestAlreadyRunning) {
+              logger.info(
+                `[FILE-CONTROLLER] Bundle ingest already running for ${result.file_id} — duplicate kick ignored`
+              );
+              return;
+            }
             logger.error(`[FILE-CONTROLLER] Bundle async ingestion failed for ${result.file_id}: ${ingestErr.message}`);
           });
         });
@@ -1387,6 +1488,24 @@ class FileController {
         return res.status(500).json({ success: false, error: 'Data prep failed.', details: result.error });
       }
     } catch (error) {
+      // A 409 from dataprep is its idempotency guard: an ingest for THIS file
+      // is already running, so the duplicate request conflicts with a live
+      // ingest. 409 Conflict says that; a 500 would report a healthy ingest
+      // as a server failure. The flag is set by _ingestFileById, which owns
+      // the decision — re-deriving it here could disagree with it. Handled
+      // BEFORE the error log: a duplicate request is not a failure, and a
+      // full axios error with its stack says it was.
+      if (error.ingestAlreadyRunning) {
+        logger.info(
+          `[FILE-CONTROLLER] Ingest request ignored for ${req.params.fileId}: an ingest for this file is already running`
+        );
+        return res.status(409).json({
+          success: false,
+          error: 'Conflict',
+          message: 'An ingest for this file is already running. Wait for it to finish before starting another one.'
+        });
+      }
+
       logger.error('Ingest file error:', error);
 
       // --- FIXED: Check for 429 Busy status from Dataprep ---
@@ -1421,7 +1540,16 @@ class FileController {
           const result = await this._ingestFileById(fileId, batchOverlap);
           results.push({ fileId, ...result });
         } catch (error) {
-          results.push({ fileId, success: false, error: error.message });
+          // A duplicate (dataprep's 409 idempotency guard) is not an ingest
+          // failure: the file IS being ingested, by the task that is already
+          // running. Reporting it as a failure would tell the operator a
+          // healthy ingest failed, and keep the file selected for a retry
+          // that hits the same 409.
+          results.push(
+            error.ingestAlreadyRunning
+              ? { fileId, success: true, duplicate: true, message: 'An ingest for this file is already running.' }
+              : { fileId, success: false, error: error.message }
+          );
         }
       }
       const successCount = results.filter((r) => r.success).length;
@@ -1632,7 +1760,15 @@ class FileController {
       // never dispatched). Live 2026-09-15: the Bali kill toasted success on a
       // completed file while the repo-wide drain kept running.
       if (response.data && response.data.success === false) {
-        return res.status(response.data.status || 502).json({
+        // Whitelist the forwarded status: dataprep's documented "no active
+        // task" body is {success:false, status:404}, and that one maps
+        // through; every OTHER status value in a 200 body — a 200 echo, a
+        // garbage string — maps to 502, so the client can neither read the
+        // failure as a success nor receive an invalid echoed HTTP status
+        // (review 2026-10-29 round 3; same false-success class as the
+        // 2026-09-15 fix below).
+        const upstream = Number(response.data.status);
+        return res.status(upstream === 404 ? 404 : 502).json({
           success: false,
           error: 'NO_ACTIVE_INGEST',
           message: response.data.message || 'No active ingestion task found for this file.'
@@ -1642,6 +1778,62 @@ class FileController {
     } catch (error) {
       logger.error('Kill ingestion error:', error);
       res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Release files stuck in 'Ingesting' back to 'Pending' (#610).
+   * Called by dataprep once at startup: its in-memory task registry dies with
+   * the process, so rows still 'Ingesting' after a restart are orphaned — the
+   * UI keeps the Ingest button disabled and kill-ingest 404s forever.
+   */
+  async recoverStuckIngests(req, res) {
+    try {
+      // The caller's still-live task ids: an ingest accepted while the
+      // recovery was retrying is not an orphan and must not be released.
+      // Joi returns the ORIGINAL input on error, so the error must be
+      // checked — an unchecked malformed body reaches the AQL bind and
+      // surfaces as a 500 (retried 30× by dataprep) instead of a 400.
+      const { error, value } = recoverStuckSchema.validate(req.body || {});
+      if (error) {
+        return res.status(400).json({ success: false, error: 'Validation error', message: error.details[0].message });
+      }
+      const recovered = await metadataService.recoverStuckIngests(value.excludeFileIds);
+      // Latency + pressure bounds: a long batch can leave hundreds of rows
+      // stuck. A serial loop could outrun the dataprep caller's 30 s
+      // control-plane timeout (retrying the call, duplicating every log
+      // line); an unbounded fan-out would fire hundreds of simultaneous
+      // ArangoDB inserts at the just-booted stack. Chunks of 50 keep both
+      // bounded.
+      const LOG_CHUNK = 50;
+      for (let i = 0; i < recovered.length; i += LOG_CHUNK) {
+        const chunk = recovered.slice(i, i + LOG_CHUNK);
+        const logResults = await Promise.allSettled(
+          chunk.map((fileId) =>
+            fileService.addIngestionLog(fileId, {
+              level: 'WARN',
+              stage: 'dataprep',
+              message:
+                'Ingestion interrupted: the ingestion service restarted while this file was being processed. ' +
+                'Status released to Pending so it can be ingested again.'
+            })
+          )
+        );
+        logResults.forEach((result, j) => {
+          if (result.status === 'rejected') {
+            // The status flip already happened; a lost log line must not fail
+            // the recovery — dataprep would only retry the whole call. The
+            // reason is not guaranteed to be an Error, so stringify defensively
+            // (a throw here would become a 500 and a 30× dataprep retry).
+            const reason = result.reason && result.reason.message ? result.reason.message : String(result.reason);
+            logger.error(`Failed to log recovery for ${chunk[j]}: ${reason}`);
+          }
+        });
+      }
+      return res.json({ success: true, recovered, count: recovered.length });
+    } catch (error) {
+      logger.error('Recover stuck ingests error:', error);
+      return res.status(500).json({ success: false, error: error.message });
     }
   }
 

@@ -7,6 +7,10 @@ jest.mock('dotenv', () => ({ config: jest.fn() }));
 jest.mock(
   '../../shared-lib',
   () => ({
+    // The retrieval-config-client destructures parsePositiveInt from the
+    // barrel — the mock must carry the real (pure) function like the shared
+    // mock file does, or every client-requiring test dies on TypeError.
+    ...require('../mocks/shared-lib'),
     logger: {
       info: jest.fn(),
       error: jest.fn(),
@@ -515,6 +519,27 @@ describe('QueryService', () => {
       expect(result.confidence_score).toBe(0.82);
       expect(result.retrieval_confidence_score).toBe(0.91);
       expect(result.self_confidence).toBe(0.82);
+    });
+
+    it('should pass through query_translation_status on the metadata event', () => {
+      // What the history translator fed the embedder (issue #1026): dropping
+      // it here would hide a degraded translation from the streamed path.
+      const meta = {
+        type: 'metadata',
+        source_documents: [],
+        confidence_score: 0.5,
+        is_grounded: true,
+        query_translation_status: 'fallback_timeout'
+      };
+      const result = queryService.parseChatQnASSELine(JSON.stringify(meta));
+      expect(result.type).toBe('metadata');
+      expect(result.query_translation_status).toBe('fallback_timeout');
+    });
+
+    it('should leave query_translation_status absent when chatqna omits it', () => {
+      const meta = { type: 'metadata', source_documents: [], confidence_score: 0.5, is_grounded: true };
+      const result = queryService.parseChatQnASSELine(JSON.stringify(meta));
+      expect(result).not.toHaveProperty('query_translation_status');
     });
 
     it('should default abstention fields when chatqna omits them', () => {

@@ -37,6 +37,7 @@ docker-compose*.yaml
 components/
 !components/gov-chat-backend/Dockerfile.migrations
 !components/gov-chat-backend/scripts/migrations/
+!components/gov-chat-backend/services/translation/language-maps/language-registry.json
 api-gateway-solution/
 
 # Secrets (never in build context)

@@ -2,10 +2,22 @@ const { expect } = require('@playwright/test');
 
 const TEST_USER = {
   username: 'testuser',
-  password: 'TestPass123!',
+  password: 'TestPass123!'
 };
 
-const BASE_URL = process.env.BASE_URL || 'https://localhost';
+// The documents admin surface (upload, delete, lifecycle) is ADMIN_ONLY on
+// the document-repository — a plain user's POST /api/files/upload is 403 by
+// design. The admin test user is provisioned with the `admin` realm role by
+// Phase 0 of docs/e2e-tests/00-clean-start.md.
+const TEST_ADMIN_USER = {
+  username: 'testadmin',
+  password: 'TestAdmin123!'
+};
+
+// Normalized once: page.url() never produces a trailing double slash,
+// so every `${BASE_URL}/...` interpolation stays well-formed even when
+// the environment configures BASE_URL with a trailing '/'.
+const BASE_URL = (process.env.BASE_URL || 'https://localhost').replace(/\/+$/, '');
 
 // The wait from the submit click to the dashboard: the identity provider
 // deciding to issue a code, then the app exchanging it. On an idle stack the
@@ -14,9 +26,11 @@ const BASE_URL = process.env.BASE_URL || 'https://localhost';
 // a stack that stalls or rejects, and the retry is what recovers from that.
 const AUTH_BUDGET_MS = 30000;
 
-// The retry runs after the first budget has already been spent, and both have
-// to fit inside Playwright's 60 s per-test timeout alongside the spec's own
-// work. 30 s + 15 s = 45 s leaves room; 30 s + 30 s would not, and a helper
+// The retry catches a partially recovered stack: a token exchange that
+// completed just after the first wait expired, or a slow identity
+// provider that recovered mid-attempt. The retry budget is therefore
+// shorter than the first (15 s vs 30 s) — the per-test ceiling that
+// constrains the total is playwright.config.js's timeout, and a helper
 // that cannot report why it failed is no better than one that failed.
 const AUTH_RETRY_BUDGET_MS = 15000;
 
@@ -57,7 +71,7 @@ async function loginViaUI(page, user = TEST_USER) {
 async function loginAttempt(page, user, budgetMs) {
   await page.goto(`${BASE_URL}/`, {
     waitUntil: 'networkidle',
-    timeout: 30000,
+    timeout: 30000
   });
 
   // A previous attempt's token exchange can complete just after its wait
@@ -66,7 +80,7 @@ async function loginAttempt(page, user, budgetMs) {
   if (page.url().includes('dashboard')) return;
 
   await page.waitForURL('**/protocol/openid-connect/auth**', {
-    timeout: 15000,
+    timeout: 15000
   });
 
   await page.fill('#username', user.username);
@@ -78,14 +92,16 @@ async function loginAttempt(page, user, budgetMs) {
       const urlStr = url.toString();
       return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
     },
-    { timeout: budgetMs },
+    { timeout: budgetMs }
   );
 
   const finalUrl = page.url();
-  expect(
-    finalUrl.includes('dashboard'),
-    `Expected URL to contain 'dashboard', got: ${finalUrl}`,
-  ).toBeTruthy();
+  // Dashboard only — deliberately stricter than the waitForURL predicate:
+  // the bare origin is also where CallbackView lands when the code
+  // exchange fails (router.replace('/')), so accepting it here would
+  // report a failed exchange as success and skip the retry that recovers
+  // a transient one by re-entering Keycloak with the session cookie.
+  expect(finalUrl.includes('dashboard'), `Expected URL to contain 'dashboard', got: ${finalUrl}`).toBeTruthy();
 }
 
 /**
@@ -94,7 +110,7 @@ async function loginAttempt(page, user, budgetMs) {
 async function navigateToChatbot(page) {
   await page.goto(`${BASE_URL}/chat`, {
     waitUntil: 'networkidle',
-    timeout: 30000,
+    timeout: 30000
   });
 }
 
@@ -116,15 +132,17 @@ async function waitForBotResponse(page, options = {}) {
   const timeout = options.timeout || 60000;
 
   // Wait for loading spinner to appear (indicates processing started)
-  await page.waitForSelector('.loading-spinner', {
-    timeout: 5000,
-  }).catch(() => {
-    // Spinner may be very fast — OK if missed
-  });
+  await page
+    .waitForSelector('.loading-spinner', {
+      timeout: 5000
+    })
+    .catch(() => {
+      // Spinner may be very fast — OK if missed
+    });
 
   // Wait for loading spinner to disappear (indicates response complete)
   await expect(page.locator('.loading-spinner')).toBeHidden({
-    timeout,
+    timeout
   });
 }
 
@@ -136,12 +154,10 @@ async function getMessages(page) {
   const elements = await page.locator('.chat-message').all();
 
   for (const el of elements) {
-    const classAttr = await el.getAttribute('class') || '';
+    const classAttr = (await el.getAttribute('class')) || '';
     const sender = classAttr.includes('user') ? 'user' : 'bot';
     const bubble = el.locator('.message-bubble');
-    const text = (await bubble.isVisible())
-      ? (await bubble.innerText()).trim()
-      : '';
+    const text = (await bubble.isVisible()) ? (await bubble.innerText()).trim() : '';
     messages.push({ sender, text });
   }
 
@@ -161,12 +177,13 @@ async function getLastBotMessage(page) {
 }
 
 /**
- * Click the save chat button and fill in the save dialog.
- * Uses chat-header button selector (last button in header) to avoid
- * dependency on i18n-translated title attributes.
+ * Click the save button and fill in the save dialog.
+ * The conversation-header save button is the only save affordance that
+ * renders: ChatComposer's save-chat-btn is gated on a show-save prop no
+ * parent passes, so the header button is what the app ships.
  */
 async function saveChat(page, title) {
-  const button = page.locator('[data-testid="save-chat-btn"]');
+  const button = page.locator('[data-testid="conversation-header-save"]');
   await expect(button).toBeVisible({ timeout: 5000 });
   await button.click();
 
@@ -180,14 +197,96 @@ async function saveChat(page, title) {
   await confirmButton.click();
 }
 
+/**
+ * Wait until the last bot bubble carries the given text. The bubble mounts
+ * as a streaming placeholder the moment the send handler runs, so bubble
+ * presence alone says nothing — this waits for CONTENT. Under the specs'
+ * SSE mock (chunk + done delivered in one body) content-on-screen means
+ * the turn is complete and storable; against a real streamed answer it
+ * would not, so a spec driving a live stream needs its own completion
+ * signal.
+ */
+async function waitForBotMessage(page, text, { timeout = 30000 } = {}) {
+  await expect(page.locator('.chat-message.bot .message-bubble').last()).toContainText(text, {
+    timeout
+  });
+}
+
+/**
+ * Build the SSE body the specs mock the answer stream with: `data: ` frames,
+ * one JSON payload per line, ending with a done frame — the app's wire
+ * contract, in one place. `metadata`, when given, travels as its own frame
+ * before the done frame (an is_grounded flag, source_documents, ...). The
+ * done frame's queryId is recorded on the finished message by the store;
+ * the value itself is never asserted.
+ */
+function sseBody(chunks, metadata) {
+  const frames = chunks.map((c) => `data: ${JSON.stringify({ type: 'chunk', content: c })}`);
+  if (metadata) frames.push(`data: ${JSON.stringify({ type: 'metadata', ...metadata })}`);
+  return [...frames, '', `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`, ''].join('\n');
+}
+
+/**
+ * Mock the chat answer stream. `chunks` arrive as chunk frames; `metadata`,
+ * when given, rides a metadata frame before the done frame. The interception
+ * sits at the network layer (page.route), so the app's own fetch + SSE
+ * parsing path runs — only the bytes on the wire are scripted.
+ */
+async function mockChatStream(page, chunks, metadata) {
+  // The body is registration-invariant: chunks and metadata are literals at
+  // every call site, so build the wire bytes once, not per interception.
+  const body = sseBody(chunks, metadata);
+  await page.route('**/queries/stream**', async (route) => {
+    // Only the app's POST carries a stream; a preflight (cross-origin dev
+    // posture) or stray GET must reach the network, not a CORS-less 200.
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    try {
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body });
+    } catch {
+      /* the context closed before the fulfillment */
+    }
+  });
+}
+
+/**
+ * Answer the feedback POST with an empty success, so a test that rates an
+ * answer does not depend on the network for the rated state. Tests that
+ * never rate need not install it.
+ */
+async function ackFeedback(page) {
+  await page.route('**/feedback**', async (route) => {
+    if (route.request().method() === 'POST') {
+      try {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      } catch {
+        /* the context closed before the fulfillment */
+      }
+      return;
+    }
+    try {
+      await route.continue();
+    } catch {
+      /* the context closed before the continuation */
+    }
+  });
+}
+
 module.exports = {
   loginViaUI,
   navigateToChatbot,
   sendMessage,
   waitForBotResponse,
+  waitForBotMessage,
+  sseBody,
+  mockChatStream,
+  ackFeedback,
   getMessages,
   getLastBotMessage,
   saveChat,
   TEST_USER,
-  BASE_URL,
+  TEST_ADMIN_USER,
+  BASE_URL
 };

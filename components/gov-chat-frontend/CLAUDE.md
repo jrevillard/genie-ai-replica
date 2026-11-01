@@ -162,8 +162,9 @@ need to out-specify the layer, that is the signal to fix the layer instead.**
   it claims to capture did not actually collapse, and when the panel did not widen. Keep that behaviour.
 - A screenshot read back yields a URL. **Pair every image with the audit; where the two disagree, the audit wins.**
 - **Direct access grants are disabled on the realm**, so a *page* session has to log in through the browser:
-  `tests/e2e/helpers/chatbot.js` → `loginViaUI(page)`. (Minting a token for a direct API call is a different
-  route — `tests/e2e/helpers/auth.js` → `getUserToken` — but it gives an API call a token, not a page a session.)
+  `tests/e2e/helpers/chatbot.js` → `loginViaUI(page)`. (Minting a token for a direct API call works only on
+  ROPC-enabled test-only realms — `tests/e2e/helpers/auth.js` → `getUserToken` with `options.realm`, provisioned
+  via `enableDirectAccessGrants` — and gives an API call a token, not a page a session.)
   A spec that walks a page unauthenticated is bounced to the login by the router guard, and that navigation
   destroys the execution context its assertions read from — the spec then fails on a race, not on what it meant
   to check.

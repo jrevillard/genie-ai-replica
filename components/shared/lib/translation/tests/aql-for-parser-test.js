@@ -426,12 +426,12 @@ const getForStatementTests = () => [
     expected: { type: 'ForStatement', variableName: 'msg', collectionName: 'messages' }
   },
   {
-    description: '[SCS-1] getTranslatedName for category',
+    description: '[SCS-1] category translation lookup',
     aql: `FOR trans IN serviceCategoryTranslations`,
     expected: { type: 'ForStatement', variableName: 'trans', collectionName: 'serviceCategoryTranslations' }
   },
   {
-    description: '[SCS-2] getTranslatedName for service',
+    description: '[SCS-2] service translation lookup',
     aql: `FOR trans IN serviceTranslations`,
     expected: { type: 'ForStatement', variableName: 'trans', collectionName: 'serviceTranslations' }
   },

@@ -46,7 +46,7 @@ graph TB
 | **embedding** | `genie-ai-overlay/embedding/` | TEI embedding microservice wrapper — single endpoint shared by dataprep (ingest) and chatqna (query). | `EMBEDDING_SERVER_ENDPOINT`, `EMBEDDING_MODEL_ID`, `EMBEDDING_SERVICE_URL` |
 | **textgen** | `genie-ai-overlay/textgen/` | vLLM wrapper service — chat, translation, and labeling all call into vLLM through this. | `VLLM_ENDPOINT`, `VLLM_LLM_MODEL_ID`, `VLLM_API_KEY` |
 | **dataprep** | `genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py` | Docling parse → dynamic-size chunk → contextual prefix (optional) → LLM labeling → vector embedding → ArangoDB write. Emits the `ingestion_log` to the backend. | `POST /v1/dataprep/ingest_file`, `POST /v1/dataprep/retract_file` (called by Document Repository via admin service account) |
-| **translation** | separate OPEA microservice | Target-language chat translation (streaming or post-generation). | `TRANSLATION_BACKEND`, `VLLM_TRANSLATION_*`, `STREAMING_TRANSLATION_ENABLED` |
+| **translation** | separate OPEA microservice | Target-language chat translation (streaming or post-generation). Off the default path: ChatQnA calls the translation vLLM directly (the microservice's payload reformatting breaks TranslateGemma's chat template) — see [Multilingual Architecture]({{< relref "/docs/architecture/multilingual-ssot" >}}). | `TRANSLATION_BACKEND`, `VLLM_TRANSLATION_*`, `STREAMING_TRANSLATION_ENABLED` |
 
 ---
 

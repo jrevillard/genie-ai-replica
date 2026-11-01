@@ -3,14 +3,13 @@
 # Tests for vLLM model auto-detection (TTL-cached) across OPEA services.
 #
 # Probe logic lives in core/model_cache.py. Each service (chatqna, retriever,
-# dataprep) calls get_model_id() to resolve the model served by a remote vLLM
-# node, gated on GPU_NODE_HOST; chatqna additionally discovers the served
-# context window (get_max_model_len) with probing always on — remote endpoint
-# when configured, compose-internal vLLM otherwise.
+# dataprep) calls get_model_id() to resolve the model served by a vLLM node —
+# remote GPU endpoint when configured, compose-internal vLLM otherwise, always
+# on. chatqna additionally discovers the served context window
+# (get_max_model_len) the same way.
 
 import logging
 import os
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -416,65 +415,168 @@ class TestModelCacheMaxModelLen:
 
 
 # ---------------------------------------------------------------------------
+# require_model_id — the loud twin of get_model_id
+# ---------------------------------------------------------------------------
+class TestRequireModelId:
+    """Payloads that must carry the name the endpoint actually serves
+    (tokenize, direct chat/completions) raise instead of guessing a name
+    vLLM would reject with a 404."""
+
+    def test_returns_discovered_id(self):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "served/model"}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert model_cache.require_model_id("https://gpu-host/llm") == "served/model"
+
+    def test_raises_when_probe_has_no_answer(self):
+        with (
+            patch("httpx.get", side_effect=httpx.ConnectError("down")),
+            pytest.raises(model_cache.ModelDiscoveryError),
+        ):
+            model_cache.require_model_id("https://gpu-host/llm")
+
+
+class TestResolveModelId:
+    """The env-wins-else-discover precedence, single-sourced next to
+    require_model_id for every payload-building consumer."""
+
+    def test_explicit_env_wins_without_probe(self, monkeypatch):
+        monkeypatch.setenv("VLLM_MODEL_ID", "explicit/model")
+
+        with patch("httpx.get") as mock_get:
+            assert model_cache.resolve_model_id("https://gpu-host/llm") == "explicit/model"
+        mock_get.assert_not_called()
+
+    def test_discovers_when_env_empty(self):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "served/model"}]}
+
+        with patch("httpx.get", return_value=mock_resp):
+            assert model_cache.resolve_model_id("https://gpu-host/llm") == "served/model"
+
+    def test_soft_variant_returns_none_instead_of_raising(self, monkeypatch):
+        """Telemetry reads need the same precedence without the raise."""
+        monkeypatch.delenv("VLLM_MODEL_ID", raising=False)
+
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")):
+            assert model_cache.discover_model_id("https://gpu-host/llm") is None
+
+    def test_soft_variant_honors_env(self, monkeypatch):
+        monkeypatch.setenv("VLLM_MODEL_ID", "explicit/model")
+
+        with patch("httpx.get") as mock_get:
+            assert model_cache.discover_model_id("https://gpu-host/llm") == "explicit/model"
+        mock_get.assert_not_called()
+
+    def test_raises_actionable_error_when_no_endpoint_and_no_env(self, monkeypatch):
+        """Neither knob configured: the error must name the two env vars to
+        set, not point at a '/v1/models' URL with an empty base."""
+        monkeypatch.delenv("VLLM_MODEL_ID", raising=False)
+
+        with pytest.raises(model_cache.ModelDiscoveryError) as exc_info:
+            model_cache.resolve_model_id("")
+
+        assert "VLLM_MODEL_ID" in str(exc_info.value)
+        assert "VLLM_ENDPOINT" in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
 # chatqna getters — _get_llm_model / _get_translation_model_id
 # ---------------------------------------------------------------------------
 class TestChatqnaGetters:
-    """Tests for chatqna model getter functions."""
+    """chatqna model-id getters: discovery is ALWAYS ON.
 
-    def test_get_llm_model_returns_detected_when_gpu_host_set(self, monkeypatch):
+    Both getters probe the same endpoint their callers' requests target
+    (_LLM_DISCOVERY_ENDPOINT / _TRANSLATION_DISCOVERY_ENDPOINT — remote GPU
+    node when configured, compose-internal vLLM otherwise), sharing the
+    core.model_cache TTL cache with the context-window getters. A payload
+    sent to a vLLM endpoint must carry the name that endpoint actually
+    serves: vLLM validates the model name and 404s unknown ones, so a
+    hardcoded fallback name kills every request that carries it.
+    """
+
+    def test_get_llm_model_returns_probed_id_without_gate(self):
+        """Plain compose (no GPU_NODE_HOST): the internal vLLM is probed anyway."""
         import chatqna.genieai_chatqna as mod
-
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "10.0.0.110")
-        monkeypatch.setattr(mod, "_VLLM_LLM_ENDPOINT", "https://10.0.0.110/llm")
 
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": [{"id": "detected-llm"}]}
 
-        with patch("httpx.get", return_value=mock_resp):
+        with patch("httpx.get", return_value=mock_resp) as mock_get:
             assert mod._get_llm_model() == "detected-llm"
+        assert mock_get.call_args.args[0] == f"{mod._LLM_DISCOVERY_ENDPOINT}/v1/models"
 
-    def test_get_llm_model_returns_default_when_no_gpu_host(self, monkeypatch):
+    def test_get_llm_model_prefers_explicit_env(self, monkeypatch):
+        """VLLM_MODEL_ID is the escape hatch for endpoints whose /v1/models is
+        unreachable while generation works (ACL'd proxies, tunnels)."""
         import chatqna.genieai_chatqna as mod
 
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "")
-
+        monkeypatch.setenv("VLLM_MODEL_ID", "explicit/model")
         with patch("httpx.get") as mock_get:
-            result = mod._get_llm_model()
-
+            assert mod._get_llm_model() == "explicit/model"
         mock_get.assert_not_called()
-        assert result == mod.LLM_MODEL
 
-    def test_get_translation_model_id_returns_detected(self, monkeypatch):
+    def test_get_llm_model_raises_when_probe_has_no_answer(self):
+        """Loud failure: without a discovered id no valid payload exists —
+        a constant name would 404 at the endpoint."""
+        import chatqna.genieai_chatqna as mod
+        from core.model_cache import ModelDiscoveryError
+
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")), pytest.raises(ModelDiscoveryError):
+            mod._get_llm_model()
+
+    def test_get_translation_model_id_discovers_when_env_empty(self, monkeypatch):
         import chatqna.genieai_chatqna as mod
 
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "10.0.0.110")
-        monkeypatch.setattr(mod, "_VLLM_TRANSLATION_ENDPOINT", "https://10.0.0.110/translation")
+        monkeypatch.setattr(mod, "TRANSLATION_MODEL_ID", "")
 
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": [{"id": "google/translategemma-3-7b"}]}
 
-        with patch("httpx.get", return_value=mock_resp):
+        with patch("httpx.get", return_value=mock_resp) as mock_get:
             assert mod._get_translation_model_id() == "google/translategemma-3-7b"
+        assert mock_get.call_args.args[0] == f"{mod._TRANSLATION_DISCOVERY_ENDPOINT}/v1/models"
+
+    def test_get_translation_model_id_prefers_explicit_env(self, monkeypatch):
+        """The documented VLLM_TRANSLATION_MODEL_ID stays the deployer override:
+        when it is set, no probe runs."""
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "TRANSLATION_MODEL_ID", "explicit/model")
+        monkeypatch.setattr(mod, "_VLLM_TRANSLATION_ENDPOINT", "https://10.0.0.110/translation")
+
+        with patch("httpx.get") as mock_get:
+            assert mod._get_translation_model_id() == "explicit/model"
+        mock_get.assert_not_called()
 
     def test_is_translategemma_true_for_translategemma(self, monkeypatch):
         import chatqna.genieai_chatqna as mod
 
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "10.0.0.110")
-        monkeypatch.setattr(mod, "_VLLM_TRANSLATION_ENDPOINT", "https://10.0.0.110/translation")
+        monkeypatch.setattr(mod, "TRANSLATION_MODEL_ID", "")
 
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": [{"id": "google/translategemma-3-7b"}]}
 
         with patch("httpx.get", return_value=mock_resp):
-            assert mod._is_translategemma() is True
+            assert mod._is_translategemma(mod._get_translation_model_id()) is True
+
+    def test_is_translategemma_false_when_undiscovered(self, monkeypatch):
+        """Undiscovered translation model → the generic chat-completions path
+        (which sends no model name), never a crash."""
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "TRANSLATION_MODEL_ID", "")
+
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")):
+            assert mod._is_translategemma(mod._get_translation_model_id()) is False
 
     def test_is_translategemma_false_for_generic_model(self, monkeypatch):
         import chatqna.genieai_chatqna as mod
 
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "")
         monkeypatch.setattr(mod, "TRANSLATION_MODEL_ID", "gemma-3-4b-it")
 
-        assert mod._is_translategemma() is False
+        assert mod._is_translategemma(mod._get_translation_model_id()) is False
 
 
 # ---------------------------------------------------------------------------
@@ -535,7 +637,6 @@ class TestChatqnaContextWindowGetters:
         discovers the real window without any GPU_NODE_HOST configured."""
         import chatqna.genieai_chatqna as mod
 
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "")
         monkeypatch.setattr(mod, "_LLM_DISCOVERY_ENDPOINT", "http://vllm:8000")
 
         mock_resp = MagicMock()
@@ -548,7 +649,6 @@ class TestChatqnaContextWindowGetters:
     def test_get_max_translation_chars_probes_without_gpu_node_host(self, monkeypatch):
         import chatqna.genieai_chatqna as mod
 
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "")
         monkeypatch.setattr(mod, "_TRANSLATION_DISCOVERY_ENDPOINT", "http://vllm-translation-guardrail:9031")
 
         mock_resp = MagicMock()
@@ -569,7 +669,6 @@ class TestChatqnaContextWindowGetters:
     def test_get_max_model_len_probe_failure_falls_back_to_configured(self, monkeypatch):
         import chatqna.genieai_chatqna as mod
 
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "10.0.0.110")
         monkeypatch.setattr(mod, "_VLLM_LLM_ENDPOINT", "https://10.0.0.110/llm")
         monkeypatch.setattr(mod, "MAX_MODEL_LEN_TEXTGEN", 4096)
 
@@ -622,7 +721,6 @@ class TestChatqnaContextWindowGetters:
     def test_get_max_translation_chars_probe_failure_falls_back(self, monkeypatch):
         import chatqna.genieai_chatqna as mod
 
-        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "10.0.0.110")
         monkeypatch.setattr(mod, "_VLLM_TRANSLATION_ENDPOINT", "https://10.0.0.110/translation")
         monkeypatch.setattr(mod, "MAX_TRANSLATION_CHARS", 2000)
 
@@ -650,139 +748,169 @@ class TestChatqnaContextWindowGetters:
 # and Contextual Retrieval context generation.)
 # ---------------------------------------------------------------------------
 class TestDataprepAutoDetect:
-    """Tests for dataprep _build_vllm_client auto-detect when GPU_NODE_HOST is set.
+    """dataprep._build_vllm_client: explicit VLLM_MODEL_ID env wins; otherwise
+    the id discovered at VLLM_ENDPOINT — loud when nothing answers."""
 
-    Uses source file inspection since the module is mocked in test environment.
-    """
+    def test_client_auth_wiring(self, monkeypatch):
+        """The AsyncOpenAI client authenticates with VLLM_API_KEY against the
+        configured endpoint — behavioral pin of the constructor wiring (no
+        custom default_headers, no OPEA_API_KEY)."""
+        import dataprep.genieai_dataprep_arangodb as dp
 
-    @pytest.fixture()
-    def source(self):
-        """Read the actual source file for assertions."""
-        src = Path(__file__).resolve().parents[1] / "dataprep" / "genieai_dataprep_arangodb.py"
-        return src.read_text()
+        monkeypatch.setenv("VLLM_ENDPOINT", "https://10.0.0.110/vllm")
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_MODEL_ID", "m")
 
-    def test_uses_vllm_api_key_for_auth(self, source):
-        idx = source.find("def _build_vllm_client")
-        chunk = source[idx : idx + 2000]
+        with patch.object(dp, "AsyncOpenAI") as mock_client:
+            dp._build_vllm_client()
 
-        assert "VLLM_API_KEY" in chunk
-        assert "OPEA_API_KEY" not in chunk
+        kwargs = mock_client.call_args.kwargs
+        assert kwargs["api_key"] == "test-key"
+        assert kwargs["base_url"] == "https://10.0.0.110/vllm/v1"
+        assert "default_headers" not in kwargs
 
-    def test_no_custom_default_headers(self, source):
-        idx = source.find("def _build_vllm_client")
-        chunk = source[idx : idx + 2000]
+    def test_env_wins_without_probe(self, monkeypatch):
+        """The explicit VLLM_MODEL_ID env is the deployer override: no probe."""
+        from dataprep.genieai_dataprep_arangodb import _build_vllm_client
 
-        assert "default_headers" not in chunk
-        assert "X-API-Key" not in chunk
+        monkeypatch.setenv("VLLM_ENDPOINT", "https://10.0.0.110/vllm")
+        monkeypatch.setenv("VLLM_MODEL_ID", "explicit/model")
 
-    def test_auto_detect_condition_checks_gpu_node_host(self, source):
-        idx = source.find("def _build_vllm_client")
-        chunk = source[idx : idx + 2000]
+        with patch("httpx.get") as mock_get:
+            _, model = _build_vllm_client()
 
-        assert 'os.getenv("GPU_NODE_HOST")' in chunk
+        assert model == "explicit/model"
+        mock_get.assert_not_called()
 
-    def test_auto_detect_uses_shared_cache(self, source):
-        """_build_vllm_client uses the shared TTL-cached get_model_id()."""
-        idx = source.find("def _build_vllm_client")
-        chunk = source[idx : idx + 2000]
+    def test_discovers_when_env_empty(self, monkeypatch):
+        from dataprep.genieai_dataprep_arangodb import _build_vllm_client
 
-        assert "get_model_id" in chunk
+        monkeypatch.setenv("VLLM_ENDPOINT", "https://10.0.0.110/vllm")
+        monkeypatch.delenv("VLLM_MODEL_ID", raising=False)
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "discovered/model"}]}
+
+        with patch("httpx.get", return_value=mock_resp) as mock_get:
+            _, model = _build_vllm_client()
+
+        assert model == "discovered/model"
+        assert mock_get.call_args.args[0] == "https://10.0.0.110/vllm/v1/models"
+
+    def test_raises_when_env_empty_and_probe_has_no_answer(self, monkeypatch):
+        """Loud: a guessed name is rejected by vLLM's model-name validation."""
+        from core.model_cache import ModelDiscoveryError
+        from dataprep.genieai_dataprep_arangodb import _build_vllm_client
+
+        monkeypatch.setenv("VLLM_ENDPOINT", "https://10.0.0.110/vllm")
+        monkeypatch.delenv("VLLM_MODEL_ID", raising=False)
+
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")), pytest.raises(ModelDiscoveryError):
+            _build_vllm_client()
 
 
 # ---------------------------------------------------------------------------
 # Dataprep _initialize_llm — auto-detection of remote vLLM model
 # ---------------------------------------------------------------------------
 class TestDataprepInitializeLlmAutoDetect:
-    """Tests for dataprep._initialize_llm override that auto-detects remote vLLM model.
-
-    When GPU_NODE_HOST is set, the override probes /v1/models (via the shared
-    TTL cache) and sets VLLM_MODEL_ID in os.environ before calling the parent.
-    """
+    """dataprep._initialize_llm override: the explicit VLLM_MODEL_ID env wins
+    untouched; when it is unset, the discovered id is written into os.environ
+    AND the parent module constant (captured at parent import time)."""
 
     @pytest.fixture(autouse=True)
     def _setup(self, monkeypatch):
-        monkeypatch.setenv("GPU_NODE_HOST", "10.0.0.110")
         monkeypatch.setenv("VLLM_ENDPOINT", "https://10.0.0.110/vllm")
         monkeypatch.setenv("VLLM_API_KEY", "test-key")
-        monkeypatch.setenv("VLLM_MODEL_ID", "default-model")
         yield
-        monkeypatch.delenv("VLLM_MODEL_ID", raising=False)
+        # The production discovery writes os.environ DIRECTLY (untracked by
+        # monkeypatch); delenv here would record-and-RESTORE it at undo.
+        os.environ.pop("VLLM_MODEL_ID", None)
 
-    def test_remote_model_overrides_config_default(self):
-        """When /v1/models returns a model, VLLM_MODEL_ID env var is overridden."""
+    def _dp(self):
         from dataprep.genieai_dataprep_arangodb import GenieArangoDataprep
 
-        dp = GenieArangoDataprep.__new__(GenieArangoDataprep)
+        return GenieArangoDataprep.__new__(GenieArangoDataprep)
+
+    def test_explicit_env_is_left_untouched(self, monkeypatch):
+        """Env set: no probe, env keeps its value."""
+        monkeypatch.setenv("VLLM_MODEL_ID", "explicit/model")
+
+        with patch("httpx.get") as mock_get:
+            self._dp()._initialize_llm(allowed_node_types=[], allowed_edge_types=[])
+
+        mock_get.assert_not_called()
+        assert os.getenv("VLLM_MODEL_ID") == "explicit/model"
+
+    def test_discovered_id_written_to_env_and_parent_constant(self, monkeypatch):
+        monkeypatch.delenv("VLLM_MODEL_ID", raising=False)
 
         mock_resp = MagicMock()
-        mock_resp.json.return_value = {"data": [{"id": "detected-model"}]}
+        mock_resp.json.return_value = {"data": [{"id": "discovered-model"}]}
         mock_resp.raise_for_status = MagicMock()
 
         with patch("httpx.get", return_value=mock_resp):
-            dp._initialize_llm(allowed_node_types=[], allowed_edge_types=[])
+            self._dp()._initialize_llm(allowed_node_types=[], allowed_edge_types=[])
 
-        assert os.getenv("VLLM_MODEL_ID") == "detected-model"
+        assert os.getenv("VLLM_MODEL_ID") == "discovered-model"
+        # The parent reads the CONSTANT captured at its import time — the env
+        # write alone would not reach it (comps parent module, mocked here).
         import comps.dataprep.src.integrations.arangodb as _parent_mod
 
-        assert _parent_mod.VLLM_MODEL_ID == "detected-model"
+        assert _parent_mod.VLLM_MODEL_ID == "discovered-model"
 
-    def test_no_gpu_host_skips_detection(self, monkeypatch):
-        """When GPU_NODE_HOST is not set, /v1/models is never probed."""
-        from dataprep.genieai_dataprep_arangodb import GenieArangoDataprep
+    def test_raises_when_env_unset_and_probe_has_no_answer(self, monkeypatch):
+        from core.model_cache import ModelDiscoveryError
 
-        monkeypatch.delenv("GPU_NODE_HOST", raising=False)
-        dp = GenieArangoDataprep.__new__(GenieArangoDataprep)
+        monkeypatch.delenv("VLLM_MODEL_ID", raising=False)
 
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {"data": [{"id": "detected-model"}]}
-
-        with patch("httpx.get", return_value=mock_resp) as mock_get:
-            dp._initialize_llm(allowed_node_types=[], allowed_edge_types=[])
-
-        mock_get.assert_not_called()
-
-    def test_failure_preserves_config_default(self):
-        """When /v1/models fails, VLLM_MODEL_ID keeps its config default."""
-        from dataprep.genieai_dataprep_arangodb import GenieArangoDataprep
-
-        dp = GenieArangoDataprep.__new__(GenieArangoDataprep)
-
-        with patch("httpx.get", side_effect=httpx.ConnectError("Connection refused")):
-            dp._initialize_llm(allowed_node_types=[], allowed_edge_types=[])
-
-        assert os.getenv("VLLM_MODEL_ID") == "default-model"
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")), pytest.raises(ModelDiscoveryError):
+            self._dp()._initialize_llm(allowed_node_types=[], allowed_edge_types=[])
 
 
 # ---------------------------------------------------------------------------
 # Retriever _initialize_llm — auto-detection of remote vLLM model
 # ---------------------------------------------------------------------------
 class TestRetrieverInitializeLlmAutoDetect:
-    """Behavioral tests for retriever._initialize_llm auto-detection.
+    """Behavioral tests for retriever model resolution.
 
-    Verifies that when GPU_NODE_HOST is set, the auto-detected model ID
-    (from /v1/models via the shared TTL cache) is passed to ChatOpenAI
-    instead of the config default.
-    """
+    The explicit VLLM_MODEL_ID env wins; otherwise the id discovered at
+    VLLM_ENDPOINT is passed to ChatOpenAI — loud when nothing answers, since
+    a guessed name is rejected by vLLM's model-name validation."""
 
     @pytest.fixture(autouse=True)
     def _setup(self, monkeypatch):
-        monkeypatch.setenv("GPU_NODE_HOST", "10.0.0.110")
         monkeypatch.setenv("VLLM_ENDPOINT", "https://10.0.0.110/vllm")
         monkeypatch.setenv("VLLM_API_KEY", "test-key")
-        monkeypatch.setenv("VLLM_MODEL_ID", "default-model")
-        # Patch module-level constants (evaluated at import time, before fixtures)
         import retriever.genieai_retriever_arangodb as _mod
 
         monkeypatch.setattr(_mod, "VLLM_ENDPOINT", "https://10.0.0.110/vllm")
-        monkeypatch.setattr(_mod, "VLLM_MODEL_ID", "default-model")
         yield
-        monkeypatch.delenv("VLLM_MODEL_ID", raising=False)
+        # The production discovery writes os.environ DIRECTLY (untracked by
+        # monkeypatch); delenv here would record-and-RESTORE it at undo.
+        os.environ.pop("VLLM_MODEL_ID", None)
 
-    def test_detected_model_used_in_chatopenai(self):
-        """Auto-detected model ID is passed to ChatOpenAI, not the config default."""
-        from retriever.genieai_retriever_arangodb import ChatOpenAI, GenieaiArangoRetriever
+    def _r(self):
+        from retriever.genieai_retriever_arangodb import GenieaiArangoRetriever
 
-        r = GenieaiArangoRetriever.__new__(GenieaiArangoRetriever)
+        return GenieaiArangoRetriever.__new__(GenieaiArangoRetriever)
+
+    def test_explicit_env_used_in_chatopenai_without_probe(self, monkeypatch):
+        from retriever.genieai_retriever_arangodb import ChatOpenAI
+
+        monkeypatch.setenv("VLLM_MODEL_ID", "explicit/model")
+        r = self._r()
+        ChatOpenAI.reset_mock()
+
+        with patch("httpx.get") as mock_get:
+            r._initialize_llm()
+
+        mock_get.assert_not_called()
+        assert ChatOpenAI.call_args.kwargs["model"] == "explicit/model"
+
+    def test_discovered_model_used_in_chatopenai(self):
+        from retriever.genieai_retriever_arangodb import ChatOpenAI
+
+        r = self._r()
         ChatOpenAI.reset_mock()
 
         mock_resp = MagicMock()
@@ -794,38 +922,91 @@ class TestRetrieverInitializeLlmAutoDetect:
 
         assert ChatOpenAI.call_args.kwargs["model"] == "detected-llm"
 
-    def test_config_default_when_no_gpu_host(self, monkeypatch):
-        """Without GPU_NODE_HOST, config default model is used in ChatOpenAI."""
-        from retriever.genieai_retriever_arangodb import ChatOpenAI, GenieaiArangoRetriever
+    def test_raises_when_env_unset_and_probe_has_no_answer(self):
+        """No env, no probe answer → loud, never a compiled-in default."""
+        from core.model_cache import ModelDiscoveryError
 
-        monkeypatch.delenv("GPU_NODE_HOST", raising=False)
-        r = GenieaiArangoRetriever.__new__(GenieaiArangoRetriever)
+        r = self._r()
+
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")), pytest.raises(ModelDiscoveryError):
+            r._initialize_llm()
+
+    def test_get_llm_keeps_client_when_unchanged(self, monkeypatch):
+        """Same resolved id → the existing client is reused, not rebuilt."""
+        from retriever.genieai_retriever_arangodb import ChatOpenAI
+
+        monkeypatch.setenv("VLLM_MODEL_ID", "stable-model")
+        r = self._r()
         ChatOpenAI.reset_mock()
+        r._llm_backend = "vllm"
+        r._llm_model_id = "stable-model"
+        client = MagicMock()
+        r.llm = client
+
+        r._get_llm()
+
+        assert r.llm is client
+        ChatOpenAI.assert_not_called()
+
+    def test_get_llm_keeps_openai_summarizer(self):
+        """OpenAI-backed summarizer + VLLM_ENDPOINT set: the model re-check
+        must not replace the OpenAI client with a vLLM one."""
+        from retriever.genieai_retriever_arangodb import ChatOpenAI
+
+        r = self._r()
+        ChatOpenAI.reset_mock()
+        r._llm_backend = "openai"
+        r._llm_model_id = "gpt-x"
+        client = MagicMock()
+        r.llm = client
 
         with patch("httpx.get") as mock_get:
-            r._initialize_llm()
+            r._get_llm()
 
+        assert r.llm is client
+        ChatOpenAI.assert_not_called()
         mock_get.assert_not_called()
-        assert ChatOpenAI.call_args.kwargs["model"] == "default-model"
 
-    def test_failure_falls_back_to_default(self):
-        """When /v1/models fails, config default model is used as fallback."""
-        from retriever.genieai_retriever_arangodb import ChatOpenAI, GenieaiArangoRetriever
+    def test_get_llm_recovers_to_vllm_when_openai_init_failed(self):
+        """Transient OpenAI-key failure at boot leaves the llm attribute
+        UNASSIGNED (never None): the first _get_llm call must degrade to the
+        vLLM summarizer instead of AttributeError-ing on the missing
+        attribute or handing back None."""
+        from retriever.genieai_retriever_arangodb import ChatOpenAI
 
-        r = GenieaiArangoRetriever.__new__(GenieaiArangoRetriever)
+        r = self._r()
         ChatOpenAI.reset_mock()
+        assert not hasattr(r, "llm")  # production never assigns it on that path
 
-        with patch("httpx.get", side_effect=httpx.ConnectError("Connection refused")):
-            r._initialize_llm()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "fallback-model"}]}
+        mock_resp.raise_for_status = MagicMock()
 
-        assert ChatOpenAI.call_args.kwargs["model"] == "default-model"
+        with patch("httpx.get", return_value=mock_resp):
+            llm = r._get_llm()
 
-    def test_get_llm_recreates_on_model_change(self, monkeypatch):
-        """_get_llm recreates the ChatOpenAI client when the detected model changes."""
-        from retriever.genieai_retriever_arangodb import ChatOpenAI, GenieaiArangoRetriever
+        assert llm is not None
+        assert r._llm_backend == "vllm"
+        assert ChatOpenAI.call_args.kwargs["model"] == "fallback-model"
 
-        r = GenieaiArangoRetriever.__new__(GenieaiArangoRetriever)
+    def test_get_llm_returns_none_when_model_undiscovered(self):
+        """A transient discovery failure must DEGRADE the auxiliary summarizer
+        (None), never fail retrieval — the caller skips summarization."""
+        r = self._r()
+        r._llm_backend = "vllm"
+        r.llm = MagicMock()
+
+        with patch("httpx.get", side_effect=httpx.ConnectError("down")):
+            assert r._get_llm() is None
+
+    def test_get_llm_recreates_on_model_change(self):
+        """The re-check runs without any GPU_NODE_HOST gate: a changed
+        discovered id recreates the client."""
+        from retriever.genieai_retriever_arangodb import ChatOpenAI
+
+        r = self._r()
         ChatOpenAI.reset_mock()
+        r._llm_backend = "vllm"
         r._llm_model_id = "old-model"
         old_client = MagicMock()
         r.llm = old_client
@@ -839,19 +1020,9 @@ class TestRetrieverInitializeLlmAutoDetect:
         assert r._llm_model_id == "new-model"
         assert r.llm is not old_client  # ChatOpenAI was recreated, old client discarded
 
-    def test_get_llm_keeps_client_when_unchanged(self, monkeypatch):
-        """_get_llm does NOT recreate the client when the model is unchanged."""
-        from retriever.genieai_retriever_arangodb import GenieaiArangoRetriever
 
-        r = GenieaiArangoRetriever.__new__(GenieaiArangoRetriever)
-        r._llm_model_id = "same-model"
-        existing_llm = MagicMock()
-        r.llm = existing_llm
-
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {"data": [{"id": "same-model"}]}
-
-        with patch("httpx.get", return_value=mock_resp):
-            result = r._get_llm()
-
-        assert result is existing_llm  # same client object returned
+@pytest.fixture(autouse=True)
+def discovered_llm_model():
+    """Override the conftest stand-in: this file exercises the REAL probe
+    path end-to-end (transport mocks, cache semantics, loud failure)."""
+    yield

@@ -280,9 +280,6 @@ describe('getRepo denial audit (AC7 review fix)', () => {
   beforeEach(() => jest.clearAllMocks());
 
   test('foreign-repo 404 with a scoped caller writes authz.denied.repo', async () => {
-    jest.mock('../services/audit-service', () => ({ writeAudit: jest.fn().mockResolvedValue(null) }), {
-      virtual: false
-    });
     authScoped(['okf:t1:repoA:read']);
     repoService.getById.mockRejectedValue(Object.assign(new Error('nf'), { code: 'REPO_NOT_FOUND', status: 404 }));
     const res = await request(createApp()).get('/api/okf/repos/repoB').set('Authorization', TOKEN);

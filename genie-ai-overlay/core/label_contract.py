@@ -5,14 +5,15 @@
 The OPEA MicroService framework creates a dynamic ``__main__`` input type from
 the HTTP body when parsing requests at the retriever endpoint. This dynamic type
 ONLY preserves standard EmbedDoc fields (``text``, ``embedding``, ``search_type``,
-``k``, ``search_start``, ``traversal_*, etc.``). Custom fields like ``context``
-are silently dropped — verified via probes (POST body has context, retriever's
-parsed input does not).
+``k``, ``search_start``, ``traversal_max_depth``, ``traversal_max_returned``, etc.).
+Custom fields like ``context`` are silently dropped — verified via probes (POST
+body has context, retriever's parsed input does not).
 
 To pass filter labels AND the authorized graph set through this contract
 boundary, encode them in ``search_start`` (a standard EmbedDoc string field
-that survives parsing). The string carries up to three segments, order
-insensitive, separated by the documented markers:
+that survives parsing). The string carries up to FOUR segments, order
+insensitive, separated by the documented markers (labels, graphs, no_legacy,
+sticky):
 
     {base_mode}::labels:{label1},{label2},...::graphs:{g1},{g2},...::no_legacy:{true|false}
 

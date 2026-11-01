@@ -50,6 +50,7 @@
 'use strict';
 
 const { logger } = require('../shared-lib/logger');
+const { isArangoNotFound } = require('./arango-errors');
 const { withSpan } = require('../shared-lib/tracing');
 const { createHash } = require('node:crypto');
 const dbService = require('../shared-lib/db-connection-service');
@@ -444,7 +445,7 @@ function loadSuiteDoc(db, repoId, suiteKey) {
     .collection(HEAD_TEST_RUNS_COLLECTION)
     .document(suiteKey)
     .catch((e) => {
-      if (e && (e.code === 404 || e.statusCode === 404 || /not found/i.test(e.message || ''))) {
+      if (isArangoNotFound(e)) {
         const err = new Error(`suite ${suiteKey} not found for repo ${repoId}`);
         err.code = 'SUITE_NOT_FOUND';
         err.status = 404;
@@ -490,6 +491,11 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     const siblings = await loadSiblingContext(db, repoId);
 
     const llm = { positive: [], negative: [], off_domain: [], meta: [], near_miss: [], keywords: [] };
+    // Provenance: the models the generation calls actually used (stamped
+    // on each response by vllmChatCompletions) — kept for the suite doc.
+    // A suite spans many calls: a TTL expiry (or a model change) mid-suite
+    // means two models produced it, and the label must say so.
+    const genModels = new Set();
     try {
       // temperature 0.7 (not the extraction default 0.0) — adversarial
       // negatives must VARY generation to generation. Story 1-8f: the ask
@@ -548,6 +554,7 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
           maxTokens: Math.min(6000, 500 + 34 * rowsInCall),
           temperature: 0.7
         });
+        if (resp.model) genModels.add(resp.model);
         const content = resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message;
         const parsed = parseJsonObject(content && content.content);
         const before =
@@ -675,7 +682,12 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       created_at: now,
       created_by: (opts.actor && opts.actor.user_id) || 'system',
       payload: {
-        generator: `llm:${process.env.VLLM_LLM_MODEL_ID || 'vllm'}`,
+        // Provenance: the model that generated this suite — the stamp the
+        // generation calls carry (it also names a named-config override).
+        // 'none' when no generation call ran or none of them carried a
+        // stamp: the suite then holds the deterministic fallback rows, and
+        // naming any model there would be a lie.
+        generator: genModels.size ? [...genModels].map((m) => `llm:${m}`).join(',') : 'none',
         sibling_names: siblings.map((s) => s.name),
         off_domain_topics: randomTopics,
         // Story 1-8d — the forbidden list this suite was generated against.
@@ -3116,21 +3128,11 @@ module.exports = {
   recommendTagSet,
   beginRecommendTagSet,
   getRecommendJob,
-  // test surface
+  // test surface — ONLY the helpers the specs actually drive; the suite
+  // generators are exercised through the public generateSuite/runSuite
+  // boundaries.
   _internals: {
-    suitePrompt,
     summarizeRun,
-    suppressReason,
-    forbiddenDerivedQueries,
-    offDomainQueries,
-    metaQueries,
-    nearMissQueries,
-    sampleTopics,
-    OFF_DOMAIN_TOPICS,
-    OFF_DOMAIN_TEMPLATES,
-    META_TEMPLATES,
-    parseJsonObject,
-    clampCount,
-    HEAD_TEST_RUNS_COLLECTION
+    nearMissQueries
   }
 };

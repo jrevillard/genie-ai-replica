@@ -76,6 +76,9 @@ void main() {
   });
 
   tearDown(() {
+    // The font scale is a singleton read (tokens.textXs) — a test that
+    // raised it must not name the next test's mount.
+    resetThemeManager();
     // The locale is a singleton: a test that switched it must not name
     // the next test's mount.
     I18nService().changeLanguage('en');
@@ -164,6 +167,11 @@ void main() {
         child: AnimatedBuilder(
           animation: I18nService(),
           builder: (context, _) => MaterialApp(
+            // The app's OWN ThemeData, not Material's defaults — a
+            // widget under a plain MaterialApp resolves text themes the
+            // shipped theme does not carry (the trap the mobile Visual
+            // Fidelity rule names).
+            theme: ThemeManager().lightTheme,
             locale: I18nService().currentLocale,
             supportedLocales: const [Locale('en')],
             localizationsDelegates: const [
@@ -267,9 +275,10 @@ void main() {
       final caption = find.textContaining('hierarchy could not be loaded');
       expect(caption, findsNWidgets(2));
       // One textXs line at 2.0× (11.2 * 2.0): the row's height follows
-      // the scaled text instead of clipping it.
+      // the scaled text instead of clipping it. The HEIGHT alone is the
+      // claim — an ordering matcher over a whole Size has no meaning.
       for (final element in caption.evaluate()) {
-        expect(element.size, greaterThanOrEqualTo(const Size(0, 22.0)));
+        expect(element.size!.height, greaterThanOrEqualTo(22.0));
       }
       expect(tester.takeException(), isNull);
     },

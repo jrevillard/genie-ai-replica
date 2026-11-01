@@ -569,6 +569,17 @@ dependencyGraph:
 #
 # scripts/ci/values-surface-check.py enforces this shape list against the
 # factory's `$svc.<key>` reads — the list cannot drift from the surface.
+#
+# OPEA-tier note — the OPEA deployments (opea.enabled) ALSO read
+# services.<name>, with different merge semantics: maps deep-merge key by
+# key over the template defaults (resources, image, probes), but LIST
+# values replace the template-built rows whole — an env override drops
+# every chart-default env row (secret refs included, so chat then fails
+# at request time with no scheduling symptom). Per-variable env goes
+# through opea.<svc>.env, a map merged beside the defaults. Wiring the
+# Services and NetworkPolicies reference is template-owned: chatqna's
+# container port 8888 is hardcoded in its Service and the OPEA policies,
+# so a port override yields a Deployment nothing reaches.
 services:
   backend:
     enabled: true

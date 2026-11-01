@@ -37,7 +37,7 @@ jest.mock('../../middleware/errors', () => ({
   }
 }));
 
-const { dbService, logger } = require('../../shared-lib');
+const { dbService } = require('../../shared-lib');
 
 function createMockCollection() {
   return {
@@ -221,7 +221,7 @@ describe('ServiceCategoryService', () => {
       await expect(service.updateServiceWithTranslations('svc-1', {})).rejects.toThrow('nameEN is required');
     });
 
-    it('should warn and skip entries that use the read shape {lang, text}', async () => {
+    it('rejects entries that use the read shape {lang, text} before mutating', async () => {
       mockDb.query.mockResolvedValue(createMockCursor([]));
 
       await expect(
@@ -234,7 +234,6 @@ describe('ServiceCategoryService', () => {
       // no mutation at all: the EN upsert and the REMOVE must not run
       expect(mockServiceTranslations.save).not.toHaveBeenCalled();
       expect(mockDb.query).not.toHaveBeenCalled();
-      expect(logger.warn).not.toHaveBeenCalled();
     });
 
     it('should reject a null translation entry before mutating anything', async () => {

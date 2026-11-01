@@ -2261,25 +2261,26 @@ describe('e2e merge-train changes filters (#1264)', () => {
     );
   });
 
+  // Comments are stripped entirely — whole-line ones and inline ` #...`
+  // tails: they are layout, not configuration, and must not leak literals
+  // (a path, a condition, a tool name) into the assertions below. The
+  // inline rule is safe for the sections this suite reads today; it is NOT
+  // file-wide — a line like `echo "Add a ## [v1] section"` (config:changelog
+  // carries one) would truncate, so a future section pin on such a job
+  // needs a quote-aware strip first.
+  const stripComments = (lines) =>
+    lines.filter((line) => !line.trimStart().startsWith('#')).map((line) => line.replace(/\s+#.*$/, ''));
+
   // Section of the file from a top-level key to the next one. The boundary
   // matches a top-level KEY line only — a column-0 comment inside the job
-  // body is valid YAML there and must not truncate the section. Comments
-  // are stripped entirely — whole-line ones and inline ` #...` tails: they
-  // are layout, not configuration, and must not leak literals (a path, a
-  // condition, a tool name) into the assertions below. Inline stripping is
-  // safe on this file: the only in-code hash signs are bash expansions of
-  // the `${VAR#word}` form, which no space precedes.
+  // body is valid YAML there and must not truncate the section.
   const sectionOf = (job) => {
     const start = content.indexOf(`\n${job}:`);
     expect(start).toBeGreaterThan(-1);
     const rest = content.slice(start + 1);
     const end = rest.search(/\n[\w:.-]+:(\s|$)/);
     const section = end === -1 ? rest : rest.slice(0, end + 1);
-    return section
-      .split('\n')
-      .filter((line) => !line.trimStart().startsWith('#'))
-      .map((line) => line.replace(/\s+#.*$/, ''))
-      .join('\n');
+    return stripComments(section.split('\n')).join('\n');
   };
 
   // Executed paths are derived from the `npx playwright test` invocation in
@@ -2367,7 +2368,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // so only comments naming real files over-derive; that is the
     // conservative direction for a trigger guard (more anchor coverage,
     // never a silent LOSS of coverage) and it fails the pin loudly.
-    const specifierRe = /(?:require(?:\.resolve)?\s*\(\s*|from\s+|import\(\s*|import\s+)(['"`])(\.[^'"`]*)\1/g;
+    const specifierRe = /(?:require(?:\.resolve)?\s*\(\s*|from\s+|import\s*\(\s*|import\s+)(['"`])(\.[^'"`]*)\1/g;
     // Same shape tolerance for __dirname chains: either quote style, any
     // spacing. A join carrying a non-literal argument is not matched at all
     // (tracked in #1325); an inline comment inside the call likewise.
@@ -2549,6 +2550,24 @@ describe('e2e merge-train changes filters (#1264)', () => {
       expect(deriveFrom('tests/e2e/chatbot/x.spec.js', source)).toEqual(['tests/e2e/helpers/**/*']);
     });
 
+    test('a spaced dynamic import is consumed too', () => {
+      expect(deriveFrom('tests/e2e/chatbot/x.spec.js', "const y = await import ('../helpers/locale');")).toEqual([
+        'tests/e2e/helpers/**/*'
+      ]);
+    });
+
+    describe('comment stripping', () => {
+      test('whole-line comments and inline tails are stripped, code text survives', () => {
+        expect(
+          stripComments([
+            '  # whole-line comment stays out',
+            '  script: npx playwright test tests/e2e/ # historical: npx playwright test tests/e2e/okf/',
+            '  VERSION="${CI_COMMIT_TAG#v}"'
+          ])
+        ).toEqual(['  script: npx playwright test tests/e2e/', '  VERSION="${CI_COMMIT_TAG#v}"']);
+      });
+    });
+
     test('specifiers that leave tests/e2e or do not exist are dropped', () => {
       const source = [
         "const p = require('../../../tests/config-validator/package.json');", // exists, outside tests/e2e
@@ -2640,9 +2659,18 @@ describe('e2e merge-train changes filters (#1264)', () => {
     expect(section).toContain('extends: .e2e_web_base');
     // The derivation reads the invocation from .e2e_web_base only — a
     // consuming job overriding script with its own playwright invocation
-    // (any runner spelling) would execute targets nothing derived. Keep
-    // the invocation single.
-    expect(section).not.toMatch(/playwright\s+test/);
+    // (any runner spelling, npx or direct CLI path) would execute targets
+    // nothing derived. Keep the invocation single. The job's own key line
+    // (e2e:playwright:) is excluded — the name is not an invocation.
+    expect(section.split('\n').slice(1).join('\n')).not.toMatch(/playwright/);
+  });
+
+  // executedPaths() reads the FIRST invocation match only — a second
+  // `npx playwright test` line inside the base would run specs the
+  // derivation never sees while every pin stays green. Pin the base to a
+  // single invocation so a second line fails here instead.
+  test('.e2e_web_base carries exactly one playwright invocation', () => {
+    expect((sectionOf('.e2e_web_base').match(/playwright test/g) || []).length).toBe(1);
   });
 
   test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {

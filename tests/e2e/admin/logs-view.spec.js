@@ -15,19 +15,20 @@ test.describe('Admin logs view', () => {
   test.setTimeout(120000);
 
   /**
-   * Login, install the summary interception, open /admin.
+   * Login, install the summary interception, open /admin. Returns
+   * {calls} — the counter guards the assertions against a vacuous pass:
+   * the empty-summary row renders whenever the component state is empty,
+   * so the tests must prove the summary call actually happened.
+   *
    * The overview mount never calls the logs endpoints — the summary is
    * fetched when the Logs tab activates (loadDataForTab('logs')), so the
    * interception is in place before the click that triggers it.
    */
   async function loginAdminWithSummary(page, summaryPayload) {
     await loginViaUI(page, TEST_ADMIN_USER);
-    // Counter guards the assertions below against a vacuous pass: the
-    // empty-summary row renders whenever the component state is empty,
-    // so the tests must prove the summary call actually happened.
-    page._summaryCalls = 0;
+    const state = { calls: 0 };
     await page.route('**/api/admin/logs/summary*', (route) => {
-      page._summaryCalls++;
+      state.calls++;
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -55,13 +56,14 @@ test.describe('Admin logs view', () => {
       }),
     );
     await page.goto(`${BASE_URL}/admin`, { waitUntil: 'networkidle' });
-    // The DsTabs control renders the tab as a button (the sidebar nav
-    // entries are links, so the role separates the two).
-    await page.getByRole('button', { name: 'Logs' }).click();
+    // DsTabs renders one anchor per tab value (the sidebar nav entries
+    // are links, not buttons — the anchor separates the two).
+    await page.locator('[data-test-id="ds-tab-logs"]').click();
+    return state;
   }
 
   test('warning rows render from the logs summary payload', async ({ page }) => {
-    await loginAdminWithSummary(page, {
+    const summary = await loginAdminWithSummary(page, {
       errors: [],
       warnings: [
         { type: 'auth', service: 'wired-keycloak', count: 3 },
@@ -76,17 +78,17 @@ test.describe('Admin logs view', () => {
     const arangoRow = page.locator('.log-summary-table tr', { hasText: 'wired-arangodb' });
     await expect(arangoRow).toBeVisible();
     await expect(arangoRow.locator('.log-count')).toHaveText('7');
-    expect(page._summaryCalls).toBeGreaterThanOrEqual(1);
+    expect(summary.calls).toBeGreaterThanOrEqual(1);
   });
 
   test('an empty summary renders the explicit empty row', async ({ page }) => {
-    await loginAdminWithSummary(page, { errors: [], warnings: [] });
+    const summary = await loginAdminWithSummary(page, { errors: [], warnings: [] });
 
     // Both roll-up tables render their own empty row; scope to the
     // warnings card (the table this spec's payload drives).
     const warningsCard = page.locator('.logs-summary', { hasText: 'Warning Logs' });
     await expect(warningsCard.locator('.empty-logs')).toBeVisible();
     await expect(warningsCard.locator('.log-count')).toHaveCount(0);
-    expect(page._summaryCalls).toBeGreaterThanOrEqual(1);
+    expect(summary.calls).toBeGreaterThanOrEqual(1);
   });
 });

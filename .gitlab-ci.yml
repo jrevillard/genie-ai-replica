@@ -464,6 +464,12 @@ workflow:
       # verdict precedes credential validation, so it is unaffected, and a
       # drifted realm can never mint a live token through the probe (it
       # answers invalid_grant instead, classified as drift below).
+      # Only unauthorized_client greens the probe: it is the one answer
+      # that proves the direct-grants gate was consulted for THIS client.
+      # Grant-level denials (unsupported_grant_type, access_denied) cannot
+      # distinguish a refused grant from a malformed request — a probe that
+      # mis-sends its own grant_type would otherwise self-certify any
+      # realm — so they fail as unrecognized, loudly, with the body.
       # Keycloak answers unauthorized_client BEFORE credential
       # validation when directAccessGrantsEnabled is false, so a minted token
       # means the posture drifted; unsupported_grant_type counts as a refusal
@@ -518,7 +524,7 @@ workflow:
       ROPC_TOKEN=${ROPC_FIELDS#*|}
       rm -f /tmp/ropc-probe-body.json
       ropc_gateway_fail() {
-        echo "ERROR: unexpected HTTP ${ROPC_STATUS} with a non-Keycloak body from the genie token endpoint — not a posture verdict; check gateway routing (nginx/Kong); body: ${ROPC_BODY:-none}"
+        echo "ERROR: unexpected HTTP ${ROPC_STATUS} with a non-Keycloak body from the genie token endpoint — not a posture verdict; check gateway routing (nginx/Kong) or the realm import; body: ${ROPC_BODY:-none}"
         exit 1
       }
       case "$ROPC_STATUS" in
@@ -526,7 +532,7 @@ workflow:
         # retries exited above), so the transport/rate-limit verdicts live
         # in the exhausted path, not here.
         4[0-9][0-9])
-          if [ "$ROPC_ERROR" = "unauthorized_client" ] || [ "$ROPC_ERROR" = "unsupported_grant_type" ] || [ "$ROPC_ERROR" = "access_denied" ]; then
+          if [ "$ROPC_ERROR" = "unauthorized_client" ]; then
             # No exit here: GitLab concatenates the script items into one
             # shell, so ANY exit would skip the suites — and an exit 0 would
             # end the job green with zero tests run. Fall through instead.

@@ -627,6 +627,33 @@ describe('compose non-root contract (#1227)', () => {
     expect(v2.some((v) => v.includes('kong'))).toBe(true);
   });
 
+  test('mutations: templated short-syntax binds demand the long form', () => {
+    // A templated host part in SHORT syntax (${CONFIG_DIR:-./x}:/t:ro)
+    // escapes the data-dir rule's dataShaped-only gate — yet a compliant
+    // spelling EXISTS (long syntax + create_host_path: false), so unlike
+    // a literal absolute path the impossible-fix concern does not apply.
+    // The short form would let docker silently root-create a missing
+    // operator-override source.
+    const shortTemplated = [
+      'services:',
+      '  frontend:',
+      '    user: "101:101"',
+      '    volumes:',
+      '      - "${CONFIG_DIR_FRONTEND:-./x}:/app/dist/config:ro"',
+      ''
+    ].join('\n');
+    const { violations: v1 } = validateComposeNonRoot(shortTemplated);
+    expect(v1.some((v) => v.includes('frontend') && v.includes('templated but in short syntax'))).toBe(true);
+
+    // a LITERAL absolute short bind stays out — no compliant short
+    // spelling exists there, so flagging would prescribe the impossible
+    const literalShort = shortTemplated.replace(
+      '"${CONFIG_DIR_FRONTEND:-./x}:/app/dist/config:ro"',
+      '"/etc/localtime:/etc/localtime:ro"'
+    );
+    expect(validateComposeNonRoot(literalShort).violations).toEqual([]);
+  });
+
   test("the runtime gate's SELF_DROPPING list matches the validator's allowlist", () => {
     // The shell gate keeps its own copy (no JS runtime there); without
     // this pin a third self-dropping image added to the validator would

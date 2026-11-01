@@ -213,6 +213,12 @@
     # so an unquoted whitespace path (or a data_dir like './data/' whose
     # basename is empty → `find: missing argument to '-name'`) would abort
     # the whole prepare play.
+    # The probe/heal pair (same shape as tasks/no-root-data-migration.yml):
+    # the heal only runs when the probe found a mis-owned depth-1 child —
+    # a converged tree reports ok instead of churning `changed` on every
+    # deploy, and the change signal stays meaningful.
+    _fix_payload_probe_cmd: >-
+      find "{{ deploy_dir }}" -mindepth 1 -maxdepth 1 ! -name "{{ data_dir | regex_replace('/$', '') | basename }}" ! -uid {{ ansible_user_uid }} -print -quit
     _fix_payload_ownership_cmd: >-
       find "{{ deploy_dir }}" -mindepth 1 -maxdepth 1 ! -name "{{ data_dir | regex_replace('/$', '') | basename }}"
       -exec chown -R -h {{ ansible_user }}:{{ ansible_user }} {} +
@@ -249,6 +255,15 @@
         mode: '0755'
       loop: "{{ _deploy_files }}"
 
+    - name: Detect mis-owned payload before download (deploy payload only — {{ data_dir | basename }} excluded)
+      # failed_when: false + rc check: a vanished deploy_dir between tasks
+      # must not abort the play — the heal's when covers the rc too.
+      become_user: root
+      ansible.builtin.command: "{{ _fix_payload_probe_cmd }}"
+      register: _payload_misowned_pre
+      changed_when: false
+      failed_when: false
+
     - name: Fix ownership before download (deploy payload only — {{ data_dir | basename }} excluded)
       # The #1227 data/ tree is NOT deploy payload: re-labeling it here
       # fought the no-root migration (pre-empting its probe, then churning
@@ -256,6 +271,7 @@
       # chowned recursively.
       become_user: root
       ansible.builtin.command: "{{ _fix_payload_ownership_cmd }}"
+      when: _payload_misowned_pre.stdout | length > 0 or _payload_misowned_pre.rc != 0
       changed_when: true
 
     - name: Fix ownership of the deploy directory itself (depth 0)
@@ -309,11 +325,19 @@
             extra_opts:
               - "--strip-components=1"
 
+    - name: Detect mis-owned payload after extraction (deploy payload only — {{ data_dir | basename }} excluded)
+      become_user: root
+      ansible.builtin.command: "{{ _fix_payload_probe_cmd }}"
+      register: _payload_misowned_post
+      changed_when: false
+      failed_when: false
+
     - name: Fix ownership to ansible_user (deploy payload only — {{ data_dir | basename }} excluded)
       # Same data/ exclusion as "Fix ownership before download": the
       # migration tasks own everything under data/.
       become_user: root
       ansible.builtin.command: "{{ _fix_payload_ownership_cmd }}"
+      when: _payload_misowned_post.stdout | length > 0 or _payload_misowned_post.rc != 0
       changed_when: true
 
     - name: Ensure deploy directories exist with correct ownership

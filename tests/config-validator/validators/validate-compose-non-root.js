@@ -162,13 +162,16 @@ function validateComposeNonRoot(composeText) {
           // missing there is still created root-owned by the daemon.
           const templated = /\$\{?\w/.test(b.path);
           const absoluteDataPath = (resolved.startsWith('/') || resolved.startsWith('~/')) && (dataShaped || templated);
-          if (b.shortSyntax ? !dataShaped : !underDataDir && !absoluteDataPath && !templated) {
+          if (b.shortSyntax ? !(dataShaped || templated) : !underDataDir && !absoluteDataPath && !templated) {
             continue;
           }
           if (b.shortSyntax) {
             violations.push(
-              `${currentService}: host bind "${b.path}" sits under the data directory in short syntax, ` +
-                'which cannot carry `create_host_path: false` — use long syntax or a named volume'
+              templated
+                ? `${currentService}: host bind "${b.path}" is templated but in short syntax, which ` +
+                    'cannot carry `create_host_path: false` — use long syntax or a named volume'
+                : `${currentService}: host bind "${b.path}" sits under the data directory in short syntax, ` +
+                    'which cannot carry `create_host_path: false` — use long syntax or a named volume'
             );
           } else if (!b.createHostPathFalse && !underDataDir) {
             violations.push(

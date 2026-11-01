@@ -12,9 +12,11 @@ module.exports = {
   // minLength: 1 covers the string half of the runtime's truthiness check
   // (an empty eventType is refused with 400); additionalProperties:false
   // says the stored document's `data` spelling is NOT accepted on the wire.
-  // The runtime does not yet enforce either beyond strings — a truthy
-  // non-string eventType is stored as-is and unknown keys are dropped
-  // silently (#1293 tracks enforcing the declared shape).
+  // The runtime does not yet enforce these — a truthy non-string eventType
+  // is stored as-is and unknown keys are dropped silently (#1293 tracks
+  // enforcing the declared shape). eventData is nullable because the
+  // generated Dart client emits `"eventData": null` whenever the field is
+  // omitted.
   EventRequest: {
     type: 'object',
     required: ['eventType'],
@@ -25,7 +27,7 @@ module.exports = {
         minLength: 1,
         description: 'Type of event (e.g., pageView, buttonClick)'
       },
-      eventData: { type: 'object', description: 'Additional event data' }
+      eventData: { type: 'object', nullable: true, description: 'Additional event data' }
     }
   },
   // The persisted ArangoDB event document (GET /api/analytics/events items).

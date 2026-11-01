@@ -2711,8 +2711,14 @@ services:
     # (CHOWN + traversal DAC_OVERRIDE caps, one-shot on both front-ends, global mode
     # so the chown has run on every node the collector can land on).
     <<: *chown-init
-    # PROBE form (no marker — see backend-init).
-    command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && find /var/lib/otelcol -user root -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /var/lib/otelcol -user root -exec chown -h 10001:10001 {} + || exit 9; fi; find /var/lib/otelcol -user root -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
+    # PROBE form (no marker — see backend-init) with a WIDER predicate
+    # than the other four inits: otel's init REPLACED a working
+    # unconditional `chown -R 10001:10001` (the queue volume's ownership
+    # contract was always "everything is 10001"), so its probe heals files
+    # owned by ANY wrong uid, not just root — a third-uid leftover (manual
+    # recovery chown, uid drift from an older image) would otherwise
+    # strand the collector in an EACCES restart loop behind a green init.
+    command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && find /var/lib/otelcol ! -user 10001 -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find /var/lib/otelcol ! -user 10001 -exec chown -h 10001:10001 {} + || exit 9; fi; find /var/lib/otelcol ! -user 10001 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi"]
     volumes:
       - otel-queue:/var/lib/otelcol
 

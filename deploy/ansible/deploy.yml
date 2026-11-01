@@ -698,6 +698,10 @@
         --filter label=com.docker.stack.namespace={{ stack_name }}
         --format '{{ "{{" }}.Name{{ "}}" }} {{ "{{" }}.Replicas{{ "}}" }}'
       register: replica_check
+      # The unhealthy predicate matches a service at ZERO running
+      # replicas (" 0/1"), anchored to the replicas column: a bare '0/'
+      # substring also lives inside "10/10" or "20/30", which would wedge
+      # the gate on any stack scaled to 10+ replicas.
       until: >
         replica_check.stdout_lines
         | reject('search', 'kong-config')
@@ -711,7 +715,7 @@
         | reject('search', 'document-repository-init')
         | reject('search', 'backend-init')
         | reject('search', '0/0')
-        | select('search', '0/')
+        | select('search', '(^|\s)0/\d')
         | length == 0
       retries: "{{ (deploy_stabilization_timeout | int) // 30 }}"
       delay: 30

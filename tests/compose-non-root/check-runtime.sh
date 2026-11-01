@@ -133,7 +133,9 @@ while IFS= read -r container; do
     # The server drops to its package user; the transient healthcheck execs
     # (pg_isready / redis-cli, sub-second, run as the container's root
     # user) are filtered — and the filter is ANCHORED to the exact
-    # sanctioned shapes (postgres: args start with pg_isready; redis: the
+    # sanctioned shapes (postgres: args start with pg_isready — exec form
+    # today, but a CMD-SHELL switch runs them as `sh -c pg_isready ...`, so
+    # the wrapper shape is exempted exactly like redis's; redis: the
     # `sh -c test ... redis-cli ping` wrapper AND its command-substitution
     # child, whose args are bare `redis-cli ping`), so an unrelated root
     # process that merely MENTIONS the token is still a violation — and
@@ -149,7 +151,7 @@ while IFS= read -r container; do
     offenders=$(
       echo "$top" |
         awk 'NR>1 && $1==0' |
-        grep -vE '^0[[:space:]]+[0-9]+[[:space:]]+(pg_isready([[:space:]]|$)|sh[[:space:]]+-c[[:space:]]+test[[:space:]]+.*redis-cli[[:space:]]+ping|redis-cli[[:space:]]+ping([[:space:]]|$))' |
+        grep -vE '^0[[:space:]]+[0-9]+[[:space:]]+(pg_isready([[:space:]]|$)|sh[[:space:]]+-c[[:space:]]+pg_isready([[:space:]]|$)|sh[[:space:]]+-c[[:space:]]+test[[:space:]]+.*redis-cli[[:space:]]+ping|redis-cli[[:space:]]+ping([[:space:]]|$))' |
         awk '{print "  pid " $2 ": " substr($0, index($0, $3))}'
     )
     if [ -n "$offenders" ]; then

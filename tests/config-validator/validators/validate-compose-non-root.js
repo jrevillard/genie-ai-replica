@@ -5,10 +5,12 @@
 //   1. every always-on service declares a non-root `user:` (uid != 0), so no
 //      long-term process runs as root and no entrypoint phase writes
 //      root-owned files into host binds;
-//   2. every host bind under the data directory either already exists in the
-//      repository or opts into `create_host_path: false` — docker silently
-//      creates a missing bind source as root-owned, which is exactly the
-//      defect this contract forbids.
+//   2. every host bind under the data directory (and every templated or
+//      home-rooted / data-shaped source) opts into `create_host_path:
+//      false` — docker silently creates a missing bind source as
+//      root-owned, which is exactly the defect this contract forbids.
+//      Whether the path happens to exist in THIS checkout is irrelevant:
+//      any other checkout (a clean clone, CI) starts without it.
 //
 // `SELF_DROPPING` lists the upstream images whose entrypoint execs into an
 // unprivileged user by itself (postgres and redis `gosu`/`su-exec` to their

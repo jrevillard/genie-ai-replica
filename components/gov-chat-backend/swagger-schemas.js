@@ -9,11 +9,17 @@
 module.exports = {
   // The POST /api/analytics/events request wire — the route reads exactly
   // these two fields; `timestamp` is server-set and not read from the wire.
+  // minLength mirrors the runtime's truthiness check (an empty eventType
+  // is refused with 400).
   EventRequest: {
     type: 'object',
     required: ['eventType'],
     properties: {
-      eventType: { type: 'string', description: 'Type of event (e.g., pageView, buttonClick)' },
+      eventType: {
+        type: 'string',
+        minLength: 1,
+        description: 'Type of event (e.g., pageView, buttonClick)'
+      },
       eventData: { type: 'object', description: 'Additional event data' }
     }
   },

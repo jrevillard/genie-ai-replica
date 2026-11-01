@@ -283,8 +283,8 @@ void main() {
       // UNTRANSLATED pick. The labels stay ['Births'] but the scope grew
       // — the held response must not commit its join over it. The join
       // reads all-Spanish: the panel re-titled the stored row from its
-      // own tree reload (#1226) — the display names follow the locale,
-      // the wire labels stay English.
+      // own tree reload — the display names follow the locale, the wire
+      // labels stay English.
       await tester.tap(find.text('Misterio'));
       await tester.pump();
       expect(find.text('Contexto: Nacimientos, Misterio'), findsOneWidget);

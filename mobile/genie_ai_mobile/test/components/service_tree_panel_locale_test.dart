@@ -55,25 +55,30 @@ void main() {
     I18nService().changeLanguage('en');
   });
 
+  Widget buildPanel(
+    _LocaleClient client,
+    void Function(Map<String, dynamic>) onSelectionChange,
+  ) {
+    return ProviderScope(
+      overrides: [
+        serviceCategoriesApiProvider.overrideWithValue(
+          ServiceCategoriesApi(ApiClient()..client = client),
+        ),
+      ],
+      child: MaterialApp(
+        home: Scaffold(
+          body: ServiceTreePanel(onSelectionChange: onSelectionChange),
+        ),
+      ),
+    );
+  }
+
   Future<void> pumpPanel(
     WidgetTester tester,
     _LocaleClient client,
     void Function(Map<String, dynamic>) onSelectionChange,
   ) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          serviceCategoriesApiProvider.overrideWithValue(
-            ServiceCategoriesApi(ApiClient()..client = client),
-          ),
-        ],
-        child: MaterialApp(
-          home: Scaffold(
-            body: ServiceTreePanel(onSelectionChange: onSelectionChange),
-          ),
-        ),
-      ),
-    );
+    await tester.pumpWidget(buildPanel(client, onSelectionChange));
     // A second frame: the locale-drift check schedules its reload in a
     // post-frame callback, and the fetch resolves across frames.
     await tester.pump();
@@ -144,6 +149,97 @@ void main() {
 
     expect(emissions, hasLength(1));
   });
+
+  testWidgets(
+    'a tree edited between the fetches moves the highlight with the entity',
+    (tester) async {
+      // The es tree REORDERS the category's children: the picked entity
+      // now sits at child index 0, and the row that inherited index 1 is
+      // a different service.
+      final reorderedEsTree = [
+        {
+          'catKey': '2',
+          'name': 'Estado civil',
+          'nameEN': 'Civil Registry',
+          'children': [
+            {'_key': 'svc-2', 'name': 'Matrimonio', 'nameEN': 'Marriage'},
+            {'_key': 'svc-1', 'name': 'Nacimientos', 'nameEN': 'Births'},
+          ],
+        },
+      ];
+      final emissions = <Map<String, dynamic>>[];
+      resetThemeManager();
+      final client = _LocaleClient({
+        'en': jsonEncode(enTree),
+        'es': jsonEncode(reorderedEsTree),
+      });
+      await pumpPanel(tester, client, emissions.add);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Civil status'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Marriage'));
+      await tester.pumpAndSettle();
+      expect(emissions.single['name'], 'Marriage');
+
+      I18nService().changeLanguage('es');
+      await pumpPanel(tester, client, emissions.add);
+      await tester.pumpAndSettle();
+
+      // The highlight followed the entity to its NEW index: it paints
+      // 'Matrimonio' (now child index 0), not the row that inherited
+      // index 1 ('Nacimientos').
+      Finder rowHighlight(String rowText) => find.descendant(
+        of: find.ancestor(
+          of: find.text(rowText),
+          matching: find.byType(ListTile),
+        ),
+        matching: find.byIcon(Icons.check_circle),
+      );
+      expect(rowHighlight('Matrimonio'), findsOneWidget);
+      expect(rowHighlight('Nacimientos'), findsNothing);
+
+      // And the highlighted row still toggles by identity: tapping it
+      // deselects the picked entity — the only one — clearing the scope.
+      await tester.tap(find.text('Matrimonio'));
+      await tester.pumpAndSettle();
+      expect(emissions.last['serviceLabelsEn'], isEmpty);
+      expect(emissions.last['serviceCount'], 0);
+    },
+  );
+
+  testWidgets(
+    'a stale response landing before the newer fetch is scheduled does not install its tree',
+    (tester) async {
+      final emissions = <Map<String, dynamic>>[];
+      resetThemeManager();
+      final gates = <String, Completer<http.StreamedResponse>>{
+        'en': Completer<http.StreamedResponse>(),
+      };
+      final client = _LocaleClient({
+        'en': jsonEncode(enTree),
+        'es': jsonEncode(esTree),
+      }, gates: gates);
+      await pumpPanel(tester, client, emissions.add);
+      // The initial (en) fetch is gated and still in flight.
+      await tester.pump();
+
+      I18nService().changeLanguage('es');
+      // The stale en response lands in the window BEFORE the es reload
+      // is scheduled — that reload runs on the next frame. The response
+      // names a locale the UI has already left. The assertion runs after
+      // the FIRST frame only: the stale tree would render exactly there
+      // (the es reload has not landed yet), and a later assertion would
+      // read the recovered state instead.
+      gates['en']!.complete(_response(200, jsonEncode(enTree)));
+      await tester.pumpWidget(buildPanel(client, emissions.add));
+      expect(find.text('Civil status'), findsNothing);
+
+      await tester.pumpAndSettle();
+      expect(find.text('Estado civil'), findsOneWidget);
+      expect(find.text('Civil status'), findsNothing);
+    },
+  );
 
   testWidgets(
     'a tree of a locale left mid-fetch does not win the race once the newer locale loaded',

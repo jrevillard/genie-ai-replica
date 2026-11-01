@@ -37,12 +37,16 @@ cd "$PROJECT_ROOT"
 IGNORE_CONTENT="$(cat "$IGNORE_FILE")"
 
 echo "==> Generating OpenAPI spec from backend source..."
-(cd "$BACKEND_DIR" && node -e "
+(cd "$BACKEND_DIR" && API_URL=http://localhost PORT=3000 \
+  KEYCLOAK_URL=https://keycloak.example.com KEYCLOAK_REALM=genie node -e "
 const swaggerJsdoc = require('swagger-jsdoc');
 const spec = swaggerJsdoc({
   // The same envelope module the runtime requires (components/gov-chat-backend/
-  // index.js) — server URLs do not affect the generated endpoint paths, so the
-  // generation-time env values do not drift the client's routes.
+  // index.js). The envelope reads env at require time; the values pinned above
+  // keep generation deterministic — the same backend sources always regenerate
+  // byte-identical artifacts. They land only in doc cosmetics (ApiClient's
+  // basePath default, README server/OAuth URLs — all runtime-overridden or
+  // placeholder), never in the generated endpoint paths.
   definition: require('./swagger-definition'),
   apis: ['./routes/*.js']
 });

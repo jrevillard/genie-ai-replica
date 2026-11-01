@@ -55,7 +55,7 @@ try {
 
 ## Documentation for API Endpoints
 
-All URIs are relative to *http://localhost:3000*
+All URIs are relative to *http://localhost*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
@@ -264,7 +264,7 @@ Authentication schemes defined for the API:
 
 - **Type**: OAuth
 - **Flow**: accessCode
-- **Authorization URL**: undefined/realms/undefined/protocol/openid-connect/auth
+- **Authorization URL**: https://keycloak.example.com/realms/genie/protocol/openid-connect/auth
 - **Scopes**: 
  - **openid**: OpenID Connect scope
  - **profile**: User profile information

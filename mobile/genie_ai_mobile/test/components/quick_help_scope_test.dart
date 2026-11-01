@@ -57,6 +57,30 @@ void main() {
       expect(resolver.stateFor(button)['broken'], isFalse);
     });
 
+    test(
+      'a numeric catKey indexes in the form the config reference resolves',
+      () {
+        // Both sides of the lookup must speak ONE form: the config's
+        // numeric category reference carries the web's serialization
+        // ('5'), so a hierarchy catKey that decoded as an integral
+        // double must index as '5' too — the Dart form ('5.0') would
+        // miss it and only the mobile would render the card broken.
+        final floatTree = <dynamic>[
+          {
+            'catKey': 5.0,
+            'name': 'Cinco',
+            'nameEN': 'Five',
+            'children': <dynamic>[],
+          },
+        ];
+        final floatResolver = QuickHelpScopeResolver(floatTree);
+        final button = {'id': 'x', 'category': 5.0};
+
+        expect(floatResolver.stateFor(button)['broken'], isFalse);
+        expect(floatResolver.categoryLabelEn(button), 'Five');
+      },
+    );
+
     test('an empty hierarchy says every scoped category is missing', () {
       // A hierarchy that LOADED and carries nothing is not a hierarchy
       // that knows nothing: every category a button names is absent
@@ -347,6 +371,156 @@ void main() {
         expect(scope.sidebarTagCount, 1);
         expect(scope.sidebarLabelsEn, isEmpty);
         expect(scope.serviceLabelsEn, isEmpty);
+      },
+    );
+
+    test('a legacy falsy-id tag restores as a sidebar tag, like the web', () {
+      // The web's restore lookup (`candidate.id === tag`) cannot match a
+      // raw 0 against the string '0', so a tag '0' falls to the SIDEBAR
+      // branch there. The restore index must skip falsy raw ids for the
+      // same verdict — an index that kept '0' would reinstate a Quick
+      // Help scope the web refuses (#1244).
+      final falsy = [
+        {
+          'id': 0,
+          'resolvedTitle': 'Civil registry help',
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final scope = convResolver(falsy).resolve(tags: ['0'], categoryKey: '2');
+
+      expect(scope.quickHelpButtonId, isNull);
+      expect(scope.sidebarTagCount, 1);
+      expect(scope.serviceLabelsEn, isEmpty);
+    });
+
+    test('the legacy false and float tags refuse like the 0 tag does', () {
+      // The changelog's upgrade promise names all three legacy tag
+      // shapes a previous build could save: '0', 'false' (the bool id)
+      // and '5.0' (the id written as a JSON float, keyed '5' now). Each
+      // must fall to the sidebar branch, or a dropped guard resurrects
+      // a restore the web refuses — with every test green but this one.
+      final falseId = [
+        {
+          'id': false,
+          'resolvedTitle': 'Civil registry help',
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final falseScope = convResolver(
+        falseId,
+      ).resolve(tags: ['false'], categoryKey: '2');
+      expect(falseScope.quickHelpButtonId, isNull);
+      expect(falseScope.sidebarTagCount, 1);
+
+      final floatId = [
+        {
+          'id': 5.0,
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final floatScope = convResolver(
+        floatId,
+      ).resolve(tags: ['5.0'], categoryKey: '2');
+      expect(floatScope.quickHelpButtonId, isNull);
+      expect(floatScope.sidebarTagCount, 1);
+      expect(floatScope.serviceLabelsEn, isEmpty);
+    });
+
+    test('a web-saved numeric id tag restores the scope', () {
+      // The web saves the RAW JSON id (tags: [5]); the mobile's tag list
+      // is string-typed and the index keys the stringified id — the
+      // scope restores here even though the web's own strict `===`
+      // cannot match the mobile's string tag back (the one-way break of
+      // the same root cause, tracked separately).
+      final numeric = [
+        {
+          'id': 5,
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final scope = convResolver(numeric).resolve(tags: [5], categoryKey: '2');
+
+      expect(scope.quickHelpButtonId, '5');
+      expect(scope.serviceLabelsEn, ['Births']);
+    });
+
+    test('a web-saved tag restores against a FLOAT-id card', () {
+      // The config wrote 5.0; the web's JSON tag is 5, the mobile's
+      // decode produces the double 5.0. The index key must be the JS
+      // serialization ('5'), not Dart's ('5.0'), or the same saved
+      // conversation restores on the web and refuses here.
+      final floatId = [
+        {
+          'id': 5.0,
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final scope = convResolver(floatId).resolve(tags: [5], categoryKey: '2');
+
+      expect(scope.quickHelpButtonId, '5');
+      expect(scope.serviceLabelsEn, ['Births']);
+    });
+
+    test('a bool-id card and a string-0 card restore at the boundary too', () {
+      // The restore boundary pins, beside the identity unit tests: a
+      // bool id indexes and restores as 'true' (dropping bool from the
+      // scalar set would silently title-identity the card), and a
+      // STRING '0' id stays a real id (configTruthy must not leak it
+      // into the falsy set).
+      final boolId = [
+        {
+          'id': true,
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final boolScope = convResolver(
+        boolId,
+      ).resolve(tags: ['true'], categoryKey: '2');
+      expect(boolScope.quickHelpButtonId, 'true');
+      expect(boolScope.serviceLabelsEn, ['Births']);
+
+      final stringZero = [
+        {
+          'id': '0',
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final zeroScope = convResolver(
+        stringZero,
+      ).resolve(tags: ['0'], categoryKey: '2');
+      expect(zeroScope.quickHelpButtonId, '0');
+      expect(zeroScope.serviceLabelsEn, ['Births']);
+    });
+
+    test(
+      'a web-saved title tag (a falsy-id card) restores as a sidebar tag',
+      () {
+        // The web saves the TITLE for a falsy-id card (serviceKey:
+        // `button.id || title`). Neither platform's restore matches a
+        // title to a button: the tag falls to the sidebar branch on both,
+        // and the unnamed-tag count refuses the follow-up on both.
+        final falsy = [
+          {
+            'id': 0,
+            'resolvedTitle': 'Civil registry help',
+            'category': '2',
+            'serviceLabels': ['Births'],
+          },
+        ];
+        final scope = convResolver(
+          falsy,
+        ).resolve(tags: ['Civil registry help'], categoryKey: '2');
+
+        expect(scope.quickHelpButtonId, isNull);
+        expect(scope.sidebarTagCount, 1);
       },
     );
 
@@ -1120,6 +1294,42 @@ void main() {
       expect(dedupeQuickHelpButtons([idless]), [idless]);
     });
 
+    test('a FALSY raw id dedupes nothing — the web keeps every such card', () {
+      // The web's load filter skips the dedupe for a falsy id
+      // (`if (!button.id) return true`): 0 and false are NO id there, so
+      // two id-0 cards stay two cards. Deduping on the stringified form
+      // would drop the second and give the platforms a different card
+      // count for the same file (#1244).
+      final zero = {
+        'id': 0,
+        'serviceLabels': ['Births'],
+      };
+      final zeroAgain = {
+        'id': 0,
+        'serviceLabels': ['No Such Service'],
+      };
+
+      expect(dedupeQuickHelpButtons([zero, zeroAgain]), [zero, zeroAgain]);
+    });
+
+    test('a numeric id dedupes by its string form', () {
+      // The PRESENCE rule tests the raw value (5 is truthy); the
+      // equality compares the string forms the tags carry.
+      final first = {
+        'id': 5,
+        'serviceLabels': ['Births'],
+      };
+      final second = {
+        'id': 5,
+        'serviceLabels': ['No Such Service'],
+      };
+
+      final unique = dedupeQuickHelpButtons([first, second]);
+
+      expect(unique, hasLength(1));
+      expect(unique.single, same(first));
+    });
+
     test('distinct ids are all kept', () {
       final a = {'id': 'a'};
       final b = {'id': 'b'};
@@ -1142,6 +1352,18 @@ void main() {
       ];
 
       expect(activeQuickHelpTitleFor(buttons, 'births'), 'Naissances');
+    });
+
+    test('the re-title lookup reads the id the SAME rule the index keys', () {
+      // The restore index normalizes the id (a JSON 5.0 becomes '5'),
+      // matched the tag, and set the active identity '5' — the re-title
+      // lookup must read the same normalized form, or the bar falls
+      // back to the saved category name instead of the button title.
+      final buttons = [
+        {'id': 5.0, 'resolvedTitle': 'Naissances'},
+      ];
+
+      expect(activeQuickHelpTitleFor(buttons, '5'), 'Naissances');
     });
 
     test(
@@ -1512,6 +1734,86 @@ void main() {
       expect(quickHelpButtonIdentity({'id': '', 'resolvedTitle': ''}), isNull);
       expect(quickHelpButtonIdentity(null), isNull);
     });
+
+    test('a FALSY raw id is no id — the title identifies, as on the web', () {
+      // The web's serviceKey rule (`button.id || title`) tests the RAW
+      // value's JavaScript truthiness BEFORE any stringification. A
+      // stringified-first read turns 0 into '0' — a truthy non-empty
+      // string — and the two platforms would then save DIFFERENT tags
+      // for the same card (#1244). A string '0' or a numeric 5 IS a
+      // real id (truthy raw values).
+      expect(
+        quickHelpButtonIdentity({'id': 0, 'resolvedTitle': 'Card'}),
+        'Card',
+      );
+      expect(
+        quickHelpButtonIdentity({'id': false, 'resolvedTitle': 'Card'}),
+        'Card',
+      );
+      expect(
+        quickHelpButtonIdentity({'id': '0', 'resolvedTitle': 'Card'}),
+        '0',
+      );
+      expect(quickHelpButtonIdentity({'id': 5, 'resolvedTitle': 'Card'}), '5');
+    });
+
+    test('a numeric id carries the tag form JavaScript serializes', () {
+      // The web saves the id as JSON — a JS number serializes 5.0 as 5.
+      // Dart's double toString would give '5.0', and the web-saved tag
+      // ('5') would miss the restore index. The integral form is the
+      // tag form, whatever the JSON decode produced. The exponential
+      // range (≥ 1e21) is where Dart's own form already matches JS.
+      expect(quickHelpButtonIdentity({'id': 5.0, 'resolvedTitle': 'C'}), '5');
+      expect(quickHelpButtonIdentity({'id': 5, 'resolvedTitle': 'C'}), '5');
+      expect(
+        quickHelpButtonIdentity({'id': 1e18, 'resolvedTitle': 'C'}),
+        '1000000000000000000',
+      );
+      expect(
+        quickHelpButtonIdentity({'id': 1e21, 'resolvedTitle': 'C'}),
+        '1e+21',
+      );
+      // Above the int64 range both platforms still hold the SAME double
+      // when the configuration wrote a JSON float — only Dart's '.0'
+      // suffix diverges, and the plain-digit form is what JavaScript
+      // serializes.
+      expect(
+        quickHelpButtonIdentity({'id': 1e19, 'resolvedTitle': 'C'}),
+        '10000000000000000000',
+      );
+      // The negative branch of the same strip: the sign stays, the
+      // suffix goes.
+      expect(quickHelpButtonIdentity({'id': -5.0, 'resolvedTitle': 'C'}), '-5');
+    });
+
+    test('a NON-SCALAR id is no identity — the title carries the card', () {
+      // An array or object id cannot be a portable identity: the web
+      // saves the LIVE value (an object), which its own restore can
+      // never match again after the JSON round trip, while a Dart
+      // stringification would produce a tag ('[]') the mobile alone
+      // would restore — the platforms would disagree about the same
+      // saved conversation. Falling to the TITLE converges every save
+      // direction on the sidebar branch, on both platforms.
+      expect(
+        quickHelpButtonIdentity({'id': [], 'resolvedTitle': 'Card'}),
+        'Card',
+      );
+      expect(
+        quickHelpButtonIdentity({'id': {}, 'resolvedTitle': 'Card'}),
+        'Card',
+      );
+    });
+
+    test('a truthy BOOL id is a real id in the web tag form', () {
+      // The scalar guard admits bools: `true || title` on the web is
+      // the raw value, and JavaScript serializes it as 'true' — the tag
+      // both platforms must write. Dropping bool from the guard's
+      // scalar set would silently turn this into a title identity.
+      expect(
+        quickHelpButtonIdentity({'id': true, 'resolvedTitle': 'C'}),
+        'true',
+      );
+    });
   });
 
   /// The config-side parse of a Quick Help button — the shape the shipped
@@ -1541,6 +1843,45 @@ void main() {
         expect(parsed['iconAsset'], 'assets/config/quickhelp/just-chat.svg');
       },
     );
+
+    test('a numeric category carries the form the web resolves', () {
+      // The web resolves a numeric category reference with
+      // String(reference): a JSON 5.0 becomes '5' and matches the
+      // hierarchy's catKey. Dart's toString would give '5.0', the
+      // hierarchy lookup would miss, and only the mobile would render
+      // the card broken.
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'category': 5.0,
+      }, 'en');
+
+      expect(parsed['category'], '5');
+    });
+
+    test('a negative-zero category serializes as JavaScript writes it', () {
+      // String(-0) in JavaScript is '0'; Dart's toString gives '-0' —
+      // the hierarchy lookup would miss where the web's matches. (The
+      // ID path never sees it: -0.0 is falsy there, on both platforms.)
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'category': -0.0,
+      }, 'en');
+
+      expect(parsed['category'], '0');
+    });
+
+    test('the id is kept RAW — the truthiness read precedes any string', () {
+      // The identity rule (the web's `id || title`) must see the JSON
+      // value the configuration wrote: a parse that stringifies first
+      // turns 0 into '0' and loses the falsiness the rule reads
+      // (#1244). The end-to-end half proves the REAL pipeline — parse
+      // then identity — carries the title the web carries for this
+      // card, not the stringified '0'.
+      final parsed = parseQuickHelpButton({...shippedButton, 'id': 0}, 'en');
+
+      expect(parsed['id'], 0);
+      expect(quickHelpButtonIdentity(parsed), 'Just Chat');
+    });
 
     test('a falsy value in the active locale falls through to English', () {
       final parsed = parseQuickHelpButton({

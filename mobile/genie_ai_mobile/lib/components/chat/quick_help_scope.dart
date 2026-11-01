@@ -69,8 +69,16 @@ Map<String, dynamic> parseQuickHelpButton(
   final action = configMapOf(btn['action']);
 
   return {
-    'id': btn['id']?.toString(),
-    'category': btn['category']?.toString(),
+    // The id is kept RAW: the presence rule (quickHelpIdOf, the web's
+    // `button.id || title`) reads the value's truthiness, which a
+    // stringified '0' would erase. Every id read goes through
+    // quickHelpIdOf, which stringifies in the web's own form.
+    'id': btn['id'],
+    // The category is an EQUALITY read — but against the form the WEB
+    // resolves: a numeric reference carries JavaScript's serialization
+    // ('5', not Dart's '5.0'), or the hierarchy lookup misses and only
+    // the mobile renders the card broken.
+    'category': _jsTagForm(btn['category']),
     'serviceLabels': quickHelpServiceLabelsOf(btn),
     'iconAsset': iconAsset,
     'resolvedTitle': resolveConfigText(btn['title'], locale),
@@ -172,21 +180,28 @@ double quickHelpGridAspectRatio(Map<String, dynamic> layout) {
 /// The loaded Quick Help buttons, with a duplicated id keeping only the
 /// FIRST entry.
 ///
-/// The dedupe keys on the ID — as the web's own load filter does — not on
-/// the identity (quickHelpButtonIdentity): two cards with one id cannot
-/// both be honoured, and the web keeps the first and drops the duplicate
-/// at load, so the mobile must too, or the same saved conversation would
-/// carry a different scope on the two platforms. A card with NO id is
-/// kept, and two id-less cards sharing a title stay two cards — they then
-/// write the SAME conversation tag, exactly as the web does.
+/// The dedupe keys on the ID (quickHelpIdOf) — the same normalized form
+/// the web's raw strict compare produces for every id shape a config can
+/// write unambiguously — not on the identity (quickHelpButtonIdentity):
+/// two cards with one id cannot both be honoured, and the web keeps the
+/// first and drops the duplicate at load, so the mobile must too, or the
+/// same saved conversation would carry a different scope on the two
+/// platforms. Two ids differing only in JSON TYPE (5 vs '5') are where
+/// the web's raw compare and this normalized key part ways — a tracked
+/// divergence of the string-tag contract, not a rule of this file: the
+/// card count diverges, and the first-wins restore index then maps the
+/// shared key to the OTHER card than the web's lookup resolves. A
+/// card with NO id is kept, and two id-less cards sharing a title stay
+/// two cards — they then write the SAME conversation tag, exactly as the
+/// web does.
 List<Map<String, dynamic>> dedupeQuickHelpButtons(
   List<Map<String, dynamic>> buttons,
 ) {
   final seen = <String>{};
   final unique = <Map<String, dynamic>>[];
   for (final button in buttons) {
-    final id = quickHelpFieldOf(button, 'id');
-    if (id == null || id.isEmpty || seen.add(id)) {
+    final id = quickHelpIdOf(button);
+    if (id == null || seen.add(id)) {
       unique.add(button);
     }
   }
@@ -197,15 +212,21 @@ List<Map<String, dynamic>> dedupeQuickHelpButtons(
 /// it. The chatbot's two reads of a button by id — the restore path and
 /// the locale re-title — share this one lookup, so a change to the
 /// matching rule (trimming ids, a new id shape) cannot drift between
-/// them. (ConversationScopeResolver keeps its OWN first-wins index in
-/// _indexButtons — a different rule over a different structure.)
+/// them. The key is the SAME normalized form the restore index
+/// (_indexButtons) and the identity read, so a tag the index matched is
+/// a tag this lookup can resolve. (ConversationScopeResolver keeps its
+/// OWN first-wins index in _indexButtons — a different structure over
+/// the same key.)
 Map<String, dynamic>? quickHelpButtonById(
   List<Map<String, dynamic>> buttons,
   String? id,
 ) {
-  if (id == null || id.isEmpty) return null;
+  // Null names NO lookup (the tag list omits a null); '' needs no
+  // guard — quickHelpIdOf can never produce it, so the loop cannot
+  // match one.
+  if (id == null) return null;
   for (final button in buttons) {
-    if ((quickHelpFieldOf(button, 'id')) == id) {
+    if (quickHelpIdOf(button) == id) {
       return button;
     }
   }
@@ -230,11 +251,17 @@ Map<String, dynamic>? quickHelpButtonById(
 /// unless the title happens to be one of its ENGLISH labels, in which case
 /// it replays as that sidebar label — the web's own behaviour for the
 /// same tag.
+///
+/// One collision the title fallback opens and the string-tag contract
+/// cannot close: a falsy-id card whose TITLE equals another card's
+/// non-string id ('5' vs 5) writes a tag the restore index resolves to
+/// the OTHER card, where the web's raw strict lookup refuses it. The
+/// same tracked divergence as the JSON type-mix (the restore speaks
+/// string tags here, raw values on the web) — not a rule this file can
+/// settle.
 String? quickHelpButtonIdentity(Map<String, dynamic>? button) {
   if (button == null) return null;
-  final id = quickHelpFieldOf(button, 'id');
-  if (configTruthy(id)) return id;
-  return quickHelpTitleOf(button);
+  return quickHelpIdOf(button) ?? quickHelpTitleOf(button);
 }
 
 /// Whether a locale-marker state is a DRIFT: the consumer's per-locale
@@ -447,18 +474,72 @@ bool restoredScopeTitleFollowsLocale({
       categoryKey.isNotEmpty;
 }
 
-/// The button's [key] as a string — ONE read of the id and the category,
-/// whatever shape the value carries: the parse normalizes them, a
-/// hand-built map need not, and a numeric id must degrade to its string
-/// form rather than throw.
-String? quickHelpFieldOf(Map<String, dynamic> button, String key) =>
-    button[key]?.toString();
+/// The button's category as a plain string — in the form the web
+/// resolves, so a hand-built map with a numeric category reads the same
+/// value the parse stored. The ID has its own read — quickHelpIdOf
+/// (raw truthiness + the web's serialization); every id consumer reads
+/// that one.
+String? quickHelpCategoryOf(Map<String, dynamic> button) =>
+    _jsTagForm(button['category']);
+
+/// The number as JAVASCRIPT serializes it — the form the web writes
+/// into a saved tag or a category reference; null for a null input.
+/// Dart's double toString differs from JS's Number.toString in TWO
+/// ways for the values the two platforms hold in common: an integral
+/// double in the plain range (below 1e21) gets a '.0' suffix (5.0 →
+/// '5.0', JS: '5'), and a negative zero prints '-0' where JS writes
+/// '0' — both normalized here (the digits themselves are identical at
+/// every magnitude: the int64 conversion is exact below 2^63; above it
+/// the plain-digit form is written straight from the double, which is
+/// what JS prints too). The exponential range (≥ 1e21) already matches
+/// unstripped. The band that stays unmatched is BY DECODE, not by this
+/// form: an integer LITERAL above 2^53 decodes to an imprecise double
+/// on the web but to the exact int64 here — the two platforms then
+/// disagree about the value itself, and a web-saved conversation
+/// carries the imprecise tag and misses this platform's index. A
+/// configuration with an id that large is not one the platforms can
+/// agree on at all; the durable answer is normalizing the tag at the
+/// save/restore boundary on both platforms, tracked beside the
+/// numeric-tag contract.
+String? _jsTagForm(dynamic raw) {
+  if (raw == null) return null;
+  if (raw is double && raw.isFinite && raw == raw.truncateToDouble()) {
+    // JS String(-0) is '0' — Dart prints '-0'.
+    if (raw == 0) return '0';
+    final plain = raw.toString();
+    // ≥ 1e21 prints exponential ('1e+21', matching JS, no suffix to
+    // strip); below it an integral double ends in '.0'.
+    return plain.endsWith('.0') ? plain.substring(0, plain.length - 2) : plain;
+  }
+  return raw.toString();
+}
+
+/// The button's id as the TAG carries it — the string form of the id,
+/// null when the configuration declares NO id. The presence rule is the
+/// web's own (`button.id || title`): the RAW value's JavaScript
+/// truthiness decides, read BEFORE any stringification — a falsy JSON
+/// id (`0`, `false`, a hand-edited configuration; none shipped) is no
+/// id, and its stringified `'0'` must not resurrect it. Every rule
+/// that decides whether an id EXISTS reads this one — the identity,
+/// the dedupe, the restore index, the by-id lookups.
+String? quickHelpIdOf(Map<String, dynamic>? button) {
+  final raw = button?['id'];
+  if (!configTruthy(raw)) return null;
+  // A non-scalar id (an array, an object) is no identity: the web saves
+  // the LIVE value, which its own restore can never match again after
+  // the JSON round trip, while a stringified form ('[]') would restore
+  // on this platform alone — the platforms would disagree about the
+  // same saved conversation. Falling to the title (the rule below)
+  // converges every save direction on the sidebar branch, on both.
+  if (raw is! String && raw is! num && raw is! bool) return null;
+  return _jsTagForm(raw);
+}
 
 /// Whether the card DECLARES a scope — a category the hierarchy names, or
 /// labels it carries. ONE rule, read by the grid's unavailable verdict and
 /// by the press path.
 bool quickHelpDeclaresScope(Map<String, dynamic> button) {
-  return declaresCategoryScope(quickHelpFieldOf(button, 'category')) ||
+  return declaresCategoryScope(quickHelpCategoryOf(button)) ||
       quickHelpServiceLabelsOf(button).isNotEmpty;
 }
 
@@ -565,7 +646,11 @@ class QuickHelpScopeResolver {
     final byKey = <String, String>{};
     for (final entry in enTree) {
       if (entry is! Map) continue;
-      final key = entry['catKey']?.toString();
+      // The index speaks the form the config references resolve in (the
+      // web's serialization, _jsTagForm): a numeric catKey must index as
+      // the reference reads, or only this platform would render the card
+      // broken.
+      final key = _jsTagForm(entry['catKey']);
       if (key == null || key.isEmpty) continue;
       if (byKey.containsKey(key)) continue;
       final value = valueOf(entry);
@@ -654,7 +739,7 @@ class QuickHelpScopeResolver {
         .where((l) => !_enLabels.contains(l))
         .toList();
 
-    final category = quickHelpFieldOf(button, 'category');
+    final category = quickHelpCategoryOf(button);
     // The category is usable only when the hierarchy names it in
     // ENGLISH: that spelling is the wire. A category the hierarchy does
     // not carry, and a category it carries without an EN translation,
@@ -676,7 +761,7 @@ class QuickHelpScopeResolver {
   /// carries it, or the entity has no EN translation (it cannot be filtered
   /// on at all).
   String? categoryLabelEn(Map<String, dynamic> button) =>
-      categoryEnLabel(quickHelpFieldOf(button, 'category'));
+      categoryEnLabel(quickHelpCategoryOf(button));
 
   /// The ENGLISH label of the category the [reference] names. Null when
   /// the hierarchy does not carry it, or carries it without an EN
@@ -775,18 +860,22 @@ class ConversationScopeResolver {
 
   /// The buttons by id, FIRST-wins.
   ///
-  /// A configuration error can give two cards the same id. The web keeps
-  /// the FIRST — its verdict map and its restore lookup are both
-  /// first-wins — so the mobile must too, or the same saved conversation
-  /// restores a DIFFERENT scope on the two platforms. A map literal would
-  /// keep the LAST: the later key overwrites the earlier one.
+  /// A configuration error can give two cards the same id. The web's
+  /// restore lookup (`find` over its button list) resolves the FIRST,
+  /// so the mobile index must keep the first too, or the same saved
+  /// conversation restores a DIFFERENT scope on the two platforms. (The
+  /// web's verdict map is written with `map.set` — last-wins — but its
+  /// input is the already-deduped button list, so no duplicate reaches
+  /// either consumer; the dedupe at load is where the FIRST rule is
+  /// actually enforced. A map literal here would keep the LAST: the
+  /// later key overwrites the earlier one.)
   static Map<String, Map<String, dynamic>> _indexButtons(
     List<Map<String, dynamic>> buttons,
   ) {
     final byId = <String, Map<String, dynamic>>{};
     for (final button in buttons) {
-      final id = quickHelpFieldOf(button, 'id');
-      if (id == null || id.isEmpty) continue;
+      final id = quickHelpIdOf(button);
+      if (id == null) continue;
       if (byId.containsKey(id)) continue;
       byId[id] = button;
     }
@@ -835,7 +924,7 @@ class ConversationScopeResolver {
     for (final tag in tagList) {
       final button = _buttons[tag];
       if (button == null) continue;
-      final category = quickHelpFieldOf(button, 'category');
+      final category = quickHelpCategoryOf(button);
       final buttonLabels = quickHelpServiceLabelsOf(button);
       // A legacy conversation can carry SEVERAL button ids: the web
       // restores every chip and sends the union of their labels. Every
@@ -1009,7 +1098,7 @@ bool quickHelpScopeIsNameable(
   Map<String, dynamic> button,
   QuickHelpScopeResolver? resolver,
 ) {
-  final category = quickHelpFieldOf(button, 'category');
+  final category = quickHelpCategoryOf(button);
   // An id that declares NO category scope (empty, or the 'general'
   // placeholder) is how a selection is cleared — the hierarchy has
   // nothing to deny. declaresCategoryScope is the ONE predicate.

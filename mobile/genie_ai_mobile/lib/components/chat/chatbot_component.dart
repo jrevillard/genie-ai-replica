@@ -1432,7 +1432,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _showQuickHelpOverlay = false;
     // The configuration names its category; the hierarchy's own key is
     // what the conversation's edge speaks.
-    final categoryRef = quickHelpFieldOf(button, 'category');
+    final categoryRef = quickHelpCategoryOf(button);
     _selectedCategoryId =
         _scopeResolver?.categoryIdFor(categoryRef) ?? categoryRef;
     _selectedCategoryNameEn = _scopeResolver?.categoryLabelEn(button) ?? '';

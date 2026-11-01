@@ -460,7 +460,11 @@ workflow:
         echo "WARNING: Could not assign admin role (admin role not found). Document tests may fail."
       fi
       # The realm's web client must refuse direct access grants — assert it
-      # for genie-app. Keycloak answers unauthorized_client BEFORE credential
+      # for genie-app. The credentials are deliberately bogus: the refusal
+      # verdict precedes credential validation, so it is unaffected, and a
+      # drifted realm can never mint a live token through the probe (it
+      # answers invalid_grant instead, classified as drift below).
+      # Keycloak answers unauthorized_client BEFORE credential
       # validation when directAccessGrantsEnabled is false, so a minted token
       # means the posture drifted; unsupported_grant_type counts as a refusal
       # too (the grant is unusable either way). Transport failures, 5xx and
@@ -473,7 +477,7 @@ workflow:
         ROPC_STATUS=$(curl -sk --max-time 15 -o /tmp/ropc-probe-body.json -w "%{http_code}" -X POST \
           "${KC_URL}/realms/genie/protocol/openid-connect/token" \
           -d "client_id=genie-app" -d "grant_type=password" \
-          -d "username=testuser" -d "password=TestPass123!") || true
+          -d "username=ropc-probe-no-such-user" -d "password=ropc-probe-bogus-credentials") || true
         case "$ROPC_STATUS" in
           5[0-9][0-9]|429|000|"")
             echo "ROPC probe attempt ${i}/5: no usable answer from the token endpoint (HTTP ${ROPC_STATUS:-none})"
@@ -3143,7 +3147,6 @@ test:flutter:
 #     configs/keycloak/themes/ and configs/otel/otel-collector-config.yaml
 #     straight from this checkout (the frontend's public/config checkout
 #     mount is already covered by the components/gov-chat-frontend glob).
-#     The image-source exception below is deliberate — see its bullet.
 #   - the configs/keycloak/ tree: its themes/ subtree is bind-mounted into
 #     the stack, and genie-realm.yaml plus the import entrypoint are baked
 #     into the keycloak-config candidate image — the ROPC-refusal probe

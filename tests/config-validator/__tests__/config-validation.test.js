@@ -2302,6 +2302,10 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // and the collector config. Not derivable from the Playwright invocation;
   // a cleanup pruning one of them re-silences the train trigger silently.
   const STACK_INPUT_PATHS = [
+    '.gitlab-ci.yml',
+    'playwright.config.js',
+    'package.json',
+    'package-lock.json',
     'docker-compose.yaml',
     'env',
     'configs/keycloak/**/*',

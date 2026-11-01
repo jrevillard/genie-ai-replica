@@ -415,35 +415,49 @@ workflow:
         echo "ERROR: genie-app client not found via nginx/Kong after 180s"
         exit 1
       fi
-      # Create test user for E2E tests (required by loginViaUI)
-      EXISTING=$(curl -sk "${KC_URL}/admin/realms/genie/users?username=testuser" \
-        -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d) if isinstance(d, list) else 0)" 2>/dev/null || true)
-      if [ "${EXISTING:-0}" -eq 0 ]; then
-        CREATE_STATUS=$(curl -sk -o /dev/null -w "%{http_code}" -X POST "${KC_URL}/admin/realms/genie/users" \
-          -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-          -d '{"username":"testuser","email":"testuser@e2e.test","emailVerified":true,"firstName":"Test","lastName":"User","enabled":true,"credentials":[{"type":"password","value":"TestPass123!","temporary":false}]}')
-        if [ "$CREATE_STATUS" -ne 201 ]; then
-          echo "ERROR: testuser creation failed (HTTP $CREATE_STATUS)"
-          exit 1
-        fi
-        echo "testuser created (HTTP $CREATE_STATUS)"
+      # Create test user for E2E tests (required by loginViaUI).
+      # Create-first: HTTP 201 = created, 409 = already exists (the body names
+      # the conflict — username or email). exact=true on the lookup: ?username=
+      # is a prefix search otherwise — a stray testuser2 would misdirect it.
+      testuser_id() {
+        USERS_JSON=$(curl -sk "${KC_URL}/admin/realms/genie/users?username=testuser&exact=true" \
+          -H "Authorization: Bearer $ADMIN_TOKEN" || true)
+        USER_ID=$(printf '%s' "$USERS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id']) if isinstance(d,list) and d and isinstance(d[0],dict) and 'id' in d[0] and d[0]['id'] else None" 2>/dev/null || true)
+      }
+      CREATE_RESP=$(curl -sk -w '\n%{http_code}' -X POST "${KC_URL}/admin/realms/genie/users" \
+        -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+        -d '{"username":"testuser","email":"testuser@e2e.test","emailVerified":true,"firstName":"Test","lastName":"User","enabled":true,"credentials":[{"type":"password","value":"TestPass123!","temporary":false}]}' || true)
+      CREATE_STATUS=$(printf '%s' "$CREATE_RESP" | tail -n1)
+      CREATE_BODY=$(printf '%s' "$CREATE_RESP" | sed '$d' | head -c 200)
+      if [ "$CREATE_STATUS" != "201" ] && [ "$CREATE_STATUS" != "409" ]; then
+        echo "ERROR: testuser creation failed (HTTP ${CREATE_STATUS:-<none>})"
+        echo "response body: ${CREATE_BODY}"
+        exit 1
+      fi
+      if [ "$CREATE_STATUS" = "409" ]; then
+        echo "testuser already exists (create returned 409): ${CREATE_BODY}"
       else
-        echo "testuser already exists"
+        echo "testuser created"
+      fi
+      testuser_id
+      if [ -z "$USER_ID" ]; then
+        echo "ERROR: cannot resolve testuser id (last users answer: $(printf '%s' "${USERS_JSON:-}" | head -c 200))"
+        if [ "$CREATE_STATUS" = "409" ]; then
+          echo "HINT: the 409 above may be an email conflict — another user owns testuser@e2e.test."
+        fi
+        exit 1
       fi
       # Assign admin realm role to test user (required for document upload/delete)
-      USER_ID=$(curl -sk "${KC_URL}/admin/realms/genie/users?username=testuser" \
-        -H "Authorization: Bearer $ADMIN_TOKEN" \
-        | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])" || true)
       ADMIN_ROLE=$(curl -sk "${KC_URL}/admin/realms/genie/roles" \
         -H "Authorization: Bearer $ADMIN_TOKEN" \
         | python3 -c "import sys,json; roles=[r for r in json.load(sys.stdin) if r['name']=='admin']; print(roles[0]['id'] if roles else '')" || true)
-      if [ -n "$ADMIN_ROLE" ] && [ -n "$USER_ID" ]; then
+      if [ -n "$ADMIN_ROLE" ]; then
         curl -sk -X POST "${KC_URL}/admin/realms/genie/users/${USER_ID}/role-mappings/realm" \
           -H "Authorization: Bearer $ADMIN_TOKEN" \
           -H "Content-Type: application/json" \
           -d "[{\"id\":\"${ADMIN_ROLE}\",\"name\":\"admin\"}]" && echo "Assigned admin role to testuser" || echo "WARNING: admin role assignment failed"
       else
-        echo "WARNING: Could not assign admin role (role or user not found). Document tests may fail."
+        echo "WARNING: Could not assign admin role (admin role not found). Document tests may fail."
       fi
     # tests/e2e/okf/ stays OUT until MR2 lands: the OKF Studio UI those specs
     # drive ships in MR 2 (this train is MR1, dark), they hardcode

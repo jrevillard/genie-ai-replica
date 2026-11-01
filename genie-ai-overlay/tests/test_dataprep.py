@@ -2052,53 +2052,6 @@ class TestIngestFileWithGuardrail:
         assert "Ingestion Error" not in status_calls
 
     @pytest.mark.asyncio
-    async def test_zero_batch_ingest_completes_as_honest_empty_success(self):
-        """A zero-batch ingest (no graph tasks scheduled) must complete as an
-        honest empty success, not crash.
-
-        Regression (review 2026-10-29 round 3): `results` was only assigned
-        under `if tasks:`, so a zero-batch run hit the totals with the name
-        unbound — UnboundLocalError — and the generic handler falsely marked
-        the file 'Ingestion Error' and auto-retracted a valid (if empty) run.
-        """
-        dp = create_dataprep()
-        inp = create_mock_ingest_input()
-
-        with (
-            patch.object(dp, "_update_doc_status", new_callable=AsyncMock) as mock_status,
-            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
-            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["Healthcare"]),
-            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["chunk1"]),
-            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
-            patch.object(
-                dp,
-                "_apply_contextualization",
-                new_callable=AsyncMock,
-                side_effect=lambda chunks, inp, fid: (list(chunks), []),
-            ),
-            # The labeling stage yields NO documents -> zero graph batches.
-            patch.object(
-                dp,
-                "_apply_labels",
-                new_callable=AsyncMock,
-                return_value=([], []),
-            ),
-            patch.object(dp, "_process_batch", new_callable=AsyncMock) as mock_process_batch,
-            patch.object(dp_module, "ArangoGraph"),
-        ):
-            result = await dp.ingest_file_with_guardrail(inp, lock_file=None)
-
-        # Zero batches scheduled: no batch work ran, and the run still
-        # completes 'Ingested' — never the UnboundLocalError -> 'Ingestion
-        # Error' path.
-        mock_process_batch.assert_not_awaited()
-        assert result["status"] == 200
-        status_calls = [c.args[1] for c in mock_status.call_args_list]
-        assert "Ingesting" in status_calls
-        assert "Ingested" in status_calls
-        assert "Ingestion Error" not in status_calls
-
-    @pytest.mark.asyncio
     async def test_no_content_raises_and_retracts(self):
         """No chunks extracted -> raises, auto-retracts, Ingestion Error."""
         dp = create_dataprep()

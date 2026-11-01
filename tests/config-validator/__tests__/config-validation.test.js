@@ -2352,10 +2352,15 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // over-capture (comments, dead references) and the filesystem arbitrates.
   const deriveConsumedPaths = (specFiles) => {
     // Specifier quotes are unenforced in tests/e2e (no ESLint config covers
-    // the tree), so both quote styles are consumed; the backreference keeps
-    // the quotes paired. `import ... from`, dynamic import() and bare
-    // side-effect imports all land in the same alternation.
-    const specifierRe = /(?:require\(\s*|from\s+|import\(\s*|import\s+)(['"])(\.[^'"]*)\1/g;
+    // the tree), so single, double and backtick quotes are all consumed;
+    // the backreference keeps the pairs matched. `import ... from`, dynamic
+    // import() and bare side-effect imports land in the same alternation.
+    // Quoted relative paths inside comments over-capture — the filesystem
+    // arbitrates existence, so only comments naming real files over-derive;
+    // that is the conservative direction for a trigger guard (more anchor
+    // coverage, never a silent skip) and it fails the pin loudly, not
+    // silently.
+    const specifierRe = /(?:require\(\s*|from\s+|import\(\s*|import\s+)(['"`])(\.[^'"`]*)\1/g;
     // Same shape tolerance for __dirname chains: either quote style, any
     // spacing. A join carrying a non-literal argument is not matched at all
     // (tracked in #1325); an inline comment inside the call likewise.
@@ -2381,9 +2386,10 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // The spec files the invocation executes: real files under the executed
   // globs (a `X/**/*` glob narrows to the `X/` subtree — with a real
   // directory boundary, a sibling `X-v2/` is not covered — an exact entry
-  // stays exact). Playwright's default testMatch runs the .js/.ts/.mjs/.cjs
-  // spellings of *.spec and *.test (the config test pins that the default
-  // is still in force), so all of them count as executed.
+  // stays exact). Playwright's default testMatch runs the .js/.jsx/.ts/.tsx
+  // spellings of *.spec and *.test, with optional .mjs/.cjs module
+  // suffixes (the config test pins that the default is still in force), so
+  // all of them count as executed.
   const specFilesUnderExecuted = (executedGlobs) =>
     scanTargets(
       fs
@@ -2452,7 +2458,13 @@ describe('e2e merge-train changes filters (#1264)', () => {
       });
 
       test('every extension of the default testMatch executes', () => {
-        const listing = ['tests/e2e/chatbot/x.spec.ts', 'tests/e2e/chatbot/x.test.mjs', 'tests/e2e/chatbot/x.spec.cjs'];
+        const listing = [
+          'tests/e2e/chatbot/x.spec.ts',
+          'tests/e2e/chatbot/x.test.mjs',
+          'tests/e2e/chatbot/x.spec.cjs',
+          'tests/e2e/chatbot/x.spec.tsx',
+          'tests/e2e/chatbot/x.test.jsx'
+        ];
         expect(scanTargets(listing, GLOBS)).toEqual(listing);
       });
 
@@ -2510,6 +2522,12 @@ describe('e2e merge-train changes filters (#1264)', () => {
 
     test('a side-effect import is consumed too', () => {
       expect(deriveFrom('tests/e2e/chatbot/x.spec.js', "import '../helpers/auth';")).toEqual([
+        'tests/e2e/helpers/**/*'
+      ]);
+    });
+
+    test('a plain backtick specifier is consumed too', () => {
+      expect(deriveFrom('tests/e2e/chatbot/x.spec.js', 'const h = require(`../helpers/auth`);')).toEqual([
         'tests/e2e/helpers/**/*'
       ]);
     });
@@ -2601,7 +2619,12 @@ describe('e2e merge-train changes filters (#1264)', () => {
   });
 
   test.each(['e2e:playwright', 'scheduled:e2e-web'])('%s still extends the base that carries the probe', (job) => {
-    expect(sectionOf(job)).toContain('extends: .e2e_web_base');
+    const section = sectionOf(job);
+    expect(section).toContain('extends: .e2e_web_base');
+    // The derivation reads the invocation from .e2e_web_base only — a
+    // consuming job overriding script with its own `npx playwright test`
+    // would execute targets nothing derived. Keep the invocation single.
+    expect(section).not.toContain('npx playwright');
   });
 
   test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {

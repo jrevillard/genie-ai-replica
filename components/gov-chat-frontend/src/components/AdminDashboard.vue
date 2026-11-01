@@ -662,7 +662,7 @@
                     </div>
                   </div>
 
-                  <div class="logs-summary">
+                  <div class="logs-summary" data-test-id="logs-errors-card">
                     <h3 class="summary-title">
                       <span class="status-indicator error"></span>
                       {{ translate('admin.logsSection.errorLogs', 'Error Logs') }} ({{
@@ -698,7 +698,7 @@
                     </div>
                   </div>
 
-                  <div class="logs-summary">
+                  <div class="logs-summary" data-test-id="logs-warnings-card">
                     <h3 class="summary-title">
                       <span class="status-indicator warning"></span>
                       {{ translate('admin.logsSection.warningLogs', 'Warning Logs') }} ({{

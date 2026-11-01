@@ -85,8 +85,8 @@ test.describe('Admin logs view', () => {
     const summary = await loginAdminWithSummary(page, { errors: [], warnings: [] });
 
     // Both roll-up tables render their own empty row; scope to the
-    // warnings card (the table this spec's payload drives).
-    const warningsCard = page.locator('.logs-summary', { hasText: 'Warning Logs' });
+    // warnings card anchor (the table this spec's payload drives).
+    const warningsCard = page.locator('[data-test-id="logs-warnings-card"]');
     await expect(warningsCard.locator('.empty-logs')).toBeVisible();
     await expect(warningsCard.locator('.log-count')).toHaveCount(0);
     expect(summary.calls).toBeGreaterThanOrEqual(1);

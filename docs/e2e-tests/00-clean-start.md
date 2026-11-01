@@ -317,7 +317,7 @@ const { createUser } = require('./tests/e2e/helpers/keycloak-admin');
 # Expected: testadmin ready (the second run is a no-op — 409 tolerated)
 ```
 
-**Test admin credentials** (documents suites only):
+**Test admin credentials** (documents and admin suites):
 - Username: `testadmin`
 - Password: `TestAdmin123!`
 

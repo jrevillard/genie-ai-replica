@@ -5,7 +5,7 @@
         v-for="(tab, index) in tabs"
         :key="tab.value ?? index"
         :class="['ds-tabs__btn', { 'ds-tabs__btn--active': modelValue === (tab.value ?? index) }]"
-        :data-test-id="tab.value ? `ds-tab-${tab.value}` : undefined"
+        :data-test-id="tab.value != null ? `ds-tab-${tab.value}` : undefined"
         @click="select(tab.value ?? index)"
       >
         <slot name="tab" :tab="tab" :index="index" :active="modelValue === (tab.value ?? index)">

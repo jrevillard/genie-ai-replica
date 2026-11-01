@@ -1536,8 +1536,33 @@ services:
     # whatever is root-owned, then verify.
     command: ["sh", "-c", "for d in /var/lib/arangodb3 /var/lib/arangodb3-apps; do find \"$$d\" ! -user 999 -print -quit > /tmp/probe || exit 9; if [ -s /tmp/probe ]; then find \"$$d\" ! -user 999 -exec chown -h 999:999 {} + || exit 9; fi; find \"$$d\" ! -user 999 -print -quit > /tmp/verify || exit 9; if [ -s /tmp/verify ]; then exit 9; fi; done"]
     volumes:
-      - arango_data:/var/lib/arangodb3
-      - arango_apps:/var/lib/arangodb3-apps
+      # nocopy is LOAD-BEARING in swarm mode: the arango image ships
+      # /var/lib/arangodb3{,-apps} as root:root 0775 (verified in-image),
+      # and docker's copy-on-empty-volume applies those attrs to the FIRST
+      # container that mounts a virgin volume — docker never copies again
+      # after that. Compose-up is shielded by ordering: depends_on holds
+      # the init (busybox, neither dir in its image) as that first
+      # mounter, so the copy burns harmlessly there and the init's chown
+      # survives (verified: the volume stays 999:999 through the arango
+      # mount). Swarm IGNORES depends_on — the arango task can mount the
+      # virgin volume first, leaving it root:root with the init already
+      # exited 0 and nothing to re-run: uid-999 arangod dies on the
+      # ENGINE file in a 60x30s crash loop (reproduced: arango alone on a
+      # virgin volume lands root:root and FATALs). nocopy makes the
+      # mount-order irrelevant. The other init-chowned volumes need no
+      # flag: their images ship the dirs already owned by the service
+      # uid (backend, document-repository) or not at all (otel-collector,
+      # victoria-logs) — a copy lands correctly owned wherever it fires.
+      - type: volume
+        source: arango_data
+        target: /var/lib/arangodb3
+        volume:
+          nocopy: true
+      - type: volume
+        source: arango_apps
+        target: /var/lib/arangodb3-apps
+        volume:
+          nocopy: true
 
   arango-vector-db:
     # least-privilege hardening (SAST wave-4): no capabilities at all.
@@ -1564,8 +1589,19 @@ services:
       arango-vector-db-init:
         condition: service_completed_successfully
     volumes:
-      - arango_data:/var/lib/arangodb3
-      - arango_apps:/var/lib/arangodb3-apps
+      # nocopy (long syntax): busybox ships neither dir today, but a
+      # root-owned copy-on-empty would undo this very init's chown before
+      # it ran — see arango-vector-db below for the full mechanism.
+      - type: volume
+        source: arango_data
+        target: /var/lib/arangodb3
+        volume:
+          nocopy: true
+      - type: volume
+        source: arango_apps
+        target: /var/lib/arangodb3-apps
+        volume:
+          nocopy: true
     environment:
       ARANGO_ROOT_PASSWORD: ${ARANGO_PASSWORD}
     command: ["--experimental-vector-index=true"]

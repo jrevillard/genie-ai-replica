@@ -73,7 +73,7 @@ cd tests/config-validator && npm test                     # Environment variable
 cd mobile/genie_ai_mobile && flutter test                 # Flutter unit tests
 ```
 
-## Manual Gates (no CI job — run these yourself)
+## Manual Gates (thin or no CI coverage — run these yourself)
 
 The repo has no pipeline job that can exercise these paths, so they are
 **not** covered by `npm test` / `pytest` / lint. Treat them as required
@@ -142,9 +142,14 @@ node: a manager-side run passes while a worker keeps a root-owned tree.
 sweeps traverse the live tree; an unprivileged run over a legitimate
 0700 uid-1000 tree turns find's EACCES into a phantom violation.
 The static half runs in CI
-(`tests/config-validator` jest suite); this runtime half has no CI job —
-run it after any change to `docker-compose.yaml` service identities,
-volumes or images.
+(`tests/config-validator` jest suite). The runtime half now has ONE CI
+invocation: `.e2e_integration_base` calls `check-runtime.sh` against the
+ephemeral CI stack right after it turns healthy (single node, core
+profile — the multi-node and observability caveats above still apply to
+local runs). Run it yourself after any change to `docker-compose.yaml`
+service identities, volumes or images, and on every node of a real
+swarm. The render+tokenize half of the ansible probe/heal commands runs
+in `docs:validate` (`tests/ansible-non-root/check-command-render.sh`).
 
 **Run it whenever you touch:**
 

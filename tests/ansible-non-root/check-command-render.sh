@@ -139,3 +139,92 @@ if not targets:
 print(f"OK: probe/heal render, tokenize ({len(shlex.split(probe_s))} argv tokens) and execute; "
       f"probe hit={hit}; heal targets={targets}")
 PYEOF
+
+# ---------------------------------------------------------------------------
+# 5. The backup-dir handover trio (tasks/no-root-data-migration.yml) and the
+# data_dir_resolved formula (group_vars/all.yml) are the other #1227 command
+# surfaces --syntax-check never templates. Same doctrine: extract, render,
+# tokenize, execute.
+# ---------------------------------------------------------------------------
+MIGRATION=deploy/ansible/tasks/no-root-data-migration.yml
+awk '/^    _trio_probe_cmd: >-/{p=1} p{print} p && /^      -exec chown/{exit}' \
+  "$MIGRATION" > "$TMP/trio.frag"
+grep -q '_trio_probe_cmd' "$TMP/trio.frag" ||
+  fail "could not extract _trio_probe_cmd/_trio_heal_cmd from $MIGRATION"
+
+FORMULA_LINE=$(grep -E '^data_dir_resolved:' deploy/ansible/group_vars/all.yml) ||
+  fail "could not extract data_dir_resolved formula from group_vars/all.yml"
+
+mkdir -p "$TMP/backups/data/database_backups"
+echo x > "$TMP/backups/data/database_backups/WOULD-BE-HEALED"
+echo x > "$TMP/backups/data/database_backups/KEEPME"
+
+cat > "$TMP/render2.yml" <<YAML
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    deploy_dir: $TMP/backups
+    # default spelling: the formula is re-evaluated per task below with
+    # task-level overrides (ansible 2.20 resolves play vars lazily and
+    # trips on an undefined data_dir during task-arg finalization)
+    data_dir: "./data"
+    $FORMULA_LINE
+$(cat "$TMP/trio.frag")
+  tasks:
+    - name: Persist the trio commands
+      ansible.builtin.copy:
+        content: "{{ _trio_probe_cmd }}\n{{ _trio_heal_cmd }}\n"
+        dest: $TMP/trio-rendered.txt
+    - name: Resolve the formula for each data_dir spelling
+      ansible.builtin.set_fact:
+        "{{ item.name }}": "{{ data_dir_resolved }}"
+      vars:
+        data_dir: "{{ item.data_dir }}"
+      loop:
+        - {name: _resolved_relative, data_dir: "./data"}
+        - {name: _resolved_absolute, data_dir: /srv/genieai-data}
+        - {name: _resolved_trailing, data_dir: "/srv/genieai-data/"}
+    - name: Persist the resolved spellings
+      ansible.builtin.copy:
+        content: "{{ _resolved_relative }}\n{{ _resolved_absolute }}\n{{ _resolved_trailing }}\n"
+        dest: $TMP/resolved.txt
+YAML
+
+ansible-playbook -i localhost, "$TMP/render2.yml" > "$TMP/render2.log" 2>&1 ||
+  { tail -20 "$TMP/render2.log" >&2; fail "ansible trio render run failed"; }
+
+python3 - "$TMP" <<'PYEOF'
+import shlex, subprocess, sys, os
+
+tmp = sys.argv[1]
+probe_s, heal_s = open(os.path.join(tmp, "trio-rendered.txt")).read().splitlines()[:2]
+resolved = open(os.path.join(tmp, "resolved.txt")).read().splitlines()
+
+expected = [os.path.join(tmp, "backups") + "/data", "/srv/genieai-data", "/srv/genieai-data"]
+for got, want, spelling in zip(resolved, expected,
+                               ("./data", "absolute", "trailing slash")):
+    if got != want:
+        print(f"data_dir_resolved[{spelling}]: rendered {got!r}, expected {want!r}",
+              file=sys.stderr); sys.exit(1)
+
+for label, cmd, needs in (("trio probe", probe_s, ("-H", "-uid", "1000", "-print", "-quit")),
+                          ("trio heal", heal_s, ("-H", "-exec"))):
+    argv = shlex.split(cmd)
+    missing = [t for t in needs if t not in argv]
+    if missing:
+        print(f"{label}: missing expected tokens {missing}", file=sys.stderr); sys.exit(1)
+    # detection: swap the uid predicate for a name one (no root needed).
+    # -mindepth 1 in the SWAP keeps the starting dir out of the match the
+    # real uid predicate would exclude (the fixture dirs run as uid 1000).
+    detect = cmd.replace("! -uid 1000 -print -quit", "-mindepth 1 ! -name KEEPME -print -quit") \
+                .replace("! -uid 1000 -exec", "-mindepth 1 ! -name KEEPME -exec")
+    detect_argv = shlex.split(detect.replace("-exec chown -h 1000:1000 {} +", "-print"))
+    r = subprocess.run(detect_argv, capture_output=True, text=True)
+    if r.returncode != 0 or "WOULD-BE-HEALED" not in r.stdout:
+        print(f"{label}: detection rc={r.returncode} out={r.stdout.strip()!r} "
+              f"err={r.stderr.strip()[:120]!r}", file=sys.stderr); sys.exit(1)
+
+print(f"OK: trio commands and data_dir_resolved formula render, tokenize and execute "
+      f"(probe hit={probe_s and 'WOULD-BE-HEALED'}; 3 formula spellings exact)")
+PYEOF

@@ -226,7 +226,10 @@ workflow:
       - runner_system_failure
       - unknown_failure
   before_script:
-    - apk add --no-cache docker-cli-compose curl
+    # bash: check-runtime.sh is a bash script — docker:24 ships only sh
+    # (verified: `command -v bash` empty in the image); without this the
+    # gate line exits 127 and the runtime contract is never enforced.
+    - apk add --no-cache bash docker-cli-compose curl
     # Authenticate to the GitLab registry so `docker compose pull` succeeds
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - if [ -n "$DOCKER_HUB_USER" ]; then echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USER" --password-stdin docker.io; fi  # avoid anonymous Docker Hub rate limits

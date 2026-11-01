@@ -694,6 +694,16 @@
         # Generate resolved compose with docker compose, then fix port types
         # (docker compose config converts port integers to strings, which
         # docker stack deploy rejects — see docker/cli#1073)
+        # KNOWN LIMITATION (#1227): compose config re-serializes the long-
+        # syntax bind opt-outs (create_host_path: false) as 'bind: {}' — the
+        # resolved artifact does NOT carry them. This is harmless on the
+        # swarm path it feeds (swarmkit ignores bind options; the #1227
+        # guarantee there is the pre-create tasks above), but do NOT
+        # `docker compose -f docker-compose.resolved.yaml up` this file as
+        # if it were the contract file — missing bind sources would be
+        # root-created again.
+        # (docker compose config converts port integers to strings, which
+        # docker stack deploy rejects — see docker/cli#1073)
         docker compose \
           --env-file {{ deploy_dir }}/.env \
           {{ _compose_profiles }} \

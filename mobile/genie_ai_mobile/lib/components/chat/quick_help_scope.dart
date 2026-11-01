@@ -221,7 +221,10 @@ Map<String, dynamic>? quickHelpButtonById(
   List<Map<String, dynamic>> buttons,
   String? id,
 ) {
-  if (id == null || id.isEmpty) return null;
+  // Null names NO lookup (the tag list omits a null); '' needs no
+  // guard — quickHelpIdOf can never produce it, so the loop cannot
+  // match one.
+  if (id == null) return null;
   for (final button in buttons) {
     if (quickHelpIdOf(button) == id) {
       return button;
@@ -473,26 +476,29 @@ String? quickHelpCategoryOf(Map<String, dynamic> button) =>
 
 /// The number as JAVASCRIPT serializes it — the form the web writes
 /// into a saved tag or a category reference; null for a null input.
-/// Dart's double toString differs in the plain range (it appends
-/// '.0': 5.0 → '5.0', JS: '5'); the exponential range (≥ 1e21)
-/// already matches. An integral value inside the int64 range converts
-/// exactly; OUTSIDE it (an integral double ≥ 2^63 but < 1e21) the
-/// Dart form stands. Two further bands stay unmatched BY DECODE, not
-/// by this form: an integer literal above 2^53 decodes to an imprecise
-/// double on the web but to the exact int64 here (the two platforms
-/// then disagree about the value itself — a web-saved conversation
-/// carries the imprecise tag and misses this platform's index), and a
-/// double ≥ 2^63 clips differently again — a configuration with an id
-/// that large is not one the platforms can agree on by serialization;
-/// the durable answer is normalizing the tag at the save/restore
-/// boundary on both platforms, tracked beside the numeric-tag contract.
+/// Dart's double toString differs from JS's Number.toString in ONE way
+/// for the values the two platforms hold in common: an integral double
+/// in the plain range (below 1e21) gets a '.0' suffix (5.0 → '5.0',
+/// JS: '5'), which is stripped here — the digits themselves are
+/// identical, at every magnitude (the int64 conversion is exact below
+/// 2^63; above it the plain-digit form is written straight from the
+/// double, which is the digits JS prints too). The exponential range
+/// (≥ 1e21) already matches unstripped. The band that stays unmatched
+/// is BY DECODE, not by this form: an integer LITERAL above 2^53
+/// decodes to an imprecise double on the web but to the exact int64
+/// here — the two platforms then disagree about the value itself, and
+/// a web-saved conversation carries the imprecise tag and misses this
+/// platform's index. A configuration with an id that large is not one
+/// the platforms can agree on at all; the durable answer is
+/// normalizing the tag at the save/restore boundary on both platforms,
+/// tracked beside the numeric-tag contract.
 String? _jsTagForm(dynamic raw) {
   if (raw == null) return null;
-  if (raw is double &&
-      raw.isFinite &&
-      raw == raw.truncateToDouble() &&
-      raw.abs() < 9223372036854775808.0) {
-    return raw.toInt().toString();
+  if (raw is double && raw.isFinite && raw == raw.truncateToDouble()) {
+    final plain = raw.toString();
+    // ≥ 1e21 prints exponential ('1e+21', matching JS, no suffix to
+    // strip); below it an integral double ends in '.0'.
+    return plain.endsWith('.0') ? plain.substring(0, plain.length - 2) : plain;
   }
   return raw.toString();
 }

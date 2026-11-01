@@ -371,6 +371,41 @@ void main() {
       expect(scope.serviceLabelsEn, isEmpty);
     });
 
+    test('the legacy false and float tags refuse like the 0 tag does', () {
+      // The changelog's upgrade promise names all three legacy tag
+      // shapes a previous build could save: '0', 'false' (the bool id)
+      // and '5.0' (the id written as a JSON float, keyed '5' now). Each
+      // must fall to the sidebar branch, or a dropped guard resurrects
+      // a restore the web refuses — with every test green but this one.
+      final falseId = [
+        {
+          'id': false,
+          'resolvedTitle': 'Civil registry help',
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final falseScope = convResolver(
+        falseId,
+      ).resolve(tags: ['false'], categoryKey: '2');
+      expect(falseScope.quickHelpButtonId, isNull);
+      expect(falseScope.sidebarTagCount, 1);
+
+      final floatId = [
+        {
+          'id': 5.0,
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final floatScope = convResolver(
+        floatId,
+      ).resolve(tags: ['5.0'], categoryKey: '2');
+      expect(floatScope.quickHelpButtonId, isNull);
+      expect(floatScope.sidebarTagCount, 1);
+      expect(floatScope.serviceLabelsEn, isEmpty);
+    });
+
     test('a web-saved numeric id tag restores the scope', () {
       // The web saves the RAW JSON id (tags: [5]); the mobile's tag list
       // is string-typed and the index keys the stringified id — the
@@ -1680,6 +1715,14 @@ void main() {
       expect(
         quickHelpButtonIdentity({'id': 1e21, 'resolvedTitle': 'C'}),
         '1e+21',
+      );
+      // Above the int64 range both platforms still hold the SAME double
+      // when the configuration wrote a JSON float — only Dart's '.0'
+      // suffix diverges, and the plain-digit form is what JavaScript
+      // serializes.
+      expect(
+        quickHelpButtonIdentity({'id': 1e19, 'resolvedTitle': 'C'}),
+        '10000000000000000000',
       );
     });
 

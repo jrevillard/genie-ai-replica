@@ -406,6 +406,8 @@ workflow:
       CLIENT_STATUS=""
       TOKEN_ATTEMPTS=0
       CLIENT_ATTEMPTS=0
+      TOKEN_FIRST_STATUS=""
+      TOKEN_BODY=""
       for i in $(seq 1 90); do
         if [ -z "$ADMIN_TOKEN" ]; then
           TOKEN_ATTEMPTS=$((TOKEN_ATTEMPTS+1))
@@ -416,6 +418,8 @@ workflow:
           # If curl died before emitting the -w trailer, the last line is body
           # text — only an all-digit status is a usable signal.
           case "$TOKEN_STATUS" in ''|*[!0-9]*) TOKEN_STATUS="" ;; esac
+          [ "$TOKEN_ATTEMPTS" = 1 ] && TOKEN_FIRST_STATUS="$TOKEN_STATUS"
+          TOKEN_BODY=$(printf '%s' "$TOKEN_RESP" | sed '$d' | head -c 200)
           ADMIN_TOKEN=$(printf '%s' "$TOKEN_RESP" | sed '$d' \
             | python3 -c "import sys,json; d=json.load(sys.stdin); t=d.get('access_token'); print(t if isinstance(t, str) and t else '')" 2>/dev/null || true)
         fi
@@ -441,6 +445,12 @@ workflow:
       done
       if [ -z "$ADMIN_TOKEN" ]; then
         echo "ERROR: master admin token never obtained via nginx/Kong after ${TOKEN_ATTEMPTS} token attempts (last token call: HTTP $(http_label "$TOKEN_STATUS"))."
+        if [ -n "$TOKEN_FIRST_STATUS" ] && [ "$TOKEN_FIRST_STATUS" != "$TOKEN_STATUS" ]; then
+          echo "The first attempt answered $(http_label "$TOKEN_FIRST_STATUS") — the per-iteration wait lines above show how the status evolved."
+        fi
+        if [ -n "$TOKEN_BODY" ]; then
+          echo "response body: ${TOKEN_BODY}"
+        fi
         case "$TOKEN_STATUS" in
           200)
             echo "The endpoint answered HTTP 200 but the body contained no usable access_token — check for a proxy/SSO interception page in front of ${KC_URL}."
@@ -462,6 +472,9 @@ workflow:
       fi
       if [ -z "$CLIENT_FOUND" ]; then
         echo "ERROR: genie-app client not found via nginx/Kong after ${CLIENT_ATTEMPTS} client lookups (last client lookup: HTTP $(http_label "$CLIENT_STATUS"))."
+        if [ "$CLIENT_STATUS" = "404" ]; then
+          echo "The admin API answered 404 — the genie realm import may not have completed or the /auth routing is wrong; the client configuration is not the first suspect."
+        fi
         exit 1
       fi
       # Create test user for E2E tests (required by loginViaUI).

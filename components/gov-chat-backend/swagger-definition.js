@@ -1,12 +1,7 @@
-// Shared OpenAPI envelope — the single source of truth for the definition
-// (non-annotation) half of the runtime spec: openapi version, info, servers,
-// securitySchemes, global security and tags. Consumed by index.js (the
-// runtime swagger spec) and by scripts/generate-api-client.sh (the mobile
-// client generation spec), so the envelope can no longer drift between the
-// spec the backend serves and the spec the client is generated from —
-// #1122 did the same for components.schemas (swagger-schemas.js).
-// Side-effect-free by design: no logging, no fs, no network — it only
-// reads process.env at require time.
+// Single source of truth for the OpenAPI envelope (openapi, info, servers,
+// securitySchemes, global security, tags), required by index.js (the runtime
+// swagger spec) and scripts/generate-api-client.sh (the mobile client
+// generation spec). Reads process.env at require time; no other side effects.
 module.exports = {
   openapi: '3.0.0',
   info: {

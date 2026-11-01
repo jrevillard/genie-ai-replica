@@ -37,11 +37,11 @@ cd "$PROJECT_ROOT"
 IGNORE_CONTENT="$(cat "$IGNORE_FILE")"
 
 echo "==> Generating OpenAPI spec from backend source..."
-# The spec extraction runs under env -i: the ONLY environment the node
-# process sees is the pin list below, so no env read anywhere in the
-# envelope or the transitive swagger-schemas.js — present or future — can
-# reach the committed artifacts from the invoking shell. Same backend
-# sources always regenerate byte-identical artifacts.
+# The spec extraction runs under env -i: the node process sees only the pin
+# list below plus PATH/HOME for tooling (the envelope reads neither), so no
+# env read anywhere in the envelope or the transitive swagger-schemas.js —
+# present or future — can reach the committed artifacts from the invoking
+# shell. Same backend sources always regenerate byte-identical artifacts.
 (cd "$BACKEND_DIR" && env -i PATH="$PATH" HOME="$HOME" API_URL=https://localhost PORT=3000 \
   KEYCLOAK_URL=https://keycloak.example.com/auth KEYCLOAK_REALM=genie node -e "
 const assert = require('assert');
@@ -55,22 +55,20 @@ const spec = swaggerJsdoc({
   definition: require('./swagger-definition'),
   apis: ['./routes/*.js']
 });
-// Sanity on the placeholders: a pin assignment dropped from the env -i line
-// yields undefined/empty here instead of the expected URL.
+// Pin-survival checks: a pin assignment dropped from the env -i line shows
+// up here as an 'undefined' interpolation. The envelope's URL construction
+// is asserted by the backend suite, not re-encoded here.
+assert.strictEqual(spec.servers?.[0]?.url, 'https://localhost',
+  'servers[0].url does not match the API_URL pin — a pin assignment is'
+  + ' missing from the env -i line above.');
 const flow = spec.components?.securitySchemes?.KeycloakOAuth2?.flows?.authorizationCode;
-const envDerived = [
-  ['servers[0].url', spec.servers?.[0]?.url, 'https://localhost'],
-  ['authorizationUrl', flow?.authorizationUrl,
-    'https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth'],
-  ['tokenUrl', flow?.tokenUrl,
-    'https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/token']
-];
-for (const [label, actual, expected] of envDerived) {
-  assert.strictEqual(actual, expected,
-    label + ' does not match the expected placeholder — either a pin'
-    + ' assignment is missing from the env -i line above, or'
-    + ' swagger-definition.js changed its URL construction and the'
-    + ' expected values here need re-syncing.');
+for (const [label, url] of [
+  ['authorizationUrl', flow?.authorizationUrl],
+  ['tokenUrl', flow?.tokenUrl]
+]) {
+  assert.ok(typeof url === 'string' && !url.includes('undefined'),
+    label + ' is not a concrete URL — the KEYCLOAK_URL/KEYCLOAK_REALM pins'
+    + ' are missing from the env -i line above.');
 }
 require('fs').writeFileSync('$SPEC_FILE', JSON.stringify(spec, null, 2));
 const count = Object.keys(spec.paths).length;

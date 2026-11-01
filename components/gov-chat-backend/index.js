@@ -53,9 +53,7 @@ try {
   });
 }
 
-// Swagger options (stays at module level for swagger-config.test.js compatibility).
-// The envelope itself is the shared swagger-definition.js module — the same
-// object scripts/generate-api-client.sh requires for client generation.
+// Swagger options (stays at module level for swagger-config.test.js compatibility)
 const swaggerOptions = {
   definition: require('./swagger-definition'),
   apis: ['./routes/*.js']

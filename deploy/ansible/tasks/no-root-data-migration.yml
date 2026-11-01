@@ -23,8 +23,14 @@
   # <absolute>/database_backups — joining deploy_dir unconditionally would
   # probe a wrong, empty tree and leave the real source to swarmkit's
   # silent root-owned creation on first up.
+  # A `~`-rooted inventory value is NOT supported and is deliberately NOT
+  # special-cased: the three contexts involved cannot agree on what ~
+  # means — the file module below expands it as the become user (root →
+  # /root), the command-module find probes never expand it at all, and
+  # compose would expand it as the invoking ansible_user. Spell the
+  # override absolute.
   ansible.builtin.set_fact:
-    _no_root_data_dir: "{{ data_dir if data_dir is match('(/|~)') else (deploy_dir ~ '/' ~ data_dir) }}"
+    _no_root_data_dir: "{{ data_dir if data_dir is match('/') else (deploy_dir ~ '/' ~ data_dir) }}"
 
 - name: Create the backend backup directory as the backend uid (#1227)
   # Pinned to the backend uid AT CREATION: a fresh dir left

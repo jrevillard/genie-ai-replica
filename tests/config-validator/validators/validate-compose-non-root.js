@@ -159,7 +159,7 @@ function validateComposeNonRoot(composeText) {
           // missing there is still created root-owned by the daemon.
           const templated = /\$\{?\w/.test(b.path);
           const absoluteDataPath = (resolved.startsWith('/') || resolved.startsWith('~/')) && (dataShaped || templated);
-          if (b.shortSyntax ? !dataShaped : !underDataDir && !absoluteDataPath) {
+          if (b.shortSyntax ? !dataShaped : !underDataDir && !absoluteDataPath && !templated) {
             continue;
           }
           if (b.shortSyntax) {
@@ -556,8 +556,8 @@ function validateComposeNonRoot(composeText) {
         }
         // source: can also be the entry's FIRST key (- source: X ...) —
         // same deferral as the 8-space spelling below
-        const dashSrc = line.match(/^ {6,}-\s*source:\s*['"]?(\S+)/);
-        if (dashSrc && !entryTypeExplicit) deferredSource = dashSrc[1];
+        const dashSrc = line.match(/^ {6,}-\s*source:\s*(?:"([^"]*)"|'([^']*)'|(\S+))/);
+        if (dashSrc && !entryTypeExplicit) deferredSource = dashSrc[1] ?? dashSrc[2] ?? dashSrc[3];
         // no continue: the same line may be a short-syntax bind
       }
       // long syntax:
@@ -589,7 +589,8 @@ function validateComposeNonRoot(composeText) {
         }
         continue;
       }
-      const srcMatch = line.match(/^ {8,}source:\s*(\S+)\s*(?:#.*)?$/);
+      const srcMatch = line.match(/^ {8,}source:\s*(?:"([^"]*)"|'([^']*)'|(\S+))\s*(?:#.*)?$/);
+      const srcVal = srcMatch ? (srcMatch[1] ?? srcMatch[2] ?? srcMatch[3]) : null;
       if (srcMatch) {
         if (entryTypeExplicit && entryType === 'volume') {
           // an EXPLICIT type: volume names a NAMED volume — not a host
@@ -599,7 +600,7 @@ function validateComposeNonRoot(composeText) {
         if (!entryTypeExplicit) {
           // untyped default = volume until proven otherwise: defer until
           // the entry's type: (or end) decides
-          deferredSource = srcMatch[1];
+          deferredSource = srcVal;
           continue;
         }
         const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
@@ -608,7 +609,7 @@ function validateComposeNonRoot(composeText) {
         // the source: this entry opened when we saw one; otherwise arm the
         // pending flag the next source: consumes.
         const idx = binds.length;
-        binds.push({ path: srcMatch[1], createHostPathFalse: false, shortSyntax: false });
+        binds.push({ path: srcVal, createHostPathFalse: false, shortSyntax: false });
         if (pendingCreateFalse) {
           binds[idx].createHostPathFalse = true;
           pendingCreateFalse = false;

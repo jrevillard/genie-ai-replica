@@ -539,6 +539,61 @@ describe('compose non-root contract (#1227)', () => {
     expect(validateComposeNonRoot(literalHomePlain).violations).toEqual([]);
   });
 
+  test('mutations: templated relative defaults and quoted sources with spaces', () => {
+    // A templated source whose default is RELATIVE outside the data dir
+    // (${BACKUP_DIR:-./backups}/dumps) is deployment-authored exactly like
+    // its absolute sibling — docker still creates the missing source
+    // root-owned wherever the variable lands. The default's ./ spelling
+    // must not defeat the opt-out demand.
+    const templatedRelative = [
+      'services:',
+      '  backend:',
+      '    user: "1000:1000"',
+      '    volumes:',
+      '      - type: bind',
+      '        source: ${BACKUP_DIR:-./backups}/dumps',
+      '        target: /app/dumps',
+      ''
+    ].join('\n');
+    const { violations: v1 } = validateComposeNonRoot(templatedRelative);
+    expect(v1.some((v) => v.includes('backend') && v.includes('deployment-authored'))).toBe(true);
+
+    const templatedRelativeOpted = templatedRelative.replace(
+      '        target: /app/dumps',
+      '        target: /app/dumps\n        bind: {create_host_path: false}'
+    );
+    expect(validateComposeNonRoot(templatedRelativeOpted).violations).toEqual([]);
+
+    // A QUOTED source containing a space is legal YAML/compose — the
+    // capture must not stop at the space, or the bind silently skips the
+    // rule (a bare \S+ matcher drops the entry entirely).
+    const quotedSpace = templatedRelative.replace(
+      'source: ${BACKUP_DIR:-./backups}/dumps',
+      'source: "./data/my backups/dumps"'
+    );
+    const { violations: v2 } = validateComposeNonRoot(quotedSpace);
+    expect(v2.some((v) => v.includes('backend') && v.includes('sits under the data directory'))).toBe(true);
+
+    const dashQuotedSpace = [
+      'services:',
+      '  backend:',
+      '    user: "1000:1000"',
+      '    volumes:',
+      '      - source: "./data/other backups"',
+      '        target: /app/x',
+      '        type: bind',
+      ''
+    ].join('\n');
+    const { violations: v3 } = validateComposeNonRoot(dashQuotedSpace);
+    expect(v3.some((v) => v.includes('backend') && v.includes('sits under the data directory'))).toBe(true);
+
+    const quotedSpaceOpted = quotedSpace.replace(
+      '        target: /app/dumps',
+      '        target: /app/dumps\n        bind: {create_host_path: false}'
+    );
+    expect(validateComposeNonRoot(quotedSpaceOpted).violations).toEqual([]);
+  });
+
   test("the runtime gate's SELF_DROPPING list matches the validator's allowlist", () => {
     // The shell gate keeps its own copy (no JS runtime there); without
     // this pin a third self-dropping image added to the validator would

@@ -443,6 +443,39 @@ void main() {
       expect(scope.serviceLabelsEn, ['Births']);
     });
 
+    test('a bool-id card and a string-0 card restore at the boundary too', () {
+      // The restore boundary pins, beside the identity unit tests: a
+      // bool id indexes and restores as 'true' (dropping bool from the
+      // scalar set would silently title-identity the card), and a
+      // STRING '0' id stays a real id (configTruthy must not leak it
+      // into the falsy set).
+      final boolId = [
+        {
+          'id': true,
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final boolScope = convResolver(
+        boolId,
+      ).resolve(tags: ['true'], categoryKey: '2');
+      expect(boolScope.quickHelpButtonId, 'true');
+      expect(boolScope.serviceLabelsEn, ['Births']);
+
+      final stringZero = [
+        {
+          'id': '0',
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final zeroScope = convResolver(
+        stringZero,
+      ).resolve(tags: ['0'], categoryKey: '2');
+      expect(zeroScope.quickHelpButtonId, '0');
+      expect(zeroScope.serviceLabelsEn, ['Births']);
+    });
+
     test(
       'a web-saved title tag (a falsy-id card) restores as a sidebar tag',
       () {
@@ -1796,6 +1829,18 @@ void main() {
       }, 'en');
 
       expect(parsed['category'], '5');
+    });
+
+    test('a negative-zero category serializes as JavaScript writes it', () {
+      // String(-0) in JavaScript is '0'; Dart's toString gives '-0' —
+      // the hierarchy lookup would miss where the web's matches. (The
+      // ID path never sees it: -0.0 is falsy there, on both platforms.)
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'category': -0.0,
+      }, 'en');
+
+      expect(parsed['category'], '0');
     });
 
     test('the id is kept RAW — the truthiness read precedes any string', () {

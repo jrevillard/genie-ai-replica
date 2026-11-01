@@ -251,6 +251,14 @@ Map<String, dynamic>? quickHelpButtonById(
 /// unless the title happens to be one of its ENGLISH labels, in which case
 /// it replays as that sidebar label — the web's own behaviour for the
 /// same tag.
+///
+/// One collision the title fallback opens and the string-tag contract
+/// cannot close: a falsy-id card whose TITLE equals another card's
+/// non-string id ('5' vs 5) writes a tag the restore index resolves to
+/// the OTHER card, where the web's raw strict lookup refuses it. The
+/// same tracked divergence as the JSON type-mix (the restore speaks
+/// string tags here, raw values on the web) — not a rule this file can
+/// settle.
 String? quickHelpButtonIdentity(Map<String, dynamic>? button) {
   if (button == null) return null;
   return quickHelpIdOf(button) ?? quickHelpTitleOf(button);
@@ -476,25 +484,28 @@ String? quickHelpCategoryOf(Map<String, dynamic> button) =>
 
 /// The number as JAVASCRIPT serializes it — the form the web writes
 /// into a saved tag or a category reference; null for a null input.
-/// Dart's double toString differs from JS's Number.toString in ONE way
-/// for the values the two platforms hold in common: an integral double
-/// in the plain range (below 1e21) gets a '.0' suffix (5.0 → '5.0',
-/// JS: '5'), which is stripped here — the digits themselves are
-/// identical, at every magnitude (the int64 conversion is exact below
-/// 2^63; above it the plain-digit form is written straight from the
-/// double, which is the digits JS prints too). The exponential range
-/// (≥ 1e21) already matches unstripped. The band that stays unmatched
-/// is BY DECODE, not by this form: an integer LITERAL above 2^53
-/// decodes to an imprecise double on the web but to the exact int64
-/// here — the two platforms then disagree about the value itself, and
-/// a web-saved conversation carries the imprecise tag and misses this
-/// platform's index. A configuration with an id that large is not one
-/// the platforms can agree on at all; the durable answer is
-/// normalizing the tag at the save/restore boundary on both platforms,
-/// tracked beside the numeric-tag contract.
+/// Dart's double toString differs from JS's Number.toString in TWO
+/// ways for the values the two platforms hold in common: an integral
+/// double in the plain range (below 1e21) gets a '.0' suffix (5.0 →
+/// '5.0', JS: '5'), and a negative zero prints '-0' where JS writes
+/// '0' — both normalized here (the digits themselves are identical at
+/// every magnitude: the int64 conversion is exact below 2^63; above it
+/// the plain-digit form is written straight from the double, which is
+/// what JS prints too). The exponential range (≥ 1e21) already matches
+/// unstripped. The band that stays unmatched is BY DECODE, not by this
+/// form: an integer LITERAL above 2^53 decodes to an imprecise double
+/// on the web but to the exact int64 here — the two platforms then
+/// disagree about the value itself, and a web-saved conversation
+/// carries the imprecise tag and misses this platform's index. A
+/// configuration with an id that large is not one the platforms can
+/// agree on at all; the durable answer is normalizing the tag at the
+/// save/restore boundary on both platforms, tracked beside the
+/// numeric-tag contract.
 String? _jsTagForm(dynamic raw) {
   if (raw == null) return null;
   if (raw is double && raw.isFinite && raw == raw.truncateToDouble()) {
+    // JS String(-0) is '0' — Dart prints '-0'.
+    if (raw == 0) return '0';
     final plain = raw.toString();
     // ≥ 1e21 prints exponential ('1e+21', matching JS, no suffix to
     // strip); below it an integral double ends in '.0'.

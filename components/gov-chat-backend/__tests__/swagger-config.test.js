@@ -271,6 +271,9 @@ describe('Swagger Configuration', () => {
       const eventRequest = spec.components.schemas.EventRequest;
       expect(eventRequest.required).toEqual(['eventType']);
       expect(Object.keys(eventRequest.properties).sort()).toEqual(['eventData', 'eventType']);
+      // Mirrors the runtime truthiness check: an empty eventType is
+      // refused with 400.
+      expect(eventRequest.properties.eventType.minLength).toBe(1);
     });
 
     it('Event carries the stored shape: data, no request-wire eventData', () => {
@@ -289,6 +292,8 @@ describe('Swagger Configuration', () => {
       expect(eventsOps.get.responses['200'].content['application/json'].schema.items.$ref).toBe(
         '#/components/schemas/Event'
       );
+      // A successful save always carries all three keys.
+      expect(spec.components.schemas.EventCreated.required).toEqual(['_id', '_key', '_rev']);
     });
   });
 

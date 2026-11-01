@@ -435,8 +435,23 @@ services:
       retries: 3
       start_period: 40s
     volumes:
-      - ./secrets/ssl:/etc/nginx/ssl:ro  # directory mount — tracks inode changes from certbot renewals
-      - certbot-webroot:/var/www/certbot:ro
+      # long syntax + create_host_path: false — the LAST host bind docker
+      # could silently create root-owned on a clean checkout (secrets/ssl
+      # is untracked). With the opt-out a missing directory FAILS THE
+      # SERVICE CREATE (the desired fail-fast): create it first — the
+      # Ansible path does, the compose docs list it, the e2e CI job
+      # mkdirs it. The directory mount still tracks inode changes from
+      # certbot renewals.
+      - type: bind
+        source: ./secrets/ssl
+        target: /etc/nginx/ssl
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: volume
+        source: certbot-webroot
+        target: /var/www/certbot
+        read_only: true
     networks:
       - genieai_network
     deploy:

@@ -612,6 +612,31 @@ describe('compose non-root contract (#1227)', () => {
     expect(v4.some((v) => v.includes('x-chown-init-genieai') && v.includes('mode: global'))).toBe(true);
   });
 
+  test('mutations: compliant flow-form deploy and user pins are not over-enforced', () => {
+    // A flow-form deploy: on a chown-init sets localDeploySeen — without
+    // parsing its body a fully COMPLIANT spelling (exactly the required
+    // doctrine) was judged absent and tripped two violations. Same for a
+    // flow-map service body's user: pin ('no user: declared').
+    const flowDeploy = composeText.replace(
+      '    # so the chown has run on every node the collector can land on).\n    <<: *chown-init\n',
+      '    # so the chown has run on every node the collector can land on).\n    <<: *chown-init\n    deploy: {mode: global, restart_policy: {condition: on-failure, delay: 30s, max_attempts: 60}}\n'
+    );
+    expect(flowDeploy).not.toBe(composeText);
+    expect(validateComposeNonRoot(flowDeploy).violations).toEqual([]);
+
+    const flowUser = ['services:', '  backend: {user: "1000:1000"}', ''].join('\n');
+    expect(validateComposeNonRoot(flowUser).violations).toEqual([]);
+
+    // the flow deploy is still a SHALLOW replace: dropping mode from it
+    // must trip, exactly like the block form
+    const flowModeDrop = composeText.replace(
+      '    # so the chown has run on every node the collector can land on).\n    <<: *chown-init\n',
+      '    # so the chown has run on every node the collector can land on).\n    <<: *chown-init\n    deploy: {restart_policy: {condition: on-failure, max_attempts: 60}}\n'
+    );
+    const { violations: v1 } = validateComposeNonRoot(flowModeDrop);
+    expect(v1.some((v) => v.includes('otel-collector-init') && v.includes('mode: global'))).toBe(true);
+  });
+
   test('mutations: a reflowed multi-line flow-sequence volumes list stays enforced', () => {
     // A formatter is enough to reflow a flow-sequence volumes list across
     // lines — legal YAML whose single-line regex match would drop every

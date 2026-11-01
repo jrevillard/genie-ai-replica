@@ -466,11 +466,19 @@ function validateComposeNonRoot(composeText) {
 
     // a service key may carry a trailing comment or a flow-map body —
     // every other spelling class here tolerates comments; a bare-key-only
-    // match silently exempted such a service from EVERY check (fail-open)
-    const serviceMatch = line.match(/^ {2}["']?([\w.-]+)["']?:\s*(?:\{.*|#.*)?$/);
+    // match silently exempted such a service from EVERY check (fail-open).
+    // The body's user: pin is parsed (a compliant flow service otherwise
+    // reported 'no user: declared'); the REST of a flow-map body is
+    // line-parser-unreachable (extracted finding #1274).
+    const serviceMatch = line.match(/^ {2}["']?([\w.-]+)["']?:\s*(?:\{(.*)\}|#.*)?$/);
     if (serviceMatch) {
       flush();
       currentService = serviceMatch[1];
+      const svcBody = serviceMatch[2];
+      if (svcBody !== undefined) {
+        const fu = svcBody.match(/\buser:\s*['"]?([^,}]+)['"]?/);
+        if (fu) currentUser = fu[1].trim();
+      }
       serviceBinds[currentService] = [];
       anchorMerged = false;
       inBindOpts = false;
@@ -569,10 +577,22 @@ function validateComposeNonRoot(composeText) {
       localDeploySeen = true;
       continue;
     }
-    // flow form: deploy: {mode: replicated} — same shallow-replace
-    // semantics as the block form
-    if (/^ {4}deploy:\s*\{/.test(line)) {
+    // flow form: deploy: {mode: global, restart_policy: {condition:
+    // on-failure, max_attempts: 60}} — same shallow-replace semantics as
+    // the block form, so the policy fields are parsed out of the body
+    // with the same shapes: an unparse-but-credit would judge a fully
+    // compliant flow spelling as ABSENT (over-enforcement prescribing an
+    // impossible fix)
+    const deployFlow = line.match(/^ {4}deploy:\s*\{(.*)\}\s*(?:#.*)?$/);
+    if (deployFlow) {
       localDeploySeen = true;
+      const body = deployFlow[1];
+      const fm = body.match(/\bmode:\s*['"]?(\w+)/);
+      if (fm) currentMode = fm[1];
+      const fc = body.match(/\bcondition:\s*['"]?([\w-]+)/);
+      if (fc) currentRestartPolicyCondition = fc[1];
+      const fa = body.match(/\bmax_attempts:\s*(\d+)/);
+      if (fa) currentMaxAttempts = fa[1];
       continue;
     }
     // dedent past the deploy map closes it: a later 6-space mode: or

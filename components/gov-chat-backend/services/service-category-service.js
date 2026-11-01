@@ -314,12 +314,6 @@ class ServiceCategoryService {
   }
 
   /**
-   * Updates a single service and its translations.
-   * @param {String} serviceKey - The _key of the service to update.
-   * @param {Object} payload - The service data { nameEN, translations }.
-   * @returns {Promise<Object>} The result of the update operation.
-   */
-  /**
    * Validates the translations array of a write payload BEFORE any mutation.
    * The update paths are delete-then-rebuild: a malformed entry that only
    * surfaces mid-loop would leave the old translations deleted, so the whole
@@ -335,13 +329,13 @@ class ServiceCategoryService {
     }
     for (let i = 0; i < translations.length; i++) {
       const trans = translations[i];
-      const keys = trans && typeof trans === 'object' ? Object.keys(trans).join(',') : typeof trans;
       if (
         !trans ||
         typeof trans !== 'object' ||
         !String(trans.languageCode || '').trim() ||
         !String(trans.translation || '').trim()
       ) {
+        const keys = trans && typeof trans === 'object' ? Object.keys(trans).join(',') : typeof trans;
         throw new ValidationError(
           `Translation entry ${i} has an unexpected shape (expected {languageCode, translation}, got keys: ${keys})`
         );
@@ -349,6 +343,33 @@ class ServiceCategoryService {
     }
   }
 
+  /**
+   * Builds a translation document for the given owner (category or service).
+   * @param {String} ownerKey - The _key of the owning category or service.
+   * @param {String} fkField - The foreign-key field name ('serviceCategoryId' or 'serviceId').
+   * @param {Object} trans - A validated {languageCode, translation} entry.
+   * @returns {Object} The translation document to save.
+   */
+  _buildTranslationDoc(ownerKey, fkField, trans) {
+    const transLocale = String(trans.languageCode).trim().toUpperCase();
+    const now = new Date().toISOString();
+    return {
+      _key: `${ownerKey}_${transLocale}`,
+      [fkField]: ownerKey,
+      languageCode: transLocale,
+      translation: trans.translation.trim(),
+      isActive: true,
+      createdAt: now,
+      updatedAt: now
+    };
+  }
+
+  /**
+   * Updates a single service and its translations.
+   * @param {String} serviceKey - The _key of the service to update.
+   * @param {Object} payload - The service data { nameEN, translations }.
+   * @returns {Promise<Object>} The result of the update operation.
+   */
   async updateServiceWithTranslations(serviceKey, payload) {
     await this.init();
     try {
@@ -384,19 +405,11 @@ class ServiceCategoryService {
         REMOVE trans IN serviceTranslations
     `);
 
-      if (payload.translations && Array.isArray(payload.translations)) {
+      if (payload.translations) {
         for (const trans of payload.translations) {
-          const transLocale = String(trans.languageCode).trim().toUpperCase();
-          const translationDoc = {
-            _key: `${serviceKey}_${transLocale}`,
-            serviceId: serviceKey,
-            languageCode: transLocale,
-            translation: trans.translation.trim(),
-            isActive: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          };
-          await this.serviceTranslations.save(translationDoc, { overwrite: true });
+          await this.serviceTranslations.save(this._buildTranslationDoc(serviceKey, 'serviceId', trans), {
+            overwrite: true
+          });
         }
         logger.info(`Processed ${payload.translations.length} additional translations for service ${serviceKey}`);
       }
@@ -919,7 +932,7 @@ class ServiceCategoryService {
       await this.serviceCategories.update(categoryKey, { nameEN: payload.nameEN });
 
       // 3. Update/create the other translations
-      if (payload.translations && Array.isArray(payload.translations)) {
+      if (payload.translations) {
         // For simplicity, we can remove old translations and add the new set.
         // A more complex implementation could merge changes.
         await this.db.query(aql`
@@ -930,17 +943,12 @@ class ServiceCategoryService {
       `);
 
         for (const trans of payload.translations) {
-          const transLocale = String(trans.languageCode).trim().toUpperCase();
-          const translationDoc = {
-            _key: `${categoryKey}_${transLocale}`,
-            serviceCategoryId: categoryKey,
-            languageCode: transLocale,
-            translation: trans.translation.trim(),
-            isActive: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          };
-          await this.serviceCategoryTranslations.save(translationDoc, { overwrite: true });
+          await this.serviceCategoryTranslations.save(
+            this._buildTranslationDoc(categoryKey, 'serviceCategoryId', trans),
+            {
+              overwrite: true
+            }
+          );
         }
         logger.info(`Processed ${payload.translations.length} additional translations for category ${categoryKey}`);
       }

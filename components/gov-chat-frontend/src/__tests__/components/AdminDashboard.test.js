@@ -642,74 +642,56 @@ describe('AdminDashboard', () => {
   });
 
   // -----------------------------------------------------------------------
-  // KH translation save — payload must match the backend write contract
-  // ({languageCode, translation}), not the GET shape ({lang, text}).
+  // KH translation save — rows are trimmed/validated in the component and
+  // converted to the backend write contract ({languageCode, translation})
+  // by serviceTreeService (tested there).
   // -----------------------------------------------------------------------
   describe('saveHierarchyItem payload contract', () => {
-    it('maps form rows {lang, text} to {languageCode, translation} on save', async () => {
-      const wrapper = createAdminDashboardWrapper();
-      const treeMock = require('../../services/serviceTreeService');
-      treeMock.updateService.mockClear();
-
-      wrapper.vm.hierarchyForm = {
-        visible: true,
-        mode: 'editService',
-        title: 'Edit Service',
-        _key: 'svc-1',
-        nameEN: 'Tax Filing',
-        translations: [{ lang: 'fr', text: 'Déclaration fiscale' }],
-        parentId: null
-      };
-
-      await wrapper.vm.saveHierarchyItem();
-
-      expect(treeMock.updateService).toHaveBeenCalledWith('svc-1', {
-        nameEN: 'Tax Filing',
-        translations: [{ languageCode: 'fr', translation: 'Déclaration fiscale' }]
-      });
-    });
-
-    it('trims whitespace from lang and text in the payload', async () => {
-      const wrapper = createAdminDashboardWrapper();
-      const treeMock = require('../../services/serviceTreeService');
-      treeMock.updateService.mockClear();
-
-      wrapper.vm.hierarchyForm = {
-        visible: true,
-        mode: 'editService',
-        title: 'Edit Service',
-        _key: 'svc-1',
-        nameEN: 'Tax Filing',
-        translations: [{ lang: ' fr ', text: '  Déclaration fiscale  ' }],
-        parentId: null
-      };
-
-      await wrapper.vm.saveHierarchyItem();
-
-      expect(treeMock.updateService).toHaveBeenCalledWith('svc-1', {
-        nameEN: 'Tax Filing',
-        translations: [{ languageCode: 'fr', translation: 'Déclaration fiscale' }]
-      });
-    });
-
-    it('rejects duplicates that differ only in case ("fr" vs "FR")', async () => {
+    // Mount the dashboard with an open edit-service form holding `translations`.
+    function mountEditingService(translations) {
       const wrapper = createAdminDashboardWrapper();
       const treeMock = require('../../services/serviceTreeService');
       treeMock.updateService.mockClear();
       mockEventBusEmit.mockClear();
-
       wrapper.vm.hierarchyForm = {
         visible: true,
         mode: 'editService',
         title: 'Edit Service',
         _key: 'svc-1',
         nameEN: 'Tax Filing',
-        translations: [
-          { lang: 'fr', text: 'A' },
-          { lang: 'FR', text: 'B' }
-        ],
+        translations,
         parentId: null
       };
+      return { wrapper, treeMock };
+    }
+
+    it('passes the normalized {lang, text} rows to the service', async () => {
+      const { wrapper, treeMock } = mountEditingService([{ lang: 'fr', text: 'Déclaration fiscale' }]);
+
+      await wrapper.vm.saveHierarchyItem();
+
+      expect(treeMock.updateService).toHaveBeenCalledWith('svc-1', {
+        nameEN: 'Tax Filing',
+        translations: [{ lang: 'fr', text: 'Déclaration fiscale' }]
+      });
+    });
+
+    it('trims whitespace from lang and text before sending', async () => {
+      const { wrapper, treeMock } = mountEditingService([{ lang: ' fr ', text: '  Déclaration fiscale  ' }]);
+
+      await wrapper.vm.saveHierarchyItem();
+
+      expect(treeMock.updateService).toHaveBeenCalledWith('svc-1', {
+        nameEN: 'Tax Filing',
+        translations: [{ lang: 'fr', text: 'Déclaration fiscale' }]
+      });
+    });
+
+    it('rejects duplicates that differ only in case ("fr" vs "FR")', async () => {
+      const { wrapper, treeMock } = mountEditingService([
+        { lang: 'fr', text: 'A' },
+        { lang: 'FR', text: 'B' }
+      ]);
 
       await wrapper.vm.saveHierarchyItem();
 
@@ -718,21 +700,9 @@ describe('AdminDashboard', () => {
     });
 
     it('never reports a save failure when the post-save refresh fails', async () => {
-      const wrapper = createAdminDashboardWrapper();
+      const { wrapper } = mountEditingService([{ lang: 'fr', text: 'Déclaration fiscale' }]);
       const treeMock = require('../../services/serviceTreeService');
-      treeMock.updateService.mockClear();
       treeMock.getAdminCategories.mockRejectedValueOnce(new Error('refresh blip'));
-      mockEventBusEmit.mockClear();
-
-      wrapper.vm.hierarchyForm = {
-        visible: true,
-        mode: 'editService',
-        title: 'Edit Service',
-        _key: 'svc-1',
-        nameEN: 'Tax Filing',
-        translations: [{ lang: 'fr', text: 'Déclaration fiscale' }],
-        parentId: null
-      };
 
       await wrapper.vm.saveHierarchyItem();
 

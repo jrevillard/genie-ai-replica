@@ -1,6 +1,24 @@
 // src/services/serviceTreeService.js - Connect ServiceTreePanelComponent to backend
 import httpService from './httpService';
 
+/**
+ * Converts a payload carrying translation rows in the read shape
+ * ({lang, text} — what the GET endpoints return and the forms hold)
+ * into the write contract ({languageCode, translation}) expected by the
+ * create/update endpoints.
+ * @param {Object} payload - { nameEN, translations: [{lang, text}] }.
+ * @returns {Object} The wire payload with {languageCode, translation} rows.
+ */
+function toWritePayload(payload) {
+  return {
+    ...payload,
+    translations: (payload.translations || []).map(({ lang, text }) => ({
+      languageCode: lang,
+      translation: text
+    }))
+  };
+}
+
 export default {
   /**
    * For the MAIN application sidebar.
@@ -128,13 +146,13 @@ export default {
 
   /**
    * Creates a new category.
-   * @param {Object} payload - The category data { nameEN, translations }.
+   * @param {Object} payload - The category data { nameEN, translations: [{lang, text}] }.
    * @returns {Promise<Object>} The newly created category.
    */
   async createCategory(payload) {
     try {
       // Send the payload directly to our new single-item creation endpoint
-      const response = await httpService.post('service-categories', payload);
+      const response = await httpService.post('service-categories', toWritePayload(payload));
       return response.data;
     } catch (error) {
       console.error('Error creating category:', error);
@@ -145,13 +163,13 @@ export default {
   /**
    * Updates an existing category.
    * @param {String} categoryId - The ID of the category to update.
-   * @param {Object} payload - The category data { nameEN, translations }.
+   * @param {Object} payload - The category data { nameEN, translations: [{lang, text}] }.
    * @returns {Promise<Object>} The updated category.
    */
   async updateCategory(categoryId, payload) {
     try {
       // Assumes a PUT endpoint at /service-categories/:id
-      const response = await httpService.put(`service-categories/${categoryId}`, payload);
+      const response = await httpService.put(`service-categories/${categoryId}`, toWritePayload(payload));
       return response.data;
     } catch (error) {
       console.error(`Error updating category ${categoryId}:`, error);
@@ -162,13 +180,13 @@ export default {
   /**
    * Creates a new service under a category.
    * @param {String} categoryId - The parent category ID.
-   * @param {Object} payload - The service data { nameEN, translations }.
+   * @param {Object} payload - The service data { nameEN, translations: [{lang, text}] }.
    * @returns {Promise<Object>} The newly created service.
    */
   async createService(categoryId, payload) {
     try {
       // Assumes a POST endpoint at /service-categories/:id/services
-      const response = await httpService.post(`service-categories/${categoryId}/services`, payload);
+      const response = await httpService.post(`service-categories/${categoryId}/services`, toWritePayload(payload));
       return response.data;
     } catch (error) {
       console.error(`Error creating service for category ${categoryId}:`, error);
@@ -179,13 +197,13 @@ export default {
   /**
    * Updates an existing service.
    * @param {String} serviceId - The ID of the service to update.
-   * @param {Object} payload - The service data { nameEN, translations }.
+   * @param {Object} payload - The service data { nameEN, translations: [{lang, text}] }.
    * @returns {Promise<Object>} The updated service.
    */
   async updateService(serviceId, payload) {
     try {
       // Assumes a PUT endpoint at /service-categories/services/:id
-      const response = await httpService.put(`service-categories/services/${serviceId}`, payload);
+      const response = await httpService.put(`service-categories/services/${serviceId}`, toWritePayload(payload));
       return response.data;
     } catch (error) {
       console.error(`Error updating service ${serviceId}:`, error);

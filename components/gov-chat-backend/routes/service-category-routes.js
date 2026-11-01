@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
-const { ValidationError } = require('../middleware/errors');
 const { logger } = require('../shared-lib');
 
 module.exports = (serviceCategoryService) => {
@@ -375,7 +374,7 @@ module.exports = (serviceCategoryService) => {
    *       '201':
    *         description: Category created successfully
    */
-  router.post('/', async (req, res) => {
+  router.post('/', async (req, res, next) => {
     const start = Date.now();
     try {
       const payload = req.body;
@@ -388,10 +387,9 @@ module.exports = (serviceCategoryService) => {
       res.status(201).json(result);
     } catch (error) {
       logger.error(`Error creating category: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
-      if (error instanceof ValidationError) {
-        return res.status(400).json({ message: error.message });
-      }
-      res.status(500).json({ message: error.message });
+      // Typed errors (ValidationError/NotFoundError/...) carry their own
+      // status code — the global error middleware renders them.
+      return next(error);
     }
   });
 
@@ -568,7 +566,7 @@ module.exports = (serviceCategoryService) => {
    *       '500':
    *         description: Server error
    */
-  router.post('/:categoryId/services', async (req, res) => {
+  router.post('/:categoryId/services', async (req, res, next) => {
     const start = Date.now();
     try {
       const { categoryId } = req.params;
@@ -582,10 +580,7 @@ module.exports = (serviceCategoryService) => {
         stack: error.stack,
         durationMs: Date.now() - start
       });
-      if (error instanceof ValidationError) {
-        return res.status(400).json({ message: error.message });
-      }
-      res.status(500).json({ message: error.message });
+      return next(error);
     }
   });
 
@@ -632,7 +627,7 @@ module.exports = (serviceCategoryService) => {
    *       '500':
    *         description: Server error
    */
-  router.put('/:categoryId', async (req, res) => {
+  router.put('/:categoryId', async (req, res, next) => {
     const start = Date.now();
     try {
       const { categoryId } = req.params;
@@ -646,10 +641,7 @@ module.exports = (serviceCategoryService) => {
         stack: error.stack,
         durationMs: Date.now() - start
       });
-      if (error instanceof ValidationError) {
-        return res.status(400).json({ message: error.message });
-      }
-      res.status(500).json({ message: error.message });
+      return next(error);
     }
   });
 
@@ -696,7 +688,7 @@ module.exports = (serviceCategoryService) => {
    *       '500':
    *         description: Server error
    */
-  router.put('/services/:serviceId', async (req, res) => {
+  router.put('/services/:serviceId', async (req, res, next) => {
     const start = Date.now();
     try {
       const { serviceId } = req.params;
@@ -710,10 +702,7 @@ module.exports = (serviceCategoryService) => {
         stack: error.stack,
         durationMs: Date.now() - start
       });
-      if (error instanceof ValidationError) {
-        return res.status(400).json({ message: error.message });
-      }
-      res.status(500).json({ message: error.message });
+      return next(error);
     }
   });
 

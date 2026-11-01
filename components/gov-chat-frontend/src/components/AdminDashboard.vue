@@ -2958,8 +2958,13 @@ export default {
 
     async saveHierarchyItem() {
       // --- 1. VALIDATION ---
-      const validTranslations = this.hierarchyForm.translations.filter((t) => t.lang.trim() && t.text.trim());
-      const langCodes = validTranslations.map((t) => t.lang.trim().toLowerCase());
+      // Normalize rows once: trimmed lang/text, empties dropped. The
+      // {lang, text} rows are converted to the write contract by the service
+      // layer (serviceTreeService).
+      const rows = this.hierarchyForm.translations
+        .map((t) => ({ lang: t.lang.trim(), text: t.text.trim() }))
+        .filter((r) => r.lang && r.text);
+      const langCodes = rows.map((r) => r.lang.toLowerCase());
 
       // Check for duplicate languages (case-insensitive — the backend
       // uppercases the code, so 'fr' and 'FR' would collide on one row)
@@ -2976,15 +2981,9 @@ export default {
       }
 
       // --- 2. PREPARE PAYLOAD ---
-      // The write endpoints expect the {languageCode, translation} contract
-      // (see service-category-routes.js); the form rows and GET endpoints use
-      // the {lang, text} read shape.
       const payload = {
         nameEN: this.hierarchyForm.nameEN,
-        translations: validTranslations.map(({ lang, text }) => ({
-          languageCode: lang.trim(),
-          translation: text.trim()
-        }))
+        translations: rows
       };
 
       this.isLoading = true;

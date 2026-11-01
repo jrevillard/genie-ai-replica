@@ -441,8 +441,10 @@ describe('write handlers map ValidationError to 400', () => {
 
     const response = await authPut('/api/service-categories/cat-1', { nameEN: 'X' });
 
+    // Generic errors reach the global error middleware, which answers a
+    // uniform 500 body (details only in development mode).
     expect(response.status).toBe(500);
-    expect(response.body).toEqual({ message: 'boom' });
+    expect(response.body.message).toBe('An unexpected error occurred');
   });
 });
 

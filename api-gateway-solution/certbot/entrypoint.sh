@@ -142,6 +142,21 @@ else
     request_certificate || true
 fi
 
+# Ownership fix-up on an existing pair (upgrade path): copy_certs only
+# runs at (re)issuance, so a pre-#1227 root:root 0600 key would keep the
+# uid-101 edge crash-looping until the renewal loop re-copied it — up to
+# 12 hours. Normalize in place whenever a pair already exists, valid or
+# not (idempotent).
+if [ -f "${SECRETS_DIR}/server.crt" ] && [ -f "${SECRETS_DIR}/server.key" ]; then
+    if chmod 644 "${SECRETS_DIR}/server.crt" \
+        && chmod 640 "${SECRETS_DIR}/server.key" \
+        && chgrp 101 "${SECRETS_DIR}/server.crt" "${SECRETS_DIR}/server.key"; then
+        echo "Certificate ownership normalized (group 101, key 0640)"
+    else
+        echo "WARNING: could not normalize certificate ownership — the edge will crash-loop if it cannot read the key"
+    fi
+fi
+
 # ---------------------------------------------------------------------------
 # Renewal loop (runs as PID 1 in foreground)
 # ---------------------------------------------------------------------------

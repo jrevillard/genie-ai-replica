@@ -654,6 +654,30 @@ describe('compose non-root contract (#1227)', () => {
     expect(validateComposeNonRoot(literalShort).violations).toEqual([]);
   });
 
+  test('mutations: a 6-space mode: after the deploy block is not deploy state', () => {
+    // The deploy block's open state must not outlive its indentation: a
+    // later 6-space mode:/restart_policy: under a DIFFERENT parent key
+    // (labels: here) would be credited to the service's deploy invariants
+    // and overwrite the real mode. Injected into backend-init (an
+    // allowlisted one-shot with a local deploy) so the invariant check
+    // actually judges it.
+    const hijacked = composeText.replace(
+      '  backend-init:\n    <<: *chown-init\n',
+      '  backend-init:\n' +
+        '    <<: *chown-init\n' +
+        '    deploy:\n' +
+        '      mode: global\n' +
+        '      restart_policy:\n' +
+        '        condition: on-failure\n' +
+        '        delay: 30s\n' +
+        '        max_attempts: 60\n' +
+        '    labels:\n' +
+        '      mode: replicated\n'
+    );
+    expect(hijacked).not.toBe(composeText);
+    expect(validateComposeNonRoot(hijacked).violations).toEqual([]);
+  });
+
   test("the runtime gate's SELF_DROPPING list matches the validator's allowlist", () => {
     // The shell gate keeps its own copy (no JS runtime there); without
     // this pin a third self-dropping image added to the validator would

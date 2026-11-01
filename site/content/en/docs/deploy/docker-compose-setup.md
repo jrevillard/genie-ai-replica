@@ -41,7 +41,13 @@ sudo chgrp 101 secrets/ssl/server.key && sudo chmod 0640 secrets/ssl/server.key
 ```
 
 (A root-owned 0600 key crash-loops nginx with a misleading openssl
-error; the Ansible path normalizes this itself.)
+error; the Ansible path normalizes this itself, and the certbot
+entrypoint normalizes an existing pair at startup on the compose path.)
+
+The key is readable by numeric group 101 (the nginx image's uid/gid —
+fixed upstream). On the HOST, check no untrusted account holds primary
+or supplemental gid 101 before deploying: a distro package group can
+occupy that id, and any member could read the TLS private key.
 
 Upgrading an existing deployment with a pre-#1227
 `data/database_backups` tree? The backend (uid 1000) must OWN it —

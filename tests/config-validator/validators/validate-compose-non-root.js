@@ -468,6 +468,14 @@ function validateComposeNonRoot(composeText) {
       localDeploySeen = true;
       continue;
     }
+    // dedent past the deploy map closes it: a later 6-space mode: or
+    // restart_policy: under a DIFFERENT parent key must not be credited to
+    // this service's deploy invariants (the block-open state must not
+    // outlive its indentation)
+    if (inDeploy && !/^ {6}/.test(line)) {
+      inDeploy = false;
+      inRestartPolicy = false;
+    }
     if (inDeploy) {
       if (/^ {6}restart_policy:\s*(?:#.*)?$/.test(line)) {
         inRestartPolicy = true;

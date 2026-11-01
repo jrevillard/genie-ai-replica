@@ -500,6 +500,10 @@ workflow:
         USERS_JSON=$(curl -sk --connect-timeout 5 --max-time 10 "${KC_URL}/admin/realms/genie/users?username=testuser&exact=true" \
           -H "Authorization: Bearer $ADMIN_TOKEN" || true)
         USER_ID=$(printf '%s' "$USERS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id']) if isinstance(d,list) and d and isinstance(d[0],dict) and 'id' in d[0] and d[0]['id'] else None" 2>/dev/null || true)
+        # Fixture-healthy = the three login-visible flags read true; only
+        # password drift is invisible to this lookup (and to any probe —
+        # the realm refuses direct access grants).
+        USER_HEALTHY=$(printf '%s' "$USERS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); u=d[0] if isinstance(d,list) and d and isinstance(d[0],dict) else None; print('yes' if u and u.get('enabled') is True and u.get('emailVerified') is True and not u.get('requiredActions') else 'no')" 2>/dev/null || true)
         if [ -z "$USER_ID" ]; then
           echo "ERROR: cannot resolve testuser id (last users answer: $(printf '%s' "${USERS_JSON:-}" | head -c 200))"
           if [ "$CREATE_STATUS" = "409" ]; then
@@ -513,47 +517,70 @@ workflow:
         echo "response body: ${CREATE_BODY}"
         exit 1
       }
+      reset_payload() {
+        python3 -c 'import json,sys; print(json.dumps({"type":"password","value":sys.argv[1],"temporary":False}))' "$TESTUSER_PWD"
+      }
       create_testuser
       if [ "$CREATE_STATUS" = "409" ]; then
-        # A 409 is not done: the existing account can hold any state from an
-        # older fixture revision — disabled, unverified email, a lingering
-        # required action, an old password — and every one of those fails the
-        # login-dependent specs far from the cause. The realm refuses direct
-        # access grants, so credential state cannot be probed either;
-        # converge by recreating the fixture account instead of trusting the
-        # existing one. Recreating replaces the Keycloak id, so backend rows
-        # keyed to the previous identity are orphaned — acceptable on a
-        # per-pipeline fixture stack. A user-level PUT is not an option:
-        # per .claude/rules/SERVER-TESTING.md it overwrites the whole
-        # credentials array. The realm forbids duplicate emails, so a 409
-        # with no resolvable testuser can only be a foreign owner of the
-        # fixture email — the resolution failure below names it.
+        # A 409 is not done: the account may be stale — disabled, unverified
+        # email, a lingering required action, an old password from an older
+        # fixture revision — and every one of those fails the login-dependent
+        # specs far from the cause. The realm refuses direct access grants,
+        # so credential drift cannot be probed: the password is reset
+        # unconditionally via the documented reset-password endpoint. Drift
+        # in the three login-visible flags means the account is deleted and
+        # recreated from the fixture payload; a user-level PUT is not used
+        # for that repair (the repo rule forbids partial user PUTs because
+        # they overwrite the credentials array, and credential handling on
+        # full PUTs is not a documented contract). Recreating replaces the
+        # Keycloak id, orphaning backend rows keyed to the previous
+        # identity — accepted on the drift path only, so the common retry
+        # against a healthy account keeps its id and its rows. The realm
+        # forbids duplicate emails, so a 409 with no resolvable testuser
+        # can only be a foreign owner of the fixture email — the resolution
+        # failure below names it.
         echo "testuser already exists (create returned 409): ${CREATE_BODY}"
         require_testuser_id
-        DEL_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X DELETE "${KC_URL}/admin/realms/genie/users/${USER_ID}" \
-          -H "Authorization: Bearer $ADMIN_TOKEN" || true)
-        DEL_STATUS=$(printf '%s' "$DEL_RESP" | tail -n1)
-        case "$DEL_STATUS" in ''|*[!0-9]*) DEL_STATUS="" ;; esac
-        DEL_BODY=$(printf '%s' "$DEL_RESP" | sed '$d' | head -c 200)
-        if [ "$DEL_STATUS" != "204" ] && [ "$DEL_STATUS" != "404" ]; then
-          echo "ERROR: cannot delete the stale testuser (HTTP $(http_label "$DEL_STATUS")) — delete the account manually and re-run the job"
-          echo "response body: ${DEL_BODY}"
-          exit 1
+        if [ "$USER_HEALTHY" = "yes" ]; then
+          RESET_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X PUT "${KC_URL}/admin/realms/genie/users/${USER_ID}/reset-password" \
+            -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+            -d "$(reset_payload)" || true)
+          RESET_STATUS=$(printf '%s' "$RESET_RESP" | tail -n1)
+          case "$RESET_STATUS" in ''|*[!0-9]*) RESET_STATUS="" ;; esac
+          if [ "$RESET_STATUS" != "204" ]; then
+            echo "ERROR: testuser password reset failed (HTTP $(http_label "$RESET_STATUS")) — the stale password would fail every login-dependent spec"
+            echo "response body: $(printf '%s' "$RESET_RESP" | sed '$d' | head -c 200)"
+            exit 1
+          fi
+          VERDICT="testuser exists, fixture-healthy — password converged (reset answered 204, id unchanged)"
+        else
+          echo "testuser exists with drifted login state — deleting and recreating it"
+          DEL_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X DELETE "${KC_URL}/admin/realms/genie/users/${USER_ID}" \
+            -H "Authorization: Bearer $ADMIN_TOKEN" || true)
+          DEL_STATUS=$(printf '%s' "$DEL_RESP" | tail -n1)
+          case "$DEL_STATUS" in ''|*[!0-9]*) DEL_STATUS="" ;; esac
+          DEL_BODY=$(printf '%s' "$DEL_RESP" | sed '$d' | head -c 200)
+          if [ "$DEL_STATUS" != "204" ] && [ "$DEL_STATUS" != "404" ]; then
+            echo "ERROR: cannot delete the stale testuser (HTTP $(http_label "$DEL_STATUS")) — delete the account manually and re-run the job"
+            echo "response body: ${DEL_BODY}"
+            exit 1
+          fi
+          if [ "$DEL_STATUS" = "404" ]; then
+            echo "testuser vanished between lookup and delete (HTTP 404) — recreating from scratch"
+          fi
+          create_testuser
+          if [ "$CREATE_STATUS" != "201" ]; then
+            die_bad_create
+          fi
+          require_testuser_id
+          VERDICT="testuser recreated (fixture state enforced)"
         fi
-        if [ "$DEL_STATUS" = "404" ]; then
-          echo "testuser vanished between lookup and delete (HTTP 404) — recreating from scratch"
-        fi
-        create_testuser
-        if [ "$CREATE_STATUS" != "201" ]; then
-          die_bad_create
-        fi
-        VERDICT="testuser recreated (fixture state enforced)"
       elif [ "$CREATE_STATUS" != "201" ]; then
         die_bad_create
       else
+        require_testuser_id
         VERDICT="testuser created"
       fi
-      require_testuser_id
       echo "$VERDICT"
       # Assign admin realm role to test user (required for document upload/delete)
       ADMIN_ROLE=$(curl -sk "${KC_URL}/admin/realms/genie/roles" \

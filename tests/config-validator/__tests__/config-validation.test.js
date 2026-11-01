@@ -2714,18 +2714,23 @@ describe('e2e merge-train changes filters (#1264)', () => {
   });
 
   // A 409 from the testuser create is convergence, not done: a stale
-  // account (disabled, unverified email, old password) that sails through
-  // provisioning fails every login-dependent spec far from the cause. Pin
-  // the full delete + recreate machinery — the delete call, its 204/404
-  // acceptance gate, and both create invocations — so a "simplification"
-  // that keeps the verdict text but drops the calls fails this pin instead
-  // of silently reverting to trust-the-409.
+  // account (disabled, unverified email, lingering required action, old
+  // password) that sails through provisioning fails every login-dependent
+  // spec far from the cause. Pin both repair arms of the convergence — the
+  // healthy path's reset-password endpoint and its 204 gate, the drifted
+  // path's delete call, 204/404 gate, both create invocations and the
+  // three id resolutions — so a "simplification" that keeps the verdict
+  // text but drops the machinery fails this pin instead of silently
+  // reverting to trust-the-409.
   test('the testuser 409 convergence is present in .e2e_web_base', () => {
     const section = sectionOf('.e2e_web_base');
+    expect(section).toContain('/reset-password');
+    expect(section).toContain('[ "$RESET_STATUS" != "204" ]');
     expect(section).toContain('X DELETE "${KC_URL}/admin/realms/genie/users/${USER_ID}"');
     expect(section).toContain('[ "$DEL_STATUS" != "204" ] && [ "$DEL_STATUS" != "404" ]');
     expect(section).toContain('testuser recreated');
     expect(section.match(/^[ \t]+create_testuser$/gm) || []).toHaveLength(2);
+    expect(section.match(/^[ \t]+require_testuser_id$/gm) || []).toHaveLength(3);
   });
 
   test.each(['e2e:playwright', 'scheduled:e2e-web'])('%s still extends the base that carries the probe', (job) => {

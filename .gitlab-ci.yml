@@ -461,23 +461,59 @@ workflow:
       fi
       # The committed realm refuses direct access grants — assert it. Keycloak
       # answers unauthorized_client BEFORE credential validation when the
-      # client has directAccessGrantsEnabled: false, so a success or any other
-      # error here means the posture drifted (unsupported_grant_type also
-      # counts as a refusal — the grant is unusable either way). Transport
-      # failures, 5xx and 429 retry; transport, gateway and rate-limit
-      # verdicts stay distinct from posture verdicts — none of them
-      # masquerades as a posture answer.
-      for i in 1 2 3; do
+      # client has directAccessGrantsEnabled: false, so a minted token means
+      # the posture drifted; unsupported_grant_type counts as a refusal too
+      # (the grant is unusable either way). Transport failures, 5xx and 429
+      # retry; transport, gateway and rate-limit verdicts stay distinct from
+      # posture verdicts — none of them masquerades as a posture answer, and
+      # every non-verdict failure logs the response body it saw.
+      for i in 1 2 3 4 5; do
         ROPC_STATUS=$(curl -sk --max-time 15 -o /tmp/ropc-probe-body.json -w "%{http_code}" -X POST \
           "${KC_URL}/realms/genie/protocol/openid-connect/token" \
           -d "client_id=genie-app" -d "grant_type=password" \
           -d "username=testuser" -d "password=TestPass123!") || true
         case "$ROPC_STATUS" in
           5[0-9][0-9]|429|000|"")
-            echo "ROPC probe attempt ${i}/3: no usable answer from the token endpoint (HTTP ${ROPC_STATUS:-none})"
-            [ "$i" -lt 3 ] && sleep 2 ;;
+            echo "ROPC probe attempt ${i}/5: no usable answer from the token endpoint (HTTP ${ROPC_STATUS:-none})"
+            [ "$i" -lt 5 ] && sleep 5 ;;
           *) break ;;
         esac
+      done
+      ROPC_FIELDS=$(python3 -c "import sys,json; d=json.load(open('/tmp/ropc-probe-body.json')); print(d.get('error',''), 'yes' if d.get('access_token') else 'no')" 2>/dev/null || true)
+      ROPC_ERROR=${ROPC_FIELDS%% *}
+      ROPC_TOKEN=${ROPC_FIELDS##* }
+      ROPC_BODY=$(head -c 200 /tmp/ropc-probe-body.json 2>/dev/null || true)
+      rm -f /tmp/ropc-probe-body.json
+      case "$ROPC_STATUS" in
+        429)
+          echo "ERROR: token endpoint rate-limited the probe (HTTP 429) — not a posture verdict; check gateway rate limiting; body: ${ROPC_BODY:-none}"
+          exit 1
+          ;;
+        4[0-9][0-9])
+          if [ "$ROPC_ERROR" = "unauthorized_client" ] || [ "$ROPC_ERROR" = "unsupported_grant_type" ]; then
+            echo "ROPC refusal verified: genie-app rejects direct access grants (HTTP ${ROPC_STATUS} ${ROPC_ERROR})"
+            exit 0
+          elif [ -n "$ROPC_ERROR" ]; then
+            echo "ERROR: unexpected error '${ROPC_ERROR}' from the genie token endpoint (HTTP ${ROPC_STATUS}) — not a recognized refusal verdict; body: ${ROPC_BODY:-none}"
+            exit 1
+          else
+            echo "ERROR: unexpected HTTP ${ROPC_STATUS} with a non-Keycloak body from the genie token endpoint — not a posture verdict; check gateway routing (nginx/Kong); body: ${ROPC_BODY:-none}"
+            exit 1
+          fi
+          ;;
+        2[0-9][0-9]|3[0-9][0-9])
+          if [ "$ROPC_TOKEN" = "yes" ]; then
+            echo "ERROR: genie realm ROPC posture drifted: token endpoint returned HTTP ${ROPC_STATUS} with an access token for a direct-access grant — directAccessGrantsEnabled must stay false on genie-app"
+          else
+            echo "ERROR: unexpected HTTP ${ROPC_STATUS} with a non-Keycloak body from the genie token endpoint — not a posture verdict; check gateway routing (nginx/Kong); body: ${ROPC_BODY:-none}"
+          fi
+          exit 1
+          ;;
+        *)
+          echo "ERROR: could not get a verdict from the genie token endpoint after 5 attempts (HTTP ${ROPC_STATUS:-none}) — transport or gateway failure, not a posture result"
+          exit 1
+          ;;
+      esac
       done
       ROPC_FIELDS=$(python3 -c "import sys,json; d=json.load(open('/tmp/ropc-probe-body.json')); print(d.get('error',''), 'yes' if d.get('access_token') else 'no')" 2>/dev/null || true)
       ROPC_ERROR=${ROPC_FIELDS%% *}

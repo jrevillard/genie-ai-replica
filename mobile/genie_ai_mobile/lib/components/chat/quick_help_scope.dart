@@ -468,7 +468,15 @@ String? quickHelpFieldOf(Map<String, dynamic> button, String key) =>
 /// quickHelpFieldOf (a string compare, no truthiness).
 String? quickHelpIdOf(Map<String, dynamic>? button) {
   final raw = button?['id'];
-  return configTruthy(raw) ? raw.toString() : null;
+  if (!configTruthy(raw)) return null;
+  // A number carries the form JAVASCRIPT serializes: the web's JSON tag
+  // for an integral value is `5`, while Dart's double toString gives
+  // '5.0' — a web-saved conversation would miss the restore index. The
+  // integral form is the tag form, whatever the JSON decode produced.
+  if (raw is double && raw.isFinite && raw == raw.truncateToDouble()) {
+    return raw.toInt().toString();
+  }
+  return raw.toString();
 }
 
 /// Whether the card DECLARES a scope — a category the hierarchy names, or
@@ -792,11 +800,15 @@ class ConversationScopeResolver {
 
   /// The buttons by id, FIRST-wins.
   ///
-  /// A configuration error can give two cards the same id. The web keeps
-  /// the FIRST — its verdict map and its restore lookup are both
-  /// first-wins — so the mobile must too, or the same saved conversation
-  /// restores a DIFFERENT scope on the two platforms. A map literal would
-  /// keep the LAST: the later key overwrites the earlier one.
+  /// A configuration error can give two cards the same id. The web's
+  /// restore lookup (`find` over its button list) resolves the FIRST,
+  /// so the mobile index must keep the first too, or the same saved
+  /// conversation restores a DIFFERENT scope on the two platforms. (The
+  /// web's verdict map is written with `map.set` — last-wins — but its
+  /// input is the already-deduped button list, so no duplicate reaches
+  /// either consumer; the dedupe at load is where the FIRST rule is
+  /// actually enforced. A map literal here would keep the LAST: the
+  /// later key overwrites the earlier one.)
   static Map<String, Map<String, dynamic>> _indexButtons(
     List<Map<String, dynamic>> buttons,
   ) {

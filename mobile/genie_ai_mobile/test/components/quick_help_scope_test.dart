@@ -390,6 +390,24 @@ void main() {
       expect(scope.serviceLabelsEn, ['Births']);
     });
 
+    test('a web-saved tag restores against a FLOAT-id card', () {
+      // The config wrote 5.0; the web's JSON tag is 5, the mobile's
+      // decode produces the double 5.0. The index key must be the JS
+      // serialization ('5'), not Dart's ('5.0'), or the same saved
+      // conversation restores on the web and refuses here.
+      final floatId = [
+        {
+          'id': 5.0,
+          'category': '2',
+          'serviceLabels': ['Births'],
+        },
+      ];
+      final scope = convResolver(floatId).resolve(tags: [5], categoryKey: '2');
+
+      expect(scope.quickHelpButtonId, '5');
+      expect(scope.serviceLabelsEn, ['Births']);
+    });
+
     test(
       'a web-saved title tag (a falsy-id card) restores as a sidebar tag',
       () {
@@ -1633,6 +1651,15 @@ void main() {
         '0',
       );
       expect(quickHelpButtonIdentity({'id': 5, 'resolvedTitle': 'Card'}), '5');
+    });
+
+    test('a numeric id carries the tag form JavaScript serializes', () {
+      // The web saves the id as JSON — a JS number serializes 5.0 as 5.
+      // Dart's double toString would give '5.0', and the web-saved tag
+      // ('5') would miss the restore index. The integral form is the
+      // tag form, whatever the JSON decode produced.
+      expect(quickHelpButtonIdentity({'id': 5.0, 'resolvedTitle': 'C'}), '5');
+      expect(quickHelpButtonIdentity({'id': 5, 'resolvedTitle': 'C'}), '5');
     });
   });
 

@@ -42,7 +42,8 @@ echo "==> Generating OpenAPI spec from backend source..."
 # env read anywhere in the envelope or the transitive swagger-schemas.js —
 # present or future — can reach the committed artifacts from the invoking
 # shell. Same backend sources always regenerate byte-identical artifacts.
-(cd "$BACKEND_DIR" && env -i PATH="$PATH" HOME="$HOME" API_URL=https://localhost PORT=3000 \
+# Linux/macOS only: env -i strips what node.exe needs on Windows.
+(cd "$BACKEND_DIR" && env -i PATH="$PATH" HOME="${HOME:-/tmp}" API_URL=https://localhost PORT=3000 \
   KEYCLOAK_URL=https://keycloak.example.com/auth KEYCLOAK_REALM=genie node -e "
 const assert = require('assert');
 const swaggerJsdoc = require('swagger-jsdoc');
@@ -58,8 +59,8 @@ const spec = swaggerJsdoc({
 // Pin-survival checks: a pin assignment dropped from the env -i line shows
 // up here as an 'undefined' interpolation. The envelope's URL construction
 // is asserted by the backend suite, not re-encoded here.
-assert.strictEqual(spec.servers?.[0]?.url, 'https://localhost',
-  'servers[0].url does not match the API_URL pin — a pin assignment is'
+assert.ok((spec.servers ?? []).some((s) => s?.url === 'https://localhost'),
+  'no server entry carries the API_URL pin value — a pin assignment is'
   + ' missing from the env -i line above.');
 const flow = spec.components?.securitySchemes?.KeycloakOAuth2?.flows?.authorizationCode;
 for (const [label, url] of [

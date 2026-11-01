@@ -481,29 +481,32 @@ workflow:
           -d "client_id=genie-app" -d "grant_type=password" \
           -d "username=ropc-probe-no-such-user" -d "password=ropc-probe-bogus-credentials") || ROPC_CURL_RC=$?
         case "$ROPC_STATUS" in
-          # A definitive status with a clean curl exit classifies immediately;
-          # a non-zero exit (timeout after headers, reset mid-body) means the
-          # answer was truncated — retry it like the other transport faults.
+          # Transient statuses retry even with a clean curl exit; any other
+          # definitive status with a clean exit classifies immediately, and
+          # a non-zero exit (timeout after headers, reset mid-body) means
+          # the answer was truncated — retry it like the other faults.
+          408|425|429) ;;
           [234][0-9][0-9])
             if [ "$ROPC_CURL_RC" -eq 0 ]; then ROPC_ANSWERED=1; break; fi ;;
         esac
         echo "ROPC probe attempt ${i}/5: no usable answer from the token endpoint (HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC})"
         { [ "$i" -lt 5 ] && sleep 5; } || true
       done
+      # A truncated 200 token response can land in the body of a transport
+      # failure; withhold any body that carries a minted token.
+      ROPC_BODY=$(head -c 200 /tmp/ropc-probe-body.json 2>/dev/null || true)
+      case "$ROPC_BODY" in
+        *access_token*) ROPC_BODY="<token response withheld>" ;;
+      esac
       if [ -z "$ROPC_ANSWERED" ]; then
+        rm -f /tmp/ropc-probe-body.json
         echo "ERROR: no usable answer from the genie token endpoint in 5 attempts (last HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC:-0}) — transport or gateway failure, not a posture result; last body: ${ROPC_BODY:-none}"
         exit 1
       fi
       ROPC_FIELDS=$(python3 -c "import sys,json; d=json.load(open('/tmp/ropc-probe-body.json')); print(d.get('error','') + '|' + ('yes' if d.get('access_token') else 'no'))" 2>/dev/null || true)
       ROPC_ERROR=${ROPC_FIELDS%|*}
       ROPC_TOKEN=${ROPC_FIELDS#*|}
-      ROPC_BODY=$(head -c 200 /tmp/ropc-probe-body.json 2>/dev/null || true)
       rm -f /tmp/ropc-probe-body.json
-      # A truncated 200 token response can land in the body of a transport
-      # failure; withhold any body that carries a minted token.
-      case "$ROPC_BODY" in
-        *access_token*) ROPC_BODY="<token response withheld>" ;;
-      esac
       ropc_gateway_fail() {
         echo "ERROR: unexpected HTTP ${ROPC_STATUS} with a non-Keycloak body from the genie token endpoint — not a posture verdict; check gateway routing (nginx/Kong); body: ${ROPC_BODY:-none}"
         exit 1

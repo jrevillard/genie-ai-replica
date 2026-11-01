@@ -224,6 +224,11 @@
     # the uid-1000 ownership the migration just handed over. The resolved
     # spelling comes from group_vars (ONE formula for every consumer).
     _fix_payload_data_path: "{{ data_dir_resolved }}"
+    # The heal/probe prune list: the data dir ITSELF plus every
+    # deploy_dir-level ancestor on the way to it (a data_dir nested two
+    # levels deep must not have its parent `state/` chown -R'd — that
+    # would re-flip the uid-1000 handover the migration just performed).
+    _fix_payload_data_chain: []
     # secrets/ is excluded too: the SSL certificate tree is ROOT-owned by
     # DESIGN (root:101 0640 key — the "Normalize SSL certificate ownership"
     # block owns it later in this play), so leaving it to the payload heal
@@ -235,12 +240,11 @@
     # depth-1 probe could never re-detect.
     _fix_payload_probe_cmd: >-
       find "{{ deploy_dir }}" -mindepth 1
-      \( -path "{{ _fix_payload_data_path }}" -o -name secrets \) -prune -o
+      {{ _fix_payload_prune_expr }}
       ! -uid {{ ansible_user_uid }} -print -quit
     _fix_payload_ownership_cmd: >-
       find "{{ deploy_dir }}" -mindepth 1 -maxdepth 1
-      ! -path "{{ _fix_payload_data_path }}"
-      ! -name secrets
+      {{ _fix_payload_prune_expr }}
       -exec chown -R -h {{ ansible_user }}:{{ ansible_user }} {} +
   tasks:
     # Images come from GitLab registry; only compose + configs needed on target.
@@ -248,6 +252,25 @@
     - name: Set raw base URL
       ansible.builtin.set_fact:
         _raw_base: "{{ repo_url | regex_replace('\\.git$', '') }}/-/raw/{{ repo_branch }}"
+
+    - name: Build the data-dir exclusion chain (the dir + its ancestors)
+      # For ./data the chain is [deploy_dir/data]; for a nested absolute
+      # override (/opt/genieai/state/data) it is
+      # [deploy_dir/state, deploy_dir/state/data]; for an override OUTSIDE
+      # deploy_dir the intermediate spellings never match real children
+      # and prune to a harmless no-op.
+      ansible.builtin.set_fact:
+        _fix_payload_data_chain: >-
+          {{ _fix_payload_data_chain | default([data_dir_resolved]) + [deploy_dir ~ '/' ~ ((data_dir_resolved | relpath(deploy_dir)) | split('/') | list)[0:idx + 1] | join('/')] }}
+      vars:
+        _rel_parts: "{{ (data_dir_resolved | relpath(deploy_dir)) | split('/') | list }}"
+      loop: "{{ range(1, _rel_parts | length + 1) | list }}"
+      loop_control:
+        index_var: idx
+
+    - name: Build the find prune expression from the chain
+      ansible.builtin.set_fact:
+        _fix_payload_prune_expr: "{{ '(' ~ (_fix_payload_data_chain | map('regex_replace', '^(.+)$', '-path "\\1"') | join(' -o ')) ~ ' -o -path "' ~ deploy_dir ~ '/secrets"' ~ ') -prune' }}"
 
     - name: Define deploy files
       ansible.builtin.set_fact:

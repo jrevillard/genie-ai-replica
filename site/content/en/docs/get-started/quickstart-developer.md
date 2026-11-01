@@ -96,6 +96,15 @@ values with `grep ^KEY .env | cut -d= -f2-` instead.
 
 ## Step 2 — Start the dependency stack (no GPU)
 
+Two host binds are `create_host_path: false` (#1227) and must pre-exist
+on a clean clone (none of `data/` or `secrets/` is tracked in git) — a
+missing one fails the service create loudly instead of docker silently
+creating it root-owned:
+
+```bash
+mkdir -p data/database_backups secrets/ssl
+```
+
 ```bash
 docker compose up -d \
   postgres kong-migrations kong kong-config \

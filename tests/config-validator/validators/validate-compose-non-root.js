@@ -310,6 +310,7 @@ function validateComposeNonRoot(composeText) {
   {
     let anchorName = null; // which extension anchor is being scanned
     let inAnchorPolicy = false;
+    let inAnchorDeploy = false; // inside the anchor's deploy: block
     let anchorKey = null; // which 2-space key the current 4-space list belongs to
     // The placement extension's deploy: is what the sequence-merged inits
     // actually inherit (last map wins whole) — its policy needs its own
@@ -338,6 +339,14 @@ function validateComposeNonRoot(composeText) {
       const anchorKeyLine = line.match(/^ {2}([\w-]+):\s*(?:\[([^\]]*)\]\s*)?(?:#.*)?$/);
       if (anchorKeyLine) {
         anchorKey = anchorKeyLine[1];
+        // the anchor's deploy: key arms the gated policy parser — without
+        // this the anchorKey handler consumes the line first and the
+        // deploy block is never entered
+        if (anchorKey === 'deploy') {
+          inAnchorDeploy = true;
+          anchorKey = null;
+          continue;
+        }
         // flow-form cap lists on the anchor: the same spelling the
         // service-level parser accepts — route the bracket payload to
         // the right defaults list
@@ -369,29 +378,46 @@ function validateComposeNonRoot(composeText) {
       const restart = line.match(/^ {2}restart:\s*['"]?([\w:-]+)['"]?\s*(?:#.*)?$/);
       if (restart && anchorName === 'x-chown-init') anchorDefaults.restart = restart[1];
       const nested = anchorName === 'x-chown-init-genieai'; // policy lives under its deploy:
-      const anchorAttempts = line.match(nested ? /^ {8}max_attempts:\s*(\d+)\s*$/ : /^ {6}max_attempts:\s*(\d+)\s*$/);
-      if (anchorAttempts) policyOf().maxAttempts = anchorAttempts[1];
-      if (line.match(nested ? /^ {6}restart_policy:/ : /^ {4}restart_policy:/)) {
-        inAnchorPolicy = true;
+      // block-state gating, the same hijack doctrine the service-level
+      // parser enforces: mode only under deploy:, condition/max_attempts
+      // only under restart_policy:
+      const dInd = nested ? 4 : 2; // the anchor's deploy: key indent
+      // the OUTER anchor's 2-space deploy: is armed by the anchorKey
+      // handler above; the nested extension's 4-space deploy: arms here
+      // (the 2-space handler cannot see it)
+      if (!inAnchorDeploy && nested && line.match(/^ {4}deploy:(?:\s.*)?$/)) {
+        inAnchorDeploy = true;
         continue;
       }
-      const anchorMode = line.match(
-        nested ? /^ {6}mode:\s*['"]?(\w+)['"]?\s*(?:#.*)?$/ : /^ {4}mode:\s*['"]?(\w+)['"]?\s*(?:#.*)?$/
-      );
-      if (anchorMode) {
-        policyOf().mode = anchorMode[1];
-        continue;
+      if (inAnchorDeploy && !line.match(new RegExp(`^ {${dInd + 2}}`)) && line.trim() !== '') {
+        inAnchorDeploy = false;
+        inAnchorPolicy = false;
       }
-      if (inAnchorPolicy) {
-        if (!line.match(nested ? /^ {8}/ : /^ {6}/)) {
+      if (inAnchorDeploy && !inAnchorPolicy) {
+        const anchorMode = line.match(new RegExp(`^ {${dInd + 2}}mode:\\s*['"]?(\\w+)['"]?\\s*(?:#.*)?$`));
+        if (anchorMode) {
+          policyOf().mode = anchorMode[1];
+          continue;
+        }
+        if (line.match(new RegExp(`^ {${dInd + 2}}restart_policy:(?:\\s.*)?$`))) {
+          inAnchorPolicy = true;
+          continue;
+        }
+      }
+      if (inAnchorDeploy && inAnchorPolicy) {
+        const cInd = dInd + 4;
+        if (!line.match(new RegExp(`^ {${cInd}}`)) && line.trim() !== '') {
           inAnchorPolicy = false;
-        } else {
-          const cond = line.match(
-            nested
-              ? /^ {8}condition:\s*['"]?([\w-]+)['"]?\s*(?:#.*)?$/
-              : /^ {6}condition:\s*['"]?([\w-]+)['"]?\s*(?:#.*)?$/
-          );
-          if (cond) policyOf().condition = cond[1];
+          continue;
+        }
+        const anchorAttempts = line.match(new RegExp(`^ {${cInd}}max_attempts:\\s*(\\d+)\\s*$`));
+        if (anchorAttempts) {
+          policyOf().maxAttempts = anchorAttempts[1];
+          continue;
+        }
+        const cond = line.match(new RegExp(`^ {${cInd}}condition:\\s*['"]?([\\w-]+)['"]?\\s*(?:#.*)?$`));
+        if (cond) {
+          policyOf().condition = cond[1];
           continue;
         }
       }

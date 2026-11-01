@@ -551,6 +551,19 @@ describe('compose non-root contract (#1227)', () => {
     expect(vHome.some((v) => v.includes('backend') && v.includes('deployment-authored'))).toBe(true);
   });
 
+  test('pin: the secrets/ssl bind keeps its create_host_path opt-out', () => {
+    // The edge nginx bind is the file's last untracked host source —
+    // outside the data dir, so NEITHER contract half would flag its
+    // removal. A future edit deleting the opt-out (or reverting to short
+    // syntax) silently reintroduces docker's root-owned creation on a
+    // clean checkout. Pinned like the kong-logs claim.
+    const bindAt = composeText.indexOf('source: ./secrets/ssl');
+    expect(bindAt).toBeGreaterThan(-1);
+    const nginxBlock = composeText.slice(bindAt, bindAt + 300);
+    expect(nginxBlock).toContain('create_host_path: false');
+    expect(composeText).not.toContain('./secrets/ssl:/etc/nginx/ssl');
+  });
+
   test('mutations: commented service-local cap items keep the defaults', () => {
     // The service-local cap-item matchers were the one spelling class
     // without trailing-comment tolerance — a DOCUMENTED cap item (the
@@ -634,8 +647,8 @@ describe('compose non-root contract (#1227)', () => {
     expect(v1.some((v) => v.includes('x-chown-init-genieai') && v.includes('condition: on-failure'))).toBe(true);
 
     const attemptsStripped = composeText.replace(
-      '      restart_policy:\n        condition: on-failure\n        delay: 30s\n        max_attempts: 60\n\nservices:',
-      '      restart_policy:\n        condition: on-failure\n        delay: 30s\n\nservices:'
+      '          - node.labels.genieai == true\n      restart_policy:\n        condition: on-failure\n        delay: 30s\n        max_attempts: 60',
+      '          - node.labels.genieai == true\n      restart_policy:\n        condition: on-failure\n        delay: 30s'
     );
     expect(attemptsStripped).not.toBe(composeText);
     const { violations: v2 } = validateComposeNonRoot(attemptsStripped);
@@ -926,9 +939,7 @@ describe('compose non-root contract (#1227)', () => {
     const namedVolume = untypedEof.replace('source: ${DATA_DIR:-./data}/logs/kong', 'source: kong_logs');
     expect(validateComposeNonRoot(namedVolume).violations).toEqual([]);
 
-    const explicitVolume = untypedEof
-      .replace('      - source:', '      - type: volume\n        source:')
-      .replace('        bind: {create_host_path: false}\n', '');
+    const explicitVolume = untypedEof.replace('      - source:', '      - type: volume\n        source:');
     expect(validateComposeNonRoot(explicitVolume).violations).toEqual([]);
   });
 

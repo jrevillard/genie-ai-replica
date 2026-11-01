@@ -367,6 +367,10 @@ class ServiceCategoryService {
               updatedAt: new Date().toISOString()
             };
             await this.serviceTranslations.save(translationDoc, { overwrite: true });
+          } else {
+            logger.warn(
+              `Skipping translation with unexpected shape for service ${serviceKey} (expected {languageCode, translation}, got keys: ${Object.keys(trans).join(',')})`
+            );
           }
         }
         logger.info(`Processed ${payload.translations.length} additional translations for service ${serviceKey}`);
@@ -912,6 +916,10 @@ class ServiceCategoryService {
               updatedAt: new Date().toISOString()
             };
             await this.serviceCategoryTranslations.save(translationDoc, { overwrite: true });
+          } else {
+            logger.warn(
+              `Skipping translation with unexpected shape for category ${categoryKey} (expected {languageCode, translation}, got keys: ${Object.keys(trans).join(',')})`
+            );
           }
         }
         logger.info(`Processed ${payload.translations.length} additional translations for category ${categoryKey}`);

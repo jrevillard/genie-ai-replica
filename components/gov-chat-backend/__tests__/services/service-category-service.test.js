@@ -37,7 +37,7 @@ jest.mock('../../middleware/errors', () => ({
   }
 }));
 
-const { dbService } = require('../../shared-lib');
+const { dbService, logger } = require('../../shared-lib');
 
 function createMockCollection() {
   return {
@@ -219,6 +219,23 @@ describe('ServiceCategoryService', () => {
 
     it('should throw ValidationError when nameEN is missing', async () => {
       await expect(service.updateServiceWithTranslations('svc-1', {})).rejects.toThrow('nameEN is required');
+    });
+
+    it('should warn and skip entries that use the read shape {lang, text}', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+
+      const result = await service.updateServiceWithTranslations('svc-1', {
+        nameEN: 'Updated',
+        translations: [{ lang: 'fr', text: 'Mis a jour' }]
+      });
+
+      expect(result.status).toBe('updated');
+      expect(mockServiceTranslations.save).not.toHaveBeenCalledWith(
+        expect.objectContaining({ translation: 'Mis a jour' }),
+        expect.anything()
+      );
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unexpected shape'));
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('svc-1'));
     });
 
     it('should throw when service does not exist', async () => {
@@ -449,6 +466,23 @@ describe('ServiceCategoryService', () => {
       await expect(service.updateCategoryWithTranslations('cat-1', { nameEN: '' })).rejects.toThrow(
         'nameEN is required'
       );
+    });
+
+    it('should warn and skip entries that use the read shape {lang, text}', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+
+      const result = await service.updateCategoryWithTranslations('cat-1', {
+        nameEN: 'Updated',
+        translations: [{ lang: 'fr', text: 'Mis a jour' }]
+      });
+
+      expect(result.status).toBe('updated');
+      expect(mockServiceCategoryTranslations.save).not.toHaveBeenCalledWith(
+        expect.objectContaining({ translation: 'Mis a jour' }),
+        expect.anything()
+      );
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unexpected shape'));
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('cat-1'));
     });
   });
 

@@ -642,6 +642,35 @@ describe('AdminDashboard', () => {
   });
 
   // -----------------------------------------------------------------------
+  // KH translation save — payload must match the backend write contract
+  // ({languageCode, translation}), not the GET shape ({lang, text}).
+  // -----------------------------------------------------------------------
+  describe('saveHierarchyItem payload contract', () => {
+    it('maps form rows {lang, text} to {languageCode, translation} on save', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      const treeMock = require('../../services/serviceTreeService');
+      treeMock.updateService.mockClear();
+
+      wrapper.vm.hierarchyForm = {
+        visible: true,
+        mode: 'editService',
+        title: 'Edit Service',
+        _key: 'svc-1',
+        nameEN: 'Tax Filing',
+        translations: [{ lang: 'fr', text: 'Déclaration fiscale' }],
+        parentId: null
+      };
+
+      await wrapper.vm.saveHierarchyItem();
+
+      expect(treeMock.updateService).toHaveBeenCalledWith('svc-1', {
+        nameEN: 'Tax Filing',
+        translations: [{ languageCode: 'fr', translation: 'Déclaration fiscale' }]
+      });
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // Task 1c: Loading/error states
   // -----------------------------------------------------------------------
   describe('error handling', () => {

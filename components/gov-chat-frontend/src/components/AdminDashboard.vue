@@ -2975,9 +2975,12 @@ export default {
       }
 
       // --- 2. PREPARE PAYLOAD ---
+      // The write endpoints expect the {languageCode, translation} contract
+      // (see service-category-routes.js); the form rows and GET endpoints use
+      // the {lang, text} read shape.
       const payload = {
         nameEN: this.hierarchyForm.nameEN,
-        translations: validTranslations
+        translations: validTranslations.map(({ lang, text }) => ({ languageCode: lang, translation: text }))
       };
 
       this.isLoading = true;

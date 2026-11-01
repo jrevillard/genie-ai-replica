@@ -2240,10 +2240,25 @@ describe('e2e merge-train changes filters (#1264)', () => {
   const E2E_JOBS = ['e2e:integration', 'e2e:playwright'];
   let content;
   let filters;
+  let EXECUTED_GLOBS;
+  let EXECUTED_SPECS;
+  let DERIVED_CONSUMED;
 
   beforeAll(() => {
     content = fs.readFileSync(ciFile, 'utf-8');
     filters = parseGitlabCiJobChanges(ciFile, [ANCHOR, ...E2E_JOBS]);
+    // The derivation pipeline runs once per suite, not once per test: the CI
+    // text parse, the directory walk and the spec reads feed every assertion
+    // below from the same snapshot, so the executed paths a test asserts can
+    // never be computed from a different invocation than the consumed ones.
+    EXECUTED_GLOBS = executedPaths();
+    EXECUTED_SPECS = specFilesUnderExecuted();
+    DERIVED_CONSUMED = deriveConsumedPaths(
+      EXECUTED_SPECS.map((file) => ({
+        file,
+        source: fs.readFileSync(path.join(ROOT, file), 'utf-8')
+      }))
+    );
   });
 
   // Section of the file from a top-level key to the next one. The boundary
@@ -2295,16 +2310,27 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // (the fixtures dir). Anything else a spec consumes is not derived.
   const TESTS_E2E_ROOT = 'tests/e2e';
 
-  // Resolve a specifier the way Node does for these CJS specs: as-is, with
-  // .js appended, or as a directory index — first existing file wins.
-  // Candidates outside tests/e2e are dropped: a traversal or a cross-tree
-  // import must not become an anchor expectation.
+  // Containment + existence in one place: both derivation shapes drop
+  // anything that leaves tests/e2e (a traversal, a cross-tree import) or
+  // does not exist on disk — the regexes over-capture and the filesystem
+  // arbitrates. Returns the stat or null.
+  const statInTree = (candidate) => {
+    if (!candidate.startsWith(`${TESTS_E2E_ROOT}/`)) return null;
+    try {
+      return fs.statSync(path.join(ROOT, candidate));
+    } catch {
+      return null;
+    }
+  };
+
+  // Resolve a specifier the way Node does for these CJS specs: as-is, or
+  // with .js appended — first existing file wins. (Every relative import in
+  // the tree targets a flat .js file; a directory-index import gets this
+  // rule added when one appears.)
   const resolveSpecifier = (fromDir, specifier) => {
     const base = path.posix.normalize(path.posix.join(fromDir, specifier));
-    for (const candidate of [base, `${base}.js`, path.posix.join(base, 'index.js')]) {
-      if (!candidate.startsWith(`${TESTS_E2E_ROOT}/`)) continue;
-      const abs = path.join(ROOT, candidate);
-      if (fs.existsSync(abs) && fs.statSync(abs).isFile()) return candidate;
+    for (const candidate of [base, `${base}.js`]) {
+      if (statInTree(candidate)?.isFile()) return candidate;
     }
     return null;
   };
@@ -2340,10 +2366,9 @@ describe('e2e merge-train changes filters (#1264)', () => {
       for (const match of source.matchAll(joinRe)) {
         const segments = [...match[1].matchAll(/'([^']*)'/g)].map((m) => m[1]);
         const resolved = path.posix.normalize(path.posix.join(dir, ...segments));
-        if (!resolved.startsWith(`${TESTS_E2E_ROOT}/`)) continue;
-        const abs = path.join(ROOT, resolved);
-        if (!fs.existsSync(abs)) continue;
-        globs.add(toAnchorPath(resolved, fs.statSync(abs).isDirectory()));
+        const st = statInTree(resolved);
+        if (!st) continue;
+        globs.add(toAnchorPath(resolved, st.isDirectory()));
       }
     }
     return [...globs].sort();
@@ -2353,13 +2378,14 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // globs (a `X/**/*` glob narrows to the `X/` subtree — with a real
   // directory boundary, a sibling `X-v2/` is not covered — an exact entry
   // stays exact). Playwright's default testMatch runs *.spec.js AND *.test.js
-  // (playwright.config.js sets only testDir), so both count as executed.
-  const specFilesUnderExecuted = (executedGlobs) =>
+  // (the config test below pins that the config still leaves the default in
+  // place), so both count as executed.
+  const specFilesUnderExecuted = () =>
     scanTargets(
       fs
         .readdirSync(path.join(ROOT, TESTS_E2E_ROOT), { recursive: true })
         .map((f) => `${TESTS_E2E_ROOT}/${f.split(path.sep).join('/')}`),
-      executedGlobs
+      executedPaths()
     );
 
   // Pure selection of the executed files from a directory listing — the
@@ -2370,23 +2396,15 @@ describe('e2e merge-train changes filters (#1264)', () => {
       .filter((f) => f.endsWith('.spec.js') || f.endsWith('.test.js'))
       .filter((f) => executedGlobs.some((g) => (g.endsWith('/**/*') ? f.startsWith(`${g.slice(0, -5)}/`) : f === g)));
 
-  const derivedConsumedPaths = () =>
-    deriveConsumedPaths(
-      specFilesUnderExecuted(executedPaths()).map((file) => ({
-        file,
-        source: fs.readFileSync(path.join(ROOT, file), 'utf-8')
-      }))
-    );
-
   test('executed and consumed paths are listed in the shared anchor', () => {
     const anchorPaths = filters.get(ANCHOR);
-    for (const required of [...executedPaths(), ...derivedConsumedPaths()]) {
+    for (const required of [...EXECUTED_GLOBS, ...DERIVED_CONSUMED]) {
       expect(anchorPaths).toContain(required);
     }
   });
 
   test('derivation scans exactly the spec files the invocation executes', () => {
-    expect(specFilesUnderExecuted(executedPaths()).sort()).toEqual([
+    expect([...EXECUTED_SPECS].sort()).toEqual([
       'tests/e2e/chatbot/conversation-history.spec.js',
       'tests/e2e/chatbot/error-handling.spec.js',
       'tests/e2e/chatbot/quick-help-scope.spec.js',
@@ -2402,7 +2420,16 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // that stops matching (a require shape, the fixtures path.join) fails here
   // before it can silently shrink what the anchor check above covers.
   test('consumed paths derived from the executed specs are the expected set', () => {
-    expect(derivedConsumedPaths()).toEqual(['tests/e2e/fixtures/**/*', 'tests/e2e/helpers/**/*']);
+    expect(DERIVED_CONSUMED).toEqual(['tests/e2e/fixtures/**/*', 'tests/e2e/helpers/**/*']);
+  });
+
+  // The derivation assumes Playwright's default testMatch (*.spec.js and
+  // *.test.js). If the config ever pins its own testMatch, the scan set
+  // silently diverges from what actually executes — the same hand-copied
+  // drift this guard exists to catch, in its own input. Pin the assumption
+  // so a testMatch introduction fails here first, loudly.
+  test('playwright.config.js pins no testMatch of its own', () => {
+    expect(fs.readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8')).not.toMatch(/testMatch/);
   });
 
   describe('consumed-path derivation units', () => {

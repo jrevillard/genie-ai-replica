@@ -1,21 +1,61 @@
 // Shared OpenAPI component schemas — the single source of truth for the
 // components.schemas section of the runtime spec. Some are $ref'd from the
-// route annotations (Analytics, CategoryTree, Event, QueryContext); the rest
-// document the runtime contract in swagger-ui. Consumed by index.js (the
-// runtime swagger spec) and by scripts/generate-api-client.sh (the mobile
-// client generation spec), so both specs carry the same schemas.
+// route annotations (Analytics, CategoryTree, Event, EventCreated,
+// EventRequest, QueryContext); the rest document the runtime contract in
+// swagger-ui.
+// Consumed by index.js (the runtime swagger spec) and by
+// scripts/generate-api-client.sh (the mobile client generation spec), so
+// both specs carry the same schemas.
 module.exports = {
+  // The POST /api/analytics/events request wire — the route reads exactly
+  // these two fields; `timestamp` is server-set and not read from the wire.
+  // minLength: 1 covers the string half of the runtime's truthiness check
+  // (an empty eventType is refused with 400); additionalProperties:false
+  // says the stored document's `data` spelling is NOT accepted on the wire.
+  // The runtime does not yet enforce these — a truthy non-string eventType
+  // is stored as-is and unknown keys are dropped silently (#1293 tracks
+  // enforcing the declared shape). eventData is nullable because the
+  // generated Dart client emits `"eventData": null` whenever the field is
+  // omitted.
+  EventRequest: {
+    type: 'object',
+    required: ['eventType'],
+    additionalProperties: false,
+    properties: {
+      eventType: {
+        type: 'string',
+        minLength: 1,
+        description: 'Type of event (e.g., pageView, buttonClick)'
+      },
+      eventData: { type: 'object', nullable: true, description: 'Additional event data' }
+    }
+  },
+  // The persisted ArangoDB event document (GET /api/analytics/events items).
+  // The request payload arrives as `data` (stored by the service from the
+  // wire's `eventData`).
   Event: {
     type: 'object',
     properties: {
       _key: { type: 'string', description: 'Unique identifier' },
       userId: { type: 'string', description: 'ID of the user' },
       eventType: { type: 'string', description: 'Type of event (e.g., pageView, buttonClick)' },
-      eventData: { type: 'object', description: 'Additional event data' },
       timestamp: { type: 'string', format: 'date-time', description: 'Event timestamp' },
       _id: { type: 'string' },
       _rev: { type: 'string' },
       data: { type: 'object', description: 'Additional event data' }
+    }
+  },
+  // What POST /api/analytics/events actually answers: the storage metadata
+  // returned by the ArangoDB save (the full persisted document is never in
+  // that response body). All three keys are always present on a successful
+  // save — hence required.
+  EventCreated: {
+    type: 'object',
+    required: ['_id', '_key', '_rev'],
+    properties: {
+      _id: { type: 'string' },
+      _key: { type: 'string' },
+      _rev: { type: 'string' }
     }
   },
   Analytics: {

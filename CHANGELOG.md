@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The documented `Event` contract no longer conflates the request wire with the stored document.** The shared `Event` schema described both the POST `/api/analytics/events` request body and the persisted ArangoDB document, with `eventData` and `data` carrying the same description — a client author could not tell which spelling the wire wanted, and a request sending `data` was silently stored as `{}`. The contract is now split:
+  - `EventRequest` (required `eventType`, optional `eventData`) annotates the request body.
+  - `Event` keeps only the stored document shape.
+  - The 201 response is documented as the storage metadata the route actually returns (`_id` / `_key` / `_rev`, new `EventCreated` schema) instead of the full document that body never contained.
+- **No runtime behavior change.** The route still reads exactly `eventType` + `eventData`; the service still stores `data: eventData`.
+- **The generated Dart client was regenerated.** The `Event` model drops the request-only `eventData` property, `ApiAnalyticsEventsPostRequest` becomes `EventRequest`, and `apiAnalyticsEventsPost` returns the new `EventCreated` model. This is not a wire change, and no shipped code consumes the renamed models (the client package is generated and consumed in-repo, in the same commit). (#1223)
+
 ### Fixed
 
 - **The API documentation's Try-it-out no longer sends every request to a doubled `/api/api/...` path.** The API docs page served by the backend described its server address as ending in `/api` while every documented path already starts with `/api`, so executing a request from the page built URLs like `.../api/api/queries` and returned 404. The documented server address no longer carries the `/api` ending. A deployment setting `API_URL` (never documented, and set by no shipped configuration) must give the base address without the `/api` ending — a value ending in `/api` produced the same doubled URLs before this change. (#1222, !669)

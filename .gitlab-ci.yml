@@ -470,12 +470,11 @@ workflow:
       # distinguish a refused grant from a malformed request — a probe that
       # mis-sends its own grant_type would otherwise self-certify any
       # realm — so they fail as unrecognized, loudly, with the body.
-      # Keycloak answers unauthorized_client BEFORE credential
-      # validation when directAccessGrantsEnabled is false, so a minted token
-      # means the posture drifted; unsupported_grant_type counts as a refusal
-      # too (the grant is unusable either way). Transport failures, 5xx and
-      # 429 retry; transport, gateway and rate-limit verdicts stay distinct
-      # from posture verdicts — none of them masquerades as a posture answer.
+      # Keycloak answers unauthorized_client BEFORE credential validation
+      # when directAccessGrantsEnabled is false, so a minted token means the
+      # posture drifted. Transport failures, 5xx and 429 retry; transport,
+      # gateway and rate-limit verdicts stay distinct from posture verdicts
+      # — none of them masquerades as a posture answer.
       # Failure verdicts log the response body they saw, except the
       # token-mint drift case: its body IS the token, never logged.
       ROPC_ANSWERED=""
@@ -568,6 +567,10 @@ workflow:
           else
             ropc_gateway_fail
           fi
+          exit 1
+          ;;
+        *)
+          echo "ERROR: the probe reached an unclassified state (HTTP ${ROPC_STATUS:-none}) — failing loudly rather than passing without a verdict"
           exit 1
           ;;
       esac

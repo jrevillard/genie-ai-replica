@@ -50,6 +50,17 @@ contractual evidence — a fresh clone does not carry them.)
   vs `main` is empty. Rebase trap noted: the vendored `charts/*.tgz`
   (untracked) block the replay — move them aside first, regenerate
   with `helm dependency update` after.
+- **OPEA service resources are values-sized (0.2.140)** — the nine
+  OPEA templates built their service dict wholesale, so no environment
+  could size chatqna/dataprep/reranker/embedding/translation from
+  values. Each injection point now merges the template defaults under
+  the operator's `services.<name>` block (deep merge: an override
+  carries only the keys it names, the template keeps the rest —
+  defaults render byte-identical, and a `requests.memory: 4Gi`
+  override lands while sibling services stay untouched; mutation-
+  proven). The translation template, hand-rendered outside the
+  factory, reads `services.translation.resources` the same way. From
+  the deploy repo's forge-review issue (#1 there).
 - **The post-OKF review round (0.2.139)** — an adversarial pass over
   everything after the OKF verification found the OKF NetworkPolicy
   graph inverted against the application's real call graph: the chart

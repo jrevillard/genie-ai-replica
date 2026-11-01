@@ -46,7 +46,7 @@ judge/embedding endpoints follow the tier's in-cluster addresses. */ -}}
     )
 -}}
 {{- $valsServices := $vals.services | default dict -}}
-{{- $_ := set $valsServices "ragas-service" $svcVals -}}
+{{- $_ := set $valsServices "ragas-service" (mergeOverwrite $svcVals (index $valsServices "ragas-service" | default dict)) -}}
 {{- $_ := set $vals "services" $valsServices -}}
 {{- $ctx := dict "name" "ragas-service" "component" "ragas-service" "Values" $vals "Chart" .Chart "Release" .Release -}}
 {{- include "genieai-umbrella.serviceDeployment" $ctx }}

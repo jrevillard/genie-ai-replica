@@ -55,6 +55,11 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
   // Locale Tracking to trigger re-fetch on language change
   String _lastLoadedLocale = "";
 
+  // The fetch sequence, the supersession guard: a locale changed mid-fetch
+  // starts a newer load, and the late response of the old one — its tree or
+  // its error — must not win the race against the newer locale's.
+  int _categoryLoadSeq = 0;
+
   @override
   void initState() {
     super.initState();
@@ -76,6 +81,7 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
 
   Future<void> _loadCategories() async {
     final currentLocale = I18nService().currentLocale.languageCode;
+    final seq = ++_categoryLoadSeq;
 
     setState(() {
       _isLoading = true;
@@ -93,29 +99,113 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
       final response = await categoriesApi
           .apiServiceCategoriesCategoriesGetWithHttpInfo(locale: currentLocale);
 
+      // A locale switch while this fetch was in flight started a newer
+      // load: this response names the locale the UI has left, whatever
+      // it carries.
+      if (!mounted || seq != _categoryLoadSeq) return;
+
       if (response.statusCode == 200) {
         final categories = jsonDecode(response.body) as List<dynamic>;
 
-        if (mounted) {
-          setState(() {
-            _nodes = categories;
-            _isLoading = false;
-          });
-          debugPrint(
-            "[SERVICE_TREE] Successfully loaded ${_nodes.length} categories.",
-          );
-        }
+        setState(() {
+          _nodes = categories;
+          // The stored selection rows carry the display names of the
+          // locale they were picked under — re-read them from the new
+          // tree, or the next toggle emits a mixed-locale name.
+          _retitleStoredSelection();
+          _isLoading = false;
+        });
+        debugPrint(
+          "[SERVICE_TREE] Successfully loaded ${_nodes.length} categories.",
+        );
       } else {
         throw Exception('Failed to load categories: ${response.statusCode}');
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = tr("userProfile.errors.loadingFailed");
-          _isLoading = false;
-        });
-        debugPrint("[SERVICE_TREE] Error loading categories: $e");
+      // Same guard on the failure path: a superseded fetch's error must
+      // not paint over the newer locale's tree or kill its spinner.
+      if (!mounted || seq != _categoryLoadSeq) return;
+      setState(() {
+        _errorMessage = tr("userProfile.errors.loadingFailed");
+        _isLoading = false;
+      });
+      debugPrint("[SERVICE_TREE] Error loading categories: $e");
+    }
+  }
+
+  // ===========================================================================
+  // SELECTION RE-TITLING (LOCALE SWITCH)
+  // ===========================================================================
+
+  // The stored selection rows keep the DISPLAY names of the locale they
+  // were picked under. The tree reload above replaces the hierarchy, and
+  // the chat re-titles the context bar from its own locale-drift path —
+  // but the rows stayed in the old language, so the next toggle emitted a
+  // payload whose name joined the two locales. Re-read each row's display
+  // name from the new tree, in the row's OWN identity space: the entity
+  // key first, the ENGLISH label second (a tree that predates the key
+  // field) — the same rules the pick matched on. A row neither can
+  // address (no key, no EN label — its display name is locale-bound)
+  // keeps the name it carries, as does a row whose category or service
+  // the new tree no longer names. The WIRE fields (id, nameEn,
+  // category_id) are identities: they do not drift with the locale, and
+  // nothing here is re-emitted — a locale switch alone must never
+  // re-install the scope in the chat, which a Quick Help press may
+  // already have replaced.
+  void _retitleStoredSelection() {
+    if (_orderedSelection.isEmpty) return;
+
+    // One walk of the new tree: per category, the children's display
+    // names by entity key and by ENGLISH label, and the category's own
+    // ENGLISH name — the same fields the pick stored.
+    final namesByKey = <String, Map<String, String>>{};
+    final namesByEn = <String, Map<String, String>>{};
+    final catNameEn = <String, String>{};
+    for (var i = 0; i < _nodes.length; i++) {
+      final category = _nodes[i];
+      if (category is! Map) continue;
+      final catKey =
+          (category['catKey'] ?? category['key'] ?? category['id'] ?? i)
+              .toString();
+      final en = category['nameEN'];
+      if (en is String && en.isNotEmpty) catNameEn[catKey] = en;
+
+      final byKey = <String, String>{};
+      final byEn = <String, String>{};
+      final children = category['children'];
+      if (children is List) {
+        for (final child in children) {
+          if (child is! Map) continue;
+          final display = child['label'] ?? child['name'];
+          if (display is! String || display.isEmpty) continue;
+          final key = (child['_key'] ?? '').toString();
+          if (key.isNotEmpty) byKey.putIfAbsent(key, () => display);
+          final childEn = child['nameEN'];
+          if (childEn is String && childEn.isNotEmpty) {
+            byEn.putIfAbsent(childEn, () => display);
+          }
+        }
       }
+      namesByKey[catKey] = byKey;
+      namesByEn[catKey] = byEn;
+    }
+
+    for (final row in _orderedSelection) {
+      final catKey = row['category_id']?.toString() ?? '';
+      if (!namesByKey.containsKey(catKey)) continue;
+      final rowId = row['id'] as String? ?? '';
+      final rowEn = row['nameEn'] as String? ?? '';
+      if (rowId.isNotEmpty) {
+        final name = namesByKey[catKey]![rowId];
+        if (name != null) row['name'] = name;
+      } else if (rowEn.isNotEmpty) {
+        final name = namesByEn[catKey]![rowEn];
+        if (name != null) row['name'] = name;
+      }
+      // The node is in hand: a category edited since the pick carried a
+      // stale ENGLISH name.
+      final en = catNameEn[catKey];
+      if (en != null) row['categoryNameEn'] = en;
     }
   }
 

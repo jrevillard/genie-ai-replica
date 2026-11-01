@@ -459,6 +459,23 @@ workflow:
       else
         echo "WARNING: Could not assign admin role (admin role not found). Document tests may fail."
       fi
+      # The committed realm refuses direct access grants — assert it. Keycloak
+      # answers unauthorized_client BEFORE credential validation when the
+      # client has directAccessGrantsEnabled: false, so a 200 or any other
+      # error here means the posture drifted.
+      ROPC_RESP=$(curl -sk --max-time 15 -w "\n%{http_code}" -X POST \
+        "${KC_URL}/realms/genie/protocol/openid-connect/token" \
+        -d "client_id=genie-app" -d "grant_type=password" \
+        -d "username=testuser" -d "password=TestPass123!")
+      ROPC_STATUS=$(printf '%s' "$ROPC_RESP" | tail -n1)
+      ROPC_ERROR=$(printf '%s' "$ROPC_RESP" | head -n1 \
+        | python3 -c "import sys,json; print(json.load(sys.stdin).get('error',''))" 2>/dev/null || true)
+      if [ "$ROPC_STATUS" = "400" ] && [ "$ROPC_ERROR" = "unauthorized_client" ]; then
+        echo "ROPC refusal verified: genie-app rejects direct access grants (HTTP 400 unauthorized_client)"
+      else
+        echo "ERROR: genie realm ROPC posture drifted (HTTP ${ROPC_STATUS:-none}, error '${ROPC_ERROR:-none}') — directAccessGrantsEnabled must stay false on genie-app"
+        exit 1
+      fi
     # tests/e2e/okf/ stays OUT until MR2 lands: the OKF Studio UI those specs
     # drive ships in MR 2 (this train is MR1, dark), they hardcode
     # https://localhost while CI serves E2E_BASE_URL=https://nginx, and they

@@ -2296,6 +2296,86 @@ describe('e2e merge-train changes filters (#1264)', () => {
     }
   });
 
+  // Entries the jobs deploy or consume from this checkout — the component
+  // trees the stack runs, the compose file, the env template, the Keycloak
+  // tree (see the anchor bullet in .gitlab-ci.yml for the baked/bind-mount
+  // split) and the collector config. Not derivable from the Playwright
+  // invocation; a cleanup pruning one of them re-silences the train trigger
+  // silently.
+  const STACK_INPUT_PATHS = [
+    'components/gov-chat-frontend/**/*',
+    'components/gov-chat-backend/**/*',
+    'components/document-repository/**/*',
+    '.gitlab-ci.yml',
+    'playwright.config.js',
+    'package.json',
+    'package-lock.json',
+    'docker-compose.yaml',
+    'env',
+    'configs/keycloak/**/*',
+    'configs/otel/otel-collector-config.yaml'
+  ];
+
+  test('stack-input entries are listed in the shared anchor', () => {
+    const anchorPaths = filters.get(ANCHOR);
+    for (const required of STACK_INPUT_PATHS) {
+      expect(anchorPaths).toContain(required);
+    }
+  });
+
+  // The e2e stack pulls the keycloak-config candidate image whose build job
+  // bakes the realm (and the import entrypoint); if a tree change stops
+  // instantiating the build, the train's candidate tag does not exist: the
+  // compose pull swallows the missing manifest (|| true) and `up --no-build`
+  // then fails hard — a red train whose cause (a missing tag, not a broken
+  // realm) is hard to attribute. The inline `paths: [...]` form is
+  // opaque to the line parser, so pin the merge_request_event rule — the
+  // branch that instantiates the job on merge trains — by adjacency: its
+  // paths list sits immediately above the compare_to line. scan:keycloak-config
+  // carries the identical rules and gates the promote chain, so it is pinned
+  // the same way.
+  test.each(['build:keycloak-config', 'scan:keycloak-config', 'promote:keycloak-config'])(
+    '%s merge_request_event rule still triggers on the keycloak tree',
+    (job) => {
+      const lines = sectionOf(job).split('\n');
+      const compareTo = lines.findIndex((l) => l.includes('compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME'));
+      expect(compareTo).toBeGreaterThan(0);
+      const adjacent = lines.slice(Math.max(0, compareTo - 2), compareTo + 1).join('\n');
+      expect(adjacent).toContain('"configs/keycloak/**/*"');
+    }
+  );
+
+  // The default-branch and release rules carry the same paths list (for
+  // pending-<sha> images and release builds); adjacency above pins the
+  // merge_request_event branch, the exact count here covers the other two
+  // in the current layout: it fails uncompensated losses and forces a
+  // conscious test update when the branch structure changes. It cannot see
+  // a compensating duplicate inside a single rule's list — closing that
+  // needs parse-level linting of the inline paths form.
+  test.each(['build:keycloak-config', 'scan:keycloak-config', 'promote:keycloak-config'])(
+    '%s carries the keycloak glob in all three rule branches',
+    (job) => {
+      const count = (sectionOf(job).match(/"configs\/keycloak\/\*\*\/\*"/g) || []).length;
+      expect(count).toBe(3);
+    }
+  );
+
+  // The widened keycloak trigger exists to feed the ROPC-refusal probe in
+  // .e2e_web_base; if the probe block is ever deleted the trigger loses its
+  // justification — pin the probe's presence so the pair cannot drift apart
+  // silently. Both consuming jobs must still extend that base, or the probe
+  // survives as dead text while nothing runs it.
+  test('the ROPC-refusal probe is present in .e2e_web_base', () => {
+    expect(sectionOf('.e2e_web_base')).toContain('ROPC refusal verified');
+  });
+
+  test.each(['e2e:playwright', 'scheduled:e2e-web'])(
+    '%s still extends the base that carries the probe',
+    (job) => {
+      expect(sectionOf(job)).toContain('extends: .e2e_web_base');
+    }
+  );
+
   test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {
     // The invariant exists because of this hard needs — pin it too.
     expect(sectionOf('e2e:playwright')).toContain('needs: [e2e:integration]');

@@ -459,6 +459,134 @@ workflow:
       else
         echo "WARNING: Could not assign admin role (admin role not found). Document tests may fail."
       fi
+      # The realm's web client must refuse direct access grants — assert it
+      # for genie-app. The credentials are deliberately bogus: the refusal
+      # verdict precedes credential validation, so it is unaffected, and a
+      # drifted realm can never mint a live token through the probe (it
+      # answers invalid_grant instead, classified as drift below).
+      # Only unauthorized_client greens the probe: it is the one answer
+      # that proves the direct-grants gate was consulted for THIS client.
+      # Grant-level denials (unsupported_grant_type, access_denied) cannot
+      # distinguish a refused grant from a malformed request — a probe that
+      # mis-sends its own grant_type would otherwise self-certify any
+      # realm — so they fail as unrecognized, loudly, with the body.
+      # Keycloak answers unauthorized_client BEFORE credential validation
+      # when directAccessGrantsEnabled is false, so a minted token means the
+      # posture drifted. Transport failures, 5xx and 429 retry; transport,
+      # gateway and rate-limit verdicts stay distinct from posture verdicts
+      # — none of them masquerades as a posture answer.
+      # Failure verdicts log the response body they saw, except the
+      # token-mint drift case: its body IS the token, never logged.
+      ROPC_ANSWERED=""
+      ROPC_LAST_ANSWERED=""
+      for i in 1 2 3 4 5; do
+        rm -f /tmp/ropc-probe-body.json
+        ROPC_CURL_RC=0
+        ROPC_STATUS=$(curl -sk --max-time 15 -o /tmp/ropc-probe-body.json -w "%{http_code}" -X POST \
+          "${KC_URL}/realms/genie/protocol/openid-connect/token" \
+          -d "client_id=genie-app" -d "grant_type=password" \
+          -d "username=ropc-probe-no-such-user" -d "password=ropc-probe-bogus-credentials") || ROPC_CURL_RC=$?
+        case "$ROPC_STATUS" in
+          # Transient statuses retry even with a clean curl exit; any other
+          # definitive status with a clean exit classifies immediately, and
+          # a non-zero exit (timeout after headers, reset mid-body) means
+          # the answer was truncated — retry it like the other faults.
+          408|425|429) ;;
+          [234][0-9][0-9])
+            ROPC_LAST_ANSWERED="$ROPC_STATUS"
+            if [ "$ROPC_CURL_RC" -eq 0 ]; then ROPC_ANSWERED=1; break; fi ;;
+          [56][0-9][0-9]) ROPC_LAST_ANSWERED="$ROPC_STATUS" ;;
+        esac
+        echo "ROPC probe attempt ${i}/5: no usable answer from the token endpoint (HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC})"
+        { [ "$i" -lt 5 ] && sleep 5; } || true
+      done
+      # A truncated 200 token response can land in the body of a transport
+      # failure, and JSON member order is not guaranteed — a body from a
+      # 2xx answer is withheld outright, and any other body carrying a
+      # minted token member within the captured 200 bytes. Error pages
+      # that merely mention the words keep their evidence.
+      ROPC_BODY=$(head -c 200 /tmp/ropc-probe-body.json 2>/dev/null || true)
+      case "$ROPC_BODY" in
+        *'"access_token"'*) ROPC_BODY="<token response withheld>" ;;
+      esac
+      case "$ROPC_STATUS" in
+        2[0-9][0-9]) ROPC_BODY="<token response withheld>" ;;
+      esac
+      if [ -z "$ROPC_ANSWERED" ]; then
+        rm -f /tmp/ropc-probe-body.json
+        case "$ROPC_STATUS" in
+          408|425)
+            echo "ERROR: the token endpoint kept failing with transport-level HTTP ${ROPC_STATUS} — not a posture verdict; check the Keycloak upstream health; body: ${ROPC_BODY:-none}"
+            ;;
+          429)
+            echo "ERROR: token endpoint rate-limited the probe (HTTP 429) — not a posture verdict; check gateway rate limiting; body: ${ROPC_BODY:-none}"
+            ;;
+          *)
+            echo "ERROR: no usable answer from the genie token endpoint in 5 attempts (last HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC:-0}, last retried HTTP ${ROPC_LAST_ANSWERED:-none}) — transport, gateway or upstream failure, not a posture result; last body: ${ROPC_BODY:-none}"
+            ;;
+        esac
+        exit 1
+      fi
+      ROPC_FIELDS=$(python3 -c "import sys,json; d=json.load(open('/tmp/ropc-probe-body.json')); print(d.get('error','') + '|' + ('yes' if d.get('access_token') else 'no'))" 2>/dev/null || true)
+      ROPC_ERROR=${ROPC_FIELDS%|*}
+      ROPC_TOKEN=${ROPC_FIELDS#*|}
+      rm -f /tmp/ropc-probe-body.json
+      ropc_gateway_fail() {
+        echo "ERROR: unexpected HTTP ${ROPC_STATUS} from the genie token endpoint whose answer carried no recognizable Keycloak error — not a posture verdict; check gateway routing (nginx/Kong) or the realm import; body: ${ROPC_BODY:-none}"
+        exit 1
+      }
+      case "$ROPC_STATUS" in
+        # Only a clean-exit 2xx-4xx answer reaches this point (exhausted
+        # retries exited above), so the transport/rate-limit verdicts live
+        # in the exhausted path, not here.
+        4[0-9][0-9])
+          if [ "$ROPC_ERROR" = "unauthorized_client" ]; then
+            # No exit here: GitLab concatenates the script items into one
+            # shell, so ANY exit would skip the suites — and an exit 0 would
+            # end the job green with zero tests run. Fall through instead.
+            echo "ROPC refusal verified at the token endpoint (HTTP ${ROPC_STATUS} ${ROPC_ERROR}) — direct access grants rejected"
+          elif [ "$ROPC_ERROR" = "invalid_grant" ]; then
+            # Verified on Keycloak 26.7: the direct-grants gate runs before
+            # credential validation, so invalid_grant here means the grant
+            # was accepted and the credentials rejected — i.e. drift. If a
+            # Keycloak upgrade ever reverses that order, a healthy realm
+            # answers invalid_grant too and this verdict misfires.
+            echo "ERROR: genie realm ROPC posture drifted (HTTP ${ROPC_STATUS}, error 'invalid_grant') — credential validation only runs when the direct-access grant was accepted; directAccessGrantsEnabled must stay false on genie-app; body: ${ROPC_BODY:-none}"
+            exit 1
+          elif [ "$ROPC_ERROR" = "invalid_client" ]; then
+            echo "ERROR: client authentication failed (HTTP ${ROPC_STATUS} invalid_client) — is genie-app still a public client? Check publicClient/KEYCLOAK_CLIENT_SECRET; body: ${ROPC_BODY:-none}"
+            exit 1
+          elif [ -n "$ROPC_ERROR" ]; then
+            echo "ERROR: unexpected error '${ROPC_ERROR}' from the genie token endpoint (HTTP ${ROPC_STATUS}) — not a recognized refusal verdict; body: ${ROPC_BODY:-none}"
+            exit 1
+          else
+            ropc_gateway_fail
+          fi
+          ;;
+        2[0-9][0-9]|3[0-9][0-9])
+          # Deliberately retained even though the fixed bogus credentials
+          # make it unreachable through credential-checked flows (an
+          # authenticate-before-gate ordering flip answers invalid_grant
+          # above): this branch covers a Keycloak that mints WITHOUT
+          # validating credentials at all — a broken authenticator or a
+          # realm import that skips the credential step. Without it, a
+          # minted token would be misreported as a transport failure.
+          if [ "$ROPC_TOKEN" = "yes" ]; then
+            echo "ERROR: genie realm ROPC posture drifted: token endpoint returned HTTP ${ROPC_STATUS} with an access token for a direct-access grant — directAccessGrantsEnabled must stay false on genie-app"
+          else
+            ropc_gateway_fail
+          fi
+          exit 1
+          ;;
+        *)
+          # Drift protection, not a live path: only clean-exit 2xx-4xx
+          # answers set ROPC_ANSWERED, and 4xx/2xx-3xx cover that space. If
+          # a future edit to the loop's answered logic widens it, this arm
+          # turns the silent-skip class into a loud failure.
+          echo "ERROR: the probe reached an unclassified state (HTTP ${ROPC_STATUS:-none}) — failing loudly rather than passing without a verdict; body: ${ROPC_BODY:-none}"
+          exit 1
+          ;;
+      esac
     # tests/e2e/okf/ stays OUT until MR2 lands: the OKF Studio UI those specs
     # drive ships in MR 2 (this train is MR1, dark), they hardcode
     # https://localhost while CI serves E2E_BASE_URL=https://nginx, and they
@@ -3073,6 +3201,11 @@ test:flutter:
 #     configs/keycloak/themes/ and configs/otel/otel-collector-config.yaml
 #     straight from this checkout (the frontend's public/config checkout
 #     mount is already covered by the components/gov-chat-frontend glob).
+#   - the rest of the configs/keycloak/ tree: genie-realm.yaml and the
+#     import entrypoint are baked into the keycloak-config candidate image
+#     (its themes/ subtree is the bind-mount covered by the bullet above) —
+#     the ROPC-refusal probe in .e2e_web_base asserts the realm's runtime
+#     behaviour, so any change in the tree must instantiate the e2e jobs.
 # tests/e2e/okf/ is deliberately NOT listed: the OKF specs are not executed
 # until MR2 wires them into the script (see .e2e_web_base script comment),
 # and listing unexecuted paths only buys 30-minute train jobs that test
@@ -3092,7 +3225,7 @@ test:flutter:
   - package-lock.json
   - docker-compose.yaml
   - env
-  - configs/keycloak/themes/**/*
+  - configs/keycloak/**/*
   - configs/otel/otel-collector-config.yaml
   - .gitlab-ci.yml
 

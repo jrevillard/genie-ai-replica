@@ -239,7 +239,7 @@ reason: torch==2.13.0 at dataprep/requirements-cpu.txt:5660, retriever:5503, rer
 status: done 2026-08-13
 resolution: genie-ai-overlay/retriever/requirements-cpu.txt:1, reranker:1, dataprep:1 — torch==2.13.0 consistent in all 3 CPU locks
 
-### DW-25: components/gov-chat-backend/.gitlab-ci.yml still carries the retired verify:dataprep-lock job against the deleted requirements.lock (root .gitlab-ci.yml is the active config; the backend copy is never
+### DW-25: components/gov-chat-backend/.gitlab-ci.yml still carries the retired verify:dataprep-lock job against the deleted requirements.lock (root .gitlab-ci.yml is the active config; the backend copy is never read by GitLab)
 origin: spec-deferred f908048420c5
 location: components/gov-chat-backend/.gitlab-ci.yml:2290
 source_spec: `2-2-migrate-dependencies-python-3-11.md`

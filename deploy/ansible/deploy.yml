@@ -237,14 +237,21 @@
     # The probe is RECURSIVE (pruned, no -maxdepth): a heal that died
     # midway left depth-1 dirs correct with root-owned DEEP paths a
     # depth-1 probe could never re-detect.
+    # BOTH commands use the GNU-find idiom "( PRUNE ) -prune -o ( PRED
+    # -ACTION )": the -o is LOAD-BEARING. Without it the whole tail is one
+    # AND chain — for every non-pruned entry the prune-expr is false,
+    # -prune short-circuits, and the "! -uid … -print" tail is never
+    # reached: the probe would return empty forever (and the heal's -exec
+    # would never fire) while looking converged. Verified against real
+    # find on the fix branch (the pruned dirs' contents stay unvisited).
     _fix_payload_probe_cmd: >-
       find "{{ deploy_dir }}" -mindepth 1
       {{ _fix_payload_prune_expr }}
-      ! -uid {{ ansible_user_uid }} -print -quit
+      -o ( ! -uid {{ ansible_user_uid }} -print -quit )
     _fix_payload_ownership_cmd: >-
       find "{{ deploy_dir }}" -mindepth 1 -maxdepth 1
       {{ _fix_payload_prune_expr }}
-      -exec chown -R -h {{ ansible_user }}:{{ ansible_user }} {} +
+      -o -exec chown -R -h {{ ansible_user }}:{{ ansible_user }} {} +
   tasks:
     # Images come from GitLab registry; only compose + configs needed on target.
     # Download individual files via GitLab raw API (reproducible, idempotent).
@@ -269,7 +276,17 @@
 
     - name: Build the find prune expression from the chain
       ansible.builtin.set_fact:
-        _fix_payload_prune_expr: "{{ '(' ~ (_fix_payload_data_chain | map('regex_replace', '^(.+)$', '-path "\\1"') | join(' -o ')) ~ ' -o -path "' ~ deploy_dir ~ '/secrets"' ~ ') -prune' }}"
+        # Block scalar, NOT a quoted flow scalar: the expression embeds
+        # literal double quotes (the find -path arguments are shell-quoted
+        # because the command module shlex-splits its string). Inside a
+        # YAML double-quoted scalar every embedded quote would need \"
+        # escaping — and ansible-core 2.20's parser hard-fails on the
+        # unescaped form. In a block scalar the text is raw. Note the
+        # SINGLE backslash in "\1": template strings are not Python —
+        # escapes are passed through verbatim to re.sub, which needs \1
+        # (one backslash) to see the group backref.
+        _fix_payload_prune_expr: >-
+          {{ '(' ~ (_fix_payload_data_chain | map('regex_replace', '^(.+)$', '-path "\1"') | join(' -o ')) ~ ' -o -path "' ~ deploy_dir ~ '/secrets"' ~ ') -prune' }}
 
     - name: Define deploy files
       ansible.builtin.set_fact:

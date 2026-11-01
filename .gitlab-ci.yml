@@ -502,7 +502,7 @@ workflow:
         rm -f /tmp/ropc-probe-body.json
         case "$ROPC_STATUS" in
           408|425)
-            echo "ERROR: the token endpoint kept failing with transport-level HTTP ${ROPC_STATUS} — not a posture verdict; check the Keycloak upstream health"
+            echo "ERROR: the token endpoint kept failing with transport-level HTTP ${ROPC_STATUS} — not a posture verdict; check the Keycloak upstream health; body: ${ROPC_BODY:-none}"
             ;;
           429)
             echo "ERROR: token endpoint rate-limited the probe (HTTP 429) — not a posture verdict; check gateway rate limiting; body: ${ROPC_BODY:-none}"
@@ -550,10 +550,13 @@ workflow:
           fi
           ;;
         2[0-9][0-9]|3[0-9][0-9])
-          # Deliberately retained even though the bogus credentials make it
-          # unreachable today: a Keycloak that ever authenticates before the
-          # direct-grants gate lands here, and without this branch a minted
-          # token would be misreported as a transport failure.
+          # Deliberately retained even though the fixed bogus credentials
+          # make it unreachable through credential-checked flows (an
+          # authenticate-before-gate ordering flip answers invalid_grant
+          # above): this branch covers a Keycloak that mints WITHOUT
+          # validating credentials at all — a broken authenticator or a
+          # realm import that skips the credential step. Without it, a
+          # minted token would be misreported as a transport failure.
           if [ "$ROPC_TOKEN" = "yes" ]; then
             echo "ERROR: genie realm ROPC posture drifted: token endpoint returned HTTP ${ROPC_STATUS} with an access token for a direct-access grant — directAccessGrantsEnabled must stay false on genie-app"
           else

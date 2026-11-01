@@ -42,7 +42,7 @@ echo "==> Generating OpenAPI spec from backend source..."
 # envelope or the transitive swagger-schemas.js — present or future — can
 # reach the committed artifacts from the invoking shell. Same backend
 # sources always regenerate byte-identical artifacts.
-(cd "$BACKEND_DIR" && env -i PATH="$PATH" API_URL=https://localhost PORT=3000 \
+(cd "$BACKEND_DIR" && env -i PATH="$PATH" HOME="$HOME" API_URL=https://localhost PORT=3000 \
   KEYCLOAK_URL=https://keycloak.example.com/auth KEYCLOAK_REALM=genie node -e "
 const assert = require('assert');
 const swaggerJsdoc = require('swagger-jsdoc');
@@ -67,8 +67,10 @@ const envDerived = [
 ];
 for (const [label, actual, expected] of envDerived) {
   assert.strictEqual(actual, expected,
-    label + ' does not match the pinned placeholder — a pin assignment is'
-    + ' missing from the env -i line above.');
+    label + ' does not match the expected placeholder — either a pin'
+    + ' assignment is missing from the env -i line above, or'
+    + ' swagger-definition.js changed its URL construction and the'
+    + ' expected values here need re-syncing.');
 }
 require('fs').writeFileSync('$SPEC_FILE', JSON.stringify(spec, null, 2));
 const count = Object.keys(spec.paths).length;

@@ -105,9 +105,9 @@ afterAll(() => {
 });
 
 // Access the exported config objects directly — no capture mocking needed.
-// The shared envelope is required into a binding at file scope (not inside
-// the test) so the identity assert is independent of jest.resetModules()
-// re-evaluations by describes that run first.
+// The shared envelope is bound at file scope (not required inside the test)
+// so the identity assert stays valid across jest.resetModules()
+// re-evaluations — the file-scope bindings survive any test reorder.
 const sharedDefinition = require('../swagger-definition');
 const { swaggerOptions, swaggerUiSetupOptions } = require('../index');
 

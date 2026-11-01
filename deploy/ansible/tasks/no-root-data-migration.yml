@@ -38,7 +38,9 @@
   ansible.builtin.file:
     path: "{{ data_dir_resolved }}/database_backups"
     state: directory
-    mode: '0755'
+    # NO mode: key — the operator's 0700 hardening of this dump dir must
+    # survive every deploy (ownership only, never widened), same doctrine
+    # as the depth-0 data-dir handover in deploy.yml.
     owner: "1000"
     group: "1000"
 

@@ -551,6 +551,19 @@ describe('compose non-root contract (#1227)', () => {
     expect(vHome.some((v) => v.includes('backend') && v.includes('deployment-authored'))).toBe(true);
   });
 
+  test('mutations: commented service-local cap items keep the defaults', () => {
+    // The service-local cap-item matchers were the one spelling class
+    // without trailing-comment tolerance — a DOCUMENTED cap item (the
+    // anchor's own items carry those comments) false-red on the
+    // CHOWN/cap_drop invariants with zero behavior change.
+    const commentedCaps = composeText.replace(
+      '    # so the chown has run on every node the collector can land on).\n    <<: *chown-init\n',
+      '    # so the chown has run on every node the collector can land on).\n    <<: *chown-init\n    cap_add:\n      - CHOWN # the chown itself\n      - DAC_OVERRIDE # traversal\n'
+    );
+    expect(commentedCaps).not.toBe(composeText);
+    expect(validateComposeNonRoot(commentedCaps).violations).toEqual([]);
+  });
+
   test('mutations: flow-form cap lists on the base anchor keep the defaults', () => {
     // A formatter reformat of the anchor's cap lists to flow style must
     // not empty anchorDefaults — every merged init would false-red on

@@ -587,7 +587,7 @@ function validateComposeNonRoot(composeText) {
       if (!/^ {6}/.test(line)) {
         inCapDrops = false;
       } else {
-        const drop = line.match(/^ {6}-\s*([A-Z_]+)\s*$/);
+        const drop = line.match(/^ {6}-\s*([A-Z_]+)\s*(?:#.*)?$/);
         if (drop) currentCapDrops.push(drop[1]);
         continue;
       }
@@ -596,7 +596,7 @@ function validateComposeNonRoot(composeText) {
       if (!/^ {6}/.test(line)) {
         inCapAdds = false;
       } else {
-        const cap = line.match(/^ {6}-\s*([A-Z_]+)\s*$/);
+        const cap = line.match(/^ {6}-\s*([A-Z_]+)\s*(?:#.*)?$/);
         if (cap) currentCapAdds.push(cap[1]);
         continue;
       }

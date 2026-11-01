@@ -33,9 +33,12 @@ cd genie-ai
 #    KEYCLOAK_CLIENT_SECRET, HUGGING_FACE_HUB_TOKEN, VLLM_API_KEY, ...)
 cp env .env && $EDITOR .env
 
-# 3. Prepare the one host bind that must pre-exist (#1227: the backend
-#    bind is create_host_path:false; the backend runs as uid 1000)
-mkdir -p data/database_backups && sudo chown 1000:1000 data/database_backups
+# 3. Prepare the two host binds that must pre-exist (#1227: both binds
+#    are create_host_path:false — a missing directory fails the service
+#    create loudly instead of docker silently creating it root-owned;
+#    the backend runs as uid 1000)
+mkdir -p data/database_backups secrets/ssl
+sudo chown 1000:1000 data/database_backups
 
 # 4. Deploy
 docker compose up -d                                  # core services

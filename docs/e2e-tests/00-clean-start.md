@@ -67,6 +67,10 @@ mkdir -p data/database_backups
 # The backend runs as uid 1000 and must own the directory — your own
 # uid is rarely 1000 (chown needs root):
 sudo chown 1000:1000 data/database_backups
+# secrets/ssl must pre-exist too: the edge nginx bind is
+# create_host_path:false (the e2e job creates it, self-signed certs land
+# there on this path).
+mkdir -p secrets/ssl
 
 docker compose up -d
 ```

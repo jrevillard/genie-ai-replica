@@ -258,36 +258,12 @@
         mode: '0755'
       loop: "{{ _deploy_files }}"
 
-    - name: Detect mis-owned payload before download (deploy payload only — {{ data_dir | basename }} excluded)
-      # failed_when: false + rc check: a vanished deploy_dir between tasks
-      # must not abort the play — the heal's when covers the rc too.
-      become_user: root
-      ansible.builtin.command: "{{ _fix_payload_probe_cmd }}"
-      register: _payload_misowned_pre
-      changed_when: false
-      failed_when: false
-
-    - name: Fix ownership before download (deploy payload only — {{ data_dir | basename }} excluded)
-      # The #1227 data/ tree is NOT deploy payload: re-labeling it here
-      # fought the no-root migration (pre-empting its probe, then churning
-      # its handover on every deploy). Each depth-1 child except data/ is
-      # chowned recursively. Best-effort, like the migration tasks: a file
-      # vanishing between probe and exec (or an EIO mid-traversal) must
-      # not abort the deploy play — the next deploy re-probes.
-      become_user: root
-      ansible.builtin.command: "{{ _fix_payload_ownership_cmd }}"
-      when: _payload_misowned_pre.stdout | length > 0 or _payload_misowned_pre.rc != 0
-      register: _payload_heal_pre
-      changed_when: _payload_heal_pre.rc | default(0) == 0
-      failed_when: false
-
-    - name: Warn if the pre-download payload heal failed
-      ansible.builtin.debug:
-        msg: >-
-          WARNING (#1227): the pre-download payload heal failed
-          (rc={{ _payload_heal_pre.rc | default('n/a') }}) — mis-owned
-          paths remain under {{ deploy_dir }}; the next deploy re-probes.
-      when: _payload_heal_pre.rc | default(0) != 0
+    - name: Run the payload-ownership pass before download (#1227)
+      # The shared probe/heal/warn trio (tasks/payload-ownership-pass.yml):
+      # extraction and get_url re-create root-era ownership on every pass
+      # that ships files. The registers are shared across imports — the
+      # pre-pass always completes before the post-pass overwrites them.
+      ansible.builtin.import_tasks: tasks/payload-ownership-pass.yml
 
     - name: Fix ownership of the deploy directory itself (depth 0)
       # The find above starts at -mindepth 1; on a FRESH host the top
@@ -340,31 +316,9 @@
             extra_opts:
               - "--strip-components=1"
 
-    - name: Detect mis-owned payload after extraction (deploy payload only — {{ data_dir | basename }} excluded)
-      become_user: root
-      ansible.builtin.command: "{{ _fix_payload_probe_cmd }}"
-      register: _payload_misowned_post
-      changed_when: false
-      failed_when: false
-
-    - name: Fix ownership to ansible_user (deploy payload only — {{ data_dir | basename }} excluded)
-      # Same data/ exclusion as "Fix ownership before download": the
-      # migration tasks own everything under data/. Best-effort for the
-      # same reason (see the pre-download heal).
-      become_user: root
-      ansible.builtin.command: "{{ _fix_payload_ownership_cmd }}"
-      when: _payload_misowned_post.stdout | length > 0 or _payload_misowned_post.rc != 0
-      register: _payload_heal_post
-      changed_when: _payload_heal_post.rc | default(0) == 0
-      failed_when: false
-
-    - name: Warn if the post-extract payload heal failed
-      ansible.builtin.debug:
-        msg: >-
-          WARNING (#1227): the post-extract payload heal failed
-          (rc={{ _payload_heal_post.rc | default('n/a') }}) — mis-owned
-          paths remain under {{ deploy_dir }}; the next deploy re-probes.
-      when: _payload_heal_post.rc | default(0) != 0
+    - name: Run the payload-ownership pass after extraction (#1227)
+      # Same shared trio, against the freshly extracted archive.
+      ansible.builtin.import_tasks: tasks/payload-ownership-pass.yml
 
     - name: Ensure deploy directories exist with correct ownership
       become_user: root

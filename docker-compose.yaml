@@ -130,14 +130,26 @@ x-chown-init: &chown-init
     - no-new-privileges:true
   logging: *fluent-logging
   image: busybox:1.38.0
-  networks:
-    - genieai_network
+  # NO networks key: the sweep performs no network I/O, and an overlay
+  # attach is pure dependency cost (a failed/slow network create on a node
+  # surfaces as an 'init failed' that looks like a chown failure). On the
+  # swarm front-end a stack service joins ONLY the networks it declares —
+  # the init runs network-less; compose falls back to the project default
+  # network, which changes nothing for a chown-only container.
   # bounded self-heal on the compose front-end (deploy.restart_policy below
-  # covers swarm): a transient init failure retries 3 times instead of
-  # stranding the dependent services on a failed one-shot. The one-shot
-  # rule treats a BOUNDED retry as one-shot-in-spirit (it terminates);
-  # restart: always would be a permanent root container and still trips.
-  restart: "on-failure:3"
+  # covers swarm): a transient init failure retries instead of stranding
+  # the dependent services on a failed one-shot. The one-shot rule treats
+  # a BOUNDED retry as one-shot-in-spirit (it terminates); restart: always
+  # would be a permanent root container and still trips.
+  # The budget is sized for the UPGRADE RACE, not for a transient hiccup:
+  # during a root-era `docker compose up` the OLD root-era container keeps
+  # writing root-owned files into the shared named volume WHILE the init
+  # sweeps, so the strict verify trips exit 9 until the old container
+  # stops — the same window the follow-up services' 60x30s budgets were
+  # sized for. 3 attempts could exhaust inside that window and strand
+  # root-owned files with no automatic re-run (swarm never restarts an
+  # exhausted task).
+  restart: "on-failure:60"
   deploy:
     # mode: global (the otel-collector-init precedent): named volumes are
     # node-local and swarm ignores depends_on, so a per-node init is the
@@ -151,10 +163,13 @@ x-chown-init: &chown-init
       # init failure (registry hiccup, EIO mid-sweep) retries instead of
       # stranding the dependent services on a failed one-shot — condition
       # "none" left a failed chown never-retried while the follow-up
-      # service burned its whole restart budget.
+      # service burned its whole restart budget. Same upgrade-race sizing
+      # as the compose restart above: the old root-era container writes
+      # into the volume while the init sweeps, and an exhausted task is
+      # never re-run by swarm.
       condition: on-failure
-      delay: 10s
-      max_attempts: 3
+      delay: 30s
+      max_attempts: 60
 
 services:
 

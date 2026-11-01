@@ -150,7 +150,7 @@ describe('compose non-root contract (#1227)', () => {
     const { violations: vSwarm } = validateComposeNonRoot(swarmFlip);
     expect(vSwarm.some((v) => v.includes('victorialogs-init') && v.includes('one-shot'))).toBe(true);
 
-    const composeFlip = composeText.replaceAll('restart: "on-failure:3"', 'restart: always');
+    const composeFlip = composeText.replaceAll('restart: "on-failure:60"', 'restart: always');
     expect(composeFlip).not.toBe(composeText);
     const { violations: vCompose } = validateComposeNonRoot(composeFlip);
     expect(vCompose.some((v) => v.includes('victorialogs-init') && v.includes('one-shot'))).toBe(true);
@@ -162,7 +162,7 @@ describe('compose non-root contract (#1227)', () => {
     // turns every anchor-merged init into an UNBOUNDED restart loop of a
     // failing root container (swarm restarts forever without a bound). Each
     // must trip by name — arango-vector-db-init asserted as the canary.
-    const unbounded = composeText.replace('\n      max_attempts: 3\n', '\n');
+    const unbounded = composeText.replace('\n      max_attempts: 60\n', '\n');
     expect(unbounded).not.toBe(composeText);
     const { violations } = validateComposeNonRoot(unbounded);
     expect(
@@ -320,11 +320,11 @@ describe('compose non-root contract (#1227)', () => {
     // restart: "on-failure:10" TERMINATES by itself — the one-shot rule
     // accepts it as one-shot-in-spirit (the anchor ships exactly this
     // form). The unbounded spellings are the danger and still trip.
-    const bounded = composeText.replaceAll('restart: "on-failure:3"', 'restart: "on-failure:10"');
+    const bounded = composeText.replaceAll('restart: "on-failure:60"', 'restart: "on-failure:10"');
     const { violations: v1 } = validateComposeNonRoot(bounded);
     expect(v1.filter((v) => v.includes('one-shot'))).toEqual([]);
 
-    const always = composeText.replaceAll('restart: "on-failure:3"', 'restart: always');
+    const always = composeText.replaceAll('restart: "on-failure:60"', 'restart: always');
     expect(always).not.toBe(composeText);
     const { violations: v2 } = validateComposeNonRoot(always);
     expect(v2.some((v) => v.includes('victorialogs-init') && v.includes('one-shot'))).toBe(true);
@@ -678,6 +678,21 @@ describe('compose non-root contract (#1227)', () => {
     expect(validateComposeNonRoot(hijacked).violations).toEqual([]);
   });
 
+  test('mutations: a service key with a trailing comment is still a service', () => {
+    // Every other spelling class tolerates trailing comments; a bare-key
+    // -only service detector silently exempted `  kong: # gateway` from
+    // EVERY check (fail-open: its user: root and data binds vanished).
+    const commented = ['services:', '  kong: # the gateway', '    user: root', ''].join('\n');
+    const { violations: v1 } = validateComposeNonRoot(commented);
+    expect(v1.some((v) => v.includes('kong') && v.includes('is root'))).toBe(true);
+
+    // a flow-map service body starts a service too — recognized (both
+    // service notions see it); parsing its INNER keys is YAML semantics a
+    // line parser cannot reach (extracted finding #1274)
+    const flowBody = ['services:', '  kong: {user: root}', ''].join('\n');
+    expect(collectServiceNames(flowBody).has('kong')).toBe(true);
+  });
+
   test("the runtime gate's SELF_DROPPING list matches the validator's allowlist", () => {
     // The shell gate keeps its own copy (no JS runtime there); without
     // this pin a third self-dropping image added to the validator would
@@ -743,7 +758,7 @@ describe('compose non-root contract (#1227)', () => {
     // A commented restart line must not fall back to the anchor's bounded
     // values — 'restart: always # self-heal' on a chown-init is a
     // permanent root container.
-    const commentedRestart = composeText.replaceAll('restart: "on-failure:3"', 'restart: always # self-heal');
+    const commentedRestart = composeText.replaceAll('restart: "on-failure:60"', 'restart: always # self-heal');
     expect(commentedRestart).not.toBe(composeText);
     const { violations: v1 } = validateComposeNonRoot(commentedRestart);
     expect(v1.some((v) => v.includes('victorialogs-init') && v.includes('one-shot'))).toBe(true);

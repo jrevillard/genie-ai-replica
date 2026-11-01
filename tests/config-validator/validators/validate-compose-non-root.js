@@ -370,7 +370,10 @@ function validateComposeNonRoot(composeText) {
     }
     if (!inServices) continue;
 
-    const serviceMatch = line.match(/^ {2}["']?([\w.-]+)["']?:\s*$/);
+    // a service key may carry a trailing comment or a flow-map body —
+    // every other spelling class here tolerates comments; a bare-key-only
+    // match silently exempted such a service from EVERY check (fail-open)
+    const serviceMatch = line.match(/^ {2}["']?([\w.-]+)["']?:\s*(?:\{.*|#.*)?$/);
     if (serviceMatch) {
       flush();
       currentService = serviceMatch[1];
@@ -774,7 +777,9 @@ function collectServiceNames(composeText) {
     if (/^[a-z][\w.-]*:\s*$/.test(line)) {
       inServices = line.trim() === 'services:';
     } else if (inServices) {
-      const m = line.match(/^ {2}["']?([\w.-]+)["']?:\s*$/);
+      // same comment/flow tolerance as the main parser's service
+      // detector — the two notions of "a service exists" must stay one
+      const m = line.match(/^ {2}["']?([\w.-]+)["']?:\s*(?:\{.*|#.*)?$/);
       if (m) names.add(m[1]);
     }
   }

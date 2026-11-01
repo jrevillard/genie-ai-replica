@@ -1,0 +1,45 @@
+---
+# payload-ownership-pass (#1227) — the probe/heal/warn trio that relabels
+# the deploy payload to ansible_user, imported VERBATIM by the "Project
+# sync and directories" play once BEFORE the payload download and once
+# AFTER the archive extraction: extraction and get_url re-create root-era
+# ownership on every pass that ships files, so each pass re-probes. ONE
+# copy, or the two passes drift (the same prose-contract class that bit
+# the migration doctrine three times).
+#
+# The registers are deliberately SHARED across imports: the pre-pass trio
+# always completes before the post-pass probe overwrites them, and both
+# heal tasks gate on the freshest probe of their own pass.
+# _fix_payload_probe_cmd / _fix_payload_ownership_cmd come from the play
+# vars (quoted, trailing-slash-normalized — see their comments there).
+
+- name: Detect mis-owned deploy payload (deploy payload only — the data tree excluded)
+  # failed_when: false + rc check: a vanished deploy_dir between tasks
+  # must not abort the play — the heal's when covers the rc too.
+  become_user: root
+  ansible.builtin.command: "{{ _fix_payload_probe_cmd }}"
+  register: _payload_misowned
+  changed_when: false
+  failed_when: false
+
+- name: Fix ownership of the deploy payload (ansible_user, data tree excluded)
+  # The #1227 data/ tree is NOT deploy payload: re-labeling it fought the
+  # no-root migration (pre-empting its probe, then churning its handover
+  # on every deploy). Each depth-1 child except the data tree is chowned
+  # recursively. Best-effort, like the migration tasks: a file vanishing
+  # between probe and exec (or an EIO mid-traversal) must not abort the
+  # deploy play — the next deploy re-probes.
+  become_user: root
+  ansible.builtin.command: "{{ _fix_payload_ownership_cmd }}"
+  when: _payload_misowned.stdout | length > 0 or _payload_misowned.rc != 0
+  register: _payload_heal
+  changed_when: _payload_heal.rc | default(0) == 0
+  failed_when: false
+
+- name: Warn if the payload heal did not complete
+  ansible.builtin.debug:
+    msg: >-
+      WARNING (#1227): the payload heal failed (rc={{ _payload_heal.rc |
+      default('n/a') }}) — mis-owned paths remain under {{ deploy_dir }};
+      the next deploy re-probes.
+  when: _payload_heal.rc | default(0) != 0

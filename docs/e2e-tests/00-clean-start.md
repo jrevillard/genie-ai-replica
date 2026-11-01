@@ -282,6 +282,11 @@ print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
 - Username: `testuser`
 - Password: `TestPass123!`
 
+The CI e2e jobs converge this fixture themselves (`.e2e_web_base` in
+`.gitlab-ci.yml`) with email `testuser@e2e.test` and `emailVerified: true`;
+a locally created user carrying other values (e.g. this section's
+`testuser@genie.local`) is judged drifted there and recreated.
+
 #### 0.8b Create Test Admin (documents suites prerequisite)
 
 The documents suites (`tests/e2e/documents/`) drive the upload/delete

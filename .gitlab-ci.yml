@@ -497,16 +497,21 @@ workflow:
         CREATE_BODY=$(printf '%s' "$CREATE_RESP" | sed '$d' | head -c 200)
       }
       require_testuser_id() {
-        USERS_JSON=$(curl -sk --connect-timeout 5 --max-time 10 "${KC_URL}/admin/realms/genie/users?username=testuser&exact=true" \
+        LOOKUP_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' "${KC_URL}/admin/realms/genie/users?username=testuser&exact=true" \
           -H "Authorization: Bearer $ADMIN_TOKEN" || true)
-        USER_ID=$(printf '%s' "$USERS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id']) if isinstance(d,list) and d and isinstance(d[0],dict) and 'id' in d[0] and d[0]['id'] else None" 2>/dev/null || true)
-        # Fixture-healthy = the three login-visible flags read true; only
-        # password drift is invisible to this lookup (and to any probe —
-        # the realm refuses direct access grants).
-        USER_HEALTHY=$(printf '%s' "$USERS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); u=d[0] if isinstance(d,list) and d and isinstance(d[0],dict) else None; print('yes' if u and u.get('enabled') is True and u.get('emailVerified') is True and not u.get('requiredActions') else 'no')" 2>/dev/null || true)
+        LOOKUP_STATUS=$(printf '%s' "$LOOKUP_RESP" | tail -n1)
+        case "$LOOKUP_STATUS" in ''|*[!0-9]*) LOOKUP_STATUS="" ;; esac
+        USERS_JSON=$(printf '%s' "$LOOKUP_RESP" | sed '$d')
+        # One parse emits "id|healthy": fixture-healthy = enabled,
+        # emailVerified, the fixture email, and no requiredActions all read
+        # true; only password drift is invisible to this lookup (and to any
+        # probe — the realm refuses direct access grants).
+        RESOLVED=$(printf '%s' "$USERS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); u=d[0] if isinstance(d,list) and d and isinstance(d[0],dict) else None; print((u.get('id') + '|' + ('yes' if u.get('enabled') is True and u.get('emailVerified') is True and u.get('email') == 'testuser@e2e.test' and not u.get('requiredActions') else 'no')) if u and u.get('id') else '|')" 2>/dev/null || true)
+        USER_ID=${RESOLVED%%|*}
+        USER_HEALTHY=${RESOLVED#*|}
         if [ -z "$USER_ID" ]; then
-          echo "ERROR: cannot resolve testuser id (last users answer: $(printf '%s' "${USERS_JSON:-}" | head -c 200))"
-          if [ "$CREATE_STATUS" = "409" ]; then
+          echo "ERROR: cannot resolve testuser id (last users answer: $(printf '%s' "${USERS_JSON:-}" | head -c 200), lookup HTTP $(http_label "$LOOKUP_STATUS"))"
+          if [ "$CREATE_STATUS" = "409" ] && [ "$LOOKUP_STATUS" = "200" ]; then
             echo "HINT: the 409 above may be an email conflict — another user owns testuser@e2e.test."
           fi
           exit 1
@@ -528,7 +533,9 @@ workflow:
         # specs far from the cause. The realm refuses direct access grants,
         # so credential drift cannot be probed: the password is reset
         # unconditionally via the documented reset-password endpoint. Drift
-        # in the three login-visible flags means the account is deleted and
+        # in the login-visible state the lookup reads (enabled, verified
+        # email, fixture email, no required actions) means the account is
+        # deleted and
         # recreated from the fixture payload; a user-level PUT is not used
         # for that repair (the repo rule forbids partial user PUTs because
         # they overwrite the credentials array, and credential handling on

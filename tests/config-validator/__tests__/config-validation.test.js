@@ -2724,6 +2724,8 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // reverting to trust-the-409.
   test('the testuser 409 convergence is present in .e2e_web_base', () => {
     const section = sectionOf('.e2e_web_base');
+    expect(section).toContain('username=testuser&exact=true');
+    expect(section).toContain("u.get('email') == 'testuser@e2e.test'");
     expect(section).toContain('/reset-password');
     expect(section).toContain('[ "$RESET_STATUS" != "204" ]');
     expect(section).toContain('X DELETE "${KC_URL}/admin/realms/genie/users/${USER_ID}"');

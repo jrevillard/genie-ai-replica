@@ -5,14 +5,19 @@ import httpService from './httpService';
  * Converts a payload carrying translation rows in the read shape
  * ({lang, text} — what the GET endpoints return and the forms hold)
  * into the write contract ({languageCode, translation}) expected by the
- * create/update endpoints.
+ * create/update endpoints. A payload without a translations array is
+ * returned untouched: the backend treats an omitted field as "leave the
+ * existing translations untouched" and an empty array as clear-all.
  * @param {Object} payload - { nameEN, translations: [{lang, text}] }.
  * @returns {Object} The wire payload with {languageCode, translation} rows.
  */
 function toWritePayload(payload) {
+  if (!Array.isArray(payload.translations)) {
+    return payload;
+  }
   return {
     ...payload,
-    translations: (payload.translations || []).map(({ lang, text }) => ({
+    translations: payload.translations.filter(Boolean).map(({ lang, text }) => ({
       languageCode: lang,
       translation: text
     }))

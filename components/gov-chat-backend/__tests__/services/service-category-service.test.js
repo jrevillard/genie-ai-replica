@@ -228,6 +228,21 @@ describe('ServiceCategoryService', () => {
       expect(mockServices.update).toHaveBeenCalledWith('svc-1', { nameEN: 'Updated' });
     });
 
+    it('stores a trimmed nameEN on the parent document and the EN translation', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+
+      await service.updateServiceWithTranslations('svc-1', {
+        nameEN: '  Padded Name  ',
+        translations: [{ languageCode: 'fr', translation: 'Mis a jour' }]
+      });
+
+      expect(mockServices.update).toHaveBeenCalledWith('svc-1', { nameEN: 'Padded Name' });
+      expect(mockServiceTranslations.save).toHaveBeenCalledWith(
+        expect.objectContaining({ languageCode: 'EN', translation: 'Padded Name' }),
+        expect.anything()
+      );
+    });
+
     it('should throw ValidationError when nameEN is missing', async () => {
       await expect(service.updateServiceWithTranslations('svc-1', {})).rejects.toThrow('nameEN is required');
     });

@@ -3023,9 +3023,11 @@ export default {
         await this.loadKnowledgeHierarchy(); // Refresh the admin dashboard tree
         eventBus.$emit('knowledge-hierarchy-updated'); // Emit global event for other components
       } catch (error) {
+        // Surface the backend's ValidationError message when present — the
+        // generic toast alone sends the admin retrying with no hint.
+        const detail = error?.response?.data?.message;
         this.showNotification(
-          // MODIFIED: Use new i18n key
-          this.translate('admin.hierarchy.saveError', 'Failed to save hierarchy item.'),
+          this.translate('admin.hierarchy.saveError', 'Failed to save hierarchy item.') + (detail ? `: ${detail}` : ''),
           'error'
         );
         console.error(error);

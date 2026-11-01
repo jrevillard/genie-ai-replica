@@ -164,7 +164,7 @@ describe('serviceTreeService', () => {
 
       const result = await serviceTreeService.createCategory({ nameEN: 'New Category' });
 
-      expect(mockPost).toHaveBeenCalledWith('service-categories', { nameEN: 'New Category', translations: [] });
+      expect(mockPost).toHaveBeenCalledWith('service-categories', { nameEN: 'New Category' });
       expect(result._key).toBe('cat-new');
     });
 
@@ -184,7 +184,7 @@ describe('serviceTreeService', () => {
 
       const result = await serviceTreeService.updateCategory('cat-1', { nameEN: 'Updated' });
 
-      expect(mockPut).toHaveBeenCalledWith('service-categories/cat-1', { nameEN: 'Updated', translations: [] });
+      expect(mockPut).toHaveBeenCalledWith('service-categories/cat-1', { nameEN: 'Updated' });
       expect(result.nameEN).toBe('Updated');
     });
   });
@@ -198,10 +198,7 @@ describe('serviceTreeService', () => {
 
       const result = await serviceTreeService.createService('cat-1', { nameEN: 'New Service' });
 
-      expect(mockPost).toHaveBeenCalledWith('service-categories/cat-1/services', {
-        nameEN: 'New Service',
-        translations: []
-      });
+      expect(mockPost).toHaveBeenCalledWith('service-categories/cat-1/services', { nameEN: 'New Service' });
       expect(result._key).toBe('svc-new');
     });
   });
@@ -215,10 +212,7 @@ describe('serviceTreeService', () => {
 
       const result = await serviceTreeService.updateService('svc-1', { nameEN: 'Updated' });
 
-      expect(mockPut).toHaveBeenCalledWith('service-categories/services/svc-1', {
-        nameEN: 'Updated',
-        translations: []
-      });
+      expect(mockPut).toHaveBeenCalledWith('service-categories/services/svc-1', { nameEN: 'Updated' });
       expect(result.nameEN).toBe('Updated');
     });
 
@@ -236,14 +230,27 @@ describe('serviceTreeService', () => {
       });
     });
 
-    it('sends an empty translations array when the payload has none', async () => {
+    it('sends the payload untouched when it carries no translations field', async () => {
       mockPut.mockResolvedValue({ data: { _key: 'svc-1' } });
 
       await serviceTreeService.updateService('svc-1', { nameEN: 'Updated' });
 
+      // An omitted translations field must stay omitted: the backend treats
+      // it as "leave the existing translations untouched".
+      expect(mockPut).toHaveBeenCalledWith('service-categories/services/svc-1', { nameEN: 'Updated' });
+    });
+
+    it('drops null rows from the translations array instead of crashing', async () => {
+      mockPut.mockResolvedValue({ data: { _key: 'svc-1' } });
+
+      await serviceTreeService.updateService('svc-1', {
+        nameEN: 'Updated',
+        translations: [null, { lang: 'fr', text: 'Mis a jour' }]
+      });
+
       expect(mockPut).toHaveBeenCalledWith('service-categories/services/svc-1', {
         nameEN: 'Updated',
-        translations: []
+        translations: [{ languageCode: 'fr', translation: 'Mis a jour' }]
       });
     });
   });

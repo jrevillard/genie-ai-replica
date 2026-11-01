@@ -737,6 +737,22 @@ describe('AdminDashboard', () => {
       expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
     });
 
+    it('surfaces the backend rejection message in the error toast', async () => {
+      const { wrapper, treeMock } = mountEditingService([{ lang: 'fr', text: 'Nom' }]);
+      const backendError = new Error('Request failed');
+      backendError.response = {
+        data: { message: "translations must not include 'EN' — the English name is owned by nameEN" }
+      };
+      treeMock.updateService.mockRejectedValueOnce(backendError);
+
+      await wrapper.vm.saveHierarchyItem();
+
+      const emissions = mockEventBusEmit.mock.calls.filter((c) => c[0] === 'notification:show');
+      const errorToast = emissions.find(([, p]) => p.type === 'error');
+      expect(errorToast).toBeTruthy();
+      expect(errorToast[1].message).toContain("must not include 'EN'");
+    });
+
     it('rejects duplicates that differ only in case ("fr" vs "FR")', async () => {
       const { wrapper, treeMock } = mountEditingService([
         { lang: 'fr', text: 'A' },

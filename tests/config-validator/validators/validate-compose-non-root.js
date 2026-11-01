@@ -466,14 +466,19 @@ function validateComposeNonRoot(composeText) {
       continue;
     }
     // flow LIST: volumes: [ "host:/container", {type: bind, source: ...} ] —
-    // same contract per entry, collected without opening the block scope
+    // same contract per entry, collected without opening the block scope.
+    // Items split nesting-aware (splitFlowItems) so `${VAR:-default}`
+    // braces and quoted commas stay inside one item.
     const volumesFlow = line.match(/^ {4}volumes:\s*\[(.*)\]\s*(?:#.*)?$/);
     if (volumesFlow) {
       const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
-      for (const entry of volumesFlow[1].match(/\{[^}]*\}|"[^"]*"|'[^']*'/g) || []) {
+      for (const entry of splitFlowItems(volumesFlow[1])) {
         const inner = entry.replace(/^[{'"]+|[}'"]+$/g, '');
         const ft = inner.match(/type:\s*['"]?(\w+)/);
-        const fsrc = inner.match(/source:\s*['"]?([^,'"}]+)/);
+        // `}` stays IN the match: truncating at the closing brace of
+        // `${VAR:-default}` cut the source short and dropped it from the
+        // data-dir rule entirely
+        const fsrc = inner.match(/source:\s*['"]?([^,'"]+)/);
         if (ft && ft[1] === 'bind' && fsrc) {
           binds.push({
             path: fsrc[1].trim(),
@@ -512,7 +517,8 @@ function validateComposeNonRoot(composeText) {
       if (flowEntry) {
         const body = flowEntry[1];
         const ft = body.match(/type:\s*['"]?(\w+)/);
-        const fsrc = body.match(/source:\s*['"]?([^,'"}]+)/);
+        // same `}`-tolerant source match as the flow-list form above
+        const fsrc = body.match(/source:\s*['"]?([^,'"]+)/);
         if (ft && ft[1] === 'bind' && fsrc) {
           const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
           binds.push({
@@ -650,6 +656,43 @@ function validateComposeNonRoot(composeText) {
   flush();
 
   return { violations, alwaysOn };
+}
+
+/**
+ * Split a YAML flow-sequence body (the text between `[` and `]`) into its
+ * top-level items. A naive `\{[^}]*\}` splitter truncates the FIRST item at
+ * the closing brace of an inner `${VAR:-default}` — the truncation silently
+ * dropped every templated bind source from the gate (the exact #1227
+ * surface), so commas inside `${...}` nesting or quoted strings must not
+ * split.
+ */
+function splitFlowItems(body) {
+  const items = [];
+  let depth = 0;
+  let quote = null;
+  let cur = '';
+  for (const ch of body) {
+    if (quote) {
+      cur += ch;
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      cur += ch;
+      continue;
+    }
+    if (ch === '{') depth += 1;
+    if (ch === '}') depth -= 1;
+    if (ch === ',' && depth === 0) {
+      items.push(cur);
+      cur = '';
+      continue;
+    }
+    cur += ch;
+  }
+  if (cur.trim()) items.push(cur);
+  return items;
 }
 
 /**

@@ -205,6 +205,13 @@
   tags: [prepare]
   become: true
   become_user: "{{ ansible_user }}"
+  vars:
+    # The deploy-payload ownership pass (depth-1 children except the data/
+    # tree), shared VERBATIM by the pre-download and post-extract tasks —
+    # one string, so the two passes cannot drift apart on a later edit.
+    _fix_payload_ownership_cmd: >-
+      find {{ deploy_dir }} -mindepth 1 -maxdepth 1 ! -name {{ data_dir | basename }}
+      -exec chown -R -h {{ ansible_user }}:{{ ansible_user }} {} +
   tasks:
     # Images come from GitLab registry; only compose + configs needed on target.
     # Download individual files via GitLab raw API (reproducible, idempotent).
@@ -244,9 +251,7 @@
       # its handover on every deploy). Each depth-1 child except data/ is
       # chowned recursively.
       become_user: root
-      ansible.builtin.command: >-
-        find {{ deploy_dir }} -mindepth 1 -maxdepth 1 ! -name {{ data_dir | basename }}
-        -exec chown -R -h {{ ansible_user }}:{{ ansible_user }} {} +
+      ansible.builtin.command: "{{ _fix_payload_ownership_cmd }}"
       changed_when: true
 
     - name: Fix ownership of the deploy directory itself (depth 0)
@@ -304,9 +309,7 @@
       # Same data/ exclusion as "Fix ownership before download": the
       # migration tasks own everything under data/.
       become_user: root
-      ansible.builtin.command: >-
-        find {{ deploy_dir }} -mindepth 1 -maxdepth 1 ! -name {{ data_dir | basename }}
-        -exec chown -R -h {{ ansible_user }}:{{ ansible_user }} {} +
+      ansible.builtin.command: "{{ _fix_payload_ownership_cmd }}"
       changed_when: true
 
     - name: Ensure deploy directories exist with correct ownership

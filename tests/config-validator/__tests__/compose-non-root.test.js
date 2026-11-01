@@ -207,7 +207,7 @@ describe('compose non-root contract (#1227)', () => {
   test('mutations: error/alt variable forms cannot escape the data-dir rule', () => {
     // \${VAR:?err}, \${VAR?err} and \${VAR:+alt} are legal compose —
     // resolved CONSERVATIVELY like every other unknown-location spelling.
-    for (const form of ['\${DATA_DIR:?missing}', '\${DATA_DIR?missing}', '\${DATA_DIR:+/srv/alt}']) {
+    for (const form of ['${DATA_DIR:?missing}', '${DATA_DIR?missing}', '${DATA_DIR:+/srv/alt}']) {
       const text = [
         'services:',
         '  kong:',
@@ -746,7 +746,7 @@ describe('compose non-root contract (#1227)', () => {
       'services:',
       '  kong:',
       '    user: "1001:1001"',
-      '    volumes: ["\${DATA_DIR:-./data}/logs/kong:/var/log/kong"]',
+      '    volumes: ["${DATA_DIR:-./data}/logs/kong:/var/log/kong"]',
       ''
     ].join('\n');
     const { violations: v1 } = validateComposeNonRoot(flowList);
@@ -775,11 +775,57 @@ describe('compose non-root contract (#1227)', () => {
       '  kong:',
       '    user: "1001:1001"',
       '    volumes:',
-      '        - "\${DATA_DIR:-./data}/x:/y"',
+      '        - "${DATA_DIR:-./data}/x:/y"',
       ''
     ].join('\n');
     const { violations: v3 } = validateComposeNonRoot(deepShort);
     expect(v3.some((v) => v.includes('kong') && v.includes('short syntax'))).toBe(true);
+  });
+
+  test('mutations: templated bind source in flow map forms (both spellings)', () => {
+    // A templated source (${DATA_DIR:-./data}/...) inside a flow MAP must
+    // reach the data-dir rule: the closing brace of ${VAR:-default} is not
+    // the end of the entry — a source match that stops at `}` (or a
+    // splitter that cuts items at the first `}`) truncates the path and
+    // the bind escapes the gate with zero violations while the identical
+    // block-style bind is flagged.
+    const flowListMap = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes: [{type: bind, source: ${DATA_DIR:-./data}/logs/kong, target: /var/log/kong}]',
+      ''
+    ].join('\n');
+    const { violations: v1 } = validateComposeNonRoot(flowListMap);
+    expect(v1.some((v) => v.includes('kong') && v.includes('create_host_path'))).toBe(true);
+
+    // the compliant spelling — opt-out carried inline — stays clean
+    const flowListOpted = [
+      'services:',
+      '  backend:',
+      '    user: "1000:1000"',
+      '    volumes: [{type: bind, source: ${DATA_DIR:-./data}/database_backups, target: /app/database_backups, bind: {create_host_path: false}}]',
+      ''
+    ].join('\n');
+    expect(validateComposeNonRoot(flowListOpted).violations).toEqual([]);
+
+    // same truncation in the block-form flow entry (- {type: bind, ...})
+    const flowEntryMap = [
+      'services:',
+      '  kong:',
+      '    user: "1001:1001"',
+      '    volumes:',
+      '      - {type: bind, source: ${DATA_DIR:-./data}/logs/other, target: /var/log/other}',
+      ''
+    ].join('\n');
+    const { violations: v2 } = validateComposeNonRoot(flowEntryMap);
+    expect(v2.some((v) => v.includes('kong') && v.includes('create_host_path'))).toBe(true);
+
+    const flowEntryOpted = flowEntryMap.replace(
+      'target: /var/log/other}',
+      'target: /var/log/other, bind: {create_host_path: false}}'
+    );
+    expect(validateComposeNonRoot(flowEntryOpted).violations).toEqual([]);
   });
 
   test('allowlist entries reference services that exist in the compose file', () => {

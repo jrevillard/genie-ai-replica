@@ -2713,6 +2713,18 @@ describe('e2e merge-train changes filters (#1264)', () => {
     expect(sectionOf('.e2e_web_base')).toContain('ROPC refusal verified');
   });
 
+  // A 409 from the testuser create is convergence, not done: a stale
+  // account (disabled, unverified email, old password) that sails through
+  // provisioning fails every login-dependent spec far from the cause. Pin
+  // the delete + recreate pair so the exists path cannot silently revert to
+  // trusting the 409. Anchored on the endpoint call and the operator
+  // verdict, not helper names, so an identifier-only refactor survives.
+  test('the testuser 409 convergence is present in .e2e_web_base', () => {
+    const section = sectionOf('.e2e_web_base');
+    expect(section).toContain('X DELETE "${KC_URL}/admin/realms/genie/users/${USER_ID}"');
+    expect(section).toContain('testuser recreated');
+  });
+
   test.each(['e2e:playwright', 'scheduled:e2e-web'])('%s still extends the base that carries the probe', (job) => {
     const section = sectionOf(job);
     // Scalar extends, exactly — an extends CHAIN ([.e2e_web_base, .other])
@@ -2727,7 +2739,6 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // legal, a second invocation cannot exist.
     expect(section).not.toMatch(/^\s*(?:script|before_script|after_script):/m);
   });
-
   test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {
     // The invariant exists because of this hard needs — pin it too.
     expect(sectionOf('e2e:playwright')).toContain('needs: [e2e:integration]');

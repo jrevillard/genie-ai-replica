@@ -1262,6 +1262,18 @@ void main() {
       expect(activeQuickHelpTitleFor(buttons, 'births'), 'Naissances');
     });
 
+    test('the re-title lookup reads the id the SAME rule the index keys', () {
+      // The restore index normalizes the id (a JSON 5.0 becomes '5'),
+      // matched the tag, and set the active identity '5' — the re-title
+      // lookup must read the same normalized form, or the bar falls
+      // back to the saved category name instead of the button title.
+      final buttons = [
+        {'id': 5.0, 'resolvedTitle': 'Naissances'},
+      ];
+
+      expect(activeQuickHelpTitleFor(buttons, '5'), 'Naissances');
+    });
+
     test(
       'a TITLE identity (an id-less card) matches no button and keeps the pressed title',
       () {
@@ -1657,9 +1669,18 @@ void main() {
       // The web saves the id as JSON — a JS number serializes 5.0 as 5.
       // Dart's double toString would give '5.0', and the web-saved tag
       // ('5') would miss the restore index. The integral form is the
-      // tag form, whatever the JSON decode produced.
+      // tag form, whatever the JSON decode produced. The exponential
+      // range (≥ 1e21) is where Dart's own form already matches JS.
       expect(quickHelpButtonIdentity({'id': 5.0, 'resolvedTitle': 'C'}), '5');
       expect(quickHelpButtonIdentity({'id': 5, 'resolvedTitle': 'C'}), '5');
+      expect(
+        quickHelpButtonIdentity({'id': 1e18, 'resolvedTitle': 'C'}),
+        '1000000000000000000',
+      );
+      expect(
+        quickHelpButtonIdentity({'id': 1e21, 'resolvedTitle': 'C'}),
+        '1e+21',
+      );
     });
   });
 
@@ -1690,6 +1711,20 @@ void main() {
         expect(parsed['iconAsset'], 'assets/config/quickhelp/just-chat.svg');
       },
     );
+
+    test('a numeric category carries the form the web resolves', () {
+      // The web resolves a numeric category reference with
+      // String(reference): a JSON 5.0 becomes '5' and matches the
+      // hierarchy's catKey. Dart's toString would give '5.0', the
+      // hierarchy lookup would miss, and only the mobile would render
+      // the card broken.
+      final parsed = parseQuickHelpButton({
+        ...shippedButton,
+        'category': 5.0,
+      }, 'en');
+
+      expect(parsed['category'], '5');
+    });
 
     test('the id is kept RAW — the truthiness read precedes any string', () {
       // The identity rule (the web's `id || title`) must see the JSON

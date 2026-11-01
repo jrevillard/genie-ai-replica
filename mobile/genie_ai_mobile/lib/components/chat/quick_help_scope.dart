@@ -74,7 +74,11 @@ Map<String, dynamic> parseQuickHelpButton(
     // stringified '0' would erase. Every read still goes through
     // quickHelpFieldOf / quickHelpIdOf, which stringify.
     'id': btn['id'],
-    'category': btn['category']?.toString(),
+    // The category is an EQUALITY read — but against the form the WEB
+    // resolves: a numeric reference carries JavaScript's serialization
+    // ('5', not Dart's '5.0'), or the hierarchy lookup misses and only
+    // the mobile renders the card broken.
+    'category': btn['category'] == null ? null : _jsTagForm(btn['category']),
     'serviceLabels': quickHelpServiceLabelsOf(btn),
     'iconAsset': iconAsset,
     'resolvedTitle': resolveConfigText(btn['title'], locale),
@@ -201,15 +205,18 @@ List<Map<String, dynamic>> dedupeQuickHelpButtons(
 /// it. The chatbot's two reads of a button by id — the restore path and
 /// the locale re-title — share this one lookup, so a change to the
 /// matching rule (trimming ids, a new id shape) cannot drift between
-/// them. (ConversationScopeResolver keeps its OWN first-wins index in
-/// _indexButtons — a different rule over a different structure.)
+/// them. The key is the SAME normalized form the restore index
+/// (_indexButtons) and the identity read, so a tag the index matched is
+/// a tag this lookup can resolve. (ConversationScopeResolver keeps its
+/// OWN first-wins index in _indexButtons — a different structure over
+/// the same key.)
 Map<String, dynamic>? quickHelpButtonById(
   List<Map<String, dynamic>> buttons,
   String? id,
 ) {
   if (id == null || id.isEmpty) return null;
   for (final button in buttons) {
-    if ((quickHelpFieldOf(button, 'id')) == id) {
+    if (quickHelpIdOf(button) == id) {
       return button;
     }
   }
@@ -451,11 +458,31 @@ bool restoredScopeTitleFollowsLocale({
 
 /// The button's [key] as a string — ONE read of the id and the category,
 /// whatever shape the value carries: a hand-built map need not carry
-/// strings, and a numeric id must degrade to its string form rather
+/// strings, and a numeric value must degrade to its string form rather
 /// than throw. (The parse keeps the id RAW — the truthiness rule below
-/// reads it — and pre-stringifies the category, an equality-only read.)
+/// reads it — and pre-stringifies the category in the web's own form.)
 String? quickHelpFieldOf(Map<String, dynamic> button, String key) =>
     button[key]?.toString();
+
+/// The number as JAVASCRIPT serializes it — the form the web writes
+/// into a saved tag or a category reference. Dart's double toString
+/// differs in the plain range (it appends '.0': 5.0 → '5.0', JS: '5');
+/// the exponential range (≥ 1e21) already matches. An integral value
+/// inside the int64 range converts exactly; OUTSIDE it (an integral
+/// double ≥ 2^63 but < 1e21) the Dart form stands — a configuration
+/// with an id that large is not one the two platforms can agree on by
+/// serialization; the durable answer is normalizing the tag at the
+/// save/restore boundary on both platforms, tracked beside the
+/// numeric-tag contract.
+String _jsTagForm(dynamic raw) {
+  if (raw is double &&
+      raw.isFinite &&
+      raw == raw.truncateToDouble() &&
+      raw.abs() < 9223372036854775808.0) {
+    return raw.toInt().toString();
+  }
+  return raw.toString();
+}
 
 /// The button's id as the TAG carries it — the string form of the id,
 /// null when the configuration declares NO id. The presence rule is the
@@ -464,19 +491,12 @@ String? quickHelpFieldOf(Map<String, dynamic> button, String key) =>
 /// id (`0`, `false`, a hand-edited configuration; none shipped) is no
 /// id, and its stringified `'0'` must not resurrect it. Every rule
 /// that decides whether an id EXISTS reads this one — the identity,
-/// the dedupe, the restore index — while the equality reads keep
-/// quickHelpFieldOf (a string compare, no truthiness).
+/// the dedupe, the restore index, the by-id lookups — while
+/// quickHelpFieldOf stays the un-normalized string read.
 String? quickHelpIdOf(Map<String, dynamic>? button) {
   final raw = button?['id'];
   if (!configTruthy(raw)) return null;
-  // A number carries the form JAVASCRIPT serializes: the web's JSON tag
-  // for an integral value is `5`, while Dart's double toString gives
-  // '5.0' — a web-saved conversation would miss the restore index. The
-  // integral form is the tag form, whatever the JSON decode produced.
-  if (raw is double && raw.isFinite && raw == raw.truncateToDouble()) {
-    return raw.toInt().toString();
-  }
-  return raw.toString();
+  return _jsTagForm(raw);
 }
 
 /// Whether the card DECLARES a scope — a category the hierarchy names, or

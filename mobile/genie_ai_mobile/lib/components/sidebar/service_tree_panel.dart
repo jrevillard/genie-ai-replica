@@ -17,12 +17,13 @@ String _categoryKeyOf(Map<dynamic, dynamic> category, int fallbackIndex) =>
         .toString();
 
 // The child's localized display text, or null when this locale names
-// nothing for it (the render hides such a row). A non-Map child — a
-// legacy tree whose children are plain strings — reads as its string.
+// nothing for it (the render falls back, the walk skips such a row). A
+// non-String label or name — legacy wire data — reads as its string, the
+// same coercion the search filter's hide rule applies; a non-Map child —
+// a legacy tree whose children are plain strings — reads as its string.
 String? _childDisplayOf(dynamic child) {
   if (child is! Map) return child?.toString();
-  final display = child['label'] ?? child['name'];
-  return (display is String && display.isNotEmpty) ? display : null;
+  return (child['label'] ?? child['name'])?.toString();
 }
 
 class ServiceTreePanel extends ConsumerStatefulWidget {
@@ -200,12 +201,15 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
       final children = category['children'];
       if (children is List) {
         // The ORIGINAL child index: the highlight map is keyed by it, and
-        // the rendered list carries it through the search filter.
+        // the rendered list carries it through the search filter. The
+        // identity registers regardless of the display: the entity KEY is
+        // display-independent, and a child this locale cannot name (the
+        // render hides it) must still be found at its new position — an
+        // unfindable entity would leave its whole category's map stale.
         for (var j = 0; j < children.length; j++) {
           final child = children[j];
           if (child is! Map) continue;
-          final display = _childDisplayOf(child);
-          if (display == null) continue;
+          final display = _childDisplayOf(child) ?? '';
           final key = (child['_key'] ?? '').toString();
           if (key.isNotEmpty) {
             byKey.putIfAbsent(key, () => (name: display, index: j));
@@ -241,7 +245,10 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
         unresolvedCategories.add(catKey);
         continue;
       }
-      row['name'] = found.name;
+      // The position always follows the entity; the display name only
+      // when this locale names it — a child the locale cannot display
+      // keeps the name it was picked under.
+      if (found.name.isNotEmpty) row['name'] = found.name;
       (realignedHighlights[catKey] ??= []).add(found.index);
       // The node is in hand: a category edited since the pick carried a
       // stale ENGLISH name.

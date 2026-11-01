@@ -10,6 +10,7 @@ import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:openapi/api.dart';
 
+import '../helpers/test_app.dart';
 import '../helpers/theme_helper.dart';
 
 // The stored selection must survive a locale switch WITHOUT carrying the
@@ -65,11 +66,7 @@ void main() {
           ServiceCategoriesApi(ApiClient()..client = client),
         ),
       ],
-      child: MaterialApp(
-        home: Scaffold(
-          body: ServiceTreePanel(onSelectionChange: onSelectionChange),
-        ),
-      ),
+      child: testApp(ServiceTreePanel(onSelectionChange: onSelectionChange)),
     );
   }
 
@@ -205,6 +202,65 @@ void main() {
       await tester.pumpAndSettle();
       expect(emissions.last['serviceLabelsEn'], isEmpty);
       expect(emissions.last['serviceCount'], 0);
+    },
+  );
+
+  testWidgets(
+    'a child the new locale cannot display still pins its category\'s highlight map',
+    (tester) async {
+      // The es tree REORDERS the children AND drops the picked entity's
+      // display name entirely: the render hides that row, but its KEY is
+      // display-independent — the realignment must still find it at its
+      // new index, or the category's whole map stays stale and paints the
+      // row that inherited the old index.
+      final esTreeWithoutDisplay = [
+        {
+          'catKey': '2',
+          'name': 'Estado civil',
+          'nameEN': 'Civil Registry',
+          'children': [
+            {'_key': 'svc-2', 'name': 'Matrimonio', 'nameEN': 'Marriage'},
+            {'_key': 'svc-1', 'name': null, 'nameEN': 'Births'},
+          ],
+        },
+      ];
+      final emissions = <Map<String, dynamic>>[];
+      resetThemeManager();
+      final client = _LocaleClient({
+        'en': jsonEncode(enTree),
+        'es': jsonEncode(esTreeWithoutDisplay),
+      });
+      await pumpPanel(tester, client, emissions.add);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Civil status'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Births'));
+      await tester.pumpAndSettle();
+      expect(emissions.single['name'], 'Births');
+
+      I18nService().changeLanguage('es');
+      await pumpPanel(tester, client, emissions.add);
+      await tester.pumpAndSettle();
+
+      // 'Births' (svc-1) is hidden in es and sits at index 1 now: the
+      // visible 'Matrimonio' row (index 0) must NOT inherit the highlight.
+      Finder rowHighlight(String rowText) => find.descendant(
+        of: find.ancestor(
+          of: find.text(rowText),
+          matching: find.byType(ListTile),
+        ),
+        matching: find.byIcon(Icons.check_circle),
+      );
+      expect(rowHighlight('Matrimonio'), findsNothing);
+
+      // The hidden row's name was kept (no locale names it), and its
+      // label still speaks on the wire when another service is picked.
+      await tester.tap(find.text('Matrimonio'));
+      await tester.pumpAndSettle();
+      expect(emissions.last['name'], 'Births, Matrimonio');
+      expect(emissions.last['serviceLabelsEn'], ['Births', 'Marriage']);
+      expect(emissions.last['serviceCount'], 2);
     },
   );
 

@@ -719,6 +719,38 @@ describe('compose non-root contract (#1227)', () => {
       true
     );
 
+    // a trailing COMMENT on a bare pin rode along once (`root # gw` was
+    // neither 'root' nor numeric — fail-open). The capture truncates at
+    // '#'; a quoted value keeps its own '#'.
+    const commentedRoot = validateComposeNonRoot(['services:', '  kong: {user: root # gw}', ''].join('\n'));
+    expect(commentedRoot.violations.some((v) => v.includes('kong') && v.includes('is root'))).toBe(true);
+    const commentedZero = validateComposeNonRoot(['services:', '  kong: {user: 0 # gw}', ''].join('\n'));
+    expect(commentedZero.violations.some((v) => v.includes('kong') && v.includes('is root'))).toBe(true);
+
+    // the BLOCK form fails open the same way for an alias — same rule.
+    const blockAlias = validateComposeNonRoot(['services:', '  kong:', '    user: *admin', ''].join('\n'));
+    expect(blockAlias.violations.some((v) => v.includes('kong') && v.includes('YAML alias'))).toBe(true);
+
+    // a nested flow-map key named user: (an environment USER var) is NOT
+    // the service pin — the depth-aware capture must not raise a false
+    // "is root" on a legal spelling.
+    const envUserKey = validateComposeNonRoot(['services:', '  kong: {environment: {user: root}}', ''].join('\n'));
+    expect(envUserKey.violations.some((v) => v.includes('is root'))).toBe(false);
+
+    // a volumes: key inside a flow body is unreachable by every bind
+    // collector (normal OR aliased) — demand the block form.
+    const bodyVolumes = validateComposeNonRoot(['services:', '  kong: {user: "1001", volumes: *binds}', ''].join('\n'));
+    expect(bodyVolumes.violations.some((v) => v.includes('kong') && v.includes('flow-map body is unenforceable'))).toBe(
+      true
+    );
+
+    // a whole-entry alias inside a flow volumes LIST drops that bind from
+    // every collector — demand it inline.
+    const flowListAlias = validateComposeNonRoot(
+      ['services:', '  backend:', '    user: "1000:1000"', '    volumes: ["./data:/data", *binds]', ''].join('\n')
+    );
+    expect(flowListAlias.violations.some((v) => v.includes('backend') && v.includes('YAML alias'))).toBe(true);
+
     // the flow deploy is still a SHALLOW replace: dropping mode from it
     // must trip, exactly like the block form
     const flowModeDrop = composeText.replace(

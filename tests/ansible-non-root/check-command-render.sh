@@ -27,7 +27,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 # and the generated playbook fails to parse — a loud failure, not a silent
 # pass.
 # ---------------------------------------------------------------------------
-awk '/^    _fix_payload_data_chain: \[\]/{p=1} p{print} p && /^      -o -exec/{exit}' \
+awk '/^    _fix_payload_data_chain: \[\]/{p=1} p{print} p && /-exec chown -R -h/{exit}' \
   "$DEPLOY" > "$TMP/vars.frag"
 # vars.frag: from the chain initializer to the end of the ownership cmd
 # (the whole _fix_payload_* var block, comments included).
@@ -237,7 +237,7 @@ for label, cmd, needs in (("trio probe", probe_s, ("-H", "-uid", "1000", "-print
     # -mindepth 1 in the SWAP keeps the starting dir out of the match the
     # real uid predicate would exclude (the fixture dirs run as uid 1000).
     detect = cmd.replace("! -uid 1000 -print -quit", "-mindepth 1 ! -name KEEPME -print -quit") \
-                .replace("! -uid 1000 -exec", "-mindepth 1 ! -name KEEPME -exec")
+                .replace("! -uid 1000 -print -exec", "-mindepth 1 ! -name KEEPME -print -exec")
     detect_argv = shlex.split(detect.replace("-exec chown -h 1000:1000 {} +", "-print"))
     r = subprocess.run(detect_argv, capture_output=True, text=True)
     if r.returncode != 0 or "WOULD-BE-HEALED" not in r.stdout:

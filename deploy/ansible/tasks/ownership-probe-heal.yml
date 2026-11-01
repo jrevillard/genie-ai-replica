@@ -27,14 +27,16 @@
   ansible.builtin.command: "{{ _trio_heal_cmd }}"
   when: _trio_probe.stdout | length > 0 or _trio_probe.rc != 0
   register: _trio_heal
-  # changed = the PROBE saw something (stdout non-empty): that is the only
-  # case where the heal has real work. The other trigger, a probe rc!=0
-  # with EMPTY stdout (transient find error), re-runs the heal defensively
-  # but the re-run matches nothing and mutates nothing — reporting
-  # `changed` there inverted the change signal on exactly the flaky-I/O
-  # path. A PARTIAL heal (probe hits, chown dies mid-batch) still reports
-  # changed: the tree WAS mutated before the failure.
-  changed_when: _trio_probe.stdout | length > 0
+  # changed = what the HEAL ITSELF chowned: both heal commands carry
+  # -print before -exec, so the task's stdout lists exactly the paths it
+  # re-owned and changed_when reads that list. The probe's stdout is NOT
+  # the signal: it is -print -quit (first hit only) while the heal
+  # traverses the whole tree, so a path appearing between the two
+  # commands (the root-era upgrade race this MR's compose comments
+  # describe) is genuinely chowned while the probe saw nothing — keying
+  # changed on the probe under-reported it; keying on the raw rc
+  # over-reported a probe-error re-run that mutated nothing.
+  changed_when: _trio_heal.stdout | length > 0
   failed_when: false
 
 - name: Warn if the heal did not complete

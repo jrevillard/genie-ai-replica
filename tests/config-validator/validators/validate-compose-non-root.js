@@ -528,21 +528,44 @@ function validateComposeNonRoot(composeText) {
       currentService = serviceMatch[1];
       const svcBody = serviceMatch[2];
       if (svcBody !== undefined) {
+        // capture stops at '#': a trailing comment on the pin (`user: root
+        // # gw`) once rode along as `root # gw` — neither root test fired
+        // (verified). A quoted value keeps its '#' (extract the quoted
+        // span whole); a bare value truncates at the comment marker.
         const fu = svcBody.match(/\buser:\s*([^,}]+)/);
         if (fu) {
-          // strip a MATCHING quote pair — the earlier ['"]?...['"]? capture
-          // kept the closing quote, so {user: "root"} captured `root"` and
-          // BOTH root tests (=== 'root', Number()) failed open (verified).
-          const unquoted = fu[1].trim().replace(/^(['"])([\s\S]*)\1$/, '$2');
-          if (unquoted.startsWith('*')) {
-            // a YAML alias cannot be resolved by a line parser: fail LOUD
-            // (the conservative-resolution doctrine) instead of reading the
-            // alias name as a literal uid that is neither root nor 0.
-            // currentUser stays null, so the must-pin rule fires too.
-            violations.push(`${currentService}: flow user: is a YAML alias (${unquoted}) — inline a literal uid:uid`);
-          } else {
-            currentUser = unquoted;
+          // DEPTH-AWARE: a user: key INSIDE a nested flow map (an
+          // environment USER variable) is not the service pin — the
+          // flat capture once turned {environment: {user: root}} into a
+          // false "is root" violation on a legal file (verified). Only a
+          // depth-0 key is the pin.
+          const before = svcBody.slice(0, fu.index);
+          const depth = (before.match(/\{/g) || []).length - (before.match(/\}/g) || []).length;
+          if (depth === 0) {
+            const rawVal = fu[1].trim();
+            const qm = rawVal.match(/^(['"])([\s\S]*?)\1/);
+            const val = qm ? qm[2] : rawVal.split('#')[0].trim();
+            // strip a MATCHING quote pair for the quoted-span escape hatch
+            const unquoted = val.replace(/^(['"])([\s\S]*)\1$/, '$2');
+            if (unquoted.startsWith('*')) {
+              // a YAML alias cannot be resolved by a line parser: fail LOUD
+              // (the conservative-resolution doctrine) instead of reading the
+              // alias name as a literal uid that is neither root nor 0.
+              // currentUser stays null, so the must-pin rule fires too.
+              violations.push(`${currentService}: flow user: is a YAML alias (${unquoted}) — inline a literal uid:uid`);
+            } else {
+              currentUser = unquoted;
+            }
           }
+        }
+        // ANY volumes: key inside a flow body is unreachable by the bind
+        // collectors (block key, flow list, alias — none see it): every
+        // bind it carries would drop out of the create_host_path contract.
+        // Conservative: demand the block form.
+        if (/\bvolumes:/.test(svcBody)) {
+          violations.push(
+            `${currentService}: volumes: inside a flow-map body is unenforceable — move it to the block form so the binds stay collected`
+          );
         }
       }
       serviceBinds[currentService] = [];
@@ -578,7 +601,15 @@ function validateComposeNonRoot(composeText) {
     // ends at whitespace or the comment marker.
     const userMatch = line.match(/^ {4}user:\s*['"]?([^'"\s#]+)['"]?\s*(?:#.*)?$/);
     if (userMatch) {
-      currentUser = userMatch[1];
+      if (userMatch[1].startsWith('*')) {
+        // the same conservative alias rule the flow body applies: a line
+        // parser cannot resolve the anchor, and reading the alias name as
+        // a literal uid fails OPEN (neither 'root' nor 0 — verified).
+        // currentUser stays null, so the must-pin rule fires too.
+        violations.push(`${currentService}: user: is a YAML alias (${userMatch[1]}) — inline a literal uid:uid`);
+      } else {
+        currentUser = userMatch[1];
+      }
       continue;
     }
 
@@ -758,6 +789,15 @@ function validateComposeNonRoot(composeText) {
     if (flowSource !== null) {
       const binds = (serviceBinds[currentService] = serviceBinds[currentService] || []);
       for (const entry of splitFlowItems(flowSource)) {
+        // a whole-entry YAML alias drops this bind from every collector
+        // below (no type:/source: pair, no host:container colon) — the
+        // conservative-resolution doctrine demands it inline.
+        if (/^\s*\*[\w-]+\s*$/.test(entry)) {
+          violations.push(
+            `${currentService}: a volumes flow entry is a YAML alias (${entry.trim()}) — inline the bind so it stays enforced`
+          );
+          continue;
+        }
         const inner = entry.replace(/^[{'"]+|[}'"]+$/g, '');
         const ft = inner.match(/type:\s*['"]?(\w+)/);
         // `}` stays IN the match: truncating at the closing brace of

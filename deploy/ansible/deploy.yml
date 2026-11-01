@@ -251,7 +251,7 @@
     _fix_payload_ownership_cmd: >-
       find "{{ deploy_dir_resolved }}" -mindepth 1 -maxdepth 1
       {{ _fix_payload_prune_expr }}
-      -o -exec chown -R -h {{ ansible_user }}:{{ ansible_user }} {} +
+      -o -print -exec chown -R -h {{ ansible_user }}:{{ ansible_user }} {} +
   tasks:
     # Images come from GitLab registry; only compose + configs needed on target.
     # Download individual files via GitLab raw API (reproducible, idempotent).
@@ -316,7 +316,10 @@
     - name: Ensure deploy directory exists
       become_user: root
       ansible.builtin.file:
-        path: "{{ deploy_dir }}"
+        # deploy_dir_resolved (group_vars): the one normalized spelling —
+        # a trailing-slash override must not fork the tree the payload
+        # probe/heal chain is built against.
+        path: "{{ deploy_dir_resolved }}"
         state: directory
         mode: '0755'
 
@@ -341,7 +344,7 @@
       # and the unprivileged get_url download would die EACCES.
       become_user: root
       ansible.builtin.file:
-        path: "{{ deploy_dir }}"
+        path: "{{ deploy_dir_resolved }}"
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
 
@@ -492,7 +495,7 @@
       # relpath a relative path against an absolute start and throw.
       loop:
         - "{{ data_dir_resolved }}/huggingface"
-        - "{{ deploy_dir }}/secrets/ssl"
+        - "{{ deploy_dir_resolved }}/secrets/ssl"
 
     # no-root data-dir migration (#1227) — the tasks live in
     # tasks/no-root-data-migration.yml, shared VERBATIM with the

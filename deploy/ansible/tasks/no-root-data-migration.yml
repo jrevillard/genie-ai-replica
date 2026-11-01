@@ -69,15 +69,22 @@
   become: true
   become_user: root
   ansible.builtin.file:
-    path: "{{ deploy_dir ~ '/' ~ (_rel_parts[0:idx + 1] | join('/')) }}"
+    path: "{{ deploy_dir_resolved ~ '/' ~ (_rel_parts[0:idx + 1] | join('/')) }}"
     state: directory
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
   vars:
-    _rel_parts: "{{ (data_dir_resolved | relpath(deploy_dir)) | split('/') | list }}"
+    _rel_parts: "{{ (data_dir_resolved | relpath(deploy_dir_resolved)) | split('/') | list }}"
   loop: "{{ range(0, _rel_parts | length - 1) | list }}"
   loop_control:
     index_var: idx
+  # An override OUTSIDE deploy_dir relpaths to ../..-prefixed parts; the
+  # -path chain builder prunes to a harmless no-op there (find never
+  # matches ..-spells), but THIS task acts through the file module, which
+  # NORMALIZES the joins — without this guard it would chown /opt, / and
+  # /srv to ansible_user (rendered and confirmed). parts[0] == '..' means
+  # EVERY prefix escapes deploy_dir: skip the whole loop.
+  when: _rel_parts[0] != '..'
 
 - name: Create the backend backup directory as the backend uid (#1227)
   # Pinned to the backend uid AT CREATION: a fresh dir left
@@ -122,5 +129,5 @@
       find -H "{{ data_dir_resolved }}/database_backups" ! -uid 1000 -print -quit
     _trio_heal_cmd: >-
       find -H "{{ data_dir_resolved }}/database_backups" ! -uid 1000
-      -exec chown -h 1000:1000 {} +
+      -print -exec chown -h 1000:1000 {} +
     _trio_label: backup-dir handover

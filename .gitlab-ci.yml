@@ -522,7 +522,7 @@ workflow:
             echo "ERROR: token endpoint rate-limited the probe (HTTP 429) — not a posture verdict; check gateway rate limiting; body: ${ROPC_BODY:-none}"
             ;;
           *)
-            echo "ERROR: no usable answer from the genie token endpoint in 5 attempts (last HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC:-0}, last answered HTTP ${ROPC_LAST_ANSWERED:-none}) — transport, gateway or upstream failure, not a posture result; last body: ${ROPC_BODY:-none}"
+            echo "ERROR: no usable answer from the genie token endpoint in 5 attempts (last HTTP ${ROPC_STATUS:-none}, curl exit ${ROPC_CURL_RC:-0}, last non-retryable HTTP ${ROPC_LAST_ANSWERED:-none}) — transport, gateway or upstream failure, not a posture result; last body: ${ROPC_BODY:-none}"
             ;;
         esac
         exit 1
@@ -532,7 +532,7 @@ workflow:
       ROPC_TOKEN=${ROPC_FIELDS#*|}
       rm -f /tmp/ropc-probe-body.json
       ropc_gateway_fail() {
-        echo "ERROR: unexpected HTTP ${ROPC_STATUS} with a non-Keycloak body from the genie token endpoint — not a posture verdict; check gateway routing (nginx/Kong) or the realm import; body: ${ROPC_BODY:-none}"
+        echo "ERROR: unexpected HTTP ${ROPC_STATUS} from the genie token endpoint whose answer carried no recognizable Keycloak error — not a posture verdict; check gateway routing (nginx/Kong) or the realm import; body: ${ROPC_BODY:-none}"
         exit 1
       }
       case "$ROPC_STATUS" in

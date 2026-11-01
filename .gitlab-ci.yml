@@ -481,33 +481,79 @@ workflow:
       # Create-first: HTTP 201 = created, 409 = already exists (the body names
       # the conflict — username or email). exact=true on the lookup: ?username=
       # is a prefix search otherwise — a stray testuser2 would misdirect it.
-      testuser_id() {
+      TESTUSER_PWD='TestPass123!'
+      testuser_state() {
         USERS_JSON=$(curl -sk "${KC_URL}/admin/realms/genie/users?username=testuser&exact=true" \
           -H "Authorization: Bearer $ADMIN_TOKEN" || true)
         USER_ID=$(printf '%s' "$USERS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id']) if isinstance(d,list) and d and isinstance(d[0],dict) and 'id' in d[0] and d[0]['id'] else None" 2>/dev/null || true)
+        USER_ENABLED=$(printf '%s' "$USERS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print('yes' if isinstance(d,list) and d and isinstance(d[0],dict) and d[0].get('enabled') is True else 'no')" 2>/dev/null || true)
       }
-      CREATE_RESP=$(curl -sk -w '\n%{http_code}' -X POST "${KC_URL}/admin/realms/genie/users" \
-        -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-        -d '{"username":"testuser","email":"testuser@e2e.test","emailVerified":true,"firstName":"Test","lastName":"User","enabled":true,"credentials":[{"type":"password","value":"TestPass123!","temporary":false}]}' || true)
-      CREATE_STATUS=$(printf '%s' "$CREATE_RESP" | tail -n1)
-      CREATE_BODY=$(printf '%s' "$CREATE_RESP" | sed '$d' | head -c 200)
+      create_testuser() {
+        CREATE_RESP=$(curl -sk -w '\n%{http_code}' -X POST "${KC_URL}/admin/realms/genie/users" \
+          -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+          -d "{\"username\":\"testuser\",\"email\":\"testuser@e2e.test\",\"emailVerified\":true,\"firstName\":\"Test\",\"lastName\":\"User\",\"enabled\":true,\"credentials\":[{\"type\":\"password\",\"value\":\"${TESTUSER_PWD}\",\"temporary\":false}]}" || true)
+        CREATE_STATUS=$(printf '%s' "$CREATE_RESP" | tail -n1)
+        CREATE_BODY=$(printf '%s' "$CREATE_RESP" | sed '$d' | head -c 200)
+      }
+      create_testuser
       if [ "$CREATE_STATUS" != "201" ] && [ "$CREATE_STATUS" != "409" ]; then
         echo "ERROR: testuser creation failed (HTTP ${CREATE_STATUS:-<none>})"
         echo "response body: ${CREATE_BODY}"
         exit 1
       fi
-      if [ "$CREATE_STATUS" = "409" ]; then
-        echo "testuser already exists (create returned 409): ${CREATE_BODY}"
-      else
-        echo "testuser created"
-      fi
-      testuser_id
+      testuser_state
       if [ -z "$USER_ID" ]; then
         echo "ERROR: cannot resolve testuser id (last users answer: $(printf '%s' "${USERS_JSON:-}" | head -c 200))"
         if [ "$CREATE_STATUS" = "409" ]; then
           echo "HINT: the 409 above may be an email conflict — another user owns testuser@e2e.test."
         fi
         exit 1
+      fi
+      if [ "$CREATE_STATUS" = "409" ]; then
+        # A 409 is not done: the stale account can be disabled or hold a
+        # password from an older fixture revision — both sail through here
+        # and fail every login-dependent spec far from the cause. Converge
+        # the account to the expected state instead of trusting the 409.
+        # Disabled: no partial-update endpoint avoids the user-level PUT
+        # (which wipes the whole credentials array), so repair = delete +
+        # recreate. Password: the realm refuses direct access grants, so
+        # credential drift cannot be probed — reset unconditionally via the
+        # dedicated reset-password endpoint.
+        if [ "$USER_ENABLED" != "yes" ]; then
+          echo "testuser exists but is disabled — deleting and recreating it (a disabled account would fail every login-dependent spec)"
+          DEL_RESP=$(curl -sk -w '\n%{http_code}' -X DELETE "${KC_URL}/admin/realms/genie/users/${USER_ID}" \
+            -H "Authorization: Bearer $ADMIN_TOKEN" || true)
+          DEL_STATUS=$(printf '%s' "$DEL_RESP" | tail -n1)
+          if [ "$DEL_STATUS" != "204" ]; then
+            echo "ERROR: cannot delete the disabled testuser (HTTP ${DEL_STATUS:-<none>}) — delete the account manually and re-run the job"
+            exit 1
+          fi
+          create_testuser
+          if [ "$CREATE_STATUS" != "201" ]; then
+            echo "ERROR: testuser recreation after delete failed (HTTP ${CREATE_STATUS:-<none>})"
+            echo "response body: ${CREATE_BODY}"
+            exit 1
+          fi
+          testuser_state
+          if [ -z "$USER_ID" ]; then
+            echo "ERROR: cannot resolve recreated testuser id (last users answer: $(printf '%s' "${USERS_JSON:-}" | head -c 200))"
+            exit 1
+          fi
+          echo "testuser recreated (enabled, fixture password set)"
+        else
+          echo "testuser already exists (create returned 409): ${CREATE_BODY}"
+          RESET_RESP=$(curl -sk -w '\n%{http_code}' -X PUT "${KC_URL}/admin/realms/genie/users/${USER_ID}/reset-password" \
+            -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+            -d "{\"type\":\"password\",\"value\":\"${TESTUSER_PWD}\",\"temporary\":false}" || true)
+          RESET_STATUS=$(printf '%s' "$RESET_RESP" | tail -n1)
+          if [ "$RESET_STATUS" != "204" ]; then
+            echo "ERROR: testuser password reset failed (HTTP ${RESET_STATUS:-<none>}) — the stale password would fail every login-dependent spec"
+            exit 1
+          fi
+          echo "testuser password converged to the fixture value (reset answered 204)"
+        fi
+      else
+        echo "testuser created"
       fi
       # Assign admin realm role to test user (required for document upload/delete)
       ADMIN_ROLE=$(curl -sk "${KC_URL}/admin/realms/genie/roles" \

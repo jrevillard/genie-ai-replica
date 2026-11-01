@@ -505,7 +505,7 @@ workflow:
           exit 1
           ;;
         4[0-9][0-9])
-          if [ "$ROPC_ERROR" = "unauthorized_client" ] || [ "$ROPC_ERROR" = "unsupported_grant_type" ]; then
+          if [ "$ROPC_ERROR" = "unauthorized_client" ] || [ "$ROPC_ERROR" = "unsupported_grant_type" ] || [ "$ROPC_ERROR" = "access_denied" ]; then
             # No exit here: GitLab concatenates the script items into one
             # shell, so ANY exit would skip the suites — and an exit 0 would
             # end the job green with zero tests run. Fall through instead.

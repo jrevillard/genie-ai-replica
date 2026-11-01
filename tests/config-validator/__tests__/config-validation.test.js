@@ -2339,6 +2339,14 @@ describe('e2e merge-train changes filters (#1264)', () => {
     expect(adjacent).toContain('"configs/keycloak/**/*"');
   });
 
+  // The default-branch and release rules carry the same paths list (for
+  // pending-<sha> images and release builds); adjacency above pins the
+  // merge_request_event branch, the count here keeps the other two honest.
+  test('build:keycloak-config carries the keycloak glob in all three rule branches', () => {
+    const count = (sectionOf('build:keycloak-config').match(/"configs\/keycloak\/\*\*\/\*"/g) || []).length;
+    expect(count).toBeGreaterThanOrEqual(3);
+  });
+
   test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {
     // The invariant exists because of this hard needs — pin it too.
     expect(sectionOf('e2e:playwright')).toContain('needs: [e2e:integration]');

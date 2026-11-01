@@ -40,9 +40,11 @@ module.exports = {
   },
   // What POST /api/analytics/events actually answers: the storage metadata
   // returned by the ArangoDB save (the full persisted document is never in
-  // that response body).
+  // that response body). All three keys are always present on a successful
+  // save — hence required.
   EventCreated: {
     type: 'object',
+    required: ['_id', '_key', '_rev'],
     properties: {
       _id: { type: 'string' },
       _key: { type: 'string' },

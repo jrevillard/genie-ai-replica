@@ -13,34 +13,16 @@ part of openapi.api;
 class EventCreated {
   /// Returns a new [EventCreated] instance.
   EventCreated({
-    this.id,
-    this.key,
-    this.rev,
+    required this.id,
+    required this.key,
+    required this.rev,
   });
 
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
-  String? id;
+  String id;
 
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
-  String? key;
+  String key;
 
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
-  String? rev;
+  String rev;
 
   @override
   bool operator ==(Object other) => identical(this, other) || other is EventCreated &&
@@ -51,30 +33,18 @@ class EventCreated {
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
-    (id == null ? 0 : id!.hashCode) +
-    (key == null ? 0 : key!.hashCode) +
-    (rev == null ? 0 : rev!.hashCode);
+    (id.hashCode) +
+    (key.hashCode) +
+    (rev.hashCode);
 
   @override
   String toString() => 'EventCreated[id=$id, key=$key, rev=$rev]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-    if (this.id != null) {
       json[r'_id'] = this.id;
-    } else {
-      json[r'_id'] = null;
-    }
-    if (this.key != null) {
       json[r'_key'] = this.key;
-    } else {
-      json[r'_key'] = null;
-    }
-    if (this.rev != null) {
       json[r'_rev'] = this.rev;
-    } else {
-      json[r'_rev'] = null;
-    }
     return json;
   }
 
@@ -89,13 +59,19 @@ class EventCreated {
       // Note 1: the values aren't checked for validity beyond being non-null.
       // Note 2: this code is stripped in release mode!
       assert(() {
+        assert(json.containsKey(r'_id'), 'Required key "EventCreated[_id]" is missing from JSON.');
+        assert(json[r'_id'] != null, 'Required key "EventCreated[_id]" has a null value in JSON.');
+        assert(json.containsKey(r'_key'), 'Required key "EventCreated[_key]" is missing from JSON.');
+        assert(json[r'_key'] != null, 'Required key "EventCreated[_key]" has a null value in JSON.');
+        assert(json.containsKey(r'_rev'), 'Required key "EventCreated[_rev]" is missing from JSON.');
+        assert(json[r'_rev'] != null, 'Required key "EventCreated[_rev]" has a null value in JSON.');
         return true;
       }());
 
       return EventCreated(
-        id: mapValueOfType<String>(json, r'_id'),
-        key: mapValueOfType<String>(json, r'_key'),
-        rev: mapValueOfType<String>(json, r'_rev'),
+        id: mapValueOfType<String>(json, r'_id')!,
+        key: mapValueOfType<String>(json, r'_key')!,
+        rev: mapValueOfType<String>(json, r'_rev')!,
       );
     }
     return null;
@@ -143,6 +119,9 @@ class EventCreated {
 
   /// The list of required keys that must be present in a JSON.
   static const requiredKeys = <String>{
+    '_id',
+    '_key',
+    '_rev',
   };
 }
 

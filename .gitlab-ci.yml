@@ -558,20 +558,37 @@ workflow:
         # failure below names it.
         echo "testuser already exists (create returned 409): ${CREATE_BODY}"
         require_testuser_id
+        recreate_from_scratch() {
+          create_testuser
+          if [ "$CREATE_STATUS" != "201" ]; then
+            die_bad_create
+          fi
+          require_testuser_id
+          require_fixture_healthy
+          VERDICT="testuser recreated (fixture state enforced)"
+        }
         if [ "$USER_HEALTHY" = "yes" ]; then
           RESET_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X PUT "${KC_URL}/admin/realms/genie/users/${USER_ID}/reset-password" \
             -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
             -d "$(reset_payload)" || true)
           RESET_STATUS=$(printf '%s' "$RESET_RESP" | tail -n1)
           case "$RESET_STATUS" in ''|*[!0-9]*) RESET_STATUS="" ;; esac
-          if [ "$RESET_STATUS" != "204" ]; then
+          if [ "$RESET_STATUS" = "404" ]; then
+            echo "testuser vanished before the password reset (HTTP 404) — recreating from scratch"
+            recreate_from_scratch
+          elif [ "$RESET_STATUS" != "204" ]; then
             echo "ERROR: testuser password reset failed (HTTP $(http_label "$RESET_STATUS")) — the stale password would fail every login-dependent spec"
             echo "response body: $(printf '%s' "$RESET_RESP" | sed '$d' | head -c 200)"
             exit 1
+          else
+            VERDICT="testuser exists, fixture-healthy — password converged (reset answered 204, id unchanged)"
           fi
-          VERDICT="testuser exists, fixture-healthy — password converged (reset answered 204, id unchanged)"
         else
           echo "testuser exists with drifted login state — deleting and recreating it"
+          # Serializing both .e2e_web_base consumers via resource_group
+          # e2e-runner is what keeps this delete+recreate free of a
+          # concurrent convergence; a third consumer of the base must keep
+          # that serialization or accept interleaved 404/409 failures.
           DEL_RESP=$(curl -sk --connect-timeout 5 --max-time 10 -w '\n%{http_code}' -X DELETE "${KC_URL}/admin/realms/genie/users/${USER_ID}" \
             -H "Authorization: Bearer $ADMIN_TOKEN" || true)
           DEL_STATUS=$(printf '%s' "$DEL_RESP" | tail -n1)
@@ -585,13 +602,7 @@ workflow:
           if [ "$DEL_STATUS" = "404" ]; then
             echo "testuser vanished between lookup and delete (HTTP 404) — recreating from scratch"
           fi
-          create_testuser
-          if [ "$CREATE_STATUS" != "201" ]; then
-            die_bad_create
-          fi
-          require_testuser_id
-          require_fixture_healthy
-          VERDICT="testuser recreated (fixture state enforced)"
+          recreate_from_scratch
         fi
       elif [ "$CREATE_STATUS" != "201" ]; then
         die_bad_create

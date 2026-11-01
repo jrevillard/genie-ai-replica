@@ -2806,7 +2806,12 @@ describe('the testuser 409 convergence in .e2e_web_base', () => {
     const section = sectionOf('.e2e_web_base');
     expect(section).toContain('username=testuser&exact=true');
     expect(section).toContain("TESTUSER_EMAIL='testuser@e2e.test'");
+    expect(section).toContain("TESTUSER_PWD='TestPass123!'");
     expect(section).toContain("u.get('email') == sys.argv[1]");
+    // both payloads take their fixture values through argv — a hardcoded
+    // literal in either payload escapes the single-source variables
+    expect(section).toContain('"value":sys.argv[2]');
+    expect(section).toContain('"value":sys.argv[1]');
     expect(section).toContain('/reset-password');
     expect(section).toContain('[ "$RESET_STATUS" != "204" ]');
     expect(section).toContain('X DELETE "${KC_URL}/admin/realms/genie/users/${USER_ID}"');

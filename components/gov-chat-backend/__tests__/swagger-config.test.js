@@ -140,6 +140,12 @@ const buildSpecWithRealFs = (options) => {
   }
 };
 
+// One spec build shared by every describe that reads the same merged spec
+// (the route annotations and the shared schemas do not change between
+// tests). The Server URL describe below cannot use it: it re-requires
+// index.js after jest.resetModules and builds its own.
+const mergedSpec = buildSpecWithRealFs(swaggerOptions);
+
 describe('Swagger Configuration', () => {
   describe('Security Scheme (Task 1)', () => {
     it('should contain KeycloakOAuth2 security scheme (NOT bearerAuth)', () => {
@@ -221,7 +227,7 @@ describe('Swagger Configuration', () => {
       // once: !609 referenced CategoryTree without defining it. Build the
       // merged spec exactly as the runtime does and assert every local
       // schema $ref resolves.
-      const spec = buildSpecWithRealFs(swaggerOptions);
+      const spec = mergedSpec;
       const defined = new Set(Object.keys(spec.components?.schemas || {}));
       const refs = new Set();
       const walk = (node) => {
@@ -242,6 +248,52 @@ describe('Swagger Configuration', () => {
       expect(refs.size).toBeGreaterThan(0);
       const dangling = [...refs].filter((name) => !defined.has(name));
       expect(dangling).toEqual([]);
+    });
+  });
+
+  describe('Event contract split (request wire vs stored document)', () => {
+    // The route destructures exactly eventType + eventData from the wire
+    // (timestamp is server-set) and the service stores the payload under
+    // `data`, so EventRequest documents the request wire and Event stays
+    // the stored ArangoDB document shape. A shared schema carrying both
+    // spellings made `eventData` vs `data` ambiguous to client authors —
+    // sending `data` was silently dropped (stored as {}).
+    const spec = mergedSpec;
+    const eventsOps = spec.paths['/api/analytics/events'];
+
+    it('annotates the POST request body with EventRequest, not Event', () => {
+      expect(eventsOps.post.requestBody.content['application/json'].schema).toEqual({
+        $ref: '#/components/schemas/EventRequest'
+      });
+    });
+
+    it('EventRequest carries the request wire: eventType required, eventData, no stored fields', () => {
+      const eventRequest = spec.components.schemas.EventRequest;
+      expect(eventRequest.required).toEqual(['eventType']);
+      expect(Object.keys(eventRequest.properties).sort()).toEqual(['eventData', 'eventType']);
+      // Mirrors the runtime truthiness check: an empty eventType is
+      // refused with 400.
+      expect(eventRequest.properties.eventType.minLength).toBe(1);
+    });
+
+    it('Event carries the stored shape: data, no request-wire eventData', () => {
+      const event = spec.components.schemas.Event;
+      expect('data' in event.properties).toBe(true);
+      expect('eventData' in event.properties).toBe(false);
+    });
+
+    it('documents the 201 as the save metadata and the GET list as stored Event documents', () => {
+      // trackEvent returns the arangojs save() result ({_id, _key, _rev}) —
+      // the full persisted document is never in the 201 body — while GET
+      // /events returns the stored documents themselves.
+      expect(eventsOps.post.responses['201'].content['application/json'].schema.$ref).toBe(
+        '#/components/schemas/EventCreated'
+      );
+      expect(eventsOps.get.responses['200'].content['application/json'].schema.items.$ref).toBe(
+        '#/components/schemas/Event'
+      );
+      // A successful save always carries all three keys.
+      expect(spec.components.schemas.EventCreated.required).toEqual(['_id', '_key', '_rev']);
     });
   });
 

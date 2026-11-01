@@ -10,9 +10,9 @@
 
 part of openapi.api;
 
-class ApiAnalyticsEventsPostRequest {
-  /// Returns a new [ApiAnalyticsEventsPostRequest] instance.
-  ApiAnalyticsEventsPostRequest({
+class EventRequest {
+  /// Returns a new [EventRequest] instance.
+  EventRequest({
     required this.eventType,
     this.eventData,
   });
@@ -21,16 +21,10 @@ class ApiAnalyticsEventsPostRequest {
   String eventType;
 
   /// Additional event data
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
   Object? eventData;
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is ApiAnalyticsEventsPostRequest &&
+  bool operator ==(Object other) => identical(this, other) || other is EventRequest &&
     other.eventType == eventType &&
     other.eventData == eventData;
 
@@ -41,7 +35,7 @@ class ApiAnalyticsEventsPostRequest {
     (eventData == null ? 0 : eventData!.hashCode);
 
   @override
-  String toString() => 'ApiAnalyticsEventsPostRequest[eventType=$eventType, eventData=$eventData]';
+  String toString() => 'EventRequest[eventType=$eventType, eventData=$eventData]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -54,10 +48,10 @@ class ApiAnalyticsEventsPostRequest {
     return json;
   }
 
-  /// Returns a new [ApiAnalyticsEventsPostRequest] instance and imports its values from
+  /// Returns a new [EventRequest] instance and imports its values from
   /// [value] if it's a [Map], null otherwise.
   // ignore: prefer_constructors_over_static_methods
-  static ApiAnalyticsEventsPostRequest? fromJson(dynamic value) {
+  static EventRequest? fromJson(dynamic value) {
     if (value is Map) {
       final json = value.cast<String, dynamic>();
 
@@ -65,12 +59,12 @@ class ApiAnalyticsEventsPostRequest {
       // Note 1: the values aren't checked for validity beyond being non-null.
       // Note 2: this code is stripped in release mode!
       assert(() {
-        assert(json.containsKey(r'eventType'), 'Required key "ApiAnalyticsEventsPostRequest[eventType]" is missing from JSON.');
-        assert(json[r'eventType'] != null, 'Required key "ApiAnalyticsEventsPostRequest[eventType]" has a null value in JSON.');
+        assert(json.containsKey(r'eventType'), 'Required key "EventRequest[eventType]" is missing from JSON.');
+        assert(json[r'eventType'] != null, 'Required key "EventRequest[eventType]" has a null value in JSON.');
         return true;
       }());
 
-      return ApiAnalyticsEventsPostRequest(
+      return EventRequest(
         eventType: mapValueOfType<String>(json, r'eventType')!,
         eventData: mapValueOfType<Object>(json, r'eventData'),
       );
@@ -78,11 +72,11 @@ class ApiAnalyticsEventsPostRequest {
     return null;
   }
 
-  static List<ApiAnalyticsEventsPostRequest> listFromJson(dynamic json, {bool growable = false,}) {
-    final result = <ApiAnalyticsEventsPostRequest>[];
+  static List<EventRequest> listFromJson(dynamic json, {bool growable = false,}) {
+    final result = <EventRequest>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
-        final value = ApiAnalyticsEventsPostRequest.fromJson(row);
+        final value = EventRequest.fromJson(row);
         if (value != null) {
           result.add(value);
         }
@@ -91,12 +85,12 @@ class ApiAnalyticsEventsPostRequest {
     return result.toList(growable: growable);
   }
 
-  static Map<String, ApiAnalyticsEventsPostRequest> mapFromJson(dynamic json) {
-    final map = <String, ApiAnalyticsEventsPostRequest>{};
+  static Map<String, EventRequest> mapFromJson(dynamic json) {
+    final map = <String, EventRequest>{};
     if (json is Map && json.isNotEmpty) {
       json = json.cast<String, dynamic>(); // ignore: parameter_assignments
       for (final entry in json.entries) {
-        final value = ApiAnalyticsEventsPostRequest.fromJson(entry.value);
+        final value = EventRequest.fromJson(entry.value);
         if (value != null) {
           map[entry.key] = value;
         }
@@ -105,14 +99,14 @@ class ApiAnalyticsEventsPostRequest {
     return map;
   }
 
-  // maps a json object with a list of ApiAnalyticsEventsPostRequest-objects as value to a dart map
-  static Map<String, List<ApiAnalyticsEventsPostRequest>> mapListFromJson(dynamic json, {bool growable = false,}) {
-    final map = <String, List<ApiAnalyticsEventsPostRequest>>{};
+  // maps a json object with a list of EventRequest-objects as value to a dart map
+  static Map<String, List<EventRequest>> mapListFromJson(dynamic json, {bool growable = false,}) {
+    final map = <String, List<EventRequest>>{};
     if (json is Map && json.isNotEmpty) {
       // ignore: parameter_assignments
       json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
-        map[entry.key] = ApiAnalyticsEventsPostRequest.listFromJson(entry.value, growable: growable,);
+        map[entry.key] = EventRequest.listFromJson(entry.value, growable: growable,);
       }
     }
     return map;

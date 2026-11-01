@@ -11,11 +11,11 @@
 import 'package:openapi/api.dart';
 import 'package:test/test.dart';
 
-// tests for ApiAnalyticsEventsPostRequest
+// tests for EventRequest
 void main() {
-  // final instance = ApiAnalyticsEventsPostRequest();
+  // final instance = EventRequest();
 
-  group('test ApiAnalyticsEventsPostRequest', () {
+  group('test EventRequest', () {
     // Type of event (e.g., pageView, buttonClick)
     // String eventType
     test('to test the property `eventType`', () async {

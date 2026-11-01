@@ -34,12 +34,6 @@ void main() {
       // TODO
     });
 
-    // Additional event data
-    // Object eventData
-    test('to test the property `eventData`', () async {
-      // TODO
-    });
-
     // Event timestamp
     // DateTime timestamp
     test('to test the property `timestamp`', () async {

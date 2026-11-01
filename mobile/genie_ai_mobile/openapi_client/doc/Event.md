@@ -11,7 +11,6 @@ Name | Type | Description | Notes
 **key** | **String** | Unique identifier | [optional] 
 **userId** | **String** | ID of the user | [optional] 
 **eventType** | **String** | Type of event (e.g., pageView, buttonClick) | [optional] 
-**eventData** | **Object** | Additional event data | [optional] 
 **timestamp** | [**DateTime**](DateTime.md) | Event timestamp | [optional] 
 **id** | **String** |  | [optional] 
 **rev** | **String** |  | [optional] 

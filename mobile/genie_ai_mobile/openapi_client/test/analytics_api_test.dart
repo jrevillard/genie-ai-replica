@@ -39,7 +39,7 @@ void main() {
     //
     // Records a user event for analytics
     //
-    //Future<Event> apiAnalyticsEventsPost(ApiAnalyticsEventsPostRequest apiAnalyticsEventsPostRequest) async
+    //Future<EventCreated> apiAnalyticsEventsPost(EventRequest eventRequest) async
     test('test apiAnalyticsEventsPost', () async {
       // TODO
     });

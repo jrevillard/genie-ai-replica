@@ -321,6 +321,28 @@ const { createUser } = require('./tests/e2e/helpers/keycloak-admin');
 - Username: `testadmin`
 - Password: `TestAdmin123!`
 
+The admin-surface authz specs (`tests/e2e/admin/authz.spec.js`) also need a
+user with NO realm roles — the non-admin side of the requireAdmin contract:
+
+```bash
+node -e "
+const { getAdminToken } = require('./tests/e2e/helpers/auth');
+const { createUser } = require('./tests/e2e/helpers/keycloak-admin');
+(async () => {
+  const token = await getAdminToken();
+  await createUser(token, 'genie', {
+    username: 'testplain',
+    email: 'testplain@genie.local',
+    firstName: 'Test',
+    lastName: 'Plain',
+    password: 'TestPlain123!',
+  });
+  console.log('testplain ready');
+})().catch((e) => { console.error(e.message); process.exit(1); });
+"
+# Expected: testplain ready (the second run is a no-op — 409 tolerated)
+```
+
 ### 0.9 Seed the Knowledge Hierarchy (Quick Help Prerequisite)
 
 A fresh stack has **empty** `serviceCategories`/`services` collections. The

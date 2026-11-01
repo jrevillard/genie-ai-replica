@@ -26,14 +26,17 @@ test.describe('Admin logs view', () => {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
+        // The wire contract is FLAT — LogsService returns
+        // {errors, warnings, services, date, degraded} at the top level
+        // and the component reads response.data.errors off the axios
+        // envelope. A {data: ...} wrapper here would take the invalid-
+        // structure branch and zero both summaries.
         body: JSON.stringify({
-          data: {
-            errors: summaryPayload.errors,
-            warnings: summaryPayload.warnings,
-            services: [],
-            date: new Date().toISOString().split('T')[0],
-            degraded: false,
-          },
+          errors: summaryPayload.errors,
+          warnings: summaryPayload.warnings,
+          services: [],
+          date: new Date().toISOString().split('T')[0],
+          degraded: false,
         }),
       }),
     );

@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { loginViaUI, BASE_URL, TEST_USER, TEST_ADMIN_USER } = require('../helpers/chatbot');
+const { loginViaUI, BASE_URL, TEST_PLAIN_USER, TEST_ADMIN_USER } = require('../helpers/chatbot');
 
 /**
  * Admin route authorization, end to end.
@@ -12,11 +12,9 @@ const { loginViaUI, BASE_URL, TEST_USER, TEST_ADMIN_USER } = require('../helpers
  * backend (route.fetch replays the browser's authenticated request), so a
  * reverted requireAdmin or a broken role mapping turns these red.
  *
- * The admin test user is provisioned with the `admin` realm role; the
- * plain user is not. On the k8s venue both are provisioned through
- * tests/e2e/helpers/keycloak-admin.js against the deployed realm (see the
- * deployment comment on the issue); the compose venue provisions them in
- * docs/e2e-tests/00-clean-start.md Phase 0.
+ * testadmin carries the `admin` realm role and testplain carries none —
+ * both are provisioned by the same venues that provision testuser (the
+ * CI e2e setup job and docs/e2e-tests/00-clean-start.md Phase 0).
  */
 test.describe('Admin route authorization', () => {
   test.setTimeout(120000);
@@ -42,7 +40,7 @@ test.describe('Admin route authorization', () => {
   });
 
   test('non-admin session is refused by the backend and the navbar', async ({ page }) => {
-    await loginViaUI(page, TEST_USER);
+    await loginViaUI(page, TEST_PLAIN_USER);
 
     // Probe the real backend with the plain user's session: requireAdmin
     // must answer 403 FORBIDDEN.

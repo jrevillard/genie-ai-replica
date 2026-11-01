@@ -2361,6 +2361,13 @@ describe('e2e merge-train changes filters (#1264)', () => {
     return dir === TESTS_E2E_ROOT ? resolvedPath : `${dir}/**/*`;
   };
 
+  // Anchor coverage is prefix-based, not verbatim: `X/**/*` covers any
+  // deeper glob or file — the anchor lists a directory once, while the
+  // derivation may resolve a path nested inside it. Exact entries cover
+  // themselves only.
+  const isCovered = (anchorPaths, entry) =>
+    anchorPaths.some((p) => p === entry || (p.endsWith('/**/*') && entry.startsWith(`${p.slice(0, -5)}/`)));
+
   // Extract the consumed paths from spec sources: relative require/import
   // specifiers and path.join(__dirname, ...) / path.resolve(__dirname, ...)
   // string-literal segment chains. Candidates are dropped unless they resolve
@@ -2380,7 +2387,10 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // Same shape tolerance as the specifiers for __dirname chains: all
     // three quote styles, any spacing. A join carrying a non-literal
     // argument is not matched at all (tracked in #1325); an inline comment
-    // inside the call likewise.
+    // inside the call likewise. Chains anchored on __filename or
+    // import.meta.url are not derived — no spec uses them; they belong to
+    // the same documented-limits family, not to #1325's computed-argument
+    // case.
     const joinRe = /path\.(?:join|resolve)\(\s*__dirname((?:\s*,\s*(['"`])[^'"`]*\2)+)\s*\)/g;
     const globs = new Set();
     for (const { file, source } of specFiles) {
@@ -2423,10 +2433,10 @@ describe('e2e merge-train changes filters (#1264)', () => {
       .filter((f) => /\.(spec|test)\.[cm]?[jt]sx?$/.test(f))
       .filter((f) => executedGlobs.some((g) => (g.endsWith('/**/*') ? f.startsWith(`${g.slice(0, -5)}/`) : f === g)));
 
-  test('executed and consumed paths are listed in the shared anchor', () => {
+  test('executed and consumed paths are covered by the shared anchor', () => {
     const anchorPaths = filters.get(ANCHOR);
     for (const required of [...EXECUTED_GLOBS, ...DERIVED_CONSUMED]) {
-      expect(anchorPaths).toContain(required);
+      expect(isCovered(anchorPaths, required)).toBe(true);
     }
   });
 
@@ -2455,13 +2465,15 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // targets. If the config ever pins its own testMatch or moves testDir,
   // the scan set silently diverges from what actually executes — the same
   // hand-copied drift this guard exists to catch, in its own input. Pin
-  // both (on code lines only — a prose comment naming the keys must not
-  // fail the pin) so an override fails here first, loudly.
+  // both (on code text only — inline and whole-line // comments naming
+  // the keys must not fail the pin) so an override fails here first,
+  // loudly.
   test('playwright.config.js keeps the defaults the derivation assumes', () => {
     const config = fs
       .readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8')
       .split('\n')
       .filter((line) => !line.trimStart().startsWith('//'))
+      .map((line) => line.replace(/\s+\/\/.*$/, ''))
       .join('\n');
     expect(config).not.toMatch(/testMatch/);
     expect(config).toMatch(/testDir:\s*'\.\/tests\/e2e'/);
@@ -2501,6 +2513,23 @@ describe('e2e merge-train changes filters (#1264)', () => {
           '  VERSION="${CI_COMMIT_TAG#v}"'
         ])
       ).toEqual(['  script: npx playwright test tests/e2e/', '  VERSION="${CI_COMMIT_TAG#v}"']);
+    });
+  });
+
+  describe('anchor coverage', () => {
+    const ANCHOR = ['tests/e2e/fixtures/**/*', 'tests/e2e/theme-runtime-config.spec.js'];
+
+    test('an exact anchor entry covers verbatim and deeper paths alike', () => {
+      expect(isCovered(ANCHOR, 'tests/e2e/fixtures/**/*')).toBe(true);
+      expect(isCovered(ANCHOR, 'tests/e2e/fixtures/http/**/*')).toBe(true);
+      expect(isCovered(ANCHOR, 'tests/e2e/fixtures/http/seed.json')).toBe(true);
+      expect(isCovered(ANCHOR, 'tests/e2e/theme-runtime-config.spec.js')).toBe(true);
+    });
+
+    test('a sibling or unrelated path is not covered', () => {
+      expect(isCovered(ANCHOR, 'tests/e2e/helpers/**/*')).toBe(false);
+      expect(isCovered(ANCHOR, 'tests/e2e/fixtures-backup/**/*')).toBe(false);
+      expect(isCovered(ANCHOR, 'tests/e2e/theme-runtime-config.spec.js.bak')).toBe(false);
     });
   });
 

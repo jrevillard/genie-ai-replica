@@ -520,7 +520,16 @@ workflow:
       die_bad_create() {
         echo "ERROR: testuser creation failed (HTTP $(http_label "$CREATE_STATUS"))"
         echo "response body: ${CREATE_BODY}"
+        if [ "$CREATE_STATUS" = "409" ]; then
+          echo "HINT: the 409 above may be an email conflict — another user owns testuser@e2e.test."
+        fi
         exit 1
+      }
+      require_fixture_healthy() {
+        if [ "$USER_HEALTHY" != "yes" ]; then
+          echo "ERROR: the freshly provisioned testuser is not fixture-healthy (lookup HTTP $(http_label "$LOOKUP_STATUS")) — realm-level defaults are attaching state to new users; check the realm import (required actions, email verification)"
+          exit 1
+        fi
       }
       reset_payload() {
         python3 -c 'import json,sys; print(json.dumps({"type":"password","value":sys.argv[1],"temporary":False}))' "$TESTUSER_PWD"
@@ -580,12 +589,14 @@ workflow:
             die_bad_create
           fi
           require_testuser_id
+          require_fixture_healthy
           VERDICT="testuser recreated (fixture state enforced)"
         fi
       elif [ "$CREATE_STATUS" != "201" ]; then
         die_bad_create
       else
         require_testuser_id
+        require_fixture_healthy
         VERDICT="testuser created"
       fi
       echo "$VERDICT"

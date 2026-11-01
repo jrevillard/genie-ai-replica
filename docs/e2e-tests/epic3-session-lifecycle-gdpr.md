@@ -51,7 +51,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
+    var u = db.users.firstExample({email: 'testuser@e2e.test', deleted: false});
     print(u._key);
   " 2>/dev/null | tail -1)
 
@@ -119,7 +119,7 @@ print(f'HTTP: 200 (token still valid)')
 docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
+    var u = db.users.firstExample({email: 'testuser@e2e.test', deleted: false});
     print('deleted: ' + u.deleted);
   "
 ```
@@ -152,7 +152,7 @@ curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" -o /d
 docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
+    var u = db.users.firstExample({email: 'testuser@e2e.test', deleted: false});
     print('deleted: ' + u.deleted + ', active: ' + u.active);
   "
 ```
@@ -169,7 +169,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
+    var u = db.users.firstExample({email: 'testuser@e2e.test', deleted: false});
     print(u._key);
   " 2>/dev/null | tail -1)
 
@@ -213,7 +213,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
+    var u = db.users.firstExample({email: 'testuser@e2e.test', deleted: false});
     print(u._key);
   " 2>/dev/null | tail -1)
 
@@ -264,7 +264,7 @@ print(f'email: {d[\"user\"][\"email\"]}')
 print(f'name: {d[\"user\"].get(\"name\",\"N/A\")}')
 "
 ```
-**Expected**: `success: true`, `email: testuser@genie.local`
+**Expected**: `success: true`, `email: testuser@e2e.test`
 
 ### Test M.2 — Get User Profile by ID
 
@@ -273,7 +273,7 @@ print(f'name: {d[\"user\"].get(\"name\",\"N/A\")}')
 USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
+    var u = db.users.firstExample({email: 'testuser@e2e.test', deleted: false});
     print(u._key);
   " 2>/dev/null | tail -1)
 
@@ -285,7 +285,7 @@ print(f'email: {d.get(\"email\",\"N/A\")}')
 print(f'active: {d.get(\"active\",\"N/A\")}')
 "
 ```
-**Expected**: `email: testuser@genie.local`, `active: true`
+**Expected**: `email: testuser@e2e.test`, `active: true`
 
 ### Test M.3 — Update User Profile
 
@@ -340,7 +340,7 @@ print(f'email: {u[\"email\"]}')
 curl -sk -X PUT "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"email":"testuser@genie.local"}' -w "\nHTTP: %{http_code}\n"
+  -d '{"email":"testuser@e2e.test"}' -w "\nHTTP: %{http_code}\n"
 ```
 **Expected**: HTTP 200
 
@@ -384,7 +384,7 @@ print(f'name: {d[\"user\"].get(\"name\",\"N/A\")}')
 USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
+    var u = db.users.firstExample({email: 'testuser@e2e.test', deleted: false});
     print(u._key);
   " 2>/dev/null | tail -1)
 
@@ -398,7 +398,7 @@ docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
 docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
+    var u = db.users.firstExample({email: 'testuser@e2e.test', deleted: false});
     print('deleted: ' + u.deleted);
   "
 # Expected: deleted: true
@@ -419,7 +419,7 @@ print(f'success: {d[\"success\"]}')
 docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
+    var u = db.users.firstExample({email: 'testuser@e2e.test', deleted: false});
     print('deleted: ' + u.deleted + ', active: ' + u.active);
   "
 ```
@@ -432,7 +432,7 @@ docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
 USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
+    var u = db.users.firstExample({email: 'testuser@e2e.test', deleted: false});
     print(u._key);
   " 2>/dev/null | tail -1)
 
@@ -464,7 +464,7 @@ curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
   -d '{
     "username": "testuser",
     "enabled": true,
-    "email": "testuser@genie.local",
+    "email": "testuser@e2e.test",
     "firstName": "Test",
     "lastName": "User",
     "credentials": [{"type": "password", "value": "TestPass123!", "temporary": false}]
@@ -501,7 +501,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
+    var u = db.users.firstExample({email: 'testuser@e2e.test', deleted: false});
     print(u._key);
   " 2>/dev/null | tail -1)
 echo "User _key: $USER_KEY"
@@ -549,7 +549,7 @@ curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
   -d '{
     "username": "testuser",
     "enabled": true,
-    "email": "testuser@genie.local",
+    "email": "testuser@e2e.test",
     "firstName": "Test",
     "lastName": "User",
     "credentials": [{"type": "password", "value": "TestPass123!", "temporary": false}]
@@ -588,7 +588,7 @@ curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
   -d '{
     "username": "testuser",
     "enabled": true,
-    "email": "testuser@genie.local",
+    "email": "testuser@e2e.test",
     "firstName": "Test",
     "lastName": "User",
     "credentials": [{"type": "password", "value": "TestPass123!", "temporary": false}]

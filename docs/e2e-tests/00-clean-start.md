@@ -255,7 +255,8 @@ curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
   -d '{
     "username": "testuser",
     "enabled": true,
-    "email": "testuser@genie.local",
+    "email": "testuser@e2e.test",
+    "emailVerified": true,
     "firstName": "Test",
     "lastName": "User",
     "credentials": [{"type": "password", "value": "TestPass123!", "temporary": false}]
@@ -282,10 +283,8 @@ print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
 - Username: `testuser`
 - Password: `TestPass123!`
 
-The CI e2e jobs converge this fixture themselves (`.e2e_web_base` in
-`.gitlab-ci.yml`) with email `testuser@e2e.test` and `emailVerified: true`;
-a locally created user carrying other values (e.g. this section's
-`testuser@genie.local`) is judged drifted there and recreated.
+This payload matches the CI e2e provisioning fixture (`.e2e_web_base` in
+`.gitlab-ci.yml`), which converges an existing account to it on every run.
 
 #### 0.8b Create Test Admin (documents suites prerequisite)
 

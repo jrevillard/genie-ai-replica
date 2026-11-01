@@ -2713,28 +2713,6 @@ describe('e2e merge-train changes filters (#1264)', () => {
     expect(sectionOf('.e2e_web_base')).toContain('ROPC refusal verified');
   });
 
-  // A 409 from the testuser create is convergence, not done: a stale
-  // account (disabled, unverified email, lingering required action, old
-  // password) that sails through provisioning fails every login-dependent
-  // spec far from the cause. Pin both repair arms of the convergence — the
-  // healthy path's reset-password endpoint and its 204 gate, the drifted
-  // path's delete call, 204/404 gate, both create invocations and the
-  // three id resolutions — so a "simplification" that keeps the verdict
-  // text but drops the machinery fails this pin instead of silently
-  // reverting to trust-the-409.
-  test('the testuser 409 convergence is present in .e2e_web_base', () => {
-    const section = sectionOf('.e2e_web_base');
-    expect(section).toContain('username=testuser&exact=true');
-    expect(section).toContain("u.get('email') == 'testuser@e2e.test'");
-    expect(section).toContain('/reset-password');
-    expect(section).toContain('[ "$RESET_STATUS" != "204" ]');
-    expect(section).toContain('X DELETE "${KC_URL}/admin/realms/genie/users/${USER_ID}"');
-    expect(section).toContain('[ "$DEL_STATUS" != "204" ] && [ "$DEL_STATUS" != "404" ]');
-    expect(section).toContain('testuser recreated');
-    expect(section.match(/^[ \t]+create_testuser$/gm) || []).toHaveLength(2);
-    expect(section.match(/^[ \t]+require_testuser_id$/gm) || []).toHaveLength(3);
-  });
-
   test.each(['e2e:playwright', 'scheduled:e2e-web'])('%s still extends the base that carries the probe', (job) => {
     const section = sectionOf(job);
     // Scalar extends, exactly — an extends CHAIN ([.e2e_web_base, .other])
@@ -2794,6 +2772,52 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // every excluded directory.
   test('the anchor does not cover the excluded okf specs', () => {
     expect(isCovered(filters.get(ANCHOR), 'tests/e2e/okf/**/*')).toBe(false);
+  });
+});
+
+// The testuser 409 convergence in .e2e_web_base: a stale account (disabled,
+// unverified email, lingering required action, old password) that sails
+// through provisioning fails every login-dependent spec far from the cause.
+// Pin both repair arms of the convergence — the healthy path's
+// reset-password endpoint and its 204 gate, the drifted path's delete call,
+// 204/404 gate, both create invocations, the id resolutions and the
+// fixture-health gates — so a "simplification" that keeps the verdict text
+// but drops the machinery fails this pin instead of silently reverting to
+// trust-the-409.
+describe('the testuser 409 convergence in .e2e_web_base', () => {
+  let content;
+
+  beforeAll(() => {
+    content = fs.readFileSync(path.join(ROOT, '.gitlab-ci.yml'), 'utf-8');
+  });
+
+  // Same section extraction as the merge-train describe above: from a
+  // top-level key to the next one, comment lines stripped.
+  const sectionOf = (job) => {
+    const start = content.indexOf(`\n${job}:`);
+    expect(start).toBeGreaterThan(-1);
+    const rest = content.slice(start + 1);
+    const end = rest.search(/\n[\w:.-]+:(\s|$)/);
+    const section = end === -1 ? rest : rest.slice(0, end + 1);
+    return section
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('#'))
+      .join('\n');
+  };
+
+  test('both repair arms and their gates are present', () => {
+    const section = sectionOf('.e2e_web_base');
+    expect(section).toContain('username=testuser&exact=true');
+    expect(section).toContain("u.get('email') == 'testuser@e2e.test'");
+    expect(section).toContain('/reset-password');
+    expect(section).toContain('[ "$RESET_STATUS" != "204" ]');
+    expect(section).toContain('X DELETE "${KC_URL}/admin/realms/genie/users/${USER_ID}"');
+    expect(section).toContain('[ "$DEL_STATUS" != "204" ] && [ "$DEL_STATUS" != "404" ]');
+    expect(section).toContain('password converged');
+    expect(section).toContain('testuser recreated');
+    expect(section.match(/^[ \t]+create_testuser$/gm) || []).toHaveLength(2);
+    expect(section.match(/^[ \t]+require_testuser_id$/gm) || []).toHaveLength(3);
+    expect(section.match(/^[ \t]+require_fixture_healthy$/gm) || []).toHaveLength(2);
   });
 });
 

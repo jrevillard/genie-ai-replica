@@ -223,7 +223,6 @@
     # dump dir, huggingface caches) to ansible_user, transiently revoking
     # the uid-1000 ownership the migration just handed over. The resolved
     # spelling comes from group_vars (ONE formula for every consumer).
-    _fix_payload_data_path: "{{ data_dir_resolved }}"
     # The heal/probe prune list: the data dir ITSELF plus every
     # deploy_dir-level ancestor on the way to it (a data_dir nested two
     # levels deep must not have its parent `state/` chown -R'd — that
@@ -502,6 +501,18 @@
     # materialize on the node the service lands on.
     - name: Run the no-root data-dir migration tasks
       ansible.builtin.import_tasks: tasks/no-root-data-migration.yml
+
+    - name: Pre-create the secrets/ssl bind source on workers (#1227)
+      # The THIRD host bind: on a gateway-labeled worker the edge nginx
+      # binds <deploy_dir>/secrets/ssl — without this task swarmkit
+      # silently root-creates it on that worker (the certs themselves are
+      # manager-scoped; the shape matches the manager's own
+      # secrets/ssl creation).
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}/secrets/ssl"
+        state: directory
+        mode: '0755'
 
     - name: Pre-create the huggingface cache bind source on workers (#1227)
       # data/huggingface is ALSO a bind source (${DATA_DIR}/huggingface:/data

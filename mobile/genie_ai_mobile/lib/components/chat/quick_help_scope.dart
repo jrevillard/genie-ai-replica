@@ -180,13 +180,18 @@ double quickHelpGridAspectRatio(Map<String, dynamic> layout) {
 /// The loaded Quick Help buttons, with a duplicated id keeping only the
 /// FIRST entry.
 ///
-/// The dedupe keys on the ID — as the web's own load filter does — not on
-/// the identity (quickHelpButtonIdentity): two cards with one id cannot
-/// both be honoured, and the web keeps the first and drops the duplicate
-/// at load, so the mobile must too, or the same saved conversation would
-/// carry a different scope on the two platforms. A card with NO id is
-/// kept, and two id-less cards sharing a title stay two cards — they then
-/// write the SAME conversation tag, exactly as the web does.
+/// The dedupe keys on the ID (quickHelpIdOf) — the same normalized form
+/// the web's raw strict compare produces for every id shape a config can
+/// write unambiguously — not on the identity (quickHelpButtonIdentity):
+/// two cards with one id cannot both be honoured, and the web keeps the
+/// first and drops the duplicate at load, so the mobile must too, or the
+/// same saved conversation would carry a different scope on the two
+/// platforms. Two ids differing only in JSON TYPE (5 vs '5') are where
+/// the web's raw compare and this normalized key part ways — a tracked
+/// divergence of the string-tag contract, not a rule of this file. A
+/// card with NO id is kept, and two id-less cards sharing a title stay
+/// two cards — they then write the SAME conversation tag, exactly as the
+/// web does.
 List<Map<String, dynamic>> dedupeQuickHelpButtons(
   List<Map<String, dynamic>> buttons,
 ) {
@@ -456,13 +461,13 @@ bool restoredScopeTitleFollowsLocale({
       categoryKey.isNotEmpty;
 }
 
-/// The button's category as a plain string. A hand-built map need not
-/// carry strings, and a numeric value must degrade to its string form
-/// rather than throw. The ID has its own read — quickHelpIdOf (raw
-/// truthiness + the web's serialization); every id consumer reads that
-/// one.
+/// The button's category as a plain string — in the form the web
+/// resolves, so a hand-built map with a numeric category reads the same
+/// value the parse stored. The ID has its own read — quickHelpIdOf
+/// (raw truthiness + the web's serialization); every id consumer reads
+/// that one.
 String? quickHelpCategoryOf(Map<String, dynamic> button) =>
-    button['category']?.toString();
+    _jsTagForm(button['category']);
 
 /// The number as JAVASCRIPT serializes it — the form the web writes
 /// into a saved tag or a category reference; null for a null input.

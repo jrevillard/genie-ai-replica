@@ -462,31 +462,39 @@ workflow:
       # The committed realm refuses direct access grants — assert it. Keycloak
       # answers unauthorized_client BEFORE credential validation when the
       # client has directAccessGrantsEnabled: false, so a success or any other
-      # error here means the posture drifted. The transport case (no HTTP
-      # status from curl) retries and then fails honestly instead of
-      # masquerading as a posture verdict.
+      # error here means the posture drifted. Transport failures retry and
+      # fail as transport; gateway answers with a non-Keycloak body fail as
+      # gateway — neither masquerades as a posture verdict.
       for i in 1 2 3; do
         ROPC_STATUS=$(curl -sk --max-time 15 -o /tmp/ropc-probe-body.json -w "%{http_code}" -X POST \
           "${KC_URL}/realms/genie/protocol/openid-connect/token" \
           -d "client_id=genie-app" -d "grant_type=password" \
-          -d "username=testuser" -d "password=TestPass123!")
+          -d "username=testuser" -d "password=TestPass123!") || true
         case "$ROPC_STATUS" in [234][0-9][0-9]) break ;; esac
         echo "ROPC probe attempt ${i}/3 could not reach the token endpoint (HTTP ${ROPC_STATUS:-none}); retrying"
-        sleep 2
+        [ "$i" -lt 3 ] && sleep 2
       done
       ROPC_ERROR=$(python3 -c "import sys,json; print(json.load(open('/tmp/ropc-probe-body.json')).get('error',''))" 2>/dev/null || true)
+      ROPC_TOKEN=$(python3 -c "import sys,json; print('yes' if json.load(open('/tmp/ropc-probe-body.json')).get('access_token') else 'no')" 2>/dev/null || true)
       rm -f /tmp/ropc-probe-body.json
       case "$ROPC_STATUS" in
         4[0-9][0-9])
           if [ "$ROPC_ERROR" = "unauthorized_client" ]; then
             echo "ROPC refusal verified: genie-app rejects direct access grants (HTTP ${ROPC_STATUS} unauthorized_client)"
-          else
+          elif [ -n "$ROPC_ERROR" ] || [ "$ROPC_TOKEN" = "yes" ]; then
             echo "ERROR: genie realm ROPC posture drifted (HTTP ${ROPC_STATUS}, error '${ROPC_ERROR:-none}') — directAccessGrantsEnabled must stay false on genie-app"
+            exit 1
+          else
+            echo "ERROR: unexpected HTTP ${ROPC_STATUS} with a non-Keycloak body from the genie token endpoint — not a posture verdict; check gateway routing (nginx/Kong)"
             exit 1
           fi
           ;;
         2[0-9][0-9]|3[0-9][0-9])
-          echo "ERROR: genie realm ROPC posture drifted: token endpoint returned HTTP ${ROPC_STATUS} for a direct-access grant — directAccessGrantsEnabled must stay false on genie-app"
+          if [ "$ROPC_TOKEN" = "yes" ]; then
+            echo "ERROR: genie realm ROPC posture drifted: token endpoint returned HTTP ${ROPC_STATUS} with an access token for a direct-access grant — directAccessGrantsEnabled must stay false on genie-app"
+          else
+            echo "ERROR: unexpected HTTP ${ROPC_STATUS} with a non-Keycloak body from the genie token endpoint — not a posture verdict; check gateway routing (nginx/Kong)"
+          fi
           exit 1
           ;;
         *)

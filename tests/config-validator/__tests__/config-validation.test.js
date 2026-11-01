@@ -2289,7 +2289,9 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // added elsewhere in the file cannot silently redirect it, and it consumes
   // EVERY invocation the base carries (a second script line's targets reach
   // the anchor check instead of silently escaping it). The npx spelling is
-  // the contract: a first invocation in another spelling fails loudly below.
+  // the contract: a first invocation in another spelling fails loudly below,
+  // and script text that merely MENTIONS the invocation (an echo, say) is
+  // captured too — loud, conservative over-capture.
   const executedPaths = () => {
     const invocations = sectionOf('.e2e_web_base').match(/npx playwright test ([^\n]+)/g) || [];
     expect(invocations.length).toBeGreaterThan(0);
@@ -2300,11 +2302,14 @@ describe('e2e merge-train changes filters (#1264)', () => {
         .filter((arg) => arg.startsWith('tests/e2e'))
         .map((arg) => (arg.endsWith('/') ? `${arg}**/*` : arg))
     );
-    expect(targets).toEqual([
+    // Set equality, order-free: reordering the invocation's arguments is
+    // semantically identical for Playwright and must not red the guard,
+    // while an added or removed target still fails here.
+    expect([...targets].sort()).toEqual([
       'tests/e2e/chatbot/**/*',
       'tests/e2e/documents/**/*',
-      'tests/e2e/theme-runtime-config.spec.js',
-      'tests/e2e/helpers/**/*'
+      'tests/e2e/helpers/**/*',
+      'tests/e2e/theme-runtime-config.spec.js'
     ]);
     return targets;
   };
@@ -2638,10 +2643,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
     expect(section).toContain('extends: .e2e_web_base');
     // The derivation reads the invocation from .e2e_web_base only — a
     // consuming job overriding script with its own playwright invocation
-    // (any runner spelling, npx or direct CLI path) would execute targets
-    // nothing derived. Keep the invocation single. The job's own key line
-    // (e2e:playwright:) is excluded — the name is not an invocation.
-    expect(section.split('\n').slice(1).join('\n')).not.toMatch(/playwright/);
+    // would execute targets nothing derived. An override REQUIRES a script
+    // key, so pin the key's absence: artifact paths or prose naming
+    // playwright stay legal, a second invocation cannot exist. The job's
+    // own key line is exempt — extends is not script.
+    expect(section).not.toMatch(/^\s*script:/m);
   });
 
   test('both jobs trigger off the shared anchor — no inline filter may fork it', () => {

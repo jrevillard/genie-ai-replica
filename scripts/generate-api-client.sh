@@ -40,16 +40,10 @@ echo "==> Generating OpenAPI spec from backend source..."
 (cd "$BACKEND_DIR" && node -e "
 const swaggerJsdoc = require('swagger-jsdoc');
 const spec = swaggerJsdoc({
-  definition: {
-    openapi: '3.0.0',
-    info: {
-      title: 'Government Services API',
-      version: '1.0.0',
-      description: 'API documentation for Government Services microservices'
-    },
-    servers: [{ url: 'https://localhost', description: 'Default' }],
-    components: { schemas: require('./swagger-schemas') }
-  },
+  // The same envelope module the runtime requires (components/gov-chat-backend/
+  // index.js) — server URLs do not affect the generated endpoint paths, so the
+  // generation-time env values do not drift the client's routes.
+  definition: require('./swagger-definition'),
   apis: ['./routes/*.js']
 });
 require('fs').writeFileSync('$SPEC_FILE', JSON.stringify(spec, null, 2));

@@ -40,6 +40,8 @@ Please follow the [installation procedure](#installation--usage) and then run th
 ```dart
 import 'package:openapi/api.dart';
 
+// TODO Configure OAuth2 access token for authorization: KeycloakOAuth2
+//defaultApiClient.getAuthentication<OAuth>('KeycloakOAuth2').accessToken = 'YOUR_ACCESS_TOKEN';
 
 final api_instance = AdminApi();
 
@@ -53,7 +55,7 @@ try {
 
 ## Documentation for API Endpoints
 
-All URIs are relative to *https://localhost*
+All URIs are relative to *http://localhost:3000*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
@@ -256,10 +258,20 @@ Class | Method | HTTP request | Description
 
 ## Documentation For Authorization
 
-Endpoints do not require authorization.
+
+Authentication schemes defined for the API:
+### KeycloakOAuth2
+
+- **Type**: OAuth
+- **Flow**: accessCode
+- **Authorization URL**: undefined/realms/undefined/protocol/openid-connect/auth
+- **Scopes**: 
+ - **openid**: OpenID Connect scope
+ - **profile**: User profile information
+ - **email**: User email address
 
 
 ## Author
 
-
+support@example.com
 

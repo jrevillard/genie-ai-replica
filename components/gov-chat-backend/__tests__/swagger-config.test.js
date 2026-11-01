@@ -147,6 +147,17 @@ const buildSpecWithRealFs = (options) => {
 const mergedSpec = buildSpecWithRealFs(swaggerOptions);
 
 describe('Swagger Configuration', () => {
+  describe('Shared envelope module', () => {
+    // The envelope (openapi/info/servers/securitySchemes/security/tags) is
+    // shared with scripts/generate-api-client.sh through swagger-definition.js.
+    // Inlining a hand-written envelope back into index.js reintroduces the
+    // two-sources drift #1218 fixed (the generator would build its spec from
+    // a different envelope than the backend serves) — pin the shared object.
+    it('exposes the shared swagger-definition module as the runtime envelope', () => {
+      expect(swaggerOptions.definition).toBe(require('../swagger-definition'));
+    });
+  });
+
   describe('Security Scheme (Task 1)', () => {
     it('should contain KeycloakOAuth2 security scheme (NOT bearerAuth)', () => {
       const schemes = swaggerOptions.definition.components.securitySchemes;

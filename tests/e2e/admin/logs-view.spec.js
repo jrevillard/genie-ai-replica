@@ -56,8 +56,9 @@ test.describe('Admin logs view', () => {
       }),
     );
     await page.goto(`${BASE_URL}/admin`, { waitUntil: 'networkidle' });
-    // DsTabs renders one anchor per tab value (the sidebar nav entries
-    // are links, not buttons — the anchor separates the two).
+    // DsTabs renders one data-test-id per tab value; the sidebar nav
+    // entries are links, not buttons, so the attribute is the
+    // unambiguous way to reach the tab strip's button.
     await page.locator('[data-test-id="ds-tab-logs"]').click();
     return state;
   }

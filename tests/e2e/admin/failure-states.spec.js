@@ -66,11 +66,23 @@ test.describe('Admin overview failure states', () => {
     await expect(page.locator('.notification.error')).toBeVisible();
 
     await page.unroute('**/api/admin/system-health');
+
+    // The recovery half must prove the reload actually reloaded: pass
+    // the real call through and count it, so a mount that fails before
+    // the API call cannot pass on static tiles.
+    const recovery = { calls: 0 };
+    await page.route('**/api/admin/system-health', async (route) => {
+      recovery.calls++;
+      const response = await route.fetch();
+      await route.fulfill({ response });
+    });
+
     await page.reload({ waitUntil: 'networkidle' });
 
     // Recovery: no error toast on the reloaded dashboard and the stat
     // tiles render from the successful load.
     await expect(page.locator('.notification.error')).toBeHidden();
     await expect(page.locator('.stat-card .stat-value')).toHaveCount(4);
+    expect(recovery.calls).toBeGreaterThanOrEqual(1);
   });
 });

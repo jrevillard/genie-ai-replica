@@ -37,43 +37,43 @@ cd "$PROJECT_ROOT"
 IGNORE_CONTENT="$(cat "$IGNORE_FILE")"
 
 echo "==> Generating OpenAPI spec from backend source..."
-(cd "$BACKEND_DIR" && API_URL=https://localhost PORT=3000 \
-  KEYCLOAK_URL=https://keycloak.example.com KEYCLOAK_REALM=genie node -e "
+# The spec extraction runs under env -i: the ONLY environment the node
+# process sees is the pin list below, so no env read anywhere in the
+# envelope or the transitive swagger-schemas.js — present or future — can
+# reach the committed artifacts from the invoking shell. Same backend
+# sources always regenerate byte-identical artifacts.
+(cd "$BACKEND_DIR" && env -i PATH="$PATH" API_URL=https://localhost PORT=3000 \
+  KEYCLOAK_URL=https://keycloak.example.com/auth KEYCLOAK_REALM=genie node -e "
 const assert = require('assert');
 const swaggerJsdoc = require('swagger-jsdoc');
 // The same envelope module the runtime requires (components/gov-chat-backend/
-// index.js). The envelope reads env at require time; the values pinned on the
-// command line keep generation deterministic — the same backend sources always
-// regenerate byte-identical artifacts, whatever the invoking shell exports.
-// They are placeholders that land in the committed artifacts' cosmetics
-// (ApiClient's basePath default, README server/OAuth URLs); the endpoint paths
-// are env-independent, and the app overrides basePath at runtime.
+// index.js). The pinned placeholder values land in the committed artifacts'
+// cosmetics (ApiClient's basePath default, README server/OAuth URLs); the
+// endpoint paths are env-independent, and the app overrides basePath at
+// runtime. KEYCLOAK_URL mirrors __tests__/setup-env.js's placeholder spelling.
 const spec = swaggerJsdoc({
   definition: require('./swagger-definition'),
   apis: ['./routes/*.js']
 });
-// Assert the composed spec's env-derived fields equal the pinned placeholders:
-// a missing prefix assignment or a new env read leaking into these fields
-// (from the envelope or the transitive swagger-schemas.js, in any access
-// form) fails the run instead of shipping a shell-dependent client.
+// Sanity on the placeholders: a pin assignment dropped from the env -i line
+// yields undefined/empty here instead of the expected URL.
 const flow = spec.components?.securitySchemes?.KeycloakOAuth2?.flows?.authorizationCode;
 const envDerived = [
   ['servers[0].url', spec.servers?.[0]?.url, 'https://localhost'],
   ['authorizationUrl', flow?.authorizationUrl,
-    'https://keycloak.example.com/realms/genie/protocol/openid-connect/auth'],
+    'https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth'],
   ['tokenUrl', flow?.tokenUrl,
-    'https://keycloak.example.com/realms/genie/protocol/openid-connect/token']
+    'https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/token']
 ];
 for (const [label, actual, expected] of envDerived) {
   assert.strictEqual(actual, expected,
-    label + ' does not match the pinned placeholder — the pin block above is'
-    + ' incomplete or a new env read reached the spec; generation must stay'
-    + ' independent of the invoking shell.');
+    label + ' does not match the pinned placeholder — a pin assignment is'
+    + ' missing from the env -i line above.');
 }
 require('fs').writeFileSync('$SPEC_FILE', JSON.stringify(spec, null, 2));
 const count = Object.keys(spec.paths).length;
 console.log('Generated ' + count + ' endpoints');
-") || { echo "ERROR: Failed to generate spec. Run 'npm install' in $BACKEND_DIR"; exit 1; }
+") || { echo "ERROR: Failed to generate the OpenAPI spec (see the node error above;"; echo "       for module-not-found errors, run 'npm install' in $BACKEND_DIR)"; exit 1; }
 
 # generate_client <output-dir> — run the generator into the given directory.
 # Single definition so the generate and --check paths cannot drift apart.

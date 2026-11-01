@@ -264,7 +264,7 @@ Authentication schemes defined for the API:
 
 - **Type**: OAuth
 - **Flow**: accessCode
-- **Authorization URL**: https://keycloak.example.com/realms/genie/protocol/openid-connect/auth
+- **Authorization URL**: https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth
 - **Scopes**: 
  - **openid**: OpenID Connect scope
  - **profile**: User profile information
